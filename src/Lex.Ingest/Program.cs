@@ -388,6 +388,36 @@ switch (args0[0])
             Get("--grader-deployment")
                 ?? throw new ArgumentException("--grader-deployment required"),
             CancellationToken.None);
+        var reviewAuthority = EvaluationReviewTrustStore.Load();
+        var admissionAuthority = new EvaluationAdmissionAuthority(
+            reviewAuthority.ReviewerId, reviewAuthority.KeyId,
+            reviewAuthority.FingerprintSha256, reviewAuthority.PublicKeyPem);
+        var admissionIdentity = new EvaluationAdmissionIdentity(
+            targetEvidence.RevisionName,
+            targetEvidence.Image,
+            targetEvidence.CodeCommit,
+            targetEvidence.ArtifactManifestSet,
+            caseSet.Sha256);
+        var verifiedAdmission = EvaluationAdmissionContract.Verify(
+            admissionBytes, admissionSignature, admissionAuthority,
+            admissionIdentity, now);
+        EvaluationAdmissionContract.VerifyEvidenceIdentity(
+            verifiedAdmission,
+            targetEvidence.EvidenceSha256,
+            candidateModel.EvidenceSha256,
+            graderModel.EvidenceSha256);
+        var expectedAdmission = EvalAdmissionCli.Create(
+            caseSet, admissionAuthority, admissionIdentity,
+            targetEvidence.EvidenceSha256,
+            candidateModel.EvidenceSha256,
+            graderModel.EvidenceSha256,
+            verifiedAdmission.IssuedAt, verifiedAdmission.Nonce);
+        var expectedAdmissionBytes = EvaluationAdmissionContract.Serialize(expectedAdmission);
+        if (admissionBytes.Length != expectedAdmissionBytes.Length
+            || !System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                admissionBytes, expectedAdmissionBytes))
+            throw new InvalidDataException(
+                "Signed evaluation admission drifted from the reviewed request plan.");
         using var targetHttp = new HttpClient { Timeout = TimeSpan.FromSeconds(90) };
         var target = new AssistantEvaluationHttpTarget(targetHttp,
             Get("--base-url") ?? throw new ArgumentException("--base-url required"),
@@ -948,8 +978,8 @@ static void Usage() => Console.Error.WriteLine("""
       lex assistant-eval verify-report --report FILE --cases FILE --review-attestation FILE --review-signature FILE --admission FILE --admission-signature FILE --base-url REVISION_URL --candidate-container-app-resource-id AZURE_ID --candidate-revision NAME
       lex assistant-eval verify-release --root DIR --manifest FILE --signature FILE --trust-roots FILE --base-url REVISION_URL --candidate-container-app-resource-id AZURE_ID --candidate-revision NAME
       lex assistant-eval verify-bootstrap-equivalence --root DIR --manifest FILE --signature FILE --trust-roots FILE --equivalence FILE --candidate-container-app-resource-id AZURE_ID --legacy-authority-revision NAME --candidate-revision NAME --rollback-revision NAME --evaluation-release TAG --canonical-template-digest SHA256 --image-digest SHA256 --cases-sha256 SHA256 [--established-release-state | --historical-source-package --expected-code-commit FULL_SHA]
-      lex assistant-eval create-admission --cases FILE --review-attestation FILE --review-signature FILE --candidate-revision NAME --candidate-image IMAGE_DIGEST --code-commit FULL_SHA --artifact-manifest-set SHA256 --out FILE
-      lex assistant-eval verify-admission --cases FILE --review-attestation FILE --review-signature FILE --candidate-revision NAME --candidate-image IMAGE_DIGEST --code-commit FULL_SHA --artifact-manifest-set SHA256 --admission FILE --signature FILE
+      lex assistant-eval create-admission --cases FILE --review-attestation FILE --review-signature FILE --candidate-revision NAME --candidate-image IMAGE_DIGEST --code-commit FULL_SHA --artifact-manifest-set SHA256 --target-evidence-sha256 SHA256 --candidate-model-evidence-sha256 SHA256 --grader-model-evidence-sha256 SHA256 --out FILE
+      lex assistant-eval verify-admission --cases FILE --review-attestation FILE --review-signature FILE --candidate-revision NAME --candidate-image IMAGE_DIGEST --code-commit FULL_SHA --artifact-manifest-set SHA256 --target-evidence-sha256 SHA256 --candidate-model-evidence-sha256 SHA256 --grader-model-evidence-sha256 SHA256 --admission FILE --signature FILE
       lex artifact verify --root DIR --manifest FILE --signature FILE --trust-roots FILE
       lex artifact trust-root --keyfile KEY.pem --key-id ID
     """);

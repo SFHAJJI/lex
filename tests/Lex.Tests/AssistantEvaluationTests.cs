@@ -442,6 +442,9 @@ public sealed class AssistantEvaluationTests : IDisposable
                 "entra:test-reviewer", root.KeyId,
                 root.FingerprintSha256, root.PublicKeyPem),
             identity,
+            new string('d', 64),
+            new string('e', 64),
+            new string('f', 64),
             DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
             nonce);
 
@@ -760,7 +763,7 @@ public sealed class AssistantEvaluationTests : IDisposable
         // Still not hidden, and still not a pass. It is recorded as the measurement that did not
         // happen, with the cause, which is the only honest reading of an unavailable judge.
         Assert.Equal("grader_transport_unavailable",
-            Assert.Single(failed.Results.Where(result => result.GradingMode == "llm"))
+            Assert.Single(failed.Results, result => result.GradingMode == "llm")
                 .Relevance.UnavailableCause);
 
         var excessive = Response();
@@ -1398,6 +1401,9 @@ public sealed class AssistantEvaluationTests : IDisposable
             set.Sha256);
         var capability = EvalAdmissionCli.Create(
             set, authority, admissionIdentity,
+            identity.Target.EvidenceSha256,
+            identity.CandidateModel.EvidenceSha256,
+            identity.GraderModel.EvidenceSha256,
             DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
             Convert.ToBase64String(new byte[32])
                 .TrimEnd('=').Replace('+', '-').Replace('/', '_'));
@@ -1441,6 +1447,9 @@ public sealed class AssistantEvaluationTests : IDisposable
                 identity.Target.RevisionName, identity.Target.Image,
                 identity.Target.CodeCommit, identity.Target.ArtifactManifestSet,
                 set.Sha256),
+            identity.Target.EvidenceSha256,
+            identity.CandidateModel.EvidenceSha256,
+            identity.GraderModel.EvidenceSha256,
             DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
             Convert.ToBase64String(new byte[32])
                 .TrimEnd('=').Replace('+', '-').Replace('/', '_'));
@@ -3190,6 +3199,111 @@ public sealed class AssistantEvaluationTests : IDisposable
         Assert.IsType<InvalidDataException>(failure.InnerException);
     }
 
+    [Theory]
+    [InlineData("/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/rg_candidate-1/providers/Microsoft.CognitiveServices/accounts/Candidate-models1", true)]
+    [InlineData("/subscriptions/------------------------------------/resourceGroups/rg/providers/Microsoft.CognitiveServices/accounts/candidate-models", false)]
+    [InlineData("/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups//providers/Microsoft.CognitiveServices/accounts/candidate-models", false)]
+    [InlineData("/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/rg./providers/Microsoft.CognitiveServices/accounts/candidate-models", false)]
+    [InlineData("/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/rg/providers/Microsoft.CognitiveServices/accounts/candidate_models", false)]
+    [InlineData("/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/rg/providers/Microsoft.CognitiveServices/accounts/candidate-models/deployments/release", false)]
+    [InlineData("/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/rg/providers/Microsoft.CognitiveServices/accounts/candidate-models/", false)]
+    public void Azure_model_resource_parser_accepts_only_supported_ids(
+        string resourceId, bool expected)
+    {
+        Assert.Equal(expected, AssistantEvaluationAzureResource.IsModelAccount(resourceId));
+    }
+
+    [Theory]
+    [InlineData("/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/rg.platform/providers/Microsoft.App/containerApps/ca-lex-candidate", true)]
+    [InlineData("/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/rg/providers/Microsoft.App/containerApps/Ca-lex-candidate", false)]
+    [InlineData("/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/rg/providers/Microsoft.App/containerApps/ca--lex", false)]
+    [InlineData("/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/rg/providers/Microsoft.App/containerApps/ca-lex-candidate/", false)]
+    [InlineData("/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/rg/providers/Microsoft.App/containerApps/ca-lex-candidate/revisions/release", false)]
+    public void Azure_container_app_resource_parser_accepts_only_supported_ids(
+        string resourceId, bool expected)
+    {
+        Assert.Equal(expected, AssistantEvaluationAzureResource.IsContainerApp(resourceId));
+    }
+
+    [Theory]
+    [InlineData("https://candidate-models.example", "candidate-models.example")]
+    [InlineData("https://xn--caf-dma.example", "xn--caf-dma.example")]
+    [InlineData("HTTPS://CANDIDATE-MODELS.EXAMPLE", "candidate-models.example")]
+    public void Bare_https_authority_accepts_only_canonical_ascii_dns_hosts(
+        string endpoint, string expectedHost)
+    {
+        Assert.Equal(expectedHost, AssistantEvaluationIdentityDigest.BareHttpsHost(endpoint));
+    }
+
+    [Theory]
+    [InlineData("https://candidate-models\u3002example")]
+    [InlineData("https://candidate-models\uFF0Eexample")]
+    [InlineData("https://candidate-models\uFF61example")]
+    [InlineData("https://\uFF43andidate-models.example")]
+    [InlineData("https://caf\u00E9.example")]
+    [InlineData("https://127.0.0.1")]
+    [InlineData("https://127.1")]
+    [InlineData("https://2130706433")]
+    [InlineData("https://0177.0.0.1")]
+    [InlineData("https://0x7f.0.0.1")]
+    [InlineData("https://169.254.169.254")]
+    [InlineData("https://10.0.0.1")]
+    [InlineData("https://192.168.1.1")]
+    [InlineData("https://[::1]")]
+    [InlineData("https://.")]
+    [InlineData("https://candidate-models.example.")]
+    [InlineData("https://127.0.0.1.")]
+    [InlineData("https://127.1.")]
+    [InlineData("https://2130706433.")]
+    [InlineData("https://0177.0.0.1.")]
+    [InlineData("https://0x7f.0.0.1.")]
+    [InlineData("https://169.254.169.254.")]
+    [InlineData("https://10.0.0.1.")]
+    [InlineData("https://192.168.1.1.")]
+    [InlineData("https://candidate_models.example")]
+    [InlineData("https://-candidate-models.example")]
+    [InlineData("https://candidate-models-.example")]
+    [InlineData("https://candidate-models..example")]
+    [InlineData("https://candidate-models.example:443")]
+    [InlineData("https://candidate-models.example:8443")]
+    [InlineData("https://candidate-models.example/")]
+    [InlineData("https://candidate-models.example/path")]
+    [InlineData("https://candidate-models.example?")]
+    [InlineData("https://candidate-models.example#")]
+    [InlineData("https://user@candidate-models.example")]
+    [InlineData("https://%63andidate-models.example")]
+    [InlineData("https://candidate-models.example\\path")]
+    [InlineData("https://candidate-models.example\r")]
+    [InlineData("https://candidate-models.example\n")]
+    [InlineData("https://candidate-models.example\t")]
+    public void Bare_https_authority_rejects_noncanonical_or_non_dns_hosts(string endpoint)
+    {
+        Assert.Throws<InvalidDataException>(() =>
+            AssistantEvaluationIdentityDigest.BareHttpsHost(endpoint));
+    }
+
+    [Fact]
+    public void Bare_https_authority_enforces_dns_name_and_label_length_bounds()
+    {
+        var maximumLabel = new string('a', 63) + ".example";
+        var maximumName = string.Join('.',
+            new string('a', 63), new string('b', 63),
+            new string('c', 63), new string('d', 61));
+        var overlongLabel = new string('a', 64) + ".example";
+        var overlongName = string.Join('.',
+            new string('a', 63), new string('b', 63),
+            new string('c', 63), new string('d', 62));
+
+        Assert.Equal(maximumLabel,
+            AssistantEvaluationIdentityDigest.BareHttpsHost($"https://{maximumLabel}"));
+        Assert.Equal(maximumName,
+            AssistantEvaluationIdentityDigest.BareHttpsHost($"https://{maximumName}"));
+        Assert.Throws<InvalidDataException>(() =>
+            AssistantEvaluationIdentityDigest.BareHttpsHost($"https://{overlongLabel}"));
+        Assert.Throws<InvalidDataException>(() =>
+            AssistantEvaluationIdentityDigest.BareHttpsHost($"https://{overlongName}"));
+    }
+
     [Fact]
     public void Candidate_identity_is_derived_from_the_exact_running_revision()
     {
@@ -3228,6 +3342,23 @@ public sealed class AssistantEvaluationTests : IDisposable
         Assert.Equal("candidate.example", evidence.RevisionFqdn);
         Assert.Equal(2_147_483_648, evidence.MemoryLimitBytes);
         Assert.Equal(0, evidence.TrafficWeight);
+        body["properties"]!["template"]!["containers"]![0]!["env"]![0]!["value"] =
+            "https://@candidate-models.example";
+        var decoratedEndpoint = Assert.Throws<TargetInvocationException>(() =>
+            ParseAzureRevisionEvidence(resource, revision, body));
+        Assert.IsType<InvalidDataException>(decoratedEndpoint.InnerException);
+        body["properties"]!["template"]!["containers"]![0]!["env"]![0]!["value"] =
+            "https://candidate-models\uFF61example";
+        var idnaEndpoint = Assert.Throws<TargetInvocationException>(() =>
+            ParseAzureRevisionEvidence(resource, revision, body));
+        Assert.IsType<InvalidDataException>(idnaEndpoint.InnerException);
+        body["properties"]!["template"]!["containers"]![0]!["env"]![0]!["value"] =
+            "https://169.254.169.254.";
+        var terminalDotEndpoint = Assert.Throws<TargetInvocationException>(() =>
+            ParseAzureRevisionEvidence(resource, revision, body));
+        Assert.IsType<InvalidDataException>(terminalDotEndpoint.InnerException);
+        body["properties"]!["template"]!["containers"]![0]!["env"]![0]!["value"] =
+            "https://candidate-models.example";
         body["properties"]!["runningState"] = "Running";
         Assert.Equal(revision, ParseAzureRevisionEvidence(resource, revision, body).RevisionName);
         body["properties"]!["active"] = false;
@@ -3398,7 +3529,11 @@ public sealed class AssistantEvaluationTests : IDisposable
             set, authority, new EvaluationAdmissionIdentity(
                 Identity().Target.RevisionName, Identity().Target.Image,
                 Identity().Target.CodeCommit, Identity().Target.ArtifactManifestSet,
-                set.Sha256), runAt.AddMinutes(-1),
+                set.Sha256),
+            Identity().Target.EvidenceSha256,
+            Identity().CandidateModel.EvidenceSha256,
+            Identity().GraderModel.EvidenceSha256,
+            runAt.AddMinutes(-1),
             Convert.ToBase64String(Enumerable.Repeat((byte)7, 32).ToArray())
                 .TrimEnd('=').Replace('+', '-').Replace('/', '_'));
         var bytes = EvaluationAdmissionContract.Serialize(capability);

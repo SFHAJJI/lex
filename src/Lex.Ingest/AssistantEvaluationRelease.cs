@@ -345,8 +345,17 @@ public static class AssistantEvaluationReleaseVerifier
         var capability = EvaluationAdmissionContract.Verify(
             bytes, EvalAdmissionCli.ReadBoundedSignature(admissionSignaturePath),
             authority, identity, runAt);
+        EvaluationAdmissionContract.VerifyEvidenceIdentity(
+            capability,
+            report.Identity.Target.EvidenceSha256,
+            report.Identity.CandidateModel.EvidenceSha256,
+            report.Identity.GraderModel.EvidenceSha256);
         var expected = EvalAdmissionCli.Create(
-            caseSet, authority, identity, capability.IssuedAt, capability.Nonce);
+            caseSet, authority, identity,
+            report.Identity.Target.EvidenceSha256,
+            report.Identity.CandidateModel.EvidenceSha256,
+            report.Identity.GraderModel.EvidenceSha256,
+            capability.IssuedAt, capability.Nonce);
         var expectedBytes = EvaluationAdmissionContract.Serialize(expected);
         var runIdentity = EvaluationAdmissionContract.RunIdentity(capability);
         if (bytes.Length != expectedBytes.Length

@@ -37,6 +37,11 @@ public static class EvalAdmissionCli
             Required("--code-commit"),
             Required("--artifact-manifest-set"),
             caseSet.Sha256);
+        var targetEvidenceSha256 = Required("--target-evidence-sha256");
+        var candidateModelEvidenceSha256 = Required(
+            "--candidate-model-evidence-sha256");
+        var graderModelEvidenceSha256 = Required(
+            "--grader-model-evidence-sha256");
         var authority = EvaluationReviewTrustStore.Load();
         var admissionAuthority = new EvaluationAdmissionAuthority(
             authority.ReviewerId, authority.KeyId,
@@ -46,7 +51,9 @@ public static class EvalAdmissionCli
         {
             var output = Path.GetFullPath(Required("--out"));
             var capability = Create(
-                caseSet, admissionAuthority, identity, now, NewNonce());
+                caseSet, admissionAuthority, identity,
+                targetEvidenceSha256, candidateModelEvidenceSha256,
+                graderModelEvidenceSha256, now, NewNonce());
             AtomicWrite(output, EvaluationAdmissionContract.Serialize(capability));
             Console.WriteLine(JsonSerializer.Serialize(new
             {
@@ -65,6 +72,9 @@ public static class EvalAdmissionCli
         var signature = ReadBoundedSignature(signaturePath);
         var verified = EvaluationAdmissionContract.Verify(
             bytes, signature, admissionAuthority, identity, now);
+        EvaluationAdmissionContract.VerifyEvidenceIdentity(
+            verified, targetEvidenceSha256, candidateModelEvidenceSha256,
+            graderModelEvidenceSha256);
         caseSet.EnsureReleaseReady();
         Console.WriteLine(JsonSerializer.Serialize(new
         {
@@ -81,6 +91,9 @@ public static class EvalAdmissionCli
         AssistantEvaluationSet caseSet,
         EvaluationAdmissionAuthority authority,
         EvaluationAdmissionIdentity identity,
+        string targetEvidenceSha256,
+        string candidateModelEvidenceSha256,
+        string graderModelEvidenceSha256,
         DateTimeOffset issuedAt,
         string nonce)
     {
@@ -132,6 +145,9 @@ public static class EvalAdmissionCli
             identity.CodeCommit,
             identity.ArtifactManifestSet,
             identity.CatalogSha256,
+            targetEvidenceSha256,
+            candidateModelEvidenceSha256,
+            graderModelEvidenceSha256,
             issuedAt.ToUniversalTime(),
             issuedAt.ToUniversalTime().AddMinutes(20),
             nonce,

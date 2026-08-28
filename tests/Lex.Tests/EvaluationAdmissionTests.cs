@@ -59,6 +59,30 @@ public sealed class EvaluationAdmissionTests
                 bytes, signature, authority, Identity(), capability.ExpiresAt));
     }
 
+    [Theory]
+    [InlineData("target")]
+    [InlineData("candidate")]
+    [InlineData("grader")]
+    public void Signed_admission_binds_each_exact_azure_evidence_identity(string mutation)
+    {
+        var capability = Capability();
+        var target = capability.TargetEvidenceSha256;
+        var candidate = capability.CandidateModelEvidenceSha256;
+        var grader = capability.GraderModelEvidenceSha256;
+        EvaluationAdmissionContract.VerifyEvidenceIdentity(
+            capability, target, candidate, grader);
+        switch (mutation)
+        {
+            case "target": target = new string('1', 64); break;
+            case "candidate": candidate = new string('1', 64); break;
+            case "grader": grader = new string('1', 64); break;
+        }
+
+        Assert.Throws<InvalidDataException>(() =>
+            EvaluationAdmissionContract.VerifyEvidenceIdentity(
+                capability, target, candidate, grader));
+    }
+
     [Fact]
     public void Malformed_null_capability_fields_fail_as_invalid_data()
     {
@@ -393,6 +417,9 @@ public sealed class EvaluationAdmissionTests
         new string('b', 40),
         new string('c', 64),
         new string('d', 64),
+        new string('e', 64),
+        new string('f', 64),
+        new string('0', 64),
         Now,
         Now.AddMinutes(10),
         Convert.ToBase64String(Enumerable.Range(0, 32).Select(i => (byte)i).ToArray())

@@ -25,6 +25,9 @@ public sealed record EvaluationAdmissionCapability(
     string CodeCommit,
     string ArtifactManifestSet,
     string CatalogSha256,
+    string TargetEvidenceSha256,
+    string CandidateModelEvidenceSha256,
+    string GraderModelEvidenceSha256,
     DateTimeOffset IssuedAt,
     DateTimeOffset ExpiresAt,
     string Nonce,
@@ -105,7 +108,7 @@ public static class AssistantEvaluationRelevanceContract
 
 public static partial class EvaluationAdmissionContract
 {
-    public const string Schema = "lex-assistant-eval-admission/1";
+    public const string Schema = "lex-assistant-eval-admission/2";
     // 25 cases and 48 repetitions enumerate 56 request identities; doubling them for the
     // runner's single pre-authorized retry per repetition serializes to about 41 KiB, so the
     // 32 KiB cap rejected the very admission the retry design produces. The cap exists to
@@ -233,6 +236,26 @@ public static partial class EvaluationAdmissionContract
     public static string RunIdentity(string nonce) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.ASCII.GetBytes(nonce)))[..16];
 
+    /// <summary>Requires the signed admission to name the exact live Azure evidence.</summary>
+    public static void VerifyEvidenceIdentity(
+        EvaluationAdmissionCapability capability,
+        string targetEvidenceSha256,
+        string candidateModelEvidenceSha256,
+        string graderModelEvidenceSha256)
+    {
+        ArgumentNullException.ThrowIfNull(capability);
+        if (!Matches(DigestPattern(), targetEvidenceSha256)
+            || !Matches(DigestPattern(), candidateModelEvidenceSha256)
+            || !Matches(DigestPattern(), graderModelEvidenceSha256)
+            || !Exact(capability.TargetEvidenceSha256, targetEvidenceSha256)
+            || !Exact(capability.CandidateModelEvidenceSha256,
+                candidateModelEvidenceSha256)
+            || !Exact(capability.GraderModelEvidenceSha256,
+                graderModelEvidenceSha256))
+            throw new InvalidDataException(
+                "Evaluation admission does not bind the exact Azure target and model evidence.");
+    }
+
     private static void ValidateStructure(EvaluationAdmissionCapability capability)
     {
         ArgumentNullException.ThrowIfNull(capability);
@@ -245,6 +268,9 @@ public static partial class EvaluationAdmissionContract
             || !Matches(CommitPattern(), capability.CodeCommit)
             || !Matches(DigestPattern(), capability.ArtifactManifestSet)
             || !Matches(DigestPattern(), capability.CatalogSha256)
+            || !Matches(DigestPattern(), capability.TargetEvidenceSha256)
+            || !Matches(DigestPattern(), capability.CandidateModelEvidenceSha256)
+            || !Matches(DigestPattern(), capability.GraderModelEvidenceSha256)
             || !Matches(NoncePattern(), capability.Nonce)
             || capability.MaxCalls is < 1 or > MaximumRequests
             || capability.AllowedRequests is null

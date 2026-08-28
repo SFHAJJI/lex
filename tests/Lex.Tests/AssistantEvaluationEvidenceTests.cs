@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Lex.Evaluation;
 using Lex.Index;
 using Lex.Web;
 using Microsoft.Extensions.DependencyInjection;
@@ -366,6 +367,452 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
             fixture.AdmissionAuthority));
     }
 
+    [Theory]
+    [InlineData("candidate_input_meter_id")]
+    [InlineData("grader_output_meter_name")]
+    [InlineData("candidate_input_effective_start_date")]
+    [InlineData("candidate_model_name")]
+    [InlineData("grader_model_version")]
+    public void Signed_package_rejects_each_re_signed_pricing_snapshot_identity_drift(
+        string mutation)
+    {
+        var fixture = Package();
+        var files = fixture.Files.ToDictionary(item => item.Key, item => item.Value.ToArray(),
+            StringComparer.Ordinal);
+        MutateJson(files, AssistantEvaluationEvidenceVerifier.ReportFile, root =>
+        {
+            var pricing = root["pricing"]!;
+            switch (mutation)
+            {
+                case "candidate_input_meter_id":
+                    pricing["candidate"]!["input"]!["meter_id"] = "candidate-input-drift";
+                    break;
+                case "grader_output_meter_name":
+                    pricing["grader"]!["output"]!["meter_name"] = "Grader output drift";
+                    break;
+                case "candidate_input_effective_start_date":
+                    pricing["candidate"]!["input"]!["effective_start_date"] =
+                        "2026-07-31T00:00:00Z";
+                    break;
+                case "candidate_model_name":
+                    pricing["candidate"]!["model_name"] = "gpt-5-mini-drift";
+                    break;
+                case "grader_model_version":
+                    pricing["grader"]!["model_version"] = "2025-08-08";
+                    break;
+            }
+        });
+        ResignManifest(files, fixture.ArtifactKey);
+        var release = ReleaseFor(files,
+            Sha(files[AssistantEvaluationEvidenceVerifier.ReportFile]),
+            fixture.Runtime.CodeCommit);
+
+        Assert.Throws<InvalidDataException>(() => AssistantEvaluationEvidenceVerifier.Verify(
+            release, files, [fixture.ArtifactRoot], fixture.Now,
+            fixture.AdmissionAuthority));
+    }
+
+    [Fact]
+    public void Signed_package_rejects_unknown_browser_evidence_properties_without_echoing_them()
+    {
+        var fixture = Package();
+        var files = fixture.Files.ToDictionary(item => item.Key, item => item.Value.ToArray(),
+            StringComparer.Ordinal);
+        var canary = Convert.ToHexString(RandomNumberGenerator.GetBytes(64));
+        MutateJson(files, AssistantEvaluationEvidenceVerifier.BrowserEvidenceFile,
+            root => root["raw_answer"] = canary);
+        ResignManifest(files, fixture.ArtifactKey);
+        var release = ReleaseFor(files, fixture.ReportSha256, fixture.Runtime.CodeCommit);
+
+        var exception = Assert.Throws<InvalidDataException>(() =>
+            AssistantEvaluationEvidenceVerifier.Verify(
+                release, files, [fixture.ArtifactRoot], fixture.Now,
+                fixture.AdmissionAuthority));
+        Assert.DoesNotContain(canary, exception.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Signed_package_rejects_duplicate_known_browser_evidence_properties()
+    {
+        var fixture = Package();
+        var files = fixture.Files.ToDictionary(item => item.Key, item => item.Value.ToArray(),
+            StringComparer.Ordinal);
+        var browser = Encoding.UTF8.GetString(
+            files[AssistantEvaluationEvidenceVerifier.BrowserEvidenceFile]);
+        var marker = "\"passed\":";
+        var index = browser.IndexOf(marker, StringComparison.Ordinal);
+        Assert.True(index >= 0);
+        files[AssistantEvaluationEvidenceVerifier.BrowserEvidenceFile] = Encoding.UTF8.GetBytes(
+            browser.Insert(index, "\"passed\":true,"));
+        ResignManifestPayloadOnly(files, fixture.ArtifactKey,
+            AssistantEvaluationEvidenceVerifier.BrowserEvidenceFile);
+        var release = ReleaseFor(files, fixture.ReportSha256, fixture.Runtime.CodeCommit);
+
+        Assert.Throws<InvalidDataException>(() => AssistantEvaluationEvidenceVerifier.Verify(
+            release, files, [fixture.ArtifactRoot], fixture.Now,
+            fixture.AdmissionAuthority));
+    }
+
+    [Theory]
+    [InlineData("failed_result")]
+    [InlineData("missing_preflight")]
+    [InlineData("missing_timings")]
+    [InlineData("wrong_repetition")]
+    [InlineData("wrong_grading_mode")]
+    [InlineData("missing_prompt_sha256")]
+    public void Signed_package_rejects_re_signed_deterministic_report_drift(string mutation)
+    {
+        var fixture = Package();
+        var files = fixture.Files.ToDictionary(item => item.Key, item => item.Value.ToArray(),
+            StringComparer.Ordinal);
+        MutateJson(files, AssistantEvaluationEvidenceVerifier.ReportFile, root =>
+        {
+            var result = root["results"]![0]!.AsObject();
+            switch (mutation)
+            {
+                case "failed_result":
+                    result["passed"] = false;
+                    break;
+                case "missing_preflight":
+                    root.Remove("preflight");
+                    break;
+                case "missing_timings":
+                    result.Remove("timings");
+                    break;
+                case "wrong_repetition":
+                    result["repetition"] = 99;
+                    break;
+                case "wrong_grading_mode":
+                    result["grading_mode"] = "deterministic";
+                    break;
+                case "missing_prompt_sha256":
+                    result.Remove("prompt_sha256");
+                    break;
+            }
+        });
+        ResignManifest(files, fixture.ArtifactKey);
+        var release = ReleaseFor(files,
+            Sha(files[AssistantEvaluationEvidenceVerifier.ReportFile]),
+            fixture.Runtime.CodeCommit);
+
+        Assert.Throws<InvalidDataException>(() => AssistantEvaluationEvidenceVerifier.Verify(
+            release, files, [fixture.ArtifactRoot], fixture.Now,
+            fixture.AdmissionAuthority));
+    }
+
+    [Fact]
+    public void Signed_package_rejects_re_signed_pricing_catalog_identity_drift()
+    {
+        var fixture = Package();
+        var files = fixture.Files.ToDictionary(item => item.Key, item => item.Value.ToArray(),
+            StringComparer.Ordinal);
+        MutateJson(files, AssistantEvaluationEvidenceVerifier.ReportFile, root =>
+        {
+            root["pricing"]!["currency"] = "USD";
+            root["pricing"]!["candidate"]!["model_name"] = "drifted-model";
+        });
+        ResignManifest(files, fixture.ArtifactKey);
+        var release = ReleaseFor(files,
+            Sha(files[AssistantEvaluationEvidenceVerifier.ReportFile]),
+            fixture.Runtime.CodeCommit);
+
+        Assert.Throws<InvalidDataException>(() => AssistantEvaluationEvidenceVerifier.Verify(
+            release, files, [fixture.ArtifactRoot], fixture.Now,
+            fixture.AdmissionAuthority));
+    }
+
+    [Theory]
+    [InlineData("candidate_resource")]
+    [InlineData("candidate_evidence")]
+    [InlineData("grader_resource")]
+    [InlineData("grader_endpoint")]
+    [InlineData("grader_endpoint_path_with_same_digest")]
+    [InlineData("grader_deployment")]
+    [InlineData("grader_evidence")]
+    public void Signed_package_rejects_re_signed_model_route_or_evidence_drift(string mutation)
+    {
+        var fixture = Package();
+        var files = fixture.Files.ToDictionary(item => item.Key, item => item.Value.ToArray(),
+            StringComparer.Ordinal);
+        MutateJson(files, AssistantEvaluationEvidenceVerifier.ReportFile, root =>
+        {
+            var identity = root["identity"]!;
+            switch (mutation)
+            {
+                case "candidate_resource":
+                    identity["candidate_model"]!["resource_id"] = "/subscriptions/attacker";
+                    break;
+                case "candidate_evidence":
+                    identity["candidate_model"]!["evidence_sha256"] = new string('8', 64);
+                    break;
+                case "grader_resource":
+                    identity["grader_model"]!["resource_id"] = "/subscriptions/attacker";
+                    break;
+                case "grader_endpoint":
+                    identity["grader_model"]!["endpoint"] = "https://attacker.example";
+                    break;
+                case "grader_endpoint_path_with_same_digest":
+                    identity["grader_model"]!["endpoint"] = "https://grader.example/attacker";
+                    break;
+                case "grader_deployment":
+                    identity["grader_model"]!["deployment"] = "attacker";
+                    break;
+                case "grader_evidence":
+                    identity["grader_model"]!["evidence_sha256"] = new string('8', 64);
+                    break;
+            }
+        });
+        ResignManifest(files, fixture.ArtifactKey);
+        var release = ReleaseFor(files,
+            Sha(files[AssistantEvaluationEvidenceVerifier.ReportFile]),
+            fixture.Runtime.CodeCommit);
+
+        Assert.Throws<InvalidDataException>(() => AssistantEvaluationEvidenceVerifier.Verify(
+            release, files, [fixture.ArtifactRoot], fixture.Now,
+            fixture.AdmissionAuthority));
+    }
+
+    [Theory]
+    [InlineData("candidate_model", "candidate-models.example")]
+    [InlineData("grader_model", "grader.example")]
+    public void Signed_package_rejects_re_signed_empty_userinfo_model_authority(
+        string route, string host)
+    {
+        var fixture = Package();
+        var files = fixture.Files.ToDictionary(item => item.Key, item => item.Value.ToArray(),
+            StringComparer.Ordinal);
+        MutateJson(files, AssistantEvaluationEvidenceVerifier.ReportFile,
+            root => root["identity"]![route]!["endpoint"] = $"https://@{host}");
+        ResignManifest(files, fixture.ArtifactKey);
+        var release = ReleaseFor(files,
+            Sha(files[AssistantEvaluationEvidenceVerifier.ReportFile]),
+            fixture.Runtime.CodeCommit);
+
+        Assert.Throws<InvalidDataException>(() => AssistantEvaluationEvidenceVerifier.Verify(
+            release, files, [fixture.ArtifactRoot], fixture.Now,
+            fixture.AdmissionAuthority));
+    }
+
+    [Theory]
+    [InlineData("candidate_model", "https://candidate-models\u3002example")]
+    [InlineData("grader_model", "https://grader\uFF0Eexample")]
+    [InlineData("candidate_model", "https://127.0.0.1.")]
+    [InlineData("grader_model", "https://169.254.169.254.")]
+    [InlineData("candidate_model", "https://candidate_models.example")]
+    [InlineData("grader_model", "https://bad-.example")]
+    public void Signed_package_rejects_fully_signed_noncanonical_model_authority(
+        string route, string endpoint)
+    {
+        var fixture = route == "candidate_model"
+            ? Package(candidateEndpoint: endpoint, useUncheckedEndpointIdentity: true)
+            : Package(graderEndpoint: endpoint, useUncheckedEndpointIdentity: true);
+
+        Assert.Throws<InvalidDataException>(() => AssistantEvaluationEvidenceVerifier.Verify(
+            fixture.Release, fixture.Files, [fixture.ArtifactRoot], fixture.Now,
+            fixture.AdmissionAuthority));
+    }
+
+    [Theory]
+    [InlineData("candidate_resource")]
+    [InlineData("grader_route")]
+    [InlineData("target_resource")]
+    [InlineData("malformed_candidate_resource")]
+    public void Signed_package_rejects_coherently_resigned_identity_substitution(
+        string mutation)
+    {
+        var fixture = Package();
+        var files = fixture.Files.ToDictionary(item => item.Key, item => item.Value.ToArray(),
+            StringComparer.Ordinal);
+        MutateJson(files, AssistantEvaluationEvidenceVerifier.ReportFile, root =>
+        {
+            var identity = root["identity"]!;
+            switch (mutation)
+            {
+                case "candidate_resource":
+                    identity["candidate_model"]!["resource_id"] =
+                        "/subscriptions/00000000-0000-0000-0000-000000000003/"
+                        + "resourceGroups/hostile-rg/providers/"
+                        + "Microsoft.CognitiveServices/accounts/hostile-candidate";
+                    RecomputeModelEvidence(identity["candidate_model"]!);
+                    break;
+                case "grader_route":
+                    identity["grader_model"]!["resource_id"] =
+                        "/subscriptions/00000000-0000-0000-0000-000000000004/"
+                        + "resourceGroups/hostile-rg/providers/"
+                        + "Microsoft.CognitiveServices/accounts/hostile-grader";
+                    identity["grader_model"]!["endpoint"] =
+                        "https://hostile-grader.example";
+                    identity["grader_model"]!["deployment"] =
+                        "hostile-grader-deployment";
+                    RecomputeModelEvidence(identity["grader_model"]!);
+                    break;
+                case "target_resource":
+                    identity["target"]!["resource_id"] =
+                        "/subscriptions/00000000-0000-0000-0000-000000000005/"
+                        + "resourceGroups/hostile-rg/providers/"
+                        + "Microsoft.App/containerApps/hostile-app";
+                    RecomputeTargetEvidence(identity["target"]!);
+                    break;
+                case "malformed_candidate_resource":
+                    identity["candidate_model"]!["resource_id"] =
+                        "/subscriptions/------------------------------------/resourceGroups/ /"
+                        + "providers/Microsoft.CognitiveServices/accounts/??";
+                    RecomputeModelEvidence(identity["candidate_model"]!);
+                    break;
+            }
+        });
+        if (mutation == "target_resource")
+        {
+            var report = JsonNode.Parse(
+                files[AssistantEvaluationEvidenceVerifier.ReportFile])!.AsObject();
+            var digest = report["identity"]!["target"]!["evidence_sha256"]!
+                .GetValue<string>();
+            MutateJson(files, AssistantEvaluationEvidenceVerifier.BrowserEvidenceFile,
+                browser => browser["candidate_evidence_sha256"] = digest);
+        }
+        ResignManifest(files, fixture.ArtifactKey);
+        var release = ReleaseFor(files,
+            Sha(files[AssistantEvaluationEvidenceVerifier.ReportFile]),
+            fixture.Runtime.CodeCommit);
+
+        Assert.Throws<InvalidDataException>(() => AssistantEvaluationEvidenceVerifier.Verify(
+            release, files, [fixture.ArtifactRoot], fixture.Now,
+            fixture.AdmissionAuthority));
+    }
+
+    [Theory]
+    [InlineData("candidate_input")]
+    [InlineData("candidate_output")]
+    [InlineData("grader_input")]
+    [InlineData("grader_output")]
+    public void Signed_package_rejects_re_signed_per_case_token_ceiling_overrun(string meter)
+    {
+        var fixture = Package();
+        var files = fixture.Files.ToDictionary(item => item.Key, item => item.Value.ToArray(),
+            StringComparer.Ordinal);
+        MutateJson(files, AssistantEvaluationEvidenceVerifier.ReportFile, root =>
+        {
+            var result = root["results"]![0]!;
+            var usage = meter.StartsWith("candidate", StringComparison.Ordinal)
+                ? result["candidate_usage"]! : result["grader_usage"]!;
+            var field = meter.EndsWith("input", StringComparison.Ordinal)
+                ? "input_tokens" : "output_tokens";
+            usage[field] = meter switch
+            {
+                "candidate_input" => 1_101,
+                "candidate_output" => 111,
+                "grader_input" => 4_097,
+                "grader_output" => 51,
+                _ => throw new InvalidOperationException("Unknown test meter."),
+            };
+            RecomputeReportUsageAndCost(root);
+        });
+        ResignManifest(files, fixture.ArtifactKey);
+        var release = ReleaseFor(files,
+            Sha(files[AssistantEvaluationEvidenceVerifier.ReportFile]),
+            fixture.Runtime.CodeCommit);
+
+        Assert.Throws<InvalidDataException>(() => AssistantEvaluationEvidenceVerifier.Verify(
+            release, files, [fixture.ArtifactRoot], fixture.Now,
+            fixture.AdmissionAuthority));
+    }
+
+    [Fact]
+    public void Signed_package_accepts_candidate_usage_within_combined_history_ceiling()
+    {
+        var fixture = Package();
+        var files = fixture.Files.ToDictionary(item => item.Key, item => item.Value.ToArray(),
+            StringComparer.Ordinal);
+        MutateJson(files, AssistantEvaluationEvidenceVerifier.ReportFile, root =>
+        {
+            var usage = root["results"]![0]!["candidate_usage"]!;
+            usage["input_tokens"] = 1_050;
+            usage["output_tokens"] = 105;
+            RecomputeReportUsageAndCost(root);
+        });
+        ResignManifest(files, fixture.ArtifactKey);
+        var release = ReleaseFor(files,
+            Sha(files[AssistantEvaluationEvidenceVerifier.ReportFile]),
+            fixture.Runtime.CodeCommit);
+
+        var evidence = AssistantEvaluationEvidenceVerifier.Verify(
+            release, files, [fixture.ArtifactRoot], fixture.Now,
+            fixture.AdmissionAuthority);
+
+        Assert.Equal(1_750, evidence.CandidateInputTokens);
+        Assert.Equal(175, evidence.CandidateOutputTokens);
+    }
+
+    [Theory]
+    [InlineData("grading_rubric")]
+    [InlineData("expected_gap_status")]
+    [InlineData("expected_clarification")]
+    [InlineData("expected_population_minimum")]
+    [InlineData("expected_population_path")]
+    [InlineData("history_expected_synthesis")]
+    public void Signed_package_rejects_fully_signed_nested_catalog_type_drift(string mutation)
+    {
+        var fixture = Package(catalog =>
+        {
+            var evaluationCase = catalog["cases"]![0]!;
+            var hostile = new JsonObject { ["unknown"] = true };
+            switch (mutation)
+            {
+                case "grading_rubric":
+                    evaluationCase["grading"]!["rubric"] = hostile;
+                    break;
+                case "expected_gap_status":
+                    evaluationCase["expected"]!["gap_status"] = hostile;
+                    break;
+                case "expected_clarification":
+                    evaluationCase["expected"]!["clarification"] = hostile;
+                    break;
+                case "expected_population_minimum":
+                    evaluationCase["expected"]!["population_minimum"] = hostile;
+                    break;
+                case "expected_population_path":
+                    evaluationCase["expected"]!["population_path"] = hostile;
+                    break;
+                case "history_expected_synthesis":
+                    evaluationCase["history"]![0]!["expected_synthesis"] = hostile;
+                    break;
+            }
+        });
+
+        Assert.Throws<InvalidDataException>(() => AssistantEvaluationEvidenceVerifier.Verify(
+            fixture.Release, fixture.Files, [fixture.ArtifactRoot], fixture.Now,
+            fixture.AdmissionAuthority));
+    }
+
+    [Theory]
+    [InlineData("empty_expected")]
+    [InlineData("missing_llm_rubric")]
+    [InlineData("unknown_expected_tool")]
+    public void Signed_package_rejects_fully_signed_catalog_without_canonical_case_semantics(
+        string mutation)
+    {
+        var fixture = Package(catalog =>
+        {
+            var evaluationCase = catalog["cases"]![0]!;
+            switch (mutation)
+            {
+                case "empty_expected":
+                    evaluationCase["expected"] = new JsonObject();
+                    break;
+                case "missing_llm_rubric":
+                    evaluationCase["grading"]!.AsObject().Remove("rubric");
+                    break;
+                case "unknown_expected_tool":
+                    evaluationCase["expected"]!["tool"] = "attacker_tool";
+                    break;
+            }
+        });
+
+        Assert.Throws<InvalidDataException>(() => AssistantEvaluationEvidenceVerifier.Verify(
+            fixture.Release, fixture.Files, [fixture.ArtifactRoot], fixture.Now,
+            fixture.AdmissionAuthority));
+    }
+
     [Fact]
     public void Runtime_match_rejects_each_different_identity_domain()
     {
@@ -533,40 +980,123 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
         Assert.Equal(1, unboundedHandler.Requests);
     }
 
-    private Fixture Package()
+    private Fixture Package(
+        Action<JsonObject>? mutateCatalog = null,
+        string candidateEndpoint = "https://candidate-models.example",
+        string graderEndpoint = "https://grader.example",
+        bool useUncheckedEndpointIdentity = false)
     {
         var now = new DateTimeOffset(2026, 8, 15, 12, 0, 0, TimeSpan.Zero);
         var code = new string('a', 40);
         var artifactSet = new string('b', 64);
         var indexIds = new[] { new string('c', 64), new string('d', 64) };
+        const string FirstQuestion = "What did Article 6 say on 1 January 2021?";
+        const string SecondQuestion = "Which laws changed in 2024?";
         var catalog = JsonNode.Parse("""
             {
               "schema":"lex-assistant-eval/3",
               "frozen_at":"2026-08-15T10:00:00Z",
-              "budget":{"maximum_cost_eur":10},
+              "authored_by":"Test catalog author",
+              "author_id":"entra:test-author",
               "pricing":{
+                "schema":"lex-assistant-eval-pricing/1",
+                "currency":"EUR",
+                "source_uri":"https://prices.azure.com/api/retail/prices",
+                "retrieved_at":"2026-08-15T09:00:00Z",
+                "valid_until":"2026-08-16T09:00:00Z",
                 "candidate":{
-                  "input":{"euros_per_million":70},
-                  "output":{"euros_per_million":50}
+                  "model_name":"gpt-5-mini",
+                  "model_version":"2025-08-07",
+                  "sku":"GlobalStandard",
+                  "input":{"meter_id":"candidate-input","meter_name":"Candidate input","effective_start_date":"2026-08-01T00:00:00Z","euros_per_million":70},
+                  "output":{"meter_id":"candidate-output","meter_name":"Candidate output","effective_start_date":"2026-08-01T00:00:00Z","euros_per_million":50}
                 },
                 "grader":{
-                  "input":{"euros_per_million":80},
-                  "output":{"euros_per_million":30}
+                  "model_name":"gpt-5-nano",
+                  "model_version":"2025-08-07",
+                  "sku":"GlobalStandard",
+                  "input":{"meter_id":"grader-input","meter_name":"Grader input","effective_start_date":"2026-08-01T00:00:00Z","euros_per_million":80},
+                  "output":{"meter_id":"grader-output","meter_name":"Grader output","effective_start_date":"2026-08-01T00:00:00Z","euros_per_million":30}
                 }
               },
+              "budget":{
+                "maximum_candidate_input_tokens":3200,
+                "maximum_candidate_output_tokens":320,
+                "maximum_grader_input_tokens":12288,
+                "maximum_grader_output_tokens":150,
+                "maximum_cost_eur":10,
+                "maximum_first_operation_p95_latency_ms":1000,
+                "maximum_first_operation_hard_latency_ms":2000,
+                "maximum_synthesis_p95_latency_ms":1000,
+                "maximum_transport_queue_residual_p95_latency_ms":100,
+                "maximum_total_p99_latency_ms":3000
+              },
               "cases":[
-                {"id":"one","question":"What did Article 6 say on 1 January 2021?","repetitions":2},
-                {"id":"two","question":"Which laws changed in 2024?","repetitions":1}
+                {
+                  "id":"one",
+                  "question":"What did Article 6 say on 1 January 2021?",
+                  "repetitions":2,
+                  "maximum_input_tokens":1000,
+                  "maximum_output_tokens":100,
+                  "maximum_latency_ms":1000,
+                  "expected_synthesis":true,
+                  "history":[
+                    {
+                      "role":"user",
+                      "content":"First setup turn.",
+                      "maximum_input_tokens":100,
+                      "maximum_output_tokens":10,
+                      "expected_synthesis":false,
+                      "expected":{"tool":"search","legal_outcome":"succeeded","transport_outcome":"completed","effect":"provision","arguments":{"query":"setup"}}
+                    }
+                  ],
+                  "expected":{"tool":"search","legal_outcome":"succeeded","transport_outcome":"completed","effect":"provision","arguments":{"query":"article 6"}},
+                  "grading":{"mode":"llm","maximum_input_tokens":4096,"maximum_output_tokens":50,"rubric":"Judge whether the answer addresses the requested provision."}
+                },
+                {
+                  "id":"two",
+                  "question":"Which laws changed in 2024?",
+                  "repetitions":1,
+                  "maximum_input_tokens":1000,
+                  "maximum_output_tokens":100,
+                  "maximum_latency_ms":1000,
+                  "expected_synthesis":false,
+                  "expected":{"tool":"changes_in_period","legal_outcome":"succeeded","transport_outcome":"completed","effect":"history","arguments":{"from_date":"2024-01-01","to_date":"2024-12-31"}},
+                  "grading":{"mode":"llm","maximum_input_tokens":4096,"maximum_output_tokens":50,"rubric":"Judge whether the answer covers the requested period."}
+                }
               ]
             }
             """)!.AsObject();
+        mutateCatalog?.Invoke(catalog);
         var catalogBytes = Bytes(catalog);
         var catalogSha = Sha(catalogBytes);
-        var targetEvidenceSha = new string('e', 64);
+        var candidateHost = new Uri(candidateEndpoint).IdnHost;
+        var targetEvidenceSha = TargetEvidenceSha(
+            "/subscriptions/00000000-0000-0000-0000-000000000006/resourceGroups/rg/providers/Microsoft.App/containerApps/ca-lex-web",
+            "ca-lex-web--candidate", "candidate.example",
+            "registry.example/lex@sha256:" + new string('f', 64),
+            1m, 1_073_741_824, 1, 1, 0, code, artifactSet,
+            candidateHost, "gpt-5-mini");
+        const string CandidateResource =
+            "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg/providers/Microsoft.CognitiveServices/accounts/candidate";
+        const string GraderResource =
+            "/subscriptions/00000000-0000-0000-0000-000000000002/resourceGroups/rg/providers/Microsoft.CognitiveServices/accounts/grader";
+        var candidateModelEvidenceSha = useUncheckedEndpointIdentity
+            ? UncheckedModelEvidenceSha(CandidateResource, candidateEndpoint,
+                "gpt-5-mini", "GlobalStandard", "OpenAI", "gpt-5-mini", "2025-08-07")
+            : ModelEvidenceSha(CandidateResource, candidateEndpoint,
+                "gpt-5-mini", "GlobalStandard", "OpenAI", "gpt-5-mini", "2025-08-07");
+        var graderModelEvidenceSha = useUncheckedEndpointIdentity
+            ? UncheckedModelEvidenceSha(GraderResource, graderEndpoint,
+                "lex-assistant-eval-grader", "GlobalStandard", "OpenAI", "gpt-5-nano",
+                "2025-08-07")
+            : ModelEvidenceSha(GraderResource, graderEndpoint,
+                "lex-assistant-eval-grader", "GlobalStandard", "OpenAI", "gpt-5-nano",
+                "2025-08-07");
         var runtime = new AssistantEvaluationRuntimeIdentity(
             code, "ca-lex-web--candidate", "candidate.example",
             "registry.example/lex@sha256:" + new string('f', 64),
-            artifactSet, catalogSha, "candidate-models.example", "gpt-5-mini",
+            artifactSet, catalogSha, candidateHost, "gpt-5-mini",
             indexIds);
         var reviewKey = ECDsa.Create();
         var reviewPem = reviewKey.ExportECPrivateKeyPem();
@@ -583,6 +1113,9 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
             runtime.CodeCommit,
             runtime.ArtifactManifestSet,
             catalogSha,
+            targetEvidenceSha,
+            candidateModelEvidenceSha,
+            graderModelEvidenceSha,
             DateTimeOffset.Parse("2026-08-15T11:25:00Z"),
             DateTimeOffset.Parse("2026-08-15T11:45:00Z"),
             Convert.ToBase64String(Enumerable.Repeat((byte)9, 32).ToArray())
@@ -598,6 +1131,9 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
         var admissionSha = Sha(admissionBytes);
         var admissionRunIdentity =
             Lex.Evaluation.EvaluationAdmissionContract.RunIdentity(admission);
+        var firstPromptSha = Sha(Encoding.UTF8.GetBytes(
+            "user\nFirst setup turn.\n---\nuser\n" + FirstQuestion));
+        var secondPromptSha = Sha(Encoding.UTF8.GetBytes("user\n" + SecondQuestion));
         var report = JsonNode.Parse($$$"""
             {
               "schema":"lex-assistant-eval-report/3",
@@ -608,47 +1144,79 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
               "admission_sha256":"{{{admissionSha}}}",
               "identity":{
                 "target":{
+                  "resource_id":"/subscriptions/00000000-0000-0000-0000-000000000006/resourceGroups/rg/providers/Microsoft.App/containerApps/ca-lex-web",
                   "revision_name":"{{{runtime.Revision}}}",
                   "revision_fqdn":"{{{runtime.RevisionHostname}}}",
                   "image":"{{{runtime.Image}}}",
+                  "cpu_cores":1,
+                  "memory_limit_bytes":1073741824,
+                  "minimum_replicas":1,
+                  "maximum_replicas":1,
+                  "traffic_weight":0,
                   "code_commit":"{{{code}}}",
                   "artifact_manifest_set":"{{{artifactSet}}}",
-                  "candidate_model_host":"candidate-models.example",
+                  "candidate_model_host":"{{{candidateHost}}}",
                   "candidate_deployment":"gpt-5-mini",
                   "evidence_sha256":"{{{targetEvidenceSha}}}"
                 },
                 "index_manifest_ids":["{{{indexIds[0]}}}","{{{indexIds[1]}}}"],
                 "candidate_model":{
-                  "endpoint":"https://candidate-models.example",
+                  "resource_id":"/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg/providers/Microsoft.CognitiveServices/accounts/candidate",
+                  "endpoint":"{{{candidateEndpoint}}}",
                   "deployment":"gpt-5-mini",
+                  "sku":"GlobalStandard",
+                  "model_format":"OpenAI",
                   "model_name":"gpt-5-mini",
                   "model_version":"2025-08-07",
-                  "sku":"GlobalStandard"
+                  "evidence_sha256":"{{{candidateModelEvidenceSha}}}"
                 },
                 "grader_model":{
-                  "endpoint":"https://grader.example",
+                  "resource_id":"/subscriptions/00000000-0000-0000-0000-000000000002/resourceGroups/rg/providers/Microsoft.CognitiveServices/accounts/grader",
+                  "endpoint":"{{{graderEndpoint}}}",
                   "deployment":"lex-assistant-eval-grader",
+                  "sku":"GlobalStandard",
+                  "model_format":"OpenAI",
                   "model_name":"gpt-5-nano",
                   "model_version":"2025-08-07",
-                  "sku":"GlobalStandard"
+                  "evidence_sha256":"{{{graderModelEvidenceSha}}}"
                 }
               },
+              "preflight":{
+                "reserved_candidate_input_tokens":3200,
+                "reserved_candidate_output_tokens":320,
+                "reserved_grader_input_tokens":12288,
+                "reserved_grader_output_tokens":150,
+                "estimated_candidate_cost_eur":0.24,
+                "estimated_grader_cost_eur":0.98754,
+                "estimated_total_cost_eur":1.22754
+              },
               "pricing":{
+                "schema":"lex-assistant-eval-pricing/1",
+                "currency":"EUR",
+                "source_uri":"https://prices.azure.com/api/retail/prices",
+                "retrieved_at":"2026-08-15T09:00:00Z",
+                "valid_until":"2026-08-16T09:00:00Z",
                 "candidate":{
-                  "input":{"euros_per_million":70},
-                  "output":{"euros_per_million":50}
+                  "model_name":"gpt-5-mini",
+                  "model_version":"2025-08-07",
+                  "sku":"GlobalStandard",
+                  "input":{"meter_id":"candidate-input","meter_name":"Candidate input","effective_start_date":"2026-08-01T00:00:00Z","euros_per_million":70},
+                  "output":{"meter_id":"candidate-output","meter_name":"Candidate output","effective_start_date":"2026-08-01T00:00:00Z","euros_per_million":50}
                 },
                 "grader":{
-                  "input":{"euros_per_million":80},
-                  "output":{"euros_per_million":30}
+                  "model_name":"gpt-5-nano",
+                  "model_version":"2025-08-07",
+                  "sku":"GlobalStandard",
+                  "input":{"meter_id":"grader-input","meter_name":"Grader input","effective_start_date":"2026-08-01T00:00:00Z","euros_per_million":80},
+                  "output":{"meter_id":"grader-output","meter_name":"Grader output","effective_start_date":"2026-08-01T00:00:00Z","euros_per_million":30}
                 },
                 "candidate_input_euros_per_million":70,
                 "candidate_output_euros_per_million":50,
                 "grader_input_euros_per_million":80,
                 "grader_output_euros_per_million":30
               },
-              "actual_candidate_usage":{"input_tokens":1000,"output_tokens":100},
-              "actual_grader_usage":{"input_tokens":600,"output_tokens":60},
+              "actual_candidate_usage":{"input_tokens":1000,"output_tokens":100,"total_tokens":1100},
+              "actual_grader_usage":{"input_tokens":600,"output_tokens":60,"total_tokens":660},
               "actual_candidate_cost_eur":0.075,
               "actual_grader_cost_eur":0.0498,
               "actual_total_cost_eur":0.1248,
@@ -657,13 +1225,13 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
                 "mcp":{"p50_milliseconds":40,"p95_milliseconds":50,"p99_milliseconds":50},
                 "transport_queue_residual":{"p50_milliseconds":10,"p95_milliseconds":10,"p99_milliseconds":10},
                 "submit_to_first_operation_result":{"p50_milliseconds":180,"p95_milliseconds":210,"p99_milliseconds":210},
-                "synthesis":{"p50_milliseconds":0,"p95_milliseconds":0,"p99_milliseconds":0},
+                "synthesis":{"p50_milliseconds":60,"p95_milliseconds":70,"p99_milliseconds":70},
                 "total":{"p50_milliseconds":360,"p95_milliseconds":420,"p99_milliseconds":420}
               },
               "results":[
-                {"case_id":"one","repetition":1,"passed":true,"relevance":{"score":5,"unavailable_cause":null},"failures":[],"candidate_usage":{"input_tokens":300,"output_tokens":30},"grader_usage":{"input_tokens":200,"output_tokens":20},"timings":{"submit_to_first_operation_result_milliseconds":180,"total_milliseconds":360}},
-                {"case_id":"one","repetition":2,"passed":true,"relevance":{"score":4,"unavailable_cause":null},"failures":[],"candidate_usage":{"input_tokens":300,"output_tokens":30},"grader_usage":{"input_tokens":200,"output_tokens":20},"timings":{"submit_to_first_operation_result_milliseconds":210,"total_milliseconds":420}},
-                {"case_id":"two","repetition":1,"passed":true,"relevance":{"score":5,"unavailable_cause":null},"failures":[],"candidate_usage":{"input_tokens":400,"output_tokens":40},"grader_usage":{"input_tokens":200,"output_tokens":20},"timings":{"submit_to_first_operation_result_milliseconds":170,"total_milliseconds":350}}
+                {"case_id":"one","repetition":1,"prompt_sha256":"{{{firstPromptSha}}}","grading_mode":"llm","passed":true,"failures":[],"relevance":{"score":5,"unavailable_cause":null},"candidate_usage":{"input_tokens":300,"output_tokens":30,"total_tokens":330},"grader_usage":{"input_tokens":200,"output_tokens":20,"total_tokens":220},"timings":{"planner_milliseconds":100,"mcp_milliseconds":40,"transport_queue_residual_milliseconds":10,"submit_to_first_operation_result_milliseconds":180,"synthesis_milliseconds":60,"total_milliseconds":360}},
+                {"case_id":"one","repetition":2,"prompt_sha256":"{{{firstPromptSha}}}","grading_mode":"llm","passed":true,"failures":[],"relevance":{"score":4,"unavailable_cause":null},"candidate_usage":{"input_tokens":300,"output_tokens":30,"total_tokens":330},"grader_usage":{"input_tokens":200,"output_tokens":20,"total_tokens":220},"timings":{"planner_milliseconds":130,"mcp_milliseconds":50,"transport_queue_residual_milliseconds":10,"submit_to_first_operation_result_milliseconds":210,"synthesis_milliseconds":70,"total_milliseconds":420}},
+                {"case_id":"two","repetition":1,"prompt_sha256":"{{{secondPromptSha}}}","grading_mode":"llm","passed":true,"failures":[],"relevance":{"score":5,"unavailable_cause":null},"candidate_usage":{"input_tokens":400,"output_tokens":40,"total_tokens":440},"grader_usage":{"input_tokens":200,"output_tokens":20,"total_tokens":220},"timings":{"planner_milliseconds":90,"mcp_milliseconds":35,"transport_queue_residual_milliseconds":5,"submit_to_first_operation_result_milliseconds":170,"synthesis_milliseconds":null,"total_milliseconds":350}}
               ],
               "gate_failures":[],
               "activation_gate_passed":true
@@ -775,17 +1343,23 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
 
     private static void ResignManifestPayloadOnly(
         Dictionary<string, byte[]> files,
-        string key)
+        string key,
+        string payload = AssistantEvaluationEvidenceVerifier.ReportFile)
     {
-        var reportBytes = files[AssistantEvaluationEvidenceVerifier.ReportFile];
+        var payloadBytes = files[payload];
         var manifest = ArtifactManifests.Parse(
             files[AssistantEvaluationEvidenceVerifier.ManifestFile]);
+        var sources = manifest.Sources.ToDictionary(item => item.Key, item => item.Value,
+            StringComparer.Ordinal);
+        if (payload == AssistantEvaluationEvidenceVerifier.BrowserEvidenceFile)
+            sources["browser_evidence_sha256"] = Sha(payloadBytes);
         manifest = manifest with
         {
             Files = manifest.Files.Select(item =>
-                item.Path == AssistantEvaluationEvidenceVerifier.ReportFile
-                    ? item with { Size = reportBytes.LongLength, Sha256 = Sha(reportBytes) }
+                item.Path == payload
+                    ? item with { Size = payloadBytes.LongLength, Sha256 = Sha(payloadBytes) }
                     : item).ToArray(),
+            Sources = sources,
         };
         var manifestBytes = ArtifactManifests.Serialize(manifest);
         files[AssistantEvaluationEvidenceVerifier.ManifestFile] = manifestBytes;
@@ -814,6 +1388,126 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
         var node = JsonNode.Parse(files[name])!.AsObject();
         mutate(node);
         files[name] = Bytes(node);
+    }
+
+    private static void RecomputeReportUsageAndCost(JsonObject report)
+    {
+        long candidateInput = 0;
+        long candidateOutput = 0;
+        long graderInput = 0;
+        long graderOutput = 0;
+        foreach (var result in report["results"]!.AsArray())
+        {
+            var candidate = result!["candidate_usage"]!;
+            var grader = result["grader_usage"]!;
+            var rowCandidateInput = (long)candidate["input_tokens"]!.GetValue<int>();
+            var rowCandidateOutput = (long)candidate["output_tokens"]!.GetValue<int>();
+            var rowGraderInput = (long)grader["input_tokens"]!.GetValue<int>();
+            var rowGraderOutput = (long)grader["output_tokens"]!.GetValue<int>();
+            candidate["total_tokens"] = rowCandidateInput + rowCandidateOutput;
+            grader["total_tokens"] = rowGraderInput + rowGraderOutput;
+            candidateInput += rowCandidateInput;
+            candidateOutput += rowCandidateOutput;
+            graderInput += rowGraderInput;
+            graderOutput += rowGraderOutput;
+        }
+        report["actual_candidate_usage"]!["input_tokens"] = candidateInput;
+        report["actual_candidate_usage"]!["output_tokens"] = candidateOutput;
+        report["actual_candidate_usage"]!["total_tokens"] = candidateInput + candidateOutput;
+        report["actual_grader_usage"]!["input_tokens"] = graderInput;
+        report["actual_grader_usage"]!["output_tokens"] = graderOutput;
+        report["actual_grader_usage"]!["total_tokens"] = graderInput + graderOutput;
+        var pricing = report["pricing"]!;
+        var candidateCost = candidateInput
+                * pricing["candidate"]!["input"]!["euros_per_million"]!.GetValue<decimal>()
+                / 1_000_000m
+            + candidateOutput
+                * pricing["candidate"]!["output"]!["euros_per_million"]!.GetValue<decimal>()
+                / 1_000_000m;
+        var graderCost = graderInput
+                * pricing["grader"]!["input"]!["euros_per_million"]!.GetValue<decimal>()
+                / 1_000_000m
+            + graderOutput
+                * pricing["grader"]!["output"]!["euros_per_million"]!.GetValue<decimal>()
+                / 1_000_000m;
+        report["actual_candidate_cost_eur"] = candidateCost;
+        report["actual_grader_cost_eur"] = graderCost;
+        report["actual_total_cost_eur"] = candidateCost + graderCost;
+    }
+
+    private static string TargetEvidenceSha(
+        string resourceId,
+        string revision,
+        string revisionFqdn,
+        string image,
+        decimal cpuCores,
+        long memoryLimitBytes,
+        int minimumReplicas,
+        int maximumReplicas,
+        int trafficWeight,
+        string codeCommit,
+        string artifactManifestSet,
+        string candidateModelHost,
+        string candidateDeployment)
+        => AssistantEvaluationIdentityDigest.TargetSha256(
+            resourceId, revision, revisionFqdn, image, cpuCores, memoryLimitBytes,
+            minimumReplicas, maximumReplicas, trafficWeight, codeCommit,
+            artifactManifestSet, candidateModelHost, candidateDeployment);
+
+    private static string ModelEvidenceSha(
+        string resourceId,
+        string endpoint,
+        string deployment,
+        string sku,
+        string modelFormat,
+        string modelName,
+        string modelVersion)
+        => AssistantEvaluationIdentityDigest.ModelSha256(
+            resourceId, endpoint, deployment, sku, modelFormat, modelName, modelVersion);
+
+    private static string UncheckedModelEvidenceSha(
+        string resourceId,
+        string endpoint,
+        string deployment,
+        string sku,
+        string modelFormat,
+        string modelName,
+        string modelVersion)
+    {
+        var canonical = string.Join('\n', resourceId.TrimEnd('/').ToLowerInvariant(),
+            new Uri(endpoint).IdnHost.ToLowerInvariant(), deployment, sku,
+            modelFormat, modelName, modelVersion);
+        return Sha(Encoding.UTF8.GetBytes(canonical));
+    }
+
+    private static void RecomputeModelEvidence(JsonNode model)
+    {
+        model["evidence_sha256"] = ModelEvidenceSha(
+            model["resource_id"]!.GetValue<string>(),
+            model["endpoint"]!.GetValue<string>(),
+            model["deployment"]!.GetValue<string>(),
+            model["sku"]!.GetValue<string>(),
+            model["model_format"]!.GetValue<string>(),
+            model["model_name"]!.GetValue<string>(),
+            model["model_version"]!.GetValue<string>());
+    }
+
+    private static void RecomputeTargetEvidence(JsonNode target)
+    {
+        target["evidence_sha256"] = TargetEvidenceSha(
+            target["resource_id"]!.GetValue<string>(),
+            target["revision_name"]!.GetValue<string>(),
+            target["revision_fqdn"]!.GetValue<string>(),
+            target["image"]!.GetValue<string>(),
+            target["cpu_cores"]!.GetValue<decimal>(),
+            target["memory_limit_bytes"]!.GetValue<long>(),
+            target["minimum_replicas"]!.GetValue<int>(),
+            target["maximum_replicas"]!.GetValue<int>(),
+            target["traffic_weight"]!.GetValue<int>(),
+            target["code_commit"]!.GetValue<string>(),
+            target["artifact_manifest_set"]!.GetValue<string>(),
+            target["candidate_model_host"]!.GetValue<string>(),
+            target["candidate_deployment"]!.GetValue<string>());
     }
 
     private static byte[] Bytes(JsonNode value) =>
