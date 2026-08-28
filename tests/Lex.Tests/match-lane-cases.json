@@ -1,0 +1,57 @@
+{
+  "schema": "lex-match-lane-cases/1",
+  "comment": "Normative lane table for B2 metadata_only (agreed design, Codex ruling 2026-08-28). Both the C# and TypeScript classifiers MUST pass every case; parity is proven by this one file. Lanes: text, identity, metadata, unclassified_render. Unknown or empty reasons render normally and are never suppressed, but the code must not assert identity it has not classified.",
+  "producer_vocabulary": [
+    "keyword", "semantic", "semantic_work", "semantic_concept", "article_intent", "fuzzy",
+    "work_metadata",
+    "exact_identifier", "exact_publisher_short_title", "exact_title",
+    "contained_identifier", "contained_publisher_short_title", "contained_title"
+  ],
+  "ambiguous_prefix": "ambiguous_",
+  "cases": [
+    { "reasons": ["keyword"], "lane": "text" },
+    { "reasons": ["semantic"], "lane": "text" },
+    { "reasons": ["semantic_work"], "lane": "text" },
+    { "reasons": ["keyword", "semantic"], "lane": "text" },
+    { "reasons": ["semantic_concept"], "lane": "text",
+      "note": "concept-vector semantic retrieval, found by the drift canary sweep 2026-08-28: meaning evidence, same family as semantic_work" },
+    { "reasons": ["article_intent"], "lane": "text",
+      "note": "an article-number provision hit is text evidence, found by the same sweep" },
+    { "reasons": ["fuzzy"], "lane": "text",
+      "note": "fuzzy-expansion keyword retrieval, found by the same sweep" },
+
+    { "reasons": ["exact_identifier"], "lane": "identity" },
+    { "reasons": ["exact_publisher_short_title"], "lane": "identity",
+      "note": "an exact publisher-recorded short title mention is a NAME (Codex Q2 ruling)" },
+    { "reasons": ["exact_title"], "lane": "identity" },
+    { "reasons": ["contained_identifier"], "lane": "identity" },
+    { "reasons": ["contained_publisher_short_title"], "lane": "identity" },
+    { "reasons": ["contained_title"], "lane": "identity" },
+    { "reasons": ["ambiguous_exact_title"], "lane": "identity",
+      "note": "ambiguity wraps a resolution reason; resolution is identity work" },
+    { "reasons": ["ambiguous_work_metadata"], "lane": "identity",
+      "note": "ambiguity arises only during identity resolution; render, never suppress" },
+
+    { "reasons": ["work_metadata"], "lane": "metadata",
+      "note": "token-OR FTS over identifiers aliases titles facets: the producer's own weak lane" },
+    { "reasons": ["work_metadata"], "metadata_kind": "eurovoc", "lane": "metadata" },
+    { "reasons": ["work_metadata"], "metadata_kind": "eurovoc_alt_label", "lane": "metadata" },
+    { "reasons": ["work_metadata"], "metadata_kind": "eurovoc_broader", "lane": "metadata" },
+    { "reasons": ["work_metadata"], "metadata_kind": "eurovoc_subdomain", "lane": "metadata" },
+    { "reasons": ["work_metadata"], "metadata_kind": "eurovoc_domain", "lane": "metadata" },
+    { "reasons": ["work_metadata"], "metadata_kind": "directory", "lane": "metadata" },
+    { "reasons": ["work_metadata"], "metadata_kind": "publisher_short_title", "lane": "metadata",
+      "note": "a PARTIAL token overlap with a short title rides the weak lane the producer assigned; only the exact mention is identity" },
+
+    { "reasons": ["keyword", "work_metadata"], "lane": "text",
+      "note": "mixed: any text reason wins, nothing is suppressed" },
+    { "reasons": ["exact_title", "work_metadata"], "lane": "identity",
+      "note": "mixed: any identity reason wins over metadata" },
+
+    { "reasons": ["some_future_reason"], "lane": "unclassified_render",
+      "note": "Codex Q1 ruling: renders through the existing visible path, never suppressed, and never asserted as identity" },
+    { "reasons": [], "lane": "unclassified_render" },
+    { "reasons": ["work_metadata", "some_future_reason"], "lane": "unclassified_render",
+      "note": "an unknown reason beside metadata forbids the metadata_only claim for this hit" }
+  ]
+}

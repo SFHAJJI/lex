@@ -540,6 +540,25 @@ public static class CatalogueEndpoints
                     if (!readers.TryGetValue(publisherId, out var reader)) continue;
                     var hits = result["hits"] as JsonArray ?? [];
                     sb.Append($"<h2>{H(reader.Stamp.GetValueOrDefault("publisher_name"))} ({H(reader.Stamp.GetValueOrDefault("jurisdiction"))}), {hits.Count} hit(s)</h2>");
+                    // B2 (Decision 41, metadata_only): when every hit in this publisher's
+                    // response is POSITIVELY a subject-metadata association, the hits are not
+                    // answers and must not render as cards; the typed notice speaks instead,
+                    // with the matches disclosed beneath it, never presented as results.
+                    // Mixed responses are byte-for-byte unchanged.
+                    if (MatchLanes.MetadataOnly(hits.OfType<JsonObject>()
+                            .Select(MatchLanes.ReasonsOf).ToArray()))
+                    {
+                        var disclosed = hits.OfType<JsonObject>().Take(10).Select(hit =>
+                        {
+                            var metaWork = hit["work"]?.GetValue<string>() ?? "";
+                            var metaFrom = hit["valid_from"]?.GetValue<string>() ?? "";
+                            var metaTitle = hit["title"]?.GetValue<string>() ?? metaWork;
+                            return ($"/{publisherId}/{metaWork}/{metaFrom}", metaTitle,
+                                $"{metaWork} · matched in metadata");
+                        }).ToArray();
+                        sb.Append(MatchLanes.NoticeHtml(publisherId, disclosed));
+                        continue;
+                    }
                     foreach (var hit in hits.OfType<JsonObject>())
                     {
                         var work = hit["work"]?.GetValue<string>() ?? "";

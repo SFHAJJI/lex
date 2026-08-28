@@ -8,6 +8,8 @@ import {
   type PublisherMetadata,
 } from "./publisherMetadata";
 import { ScopeFilters } from "./ScopeFilters";
+import { metadataOnlyState } from "./matchLanes";
+import { MetadataOnlyNotice } from "./metadataOnlyNotice";
 import type { State } from "./state";
 import { shorten } from "./pickers";
 import { ResultsSkeleton } from "./Skeleton";
@@ -200,7 +202,12 @@ export default function Search(p: SearchProps) {
     p.onSubmit(searchSubmission(text));
   };
 
-  const groupedResults = groupSearchResults(works, articles);
+  // B2 (Decision 41, metadata_only): when every hit is POSITIVELY a subject-metadata
+  // association, nothing here is an answer; the typed notice speaks and the matches are
+  // disclosed beneath it, never rendered as law cards. Mixed responses are unchanged.
+  const metadataOnly = articles.length === 0
+    && metadataOnlyState(works.map((work) => work.matchReasons ?? []));
+  const groupedResults = groupSearchResults(metadataOnly ? [] : works, articles);
   const visiblePassages = new Set(articles.slice(0, articleLimit));
   const resultLawCount = groupedResults.reduce((count, section) => count + section.works.length, 0);
 
@@ -355,7 +362,9 @@ export default function Search(p: SearchProps) {
             </button>
           ) : null}
 
-          {!busy && !error && works.length === 0 && articles.length === 0 ? (
+          {!busy && !error && metadataOnly ? <MetadataOnlyNotice works={works} /> : null}
+
+          {!busy && !error && !metadataOnly && works.length === 0 && articles.length === 0 ? (
             <div className="empty">
               <p>Nothing in the corpus matches that.</p>
               <p className="sub">
