@@ -785,9 +785,13 @@ export const hasView = (ui?: UiEffect) =>
 export function PartialResponseNotice(
   { partial, conflicted }: { partial?: boolean; conflicted?: string[] }) {
   if (!partial) return null;
-  // Named when we can name them. A conflicted publisher is not merely missing: its own response
-  // contradicted itself, so every claim it made was withheld, and a reader deciding whether this
-  // answer covers what they care about needs to know which publisher that was.
+  // Named when they can be named. A withheld publisher is not merely missing: it sent more than
+  // one answer for this query, so every claim it made was withheld, and a reader deciding
+  // whether this answer covers what they care about needs to know which publisher that was.
+  //
+  // This comment used to say the publisher contradicted itself. That stopped being true when a
+  // duplicate became incoherent even where the two units agree, and it outlived the copy it was
+  // written to explain by one commit. The sentence itself is built and validated below.
   const names = conflictedPublishersSentence(conflicted ?? []);
   return (
     <div className="trust-notice" role="note" data-testid="partial-response-notice"

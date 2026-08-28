@@ -1126,3 +1126,101 @@ test("the copy is true when the second unit is byte-identical to the first", () 
       `two identical answers were described as "${claim}"`);
   }
 });
+
+// ---------------------------------------------------------------------------
+// O20: the conflicted-publisher list is transport data, so the sentence validates it
+// ---------------------------------------------------------------------------
+//
+// `UiEffect` carries this field from the assistant as well as from the local projector. It was
+// typed `string[]` and handed straight to `length` and `join` with no runtime check, and a type
+// annotation is erased at runtime. The validation lives in the function rather than at the call
+// site so that every present and future caller is covered.
+
+test("a hostile conflicted-publisher payload names nobody and never throws", () => {
+  const hostile: [string, unknown][] = [
+    // THE TRAP, and the case a reader dismisses as impossible. A string HAS a `length`, so a
+    // guard written against emptiness admits it and everything after walks the CHARACTERS.
+    // publisherIdentity accepts /^[a-z0-9_-]+$/ from 1 to 64 characters, so "e" and "u" are both
+    // legal identities and the sentence renders "Nothing from e, u is shown here."
+    ["non-empty string", "eu"],
+    ["longer string", "lu-legilux"],
+    // An array-like object walks the same path for the same reason.
+    ["array-like object", { 0: "lu-legilux", length: 1 }],
+    ["plain object", { publishers: ["lu-legilux"] }],
+    ["null", null],
+    ["undefined", undefined],
+    ["number", 2],
+    ["boolean", true],
+    ["array with a non-string member", ["lu-legilux", 7]],
+    ["array with a null member", ["lu-legilux", null]],
+    ["array with an undefined member", ["lu-legilux", undefined]],
+    ["array with a padded member", ["lu-legilux", " eu-eurlex "]],
+    ["array with an upper-case member", ["LU-Legilux"]],
+    ["array with an empty member", [""]],
+    ["array with the ? sentinel", ["?"]],
+    ["nested array", [["lu-legilux"]]],
+    ["duplicate", ["lu-legilux", "lu-legilux"]],
+    // Five valid names, one past the cap. Two publishers are registered.
+    ["over-cap array", ["pub-1", "pub-2", "pub-3", "pub-4", "pub-5"]],
+    ["overlong member", ["x".repeat(65)]],
+  ];
+  for (const [label, value] of hostile) {
+    let sentence: string | undefined = "unset";
+    assert.doesNotThrow(() => { sentence = conflictedPublishersSentence(value); },
+      `${label} threw instead of failing closed`);
+    assert.equal(sentence, undefined, `${label} produced a name sentence`);
+  }
+});
+
+test("validation cannot pass by refusing everything", () => {
+  // The liveness half. A guard that returns undefined unconditionally satisfies every hostile
+  // case above and destroys the disclosure the sentence exists for.
+  const two = conflictedPublishersSentence(["eu-eurlex", "lu-legilux"]);
+  assert.ok(two !== undefined, "a legitimate two-publisher list was refused");
+  assert.ok(two.includes("eu-eurlex") && two.includes("lu-legilux"), "both names must appear");
+  assert.ok(conflictedPublishersSentence(["lu-legilux"]) !== undefined,
+    "a legitimate one-publisher list was refused");
+  // The cap is a bound, not a narrowing: exactly cap-many valid distinct names still speak.
+  assert.ok(conflictedPublishersSentence(["pub-1", "pub-2", "pub-3", "pub-4"]) !== undefined,
+    "the cap refused a list at its own maximum");
+  // Underscore is inside the producer's declared class, so it is not hostile input.
+  assert.ok(conflictedPublishersSentence(["lu_legilux"]) !== undefined,
+    "a grammar the producer declares was refused");
+});
+
+test("a locally derived partition value passes the guard unchanged", () => {
+  // The guard must not refuse the projector's own output, which is where this field normally
+  // comes from: sorted, distinct, already validated publisher ids.
+  const partition = partitionGovernedResponse("search", [
+    searchOk("lu-legilux", 2), refusalFor("lu-legilux"),
+    searchOk("eu-eurlex", 1), refusalFor("eu-eurlex"),
+  ]);
+  assert.deepEqual(partition.conflictedPublishers, ["eu-eurlex", "lu-legilux"],
+    "the fixture stopped producing two conflicted publishers");
+  const sentence = conflictedPublishersSentence(partition.conflictedPublishers);
+  assert.ok(sentence !== undefined, "the guard refused the projector's own list");
+  assert.ok(sentence.includes("eu-eurlex") && sentence.includes("lu-legilux"));
+  // And a one-publisher partition, the ordinary case, is untouched too.
+  const single = partitionGovernedResponse("in_force_on",
+    [inForceOk("lu-legilux", 2), refusalFor("lu-legilux")]);
+  assert.ok(conflictedPublishersSentence(single.conflictedPublishers) !== undefined);
+});
+
+test("failing closed removes the names, never the incompleteness disclosure", () => {
+  // The two disclosures are independent by construction, and this pins that. views.tsx renders
+  // PARTIAL_RESPONSE_SENTENCE whenever `partial` is set and only the inner named paragraph from
+  // this sentence, so a corrupted name list must cost the reader the names and nothing else.
+  const decision = projectGovernedEmptiness("in_force_on",
+    [inForceOk("lu-legilux", 2), refusalFor("lu-legilux")], 0);
+  assert.equal(decision.partial, true, "the disclosure the caller renders was lost");
+  assert.equal(decision.empty, "incomplete_response");
+  assert.ok(PARTIAL_RESPONSE_SENTENCE.length > 0 && INCOMPLETE_RESPONSE_SENTENCE.length > 0,
+    "the generic notices are what survive a hostile name list");
+  // Same response, names corrupted on the wire: no names, and the partition is untouched.
+  assert.equal(conflictedPublishersSentence("lu-legilux"), undefined);
+  assert.equal(conflictedPublishersSentence({ length: 1 }), undefined);
+  assert.equal(decision.partial, true, "validating the names changed the partition");
+  // The honest list from that very same partition still names its publisher.
+  assert.ok(conflictedPublishersSentence(decision.partition.conflictedPublishers) !== undefined,
+    "failing closed on hostile input also silenced the honest case");
+});

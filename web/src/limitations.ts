@@ -124,7 +124,48 @@ export const PARTIAL_RESPONSE_SENTENCE =
   + "it holds for this request.";
 
 /**
- * Names the publishers whose every claim was withheld, or nothing when there are none.
+ * The largest name list this sentence will speak for. `SourceAdapterRegistry` registers exactly
+ * two publishers, "lu-legilux" and "eu-eurlex", so a handful is already generous headroom and a
+ * longer list is not a publisher list whatever it claims to be. The sentence names rather than
+ * counts, so it cannot absorb a long list by summarizing it; naming nobody and leaving the
+ * generic notice to stand alone is the only honest answer to one.
+ */
+const CONFLICTED_PUBLISHER_CAP = 4;
+
+/**
+ * O20. The sentence takes `unknown` and validates HERE rather than trusting a `string[]`
+ * annotation at a call site, because this field reaches `UiEffect` as transport data from the
+ * assistant as well as from the local projector, and an annotation is erased at runtime and
+ * defends nothing against a payload. Validating in the function covers every present and future
+ * caller instead of the one that happened to be audited.
+ *
+ * THE NON-EMPTY STRING IS THE TRAP, and it is why `Array.isArray` is the first line rather than
+ * any test on `length`. A string HAS a `length`, so a guard written against emptiness admits one
+ * and everything after it walks the CHARACTERS: the grammar in `publisherIdentity` is
+ * `/^[a-z0-9_-]+$/` bounded at 1 to 64, so every single character of "eu" is a perfectly legal
+ * publisher identity and the sentence renders "Nothing from e, u is shown here." Nothing throws,
+ * nothing looks broken, and the product has named two publishers that do not exist.
+ *
+ * Returns the validated names, or null for anything that is not exactly a publisher list.
+ */
+const conflictedPublisherNames = (value: unknown): string[] | null => {
+  if (!Array.isArray(value)) return null;
+  if (value.length > CONFLICTED_PUBLISHER_CAP) return null;
+  const names = Array.from(value, (item) => publisherIdentity(item));
+  // One invalid member voids the WHOLE set rather than being filtered out of it. Known exclusions
+  // work this way and for the same reason: a list with a member quietly dropped still presents
+  // itself as the complete set of withheld publishers, so it names fewer than were actually
+  // withheld while looking exactly like an honest answer. Naming none is the smaller lie.
+  if (names.some((name) => name === undefined)) return null;
+  // The projector emits this list sorted and distinct, so a repeat did not come from the
+  // projector, and this sentence has no business rendering one publisher twice.
+  if (new Set(names).size !== names.length) return null;
+  return names as string[];
+};
+
+/**
+ * Names the publishers whose every claim was withheld, or nothing when there are none,
+ * and nothing when the list is not one the projector could have produced (O20, below).
  *
  * Named rather than counted. A conflicted publisher is not merely missing: every claim it made
  * was withheld, and a reader deciding whether this answer covers what they care about needs to
@@ -143,11 +184,16 @@ export const PARTIAL_RESPONSE_SENTENCE =
  * "Each publisher named" rather than "that publisher": the list can carry several, and the
  * function's contract is to name them rather than count them.
  */
-export function conflictedPublishersSentence(conflicted: string[]): string | undefined {
-  return conflicted.length === 0 ? undefined
-    : `Nothing from ${conflicted.join(", ")} is shown here. This response carried more than one `
-      + "answer from each publisher named, and Lex stands behind a publisher's claims only when "
-      + "exactly one answer arrives from it.";
+export function conflictedPublishersSentence(conflicted: unknown): string | undefined {
+  const names = conflictedPublisherNames(conflicted);
+  // Failing closed removes the NAMES and nothing else. `PartialResponseNotice` renders the
+  // incompleteness disclosure from the partition's own counts and only the inner paragraph from
+  // this value, so a hostile payload costs the reader the publisher names while the disclosure
+  // that something was incomplete still stands.
+  if (names === null || names.length === 0) return undefined;
+  return `Nothing from ${names.join(", ")} is shown here. This response carried more than one `
+    + "answer from each publisher named, and Lex stands behind a publisher's claims only when "
+    + "exactly one answer arrives from it.";
 }
 
 /** The fixed sentence for a response that cannot support results or absence claims. */
