@@ -146,6 +146,31 @@ export default function App() {
    * turned a later Back into an empty view with no request.
    */
   const [governedRefresh, setGovernedRefresh] = useState(0);
+  /**
+   * The law-request generation, for the outline and read paths.
+   *
+   * Those two cleared their content in a passive effect or after a response, so at a UTC rollover
+   * React could commit the new default date while the previous day's provisions, gap and index
+   * strip survived a paint. A reader saw one frame of yesterday's law under today's date.
+   */
+  const lawGeneration = useRef(0);
+
+  /**
+   * The law transition, before paint.
+   *
+   * Keyed on exactly what those two effects ask for. An explicit date does not move at a rollover,
+   * so a reader pinned to a date is never cleared by the clock; only the default-date routes are,
+   * which is the case where the question itself changed.
+   */
+  useLayoutEffect(() => {
+    lawGeneration.current += 1;
+    if (!s.work) return;
+    setLoaded(undefined);
+    setToc([]);
+    setUi(undefined);
+    setStrip([]);
+    return () => { lawGeneration.current += 1; };
+  }, [s.work, readDate, s.mode, s.anchor, s.language]);
   const [operationViews, setOperationViews] = useState<OperationReply[]>([]);
   const [assistantPresentationId, setAssistantPresentationId] = useState<string>();
   const pendingPresentations = useRef(new Set<string>());
@@ -279,11 +304,12 @@ export default function App() {
   // and re-dating dropped you at the top of a document you were reading the middle of.
   useEffect(() => {
     if (!s.work) { setToc([]); return; }
-    let live = true;
+    const mine = lawGeneration.current;
+    const live = () => mine === lawGeneration.current;
     tool<any>("as_of", { work: s.work, date: readDate, mode: "outline",
                          ...(s.language ? { language: s.language } : {}) })
       .then((res) => {
-        if (!live) return;
+        if (!live()) return;
         const one = first<any>(res, (x) => Array.isArray(x?.provisions) && x.provisions.length > 0);
         setToc((one?.provisions ?? []) as ProvisionItem[]);
         // The law's name belongs to the law, not to the mode you are reading it in. It used to
@@ -293,8 +319,7 @@ export default function App() {
         if (t) setTitle(t);
         setServedLang((one?.document ?? one)?.language);
       })
-      .catch(() => live && setToc([]));
-    return () => { live = false; };
+      .catch(() => { if (live()) setToc([]); });
   }, [s.work, readDate, s.language]);
 
   // Deterministic loading: changing date, article or mode calls the public MCP endpoint
