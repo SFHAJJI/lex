@@ -156,6 +156,159 @@ jobs:
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Verify source-controlled telemetry policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          telemetry_dir=$(mktemp -d)
+          trap 'rm -rf "$telemetry_dir"' EXIT
+          policy=deploy/telemetry-policy.json
+          environment_group=$(jq -er '.environment.resource_group_name' "$policy")
+          environment_name=$(jq -er '.environment.name' "$policy")
+          container_app_group=$(jq -er '.container_app.resource_group_name' "$policy")
+          container_app_name=$(jq -er '.container_app.name' "$policy")
+          application_insights_group=$(jq -er \
+            '.application_insights.resource_group_name' "$policy")
+          application_insights_name=$(jq -er '.application_insights.name' "$policy")
+          container_apps_workspace_group=$(jq -er \
+            '.workspaces[] | select(.purpose == "container_apps") | .resource_group_name' \
+            "$policy")
+          container_apps_workspace_name=$(jq -er \
+            '.workspaces[] | select(.purpose == "container_apps") | .name' "$policy")
+          environment_id="/subscriptions/$AZURE_SUBSCRIPTION_ID/resourceGroups/$environment_group/providers/Microsoft.App/managedEnvironments/$environment_name"
+          container_app_id="/subscriptions/$AZURE_SUBSCRIPTION_ID/resourceGroups/$container_app_group/providers/Microsoft.App/containerApps/$container_app_name"
+          application_insights_id="/subscriptions/$AZURE_SUBSCRIPTION_ID/resourceGroups/$application_insights_group/providers/Microsoft.Insights/components/$application_insights_name"
+          container_apps_workspace_id="/subscriptions/$AZURE_SUBSCRIPTION_ID/resourceGroups/$container_apps_workspace_group/providers/Microsoft.OperationalInsights/workspaces/$container_apps_workspace_name"
+          environment_api=$(jq -er '.api_versions.managed_environment' "$policy")
+          environment_telemetry_api=$(jq -er \
+            '.api_versions.managed_environment_telemetry' "$policy")
+          container_app_api=$(jq -er '.api_versions.container_app' "$policy")
+          diagnostic_api=$(jq -er '.api_versions.diagnostic_settings' "$policy")
+          category_api=$(jq -er '.api_versions.diagnostic_settings_categories' "$policy")
+          application_insights_api=$(jq -er '.api_versions.application_insights' "$policy")
+          workspace_api=$(jq -er '.api_versions.log_analytics_workspace' "$policy")
+          [ "$environment_api" = "2025-07-01" ] \
+            && [ "$environment_telemetry_api" = "2024-10-02-preview" ] \
+            && [ "$container_app_api" = "2025-07-01" ] \
+            && [ "$diagnostic_api" = "2021-05-01-preview" ] \
+            && [ "$category_api" = "2021-05-01-preview" ] \
+            && [ "$application_insights_api" = "2020-02-02" ] \
+            && [ "$workspace_api" = "2025-07-01" ] \
+            || { echo "::error::telemetry policy uses an unreviewed Azure API version"; exit 1; }
+
+          telemetry_get() {
+            local label="$1" resource="$2" api="$3" projection="$4" output="$5"
+            if ! az rest --method get \
+                --url "https://management.azure.com${resource}?api-version=${api}" \
+                --query "$projection" -o json > "$output" \
+                2> "$telemetry_dir/azure-error.txt"; then
+              echo "::error::telemetry policy read failed at $label"
+              exit 1
+            fi
+            [ -s "$output" ] \
+              || { echo "::error::telemetry policy read was empty at $label"; exit 1; }
+          }
+
+          telemetry_scalar() {
+            local label="$1" resource="$2" api="$3" projection="$4"
+            local value
+            if ! value=$(az rest --method get \
+                --url "https://management.azure.com${resource}?api-version=${api}" \
+                --query "$projection" -o tsv 2> "$telemetry_dir/azure-error.txt"); then
+              echo "::error::telemetry policy scalar read failed at $label" >&2
+              exit 1
+            fi
+            [ -n "$value" ] \
+              || { echo "::error::telemetry policy scalar read was empty at $label" >&2; exit 1; }
+            printf '%s' "$value"
+          }
+
+          telemetry_get managed-environment "$environment_id" "$environment_api" \
+            '{resource_group_name:resourceGroup,name:name,log_destination:properties.appLogsConfiguration.destination,dapr_application_insights_enabled:(not_null(properties.daprAIConnectionString,properties.daprAIInstrumentationKey,`""`)!=`""`)}' \
+            "$telemetry_dir/environment.json"
+          telemetry_get managed-environment-telemetry "$environment_id" \
+            "$environment_telemetry_api" \
+            '{managed_open_telemetry:{app_insights_destination_enabled:(type(properties.openTelemetryConfiguration.destinationsConfiguration.appInsightsConfiguration)==`"object"`),data_dog_destination_enabled:(type(properties.openTelemetryConfiguration.destinationsConfiguration.dataDogConfiguration)==`"object"`),otlp_destinations_type:type(properties.openTelemetryConfiguration.destinationsConfiguration.otlpConfigurations),otlp_destination_count:length(not_null(properties.openTelemetryConfiguration.destinationsConfiguration.otlpConfigurations, `[]`)),trace_destinations:not_null(properties.openTelemetryConfiguration.tracesConfiguration.destinations, `[]`),log_destinations:not_null(properties.openTelemetryConfiguration.logsConfiguration.destinations, `[]`),metric_destinations:not_null(properties.openTelemetryConfiguration.metricsConfiguration.destinations, `[]`)}}' \
+            "$telemetry_dir/environment-telemetry.json"
+          telemetry_get managed-environment-settings \
+            "$environment_id/providers/Microsoft.Insights/diagnosticSettings" "$diagnostic_api" \
+            '{diagnostic_settings_type:type(value),diagnostic_setting_count:length(not_null(value, `[]`))}' \
+            "$telemetry_dir/environment-settings.json"
+          telemetry_get managed-environment-categories \
+            "$environment_id/providers/Microsoft.Insights/diagnosticSettingsCategories" \
+            "$category_api" \
+            '{diagnostic_categories_type:type(value),diagnostic_categories:not_null(value[].name, `[]`)}' \
+            "$telemetry_dir/environment-categories.json"
+          telemetry_get container-app "$container_app_id" "$container_app_api" \
+            '{resource_group_name:resourceGroup,name:name,dapr_enabled:not_null(properties.configuration.dapr.enabled,`false`),dapr_api_logging_enabled:not_null(properties.configuration.dapr.enableApiLogging,`false`)}' \
+            "$telemetry_dir/container-app.json"
+          telemetry_get container-app-settings \
+            "$container_app_id/providers/Microsoft.Insights/diagnosticSettings" "$diagnostic_api" \
+            '{diagnostic_settings_type:type(value),diagnostic_setting_count:length(not_null(value, `[]`))}' \
+            "$telemetry_dir/container-app-settings.json"
+          telemetry_get application-insights "$application_insights_id" \
+            "$application_insights_api" \
+            '{resource_group_name:resourceGroup,name:name,ip_masking_enabled:(not_null(properties.DisableIpMasking,`false`)==`false`)}' \
+            "$telemetry_dir/application-insights.json"
+          telemetry_get application-insights-settings \
+            "$application_insights_id/providers/Microsoft.Insights/diagnosticSettings" \
+            "$diagnostic_api" \
+            '{diagnostic_settings_type:type(value),diagnostic_setting_count:length(not_null(value, `[]`))}' \
+            "$telemetry_dir/application-insights-settings.json"
+
+          application_insights_workspace_id=$(telemetry_scalar \
+            application-insights-workspace-link "$application_insights_id" \
+            "$application_insights_api" properties.WorkspaceResourceId)
+          telemetry_get container-apps-workspace "$container_apps_workspace_id" "$workspace_api" \
+            '{resource_group_name:resourceGroup,name:name,resource_only_permissions:properties.features.enableLogAccessUsingOnlyResourcePermissions}' \
+            "$telemetry_dir/container-apps-workspace.json"
+          telemetry_get application-insights-workspace "$application_insights_workspace_id" \
+            "$workspace_api" \
+            '{resource_group_name:resourceGroup,name:name,resource_only_permissions:properties.features.enableLogAccessUsingOnlyResourcePermissions}' \
+            "$telemetry_dir/application-insights-workspace.json"
+
+          environment_customer=$(telemetry_scalar managed-environment-workspace \
+            "$environment_id" "$environment_api" \
+            properties.appLogsConfiguration.logAnalyticsConfiguration.customerId)
+          container_apps_customer=$(telemetry_scalar container-apps-workspace-customer \
+            "$container_apps_workspace_id" "$workspace_api" properties.customerId)
+          environment_workspace_linked=false
+          [ "$environment_customer" = "$container_apps_customer" ] \
+            && environment_workspace_linked=true
+
+          jq --argjson workspace_linked "$environment_workspace_linked" -s \
+            '.[0] * .[1] * .[2] * .[3] + {workspace_linked:$workspace_linked}' \
+            "$telemetry_dir/environment.json" \
+            "$telemetry_dir/environment-telemetry.json" \
+            "$telemetry_dir/environment-settings.json" \
+            "$telemetry_dir/environment-categories.json" \
+            > "$telemetry_dir/environment-readback.json"
+          jq -s '.[0] * .[1]' \
+            "$telemetry_dir/container-app.json" \
+            "$telemetry_dir/container-app-settings.json" \
+            > "$telemetry_dir/container-app-readback.json"
+          jq -s \
+            '. as $items | $items[0] * $items[1] + {workspace_name:$items[2].name,workspace_linked:true}' \
+            "$telemetry_dir/application-insights.json" \
+            "$telemetry_dir/application-insights-settings.json" \
+            "$telemetry_dir/application-insights-workspace.json" \
+            > "$telemetry_dir/application-insights-readback.json"
+          jq --arg purpose container_apps '. + {purpose:$purpose}' \
+            "$telemetry_dir/container-apps-workspace.json" \
+            > "$telemetry_dir/container-apps-workspace-readback.json"
+          jq --arg purpose application_insights '. + {purpose:$purpose}' \
+            "$telemetry_dir/application-insights-workspace.json" \
+            > "$telemetry_dir/application-insights-workspace-readback.json"
+          jq -n \
+            --slurpfile environment "$telemetry_dir/environment-readback.json" \
+            --slurpfile container_app "$telemetry_dir/container-app-readback.json" \
+            --slurpfile application_insights "$telemetry_dir/application-insights-readback.json" \
+            --slurpfile container_apps_workspace "$telemetry_dir/container-apps-workspace-readback.json" \
+            --slurpfile application_insights_workspace "$telemetry_dir/application-insights-workspace-readback.json" \
+            '{schema:"lex-telemetry-readback/1",environment:$environment[0],container_app:$container_app[0],application_insights:$application_insights[0],workspaces:[$container_apps_workspace[0],$application_insights_workspace[0]]}' \
+            > "$telemetry_dir/readback.json"
+          python3 scripts/deploy/telemetry_policy.py "$policy" "$telemetry_dir/readback.json"
+
       - name: Verify published telemetry retention
         shell: bash
         run: |
@@ -1365,30 +1518,187 @@ jobs:
           az_reauth
           trace_id=$(openssl rand -hex 16)
           span_id=$(openssl rand -hex 8)
-          trace_canary="LEXTRACE${GITHUB_RUN_ID}${GITHUB_RUN_ATTEMPT}"
-          curl --fail --show-error --silent --retry 3 --retry-delay 2 \
-            --connect-timeout 5 --max-time 30 \
-            -H "traceparent: 00-$trace_id-$span_id-01" \
-            "https://$fqdn/?q=$trace_canary" >/dev/null
+          query_canary="LEXQ${GITHUB_RUN_ID}X${GITHUB_RUN_ATTEMPT}"
+          user_agent_canary="LEXUA${GITHUB_RUN_ID}X${GITHUB_RUN_ATTEMPT}"
+          body_canary="LEXBODY${GITHUB_RUN_ID}X${GITHUB_RUN_ATTEMPT}"
+          ip_canary="2001:db8:${trace_id:0:4}:${trace_id:4:4}::1"
+          privacy_error=$(mktemp)
+          if ! curl --fail --silent --retry 3 --retry-delay 2 \
+              --connect-timeout 5 --max-time 30 \
+              -H "traceparent: 00-$trace_id-$span_id-01" \
+              -H "User-Agent: $user_agent_canary" \
+              -H "X-Forwarded-For: $ip_canary" \
+              -H "Content-Type: application/octet-stream" \
+              --request GET --data-binary "$body_canary" \
+              "https://$fqdn/search?q=$query_canary" >/dev/null \
+              2> "$privacy_error"; then
+            echo "::error::synthetic privacy request failed"
+            exit 1
+          fi
+          telemetry_query=$(tr '\n' ' ' <<KQL
+          union
+            (requests
+              | project timestamp, operation_Id,
+                  isRequest=true, isDependency=false,
+                  telemetryName=tostring(name), requestUrl=tostring(url)),
+            (dependencies
+              | project timestamp, operation_Id,
+                  isRequest=false, isDependency=true,
+                  telemetryName=tostring(name), dependencyData=tostring(data),
+                  dependencyTarget=tostring(target)),
+            (traces
+              | project timestamp, operation_Id,
+                  isRequest=false, isDependency=false)
+            | where timestamp > ago(15m) and operation_Id == '$trace_id'
+            | summarize requestRows=countif(isRequest),
+                  requestNameViolations=countif(isRequest and telemetryName != 'lex.request'),
+                  requestUrlViolations=countif(isRequest and isnotempty(requestUrl)),
+                  toolRows=countif(isDependency and telemetryName == 'lex.tool'),
+                  dependencyFieldViolations=countif(isDependency and
+                    (isnotempty(dependencyData) or isnotempty(dependencyTarget)))
+          KQL
+          )
           telemetry=''
+          telemetry_error=$(mktemp)
           for attempt in $(seq 1 18); do
-            telemetry=$(az_retry az monitor app-insights query -g "$RESOURCE_GROUP" --app "$APPLICATION_INSIGHTS_NAME" \
-            --analytics-query "union isfuzzy=true requests, dependencies, traces
-              | where timestamp > ago(15m) and operation_Id == '$trace_id'
-              | extend record=tostring(pack_all()), address=tostring(column_ifexists('client_IP', ''))
-                | summarize rows=count(), requestRows=countif(itemType == 'request'),
-                    leaks=countif(record contains '$trace_canary'),
-                    addresses=countif(isnotempty(address) and address != '0.0.0.0')" -o json)
-            request_rows=$(printf '%s' "$telemetry" | jq -r '.tables[0].rows[0][1] // 0')
-            [ "$request_rows" -gt 0 ] && break
+            if ! telemetry=$(az monitor app-insights query -g "$RESOURCE_GROUP" \
+                --app "$APPLICATION_INSIGHTS_NAME" \
+                --analytics-query "$telemetry_query" \
+                -o json 2> "$telemetry_error"); then
+              echo "::error::candidate telemetry query failed"
+              exit 1
+            fi
+            if ! printf '%s' "$telemetry" | jq -e '
+                (.tables | type) == "array"
+                and (.tables | length) == 1
+                and ([.tables[0].columns[].name] == [
+                  "requestRows", "requestNameViolations", "requestUrlViolations",
+                  "toolRows", "dependencyFieldViolations"
+                ])
+                and (.tables[0].rows | length) == 1
+                and (.tables[0].rows[0] | length) == 5
+                and all(.tables[0].rows[0][];
+                  type == "number" and . >= 0 and floor == .)
+              ' >/dev/null 2>/dev/null; then
+              echo "::error::candidate telemetry response shape was invalid"
+              exit 1
+            fi
+            request_rows=$(printf '%s' "$telemetry" | jq -r '.tables[0].rows[0][0] // 0')
+            tool_rows=$(printf '%s' "$telemetry" | jq -r '.tables[0].rows[0][3] // 0')
+            [ "$request_rows" -gt 0 ] && [ "$tool_rows" -gt 0 ] && break
             sleep 10
           done
           [ "${request_rows:-0}" -gt 0 ] \
             || { echo "::error::candidate request telemetry was not exported"; exit 1; }
-          leaks=$(printf '%s' "$telemetry" | jq -r '.tables[0].rows[0][2] // -1')
-          addresses=$(printf '%s' "$telemetry" | jq -r '.tables[0].rows[0][3] // -1')
-          [ "$leaks" -eq 0 ] && [ "$addresses" -eq 0 ] \
-            || { echo "::error::raw query or client address reached telemetry"; exit 1; }
+          [ "${tool_rows:-0}" -gt 0 ] \
+            || { echo "::error::candidate tool telemetry was not exported"; exit 1; }
+          request_name_violations=$(printf '%s' "$telemetry" | jq -r '.tables[0].rows[0][1] // -1')
+          request_url_violations=$(printf '%s' "$telemetry" | jq -r '.tables[0].rows[0][2] // -1')
+          dependency_field_violations=$(printf '%s' "$telemetry" | jq -r '.tables[0].rows[0][4] // -1')
+          [ "$request_name_violations" -eq 0 ] \
+            && [ "$request_url_violations" -eq 0 ] \
+            && [ "$dependency_field_violations" -eq 0 ] \
+            || { echo "::error::candidate telemetry fields violated the safe shape"; exit 1; }
+
+          application_privacy_query=$(tr '\n' ' ' <<KQL
+          union
+            (requests | project timestamp, operation_Id, record=tostring(pack_all())),
+            (dependencies | project timestamp, operation_Id, record=tostring(pack_all())),
+            (traces | project timestamp, operation_Id, record=tostring(pack_all()))
+            | where timestamp > ago(15m) and operation_Id == '$trace_id'
+            | summarize queryMatches=countif(record contains '$query_canary'),
+                  ipMatches=countif(record contains '$ip_canary'),
+                  userAgentMatches=countif(record contains '$user_agent_canary'),
+                  bodyMatches=countif(record contains '$body_canary')
+          KQL
+          )
+          if ! application_privacy=$(az monitor app-insights query -g "$RESOURCE_GROUP" \
+              --app "$APPLICATION_INSIGHTS_NAME" \
+              --analytics-query "$application_privacy_query" -o json \
+              2> "$privacy_error"); then
+            echo "::error::Application Insights privacy count query failed"
+            exit 1
+          fi
+          if ! printf '%s' "$application_privacy" | jq -e '
+              (.tables | type) == "array" and (.tables | length) == 1
+              and ([.tables[0].columns[].name] == [
+                "queryMatches", "ipMatches", "userAgentMatches", "bodyMatches"
+              ])
+              and (.tables[0].rows | length) == 1
+              and (.tables[0].rows[0] | length) == 4
+              and all(.tables[0].rows[0][];
+                type == "number" and . >= 0 and floor == .)
+            ' >/dev/null 2>/dev/null; then
+            echo "::error::Application Insights privacy count response shape was invalid"
+            exit 1
+          fi
+          application_query_matches=$(printf '%s' "$application_privacy" | jq -r '.tables[0].rows[0][0]')
+          application_ip_matches=$(printf '%s' "$application_privacy" | jq -r '.tables[0].rows[0][1]')
+          application_user_agent_matches=$(printf '%s' "$application_privacy" | jq -r '.tables[0].rows[0][2]')
+          application_body_matches=$(printf '%s' "$application_privacy" | jq -r '.tables[0].rows[0][3]')
+          [ "$application_query_matches" -eq 0 ] && [ "$application_ip_matches" -eq 0 ] \
+            && [ "$application_user_agent_matches" -eq 0 ] \
+            && [ "$application_body_matches" -eq 0 ] \
+            || { echo "::error::synthetic privacy canary reached application telemetry"; exit 1; }
+
+          policy=deploy/telemetry-policy.json
+          container_apps_workspace_group=$(jq -er \
+            '.workspaces[] | select(.purpose == "container_apps") | .resource_group_name' \
+            "$policy")
+          container_apps_workspace_name=$(jq -er \
+            '.workspaces[] | select(.purpose == "container_apps") | .name' "$policy")
+          if ! container_apps_workspace_customer=$(az monitor log-analytics workspace show \
+              -g "$container_apps_workspace_group" -n "$container_apps_workspace_name" \
+              --query customerId -o tsv 2> "$privacy_error"); then
+            echo "::error::Container Apps privacy workspace lookup failed"
+            exit 1
+          fi
+          [ -n "$container_apps_workspace_customer" ] \
+            || { echo "::error::Container Apps privacy workspace identity was empty"; exit 1; }
+          platform_privacy_query=$(tr '\n' ' ' <<KQL
+          union
+            (ContainerAppHTTPLogs
+              | project TimeGenerated, record=tostring(pack_all())),
+            (ContainerAppSystemLogs_CL
+              | project TimeGenerated, record=tostring(pack_all())),
+            (ContainerAppConsoleLogs_CL
+              | project TimeGenerated, record=tostring(pack_all()))
+            | where TimeGenerated > ago(15m)
+            | summarize queryMatches=countif(record contains '$query_canary'),
+                  ipMatches=countif(record contains '$ip_canary'),
+                  userAgentMatches=countif(record contains '$user_agent_canary'),
+                  bodyMatches=countif(record contains '$body_canary')
+          KQL
+          )
+          for attempt in 1 2 3; do
+            if ! platform_privacy=$(az monitor log-analytics query \
+                --workspace "$container_apps_workspace_customer" \
+                --analytics-query "$platform_privacy_query" -o json \
+                2> "$privacy_error"); then
+              echo "::error::Container Apps privacy count query failed"
+              exit 1
+            fi
+            if ! printf '%s' "$platform_privacy" | jq -e '
+                type == "array" and length == 1
+                and (.[0] | keys | sort) == [
+                  "bodyMatches", "ipMatches", "queryMatches", "userAgentMatches"
+                ]
+                and all(.[0][]; type == "number" and . >= 0 and floor == .)
+              ' >/dev/null 2>/dev/null; then
+              echo "::error::Container Apps privacy count response shape was invalid"
+              exit 1
+            fi
+            platform_query_matches=$(printf '%s' "$platform_privacy" | jq -r '.[0].queryMatches')
+            platform_ip_matches=$(printf '%s' "$platform_privacy" | jq -r '.[0].ipMatches')
+            platform_user_agent_matches=$(printf '%s' "$platform_privacy" | jq -r '.[0].userAgentMatches')
+            platform_body_matches=$(printf '%s' "$platform_privacy" | jq -r '.[0].bodyMatches')
+            [ "$platform_query_matches" -eq 0 ] && [ "$platform_ip_matches" -eq 0 ] \
+              && [ "$platform_user_agent_matches" -eq 0 ] \
+              && [ "$platform_body_matches" -eq 0 ] \
+              || { echo "::error::synthetic privacy canary reached Container Apps telemetry"; exit 1; }
+            [ "$attempt" -eq 3 ] || sleep 30
+          done
+          rm -f "$telemetry_error" "$privacy_error"
 
           # Zero-traffic revisions still have directly addressable FQDNs. Keep only the current
           # production authority active after the candidate has passed; promotion explicitly

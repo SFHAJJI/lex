@@ -1,0 +1,62 @@
+{
+  "schema": "lex-telemetry-policy/1",
+  "api_versions": {
+    "managed_environment": "2025-07-01",
+    "managed_environment_telemetry": "2024-10-02-preview",
+    "container_app": "2025-07-01",
+    "diagnostic_settings": "2021-05-01-preview",
+    "diagnostic_settings_categories": "2021-05-01-preview",
+    "application_insights": "2020-02-02",
+    "log_analytics_workspace": "2025-07-01"
+  },
+  "environment": {
+    "resource_group_name": "rg-platform",
+    "name": "cae-platform-law",
+    "log_destination": "log-analytics",
+    "workspace_linked": true,
+    "diagnostic_setting_count": 0,
+    "required_diagnostic_categories": [
+      "ContainerAppConsoleLogs",
+      "ContainerAppHTTPLogs",
+      "ContainerAppSystemLogs"
+    ],
+    "dapr_application_insights_enabled": false,
+    "managed_open_telemetry": {
+      "app_insights_destination_enabled": false,
+      "data_dog_destination_enabled": false,
+      "otlp_destination_count": 0,
+      "trace_destinations": [],
+      "log_destinations": [],
+      "metric_destinations": []
+    }
+  },
+  "container_app": {
+    "resource_group_name": "rg-platform",
+    "name": "ca-lex-web",
+    "diagnostic_setting_count": 0,
+    "dapr_enabled": false,
+    "dapr_api_logging_enabled": false
+  },
+  "application_insights": {
+    "resource_group_name": "rg-platform",
+    "name": "ai-lex-web",
+    "workspace_name": "managed-ai-lex-web-ws",
+    "workspace_linked": true,
+    "ip_masking_enabled": true,
+    "diagnostic_setting_count": 0
+  },
+  "workspaces": [
+    {
+      "purpose": "container_apps",
+      "resource_group_name": "rg-enercop-dev",
+      "name": "law-enercop-dev",
+      "resource_only_permissions": true
+    },
+    {
+      "purpose": "application_insights",
+      "resource_group_name": "managed-ai-rg",
+      "name": "managed-ai-lex-web-ws",
+      "resource_only_permissions": true
+    }
+  ]
+}

@@ -9,11 +9,16 @@ Terraform does not recreate or silently import them.
 The runtime identity pulls from ACR and calls Azure OpenAI. The deployment identity receives a
 GitHub OIDC token for the `production` environment and can build an ACR image, read immutable
 `lex-web` manifest metadata for dry-run retention, assign the runtime identity and update only
-`ca-lex-web`. Two exact-resource assignments additionally let it read the
-`ai-lex-web` component and its Log Analytics table policies so deployment can prove the published
-90-day retention; the custom roles contain no telemetry-record query or write action. Azure blocks
-custom role definitions inside the managed Log Analytics resource group, so the one-action table-policy
-role is defined at subscription scope but remains assigned only to that exact workspace. The publisher
+`ca-lex-web`. Exact-resource assignments additionally let it read and count-query the
+`ai-lex-web` component, read its Log Analytics table policies, and query the Container Apps workspace.
+Microsoft's Log Analytics query API requires workspace query permission in addition to table access,
+so the exact-workspace assignment grants `workspaces/query/read` plus only the HTTP, system and console
+table actions. The privacy queries return aggregate match counts, and the roles grant no telemetry
+write, export, cross-workspace assignment or wildcard table action. Azure blocks custom role definitions
+inside the managed Log Analytics resource group, so the table-policy and Container Apps table-query
+roles are defined at subscription scope but remain assigned only to their exact workspaces. Both
+workspace names and resource groups are pinned by `deploy/telemetry-policy.json`; no null or discovered
+resource-group wildcard is accepted. The publisher
 identity receives a GitHub OIDC token only
 after approval in the main-only `lex-ops` production environment, can read the exact Container App
 revision and candidate/grader model identities, and can sign or verify with the Key Vault key. Its
