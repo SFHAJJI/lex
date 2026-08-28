@@ -807,6 +807,144 @@ public sealed class EurLexScopeTests : IDisposable
     }
 
     [Fact]
+    public void Every_cellar_enumeration_requires_one_exact_bounded_limit()
+    {
+        EurLexAdapter.RequireBoundedEnumerationQuery("SELECT * WHERE { ?s ?p ?o } LIMIT 2", 2);
+
+        Assert.Throws<InvalidDataException>(() =>
+            EurLexAdapter.RequireBoundedEnumerationQuery("SELECT * WHERE { ?s ?p ?o }", 2));
+        Assert.Throws<InvalidDataException>(() =>
+            EurLexAdapter.RequireBoundedEnumerationQuery(
+                "SELECT * WHERE { ?s ?p ?o } LIMIT 3", 2));
+        Assert.Throws<InvalidDataException>(() =>
+            EurLexAdapter.RequireBoundedEnumerationQuery(
+                "SELECT * WHERE { ?s ?p ?o } LIMIT 1000001", 1_000_001));
+    }
+
+    [Fact]
+    public void Commented_out_final_limit_must_not_pass_the_guard()
+    {
+        Assert.Throws<InvalidDataException>(() =>
+            EurLexAdapter.RequireBoundedEnumerationQuery(
+                "SELECT * WHERE { ?s ?p ?o } # LIMIT 2", 2));
+    }
+
+    [Fact]
+    public void Case_variant_subquery_limit_must_count_as_a_duplicate()
+    {
+        Assert.Throws<InvalidDataException>(() =>
+            EurLexAdapter.RequireBoundedEnumerationQuery(
+                "SELECT * WHERE { { SELECT * WHERE { ?s ?p ?o } limit 1 } } LIMIT 2", 2));
+    }
+
+    [Theory]
+    [InlineData("SELECT * WHERE { ?s ?p ?o } \\u0023 LIMIT 2")]
+    [InlineData("SELECT * WHERE { { SELECT * WHERE { ?s ?p ?o } \\u004cIMIT 1 } } LIMIT 2")]
+    [InlineData("SELECT * WHERE { BIND(\"\\u0022 # LIMIT 1\" AS ?x) } LIMIT 2")]
+    public void Sparql_codepoint_escapes_cannot_change_the_limit_grammar(string query)
+    {
+        Assert.Throws<InvalidDataException>(() =>
+            EurLexAdapter.RequireBoundedEnumerationQuery(query, 2));
+    }
+
+    [Fact]
+    public void Escaped_hash_in_a_prefixed_name_cannot_hide_a_duplicate_limit()
+    {
+        const string query = """
+            SELECT * WHERE { { SELECT * WHERE { ?s ?p ex:a\#value } LIMIT 1 } }
+            LIMIT 2
+            """;
+
+        Assert.Throws<InvalidDataException>(() =>
+            EurLexAdapter.RequireBoundedEnumerationQuery(query, 2));
+    }
+
+    [Fact]
+    public void Escaped_hash_in_a_prefixed_name_preserves_one_final_limit()
+    {
+        EurLexAdapter.RequireBoundedEnumerationQuery(
+            "SELECT * WHERE { ?s ?p ex:a\\#value } LIMIT 2", 2);
+    }
+
+    [Fact]
+    public void Limit_text_in_comments_literals_iris_and_names_is_not_an_executable_clause()
+    {
+        const string query = """"
+            PREFIX limit: <https://example.invalid/LIMIT#value>
+            SELECT * WHERE {
+              BIND("# LIMIT 7" AS ?limit)
+              BIND('LIMIT 8' AS ?label)
+              BIND("""LIMIT 9""" AS ?longLabel)
+            }
+            # LIMIT 10
+            limit 2 # LIMIT 11
+            """";
+
+        EurLexAdapter.RequireBoundedEnumerationQuery(query, 2);
+    }
+
+    [Fact]
+    public void Executable_tokens_after_the_limit_are_rejected()
+    {
+        Assert.Throws<InvalidDataException>(() =>
+            EurLexAdapter.RequireBoundedEnumerationQuery(
+                "SELECT * WHERE { ?s ?p ?o } LIMIT 2 OFFSET 0", 2));
+    }
+
+    [Fact]
+    public void A_full_cellar_result_page_is_incomplete_not_success()
+    {
+        EurLexAdapter.RequireCompleteCellarEnumeration(1, 2);
+        EurLexAdapter.RequireCompleteCellarEnumeration(999_999, 1_000_000);
+
+        Assert.Throws<InvalidDataException>(() =>
+            EurLexAdapter.RequireCompleteCellarEnumeration(2, 2));
+        Assert.Throws<InvalidDataException>(() =>
+            EurLexAdapter.RequireCompleteCellarEnumeration(1_000_000, 1_000_000));
+    }
+
+    [Fact]
+    public void Sparql_parser_rejects_a_full_page_before_it_can_be_used()
+    {
+        var oneRow = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            results = new
+            {
+                bindings = new[] { new { celex = new { value = "first" } } },
+            },
+        });
+        var twoRows = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            results = new
+            {
+                bindings = new[]
+                {
+                    new { celex = new { value = "first" } },
+                    new { celex = new { value = "second" } },
+                },
+            },
+        });
+
+        Assert.Single(EurLexAdapter.ParseSparqlRows(oneRow, 2));
+        Assert.Throws<InvalidDataException>(() =>
+            EurLexAdapter.ParseSparqlRows(twoRows, 2));
+    }
+
+    [Fact]
+    public void Relationship_closure_carries_the_cellar_truncation_sentinel()
+    {
+        var query = EurLexAdapter.RelationshipClosureQuery(
+            ["32016R0679"],
+            ["resource_legal_corrects_resource_legal"],
+            ["en", "fr"]);
+
+        Assert.EndsWith($"LIMIT {EurLexAdapter.CellarTruncationRowLimit}",
+            query.Trim(), StringComparison.Ordinal);
+        EurLexAdapter.RequireBoundedEnumerationQuery(
+            query, EurLexAdapter.CellarTruncationRowLimit);
+    }
+
+    [Fact]
     public void Original_state_is_kept_only_when_it_extends_temporal_coverage()
     {
         Assert.True(EurLexAdapter.ShouldIncludeOriginalState(
