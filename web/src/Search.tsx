@@ -100,9 +100,9 @@ const INITIAL_ARTICLES = 8;
 function withholdingSentence(
   withheld: { publishers: string[]; unattributed: number }): string {
   const named = withheld.publishers.length > 0
-    ? `Results from ${withheld.publishers.join(", ")} are not shown, because the scope figure `
-      + "reported for this query did not hold together and those results cannot be checked "
-      + "against it."
+    ? `Results from ${withheld.publishers.join(", ")} are not shown, because that publisher `
+      + "answered this query in ways that contradict each other, so its results cannot be "
+      + "checked."
     : "";
   const unnamed = withheld.unattributed > 0
     ? `${withheld.unattributed} further result set${withheld.unattributed === 1 ? " was" : "s were"}`
@@ -314,6 +314,19 @@ export default function Search(p: SearchProps) {
   const emptyPresentation = searchEmptyPresentation(
     results.absence === "has_results" || results.absence === "partial_results"
       ? "no_match" : results.absence);
+  /**
+   * Whether the response fell short of the scope the reader selected, from any cause.
+   *
+   * Deriving this from `withheld` alone was too narrow: that is only the case this module
+   * detects. The projector independently classifies a malformed or unattributable sibling as
+   * partial or incomplete, and in that state the unqualified sentence claims the whole selected
+   * scope was searched while the notice beside it says the response was not coherent. The
+   * denominator has to answer to the final authority, not to the half of it this file owns.
+   */
+  const authorityIncomplete = withheld !== undefined
+    || results.absence === "partial_results"
+    || results.absence === "incomplete_response"
+    || results.absence === "mixed_no_match";
   const groupedResults = groupSearchResults(works, articles);
   const visiblePassages = new Set(articles.slice(0, articleLimit));
   const resultLawCount = groupedResults.reduce((count, section) => count + section.works.length, 0);
@@ -556,7 +569,7 @@ export default function Search(p: SearchProps) {
           {/* Rule 6: the population behind the list, the zero, or the refusal alike. Rendered
               from validated envelopes only, so an invalid sibling contributes nothing. */}
           {!busy && !error
-            ? <PopulationFooter rows={populations} incomplete={withheld !== undefined} />
+            ? <PopulationFooter rows={populations} incomplete={authorityIncomplete} />
             : null}
         </div>
       ) : null}
