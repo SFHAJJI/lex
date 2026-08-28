@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { compoundOperationViews, first, tool, unionKnownExclusions, type AskReply,
   type OperationReply, type ProvisionItem, type UiEffect } from "./api";
+import { envelopeStripRows, type EnvelopeStripRow } from "./envelopeStrip";
 import { publisherOf, useWorkspace, workSlug, type Space, type State } from "./state";
-import { CitedBy, CoveragePanel, Empty, EvidenceCoordinates, Gap, InForce, PartialResponseNotice, Provision, PublisherLimitations, Ranking, Timeline,
+import { CitedBy, CoveragePanel, Empty, EnvelopeStrip, EvidenceCoordinates, Gap, InForce, PartialResponseNotice, Provision, PublisherLimitations, Ranking, Timeline,
   VerificationPanel, VersionRail, hasView } from "./views";
 import { limitationsFromEffect } from "./limitations";
 import { Compare } from "./Compare";
@@ -71,6 +72,9 @@ export default function App() {
   const [timelineSemantics, setTimelineSemantics] = useState<string>();
   const [held, setHeld] = useState<{ text: number; total: number; official?: string; kind?: string }>();
   const [page, setPage] = useState(0);
+  // The index identity behind whatever data view is showing, kept from the response that produced
+  // it rather than fetched separately, so the strip describes THIS answer's index.
+  const [strip, setStrip] = useState<EnvelopeStripRow[]>([]);
   const [states, setStates] = useState<string[]>([]);
   const [coached, setCoached] = useState(() => {
     try { return localStorage.getItem(COACH_KEY) === "1"; } catch { return true; }
@@ -296,6 +300,7 @@ export default function App() {
         // beside them, and only the typed empty states speak for absence.
         const decision = projectGovernedEmptiness(
           "changes_in_period", res, visibleRows.length);
+        setStrip(envelopeStripRows(res));
         setUi(decision.empty === null
           ? { ranking: { from_date: s.from!, to_date: s.until!, order: by,
                          works_changed: ran.reduce((n, e) => n + (e?.works_changed ?? 0), 0),
@@ -360,6 +365,7 @@ export default function App() {
     })
       .then((res) => {
         if (!live) return;
+        setStrip(envelopeStripRows(res));
         const first = projectGovernedEmptiness("in_force_on", res, 1);
         const partition = first.partition;
         const ran = partition.ran as any[];
@@ -798,6 +804,7 @@ export default function App() {
          null}
         </>}
         {operationViews.length <= 1 && ui ? <EvidenceCoordinates ui={ui} /> : null}
+        <EnvelopeStrip rows={strip} />
       </div>
 
       {(s.work || ui) ? (

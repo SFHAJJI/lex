@@ -702,3 +702,17 @@ button.publisher-metadata-chip[aria-pressed="true"] { border-color: var(--fg); c
 .trust-notice b { display: block; margin-bottom: 2px; }
 .trust-notice .actions { margin-top: 4px; font-size: 12.5px; }
 .trust-notice .actions a { margin-right: 14px; display: inline-block; }
+
+/* The product's signature line. Pinned under the data view, quiet until asked: it must be
+   present on every screen without competing with the law for attention. */
+.envelope-strip { margin-top: 1.25rem; border-top: 1px solid var(--line); padding-top: .5rem; }
+.envelope-strip > summary { cursor: pointer; list-style: none; color: var(--muted);
+  font-size: .78rem; display: flex; flex-direction: column; gap: .15rem; }
+.envelope-strip > summary::-webkit-details-marker { display: none; }
+.envelope-line { display: flex; flex-wrap: wrap; gap: .5rem; align-items: baseline; }
+.envelope-line > span + span::before { content: "|"; margin-right: .5rem; opacity: .45; }
+.envelope-identity { display: grid; grid-template-columns: auto 1fr; gap: .15rem .75rem;
+  margin: .5rem 0 0; font-size: .74rem; color: var(--muted); }
+.envelope-identity > div { display: contents; }
+.envelope-identity dt { opacity: .8; }
+.envelope-identity dd { margin: 0; overflow-wrap: anywhere; }

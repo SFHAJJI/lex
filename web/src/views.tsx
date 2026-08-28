@@ -4,6 +4,7 @@ import {
   type ProvisionItem, type RankingRow, type UiEffect,
 } from "./api";
 import { facetLabel, jurisdictionLabel } from "./facets";
+import { indexFreshnessLabel, type EnvelopeStripRow } from "./envelopeStrip";
 import { publisherOf, workSlug } from "./state";
 import { shorten } from "./pickers";
 import { assistantTimelineRows } from "./assistantShell";
@@ -507,6 +508,47 @@ export function Ranking({ rows, worksChanged, newVersions, populationWorks, know
         </div>
       ) : null}
     </>
+  );
+}
+
+/**
+ * The product's signature line: which index answered, how fresh it is, and whether its stamp
+ * verified. Trust rule 4 puts this on every data view without exception, and rule 8 forbids
+ * implying data is fresher than its build, which is what an undated screen does.
+ *
+ * One line per mounted publisher, because freshness is a property of each index rather than of
+ * the product. The publisher identifier renders verbatim; there is no publisher display name in
+ * the envelope, and inventing one would put a word on screen that no response carried.
+ */
+export function EnvelopeStrip({ rows }: { rows: EnvelopeStripRow[] }) {
+  if (rows.length === 0) return null;
+  const identities = (r: EnvelopeStripRow) => ([
+    ["corpus commit", r.corpusCommit], ["code commit", r.codeCommit],
+    ["manifest set", r.manifestSetId], ["content digest", r.contentDigest],
+  ] as const).filter(([, v]) => v !== undefined);
+  return (
+    <details className="envelope-strip" data-testid="envelope-strip">
+      <summary>
+        {rows.map((r) => (
+          <span className="envelope-line" key={r.publisher}>
+            <span className="mono">{r.publisher}</span>
+            {r.timelineSemantics ? <span>{facetLabel(r.timelineSemantics)}</span> : null}
+            <span data-testid="envelope-built-at">{indexFreshnessLabel(r.builtAt)}</span>
+            <span>{signatureStatusLabel(r.signatureValid)}</span>
+          </span>
+        ))}
+      </summary>
+      {rows.map((r) => (
+        <dl className="envelope-identity" key={r.publisher}>
+          {identities(r).map(([label, value]) => (
+            <div key={label}>
+              <dt>{label}</dt>
+              <dd className="mono">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      ))}
+    </details>
   );
 }
 
