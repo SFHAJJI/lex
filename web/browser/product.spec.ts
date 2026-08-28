@@ -576,6 +576,19 @@ test("official metadata chips apply only the exact server URI and HTTP provenanc
             source_uri: identifier,
           },
         }],
+        // Same class of staleness as the missing `status` above, caught the same way and by
+        // the same gate. Every search path in the producer writes `population` unconditionally:
+        // the unsupported-filter refusal, the retrieval-mode-unavailable envelope and the
+        // executed query all emit it. A search envelope without one is a shape the server never
+        // sends, and the client now withholds that publisher's rows rather than rendering a list
+        // the reader cannot check against a denominator. This is the coherent triple for `ok`.
+        population: {
+          basis: "selected_metadata_scope",
+          works_in_scope: 1,
+          scope_filters_applied: true,
+          query_ran: true,
+          known_exclusions: [],
+        },
       }];
       await route.fulfill({
         status: 200,
@@ -614,4 +627,136 @@ test("official metadata chips apply only the exact server URI and HTTP provenanc
     await expect(page.getByRole("status")).toHaveCount(0);
     await expectNoHorizontalOverflow(page);
     await expectNoSeriousAxeViolation(page);
+  });
+
+test("the exact words override is cleared by the next question and never re-armed by returning",
+  async ({ page }) => {
+    // What this proves that a unit test cannot. `nextExactQuery` and `fuzzyModeFor` are pure and
+    // covered on their own, but every one of those assertions stays green if the effect that
+    // calls the transition is deleted, because nothing in them observes React. The evidence
+    // here is the `fuzzy` argument of each request the running page actually issued, so the
+    // assertion fails the moment the component stops applying the rule. Reading the component
+    // source instead would fail on a rename and pass on a semantic regression; the requests
+    // cannot do either.
+    const consoleErrors: string[] = [];
+    const pageErrors: string[] = [];
+    page.on("console", (message) => {
+      if (message.type() === "error") consoleErrors.push(message.text());
+    });
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+
+    const misspelled = "travial";
+    const expansion = "travail";
+    const otherQuestion = "capital";
+    const fuzzyArguments: unknown[] = [];
+
+    // Where the relaxed response comes from. This suite starts Lex.Web over
+    // `browser/empty-indexes`, so no query typed here can come back relaxed: a server with
+    // nothing mounted answers the terminal no-corpus refusal, never expansions. The relaxed
+    // response is therefore a publisher double, as it already is for the quarantined-mode and
+    // publisher-metadata tests above. The double is keyed on the argument it was actually sent
+    // rather than fixed, because that is what the producer does: spelling fallback is only ever
+    // applied to a request that allowed it. Nothing here chooses that argument. The page does,
+    // and the page is what is on trial.
+    const response = (fuzzy: unknown) => [{
+      envelope: {
+        publisher: "lu-legilux",
+        jurisdiction: "LU",
+        status: "ok",
+        timeline_semantics: "official_consolidation_state",
+      },
+      retrieval_mode: "keyword",
+      ...(fuzzy === "auto" ? { query_expansions: [expansion] } : {}),
+      population: {
+        basis: "selected_metadata_scope",
+        works_in_scope: 1,
+        scope_filters_applied: true,
+        query_ran: true,
+        known_exclusions: [],
+      },
+      hits: [{
+        lex_id: "lu-legilux:loi-2020-07-17-a624:2020-07-17",
+        title: "Loi du 17 juillet 2020",
+        language: "fr",
+        valid_from: "2020-07-17",
+        valid_to: null,
+        match_reasons: ["text"],
+      }],
+    }];
+
+    await page.route("**/mcp", async (route) => {
+      const request = route.request().postDataJSON() as {
+        id: number;
+        params?: { name?: string; arguments?: Record<string, unknown> };
+      };
+      // Only the workspace search is on trial. Anything else reaches the real server and
+      // answers for itself rather than being impersonated by this double.
+      if (request.params?.name !== "search") { await route.continue(); return; }
+      const fuzzy = request.params?.arguments?.fuzzy;
+      fuzzyArguments.push(fuzzy);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: request.id,
+          result: { content: [{ type: "text", text: JSON.stringify(response(fuzzy)) }] },
+        }),
+      });
+    });
+
+    const relaxed = page.getByTestId("interpretation-notice");
+    const revert = page.getByTestId("relaxation-revert");
+    const exactWords = page.getByTestId("exact-words-notice");
+
+    // 1. The relaxation is disclosed, and there is exactly one way back out of it.
+    await page.goto(`/?space=search&q=${misspelled}`, { waitUntil: "networkidle" });
+    await expect.poll(() => fuzzyArguments.length).toBe(1);
+    expect(fuzzyArguments).toEqual(["auto"]);
+    await expect(relaxed).toBeVisible();
+    await expect(relaxed).toContainText(expansion);
+    await expect(revert).toHaveCount(1);
+
+    // 2. The revert issues a NEW search asking for the exact words. A control that only rewrote
+    //    the sentence on screen would read as a revert and leave this argument at "auto", which
+    //    is why the assertion is on the recorded request and not on the copy.
+    await revert.click();
+    await expect.poll(() => fuzzyArguments.length).toBe(2);
+    expect(fuzzyArguments[1]).toBe("off");
+
+    // 3. The screen now says what the request said, and the relaxed disclosure is gone.
+    await expect(exactWords).toBeVisible();
+    await expect(relaxed).toHaveCount(0);
+
+    // 4. The regression this test exists for. A different question, then back to the first one.
+    //    The override was authorised once, for those words, on that visit. Returning to them
+    //    later is not a second authorisation, so the searches issued on the way back must ask
+    //    for no narrowing at all.
+    await page.getByRole("textbox", { name: "Search for a law, an identifier, or words in the text" })
+      .fill(otherQuestion);
+    await page.getByRole("button", { name: "Search", exact: true }).click();
+    await expect.poll(() => new URL(page.url()).searchParams.get("q")).toBe(otherQuestion);
+    await expect.poll(() => fuzzyArguments.length).toBe(3);
+
+    await page.goBack();
+    await expect.poll(() => new URL(page.url()).searchParams.get("q")).toBe(misspelled);
+    await expect.poll(() => fuzzyArguments.length).toBe(4);
+
+    // The recorded arguments are the whole evidence, so their substance is asserted before
+    // their content. `not.toContain` is satisfied by an empty list, and a test that can be
+    // satisfied by observing nothing is the defect this suite exists to prevent.
+    const afterReturning = fuzzyArguments.slice(2);
+    expect(fuzzyArguments).toHaveLength(4);
+    expect(afterReturning).toHaveLength(2);
+    expect(afterReturning).not.toContain("off");
+    expect(fuzzyArguments).toEqual(["auto", "off", "auto", "auto"]);
+
+    // A dormant override would have suppressed the disclosure a second time as well, so the
+    // reader would never have been told the query they came back to had been narrowed.
+    await expect(relaxed).toBeVisible();
+    await expect(relaxed).toContainText(expansion);
+    await expect(exactWords).toHaveCount(0);
+
+    expect(consoleErrors).toEqual([]);
+    expect(pageErrors).toEqual([]);
   });
