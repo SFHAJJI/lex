@@ -21,7 +21,45 @@ import { latestStateLabel, temporalStatusLabel } from "./temporal";
 import { AMBIGUOUS_ONLY_SENTENCE, INCOMPLETE_RESPONSE_SENTENCE, LIMITATION_EXPLANATION,
   MIXED_ZERO_SENTENCES, NO_CORPUS_SENTENCE, projectGovernedEmptiness } from "./limitations";
 
-const today = () => new Date().toISOString().slice(0, 10);
+const utcDay = () => new Date().toISOString().slice(0, 10);
+
+/**
+ * The current UTC day, as live state rather than a value read once per render.
+ *
+ * "Today" is a fact about the world that changes without anyone touching the page. Reading it at
+ * render time meant the default date moved when something else happened to re-render, and stood
+ * still otherwise: a tab left open across midnight kept asking for yesterday, and a rerender for
+ * an unrelated reason moved the visible default while the request that produced the rows on screen
+ * had already been made against the previous day.
+ *
+ * Two triggers, because either alone leaves a gap. A timer at the next UTC boundary catches a page
+ * left open, and a visibility check catches a tab that was asleep when the boundary passed, since
+ * background timers are throttled and may fire late or not at all.
+ */
+function useUtcDay(): string {
+  const [day, setDay] = useState(utcDay);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const refresh = () => {
+      setDay((current) => {
+        const now = utcDay();
+        return current === now ? current : now;
+      });
+      const now = new Date();
+      const nextBoundary = Date.UTC(
+        now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+      timer = setTimeout(refresh, Math.max(1, nextBoundary - now.getTime()));
+    };
+    refresh();
+    const onVisible = () => { if (!document.hidden) refresh(); };
+    addEventListener("visibilitychange", onVisible);
+    return () => {
+      if (timer !== undefined) clearTimeout(timer);
+      removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
+  return day;
+}
 
 /** Language codes as a reader recognises them, for the switcher's tooltip. */
 const NAMES: Record<string, string> = {
@@ -34,16 +72,18 @@ const PRESENTATION_FRAME_ATTEMPTS = 8;
 const presentationMark = (operationId: string) =>
   `lex-operation-result-received:${operationId}`;
 /** Follow-ups derived from the view on screen — always valid, and free. */
-function chipsFor(s: State, ui?: UiEffect, hasText = true): { label: string; go: Partial<State> }[] {
+function chipsFor(
+  s: State, today: string, ui?: UiEffect, hasText = true,
+): { label: string; go: Partial<State> }[] {
   // Offering a window the reader is already looking at is noise, so the twelve-month chip only
   // appears when the twelve months are not already on screen.
   if (ui?.ranking) {
-    const from = shift(today(), -365);
-    return s.from === from && s.until === today() ? []
-         : [{ label: "Try the last twelve months", go: { from, until: today(), mode: "read" } }];
+    const from = shift(today, -365);
+    return s.from === from && s.until === today ? []
+         : [{ label: "Try the last twelve months", go: { from, until: today, mode: "read" } }];
   }
   if (s.mode === "compare") return [{ label: "Read the later version", go: { mode: "read", date: s.to, to: undefined } }];
-  if (s.work && hasText) return [{ label: "Read the current text", go: { mode: "read", date: today(), to: undefined } }];
+  if (s.work && hasText) return [{ label: "Read the current text", go: { mode: "read", date: today, to: undefined } }];
   return [];
 }
 
@@ -54,7 +94,14 @@ function shift(date: string, days: number) {
 }
 
 export default function App() {
+  const today = useUtcDay();
   const [s, go] = useWorkspace();
+  /**
+   * The date these effects actually ask for. Not `s.date`: with no explicit date the request
+   * falls back to today, and today moves on its own. Watching `s.date` alone meant a tab open
+   * across a UTC boundary kept showing the previous day, with no request to correct it.
+   */
+  const readDate = s.date ?? today;
   const [ui, setUi] = useState<UiEffect>();
   /**
    * The governed-response generation, for the two effects this branch touches.
@@ -82,6 +129,17 @@ export default function App() {
    * here would have stranded on its first turn.
    */
   const appliedReply = useRef<string>();
+  /**
+   * One canonical request per accepted governed destination.
+   *
+   * An event counter in state, not a consumable token in a ref. It sits in both governed dependency
+   * lists, so incrementing it re-runs the effect whether or not the destination tuple changed, and
+   * there is nothing to consume, nothing to match and nothing to strand for a later navigation. A
+   * one-shot token was considered here and rejected: it would have been written by this callback
+   * and consumed by an effect, which is not stale-closure safe, and an unconsumed key would have
+   * turned a later Back into an empty view with no request.
+   */
+  const [governedRefresh, setGovernedRefresh] = useState(0);
   const [operationViews, setOperationViews] = useState<OperationReply[]>([]);
   const [assistantPresentationId, setAssistantPresentationId] = useState<string>();
   const pendingPresentations = useRef(new Set<string>());
@@ -216,7 +274,7 @@ export default function App() {
   useEffect(() => {
     if (!s.work) { setToc([]); return; }
     let live = true;
-    tool<any>("as_of", { work: s.work, date: s.date ?? today(), mode: "outline",
+    tool<any>("as_of", { work: s.work, date: readDate, mode: "outline",
                          ...(s.language ? { language: s.language } : {}) })
       .then((res) => {
         if (!live) return;
@@ -231,7 +289,7 @@ export default function App() {
       })
       .catch(() => live && setToc([]));
     return () => { live = false; };
-  }, [s.work, s.date, s.language]);
+  }, [s.work, readDate, s.language]);
 
   // Deterministic loading: changing date, article or mode calls the public MCP endpoint
   // directly. No model in the loop — playing with the workspace must be instant and repeatable.
@@ -240,7 +298,7 @@ export default function App() {
     let live = true;
     // Never show one law's text under another's heading: clear before fetching.
     setLoaded(undefined);
-    const date = s.date ?? today();
+    const date = readDate;
     const lang = s.language ? { language: s.language } : {};
     // A code can carry thousands of articles: ask for the outline first and only pull full
     // text when it is small enough to read. Otherwise leave the reader in the contents —
@@ -286,7 +344,7 @@ export default function App() {
       })
       .catch(() => live && setUi({ gap: { status: "error", explanation: "That version could not be loaded.", available: [] } }));
     return () => { live = false; };
-  }, [s.work, s.date, s.mode, s.anchor, s.language]);
+  }, [s.work, readDate, s.mode, s.anchor, s.language]);
 
   // Time workspace: a period loads the ranking deterministically, so the follow-up chips
   // and any /?from=&until= link land on real content instead of an empty panel.
@@ -397,7 +455,7 @@ export default function App() {
       })
       .catch(() => { if (live()) setUi({ gap: { status: "error", explanation: "The change report could not be loaded. Try again.", available: [] } }); });
   }, [s.work, s.from, s.until, s.order, s.jurisdiction, s.hierarchy, s.domain,
-      s.sourceClass, s.actForm, s.bindingStatus, s.language, page]);
+      s.sourceClass, s.actForm, s.bindingStatus, s.language, page, governedRefresh]);
 
   // "What was in force on this day": the compliance question, answered deterministically like
   // every other control in the workspace rather than only through the assistant.
@@ -521,7 +579,7 @@ export default function App() {
       })
       .catch(() => { if (live()) setUi({ gap: { status: "error", explanation: "The in-force list could not be loaded. Try again.", available: [] } }); });
   }, [s.space, s.asOf, s.work, s.q, s.jurisdiction, s.hierarchy, s.domain,
-      s.sourceClass, s.actForm, s.bindingStatus, s.language, page]);
+      s.sourceClass, s.actForm, s.bindingStatus, s.language, page, governedRefresh]);
 
   // With an article open the rail narrows to THAT article's distinct texts — the question a
   // reader actually has ("when did this paragraph change?") rather than "when was anything
@@ -603,8 +661,15 @@ export default function App() {
           go(assistantWorkspaceState(r.ui)!);
           navigated = true;
         } else if (r.ui!.ranking || r.ui!.in_force) {
-          setPage(r.ui!.workspace?.page ?? 0);
+          // The deterministic effect owns these two, so the assistant answer is not installed as
+          // the primary view. Its payload is a 20 row page while the effect asks for 25 and slices
+          // in 25s, so installing it would leave the reader on a page the URL beside it does not
+          // reproduce. Clear, navigate through the now idempotent go, and let the effect answer.
+          setUi(undefined);
+          setStrip([]);
+          setPage(Math.max(0, r.ui!.workspace?.page ?? 0));
           go(assistantWorkspaceState(r.ui)!);
+          setGovernedRefresh((n) => n + 1);
           navigated = true;
         }
       }
@@ -666,7 +731,7 @@ export default function App() {
   const railDates = narrowed ? states : versions;
   const railScope = narrowed ? "texts of this article" : "versions";
   const at = loaded?.from && railDates.includes(loaded.from) ? loaded.from
-           : railDates.filter((d) => d <= (s.date ?? today())).pop();
+           : railDates.filter((d) => d <= (s.date ?? today)).pop();
 
   const openLaw = (work: string, date: string) => { clearAssistantView(); go({ work, date, to: undefined, anchor: undefined, mode: "read", space: "law" }); };
   const openDiff = (work: string, from: string, to: string) => { clearAssistantView(); go({ work, date: from, to, mode: "compare", space: "law" }); };
@@ -677,7 +742,7 @@ export default function App() {
   const switchTo = (sp: Space) => {
     clearAssistantView();
     setPage(0);
-    if (sp === "time") go({ space: sp, work: undefined, anchor: undefined, from: s.from ?? shift(today(), -365), until: s.until ?? today(), order: s.order ?? "by_churn" });
+    if (sp === "time") go({ space: sp, work: undefined, anchor: undefined, from: s.from ?? shift(today, -365), until: s.until ?? today, order: s.order ?? "by_churn" });
     else go({ space: sp, work: undefined, anchor: undefined, from: undefined, until: undefined });
   };
 
@@ -732,7 +797,7 @@ export default function App() {
     </section>;
     const subject = view.provision?.subject ?? view.history?.subject;
     if (subject?.work) {
-      const from = view.provision?.valid_from ?? subject.date ?? today();
+      const from = view.provision?.valid_from ?? subject.date ?? today;
       return <button className="operation-open" onClick={() => openLaw(subject.work, from)}>
         Open {view.history ? "article history" : view.provision?.outline_only
             ? "table of contents" : "publisher text"}
@@ -756,7 +821,7 @@ export default function App() {
           // raw string would make "x" and "  x  " two questions and drop an authorization the
           // reader gave for what is visibly one.
           key={(s.q ?? "").trim()}
-          state={s} today={today()}
+          state={s} today={today}
           onSubmit={({ query, asOf }) => { setPage(0); clearAssistantView(); go({
             q: query || undefined,
             ...(asOf ? { asOf } : {}),
@@ -784,13 +849,13 @@ export default function App() {
       )}
 
       <AssistantController onReply={applyAssistantReply}
-                followUps={chipsFor(s, ui, (held?.text ?? 1) > 0).map((c) => ({
+                followUps={chipsFor(s, today, ui, (held?.text ?? 1) > 0).map((c) => ({
                   label: c.label, run: () => { clearAssistantView(); go(c.go); } }))}
                 onOpenStep={(st) => { clearAssistantView(); go({ work: st.work, date: st.date, anchor: st.anchor, mode: "read", space: "law" }); }} />
 
       {space === "time" && !s.work ? (
-        <Period from={s.from ?? shift(today(), -365)} until={s.until ?? today()}
-                order={s.order ?? "by_churn"} today={today()}
+        <Period from={s.from ?? shift(today, -365)} until={s.until ?? today}
+                order={s.order ?? "by_churn"} today={today}
                 jurisdiction={s.jurisdiction} hierarchy={s.hierarchy} domain={s.domain}
                 sourceClass={s.sourceClass} actForm={s.actForm}
                 bindingStatus={s.bindingStatus} language={s.language}
@@ -836,7 +901,7 @@ export default function App() {
               ) : null}
               <span className="grow" />
               <label className="pick"><i>{s.mode === "compare" ? "from" : "showing"}</i>
-                <input name="publisher-date" type="date" value={s.date ?? today()} aria-label="Date whose publisher state to show"
+                <input name="publisher-date" type="date" value={s.date ?? today} aria-label="Date whose publisher state to show"
                        onChange={(e) => go({ date: e.target.value })} />
               </label>
               <LawPicker current="choose another" onPick={pickLaw} />
@@ -848,7 +913,7 @@ export default function App() {
 
       {space === "law" && s.work ? (
         <VersionRail dates={railDates} current={at} compareTo={s.mode === "compare" ? s.to : undefined}
-                     scope={railScope} today={today()} work={s.work} timelineSemantics={timelineSemantics}
+                     scope={railScope} today={today} work={s.work} timelineSemantics={timelineSemantics}
                      onPick={(d) => { clearAssistantView(); go({ date: d, to: undefined, mode: "read" }); }}
                      onCompare={(d) => {
                        // Shift-click makes the pair, so comparing never means retyping a date
@@ -906,7 +971,7 @@ export default function App() {
                                   page={page} hasMore={ui.in_force.total !== undefined
                                     && (page * PAGE) + ui.in_force.rows.length < ui.in_force.total}
                                   onPage={(p) => { setPage(Math.max(0, p)); clearAssistantView(); }} onOpen={openLaw} /> :
-         s.work && s.mode === "compare" ? <Compare work={s.work} title={title ?? s.work} from={s.date ?? today()} to={s.to ?? today()} anchor={s.anchor} /> :
+         s.work && s.mode === "compare" ? <Compare work={s.work} title={title ?? s.work} from={s.date ?? today} to={s.to ?? today} anchor={s.anchor} /> :
          s.work && loaded ? <Provision items={loaded.items} toc={toc} validFrom={loaded.from} validTo={loaded.to}
                                        work={s.work} title={title ?? s.work} language={servedLang}
                                        anchor={s.anchor} profile={loaded.profile}
@@ -930,7 +995,7 @@ export default function App() {
 
       {(s.work || ui) ? (
         <div className="chips">
-          {chipsFor(s, ui, (held?.text ?? 1) > 0).map((c) => (
+          {chipsFor(s, today, ui, (held?.text ?? 1) > 0).map((c) => (
             <button key={c.label} className="chip" onClick={() => { clearAssistantView(); go(c.go); }}>{c.label}</button>
           ))}
         </div>
