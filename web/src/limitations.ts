@@ -128,6 +128,57 @@ export function limitationsFromEnvelopes(
   return dedupeLimitations(result).slice(0, LIMITATION_CAP);
 }
 
+/**
+ * The row-authority boundary (round 3, O1). A refusing envelope's rows are malformed response
+ * data: the publisher did not run the governed operation, so nothing it carries may become a
+ * hit, a change row, an in-force row, a count or a pagination input. Every consumer projects
+ * rows exclusively from `ran`; refusals contribute limitations and nothing else.
+ */
+export interface GovernedPartition {
+  /** Envelopes that actually executed the governed operation. Rows come only from these. */
+  ran: unknown[];
+  /** Typed limitations derived from the refusing envelopes. */
+  limitations: PublisherLimitation[];
+  /** At least one envelope refused. */
+  anyRefused: boolean;
+  /** Every envelope refused (and there was at least one). */
+  allRefused: boolean;
+}
+
+export function partitionGovernedResponse(
+  tool: string,
+  envelopes: unknown[],
+): GovernedPartition {
+  const list = Array.isArray(envelopes) ? envelopes : [];
+  const refused = (entry: unknown): boolean => {
+    if (typeof entry !== "object" || entry === null) return false;
+    const envelope = (entry as Record<string, unknown>).envelope;
+    return typeof envelope === "object" && envelope !== null
+      && (envelope as Record<string, unknown>).status === LIMITATION_STATUS;
+  };
+  const ran = list.filter((entry) => !refused(entry));
+  const refusedCount = list.length - ran.length;
+  return {
+    ran,
+    limitations: limitationsFromEnvelopes(tool, list),
+    anyRefused: refusedCount > 0,
+    allRefused: refusedCount > 0 && ran.length === 0,
+  };
+}
+
+/**
+ * The scoped sentence for a mixed zero-result outcome, per governed operation (round 3, O2):
+ * a whole-scope absence claim is unprovable while any publisher refused, so the copy names
+ * only the publishers that ran.
+ */
+export const MIXED_ZERO_SENTENCES: Record<string, string> = {
+  search: "No match was returned by the publishers that could apply these filters.",
+  changes_in_period:
+    "No change was returned by the publishers that could apply these filters.",
+  in_force_on:
+    "No in-force state was returned by the publishers that could apply these filters.",
+};
+
 /** True when every envelope in the call refused; the caller then keeps its full typed gap. */
 export function everyPublisherRefused(envelopes: unknown[]): boolean {
   if (!Array.isArray(envelopes) || envelopes.length === 0) return false;
@@ -145,14 +196,12 @@ export function everyPublisherRefused(envelopes: unknown[]): boolean {
  * coverage statement and must render the typed limitation gap instead. Any hit renders results.
  */
 export function searchAbsenceState(
-  envelopes: unknown[],
-  hitCount: number,
+  partition: GovernedPartition,
+  ranHitCount: number,
 ): "has_results" | "all_refused" | "mixed_no_match" | "no_match" {
-  if (hitCount > 0) return "has_results";
-  if (!Array.isArray(envelopes) || envelopes.length === 0) return "no_match";
-  const refusals = limitationsFromEnvelopes("search", envelopes);
-  if (refusals.length === 0) return "no_match";
-  return everyPublisherRefused(envelopes) ? "all_refused" : "mixed_no_match";
+  if (partition.allRefused) return "all_refused";
+  if (ranHitCount > 0) return "has_results";
+  return partition.anyRefused ? "mixed_no_match" : "no_match";
 }
 
 /**
@@ -201,8 +250,8 @@ export const clearedSearchResults = <W, A>(): SearchResultsState<W, A> => ({
 
 /** A completed response: derived limitations and the typed absence state travel together. */
 export const searchResultsFromResponse = <W, A>(
-  envelopes: unknown[],
-  hitCount: number,
+  partition: GovernedPartition,
+  ranHitCount: number,
   values: {
     works: W[]; articles: A[]; expansions: string[]; modeUnavailable: string | undefined;
   },
@@ -212,8 +261,8 @@ export const searchResultsFromResponse = <W, A>(
   error: undefined,
   modeUnavailable: values.modeUnavailable,
   expansions: values.expansions,
-  limitations: limitationsFromEnvelopes("search", envelopes),
-  absence: searchAbsenceState(envelopes, hitCount),
+  limitations: partition.limitations,
+  absence: searchAbsenceState(partition, ranHitCount),
 });
 
 /** A transport failure: cleared results carrying only the fixed error sentence. */

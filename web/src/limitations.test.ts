@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   clearedSearchResults, everyPublisherRefused, LIMITATION_CAP, LIMITATION_EXPLANATION,
-  LIMITATION_STATUS, limitationsFromEffect, limitationsFromEnvelopes, searchAbsenceState,
-  searchEmptyPresentation, searchResultsFromError, searchResultsFromResponse, validateLimitation,
+  LIMITATION_STATUS, limitationsFromEffect, limitationsFromEnvelopes, MIXED_ZERO_SENTENCES,
+  partitionGovernedResponse, searchAbsenceState, searchEmptyPresentation,
+  searchResultsFromError, searchResultsFromResponse, validateLimitation,
 } from "./limitations.ts";
 
 const refused = (publisher: string, filters: string[]) => ({
@@ -129,17 +130,82 @@ test("empty-state truth scope: all-refused, mixed, and corpus-wide are distinct 
   const refusedEnv = { envelope: { status: LIMITATION_STATUS, publisher: "lu-legilux" },
     unsupported_filters: ["domain"] };
   const okEnv = { envelope: { status: "ok", publisher: "eu-eurlex" }, hits: [] };
+  const p = (envs: unknown[]) => partitionGovernedResponse("search", envs);
   // All refused, zero hits: coverage, never absence.
-  assert.equal(searchAbsenceState([refusedEnv, refusedEnv], 0), "all_refused");
-  // Round 2 correction: one publisher ran and found nothing while another refused. The
-  // refusing publisher's scope is unknown, so a corpus-wide claim is unproved: mixed state.
-  assert.equal(searchAbsenceState([refusedEnv, okEnv], 0), "mixed_no_match");
+  assert.equal(searchAbsenceState(p([refusedEnv, refusedEnv]), 0), "all_refused");
+  // One publisher ran and found nothing while another refused: mixed state.
+  assert.equal(searchAbsenceState(p([refusedEnv, okEnv]), 0), "mixed_no_match");
   // Only when every selected publisher ran is the corpus-wide sentence true.
-  assert.equal(searchAbsenceState([okEnv, okEnv], 0), "no_match");
-  // Any hit renders results regardless of refusals beside it.
-  assert.equal(searchAbsenceState([refusedEnv, okEnv], 3), "has_results");
+  assert.equal(searchAbsenceState(p([okEnv, okEnv]), 0), "no_match");
+  // Hits from publishers that ran render results regardless of refusals beside them.
+  assert.equal(searchAbsenceState(p([refusedEnv, okEnv]), 3), "has_results");
   // No envelopes at all is not an all-refused claim.
-  assert.equal(searchAbsenceState([], 0), "no_match");
+  assert.equal(searchAbsenceState(p([]), 0), "no_match");
+  // Round 3, O1: a refused envelope's rows never produce has_results. The partition strips
+  // the contradictory envelope before any row can be counted, so the all-refused state wins
+  // even when the refusal smuggles a row.
+  const contradictory = { envelope: { status: LIMITATION_STATUS, publisher: "lu-legilux" },
+    unsupported_filters: ["domain"],
+    hits: [{ lex_id: "lu-legilux:contradiction", title: "MUST NOT RENDER" }] };
+  const part = p([contradictory]);
+  assert.equal(part.ran.length, 0);
+  assert.equal(part.allRefused, true);
+  assert.equal(searchAbsenceState(part, part.ran.length), "all_refused");
+});
+
+test("row authority: refused envelopes contribute no rows on any path (round 3, O1)", () => {
+  const contradictorySearch = { envelope: { status: LIMITATION_STATUS, publisher: "lu-legilux" },
+    unsupported_filters: ["domain"], hits: [{ lex_id: "x", title: "MUST NOT RENDER" }] };
+  const contradictoryPeriod = { envelope: { status: LIMITATION_STATUS, publisher: "lu-legilux" },
+    unsupported_filters: ["domain"], changes: [{ work: "refused-row", versions_in_period: 1 }] };
+  const contradictoryForce = { envelope: { status: LIMITATION_STATUS, publisher: "lu-legilux" },
+    unsupported_filters: ["domain"], works: [{ work: "refused-row" }] };
+  // This mirrors the production projection exactly: rows come from partition.ran only.
+  for (const [tool, env, key] of [
+    ["search", contradictorySearch, "hits"],
+    ["changes_in_period", contradictoryPeriod, "changes"],
+    ["in_force_on", contradictoryForce, "works"],
+  ] as const) {
+    const part = partitionGovernedResponse(tool, [env]);
+    const rows = (part.ran as Record<string, unknown>[]).flatMap(
+      (e) => (e?.[key] as unknown[]) ?? []);
+    assert.equal(rows.length, 0, `${tool}: refused rows must not project`);
+    assert.equal(part.limitations.length, 1, `${tool}: the refusal must remain typed`);
+    assert.equal(part.allRefused, true);
+  }
+  // A mixed call still projects the supported publisher's rows, and only those.
+  const okPeriod = { envelope: { status: "ok", publisher: "eu-eurlex" },
+    changes: [{ work: "real-row", versions_in_period: 2 }] };
+  const mixed = partitionGovernedResponse("changes_in_period", [contradictoryPeriod, okPeriod]);
+  const mixedRows = (mixed.ran as Record<string, unknown>[]).flatMap(
+    (e) => (e?.changes as unknown[]) ?? []);
+  assert.equal(mixedRows.length, 1);
+  assert.equal((mixedRows[0] as Record<string, unknown>).work, "real-row");
+});
+
+test("mixed zero on the direct paths never claims whole-scope absence (round 3, O2)", () => {
+  const refused = { envelope: { status: LIMITATION_STATUS, publisher: "lu-legilux" },
+    unsupported_filters: ["domain"] };
+  const okEmptyPeriod = { envelope: { status: "ok", publisher: "eu-eurlex" }, changes: [] };
+  const okEmptyForce = { envelope: { status: "ok", publisher: "eu-eurlex" }, works: [] };
+  // The production branch decision: rows empty, not all refused, one refusal -> mixed gap
+  // with the operation's scoped sentence, never the whole-scope claim.
+  for (const [tool, envs] of [
+    ["changes_in_period", [okEmptyPeriod, refused]],
+    ["in_force_on", [okEmptyForce, refused]],
+  ] as const) {
+    const part = partitionGovernedResponse(tool, [...envs]);
+    assert.equal(part.allRefused, false);
+    assert.equal(part.anyRefused, true);
+    const sentence = MIXED_ZERO_SENTENCES[tool];
+    assert.ok(sentence.includes("publishers that could apply these filters"));
+    assert.ok(!sentence.includes("Nothing changed"));
+    assert.ok(!sentence.includes("No publisher state covers"));
+  }
+  // Both publishers ran and found nothing: the whole-scope sentences are then true and the
+  // mixed sentence must NOT be selected.
+  const clean = partitionGovernedResponse("changes_in_period", [okEmptyPeriod, okEmptyPeriod]);
+  assert.equal(clean.anyRefused, false);
 });
 
 test("the production presentation maps each empty state to its scoped sentence (O1)", () => {
@@ -162,7 +228,8 @@ test("state transitions: a refused response then a cleared query leaves nothing 
   const refusedEnv = { envelope: { status: LIMITATION_STATUS, publisher: "lu-legilux" },
     unsupported_filters: ["domain"] };
   // The exact production wiring: Search.tsx builds its state through these transitions.
-  const after = searchResultsFromResponse([refusedEnv], 0,
+  const after = searchResultsFromResponse(
+    partitionGovernedResponse("search", [refusedEnv]), 0,
     { works: [], articles: [], expansions: [], modeUnavailable: undefined });
   assert.equal(after.limitations.length, 1);
   assert.equal(after.absence, "all_refused");

@@ -8,8 +8,9 @@ import {
   type PublisherMetadata,
 } from "./publisherMetadata";
 import { ScopeFilters } from "./ScopeFilters";
-import { clearedSearchResults, LIMITATION_EXPLANATION, searchEmptyPresentation,
-  searchResultsFromError, searchResultsFromResponse, type SearchResultsState } from "./limitations";
+import { clearedSearchResults, LIMITATION_EXPLANATION, partitionGovernedResponse,
+  searchEmptyPresentation, searchResultsFromError, searchResultsFromResponse,
+  type SearchResultsState } from "./limitations";
 import { PublisherLimitations } from "./views";
 import type { State } from "./state";
 import { shorten } from "./pickers";
@@ -148,7 +149,10 @@ export default function Search(p: SearchProps) {
       .then((res) => {
         if (!live) return;
         const envelopes = Array.isArray(res) ? res : [res];
-        const hits = fusePublisherHits<any>(envelopes);
+        // Row authority (round 3, O1): rows are projected only from envelopes that actually
+        // ran the governed operation. A refusal's rows are malformed data, never results.
+        const partition = partitionGovernedResponse("search", envelopes);
+        const hits = fusePublisherHits<any>(partition.ran as any[]);
         const unavailable = envelopes.filter((e: any) =>
           e?.envelope?.status === "retrieval_mode_unavailable");
         // Capability refusals are kept and shown beside the fused hits, never instead of
@@ -199,7 +203,7 @@ export default function Search(p: SearchProps) {
         // result inventory and must never introduce a ninth law after the work cap was applied.
         // Everything a response sets travels through ONE transition, so no key can be set on
         // one path and forgotten on another (review round 2, O2).
-        setResults(searchResultsFromResponse(envelopes, hits.length, {
+        setResults(searchResultsFromResponse(partition, hits.length, {
           works: visibleWorks,
           articles: arts.filter((article) => visibleWorkIds.has(article.work)).slice(0, 25),
           expansions: nextExpansions,
