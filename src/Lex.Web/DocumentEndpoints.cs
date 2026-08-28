@@ -326,6 +326,12 @@ public static class DocumentEndpoints
                    <div class="notice" style="border-left-color:var(--ok)"><b>Point-in-time view as at {d:yyyy-MM-dd}.</b>
                    This is the latest state the publisher has consolidated, valid {H(Interval(doc))}.</div>
                    """);
+            // Phase 0 trust notice (Decision 41): a consolidated state dated before the
+            // publisher's application date must say so. It renders only when an indexed
+            // application-date fact exists; the evidence source answers null until EU typed
+            // dates land, so this line is inert today by design, not by accident.
+            sb.Append(TrustNotices.PreApplicationState(
+                doc, TrustNotices.FindPreApplicationFact(r, doc)) ?? "");
             // Most readers arrive from a search engine straight onto this page and never see the
             // homepage. The two things they must know — what a consolidated text is, and that it
             // carries no legal force — belong here, in plain words, not only on the front door.
@@ -391,11 +397,15 @@ public static class DocumentEndpoints
                     }
                     var title = p.Num is null && p.Heading is null ? p.Anchor
                         : string.Join(", ", new[] { p.Num, p.Heading }.Where(s => !string.IsNullOrEmpty(s)));
+                    // Phase 0 trust notice (Decisions 41 and 44): rendered inside the provision
+                    // card it concerns, only when its typed evidence condition holds.
+                    var derogation = TrustNotices.TemporaryDerogation(
+                        r, publisher, doc.GroupKey, p.Anchor);
                     sb.Append($"""
                         <div class="card" id="{H(p.Anchor)}">
                         <b>{RenderLegalInline(title)}</b>
                         <a class="sub mono" href="#{H(p.Anchor)}" title="permalink to this provision">#{H(p.Anchor)}</a>
-                        {(p.ArticleValidFrom is not null && p.ArticleValidFrom != doc.ValidFrom ? $"<span class=\"badge\">applicable {H(p.ArticleValidFrom)}</span>" : "")}
+                        {(p.ArticleValidFrom is not null && p.ArticleValidFrom != doc.ValidFrom ? $"<span class=\"badge\">applicable {H(p.ArticleValidFrom)}</span>" : "")}{derogation ?? ""}
                         <div class="lawbody legal-markdown">{RenderLegalMarkdown(p.TextMd)}</div>
                         </div>
                         """);

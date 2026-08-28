@@ -694,3 +694,11 @@ button.publisher-metadata-chip[aria-pressed="true"] { border-color: var(--fg); c
 .evidence-coordinates.warn strong {
   color: var(--danger, #8a2d20);
 }
+
+/* Phase 0 trust notice (Decision 41): information, not error. No color-only signalling: the
+   heading carries the state in words, the border is reinforcement. */
+.trust-notice { border: 1px solid var(--line); border-left: 3px solid var(--warn);
+  border-radius: 8px; padding: 8px 12px; margin: 10px 0; font-size: 13.5px; }
+.trust-notice b { display: block; margin-bottom: 2px; }
+.trust-notice .actions { margin-top: 4px; font-size: 12.5px; }
+.trust-notice .actions a { margin-right: 14px; display: inline-block; }

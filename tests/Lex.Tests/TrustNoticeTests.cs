@@ -1,0 +1,274 @@
+using System.Net;
+using System.Security.Cryptography;
+using System.Text;
+using Lex.Index;
+using Lex.Web;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+
+namespace Lex.Tests;
+
+/// <summary>
+/// The Phase 0 trust notices (Decisions 41 and 44): each renders exactly when its typed
+/// evidence condition is satisfied, and never states a fact the index does not hold. The sites
+/// here use the REAL production trigger identifiers (publisher, work, anchor, derogating act),
+/// so the tests exercise the production condition end to end rather than an injected stand-in.
+/// </summary>
+public sealed class TrustNoticeTests : IDisposable
+{
+    private const string DerogationHeading = "Temporary derogation recorded";
+    private readonly string _root = Path.Combine(
+        Path.GetTempPath(), $"lex-trust-notice-{Guid.NewGuid():N}");
+
+    public TrustNoticeTests() => Directory.CreateDirectory(_root);
+
+    public void Dispose()
+    {
+        try { Directory.Delete(_root, recursive: true); } catch { }
+    }
+
+    [Fact]
+    public async Task Derogation_notice_renders_inside_the_targeted_provision_card_only()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "with-act"), includeAct: true);
+        var page = await site.Client.GetStringAsync(
+            "/lu-legilux/loi-2006-07-31-n2/2024-08-04");
+
+        Assert.Contains(DerogationHeading, page, StringComparison.Ordinal);
+        Assert.Contains("dated 19 December 2020", page, StringComparison.Ordinal);
+        Assert.Contains("does not yet hold the publisher's act-level", page, StringComparison.Ordinal);
+        Assert.Contains("/lu-legilux/loi-2020-12-19-a1039", page, StringComparison.Ordinal);
+        Assert.Contains("Open the derogating act", page, StringComparison.Ordinal);
+        // The action links to the held act's publisher-asserted source, never a guessed ELI.
+        Assert.Contains("https://example.test/derogation-source", page, StringComparison.Ordinal);
+
+        // Decision 44(b): a consolidation-state interval boundary is never spoken as an
+        // act-level force fact. The body must carry no force-boundary date at all.
+        var notice = ExtractNotice(page);
+        Assert.DoesNotContain("2021-07-01", notice, StringComparison.Ordinal);
+        Assert.DoesNotContain("2022-06-30", notice, StringComparison.Ordinal);
+        Assert.DoesNotContain("21 December 2020", notice, StringComparison.Ordinal);
+        Assert.DoesNotContain("30 June 2022", notice, StringComparison.Ordinal);
+
+        // The notice binds to its provision card, not to the page: the sibling article on the
+        // same page must not carry it.
+        var otherCard = CardOf(page, "art_l_121-7");
+        Assert.DoesNotContain(DerogationHeading, otherCard, StringComparison.Ordinal);
+        var targetCard = CardOf(page, "art_l_121-6");
+        Assert.Contains(DerogationHeading, targetCard, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Derogation_notice_is_absent_when_the_derogating_act_is_not_held()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "without-act"), includeAct: false);
+        var page = await site.Client.GetStringAsync(
+            "/lu-legilux/loi-2006-07-31-n2/2024-08-04");
+
+        // Same publisher, same work, same anchor; the only difference is that the mounted index
+        // does not hold the derogating act. Missing evidence must produce no prose claim.
+        Assert.Contains("art_l_121-6", page, StringComparison.Ordinal);
+        Assert.DoesNotContain(DerogationHeading, page, StringComparison.Ordinal);
+        Assert.DoesNotContain("derogat", page, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Derogation_notice_never_leaks_to_another_work()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "other-work"), includeAct: true);
+        var page = await site.Client.GetStringAsync(
+            "/lu-legilux/loi-2020-12-19-a1039/2021-07-01");
+
+        // The derogating act's own page shares publisher and holds the act, but it is not the
+        // governed work-and-anchor coordinate, so the notice must not appear.
+        Assert.DoesNotContain(DerogationHeading, page, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Pre_application_notice_requires_an_indexed_fact_and_an_earlier_state_date()
+    {
+        var doc = Doc("eu-eurlex", "gdpr", "2016-05-04");
+        var fact = new PreApplicationFact(
+            "2018-05-25", "/eu-eurlex/gdpr/dates",
+            "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=OJ:L:2016:119:TOC");
+
+        var rendered = TrustNotices.PreApplicationState(doc, fact);
+        Assert.NotNull(rendered);
+        Assert.Contains("Pre-application state", rendered, StringComparison.Ordinal);
+        Assert.Contains("separate publisher dates", rendered, StringComparison.Ordinal);
+        Assert.Contains("/eu-eurlex/gdpr/dates", rendered, StringComparison.Ordinal);
+        Assert.Contains("https://eur-lex.europa.eu/legal-content", rendered, StringComparison.Ordinal);
+
+        // No indexed fact, no claim; and a state dated on or after application is not
+        // pre-application, whatever the fact says.
+        Assert.Null(TrustNotices.PreApplicationState(doc, null));
+        Assert.Null(TrustNotices.PreApplicationState(
+            Doc("eu-eurlex", "gdpr", "2018-05-25"), fact));
+        Assert.Null(TrustNotices.PreApplicationState(
+            Doc("eu-eurlex", "gdpr", "2019-01-01"), fact));
+    }
+
+    [Fact]
+    public void Pre_application_notice_fails_closed_on_hostile_or_malformed_evidence()
+    {
+        var doc = Doc("eu-eurlex", "gdpr", "2016-05-04");
+        string? Render(string date, string typedDates, string journal) =>
+            TrustNotices.PreApplicationState(doc,
+                new PreApplicationFact(date, typedDates, journal));
+
+        // The valid contract renders; every hostile or malformed member suppresses the whole
+        // notice, because Decision 41 requires both actions and a partial evidence contract
+        // must not become prose (Codex review O1).
+        Assert.NotNull(Render("2018-05-25", "/eu-eurlex/gdpr/dates", "https://eur-lex.europa.eu/oj"));
+        // javascript: scheme in either action.
+        Assert.Null(Render("2018-05-25", "javascript:alert(1)", "https://eur-lex.europa.eu/oj"));
+        Assert.Null(Render("2018-05-25", "/eu-eurlex/gdpr/dates", "javascript:alert(1)"));
+        // Protocol-relative and scheme-bearing internal routes.
+        Assert.Null(Render("2018-05-25", "//evil.example/dates", "https://eur-lex.europa.eu/oj"));
+        Assert.Null(Render("2018-05-25", "https://evil.example/dates", "https://eur-lex.europa.eu/oj"));
+        // Non-HTTPS official link.
+        Assert.Null(Render("2018-05-25", "/eu-eurlex/gdpr/dates", "http://example.test/oj"));
+        Assert.Null(Render("2018-05-25", "/eu-eurlex/gdpr/dates", "ftp://example.test/oj"));
+        // Malformed or non-canonical dates.
+        Assert.Null(Render("25/05/2018", "/eu-eurlex/gdpr/dates", "https://eur-lex.europa.eu/oj"));
+        Assert.Null(Render("2018-5-25", "/eu-eurlex/gdpr/dates", "https://eur-lex.europa.eu/oj"));
+        Assert.Null(Render("", "/eu-eurlex/gdpr/dates", "https://eur-lex.europa.eu/oj"));
+        // Round 2 regressions: an encrypted link is not an official link, and a backslash
+        // authority escape is not an internal route ("/\\evil.example/dates" resolves to
+        // origin evil.example in browsers).
+        Assert.Null(Render("2018-05-25", "/eu-eurlex/gdpr/dates", "https://evil.example/oj"));
+        Assert.Null(Render("2018-05-25", "/\\evil.example/dates", "https://eur-lex.europa.eu/oj"));
+        Assert.Null(Render("2018-05-25", "/eu-eurlex\\..\\x", "https://eur-lex.europa.eu/oj"));
+        // Userinfo and explicit ports are not official publisher shapes.
+        Assert.Null(Render("2018-05-25", "/eu-eurlex/gdpr/dates", "https://user@eur-lex.europa.eu/oj"));
+        Assert.Null(Render("2018-05-25", "/eu-eurlex/gdpr/dates", "https://eur-lex.europa.eu:8443/oj"));
+        // Control characters in the route fail closed.
+        Assert.Null(Render("2018-05-25", "/eu-eurlex/gdpr\u0000/dates", "https://eur-lex.europa.eu/oj"));
+        // Every official publisher host is accepted; case of the host does not matter.
+        Assert.NotNull(Render("2018-05-25", "/x", "https://publications.europa.eu/resource/oj/x"));
+        Assert.NotNull(Render("2018-05-25", "/x", "https://legilux.public.lu/eli/etat/leg/x"));
+        Assert.NotNull(Render("2018-05-25", "/x", "https://EUR-LEX.europa.eu/oj"));
+        // An unparseable state date fails closed too, whatever the fact says.
+        Assert.Null(TrustNotices.PreApplicationState(
+            Doc("eu-eurlex", "gdpr", "not-a-date"),
+            new PreApplicationFact("2018-05-25", "/eu-eurlex/gdpr/dates", "https://eur-lex.europa.eu/oj")));
+    }
+
+    [Fact]
+    public void Pre_application_evidence_source_answers_null_until_typed_dates_are_indexed()
+    {
+        // The seam is deliberately inert: the index holds no application-date fact today
+        // (verified against the packaged EU index, 2026-08-28), so the source must answer null
+        // for every document until EU typed dates land. This test freezes that contract; the
+        // E1 implementation replaces it together with a real evidence-present path.
+        using var site = new NoticeSite(Path.Combine(_root, "seam"), includeAct: true);
+        using var reader = site.Reader();
+        var doc = reader.ByKey("lu-legilux:loi-2006-07-31-n2:2024-08-04");
+        Assert.NotNull(doc);
+        Assert.Null(TrustNotices.FindPreApplicationFact(reader, doc!));
+    }
+
+    private static string ExtractNotice(string page)
+    {
+        var start = page.IndexOf(DerogationHeading, StringComparison.Ordinal);
+        Assert.True(start >= 0);
+        var end = page.IndexOf("</div>", start, StringComparison.Ordinal);
+        Assert.True(end > start);
+        return page[start..end];
+    }
+
+    /// <summary>The provision card markup for one anchor, bounded by the next card.</summary>
+    private static string CardOf(string page, string anchor)
+    {
+        var start = page.IndexOf($"id=\"{anchor}\"", StringComparison.Ordinal);
+        Assert.True(start >= 0, $"provision card {anchor} not found");
+        var end = page.IndexOf("<div class=\"card\" id=", start + 1, StringComparison.Ordinal);
+        return end < 0 ? page[start..] : page[start..end];
+    }
+
+    private static DocRow Doc(string collection, string work, string validFrom) => new(
+        $"{collection}:{work}:{validFrom}", collection, work, $"official:{work}", "REG", "en",
+        validFrom, null, "official_consolidation_state", "2026-08-14T00:00:00Z", false,
+        true, true, Sha(validFrom), null, $"https://example.test/{work}", "Test work",
+        "Test work", null, validFrom, null);
+
+    private static string Sha(string value) => Convert.ToHexStringLower(
+        SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+
+    /// <summary>
+    /// A site whose synthetic Luxembourg index uses the production trigger identifiers: the
+    /// Code du travail with articles L. 121-6 and L. 121-7, and optionally the derogating act
+    /// loi-2020-12-19-a1039 with a publisher-asserted source URI.
+    /// </summary>
+    private sealed class NoticeSite : WebApplicationFactory<Program>
+    {
+        private readonly string _root;
+        private readonly string _dbPath;
+        public HttpClient Client { get; }
+
+        public NoticeSite(string root, bool includeAct)
+        {
+            _root = root;
+            Directory.CreateDirectory(Path.Combine(root, "wwwroot", "app"));
+            File.WriteAllText(Path.Combine(root, "wwwroot", "app", "workspace.js"), "/* test */\n");
+            _dbPath = Path.Combine(root, "index-lu-legilux.db");
+            BuildIndex(_dbPath, includeAct);
+            Client = CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        }
+
+        public LexIndexReader Reader() => LexIndexReader.Open(_dbPath);
+
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
+        {
+            builder.UseSetting("LEX_INDEX_DIR", _root);
+            builder.UseSetting("LEX_PUBLIC_BASE_URL", "https://example.test");
+            builder.UseWebRoot(Path.Combine(_root, "wwwroot"));
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            Client?.Dispose();
+            base.Dispose(disposing);
+        }
+
+        private static ProvisionRow Provision(
+            string rid, string key, int seq, string anchor, string num, string text) =>
+            new(rid, seq, anchor, $"{key}#{anchor}", "article", num, null, "Livre I",
+                null, "Code du travail", text, Sha(text));
+
+        private static void BuildIndex(string path, bool includeAct)
+        {
+            var codeKey = "lu-legilux:loi-2006-07-31-n2:2024-08-04";
+            var code = new DocRow(
+                codeKey, "lu-legilux", "loi-2006-07-31-n2", "official:loi-2006-07-31-n2",
+                "CODE", "fr", "2024-08-04", null, "publisher", "2026-08-14T00:00:00Z",
+                false, true, true, Sha("code"), null,
+                "https://example.test/loi-2006-07-31-n2", "Code du travail",
+                "Code du travail", null, "2024-08-04", null);
+            var docs = new List<DocRow> { code };
+            if (includeAct)
+                docs.Add(new DocRow(
+                    "lu-legilux:loi-2020-12-19-a1039:2021-07-01", "lu-legilux",
+                    "loi-2020-12-19-a1039", "official:loi-2020-12-19-a1039", "LOI", "fr",
+                    "2021-07-01", "2022-06-30", "publisher", "2026-08-14T00:00:00Z",
+                    false, true, true, Sha("derogation"), null,
+                    "https://example.test/derogation-source",
+                    "Loi du 19 decembre 2020 portant derogation temporaire",
+                    "Loi du 19 decembre 2020", null, "2020-12-24", null));
+            var rid = $"{codeKey}|fr|2024-08-04";
+            var provisions = new List<ProvisionRow>
+            {
+                Provision(rid, codeKey, 1, "art_l_121-6", "Art. L. 121-6",
+                    "Le contrat de travail est suspendu pendant la maladie."),
+                Provision(rid, codeKey, 2, "art_l_121-7", "Art. L. 121-7",
+                    "Texte voisin sans rapport avec la protection."),
+            };
+            IndexBuilder.Build(path, new Dictionary<string, string>
+            {
+                ["collection"] = "lu-legilux", ["tier"] = "A",
+                ["history_begins"] = "publisher",
+                ["built_at"] = "2026-08-14T00:00:00Z", ["corpus_commit"] = "test",
+            }, docs, provisions, [], [], StampSigner.CreateKeyPem());
+        }
+    }
+}
