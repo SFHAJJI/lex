@@ -357,6 +357,9 @@ export interface SearchFact {
   snippet?: string; title?: string; valid_from?: string; source_uri?: string; permalink?: string;
 }
 export interface UiEffect {
+  /** Additive: typed per-publisher capability refusals beside a primary view. Validated fail
+      closed in the browser; malformed entries are ignored and never suppress a view. */
+  publisher_limitations?: unknown;
   provision?: { subject: Subject; valid_from: string; valid_to?: string; provisions: ProvisionItem[]; permalink?: string;
                 evidence?: EvidenceContext[]; total_provisions?: number; truncated?: boolean;
                 text_truncated?: boolean; outline_only?: boolean };

@@ -16,6 +16,7 @@ import {
 } from "./temporal";
 import { extractionDisclosure } from "./extractionProfile";
 import { HISTORICAL_DENSITY, historicalDensityApplies } from "./notices";
+import { LIMITATION_EXPLANATION, limitationsFromEffect, type PublisherLimitation } from "./limitations";
 
 const permalink = (work: string, date: string, anchor?: string) =>
   `/${publisherOf(work)}/${workSlug(work)}/${date}${anchor ? `#${anchor}` : ""}`;
@@ -622,7 +623,35 @@ export function Empty({ children }: { children: React.ReactNode }) {
 
 export const hasView = (ui?: UiEffect) =>
   !!(ui && (ui.provision || ui.diff || ui.history || ui.timeline || ui.ranking || ui.in_force
-    || ui.cited_by || ui.coverage || ui.verification || ui.gap));
+    || ui.cited_by || ui.coverage || ui.verification || ui.gap
+    // A partial result whose only additive disclosure is a capability limitation is still a
+    // result; discarding it would silently hide the one publisher that answered honestly.
+    || limitationsFromEffect(ui.publisher_limitations).length > 0));
+
+/**
+ * Typed publisher capability limitations, rendered beside supported rows, never instead of
+ * them. Information, not error: the reader keeps the answer and learns exactly which publisher
+ * did not run the query and for which governed filters. Input is validated fail closed by the
+ * caller or here; malformed entries never render and never suppress the primary view.
+ */
+export function PublisherLimitations({ items }: { items: PublisherLimitation[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="trust-notice" role="note" aria-label="Publisher limitation">
+      <b>Some publishers did not run this query</b>
+      {items.map((item, index) => (
+        <p key={index} className="limitation-row">
+          {(item.publisher ?? item.jurisdiction ?? "One selected publisher")}
+          {": the filter"}{item.unsupported_filters.length > 1 ? "s" : ""}{" "}
+          <code>{item.unsupported_filters.join(", ")}</code>
+          {" "}{item.unsupported_filters.length > 1 ? "are" : "is"} not described by its index
+          for this scope.
+        </p>
+      ))}
+      <p className="limitation-row sub">{LIMITATION_EXPLANATION}</p>
+    </div>
+  );
+}
 
 export function EvidenceCoordinates({ ui }: { ui: UiEffect }) {
   const evidence = ui.provision?.evidence ?? ui.diff?.evidence ?? ui.history?.evidence

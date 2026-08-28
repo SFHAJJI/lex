@@ -2,8 +2,9 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { compoundOperationViews, first, tool, type AskReply, type OperationReply,
   type ProvisionItem, type UiEffect } from "./api";
 import { publisherOf, useWorkspace, workSlug, type Space, type State } from "./state";
-import { CitedBy, CoveragePanel, Empty, EvidenceCoordinates, Gap, InForce, Provision, Ranking, Timeline,
+import { CitedBy, CoveragePanel, Empty, EvidenceCoordinates, Gap, InForce, Provision, PublisherLimitations, Ranking, Timeline,
   VerificationPanel, VersionRail, hasView } from "./views";
+import { limitationsFromEffect } from "./limitations";
 import { Compare } from "./Compare";
 import { LawPicker, shorten } from "./pickers";
 import AssistantController from "./AssistantController";
@@ -14,6 +15,7 @@ import Coach, { COACH_KEY } from "./Coach";
 import { CompareSkeleton, LawSkeleton, ReportSkeleton } from "./Skeleton";
 import { jurisdictionForPublisher, jurisdictionLabel } from "./facets";
 import { latestStateLabel, temporalStatusLabel } from "./temporal";
+import { everyPublisherRefused, LIMITATION_EXPLANATION, limitationsFromEnvelopes } from "./limitations";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -274,6 +276,7 @@ export default function App() {
         // rows reported 3 EU acts for the pandemic and silently dropped the hundreds of
         // Luxembourg ones behind it, because the EU index answers first.
         const envs = (Array.isArray(res) ? res : [res]) as any[];
+        const periodLimitations = limitationsFromEnvelopes("changes_in_period", envs);
         const rows = envs.flatMap((e) => (e?.changes ?? []).map((row: any) => ({
           ...row,
           jurisdiction: e?.envelope?.jurisdiction,
@@ -284,6 +287,8 @@ export default function App() {
           ? (b.versions_in_period ?? 0) - (a.versions_in_period ?? 0)
           : String(b.last_change ?? "").localeCompare(String(a.last_change ?? "")));
         const visibleRows = rows.slice(page * PAGE, (page + 1) * PAGE);
+        // Supported rows and typed refusals coexist: rows render, the limitation renders
+        // beside them, and only an all-refused call keeps the full typed gap.
         setUi(visibleRows.length
           ? { ranking: { from_date: s.from!, to_date: s.until!, order: by,
                          works_changed: envs.reduce((n, e) => n + (e?.works_changed ?? 0), 0),
@@ -292,8 +297,14 @@ export default function App() {
                          population_basis: "sum of the selected publisher scopes",
                          known_exclusions: [...new Set(envs.map(e => e?.population?.known_exclusions)
                            .filter(Boolean))] as string[],
-                         rows: visibleRows } }
-          : { gap: { status: "no_changes_in_period", explanation: "Nothing changed in that window.", available: [] } });
+                         rows: visibleRows },
+              publisher_limitations: periodLimitations }
+          : everyPublisherRefused(envs)
+          ? { gap: { status: "filter_not_supported_by_index",
+                     explanation: LIMITATION_EXPLANATION, available: [] },
+              publisher_limitations: periodLimitations }
+          : { gap: { status: "no_changes_in_period", explanation: "Nothing changed in that window.", available: [] },
+              publisher_limitations: periodLimitations });
       })
       .catch(() => { if (live) setUi({ gap: { status: "error", explanation: "The change report could not be loaded. Try again.", available: [] } }); });
     return () => { live = false; };
@@ -320,6 +331,7 @@ export default function App() {
       .then((res) => {
         if (!live) return;
         const envs = (Array.isArray(res) ? res : [res]) as any[];
+        const inForceLimitations = limitationsFromEnvelopes("in_force_on", envs);
         // in_force_on returns `works` with a `total_works_in_force` count, and its rows carry
         // work/title/document_type/valid_from. Mapped here to the shape the view already speaks.
         const rows = envs.flatMap((e) => (e?.works ?? []).map((w: any) => ({
@@ -335,8 +347,14 @@ export default function App() {
         rows.sort((a: any, b: any) => String(a.title ?? a.work).localeCompare(String(b.title ?? b.work)));
         const visibleRows = rows.slice(page * PAGE, (page + 1) * PAGE);
         setUi(visibleRows.length
-          ? { in_force: { date: s.asOf!, total: envs.reduce((n, e) => n + (e?.total_works_in_force ?? 0), 0), rows: visibleRows } }
-          : { gap: { status: "no_result", explanation: `No publisher state covers ${s.asOf} in this scope.`, available: [] } });
+          ? { in_force: { date: s.asOf!, total: envs.reduce((n, e) => n + (e?.total_works_in_force ?? 0), 0), rows: visibleRows },
+              publisher_limitations: inForceLimitations }
+          : everyPublisherRefused(envs)
+          ? { gap: { status: "filter_not_supported_by_index",
+                     explanation: LIMITATION_EXPLANATION, available: [] },
+              publisher_limitations: inForceLimitations }
+          : { gap: { status: "no_result", explanation: `No publisher state covers ${s.asOf} in this scope.`, available: [] },
+              publisher_limitations: inForceLimitations });
       })
       .catch(() => { if (live) setUi({ gap: { status: "error", explanation: "The in-force list could not be loaded. Try again.", available: [] } }); });
     return () => { live = false; };
@@ -641,12 +659,16 @@ export default function App() {
                          ? operation.operation_id : undefined}
                        aria-label={`Result ${operation.order + 1}`}>
                 <p className="operation-label">Result {operation.order + 1}</p>
+                <PublisherLimitations
+                  items={limitationsFromEffect(operation.ui?.publisher_limitations)} />
                 {renderOperation(operation)}
                 <EvidenceCoordinates ui={operation.ui!} />
               </section>
             ))}
           </div>
-        ) : ui?.gap ? <Gap {...ui.gap} held={s.work ? held : undefined} /> :
+        ) : <>
+        <PublisherLimitations items={limitationsFromEffect(ui?.publisher_limitations)} />
+        {ui?.gap ? <Gap {...ui.gap} held={s.work ? held : undefined} /> :
          ui?.ranking ? <Ranking rows={ui.ranking.rows} worksChanged={ui.ranking.works_changed}
                                 newVersions={ui.ranking.new_versions} from={ui.ranking.from_date}
                                 jurisdiction={s.jurisdiction}
@@ -680,6 +702,7 @@ export default function App() {
          !front && space === "time" && (s.from || s.until) ? <ReportSkeleton /> :
          !front && space === "time" ? <Empty>Pick a period above.</Empty> :
          null}
+        </>}
         {operationViews.length <= 1 && ui ? <EvidenceCoordinates ui={ui} /> : null}
       </div>
 

@@ -8,6 +8,9 @@ import {
   type PublisherMetadata,
 } from "./publisherMetadata";
 import { ScopeFilters } from "./ScopeFilters";
+import { clearedSearchResults, LIMITATION_EXPLANATION, limitationsFromEnvelopes, searchAbsenceState,
+  type PublisherLimitation } from "./limitations";
+import { PublisherLimitations } from "./views";
 import type { State } from "./state";
 import { shorten } from "./pickers";
 import { ResultsSkeleton } from "./Skeleton";
@@ -86,6 +89,8 @@ export default function Search(p: SearchProps) {
   const [busy, setBusy] = useState(false);
   const [modeUsed, setModeUsed] = useState<"keyword" | "hybrid" | "unavailable">("keyword");
   const [modeUnavailable, setModeUnavailable] = useState<string>();
+  const [limitations, setLimitations] = useState<PublisherLimitation[]>([]);
+  const [allRefused, setAllRefused] = useState(false);
   const [expansions, setExpansions] = useState<string[]>([]);
   const [error, setError] = useState<string>();
   const [articleLimit, setArticleLimit] = useState(INITIAL_ARTICLES);
@@ -120,16 +125,22 @@ export default function Search(p: SearchProps) {
     : undefined;
   const metadataIdentifier = metadataArguments?.publisher_metadata_identifier;
 
+  // One cleared tuple for the empty-query and request-start transitions (review O2): a state
+  // added to one and forgotten in the other is exactly how a stale limitation strands on an
+  // empty workspace.
+  const applyCleared = () => {
+    const cleared = clearedSearchResults();
+    setWorks(cleared.works); setArticles(cleared.articles); setError(cleared.error);
+    setModeUnavailable(cleared.modeUnavailable); setLimitations(cleared.limitations);
+    setExpansions(cleared.expansions); setAllRefused(false);
+  };
+
   useEffect(() => {
-    if (!q.trim()) { setWorks([]); setArticles([]); setError(undefined); return; }
+    if (!q.trim()) { applyCleared(); return; }
     let live = true;
     setArticleLimit(INITIAL_ARTICLES);
     setBusy(true);
-    setError(undefined);
-    setModeUnavailable(undefined);
-    setExpansions([]);
-    setWorks([]);
-    setArticles([]);
+    applyCleared();
     tool<any>("search", { query: q.trim(), limit: 40, time_scope: "as_of", as_of: asOf ?? p.today,
                           retrieval_mode: retrieval, fuzzy: "auto",
                           ...(jurisdiction ? { jurisdiction } : {}),
@@ -145,6 +156,10 @@ export default function Search(p: SearchProps) {
         const hits = fusePublisherHits<any>(envelopes);
         const unavailable = envelopes.filter((e: any) =>
           e?.envelope?.status === "retrieval_mode_unavailable");
+        // Capability refusals are kept and shown beside the fused hits, never instead of
+        // them and never silently dropped: a coverage statement is not an empty result.
+        setLimitations(limitationsFromEnvelopes("search", envelopes));
+        setAllRefused(searchAbsenceState(envelopes, hits.length) === "all_refused");
         const usedHybrid = envelopes.some((e: any) => e?.retrieval_mode === "hybrid");
         const usedKeyword = envelopes.some((e: any) => e?.retrieval_mode === "keyword");
         setModeUsed(usedHybrid ? "hybrid" : usedKeyword ? "keyword" : "unavailable");
@@ -189,7 +204,7 @@ export default function Search(p: SearchProps) {
         // result inventory and must never introduce a ninth law after the work cap was applied.
         setArticles(arts.filter((article) => visibleWorkIds.has(article.work)).slice(0, 25));
       })
-      .catch(() => { if (live) { setWorks([]); setArticles([]); setError("Search could not be reached. Try again."); } })
+      .catch(() => { if (live) { applyCleared(); setError("Search could not be reached. Try again."); } })
       .finally(() => { if (live) setBusy(false); });
     return () => { live = false; };
   }, [q, asOf, retrieval, jurisdiction, hierarchy, domain, sourceClass, actForm, bindingStatus,
@@ -276,6 +291,8 @@ export default function Search(p: SearchProps) {
 
           <ScopeFilters values={p.state} onChange={p.onRefine} />
 
+          <PublisherLimitations items={limitations} />
+
           {activeMetadata ? (
             <div className="metadata-filter" role="status">
               <span>Filtering by {publisherMetadataCaption(activeMetadata.kind)}: <b>{activeMetadata.displayLabel}</b></span>
@@ -356,7 +373,16 @@ export default function Search(p: SearchProps) {
           ) : null}
 
           {!busy && !error && works.length === 0 && articles.length === 0 ? (
-            <div className="empty">
+            allRefused ? (
+              // Review O1: when no publisher ran the governed query, a corpus-absence sentence
+              // would be false. The typed limitation gap speaks instead, and only it.
+              <div className="empty" data-search-empty="all_refused">
+                <p>No selected publisher ran this query.</p>
+                <p className="sub">{LIMITATION_EXPLANATION}{" "}
+                  <a href="/coverage">What Lex holds, and lacks →</a></p>
+              </div>
+            ) : (
+            <div className="empty" data-search-empty="no_match">
               <p>Nothing in the corpus matches that.</p>
               <p className="sub">
                 Search reads the versions that carry text. Lex also holds dated versions whose
@@ -364,6 +390,7 @@ export default function Search(p: SearchProps) {
                 <a href="/coverage">What Lex holds, and lacks →</a>
               </p>
             </div>
+            )
           ) : null}
         </div>
       ) : null}
