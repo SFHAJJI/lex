@@ -539,9 +539,13 @@ export function PopulationFooter(
       {denominator.kind === "total"
         ? <p data-testid="population-searched">
             {incomplete
+              // Says what the figure covers, never why it is short. A withheld publisher need
+              // not have rows on screen, and the withholding may be entirely unattributed, so
+              // both "shown above" and "another publisher" can be false. The withholding
+              // notice states the cause; this states the scope.
               ? `Searched ${denominator.works.toLocaleString()} works across the publishers `
-                + "shown above. This is not the whole scope you selected, because another "
-                + "publisher was withheld."
+                + "whose disclosed scope this query could use. That is less than the scope you "
+                + "selected."
               : `Searched ${denominator.works.toLocaleString()} works in the selected scope.`}
           </p>
         : denominator.kind === "none_ran"

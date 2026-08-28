@@ -300,7 +300,12 @@ export function fuzzyModeFor(
  */
 export function retainedForQuery<T extends { query: string }>(
   current: T | undefined, submittedQuery: string): T | undefined {
-  return current !== undefined && current.query !== submittedQuery ? undefined : current;
+  // Trimmed on both sides, because that is the identity the request carries and the identity
+  // the component is keyed by. Comparing raw strings while the key trims left a gap: a padded
+  // resubmission did not remount, so the filter was hidden rather than discarded, and the
+  // unpadded question then reactivated it. Three notions of one question is two too many.
+  return current !== undefined && current.query.trim() !== submittedQuery.trim()
+    ? undefined : current;
 }
 
 export function populationCoverageLabel(
