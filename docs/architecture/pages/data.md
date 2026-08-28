@@ -17,6 +17,8 @@ disposable. That split lets an extraction improve without rewriting what the pub
 | Index | Hash-pinned corpora and article release | SQLite FTS, temporal tables and optional vectors | `Lex.Ingest` and `Lex.Index` on the local build machine | Incomplete or mismatched inputs fail the build |
 | Sign | Canonical artifact manifest | Signature and public verification material | bounded `lex-ops` publication with Key Vault | Runtime rejects a manifest outside pinned trust |
 
+{lex-transport-evidence}
+
 `lex-corpus/5` introduces content-addressed primary observations. For every fresh primary
 observation, the corpus writer stages the exact bounded response bytes
 before it attempts character decoding. The observation retains only status, media type, charset, ETag,
@@ -36,6 +38,8 @@ their typed build issue blocks every derive and index entry point. Candidate fil
 atomically, checked as one projected corpus, and published through a durable handle-bound journal;
 an interrupted per-file replacement recovers forward before the next writer reads the corpus.
 Duplicate retries retain identical bytes.
+
+{/lex-transport-evidence}
 
 Extraction profiles are versioned and their fingerprints are frozen by test; an improvement ships
 as a new profile version, and the Memorial fallback ladder promotes the successor only when it
