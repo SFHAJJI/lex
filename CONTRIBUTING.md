@@ -40,3 +40,23 @@ contribution is judged against that.
 Sign your commits with the Developer Certificate of Origin (`git commit -s`).
 Code is Apache-2.0; corpus data carries its own publisher licences (see each
 corpus repo's `NOTICE`).
+
+### Golden snapshot changes
+
+A pull request that changes JSON tool goldens must include exactly one fenced
+JSON object in its body with schema `lex-golden-diff-intent/1`, the current
+40-character base commit, and at least one exact `additions` or `replacements`
+declaration. Tool-response declarations use outer pointer
+`/result/content/0/text` plus the exact `document_pointer`. `tools-list.txt`
+declarations use its direct pointer and omit `document_pointer`.
+
+`replacements` authorize only declared scalar-leaf changes. They do not
+authorize removals, container replacement, array insertion or reordering,
+format-only churn, or changes to the outer MCP envelope. Array additions remain
+append-only. `additions` and `replacements` may share one intent. HTML page
+changes instead use the mutually exclusive `html_selectors` mode.
+When repeated array values make replacement plus append structurally
+indistinguishable from insertion or reordering, the classifier fails closed.
+
+The trusted classifier verifies machine scope. Reviewing the resulting human
+diff remains required before the snapshot is accepted.

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import argparse
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import hashlib
 import json
 import math
@@ -22,6 +22,8 @@ MAX_INTENT_BYTES = 64 * 1024
 MAX_EVENT_BYTES = 2 * 1024 * 1024
 MAX_PR_BODY_BYTES = 128 * 1024
 MAX_ADDITIONS = 10_000
+MAX_REPLACEMENTS = 10_000
+MAX_JSON_CHANGES = 10_000
 MAX_HTML_SELECTORS = 256
 MAX_HTML_HELPER_OUTPUT_BYTES = 4 * 1024
 MAX_WORKFLOW_FILES = 256
@@ -50,6 +52,15 @@ class Addition:
 
 
 @dataclass(frozen=True, order=True)
+class Replacement:
+    file: str
+    pointer: str
+    document_pointer: str | None = None
+    old_summary: str | None = field(default=None, compare=False)
+    new_summary: str | None = field(default=None, compare=False)
+
+
+@dataclass(frozen=True, order=True)
 class HtmlSelector:
     file: str
     selector: str
@@ -58,6 +69,7 @@ class HtmlSelector:
 @dataclass(frozen=True)
 class Intent:
     additions: frozenset[Addition] = frozenset()
+    replacements: frozenset[Replacement] = frozenset()
     html_selectors: frozenset[HtmlSelector] = frozenset()
 
 
@@ -273,7 +285,8 @@ def scan_json_layout(source, value, label, style, *, newline=False):
     return scanner.leaves, scanner.keys
 
 
-def compare_lexemes(old, new, old_lexemes, new_lexemes, pointer, label):
+def compare_lexemes(
+        old, new, old_lexemes, new_lexemes, pointer, label, replacements=frozenset()):
     old_leaves, old_keys = old_lexemes
     new_leaves, new_keys = new_lexemes
     if isinstance(old, dict) and isinstance(new, dict):
@@ -283,13 +296,17 @@ def compare_lexemes(old, new, old_lexemes, new_lexemes, pointer, label):
                     f"{label}: existing JSON key lexical representation changed at "
                     f"{safe_pointer(child)}")
             compare_lexemes(
-                old_value, new[key], old_lexemes, new_lexemes, child, label)
+                old_value, new[key], old_lexemes, new_lexemes, child, label,
+                replacements)
         return
     if isinstance(old, list) and isinstance(new, list):
         for index, old_value in enumerate(old):
             child = pointer_child(pointer, index)
             compare_lexemes(
-                old_value, new[index], old_lexemes, new_lexemes, child, label)
+                old_value, new[index], old_lexemes, new_lexemes, child, label,
+                replacements)
+        return
+    if pointer in replacements:
         return
     require(old_leaves.get(pointer) == new_leaves.get(pointer),
             f"{label}: existing JSON lexical representation changed at "
@@ -318,18 +335,69 @@ def value_type(value):
     return "object"
 
 
-def value_summary(value):
-    canonical = json.dumps(
+def canonical_value_bytes(value):
+    return json.dumps(
         value,
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
+
+
+def value_fingerprint(value, cache):
+    if not isinstance(value, (dict, list)):
+        tag = type(value).__name__.encode("ascii")
+        return hashlib.sha256(tag + b":" + canonical_value_bytes(value)).digest()
+    identity = id(value)
+    cached = cache.get(identity)
+    if cached is not None:
+        return cached
+    digest = hashlib.sha256(b"list:" if isinstance(value, list) else b"dict:")
+    digest.update(len(value).to_bytes(8, "big"))
+    if isinstance(value, list):
+        for child in value:
+            digest.update(value_fingerprint(child, cache))
+    else:
+        for key, child in value.items():
+            encoded_key = key.encode("utf-8")
+            digest.update(len(encoded_key).to_bytes(8, "big"))
+            digest.update(encoded_key)
+            digest.update(value_fingerprint(child, cache))
+    result = digest.digest()
+    cache[identity] = result
+    return result
+
+
+def value_summary(value):
+    canonical = canonical_value_bytes(value)
     return (f"type={value_type(value)} size={len(canonical)}B "
             f"sha256={hashlib.sha256(canonical).hexdigest()}")
 
 
-def compare_additive(old, new, pointer, additions, label):
+def array_was_reordered(old_items, new_items):
+    old_positions = {}
+    new_positions = {}
+    for index, fingerprint in enumerate(old_items):
+        old_positions.setdefault(fingerprint, set()).add(index)
+    for index, fingerprint in enumerate(new_items):
+        new_positions.setdefault(fingerprint, set()).add(index)
+    for fingerprint in old_positions.keys() & new_positions.keys():
+        retained = min(
+            len(old_positions[fingerprint]), len(new_positions[fingerprint]))
+        unchanged = len(
+            old_positions[fingerprint] & new_positions[fingerprint])
+        if unchanged < retained:
+            return True
+    return False
+
+
+def compare_json_changes(
+        old, new, pointer, additions, replacements, label,
+        old_fingerprints=None, new_fingerprints=None):
+    if old_fingerprints is None:
+        old_fingerprints = {}
+    if new_fingerprints is None:
+        new_fingerprints = {}
     if isinstance(old, dict) and isinstance(new, dict):
         for key, old_value in old.items():
             child = pointer_child(pointer, key)
@@ -341,7 +409,9 @@ def compare_additive(old, new, pointer, additions, label):
                 f"{safe_pointer(pointer)}")
         for key, old_value in old.items():
             child = pointer_child(pointer, key)
-            compare_additive(old_value, new[key], child, additions, label)
+            compare_json_changes(
+                old_value, new[key], child, additions, replacements, label,
+                old_fingerprints, new_fingerprints)
         for key in new.keys() - old.keys():
             additions.add(pointer_child(pointer, key))
             require(len(additions) <= MAX_ADDITIONS,
@@ -354,18 +424,29 @@ def compare_additive(old, new, pointer, additions, label):
             raise Rejection(
                 f"{label}: removal at {safe_pointer(child)}; "
                 f"old {value_summary(old[len(new)])}")
+        old_items = [value_fingerprint(value, old_fingerprints) for value in old]
+        new_items = [value_fingerprint(value, new_fingerprints) for value in new]
+        require(not array_was_reordered(old_items, new_items),
+                f"{label}: array reorder at {safe_pointer(pointer)}")
         for index, old_value in enumerate(old):
-            compare_additive(
-                old_value, new[index], pointer_child(pointer, index), additions, label)
+            compare_json_changes(
+                old_value, new[index], pointer_child(pointer, index),
+                additions, replacements, label,
+                old_fingerprints, new_fingerprints)
         for index in range(len(old), len(new)):
             additions.add(pointer_child(pointer, index))
             require(len(additions) <= MAX_ADDITIONS,
                     f"{label}: too many JSON additions")
         return
 
-    require(type(old) is type(new) and old == new,
-            f"{label}: replacement at {safe_pointer(pointer)}; "
+    require(not isinstance(old, (dict, list)) and not isinstance(new, (dict, list)),
+            f"{label}: replacement at {safe_pointer(pointer)} must be scalar; "
             f"old {value_summary(old)}; new {value_summary(new)}")
+    if type(old) is type(new) and old == new:
+        return
+    replacements.add((pointer, value_summary(old), value_summary(new)))
+    require(len(replacements) <= MAX_REPLACEMENTS,
+            f"{label}: too many JSON replacements")
 
 
 def skip_space(source, index):
@@ -487,15 +568,47 @@ def validate_file_path(raw, expected_family):
     return raw
 
 
+def parse_json_declarations(raw_entries, name, maximum, declaration_type):
+    require(isinstance(raw_entries, list) and 0 < len(raw_entries) <= maximum,
+            f"intent {name}s must be a nonempty bounded array")
+    declarations = set()
+    for entry in raw_entries:
+        require(isinstance(entry, dict) and "file" in entry and "pointer" in entry,
+                f"each intent {name} must name an exact file and pointer")
+        file = validate_file_path(entry["file"], "json")
+        pointer = entry["pointer"]
+        parse_pointer(pointer)
+        if file.endswith("/tools-list.txt"):
+            require(set(entry) == {"file", "pointer"},
+                    f"tools-list {name}s use a direct pointer without document_pointer")
+            declaration = declaration_type(file, pointer)
+        else:
+            require(set(entry) == {"file", "pointer", "document_pointer"}
+                    and pointer == DOCUMENT_POINTER,
+                    f"tool response {name}s require exactly pointer "
+                    f"{DOCUMENT_POINTER} and an exact document_pointer")
+            document_pointer = entry["document_pointer"]
+            parse_pointer(document_pointer)
+            declaration = declaration_type(file, pointer, document_pointer)
+        require(declaration not in declarations,
+                f"intent contains a duplicate {name} declaration")
+        declarations.add(declaration)
+    return frozenset(declarations)
+
+
 def parse_intent(raw, supplied_base):
     require(len(raw) <= MAX_INTENT_BYTES, "intent exceeds its byte limit")
     payload = parse_json(raw, "intent")
     require(isinstance(payload, dict), "intent must be a JSON object")
     keys = set(payload)
-    additions_keys = {"schema", "base_commit", "additions"}
-    selector_keys = {"schema", "base_commit", "html_selectors"}
-    require(keys in (additions_keys, selector_keys),
-            "intent must contain exactly one of additions or html_selectors")
+    base_keys = {"schema", "base_commit"}
+    selector_keys = base_keys | {"html_selectors"}
+    json_keys = keys - base_keys
+    json_modes = {"additions", "replacements"}
+    require(keys == selector_keys
+            or (base_keys < keys and json_keys <= json_modes),
+            "intent must contain exactly html_selectors or at least one of "
+            "additions and replacements")
     require(payload["schema"] == INTENT_SCHEMA,
             f"intent schema must be {INTENT_SCHEMA}")
     intent_base = payload["base_commit"]
@@ -504,34 +617,19 @@ def parse_intent(raw, supplied_base):
     require(intent_base == supplied_base,
             "intent base_commit does not match the separately supplied base SHA")
 
-    if "additions" in payload:
-        raw_additions = payload["additions"]
-        require(isinstance(raw_additions, list)
-                and 0 < len(raw_additions) <= MAX_ADDITIONS,
-                "intent additions must be a nonempty bounded array")
-        additions = set()
-        for entry in raw_additions:
-            require(isinstance(entry, dict) and "file" in entry and "pointer" in entry,
-                    "each intent addition must name an exact file and pointer")
-            file = validate_file_path(entry["file"], "json")
-            pointer = entry["pointer"]
-            parse_pointer(pointer)
-            if file.endswith("/tools-list.txt"):
-                require(set(entry) == {"file", "pointer"},
-                        "tools-list additions use a direct pointer without document_pointer")
-                addition = Addition(file, pointer)
-            else:
-                require(set(entry) == {"file", "pointer", "document_pointer"}
-                        and pointer == DOCUMENT_POINTER,
-                        f"tool response additions require pointer {DOCUMENT_POINTER} "
-                        "and an exact document_pointer")
-                document_pointer = entry["document_pointer"]
-                parse_pointer(document_pointer)
-                addition = Addition(file, pointer, document_pointer)
-            require(addition not in additions,
-                    "intent contains a duplicate addition declaration")
-            additions.add(addition)
-        return Intent(additions=frozenset(additions))
+    if keys != selector_keys:
+        additions = (
+            parse_json_declarations(
+                payload["additions"], "addition", MAX_ADDITIONS, Addition)
+            if "additions" in payload else frozenset())
+        replacements = (
+            parse_json_declarations(
+                payload["replacements"], "replacement", MAX_REPLACEMENTS,
+                Replacement)
+            if "replacements" in payload else frozenset())
+        require(len(additions) + len(replacements) <= MAX_JSON_CHANGES,
+                "intent has too many JSON changes")
+        return Intent(additions=additions, replacements=replacements)
 
     raw_selectors = payload["html_selectors"]
     require(isinstance(raw_selectors, list)
@@ -809,6 +907,7 @@ def classify_json_file(repo, base, path):
     old_raw = blob(repo, base, path)
     new_raw = blob(repo, "HEAD", path)
     additions = set()
+    replacements = set()
     if path.endswith("/tools-list.txt"):
         old = parse_json(old_raw, f"base {path}")
         new = parse_json(new_raw, f"head {path}")
@@ -818,10 +917,18 @@ def classify_json_file(repo, base, path):
         new_lexemes = scan_json_layout(
             new_raw.decode("utf-8"), new, f"head {path}",
             "compact", newline=True)
-        require(old != new, f"{path}: format-only JSON change")
-        compare_additive(old, new, "", additions, path)
-        compare_lexemes(old, new, old_lexemes, new_lexemes, "", path)
-        return {Addition(path, pointer) for pointer in additions}
+        require(value_fingerprint(old, {}) != value_fingerprint(new, {}),
+                f"{path}: format-only JSON change")
+        compare_json_changes(old, new, "", additions, replacements, path)
+        replacement_pointers = {pointer for pointer, _, _ in replacements}
+        compare_lexemes(
+            old, new, old_lexemes, new_lexemes, "", path, replacement_pointers)
+        return (
+            {Addition(path, pointer) for pointer in additions},
+            {Replacement(path, pointer, old_summary=old_summary,
+                         new_summary=new_summary)
+             for pointer, old_summary, new_summary in replacements},
+        )
 
     old_envelope, old, old_text = mcp_document(old_raw, f"base {path}")
     new_envelope, new, new_text = mcp_document(new_raw, f"head {path}")
@@ -840,10 +947,17 @@ def classify_json_file(repo, base, path):
     require(mask_document(old_raw, f"base {path}")
             == mask_document(new_raw, f"head {path}"),
             f"{path}: outer MCP envelope changed outside {DOCUMENT_POINTER}")
-    require(old != new, f"{path}: format-only JSON change")
-    compare_additive(old, new, "", additions, path)
-    compare_lexemes(old, new, old_lexemes, new_lexemes, "", path)
-    return {Addition(path, DOCUMENT_POINTER, pointer) for pointer in additions}
+    require(value_fingerprint(old, {}) != value_fingerprint(new, {}),
+            f"{path}: format-only JSON change")
+    compare_json_changes(old, new, "", additions, replacements, path)
+    replacement_pointers = {pointer for pointer, _, _ in replacements}
+    compare_lexemes(
+        old, new, old_lexemes, new_lexemes, "", path, replacement_pointers)
+    return (
+        {Addition(path, DOCUMENT_POINTER, pointer) for pointer in additions},
+        {Replacement(path, DOCUMENT_POINTER, pointer, old_summary, new_summary)
+         for pointer, old_summary, new_summary in replacements},
+    )
 
 
 def html_scope(raw, selector, label):
@@ -948,6 +1062,24 @@ def compare_declarations(actual, declared):
     raise Rejection("intent mismatch: " + ", ".join(parts))
 
 
+def compare_replacements(actual, declared):
+    undeclared = actual - declared
+    stale = declared - actual
+    if not undeclared and not stale:
+        return
+    parts = []
+    if undeclared:
+        parts.append(f"{len(undeclared)} undeclared replacement(s)")
+    if stale:
+        parts.append(f"{len(stale)} stale replacement declaration(s)")
+    if undeclared:
+        sample = min(undeclared)
+        parts.append(
+            f"first undeclared replacement old {sample.old_summary}; "
+            f"new {sample.new_summary}")
+    raise Rejection("intent mismatch: " + ", ".join(parts))
+
+
 def compare_html_scope(files, selectors):
     changed = set(files)
     declared = {entry.file for entry in selectors}
@@ -1002,7 +1134,8 @@ def classify(repo, base, intent_path=None, event_path=None):
         require(intent is None, "intent is stale because no golden files changed")
         return "golden diff: no golden changes"
     if families == {"page"}:
-        require(intent is not None and intent.html_selectors and not intent.additions,
+        require(intent is not None and intent.html_selectors
+                and not intent.additions and not intent.replacements,
                 "HTML page golden changes require exact external html_selectors intent, "
                 "with one fenced PR-body JSON object in CI")
         compare_html_scope(files, intent.html_selectors)
@@ -1013,15 +1146,32 @@ def classify(repo, base, intent_path=None, event_path=None):
         return (f"golden diff: {len(files)} HTML machine scope(s) verified; "
                 "human diff review remains defense in depth")
 
-    require(intent is not None and intent.additions and not intent.html_selectors,
-            "JSON tool golden changes require exact external additions intent, "
+    require(intent is not None and (intent.additions or intent.replacements)
+            and not intent.html_selectors,
+            "JSON tool golden changes require exact external additions or "
+            "replacements intent, "
             "with one fenced PR-body JSON object in CI")
-    actual = set()
+    actual_additions = set()
+    actual_replacements = set()
     for path in files:
-        actual.update(classify_json_file(repo, base, path))
-        require(len(actual) <= MAX_ADDITIONS, "golden diff has too many JSON additions")
-    compare_declarations(actual, intent.additions)
-    return f"golden diff: approved {len(actual)} declared JSON additions"
+        additions, replacements = classify_json_file(repo, base, path)
+        actual_additions.update(additions)
+        actual_replacements.update(replacements)
+        require(len(actual_additions) <= MAX_ADDITIONS,
+                "golden diff has too many JSON additions")
+        require(len(actual_replacements) <= MAX_REPLACEMENTS,
+                "golden diff has too many JSON replacements")
+        require(len(actual_additions) + len(actual_replacements)
+                <= MAX_JSON_CHANGES,
+                "golden diff has too many JSON changes")
+    compare_declarations(actual_additions, intent.additions)
+    compare_replacements(actual_replacements, intent.replacements)
+    if not actual_replacements:
+        return (f"golden diff: approved {len(actual_additions)} declared "
+                "JSON additions")
+    return (f"golden diff: approved {len(actual_additions)} declared JSON "
+            f"additions and {len(actual_replacements)} declared scalar "
+            "replacement(s)")
 
 
 def main(arguments=None):

@@ -122,12 +122,35 @@ class GoldenDiffTests(unittest.TestCase):
             "pointer": pointer,
         }
 
+    def document_replacement(self, pointer, file=TOOL):
+        return {
+            "file": Path(file).as_posix(),
+            "pointer": DOCUMENT_POINTER,
+            "document_pointer": pointer,
+        }
+
+    def direct_replacement(self, pointer):
+        return {
+            "file": TOOLS_LIST.as_posix(),
+            "pointer": pointer,
+        }
+
     def intent(self, additions, *, base=None):
         return {
             "schema": "lex-golden-diff-intent/1",
             "base_commit": base or self.repo.base,
             "additions": additions,
         }
+
+    def replacement_intent(self, replacements, *, additions=None, base=None):
+        result = {
+            "schema": "lex-golden-diff-intent/1",
+            "base_commit": base or self.repo.base,
+            "replacements": replacements,
+        }
+        if additions is not None:
+            result["additions"] = additions
+        return result
 
     def html_intent(self, file=PAGE, selector="#main", *, base=None):
         return {
@@ -1397,6 +1420,157 @@ class GoldenDiffTests(unittest.TestCase):
         self.assertIn("undeclared", stale.stderr)
         self.assertIn("stale", stale.stderr)
 
+    def test_exact_scalar_replacement_passes_for_embedded_and_direct_json(self):
+        self.repo.amend_baseline(TOOL, mcp({"index_format": None}))
+        self.repo.write(TOOL, mcp({"index_format": "lex-index/3"}))
+        self.repo.commit(TOOL)
+
+        completed = self.assert_passes(self.replacement_intent([
+            self.document_replacement("/index_format"),
+        ]))
+        self.assertIn("replacement", completed.stdout)
+
+        direct = self.fresh_repository()
+        direct.amend_baseline(TOOLS_LIST, compact({"enabled": False}))
+        direct.write(TOOLS_LIST, compact({"enabled": True}))
+        direct.commit(TOOLS_LIST)
+        self.assert_passes(self.replacement_intent([
+            self.direct_replacement("/enabled"),
+        ], base=direct.base), repository=direct)
+
+    def test_json_scalar_replacement_uses_exact_types_not_python_equality(self):
+        for old, new in ((True, 1), (1, 1.0), (1.0, 1)):
+            repository = self.fresh_repository()
+            repository.amend_baseline(TOOL, mcp({"value": old}))
+            repository.write(TOOL, mcp({"value": new}))
+            repository.commit(TOOL)
+
+            with self.subTest(old=old, new=new):
+                self.assert_passes(self.replacement_intent(
+                    [self.document_replacement("/value")],
+                    base=repository.base), repository=repository)
+
+    def test_addition_and_replacement_can_share_one_exact_intent(self):
+        self.repo.amend_baseline(TOOL, mcp({"status": None}))
+        self.repo.write(TOOL, mcp({"status": "ok", "new_field": True}))
+        self.repo.commit(TOOL)
+
+        self.assert_passes(self.replacement_intent(
+            [self.document_replacement("/status")],
+            additions=[self.document_addition("/new_field")]))
+
+    def test_replacements_fail_when_undeclared_stale_or_duplicated(self):
+        self.repo.amend_baseline(TOOL, mcp({"status": None}))
+        self.repo.write(TOOL, mcp({"status": "ok"}))
+        self.repo.commit(TOOL)
+
+        self.assertIn("intent", self.assert_fails().stderr.lower())
+        mismatch = self.assert_fails(self.replacement_intent([
+            self.document_replacement("/other"),
+        ]))
+        self.assertIn("undeclared", mismatch.stderr)
+        self.assertIn("stale", mismatch.stderr)
+        duplicate = self.document_replacement("/status")
+        self.assertIn("duplicate", self.assert_fails(
+            self.replacement_intent([duplicate, duplicate])).stderr)
+
+    def test_replacement_intent_rejects_empty_mixed_html_and_wrong_shape(self):
+        self.assertIn("nonempty", self.assert_fails(
+            self.replacement_intent([])).stderr)
+        mixed = self.replacement_intent([self.document_replacement("/status")])
+        mixed["html_selectors"] = [{"file": PAGE.as_posix(), "selector": "#main"}]
+        self.assertIn("exactly", self.assert_fails(mixed).stderr)
+        malformed = self.document_replacement("/status") | {"unexpected": True}
+        self.assertIn("exactly", self.assert_fails(
+            self.replacement_intent([malformed])).stderr)
+
+    def test_replacement_scope_is_scalar_leaf_only(self):
+        cases = [
+            ({"value": None}, {"value": {"nested": True}}),
+            ({"value": []}, {"value": "new"}),
+            ({"value": {"old": True}}, {"value": "new"}),
+        ]
+        for old, new in cases:
+            repository = self.fresh_repository()
+            repository.amend_baseline(TOOL, mcp(old))
+            repository.write(TOOL, mcp(new))
+            repository.commit(TOOL)
+            failed = self.assert_fails(self.replacement_intent(
+                [self.document_replacement("/value")], base=repository.base),
+                repository=repository)
+            self.assertIn("scalar", failed.stderr)
+
+    def test_replacement_intent_cannot_authorize_array_reorder(self):
+        cases = [
+            (["first", "second"], ["second", "first"]),
+            (["first", "second"], ["second", "changed"]),
+            ([1, 2, 3], [2, 4, 3]),
+        ]
+        for old, new in cases:
+            repository = self.fresh_repository()
+            repository.amend_baseline(TOOL, mcp({"items": old}))
+            repository.write(TOOL, mcp({"items": new}))
+            repository.commit(TOOL)
+
+            failed = self.assert_fails(self.replacement_intent([
+                self.document_replacement("/items/0"),
+                self.document_replacement("/items/1"),
+            ], base=repository.base), repository=repository)
+
+            self.assertIn("reorder", failed.stderr)
+
+    def test_exact_scalar_leaf_replacement_inside_array_passes(self):
+        self.repo.amend_baseline(TOOL, mcp({"items": ["first", "second"]}))
+        self.repo.write(TOOL, mcp({"items": ["changed", "second"]}))
+        self.repo.commit(TOOL)
+
+        self.assert_passes(self.replacement_intent([
+            self.document_replacement("/items/0"),
+        ]))
+
+    def test_replacement_intent_cannot_disguise_array_insertion(self):
+        self.repo.amend_baseline(TOOL, mcp({"items": ["first", "second"]}))
+        self.repo.write(TOOL, mcp({"items": ["inserted", "first", "second"]}))
+        self.repo.commit(TOOL)
+
+        failed = self.assert_fails(self.replacement_intent(
+            [
+                self.document_replacement("/items/0"),
+                self.document_replacement("/items/1"),
+            ],
+            additions=[self.document_addition("/items/2")]))
+
+        self.assertIn("reorder", failed.stderr)
+
+    def test_replacement_and_append_can_share_one_array_intent(self):
+        self.repo.amend_baseline(TOOL, mcp({"items": [1]}))
+        self.repo.write(TOOL, mcp({"items": [2, 3]}))
+        self.repo.commit(TOOL)
+
+        self.assert_passes(self.replacement_intent(
+            [self.document_replacement("/items/0")],
+            additions=[self.document_addition("/items/1")]))
+
+    def test_ambiguous_duplicate_array_history_fails_closed(self):
+        self.repo.amend_baseline(TOOL, mcp({"items": ["same", "same"]}))
+        self.repo.write(TOOL, mcp({"items": ["changed", "same", "same"]}))
+        self.repo.commit(TOOL)
+
+        failed = self.assert_fails(self.replacement_intent(
+            [self.document_replacement("/items/0")],
+            additions=[self.document_addition("/items/2")]))
+
+        self.assertIn("reorder", failed.stderr)
+
+    def test_pr_body_can_supply_an_exact_replacement_intent(self):
+        self.repo.amend_baseline(TOOL, mcp({"status": None}))
+        self.repo.write(TOOL, mcp({"status": "ok"}))
+        self.repo.commit(TOOL)
+
+        self.assert_passes(event_body=self.fenced(self.replacement_intent([
+            self.document_replacement("/status"),
+        ])))
+
     def test_replacement_reports_only_bounded_metadata_for_large_values(self):
         large = "sensitive-" + "x" * 200_000
         self.repo.write(TOOL, mcp({"items": large, "added": True}))
@@ -1448,7 +1622,7 @@ class GoldenDiffTests(unittest.TestCase):
             self.direct_addition("/result/tools/1"),
         ]))
 
-        self.assertIn("replacement", completed.stderr)
+        self.assertIn("reorder", completed.stderr)
 
     def test_format_only_change_fails(self):
         document = '{\n  "items": [\n    {"id": "existing"}\n  ]\n}'
