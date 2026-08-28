@@ -12,6 +12,36 @@ public sealed class McpCore
 {
     public const string ActivitySourceName = McpTelemetry.ActivitySourceName;
     private readonly IReadOnlyDictionary<string, LexIndexReader> readers;
+
+    /// <summary>
+    /// Additive unknown_work candidates (Decision 41): the nearest held records across every
+    /// mounted publisher, attached only when at least one exists so an empty search changes
+    /// no envelope byte. Absence of a record is never presented as absence of law; the copy
+    /// obligations live on the rendering surfaces, this field carries only coordinates.
+    /// </summary>
+    private JsonObject WithWorkCandidates(JsonObject payload, string requested)
+    {
+        var list = new JsonArray();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var reader in readers.Values)
+        {
+            foreach (var candidate in WorkCandidateFinder.Nearest(reader, requested))
+            {
+                if (list.Count >= WorkCandidateFinder.Limit) break;
+                if (!seen.Add($"{candidate.Publisher}:{candidate.Work}")) continue;
+                list.Add(new JsonObject
+                {
+                    ["work"] = candidate.Work,
+                    ["title"] = candidate.Title,
+                    ["publisher"] = candidate.Publisher,
+                    ["permalink"] = $"/{candidate.Publisher}/{candidate.Work}",
+                });
+            }
+            if (list.Count >= WorkCandidateFinder.Limit) break;
+        }
+        if (list.Count > 0) payload["work_candidates"] = list;
+        return payload;
+    }
     private readonly string? artifactManifestIdentity;
     private readonly bool _corpusMounted;
     private readonly IReadOnlyDictionary<string, SemaphoreSlim> _readerExecutions;
@@ -915,7 +945,7 @@ public sealed class McpCore
                 var work = Str("work") ?? throw new ArgumentException("work required");
                 var date = Date("date");
                 var res = Resolve(work, Str("publisher"));
-                if (res is null) return new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work };
+                if (res is null) return WithWorkCandidates(new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work }, work);
                 var (r, w) = res.Value;
                 var language = Str("language");
                 var versionKey = Str("version_key");
@@ -1049,11 +1079,11 @@ public sealed class McpCore
             {
                 var work = Str("work") ?? throw new ArgumentException("work required");
                 var res = Resolve(work, Str("publisher"));
-                if (res is null) return new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work };
+                if (res is null) return WithWorkCandidates(new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work }, work);
                 var (r, w) = res.Value;
                 var limit = Int("limit", 100); var offset = Int("offset", 0);
                 var (rows, total) = r.Timeline(w, limit, offset);
-                if (total == 0) return new JsonObject { ["envelope"] = Envelope(r, McpStatus.UnknownWork), ["work"] = w };
+                if (total == 0) return WithWorkCandidates(new JsonObject { ["envelope"] = Envelope(r, McpStatus.UnknownWork), ["work"] = w }, w);
                 var provisional = rows.Any(row => TryIsoDate(row.Version.ValidFrom, out var validFrom)
                     && ProvisionalFor(r, validFrom));
                 return new JsonObject
@@ -1159,7 +1189,7 @@ public sealed class McpCore
                 var from = Date("from_date");
                 var to = Date("to_date");
                 var res = Resolve(work, Str("publisher"));
-                if (res is null) return new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work };
+                if (res is null) return WithWorkCandidates(new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work }, work);
                 var (r, w) = res.Value;
                 var f = new FilterSet(null, null, null, Str("language"));
                 var language = Str("language");
@@ -1554,9 +1584,9 @@ public sealed class McpCore
                 var work = Str("work") ?? throw new ArgumentException("work required");
                 var anchor = Str("anchor") ?? throw new ArgumentException("anchor required");
                 var res = Resolve(work, Str("publisher"));
-                if (res is null) return new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work };
+                if (res is null) return WithWorkCandidates(new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work }, work);
                 var (r, w) = res.Value;
-                if (!r.WorkExists(w)) return new JsonObject { ["envelope"] = Envelope(r, McpStatus.UnknownWork), ["work"] = w };
+                if (!r.WorkExists(w)) return WithWorkCandidates(new JsonObject { ["envelope"] = Envelope(r, McpStatus.UnknownWork), ["work"] = w }, w);
                 var requestedLanguage = Str("language");
                 var windowFrom = Str("from_date");
                 var windowTo = Str("to_date");
@@ -1669,7 +1699,7 @@ public sealed class McpCore
                         },
                     };
                 }
-                return new JsonObject { ["status"] = McpStatus.UnknownWork, ["lex_id"] = key };
+                return WithWorkCandidates(new JsonObject { ["status"] = McpStatus.UnknownWork, ["lex_id"] = key }, key);
             }
             case "cited_by":
             {

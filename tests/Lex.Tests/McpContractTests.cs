@@ -362,6 +362,28 @@ public class McpContractTests : IDisposable
         try { File.Delete(_db); } catch { /* the OS will reclaim it */ }
     }
 
+    [Fact]
+    public void Unknown_work_carries_nearest_held_candidates_only_when_they_exist()
+    {
+        // A near-miss identifier: the fixture holds w1; "w1 typo" drops its trailing token.
+        var near = Call("timeline", new JsonObject { ["work"] = "t-pub:w1 typo" });
+        if (near["envelope"] is JsonObject envelope)
+            Assert.Equal("unknown_work", envelope["status"]!.GetValue<string>());
+        else
+            Assert.Equal("unknown_work", near["status"]!.GetValue<string>());
+        var candidates = near["work_candidates"] as JsonArray;
+        Assert.NotNull(candidates);
+        Assert.InRange(candidates!.Count, 1, 5);
+        var first = Assert.IsType<JsonObject>(candidates[0]);
+        Assert.Equal("t-pub", first["publisher"]!.GetValue<string>());
+        Assert.StartsWith("/t-pub/", first["permalink"]!.GetValue<string>());
+
+        // A wholly unrelated identifier gains no candidates and no field: an empty search
+        // changes no envelope byte, so absence of neighbours is silence, not prose.
+        var far = Call("timeline", new JsonObject { ["work"] = "t-pub:zzzz-9999-unrelated" });
+        Assert.Null(far["work_candidates"]);
+    }
+
     private JsonObject Call(string tool, JsonObject args)
     {
         var res = _core.CallTool(tool, args);

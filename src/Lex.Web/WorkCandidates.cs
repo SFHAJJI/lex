@@ -1,4 +1,5 @@
 using Lex.Index;
+using Lex.Mcp;
 using static Lex.Web.PageShell;
 
 namespace Lex.Web;
@@ -32,52 +33,16 @@ public static class WorkCandidates
         _ => "/search",
     };
 
-    public sealed record Candidate(string Work, string? Title, string Publisher);
 
-    /// <summary>
-    /// Nearest held works for a requested identifier: the verbatim string first, then a
-    /// separator-widened variant so a near-miss slug (one wrong ordinal, a missing suffix)
-    /// still finds its neighbours. Read-only, bounded, distinct by work.
-    /// </summary>
-    public static IReadOnlyList<Candidate> Nearest(LexIndexReader reader, string requested)
-    {
-        if (string.IsNullOrWhiteSpace(requested) || requested.Length > 200) return [];
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        var result = new List<Candidate>();
-        foreach (var query in Queries(requested))
-        {
-            foreach (var document in reader.SearchWorksByIdentifierOrTitle(
-                         query, FilterSet.All, Limit * 2))
-            {
-                if (!seen.Add(document.GroupKey)) continue;
-                result.Add(new Candidate(
-                    document.GroupKey, document.TitleShort ?? document.Title,
-                    document.Collection));
-                if (result.Count >= Limit) return result;
-            }
-            if (result.Count > 0) break;
-        }
-        return result;
-    }
 
-    private static IEnumerable<string> Queries(string requested)
-    {
-        yield return requested;
-        var widened = requested.Replace('-', ' ').Replace('_', ' ').Replace(':', ' ');
-        if (!string.Equals(widened, requested, StringComparison.Ordinal))
-            yield return widened;
-        // The lookup is conjunctive, so a single wrong token (usually the most specific,
-        // trailing one: an ordinal, a suffix) hides every neighbour. Drop trailing tokens
-        // progressively; the shortest query still needs two tokens so "loi" alone never
-        // floods the candidate list.
-        var tokens = widened.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        for (var keep = tokens.Length - 1; keep >= 2 && keep >= tokens.Length - 2; keep--)
-            yield return string.Join(' ', tokens.Take(keep));
-    }
+    /// <summary>Shared finder; the page keeps only presentation.</summary>
+    public static IReadOnlyList<WorkCandidateFinder.Candidate> Nearest(
+        LexIndexReader reader, string requested) =>
+        WorkCandidateFinder.Nearest(reader, requested);
 
     /// <summary>The server-page notice: frozen copy, candidate list, official search action.</summary>
     public static string NoticeHtml(
-        string requested, string collection, IReadOnlyList<Candidate> candidates)
+        string requested, string collection, IReadOnlyList<WorkCandidateFinder.Candidate> candidates)
     {
         var items = string.Join("", candidates.Select(candidate =>
             $"<li><a href=\"/{H(candidate.Publisher)}/{H(candidate.Work)}\">"
