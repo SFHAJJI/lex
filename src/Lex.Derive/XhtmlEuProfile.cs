@@ -21,7 +21,7 @@ public static class XhtmlEuProfile
 
     public static Extraction Extract(string xhtml, string lexIdBase)
     {
-        var doc = XDocument.Parse(xhtml, LoadOptions.None);
+        var doc = StrictPublisherXml.Parse(xhtml);
         return Extract(doc, lexIdBase);
     }
 

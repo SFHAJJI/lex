@@ -16,7 +16,7 @@ public static class AknLuDocumentProfile
 
     public static Extraction Extract(string xml, string lexIdBase)
     {
-        var document = XDocument.Parse(xml, LoadOptions.None);
+        var document = StrictPublisherXml.Parse(xml);
         var root = document.Root ?? throw new InvalidDataException("empty XML document");
         var akn = root.Name.Namespace;
         var body = root.Descendants()

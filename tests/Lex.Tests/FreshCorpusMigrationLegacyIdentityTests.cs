@@ -34,12 +34,14 @@ public sealed partial class CorpusWriterTests
         Assert.True(report.IsValid, string.Join(Environment.NewLine, report.Errors));
         Assert.Equal(1, report.ActualVersions);
         Assert.Equal(1, report.Expressions);
-        Assert.Equal(0, current.BodyFetchCount);
+        Assert.Equal(1, current.BodyFetchCount);
         var expression = Assert.Single(ReadOnlyVersion(corpusRoot).Expressions);
         Assert.Equal("fr", expression.Language);
-        var observation = Assert.Single(expression.Observations);
-        Assert.Equal(retained.Sha256, observation.Sha256);
-        Assert.Equal(retained.ObservedFrom, observation.ObservedFrom);
+        Assert.Contains(expression.Observations, observation =>
+            observation.Sha256 == retained.Sha256
+            && observation.ObservedFrom == retained.ObservedFrom
+            && observation.Http is null);
+        Assert.Contains(expression.Observations, observation => observation.Http is not null);
     }
 
     [Fact]
@@ -55,7 +57,7 @@ public sealed partial class CorpusWriterTests
             DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit, default);
 
         Assert.True(report.IsValid, string.Join(Environment.NewLine, report.Errors));
-        Assert.Equal(1, current.BodyFetchCount);
+        Assert.Equal(2, current.BodyFetchCount);
         Assert.Equal(["en", "fr"], ReadOnlyVersion(corpusRoot).Expressions
             .Select(expression => expression.Language).Order().ToArray());
     }
@@ -75,14 +77,16 @@ public sealed partial class CorpusWriterTests
             DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit, default);
 
         Assert.True(report.IsValid, string.Join(Environment.NewLine, report.Errors));
-        Assert.Equal(0, current.BodyFetchCount);
+        Assert.Equal(1, current.BodyFetchCount);
         var expression = Assert.Single(ReadOnlyVersion(corpusRoot).Expressions);
         Assert.True(expression.SourceUri?.EndsWith(
             "?view=current", StringComparison.Ordinal) == true);
-        var observation = Assert.Single(expression.Observations);
-        Assert.Equal(retained.SourceUri, observation.SourceUri);
-        Assert.Equal(retained.Sha256, observation.Sha256);
-        Assert.Equal(retained.ObservedFrom, observation.ObservedFrom);
+        Assert.Contains(expression.Observations, observation =>
+            observation.SourceUri == retained.SourceUri
+            && observation.Sha256 == retained.Sha256
+            && observation.ObservedFrom == retained.ObservedFrom
+            && observation.Http is null);
+        Assert.Contains(expression.Observations, observation => observation.Http is not null);
     }
 
     [Fact]
@@ -131,7 +135,7 @@ public sealed partial class CorpusWriterTests
             DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit, default);
 
         Assert.True(report.IsValid, string.Join(Environment.NewLine, report.Errors));
-        Assert.Equal(0, current.BodyFetchCount);
+        Assert.Equal(1, current.BodyFetchCount);
         var version = ReadOnlyVersion(corpusRoot);
         Assert.Equal("REG", version.DocumentType);
         Assert.Equal("2025-12-31", version.ValidTo);
@@ -150,7 +154,7 @@ public sealed partial class CorpusWriterTests
         Assert.Equal("Current", expression.TitleShort);
         Assert.EndsWith("?view=current", expression.SourceUri,
             StringComparison.Ordinal);
-        Assert.Equal(expression.SourceUri, expression.Text.Url);
+        Assert.Equal(EffectiveBodyUri, expression.Text.Url);
         Assert.Single(version.Raw);
         Assert.Equal("current", version.Raw["status"]);
         Assert.DoesNotContain("legacy_only", version.Raw.Keys);
@@ -202,7 +206,7 @@ public sealed partial class CorpusWriterTests
             DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit, default);
 
         Assert.True(report.IsValid, string.Join(Environment.NewLine, report.Errors));
-        Assert.Equal(0, current.BodyFetchCount);
+        Assert.Equal(1, current.BodyFetchCount);
         var version = ReadOnlyVersion(corpusRoot);
         Assert.Equal("2025-12-31", version.ValidTo);
         Assert.Equal("2025-12-31", Assert.Single(version.Expressions).ValidTo);
@@ -232,7 +236,7 @@ public sealed partial class CorpusWriterTests
             DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit, default);
 
         Assert.True(report.IsValid, string.Join(Environment.NewLine, report.Errors));
-        Assert.Equal(0, current.BodyFetchCount);
+        Assert.Equal(2, current.BodyFetchCount);
         Assert.Equal(["fr", "en"], ReadOnlyVersion(corpusRoot).Expressions
             .Select(expression => expression.Language).ToArray());
     }
@@ -382,7 +386,7 @@ public sealed partial class CorpusWriterTests
         {
             if (BodyFetchCount == 0) beforeFirstBodyFetch?.Invoke();
             BodyFetchCount++;
-            return Task.FromResult(SourceBodyFetch.Retrieved(
+            return Task.FromResult(RetrievedBody(
                 $"<html>{version.Id.Value}:{expression.Language}</html>"));
         }
 

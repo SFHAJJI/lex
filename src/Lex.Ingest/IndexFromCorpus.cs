@@ -32,7 +32,18 @@ public static class IndexFromCorpus
             File.ReadAllText(corpusManifestPath), CorpusJson.Options)!;
         if (manifest.Schema != ManifestDoc.CurrentSchema)
             throw new InvalidDataException(
-                "Index construction requires a fresh lex-corpus/4 input.");
+                $"Index construction requires a fresh {ManifestDoc.CurrentSchema} input.");
+        if (manifest.Canon != ManifestDoc.CurrentCanon)
+            throw new InvalidDataException(
+                $"Index construction requires canon '{ManifestDoc.CurrentCanon}'.");
+        if (manifest.BuildIssues is null || manifest.BuildIssues.Count > 0)
+            throw new InvalidDataException(
+                "Index construction is blocked while the corpus contains rejected acquisition evidence.");
+        var corpusIntegrity = CorpusIntegrity.Verify(corpusRoot);
+        if (!corpusIntegrity.IsValid)
+            throw new InvalidDataException(
+                "Index construction requires an integrity-valid corpus:\n"
+                + string.Join("\n", corpusIntegrity.Errors));
         var ingesterCodeCommit = CodeIdentity.RequireFullCommit(
             manifest.IngesterCodeCommit, "manifest ingester_code_commit");
         CorpusWriter.ValidateSourceConfiguration(
@@ -94,6 +105,19 @@ public static class IndexFromCorpus
 
                 foreach (var expr in meta.Expressions)
                 {
+                    var freshPrimary = expr.Observations.Where(observation =>
+                            observation.Format is null
+                            && observation.Http is not null
+                            && observation.ObservedFrom == manifest.ObservationRun)
+                        .ToArray();
+                    if (freshPrimary.Length > 1)
+                        throw new InvalidDataException(
+                            $"{meta.LexId}/{expr.Language} has ambiguous effective response identity.");
+                    var primaryObservation = freshPrimary.SingleOrDefault()
+                        ?? expr.Observations.LastOrDefault(observation =>
+                            observation.Format is null);
+                    var effectiveSourceUri = primaryObservation?.SourceUri
+                        ?? expr.SourceUri;
                     var exprValidFrom = expr.ValidFrom ?? meta.ValidFrom;
                     var languageWorkTitle = string.Equals(
                         workMeta.TitleLanguage, expr.Language, StringComparison.Ordinal)
@@ -115,6 +139,15 @@ public static class IndexFromCorpus
                     if (hasDerived)
                     {
                         using var dd = JsonDocument.Parse(File.ReadAllText(derivedJson!));
+                        var derivedSourceUri = dd.RootElement.TryGetProperty(
+                                "derived_from", out var derivedFrom)
+                            && derivedFrom.TryGetProperty(
+                                "source_uri", out var source)
+                            ? source.GetString() : null;
+                        if (!string.Equals(derivedSourceUri, effectiveSourceUri,
+                                StringComparison.Ordinal))
+                            throw new InvalidDataException(
+                                $"{derivedJson}: source_uri does not match the effective publisher response URI.");
                         if (dd.RootElement.TryGetProperty("generator", out var gen)
                             && gen.TryGetProperty("profile", out var pf))
                         {
@@ -190,8 +223,8 @@ public static class IndexFromCorpus
                         TextAvailable: expr.Text.Available,
                         TextPublic: manifest.TextPublic && expr.Text.Available && indexedInExpression > 0,
                         RecordSha: meta.RecordSha256,
-                        BodySha: expr.Observations.LastOrDefault()?.Sha256,
-                        SourceUri: expr.SourceUri,
+                        BodySha: primaryObservation?.Sha256,
+                        SourceUri: effectiveSourceUri,
                         Title: expr.Title ?? languageWorkTitle,
                         TitleShort: expr.TitleShort ?? languageWorkTitle,
                         Body: null,

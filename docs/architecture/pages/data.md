@@ -17,6 +17,26 @@ disposable. That split lets an extraction improve without rewriting what the pub
 | Index | Hash-pinned corpora and article release | SQLite FTS, temporal tables and optional vectors | `Lex.Ingest` and `Lex.Index` on the local build machine | Incomplete or mismatched inputs fail the build |
 | Sign | Canonical artifact manifest | Signature and public verification material | bounded `lex-ops` publication with Key Vault | Runtime rejects a manifest outside pinned trust |
 
+`lex-corpus/5` introduces content-addressed primary observations. For every fresh primary
+observation, the corpus writer stages the exact bounded response bytes
+before it attempts character decoding. The observation retains only status, media type, charset, ETag,
+Last-Modified, fetch time, attempt count and a closed outcome. Its metadata carries the full
+SHA-256; its append-safe filename carries a collision-checked digest prefix. A body that fails the
+strict UTF-8 or content-type contract remains transport evidence but cannot enter derivation.
+Historical observations without this HTTP object remain labeled by their older shape; Lex never
+retroactively claims transport evidence it did not collect.
+Every schema-v5 build names its acquisition run and `canon/1`; integrity requires a fresh primary
+observation for every currently served primary text. The schema accepts exactly the frozen
+`canon/1` identity; a successor canon requires a separately reviewed schema and rebuild rather than
+a relabel or append-time downgrade.
+Redirect evidence names the effective official URI. UTF-8 BOM bytes remain in the evidence object
+but are removed from the decoded view; UTF-16 BOMs fail closed. Rejected HTTP bodies and oversized
+bounded prefixes remain content-addressed evidence with an explicit incomplete-body marker, while
+their typed build issue blocks every derive and index entry point. Candidate files are staged
+atomically, checked as one projected corpus, and published through a durable handle-bound journal;
+an interrupted per-file replacement recovers forward before the next writer reads the corpus.
+Duplicate retries retain identical bytes.
+
 Extraction profiles are versioned and their fingerprints are frozen by test; an improvement ships
 as a new profile version, and the Memorial fallback ladder promotes the successor only when it
 recovers strictly more wording. Evidence is fetched once per address: a later silent edit behind

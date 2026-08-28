@@ -58,7 +58,7 @@ internal static class CorpusTransaction
         HandleBoundRoot root,
         string stagedRoot,
         Action<int, string>? afterPublish) =>
-        Commit(root, stagedRoot, [], requireCorpusIntegrity: false, afterPublish);
+        Commit(root, stagedRoot, [], requireCorpusIntegrity: true, afterPublish);
 
     public static void CommitSnapshot(
         HandleBoundRoot root,

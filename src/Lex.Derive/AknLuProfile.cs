@@ -31,7 +31,7 @@ public static class AknLuProfile
     private static Extraction ExtractCore(
         string xml, string lexIdBase, bool preservePublisherStructuralEmpties)
     {
-        var doc = XDocument.Parse(xml, LoadOptions.None);
+        var doc = StrictPublisherXml.Parse(xml);
         var root = doc.Root ?? throw new InvalidDataException("empty XML document");
         var akn = root.Name.Namespace;
         var notes = new List<string>();

@@ -18,7 +18,15 @@ namespace Lex.Tests;
 public sealed partial class CorpusWriterTests : IDisposable
 {
     private const string CodeCommit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    private const string EffectiveBodyUri = "https://publisher.example/effective/body";
     private readonly string _dir = Path.Combine(Path.GetTempPath(), $"lex-writer-{Guid.NewGuid():N}");
+
+    private static SourceBodyFetch RetrievedBody(string text) =>
+        SourceBodyFetch.Retrieved(
+            Encoding.UTF8.GetBytes(text),
+            new SourceHttpEvidence(
+                200, "text/html", "utf-8", null, null,
+                DateTimeOffset.Parse("2026-08-14T00:00:00Z"), EffectiveBodyUri));
 
     public CorpusWriterTests() => Directory.CreateDirectory(_dir);
 
@@ -442,11 +450,11 @@ public sealed partial class CorpusWriterTests : IDisposable
     }
 
     [Fact]
-    public async Task No_change_poll_keeps_the_prior_materializer_identity_and_writes_no_bytes()
+    public async Task V3_contract_poll_records_fresh_observations_and_materializer_identity()
     {
         const string laterCodeCommit = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
         var adapter = new OneVersionAdapter("in_force", "finance",
-            bodyFetch: SourceBodyFetch.Retrieved("<html>publisher text</html>"));
+            bodyFetch: RetrievedBody("<html>publisher text</html>"));
         var first = new CorpusWriter(
             _dir, DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit);
         await first.WriteAsync(adapter, default);
@@ -457,12 +465,12 @@ public sealed partial class CorpusWriterTests : IDisposable
         await poll.WriteAsync(adapter, default);
 
         Assert.True(poll.Accepted);
-        Assert.False(poll.Committed);
-        Assert.Equal(before, Snapshot());
+        Assert.True(poll.Committed);
+        Assert.NotEqual(before, Snapshot());
         var manifest = JsonSerializer.Deserialize<ManifestDoc>(
             await File.ReadAllTextAsync(Path.Combine(_dir, "manifest.json")),
             CorpusJson.Options)!;
-        Assert.Equal(CodeCommit, manifest.IngesterCodeCommit);
+        Assert.Equal(laterCodeCommit, manifest.IngesterCodeCommit);
     }
 
     [Fact]
@@ -513,7 +521,7 @@ public sealed partial class CorpusWriterTests : IDisposable
             """;
         await new CorpusWriter(corpus, DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit)
             .WriteAsync(new OneVersionAdapter("true", "finance",
-                bodyFetch: SourceBodyFetch.Retrieved(body)), default);
+                bodyFetch: RetrievedBody(body)), default);
         var corpusCommit = CommitGitDirectory(corpus);
 
         var stats = DeriveWriter.Derive(corpus, articles, "test",
@@ -593,7 +601,7 @@ public sealed partial class CorpusWriterTests : IDisposable
             var db = Path.Combine(fixture, "index-test.db");
             await new CorpusWriter(corpus, DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit)
                 .WriteAsync(new OneVersionAdapter("true", "finance",
-                    bodyFetch: SourceBodyFetch.Retrieved(html)), default);
+                    bodyFetch: RetrievedBody(html)), default);
             var corpusCommit = CommitGitDirectory(corpus);
             var stats = DeriveWriter.Derive(corpus, articles, "test",
                 new string('b', 40), new string('d', 40), corpusCommit);
@@ -790,7 +798,7 @@ public sealed partial class CorpusWriterTests : IDisposable
             var missing = Fragments.MissingTextBox(document,
                 Fragments.PublisherTextGateOpen(reader));
             Assert.Contains("text_not_available", missing, StringComparison.Ordinal);
-            Assert.Contains("href=\"https://example.test/v1/en\"", missing,
+            Assert.Contains($"href=\"{EffectiveBodyUri}\"", missing,
                 StringComparison.Ordinal);
             Assert.DoesNotContain("Text withheld", missing, StringComparison.Ordinal);
             Assert.DoesNotContain("All-empty canary", missing, StringComparison.Ordinal);
@@ -802,7 +810,7 @@ public sealed partial class CorpusWriterTests : IDisposable
         {
             var html = await site.Client.GetStringAsync("/test/w1/2024-01-01");
             Assert.Contains("text_not_available", html, StringComparison.Ordinal);
-            Assert.Contains("href=\"https://example.test/v1/en\"", html,
+            Assert.Contains($"href=\"{EffectiveBodyUri}\"", html,
                 StringComparison.Ordinal);
             Assert.DoesNotContain("Text withheld", html, StringComparison.Ordinal);
             Assert.DoesNotContain("All-empty canary", html, StringComparison.Ordinal);
@@ -868,8 +876,11 @@ public sealed partial class CorpusWriterTests : IDisposable
             DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit, default);
 
         Assert.True(report.IsValid, string.Join(Environment.NewLine, report.Errors));
-        Assert.Contains("Attribution: test",
-            File.ReadAllText(Path.Combine(corpusRoot, "NOTICE")),
+        var notice = File.ReadAllText(Path.Combine(corpusRoot, "NOTICE"));
+        Assert.Contains("Attribution: test", notice, StringComparison.Ordinal);
+        Assert.Contains(
+            "Historical observations make no retroactive transport-byte claim.",
+            notice,
             StringComparison.Ordinal);
         var version = Assert.Single(Directory.EnumerateDirectories(
             Path.Combine(corpusRoot, "works", "w1", "versions")));
@@ -882,6 +893,10 @@ public sealed partial class CorpusWriterTests : IDisposable
         Assert.Equal(ManifestDoc.CurrentSchema, manifest.Schema);
         Assert.Equal(CodeCommit, manifest.IngesterCodeCommit);
         Assert.Equal(1, manifest.MigrationBaselineWorks);
+        Assert.Contains(
+            "Historical observations make no retroactive transport-byte claim.",
+            manifest.Modifications,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -947,7 +962,7 @@ public sealed partial class CorpusWriterTests : IDisposable
     public async Task Fresh_migration_handles_the_recorded_256_character_nested_destination(
         bool removeParentBeforeCopy)
     {
-        var body = SourceBodyFetch.Retrieved("<html>publisher text</html>");
+        var body = RetrievedBody("<html>publisher text</html>");
         const string member = "CL2012R0648FR0200010.0001.doc.xml";
         const string workSlug = "32012r0648";
         const string language = "fr";
@@ -1089,8 +1104,8 @@ public sealed partial class CorpusWriterTests : IDisposable
         Assert.Equal(2, report.ActualVersions);
         Assert.Equal(1, report.CurrentVersions);
         Assert.Equal(2, report.Expressions);
-        Assert.Equal(2, report.Observations);
-        Assert.Empty(current.FetchedVersionIdentifiers);
+        Assert.Equal(3, report.Observations); // V3: two historical rows plus one fresh observation.
+        Assert.Single(current.FetchedVersionIdentifiers); // V3 requires a fresh current observation.
 
         var manifest = JsonSerializer.Deserialize<ManifestDoc>(
             await File.ReadAllTextAsync(Path.Combine(corpusRoot, "manifest.json")),
@@ -1354,10 +1369,12 @@ public sealed partial class CorpusWriterTests : IDisposable
         await new CorpusWriter(corpusRoot,
                 DateTimeOffset.Parse("2026-08-13T00:00:00Z"), CodeCommit)
             .WriteAsync(new SameDateAdapter(reverse: false), default);
+        await ConvertCurrentCorpusToV4Async(corpusRoot);
 
         var report = await FreshCorpusMigration.RunAsync(
             corpusRoot, "test",
-            new SameDateAdapter(reverse: true, shareSource: true),
+            new NoLegacyIdentityAdapter(
+                new SameDateAdapter(reverse: true, shareSource: true)),
             DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit, default);
 
         Assert.True(report.IsValid, string.Join(Environment.NewLine, report.Errors));
@@ -1402,10 +1419,52 @@ public sealed partial class CorpusWriterTests : IDisposable
                 corpusRoot, "test", new ManyWorksAdapter(1),
                 DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit,
                 (Action<string, string>)Inject, CancellationToken.None,
-        ]));
+            ]));
         await Assert.ThrowsAsync<IOException>(() => task);
 
         Assert.Equal(before, Inventory(corpusRoot));
+        Assert.False(Directory.Exists(Path.Combine(
+            corpusRoot, ".lex-corpus-transaction")));
+    }
+
+    [Fact]
+    public async Task V3_contract_fresh_migration_uses_the_recoverable_snapshot_transaction()
+    {
+        var corpusRoot = Path.Combine(_dir, "candidate");
+        await WriteLegacyBaselineAsync(corpusRoot);
+        var initialSwapFailed = false;
+        void Inject(string source, string destination)
+        {
+            if (source.Contains(".lex-fresh-stage-", StringComparison.Ordinal)
+                && Path.GetFileName(source) == "manifest.json")
+            {
+                initialSwapFailed = true;
+                throw new IOException("injected staged manifest move failure");
+            }
+            if (initialSwapFailed
+                && source.Contains(".lex-fresh-backup-", StringComparison.Ordinal)
+                && Path.GetFileName(source) == "manifest.json")
+                throw new IOException("injected baseline restore failure");
+        }
+
+        var injected = typeof(FreshCorpusMigration).GetMethods(
+                System.Reflection.BindingFlags.NonPublic
+                | System.Reflection.BindingFlags.Static)
+            .Single(method => method.Name == "RunAsync"
+                && method.GetParameters().Length == 7);
+        var task = Assert.IsAssignableFrom<Task<CorpusIntegrityReport>>(
+            injected.Invoke(null,
+            [
+                corpusRoot, "test", new ManyWorksAdapter(1),
+                DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit,
+                (Action<string, string>)Inject, CancellationToken.None,
+            ]));
+        var report = await task;
+
+        Assert.True(report.IsValid,
+            string.Join(Environment.NewLine, report.Errors));
+        Assert.Empty(Directory.EnumerateDirectories(_dir,
+            ".candidate.lex-fresh-backup-*"));
         Assert.False(Directory.Exists(Path.Combine(
             corpusRoot, ".lex-corpus-transaction")));
     }
@@ -1641,6 +1700,36 @@ public sealed partial class CorpusWriterTests : IDisposable
         Assert.Equal(1, miss.RunsMissed);
         Assert.Equal("nightly-201", miss.RunIdentity);
         Assert.Equal("2026-08-02T00:00:00Z", miss.ObservedFrom);
+    }
+
+    [Fact]
+    public async Task V3_contract_missing_publisher_record_requires_three_completed_runs_and_can_be_resighted()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
+            .WriteAsync(new OneVersionAdapter("in_force", "financial-services"), default);
+
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-03T00:00:00Z"), CodeCommit,
+                runIdentity: "nightly-miss-1")
+            .WriteAsync(new EmptyAdapter(), default);
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-04T00:00:00Z"), CodeCommit,
+                runIdentity: "nightly-miss-2")
+            .WriteAsync(new EmptyAdapter(), default);
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-05T00:00:00Z"), CodeCommit,
+                runIdentity: "nightly-miss-3")
+            .WriteAsync(new EmptyAdapter(), default);
+
+        var path = Path.Combine(OneVersionDirectory, "meta.json");
+        var withdrawn = JsonSerializer.Deserialize<VersionMeta>(
+            await File.ReadAllTextAsync(path), CorpusJson.Options)!;
+        Assert.Equal("withdrawn_from_source", withdrawn.Events[^1].Event);
+
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-06T00:00:00Z"), CodeCommit,
+                runIdentity: "nightly-resight-1")
+            .WriteAsync(new OneVersionAdapter("in_force", "financial-services"), default);
+
+        var resighted = JsonSerializer.Deserialize<VersionMeta>(
+            await File.ReadAllTextAsync(path), CorpusJson.Options)!;
+        Assert.Equal("resighted", resighted.Events[^1].Event);
     }
 
     [Fact]
@@ -2101,7 +2190,7 @@ public sealed partial class CorpusWriterTests : IDisposable
     {
         await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
             .WriteAsync(new OneVersionAdapter("in_force", "finance",
-                bodyFetch: SourceBodyFetch.Retrieved("<html>publisher text</html>")), default);
+                bodyFetch: RetrievedBody("<html>publisher text</html>")), default);
         var before = Snapshot();
 
         await Assert.ThrowsAsync<HttpRequestException>(() =>
@@ -2192,7 +2281,7 @@ public sealed partial class CorpusWriterTests : IDisposable
     {
         await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
             .WriteAsync(new OneVersionAdapter("in_force", "finance",
-                bodyFetch: SourceBodyFetch.Retrieved("<html>publisher text</html>")), default);
+                bodyFetch: RetrievedBody("<html>publisher text</html>")), default);
         var before = Snapshot();
 
         var candidate = new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"), CodeCommit);
@@ -2203,7 +2292,9 @@ public sealed partial class CorpusWriterTests : IDisposable
             requireComplete: true);
 
         Assert.False(candidate.Committed);
-        Assert.Equal("body_not_found", Assert.Single(candidate.BuildIssues).Code);
+        Assert.Equal(2, candidate.BuildIssues.Count);
+        Assert.All(candidate.BuildIssues,
+            issue => Assert.Equal("body_not_found", issue.Code));
         Assert.Equal(before, Snapshot());
     }
 
@@ -2214,11 +2305,11 @@ public sealed partial class CorpusWriterTests : IDisposable
     // acquisition failures discarded the whole candidate every night, for both publishers, with a
     // count that could only grow.
     [Fact]
-    public async Task A_metadata_only_expression_does_not_discard_the_candidate()
+    public async Task V3_contract_metadata_only_transition_publishes_only_unavailable_expressions()
     {
         await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
             .WriteAsync(new OneVersionAdapter("in_force", "finance",
-                bodyFetch: SourceBodyFetch.Retrieved("<html>publisher text</html>")), default);
+                bodyFetch: RetrievedBody("<html>publisher text</html>")), default);
 
         var candidate = new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"), CodeCommit);
         await candidate.WriteAsync(new OneVersionAdapter("in_force", "finance", ["en", "fr"],
@@ -2235,9 +2326,12 @@ public sealed partial class CorpusWriterTests : IDisposable
         // The language the publisher offered nothing for carries the reason, and carries no
         // text: committing the candidate must not invent coverage it does not have.
         var expressions = (await ReadVersionMeta()).Expressions;
-        var metadataOnly = Assert.Single(expressions,
-            expression => expression.Text.Reason == "publisher_metadata_only");
-        Assert.False(metadataOnly.Text.Available);
+        Assert.Equal(2, expressions.Count);
+        Assert.All(expressions, expression =>
+        {
+            Assert.Equal("publisher_metadata_only", expression.Text.Reason);
+            Assert.False(expression.Text.Available);
+        });
     }
 
     // The manifest's build_issues is the acquisition-failure record, and CorpusIntegrity bounds it
@@ -2280,7 +2374,7 @@ public sealed partial class CorpusWriterTests : IDisposable
     {
         await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
             .WriteAsync(new OneVersionAdapter("in_force", "finance",
-                bodyFetch: SourceBodyFetch.Retrieved("<html>publisher text</html>")), default);
+                bodyFetch: RetrievedBody("<html>publisher text</html>")), default);
         var before = Snapshot();
 
         var candidate = new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"), CodeCommit);
@@ -2326,14 +2420,16 @@ public sealed partial class CorpusWriterTests : IDisposable
     {
         await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"), CodeCommit)
             .WriteAsync(new OneVersionAdapter("in_force", "finance",
-                bodyFetch: SourceBodyFetch.Retrieved("<html>publisher text</html>")), default);
+                bodyFetch: RetrievedBody("<html>publisher text</html>")), default);
 
         var manifest = JsonSerializer.Deserialize<ManifestDoc>(
             await File.ReadAllTextAsync(Path.Combine(_dir, "manifest.json")), CorpusJson.Options)!;
         Assert.Equal(1, manifest.Expressions);
         Assert.Equal(1, manifest.ExpressionsWithText);
         Assert.Equal(0, manifest.ExpressionsWithoutText);
-        Assert.True(File.Exists(Path.Combine(OneVersionDirectory, "en.html")));
+        var observation = Assert.Single((await ReadVersionMeta()).Expressions)
+            .Observations.Single(item => item.Format is null);
+        Assert.True(File.Exists(Path.Combine(OneVersionDirectory, observation.File!)));
     }
 
     [Fact]
@@ -2341,7 +2437,7 @@ public sealed partial class CorpusWriterTests : IDisposable
     {
         await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"), CodeCommit)
             .WriteAsync(new OneVersionAdapter("in_force", "finance",
-                bodyFetch: SourceBodyFetch.Retrieved("   ")), default);
+                bodyFetch: RetrievedBody("   ")), default);
 
         var manifest = JsonSerializer.Deserialize<ManifestDoc>(
             await File.ReadAllTextAsync(Path.Combine(_dir, "manifest.json")), CorpusJson.Options)!;
@@ -2353,8 +2449,9 @@ public sealed partial class CorpusWriterTests : IDisposable
         var expr = Assert.Single((await ReadVersionMeta()).Expressions);
         Assert.False(expr.Text.Available);
         Assert.Equal("body_empty", expr.Text.Reason);
-        Assert.Empty(expr.Observations);
-        Assert.False(File.Exists(Path.Combine(OneVersionDirectory, "en.html")));
+        var observation = Assert.Single(expr.Observations);
+        Assert.Equal("body_empty", observation.Http?.AttemptOutcome);
+        Assert.True(File.Exists(Path.Combine(OneVersionDirectory, observation.File!)));
     }
 
     [Fact]
@@ -2365,18 +2462,19 @@ public sealed partial class CorpusWriterTests : IDisposable
                 SourceBodyStatus.RetryExhausted, Detail: "network", Attempts: 2)), default);
 
         var versionDir = OneVersionDirectory;
-        Assert.False(File.Exists(Path.Combine(versionDir, "en.html")));
+        Assert.Empty(Directory.EnumerateFiles(
+            versionDir, "en--*.html", SearchOption.TopDirectoryOnly));
         var first = Assert.Single((await ReadVersionMeta()).Expressions);
         Assert.True(first.Text.Available);                       // an alt manifestation IS observed text
         Assert.All(first.Observations, o => Assert.NotNull(o.Format));
 
         await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-02T00:00:00Z"), CodeCommit)
             .WriteAsync(new AltThenPrimaryAdapter(
-                SourceBodyFetch.Retrieved("<html>primary text</html>")), default);
+                RetrievedBody("<html>primary text</html>")), default);
 
-        Assert.True(File.Exists(Path.Combine(versionDir, "en.html")));
         var second = Assert.Single((await ReadVersionMeta()).Expressions);
-        Assert.Contains(second.Observations, o => o.Format is null);
+        var primary = Assert.Single(second.Observations, o => o.Format is null);
+        Assert.True(File.Exists(Path.Combine(versionDir, primary.File!)));
     }
 
     private async Task<VersionMeta> ReadVersionMeta() => JsonSerializer.Deserialize<VersionMeta>(
@@ -2403,10 +2501,13 @@ public sealed partial class CorpusWriterTests : IDisposable
         await new CorpusWriter(root,
                 DateTimeOffset.Parse("2026-08-13T00:00:00Z"), CodeCommit)
             .WriteAsync(adapter, default);
+        await ConvertTransportObservationsToLegacyAsync(root);
         var path = Path.Combine(root, "manifest.json");
         var manifest = JsonSerializer.Deserialize<ManifestDoc>(
             await File.ReadAllTextAsync(path), CorpusJson.Options)!;
         manifest.Schema = "lex-corpus/3";
+        manifest.Canon = null;
+        manifest.ObservationRun = null;
         manifest.IngesterCodeCommit = null;
         await File.WriteAllTextAsync(path,
             JsonSerializer.Serialize(manifest, CorpusJson.Options) + "\n");
@@ -2438,6 +2539,7 @@ public sealed partial class CorpusWriterTests : IDisposable
         await new CorpusWriter(root,
                 DateTimeOffset.Parse("2026-08-13T00:00:00Z"), CodeCommit)
             .WriteAsync(new LegiluxReplacementAdapter(includeWithdrawn: true), default);
+        await ConvertTransportObservationsToLegacyAsync(root);
 
         var versionsRoot = Path.Combine(root, "works", "code-civil", "versions");
         string? tombstoneTemporary = null;
@@ -2484,6 +2586,8 @@ public sealed partial class CorpusWriterTests : IDisposable
             await File.ReadAllTextAsync(manifestPath), CorpusJson.Options)!;
         manifest.Schema = "lex-corpus/3";
         manifest.IngesterCodeCommit = null;
+        manifest.Canon = null;
+        manifest.ObservationRun = null;
         manifest.Versions = 1;
         await File.WriteAllTextAsync(manifestPath,
             JsonSerializer.Serialize(manifest, CorpusJson.Options) + "\n");
@@ -2551,8 +2655,72 @@ public sealed partial class CorpusWriterTests : IDisposable
                     JsonSerializer.Serialize(meta, CorpusJson.Options))));
     }
 
+    private static async Task ConvertCurrentCorpusToV4Async(string root)
+    {
+        await ConvertTransportObservationsToLegacyAsync(root);
+
+        var manifestPath = Path.Combine(root, "manifest.json");
+        var manifest = JsonSerializer.Deserialize<ManifestDoc>(
+            await File.ReadAllTextAsync(manifestPath), CorpusJson.Options)!;
+        manifest.Schema = "lex-corpus/4";
+        manifest.Canon = null;
+        manifest.ObservationRun = null;
+        await File.WriteAllTextAsync(manifestPath,
+            JsonSerializer.Serialize(manifest, CorpusJson.Options) + "\n");
+    }
+
+    private static async Task ConvertTransportObservationsToLegacyAsync(string root)
+    {
+        var worksRoot = Path.Combine(root, "works");
+        foreach (var workDirectory in Directory.EnumerateDirectories(worksRoot))
+        foreach (var versionDirectory in Directory.EnumerateDirectories(
+                     Path.Combine(workDirectory, "versions")))
+        {
+            var metaPath = Path.Combine(versionDirectory, "meta.json");
+            var meta = JsonSerializer.Deserialize<VersionMeta>(
+                await File.ReadAllTextAsync(metaPath), CorpusJson.Options)!;
+            foreach (var expression in meta.Expressions)
+            foreach (var observation in expression.Observations
+                         .Where(item => item.Format is null))
+            {
+                var extension = Path.GetExtension(observation.File);
+                var legacyName = expression.Language + extension;
+                var legacyPath = Path.Combine(versionDirectory, legacyName);
+                Assert.False(File.Exists(legacyPath));
+                File.Move(Path.Combine(versionDirectory, observation.File!), legacyPath);
+                observation.File = legacyName;
+                observation.Http = null;
+            }
+            RefreshRecordHash(meta);
+            await File.WriteAllTextAsync(metaPath,
+                JsonSerializer.Serialize(meta, CorpusJson.Options) + "\n");
+        }
+    }
+
     private sealed record LegacyWithdrawalBaseline(
         string MetaPath, string BodyPath, string BodySha256, byte[] BodyBytes);
+
+    private sealed class NoLegacyIdentityAdapter(ISourceAdapter inner) : ISourceAdapter
+    {
+        public PublisherDescriptor Describe() => inner.Describe();
+
+        public IAsyncEnumerable<WorkRef> EnumerateWorks(CancellationToken ct) =>
+            inner.EnumerateWorks(ct);
+
+        public Task<IReadOnlyList<VersionRecord>> FetchVersions(
+            WorkRef work,
+            CancellationToken ct) => inner.FetchVersions(work, ct);
+
+        public Task<SourceBodyFetch> FetchBody(
+            VersionRecord version,
+            ExpressionRecord expression,
+            CancellationToken ct) => inner.FetchBody(version, expression, ct);
+
+        public Task<SourceManifestationFetch> FetchAltManifestation(
+            VersionRecord version,
+            ExpressionRecord expression,
+            CancellationToken ct) => inner.FetchAltManifestation(version, expression, ct);
+    }
 
     public void Dispose()
     {
@@ -2744,7 +2912,7 @@ public sealed partial class CorpusWriterTests : IDisposable
         {
             if (BodyFetchCount == 0) beforeFirstBodyFetch?.Invoke();
             BodyFetchCount++;
-            return Task.FromResult(SourceBodyFetch.Retrieved(
+            return Task.FromResult(RetrievedBody(
                 $"<html>{version.Id.Value}</html>"));
         }
 
@@ -2801,7 +2969,7 @@ public sealed partial class CorpusWriterTests : IDisposable
             VersionRecord version, ExpressionRecord expression, CancellationToken ct)
         {
             BodyFetchCount++;
-            return Task.FromResult(SourceBodyFetch.Retrieved(
+            return Task.FromResult(RetrievedBody(
                 $"<html>{version.Id.Value}</html>"));
         }
 
@@ -2878,7 +3046,7 @@ public sealed partial class CorpusWriterTests : IDisposable
             if (BodyFetchCount == 0) beforeFirstBodyFetch?.Invoke();
             BodyFetchCount++;
             FetchedVersionIdentifiers.Add(version.Id.Value);
-            return Task.FromResult(SourceBodyFetch.Retrieved(
+            return Task.FromResult(RetrievedBody(
                 $"<html>{version.Id.Value}</html>"));
         }
 
@@ -3132,7 +3300,7 @@ public sealed partial class CorpusWriterTests : IDisposable
             VersionRecord version, ExpressionRecord expression, CancellationToken ct)
         {
             BodyFetchCount++;
-            return Task.FromResult(SourceBodyFetch.Retrieved("""
+            return Task.FromResult(RetrievedBody("""
                 <html><body>
                 <p class="title-article-norm">Article 1</p>
                 <p>Protected official wording.</p>

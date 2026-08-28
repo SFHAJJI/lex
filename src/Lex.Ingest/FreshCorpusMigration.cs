@@ -137,6 +137,7 @@ public static class FreshCorpusMigration
             Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
         var stage = Path.Combine(parent, $".{name}.lex-fresh-stage-{token}");
         Directory.CreateDirectory(stage);
+        var retainRejectedStage = false;
         try
         {
             var writer = new CorpusWriter(
@@ -158,6 +159,14 @@ public static class FreshCorpusMigration
                         beforeStageFileWrite, cancellationToken);
                 }, beforeCandidateCommit: null,
                 allowTrustedPlanPreparation: true);
+            if (!writer.Accepted)
+            {
+                retainRejectedStage = writer.Committed;
+                throw new InvalidDataException(
+                    retainRejectedStage
+                        ? $"Fresh corpus candidate was rejected by the complete-acquisition gate; bounded response evidence remains at {stage}."
+                        : "Fresh corpus candidate was rejected by the complete-acquisition gate.");
+            }
             if (!writer.Committed)
                 throw new InvalidDataException("Fresh corpus candidate was not committed.");
             if (reconciliation is null)
@@ -217,7 +226,8 @@ public static class FreshCorpusMigration
         }
         finally
         {
-            try { if (Directory.Exists(stage)) Directory.Delete(stage, recursive: true); } catch { }
+            if (!retainRejectedStage)
+                try { if (Directory.Exists(stage)) Directory.Delete(stage, recursive: true); } catch { }
         }
     }
 
@@ -311,7 +321,8 @@ public static class FreshCorpusMigration
     private static BaselineInventory ReadBaselineInventory(
         string root, string schema, string publisher)
     {
-        var usesPublisherVersionIdentifier = schema == ManifestDoc.CurrentSchema;
+        var usesPublisherVersionIdentifier = schema is "lex-corpus/4"
+            || schema == ManifestDoc.CurrentSchema;
         var works = new List<BaselineWork>();
         var worksRoot = VerifiedCorpusPath.RequireExisting(
             root, Path.Combine(root, "works"), "works directory");

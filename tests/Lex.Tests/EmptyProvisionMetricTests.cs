@@ -476,7 +476,7 @@ public sealed class EmptyProvisionMetricTests
             var output = Path.Combine(root, "articles");
             Directory.CreateDirectory(corpus);
             File.WriteAllText(Path.Combine(corpus, "manifest.json"), $$"""
-                { "schema": "lex-corpus/4", "ingester_code_commit": "{{IngesterCommit}}" }
+                { "schema": "lex-corpus/5", "canon": "canon/1", "build_issues": [], "ingester_code_commit": "{{IngesterCommit}}" }
                 """);
             var work = Path.Combine(corpus, "works", "large");
             Directory.CreateDirectory(work);
@@ -667,7 +667,7 @@ public sealed class EmptyProvisionMetricTests
         var manifest = Path.Combine(corpus, "manifest.json");
         if (!File.Exists(manifest))
             File.WriteAllText(manifest, $$"""
-                { "schema": "lex-corpus/4", "ingester_code_commit": "{{IngesterCommit}}" }
+                { "schema": "lex-corpus/5", "canon": "canon/1", "build_issues": [], "ingester_code_commit": "{{IngesterCommit}}" }
                 """);
         var work = Path.Combine(corpus, "works", slug);
         Directory.CreateDirectory(work);
@@ -691,7 +691,11 @@ public sealed class EmptyProvisionMetricTests
               "expressions": [{
                 "language": "en",
                 "source_uri": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32000R0001",
-                "observations": [{ "file": "en.html", "sha256": "fixture" }]
+                "observations": [{
+                  "file": "en.html",
+                  "sha256": "fixture",
+                  "source_uri": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32000R0001"
+                }]
               }]
             }
             """);

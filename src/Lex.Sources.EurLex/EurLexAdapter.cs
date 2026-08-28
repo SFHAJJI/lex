@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Lex.Law;
+using Lex.Temporal;
 
 namespace Lex.Sources.EurLex;
 
@@ -234,6 +235,7 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
                 totalAttempts += last.Attempts;
                 if (!exact.ExactIdentity && exact.IdentityFailureDetail is not null)
                     return new(SourceBodyStatus.ParserFailure,
+                        last.Bytes, last.Http,
                         Detail: exact.IdentityFailureDetail,
                         Attempts: totalAttempts);
             }
@@ -245,15 +247,18 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
                     remainingAttempts, ct);
                 totalAttempts += last.Attempts;
             }
-            if (last.Bytes is null) continue;
-
-            var text = System.Text.Encoding.UTF8.GetString(last.Bytes);
+            if (last.Bytes is null || (int?)last.StatusCode is not (>= 200 and <= 299))
+                continue;
 
             var fallback = attempt > 0
                 ? " (official EUR-Lex fallback)"
                 : "";
             Console.Error.WriteLine($"  [eurlex] {celex}: body {last.Bytes.Length / 1024} KB{fallback}");
-            return SourceBodyFetch.Retrieved(text, totalAttempts);
+            return SourceBodyFetch.Retrieved(
+                last.Bytes,
+                last.Http ?? throw new InvalidDataException(
+                    "A successful publisher body has no bounded HTTP evidence."),
+                totalAttempts);
         }
 
         if (last?.LimitExceeded == true)
@@ -262,29 +267,31 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
             Console.Error.WriteLine($"  [eurlex] {celex}: official body unavailable after {urls.Count} endpoint(s) (last status {(int?)last?.StatusCode})");
         if (last?.LimitExceeded == true)
             return new(SourceBodyStatus.Oversized,
+                last.Bytes, last.Http,
                 Detail: $"Official body exceeded the {BodyCapBytes}-byte acquisition limit.",
                 Attempts: totalAttempts);
         if (last?.RetryExhausted == true)
             return new(SourceBodyStatus.RetryExhausted,
+                last.Bytes, last.Http,
                 Detail: last.FailureDetail ?? "The official endpoint exhausted the retry policy.",
                 Attempts: totalAttempts);
+        SourceBodyFetch Rejected(SourceBodyStatus status, string detail) =>
+            new(status, last?.Bytes, last?.Http, detail, totalAttempts);
         return last?.StatusCode switch
         {
-            System.Net.HttpStatusCode.NotFound => new(SourceBodyStatus.PermanentNotFound,
-                Detail: "Every bounded official endpoint returned HTTP 404.", Attempts: totalAttempts),
-            System.Net.HttpStatusCode.Gone => new(SourceBodyStatus.Gone,
-                Detail: "The official endpoint returned HTTP 410.", Attempts: totalAttempts),
+            System.Net.HttpStatusCode.NotFound => Rejected(SourceBodyStatus.PermanentNotFound,
+                "Every bounded official endpoint returned HTTP 404."),
+            System.Net.HttpStatusCode.Gone => Rejected(SourceBodyStatus.Gone,
+                "The official endpoint returned HTTP 410."),
             System.Net.HttpStatusCode.RequestTimeout
                 or System.Net.HttpStatusCode.TooManyRequests
                 or System.Net.HttpStatusCode.InternalServerError
                 or System.Net.HttpStatusCode.BadGateway
                 or System.Net.HttpStatusCode.ServiceUnavailable
-                or System.Net.HttpStatusCode.GatewayTimeout => new(SourceBodyStatus.RetryExhausted,
-                    Detail: $"Retryable publisher response {(int?)last.StatusCode} exhausted the acquisition policy.",
-                    Attempts: totalAttempts),
-            _ => new(SourceBodyStatus.ParserFailure,
-                Detail: $"Official body acquisition failed with HTTP {(int?)last?.StatusCode}.",
-                Attempts: totalAttempts),
+                or System.Net.HttpStatusCode.GatewayTimeout => Rejected(SourceBodyStatus.RetryExhausted,
+                    $"Retryable publisher response {(int?)last.StatusCode} exhausted the acquisition policy."),
+            _ => Rejected(SourceBodyStatus.ParserFailure,
+                $"Official body acquisition failed with HTTP {(int?)last?.StatusCode}."),
         };
     }
 
@@ -327,9 +334,15 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
             if (resp is null)
                 return new FetchResult(null, null, false, url, Attempts: attempts,
                     RetryExhausted: true, FailureDetail: failureDetail);
+            var responseUri = OfficialEuUri(
+                resp.RequestMessage?.RequestUri?.AbsoluteUri)
+                ?? throw new InvalidDataException(
+                    "The publisher response URI is missing or outside the official EU host allowlist.");
             if ((int)resp.StatusCode is >= 300 and < 400 && resp.Headers.Location is { } loc)
             {
-                var next = loc.IsAbsoluteUri ? loc.ToString() : new Uri(new Uri(url), loc).ToString();
+                var next = loc.IsAbsoluteUri
+                    ? loc.ToString()
+                    : new Uri(new Uri(responseUri), loc).ToString();
                 url = next.StartsWith("http://", StringComparison.Ordinal) ? "https://" + next["http://".Length..] : next;
                 if (OfficialEuUri(url) is null)
                 {
@@ -341,25 +354,35 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
             }
             break;
         }
-        if (resp is null || !resp.IsSuccessStatusCode)
+        if (resp is null)
         {
-            var status = resp?.StatusCode;
-            resp?.Dispose();
-            return new FetchResult(null, status, false, url, Attempts: attempts,
+            return new FetchResult(null, null, false, url, Attempts: attempts,
                 RetryExhausted: retryExhausted, FailureDetail: failureDetail);
         }
         using var _ = resp;
-        if (resp.Content.Headers.ContentLength is { } contentLength && contentLength > capBytes)
-            return new FetchResult(null, resp.StatusCode, true, url, Attempts: attempts);
-
+        var effectiveSourceUri = OfficialEuUri(
+            resp.RequestMessage?.RequestUri?.AbsoluteUri)
+            ?? throw new InvalidDataException(
+                "The publisher response URI is missing or outside the official EU host allowlist.");
         await using var stream = await resp.Content.ReadAsStreamAsync(ct);
         var bounded = await ReadBounded(stream, capBytes, ct);
         var contentLanguage = string.Join(",",
             resp.Content.Headers.ContentLanguage.OrderBy(value => value, StringComparer.Ordinal));
-        return new FetchResult(bounded.Bytes, resp.StatusCode, bounded.LimitExceeded, url,
+        var http = new SourceHttpEvidence(
+            (int)resp.StatusCode,
+            resp.Content.Headers.ContentType?.MediaType,
+            resp.Content.Headers.ContentType?.CharSet,
+            resp.Headers.ETag?.ToString(),
+            resp.Content.Headers.LastModified,
+            DateTimeOffset.UtcNow,
+            effectiveSourceUri,
+            !bounded.LimitExceeded);
+        return new FetchResult(bounded.Bytes, resp.StatusCode, bounded.LimitExceeded,
+            effectiveSourceUri,
             resp.Content.Headers.ContentType?.MediaType,
             string.IsNullOrEmpty(contentLanguage) ? null : contentLanguage,
-            Attempts: attempts);
+            Attempts: attempts,
+            Http: http);
     }
 
     private async Task<PortalBodyFetch> FetchExactPortalBodyAsync(
@@ -382,11 +405,22 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
                 maximumAttempts - attempts, ct);
             attempts += fetched.Attempts;
             last = fetched with { Attempts = attempts };
-            if (fetched.Bytes is null)
+            if (fetched.Bytes is null || (int?)fetched.StatusCode is not (>= 200 and <= 299))
                 return new(last, ExactIdentity: false,
                     IdentityFailureDetail: identityFailureDetail);
 
-            var text = System.Text.Encoding.UTF8.GetString(fetched.Bytes);
+            string text;
+            try
+            {
+                text = StrictPublisherText.Decode(
+                    fetched.Bytes, fetched.Http?.Charset);
+            }
+            catch (InvalidDataException)
+            {
+                return new(last, ExactIdentity: false,
+                    IdentityFailureDetail: PortalIdentityFingerprint(
+                        last, exactIdentity: false));
+            }
             if (IsExactPortalExpression(text, celex, language))
                 return new(last, ExactIdentity: true, IdentityFailureDetail: null);
 
@@ -426,8 +460,12 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
         int read;
         while ((read = await stream.ReadAsync(buf, ct)) > 0)
         {
-            if (ms.Length + read > capBytes)
-                return new BoundedRead(null, ms.Length + read, true);
+            var remaining = capBytes - checked((int)ms.Length);
+            if (read > remaining)
+            {
+                if (remaining > 0) ms.Write(buf, 0, remaining);
+                return new BoundedRead(ms.ToArray(), ms.Length + read - remaining, true);
+            }
             ms.Write(buf, 0, read);
         }
         return new BoundedRead(ms.ToArray(), ms.Length, false);
@@ -560,7 +598,8 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
         string? ContentLanguage = null,
         int Attempts = 1,
         bool RetryExhausted = false,
-        string? FailureDetail = null);
+        string? FailureDetail = null,
+        SourceHttpEvidence? Http = null);
 
     private sealed record PortalBodyFetch(
         FetchResult Fetch,

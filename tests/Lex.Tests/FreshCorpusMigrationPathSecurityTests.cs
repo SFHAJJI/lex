@@ -572,7 +572,7 @@ public sealed partial class CorpusWriterTests
         if (!CanCreateSymbolicLinks()) return;
 
         const string member = "CL2012R0648FR0200010.0001.doc.xml";
-        var body = SourceBodyFetch.Retrieved("<html>publisher text</html>");
+        var body = RetrievedBody("<html>publisher text</html>");
         var corpusRoot = Path.Combine(_dir, "linked-nested-stage-observation");
         await new CorpusWriter(corpusRoot,
                 DateTimeOffset.Parse("2026-08-13T00:00:00Z"), CodeCommit)
@@ -608,7 +608,7 @@ public sealed partial class CorpusWriterTests
     {
         if (!CanCreateSymbolicLinks()) return;
 
-        var body = SourceBodyFetch.Retrieved("<html>publisher text</html>");
+        var body = RetrievedBody("<html>publisher text</html>");
         var corpusRoot = Path.Combine(_dir, "source-swapped-before-stage-copy");
         await new CorpusWriter(corpusRoot,
                 DateTimeOffset.Parse("2026-08-13T00:00:00Z"), CodeCommit)

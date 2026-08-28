@@ -85,6 +85,8 @@ public sealed class CorpusWriter(
         var langs = new HashSet<string>(StringComparer.Ordinal);
         string? earliest = null, latest = null;
         int works = 0, versions = 0, expressions = 0, expressionsWithText = 0;
+        var retainedRejectedEvidence = false;
+        var missingFreshForAvailableText = false;
         var seenVersionMetadata = new HashSet<string>(PathComparer);
 
         // Materialise the metadata-only plan before fetching bodies. Adapters already hold their
@@ -332,7 +334,8 @@ public sealed class CorpusWriter(
                             current.SourceUri = expression.SourceUri;
                             revised.Add($"expressions.{expression.Language}.source_uri");
                         }
-                        if (current.Text.Url != expression.SourceUri)
+                        if (!current.Text.Available
+                            && current.Text.Url != expression.SourceUri)
                         {
                             current.Text.Url = expression.SourceUri;
                             revised.Add($"expressions.{expression.Language}.text.url");
@@ -407,29 +410,38 @@ public sealed class CorpusWriter(
                         // manifestation members are observations too, and counting them here let
                         // one successful Formex night disable the promised primary backfill
                         // permanently for an expression whose primary fetch failed that night.
-                        if (exprMeta.Observations.Any(o => o.Format is null)) continue;
                         var fetched = await adapter.FetchBody(v, exprRec, ct);
                         ValidateBodyFetch(fetched);
                         retryMaximumAttempts = Math.Max(retryMaximumAttempts, fetched.Attempts);
-                        if (fetched.Status == SourceBodyStatus.Retrieved
-                            && string.IsNullOrWhiteSpace(fetched.Text))
-                        {
-                            // A 2xx whose body is empty is a failed fetch, not text. Storing it
-                            // would mint a permanent zero-byte observation that counts as covered
-                            // and, being an observation, would never be refetched.
-                            fetched = new SourceBodyFetch(SourceBodyStatus.EmptyBody,
-                                Detail: "publisher returned an empty body", Attempts: fetched.Attempts);
-                        }
-                        if (fetched.Status != SourceBodyStatus.Retrieved || fetched.Text is null)
+                        if (fetched.Bytes is null || fetched.Http is null)
                         {
                             bodyFailures[exprRec.Language] = fetched;
-                            if (!exprMeta.Text.Available) exprMeta.Text.Reason = fetched.IssueCode;
+                            if (fetched.Status == SourceBodyStatus.PublisherMetadataOnly)
+                            {
+                                exprMeta.Text = new TextInfo
+                                {
+                                    Available = false,
+                                    Reason = fetched.IssueCode,
+                                    Url = exprRec.SourceUri,
+                                };
+                                bodyAdded = true;
+                            }
+                            else if (exprMeta.Text.Available)
+                            {
+                                missingFreshForAvailableText = true;
+                            }
+                            else
+                            {
+                                exprMeta.Text.Reason = fetched.IssueCode;
+                            }
                             continue;
                         }
-                        var bytes = Encoding.UTF8.GetBytes(fetched.Text);
+                        var bytes = fetched.Bytes;
+                        var http = fetched.Http;
                         var bodySha256 = Convert.ToHexStringLower(SHA256.HashData(bytes));
                         var replaced = PriorSameDatePrimaryObservation(
-                            workDir, vkey, vfrom, exprMeta.Language, exprRec.SourceUri);
+                            workDir, vkey, vfrom, exprMeta.Language,
+                            http.EffectiveSourceUri);
                         if (replaced is not null
                             && !CorpusHashes.Equal(replaced.Value.Sha256, bodySha256))
                             meta.Events.Add(new EventEntry
@@ -441,20 +453,81 @@ public sealed class CorpusWriter(
                                     + $"prior_sha256={replaced.Value.Sha256}; "
                                     + $"current_sha256={bodySha256}",
                             });
-                        var ext = fetched.Text.TrimStart().StartsWith("<?xml", StringComparison.Ordinal) ? "xml" : "html";
-                        var file = $"{exprMeta.Language}.{ext}";          // §3.3 rule 3, initial expression
+                        var supportedContentType = TryPrimaryBodyExtension(
+                            http.ContentType, out var ext);
+                        var file = PrimaryObservationName.Create(
+                            exprMeta.Language, bodySha256, ext);
                         var bodyPath = Path.Combine(versionDir, file);
-                        if (!candidate.Exists(bodyPath)) await candidate.WriteBytesAsync(bodyPath, bytes, ct);
+                        if (candidate.Exists(bodyPath))
+                        {
+                            if (!CorpusHashes.Equal(
+                                    candidate.ExistingSha256(bodyPath), bodySha256))
+                                throw new InvalidDataException(
+                                    "A primary observation filename prefix collision was detected.");
+                        }
+                        else
+                        {
+                            await candidate.WriteBytesAsync(bodyPath, bytes, ct);
+                        }
+
+                        if (fetched.Status == SourceBodyStatus.Retrieved)
+                        {
+                            if (!supportedContentType)
+                            {
+                                fetched = new SourceBodyFetch(
+                                    SourceBodyStatus.ParserFailure, bytes, http,
+                                    "publisher body declared an unsupported content type",
+                                    fetched.Attempts);
+                            }
+                            else
+                            {
+                                try
+                                {
+                                    var decoded = StrictPublisherText.Decode(
+                                        bytes, http.Charset);
+                                    if (string.IsNullOrWhiteSpace(decoded))
+                                        fetched = new SourceBodyFetch(
+                                            SourceBodyStatus.EmptyBody, bytes, http,
+                                            "publisher returned an empty body",
+                                            fetched.Attempts);
+                                }
+                                catch (InvalidDataException)
+                                {
+                                    fetched = new SourceBodyFetch(
+                                        SourceBodyStatus.ParserFailure, bytes, http,
+                                        "publisher body failed the strict character decoder",
+                                        fetched.Attempts);
+                                }
+                            }
+                        }
+                        var httpObservation = HttpObservation(
+                            http,
+                            fetched.Attempts,
+                            fetched.Status == SourceBodyStatus.Retrieved
+                                ? "retrieved" : fetched.IssueCode);
                         exprMeta.Observations.Add(new ObservationEntry
                         {
                             File = file,
                             Sha256 = bodySha256,
-                            SourceUri = exprRec.SourceUri ?? "",
-                            RetrievedAt = _now,
+                            SourceUri = http.EffectiveSourceUri,
+                            RetrievedAt = httpObservation.FetchedAt,
                             ObservedFrom = _now,
+                            Http = httpObservation,
                         });
-                        exprMeta.Text = new TextInfo { Available = true, Url = exprRec.SourceUri };
                         bodyAdded = true;
+                        if (fetched.Status != SourceBodyStatus.Retrieved)
+                        {
+                            retainedRejectedEvidence = true;
+                            bodyFailures[exprRec.Language] = fetched;
+                            if (!exprMeta.Text.Available)
+                                exprMeta.Text.Reason = fetched.IssueCode;
+                            continue;
+                        }
+                        exprMeta.Text = new TextInfo
+                        {
+                            Available = true,
+                            Url = http.EffectiveSourceUri,
+                        };
                     }
 
                     // D48: alternative structural manifestation (e.g. Formex 4). Stored as
@@ -600,6 +673,8 @@ public sealed class CorpusWriter(
                 + "the publisher; recorded as coverage, not treated as acquisition failures");
         var manifest = new ManifestDoc
         {
+            Canon = ManifestDoc.CurrentCanon,
+            ObservationRun = _now,
             Publisher = new Dictionary<string, string>
             {
                 ["id"] = pub.Id,
@@ -614,7 +689,7 @@ public sealed class CorpusWriter(
             TextIncluded = desc.TextIncluded,
             TextPublic = desc.TextPublic,
             Modifications = desc.TextIncluded
-                ? "Metadata converted from source RDF to JSON; bodies stored verbatim as retrieved from the publisher's dissemination channel; no text altered."
+                ? "Metadata converted from source RDF to JSON; fresh primary observations carrying bounded HTTP evidence store the publisher response bytes unchanged. Historical observations make no retroactive transport-byte claim. No retained text altered."
                 : "Metadata converted from source RDF to JSON; no text stored (metadata-only mode, D42).",
             DocumentTypes = kinds.OrderByDescending(k => k.Value)
                 .Select(k => new Dictionary<string, object> { ["code"] = k.Key, ["versions"] = k.Value }).ToList(),
@@ -652,7 +727,14 @@ public sealed class CorpusWriter(
             candidate.WriteIfChanged(Path.Combine(corpusRoot, "manifest.json"),
                 JsonSerializer.Serialize(manifest, CorpusJson.Options));
         }
-        if (requireComplete && blocking.Length > 0)
+        if (missingFreshForAvailableText)
+        {
+            _progress.WriteLine(
+                "  [corpus] candidate not published because an available expression has no fresh bounded response evidence");
+            return;
+        }
+        var rejected = requireComplete && blocking.Length > 0;
+        if (rejected)
         {
             // Only the blocking issues are listed. The metadata-only ones were already summarised
             // above as coverage, and repeating them under "rejected with" would read as though
@@ -661,10 +743,18 @@ public sealed class CorpusWriter(
                 _progress.WriteLine(
                     $"  [corpus-issue] code={issue.Code} work={issue.Work} detail={issue.Detail}");
             _progress.WriteLine(
-                $"  [corpus] candidate rejected with {blocking.Length} typed acquisition issue(s); prior corpus retained");
-            return;
+                $"  [corpus] downstream build rejected with {blocking.Length} typed acquisition issue(s); bounded response evidence will be retained when present");
+            if (!retainedRejectedEvidence)
+            {
+                _progress.WriteLine(
+                    "  [corpus] no bounded rejected response was received; prior corpus retained");
+                return;
+            }
         }
-        Accepted = true;
+        else
+        {
+            Accepted = true;
+        }
         if (!candidate.HasChanges)
         {
             _progress.WriteLine(
@@ -674,6 +764,12 @@ public sealed class CorpusWriter(
         candidate.Commit(
             baseline, writeSession, beforeCandidateCommit, afterCandidatePublish);
         Committed = true;
+        if (rejected)
+        {
+            _progress.WriteLine(
+                "  [corpus] rejected bounded response evidence retained; derive and index remain blocked");
+            return;
+        }
         _progress.WriteLine($"  [corpus] works={works} versions={versions} expressions={expressions} " +
             $"with_text={expressionsWithText} without_text={manifest.ExpressionsWithoutText} " +
             $"created={Created} updated={Updated} unchanged={Unchanged}");
@@ -696,8 +792,12 @@ public sealed class CorpusWriter(
             ?? throw new InvalidDataException("Existing corpus manifest is empty.");
         if (manifest.Schema != ManifestDoc.CurrentSchema)
             throw new InvalidDataException(
-                $"Existing corpus schema '{manifest.Schema}' cannot be appended by the v4 writer; "
+                $"Existing corpus schema '{manifest.Schema}' cannot be appended by the v5 writer; "
                 + "use the explicit fresh-corpus migration path.");
+        if (manifest.Canon != ManifestDoc.CurrentCanon)
+            throw new InvalidDataException(
+                $"Existing corpus canon '{manifest.Canon}' cannot be appended by the "
+                + $"{ManifestDoc.CurrentCanon} writer.");
         CodeIdentity.RequireFullCommit(
             manifest.IngesterCodeCommit, "manifest ingester_code_commit");
         ValidateSourceConfiguration(
@@ -1033,10 +1133,93 @@ public sealed class CorpusWriter(
     {
         if (result.Attempts is < 1 or > 10)
             throw new InvalidDataException("A source body outcome reported an invalid attempt count.");
-        if ((result.Status == SourceBodyStatus.Retrieved) != (result.Text is not null))
+        if ((result.Bytes is null) != (result.Http is null))
             throw new InvalidDataException(
-                "A source body outcome must contain text exactly when its status is Retrieved.");
+                "Source body bytes and bounded HTTP evidence must be reported together.");
+        if (result.Status == SourceBodyStatus.Retrieved && result.Bytes is null)
+            throw new InvalidDataException(
+                "A retrieved source body must contain bounded HTTP evidence.");
+        if (result.Http is not { } http) return;
+        if (http.StatusCode is < 100 or > 599
+            || result.Status == SourceBodyStatus.Retrieved
+                && http.StatusCode is not (>= 200 and <= 299))
+            throw new InvalidDataException(
+                "A source body reported an invalid HTTP status.");
+        RequireBoundedHttpValue(http.ContentType, 128, "content type");
+        RequireBoundedHttpValue(http.Charset, 64, "charset");
+        RequireBoundedHttpValue(http.EntityTag, 512, "entity tag");
+        RequireBoundedHttpValue(http.EffectiveSourceUri, 2048,
+            "effective source URI", required: true);
+        if (!Uri.TryCreate(http.EffectiveSourceUri, UriKind.Absolute, out var uri)
+            || uri.Scheme is not ("http" or "https"))
+            throw new InvalidDataException(
+                "Source HTTP effective source URI must be absolute HTTP(S).");
+        if (http.FetchedAt.Offset != TimeSpan.Zero)
+            throw new InvalidDataException("Source HTTP fetch time must use UTC.");
     }
+
+    private static void RequireBoundedHttpValue(
+        string? value,
+        int maximumLength,
+        string label,
+        bool required = false)
+    {
+        if (value is null)
+        {
+            if (required)
+                throw new InvalidDataException(
+                    $"Source HTTP {label} is required.");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(value) || value.Length > maximumLength
+            || value.Any(char.IsControl))
+            throw new InvalidDataException(
+                $"Source HTTP {label} is outside its bounded contract.");
+    }
+
+    private static bool TryPrimaryBodyExtension(
+        string? contentType,
+        out string extension)
+    {
+        var mediaType = contentType?.Trim().ToLowerInvariant();
+        switch (mediaType)
+        {
+            case "application/xml":
+            case "text/xml":
+            case "application/akn+xml":
+                extension = "xml";
+                return true;
+            case "application/xhtml+xml":
+            case "text/html":
+                extension = "html";
+                return true;
+            case null:
+            case "":
+                extension = "body";
+                return true;
+            default:
+                extension = "body";
+                return false;
+        }
+    }
+
+    private static HttpObservationEvidence HttpObservation(
+        SourceHttpEvidence http,
+        int attempts,
+        string attemptOutcome) => new()
+    {
+        StatusCode = http.StatusCode,
+        ContentType = http.ContentType,
+        Charset = http.Charset,
+        EntityTag = http.EntityTag,
+        LastModified = http.LastModified?.UtcDateTime.ToString(
+            "yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture),
+        FetchedAt = http.FetchedAt.UtcDateTime.ToString(
+            "yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture),
+        AttemptOutcome = attemptOutcome,
+        Attempts = attempts,
+        BodyComplete = http.BodyComplete ? null : false,
+    };
 
     private static void ValidateManifestationFetch(SourceManifestationFetch result)
     {
@@ -1184,7 +1367,7 @@ public sealed class CorpusWriter(
         $"{(int)value.TotalHours:00}:{value.Minutes:00}:{value.Seconds:00}";
 
     private static string Notice(Publisher pub, bool textIncluded) => $"""
-        NOTICE — three layers (Lex spec §16.2)
+        NOTICE - three layers (Lex spec §16.2)
 
         1. UNDERLYING ACTS AND DOCUMENTS
            Official acts of public authority are excluded from copyright protection
@@ -1194,7 +1377,7 @@ public sealed class CorpusWriter(
            Source terms: {pub.SourceTermsUrl}
            Modifications: metadata converted from source RDF to JSON; no text altered.
            {(textIncluded
-              ? "Bodies are stored verbatim as retrieved from the publisher's dissemination channel."
+              ? "Fresh primary observations carrying bounded HTTP evidence store the publisher response bytes unchanged. Historical observations make no retroactive transport-byte claim."
               : "No text is stored (metadata-only mode, D42).")}
            These obligations survive into forks and derived artefacts.
 

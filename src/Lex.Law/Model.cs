@@ -148,14 +148,32 @@ public enum SourceBodyStatus
     EmptyBody,
 }
 
+/// <summary>
+/// The bounded response metadata retained beside a primary publisher body. This deliberately
+/// excludes arbitrary headers, cookies, addresses, request data, and redirect history.
+/// </summary>
+public sealed record SourceHttpEvidence(
+    int StatusCode,
+    string? ContentType,
+    string? Charset,
+    string? EntityTag,
+    DateTimeOffset? LastModified,
+    DateTimeOffset FetchedAt,
+    string EffectiveSourceUri,
+    bool BodyComplete = true);
+
 public sealed record SourceBodyFetch(
     SourceBodyStatus Status,
-    string? Text = null,
+    byte[]? Bytes = null,
+    SourceHttpEvidence? Http = null,
     string? Detail = null,
     int Attempts = 1)
 {
-    public static SourceBodyFetch Retrieved(string text, int attempts = 1) =>
-        new(SourceBodyStatus.Retrieved, text, Attempts: attempts);
+    public static SourceBodyFetch Retrieved(
+        byte[] bytes,
+        SourceHttpEvidence http,
+        int attempts = 1) =>
+        new(SourceBodyStatus.Retrieved, bytes, http, Attempts: attempts);
 
     public string IssueCode => Status switch
     {
