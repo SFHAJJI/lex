@@ -199,6 +199,11 @@ export default function Search(p: SearchProps) {
     p.onSubmit(searchSubmission(text));
   };
 
+  // has_results and partial_results both mean rows rendered, so neither can reach the empty
+  // branch; mapping them to no_match keeps the presentation total without widening its type.
+  const emptyPresentation = searchEmptyPresentation(
+    results.absence === "has_results" || results.absence === "partial_results"
+      ? "no_match" : results.absence);
   const groupedResults = groupSearchResults(works, articles);
   const visiblePassages = new Set(articles.slice(0, articleLimit));
   const resultLawCount = groupedResults.reduce((count, section) => count + section.works.length, 0);
@@ -252,8 +257,14 @@ export default function Search(p: SearchProps) {
         <div className="results">
           <div className="res-head">
             <span className="sub">{busy ? "Searching…" : `${resultLawCount} law${resultLawCount === 1 ? "" : "s"}, ${articles.length} matching passage${articles.length === 1 ? "" : "s"}`}</span>
-            <span className="badge">{results.modeUsed === "hybrid" ? "words + meaning"
-              : results.modeUsed === "keyword" ? "exact words" : "meaning unavailable"}</span>
+            {/* An unknown mode is not an unavailable mode: in flight and after a transport
+                error the badge states nothing rather than a false capability claim. */}
+            {results.modeUsed === undefined
+              ? (results.modeUnavailable
+                  ? <span className="badge">meaning unavailable</span>
+                  : null)
+              : <span className="badge">{results.modeUsed === "hybrid"
+                  ? "words + meaning" : "exact words"}</span>}
             <span className="grow" />
             <div className="search-mode" role="group" aria-label="Search method">
               <button className={retrieval === "keyword" ? "on" : ""}
@@ -360,10 +371,8 @@ export default function Search(p: SearchProps) {
             // The empty sentence is a typed truth claim scoped by searchEmptyPresentation
             // (review round 2, O1): corpus-wide only when every publisher ran; scoped to the
             // publishers that ran when one refused; coverage-only when all refused.
-            <div className="empty" data-search-empty={searchEmptyPresentation(
-                results.absence === "has_results" ? "no_match" : results.absence).kind}>
-              <p>{searchEmptyPresentation(
-                results.absence === "has_results" ? "no_match" : results.absence).sentence}</p>
+            <div className="empty" data-search-empty={emptyPresentation.kind}>
+              <p>{emptyPresentation.sentence}</p>
               {allRefused ? (
                 <p className="sub">{LIMITATION_EXPLANATION}{" "}
                   <a href="/coverage">What Lex holds, and lacks →</a></p>

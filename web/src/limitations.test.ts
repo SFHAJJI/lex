@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   classifyEnvelope, clearedSearchResults, gapBadgeStatus, INCOMPLETE_RESPONSE_SENTENCE,
-  LIMITATION_CAP,
+  LIMITATION_CAP, NO_CORPUS_SENTENCE, NO_CORPUS_STATUS,
   LIMITATION_EXPLANATION, LIMITATION_STATUS, limitationsForTool, limitationsFromEffect,
   MIXED_ZERO_SENTENCES, partitionGovernedResponse, projectGovernedEmptiness,
   projectSearchResponse, searchAbsenceState, searchEmptyPresentation, searchResultsFromError,
@@ -123,11 +123,7 @@ test("an unknown or missing status authorizes neither rows nor absence claims", 
 // Count and row coherence (round 4, O2)
 // ---------------------------------------------------------------------------
 
-test("counts and rows are validated as one response", () => {
-  // Positive count with zero rows would emit a false whole-scope absence claim.
-  assert.equal(classifyEnvelope("changes_in_period", {
-    envelope: { status: "ok" }, changes: [], works_changed: 7, new_versions: 7,
-  }).kind, "invalid");
+test("only impossible count/row directions are contradictions", () => {
   // Zero count beside retained rows is internally contradictory evidence.
   assert.equal(classifyEnvelope("changes_in_period", {
     envelope: { status: "ok" }, changes: [{ work: "w1" }], works_changed: 0, new_versions: 0,
@@ -136,6 +132,11 @@ test("counts and rows are validated as one response", () => {
   assert.equal(classifyEnvelope("in_force_on", {
     envelope: { status: "ok" }, works: [{ work: "a" }, { work: "b" }],
     total_works_in_force: 1,
+  }).kind, "invalid");
+  // Rows plus ambiguity units may not exceed the total either.
+  assert.equal(classifyEnvelope("in_force_on", {
+    envelope: { status: "ambiguous_version" }, works: [{ work: "a" }],
+    ambiguous_works: [{ work: "b" }, { work: "c" }], total_works_in_force: 2,
   }).kind, "invalid");
   // Non-finite, negative, fractional and wrong-typed counts are all invalid.
   for (const total of [Number.NaN, Number.POSITIVE_INFINITY, -1, 1.5, "3", {}, []]) {
@@ -149,14 +150,99 @@ test("counts and rows are validated as one response", () => {
   }).kind, "invalid");
 });
 
+test("a paged publisher with zero rows beside a positive count is legitimate", () => {
+  // Self-attack finding, round 6: the producer shares ONE remaining limit across publishers
+  // (in_force_on) and slices ONE globally merged page (changes_in_period) while each
+  // publisher still reports its own full total. Round 5 called these contradictions and
+  // silently dropped whole publishers out of the headline counts.
+  assert.equal(classifyEnvelope("changes_in_period", {
+    envelope: { status: "ok", publisher: "eu-eurlex" },
+    changes: [], works_changed: 7, new_versions: 7,
+  }).kind, "ran");
+  assert.equal(classifyEnvelope("in_force_on", {
+    envelope: { status: "ok", publisher: "eu-eurlex" },
+    works: [], total_works_in_force: 412,
+  }).kind, "ran");
+  // And the count still reaches the caller rather than being discarded.
+  const partition = partitionGovernedResponse("in_force_on", [
+    { envelope: { status: "ok", publisher: "eu-eurlex" }, works: [],
+      total_works_in_force: 412 },
+    inForceOk("lu-legilux", 2),
+  ]);
+  assert.equal(partition.ran.length, 2);
+  assert.equal(partition.invalidCount, 0);
+});
+
+test("an all-ambiguity in-force page is content, never an absence claim", () => {
+  const ambiguousOnly = {
+    envelope: { status: "ambiguous_version", publisher: "lu-legilux" },
+    works: [],
+    ambiguous_works: [{ work: "w1" }, { work: "w2" }],
+    total_works_in_force: 2,
+  };
+  assert.equal(classifyEnvelope("in_force_on", ambiguousOnly).kind, "ran");
+  const decision = projectGovernedEmptiness("in_force_on", [ambiguousOnly], 0);
+  assert.equal(decision.partition.ambiguityUnits, 2);
+  assert.equal(decision.empty, null,
+    "ambiguity units are held content; claiming nothing covers the date would be false");
+});
+
+test("no_corpus_mounted is a terminal refusal, not a malformed response", () => {
+  // The producer returns a TOP-LEVEL status with no envelope for every tool. Round 5
+  // classified it invalid and told the reader to retry a request that can never succeed.
+  const noCorpus = { status: NO_CORPUS_STATUS, tool_called: "search" };
+  assert.equal(classifyEnvelope("search", noCorpus).kind, "no_corpus");
+  assert.equal(classifyEnvelope("in_force_on", noCorpus).kind, "no_corpus");
+  const projected = projectSearch([noCorpus]);
+  assert.equal(projected.absence, "no_corpus");
+  assert.equal(searchEmptyPresentation("no_corpus").sentence, NO_CORPUS_SENTENCE);
+  assert.ok(!NO_CORPUS_SENTENCE.toLowerCase().includes("try"),
+    "retrying cannot help, so the copy never suggests it");
+  assert.equal(projectGovernedEmptiness("in_force_on", [noCorpus], 0).empty, "no_corpus");
+});
+
 test("a contradictory envelope becomes incomplete, never results or absence", () => {
   const contradictory = {
     envelope: { status: "ok", publisher: "lu-legilux" },
-    changes: [], works_changed: 4, new_versions: 4,
+    changes: [{ work: "w1" }], works_changed: 0, new_versions: 0,
   };
   const decision = projectGovernedEmptiness("changes_in_period", [contradictory], 0);
   assert.equal(decision.empty, "incomplete_response");
   assert.deepEqual(decision.partition.ran, []);
+});
+
+test("an unusable sibling is disclosed even when other rows render", () => {
+  // Round 5 consulted invalidCount only on the empty path, so a partial answer presented
+  // itself as the complete holding.
+  const projected = projectSearch([
+    searchOk("lu-legilux", 2),
+    { envelope: { status: "made_up" }, hits: [] },
+  ]);
+  assert.equal(projected.works.length, 2, "the usable publisher's rows still render");
+  assert.equal(projected.absence, "partial_results",
+    "rows rendered, but the response was not complete and must say so");
+
+  const governed = projectGovernedEmptiness("in_force_on", [
+    inForceOk("lu-legilux", 2),
+    { envelope: { status: "made_up" }, works: [] },
+  ], 2);
+  assert.equal(governed.empty, null);
+  assert.equal(governed.partial, true);
+});
+
+test("a missing retrieval mode is not a refused filter", () => {
+  // Round 5 folded mode-unavailable into allRefused, so a search where no publisher had the
+  // hybrid mode rendered the filter-capability explanation, blaming a filter never refused.
+  const modeOnly = projectSearch([
+    { envelope: { status: "retrieval_mode_unavailable", publisher: "lu-legilux" } },
+  ]);
+  assert.equal(modeOnly.limitations.length, 0, "no capability limitation exists");
+  assert.notEqual(modeOnly.absence, "all_refused",
+    "all_refused selects the filter-refusal copy and no filter was refused");
+  assert.ok(modeOnly.modeUnavailable?.includes("lu-legilux"));
+
+  // A real capability refusal still reaches all_refused.
+  assert.equal(projectSearch([refused("lu-legilux", ["domain"])]).absence, "all_refused");
 });
 
 // ---------------------------------------------------------------------------
@@ -303,6 +389,10 @@ test("out-of-order and repeated transitions leave nothing stale", () => {
 test("a client-only presentation state never wears the wire status badge", () => {
   assert.equal(gapBadgeStatus("mixed_no_match"), null);
   assert.equal(gapBadgeStatus("incomplete_response"), null);
+  // "error" is minted by the transport-failure branches, not by any publisher; the status
+  // register is explicit that transport failures are represented separately.
+  assert.equal(gapBadgeStatus("error"), null);
+  assert.equal(gapBadgeStatus("partial_response"), null);
   // Real publisher statuses keep their badge.
   assert.equal(gapBadgeStatus("filter_not_supported_by_index"),
     "filter_not_supported_by_index");

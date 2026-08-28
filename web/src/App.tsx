@@ -16,7 +16,7 @@ import { CompareSkeleton, LawSkeleton, ReportSkeleton } from "./Skeleton";
 import { jurisdictionForPublisher, jurisdictionLabel } from "./facets";
 import { latestStateLabel, temporalStatusLabel } from "./temporal";
 import { INCOMPLETE_RESPONSE_SENTENCE, LIMITATION_EXPLANATION, MIXED_ZERO_SENTENCES,
-  projectGovernedEmptiness } from "./limitations";
+  NO_CORPUS_SENTENCE, projectGovernedEmptiness } from "./limitations";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -311,6 +311,12 @@ export default function App() {
                      explanation: LIMITATION_EXPLANATION, available: [] },
               publisher_limitations: partition.limitations }
           // An incomplete response claims nothing at all (round 4, O1/O2).
+          // A server with no mounted index is a terminal deployment state; retrying
+          // cannot help, so the copy never suggests it.
+          : decision.empty === "no_corpus"
+          ? { gap: { status: "no_corpus_mounted",
+                     explanation: NO_CORPUS_SENTENCE, available: [] },
+              publisher_limitations: partition.limitations }
           : decision.empty === "incomplete_response"
           ? { gap: { status: "incomplete_response",
                      explanation: INCOMPLETE_RESPONSE_SENTENCE, available: [] },
@@ -372,6 +378,10 @@ export default function App() {
           : decision.empty === "all_refused"
           ? { gap: { status: "filter_not_supported_by_index",
                      explanation: LIMITATION_EXPLANATION, available: [] },
+              publisher_limitations: partition.limitations }
+          : decision.empty === "no_corpus"
+          ? { gap: { status: "no_corpus_mounted",
+                     explanation: NO_CORPUS_SENTENCE, available: [] },
               publisher_limitations: partition.limitations }
           : decision.empty === "incomplete_response"
           ? { gap: { status: "incomplete_response",

@@ -53,7 +53,7 @@ const SUCCESS_STATUSES: Record<string, ReadonlySet<string>> = {
 
 /** Client-only presentation states; never rendered as a wire status badge (Codex O5). */
 export const CLIENT_GAP_STATES: ReadonlySet<string> = new Set([
-  "mixed_no_match", "incomplete_response",
+  "mixed_no_match", "incomplete_response", "error", "partial_response",
 ]);
 
 /**
@@ -70,6 +70,14 @@ export const LIMITATION_EXPLANATION =
   "This publisher's index does not describe the requested filter for the requested scope, so "
   + "it did not run this query. That is a statement about Lex's coverage, not evidence that a "
   + "law or record is absent.";
+
+/** The documented no-corpus refusal: a top-level status with no envelope, every tool. */
+export const NO_CORPUS_STATUS = "no_corpus_mounted";
+
+/** Fixed copy for the no-corpus terminal state. Retrying cannot help, so it never says to. */
+export const NO_CORPUS_SENTENCE =
+  "This server has no verified legal index mounted, so it holds no law and cannot answer "
+  + "legal questions. This is a deployment state, not a statement about the law.";
 
 /** The fixed sentence for a response that cannot support results or absence claims. */
 export const INCOMPLETE_RESPONSE_SENTENCE =
@@ -163,6 +171,7 @@ export type EnvelopeClass =
   | { kind: "ran"; entry: unknown }
   | { kind: "refused"; limitation: PublisherLimitation }
   | { kind: "mode_unavailable"; publisher?: string }
+  | { kind: "no_corpus" }
   | { kind: "invalid" };
 
 const record = (value: unknown): Record<string, unknown> | null =>
@@ -188,8 +197,11 @@ function ranShapeValid(tool: string, entry: Record<string, unknown>, status: str
     if (status === "no_changes_in_period") {
       return worksChanged === 0 && entry.changes.length === 0;
     }
+    // Rows may legitimately be empty beside a positive count: the producer emits this
+    // publisher's FULL period total beside its slice of one globally merged page, so a
+    // publisher outranked out of the current page returns count>0 with zero rows. Only the
+    // impossible directions are contradictions.
     if (entry.changes.length > worksChanged) return false;
-    if (worksChanged > 0 && entry.changes.length === 0) return false;
     if (entry.changes.length > 0 && worksChanged === 0) return false;
     return true;
   }
@@ -197,11 +209,12 @@ function ranShapeValid(tool: string, entry: Record<string, unknown>, status: str
     if (!Array.isArray(entry.works)) return false;
     const total = requiredCount(entry.total_works_in_force);
     if (total === null) return false;
-    // ambiguous_version pages mix rows and ambiguity units, so only the plain statuses
-    // carry the strict row/count relation.
-    if (status === "ambiguous_version") return true;
-    if (entry.works.length > total) return false;
-    if (total > 0 && entry.works.length === 0) return false;
+    const ambiguities = Array.isArray(entry.ambiguous_works)
+      ? entry.ambiguous_works.length : 0;
+    // As above: one remainingLimit is shared across publishers, so an exhausted page returns
+    // zero rows beside this publisher's full total. Ambiguity units also consume the page, so
+    // rows plus ambiguities is what must not exceed the total.
+    if (entry.works.length + ambiguities > total) return false;
     if (entry.works.length > 0 && total === 0) return false;
     return true;
   }
@@ -213,6 +226,9 @@ export function classifyEnvelope(tool: string, value: unknown): EnvelopeClass {
   if (!GOVERNED_TOOLS.has(tool)) return { kind: "invalid" };
   const entry = record(value);
   if (!entry) return { kind: "invalid" };
+  // The no-corpus refusal is documented as a top-level status with no envelope, for every
+  // tool. It is terminal, not malformed: telling the reader to retry would be a lie.
+  if (entry.status === NO_CORPUS_STATUS) return { kind: "no_corpus" };
   const envelope = record(entry.envelope);
   if (!envelope) return { kind: "invalid" };
   const status = envelope.status;
@@ -248,6 +264,10 @@ export interface GovernedPartition {
   modeUnavailablePublishers: string[];
   /** How many envelopes lacked the retrieval mode, id-bearing or not. */
   modeUnavailableCount: number;
+  /** Every selected publisher returned the terminal no-corpus refusal. */
+  noCorpus: boolean;
+  /** Ambiguity units across ran in_force_on envelopes; they are content, not emptiness. */
+  ambiguityUnits: number;
   /** Envelopes that authorize neither rows nor absence claims. */
   invalidCount: number;
   /** At least one envelope refused. */
@@ -273,15 +293,26 @@ export function partitionGovernedResponse(
     classes.filter((item) => item.kind === "mode_unavailable").length;
   const invalidCount = classes.filter((item) => item.kind === "invalid").length;
   const refusedCount = classes.filter((item) => item.kind === "refused").length;
+  const noCorpusCount = classes.filter((item) => item.kind === "no_corpus").length;
+  const ambiguityUnits = ran
+    .map(record)
+    .reduce((sum, entry) => sum + (Array.isArray(entry?.ambiguous_works)
+      ? entry!.ambiguous_works.length : 0), 0);
   return {
     ran,
     limitations,
     modeUnavailablePublishers,
     modeUnavailableCount,
+    noCorpus: noCorpusCount > 0 && ran.length === 0 && refusedCount === 0
+      && invalidCount === 0,
+    ambiguityUnits,
     invalidCount,
     anyRefused: refusedCount > 0,
-    allRefused: ran.length === 0 && refusedCount + modeUnavailableCount > 0
-      && invalidCount === 0,
+    // A capability REFUSAL is what the filter-limitation copy explains. A publisher that
+    // merely lacked the hybrid retrieval mode refused no filter, so it must not select copy
+    // blaming a filter that was never refused.
+    allRefused: ran.length === 0 && refusedCount > 0 && invalidCount === 0
+      && noCorpusCount === 0,
   };
 }
 
@@ -295,8 +326,14 @@ export function partitionGovernedResponse(
 export function searchAbsenceState(
   partition: GovernedPartition,
   ranHitCount: number,
-): "has_results" | "all_refused" | "mixed_no_match" | "no_match" | "incomplete_response" {
-  if (ranHitCount > 0) return "has_results";
+): "has_results" | "partial_results" | "all_refused" | "no_corpus" | "mixed_no_match"
+  | "no_match" | "incomplete_response" {
+  // Rows exist, but a sibling response was unusable: the answer is incomplete and says so
+  // rather than presenting itself as the whole of what Lex holds.
+  if (ranHitCount > 0) {
+    return partition.invalidCount > 0 ? "partial_results" : "has_results";
+  }
+  if (partition.noCorpus) return "no_corpus";
   if (partition.invalidCount > 0) return "incomplete_response";
   if (partition.allRefused) return "all_refused";
   if (partition.ran.length === 0) return "incomplete_response";
@@ -312,9 +349,12 @@ export function searchAbsenceState(
  * incomplete response claims nothing at all. The component renders exactly this decision.
  */
 export function searchEmptyPresentation(
-  state: "all_refused" | "mixed_no_match" | "no_match" | "incomplete_response",
+  state: "all_refused" | "no_corpus" | "mixed_no_match" | "no_match"
+    | "incomplete_response",
 ): { kind: string; sentence: string } {
   switch (state) {
+    case "no_corpus":
+      return { kind: "no_corpus", sentence: NO_CORPUS_SENTENCE };
     case "all_refused":
       return { kind: "all_refused", sentence: "No selected publisher ran this query." };
     case "mixed_no_match":
@@ -355,8 +395,8 @@ export interface SearchResultsState<W, A> {
   modeUnavailable: string | undefined;
   expansions: string[];
   limitations: PublisherLimitation[];
-  absence: "has_results" | "all_refused" | "mixed_no_match" | "no_match"
-    | "incomplete_response";
+  absence: "has_results" | "partial_results" | "all_refused" | "no_corpus"
+    | "mixed_no_match" | "no_match" | "incomplete_response";
 }
 
 /** The one cleared tuple: every result-bearing key, one place, three transitions share it. */
@@ -416,8 +456,11 @@ export function projectSearchResponse<W, A>(
 /** One governed non-search projection: validated rows, counts and the typed empty state. */
 export interface GovernedProjection {
   partition: GovernedPartition;
-  /** The typed empty state; null while rows exist. */
-  empty: "all_refused" | "mixed_no_match" | "none_matched" | "incomplete_response" | null;
+  /** The typed empty state; null while rows or ambiguity units exist. */
+  empty: "all_refused" | "no_corpus" | "mixed_no_match" | "none_matched"
+    | "incomplete_response" | null;
+  /** Rows rendered, but a sibling response was unusable and must be disclosed. */
+  partial: boolean;
 }
 
 /**
@@ -432,12 +475,21 @@ export function projectGovernedEmptiness(
 ): GovernedProjection {
   const envelopes = Array.isArray(raw) ? raw : [raw];
   const partition = partitionGovernedResponse(tool, envelopes);
-  if (visibleRowCount > 0) return { partition, empty: null };
-  if (partition.invalidCount > 0) return { partition, empty: "incomplete_response" };
-  if (partition.allRefused) return { partition, empty: "all_refused" };
-  if (partition.ran.length === 0) return { partition, empty: "incomplete_response" };
+  const partial = partition.invalidCount > 0;
+  // Ambiguity units are held content the reader must be told about, so a page made only of
+  // them is not an empty result and must never say nothing covers the date.
+  if (visibleRowCount > 0 || partition.ambiguityUnits > 0) {
+    return { partition, empty: null, partial };
+  }
+  if (partition.noCorpus) return { partition, empty: "no_corpus", partial };
+  if (partial) return { partition, empty: "incomplete_response", partial };
+  if (partition.allRefused) return { partition, empty: "all_refused", partial };
+  if (partition.ran.length === 0) {
+    return { partition, empty: "incomplete_response", partial };
+  }
   return {
     partition,
     empty: partition.anyRefused ? "mixed_no_match" : "none_matched",
+    partial,
   };
 }
