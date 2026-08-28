@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { safeHttpsUrl, tool } from "./api";
 import { facetLabel as label, jurisdictionForPublisher, jurisdictionLabel } from "./facets";
 import {
@@ -188,12 +188,42 @@ export default function Search(p: SearchProps) {
     : undefined;
   const metadataIdentifier = metadataArguments?.publisher_metadata_identifier;
 
-  useEffect(() => {
-    if (!q.trim()) { clearResponseState(); return; }
-    let live = true;
+  /**
+   * The request generation. Every response carries the generation it was asked under, and
+   * only the current generation may write. A boolean captured per effect run could not do
+   * this job: it is flipped by passive cleanup, which runs after the next paint, so a
+   * response arriving in that interval was still live and still allowed to write.
+   */
+  const generation = useRef(0);
+
+  /**
+   * The state transition, before paint.
+   *
+   * Clearing in a passive effect left a committed frame in which the request arguments had
+   * already changed and the previous answer was still on screen, so a reader saw rows,
+   * limitations and a denominator attributed to a date, a retrieval mode or a scope filter
+   * they had already left. Changing the question remounts and needs none of this; changing
+   * anything else about the request does not, which is the case this covers.
+   *
+   * Cleanup advances the generation too, so unmounting invalidates an outstanding request
+   * rather than leaving it able to write into a component that no longer exists.
+   */
+  useLayoutEffect(() => {
+    generation.current += 1;
+    clearResponseState();
+    if (!q.trim()) { setBusy(false); return; }
     setArticleLimit(INITIAL_ARTICLES);
     setBusy(true);
-    clearResponseState();
+    return () => { generation.current += 1; };
+  }, [q, asOf, retrieval, jurisdiction, hierarchy, domain, sourceClass, actForm,
+      bindingStatus, language, metadataIdentifier, fuzzyMode, clearResponseState]);
+
+  useEffect(() => {
+    if (!q.trim()) return;
+    // Read after the layout effect above has advanced it, so this is the generation this
+    // request belongs to.
+    const mine = generation.current;
+    const live = () => mine === generation.current;
     tool<any>("search", { query: q.trim(), limit: 40, time_scope: "as_of", as_of: asOf ?? p.today,
                           retrieval_mode: retrieval, fuzzy: fuzzyMode,
                           ...(jurisdiction ? { jurisdiction } : {}),
@@ -204,7 +234,7 @@ export default function Search(p: SearchProps) {
                           ...(sourceClass ? { source_class: sourceClass } : {}),
                           ...(metadataArguments ?? {}) })
       .then((res) => {
-        if (!live) return;
+        if (!live()) return;
         p.onEnvelopes(envelopeStripRows(res));
         // One normalized set feeds rows, the denominator and absence authority. Two passes
         // over two sets is how a footer ends up describing a different population than the
@@ -258,9 +288,10 @@ export default function Search(p: SearchProps) {
           };
         }));
       })
-      .catch(() => { if (live) setResults(searchResultsFromError("Search could not be reached. Try again.")); })
-      .finally(() => { if (live) setBusy(false); });
-    return () => { live = false; };
+      .catch(() => {
+        if (live()) setResults(searchResultsFromError("Search could not be reached. Try again."));
+      })
+      .finally(() => { if (live()) setBusy(false); });
   }, [q, asOf, retrieval, jurisdiction, hierarchy, domain, sourceClass, actForm, bindingStatus,
       language, metadataIdentifier, fuzzyMode, clearResponseState]);
 
