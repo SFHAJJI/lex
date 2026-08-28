@@ -487,37 +487,46 @@ public class McpContractTests : IDisposable
     }
 
     [Fact]
-    public void Candidate_discovery_stays_inside_the_bounded_ordered_reader_set()
+    public void Candidate_discovery_never_leaves_the_derived_publisher_scope()
     {
         var (db, second) = BuildSecondPublisher();
         try
         {
-            // Nine t-pub mounts push z-oth past the eight-reader execution bound; ordinal
-            // order sorts z-oth last. An unscoped near miss of a z-oth-only work must not
-            // reach it (Codex B1 review, O3: the output cap does not bound work).
-            var many = new Dictionary<string, LexIndexReader>(StringComparer.Ordinal);
-            for (var index = 0; index < 9; index++) many[$"t-pub-{index}"] = _reader;
-            many["z-oth"] = second;
-            var bounded = new McpCore(many);
-            var missed = (JsonObject)bounded.CallTool("timeline", new JsonObject
-            {
-                ["work"] = "zz-nope:w9order typo",
-            })!;
-            Assert.Equal("unknown_work", Status(missed));
-            Assert.Null(missed["work_candidates"]);
-
-            // The two-reader control proves the finder would otherwise surface it: only the
-            // execution bound kept the ninth-plus reader out.
-            var control = new McpCore(new Dictionary<string, LexIndexReader>(StringComparer.Ordinal)
+            var core = new McpCore(new Dictionary<string, LexIndexReader>(StringComparer.Ordinal)
             {
                 ["t-pub"] = _reader, ["z-oth"] = second,
             });
-            var found = (JsonObject)control.CallTool("timeline", new JsonObject
+
+            // An unmounted publisher prefix derives an empty scope: the miss returns no
+            // candidates even though z-oth holds a near neighbour (B1 round-two O5: a typo in
+            // a publisher prefix never becomes cross-publisher discovery).
+            var unmounted = (JsonObject)core.CallTool("timeline", new JsonObject
             {
                 ["work"] = "zz-nope:w9order typo",
             })!;
-            Assert.Equal("unknown_work", Status(found));
-            Assert.NotNull(found["work_candidates"]);
+            Assert.Equal("unknown_work", Status(unmounted));
+            Assert.Null(unmounted["work_candidates"]);
+
+            // An explicit publisher argument stays authoritative over a conflicting prefix in
+            // the work text: candidates come from the explicit scope only.
+            var explicitWins = (JsonObject)core.CallTool("as_of", new JsonObject
+            {
+                ["work"] = "z-oth:w9order typo", ["publisher"] = "t-pub",
+                ["date"] = "2024-01-01",
+            })!;
+            Assert.Equal("unknown_work", Status(explicitWins));
+            Assert.Null(explicitWins["work_candidates"]);
+
+            // The same miss under its own mounted prefix does discover, proving both silences
+            // above are scope, not finder weakness.
+            var mounted = (JsonObject)core.CallTool("timeline", new JsonObject
+            {
+                ["work"] = "z-oth:w9order typo",
+            })!;
+            Assert.Equal("unknown_work", Status(mounted));
+            var candidates = Assert.IsType<JsonArray>(mounted["work_candidates"]);
+            Assert.All(candidates.OfType<JsonObject>(), candidate =>
+                Assert.Equal("z-oth", candidate["publisher"]!.GetValue<string>()));
         }
         finally
         {
@@ -532,14 +541,13 @@ public class McpContractTests : IDisposable
         var (db, second) = BuildSecondPublisher();
         try
         {
-            // Both publishers hold a w1, so an unscoped miss draws candidates from both.
-            // Opposite dictionary insertion orders must serve byte-identical candidate
-            // arrays in collection order. Two layers each guarantee this on their own: the
+            // A mounted-prefix miss must serve byte-identical candidate arrays whatever
+            // the reader insertion order. Two layers each guarantee this on their own: the
             // execution dispatch rebuilds ordinal-key session dictionaries per call, and the
             // decorator orders through the SelectReaders contract, so this test documents
             // the served property rather than distinguishing either layer alone.
             JsonObject Near(McpCore core) => (JsonObject)core.CallTool("timeline",
-                new JsonObject { ["work"] = "zz-nope:w1 typo" })!;
+                new JsonObject { ["work"] = "t-pub:w1 typo" })!;
             var forward = Near(new McpCore(new Dictionary<string, LexIndexReader>(StringComparer.Ordinal)
             {
                 ["t-pub"] = _reader, ["z-oth"] = second,
@@ -551,10 +559,8 @@ public class McpContractTests : IDisposable
             var forwardBytes = forward["work_candidates"]!.ToJsonString();
             Assert.Equal(forwardBytes, reversed["work_candidates"]!.ToJsonString());
             Assert.Contains("t-pub", forwardBytes, StringComparison.Ordinal);
-            Assert.Contains("z-oth", forwardBytes, StringComparison.Ordinal);
-            var candidateOrder = (JsonArray)forward["work_candidates"]!;
-            Assert.Equal("t-pub",
-                ((JsonObject)candidateOrder[0]!)["publisher"]!.GetValue<string>());
+            // Scope derivation keeps discovery inside the prefix publisher.
+            Assert.DoesNotContain("z-oth", forwardBytes, StringComparison.Ordinal);
         }
         finally
         {

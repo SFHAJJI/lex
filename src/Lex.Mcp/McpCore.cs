@@ -22,6 +22,26 @@ public sealed class McpCore
     /// bounded reader set. Absence of a record is never presented as absence of law; the copy
     /// obligations live on the rendering surfaces, this field carries only coordinates.
     /// </summary>
+    /// <summary>
+    /// The one publisher-scope rule (B1 round-two O5): an explicit publisher argument wins;
+    /// otherwise a publisher-qualified work or lex_id contributes its prefix; otherwise null,
+    /// which the input contract permits only where an operation is legitimately unscoped.
+    /// ReadersFor and candidate discovery both use this, so an unmounted prefix selects zero
+    /// readers in both places and a typo in a publisher prefix never becomes cross-publisher
+    /// discovery without a recorded product ruling.
+    /// </summary>
+    private static string? PublisherScopeOf(JsonObject arguments)
+    {
+        static string? Text(JsonNode? node) => node is JsonValue value
+            && value.TryGetValue<string>(out var text) ? text : null;
+        var publisher = Text(arguments["publisher"]);
+        if (publisher is not null) return publisher;
+        var work = Text(arguments["work"]) ?? Text(arguments["lex_id"]);
+        return work is not null && work.Contains(':') && !work.Contains("://")
+            ? work.Split(':', 2)[0]
+            : null;
+    }
+
     private JsonObject WithWorkCandidates(JsonObject payload, string requested, string? publisher)
     {
         var list = new JsonArray();
@@ -861,17 +881,12 @@ public sealed class McpCore
     {
         static string? Text(JsonNode? node) => node is JsonValue value
             && value.TryGetValue<string>(out var text) ? text : null;
-        var publisher = Text(arguments["publisher"]);
+        var publisher = PublisherScopeOf(arguments);
         var work = Text(arguments["work"]) ?? Text(arguments["lex_id"]);
-        if (publisher is null && tool != "cited_by")
-        {
-            if (work is not null && work.Contains(':') && !work.Contains("://"))
-                publisher = work.Split(':', 2)[0];
-            else if (work is not null)
-                throw new ArgumentException(
-                    "publisher is required when work is not a publisher-qualified lex_id.",
-                    "publisher");
-        }
+        if (publisher is null && tool != "cited_by" && work is not null)
+            throw new ArgumentException(
+                "publisher is required when work is not a publisher-qualified lex_id.",
+                "publisher");
         var jurisdiction = Text(arguments["jurisdiction"]);
         var eligible = readers
             .Where(item => (publisher is null || item.Key == publisher)
@@ -948,7 +963,7 @@ public sealed class McpCore
                 var work = Str("work") ?? throw new ArgumentException("work required");
                 var date = Date("date");
                 var res = Resolve(work, Str("publisher"));
-                if (res is null) return WithWorkCandidates(new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work }, work, Str("publisher"));
+                if (res is null) return WithWorkCandidates(new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work }, work, PublisherScopeOf(a));
                 var (r, w) = res.Value;
                 var language = Str("language");
                 var versionKey = Str("version_key");
@@ -1088,7 +1103,7 @@ public sealed class McpCore
             {
                 var work = Str("work") ?? throw new ArgumentException("work required");
                 var res = Resolve(work, Str("publisher"));
-                if (res is null) return WithWorkCandidates(new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work }, work, Str("publisher"));
+                if (res is null) return WithWorkCandidates(new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work }, work, PublisherScopeOf(a));
                 var (r, w) = res.Value;
                 var limit = Int("limit", 100); var offset = Int("offset", 0);
                 var (rows, total) = r.Timeline(w, limit, offset);
@@ -1198,7 +1213,7 @@ public sealed class McpCore
                 var from = Date("from_date");
                 var to = Date("to_date");
                 var res = Resolve(work, Str("publisher"));
-                if (res is null) return WithWorkCandidates(new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work }, work, Str("publisher"));
+                if (res is null) return WithWorkCandidates(new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work }, work, PublisherScopeOf(a));
                 var (r, w) = res.Value;
                 var f = new FilterSet(null, null, null, Str("language"));
                 var language = Str("language");
@@ -1604,7 +1619,7 @@ public sealed class McpCore
                 var work = Str("work") ?? throw new ArgumentException("work required");
                 var anchor = Str("anchor") ?? throw new ArgumentException("anchor required");
                 var res = Resolve(work, Str("publisher"));
-                if (res is null) return WithWorkCandidates(new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work }, work, Str("publisher"));
+                if (res is null) return WithWorkCandidates(new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work }, work, PublisherScopeOf(a));
                 var (r, w) = res.Value;
                 if (!r.WorkExists(w)) return WithWorkCandidates(new JsonObject { ["envelope"] = Envelope(r, McpStatus.UnknownWork), ["work"] = w }, w, r.Collection);
                 var requestedLanguage = Str("language");
@@ -1681,9 +1696,7 @@ public sealed class McpCore
             case "provenance":
             {
                 var key = Str("lex_id") ?? throw new ArgumentException("lex_id required");
-                var publisher = key.Contains(':')
-                    ? key[..key.IndexOf(':')]
-                    : null;
+                var publisher = PublisherScopeOf(a);
                 foreach (var r in SelectReaders(publisher).Readers)
                 {
                     var d = r.ByKey(key);
