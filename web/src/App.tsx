@@ -649,6 +649,7 @@ export default function App() {
           onRefine={(next) => { setPage(0); clearAssistantView(); go(next); }}
           onOpen={(work, date, anchor) => { clearAssistantView(); go({ work, date, anchor, mode: "read", space: "law" }); }}
           onMonitor={() => switchTo("time")}
+          onEnvelopes={setStrip}
         />
       ) : (
         <nav className="doors">

@@ -8,6 +8,7 @@ import {
   type PublisherMetadata,
 } from "./publisherMetadata";
 import { ScopeFilters } from "./ScopeFilters";
+import { envelopeStripRows, type EnvelopeStripRow } from "./envelopeStrip";
 import { clearedSearchResults, LIMITATION_EXPLANATION, projectSearchResponse,
   searchEmptyPresentation, searchResultsFromError,
   type SearchResultsState } from "./limitations";
@@ -48,6 +49,12 @@ export interface SearchProps {
   onAsOf: (d?: string) => void;
   onRefine: (next: Partial<State>) => void;
   onMonitor: () => void;
+  /**
+   * The index identity behind these results, lifted so the shell's EnvelopeStrip describes the
+   * response actually on screen. Trust rule 4 puts freshness on every data view, and the search
+   * surface is the most used one.
+   */
+  onEnvelopes: (rows: EnvelopeStripRow[]) => void;
 }
 
 type HitMeta = {
@@ -147,6 +154,7 @@ export default function Search(p: SearchProps) {
                           ...(metadataArguments ?? {}) })
       .then((res) => {
         if (!live) return;
+        p.onEnvelopes(envelopeStripRows(res));
         // Round 4 (O3/O4): the ONE production projector partitions the response closed,
         // derives mode and expansion facts from the validated ran envelopes only, and types
         // the absence state; the callback below is presentation mapping, not decision.
