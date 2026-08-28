@@ -828,6 +828,15 @@ class GoldenDiffTests(unittest.TestCase):
     def test_html_mode_only_change_fails(self):
         self.repo.git("update-index", "--chmod=+x", "--", PAGE.as_posix())
         self.repo.git("commit", "-m", "mode only")
+        # The committed tree is the subject of this test. On POSIX, the test
+        # file itself remains non-executable and otherwise looks dirty before
+        # the classifier can compare the two committed modes.
+        self.repo.git("config", "core.filemode", "false")
+        self.assertEqual(
+            "",
+            self.repo.git(
+                "status", "--porcelain=v1", "--", PAGE.as_posix()).stdout,
+        )
 
         completed = self.assert_fails(self.html_intent())
 
