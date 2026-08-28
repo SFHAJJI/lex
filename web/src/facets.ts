@@ -70,9 +70,25 @@ export const facetLabel = (value: string) => LABELS[value]
   ?? value.replaceAll("_", " ").replaceAll("-", " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
-export const jurisdictionLabel = (code: string) => code.toUpperCase() === "EU"
-  ? "European Union"
-  : new Intl.DisplayNames(["en"], { type: "region" }).of(code.toUpperCase()) ?? code;
+/**
+ * A region subtag is two ASCII letters or three digits. `Intl.DisplayNames.of` returns undefined
+ * for a well-formed code it does not know, which the fallback below handles, but it THROWS a
+ * RangeError for an ill-formed one, which nothing handled.
+ *
+ * That was reachable from a search response: a hit whose envelope omits `jurisdiction` is grouped
+ * under the literal "Other" by searchResults, and "Other" is ill-formed, so one malformed
+ * publisher answer took the whole workspace render down. A product that answers a bad response
+ * with a blank page has failed open in the only way that matters to a reader, and everything
+ * around this fails closed instead.
+ */
+const REGION_SUBTAG = /^([A-Z]{2}|[0-9]{3})$/;
+
+export const jurisdictionLabel = (code: string) => {
+  const upper = code.toUpperCase();
+  if (upper === "EU") return "European Union";
+  if (!REGION_SUBTAG.test(upper)) return code;
+  return new Intl.DisplayNames(["en"], { type: "region" }).of(upper) ?? code;
+};
 
 /** Resolve a work's publisher through server-emitted metadata, never through known ID prefixes. */
 export const jurisdictionForPublisher = (publisher: string) =>
