@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { compoundOperationViews, first, tool, type AskReply, type OperationReply,
-  type ProvisionItem, type UiEffect } from "./api";
+import { compoundOperationViews, first, tool, unionKnownExclusions, type AskReply,
+  type OperationReply, type ProvisionItem, type UiEffect } from "./api";
 import { publisherOf, useWorkspace, workSlug, type Space, type State } from "./state";
 import { CitedBy, CoveragePanel, Empty, EvidenceCoordinates, Gap, InForce, PartialResponseNotice, Provision, PublisherLimitations, Ranking, Timeline,
   VerificationPanel, VersionRail, hasView } from "./views";
@@ -302,8 +302,7 @@ export default function App() {
                          new_versions: ran.reduce((n, e) => n + (e?.new_versions ?? 0), 0),
                          population_works: ran.reduce((n, e) => n + (e?.population?.works_in_scope ?? 0), 0),
                          population_basis: "sum of the selected publisher scopes",
-                         known_exclusions: [...new Set(ran.map(e => e?.population?.known_exclusions)
-                           .filter(Boolean))] as string[],
+                         known_exclusions: unionKnownExclusions(ran),
                          rows: visibleRows },
               publisher_limitations: partition.limitations,
               partial_response: decision.partial }
@@ -393,8 +392,28 @@ export default function App() {
         const pageUnits = [...rows, ...ambiguityRows];
         const visibleRows = pageUnits.slice(page * PAGE, (page + 1) * PAGE);
         const decision = projectGovernedEmptiness("in_force_on", res, visibleRows.length);
+        // Trust rule 6: the producer publishes the population behind this list and the client
+        // discarded it, so the reader saw a count of states with nothing to read it against.
+        // Summed only across the publishers that actually ran. The basis is shown only when every
+        // contributing publisher states the same one, because a single label cannot honestly
+        // describe two different populations.
+        const bases = [...new Set(ran.map((e) => e?.population?.basis)
+          .filter((b: unknown): b is string => typeof b === "string" && b.trim().length > 0))];
+        const covered = ran.some((e) => typeof e?.population?.works_covered === "number")
+          ? ran.reduce((n, e) => n + (e?.population?.works_covered ?? 0), 0)
+          : undefined;
+        // works_covered comes from Coverage(1).Groups, which counts a publisher's versioned works
+        // and is never narrowed by the metadata filters this request sent. Presenting it beside a
+        // filtered list without saying so would imply the filters reduced the denominator.
+        const scopeFiltersApplied = !(s.jurisdiction || s.hierarchy || s.domain || s.sourceClass
+          || s.actForm || s.bindingStatus || s.language);
         setUi(decision.empty === null
-          ? { in_force: { date: s.asOf!, total: ran.reduce((n, e) => n + (e?.total_works_in_force ?? 0), 0), rows: visibleRows },
+          ? { in_force: { date: s.asOf!, total: ran.reduce((n, e) => n + (e?.total_works_in_force ?? 0), 0),
+                          population_works: covered,
+                          population_basis: bases.length === 1 ? bases[0] : undefined,
+                          population_scope_filters_applied: scopeFiltersApplied,
+                          known_exclusions: unionKnownExclusions(ran),
+                          rows: visibleRows },
               publisher_limitations: partition.limitations,
               partial_response: decision.partial }
           : decision.empty === "all_refused"
@@ -571,7 +590,11 @@ export default function App() {
         go({ work, date, anchor, mode: "read", space: "law" });
       }} />;
     if (view.in_force) return <InForce date={view.in_force.date} total={view.in_force.total}
-      rows={view.in_force.rows} page={0} hasMore={false} onPage={() => {}} onOpen={openLaw} />;
+      rows={view.in_force.rows} populationWorks={view.in_force.population_works}
+      populationBasis={view.in_force.population_basis}
+      populationScopeFiltersApplied={view.in_force.population_scope_filters_applied}
+      knownExclusions={view.in_force.known_exclusions}
+      page={0} hasMore={false} onPage={() => {}} onOpen={openLaw} />;
     if (view.timeline) return <Timeline view={view.timeline}
       onOpen={(date) => {
         clearAssistantView();
@@ -750,6 +773,10 @@ export default function App() {
          ui?.coverage ? <CoveragePanel view={ui.coverage} /> :
          ui?.verification ? <VerificationPanel view={ui.verification} /> :
          ui?.in_force ? <InForce date={ui.in_force.date} total={ui.in_force.total} rows={ui.in_force.rows}
+                                  populationWorks={ui.in_force.population_works}
+                                  populationBasis={ui.in_force.population_basis}
+                                  populationScopeFiltersApplied={ui.in_force.population_scope_filters_applied}
+                                  knownExclusions={ui.in_force.known_exclusions}
                                   page={page} hasMore={(page * PAGE) + ui.in_force.rows.length < ui.in_force.total}
                                   onPage={(p) => { setPage(Math.max(0, p)); clearAssistantView(); }} onOpen={openLaw} /> :
          s.work && s.mode === "compare" ? <Compare work={s.work} title={title ?? s.work} from={s.date ?? today()} to={s.to ?? today()} anchor={s.anchor} /> :

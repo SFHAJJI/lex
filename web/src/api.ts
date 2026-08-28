@@ -255,6 +255,40 @@ export function populationScopeLabel(value: number | undefined): string | undefi
   return value === undefined ? undefined : `${value.toLocaleString()} works in selected scope`;
 }
 
+/**
+ * in_force_on publishes `works_covered` from `Coverage(1).Groups`, which counts a publisher's
+ * versioned works and is NOT narrowed by the request's metadata filters, unlike the ranking
+ * surface's filter-aware `works_in_scope`. Reusing "in selected scope" here would overstate what
+ * was actually covered under any filter, which is the false denominator that trust rule 6 and
+ * never-implied rule 7 exist to prevent. The producer publishes its own `basis` string for
+ * exactly this reason, so it is rendered instead of a basis the browser invents.
+ */
+/**
+ * Known exclusions arrive per publisher. The previous union built a Set of the arrays themselves,
+ * so identical exclusions across two publishers never de-duplicated and a publisher with none
+ * contributed a truthy empty array that rendered as a stray separator under "Known exclusions:".
+ * Flattening first makes the Set do the work it was there to do.
+ */
+export function unionKnownExclusions(entries: any[]): string[] {
+  return [...new Set(entries.flatMap((e) => e?.population?.known_exclusions ?? [])
+    .filter((x: unknown): x is string => typeof x === "string" && x.trim().length > 0))];
+}
+
+export function populationCoverageLabel(
+  works: number | undefined,
+  basis: string | undefined,
+  scopeFiltersApplied: boolean,
+): string | undefined {
+  if (works === undefined) return undefined;
+  // Whether the request carried filters is a fact about what this client sent, not an inference
+  // about the corpus, so saying so is honest where silently implying the filters narrowed the
+  // denominator would not be.
+  const counted = `${works.toLocaleString()} works covered`
+    + (scopeFiltersApplied ? "" : " before the selected filters");
+  const stated = typeof basis === "string" ? basis.trim() : "";
+  return stated.length > 0 && stated.length <= 120 ? `${counted}, ${stated}` : counted;
+}
+
 /** Page-specific actions are useful only after an answer that did not end in a gap. */
 export function shouldOfferContextualFollowUps(reply: AskReply): boolean {
   return !reply.error && !reply.clarification && !reply.ui?.gap;
@@ -377,7 +411,9 @@ export interface UiEffect {
   ranking?: { from_date: string; to_date: string; order: string; works_changed: number; new_versions: number;
               population_works?: number; population_basis?: string; known_exclusions?: string[];
               rows: RankingRow[]; status?: string; evidence?: EvidenceContext[] };
-  in_force?: { date: string; total: number; status?: string; evidence?: EvidenceContext[]; rows: {
+  in_force?: { date: string; total: number; status?: string; evidence?: EvidenceContext[];
+               population_works?: number; population_basis?: string;
+               population_scope_filters_applied?: boolean; known_exclusions?: string[]; rows: {
     work: string; title?: string; kind?: string; valid_from: string; permalink?: string;
     jurisdiction?: string; hierarchy?: string; timeline_semantics?: string;
   }[] };

@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
-  populationScopeLabel, safeHttpsUrl, signatureStatusLabel, type ProvisionItem, type RankingRow, type UiEffect,
+  populationCoverageLabel, populationScopeLabel, safeHttpsUrl, signatureStatusLabel,
+  type ProvisionItem, type RankingRow, type UiEffect,
 } from "./api";
 import { facetLabel, jurisdictionLabel } from "./facets";
 import { publisherOf, workSlug } from "./state";
@@ -509,8 +510,12 @@ export function Ranking({ rows, worksChanged, newVersions, populationWorks, know
   );
 }
 
-export function InForce({ date, total, rows, page, hasMore, onOpen, onPage }: {
+export function InForce({ date, total, rows, populationWorks, populationBasis,
+                          populationScopeFiltersApplied, knownExclusions,
+                          page, hasMore, onOpen, onPage }: {
   date: string; total: number;
+  populationWorks?: number; populationBasis?: string;
+  populationScopeFiltersApplied?: boolean; knownExclusions?: string[];
   rows: { work: string; title?: string; kind?: string; valid_from: string;
           jurisdiction?: string; hierarchy?: string; timeline_semantics?: string;
           /** The publisher exposes several identified versions for this work on this date. */
@@ -519,12 +524,23 @@ export function InForce({ date, total, rows, page, hasMore, onOpen, onPage }: {
   onOpen: (work: string, date: string) => void;
   onPage: (page: number) => void;
 }) {
+  // Trust rule 6: a count of states means nothing without the population it was drawn from.
+  const populationLabel = populationCoverageLabel(
+    populationWorks, populationBasis, populationScopeFiltersApplied !== false);
   return (
     <>
       <div className="cnt">
         <span className="tag">{total.toLocaleString()} publisher states</span>
+        {populationLabel
+          ? <span className="tag" data-testid="in-force-population">{populationLabel}</span>
+          : null}
         <span className="tag mono">on {date}</span>
       </div>
+      {knownExclusions && knownExclusions.length > 0
+        ? <p className="sub" data-testid="in-force-exclusions">
+            Known exclusions: {knownExclusions.join(" · ")} <a href="/coverage">See coverage</a>
+          </p>
+        : null}
       <ul className="rows">
         {rows.map((r) => (
           <li key={r.work}>
