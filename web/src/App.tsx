@@ -41,6 +41,10 @@ function useUtcDay(): string {
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const refresh = () => {
+      // Clear before scheduling, always. Without this every visibility return left the previous
+      // midnight callback running and scheduled another beside it, so a reader who switched tabs
+      // a few times accumulated one timer per switch and each of those went on breeding nightly.
+      if (timer !== undefined) clearTimeout(timer);
       setDay((current) => {
         const now = utcDay();
         return current === now ? current : now;
@@ -51,11 +55,13 @@ function useUtcDay(): string {
       timer = setTimeout(refresh, Math.max(1, nextBoundary - now.getTime()));
     };
     refresh();
+    // On `document`, which is where the platform dispatches it. It bubbles to the window, so a
+    // window listener also fires, but binding the semantic target is what makes a test exact.
     const onVisible = () => { if (!document.hidden) refresh(); };
-    addEventListener("visibilitychange", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       if (timer !== undefined) clearTimeout(timer);
-      removeEventListener("visibilitychange", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
   return day;
