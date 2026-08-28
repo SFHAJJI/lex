@@ -80,8 +80,11 @@ public static class UiMapper
 
     public static UiEffect From(string tool, JsonObject args, JsonNode result, string locale = "en")
     {
-        var evidence = EvidenceOf(result, args);
-        var (effectiveResult, publisherLimitations) = SplitPublisherLimitations(tool, result);
+        var shapeCheckedResult = WithoutContradictorySuccessfulEmpty(tool, result);
+        var publisherCheckedResult = WithoutUnprovenPublisherFacts(tool, shapeCheckedResult);
+        var evidence = EvidenceOf(publisherCheckedResult, args);
+        var (effectiveResult, publisherLimitations) =
+            SplitPublisherLimitations(tool, publisherCheckedResult);
         UiEffect Finish(UiEffect effect) => WithEvidence(effect, evidence) with
         {
             PublisherLimitations = publisherLimitations.Count == 0
@@ -118,7 +121,7 @@ public static class UiMapper
                     ["total_works_in_force"] = 0,
                     ["works"] = new JsonArray(),
                 }, args),
-                "search" => SearchWorkspace(args, result),
+                "search" => SearchWorkspace(args, effectiveResult),
                 _ => new UiEffect(),
             };
             return Finish(empty);
@@ -126,7 +129,7 @@ public static class UiMapper
         var node = effectiveResult is JsonArray arr
             ? Aggregate(tool, arr) : effectiveResult as JsonObject;
         if (node is null) return new UiEffect();
-        var status = (node["envelope"]?["status"] ?? node["status"])?.GetValue<string>();
+        var status = LegalOperationPolicy.StatusForPublisherResult(node);
         var outcome = status is null ? (LegalOutcome?)null : LegalOperationPolicy.OutcomeForStatus(status);
 
         // A refusal is a first-class view: say what is missing and what does exist instead.
@@ -161,6 +164,62 @@ public static class UiMapper
         return Finish(mapped);
     }
 
+    private static JsonNode WithoutContradictorySuccessfulEmpty(string tool, JsonNode result)
+    {
+        static bool IsContradictory(string operation, JsonObject item)
+        {
+            var status = LegalOperationPolicy.StatusForPublisherResult(item);
+            return status is not null
+                   && LegalOperationPolicy.OutcomeForStatus(status) == LegalOutcome.SucceededEmpty
+                   && !LegalOperationPolicy.IsProvenSuccessfulPublisherResult(item, operation);
+        }
+
+        if (result is JsonObject single)
+        {
+            if (IsContradictory(tool, single))
+                throw new InvalidDataException(
+                    $"Tool '{tool}' returned rows or counts that contradict its empty status.");
+            return result;
+        }
+        if (result is not JsonArray array) return result;
+
+        var contradictory = array.OfType<JsonObject>()
+            .Where(item => IsContradictory(tool, item))
+            .ToHashSet();
+        if (contradictory.Count == 0) return result;
+        var retained = new JsonArray(array
+            .Where(item => item is not JsonObject obj || !contradictory.Contains(obj))
+            .Select(item => item?.DeepClone()).ToArray());
+        if (!retained.OfType<JsonObject>().Any())
+            throw new InvalidDataException(
+                $"Tool '{tool}' returned no result with a proven execution shape.");
+        return retained;
+    }
+
+    private static JsonNode WithoutUnprovenPublisherFacts(string tool, JsonNode result)
+    {
+        if (tool != "search") return result;
+
+        static bool IsUnproven(string operation, JsonObject item)
+        {
+            if (!LegalOperationPolicy.HasPublisherEnvelope(item)
+                || LegalOperationPolicy.IsProvenSuccessfulPublisherResult(item, operation))
+                return false;
+            var status = LegalOperationPolicy.StatusForPublisherResult(item);
+            return status is null or LegalOperationStatus.PartialResult;
+        }
+
+        if (result is JsonObject single)
+            return IsUnproven(tool, single) ? new JsonArray() : result;
+        if (result is not JsonArray array) return result;
+        var retained = array
+            .Where(item => item is not JsonObject obj || !IsUnproven(tool, obj))
+            .ToArray();
+        return retained.Length == array.Count
+            ? result
+            : new JsonArray(retained.Select(item => item?.DeepClone()).ToArray());
+    }
+
     /// <summary>
     /// A multi-publisher capability refusal is partial when another publisher answered. Retain
     /// the successful payload as the primary mapping and carry every refusal as a bounded typed
@@ -170,6 +229,9 @@ public static class UiMapper
         SplitPublisherLimitations(string tool, JsonNode result)
     {
         if (result is not JsonArray array) return (result, []);
+        if (!string.Equals(LegalOperationPolicy.StatusForResult(result),
+                LegalOperationStatus.PartialResult, StringComparison.Ordinal))
+            return (result, []);
         var parts = array.OfType<JsonObject>().ToArray();
         var refusals = parts.Where(part => string.Equals(
                 S(part["envelope"] as JsonObject, "status") ?? S(part, "status"),
@@ -179,7 +241,11 @@ public static class UiMapper
         if (refusals.Length == 0 || refusals.Length == parts.Length)
             return (result, []);
 
-        var supported = parts.Except(refusals).ToArray();
+        var supported = parts.Where(part =>
+                LegalOperationPolicy.IsProvenSuccessfulPublisherResult(part, tool))
+            .ToArray();
+        if (supported.Length == 0)
+            return (refusals[0].DeepClone(), []);
         var limitations = PublisherLimitationPolicy.FromResult(tool, result);
         return (new JsonArray(supported
             .Select(part => (JsonNode)part.DeepClone()).ToArray()), limitations);
@@ -338,14 +404,16 @@ public static class UiMapper
     {
         var parts = result.OfType<JsonObject>().ToList();
         if (parts.Count == 0) return null;
-        if (tool is not ("changes_in_period" or "in_force_on" or "cited_by"))
-            return parts.FirstOrDefault(HasContent) ?? parts[0];
-
         var aggregateStatus = LegalOperationPolicy.StatusForResult(result);
-        var combined = (parts.FirstOrDefault(part =>
-                (S(part["envelope"] as JsonObject, "status") ?? S(part, "status"))
-                    == aggregateStatus)
-            ?? parts.FirstOrDefault(HasContent) ?? parts[0]).DeepClone().AsObject();
+        var statusMatch = parts.FirstOrDefault(part => string.Equals(
+            LegalOperationPolicy.StatusForPublisherResult(part),
+            aggregateStatus,
+            StringComparison.Ordinal));
+        if (tool is not ("changes_in_period" or "in_force_on" or "cited_by"))
+            return statusMatch ?? parts.FirstOrDefault(HasContent) ?? parts[0];
+
+        var combined = (statusMatch ?? parts.FirstOrDefault(HasContent) ?? parts[0])
+            .DeepClone().AsObject();
         if (combined["envelope"] is not JsonObject combinedEnvelope)
         {
             combinedEnvelope = new JsonObject();

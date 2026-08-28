@@ -86,6 +86,10 @@ internal static class OperationAnswerPolicy
                 : item.Jurisdiction is { Length: > 0 }
                     ? item.Jurisdiction
                     : fr ? "un éditeur sélectionné" : "a selected publisher";
+            if (item.UnsupportedFilters.Count == 0)
+                return fr
+                    ? $" Limite de capacité: {publisher} n'a pas exécuté cette opération, car son index a signalé qu'un filtre demandé n'était pas pris en charge pour le périmètre sélectionné. Il s'agit de la couverture de Lex, et non d'une preuve de l'absence d'une loi ou d'un record."
+                    : $" Capability limitation: {publisher} did not run this operation because its index reported that a requested filter is unsupported for the selected scope. This is about Lex coverage, not evidence that a law or record is absent.";
             var filters = string.Join(", ", item.UnsupportedFilters);
             return fr
                 ? $" Limite de capacité: {publisher} n'a pas exécuté le filtre [{filters}], car son index ne le décrit pas pour le périmètre demandé. Il s'agit de la couverture de Lex, et non d'une preuve de l'absence d'une loi ou d'un record."

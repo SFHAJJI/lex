@@ -331,7 +331,6 @@ internal static class PublisherLimitationPolicy
                 .Distinct(StringComparer.Ordinal)
                 .Order(StringComparer.Ordinal)
                 .ToArray();
-            if (filters.Length == 0) continue;
             var normalized = item with
             {
                 Publisher = Identifier(item.Publisher),

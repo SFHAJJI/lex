@@ -29,14 +29,19 @@ internal sealed class AgentEvidenceLedger
             if (limitations.Count > 0)
                 Add(tool, call, ordinal++, AgentEvidenceKind.Coverage,
                     null, null, null, null, null, true, null,
-                    PublisherLimitationPayload(limitations));
+                    PublisherLimitationPayload(LegalOperationStatus.PartialResult, limitations));
         }
         if (status is not null && LegalOperationPolicy.OutcomeForStatus(status) is
             LegalOutcome.NeedsClarification or LegalOutcome.NotAvailable
                 or LegalOutcome.NotComparable or LegalOutcome.NotFound)
         {
+            var limitations = PublisherLimitationPolicy.FromResult(tool, result);
+            var payload = status == McpStatus.FilterNotSupportedByIndex
+                          && limitations.Count > 0
+                ? PublisherLimitationPayload(status, limitations)
+                : EvidencePayload(result, status);
             Add(tool, call, 0, AgentEvidenceKind.Coverage, null, null, null, null, null, true,
-                null, EvidencePayload(result, status));
+                null, payload);
             return;
         }
 
@@ -170,9 +175,10 @@ internal sealed class AgentEvidenceLedger
     }
 
     private static string PublisherLimitationPayload(
+        string status,
         IReadOnlyList<PublisherLimitationView> limitations) => new JsonObject
     {
-        ["status"] = LegalOperationStatus.PartialResult,
+        ["status"] = status,
         ["publisher_limitations"] = new JsonArray(limitations.Select(item =>
             (JsonNode)new JsonObject
             {
@@ -243,18 +249,19 @@ internal sealed class AgentEvidenceLedger
 
     private static IEnumerable<(string Publisher, JsonObject Payload)> RankingAggregates(JsonNode result)
     {
-        var entries = result switch
+        var entries = (result switch
         {
             JsonArray array => array.OfType<JsonObject>(),
             JsonObject item => [item],
             _ => [],
-        };
+        }).ToArray();
+        var hasTypedPublisherStatus = entries.Any(entry =>
+            LegalOperationPolicy.StatusForPublisherResult(entry) is not null);
         foreach (var entry in entries)
         {
-            if ((entry["envelope"]?["status"] ?? entry["status"]) is JsonValue status
-                && status.TryGetValue<string>(out var statusValue)
-                && string.Equals(statusValue, McpStatus.FilterNotSupportedByIndex,
-                    StringComparison.Ordinal))
+            if (hasTypedPublisherStatus
+                && !LegalOperationPolicy.IsProvenSuccessfulPublisherResult(
+                    entry, "changes_in_period"))
                 continue;
             var aggregate = new JsonObject();
             foreach (var key in new[]

@@ -195,6 +195,86 @@ public static class LegalOperationPolicy
         return statuses.First(status => OutcomeForStatus(status) == outcome);
     }
 
+    internal static string? StatusForPublisherResult(JsonObject result)
+    {
+        var value = result["envelope"]?["status"] ?? result["status"];
+        return value is JsonValue status && status.TryGetValue<string>(out var text)
+            ? text
+            : null;
+    }
+
+    internal static bool HasPublisherEnvelope(JsonObject result) =>
+        result["envelope"] is JsonObject envelope && envelope.ContainsKey("publisher");
+
+    internal static bool IsProvenSuccessfulPublisherResult(
+        JsonObject result,
+        string? tool = null)
+    {
+        var status = StatusForPublisherResult(result);
+        if (status is null) return false;
+        if (status == LegalOperationStatus.PartialResult) return false;
+        return OutcomeForStatus(status) switch
+        {
+            LegalOutcome.Succeeded => true,
+            LegalOutcome.SucceededEmpty => SuccessfulEmptyShapeIsValid(result, status, tool),
+            _ => false,
+        };
+    }
+
+    private static bool SuccessfulEmptyShapeIsValid(
+        JsonObject result,
+        string status,
+        string? tool)
+    {
+        if (status == McpStatus.NoChangesInPeriod)
+            return (tool is null or "changes_in_period")
+                   && EmptyArray(result, "changes")
+                   && ZeroOrAbsent(result, "works_changed")
+                   && ZeroOrAbsent(result, "new_versions");
+        if (status != McpStatus.NoResult) return false;
+
+        return tool switch
+        {
+            "search" => EmptyArray(result, "hits")
+                        && ZeroOrAbsent(result, "total_hits"),
+            "in_force_on" => EmptyArray(result, "works")
+                             && ZeroOrAbsent(result, "total_works_in_force"),
+            "cited_by" => EmptyArray(result, "citations")
+                          && ZeroOrAbsent(result, "citing_articles"),
+            "changes_in_period" => false,
+            _ => NoKnownEmptyShapeContradiction(result),
+        };
+    }
+
+    private static bool NoKnownEmptyShapeContradiction(JsonObject result)
+    {
+        var rowShapeObserved = false;
+        foreach (var field in new[] { "hits", "changes", "works", "citations" })
+        {
+            if (result[field] is null) continue;
+            rowShapeObserved = true;
+            if (!EmptyArray(result, field))
+                return false;
+        }
+        foreach (var field in new[]
+                 {
+                     "total_hits", "works_changed", "new_versions",
+                     "total_works_in_force", "citing_articles",
+                 })
+            if (!ZeroOrAbsent(result, field))
+                return false;
+        return rowShapeObserved;
+    }
+
+    private static bool EmptyArray(JsonObject result, string field) =>
+        result[field] is JsonArray { Count: 0 };
+
+    private static bool ZeroOrAbsent(JsonObject result, string field) =>
+        result[field] is null
+        || result[field] is JsonValue value
+        && value.TryGetValue<int>(out var count)
+        && count == 0;
+
     private static LegalOutcome DominantOutcome(IEnumerable<LegalOutcome> values)
     {
         var observed = values.Distinct().ToArray();
@@ -217,14 +297,16 @@ public static class LegalOperationPolicy
         {
             foreach (var item in array.OfType<JsonObject>())
                 if ((item["envelope"]?["status"] ?? item["status"]) is JsonValue status
-                    && status.TryGetValue<string>(out var value))
+                    && status.TryGetValue<string>(out var value)
+                    && value != LegalOperationStatus.PartialResult)
                     yield return value;
             yield break;
         }
 
         if (payload is JsonObject itemObject
             && (itemObject["envelope"]?["status"] ?? itemObject["status"]) is JsonValue itemStatus
-            && itemStatus.TryGetValue<string>(out var itemValue))
+            && itemStatus.TryGetValue<string>(out var itemValue)
+            && itemValue != LegalOperationStatus.PartialResult)
             yield return itemValue;
     }
 }

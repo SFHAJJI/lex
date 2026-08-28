@@ -2087,7 +2087,31 @@ public sealed class AskService
                     break;
             }
         }
-        Walk(result);
+
+        static bool RequiresPublisherProof(JsonObject publisherResult) =>
+            LegalOperationPolicy.StatusForPublisherResult(publisherResult) is not null
+            || LegalOperationPolicy.HasPublisherEnvelope(publisherResult)
+            && publisherResult["hits"] is JsonArray;
+
+        if (result is JsonArray publisherResults
+            && publisherResults.OfType<JsonObject>().Any(RequiresPublisherProof))
+        {
+            foreach (var publisherResult in publisherResults.OfType<JsonObject>())
+            {
+                if (LegalOperationPolicy.IsProvenSuccessfulPublisherResult(publisherResult))
+                    Walk(publisherResult);
+            }
+        }
+        else if (result is JsonObject publisherResult
+                 && RequiresPublisherProof(publisherResult))
+        {
+            if (LegalOperationPolicy.IsProvenSuccessfulPublisherResult(publisherResult))
+                Walk(publisherResult);
+        }
+        else
+        {
+            Walk(result);
+        }
         return (status, docs);
     }
 
