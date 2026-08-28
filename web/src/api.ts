@@ -274,6 +274,19 @@ export function unionKnownExclusions(entries: any[]): string[] {
     .filter((x: unknown): x is string => typeof x === "string" && x.trim().length > 0))];
 }
 
+/**
+ * Whether the reader's "exact words" override applies to the query now on screen.
+ *
+ * Trust rule 9 requires a one-tap revert of any relaxation. The override is bound to the exact
+ * query it was chosen for: a reader who turned off spelling fallback for one question has said
+ * nothing about the next one, and carrying the decision forward would silently narrow a search
+ * they never narrowed. Anything but an exact match resolves to the default.
+ */
+export function fuzzyModeFor(
+  exactQuery: string | undefined, query: string): "auto" | "off" {
+  return exactQuery !== undefined && exactQuery === query.trim() ? "off" : "auto";
+}
+
 export function populationCoverageLabel(
   works: number | undefined,
   basis: string | undefined,

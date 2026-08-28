@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { populationCoverageLabel, populationScopeLabel, unionKnownExclusions } from "./api.ts";
+import { fuzzyModeFor, populationCoverageLabel, populationScopeLabel, unionKnownExclusions } from "./api.ts";
 
 // Trust rule 6 is about a denominator the reader can check. These bind the exact presentation of
 // a population the producer published, so a number can never appear describing a scope it did not
@@ -64,4 +64,23 @@ test("a publisher with no exclusions contributes no empty segment", () => {
 
 test("a publisher that published no population at all is skipped", () => {
   assert.deepEqual(unionKnownExclusions([{}, null, { population: {} }]), []);
+});
+
+// Trust rule 9: the one-tap revert, and the binding that stops it leaking onto another query.
+
+test("no override means the default relaxation still applies", () => {
+  assert.equal(fuzzyModeFor(undefined, "travial salarie"), "auto");
+});
+
+test("an override applies to the exact query it was chosen for", () => {
+  assert.equal(fuzzyModeFor("travial salarie", "travial salarie"), "off");
+  assert.equal(fuzzyModeFor("travial salarie", "  travial salarie  "), "off");
+});
+
+test("an override never survives a change of question", () => {
+  // A reader who turned off spelling fallback for one question has said nothing about the next.
+  // Carrying it forward would silently narrow a search they never narrowed.
+  assert.equal(fuzzyModeFor("travial salarie", "conge parental"), "auto");
+  assert.equal(fuzzyModeFor("travial salarie", ""), "auto");
+  assert.equal(fuzzyModeFor("travial salarie", "travial"), "auto");
 });

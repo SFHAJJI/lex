@@ -10,6 +10,7 @@ import {
 import { ScopeFilters } from "./ScopeFilters";
 import { envelopeStripRows, type EnvelopeStripRow } from "./envelopeStrip";
 import { searchPopulations, type PublisherPopulation } from "./searchPopulation";
+import { fuzzyModeFor } from "./api";
 import { classifyEnvelope, clearedSearchResults, LIMITATION_EXPLANATION, projectSearchResponse,
   searchEmptyPresentation, searchResultsFromError,
   type SearchResultsState } from "./limitations";
@@ -101,6 +102,13 @@ export default function Search(p: SearchProps) {
   // The denominator behind whatever this response showed, kept from the response itself so the
   // footer can never describe a different query than the one on screen.
   const [populations, setPopulations] = useState<PublisherPopulation[]>([]);
+  /**
+   * Trust rule 9: a reader told their query was rewritten must be able to undo it. The override
+   * stores the exact query it was chosen for, so it can never silently apply to a different one.
+   * Typing a new question restores the default rather than carrying a decision the reader made
+   * about words they are no longer searching for.
+   */
+  const [exactQuery, setExactQuery] = useState<string>();
 
 
   const [articleLimit, setArticleLimit] = useState(INITIAL_ARTICLES);
@@ -118,6 +126,9 @@ export default function Search(p: SearchProps) {
   }, []);
 
   const q = p.state.q ?? "";
+  // Bound to the exact submitted query. Any other query resolves to the default, so the override
+  // cannot outlive the words it was chosen for.
+  const fuzzyMode = fuzzyModeFor(exactQuery, q);
   const asOf = p.state.asOf;
   const retrieval = p.state.retrieval ?? "keyword";
   const jurisdiction = p.state.jurisdiction ?? "";
@@ -148,7 +159,7 @@ export default function Search(p: SearchProps) {
     setBusy(true);
     applyCleared();
     tool<any>("search", { query: q.trim(), limit: 40, time_scope: "as_of", as_of: asOf ?? p.today,
-                          retrieval_mode: retrieval, fuzzy: "auto",
+                          retrieval_mode: retrieval, fuzzy: fuzzyMode,
                           ...(jurisdiction ? { jurisdiction } : {}),
                           ...(hierarchy ? { hierarchy } : {}), ...(domain ? { domain } : {}),
                           ...(actForm ? { act_form: actForm } : {}),
@@ -205,7 +216,7 @@ export default function Search(p: SearchProps) {
       .finally(() => { if (live) setBusy(false); });
     return () => { live = false; };
   }, [q, asOf, retrieval, jurisdiction, hierarchy, domain, sourceClass, actForm, bindingStatus,
-      language, metadataIdentifier]);
+      language, metadataIdentifier, fuzzyMode]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -313,7 +324,33 @@ export default function Search(p: SearchProps) {
             </div>
           ) : null}
 
-          {expansions.length > 0 ? <p className="sub expansion">Spelling fallback tried: {expansions.join(", ")}</p> : null}
+          {expansions.length > 0 && fuzzyMode === "auto" ? (
+            <div className="sub expansion" role="note" aria-label="Query interpretation"
+                 data-testid="interpretation-notice">
+              <p>Spelling fallback tried: {expansions.join(", ")}</p>
+              <button type="button" className="ghost" data-testid="relaxation-revert"
+                      onClick={() => {
+                        // Clear before the rerun, not after it: rows, limitations and the
+                        // denominator all describe the relaxed query, and leaving them on screen
+                        // during the refetch shows results attributed to a query no longer running.
+                        setResults(clearedSearchResults);
+                        setPopulations([]);
+                        p.onEnvelopes([]);
+                        setExactQuery(q.trim());
+                      }}>
+                Search these exact words instead
+              </button>
+            </div>
+          ) : null}
+          {fuzzyMode === "off" ? (
+            <p className="sub expansion" data-testid="exact-words-notice">
+              Searching these exact words. No spelling fallback was applied.{" "}
+              <button type="button" className="linklike" data-testid="relaxation-restore"
+                      onClick={() => setExactQuery(undefined)}>
+                Allow spelling fallback again
+              </button>
+            </p>
+          ) : null}
 
           {busy && works.length === 0 && articles.length === 0 ? <ResultsSkeleton /> : null}
 

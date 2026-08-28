@@ -723,3 +723,10 @@ button.publisher-metadata-chip[aria-pressed="true"] { border-color: var(--fg); c
   font-size: .82rem; }
 .population-footer p { margin: 0 0 .25rem; }
 .population-footer .sub { font-size: .78rem; opacity: .85; }
+
+/* The revert is an action, not a footnote: a reader told their words were changed must be able
+   to see the way back without hunting for it. */
+.expansion button.ghost { margin-top: .35rem; font-size: .78rem; padding: .2rem .55rem; }
+.linklike { background: none; border: 0; padding: 0; font: inherit; color: var(--accent);
+  text-decoration: underline; cursor: pointer; }
+.linklike:hover { text-decoration: none; }
