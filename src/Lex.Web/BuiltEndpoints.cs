@@ -243,8 +243,12 @@ public static class BuiltEndpoints
                 var contract = item.Passed == item.Repetitions
                     ? $"<span class=\"badge ok\">{item.Passed:n0} of {item.Repetitions:n0}</span>"
                     : $"<span class=\"badge\">{item.Passed:n0} of {item.Repetitions:n0}</span>";
-                var relevance = string.Join(", ",
-                    item.RelevanceScores.Select(score => $"{score:n0}/5"));
+                var measured = item.RelevanceScores.Count(score => score.HasValue);
+                var relevance = measured == 0
+                    ? $"insufficient_denominator (0 of {item.Repetitions:n0} measured)"
+                    : string.Join(", ", item.RelevanceScores.Select(score =>
+                        score is { } value ? $"{value:n0}/5" : "not measured"))
+                        + $" ({measured:n0} of {item.Repetitions:n0} measured)";
                 return $"<tr><td class=\"mono\">{H(item.CaseId)}</td><td>{H(item.Question)}</td>"
                     + $"<td>{contract}</td><td class=\"mono\">{H(relevance)}</td></tr>";
             }));
@@ -253,7 +257,8 @@ public static class BuiltEndpoints
                 <p class="sub">Read from the signed report above. The contract column is the gate:
                 it counts repetitions whose typed plan, arguments, outcomes, effects and latency all
                 held. The relevance column is the separate grader's opinion of whether the answer
-                addressed the question, recorded per repetition and gating nothing.</p>
+                addressed the question, recorded per repetition and gating nothing. Missing scores
+                remain not measured, and a zero measured count is an insufficient denominator.</p>
                 <div class="dossier-table" tabindex="0" role="region" aria-label="Signed assistant evaluation results by case"><table>
                 <thead><tr><th>Case</th><th>Question</th><th>Contract</th><th>Relevance</th></tr></thead>
                 <tbody>{rows}</tbody>

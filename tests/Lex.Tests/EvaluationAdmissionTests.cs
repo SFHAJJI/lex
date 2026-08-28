@@ -18,6 +18,19 @@ public sealed class EvaluationAdmissionTests
     private static readonly DateTimeOffset Now =
         new(2026, 8, 14, 12, 0, 0, TimeSpan.Zero);
 
+    [Theory]
+    [InlineData(1_000, 0)]
+    [InlineData(0, 20)]
+    public void Relevance_contract_accepts_nonnegative_mixed_zero_usage_with_positive_total(
+        long inputTokens,
+        long outputTokens)
+    {
+        Assert.True(AssistantEvaluationRelevanceContract.IsValidUsage(
+            inputTokens, outputTokens));
+        Assert.True(AssistantEvaluationRelevanceContract.IsCoherent(
+            null, "grader_finish_reason_content_filter", inputTokens, outputTokens));
+    }
+
     [Fact]
     public void Signed_admission_is_release_bound_and_commits_only_exact_requests()
     {
@@ -44,6 +57,30 @@ public sealed class EvaluationAdmissionTests
         Assert.Throws<InvalidDataException>(() =>
             EvaluationAdmissionContract.Verify(
                 bytes, signature, authority, Identity(), capability.ExpiresAt));
+    }
+
+    [Theory]
+    [InlineData("target")]
+    [InlineData("candidate")]
+    [InlineData("grader")]
+    public void Signed_admission_binds_each_exact_azure_evidence_identity(string mutation)
+    {
+        var capability = Capability();
+        var target = capability.TargetEvidenceSha256;
+        var candidate = capability.CandidateModelEvidenceSha256;
+        var grader = capability.GraderModelEvidenceSha256;
+        EvaluationAdmissionContract.VerifyEvidenceIdentity(
+            capability, target, candidate, grader);
+        switch (mutation)
+        {
+            case "target": target = new string('1', 64); break;
+            case "candidate": candidate = new string('1', 64); break;
+            case "grader": grader = new string('1', 64); break;
+        }
+
+        Assert.Throws<InvalidDataException>(() =>
+            EvaluationAdmissionContract.VerifyEvidenceIdentity(
+                capability, target, candidate, grader));
     }
 
     [Fact]
@@ -380,6 +417,9 @@ public sealed class EvaluationAdmissionTests
         new string('b', 40),
         new string('c', 64),
         new string('d', 64),
+        new string('e', 64),
+        new string('f', 64),
+        new string('0', 64),
         Now,
         Now.AddMinutes(10),
         Convert.ToBase64String(Enumerable.Range(0, 32).Select(i => (byte)i).ToArray())

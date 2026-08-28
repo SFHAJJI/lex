@@ -7,23 +7,16 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Azure.Core;
 using Azure.Identity;
+using Lex.Evaluation;
 
 namespace Lex.Ingest;
 
 public sealed class AzureModelDeploymentResolver
 {
     private const string ApiVersion = "2024-10-01";
-    private static readonly Regex AccountResourceId = new(
-        "^/subscriptions/[0-9a-f-]{36}/resourceGroups/[^/]{1,90}/providers/"
-        + "Microsoft\\.CognitiveServices/accounts/[^/]{2,64}$",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Regex DeploymentName = new(
         "^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$",
         RegexOptions.CultureInvariant);
-    private static readonly Regex ContainerAppResourceId = new(
-        "^/subscriptions/[0-9a-f-]{36}/resourceGroups/[^/]{1,90}/providers/"
-        + "Microsoft\\.App/containerApps/[^/]{2,32}$",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Regex RevisionName = new(
         "^[a-z][a-z0-9-]{1,63}$", RegexOptions.CultureInvariant);
     private static readonly Regex Memory = new(
@@ -44,7 +37,7 @@ public sealed class AzureModelDeploymentResolver
         string deployment,
         CancellationToken cancellationToken)
     {
-        if (!AccountResourceId.IsMatch(resourceId))
+        if (!AssistantEvaluationAzureResource.IsModelAccount(resourceId))
             throw new InvalidDataException("Azure model resource id is invalid or unsupported.");
         if (!DeploymentName.IsMatch(deployment))
             throw new InvalidDataException("Azure model deployment name is invalid.");
@@ -65,7 +58,7 @@ public sealed class AzureModelDeploymentResolver
         string resourceId,
         CancellationToken cancellationToken)
     {
-        if (!ContainerAppResourceId.IsMatch(resourceId))
+        if (!AssistantEvaluationAzureResource.IsContainerApp(resourceId))
             throw new InvalidDataException("Azure Container App resource id is invalid.");
         var token = await _credential.GetTokenAsync(
             new TokenRequestContext(["https://management.azure.com/.default"]),
@@ -81,7 +74,7 @@ public sealed class AzureModelDeploymentResolver
         string revisionName,
         CancellationToken cancellationToken)
     {
-        if (!ContainerAppResourceId.IsMatch(resourceId))
+        if (!AssistantEvaluationAzureResource.IsContainerApp(resourceId))
             throw new InvalidDataException("Azure Container App resource id is invalid.");
         if (!RevisionName.IsMatch(revisionName))
             throw new InvalidDataException("Azure Container App revision name is invalid.");
@@ -100,7 +93,7 @@ public sealed class AzureModelDeploymentResolver
         string revisionName,
         CancellationToken cancellationToken)
     {
-        if (!ContainerAppResourceId.IsMatch(resourceId))
+        if (!AssistantEvaluationAzureResource.IsContainerApp(resourceId))
             throw new InvalidDataException("Azure Container App resource id is invalid.");
         if (!RevisionName.IsMatch(revisionName))
             throw new InvalidDataException("Azure Container App revision name is invalid.");
@@ -119,7 +112,7 @@ public sealed class AzureModelDeploymentResolver
             string resourceId,
             CancellationToken cancellationToken)
     {
-        if (!ContainerAppResourceId.IsMatch(resourceId))
+        if (!AssistantEvaluationAzureResource.IsContainerApp(resourceId))
             throw new InvalidDataException("Azure Container App resource id is invalid.");
         var token = await _credential.GetTokenAsync(
             new TokenRequestContext(["https://management.azure.com/.default"]),
@@ -362,7 +355,8 @@ public sealed class AzureModelDeploymentResolver
             && !string.IsNullOrWhiteSpace(value) && value.Length <= 2_000
                 ? value : throw new InvalidDataException(
                     $"Azure Container App evidence is missing {name}.");
-        var endpoint = new Uri(Required("AOAI_ENDPOINT"));
+        var candidateModelHost = AssistantEvaluationIdentityDigest.BareHttpsHost(
+            Required("AOAI_ENDPOINT"));
         var evidence = new AssistantCandidateRuntimeEvidence(
             resourceId,
             revisionName,
@@ -374,36 +368,17 @@ public sealed class AzureModelDeploymentResolver
             scale["maxReplicas"]?.GetValue<int>() ?? -1,
             properties["trafficWeight"]?.GetValue<int>() ?? -1,
             Required("LEX_CODE_COMMIT"), Required("LEX_ARTIFACT_MANIFEST_ID"),
-            endpoint.IdnHost, Required("AOAI_CHAT_DEPLOYMENT"), "");
+            candidateModelHost, Required("AOAI_CHAT_DEPLOYMENT"), "");
         return evidence with { EvidenceSha256 = TargetEvidenceSha256(evidence) };
     }
 
     public static string TargetEvidenceSha256(AssistantCandidateRuntimeEvidence evidence)
-    {
-        // A scale-stripping format, because Azure Resource Manager renders the same CPU
-        // allocation with different trailing zeros between responses. One evaluation recorded
-        // "cpu": 1.000 and the next request for the identical revision returned "cpu": 1.0, which
-        // produced two digests for one unchanged revision and made the signed report permanently
-        // unpublishable. decimal equality ignores scale, so CpuCores itself compared equal and only
-        // this derived string disagreed, which is why the failure surfaced as wrong evidence.
-        // Every number is formatted invariantly, not just the decimal. string.Join calls ToString()
-        // with the ambient culture, and a culture with non-ASCII digits renders the same replica
-        // count and byte size differently, which is the same defect one field over: an unchanged
-        // revision hashing to two identities depending on where the verifier happens to run.
-        var invariant = System.Globalization.CultureInfo.InvariantCulture;
-        var canonical = string.Join('\n',
-            evidence.ResourceId.TrimEnd('/').ToLowerInvariant(), evidence.RevisionName,
-            evidence.RevisionFqdn.ToLowerInvariant(), evidence.Image,
-            evidence.CpuCores.ToString("0.############################", invariant),
-            evidence.MemoryLimitBytes.ToString(invariant),
-            evidence.MinimumReplicas.ToString(invariant),
-            evidence.MaximumReplicas.ToString(invariant),
-            evidence.TrafficWeight.ToString(invariant),
-            evidence.CodeCommit, evidence.ArtifactManifestSet,
-            evidence.CandidateModelHost.ToLowerInvariant(), evidence.CandidateDeployment);
-        return Convert.ToHexStringLower(
-            SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
-    }
+        => AssistantEvaluationIdentityDigest.TargetSha256(
+            evidence.ResourceId, evidence.RevisionName, evidence.RevisionFqdn, evidence.Image,
+            evidence.CpuCores, evidence.MemoryLimitBytes, evidence.MinimumReplicas,
+            evidence.MaximumReplicas, evidence.TrafficWeight, evidence.CodeCommit,
+            evidence.ArtifactManifestSet, evidence.CandidateModelHost,
+            evidence.CandidateDeployment);
 
     internal static AssistantModelDeploymentEvidence Parse(
         string resourceId,
@@ -446,19 +421,9 @@ public sealed class AzureModelDeploymentResolver
     }
 
     internal static string EvidenceSha256(AssistantModelDeploymentEvidence evidence)
-    {
-        var endpoint = new Uri(evidence.Endpoint);
-        var canonical = string.Join('\n',
-            evidence.ResourceId.TrimEnd('/').ToLowerInvariant(),
-            endpoint.IdnHost.ToLowerInvariant(),
-            evidence.Deployment,
-            evidence.Sku,
-            evidence.ModelFormat,
-            evidence.ModelName,
-            evidence.ModelVersion);
-        return Convert.ToHexStringLower(
-            SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
-    }
+        => AssistantEvaluationIdentityDigest.ModelSha256(
+            evidence.ResourceId, evidence.Endpoint, evidence.Deployment, evidence.Sku,
+            evidence.ModelFormat, evidence.ModelName, evidence.ModelVersion);
 
     private async Task<JsonObject> GetAsync(
         string uri,

@@ -64,12 +64,17 @@ $admissionDigest = (Get-FileHash -LiteralPath $sourceAdmission -Algorithm SHA256
 if ($reportJson.admission_sha256 -cnotmatch '\A[0-9a-f]{64}\z' -or
     $reportJson.admission_sha256 -cne $admissionDigest -or
     $reportJson.admission_run_identity -cnotmatch '\A[0-9a-f]{16}\z' -or
-    $admissionJson.schema -ne "lex-assistant-eval-admission/1" -or
+    $admissionJson.schema -ne "lex-assistant-eval-admission/2" -or
     $admissionJson.catalog_sha256 -cne $reportJson.cases_sha256 -or
     $admissionJson.candidate_revision -cne $target.revision_name -or
     $admissionJson.candidate_image -cne $target.image -or
     $admissionJson.code_commit -cne $target.code_commit -or
-    $admissionJson.artifact_manifest_set -cne $target.artifact_manifest_set) {
+    $admissionJson.artifact_manifest_set -cne $target.artifact_manifest_set -or
+    $admissionJson.target_evidence_sha256 -cne $target.evidence_sha256 -or
+    $admissionJson.candidate_model_evidence_sha256 -cne
+        $reportJson.identity.candidate_model.evidence_sha256 -or
+    $admissionJson.grader_model_evidence_sha256 -cne
+        $reportJson.identity.grader_model.evidence_sha256) {
     throw "The report does not bind the exact signed evaluation admission."
 }
 $admissionSignatureInfo = Get-Item -LiteralPath $sourceAdmissionSignature

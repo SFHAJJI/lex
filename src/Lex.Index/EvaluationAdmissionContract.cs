@@ -25,6 +25,9 @@ public sealed record EvaluationAdmissionCapability(
     string CodeCommit,
     string ArtifactManifestSet,
     string CatalogSha256,
+    string TargetEvidenceSha256,
+    string CandidateModelEvidenceSha256,
+    string GraderModelEvidenceSha256,
     DateTimeOffset IssuedAt,
     DateTimeOffset ExpiresAt,
     string Nonce,
@@ -50,9 +53,62 @@ public sealed record EvaluationAdmissionAuthority(
     internal ArtifactTrustRoot Root => new(KeyId, FingerprintSha256, PublicKeyPem);
 }
 
+/// <summary>Closed coherence rules for the published assistant relevance measurement.</summary>
+public static class AssistantEvaluationRelevanceContract
+{
+    private static readonly HashSet<string> BilledCauses = new(StringComparer.Ordinal)
+    {
+        "grader_finish_reason_absent", "grader_finish_reason_invalid_type",
+        "grader_finish_reason_unknown", "grader_finish_reason_length",
+        "grader_finish_reason_content_filter", "grader_grade_malformed",
+        "grader_response_malformed", "grader_no_content", "grader_no_score", "grader_no_reason",
+        "grader_score_out_of_range", "grader_unknown_billed_failure",
+    };
+
+    private static readonly HashSet<string> UnbilledCauses = new(StringComparer.Ordinal)
+    {
+        "grader_not_configured", "grader_usage_absent", "grader_usage_invalid",
+        "grader_prefix_over_input_ceiling", "grader_evidence_over_input_ceiling",
+        "grader_prompt_over_input_ceiling", "grader_request_over_transport_bound",
+        "grader_not_executed_target_failure", "grader_empty_response", "grader_malformed_json",
+        "grader_http_rejected", "grader_transport_unavailable", "grader_timeout",
+        "grader_unknown_failure",
+    };
+
+    public static bool IsKnownCause(string? cause) =>
+        cause is not null && (BilledCauses.Contains(cause) || UnbilledCauses.Contains(cause));
+
+    public static bool IsValidUsage(long inputTokens, long outputTokens)
+    {
+        if (inputTokens < 0 || outputTokens < 0) return false;
+        try
+        {
+            _ = checked(inputTokens + outputTokens);
+            return true;
+        }
+        catch (OverflowException)
+        {
+            return false;
+        }
+    }
+
+    public static bool IsCoherent(
+        int? score, string? unavailableCause, long inputTokens, long outputTokens)
+    {
+        if (!IsValidUsage(inputTokens, outputTokens)) return false;
+        var hasUsage = inputTokens != 0 || outputTokens != 0;
+        return score is >= 1 and <= 5
+            ? unavailableCause is null && hasUsage
+            : score is null && unavailableCause is not null
+                && (hasUsage
+                    ? BilledCauses.Contains(unavailableCause)
+                    : UnbilledCauses.Contains(unavailableCause));
+    }
+}
+
 public static partial class EvaluationAdmissionContract
 {
-    public const string Schema = "lex-assistant-eval-admission/1";
+    public const string Schema = "lex-assistant-eval-admission/2";
     // 25 cases and 48 repetitions enumerate 56 request identities; doubling them for the
     // runner's single pre-authorized retry per repetition serializes to about 41 KiB, so the
     // 32 KiB cap rejected the very admission the retry design produces. The cap exists to
@@ -180,6 +236,26 @@ public static partial class EvaluationAdmissionContract
     public static string RunIdentity(string nonce) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.ASCII.GetBytes(nonce)))[..16];
 
+    /// <summary>Requires the signed admission to name the exact live Azure evidence.</summary>
+    public static void VerifyEvidenceIdentity(
+        EvaluationAdmissionCapability capability,
+        string targetEvidenceSha256,
+        string candidateModelEvidenceSha256,
+        string graderModelEvidenceSha256)
+    {
+        ArgumentNullException.ThrowIfNull(capability);
+        if (!Matches(DigestPattern(), targetEvidenceSha256)
+            || !Matches(DigestPattern(), candidateModelEvidenceSha256)
+            || !Matches(DigestPattern(), graderModelEvidenceSha256)
+            || !Exact(capability.TargetEvidenceSha256, targetEvidenceSha256)
+            || !Exact(capability.CandidateModelEvidenceSha256,
+                candidateModelEvidenceSha256)
+            || !Exact(capability.GraderModelEvidenceSha256,
+                graderModelEvidenceSha256))
+            throw new InvalidDataException(
+                "Evaluation admission does not bind the exact Azure target and model evidence.");
+    }
+
     private static void ValidateStructure(EvaluationAdmissionCapability capability)
     {
         ArgumentNullException.ThrowIfNull(capability);
@@ -192,6 +268,9 @@ public static partial class EvaluationAdmissionContract
             || !Matches(CommitPattern(), capability.CodeCommit)
             || !Matches(DigestPattern(), capability.ArtifactManifestSet)
             || !Matches(DigestPattern(), capability.CatalogSha256)
+            || !Matches(DigestPattern(), capability.TargetEvidenceSha256)
+            || !Matches(DigestPattern(), capability.CandidateModelEvidenceSha256)
+            || !Matches(DigestPattern(), capability.GraderModelEvidenceSha256)
             || !Matches(NoncePattern(), capability.Nonce)
             || capability.MaxCalls is < 1 or > MaximumRequests
             || capability.AllowedRequests is null

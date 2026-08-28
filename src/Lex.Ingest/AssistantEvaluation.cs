@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using Lex.Evaluation;
 using Lex.Index;
 
 namespace Lex.Ingest;
@@ -120,6 +121,7 @@ public sealed record AssistantEvaluationCatalog(
         EvaluationReviewAuthority? authority)
     {
         var bytes = File.ReadAllBytes(path);
+        AssistantEvaluationCatalogContract.Validate(bytes);
         AssistantEvaluationCatalog catalog;
         try
         {

@@ -31,8 +31,6 @@ public static class AssistantEvaluationReleaseVerifier
         "^[0-9a-f]{16}$", RegexOptions.CultureInvariant);
     private static readonly Regex Digest = new(
         "^[0-9a-f]{64}$", RegexOptions.CultureInvariant);
-    private static readonly Regex RelevanceCause = new(
-        "^[A-Za-z0-9_]{1,64}$", RegexOptions.CultureInvariant);
     private static readonly JsonSerializerOptions Json = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
@@ -242,14 +240,10 @@ public static class AssistantEvaluationReleaseVerifier
                 || results.Any(item => !FixedEquals(item.PromptSha256,
                         AssistantEvaluationRunner.PromptSha256(evaluationCase))
                     || item.GradingMode != evaluationCase.Grading.Mode
-                    // A deterministic turn that called no model reports zero, so a repetition may
-                    // read zero here, but only as an all-zero reading: no input beside real output
-                    // is a model call understating the axis the candidate input budget is enforced
-                    // on. The run-wide sum below is where a report claiming no spend at all fails.
-                    || item.CandidateUsage.InputTokens < 0
-                    || item.CandidateUsage.OutputTokens < 0
-                    || (item.CandidateUsage.InputTokens == 0)
-                        != (item.CandidateUsage.OutputTokens == 0)
+                    || item.CandidateUsage is null
+                    || item.GraderUsage is null
+                    || !AssistantEvaluationRelevanceContract.IsValidUsage(
+                        item.CandidateUsage.InputTokens, item.CandidateUsage.OutputTokens)
                     // Relevance reports, so no score is refused here for being low. What is
                     // refused is an incoherent measurement: a judged case that is silent about
                     // both the score and why it has none, a score that arrived with a reason it
@@ -257,7 +251,7 @@ public static class AssistantEvaluationReleaseVerifier
                     // cause that is free text rather than the machine token this published list
                     // is allowed to carry.
                     || evaluationCase.Grading.Mode == "llm"
-                        && !CoherentRelevance(item.Relevance)
+                        && !CoherentRelevance(item.Relevance, item.GraderUsage)
                     || evaluationCase.Grading.Mode == "deterministic"
                         && (item.Relevance is null
                             || item.Relevance.Score is not null
@@ -285,12 +279,16 @@ public static class AssistantEvaluationReleaseVerifier
             // Recomputed from the per-result usages just above, so a report cannot declare spend it
             // did not measure: a run whose every repetition read zero fails here, which is where
             // the per-result check used to stop it before deterministic turns could report honestly.
-            || candidateUsage.InputTokens <= 0
-            || candidateUsage.OutputTokens <= 0
+            || !AssistantEvaluationRelevanceContract.IsValidUsage(
+                candidateUsage.InputTokens, candidateUsage.OutputTokens)
+            || candidateUsage.InputTokens == 0 && candidateUsage.OutputTokens == 0
             || candidateUsage.InputTokens > caseSet.Catalog.Budget.MaximumCandidateInputTokens
             || candidateUsage.OutputTokens > caseSet.Catalog.Budget.MaximumCandidateOutputTokens
             || graderUsage.InputTokens > caseSet.Catalog.Budget.MaximumGraderInputTokens
             || graderUsage.OutputTokens > caseSet.Catalog.Budget.MaximumGraderOutputTokens
+            || report.ActualCandidateCostEur < 0
+            || report.ActualGraderCostEur < 0
+            || report.ActualTotalCostEur < 0
             || report.ActualCandidateCostEur != report.Pricing.CandidateCost(
                 candidateUsage.InputTokens, candidateUsage.OutputTokens)
             || report.ActualGraderCostEur != report.Pricing.GraderCost(
@@ -316,12 +314,12 @@ public static class AssistantEvaluationReleaseVerifier
     }
 
     /// <summary>A judged repetition carries a score, or the machine token for why it has none.</summary>
-    private static bool CoherentRelevance(AssistantEvaluationRelevance? relevance) =>
-        relevance is not null
-        && (relevance.Score is null) != (relevance.UnavailableCause is null)
-        && relevance.Score is null or (>= 1 and <= 5)
-        && (relevance.UnavailableCause is null
-            || RelevanceCause.IsMatch(relevance.UnavailableCause));
+    private static bool CoherentRelevance(
+        AssistantEvaluationRelevance? relevance, AssistantModelUsage? usage) =>
+        relevance is not null && usage is not null
+        && AssistantEvaluationRelevanceContract.IsCoherent(
+            relevance.Score, relevance.UnavailableCause,
+            usage.InputTokens, usage.OutputTokens);
 
     private static void VerifyAdmission(
         string admissionPath,
@@ -347,8 +345,17 @@ public static class AssistantEvaluationReleaseVerifier
         var capability = EvaluationAdmissionContract.Verify(
             bytes, EvalAdmissionCli.ReadBoundedSignature(admissionSignaturePath),
             authority, identity, runAt);
+        EvaluationAdmissionContract.VerifyEvidenceIdentity(
+            capability,
+            report.Identity.Target.EvidenceSha256,
+            report.Identity.CandidateModel.EvidenceSha256,
+            report.Identity.GraderModel.EvidenceSha256);
         var expected = EvalAdmissionCli.Create(
-            caseSet, authority, identity, capability.IssuedAt, capability.Nonce);
+            caseSet, authority, identity,
+            report.Identity.Target.EvidenceSha256,
+            report.Identity.CandidateModel.EvidenceSha256,
+            report.Identity.GraderModel.EvidenceSha256,
+            capability.IssuedAt, capability.Nonce);
         var expectedBytes = EvaluationAdmissionContract.Serialize(expected);
         var runIdentity = EvaluationAdmissionContract.RunIdentity(capability);
         if (bytes.Length != expectedBytes.Length
@@ -482,8 +489,16 @@ public static class AssistantEvaluationReleaseVerifier
     private static AssistantModelUsage Sum(IEnumerable<AssistantModelUsage> usages)
     {
         var total = new AssistantModelUsage(0, 0);
-        foreach (var usage in usages)
-            total = total.Add(usage);
+        try
+        {
+            foreach (var usage in usages)
+                total = total.Add(usage);
+        }
+        catch (OverflowException exception)
+        {
+            throw new InvalidDataException(
+                "Assistant evaluation usage overflowed its signed evidence range.", exception);
+        }
         return total;
     }
 
