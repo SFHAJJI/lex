@@ -32,7 +32,8 @@ const GOVERNED_TOOLS = new Set(["search", "changes_in_period", "in_force_on"]);
 /** The governed filter identifiers; anything else in the list is dropped. */
 const GOVERNED_FILTERS = new Set(["act_form", "binding_status", "domain", "hierarchy"]);
 
-/** Fixed server explanation. Never interpolates publisher prose or the reader's query. */
+/** The browser's fixed copy for this notice (facts-only ruling): the wire carries facts,
+    each renderer owns its fixed template. Never interpolates prose or the reader's query. */
 export const LIMITATION_EXPLANATION =
   "This publisher's index does not describe the requested filter for the requested scope, so "
   + "it did not run this query. That is a statement about Lex's coverage, not evidence that a "
@@ -146,10 +147,35 @@ export function everyPublisherRefused(envelopes: unknown[]): boolean {
 export function searchAbsenceState(
   envelopes: unknown[],
   hitCount: number,
-): "has_results" | "all_refused" | "no_match" {
+): "has_results" | "all_refused" | "mixed_no_match" | "no_match" {
   if (hitCount > 0) return "has_results";
-  if (everyPublisherRefused(envelopes)) return "all_refused";
-  return "no_match";
+  if (!Array.isArray(envelopes) || envelopes.length === 0) return "no_match";
+  const refusals = limitationsFromEnvelopes("search", envelopes);
+  if (refusals.length === 0) return "no_match";
+  return everyPublisherRefused(envelopes) ? "all_refused" : "mixed_no_match";
+}
+
+/**
+ * The empty-state sentence is a truth claim, so its scope is typed (review round 2, O1).
+ * "no_match" may speak for the corpus only when every selected publisher ran; a mixed state
+ * speaks only for the publishers that could apply the filters; all-refused speaks only about
+ * coverage. The component renders exactly this decision, so a test failing here is the
+ * production presentation failing.
+ */
+export function searchEmptyPresentation(
+  state: "all_refused" | "mixed_no_match" | "no_match",
+): { kind: string; sentence: string } {
+  switch (state) {
+    case "all_refused":
+      return { kind: "all_refused", sentence: "No selected publisher ran this query." };
+    case "mixed_no_match":
+      return {
+        kind: "mixed_no_match",
+        sentence: "No match was returned by the publishers that could apply these filters.",
+      };
+    default:
+      return { kind: "no_match", sentence: "Nothing in the corpus matches that." };
+  }
 }
 
 /**
@@ -157,15 +183,40 @@ export function searchAbsenceState(
  * one place, so the empty-query transition and the request-start transition cannot drift apart
  * and strand a stale notice on an empty workspace.
  */
-export interface ClearedSearchResults {
-  works: never[];
-  articles: never[];
-  error: undefined;
-  modeUnavailable: undefined;
-  limitations: never[];
-  expansions: never[];
+export interface SearchResultsState<W, A> {
+  works: W[];
+  articles: A[];
+  error: string | undefined;
+  modeUnavailable: string | undefined;
+  expansions: string[];
+  limitations: PublisherLimitation[];
+  absence: "has_results" | "all_refused" | "mixed_no_match" | "no_match";
 }
-export const clearedSearchResults = (): ClearedSearchResults => ({
+
+/** The one cleared tuple: every result-bearing key, one place, three transitions share it. */
+export const clearedSearchResults = <W, A>(): SearchResultsState<W, A> => ({
   works: [], articles: [], error: undefined, modeUnavailable: undefined,
-  limitations: [], expansions: [],
+  expansions: [], limitations: [], absence: "no_match",
+});
+
+/** A completed response: derived limitations and the typed absence state travel together. */
+export const searchResultsFromResponse = <W, A>(
+  envelopes: unknown[],
+  hitCount: number,
+  values: {
+    works: W[]; articles: A[]; expansions: string[]; modeUnavailable: string | undefined;
+  },
+): SearchResultsState<W, A> => ({
+  works: values.works,
+  articles: values.articles,
+  error: undefined,
+  modeUnavailable: values.modeUnavailable,
+  expansions: values.expansions,
+  limitations: limitationsFromEnvelopes("search", envelopes),
+  absence: searchAbsenceState(envelopes, hitCount),
+});
+
+/** A transport failure: cleared results carrying only the fixed error sentence. */
+export const searchResultsFromError = <W, A>(error: string): SearchResultsState<W, A> => ({
+  ...clearedSearchResults<W, A>(), error,
 });

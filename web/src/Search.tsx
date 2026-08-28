@@ -8,8 +8,8 @@ import {
   type PublisherMetadata,
 } from "./publisherMetadata";
 import { ScopeFilters } from "./ScopeFilters";
-import { clearedSearchResults, LIMITATION_EXPLANATION, limitationsFromEnvelopes, searchAbsenceState,
-  type PublisherLimitation } from "./limitations";
+import { clearedSearchResults, LIMITATION_EXPLANATION, searchEmptyPresentation,
+  searchResultsFromError, searchResultsFromResponse, type SearchResultsState } from "./limitations";
 import { PublisherLimitations } from "./views";
 import type { State } from "./state";
 import { shorten } from "./pickers";
@@ -84,15 +84,14 @@ const INITIAL_ARTICLES = 8;
 
 export default function Search(p: SearchProps) {
   const [text, setText] = useState(p.state.q ?? "");
-  const [works, setWorks] = useState<WorkHit[]>([]);
-  const [articles, setArticles] = useState<ArticleHit[]>([]);
+  const [results, setResults] =
+    useState<SearchResultsState<WorkHit, ArticleHit>>(clearedSearchResults);
+  const { works, articles, error, modeUnavailable, expansions, limitations } = results;
+  const allRefused = results.absence === "all_refused";
   const [busy, setBusy] = useState(false);
   const [modeUsed, setModeUsed] = useState<"keyword" | "hybrid" | "unavailable">("keyword");
-  const [modeUnavailable, setModeUnavailable] = useState<string>();
-  const [limitations, setLimitations] = useState<PublisherLimitation[]>([]);
-  const [allRefused, setAllRefused] = useState(false);
-  const [expansions, setExpansions] = useState<string[]>([]);
-  const [error, setError] = useState<string>();
+
+
   const [articleLimit, setArticleLimit] = useState(INITIAL_ARTICLES);
   const [metadataFilter, setMetadataFilter] = useState<{
     query: string; metadata: PublisherMetadata;
@@ -128,12 +127,8 @@ export default function Search(p: SearchProps) {
   // One cleared tuple for the empty-query and request-start transitions (review O2): a state
   // added to one and forgotten in the other is exactly how a stale limitation strands on an
   // empty workspace.
-  const applyCleared = () => {
-    const cleared = clearedSearchResults();
-    setWorks(cleared.works); setArticles(cleared.articles); setError(cleared.error);
-    setModeUnavailable(cleared.modeUnavailable); setLimitations(cleared.limitations);
-    setExpansions(cleared.expansions); setAllRefused(false);
-  };
+  const applyCleared = () =>
+    setResults(clearedSearchResults<WorkHit, ArticleHit>());
 
   useEffect(() => {
     if (!q.trim()) { applyCleared(); return; }
@@ -158,19 +153,20 @@ export default function Search(p: SearchProps) {
           e?.envelope?.status === "retrieval_mode_unavailable");
         // Capability refusals are kept and shown beside the fused hits, never instead of
         // them and never silently dropped: a coverage statement is not an empty result.
-        setLimitations(limitationsFromEnvelopes("search", envelopes));
-        setAllRefused(searchAbsenceState(envelopes, hits.length) === "all_refused");
+
         const usedHybrid = envelopes.some((e: any) => e?.retrieval_mode === "hybrid");
         const usedKeyword = envelopes.some((e: any) => e?.retrieval_mode === "keyword");
         setModeUsed(usedHybrid ? "hybrid" : usedKeyword ? "keyword" : "unavailable");
+        let nextModeUnavailable: string | undefined;
         if (unavailable.length > 0) {
           const publishers = unavailable
             .map((e: any) => String(e?.envelope?.publisher ?? ""))
             .filter(Boolean)
             .join(", ");
-          setModeUnavailable(`Words + meaning is unavailable${publishers ? ` for ${publishers}` : ""}: its signed retrieval benchmark has not authorized it. Choose Exact words.`);
+          nextModeUnavailable = `Words + meaning is unavailable${publishers ? ` for ${publishers}` : ""}: its signed retrieval benchmark has not authorized it. Choose Exact words.`;
         }
-        setExpansions([...new Set(envelopes.flatMap((e: any) => e?.query_expansions ?? []))] as string[]);
+        const nextExpansions = [...new Set(envelopes.flatMap(
+          (e: any) => e?.query_expansions ?? []))] as string[];
         // The same hits answer two different questions, so they are split rather than ranked
         // together: "which law is this" and "where is this said". A reader almost always wants
         // the first when they typed a name, and the second when they typed words.
@@ -199,12 +195,18 @@ export default function Search(p: SearchProps) {
         }
         const visibleWorks = [...byWork.values()].slice(0, 8);
         const visibleWorkIds = new Set(visibleWorks.map((work) => work.work));
-        setWorks(visibleWorks);
         // Passages explain why one of the visible laws matched. They are not an independent
         // result inventory and must never introduce a ninth law after the work cap was applied.
-        setArticles(arts.filter((article) => visibleWorkIds.has(article.work)).slice(0, 25));
+        // Everything a response sets travels through ONE transition, so no key can be set on
+        // one path and forgotten on another (review round 2, O2).
+        setResults(searchResultsFromResponse(envelopes, hits.length, {
+          works: visibleWorks,
+          articles: arts.filter((article) => visibleWorkIds.has(article.work)).slice(0, 25),
+          expansions: nextExpansions,
+          modeUnavailable: nextModeUnavailable,
+        }));
       })
-      .catch(() => { if (live) { applyCleared(); setError("Search could not be reached. Try again."); } })
+      .catch(() => { if (live) setResults(searchResultsFromError("Search could not be reached. Try again.")); })
       .finally(() => { if (live) setBusy(false); });
     return () => { live = false; };
   }, [q, asOf, retrieval, jurisdiction, hierarchy, domain, sourceClass, actForm, bindingStatus,
@@ -373,24 +375,24 @@ export default function Search(p: SearchProps) {
           ) : null}
 
           {!busy && !error && works.length === 0 && articles.length === 0 ? (
-            allRefused ? (
-              // Review O1: when no publisher ran the governed query, a corpus-absence sentence
-              // would be false. The typed limitation gap speaks instead, and only it.
-              <div className="empty" data-search-empty="all_refused">
-                <p>No selected publisher ran this query.</p>
+            // The empty sentence is a typed truth claim scoped by searchEmptyPresentation
+            // (review round 2, O1): corpus-wide only when every publisher ran; scoped to the
+            // publishers that ran when one refused; coverage-only when all refused.
+            <div className="empty" data-search-empty={searchEmptyPresentation(
+                results.absence === "has_results" ? "no_match" : results.absence).kind}>
+              <p>{searchEmptyPresentation(
+                results.absence === "has_results" ? "no_match" : results.absence).sentence}</p>
+              {allRefused ? (
                 <p className="sub">{LIMITATION_EXPLANATION}{" "}
                   <a href="/coverage">What Lex holds, and lacks →</a></p>
-              </div>
-            ) : (
-            <div className="empty" data-search-empty="no_match">
-              <p>Nothing in the corpus matches that.</p>
-              <p className="sub">
-                Search reads the versions that carry text. Lex also holds dated versions whose
-                wording the publisher never issued, and those can be dated but not searched.{" "}
-                <a href="/coverage">What Lex holds, and lacks →</a>
-              </p>
+              ) : (
+                <p className="sub">
+                  Search reads the versions that carry text. Lex also holds dated versions whose
+                  wording the publisher never issued, and those can be dated but not searched.{" "}
+                  <a href="/coverage">What Lex holds, and lacks →</a>
+                </p>
+              )}
             </div>
-            )
           ) : null}
         </div>
       ) : null}

@@ -3,7 +3,7 @@ import test from "node:test";
 import {
   clearedSearchResults, everyPublisherRefused, LIMITATION_CAP, LIMITATION_EXPLANATION,
   LIMITATION_STATUS, limitationsFromEffect, limitationsFromEnvelopes, searchAbsenceState,
-  validateLimitation,
+  searchEmptyPresentation, searchResultsFromError, searchResultsFromResponse, validateLimitation,
 } from "./limitations.ts";
 
 const refused = (publisher: string, filters: string[]) => ({
@@ -125,18 +125,55 @@ test("two separately allocated identical limitations render once (O3 dedup)", ()
   assert.equal(limitationsFromEnvelopes("search", distinct).length, 2);
 });
 
-test("an all-refused search never claims a corpus miss (O1)", () => {
+test("empty-state truth scope: all-refused, mixed, and corpus-wide are distinct (O1)", () => {
   const refusedEnv = { envelope: { status: LIMITATION_STATUS, publisher: "lu-legilux" },
     unsupported_filters: ["domain"] };
   const okEnv = { envelope: { status: "ok", publisher: "eu-eurlex" }, hits: [] };
-  // All refused, zero hits: the surface must speak coverage, not absence.
+  // All refused, zero hits: coverage, never absence.
   assert.equal(searchAbsenceState([refusedEnv, refusedEnv], 0), "all_refused");
-  // One publisher ran and found nothing: the corpus-miss sentence is now true.
-  assert.equal(searchAbsenceState([refusedEnv, okEnv], 0), "no_match");
+  // Round 2 correction: one publisher ran and found nothing while another refused. The
+  // refusing publisher's scope is unknown, so a corpus-wide claim is unproved: mixed state.
+  assert.equal(searchAbsenceState([refusedEnv, okEnv], 0), "mixed_no_match");
+  // Only when every selected publisher ran is the corpus-wide sentence true.
+  assert.equal(searchAbsenceState([okEnv, okEnv], 0), "no_match");
   // Any hit renders results regardless of refusals beside it.
   assert.equal(searchAbsenceState([refusedEnv, okEnv], 3), "has_results");
   // No envelopes at all is not an all-refused claim.
   assert.equal(searchAbsenceState([], 0), "no_match");
+});
+
+test("the production presentation maps each empty state to its scoped sentence (O1)", () => {
+  // This IS the render decision: Search.tsx passes results.absence into this presenter and
+  // prints the returned sentence, so a wrong mapping here is the production surface lying.
+  assert.equal(searchEmptyPresentation("no_match").sentence,
+    "Nothing in the corpus matches that.");
+  assert.equal(searchEmptyPresentation("mixed_no_match").sentence,
+    "No match was returned by the publishers that could apply these filters.");
+  assert.equal(searchEmptyPresentation("all_refused").sentence,
+    "No selected publisher ran this query.");
+  // The corpus-wide sentence must be unreachable from the two refusal-bearing states.
+  assert.notEqual(searchEmptyPresentation("mixed_no_match").sentence,
+    searchEmptyPresentation("no_match").sentence);
+  assert.notEqual(searchEmptyPresentation("all_refused").sentence,
+    searchEmptyPresentation("no_match").sentence);
+});
+
+test("state transitions: a refused response then a cleared query leaves nothing behind (O2)", () => {
+  const refusedEnv = { envelope: { status: LIMITATION_STATUS, publisher: "lu-legilux" },
+    unsupported_filters: ["domain"] };
+  // The exact production wiring: Search.tsx builds its state through these transitions.
+  const after = searchResultsFromResponse([refusedEnv], 0,
+    { works: [], articles: [], expansions: [], modeUnavailable: undefined });
+  assert.equal(after.limitations.length, 1);
+  assert.equal(after.absence, "all_refused");
+  const cleared = clearedSearchResults();
+  assert.deepEqual(cleared.limitations, []);
+  assert.equal(cleared.absence, "no_match");
+  // The error transition clears result state too, carrying only its sentence.
+  const failed = searchResultsFromError("Search could not be reached. Try again.");
+  assert.deepEqual(failed.limitations, []);
+  assert.equal(failed.error, "Search could not be reached. Try again.");
+  assert.equal(failed.absence, "no_match");
 });
 
 test("the cleared search tuple clears the limitation state (O2)", () => {
@@ -150,5 +187,5 @@ test("the cleared search tuple clears the limitation state (O2)", () => {
   // The tuple is the union of every result-bearing key the search surface sets; a key added
   // to the surface without joining this tuple is the exact stale-state defect of review O2.
   assert.deepEqual(Object.keys(cleared).sort(),
-    ["articles", "error", "expansions", "limitations", "modeUnavailable", "works"]);
+    ["absence", "articles", "error", "expansions", "limitations", "modeUnavailable", "works"]);
 });
