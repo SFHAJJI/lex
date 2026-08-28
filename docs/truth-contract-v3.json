@@ -1,0 +1,169 @@
+{
+  "schema": "lex-truth-contract/1",
+  "status": "accepted_v3_target_not_deployed",
+  "enforcement": "live_read_back_required_before_claim",
+  "implementation_binding": {
+    "consumer_validation": "exact_schema_and_values",
+    "unknown_field_outcome": "contract_rejected",
+    "missing_field_outcome": "contract_rejected",
+    "unknown_value_outcome": "contract_rejected",
+    "missing_live_read_back_outcome": "claim_blocked"
+  },
+  "revalidation": {
+    "cadences": {
+      "nightly": [
+        "publisher_feed",
+        "open_states",
+        "future_dated_states"
+      ],
+      "weekly": [
+        "complete_reviewed_lu_catalog",
+        "complete_reviewed_eu_catalog"
+      ],
+      "monthly": [
+        "every_still_resolving_held_manifestation"
+      ]
+    },
+    "http": {
+      "method": "GET",
+      "forbidden_methods": [
+        "HEAD"
+      ],
+      "validator_order": [
+        "etag",
+        "last_modified",
+        "unconditional_get"
+      ],
+      "missing_validator_outcome": "unconditional_get",
+      "not_modified_outcome": "completed_revalidation"
+    },
+    "run_identity": {
+      "algorithm": "sha256_rfc8785",
+      "fields": [
+        "publisher",
+        "cadence",
+        "scheduled_slot_utc",
+        "scope_manifest_sha256"
+      ],
+      "slot_formats": {
+        "nightly": "YYYY-MM-DD",
+        "weekly": "YYYY-Www",
+        "monthly": "YYYY-MM"
+      },
+      "scope_frozen_for_slot": true,
+      "retry_must_reuse_identity": true,
+      "excluded_fields": [
+        "attempt",
+        "process_id",
+        "wall_clock_start",
+        "random_uuid"
+      ]
+    },
+    "completion_requires": [
+      "feed_complete_if_nightly",
+      "target_set_complete",
+      "pagination_complete",
+      "publisher_truncation_checks_passed",
+      "identity_coherent"
+    ],
+    "absence_advances_on": "distinct_completed_logical_run_identity_only"
+  },
+  "retention": {
+    "classes": {
+      "evidence_bundle_release": "indefinite",
+      "nightly_release": "minimum_2160_hours",
+      "monthly_keeper": "indefinite"
+    },
+    "clock": {
+      "source": "signed_ledger_accepted_at_utc",
+      "deletion_now_source": "cleanup_executor_trusted_utc_clock",
+      "clock_failure_outcome": "no_deletion",
+      "format": "rfc3339_utc",
+      "caller_timestamp_allowed": false,
+      "monotonic_against_ledger_head": true,
+      "nightly_duration_hours": 2160,
+      "delete_boundary": "now_utc_gte_accepted_at_utc_plus_2160_hours"
+    },
+    "monthly_selection": {
+      "eligibility_requires": [
+        "complete_lu_artifact",
+        "complete_eu_artifact",
+        "valid_signatures",
+        "complete_retention_receipt",
+        "capability_manifest",
+        "evaluation_identity",
+        "exact_build_identity"
+      ],
+      "selection_order": [
+        "accepted_at_utc_desc",
+        "manifest_set_identifier_asc"
+      ],
+      "no_eligible_release_is_final": true,
+      "selection_replaceable": false
+    },
+    "mutation_protocol": {
+      "cooperative_lock": "lex-retention-ledger/1",
+      "lock_users": [
+        "bundle_reference_publication",
+        "monthly_selection",
+        "cleanup_deletion"
+      ],
+      "fencing_token_required": true,
+      "ledger_head_cas_required": true,
+      "bundle_reference_committed_before_return": true,
+      "cleanup_authorization_committed_before_delete": true,
+      "cleanup_authorization_scope": "one_exact_immutable_object",
+      "multi_object_cleanup_sequence": "authorize_read_back_delete_record_per_object",
+      "cleanup_delete_paths": [
+        "automated",
+        "operator_workflow",
+        "api",
+        "ui"
+      ],
+      "direct_delete_bypass_outcome": "replay_promotion_blocked",
+      "failure_outcome": "no_further_mutation"
+    }
+  },
+  "replay_acceptance": {
+    "retention_is_necessary_not_sufficient": true,
+    "required_gates": [
+      "canonical_plan_recomputation",
+      "canonical_receipt_recomputation",
+      "exact_tool_source_binding",
+      "path_specific_schema_validation",
+      "bounded_streaming_before_allocation",
+      "strict_transport_validation",
+      "static_pin_cross_checks",
+      "practical_encoded_query_leak_detection",
+      "controlled_malformed_set_rejection",
+      "fresh_validation_bounded_age",
+      "fresh_validation_bounded_duration",
+      "not_assessed_no_specific_checks_status",
+      "not_executed_as_contracted_status",
+      "independent_live_probe_repeated"
+    ],
+    "privacy_canary_output": "match_counts_only"
+  },
+  "public_inventory": {
+    "reason_field": "reason_codes",
+    "free_text_allowed": false,
+    "reason_enum": [
+      "evidence_bundle_reference",
+      "monthly_keeper",
+      "nightly_window",
+      "current_production",
+      "current_rollback"
+    ],
+    "forbidden_public_fields": [
+      "query_text",
+      "request_body",
+      "ip_address",
+      "user_agent",
+      "referrer",
+      "cookies",
+      "authorization",
+      "bundle_narrative",
+      "bundle_identifier"
+    ]
+  }
+}

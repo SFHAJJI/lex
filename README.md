@@ -23,7 +23,9 @@ cannot know.
 **[Verify it yourself](https://law.soufien.lu/verify)** ·
 **[Program](docs/hybrid-eu-roadmap.md)** ·
 **[Retrieval + agent plan](docs/retrieval-agent-enrichment-plan.md)** ·
-**[Spec (D1-D82)](docs/lex-spec-v4.md)**
+**[Spec (D1-D82)](docs/lex-spec-v4.md)** ·
+**[Corpus revalidation](docs/corpus-revalidation.md)** ·
+**[Snapshot retention](docs/snapshot-retention.md)**
 
 ## 74-second engineering demo
 
