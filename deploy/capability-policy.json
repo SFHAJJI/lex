@@ -1,0 +1,18 @@
+{
+  "schema": "lex-capability-policy/1",
+  "collections": {
+    "eu-eurlex": {
+      "unsupported_filters": [
+        "domain"
+      ]
+    },
+    "lu-legilux": {
+      "unsupported_filters": [
+        "act_form",
+        "binding_status",
+        "domain",
+        "hierarchy"
+      ]
+    }
+  }
+}

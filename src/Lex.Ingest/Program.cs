@@ -637,8 +637,11 @@ switch (args0[0])
             ?? throw new ArgumentException("--articles-commit required when --articles is supplied");
         var corpusCommit = Get("--corpus-commit")
             ?? throw new ArgumentException("--corpus-commit required");
+        var capabilityPolicyPath = Get("--capability-policy")
+            ?? throw new ArgumentException("--capability-policy required");
         IndexFromCorpus.Build(corpus, articles, outDb, keyPem, now, semantic,
-            codeCommit, articlesCommit, corpusCommit);
+            codeCommit, articlesCommit, corpusCommit,
+            capabilityPolicyPath: capabilityPolicyPath);
         return 0;
     }
     case "derive":
@@ -669,7 +672,7 @@ switch (args0[0])
         // verify corpus --corpus X | verify stamp --db X
         //   [--expected-collection ID] [--expected-corpus-commit SHA]
         //   [--expected-code-commit SHA] [--corpus-manifest FILE]
-        //   [--articles-generation FILE]
+        //   [--articles-generation FILE] --capability-policy FILE
         // | verify derive --publisher P --corpus X --articles Y
         switch (args0.Length > 1 ? args0[1] : "")
         {
@@ -702,20 +705,9 @@ switch (args0[0])
                 var expectedDeriverTreeId = Get("--expected-deriver-tree-id");
                 var expectedGenerationSha256 = Get("--expected-generation-sha256");
                 var expectedProfilesSha256 = Get("--expected-profiles-sha256");
-                var hasProvenanceEvidence = corpusManifest is not null
-                    || articlesGeneration is not null
-                    || expectedCorpusManifestSha256 is not null
-                    || expectedIngesterCodeCommit is not null
-                    || expectedDeriverCodeCommit is not null
-                    || expectedDeriverTreeId is not null
-                    || expectedGenerationSha256 is not null
-                    || expectedProfilesSha256 is not null;
-                if (expectedCollection is not null || expectedCorpusCommit is not null
-                    || expectedCodeCommit is not null || expectedArticlesCommit is not null
-                    || hasProvenanceEvidence)
-                {
-                    var strict = IndexStampVerifier.Verify(db,
-                        new IndexStampVerificationInputs(
+                var capabilityPolicy = Get("--capability-policy");
+                var strict = IndexStampVerifier.VerifyPromotion(db,
+                    new IndexStampVerificationInputs(
                             ExpectedCollection: expectedCollection,
                             ExpectedCorpusCommit: expectedCorpusCommit,
                             ExpectedCodeCommit: expectedCodeCommit,
@@ -728,9 +720,10 @@ switch (args0[0])
                             ExpectedDeriverTreeId: expectedDeriverTreeId,
                             ExpectedGenerationSha256: expectedGenerationSha256,
                             ExpectedProfilesSha256: expectedProfilesSha256,
+                            CapabilityPolicyPath: capabilityPolicy,
                             RequireDerivedProvenance: expectedArticlesCommit is not null
                                 || articlesGeneration is not null));
-                    Console.WriteLine($"collection={strict.Collection} " +
+                Console.WriteLine($"collection={strict.Collection} " +
                         $"corpus_commit={strict.CorpusCommit} " +
                         $"signature_valid={strict.SignatureValid} " +
                         $"content_digest={(strict.ContentDigestMatches ? "matches"
@@ -741,26 +734,14 @@ switch (args0[0])
                         $"code_commit_matches={strict.CodeCommitMatches} " +
                         $"articles_commit={strict.ArticlesCommit ?? "absent"} " +
                         $"articles_commit_matches={strict.ArticlesCommitMatches} " +
+                        $"capability_policy_matches={strict.CapabilityPolicyMatches} " +
+                        $"capability_manifest_sha256={strict.CapabilityManifestSha256 ?? "absent"} " +
+                        $"capability_policy_sha256={strict.CapabilityPolicySha256 ?? "absent"} " +
                         $"derived_provenance={(strict.ProvenanceMatches
                             ? "matches" : "MISMATCH")}");
-                    foreach (var error in strict.ProvenanceErrors)
-                        Console.Error.WriteLine($"provenance error: {error}");
-                    return strict.ExitCode;
-                }
-                using var r = Lex.Index.LexIndexReader.Open(db);
-                // A valid signature over the metadata proves nothing about the text. Recompute
-                // the content digest from what the database actually holds and compare it with
-                // the signed value: that is what detects an edited article.
-                var claimed = r.Stamp.GetValueOrDefault("content_digest") ?? "";
-                var actual = r.ComputeContentDigest();
-                var contentOk = claimed.Length > 0 && claimed == actual;
-                Console.WriteLine($"collection={r.Collection} schema={r.Stamp.GetValueOrDefault("schema")} " +
-                    $"algorithm={r.Stamp.GetValueOrDefault("algorithm")} corpus_commit={r.Stamp.GetValueOrDefault("corpus_commit")} " +
-                    $"built_at={r.Stamp.GetValueOrDefault("built_at")} signature_valid={r.SignatureValid} " +
-                    $"content_digest={(claimed.Length == 0 ? "absent (index predates content binding)" : contentOk ? "matches" : "MISMATCH — contents were altered")}");
-                if (!r.SignatureValid) return 3;
-                if (claimed.Length > 0 && !contentOk) return 4;
-                return 0;
+                foreach (var error in strict.ProvenanceErrors)
+                    Console.Error.WriteLine($"provenance error: {error}");
+                return strict.ExitCode;
             }
             case "derive":
             {
@@ -806,7 +787,7 @@ switch (args0[0])
                 finally { try { Directory.Delete(tmp, true); } catch { } }
             }
             default:
-                Console.Error.WriteLine("usage: lex verify corpus --corpus X | lex verify stamp --db X [--expected-collection ID] [--expected-corpus-commit SHA] [--expected-code-commit SHA] [--expected-articles-commit SHA] [--corpus-manifest FILE --articles-generation FILE] | lex verify derive --publisher P --corpus X --articles Y [--work slug]");
+                Console.Error.WriteLine("usage: lex verify corpus --corpus X | lex verify stamp --db X --capability-policy FILE [--expected-collection ID] [--expected-corpus-commit SHA] [--expected-code-commit SHA] [--expected-articles-commit SHA] [--corpus-manifest FILE --articles-generation FILE] | lex verify derive --publisher P --corpus X --articles Y [--work slug]");
                 return 1;
         }
     }
@@ -962,6 +943,7 @@ static void Usage() => Console.Error.WriteLine("""
       lex ingest --publisher ID --corpus PATH --code-commit FULL_SHA --run-id SOURCE_RUN_ID [--scope FILE] [--wave 1..4] [--now ISO]
                  [--fresh [--historical-withdrawal-audit FILE]]
       lex index  --corpus PATH [--articles PATH --articles-commit FULL_SHA] --out FILE.db [--keyfile KEY.pem] [--now ISO]
+                 --capability-policy FILE
                  [--embedding-model PATH] [--vectors FILE] [--embedding-batch-size N]
                  [--time-budget-minutes N] --corpus-commit FULL_SHA --code-commit FULL_SHA
       lex derive --publisher ID --corpus PATH --out PATH --code-commit FULL_SHA
@@ -969,7 +951,7 @@ static void Usage() => Console.Error.WriteLine("""
       lex verify corpus --corpus PATH
       lex verify stamp --db FILE.db --expected-collection ID --expected-corpus-commit FULL_SHA
                  --expected-code-commit FULL_SHA --expected-articles-commit FULL_SHA
-                 --corpus-manifest FILE --articles-generation FILE
+                 --corpus-manifest FILE --articles-generation FILE --capability-policy FILE
       lex repair checkout-line-endings --corpus PATH
       lex artifact manifest --root DIR --file RELATIVE [--file RELATIVE] --manifest FILE --signature FILE --keyfile KEY.pem --key-id ID --code-commit SHA [--source KEY=VALUE]
       lex assistant-eval --admission FILE --admission-signature FILE --base-url REVISION_URL --candidate-container-app-resource-id AZURE_ID --candidate-revision NAME --cases FILE --review-attestation FILE --review-signature FILE --out FILE --candidate-model-resource-id AZURE_ID --candidate-deployment ID --grader-model-resource-id AZURE_ID --grader-deployment ID [--grader-key-env NAME]

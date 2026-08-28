@@ -72,11 +72,17 @@ public enum OperationExecutionState
     Completed,
 }
 
+/// <summary>Status values derived only at the multi-publisher operation boundary.</summary>
+public static class LegalOperationStatus
+{
+    public const string PartialResult = "partial_result";
+}
+
 public static class LegalOperationPolicy
 {
     public static LegalOutcome OutcomeForStatus(string status) => status switch
     {
-        McpStatus.Ok => LegalOutcome.Succeeded,
+        McpStatus.Ok or LegalOperationStatus.PartialResult => LegalOutcome.Succeeded,
         McpStatus.NoResult or McpStatus.NoChangesInPeriod => LegalOutcome.SucceededEmpty,
         McpStatus.ProfilesDiffer => LegalOutcome.NotComparable,
         McpStatus.AmbiguousVersion => LegalOutcome.NeedsClarification,
@@ -85,8 +91,9 @@ public static class LegalOperationPolicy
         McpStatus.NoVersionForDate or McpStatus.AnchorNotInVersion
             or McpStatus.NoProvisionHistory or McpStatus.TextNotAvailable
             or McpStatus.TextWithheld or McpStatus.NoCorpusMounted
-            or McpStatus.RetrievalModeUnavailable => LegalOutcome.NotAvailable,
-        _ => throw new InvalidDataException($"Unknown MCP legal status '{status}'."),
+            or McpStatus.RetrievalModeUnavailable
+            or McpStatus.FilterNotSupportedByIndex => LegalOutcome.NotAvailable,
+        _ => throw new InvalidDataException($"Unknown legal operation status '{status}'."),
     };
 
     public static LegalResultClass ResultClassFor(string tool) =>
@@ -160,10 +167,10 @@ public static class LegalOperationPolicy
         var statuses = ObservedStatuses(payload).ToArray();
         if (statuses.Length == 0) return declared;
 
-        var actual = DominantOutcome(statuses.Select(OutcomeForStatus));
+        var actual = OutcomeForStatus(StatusForResult(payload));
         if (actual != declared)
             throw new InvalidDataException(
-                $"Declared MCP status '{declaredStatus}' contradicts the result payload.");
+                $"Declared legal operation status '{declaredStatus}' contradicts the result payload.");
         return actual;
     }
 
@@ -173,9 +180,100 @@ public static class LegalOperationPolicy
         if (payload is JsonArray { Count: 0 }) return McpStatus.NoResult;
         var statuses = ObservedStatuses(payload).ToArray();
         if (statuses.Length == 0) return McpStatus.Ok;
+        if (statuses.Contains(McpStatus.FilterNotSupportedByIndex, StringComparer.Ordinal))
+        {
+            var supported = statuses
+                .Where(status => status != McpStatus.FilterNotSupportedByIndex)
+                .Select(OutcomeForStatus)
+                .ToArray();
+            if (supported.Length > 0
+                && DominantOutcome(supported) is LegalOutcome.Succeeded
+                    or LegalOutcome.SucceededEmpty)
+                return LegalOperationStatus.PartialResult;
+        }
         var outcome = DominantOutcome(statuses.Select(OutcomeForStatus));
         return statuses.First(status => OutcomeForStatus(status) == outcome);
     }
+
+    internal static string? StatusForPublisherResult(JsonObject result)
+    {
+        var value = result["envelope"]?["status"] ?? result["status"];
+        return value is JsonValue status && status.TryGetValue<string>(out var text)
+            ? text
+            : null;
+    }
+
+    internal static bool HasPublisherEnvelope(JsonObject result) =>
+        result["envelope"] is JsonObject envelope && envelope.ContainsKey("publisher");
+
+    internal static bool IsProvenSuccessfulPublisherResult(
+        JsonObject result,
+        string? tool = null)
+    {
+        var status = StatusForPublisherResult(result);
+        if (status is null) return false;
+        if (status == LegalOperationStatus.PartialResult) return false;
+        return OutcomeForStatus(status) switch
+        {
+            LegalOutcome.Succeeded => true,
+            LegalOutcome.SucceededEmpty => SuccessfulEmptyShapeIsValid(result, status, tool),
+            _ => false,
+        };
+    }
+
+    private static bool SuccessfulEmptyShapeIsValid(
+        JsonObject result,
+        string status,
+        string? tool)
+    {
+        if (status == McpStatus.NoChangesInPeriod)
+            return (tool is null or "changes_in_period")
+                   && EmptyArray(result, "changes")
+                   && ZeroOrAbsent(result, "works_changed")
+                   && ZeroOrAbsent(result, "new_versions");
+        if (status != McpStatus.NoResult) return false;
+
+        return tool switch
+        {
+            "search" => EmptyArray(result, "hits")
+                        && ZeroOrAbsent(result, "total_hits"),
+            "in_force_on" => EmptyArray(result, "works")
+                             && ZeroOrAbsent(result, "total_works_in_force"),
+            "cited_by" => EmptyArray(result, "citations")
+                          && ZeroOrAbsent(result, "citing_articles"),
+            "changes_in_period" => false,
+            _ => NoKnownEmptyShapeContradiction(result),
+        };
+    }
+
+    private static bool NoKnownEmptyShapeContradiction(JsonObject result)
+    {
+        var rowShapeObserved = false;
+        foreach (var field in new[] { "hits", "changes", "works", "citations" })
+        {
+            if (result[field] is null) continue;
+            rowShapeObserved = true;
+            if (!EmptyArray(result, field))
+                return false;
+        }
+        foreach (var field in new[]
+                 {
+                     "total_hits", "works_changed", "new_versions",
+                     "total_works_in_force", "citing_articles",
+                 })
+            if (!ZeroOrAbsent(result, field))
+                return false;
+        return rowShapeObserved;
+    }
+
+    private static bool EmptyArray(JsonObject result, string field) =>
+        result[field] is JsonArray { Count: 0 };
+
+    private static bool ZeroOrAbsent(JsonObject result, string field) =>
+        result[field] is null
+        || result[field] is JsonValue value
+        && value.TryGetValue<int>(out var count)
+        && count == 0;
 
     private static LegalOutcome DominantOutcome(IEnumerable<LegalOutcome> values)
     {
@@ -199,14 +297,16 @@ public static class LegalOperationPolicy
         {
             foreach (var item in array.OfType<JsonObject>())
                 if ((item["envelope"]?["status"] ?? item["status"]) is JsonValue status
-                    && status.TryGetValue<string>(out var value))
+                    && status.TryGetValue<string>(out var value)
+                    && value != LegalOperationStatus.PartialResult)
                     yield return value;
             yield break;
         }
 
         if (payload is JsonObject itemObject
             && (itemObject["envelope"]?["status"] ?? itemObject["status"]) is JsonValue itemStatus
-            && itemStatus.TryGetValue<string>(out var itemValue))
+            && itemStatus.TryGetValue<string>(out var itemValue)
+            && itemValue != LegalOperationStatus.PartialResult)
             yield return itemValue;
     }
 }

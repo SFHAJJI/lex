@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Lex.Mcp;
 
 namespace Lex.Ask;
 
@@ -26,13 +27,15 @@ public sealed record UiEffect(
     // reader makes with a filter, and the assistant should be able to make the same move rather
     // than describe it in prose and leave the visitor to find the control.
     WorkspaceView? Workspace = null,
-    GapView? Gap = null)
+    GapView? Gap = null,
+    IReadOnlyList<PublisherLimitationView>? PublisherLimitations = null)
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsEmpty => Provision is null && Diff is null && History is null && Timeline is null
                            && Ranking is null && InForce is null && CitedBy is null
                            && Coverage is null && Verification is null
-                           && Workspace is null && Gap is null;
+                           && Workspace is null && Gap is null
+                           && (PublisherLimitations is null || PublisherLimitations.Count == 0);
 
     /// <summary>Merge the effects of every tool call in one turn into a single payload.</summary>
     public static UiEffect Merge(IEnumerable<UiEffect> parts)
@@ -67,6 +70,8 @@ public sealed record UiEffect(
             }
             else if (ranking is null)
                 workspace ??= p.Workspace;
+            var publisherLimitations = PublisherLimitationPolicy.Normalize(
+                (acc.PublisherLimitations ?? []).Concat(p.PublisherLimitations ?? []));
             acc = acc with
             {
                 Provision = acc.Provision ?? p.Provision,
@@ -80,6 +85,8 @@ public sealed record UiEffect(
                 Verification = acc.Verification ?? p.Verification,
                 Workspace = workspace,
                 Gap = acc.Gap ?? p.Gap,
+                PublisherLimitations = publisherLimitations.Count == 0
+                    ? null : publisherLimitations,
             };
         }
         return acc;
@@ -283,3 +290,90 @@ public sealed record InForceRow(string Work, string? Title, string? Kind, string
 /// <summary>An honest gap: what was asked for, and why Lex cannot show it.</summary>
 public sealed record GapView(string Status, string? Work, string? Date, string Explanation,
     IReadOnlyList<string> Available, IReadOnlyList<EvidenceContext>? Evidence = null);
+
+/// <summary>
+/// One publisher-specific capability refusal retained beside successful rows from another
+/// publisher. It is a disclosure attached to a primary view, never a replacement for that view.
+/// </summary>
+public sealed record PublisherLimitationView(
+    string Status,
+    string Tool,
+    string? Publisher,
+    string? Jurisdiction,
+    IReadOnlyList<string> UnsupportedFilters);
+
+internal static class PublisherLimitationPolicy
+{
+    private const int MaximumItems = 8;
+    private static readonly HashSet<string> GovernedTools = new(StringComparer.Ordinal)
+    {
+        "search", "changes_in_period", "in_force_on",
+    };
+    private static readonly HashSet<string> GovernedFilters = new(StringComparer.Ordinal)
+    {
+        "act_form", "binding_status", "domain", "hierarchy",
+    };
+
+    internal static IReadOnlyList<PublisherLimitationView> Normalize(
+        IEnumerable<PublisherLimitationView>? source)
+    {
+        if (source is null) return [];
+        var result = new List<PublisherLimitationView>(MaximumItems);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var item in source)
+        {
+            if (!string.Equals(item.Status, McpStatus.FilterNotSupportedByIndex,
+                    StringComparison.Ordinal)
+                || !GovernedTools.Contains(item.Tool))
+                continue;
+            var filters = (item.UnsupportedFilters ?? [])
+                .Where(GovernedFilters.Contains)
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+            var normalized = item with
+            {
+                Publisher = Identifier(item.Publisher),
+                Jurisdiction = Identifier(item.Jurisdiction),
+                UnsupportedFilters = filters,
+            };
+            var key = string.Join('\u001e', normalized.Status, normalized.Tool,
+                normalized.Publisher ?? "", normalized.Jurisdiction ?? "",
+                string.Join('\u001f', filters));
+            if (!seen.Add(key)) continue;
+            result.Add(normalized);
+            if (result.Count == MaximumItems) break;
+        }
+        return result;
+    }
+
+    internal static IReadOnlyList<PublisherLimitationView> FromResult(
+        string tool,
+        JsonNode? result)
+    {
+        if (result is not JsonArray array) return [];
+        return Normalize(array.OfType<JsonObject>().Where(item => string.Equals(
+                String(item["envelope"] as JsonObject, "status") ?? String(item, "status"),
+                McpStatus.FilterNotSupportedByIndex,
+                StringComparison.Ordinal))
+            .Select(item => new PublisherLimitationView(
+                McpStatus.FilterNotSupportedByIndex,
+                tool,
+                String(item["envelope"] as JsonObject, "publisher"),
+                String(item["envelope"] as JsonObject, "jurisdiction"),
+                (item["unsupported_filters"] as JsonArray)?.OfType<JsonValue>()
+                    .Select(value => value.TryGetValue<string>(out var filter) ? filter : null)
+                    .Where(value => value is { Length: > 0 })
+                    .Cast<string>()
+                    .ToArray() ?? [])));
+    }
+
+    private static string? String(JsonObject? value, string key) =>
+        value?[key] is JsonValue item && item.TryGetValue<string>(out var text) ? text : null;
+
+    private static string? Identifier(string? value) =>
+        value is { Length: > 0 and <= 64 }
+        && value.All(character => char.IsAsciiLetterOrDigit(character)
+                                  || character is '-' or '_')
+            ? value : null;
+}

@@ -22,12 +22,26 @@ internal sealed class AgentEvidenceLedger
         JsonObject? arguments = null)
     {
         var call = ++_call;
+        var ordinal = 0;
+        if (string.Equals(status, LegalOperationStatus.PartialResult, StringComparison.Ordinal))
+        {
+            var limitations = PublisherLimitationPolicy.FromResult(tool, result);
+            if (limitations.Count > 0)
+                Add(tool, call, ordinal++, AgentEvidenceKind.Coverage,
+                    null, null, null, null, null, true, null,
+                    PublisherLimitationPayload(LegalOperationStatus.PartialResult, limitations));
+        }
         if (status is not null && LegalOperationPolicy.OutcomeForStatus(status) is
             LegalOutcome.NeedsClarification or LegalOutcome.NotAvailable
                 or LegalOutcome.NotComparable or LegalOutcome.NotFound)
         {
+            var limitations = PublisherLimitationPolicy.FromResult(tool, result);
+            var payload = status == McpStatus.FilterNotSupportedByIndex
+                          && limitations.Count > 0
+                ? PublisherLimitationPayload(status, limitations)
+                : EvidencePayload(result, status);
             Add(tool, call, 0, AgentEvidenceKind.Coverage, null, null, null, null, null, true,
-                null, EvidencePayload(result, status));
+                null, payload);
             return;
         }
 
@@ -50,7 +64,6 @@ internal sealed class AgentEvidenceLedger
         };
         if (kind is null) return;
 
-        var ordinal = 0;
         if (kind == AgentEvidenceKind.Ranking && result is not null)
             foreach (var aggregate in RankingAggregates(result))
                 Add(tool, call, ordinal++, AgentEvidenceKind.Ranking, null, null, null, null, null,
@@ -161,6 +174,23 @@ internal sealed class AgentEvidenceLedger
         return json.Length <= 8_000 ? json : json[..8_000];
     }
 
+    private static string PublisherLimitationPayload(
+        string status,
+        IReadOnlyList<PublisherLimitationView> limitations) => new JsonObject
+    {
+        ["status"] = status,
+        ["publisher_limitations"] = new JsonArray(limitations.Select(item =>
+            (JsonNode)new JsonObject
+            {
+                ["status"] = item.Status,
+                ["tool"] = item.Tool,
+                ["publisher"] = item.Publisher,
+                ["jurisdiction"] = item.Jurisdiction,
+                ["unsupported_filters"] = new JsonArray(item.UnsupportedFilters
+                    .Select(filter => (JsonNode)filter).ToArray()),
+            }).ToArray()),
+    }.ToJsonString();
+
     /// <summary>
     /// The verified comparison, carried as the typed fields rather than the whole tool response.
     ///
@@ -219,14 +249,20 @@ internal sealed class AgentEvidenceLedger
 
     private static IEnumerable<(string Publisher, JsonObject Payload)> RankingAggregates(JsonNode result)
     {
-        var entries = result switch
+        var entries = (result switch
         {
             JsonArray array => array.OfType<JsonObject>(),
             JsonObject item => [item],
             _ => [],
-        };
+        }).ToArray();
+        var hasTypedPublisherStatus = entries.Any(entry =>
+            LegalOperationPolicy.StatusForPublisherResult(entry) is not null);
         foreach (var entry in entries)
         {
+            if (hasTypedPublisherStatus
+                && !LegalOperationPolicy.IsProvenSuccessfulPublisherResult(
+                    entry, "changes_in_period"))
+                continue;
             var aggregate = new JsonObject();
             foreach (var key in new[]
                      {

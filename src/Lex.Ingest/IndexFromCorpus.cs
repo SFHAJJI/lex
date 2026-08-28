@@ -17,8 +17,13 @@ public static class IndexFromCorpus
     public static void Build(string corpusRoot, string? articlesRoot, string dbPath, string? signingKeyPem,
                              DateTimeOffset now, SemanticBuildOptions? semantic = null,
                              string? codeCommit = null,
-                             string? articlesCommit = null, string? corpusCommit = null)
+                             string? articlesCommit = null, string? corpusCommit = null,
+                             CapabilityBuildExpectation? capabilityExpectation = null,
+                             string? capabilityPolicyPath = null)
     {
+        if (capabilityExpectation is not null && capabilityPolicyPath is not null)
+            throw new ArgumentException(
+                "Supply either a capability expectation or a capability policy path, not both.");
         if ((articlesRoot is null) != (articlesCommit is null))
             throw new InvalidDataException(
                 "The derived articles path and its full Git commit must be supplied together.");
@@ -50,6 +55,8 @@ public static class IndexFromCorpus
             manifest.SourceConfigurationKind, manifest.SourceConfigurationSha256);
         var builderCodeCommit = NormalizeCodeCommit(codeCommit);
         var publisherId = manifest.Publisher["id"];
+        capabilityExpectation ??= capabilityPolicyPath is null
+            ? null : CapabilityPolicy.Load(capabilityPolicyPath, publisherId);
         DerivationGeneration.Entry? generation = null;
         string? generationSha256 = null;
         if (articlesRoot is not null)
@@ -399,7 +406,7 @@ public static class IndexFromCorpus
         stamp["indexed_provisions"] = provisions.Count.ToString();
         stamp["excluded_empty_provisions"] = excludedEmptyProvisions.ToString();
         IndexBuilder.Build(dbPath, stamp, docs, provisions, events, observations, signingKeyPem,
-            provisionStates, anchorEventRows, semantic);
+            provisionStates, anchorEventRows, semantic, capabilityExpectation);
         Console.Error.WriteLine($"  [index] {dbPath}: {docs.Count} rows, {provisions.Count} provisions, {provisionStates.Count} states, {anchorEventRows.Count} anchor events, signed={(signingKeyPem is not null)}");
     }
 

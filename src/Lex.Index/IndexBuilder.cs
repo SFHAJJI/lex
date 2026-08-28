@@ -146,9 +146,22 @@ public static class IndexBuilder
         string? signingKeyPem,
         IEnumerable<ProvisionStateRow>? provisionStates = null,
         IEnumerable<AnchorEventRow>? anchorEvents = null,
-        SemanticBuildOptions? semantic = null)
+        SemanticBuildOptions? semantic = null,
+        CapabilityBuildExpectation? capabilityExpectation = null)
     {
         var docRows = docs.ToList();
+        var collection = stampValues.GetValueOrDefault("collection")
+            ?? throw new InvalidDataException("Index collection is required.");
+        var capabilityRows = CapabilityManifest.Build(docRows);
+        CapabilityManifest.ValidateExpectation(collection, capabilityRows, capabilityExpectation);
+        var capabilityDigest = CapabilityManifest.Digest(capabilityRows);
+        var capabilityUnsupported = CapabilityManifest.GovernedFilters
+            .Where(filter => !capabilityRows.Any(row => row.Filter == filter
+                && row.Language == CapabilityManifest.AllLanguages
+                && row.TimeScope == CapabilityManifest.AllVersions && row.Supported))
+            .Order(StringComparer.Ordinal).ToArray();
+        var capabilityPolicyDigest = capabilityExpectation?.PolicySha256
+            ?? Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes("unchecked\n")));
         var provisionRows = provisions.ToList();
         var blankProvision = provisionRows.FirstOrDefault(
             provision => string.IsNullOrWhiteSpace(provision.TextMd));
@@ -352,6 +365,11 @@ public static class IndexBuilder
             CREATE TABLE obs_history(key TEXT, language TEXT, expr_valid_from TEXT,
               sha256 TEXT, source_uri TEXT, observed_from TEXT, observed_to TEXT);
             CREATE INDEX ix_obs_key ON obs_history(key, language, expr_valid_from);
+            CREATE TABLE capability_manifest(
+              filter_name TEXT NOT NULL, language TEXT NOT NULL, time_scope TEXT NOT NULL,
+              period_start TEXT NOT NULL, period_end TEXT NOT NULL,
+              eligible_rows INTEGER NOT NULL, populated_rows INTEGER NOT NULL,
+              PRIMARY KEY(filter_name,language,time_scope,period_start,period_end));
             CREATE TABLE work_records(
               work_id INTEGER PRIMARY KEY,
               group_key TEXT NOT NULL, language TEXT NOT NULL,
@@ -402,7 +420,8 @@ public static class IndexBuilder
         {
             var databaseWatch = System.Diagnostics.Stopwatch.StartNew();
             var databaseTotal = (long)docRows.Count + provisionRows.Count + provisionStateRows.Count
-                + anchorEventRows.Count + eventRows.Count + observationRows.Count;
+                + anchorEventRows.Count + eventRows.Count + observationRows.Count
+                + capabilityRows.Count;
             long databaseCompleted = 0;
             long lastDatabasePercent = -1;
             var lastDatabaseReport = TimeSpan.Zero;
@@ -452,6 +471,30 @@ public static class IndexBuilder
                     insRole.Parameters["$role"].Value = role;
                     insRole.ExecuteNonQuery();
                 }
+                DatabaseItemCompleted();
+            }
+
+            var insCapability = conn.CreateCommand();
+            insCapability.CommandText = """
+                INSERT INTO capability_manifest(
+                  filter_name,language,time_scope,period_start,period_end,
+                  eligible_rows,populated_rows)
+                VALUES ($filter,$language,$scope,$start,$end,$eligible,$populated)
+                """;
+            foreach (var parameter in new[] { "$filter", "$language", "$scope", "$start", "$end" })
+                insCapability.Parameters.Add(new SqliteParameter(parameter, SqliteType.Text));
+            insCapability.Parameters.Add(new SqliteParameter("$eligible", SqliteType.Integer));
+            insCapability.Parameters.Add(new SqliteParameter("$populated", SqliteType.Integer));
+            foreach (var row in capabilityRows)
+            {
+                Set(insCapability, "$filter", row.Filter);
+                Set(insCapability, "$language", row.Language);
+                Set(insCapability, "$scope", row.TimeScope);
+                Set(insCapability, "$start", row.PeriodStart ?? "");
+                Set(insCapability, "$end", row.PeriodEnd ?? "");
+                insCapability.Parameters["$eligible"].Value = row.EligibleRows;
+                insCapability.Parameters["$populated"].Value = row.PopulatedRows;
+                insCapability.ExecuteNonQuery();
                 DatabaseItemCompleted();
             }
 
@@ -646,6 +689,13 @@ public static class IndexBuilder
                 ["algorithm"] = StampSigner.Algorithm,
                 ["content_digest"] = ContentDigest(conn, docRows, provisionRows),
                 ["work_catalog_version"] = "3",
+                ["capability_manifest_schema"] = CapabilityManifest.Schema,
+                ["capability_manifest_rows"] = capabilityRows.Count.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture),
+                ["capability_manifest_sha256"] = capabilityDigest,
+                ["capability_manifest_unsupported_filters"] = string.Join(',', capabilityUnsupported),
+                ["capability_policy_tier"] = capabilityExpectation?.Tier ?? "unchecked",
+                ["capability_policy_sha256"] = capabilityPolicyDigest,
             };
             using (var workCounts = conn.CreateCommand())
             {

@@ -1711,6 +1711,8 @@ public sealed class OperationPolicyTests
         { McpStatus.TextWithheld, LegalOutcome.NotAvailable },
         { McpStatus.NoCorpusMounted, LegalOutcome.NotAvailable },
         { McpStatus.RetrievalModeUnavailable, LegalOutcome.NotAvailable },
+        { McpStatus.FilterNotSupportedByIndex, LegalOutcome.NotAvailable },
+        { LegalOperationStatus.PartialResult, LegalOutcome.Succeeded },
     };
 
     [Theory]
@@ -1724,7 +1726,8 @@ public sealed class OperationPolicyTests
     [Fact]
     public void The_status_table_is_exhaustive_and_rejects_removed_or_invented_values()
     {
-        Assert.Equal(McpStatus.All.Order(), StatusCases.Select(item => (string)item[0]).Order());
+        Assert.Equal(McpStatus.All.Append(LegalOperationStatus.PartialResult).Order(),
+            StatusCases.Select(item => (string)item[0]).Order());
         Assert.Throws<InvalidDataException>(() =>
             LegalOperationPolicy.OutcomeForStatus("outside_observed_window"));
         Assert.Throws<InvalidDataException>(() =>
@@ -1858,6 +1861,7 @@ public sealed class OperationPolicyTests
         Assert.Equal("2.0.0", McpSdkBridge.ServerVersion);
         Assert.DoesNotContain("outside_observed_window", McpSdkBridge.ServerInstructions);
         Assert.Contains(McpStatus.RetrievalModeUnavailable, McpSdkBridge.ServerInstructions);
+        Assert.Contains(McpStatus.FilterNotSupportedByIndex, McpSdkBridge.ServerInstructions);
     }
 
     [Fact]
@@ -2017,6 +2021,1153 @@ public sealed class OperationPolicyTests
 
         Assert.Equal(McpStatus.RetrievalModeUnavailable, effect.Gap?.Status);
         Assert.Contains("signed retrieval benchmark", effect.Gap?.Explanation);
+    }
+
+    [Fact]
+    public void Unsupported_index_filter_is_an_explicit_user_visible_gap()
+    {
+        var effect = UiMapper.From("search", new JsonObject
+        {
+            ["query"] = "synthetic",
+            ["domain"] = "finance",
+        }, new JsonArray(new JsonObject
+        {
+            ["envelope"] = new JsonObject
+            {
+                ["publisher"] = "lu-legilux",
+                ["status"] = McpStatus.FilterNotSupportedByIndex,
+            },
+            ["unsupported_filters"] = new JsonArray("domain"),
+            ["hits"] = new JsonArray(),
+        }), "fr");
+
+        Assert.Equal(McpStatus.FilterNotSupportedByIndex, effect.Gap?.Status);
+        Assert.Contains("filtre", effect.Gap?.Explanation, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Mixed_publisher_filter_refusal_preserves_supported_search_as_typed_partial_result()
+    {
+        var payload = new JsonArray(
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject
+                {
+                    ["publisher"] = "lu-legilux",
+                    ["jurisdiction"] = "LU",
+                    ["status"] = McpStatus.FilterNotSupportedByIndex,
+                },
+                ["unsupported_filters"] = new JsonArray("domain"),
+                ["hits"] = new JsonArray(),
+            },
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject
+                {
+                    ["publisher"] = "eu-eurlex",
+                    ["jurisdiction"] = "EU",
+                    ["status"] = McpStatus.Ok,
+                },
+                ["hits"] = new JsonArray(new JsonObject
+                {
+                    ["lex_id"] = "eu-eurlex:32016r0679:2016-05-04",
+                    ["anchor"] = "art_1",
+                    ["title"] = "Synthetic held result",
+                }),
+            });
+
+        Assert.Equal(LegalOperationStatus.PartialResult,
+            LegalOperationPolicy.StatusForResult(payload));
+        Assert.Equal(LegalOutcome.Succeeded,
+            LegalOperationPolicy.OutcomeForResult(LegalOperationStatus.PartialResult, payload));
+        var effect = UiMapper.From("search", new JsonObject
+        {
+            ["query"] = "synthetic",
+            ["domain"] = "finance",
+        }, payload);
+
+        Assert.Null(effect.Gap);
+        Assert.Equal("eu-eurlex:32016r0679:2016-05-04",
+            Assert.Single(effect.Workspace?.Results ?? []).LexId);
+        var limitation = Assert.Single(effect.PublisherLimitations ?? []);
+        Assert.Equal(McpStatus.FilterNotSupportedByIndex, limitation.Status);
+        Assert.Equal("lu-legilux", limitation.Publisher);
+        Assert.Equal("LU", limitation.Jurisdiction);
+        Assert.Equal(["domain"], limitation.UnsupportedFilters);
+
+        var serialized = JsonSerializer.Serialize(effect);
+        Assert.DoesNotContain("explanation", serialized, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Mixed_publisher_summaries_preserve_supported_documents_for_synthesis()
+    {
+        static JsonObject Refusal() => new()
+        {
+            ["envelope"] = new JsonObject
+            {
+                ["publisher"] = "lu-legilux",
+                ["jurisdiction"] = "LU",
+                ["status"] = McpStatus.FilterNotSupportedByIndex,
+            },
+            ["unsupported_filters"] = new JsonArray("domain"),
+        };
+
+        static JsonObject Supported(string tool) => tool switch
+        {
+            "search" => new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["status"] = McpStatus.Ok },
+                ["hits"] = new JsonArray(new JsonObject
+                {
+                    ["lex_id"] = "eu-eurlex:32016r0679:2016-05-04",
+                    ["anchor"] = "art_1",
+                    ["snippet"] = "Bounded publisher excerpt",
+                }),
+            },
+            "changes_in_period" => new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["status"] = McpStatus.Ok },
+                ["changes"] = new JsonArray(new JsonObject
+                {
+                    ["work"] = "eu-eurlex:32016r0679",
+                    ["versions_in_period"] = 1,
+                    ["versions_total"] = 2,
+                    ["first_change"] = "2024-01-01",
+                    ["last_change"] = "2024-01-01",
+                }),
+            },
+            "in_force_on" => new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["status"] = McpStatus.Ok },
+                ["works"] = new JsonArray(new JsonObject
+                {
+                    ["lex_id"] = "eu-eurlex:32016r0679:2016-05-04",
+                    ["valid_from"] = "2016-05-04",
+                }),
+            },
+            _ => throw new ArgumentOutOfRangeException(nameof(tool)),
+        };
+
+        static (string? Status, JsonArray Docs) Summarize(JsonNode payload)
+        {
+            var method = typeof(AskService).GetMethod("Summarize",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
+                ?? throw new InvalidOperationException("AskService.Summarize was not found.");
+            var value = (ValueTuple<string?, JsonArray>)method.Invoke(null, [payload])!;
+            return (value.Item1, value.Item2);
+        }
+
+        foreach (var tool in new[] { "search", "changes_in_period", "in_force_on" })
+        {
+            var payload = new JsonArray(Refusal(), Supported(tool));
+            var summary = Summarize(payload);
+
+            Assert.Equal(LegalOperationStatus.PartialResult, summary.Status);
+            Assert.NotEmpty(summary.Docs);
+            var ledger = new AgentEvidenceLedger();
+            ledger.Observe(tool, summary.Status, summary.Docs, payload, new JsonObject());
+            var expectedKind = tool switch
+            {
+                "search" => AgentEvidenceKind.Pointer,
+                "changes_in_period" => AgentEvidenceKind.Ranking,
+                "in_force_on" => AgentEvidenceKind.Timeline,
+                _ => throw new ArgumentOutOfRangeException(nameof(tool)),
+            };
+            Assert.Contains(ledger.Evidence, item => item.Kind == expectedKind);
+            Assert.Contains(ledger.Evidence, item => item is
+            {
+                Kind: AgentEvidenceKind.Coverage,
+                RequiresCoverageDisclosure: true,
+                Excerpt: not null,
+            } && item.Excerpt.Contains("publisher_limitations", StringComparison.Ordinal));
+            if (tool == "changes_in_period")
+                Assert.DoesNotContain(ledger.Evidence, item => item.Kind == AgentEvidenceKind.Ranking
+                    && item.Title?.Contains("lu-legilux", StringComparison.Ordinal) == true);
+        }
+    }
+
+    [Fact]
+    public void Partial_summaries_exclude_rows_carried_by_refused_publishers()
+    {
+        static JsonObject Refusal(string tool)
+        {
+            var refusal = new JsonObject
+            {
+                ["envelope"] = new JsonObject
+                {
+                    ["publisher"] = "lu-legilux",
+                    ["jurisdiction"] = "LU",
+                    ["status"] = McpStatus.FilterNotSupportedByIndex,
+                },
+                ["unsupported_filters"] = new JsonArray("domain"),
+            };
+            refusal[tool switch
+            {
+                "search" => "hits",
+                "changes_in_period" => "changes",
+                "in_force_on" => "works",
+                _ => throw new ArgumentOutOfRangeException(nameof(tool)),
+            }] = new JsonArray(tool switch
+            {
+                "search" => new JsonObject
+                {
+                    ["lex_id"] = "lu-legilux:refused:2024-01-01",
+                    ["anchor"] = "art_1",
+                    ["snippet"] = "stale row from a refused publisher",
+                },
+                "changes_in_period" => new JsonObject
+                {
+                    ["work"] = "lu-legilux:refused",
+                    ["versions_in_period"] = 1,
+                    ["versions_total"] = 1,
+                    ["first_change"] = "2024-01-01",
+                    ["last_change"] = "2024-01-01",
+                },
+                "in_force_on" => new JsonObject
+                {
+                    ["lex_id"] = "lu-legilux:refused:2024-01-01",
+                    ["valid_from"] = "2024-01-01",
+                },
+                _ => throw new ArgumentOutOfRangeException(nameof(tool)),
+            });
+            return refusal;
+        }
+
+        static JsonObject Supported(string tool) => tool switch
+        {
+            "search" => new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["status"] = McpStatus.Ok },
+                ["hits"] = new JsonArray(new JsonObject
+                {
+                    ["lex_id"] = "eu-eurlex:supported:2024-01-01",
+                    ["anchor"] = "art_1",
+                    ["snippet"] = "supported row",
+                }),
+            },
+            "changes_in_period" => new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["status"] = McpStatus.Ok },
+                ["changes"] = new JsonArray(new JsonObject
+                {
+                    ["work"] = "eu-eurlex:supported",
+                    ["versions_in_period"] = 1,
+                    ["versions_total"] = 1,
+                    ["first_change"] = "2024-01-01",
+                    ["last_change"] = "2024-01-01",
+                }),
+            },
+            "in_force_on" => new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["status"] = McpStatus.Ok },
+                ["works"] = new JsonArray(new JsonObject
+                {
+                    ["lex_id"] = "eu-eurlex:supported:2024-01-01",
+                    ["valid_from"] = "2024-01-01",
+                }),
+            },
+            _ => throw new ArgumentOutOfRangeException(nameof(tool)),
+        };
+
+        static (string? Status, JsonArray Docs) Summarize(JsonNode payload)
+        {
+            var method = typeof(AskService).GetMethod("Summarize",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
+                ?? throw new InvalidOperationException("AskService.Summarize was not found.");
+            var value = (ValueTuple<string?, JsonArray>)method.Invoke(null, [payload])!;
+            return (value.Item1, value.Item2);
+        }
+
+        foreach (var tool in new[] { "search", "changes_in_period", "in_force_on" })
+        {
+            var payload = new JsonArray(Refusal(tool), Supported(tool));
+            var summary = Summarize(payload);
+
+            Assert.Equal(LegalOperationStatus.PartialResult, summary.Status);
+            Assert.Contains(summary.Docs.OfType<JsonObject>(), item =>
+                item["lex_id"]?.GetValue<string>()?.StartsWith(
+                    "eu-eurlex:supported", StringComparison.Ordinal) == true);
+            Assert.DoesNotContain(summary.Docs.OfType<JsonObject>(), item =>
+                item["lex_id"]?.GetValue<string>()?.StartsWith(
+                    "lu-legilux:refused", StringComparison.Ordinal) == true);
+
+            var ledger = new AgentEvidenceLedger();
+            ledger.Observe(tool, summary.Status, summary.Docs, payload, new JsonObject());
+            Assert.DoesNotContain(ledger.Evidence, item =>
+                string.Equals(item.Work, "lu-legilux:refused", StringComparison.Ordinal));
+        }
+    }
+
+    [Fact]
+    public void Refusal_with_untyped_companion_remains_full_gap_and_untyped_rows_never_join_partial()
+    {
+        static JsonObject Refusal() => new()
+        {
+            ["envelope"] = new JsonObject
+            {
+                ["publisher"] = "lu-legilux",
+                ["jurisdiction"] = "LU",
+                ["status"] = McpStatus.FilterNotSupportedByIndex,
+            },
+            ["unsupported_filters"] = new JsonArray("domain"),
+            ["hits"] = new JsonArray(),
+        };
+
+        var refusalWithUntypedEmpty = new JsonArray(Refusal(), new JsonObject
+        {
+            ["hits"] = new JsonArray(),
+        });
+        Assert.Equal(McpStatus.FilterNotSupportedByIndex,
+            LegalOperationPolicy.StatusForResult(refusalWithUntypedEmpty));
+
+        var refused = UiMapper.From("search", new JsonObject
+        {
+            ["query"] = "synthetic",
+            ["domain"] = "finance",
+        }, refusalWithUntypedEmpty);
+
+        Assert.Equal(McpStatus.FilterNotSupportedByIndex, refused.Gap?.Status);
+        Assert.Null(refused.Workspace);
+        Assert.Null(refused.PublisherLimitations);
+
+        var genuinePartial = new JsonArray(
+            Refusal(),
+            new JsonObject
+            {
+                ["hits"] = new JsonArray(new JsonObject
+                {
+                    ["lex_id"] = "untyped:must-not-enter:2024-01-01",
+                    ["anchor"] = "art_1",
+                }),
+            },
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["status"] = McpStatus.Ok },
+                ["hits"] = new JsonArray(new JsonObject
+                {
+                    ["lex_id"] = "eu-eurlex:supported:2024-01-01",
+                    ["anchor"] = "art_1",
+                }),
+            });
+        Assert.Equal(LegalOperationStatus.PartialResult,
+            LegalOperationPolicy.StatusForResult(genuinePartial));
+
+        var partial = UiMapper.From("search", new JsonObject
+        {
+            ["query"] = "synthetic",
+            ["domain"] = "finance",
+        }, genuinePartial);
+
+        Assert.Equal("eu-eurlex:supported:2024-01-01",
+            Assert.Single(partial.Workspace?.Results ?? []).LexId);
+        Assert.Single(partial.PublisherLimitations ?? []);
+    }
+
+    [Fact]
+    public void Lone_partial_result_publisher_cannot_reach_search_ui()
+    {
+        static JsonObject PublisherResult() => new()
+        {
+            ["envelope"] = new JsonObject
+            {
+                ["publisher"] = "unproved-publisher",
+                ["status"] = LegalOperationStatus.PartialResult,
+            },
+            ["hits"] = new JsonArray(new JsonObject
+            {
+                ["lex_id"] = "unproved:partial:2024-01-01",
+                ["anchor"] = "art_1",
+                ["snippet"] = "must never become a UI fact",
+            }),
+        };
+
+        foreach (var aggregate in new[] { false, true })
+        {
+            var publisherResult = PublisherResult();
+            Assert.False(LegalOperationPolicy.IsProvenSuccessfulPublisherResult(
+                publisherResult, "search"));
+            JsonNode payload = aggregate
+                ? new JsonArray(publisherResult)
+                : publisherResult;
+            var arguments = new JsonObject { ["query"] = "synthetic" };
+
+            var effect = UiMapper.From("search", arguments, payload);
+
+            Assert.Empty(effect.Workspace?.Results ?? []);
+            var operation = RequestedOperation.CreatePlanned(
+                $"req:lone-partial:{aggregate}", 0, "search", arguments);
+            var execution = new OperationExecution(operation)
+                .Complete(LegalOperationStatus.PartialResult, payload);
+            var reply = OperationAnswerPolicy.Render("en", [execution], [effect]);
+            Assert.DoesNotContain("unproved:partial", reply, StringComparison.Ordinal);
+            Assert.DoesNotContain("must never become a UI fact", reply, StringComparison.Ordinal);
+            Assert.DoesNotContain("Lex found 1", reply, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void Publisher_shaped_untyped_search_results_cannot_reach_ui_or_summaries()
+    {
+        static (string? Status, JsonArray Docs) Summarize(JsonNode payload)
+        {
+            var method = typeof(AskService).GetMethod("Summarize",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
+                ?? throw new InvalidOperationException("AskService.Summarize was not found.");
+            var value = (ValueTuple<string?, JsonArray>)method.Invoke(null, [payload])!;
+            return (value.Item1, value.Item2);
+        }
+
+        var statusShapes = new (string Name, Func<JsonNode?> Create)[]
+        {
+            ("missing", () => null),
+            ("numeric", () => JsonValue.Create(42)),
+            ("boolean", () => JsonValue.Create(true)),
+            ("array", () => new JsonArray(McpStatus.Ok)),
+            ("object", () => new JsonObject { ["value"] = McpStatus.Ok }),
+        };
+
+        foreach (var (name, createStatus) in statusShapes)
+        foreach (var aggregate in new[] { false, true })
+        {
+            var envelope = new JsonObject { ["publisher"] = "unproved-publisher" };
+            if (createStatus() is { } status)
+                envelope["status"] = status;
+            var publisherResult = new JsonObject
+            {
+                ["envelope"] = envelope,
+                ["hits"] = new JsonArray(new JsonObject
+                {
+                    ["lex_id"] = $"unproved:{name}:2024-01-01",
+                    ["anchor"] = "art_1",
+                    ["snippet"] = $"{name} status must never become synthesis evidence",
+                }),
+            };
+            Assert.False(LegalOperationPolicy.IsProvenSuccessfulPublisherResult(
+                publisherResult, "search"));
+            JsonNode payload = aggregate
+                ? new JsonArray(publisherResult)
+                : publisherResult;
+
+            var effect = UiMapper.From("search",
+                new JsonObject { ["query"] = "synthetic" }, payload);
+            var summary = Summarize(payload);
+
+            Assert.Empty(effect.Workspace?.Results ?? []);
+            Assert.DoesNotContain($"unproved:{name}", JsonSerializer.Serialize(effect),
+                StringComparison.Ordinal);
+            Assert.Empty(summary.Docs);
+        }
+    }
+
+    [Fact]
+    public void Full_refusal_ignores_statusless_and_numeric_status_search_hits()
+    {
+        static JsonObject Refusal() => new()
+        {
+            ["envelope"] = new JsonObject
+            {
+                ["publisher"] = "lu-legilux",
+                ["jurisdiction"] = "LU",
+                ["status"] = McpStatus.FilterNotSupportedByIndex,
+            },
+            ["unsupported_filters"] = new JsonArray("domain"),
+            ["hits"] = new JsonArray(),
+        };
+
+        static (string? Status, JsonArray Docs) Summarize(JsonNode payload)
+        {
+            var method = typeof(AskService).GetMethod("Summarize",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
+                ?? throw new InvalidOperationException("AskService.Summarize was not found.");
+            var value = (ValueTuple<string?, JsonArray>)method.Invoke(null, [payload])!;
+            return (value.Item1, value.Item2);
+        }
+
+        foreach (var companionStatus in new JsonNode?[]
+                 {
+                     null, JsonValue.Create(42), JsonValue.Create(LegalOperationStatus.PartialResult),
+                 })
+        foreach (var reverse in new[] { false, true })
+        {
+            var companion = new JsonObject
+            {
+                ["hits"] = new JsonArray(new JsonObject
+                {
+                    ["lex_id"] = "untyped:must-not-answer:2024-01-01",
+                    ["anchor"] = "art_1",
+                }),
+            };
+            if (companionStatus is not null)
+                companion["envelope"] = new JsonObject
+                {
+                    ["status"] = companionStatus.DeepClone(),
+                };
+            var payload = reverse
+                ? new JsonArray(companion, Refusal())
+                : new JsonArray(Refusal(), companion);
+            var arguments = new JsonObject
+            {
+                ["query"] = "synthetic",
+                ["domain"] = "finance",
+            };
+
+            Assert.Equal(McpStatus.FilterNotSupportedByIndex,
+                LegalOperationPolicy.StatusForResult(payload));
+            var effect = UiMapper.From("search", arguments, payload);
+            Assert.Equal(McpStatus.FilterNotSupportedByIndex, effect.Gap?.Status);
+            Assert.Null(effect.Workspace);
+            Assert.Null(effect.PublisherLimitations);
+
+            var summary = Summarize(payload);
+            Assert.Equal(McpStatus.FilterNotSupportedByIndex, summary.Status);
+            Assert.Empty(summary.Docs);
+
+            var operation = RequestedOperation.CreatePlanned(
+                $"req:full-refusal:{reverse}:{companionStatus is not null}", 0,
+                "search", arguments);
+            var execution = new OperationExecution(operation)
+                .Complete(McpStatus.FilterNotSupportedByIndex, payload);
+            var reply = OperationAnswerPolicy.Render("en", [execution], [effect]);
+            Assert.DoesNotContain("Lex found 1", reply, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void Full_refusal_ledger_stores_only_typed_facts_not_rejected_companion_rows()
+    {
+        static (string? Status, JsonArray Docs) Summarize(JsonNode payload)
+        {
+            var method = typeof(AskService).GetMethod("Summarize",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
+                ?? throw new InvalidOperationException("AskService.Summarize was not found.");
+            var value = (ValueTuple<string?, JsonArray>)method.Invoke(null, [payload])!;
+            return (value.Item1, value.Item2);
+        }
+
+        static string RowField(string tool) => tool switch
+        {
+            "search" => "hits",
+            "changes_in_period" => "changes",
+            "in_force_on" => "works",
+            _ => throw new ArgumentOutOfRangeException(nameof(tool)),
+        };
+
+        static JsonObject Row(string tool, string marker) => tool switch
+        {
+            "search" => new JsonObject
+            {
+                ["lex_id"] = $"unproved:{marker}:2024-01-01",
+                ["anchor"] = "art_1",
+                ["snippet"] = marker,
+            },
+            "changes_in_period" => new JsonObject
+            {
+                ["work"] = $"unproved:{marker}",
+                ["versions_in_period"] = 1,
+                ["versions_total"] = 1,
+                ["title"] = marker,
+            },
+            "in_force_on" => new JsonObject
+            {
+                ["lex_id"] = $"unproved:{marker}:2024-01-01",
+                ["valid_from"] = "2024-01-01",
+                ["title"] = marker,
+            },
+            _ => throw new ArgumentOutOfRangeException(nameof(tool)),
+        };
+
+        static JsonObject Refusal(string tool)
+        {
+            var result = new JsonObject
+            {
+                ["envelope"] = new JsonObject
+                {
+                    ["publisher"] = "refusing-publisher",
+                    ["jurisdiction"] = "LU",
+                    ["status"] = McpStatus.FilterNotSupportedByIndex,
+                },
+                ["unsupported_filters"] = new JsonArray("domain"),
+            };
+            result[RowField(tool)] = new JsonArray(Row(tool, "raw-refusal-row"));
+            return result;
+        }
+
+        static JsonObject Companion(string tool, JsonNode? status)
+        {
+            var envelope = new JsonObject { ["publisher"] = "unproved-publisher" };
+            if (status is not null)
+                envelope["status"] = status;
+            var result = new JsonObject { ["envelope"] = envelope };
+            result[RowField(tool)] = new JsonArray(Row(tool, "raw-rejected-companion"));
+            return result;
+        }
+
+        var companionStatuses = new (string Name, Func<JsonNode?> Create)[]
+        {
+            ("missing", () => null),
+            ("numeric", () => JsonValue.Create(42)),
+            ("partial", () => JsonValue.Create(LegalOperationStatus.PartialResult)),
+        };
+        var leaks = new List<string>();
+
+        foreach (var tool in new[] { "search", "changes_in_period", "in_force_on" })
+        foreach (var (name, createStatus) in companionStatuses)
+        foreach (var reverse in new[] { false, true })
+        {
+            var companion = Companion(tool, createStatus());
+            var payload = reverse
+                ? new JsonArray(companion, Refusal(tool))
+                : new JsonArray(Refusal(tool), companion);
+            var arguments = tool switch
+            {
+                "search" => new JsonObject { ["query"] = "synthetic", ["domain"] = "finance" },
+                "changes_in_period" => new JsonObject
+                {
+                    ["from_date"] = "2024-01-01",
+                    ["to_date"] = "2024-12-31",
+                    ["domain"] = "finance",
+                },
+                _ => new JsonObject { ["date"] = "2024-01-01", ["domain"] = "finance" },
+            };
+
+            Assert.Equal(McpStatus.FilterNotSupportedByIndex,
+                LegalOperationPolicy.StatusForResult(payload));
+            var effect = UiMapper.From(tool, arguments, payload);
+            Assert.Equal(McpStatus.FilterNotSupportedByIndex, effect.Gap?.Status);
+            Assert.Null(effect.Workspace);
+            Assert.Null(effect.Ranking);
+            Assert.Null(effect.InForce);
+
+            var summary = Summarize(payload);
+            Assert.Equal(McpStatus.FilterNotSupportedByIndex, summary.Status);
+            Assert.Empty(summary.Docs);
+            var ledger = new AgentEvidenceLedger();
+            ledger.Observe(tool, summary.Status, summary.Docs, payload, arguments);
+            var evidence = Assert.Single(ledger.Evidence);
+            Assert.Equal(AgentEvidenceKind.Coverage, evidence.Kind);
+            Assert.True(evidence.RequiresCoverageDisclosure);
+            var excerpt = Assert.IsType<string>(evidence.Excerpt);
+            var label = $"{tool}:{name}:{reverse}:synthesis";
+            if (excerpt.Contains("raw-rejected-companion", StringComparison.Ordinal)
+                || excerpt.Contains("raw-refusal-row", StringComparison.Ordinal))
+            {
+                leaks.Add(label);
+                continue;
+            }
+
+            var facts = JsonNode.Parse(excerpt) as JsonObject;
+            if (facts is null
+                || facts["status"]?.GetValue<string>() != McpStatus.FilterNotSupportedByIndex
+                || facts["publisher_limitations"] is not JsonArray limitations
+                || limitations.Count != 1)
+            {
+                leaks.Add(label);
+                continue;
+            }
+            var limitation = Assert.IsType<JsonObject>(limitations[0]);
+            Assert.Equal(McpStatus.FilterNotSupportedByIndex,
+                limitation["status"]?.GetValue<string>());
+            Assert.Equal(tool, limitation["tool"]?.GetValue<string>());
+            Assert.Equal("refusing-publisher", limitation["publisher"]?.GetValue<string>());
+            Assert.Equal("LU", limitation["jurisdiction"]?.GetValue<string>());
+            Assert.Equal("domain", Assert.Single(
+                Assert.IsType<JsonArray>(limitation["unsupported_filters"]))?.GetValue<string>());
+        }
+
+        Assert.Empty(leaks);
+    }
+
+    [Fact]
+    public void Contradictory_successful_empty_publishers_contribute_no_ui_or_synthesis_rows()
+    {
+        static JsonObject Refusal() => new()
+        {
+            ["envelope"] = new JsonObject
+            {
+                ["publisher"] = "lu-legilux",
+                ["jurisdiction"] = "LU",
+                ["status"] = McpStatus.FilterNotSupportedByIndex,
+            },
+            ["unsupported_filters"] = new JsonArray("domain"),
+        };
+
+        static (string? Status, JsonArray Docs) Summarize(JsonNode payload)
+        {
+            var method = typeof(AskService).GetMethod("Summarize",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
+                ?? throw new InvalidOperationException("AskService.Summarize was not found.");
+            var value = (ValueTuple<string?, JsonArray>)method.Invoke(null, [payload])!;
+            return (value.Item1, value.Item2);
+        }
+
+        static JsonObject Supported(string tool) => tool switch
+        {
+            "search" => new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["status"] = McpStatus.Ok },
+                ["hits"] = new JsonArray(new JsonObject
+                {
+                    ["lex_id"] = "eu-eurlex:supported-search:2024-01-01",
+                    ["anchor"] = "art_1",
+                }),
+            },
+            "changes_in_period" => new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["status"] = McpStatus.Ok },
+                ["works_changed"] = 1,
+                ["new_versions"] = 1,
+                ["changes"] = new JsonArray(new JsonObject
+                {
+                    ["work"] = "eu-eurlex:supported-period",
+                    ["versions_in_period"] = 1,
+                    ["versions_total"] = 1,
+                }),
+            },
+            "in_force_on" => new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["status"] = McpStatus.Ok },
+                ["total_works_in_force"] = 1,
+                ["works"] = new JsonArray(new JsonObject
+                {
+                    ["lex_id"] = "eu-eurlex:supported-force:2024-01-01",
+                    ["valid_from"] = "2024-01-01",
+                }),
+            },
+            _ => throw new ArgumentOutOfRangeException(nameof(tool)),
+        };
+
+        var attacks = new (string Tool, JsonObject Result)[]
+        {
+            ("search", new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["status"] = McpStatus.NoResult },
+                ["lex_id"] = "eu-eurlex:stale-without-row-shape:2024-01-01",
+                ["anchor"] = "art_1",
+            }),
+            ("search", new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["status"] = McpStatus.NoResult },
+                ["hits"] = new JsonArray(new JsonObject
+                {
+                    ["lex_id"] = "eu-eurlex:stale-search:2024-01-01",
+                    ["anchor"] = "art_1",
+                }),
+            }),
+            ("changes_in_period", new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["status"] = McpStatus.NoChangesInPeriod },
+                ["works_changed"] = 0,
+                ["new_versions"] = 0,
+                ["changes"] = new JsonArray(new JsonObject
+                {
+                    ["work"] = "eu-eurlex:stale-period",
+                    ["versions_in_period"] = 1,
+                    ["versions_total"] = 1,
+                }),
+            }),
+            ("changes_in_period", new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["status"] = McpStatus.NoChangesInPeriod },
+                ["works_changed"] = 1,
+                ["new_versions"] = 1,
+                ["changes"] = new JsonArray(),
+            }),
+            ("in_force_on", new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["status"] = McpStatus.NoResult },
+                ["total_works_in_force"] = 0,
+                ["works"] = new JsonArray(new JsonObject
+                {
+                    ["lex_id"] = "eu-eurlex:stale-force:2024-01-01",
+                    ["valid_from"] = "2024-01-01",
+                }),
+            }),
+            ("in_force_on", new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["status"] = McpStatus.NoResult },
+                ["total_works_in_force"] = 1,
+                ["works"] = new JsonArray(),
+            }),
+        };
+
+        foreach (var (tool, contradictory) in attacks)
+        foreach (var reverse in new[] { false, true })
+        {
+            var payload = reverse
+                ? new JsonArray(contradictory.DeepClone(), Refusal())
+                : new JsonArray(Refusal(), contradictory.DeepClone());
+            var arguments = tool switch
+            {
+                "search" => new JsonObject { ["query"] = "synthetic" },
+                "changes_in_period" => new JsonObject
+                {
+                    ["from_date"] = "2024-01-01",
+                    ["to_date"] = "2024-12-31",
+                },
+                _ => new JsonObject { ["date"] = "2024-01-01" },
+            };
+
+            Assert.Equal(LegalOperationStatus.PartialResult,
+                LegalOperationPolicy.StatusForResult(payload));
+            var effect = UiMapper.From(tool, arguments, payload);
+            Assert.Equal(McpStatus.FilterNotSupportedByIndex, effect.Gap?.Status);
+            Assert.Null(effect.Workspace);
+            Assert.Null(effect.Ranking);
+            Assert.Null(effect.InForce);
+            Assert.Null(effect.PublisherLimitations);
+
+            var summary = Summarize(payload);
+            Assert.Empty(summary.Docs);
+            var ledger = new AgentEvidenceLedger();
+            ledger.Observe(tool, summary.Status, summary.Docs, payload, arguments);
+            Assert.DoesNotContain(ledger.Evidence, item => item.Kind is
+                AgentEvidenceKind.Pointer or AgentEvidenceKind.Ranking or
+                AgentEvidenceKind.Timeline);
+
+            Assert.Throws<InvalidDataException>(() =>
+                UiMapper.From(tool, arguments, contradictory.DeepClone()));
+            Assert.Empty(Summarize(contradictory).Docs);
+
+            var supportedPayload = reverse
+                ? new JsonArray(Supported(tool), contradictory.DeepClone())
+                : new JsonArray(contradictory.DeepClone(), Supported(tool));
+            var supportedEffect = UiMapper.From(tool, arguments, supportedPayload);
+            Assert.Null(supportedEffect.Gap);
+            if (tool == "search")
+                Assert.Single(supportedEffect.Workspace?.Results ?? []);
+            if (tool == "changes_in_period")
+            {
+                Assert.Single(supportedEffect.Ranking?.Rows ?? []);
+                Assert.Equal(1, supportedEffect.Ranking?.WorksChanged);
+                Assert.Equal(1, supportedEffect.Ranking?.NewVersions);
+            }
+            if (tool == "in_force_on")
+            {
+                Assert.Single(supportedEffect.InForce?.Rows ?? []);
+                Assert.Equal(1, supportedEffect.InForce?.Total);
+            }
+            Assert.Single(Summarize(supportedPayload).Docs);
+        }
+    }
+
+    [Fact]
+    public void Valid_successful_empty_publishers_remain_partial_in_either_order()
+    {
+        static JsonObject Refusal() => new()
+        {
+            ["envelope"] = new JsonObject
+            {
+                ["publisher"] = "lu-legilux",
+                ["jurisdiction"] = "LU",
+                ["status"] = McpStatus.FilterNotSupportedByIndex,
+            },
+            ["unsupported_filters"] = new JsonArray("domain"),
+        };
+
+        var valid = new (string Tool, JsonObject Result)[]
+        {
+            ("search", new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["status"] = McpStatus.NoResult },
+                ["hits"] = new JsonArray(),
+            }),
+            ("changes_in_period", new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["status"] = McpStatus.NoChangesInPeriod },
+                ["works_changed"] = 0,
+                ["new_versions"] = 0,
+                ["changes"] = new JsonArray(),
+            }),
+            ("in_force_on", new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["status"] = McpStatus.NoResult },
+                ["total_works_in_force"] = 0,
+                ["works"] = new JsonArray(),
+            }),
+        };
+
+        foreach (var (tool, successfulEmpty) in valid)
+        foreach (var reverse in new[] { false, true })
+        {
+            var payload = reverse
+                ? new JsonArray(successfulEmpty.DeepClone(), Refusal())
+                : new JsonArray(Refusal(), successfulEmpty.DeepClone());
+            var effect = UiMapper.From(tool, new JsonObject(), payload);
+
+            Assert.Null(effect.Gap);
+            Assert.Single(effect.PublisherLimitations ?? []);
+            if (tool == "search") Assert.Empty(effect.Workspace?.Results ?? []);
+            if (tool == "changes_in_period") Assert.Empty(effect.Ranking?.Rows ?? []);
+            if (tool == "in_force_on") Assert.Empty(effect.InForce?.Rows ?? []);
+        }
+    }
+
+    [Fact]
+    public void Partial_refusal_with_only_unknown_filter_names_keeps_generic_limitation()
+    {
+        var arguments = new JsonObject
+        {
+            ["query"] = "synthetic",
+            ["domain"] = "finance",
+        };
+        var payload = new JsonArray(
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject
+                {
+                    ["publisher"] = "lu-legilux",
+                    ["jurisdiction"] = "LU",
+                    ["status"] = McpStatus.FilterNotSupportedByIndex,
+                },
+                ["unsupported_filters"] = new JsonArray("unknown_filter"),
+            },
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["status"] = McpStatus.Ok },
+                ["hits"] = new JsonArray(new JsonObject
+                {
+                    ["lex_id"] = "eu-eurlex:supported:2024-01-01",
+                    ["anchor"] = "art_1",
+                }),
+            });
+        var operation = RequestedOperation.CreatePlanned("req:generic-limitation", 0,
+            "search", arguments);
+        var execution = new OperationExecution(operation)
+            .Complete(LegalOperationStatus.PartialResult, payload);
+        var effect = UiMapper.From(operation, arguments, payload);
+
+        var limitation = Assert.Single(effect.PublisherLimitations ?? []);
+        Assert.Equal("lu-legilux", limitation.Publisher);
+        Assert.Empty(limitation.UnsupportedFilters);
+        Assert.Single(effect.Workspace?.Results ?? []);
+
+        var english = OperationAnswerPolicy.Render("en", [execution], [effect]);
+        Assert.Contains("Capability limitation", english, StringComparison.Ordinal);
+        Assert.Contains("did not run this operation", english, StringComparison.Ordinal);
+        Assert.DoesNotContain("unknown_filter", english, StringComparison.Ordinal);
+        var french = OperationAnswerPolicy.Render("fr", [execution], [effect]);
+        Assert.Contains("Limite de capacité", french, StringComparison.Ordinal);
+        Assert.Contains("n'a pas exécuté cette opération", french, StringComparison.Ordinal);
+        Assert.DoesNotContain("unknown_filter", french, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Deterministic_partial_reply_discloses_limited_publisher_and_filter()
+    {
+        var arguments = new JsonObject { ["query"] = "synthetic", ["domain"] = "finance" };
+        var payload = new JsonArray(
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject
+                {
+                    ["publisher"] = "lu-legilux",
+                    ["jurisdiction"] = "LU",
+                    ["status"] = McpStatus.FilterNotSupportedByIndex,
+                },
+                ["unsupported_filters"] = new JsonArray("domain"),
+            },
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject
+                {
+                    ["publisher"] = "eu-eurlex",
+                    ["jurisdiction"] = "EU",
+                    ["status"] = McpStatus.Ok,
+                },
+                ["hits"] = new JsonArray(new JsonObject
+                {
+                    ["lex_id"] = "eu-eurlex:32016r0679:2016-05-04",
+                    ["anchor"] = "art_1",
+                    ["title"] = "Synthetic held result",
+                }),
+            });
+        var operation = RequestedOperation.CreatePlanned("req:partial", 0, "search", arguments);
+        var result = new OperationExecution(operation)
+            .Complete(LegalOperationStatus.PartialResult, payload);
+        var effect = UiMapper.From(operation, arguments, payload);
+
+        var rendered = OperationAnswerPolicy.Render("en", [result], [effect]);
+
+        Assert.Contains("lu-legilux", rendered, StringComparison.Ordinal);
+        Assert.Contains("domain", rendered, StringComparison.Ordinal);
+        Assert.Contains("Lex coverage", rendered, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("not evidence", rendered, StringComparison.OrdinalIgnoreCase);
+
+        var french = OperationAnswerPolicy.Render("fr", [result], [effect]);
+        Assert.Contains("Limite de capacité", french, StringComparison.Ordinal);
+        Assert.Contains("lu-legilux", french, StringComparison.Ordinal);
+        Assert.Contains("domain", french, StringComparison.Ordinal);
+        Assert.Contains("couverture de Lex", french, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Publisher_limitation_merge_deduplicates_equal_filter_values()
+    {
+        var first = new PublisherLimitationView(
+            McpStatus.FilterNotSupportedByIndex, "search", "lu-legilux", "LU",
+            new[] { "domain" });
+        var second = new PublisherLimitationView(
+            McpStatus.FilterNotSupportedByIndex, "search", "lu-legilux", "LU",
+            new[] { "domain" });
+
+        var merged = UiEffect.Merge([
+            new UiEffect(PublisherLimitations: [first]),
+            new UiEffect(PublisherLimitations: [second]),
+        ]);
+
+        Assert.Single(merged.PublisherLimitations ?? []);
+
+        var bounded = UiEffect.Merge(Enumerable.Range(0, 12).Select(index =>
+            new UiEffect(PublisherLimitations:
+            [
+                new PublisherLimitationView(
+                    McpStatus.FilterNotSupportedByIndex, "search", $"publisher-{index}", "EU",
+                    new[] { "domain" }),
+            ])));
+        Assert.Equal(8, bounded.PublisherLimitations?.Count);
+    }
+
+    [Fact]
+    public void Partial_limitation_is_force_appended_after_optional_synthesis_once()
+    {
+        var limitation = new PublisherLimitationView(
+            McpStatus.FilterNotSupportedByIndex, "search", "lu-legilux", "LU",
+            new[] { "domain" });
+        var method = typeof(AskService).GetMethod("WithPublisherLimitations",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+
+        Assert.NotNull(method);
+        var once = (string)method!.Invoke(null,
+            ["Synthesized supported answer.", "en", new[] { limitation }])!;
+        var twice = (string)method.Invoke(null,
+            [once, "en", new[] { limitation }])!;
+
+        Assert.Contains("lu-legilux", once, StringComparison.Ordinal);
+        Assert.Contains("domain", once, StringComparison.Ordinal);
+        Assert.Equal(once, twice);
+
+        var bodyMethod = typeof(AskService).GetMethod("Body",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        Assert.NotNull(bodyMethod);
+        var body = (JsonObject)bodyMethod!.Invoke(null,
+            ["Synthesized supported answer.", "en", new JsonArray(),
+                new List<UiEffect> { new(PublisherLimitations: [limitation]) }, null, null])!;
+        Assert.Equal(once, body["reply"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void Mixed_publisher_limitation_ignores_malformed_untrusted_fields()
+    {
+        var payload = new JsonArray(
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject
+                {
+                    ["publisher"] = "bad publisher!",
+                    ["jurisdiction"] = new string('x', 65),
+                    ["status"] = McpStatus.FilterNotSupportedByIndex,
+                },
+                ["unsupported_filters"] = new JsonArray(
+                    42, "domain", "unknown_filter", new string('x', 65), "domain"),
+            },
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject
+                {
+                    ["publisher"] = "eu-eurlex",
+                    ["jurisdiction"] = "EU",
+                    ["status"] = McpStatus.Ok,
+                },
+                ["hits"] = new JsonArray(new JsonObject
+                {
+                    ["lex_id"] = "eu-eurlex:32016r0679:2016-05-04",
+                    ["anchor"] = "art_1",
+                }),
+            });
+
+        var effect = UiMapper.From("search", new JsonObject
+        {
+            ["query"] = "synthetic",
+            ["domain"] = "finance",
+        }, payload);
+
+        var limitation = Assert.Single(effect.PublisherLimitations ?? []);
+        Assert.Null(limitation.Publisher);
+        Assert.Null(limitation.Jurisdiction);
+        Assert.Equal(["domain"], limitation.UnsupportedFilters);
+        Assert.Single(effect.Workspace?.Results ?? []);
+    }
+
+    [Fact]
+    public void Mixed_publisher_filter_refusal_co_delivers_supported_period_and_in_force_rows()
+    {
+        static JsonObject Refusal() => new()
+        {
+            ["envelope"] = new JsonObject
+            {
+                ["publisher"] = "lu-legilux",
+                ["jurisdiction"] = "LU",
+                ["status"] = McpStatus.FilterNotSupportedByIndex,
+            },
+            ["unsupported_filters"] = new JsonArray("hierarchy"),
+        };
+
+        var period = UiMapper.From("changes_in_period", new JsonObject
+        {
+            ["from_date"] = "2024-01-01",
+            ["to_date"] = "2024-12-31",
+        }, new JsonArray(Refusal(), new JsonObject
+        {
+            ["envelope"] = new JsonObject
+            {
+                ["publisher"] = "eu-eurlex",
+                ["jurisdiction"] = "EU",
+                ["status"] = McpStatus.Ok,
+            },
+            ["window"] = new JsonObject
+            {
+                ["from"] = "2024-01-01", ["to"] = "2024-12-31",
+            },
+            ["order"] = "by_date",
+            ["works_changed"] = 1,
+            ["new_versions"] = 1,
+            ["changes"] = new JsonArray(new JsonObject
+            {
+                ["work"] = "32016r0679",
+                ["versions_in_period"] = 1,
+                ["versions_total"] = 2,
+                ["first_change"] = "2024-01-01",
+                ["last_change"] = "2024-01-01",
+            }),
+        }));
+
+        Assert.Null(period.Gap);
+        Assert.Single(period.Ranking?.Rows ?? []);
+        Assert.Single(period.PublisherLimitations ?? []);
+
+        var inForce = UiMapper.From("in_force_on", new JsonObject
+        {
+            ["date"] = "2024-01-01",
+        }, new JsonArray(Refusal(), new JsonObject
+        {
+            ["envelope"] = new JsonObject
+            {
+                ["publisher"] = "eu-eurlex",
+                ["jurisdiction"] = "EU",
+                ["status"] = McpStatus.Ok,
+            },
+            ["total_works_in_force"] = 1,
+            ["works"] = new JsonArray(new JsonObject
+            {
+                ["work"] = "32016r0679",
+                ["valid_from"] = "2016-05-04",
+            }),
+        }));
+
+        Assert.Null(inForce.Gap);
+        Assert.Single(inForce.InForce?.Rows ?? []);
+        Assert.Single(inForce.PublisherLimitations ?? []);
     }
 
     [Fact]

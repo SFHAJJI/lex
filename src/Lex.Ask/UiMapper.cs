@@ -80,9 +80,18 @@ public static class UiMapper
 
     public static UiEffect From(string tool, JsonObject args, JsonNode result, string locale = "en")
     {
-        var evidence = EvidenceOf(result, args);
-        if (tool == "coverage") return WithEvidence(CoverageResult(result, locale), evidence);
-        if (result is JsonArray { Count: 0 })
+        var shapeCheckedResult = WithoutContradictorySuccessfulEmpty(tool, result);
+        var publisherCheckedResult = WithoutUnprovenPublisherFacts(tool, shapeCheckedResult);
+        var evidence = EvidenceOf(publisherCheckedResult, args);
+        var (effectiveResult, publisherLimitations) =
+            SplitPublisherLimitations(tool, publisherCheckedResult);
+        UiEffect Finish(UiEffect effect) => WithEvidence(effect, evidence) with
+        {
+            PublisherLimitations = publisherLimitations.Count == 0
+                ? null : publisherLimitations,
+        };
+        if (tool == "coverage") return Finish(CoverageResult(effectiveResult, locale));
+        if (effectiveResult is JsonArray { Count: 0 })
         {
             var empty = tool switch
             {
@@ -112,14 +121,15 @@ public static class UiMapper
                     ["total_works_in_force"] = 0,
                     ["works"] = new JsonArray(),
                 }, args),
-                "search" => SearchWorkspace(args, result),
+                "search" => SearchWorkspace(args, effectiveResult),
                 _ => new UiEffect(),
             };
-            return WithEvidence(empty, evidence);
+            return Finish(empty);
         }
-        var node = result is JsonArray arr ? Aggregate(tool, arr) : result as JsonObject;
+        var node = effectiveResult is JsonArray arr
+            ? Aggregate(tool, arr) : effectiveResult as JsonObject;
         if (node is null) return new UiEffect();
-        var status = (node["envelope"]?["status"] ?? node["status"])?.GetValue<string>();
+        var status = LegalOperationPolicy.StatusForPublisherResult(node);
         var outcome = status is null ? (LegalOutcome?)null : LegalOperationPolicy.OutcomeForStatus(status);
 
         // A refusal is a first-class view: say what is missing and what does exist instead.
@@ -135,7 +145,7 @@ public static class UiMapper
             var refused = outcome == LegalOutcome.NotComparable && tool == "diff"
                 ? UiEffect.Merge([Diff(node, args), gap])
                 : gap;
-            return WithEvidence(refused, evidence);
+            return Finish(refused);
         }
 
         var mapped = tool switch
@@ -148,10 +158,97 @@ public static class UiMapper
             "in_force_on" => InForce(node, args),
             "cited_by" => Cited(node),
             "provenance" => Verification(node),
-            "search" => SearchWorkspace(args, result),
+            "search" => SearchWorkspace(args, effectiveResult),
             _ => new UiEffect(),
         };
-        return WithEvidence(mapped, evidence);
+        return Finish(mapped);
+    }
+
+    private static JsonNode WithoutContradictorySuccessfulEmpty(string tool, JsonNode result)
+    {
+        static bool IsContradictory(string operation, JsonObject item)
+        {
+            var status = LegalOperationPolicy.StatusForPublisherResult(item);
+            return status is not null
+                   && LegalOperationPolicy.OutcomeForStatus(status) == LegalOutcome.SucceededEmpty
+                   && !LegalOperationPolicy.IsProvenSuccessfulPublisherResult(item, operation);
+        }
+
+        if (result is JsonObject single)
+        {
+            if (IsContradictory(tool, single))
+                throw new InvalidDataException(
+                    $"Tool '{tool}' returned rows or counts that contradict its empty status.");
+            return result;
+        }
+        if (result is not JsonArray array) return result;
+
+        var contradictory = array.OfType<JsonObject>()
+            .Where(item => IsContradictory(tool, item))
+            .ToHashSet();
+        if (contradictory.Count == 0) return result;
+        var retained = new JsonArray(array
+            .Where(item => item is not JsonObject obj || !contradictory.Contains(obj))
+            .Select(item => item?.DeepClone()).ToArray());
+        if (!retained.OfType<JsonObject>().Any())
+            throw new InvalidDataException(
+                $"Tool '{tool}' returned no result with a proven execution shape.");
+        return retained;
+    }
+
+    private static JsonNode WithoutUnprovenPublisherFacts(string tool, JsonNode result)
+    {
+        if (tool != "search") return result;
+
+        static bool IsUnproven(string operation, JsonObject item)
+        {
+            if (!LegalOperationPolicy.HasPublisherEnvelope(item)
+                || LegalOperationPolicy.IsProvenSuccessfulPublisherResult(item, operation))
+                return false;
+            var status = LegalOperationPolicy.StatusForPublisherResult(item);
+            return status is null or LegalOperationStatus.PartialResult;
+        }
+
+        if (result is JsonObject single)
+            return IsUnproven(tool, single) ? new JsonArray() : result;
+        if (result is not JsonArray array) return result;
+        var retained = array
+            .Where(item => item is not JsonObject obj || !IsUnproven(tool, obj))
+            .ToArray();
+        return retained.Length == array.Count
+            ? result
+            : new JsonArray(retained.Select(item => item?.DeepClone()).ToArray());
+    }
+
+    /// <summary>
+    /// A multi-publisher capability refusal is partial when another publisher answered. Retain
+    /// the successful payload as the primary mapping and carry every refusal as a bounded typed
+    /// disclosure. All-refusal payloads remain the existing full gap.
+    /// </summary>
+    private static (JsonNode Result, IReadOnlyList<PublisherLimitationView> Limitations)
+        SplitPublisherLimitations(string tool, JsonNode result)
+    {
+        if (result is not JsonArray array) return (result, []);
+        if (!string.Equals(LegalOperationPolicy.StatusForResult(result),
+                LegalOperationStatus.PartialResult, StringComparison.Ordinal))
+            return (result, []);
+        var parts = array.OfType<JsonObject>().ToArray();
+        var refusals = parts.Where(part => string.Equals(
+                S(part["envelope"] as JsonObject, "status") ?? S(part, "status"),
+                McpStatus.FilterNotSupportedByIndex,
+                StringComparison.Ordinal))
+            .ToArray();
+        if (refusals.Length == 0 || refusals.Length == parts.Length)
+            return (result, []);
+
+        var supported = parts.Where(part =>
+                LegalOperationPolicy.IsProvenSuccessfulPublisherResult(part, tool))
+            .ToArray();
+        if (supported.Length == 0)
+            return (refusals[0].DeepClone(), []);
+        var limitations = PublisherLimitationPolicy.FromResult(tool, result);
+        return (new JsonArray(supported
+            .Select(part => (JsonNode)part.DeepClone()).ToArray()), limitations);
     }
 
     private static UiEffect WithEvidence(
@@ -294,6 +391,7 @@ public static class UiMapper
     private static bool HasContent(JsonObject o)
         => o["provisions"] is JsonArray { Count: > 0 } || o["states"] is JsonArray { Count: > 0 }
            || o["changes"] is JsonArray { Count: > 0 } || o["works"] is JsonArray { Count: > 0 }
+           || o["hits"] is JsonArray { Count: > 0 }
            || o["document"] is JsonObject || o["from"] is JsonObject;
 
     /// <summary>
@@ -306,14 +404,16 @@ public static class UiMapper
     {
         var parts = result.OfType<JsonObject>().ToList();
         if (parts.Count == 0) return null;
-        if (tool is not ("changes_in_period" or "in_force_on" or "cited_by"))
-            return parts.FirstOrDefault(HasContent) ?? parts[0];
-
         var aggregateStatus = LegalOperationPolicy.StatusForResult(result);
-        var combined = (parts.FirstOrDefault(part =>
-                (S(part["envelope"] as JsonObject, "status") ?? S(part, "status"))
-                    == aggregateStatus)
-            ?? parts.FirstOrDefault(HasContent) ?? parts[0]).DeepClone().AsObject();
+        var statusMatch = parts.FirstOrDefault(part => string.Equals(
+            LegalOperationPolicy.StatusForPublisherResult(part),
+            aggregateStatus,
+            StringComparison.Ordinal));
+        if (tool is not ("changes_in_period" or "in_force_on" or "cited_by"))
+            return statusMatch ?? parts.FirstOrDefault(HasContent) ?? parts[0];
+
+        var combined = (statusMatch ?? parts.FirstOrDefault(HasContent) ?? parts[0])
+            .DeepClone().AsObject();
         if (combined["envelope"] is not JsonObject combinedEnvelope)
         {
             combinedEnvelope = new JsonObject();
@@ -692,6 +792,7 @@ public static class UiMapper
             {
                 McpStatus.NoCorpusMounted => "Lex ne dispose d'aucun index juridique vérifié, donc aucune opération juridique n'est disponible.",
                 McpStatus.RetrievalModeUnavailable => "La recherche par sens n'est pas disponible pour ce périmètre, car son benchmark de recherche signé n'en a pas autorisé l'activation. La recherche par mots exacts reste disponible.",
+                McpStatus.FilterNotSupportedByIndex => "L'index signé ne prend pas en charge ce filtre pour la langue et la période demandées. Retirez le filtre ou consultez la couverture déclarée.",
                 McpStatus.NoVersionForDate => "Lex détient cet instrument, mais aucune version de l'éditeur ne couvre cette date.",
                 McpStatus.AmbiguousVersion when tool == "diff" => "L'éditeur expose plusieurs versions identifiées à une limite de comparaison. Choisissez une version exacte pour chaque limite ambiguë.",
                 McpStatus.AmbiguousVersion => "L'éditeur expose plusieurs versions identifiées à cette date. Choisissez une version exacte de l'éditeur.",
@@ -712,6 +813,7 @@ public static class UiMapper
         {
             McpStatus.NoCorpusMounted => "Lex has no verified legal index mounted, so no legal operation is available.",
             McpStatus.RetrievalModeUnavailable => "Meaning search is unavailable for this scope because its signed retrieval benchmark has not authorized activation. Exact-word search remains available.",
+            McpStatus.FilterNotSupportedByIndex => "The signed index does not support this filter for the requested language and period. Remove the filter or inspect the declared coverage.",
             McpStatus.NoVersionForDate => "Lex holds this law, but no publisher version covers that date.",
             McpStatus.AmbiguousVersion when tool == "diff" => "The publisher exposes multiple identified versions at a comparison boundary. Choose one exact publisher version for each ambiguous comparison boundary.",
             McpStatus.AmbiguousVersion => "The publisher exposes multiple identified versions for that date. Choose one exact publisher version.",
