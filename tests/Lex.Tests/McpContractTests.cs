@@ -384,6 +384,204 @@ public class McpContractTests : IDisposable
         Assert.Null(far["work_candidates"]);
     }
 
+    [Fact]
+    public void As_of_unknown_work_carries_candidates_on_both_miss_paths()
+    {
+        // The resolved-reader miss: the publisher qualifies, the reader mounts, and the work
+        // is a near miss. This is the common qualified as_of unknown-work branch (Codex B1
+        // review, O2), distinct from the resolve-failure branch the earlier test covers.
+        var near = Call("as_of", new JsonObject
+        {
+            ["work"] = "w1 typo", ["publisher"] = "t-pub", ["date"] = "2024-01-01",
+        });
+        Assert.Equal("unknown_work", Status(near));
+        var candidates = Assert.IsType<JsonArray>(near["work_candidates"]);
+        Assert.InRange(candidates.Count, 1, 5);
+        Assert.Equal("t-pub",
+            candidates.OfType<JsonObject>().First()["publisher"]!.GetValue<string>());
+
+        // A held work missing a version stays a bare dated refusal: no_version_for_date is
+        // never candidate-enriched, so the two refusals cannot blur into each other.
+        var dated = Call("as_of", new JsonObject
+        {
+            ["work"] = "w1", ["publisher"] = "t-pub", ["date"] = "1900-01-01",
+        });
+        Assert.Equal("no_version_for_date", Status(dated));
+        Assert.Null(dated["work_candidates"]);
+
+        // A wholly unrelated qualified identifier gains no candidates and no field.
+        var far = Call("as_of", new JsonObject
+        {
+            ["work"] = "zzzz-9999-unrelated", ["publisher"] = "t-pub", ["date"] = "2024-01-01",
+        });
+        Assert.Equal("unknown_work", Status(far));
+        Assert.Null(far["work_candidates"]);
+    }
+
+    [Fact]
+    public void Every_unknown_work_operation_carries_candidates()
+    {
+        // The audit table (Codex B1 review, O2): every operation family that can refuse with
+        // unknown_work routes the refusal through the candidate decorator. A later direct
+        // return in any of these families fails here, not in production.
+        var calls = new (string Tool, JsonObject Args)[]
+        {
+            ("as_of", new JsonObject { ["work"] = "t-pub:w1 typo", ["date"] = "2024-01-01" }),
+            ("timeline", new JsonObject { ["work"] = "t-pub:w1 typo" }),
+            ("diff", new JsonObject
+            {
+                ["work"] = "t-pub:w1 typo",
+                ["from_date"] = "2020-06-01", ["to_date"] = "2024-01-01",
+            }),
+            ("article_history", new JsonObject
+            {
+                ["work"] = "t-pub:w1 typo", ["anchor"] = "art_1",
+            }),
+            ("provenance", new JsonObject { ["lex_id"] = "t-pub:w1 typo" }),
+        };
+        foreach (var (tool, args) in calls)
+        {
+            var result = Call(tool, args);
+            Assert.Equal("unknown_work", Status(result));
+            var candidates = Assert.IsType<JsonArray>(result["work_candidates"]);
+            Assert.InRange(candidates.Count, 1, 5);
+        }
+    }
+
+    [Fact]
+    public void Candidate_discovery_honors_the_publisher_scope()
+    {
+        var (db, second) = BuildSecondPublisher();
+        try
+        {
+            var core = new McpCore(new Dictionary<string, LexIndexReader>(StringComparer.Ordinal)
+            {
+                ["t-pub"] = _reader, ["z-oth"] = second,
+            });
+
+            // w9order lives only in z-oth. A miss scoped to t-pub must not leak candidates
+            // from the unselected publisher (Codex B1 review, O3).
+            var scoped = (JsonObject)core.CallTool("as_of", new JsonObject
+            {
+                ["work"] = "w9order typo", ["publisher"] = "t-pub", ["date"] = "2024-01-01",
+            })!;
+            Assert.Equal("unknown_work", Status(scoped));
+            Assert.Null(scoped["work_candidates"]);
+
+            // The same miss scoped to its own publisher does find it, proving the absence
+            // above came from the scope, not from the finder.
+            var selected = (JsonObject)core.CallTool("as_of", new JsonObject
+            {
+                ["work"] = "w9order typo", ["publisher"] = "z-oth", ["date"] = "2024-01-01",
+            })!;
+            Assert.Equal("unknown_work", Status(selected));
+            var candidates = Assert.IsType<JsonArray>(selected["work_candidates"]);
+            Assert.All(candidates.OfType<JsonObject>(), candidate =>
+                Assert.Equal("z-oth", candidate["publisher"]!.GetValue<string>()));
+        }
+        finally
+        {
+            second.Dispose();
+            try { File.Delete(db); } catch { /* the OS will reclaim it */ }
+        }
+    }
+
+    [Fact]
+    public void Candidate_discovery_stays_inside_the_bounded_ordered_reader_set()
+    {
+        var (db, second) = BuildSecondPublisher();
+        try
+        {
+            // Nine t-pub mounts push z-oth past the eight-reader execution bound; ordinal
+            // order sorts z-oth last. An unscoped near miss of a z-oth-only work must not
+            // reach it (Codex B1 review, O3: the output cap does not bound work).
+            var many = new Dictionary<string, LexIndexReader>(StringComparer.Ordinal);
+            for (var index = 0; index < 9; index++) many[$"t-pub-{index}"] = _reader;
+            many["z-oth"] = second;
+            var bounded = new McpCore(many);
+            var missed = (JsonObject)bounded.CallTool("timeline", new JsonObject
+            {
+                ["work"] = "zz-nope:w9order typo",
+            })!;
+            Assert.Equal("unknown_work", Status(missed));
+            Assert.Null(missed["work_candidates"]);
+
+            // The two-reader control proves the finder would otherwise surface it: only the
+            // execution bound kept the ninth-plus reader out.
+            var control = new McpCore(new Dictionary<string, LexIndexReader>(StringComparer.Ordinal)
+            {
+                ["t-pub"] = _reader, ["z-oth"] = second,
+            });
+            var found = (JsonObject)control.CallTool("timeline", new JsonObject
+            {
+                ["work"] = "zz-nope:w9order typo",
+            })!;
+            Assert.Equal("unknown_work", Status(found));
+            Assert.NotNull(found["work_candidates"]);
+        }
+        finally
+        {
+            second.Dispose();
+            try { File.Delete(db); } catch { /* the OS will reclaim it */ }
+        }
+    }
+
+    [Fact]
+    public void Candidate_order_is_canonical_across_reader_insertion_orders()
+    {
+        var (db, second) = BuildSecondPublisher();
+        try
+        {
+            // Both publishers hold a w1, so an unscoped miss draws candidates from both.
+            // Opposite dictionary insertion orders must serve byte-identical candidate
+            // arrays in collection order. Two layers each guarantee this on their own: the
+            // execution dispatch rebuilds ordinal-key session dictionaries per call, and the
+            // decorator orders through the SelectReaders contract, so this test documents
+            // the served property rather than distinguishing either layer alone.
+            JsonObject Near(McpCore core) => (JsonObject)core.CallTool("timeline",
+                new JsonObject { ["work"] = "zz-nope:w1 typo" })!;
+            var forward = Near(new McpCore(new Dictionary<string, LexIndexReader>(StringComparer.Ordinal)
+            {
+                ["t-pub"] = _reader, ["z-oth"] = second,
+            }));
+            var reversed = Near(new McpCore(new Dictionary<string, LexIndexReader>(StringComparer.Ordinal)
+            {
+                ["z-oth"] = second, ["t-pub"] = _reader,
+            }));
+            var forwardBytes = forward["work_candidates"]!.ToJsonString();
+            Assert.Equal(forwardBytes, reversed["work_candidates"]!.ToJsonString());
+            Assert.Contains("t-pub", forwardBytes, StringComparison.Ordinal);
+            Assert.Contains("z-oth", forwardBytes, StringComparison.Ordinal);
+            var candidateOrder = (JsonArray)forward["work_candidates"]!;
+            Assert.Equal("t-pub",
+                ((JsonObject)candidateOrder[0]!)["publisher"]!.GetValue<string>());
+        }
+        finally
+        {
+            second.Dispose();
+            try { File.Delete(db); } catch { /* the OS will reclaim it */ }
+        }
+    }
+
+    /// <summary>A second real publisher: distinct collection stamp, works w1 and w9order.</summary>
+    private static (string Db, LexIndexReader Reader) BuildSecondPublisher()
+    {
+        var db = Path.Combine(Path.GetTempPath(), $"lex-mcp-second-{Guid.NewGuid():N}.db");
+        DocRow Row(string key, string group, string title) =>
+            new(key, "z-oth", group, $"urn:z:{group}", "REG", "en", "2021-01-01", null,
+                "publisher", "2026-08-01T00:00:00Z", false, true, true, "abc", null,
+                "https://example.org", title, title, null, "2021-01-01", null);
+        IndexBuilder.Build(db, new Dictionary<string, string>
+        {
+            ["collection"] = "z-oth", ["tier"] = "A", ["history_begins"] = "publisher",
+            ["built_at"] = "2026-08-01T00:00:00Z", ["corpus_commit"] = "test",
+        },
+        [Row("z-oth:w1:2021-01-01", "w1", "Other first work"),
+         Row("z-oth:w9order:2021-01-01", "w9order", "Order work nine")],
+        [], [], [], StampSigner.CreateKeyPem());
+        return (db, LexIndexReader.Open(db));
+    }
+
     private JsonObject Call(string tool, JsonObject args)
     {
         var res = _core.CallTool(tool, args);

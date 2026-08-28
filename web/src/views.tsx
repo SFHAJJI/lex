@@ -16,7 +16,7 @@ import {
 } from "./temporal";
 import { extractionDisclosure } from "./extractionProfile";
 import { HISTORICAL_DENSITY, historicalDensityApplies } from "./notices";
-import { UNKNOWN_WORK_BOUNDARY, UNKNOWN_WORK_CANDIDATES_HEADING, workCandidateHref, workCandidatesFrom } from "./workCandidates";
+import { GapExplanation } from "./unknownWorkNotice";
 
 const permalink = (work: string, date: string, anchor?: string) =>
   `/${publisherOf(work)}/${workSlug(work)}/${date}${anchor ? `#${anchor}` : ""}`;
@@ -565,9 +565,6 @@ export function Gap({ status, explanation, available, held, candidates }: {
   held?: { text: number; total: number; official?: string; kind?: string };
   candidates?: unknown;
 }) {
-  // Decision 41: nearest held records beside an unknown-work refusal, validated fail closed;
-  // links are rebuilt from validated coordinates, never read from the payload.
-  const heldCandidates = status === "unknown_work" ? workCandidatesFrom(candidates) : [];
   const whole = held && held.total > 0 && held.text === 0;
   const collection = whole && (held?.kind === "RECUEIL" || held?.kind === "CODE_RECUEIL");
   return (
@@ -608,21 +605,7 @@ export function Gap({ status, explanation, available, held, candidates }: {
         </>
       ) : (
         <>
-          <p>{explanation}</p>
-          {heldCandidates.length > 0 ? (
-            <div className="trust-notice" role="note" aria-label={UNKNOWN_WORK_CANDIDATES_HEADING}>
-              <b>{UNKNOWN_WORK_CANDIDATES_HEADING}</b>
-              <p className="sub">{UNKNOWN_WORK_BOUNDARY}</p>
-              <ul>
-                {heldCandidates.map((candidate) => (
-                  <li key={`${candidate.publisher}:${candidate.work}`}>
-                    <a href={workCandidateHref(candidate)}>{candidate.title ?? candidate.work}</a>{" "}
-                    <span className="sub mono">{candidate.work} · {candidate.publisher}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
+          <GapExplanation status={status} explanation={explanation} candidates={candidates} />
           {available.length > 0 ? (
             <p className="sub">What does exist: {available.slice(0, 10).join(" · ")}</p>
           ) : null}

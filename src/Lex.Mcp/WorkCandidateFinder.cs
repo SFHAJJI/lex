@@ -19,8 +19,9 @@ public static class WorkCandidateFinder
     /// The verbatim identifier first, then a separator-widened variant, then the widened
     /// variant with trailing tokens dropped progressively: the underlying lookup is
     /// conjunctive, so a single wrong trailing token (an ordinal, a suffix) would otherwise
-    /// hide every neighbour. The shortest query keeps two tokens so one generic word never
-    /// floods the list. Read-only, bounded, distinct by work.
+    /// hide every neighbour. The ladder may narrow to a single remaining token: a two-token
+    /// identifier with one typo has exactly one honest token left, and the five-result cap
+    /// bounds what a generic word can flood. Read-only, bounded, distinct by work.
     /// </summary>
     public static IReadOnlyList<Candidate> Nearest(LexIndexReader reader, string requested)
     {

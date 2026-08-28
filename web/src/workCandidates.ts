@@ -13,11 +13,18 @@ export interface WorkCandidate {
 
 export const WORK_CANDIDATE_CAP = 5;
 
-/** Decision 41 frozen copy, browser authority for the workspace surface. */
+/**
+ * Decision 41 frozen copy, browser authority for the workspace surface. The heading and the
+ * complete body render on EVERY unknown_work gap, with or without candidates: the candidate
+ * list is optional evidence, the notice is not, and the absence boundary must never be
+ * replaced by a bald non-holding claim.
+ */
+export const UNKNOWN_WORK_HEADING = "Instrument not found in held records";
+export const UNKNOWN_WORK_BODY =
+  "Lex does not hold an instrument matching this identifier. This is not evidence that the "
+  + "instrument or law does not exist. Check the identifier, choose a possible held record "
+  + "below, or search the official publisher.";
 export const UNKNOWN_WORK_CANDIDATES_HEADING = "Possible held records";
-export const UNKNOWN_WORK_BOUNDARY =
-  "This is not evidence that the instrument or law does not exist. Check the identifier, "
-  + "choose a possible held record below, or search the official publisher.";
 
 const IDENTIFIER = /^[a-z0-9][a-z0-9._-]{0,199}$/i;
 const PUBLISHER = /^[a-z0-9][a-z0-9-]{0,63}$/i;

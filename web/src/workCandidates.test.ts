@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  UNKNOWN_WORK_BOUNDARY, WORK_CANDIDATE_CAP, validateWorkCandidate, workCandidateHref,
-  workCandidatesFrom,
+  UNKNOWN_WORK_BODY, UNKNOWN_WORK_HEADING, WORK_CANDIDATE_CAP, validateWorkCandidate,
+  workCandidateHref, workCandidatesFrom,
 } from "./workCandidates.ts";
 
 test("valid candidates pass and links are rebuilt from validated parts", () => {
@@ -37,7 +37,10 @@ test("the list is capped and non-arrays produce nothing", () => {
   assert.equal(workCandidatesFrom("no").length, 0);
 });
 
-test("the frozen boundary copy keeps the honest sentence", () => {
-  assert.ok(UNKNOWN_WORK_BOUNDARY.includes(
-    "not evidence that the instrument or law does not exist"));
+test("the frozen copy is byte-equal to Decision 41, heading and complete body", () => {
+  assert.equal(UNKNOWN_WORK_HEADING, "Instrument not found in held records");
+  assert.equal(UNKNOWN_WORK_BODY,
+    "Lex does not hold an instrument matching this identifier. This is not evidence that "
+    + "the instrument or law does not exist. Check the identifier, choose a possible held "
+    + "record below, or search the official publisher.");
 });

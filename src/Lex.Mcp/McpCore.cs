@@ -14,16 +14,19 @@ public sealed class McpCore
     private readonly IReadOnlyDictionary<string, LexIndexReader> readers;
 
     /// <summary>
-    /// Additive unknown_work candidates (Decision 41): the nearest held records across every
-    /// mounted publisher, attached only when at least one exists so an empty search changes
-    /// no envelope byte. Absence of a record is never presented as absence of law; the copy
+    /// Additive unknown_work candidates (Decision 41): the nearest held records, attached only
+    /// when at least one exists so an empty search changes no envelope byte. Discovery obeys the
+    /// operation's own selection contract via SelectReaders: the same ordinal reader order and
+    /// the same MaximumPublisherRows execution bound, so a publisher-scoped call never receives
+    /// candidates from an unselected publisher and an unknown identifier never fans out past the
+    /// bounded reader set. Absence of a record is never presented as absence of law; the copy
     /// obligations live on the rendering surfaces, this field carries only coordinates.
     /// </summary>
-    private JsonObject WithWorkCandidates(JsonObject payload, string requested)
+    private JsonObject WithWorkCandidates(JsonObject payload, string requested, string? publisher)
     {
         var list = new JsonArray();
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var reader in readers.Values)
+        foreach (var reader in SelectReaders(publisher).Readers)
         {
             foreach (var candidate in WorkCandidateFinder.Nearest(reader, requested))
             {
@@ -945,7 +948,7 @@ public sealed class McpCore
                 var work = Str("work") ?? throw new ArgumentException("work required");
                 var date = Date("date");
                 var res = Resolve(work, Str("publisher"));
-                if (res is null) return WithWorkCandidates(new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work }, work);
+                if (res is null) return WithWorkCandidates(new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work }, work, Str("publisher"));
                 var (r, w) = res.Value;
                 var language = Str("language");
                 var versionKey = Str("version_key");
@@ -976,12 +979,18 @@ public sealed class McpCore
                         ? exactDateVersions[0]
                         : r.AsOf(w, date, new FilterSet(null, null, null, language));
                 if (doc is null)
-                    return new JsonObject
+                {
+                    // no_version_for_date stays a bare dated refusal; only the unknown-work miss
+                    // carries nearest held candidates, scoped to the reader this call selected.
+                    var exists = r.WorkExists(w);
+                    var miss = new JsonObject
                     {
-                        ["envelope"] = Envelope(r, r.WorkExists(w) ? McpStatus.NoVersionForDate : McpStatus.UnknownWork, ProvisionalFor(r, date)),
+                        ["envelope"] = Envelope(r, exists ? McpStatus.NoVersionForDate : McpStatus.UnknownWork, ProvisionalFor(r, date)),
                         ["work"] = w,
                         ["date"] = date.ToString("yyyy-MM-dd"),
                     };
+                    return exists ? miss : WithWorkCandidates(miss, w, r.Collection);
+                }
                 var status = TextStatus(r, doc);
                 var mode = Str("mode") ?? "full";
                 var o = new JsonObject
@@ -1079,11 +1088,11 @@ public sealed class McpCore
             {
                 var work = Str("work") ?? throw new ArgumentException("work required");
                 var res = Resolve(work, Str("publisher"));
-                if (res is null) return WithWorkCandidates(new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work }, work);
+                if (res is null) return WithWorkCandidates(new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work }, work, Str("publisher"));
                 var (r, w) = res.Value;
                 var limit = Int("limit", 100); var offset = Int("offset", 0);
                 var (rows, total) = r.Timeline(w, limit, offset);
-                if (total == 0) return WithWorkCandidates(new JsonObject { ["envelope"] = Envelope(r, McpStatus.UnknownWork), ["work"] = w }, w);
+                if (total == 0) return WithWorkCandidates(new JsonObject { ["envelope"] = Envelope(r, McpStatus.UnknownWork), ["work"] = w }, w, r.Collection);
                 var provisional = rows.Any(row => TryIsoDate(row.Version.ValidFrom, out var validFrom)
                     && ProvisionalFor(r, validFrom));
                 return new JsonObject
@@ -1189,7 +1198,7 @@ public sealed class McpCore
                 var from = Date("from_date");
                 var to = Date("to_date");
                 var res = Resolve(work, Str("publisher"));
-                if (res is null) return WithWorkCandidates(new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work }, work);
+                if (res is null) return WithWorkCandidates(new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work }, work, Str("publisher"));
                 var (r, w) = res.Value;
                 var f = new FilterSet(null, null, null, Str("language"));
                 var language = Str("language");
@@ -1233,7 +1242,18 @@ public sealed class McpCore
                         "to_version_key must identify a held version of the resolved work on to_date.",
                         "to_version_key");
                 if (a1 is null || b1 is null)
+                {
+                    // An unknown work must never masquerade as a dated version miss: the
+                    // no_version_for_date explanation claims Lex holds this law, so it is
+                    // reserved for works the reader actually holds.
+                    if (!r.WorkExists(w))
+                        return WithWorkCandidates(new JsonObject
+                        {
+                            ["envelope"] = Envelope(r, McpStatus.UnknownWork),
+                            ["work"] = w,
+                        }, w, r.Collection);
                     return new JsonObject { ["envelope"] = Envelope(r, McpStatus.NoVersionForDate), ["from_resolved"] = a1 is not null, ["to_resolved"] = b1 is not null };
+                }
                 var anchor = Str("anchor")?.Trim().ToLowerInvariant();
                 if (anchor is { Length: > 0 } && (anchor.Length > McpInputPolicy.MaximumAnchorLength
                     || !System.Text.RegularExpressions.Regex.IsMatch(anchor,
@@ -1584,9 +1604,9 @@ public sealed class McpCore
                 var work = Str("work") ?? throw new ArgumentException("work required");
                 var anchor = Str("anchor") ?? throw new ArgumentException("anchor required");
                 var res = Resolve(work, Str("publisher"));
-                if (res is null) return WithWorkCandidates(new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work }, work);
+                if (res is null) return WithWorkCandidates(new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work }, work, Str("publisher"));
                 var (r, w) = res.Value;
-                if (!r.WorkExists(w)) return WithWorkCandidates(new JsonObject { ["envelope"] = Envelope(r, McpStatus.UnknownWork), ["work"] = w }, w);
+                if (!r.WorkExists(w)) return WithWorkCandidates(new JsonObject { ["envelope"] = Envelope(r, McpStatus.UnknownWork), ["work"] = w }, w, r.Collection);
                 var requestedLanguage = Str("language");
                 var windowFrom = Str("from_date");
                 var windowTo = Str("to_date");
@@ -1699,7 +1719,7 @@ public sealed class McpCore
                         },
                     };
                 }
-                return WithWorkCandidates(new JsonObject { ["status"] = McpStatus.UnknownWork, ["lex_id"] = key }, key);
+                return WithWorkCandidates(new JsonObject { ["status"] = McpStatus.UnknownWork, ["lex_id"] = key }, key, publisher);
             }
             case "cited_by":
             {
