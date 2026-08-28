@@ -554,6 +554,10 @@ test("official metadata chips apply only the exact server URI and HTTP provenanc
         envelope: {
           publisher: "eu-eurlex",
           jurisdiction: "EU",
+          // The real producer's Envelope() always writes a status; this double omitted it,
+          // so it asserted against a shape the server never emits. The closed status
+          // classification (round-4 O1) correctly rejected it and CI caught the stale double.
+          status: "ok",
           timeline_semantics: "official_consolidation_state",
         },
         retrieval_mode: "keyword",
