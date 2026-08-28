@@ -418,10 +418,15 @@ export interface GovernedPartition {
   /** Envelopes that authorize neither rows nor absence claims. */
   invalidCount: number;
   /**
-   * Publishers whose own response contradicted itself about what they DID with this operation:
-   * it ran and it refused, it ran and its retrieval mode was unavailable, it refused and its
-   * mode was unavailable. Sorted. Every claim they made is withheld; the incoherence is the
-   * only thing left, and the surface must disclose it.
+   * Publishers who sent more than one claim-bearing unit for this operation. Sorted. Every claim
+   * they made is withheld; the incoherence is the only thing left, and the surface must disclose
+   * it.
+   *
+   * The test is the count, not whether the units disagree. The reader registry is keyed by
+   * collection, so the producer emits at most one unit per publisher: a second unit is a shape it
+   * cannot emit, and byte identity does not make it legitimate. That covers the obvious
+   * contradiction, a publisher that both ran and refused, and the quieter one, two ran units
+   * whose counts were being added together.
    */
   conflictedPublishers: string[];
   /** At least one envelope refused. */
@@ -452,23 +457,43 @@ export function partitionGovernedResponse(
     item.kind === "ran" || item.kind === "mode_unavailable" ? item.publisher
       : item.kind === "refused" ? item.limitation.publisher
         : undefined;
-  const kindsByPublisher = new Map<string, Set<string>>();
+  const unitsByPublisher = new Map<string, number>();
   for (const item of classes) {
     const publisher = claimPublisher(item);
     if (publisher === undefined) continue;
-    const kinds = kindsByPublisher.get(publisher) ?? new Set<string>();
-    kinds.add(item.kind);
-    kindsByPublisher.set(publisher, kinds);
+    unitsByPublisher.set(publisher, (unitsByPublisher.get(publisher) ?? 0) + 1);
   }
-  // Decided across the WHOLE response before anything is projected, so arrival order cannot
-  // decide the outcome, and a conflict between DISTINCT publishers is not a conflict at all.
-  const conflicted = new Set([...kindsByPublisher]
-    .filter(([, kinds]) => kinds.size > 1)
+  /**
+   * Decided across the WHOLE response before anything is projected, so arrival order cannot decide
+   * the outcome, and a conflict between DISTINCT publishers is not a conflict at all.
+   *
+   * The test is the unit count, not the set of kinds. The reader registry is keyed by collection
+   * with an ordinal comparer and the tools iterate its values, so the producer emits at most one
+   * unit per publisher. A second unit is a shape the producer cannot emit whatever it says, which
+   * makes two identical refusals as illegitimate as a ran beside a refusal. Counting kinds instead
+   * admitted the duplicate case, and two ran units for one publisher doubled the works changed,
+   * the new versions, the population and the rows.
+   */
+  const conflicted = new Set([...unitsByPublisher]
+    .filter(([, units]) => units > 1)
     .map(([publisher]) => publisher));
   const conflictedPublishers = [...conflicted].sort();
+  /**
+   * A claim-bearing unit with no valid publisher identity is not authoritative.
+   *
+   * The envelope always carries the reader's collection, so a successful governed unit without a
+   * bounded producer identity is malformed. The search surface has a second normalization layer
+   * that withholds these, but the other governed tools reach the projector directly, so a missing,
+   * padded, upper-case or overlong publisher could render rows, totals and exclusions with no
+   * index identity beside them. Unattributable is withheld, not merely ungroupable.
+   */
+  const unattributed = (item: EnvelopeClass): boolean =>
+    (item.kind === "ran" || item.kind === "mode_unavailable" || item.kind === "refused")
+    && claimPublisher(item) === undefined;
   const inConflict = (item: EnvelopeClass): boolean => {
     const publisher = claimPublisher(item);
-    return publisher !== undefined && conflicted.has(publisher);
+    return unattributed(item)
+      || (publisher !== undefined && conflicted.has(publisher));
   };
   // Retained as typed incoherence rather than dropped, so an all-conflicted response becomes
   // incomplete and another publisher's rows may render only as partial.

@@ -683,26 +683,41 @@ test("a lone genuine refusal still reaches all_refused, on every governed tool",
     projectGovernedEmptiness("in_force_on", [refusalFor("lu-legilux")], 0).empty, "all_refused");
 });
 
-test("two identical refusals from one publisher are one disclosure, not a conflict", () => {
-  // Same kind twice is agreement, not contradiction. Only DIFFERENT terminal kinds conflict.
+test("a second unit from one publisher is incoherent whatever it says", () => {
+  // This test previously asserted the opposite, that two identical refusals collapse into one
+  // disclosure, on the reasoning that the same kind twice is agreement rather than contradiction.
+  // The producer says otherwise. IndexRegistry keys its readers by collection with an ordinal
+  // comparer and the tools iterate its values, so at most one unit per publisher can ever be
+  // emitted. A second unit is a shape the producer cannot produce, and byte identity does not
+  // make it legitimate: two ran units for one publisher doubled the works changed, the new
+  // versions, the population and the rows, and nothing distinguishes that case from this one
+  // except what the duplicate happens to say.
   const partition = partitionGovernedResponse("search",
     [refusalFor("lu-legilux"), refusalFor("lu-legilux")]);
-  assert.deepEqual(partition.conflictedPublishers, []);
-  assert.equal(partition.limitations.length, 1, "two identical refusals stopped collapsing");
-  assert.equal(partition.allRefused, true);
+  assert.deepEqual(partition.conflictedPublishers, ["lu-legilux"]);
+  assert.equal(partition.limitations.length, 0, "a duplicated publisher still spoke");
+  assert.equal(partition.allRefused, false, "an incoherent response became an absence claim");
 });
 
-test("an unattributable claim cannot conflict with a named one", () => {
-  // A claim with no valid publisher identity cannot be grouped, so it neither creates nor joins
-  // a conflict. It is already handled as an unattributed entry upstream.
+test("an unattributable claim neither conflicts with a named one nor speaks itself", () => {
+  // Two properties, and the second one changed. A padded spelling must not be grouped with the
+  // real publisher, or one publisher's rows would be withheld by another's malformed unit; that
+  // half is unchanged and is the anti-aliasing guarantee.
+  //
+  // What changed is that the unattributable unit no longer renders its own limitation. The comment
+  // here used to say it was handled as an unattributed entry upstream, which is true of the search
+  // surface and false of the other governed tools: they reach this projector directly, so a
+  // missing, padded, upper-case or overlong publisher could render a limitation with no index
+  // identity beside it. The envelope always carries the reader's collection, so a claim without a
+  // bounded identity is malformed rather than merely anonymous.
   const nameless = { envelope: { status: "filter_not_supported_by_index", publisher: " lu-legilux " },
     unsupported_filters: ["domain"] };
   const partition = partitionGovernedResponse("search", [searchOk("lu-legilux", 2), nameless]);
   assert.deepEqual(partition.conflictedPublishers, [],
     "a padded spelling was grouped with the real publisher");
   assert.equal(partition.ran.length, 1, "an uncontradicted publisher lost its rows");
-  assert.equal(partition.limitations.length, 1);
-  assert.equal(partition.limitations[0]!.publisher, undefined);
+  assert.equal(partition.limitations.length, 0, "an unattributable claim still spoke");
+  assert.equal(partition.invalidCount, 1, "the withheld unit left no trace on completeness");
 });
 
 // ---------------------------------------------------------------------------
@@ -851,12 +866,17 @@ test("more than eight refusal envelopes are capped, never summarized into prose"
   assert.equal(partitionGovernedResponse("search", many).limitations.length, LIMITATION_CAP);
 });
 
-test("two separately allocated identical limitations render once", () => {
+test("two units for one publisher are withheld even when logically identical", () => {
+  // Also inverted. It asserted that two separately allocated but logically identical limitations
+  // render once, which was a statement about deduplication by value rather than by reference.
+  // That property is real, but this fixture is not the place it applies: the producer cannot send
+  // one publisher twice, so the response is incoherent before deduplication becomes a question.
   const duplicated = partitionGovernedResponse("search", [
     refused("lu-legilux", ["domain", "hierarchy"]),
     refused("lu-legilux", ["hierarchy", "domain"]),
   ]);
-  assert.equal(duplicated.limitations.length, 1, "logical identity, not reference identity");
+  assert.deepEqual(duplicated.conflictedPublishers, ["lu-legilux"]);
+  assert.equal(duplicated.limitations.length, 0);
 });
 
 test("the fixed explanation carries no interpolation and no query placeholder", () => {
