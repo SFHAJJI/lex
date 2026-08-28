@@ -62,8 +62,16 @@ export const POPULATION_BOUNDS = {
   maxPublisherLength: MAX_PUBLISHER_IDENTITY,
 };
 
-/** A bounded list, or a single bounded string, and nothing else. */
-function exclusionsOf(raw: unknown): string[] | null {
+/**
+ * A bounded list, or a single bounded string, and nothing else.
+ *
+ * EXPORTED so limitations.ts can read the other two tools' `known_exclusions` through this one
+ * helper instead of carrying its own copy. The producer serializes the field as ONE string
+ * (`McpCore.KnownExclusions` returns a `string`) on all three governed tools, which is why the
+ * single-string case is here rather than at a call site. Returns null for anything that is not
+ * a bounded list of bounded strings; the trimmed, de-duplicated set otherwise.
+ */
+export function exclusionsOf(raw: unknown): string[] | null {
   const list = typeof raw === "string" ? [raw] : raw;
   if (!Array.isArray(list)) return null;
   if (list.length > POPULATION_BOUNDS.maxExclusions) return null;

@@ -21,6 +21,12 @@
  */
 
 import { publisherIdentity } from "./publisherIdentity.ts";
+// IMPORTED, not copied. The search coherence table is read from
+// tests/Lex.Tests/search-population-contract.json by exactly one validator, and a second
+// reading of it here would put three copies of one rule in the workspace. The direction is
+// acyclic: searchPopulation.ts imports publisherIdentity.ts and nothing else, and it takes its
+// classifier as a callback rather than importing this module back.
+import { exclusionsOf, validateSearchPopulation } from "./searchPopulation.ts";
 
 export interface PublisherLimitation {
   status: "filter_not_supported_by_index";
@@ -35,9 +41,6 @@ export const LIMITATION_STATUS = "filter_not_supported_by_index";
 
 /** At most eight limitation objects render; the rest are dropped, never summarized. */
 export const LIMITATION_CAP = 8;
-
-/** The governed operations; a limitation naming any other tool is malformed. */
-const GOVERNED_TOOLS = new Set(["search", "changes_in_period", "in_force_on"]);
 
 /**
  * The four filters the index itself checks. This set is signed: CapabilityManifest.RequestedFilters
@@ -66,20 +69,14 @@ export const GUARDED_FILTERS = new Set(["publisher_metadata_identifier"]);
 /** The governed filter identifiers; anything else in the list is dropped. */
 export const GOVERNED_FILTERS = new Set([...MANIFEST_FILTERS, ...GUARDED_FILTERS]);
 
-/**
- * The closed terminal success statuses per governed operation, pinned against the producer
- * (McpCore): search executes as `ok` only; changes_in_period as `ok` or
- * `no_changes_in_period`; in_force_on as `ok`, `no_result` or `ambiguous_version`. Search's
- * `retrieval_mode_unavailable` is its own non-ran class. Everything else is invalid.
- */
 /** The retrieval modes a successful search envelope must declare. */
 const RETRIEVAL_MODES = new Set(["keyword", "hybrid"]);
 
-const SUCCESS_STATUSES: Record<string, ReadonlySet<string>> = {
-  search: new Set(["ok"]),
-  changes_in_period: new Set(["ok", "no_changes_in_period"]),
-  in_force_on: new Set(["ok", "no_result", "ambiguous_version"]),
-};
+/**
+ * Search's own non-ran class: the publisher and its index boundary are mounted, the requested
+ * retrieval mode is not authorized for it. Never a filter refusal, and never an absence claim.
+ */
+const RETRIEVAL_MODE_UNAVAILABLE = "retrieval_mode_unavailable";
 
 /** Client-only presentation states; never rendered as a wire status badge (Codex O5). */
 export const CLIENT_GAP_STATES: ReadonlySet<string> = new Set([
@@ -218,6 +215,24 @@ const boundedIdentifier = (value: unknown): string | undefined =>
     ? value
     : undefined;
 
+/** `timeline_semantics` is free stamp text, not an identifier, so only the bound applies. */
+const MAX_TIMELINE_SEMANTICS = 64;
+
+/**
+ * The population basis. The producer's longest is in_force_on's
+ * "distinct non-withdrawn works in the selected publisher and legal metadata scope", so this is
+ * headroom rather than a fit, and it is a bound on a sentence rather than a grammar for one:
+ * the string is the producer's own and is never rewritten here.
+ */
+const MAX_SCOPE_BASIS = 120;
+
+/** A bounded, non-empty string kept verbatim. Refuses rather than trims, like every validator
+    in this module: a padded value is evidence that something upstream is not the producer. */
+const boundedText = (value: unknown, maximum: number): string | undefined =>
+  typeof value === "string" && value.length > 0 && value.length <= maximum
+    ? value
+    : undefined;
+
 /**
  * The producer's own numeric range, verified against the authoritative chain rather than assumed.
  * Every count this module consumes is minted as a C# `int` end to end: `IndexReader.ChangeTotals`
@@ -346,12 +361,6 @@ const record = (value: unknown): Record<string, unknown> | null =>
     : null;
 
 /**
- * Operation-specific response-shape and count/row coherence checks (round 4, O2). Both
- * governed direct callers request offset 0, so a positive count with zero rows is a
- * contradiction, as are rows exceeding their count or rows beside a zero count. A
- * contradictory envelope is invalid: it never becomes results or corpus absence.
- */
-/**
  * Every row in a successful response must be a non-null object (PR293 review, O4). Round 6
  * validated only the outer array, so a single null row was admitted and then threw inside
  * fusePublisherHits while reading lex_id, taking the workspace down on a malformed response
@@ -366,81 +375,492 @@ function rowsValid(value: unknown): value is Record<string, unknown>[] {
 const text = (value: unknown): boolean =>
   typeof value === "string" && value.length > 0;
 
+// ---------------------------------------------------------------------------
+// The parsed governed response: one door for untrusted input
+// ---------------------------------------------------------------------------
+//
+// Two independent authorities parse the same untrusted MCP response today:
+// `normalizeSearchResponse` in searchPopulation.ts and `partitionGovernedResponse` below. Two
+// entry points that both take `unknown` can disagree, and they did: two byte-identical search
+// units for one publisher produced `complete: true` with one surviving population on one side
+// and `incomplete_response` with zero rows on the other. The repair is not a rule about
+// duplicates. It is a shape. ONE function takes `unknown`, everything downstream takes a parsed
+// unit, and disagreement stops being expressible rather than merely being prevented.
+//
+// This is that function. Nothing consumes it yet. `classifyEnvelope` and
+// `partitionGovernedResponse` are reimplemented over it and return exactly what they always
+// returned, so this step builds the door without moving anyone through it.
+
 /**
- * Operation-specific row schemas (PR293 exact review, O2). Round 7 accepted any non-null
- * object, so `hits:[{}]` was `ran`: the empty row then yielded no work id, the surface found
- * zero rows and claimed "Nothing in the corpus matches that", and an empty change row threw
- * inside `work.includes`. A row that a renderer cannot read is malformed, not empty.
+ * The governed operations, closed at COMPILE time rather than carried as a string. A fourth tool
+ * must be a type error at the call site rather than a silent invalid classification at runtime.
  */
-const ROW_SCHEMAS: Record<string, (row: Record<string, unknown>) => boolean> = {
-  // The workspace derives every work identity from lex_id.
-  search: (row) => text(row.lex_id),
-  // The ranking view reads work and calls string methods on it.
-  changes_in_period: (row) => text(row.work),
-  // The in-force view opens rows by work, or by lex_id when the publisher supplies one.
-  in_force_on: (row) => text(row.work) || text(row.lex_id),
-};
+export type GovernedTool = "search" | "changes_in_period" | "in_force_on";
 
-const rowsMatchSchema = (tool: string, rows: Record<string, unknown>[]): boolean =>
-  rows.every((row) => ROW_SCHEMAS[tool]!(row));
+/**
+ * Which claim a disclosed denominator makes, carried so no renderer can swap the two.
+ *
+ * They are different populations from different producer queries. `works_in_scope` is narrowed by
+ * the request's own metadata filters: `McpCore.SearchPopulation` reads
+ * `reader.SearchPopulationTotal(filter)`, and changes_in_period reads
+ * `r.PopulationTotal(kinds, filter)`. `works_covered` is not narrowed by anything the request
+ * sent: in_force_on reads `r.Coverage(1).Groups`, the publisher's versioned works. Presenting one
+ * as the other tells the reader a filtered list was measured against an unfiltered denominator,
+ * or the reverse.
+ */
+export type ScopeMeasure = "works_in_scope" | "works_covered";
 
-function ranShapeValid(tool: string, entry: Record<string, unknown>, status: string): boolean {
-  if (tool === "search") {
-    // O3: the producer always declares its actual retrieval mode on a successful search.
-    // Admitting an envelope without one lets a response of unknown provenance render.
-    return rowsValid(entry.hits)
-      && rowsMatchSchema("search", entry.hits)
-      && typeof entry.retrieval_mode === "string"
-      && RETRIEVAL_MODES.has(entry.retrieval_mode);
-  }
-  if (tool === "changes_in_period") {
-    if (!rowsValid(entry.changes)) return false;
-    if (!rowsMatchSchema("changes_in_period", entry.changes)) return false;
-    const worksChanged = requiredCount(entry.works_changed);
-    const newVersions = optionalCount(entry.new_versions);
-    if (worksChanged === null || newVersions === null) return false;
-    if (status === "no_changes_in_period") {
-      return worksChanged === 0 && entry.changes.length === 0
-        && optionalCount(entry.new_versions) === 0;
-    }
-    // Rows may legitimately be empty beside a positive count: the producer emits this
-    // publisher's FULL period total beside its slice of one globally merged page, so a
-    // publisher outranked out of the current page returns count>0 with zero rows. Only the
-    // impossible directions are contradictions.
-    if (entry.changes.length > worksChanged) return false;
-    if (entry.changes.length > 0 && worksChanged === 0) return false;
-    return true;
-  }
-  if (tool === "in_force_on") {
-    if (!rowsValid(entry.works)) return false;
-    if (!rowsMatchSchema("in_force_on", entry.works)) return false;
-    const total = requiredCount(entry.total_works_in_force);
-    if (total === null) return false;
-    if (entry.ambiguous_works !== undefined
-      && (!rowsValid(entry.ambiguous_works)
-        || !rowsMatchSchema("in_force_on", entry.ambiguous_works))) return false;
-    const ambiguities = Array.isArray(entry.ambiguous_works)
-      ? entry.ambiguous_works.length : 0;
-    // Status and counts must agree. no_result means the publisher found nothing, so a
-    // positive total contradicts it; round 7 admitted that and rendered a false claim that
-    // no state covers the date beside a response reporting five (O2). ambiguous_version
-    // means at least one ambiguity unit exists.
-    if (status === "no_result"
-      && (total !== 0 || entry.works.length > 0 || ambiguities > 0)) return false;
-    if (status === "ambiguous_version" && ambiguities === 0) return false;
-    // As above: one remainingLimit is shared across publishers, so an exhausted page returns
-    // zero rows beside this publisher's full total. Ambiguity units also consume the page, so
-    // rows plus ambiguities is what must not exceed the total.
-    if (entry.works.length + ambiguities > total) return false;
-    if (entry.works.length > 0 && total === 0) return false;
-    return true;
-  }
-  return false;
+export interface ScopeDisclosure {
+  /** Carried so no renderer can swap the two claims. */
+  measure: ScopeMeasure;
+  /** Non-negative, a safe integer, and inside the producer's own Int32 ceiling. */
+  works: number;
+  /** The producer's own string, bounded at parse time, never invented and never repaired. */
+  basis: string;
+  /** Search only. changes_in_period and in_force_on publish neither field. */
+  scopeFiltersApplied: boolean | undefined;
+  /** Search only, and the field that decides whether a scope may join a "searched N" sentence. */
+  queryRan: boolean | undefined;
+  /** Bounded, de-duplicated and order-insensitive, through the shared population helper. */
+  knownExclusions: string[];
 }
 
-/** Classify one envelope of one governed operation, closed in every direction. */
-export function classifyEnvelope(tool: string, value: unknown): EnvelopeClass {
+/**
+ * A publisher's disclosed scope, or the positive statement that there is none to disclose.
+ *
+ * `none_published` is legitimate and is a claim about the CONTRACT, not a shrug: the producer
+ * emits no population at all on a `changes_in_period` or `in_force_on` refusal, and a reader is
+ * entitled to know that rather than to be shown a blank. An absent denominator modelled as a bare
+ * `undefined` reads as "nothing to say", which is the exact shape of the defect this lane exists
+ * to close.
+ *
+ * `unreadable` is the third answer, and it is NOT in the sketch this was built from because the
+ * sketch was written for the end state. It is required here, and it will still be required at the
+ * end. A population the producer does publish but that will not validate is a different fact from
+ * one it never publishes: today `normalizeSearchResponse` voids that publisher and withholds its
+ * ROWS, so a merged parser that collapsed the two into `none_published` could not reproduce the
+ * search surface's own behaviour when it eventually takes over. Collapsing them would also be the
+ * very lie the paragraph above forbids, one step removed.
+ */
+export type Scope =
+  | { kind: "disclosed"; scope: ScopeDisclosure }
+  | { kind: "none_published" }
+  | { kind: "unreadable"; reason: string };
+
+interface UnitCore {
+  /** From publisherIdentity, never trimmed and never case-folded. */
+  publisher: string;
+  /** Already inside this tool's closed status set. */
+  status: string;
+  /**
+   * From boundedIdentifier, case-preserving: the producer emits "LU". Load-bearing, not
+   * decoration. App.tsx reads jurisdiction and timeline_semantics off the raw entries in both
+   * governed effects to render chips, and no node test imports App.tsx, so a unit that dropped
+   * them would take those chips off the screen with the suite still green.
+   */
+  jurisdiction: string | undefined;
+  /** The same, bounded at 64: `publisher_applicability` or `official_consolidation_state`. */
+  timelineSemantics: string | undefined;
+  scope: Scope;
+  /**
+   * TRANSITIONAL. The raw entry this unit was parsed from.
+   *
+   * `partitionGovernedResponse` returns the original entry objects in the order the response
+   * carried them, and its callers read fields off them that no unit models yet. Keeping the
+   * entry here is what lets that adapter be written over this parser instead of beside it. It
+   * goes when the last raw-entry reader goes, which is the point of the whole exercise.
+   */
+  entry: unknown;
+}
+
+export interface RanUnit extends UnitCore {
+  kind: "ran";
+  /** Each row satisfies this tool's row schema. */
+  rows: Record<string, unknown>[];
+  /** Empty except on in_force_on, the only tool with an ambiguity field. */
+  ambiguities: Record<string, unknown>[];
+  /** Every count this tool requires, present and inside the producer's Int32 ceiling. */
+  counts: Readonly<Record<string, number>>;
+  /** Search only. */
+  retrievalMode: "keyword" | "hybrid" | undefined;
+  /** Search only, bounded at 128 characters each and de-duplicated. */
+  expansions: string[];
+}
+
+export interface RefusedUnit extends UnitCore {
+  kind: "refused";
+  /** `limitation.publisher` equals `this.publisher`: one validator mints both. */
+  limitation: PublisherLimitation;
+}
+
+export interface ModeUnavailableUnit extends UnitCore { kind: "mode_unavailable"; }
+
+export type PublisherUnit = RanUnit | RefusedUnit | ModeUnavailableUnit;
+
+export interface GovernedResponse {
+  tool: GovernedTool;
+  /** At most one per publisher, sorted ordinally by publisher. */
+  units: PublisherUnit[];
+  /** Publishers that sent more than one claim-bearing unit, sorted. */
+  conflicted: string[];
+  /** Claim-bearing units with no mintable publisher identity. */
+  unattributed: number;
+  /** Today's invalidCount: malformed units, incoherent no-corpus units, conflicts, unattributed. */
+  unusable: number;
+  /** Exactly one bare `no_corpus_mounted` unit and nothing else. */
+  noCorpus: boolean;
+  /**
+   * Whether the units below are the whole response or only the part of it that survived. A
+   * denominator drawn from `usable_units_only` describes fewer publishers than answered.
+   */
+  scopeAuthority: "every_unit_usable" | "usable_units_only";
+}
+
+/** The facts a status invariant is allowed to see: no raw entry, so it cannot widen itself. */
+interface StatusFacts {
+  status: string;
+  rowCount: number;
+  ambiguityCount: number;
+  counts: Readonly<Record<string, number>>;
+}
+
+/**
+ * How one (tool, status) discloses its population.
+ *
+ * `search_contract` defers to `validateSearchPopulation`, which reads the jointly accepted
+ * coherence table in tests/Lex.Tests/search-population-contract.json. It is IMPORTED rather than
+ * copied: a copy would put three readings of that table in one commit.
+ *
+ * `bounded_disclosure` is shape and bounds ONLY. There is no accepted coherence contract for the
+ * other two populations, and they carry neither `scope_filters_applied` nor `query_ran`, so there
+ * is nothing to be coherent with. Inventing a table for them would be the same defect this lane
+ * exists to stop, written by us this time.
+ */
+type ScopeRule =
+  | { rule: "search_contract" }
+  | { rule: "bounded_disclosure"; measure: ScopeMeasure; companionCounts: readonly string[] }
+  | { rule: "none_published" };
+
+interface ToolSchema {
+  successStatuses: ReadonlySet<string>;
+  rowsField: "hits" | "changes" | "works";
+  rowValid: (row: Record<string, unknown>) => boolean;
+  ambiguityField: string | undefined;
+  requiredCounts: readonly string[];
+  /**
+   * The one count the shipped validator has always tolerated as absent, reading a missing value
+   * as zero. Declared rather than assumed, because "required" and "tolerated absent" are the two
+   * readings that decide whether a real `no_changes_in_period` envelope is evidence or garbage,
+   * and the classifier's current answer for `new_versions` is the second one.
+   */
+  absentCountsAsZero: ReadonlySet<string>;
+  statusInvariant: (facts: StatusFacts) => boolean;
+  /** Keyed by status, and every status this tool can be classified under has an entry. */
+  scopeRule: Readonly<Record<string, ScopeRule>>;
+  requiresRetrievalMode: boolean;
+}
+
+/**
+ * The per-tool schema, keyed by GovernedTool so a fourth tool is a compile error until its schema
+ * exists. Every row is pinned against src/Lex.Mcp/McpCore.cs:
+ *
+ *   search              statuses `ok`; rows `hits`; no counts; no ambiguity field; a population on
+ *                       the ran, mode-unavailable AND refusal paths; `retrieval_mode` required.
+ *   changes_in_period   statuses `ok` and `no_changes_in_period`; rows `changes`; counts
+ *                       `works_changed` and `new_versions`; no ambiguity field; a population on
+ *                       the ran path only.
+ *   in_force_on         statuses `ok`, `no_result` and `ambiguous_version`; rows `works`; count
+ *                       `total_works_in_force`; ambiguity field `ambiguous_works`; a population
+ *                       on the ran path only.
+ *
+ * COUNTS AND SCOPE ARE RAN-ONLY, and the table has to say so. The shipped shape check gets away
+ * with leaving it implicit because it is never reached for a refusal; a merged parser that
+ * applied `requiredCounts` to every unit would make every in-force refusal invalid for lacking a
+ * count it was never sent.
+ */
+const TOOL_SCHEMAS: Readonly<Record<GovernedTool, ToolSchema>> = {
+  search: {
+    // McpCore search emits `Envelope(r, McpStatus.Ok)` on the executed path and nothing else.
+    successStatuses: new Set(["ok"]),
+    rowsField: "hits",
+    // The workspace derives every work identity from lex_id.
+    rowValid: (row) => text(row.lex_id),
+    ambiguityField: undefined,
+    requiredCounts: [],
+    absentCountsAsZero: new Set(),
+    statusInvariant: () => true,
+    // The only tool that discloses a population on all three of its paths:
+    // `refusal["population"] = SearchPopulation(reader, filter, false, false)`,
+    // `["population"] = SearchPopulation(reader, filter, true, false)` beside
+    // `McpStatus.RetrievalModeUnavailable`, and `SearchPopulation(r, filter, true, true)` beside
+    // the hits. All three go through the accepted coherence contract.
+    scopeRule: {
+      ok: { rule: "search_contract" },
+      [RETRIEVAL_MODE_UNAVAILABLE]: { rule: "search_contract" },
+      [LIMITATION_STATUS]: { rule: "search_contract" },
+    },
+    // O3: the producer always declares its actual retrieval mode on a successful search
+    // (`["retrieval_mode"] = execution.RetrievalMode`). Admitting an envelope without one lets a
+    // response of unknown provenance render. This flag is also what makes
+    // `retrieval_mode_unavailable` a class at all: a tool with no retrieval mode cannot have an
+    // unauthorized one.
+    requiresRetrievalMode: true,
+  },
+  changes_in_period: {
+    // `works == 0 ? McpStatus.NoChangesInPeriod : McpStatus.Ok`.
+    successStatuses: new Set(["ok", "no_changes_in_period"]),
+    rowsField: "changes",
+    // The ranking view reads work and calls string methods on it.
+    rowValid: (row) => text(row.work),
+    ambiguityField: undefined,
+    // `["works_changed"] = works, ["new_versions"] = versions`, both from
+    // `IndexReader.ChangeTotals`, declared `(int Works, int Versions)`.
+    requiredCounts: ["works_changed", "new_versions"],
+    absentCountsAsZero: new Set(["new_versions"]),
+    statusInvariant: (facts) => {
+      const worksChanged = facts.counts.works_changed;
+      if (facts.status === "no_changes_in_period") {
+        return worksChanged === 0 && facts.rowCount === 0 && facts.counts.new_versions === 0;
+      }
+      // Rows may legitimately be empty beside a positive count: the producer emits this
+      // publisher's FULL period total beside its slice of one globally merged page, so a
+      // publisher outranked out of the current page returns count>0 with zero rows. Only the
+      // impossible directions are contradictions.
+      if (facts.rowCount > worksChanged) return false;
+      if (facts.rowCount > 0 && worksChanged === 0) return false;
+      return true;
+    },
+    // The refusal branch adds `window`, `works_changed`, `new_versions`, `shown` and `offset` to
+    // `UnsupportedFilterResult` and no population.
+    scopeRule: {
+      ok: {
+        rule: "bounded_disclosure", measure: "works_in_scope",
+        companionCounts: ["expected_works"],
+      },
+      no_changes_in_period: {
+        rule: "bounded_disclosure", measure: "works_in_scope",
+        companionCounts: ["expected_works"],
+      },
+      [LIMITATION_STATUS]: { rule: "none_published" },
+    },
+    requiresRetrievalMode: false,
+  },
+  in_force_on: {
+    // `total == 0 ? McpStatus.NoResult : ambiguities.Count > 0 ? McpStatus.AmbiguousVersion
+    // : McpStatus.Ok`.
+    successStatuses: new Set(["ok", "no_result", "ambiguous_version"]),
+    rowsField: "works",
+    // The in-force view opens rows by work, or by lex_id when the publisher supplies one.
+    rowValid: (row) => text(row.work) || text(row.lex_id),
+    ambiguityField: "ambiguous_works",
+    // `["total_works_in_force"] = total`, from `Rows.InForcePage.TotalGroups`, an `int`.
+    requiredCounts: ["total_works_in_force"],
+    absentCountsAsZero: new Set(),
+    statusInvariant: (facts) => {
+      const total = facts.counts.total_works_in_force;
+      // Status and counts must agree. no_result means the publisher found nothing, so a
+      // positive total contradicts it; round 7 admitted that and rendered a false claim that
+      // no state covers the date beside a response reporting five (O2). ambiguous_version
+      // means at least one ambiguity unit exists.
+      if (facts.status === "no_result"
+        && (total !== 0 || facts.rowCount > 0 || facts.ambiguityCount > 0)) return false;
+      if (facts.status === "ambiguous_version" && facts.ambiguityCount === 0) return false;
+      // As above: one remainingLimit is shared across publishers, so an exhausted page returns
+      // zero rows beside this publisher's full total. Ambiguity units also consume the page, so
+      // rows plus ambiguities is what must not exceed the total.
+      if (facts.rowCount + facts.ambiguityCount > total) return false;
+      if (facts.rowCount > 0 && total === 0) return false;
+      return true;
+    },
+    // `UnsupportedFilterResult(r, unsupported, filter, CapabilityManifest.AsOf, date, "works")`
+    // is returned unchanged, so an in-force refusal carries no population at all.
+    scopeRule: {
+      ok: { rule: "bounded_disclosure", measure: "works_covered", companionCounts: [] },
+      no_result: { rule: "bounded_disclosure", measure: "works_covered", companionCounts: [] },
+      ambiguous_version: {
+        rule: "bounded_disclosure", measure: "works_covered", companionCounts: [],
+      },
+      [LIMITATION_STATUS]: { rule: "none_published" },
+    },
+    requiresRetrievalMode: false,
+  },
+};
+
+/**
+ * The governed operations at RUNTIME, derived from the table's own keys so the two cannot drift.
+ * A limitation naming any other tool is malformed, and this is also the gate that keeps every
+ * table lookup below off an attacker's string: `TOOL_SCHEMAS[tool]` is only ever reached through
+ * this membership test, exactly as the shipped classifier reached `SUCCESS_STATUSES[tool]`.
+ */
+const GOVERNED_TOOLS: ReadonlySet<string> = new Set(Object.keys(TOOL_SCHEMAS));
+
+/**
+ * One publisher's disclosed scope for one already-classified status.
+ *
+ * Called ONLY from a branch whose status is already inside a closed set, so `scopeRule[status]`
+ * is never indexed with a value the response chose. A plain object answers "toString" with a
+ * function from its prototype, and the shipped code was immune to that only because it gated
+ * every lookup behind a membership test first.
+ */
+function parseScope(
+  schema: ToolSchema,
+  status: string,
+  entry: Record<string, unknown>,
+): Scope {
+  const rule: ScopeRule | undefined = schema.scopeRule[status];
+  if (rule === undefined) {
+    return { kind: "unreadable", reason: "no scope rule for this status" };
+  }
+  if (rule.rule === "none_published") {
+    // Fail closed, on the precedent already in this file: an object carrying BOTH the terminal
+    // no-corpus status and an envelope is a forgery rather than a terminal answer. A population
+    // arriving where the producer publishes none is the same kind of object, so it may not be
+    // reported as the producer's own silence.
+    return entry.population === undefined
+      ? { kind: "none_published" }
+      : { kind: "unreadable", reason: "a population arrived where the producer publishes none" };
+  }
+  if (rule.rule === "search_contract") {
+    const verdict = validateSearchPopulation(status, entry.population);
+    if (!verdict.valid) return { kind: "unreadable", reason: verdict.reason };
+    // The contract checks a safe non-negative integer; the producer mints this from a C# `int`
+    // like every other count here, so the Int32 ceiling applies to it too.
+    const works = requiredCount(verdict.population.works_in_scope);
+    if (works === null) {
+      return { kind: "unreadable", reason: "works_in_scope is outside the producer's range" };
+    }
+    return {
+      kind: "disclosed",
+      scope: {
+        measure: "works_in_scope",
+        works,
+        // Closed vocabulary, both members far inside the basis bound.
+        basis: verdict.population.basis,
+        scopeFiltersApplied: verdict.population.scope_filters_applied,
+        queryRan: verdict.population.query_ran,
+        knownExclusions: verdict.population.known_exclusions,
+      },
+    };
+  }
+  const population = record(entry.population);
+  if (!population) {
+    return { kind: "unreadable", reason: "population absent or not an object" };
+  }
+  const works = requiredCount(population[rule.measure]);
+  if (works === null) {
+    return { kind: "unreadable", reason: `${rule.measure} is not a count the producer can mint` };
+  }
+  const basis = boundedText(population.basis, MAX_SCOPE_BASIS);
+  if (basis === undefined) {
+    return { kind: "unreadable", reason: "basis absent or not a bounded string" };
+  }
+  // The producer serializes this as ONE string rather than a list; the shared helper takes both
+  // and returns a bounded, trimmed, de-duplicated set either way.
+  const knownExclusions = exclusionsOf(population.known_exclusions ?? []);
+  if (knownExclusions === null) {
+    return {
+      kind: "unreadable",
+      reason: "known_exclusions is not a bounded list of bounded strings",
+    };
+  }
+  // `expected_works` is `Coverage(1).ExpectedWorks`, an `int?`, so absent and null are both the
+  // producer's own answer. Nothing carries it, but a value that is neither absent nor a count
+  // the producer can mint means this is not the producer's population object.
+  for (const name of rule.companionCounts) {
+    if (optionalCount(population[name]) === null) {
+      return { kind: "unreadable", reason: `${name} is not a count the producer can mint` };
+    }
+  }
+  return {
+    kind: "disclosed",
+    scope: {
+      measure: rule.measure,
+      works,
+      basis,
+      scopeFiltersApplied: undefined,
+      queryRan: undefined,
+      knownExclusions,
+    },
+  };
+}
+
+/** The validated ran payload, or null for a shape the producer could not have emitted. */
+interface RanShape {
+  rows: Record<string, unknown>[];
+  ambiguities: Record<string, unknown>[];
+  counts: Readonly<Record<string, number>>;
+  retrievalMode: "keyword" | "hybrid" | undefined;
+  expansions: string[];
+}
+
+/**
+ * Operation-specific response-shape and count/row coherence, read from the table (round 4, O2).
+ * Both governed direct callers request offset 0, so a positive count with zero rows is ordinary
+ * paging while rows exceeding their count is a contradiction. A contradictory envelope is
+ * invalid: it never becomes results or corpus absence.
+ */
+function ranShape(
+  schema: ToolSchema,
+  entry: Record<string, unknown>,
+  status: string,
+): RanShape | null {
+  const rows = entry[schema.rowsField];
+  if (!rowsValid(rows) || !rows.every(schema.rowValid)) return null;
+  let ambiguities: Record<string, unknown>[] = [];
+  if (schema.ambiguityField !== undefined) {
+    const raw = entry[schema.ambiguityField];
+    if (raw !== undefined) {
+      if (!rowsValid(raw) || !raw.every(schema.rowValid)) return null;
+      ambiguities = raw;
+    }
+  }
+  const counts: Record<string, number> = {};
+  for (const name of schema.requiredCounts) {
+    const value = schema.absentCountsAsZero.has(name)
+      ? optionalCount(entry[name])
+      : requiredCount(entry[name]);
+    if (value === null) return null;
+    counts[name] = value;
+  }
+  let retrievalMode: "keyword" | "hybrid" | undefined;
+  if (schema.requiresRetrievalMode) {
+    const mode = entry.retrieval_mode;
+    if (typeof mode !== "string" || !RETRIEVAL_MODES.has(mode)) return null;
+    retrievalMode = mode === "hybrid" ? "hybrid" : "keyword";
+  }
+  if (!schema.statusInvariant({
+    status, rowCount: rows.length, ambiguityCount: ambiguities.length, counts,
+  })) return null;
+  // Query expansions exist only where a retrieval mode does, which is the same one tool.
+  const expansions = schema.requiresRetrievalMode && Array.isArray(entry.query_expansions)
+    ? [...new Set((entry.query_expansions as unknown[]).filter(boundedExpansion))]
+    : [];
+  return { rows, ambiguities, counts, retrievalMode, expansions };
+}
+
+/** Everything a claim-bearing unit carries before it is known to be attributable. */
+interface ClaimCore {
+  entry: unknown;
+  publisher: string | undefined;
+  status: string;
+  jurisdiction: string | undefined;
+  timelineSemantics: string | undefined;
+  scope: Scope;
+}
+
+interface RanClaim extends ClaimCore, RanShape { kind: "ran"; }
+interface RefusedClaim extends ClaimCore { kind: "refused"; limitation: PublisherLimitation; }
+interface ModeClaim extends ClaimCore { kind: "mode_unavailable"; }
+type ClaimEntry = RanClaim | RefusedClaim | ModeClaim;
+type ClassifiedEntry = ClaimEntry | { kind: "no_corpus" } | { kind: "invalid" };
+
+const isClaim = (item: ClassifiedEntry): item is ClaimEntry =>
+  item.kind === "ran" || item.kind === "refused" || item.kind === "mode_unavailable";
+
+/** Classify one envelope of one governed operation over the table, closed in every direction. */
+function classifyEntry(tool: string, value: unknown): ClassifiedEntry {
   if (!GOVERNED_TOOLS.has(tool)) return { kind: "invalid" };
+  const schema = TOOL_SCHEMAS[tool as GovernedTool];
   const entry = record(value);
   if (!entry) return { kind: "invalid" };
   // The no-corpus refusal is documented as a top-level status with no envelope, for every
@@ -462,6 +882,18 @@ export function classifyEnvelope(tool: string, value: unknown): EnvelopeClass {
   if (!envelope) return { kind: "invalid" };
   const status = envelope.status;
   if (typeof status !== "string") return { kind: "invalid" };
+  // Built only inside a branch whose status is already closed, so nothing below indexes the
+  // scope table with a string the response chose. The validated publisher travels with every
+  // class: the projector groups claims by it, and a grouping key that disagreed with the one the
+  // refusal already carries would split one publisher in two. One validator, three classes.
+  const core = (): ClaimCore => ({
+    entry: value,
+    publisher: publisherIdentity(envelope.publisher),
+    status,
+    jurisdiction: boundedIdentifier(envelope.jurisdiction),
+    timelineSemantics: boundedText(envelope.timeline_semantics, MAX_TIMELINE_SEMANTICS),
+    scope: parseScope(schema, status, entry),
+  });
   if (status === LIMITATION_STATUS) {
     const limitation = validateLimitation({
       status: LIMITATION_STATUS,
@@ -471,18 +903,126 @@ export function classifyEnvelope(tool: string, value: unknown): EnvelopeClass {
       unsupported_filters: entry.unsupported_filters,
     });
     // A refusal without its required typed limitation is invalid, never evidence-free.
-    return limitation ? { kind: "refused", limitation } : { kind: "invalid" };
+    return limitation === null
+      ? { kind: "invalid" }
+      : { ...core(), kind: "refused", limitation };
   }
-  if (tool === "search" && status === "retrieval_mode_unavailable") {
-    return { kind: "mode_unavailable", publisher: publisherIdentity(envelope.publisher) };
+  if (schema.requiresRetrievalMode && status === RETRIEVAL_MODE_UNAVAILABLE) {
+    return { ...core(), kind: "mode_unavailable" };
   }
-  if (!SUCCESS_STATUSES[tool]!.has(status)) return { kind: "invalid" };
-  // The validated publisher travels with the class: the projector groups claims by it, and a
-  // grouping key that disagreed with the one the refusal and the mode-unavailable classes
-  // already carry would split one publisher in two. One validator, three classes.
-  return ranShapeValid(tool, entry, status)
-    ? { kind: "ran", entry: value, publisher: publisherIdentity(envelope.publisher) }
-    : { kind: "invalid" };
+  if (!schema.successStatuses.has(status)) return { kind: "invalid" };
+  const shape = ranShape(schema, entry, status);
+  return shape === null ? { kind: "invalid" } : { ...core(), kind: "ran", ...shape };
+}
+
+/** Classify one envelope of one governed operation, closed in every direction. */
+export function classifyEnvelope(tool: string, value: unknown): EnvelopeClass {
+  const classified = classifyEntry(tool, value);
+  switch (classified.kind) {
+    case "ran":
+      return { kind: "ran", entry: classified.entry, publisher: classified.publisher };
+    case "refused":
+      return { kind: "refused", limitation: classified.limitation };
+    case "mode_unavailable":
+      return { kind: "mode_unavailable", publisher: classified.publisher };
+    case "no_corpus":
+      return { kind: "no_corpus" };
+    case "invalid":
+      return { kind: "invalid" };
+  }
+}
+
+const toUnit = (claim: ClaimEntry, publisher: string): PublisherUnit => {
+  const core = {
+    publisher,
+    status: claim.status,
+    jurisdiction: claim.jurisdiction,
+    timelineSemantics: claim.timelineSemantics,
+    scope: claim.scope,
+    entry: claim.entry,
+  };
+  return claim.kind === "ran"
+    ? {
+      ...core, kind: "ran", rows: claim.rows, ambiguities: claim.ambiguities,
+      counts: claim.counts, retrievalMode: claim.retrievalMode, expansions: claim.expansions,
+    }
+    : claim.kind === "refused"
+      ? { ...core, kind: "refused", limitation: claim.limitation }
+      : { ...core, kind: "mode_unavailable" };
+};
+
+/**
+ * The one parse of one untrusted governed response.
+ *
+ * SAME-PUBLISHER CONFLICT, for every governed tool rather than for search alone. One publisher
+ * cannot both have run this operation and refused it. A response carrying both contains two
+ * claims and nothing that says which is true, so keeping either side is the product choosing one
+ * and asserting it.
+ *
+ * The test is the unit COUNT, not the set of kinds. The reader registry is keyed by collection
+ * with an ordinal comparer and the tools iterate its values, so the producer emits at most one
+ * unit per publisher. A second unit is a shape the producer cannot emit whatever it says, which
+ * makes two identical refusals as illegitimate as a ran beside a refusal. Counting kinds instead
+ * admitted the duplicate case, and two ran units for one publisher doubled the works changed,
+ * the new versions, the population and the rows.
+ *
+ * Decided across the WHOLE response before anything is projected, so arrival order cannot decide
+ * the outcome, and a conflict between DISTINCT publishers is not a conflict at all.
+ *
+ * A claim-bearing unit with no valid publisher identity is not authoritative either. The envelope
+ * always carries the reader's collection, so a successful governed unit without a bounded
+ * producer identity is malformed: unattributable is withheld, not merely ungroupable.
+ */
+export function parseGovernedResponse(tool: GovernedTool, raw: unknown): GovernedResponse {
+  const list = Array.isArray(raw) ? raw : [raw];
+  const classified = list.map((entry) => classifyEntry(tool, entry));
+  const claims = classified.filter(isClaim);
+  const unitsByPublisher = new Map<string, number>();
+  for (const claim of claims) {
+    if (claim.publisher === undefined) continue;
+    unitsByPublisher.set(claim.publisher, (unitsByPublisher.get(claim.publisher) ?? 0) + 1);
+  }
+  const conflictedSet = new Set([...unitsByPublisher]
+    .filter(([, units]) => units > 1)
+    .map(([publisher]) => publisher));
+  const conflicted = [...conflictedSet].sort();
+  const unattributed = claims.filter((claim) => claim.publisher === undefined).length;
+  // Retained as typed incoherence rather than dropped, so an all-conflicted response becomes
+  // incomplete and another publisher's rows may render only as partial.
+  const withheld = claims.filter((claim) => claim.publisher === undefined
+    || conflictedSet.has(claim.publisher)).length;
+  const noCorpusCount = classified.filter((item) => item.kind === "no_corpus").length;
+  // The terminal refusal is GLOBAL and SINGULAR. `McpCore.CallToolCore` returns it before any
+  // per-publisher work runs, so it can never legitimately arrive beside a ran, refused,
+  // mode-unavailable or invalid sibling, AND it can only ever be returned once. Both facts fall
+  // out of one comparison: the response is the terminal answer only when it is exactly one unit
+  // and that unit is the terminal object.
+  const soleTerminalUnit = classified.length === 1 && noCorpusCount === 1;
+  // A no-corpus unit that is not the sole terminal answer is an incoherence, and incoherence is
+  // what unusable means here. Counting it is what routes it into the partial and incomplete
+  // authority the projector already has, instead of dropping it: a ran envelope beside a
+  // no-corpus object used to render whole results and silently discard a global state saying the
+  // server holds no law.
+  const unusable = classified.filter((item) => item.kind === "invalid").length
+    + (soleTerminalUnit ? 0 : noCorpusCount)
+    + withheld;
+  const units = claims.flatMap((claim) => {
+    const publisher = claim.publisher;
+    return publisher === undefined || conflictedSet.has(publisher)
+      ? []
+      : [toUnit(claim, publisher)];
+  }).sort((a, b) => a.publisher < b.publisher ? -1 : a.publisher > b.publisher ? 1 : 0);
+  return {
+    tool,
+    units,
+    conflicted,
+    unattributed,
+    unusable,
+    noCorpus: soleTerminalUnit,
+    scopeAuthority: conflicted.length === 0 && unattributed === 0 && unusable === 0
+      ? "every_unit_usable"
+      : "usable_units_only",
+  };
 }
 
 /**
@@ -529,126 +1069,63 @@ export interface GovernedPartition {
   allRefused: boolean;
 }
 
+/**
+ * The shipped partition, now an ADAPTER over `parseGovernedResponse` and nothing else. Byte for
+ * byte what it always returned, `ran` holding the original entry objects included.
+ *
+ * RESPONSE ORDER IS RECOVERED, not assumed. `parseGovernedResponse` sorts its units by publisher,
+ * and every list here has always been in the order the response carried. It is load-bearing in
+ * two places: `ran` is asserted entry for entry by the population contract tests, and the
+ * limitation cap decides WHICH eight survive, so sorted order would silently change both.
+ */
 export function partitionGovernedResponse(
   tool: string,
   envelopes: unknown[],
 ): GovernedPartition {
   const list = Array.isArray(envelopes) ? envelopes : [];
-  const classes = list.map((entry) => classifyEnvelope(tool, entry));
-
-  // SAME-PUBLISHER TERMINAL-KIND CONFLICT, for every governed tool rather than for search
-  // alone. One publisher cannot both have run this operation and refused it. A response
-  // carrying both contains two claims and nothing that says which is true, so keeping either
-  // side is the product choosing one and asserting it. Keeping the refusal made the screen say
-  // "No selected publisher ran this query", and LIMITATION_EXPLANATION say the publisher did
-  // not run this query, about a response that also said it ran.
-  //
-  // The three claim-bearing classes each speak for one publisher; `no_corpus` and `invalid`
-  // speak for no publisher and are not grouped. An unattributable claim (no valid publisher
-  // identity) cannot be grouped either, and stays out of this: it is already handled as an
-  // unattributed entry upstream.
-  const claimPublisher = (item: EnvelopeClass): string | undefined =>
-    item.kind === "ran" || item.kind === "mode_unavailable" ? item.publisher
-      : item.kind === "refused" ? item.limitation.publisher
-        : undefined;
-  const unitsByPublisher = new Map<string, number>();
-  for (const item of classes) {
-    const publisher = claimPublisher(item);
-    if (publisher === undefined) continue;
-    unitsByPublisher.set(publisher, (unitsByPublisher.get(publisher) ?? 0) + 1);
+  if (!GOVERNED_TOOLS.has(tool)) {
+    // No schema, so nothing in the response can be classified. Every entry is unusable, which is
+    // exactly what the classifier has always said for an ungoverned tool.
+    return {
+      ran: [], limitations: [], modeUnavailablePublishers: [], modeUnavailableCount: 0,
+      noCorpus: false, ambiguityUnits: 0, invalidCount: list.length, conflictedPublishers: [],
+      anyRefused: false, allRefused: false,
+    };
   }
-  /**
-   * Decided across the WHOLE response before anything is projected, so arrival order cannot decide
-   * the outcome, and a conflict between DISTINCT publishers is not a conflict at all.
-   *
-   * The test is the unit count, not the set of kinds. The reader registry is keyed by collection
-   * with an ordinal comparer and the tools iterate its values, so the producer emits at most one
-   * unit per publisher. A second unit is a shape the producer cannot emit whatever it says, which
-   * makes two identical refusals as illegitimate as a ran beside a refusal. Counting kinds instead
-   * admitted the duplicate case, and two ran units for one publisher doubled the works changed,
-   * the new versions, the population and the rows.
-   */
-  const conflicted = new Set([...unitsByPublisher]
-    .filter(([, units]) => units > 1)
-    .map(([publisher]) => publisher));
-  const conflictedPublishers = [...conflicted].sort();
-  /**
-   * A claim-bearing unit with no valid publisher identity is not authoritative.
-   *
-   * The envelope always carries the reader's collection, so a successful governed unit without a
-   * bounded producer identity is malformed. The search surface has a second normalization layer
-   * that withholds these, but the other governed tools reach the projector directly, so a missing,
-   * padded, upper-case or overlong publisher could render rows, totals and exclusions with no
-   * index identity beside them. Unattributable is withheld, not merely ungroupable.
-   */
-  const unattributed = (item: EnvelopeClass): boolean =>
-    (item.kind === "ran" || item.kind === "mode_unavailable" || item.kind === "refused")
-    && claimPublisher(item) === undefined;
-  const inConflict = (item: EnvelopeClass): boolean => {
-    const publisher = claimPublisher(item);
-    return unattributed(item)
-      || (publisher !== undefined && conflicted.has(publisher));
-  };
-  // Retained as typed incoherence rather than dropped, so an all-conflicted response becomes
-  // incomplete and another publisher's rows may render only as partial.
-  const withheldByConflict = classes.filter(inConflict).length;
-
-  const ran = classes.flatMap((item) =>
-    item.kind === "ran" && !inConflict(item) ? [item.entry] : []);
-  const limitations = dedupeLimitations(
-    classes.flatMap((item) =>
-      item.kind === "refused" && !inConflict(item) ? [item.limitation] : []))
-    .slice(0, LIMITATION_CAP);
-  const modeUnavailablePublishers = [...new Set(classes
-    .flatMap((item) => item.kind === "mode_unavailable" && item.publisher
-      && !inConflict(item)
-      ? [item.publisher] : []))];
-  const modeUnavailableCount =
-    classes.filter((item) => item.kind === "mode_unavailable" && !inConflict(item)).length;
-  const refusedCount =
-    classes.filter((item) => item.kind === "refused" && !inConflict(item)).length;
-  const noCorpusCount = classes.filter((item) => item.kind === "no_corpus").length;
-  // The terminal refusal is GLOBAL and SINGULAR. `McpCore.CallToolCore` returns it before any
-  // per-publisher work runs, so it can never legitimately arrive beside a ran, refused,
-  // mode-unavailable or invalid sibling, AND it can only ever be returned once. Both facts fall
-  // out of one comparison: the response is the terminal answer only when it is exactly one unit
-  // and that unit is the terminal object.
-  //
-  // Not "every unit is no-corpus". A repeated pair is not a conservative case to preserve; it
-  // is a shape the producer cannot emit, and accepting it would widen the sentence's authority
-  // to cover a response nothing stands behind. Not "any unit is no-corpus" either: that is the
-  // original defect, and it printed "this server has no verified legal index mounted" beside a
-  // retrieval_mode_unavailable envelope asserting a mounted publisher and index boundary.
-  const soleTerminalUnit = classes.length === 1 && noCorpusCount === 1;
-  // A no-corpus unit that is not the sole terminal answer is an incoherence, and incoherence is
-  // what `invalid` means here. Counting it as invalid is what routes it into the partial and
-  // incomplete authority the projector already has, instead of dropping it: a ran envelope
-  // beside a no-corpus object used to render whole results and silently discard a global state
-  // saying the server holds no law.
-  const invalidCount = classes.filter((item) => item.kind === "invalid").length
-    + (soleTerminalUnit ? 0 : noCorpusCount)
-    + withheldByConflict;
-  const ambiguityUnits = ran
-    .map(record)
-    .reduce((sum, entry) => sum + (Array.isArray(entry?.ambiguous_works)
-      ? entry!.ambiguous_works.length : 0), 0);
+  const parsed = parseGovernedResponse(tool as GovernedTool, list);
+  const byEntry = new Map<unknown, PublisherUnit>();
+  for (const unit of parsed.units) byEntry.set(unit.entry, unit);
+  const ordered = list.flatMap((entry) => {
+    const unit = byEntry.get(entry);
+    return unit === undefined ? [] : [unit];
+  });
+  const ran = ordered.flatMap((unit) => unit.kind === "ran" ? [unit.entry] : []);
+  const refusals = ordered.flatMap((unit) => unit.kind === "refused" ? [unit.limitation] : []);
+  const modeUnavailable = ordered.filter((unit) => unit.kind === "mode_unavailable");
   return {
     ran,
-    limitations,
-    modeUnavailablePublishers,
-    modeUnavailableCount,
-    noCorpus: soleTerminalUnit,
-    ambiguityUnits,
-    invalidCount,
-    conflictedPublishers,
-    anyRefused: refusedCount > 0,
+    limitations: dedupeLimitations(refusals).slice(0, LIMITATION_CAP),
+    modeUnavailablePublishers: [...new Set(modeUnavailable.map((unit) => unit.publisher))],
+    modeUnavailableCount: modeUnavailable.length,
+    noCorpus: parsed.noCorpus,
+    // Read from the raw entry rather than from `RanUnit.ambiguities`, deliberately. The table
+    // gives changes_in_period no ambiguity field, so its unit carries none, while this count has
+    // always read `ambiguous_works` off any ran entry of any tool. Reading the parsed field would
+    // be a behaviour change on a tool the producer never sends the field for.
+    ambiguityUnits: ran
+      .map(record)
+      .reduce((sum, entry) => sum + (Array.isArray(entry?.ambiguous_works)
+        ? entry!.ambiguous_works.length : 0), 0),
+    invalidCount: parsed.unusable,
+    conflictedPublishers: parsed.conflicted,
+    anyRefused: refusals.length > 0,
     // A capability REFUSAL is what the filter-limitation copy explains. A publisher that
     // merely lacked the hybrid retrieval mode refused no filter, so it must not select copy
     // blaming a filter that was never refused.
-    // No separate no-corpus term: a whole-response no-corpus carries refusedCount 0, and a
-    // mixed one is already inside invalidCount above. Restating it here would be a condition
-    // no mutation could kill, which is its own kind of lie about what is tested.
-    allRefused: ran.length === 0 && refusedCount > 0 && invalidCount === 0,
+    // No separate no-corpus term: a whole-response no-corpus carries no refusal, and a mixed one
+    // is already inside the unusable count above. Restating it here would be a condition no
+    // mutation could kill, which is its own kind of lie about what is tested.
+    allRefused: ran.length === 0 && refusals.length > 0 && parsed.unusable === 0,
   };
 }
 
