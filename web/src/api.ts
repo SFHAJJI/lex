@@ -679,6 +679,11 @@ export interface UiEffect {
   diff?: { subject: Subject; from_date: string; to_date: string; note?: string; status?: string;
            anchor_from_present?: boolean; anchor_to_present?: boolean; anchor_text_equal?: boolean;
            provision_level_comparable?: boolean;
+           /** Whether the two dates resolved to different publisher versions, or for an anchored
+               comparison whether that provision moved. A whole-work comparison has no other typed
+               outcome, so without this the reader is told a comparison happened and left to guess
+               how it came out. It is a record fact about versions, never a claim about the law. */
+           changed?: boolean;
            evidence?: EvidenceContext[] };
   history?: { subject: Subject; anchor: string; distinct_texts: number; states: { valid_from: string; valid_to?: string; sha?: string; permalink?: string }[]; evidence?: EvidenceContext[] };
   timeline?: { subject: Subject; rows: { lex_id?: string; valid_from: string; valid_to?: string;
