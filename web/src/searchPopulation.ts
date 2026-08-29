@@ -28,7 +28,7 @@
  */
 
 import { MAX_PUBLISHER_IDENTITY } from "./publisherIdentity.ts";
-import type { GovernedResponse, PublisherUnit } from "./limitations.ts";
+import type { GovernedResponse, PublisherUnit, WithheldClaims } from "./limitations.ts";
 
 export type PopulationBasis =
   | "selected_metadata_scope"
@@ -238,18 +238,19 @@ export type NormalizedSearchResponse =
       /** At most one validated population per publisher, holding none of the withheld ones. */
       populations: PublisherPopulation[];
       /**
-       * Named publishers whose claims were withheld, sorted and distinct. Two causes, both
-       * decided by the one parse: a SAME-PUBLISHER CONFLICT, where more than one claim-bearing
-       * unit arrived and nothing says which is true, and an UNREADABLE REQUIRED SCOPE, where the
-       * producer publishes a population on every search path and this one will not validate.
-       * Empty when only unattributable entries were withheld.
+       * What was withheld, WITH ITS CAUSES KEPT APART (O3).
+       *
+       * Both are decided by the one parse: a SAME-PUBLISHER CONFLICT, where more than one
+       * claim-bearing unit arrived and nothing says which is true, and an UNREADABLE REQUIRED
+       * SCOPE, where the producer publishes a population on every search path and this one
+       * will not validate. They used to be merged into a single `withheldPublishers` list
+       * here, and the surface then told every publisher in it that it had answered this query
+       * in ways that contradict each other, which the parse established for neither cause: a
+       * conflict is now decided on the unit COUNT, and an unreadable scope is one answer this
+       * client could not read. A merged list cannot be un-merged downstream, so the
+       * distinction is carried rather than recovered.
        */
-      withheldPublishers: string[];
-      /**
-       * How many claim-bearing entries carried no bounded publisher identity. They are withheld,
-       * and named to nobody, which is why they are only a count.
-       */
-      unattributedEntries: number;
+      withheld: WithheldClaims;
     };
 
 /**
@@ -289,20 +290,20 @@ export function normalizeSearchResponse(
   const populations = parsed.units
     .map(searchPopulationOf)
     .filter((row): row is PublisherPopulation => row !== undefined);
-  // Both causes are named, and they are named TOGETHER because the reader's question is the same
-  // for both: which publisher is this page showing me nothing from. Sorted and de-duplicated
-  // because the two lists are independent and a publisher can in principle appear in neither
-  // order nor only once.
-  const withheldPublishers = [...new Set([...parsed.conflicted, ...parsed.unreadable])].sort();
-  if (withheldPublishers.length === 0 && parsed.unattributed === 0) {
+  // Passed through from the parse with their causes intact; each list is already sorted and
+  // distinct there. A publisher can in principle appear under both, and it is named under
+  // both, because the two sentences state two different facts about it and neither is a
+  // weaker version of the other.
+  const withheld: WithheldClaims = {
+    conflicted: parsed.conflicted,
+    unreadableScope: parsed.unreadable,
+    unattributed: parsed.unattributed,
+  };
+  if (withheld.conflicted.length === 0 && withheld.unreadableScope.length === 0
+    && withheld.unattributed === 0) {
     return { complete: true, populations };
   }
-  return {
-    complete: false,
-    populations,
-    withheldPublishers,
-    unattributedEntries: parsed.unattributed,
-  };
+  return { complete: false, populations, withheld };
 }
 
 /**

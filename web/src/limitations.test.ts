@@ -1,16 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import {
   classifyEnvelope, clearedSearchResults, gapBadgeStatus, INCOMPLETE_RESPONSE_SENTENCE,
   AMBIGUOUS_ONLY_SENTENCE, LIMITATION_CAP, NO_CORPUS_SENTENCE, NO_CORPUS_STATUS,
   conflictedPublishersSentence, PARTIAL_RESPONSE_SENTENCE, scopedLimitations,
   LIMITATION_EXPLANATION, LIMITATION_STATUS, limitationsForTool, limitationsFromEffect,
-  MIXED_ZERO_SENTENCES, parseGovernedResponse, partitionGovernedResponse,
-  projectGovernedEmptiness,
+  MIXED_ZERO_SENTENCES, parseGovernedResponse, partitionGovernedResponse, partitionOf,
+  projectGovernedEmptiness, withholdingSentence,
   projectSearchResponse, searchAbsenceState, searchEmptyPresentation, searchResultsFromError,
   validateLimitation,
   GOVERNED_FILTERS, MANIFEST_FILTERS,
 } from "./limitations.ts";
+// The withholding disclosure is rendered from the adapter's output, so the cause-preserving
+// tests below drive the same chain Search.tsx does: one parse, one normalization, one
+// sentence (O3).
+import { normalizeSearchResponse } from "./searchPopulation.ts";
 
 /**
  * THE POPULATION IS NOT OPTIONAL DRESSING ON THESE FIXTURES, and it did not used to be here.
@@ -1684,4 +1689,260 @@ test("a quarantined retrieval mode reports unavailability and never falls back",
   assert.equal(degraded.absence, "incomplete_response",
     "an unusable response made a claim about the corpus");
   assert.notEqual(degraded.absence, "no_match");
+});
+
+// ---------------------------------------------------------------------------
+// O2: the producer's response-wide receipts, reconciled once
+// ---------------------------------------------------------------------------
+
+test("a row receipt counting rows the response did not carry forbids the absence claim", () => {
+  // THE REVIEWER'S PROBE, and the reason O2 was raised. Every per-unit check passes: a valid `ok`
+  // search envelope, a coherent population, zero hits, and a `response_row_set` whose own three
+  // members are perfectly well formed. Only the response-wide arithmetic can see it, and the
+  // sentence on the other side of it is the widest absence claim this product makes.
+  const receipt = { maximum: 20, returned: 1, truncated: false };
+  const forged = { ...searchOk("lu-legilux", 0), response_row_set: receipt };
+  assert.equal(classifyEnvelope("search", forged).kind, "ran",
+    "the fixture stopped classifying ran, so this test would prove nothing");
+  assert.equal(parseGovernedResponse("search", [forged]).receipts.kind, "irreconcilable");
+  const projected = projectSearch([forged]);
+  assert.notEqual(projected.absence, "no_match",
+    "a response whose own receipt reported a returned row claimed the corpus holds nothing");
+  assert.equal(projected.absence, "incomplete_response");
+  assert.equal(searchEmptyPresentation(projected.absence as "incomplete_response").sentence,
+    INCOMPLETE_RESPONSE_SENTENCE);
+  // The honest reading of the very same receipt still runs: one hit, one returned row.
+  const honest = { ...searchOk("lu-legilux", 1), response_row_set: receipt };
+  assert.equal(parseGovernedResponse("search", [honest]).receipts.kind, "reconciled");
+  assert.equal(projectSearch([honest]).absence, "has_results");
+});
+
+test("a response-wide receipt must be the same object on every sibling", () => {
+  // `MarkResponseRows` writes ONE object into every item of the output, so two units carrying
+  // different ones did not come from one response. The `returned` sum cannot catch this: both
+  // readings below add up against the rows, and only the sibling comparison sees the swap.
+  const agree = { maximum: 20, returned: 2, truncated: false };
+  const both = [
+    { ...searchOk("lu-legilux", 1), response_row_set: agree },
+    { ...searchOk("eu-eurlex", 1), response_row_set: agree },
+  ];
+  assert.equal(parseGovernedResponse("search", both).receipts.kind, "reconciled");
+  const disagreeing = [
+    both[0],
+    { ...searchOk("eu-eurlex", 1),
+      response_row_set: { maximum: 40, returned: 2, truncated: false } },
+  ];
+  assert.equal(parseGovernedResponse("search", disagreeing).receipts.kind, "irreconcilable");
+  assert.equal(projectSearch(disagreeing).absence, "partial_results",
+    "a response carrying two different receipts presented itself as complete");
+  // Mixed presence is neither present nor absent: one loop stamps every item.
+  assert.equal(parseGovernedResponse("search", [both[0], searchOk("eu-eurlex", 1)]).receipts.kind,
+    "irreconcilable");
+  // The publisher receipt is response-wide in exactly the same way (MarkPublisherSet 701-712), so
+  // two units disagreeing about how many publishers answered is the same defect.
+  assert.equal(parseGovernedResponse("search", [
+    { ...searchOk("lu-legilux", 1),
+      publisher_result_set: { total: 2, returned: 2, maximum: 8, truncated: false } },
+    { ...searchOk("eu-eurlex", 1),
+      publisher_result_set: { total: 3, returned: 3, maximum: 8, truncated: false } },
+  ]).receipts.kind, "irreconcilable");
+});
+
+test("a receipt returning more rows than its own maximum is refused", () => {
+  // `returned` is `limit - remaining` and `maximum` is that same `limit`. No publisher loop can
+  // drive `remaining` below zero: search caps each publisher at `Math.Min(remainingResults, ...)`
+  // and in_force_on pages its groups at `remainingLimit`. So this is not a big page, it is a
+  // number the producer cannot mint.
+  const over = { maximum: 2, returned: 5, truncated: false };
+  assert.equal(
+    classifyEnvelope("search", { ...searchOk("lu-legilux", 5), response_row_set: over }).kind,
+    "invalid");
+  assert.equal(
+    classifyEnvelope("in_force_on", { ...inForceOk("lu-legilux", 5), response_row_set: over }).kind,
+    "invalid");
+  // MergeGlobalChanges adds at most `limit` items, so the global receipt takes the same bound.
+  assert.equal(classifyEnvelope("changes_in_period", {
+    ...changesOk("lu-legilux", 5),
+    global_response_row_set: { offset: 0, maximum: 2, returned: 5, total: 5, truncated: false },
+  }).kind, "invalid");
+  // And the boundary the producer really does reach stays legal, or a full page would be refused.
+  assert.equal(
+    classifyEnvelope("search",
+      { ...searchOk("lu-legilux", 5),
+        response_row_set: { maximum: 5, returned: 5, truncated: false } }).kind,
+    "ran");
+});
+
+test("a forged global total in changes_in_period fails closed", () => {
+  // `total` is `totalAcrossPublishers`, the sum of every stamped unit's `works_changed`, and it is
+  // the figure the report prints beside the rows. Nothing else in the response contradicts a
+  // forged one, which is exactly why it has to be reconciled here.
+  const globalFor = (total: number, returned: number) => ({
+    offset: 0, maximum: 20, returned, total, truncated: total > returned,
+  });
+  const honest = [
+    { ...changesOk("lu-legilux", 1), global_response_row_set: globalFor(2, 2) },
+    { ...changesOk("eu-eurlex", 1), global_response_row_set: globalFor(2, 2) },
+  ];
+  assert.equal(parseGovernedResponse("changes_in_period", honest).receipts.kind, "reconciled");
+  const forged = honest.map((entry) =>
+    ({ ...entry, global_response_row_set: globalFor(900, 2) }));
+  assert.equal(parseGovernedResponse("changes_in_period", forged).receipts.kind, "irreconcilable");
+  assert.equal(projectGovernedEmptiness("changes_in_period", forged, 2).partial, true,
+    "a report whose own total nothing supports presented itself as complete");
+  // A refusal is an addend worth zero, which is what the producer stamps on it. Counting only ran
+  // units would be right by luck here and wrong the moment a refusal claimed a change.
+  const withRefusal = [
+    { ...changesOk("lu-legilux", 1), global_response_row_set: globalFor(1, 1) },
+    { ...refused("eu-eurlex", ["domain"], "changes_in_period"), works_changed: 0,
+      global_response_row_set: globalFor(1, 1) },
+  ];
+  assert.equal(parseGovernedResponse("changes_in_period", withRefusal).receipts.kind,
+    "reconciled");
+  const loudRefusal = [withRefusal[0], { ...withRefusal[1], works_changed: 7 }];
+  assert.equal(parseGovernedResponse("changes_in_period", loudRefusal).receipts.kind,
+    "irreconcilable",
+    "a publisher that refused to look reported seven changed works and was believed");
+});
+
+test("in_force_on counts its ambiguity units as returned rows", () => {
+  // `remainingLimit -= rows.Count + ambiguities.Count`, so a page of one row and one ambiguity
+  // unit reports two returned. Counting visible rows only would make every ambiguous page
+  // irreconcilable, which takes a real answer off the screen rather than a false one.
+  const ambiguous = {
+    envelope: { status: "ambiguous_version", publisher: "lu-legilux" },
+    works: [{ work: "w0" }],
+    ambiguous_works: [{ work: "w1" }],
+    total_works_in_force: 2,
+    population: inForcePopulation(),
+    response_row_set: { maximum: 20, returned: 2, truncated: false },
+  };
+  assert.equal(parseGovernedResponse("in_force_on", [ambiguous]).receipts.kind, "reconciled");
+  assert.equal(parseGovernedResponse("in_force_on", [{
+    ...ambiguous, response_row_set: { maximum: 20, returned: 1, truncated: false },
+  }]).receipts.kind, "irreconcilable");
+});
+
+test("a response that stamps no receipt at all is still readable", () => {
+  // ABSENCE IS TOLERATED, PRESENCE IS BINDING. The governed contract fixtures carry no receipts,
+  // and a client that required them would refuse every response shape it has not seen a live
+  // server produce. This is also the non-trivial baseline for the four tests above: without it,
+  // an always-irreconcilable verdict would satisfy every one of them.
+  const plain = [searchOk("lu-legilux", 1), searchOk("eu-eurlex", 0)];
+  assert.equal(parseGovernedResponse("search", plain).receipts.kind, "reconciled");
+  assert.equal(projectSearch(plain).absence, "has_results");
+  assert.equal(projectSearch([searchOk("lu-legilux", 0)]).absence, "no_match",
+    "an ordinary empty response stopped being able to say the corpus holds nothing");
+});
+
+test("a malformed receipt on a refusal costs the absence claim, not the refusal", () => {
+  // A ran unit fails closed on a malformed receipt and disappears, because its rows and counts
+  // are what the receipt is about. A refusal must NOT: the capability statement is the only thing
+  // it came to make, and dropping it would present a coverage gap as silence. The response loses
+  // the right to speak for coverage instead, and the limitation still renders.
+  const refusal = { ...refused("lu-legilux", ["domain"]), response_row_set: { maximum: "20" } };
+  const parsed = parseGovernedResponse("search", [refusal]);
+  assert.equal(parsed.units.length, 1, "the refusal was dropped along with its receipt");
+  assert.equal(parsed.receipts.kind, "irreconcilable");
+  const partition = partitionOf(parsed);
+  assert.equal(partition.limitations.length, 1, "the capability statement was lost");
+  assert.equal(searchAbsenceState(partition, 0), "incomplete_response",
+    "a response carrying a receipt nothing could read still spoke for coverage");
+});
+
+// ---------------------------------------------------------------------------
+// O3: the withholding sentence states the cause the parse established
+// ---------------------------------------------------------------------------
+
+test("a withheld publisher is told the cause the parse actually established", () => {
+  // One sentence used to speak for both causes, and it asserted the stronger one: every publisher
+  // in the merged list was told it had answered this query in ways that contradict each other. A
+  // conflict is decided on the unit COUNT, so two byte-identical units contradict each other in
+  // no way at all; an unreadable scope is one answer this client could not read. Neither is what
+  // the reader was being told.
+  const conflict = normalizeSearchResponse(parseGovernedResponse("search",
+    [searchOk("lu-legilux", 1), searchOk("lu-legilux", 1)]));
+  assert.equal(conflict.complete, false);
+  const conflicted = conflict.complete === false ? withholdingSentence(conflict.withheld) : "";
+  assert.ok(conflicted.includes("lu-legilux"), "the withheld publisher was not named");
+  assert.ok(conflicted.includes("more than one"), "the conflict cause was not stated");
+  assert.ok(!conflicted.includes("contradict"),
+    "two identical units were reported to the reader as contradicting each other");
+
+  const scope = normalizeSearchResponse(parseGovernedResponse("search",
+    [{ ...searchOk("lu-legilux", 1), population: "1250" }]));
+  assert.equal(scope.complete, false);
+  const unreadable = scope.complete === false ? withholdingSentence(scope.withheld) : "";
+  assert.ok(unreadable.includes("scope Lex could not read"),
+    "the unreadable-scope cause was not stated");
+  assert.ok(!unreadable.includes("contradict"),
+    "an unreadable scope was reported to the reader as a contradiction");
+  assert.ok(!unreadable.includes("more than one"),
+    "one unreadable answer was reported as several answers");
+  // Two causes, two sentences. Equal strings would mean one cause had absorbed the other again.
+  assert.notEqual(conflicted, unreadable);
+});
+
+test("the withholding sentence names several publishers and speaks of each of them", () => {
+  const answer = normalizeSearchResponse(parseGovernedResponse("search", [
+    searchOk("lu-legilux", 1), searchOk("lu-legilux", 1),
+    { ...searchOk("eu-eurlex", 1), population: "1250" },
+  ]));
+  assert.equal(answer.complete, false);
+  const sentence = answer.complete === false ? withholdingSentence(answer.withheld) : "";
+  assert.ok(sentence.includes("lu-legilux"), "the conflicted publisher was not named");
+  assert.ok(sentence.includes("eu-eurlex"), "the unreadable-scope publisher was not named");
+  assert.ok(!sentence.includes("that publisher"),
+    "a list of publishers was addressed in the singular");
+  assert.equal(sentence.split("Nothing from").length - 1, 2,
+    "two causes were collapsed into one sentence");
+});
+
+test("the unattributable entries are counted beside the publishers that are named", () => {
+  const answer = normalizeSearchResponse(parseGovernedResponse("search", [
+    searchOk("lu-legilux", 1),
+    { ...searchOk("eu-eurlex", 1), envelope: { status: "ok", publisher: 7 } },
+  ]));
+  assert.equal(answer.complete, false);
+  const sentence = answer.complete === false ? withholdingSentence(answer.withheld) : "";
+  assert.ok(sentence.includes("1 further result set was not shown"),
+    "an entry with nobody to name was dropped silently");
+  assert.ok(!sentence.includes("Nothing from"),
+    "an unnamed entry was reported as a named publisher");
+});
+
+test("the withholding sentence names nobody rather than naming a hostile list", () => {
+  // The same trap `conflictedPublishersSentence` closes, at the second door. A bare string HAS a
+  // length, so a guard written against emptiness walks its characters: every character of "eu" is
+  // a legal publisher identity, and the sentence would name two publishers that do not exist.
+  const empty = { conflicted: [], unreadableScope: [], unattributed: 0 };
+  assert.equal(withholdingSentence(empty), "");
+  assert.equal(withholdingSentence({ ...empty, conflicted: "eu" as unknown as string[] }), "");
+  assert.equal(withholdingSentence({ ...empty, unreadableScope: "eu" as unknown as string[] }), "");
+  assert.equal(withholdingSentence({ ...empty, unattributed: -1 }), "");
+  assert.equal(withholdingSentence({ ...empty, unattributed: 1.5 }), "");
+  // And a real one is not empty, so the assertions above are about the hostile input rather than
+  // about a function that returns nothing whatever it is given.
+  assert.notEqual(withholdingSentence({ ...empty, conflicted: ["lu-legilux"] }), "");
+});
+
+test("the search surface renders the withholding disclosure through this one function", () => {
+  // STRUCTURAL, like the second-parser guard in searchPopulationContract.test.ts, because no node
+  // test can import a .tsx component. The sentence used to be a private copy inside Search.tsx
+  // where nothing could reach it, and it stated a cause the parse never established. Comments are
+  // stripped first: a sentence explaining the defect is the opposite of a reintroduction.
+  const source = readFileSync(new URL("./Search.tsx", import.meta.url), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.ok(source.includes("withholdingSentence(withheld)"),
+    "the search surface no longer renders the shared withholding sentence");
+  assert.ok(!source.includes("function withholdingSentence"),
+    "Search.tsx carries a private copy of the withholding copy again");
+  assert.ok(!source.includes("contradict"),
+    "the contradiction sentence is back in the search surface");
+  // And the strip is fed the one parse rather than the bytes beside it (O1).
+  assert.ok(source.includes("envelopeStripRows(parsed)"),
+    "the search surface stopped feeding the strip its one parse");
+  assert.ok(!source.includes("envelopeStripRows(res)"),
+    "the search surface handed raw response bytes to the trust strip again");
 });

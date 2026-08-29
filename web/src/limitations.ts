@@ -27,6 +27,15 @@ import { publisherIdentity } from "./publisherIdentity.ts";
 // acyclic: searchPopulation.ts imports publisherIdentity.ts and nothing else, and it takes its
 // classifier as a callback rather than importing this module back.
 import { exclusionsOf, MAX_PRODUCER_COUNT, validateSearchPopulation } from "./searchPopulation.ts";
+// The strip's field validators and its row builder, IMPORTED for the same reason. The
+// runtime direction is limitations.ts -> envelopeStrip.ts and the type import back is
+// erased, exactly as with searchPopulation.ts, so nothing here is cyclic. envelopeStrip.ts
+// used to be a second parser of the same bytes (O1); it now takes this module's output, and
+// the disclosure fields it renders are validated HERE, once, on the unit that carried them.
+import {
+  envelopeDisclosure, envelopeStripRows,
+  type EnvelopeDisclosure, type EnvelopeStripRow,
+} from "./envelopeStrip.ts";
 
 export interface PublisherLimitation {
   status: "filter_not_supported_by_index";
@@ -191,6 +200,74 @@ export function conflictedPublishersSentence(conflicted: unknown): string | unde
   return `Nothing from ${names.join(", ")} is shown here. This response carried more than one `
     + "answer from each publisher named, and Lex stands behind a publisher's claims only when "
     + "exactly one answer arrives from it.";
+}
+
+/**
+ * What one governed response could not attribute, with its causes KEPT APART (O3).
+ *
+ * Two publishers can be missing from a page for two different reasons, and the sentence a reader
+ * is shown has to be the one that is true of them. The projector merged both into a single
+ * `withheldPublishers` list, so one sentence spoke for both, and the sentence it chose asserted
+ * that every publisher named had answered in ways that contradict each other. A publisher whose
+ * required scope would not validate contradicted nothing, and may well have sent exactly one
+ * answer. The cause is typed from the parse to the copy so no renderer can substitute one for the
+ * other.
+ */
+export interface WithheldClaims {
+  /** More than one claim-bearing unit arrived from each of these. Sorted and distinct. */
+  conflicted: readonly string[];
+  /** The scope each of these published for this request could not be read. Sorted, distinct. */
+  unreadableScope: readonly string[];
+  /** Claim-bearing entries carrying no publisher identity, which can only be counted. */
+  unattributed: number;
+}
+
+/**
+ * The publishers whose answer named a scope this client could not read.
+ *
+ * A DIFFERENT FACT from a conflict, and the whole of O3. The producer publishes a population on
+ * every search path, so a unit whose population will not validate authorizes nothing: not its
+ * rows, not its denominator, not an absence claim. That is worth telling a reader plainly, and it
+ * is not "answered this query in ways that contradict each other", which is what they were told.
+ *
+ * "Each publisher named" rather than "that publisher", because the list can carry several and
+ * this function's contract is to name them rather than to count them.
+ */
+function unreadableScopeSentence(unreadable: unknown): string | undefined {
+  const names = conflictedPublisherNames(unreadable);
+  if (names === null || names.length === 0) return undefined;
+  return `Nothing from ${names.join(", ")} is shown here. Each publisher named returned a scope `
+    + "Lex could not read, and Lex shows a publisher's results only when it can state the scope "
+    + "they were drawn from.";
+}
+
+/** The entries with no publisher to name. Counted, because naming is not available. */
+function unattributedSentence(count: unknown): string | undefined {
+  const entries = requiredCount(count);
+  if (entries === null || entries === 0) return undefined;
+  return `${entries} further result set${entries === 1 ? " was" : "s were"} not shown, because `
+    + "they arrived without a publisher to attribute them to.";
+}
+
+/**
+ * The withholding disclosure: one sentence per cause, and never a cause the parse did not
+ * establish.
+ *
+ * Named wherever there is a name, because a reader deciding whether this answer covers what they
+ * care about needs to know which publisher is missing from it. The unattributable entries are the
+ * exception and are counted, because there is nobody to name.
+ *
+ * Every list is validated HERE rather than trusted from its annotation, exactly as
+ * `conflictedPublishersSentence` validates its own. An annotation is erased at runtime and
+ * defends nothing, and the non-empty-string trap is the same one: every character of "eu" is a
+ * legal publisher identity, so a guard written against emptiness renders "Nothing from e, u".
+ */
+export function withholdingSentence(withheld: WithheldClaims): string {
+  return [
+    conflictedPublishersSentence(withheld.conflicted),
+    unreadableScopeSentence(withheld.unreadableScope),
+    unattributedSentence(withheld.unattributed),
+  ].filter((part): part is string => part !== undefined).join(" ");
 }
 
 /** The fixed sentence for a response that cannot support results or absence claims. */
@@ -394,13 +471,15 @@ const text = (value: unknown): boolean =>
 // about duplicates. It is a shape. ONE function takes `unknown`, everything downstream takes a
 // parsed unit, and disagreement stops being expressible rather than merely being prevented.
 //
-// This is that function, and it is now the only parse on the search path. `classifyEnvelope`,
-// `partitionGovernedResponse`, `normalizeSearchResponse`, `projectSearchResponse` and
-// `projectGovernedEmptiness` are all views of its output. `envelopeStripRows` is NOT yet, and
-// that is the one authority this cutover did not close: it is called from App.tsx, which this
-// change was not permitted to edit, so it still walks the raw response. Until it is routed
-// through here, an entry the table refuses can still contribute a build date and a signature
-// claim to the index strip.
+// This is that function, and it is now the only parse of a governed response anywhere in this
+// workspace. `classifyEnvelope`, `partitionGovernedResponse`, `normalizeSearchResponse`,
+// `projectSearchResponse`, `projectGovernedEmptiness` and `envelopeStripRows` are all views of
+// its output. The strip was the last holdout and the most dangerous one, because it was not
+// merely a second reading: it read fields no classification governed at all. An entry the
+// table refused as unusable still contributed a build date and a valid-signature badge to the
+// trust strip, so the surface whose whole job is to say which index answered was answering
+// from input this parser had rejected. It takes the parsed response now, and there is nothing
+// left for it to disagree with (O1).
 
 /**
  * The governed operations, closed at COMPILE time rather than carried as a string. A fourth tool
@@ -485,13 +564,28 @@ interface UnitCore {
   timelineSemantics: string | undefined;
   scope: Scope;
   /**
-   * TRANSITIONAL, and now down to two readers. The raw entry this unit was parsed from.
+   * The index identity this envelope disclosed, validated at this one parse (O1).
+   *
+   * It travels on the unit rather than being re-derived by the strip, because the strip makes
+   * the strongest claim on the page: a build date and a signature verdict. Those may be made
+   * only for a unit this table admitted, and the only way to guarantee that is for the
+   * admission and the disclosure to be one object.
+   */
+  disclosure: EnvelopeDisclosure;
+  /**
+   * The response-wide paging receipts this unit carried, typed and retained so the whole
+   * response can be reconciled once (O2). Present on refusals as well as ran units, because
+   * the producer stamps them in one loop over the whole output.
+   */
+  receipts: UnitReceipts;
+  /**
+   * TRANSITIONAL, and now down to ONE reader. The raw entry this unit was parsed from.
    *
    * `GovernedPartition.ran` still returns the original entry objects, because App.tsx reads
    * `changes`, `works`, `envelope.jurisdiction`, `envelope.timeline_semantics` and
    * `population.basis` off them and passes them to the api.ts sum helpers, and this change was
-   * not permitted to edit App.tsx. `envelopeStripRows` is the other, and it does not even come
-   * through here: it walks the raw response for itself.
+   * not permitted to edit App.tsx. `envelopeStripRows` was the other and is not any more: it
+   * takes the parsed response, so no trust claim outside this module reads a raw entry.
    *
    * The parsed unit already models everything App.tsx reads. This field goes when those call
    * sites move to `ranUnits`, which is the point of the whole exercise. Nothing in this module
@@ -548,6 +642,12 @@ export interface GovernedResponse {
   unusable: number;
   /** Exactly one bare `no_corpus_mounted` unit and nothing else. */
   noCorpus: boolean;
+  /**
+   * Whether the producer's own response-wide receipts add up against the admitted units
+   * (O2). Irreconcilable never suppresses rows; it forbids an absence claim, which is the
+   * only claim contradicted arithmetic can falsify.
+   */
+  receipts: ReceiptReconciliation;
   /**
    * Whether the units below are the whole response or only the part of it that survived. A
    * denominator drawn from `usable_units_only` describes fewer publishers than answered.
@@ -704,6 +804,13 @@ function rowSetOf(value: unknown): RowSetReceipt | null | undefined {
   const returned = requiredCount(o.returned);
   const truncated = flag(o.truncated);
   if (maximum === null || returned === null || truncated === undefined) return null;
+  // `returned` is `limit - remaining` and `maximum` is that same `limit` (McpCore 1171, 1576),
+  // and no path lets `remaining` go negative: search caps each publisher at
+  // `Math.Min(remainingResults, ...)` and in_force_on pages its groups at `remainingLimit`, so
+  // its rows plus ambiguity units never exceed it either. changes_in_period mints this one
+  // from `shown`, a slice of a merged page of at most `limit`. A receipt claiming to have
+  // returned more than the page could hold is arithmetic the producer cannot perform (O2).
+  if (returned > maximum) return null;
   return { maximum, returned, truncated };
 }
 
@@ -723,7 +830,197 @@ function globalRowSetOf(value: unknown): GlobalRowSetReceipt | null | undefined 
   // `truncated = totalAcrossPublishers > offset + candidates.Count`, all three of which the
   // receipt carries, so this equality is the receipt's own arithmetic and not an inference.
   if (truncated !== (total > offset + returned)) return null;
+  // `returned` is `candidates.Count` and `maximum` is the same `limit` MergeGlobalChanges was
+  // given, whose loop adds at most `limit` items, so a larger `returned` is not a big page but
+  // a number that method cannot produce (O2). The other direction, `offset + returned <=
+  // total`, is NOT a bound and must not be added: an offset past the end of a short report
+  // legitimately exceeds the total while returning nothing.
+  if (returned > maximum) return null;
   return { offset, maximum, returned, total, truncated };
+}
+
+// ---------------------------------------------------------------------------
+// Response-wide receipt reconciliation (O2)
+// ---------------------------------------------------------------------------
+//
+// WHAT THE PER-UNIT CHECKS COULD NEVER SEE. Everything above validates one receipt's own members
+// and the equalities ONE entry determines. Nothing reconciled the receipts the producer mints
+// across the WHOLE response, and those are the ones that situate an empty page. A valid search
+// unit with zero hits beside `response_row_set = { maximum: 20, returned: 1, truncated: false }`
+// passed every per-unit test, and the surface answered `Nothing in the corpus matches that.`
+// while the response's own receipt said a row had been returned. A false absence carrying the
+// producer's own contradiction is the worst failure this product has.
+//
+// The mint sites, read from src/Lex.Mcp/McpCore.cs:
+//
+//   MarkPublisherSet (701-712) writes ONE `publisher_result_set` into every item of all three
+//   tools, so its three numbers are response-wide and identical by construction.
+//
+//   MarkResponseRows (713-725) writes ONE `response_row_set` into every item of search (1576) and
+//   in_force_on (1171). Its `returned` is `limit - remaining`, counted ACROSS publishers: the
+//   hits every ran unit shipped for search, and rows plus ambiguity units for in_force_on, since
+//   `remainingLimit -= rows.Count + ambiguities.Count`.
+//
+//   changes_in_period (1865-1882) stamps two. Its `response_row_set` is PER UNIT, minted from
+//   that unit's own `shown` and `works_changed` and already checked in the table above. Beside it
+//   is a response-wide `global_response_row_set` whose `returned` is `candidates.Count`, the one
+//   merged page, and whose `total` is `totalAcrossPublishers`, the sum of every unit's
+//   `works_changed`. Refusals are stamped too and carry `works_changed = 0`, so they are addends
+//   worth zero rather than units standing outside the sum.
+//
+// ABSENCE IS STILL TOLERATED, PRESENCE IS STILL BINDING, and MIXED PRESENCE is neither: one loop
+// stamps every item, so a receipt on some units and not others is a shape the producer cannot
+// emit. A response whose receipts will not reconcile does not lose its rows. It loses the right
+// to claim absence, which is the only claim this arithmetic can falsify.
+
+/**
+ * The response-wide receipts one unit carried, typed at the one parse (O2).
+ *
+ * A ran unit's `paging` holds the SAME OBJECTS, by reference: `receiptsOf` validates them
+ * once and both views point at its result. That is one parse with two views, not two
+ * readings: `paging` is what one entry's own numbers must cohere with, and this is what the
+ * response as a whole must reconcile, and there is nothing for them to disagree about.
+ */
+export interface UnitReceipts {
+  publisherSet: PublisherSetReceipt | undefined;
+  rowSet: RowSetReceipt | undefined;
+  globalRowSet: GlobalRowSetReceipt | undefined;
+  /**
+   * This unit's addend for the response-wide total, where its tool publishes one. Read from the
+   * same field on a refusal as on a ran unit, because the producer stamps the refusal's zero
+   * itself and a refusal that carried anything else would not be the producer's.
+   */
+  totalAddend: number | undefined;
+  /** A receipt arrived whose shape the producer could not have minted. */
+  malformed: boolean;
+}
+
+/**
+ * Every response-wide receipt one entry carried.
+ *
+ * Runs for EVERY claim-bearing unit, refusals included, because the producer stamps them in one
+ * loop over the whole output: a refusal's receipt is evidence about the response exactly as a ran
+ * unit's is, and the shipped parser read them only on the ran path.
+ *
+ * Never null. A malformed receipt is RECORDED rather than thrown, so a ran unit keeps failing
+ * closed on it through `pagingOf` while a refusal makes the RESPONSE irreconcilable instead of
+ * losing the coverage statement it came to make.
+ */
+function receiptsOf(schema: ToolSchema, entry: Record<string, unknown>): UnitReceipts {
+  const publisherSet = publisherSetOf(entry.publisher_result_set);
+  const rowSet = rowSetOf(entry.response_row_set);
+  const globalRowSet = schema.paging.hasGlobalRowSet
+    ? globalRowSetOf(entry.global_response_row_set)
+    : undefined;
+  const rawTotal = schema.responseTotal === undefined
+    ? undefined
+    : entry[schema.responseTotal];
+  const totalAddend = rawTotal === undefined ? undefined : requiredCount(rawTotal);
+  return {
+    publisherSet: publisherSet ?? undefined,
+    rowSet: rowSet ?? undefined,
+    globalRowSet: globalRowSet ?? undefined,
+    totalAddend: totalAddend ?? undefined,
+    malformed: publisherSet === null || rowSet === null || globalRowSet === null
+      || totalAddend === null,
+  };
+}
+
+/**
+ * Every member of each receipt, as a mapped type, so a member added to one of them fails the
+ * build until it is compared here too. The same guard the strip uses over its row fields, for the
+ * same reason: comparing a subset is how two disagreeing receipts pass for one.
+ */
+const PUBLISHER_SET_FIELDS: { [K in keyof PublisherSetReceipt]: true } = {
+  total: true, returned: true, maximum: true, truncated: true,
+};
+const ROW_SET_FIELDS: { [K in keyof RowSetReceipt]: true } = {
+  maximum: true, returned: true, truncated: true,
+};
+const GLOBAL_ROW_SET_FIELDS: { [K in keyof GlobalRowSetReceipt]: true } = {
+  offset: true, maximum: true, returned: true, total: true, truncated: true,
+};
+
+const sameReceipt = <T extends object>(
+  fields: { [K in keyof T]: true }, a: T, b: T,
+): boolean => (Object.keys(fields) as (keyof T)[]).every((field) => a[field] === b[field]);
+
+/** Whether the producer's own response-wide arithmetic adds up (O2). */
+export type ReceiptReconciliation =
+  | { kind: "reconciled" }
+  | { kind: "irreconcilable"; reason: string };
+
+const RECONCILED: ReceiptReconciliation = { kind: "reconciled" };
+
+const irreconcilable = (reason: string): ReceiptReconciliation =>
+  ({ kind: "irreconcilable", reason });
+
+/** Present on all of them, on none of them, or on some: the third is a shape nothing emits. */
+function presenceOf<T>(carried: (T | undefined)[]): { mixed: boolean; all: T[] } {
+  const all = carried.filter((item): item is T => item !== undefined);
+  return { mixed: all.length > 0 && all.length !== carried.length, all };
+}
+
+/**
+ * The response-wide reconciliation, performed once, at the one parse boundary.
+ *
+ * Over the ADMITTED units and no others. A rejected, unattributed or conflicted unit has already
+ * made the response unusable, and its receipt is no more trustworthy than the claim it arrived
+ * with; a sum that included it would be reconciling forged arithmetic against real rows.
+ */
+function reconcileReceipts(schema: ToolSchema, units: PublisherUnit[]): ReceiptReconciliation {
+  if (units.some((unit) => unit.receipts.malformed)) {
+    return irreconcilable("a receipt arrived that the producer could not have minted");
+  }
+  const publishers = presenceOf(units.map((unit) => unit.receipts.publisherSet));
+  if (publishers.mixed) {
+    return irreconcilable("publisher_result_set was stamped on some units and not others");
+  }
+  const firstPublisherSet = publishers.all[0];
+  if (firstPublisherSet !== undefined && publishers.all.some(
+    (receipt) => !sameReceipt(PUBLISHER_SET_FIELDS, receipt, firstPublisherSet))) {
+    return irreconcilable("publisher_result_set disagreed between siblings");
+  }
+  // Only a ran unit ships rows; a refusal and an unavailable mode ship none and are addends worth
+  // zero, exactly as the producer counts them.
+  const returned = units.reduce((sum, unit) => sum + (unit.kind === "ran"
+    ? schema.commonReturned({
+      rowCount: unit.rows.length, ambiguityCount: unit.ambiguities.length,
+    })
+    : 0), 0);
+  if (schema.commonReceipt === "row_set") {
+    const rows = presenceOf(units.map((unit) => unit.receipts.rowSet));
+    if (rows.mixed) {
+      return irreconcilable("response_row_set was stamped on some units and not others");
+    }
+    const first = rows.all[0];
+    if (first === undefined) return RECONCILED;
+    if (rows.all.some((receipt) => !sameReceipt(ROW_SET_FIELDS, receipt, first))) {
+      return irreconcilable("response_row_set disagreed between siblings");
+    }
+    return first.returned === returned
+      ? RECONCILED
+      : irreconcilable("response_row_set counted rows this response did not carry");
+  }
+  const globals = presenceOf(units.map((unit) => unit.receipts.globalRowSet));
+  if (globals.mixed) {
+    return irreconcilable("global_response_row_set was stamped on some units and not others");
+  }
+  const first = globals.all[0];
+  if (first === undefined) return RECONCILED;
+  if (globals.all.some((receipt) => !sameReceipt(GLOBAL_ROW_SET_FIELDS, receipt, first))) {
+    return irreconcilable("global_response_row_set disagreed between siblings");
+  }
+  if (first.returned !== returned) {
+    return irreconcilable("global_response_row_set counted rows this response did not carry");
+  }
+  // `totalAcrossPublishers` is the sum of every stamped unit's `works_changed`, refusals included
+  // at zero. A total the units do not sum to is a figure this response cannot support, and it is
+  // the figure the report prints beside the rows.
+  const total = units.reduce((sum, unit) => sum + (unit.receipts.totalAddend ?? 0), 0);
+  return first.total === total
+    ? RECONCILED
+    : irreconcilable("global_response_row_set states a total its own units do not sum to");
 }
 
 /**
@@ -733,7 +1030,11 @@ function globalRowSetOf(value: unknown): GlobalRowSetReceipt | null | undefined 
  * exist only on the executed path, and applying the rule to a refusal would invalidate every
  * in-force refusal for lacking a receipt it was never asked to carry.
  */
-function pagingOf(schema: PagingSchema, entry: Record<string, unknown>): PagingEvidence | null {
+function pagingOf(
+  schema: PagingSchema,
+  entry: Record<string, unknown>,
+  receipts: UnitReceipts,
+): PagingEvidence | null {
   const rawOffset = schema.hasOffset ? entry.offset : undefined;
   const rawShown = schema.hasShown ? entry.shown : undefined;
   const rawTruncated = schema.hasTruncated ? entry.truncated : undefined;
@@ -748,13 +1049,18 @@ function pagingOf(schema: PagingSchema, entry: Record<string, unknown>): PagingE
   const truncated = rawTruncated === undefined ? undefined : flag(rawTruncated);
   if (offset === null || shown === null) return null;
   if (rawTruncated !== undefined && truncated === undefined) return null;
-  const publisherSet = publisherSetOf(entry.publisher_result_set);
-  const rowSet = rowSetOf(entry.response_row_set);
-  const globalRowSet = schema.hasGlobalRowSet
-    ? globalRowSetOf(entry.global_response_row_set)
-    : undefined;
-  if (publisherSet === null || rowSet === null || globalRowSet === null) return null;
-  return { offset, shown, truncated, publisherSet, rowSet, globalRowSet };
+  // The three receipts are read ONCE, by `receiptsOf`, and consumed here. Reading them a
+  // second time would be the two-authorities defect in miniature: this validator and the
+  // response-wide reconciler could reach different verdicts about one object.
+  if (receipts.malformed) return null;
+  return {
+    offset,
+    shown,
+    truncated,
+    publisherSet: receipts.publisherSet,
+    rowSet: receipts.rowSet,
+    globalRowSet: receipts.globalRowSet,
+  };
 }
 
 /**
@@ -799,6 +1105,21 @@ interface ToolSchema {
    */
   absenceTotal: string | undefined;
   requiresRetrievalMode: boolean;
+  /**
+   * Which receipt the producer stamps IDENTICALLY on every unit of this tool's response, and
+   * therefore the one that must be reconciled across the whole response rather than inside
+   * one unit. `MarkResponseRows` writes `response_row_set` for search and in_force_on;
+   * changes_in_period writes a PER UNIT `response_row_set` from its own `shown` and a
+   * response-wide `global_response_row_set` beside it.
+   */
+  commonReceipt: "row_set" | "global_row_set";
+  /** How many rows of one ran unit that receipt's `returned` counts. */
+  commonReturned: (facts: { rowCount: number; ambiguityCount: number }) => number;
+  /**
+   * The per-unit field the response-wide receipt's `total` sums, where the tool publishes
+   * one. `undefined` for the two tools whose common receipt carries no total at all.
+   */
+  responseTotal: string | undefined;
 }
 
 /**
@@ -858,6 +1179,12 @@ const TOOL_SCHEMAS: Readonly<Record<GovernedTool, ToolSchema>> = {
     // `retrieval_mode_unavailable` a class at all: a tool with no retrieval mode cannot have an
     // unauthorized one.
     requiresRetrievalMode: true,
+    // `MarkResponseRows(outp, limit, limit - remainingResults, ...)` (McpCore 1576), and
+    // `remainingResults -= hitsArr.Count` for each publisher, so this receipt's `returned` is
+    // the hits every ran unit shipped. Search has no response-wide total.
+    commonReceipt: "row_set",
+    commonReturned: (facts) => facts.rowCount,
+    responseTotal: undefined,
   },
   changes_in_period: {
     // `works == 0 ? McpStatus.NoChangesInPeriod : McpStatus.Ok`.
@@ -922,6 +1249,13 @@ const TOOL_SCHEMAS: Readonly<Record<GovernedTool, ToolSchema>> = {
     // globally merged page. A positive one with nothing on screen means the page is a slice.
     absenceTotal: "works_changed",
     requiresRetrievalMode: false,
+    // The one tool whose response-wide receipt is the global one (McpCore 1874-1881):
+    // `returned` is `candidates.Count`, the single merged page that every unit's rows were
+    // sliced out of, and `total` is `totalAcrossPublishers`, the sum of every unit's
+    // `works_changed`. Its per-unit `response_row_set` is checked in `paging.coherent` above.
+    commonReceipt: "global_row_set",
+    commonReturned: (facts) => facts.rowCount,
+    responseTotal: "works_changed",
   },
   in_force_on: {
     // `total == 0 ? McpStatus.NoResult : ambiguities.Count > 0 ? McpStatus.AmbiguousVersion
@@ -976,6 +1310,13 @@ const TOOL_SCHEMAS: Readonly<Record<GovernedTool, ToolSchema>> = {
     // shared remainingLimit can page every row of it out of this response.
     absenceTotal: "total_works_in_force",
     requiresRetrievalMode: false,
+    // `MarkResponseRows(outp, limit, limit - remainingLimit, ...)` (McpCore 1171), and
+    // `remainingLimit -= rows.Count + ambiguities.Count`, so an ambiguity unit is a returned
+    // row as far as this receipt is concerned. Counting only visible rows here would make
+    // every ambiguous page irreconcilable.
+    commonReceipt: "row_set",
+    commonReturned: (facts) => facts.rowCount + facts.ambiguityCount,
+    responseTotal: undefined,
   },
 };
 
@@ -1097,6 +1438,7 @@ function ranShape(
   schema: ToolSchema,
   entry: Record<string, unknown>,
   status: string,
+  receipts: UnitReceipts,
 ): RanShape | null {
   const rows = entry[schema.rowsField];
   if (!rowsValid(rows) || !rows.every(schema.rowValid)) return null;
@@ -1128,7 +1470,7 @@ function ranShape(
   // The producer's own paging arithmetic, checked against this entry's own rows and counts
   // (O16). A receipt that contradicts them is not a detail beside the answer: it is what turns
   // an empty slice of a page into a confident statement that there was nothing to show.
-  const paging = pagingOf(schema.paging, entry);
+  const paging = pagingOf(schema.paging, entry, receipts);
   if (paging === null) return null;
   if (!schema.paging.coherent({
     rowCount: rows.length, ambiguityCount: ambiguities.length, counts, paging,
@@ -1148,6 +1490,8 @@ interface ClaimCore {
   jurisdiction: string | undefined;
   timelineSemantics: string | undefined;
   scope: Scope;
+  disclosure: EnvelopeDisclosure;
+  receipts: UnitReceipts;
 }
 
 interface RanClaim extends ClaimCore, RanShape { kind: "ran"; }
@@ -1215,6 +1559,12 @@ function classifyEntry(tool: string, value: unknown): ClassifiedEntry {
   // scope table with a string the response chose. The validated publisher travels with every
   // class: the projector groups claims by it, and a grouping key that disagreed with the one the
   // refusal already carries would split one publisher in two. One validator, three classes.
+  // ONE read of the receipts and ONE read of the disclosure, for every class of unit. A
+  // refusal discloses its index identity exactly as a ran unit does, since `Envelope` stamps
+  // freshness and artifact on every path it builds, and it carries the same response-wide
+  // receipts. Reading either on the ran branch alone is what left the strip walking raw bytes
+  // for facts no classification governed.
+  const receipts = receiptsOf(schema, entry);
   const core = (): ClaimCore => ({
     entry: value,
     publisher: publisherIdentity(envelope.publisher),
@@ -1222,6 +1572,8 @@ function classifyEntry(tool: string, value: unknown): ClassifiedEntry {
     jurisdiction: boundedIdentifier(envelope.jurisdiction),
     timelineSemantics: boundedText(envelope.timeline_semantics, MAX_TIMELINE_SEMANTICS),
     scope: parseScope(schema, status, entry),
+    disclosure: envelopeDisclosure(envelope),
+    receipts,
   });
   /**
    * A CLAIM SURVIVES ONLY WITH A READABLE SCOPE, and saying so here is what makes `unreadable`
@@ -1261,7 +1613,7 @@ function classifyEntry(tool: string, value: unknown): ClassifiedEntry {
     return claimed((claim) => ({ ...claim, kind: "mode_unavailable" }));
   }
   if (!schema.successStatuses.has(status)) return { kind: "invalid" };
-  const shape = ranShape(schema, entry, status);
+  const shape = ranShape(schema, entry, status, receipts);
   return shape === null
     ? { kind: "invalid" }
     : claimed((claim) => ({ ...claim, kind: "ran", ...shape }));
@@ -1292,6 +1644,8 @@ const toUnit = (claim: ClaimEntry, publisher: string, index: number): PublisherU
     jurisdiction: claim.jurisdiction,
     timelineSemantics: claim.timelineSemantics,
     scope: claim.scope,
+    disclosure: claim.disclosure,
+    receipts: claim.receipts,
     entry: claim.entry,
   };
   return claim.kind === "ran"
@@ -1372,9 +1726,14 @@ export function parseGovernedResponse(tool: GovernedTool, raw: unknown): Governe
       ? []
       : [toUnit(claim, publisher, index)];
   }).sort((a, b) => a.publisher < b.publisher ? -1 : a.publisher > b.publisher ? 1 : 0);
+  // The response-wide arithmetic, over the ADMITTED units and no others (O2). It runs after
+  // withholding, so a conflicted or unattributable unit is never an addend, and it runs
+  // before any projection, so no surface can reach a row count the receipts contradict.
+  const receipts = reconcileReceipts(TOOL_SCHEMAS[tool], units);
   return {
     tool,
     units,
+    receipts,
     conflicted,
     unattributed,
     unreadable,
@@ -1439,6 +1798,23 @@ export interface GovernedPartition {
    * whose counts were being added together.
    */
   conflictedPublishers: string[];
+  /**
+   * The producer's own response-wide receipts do not reconcile against the admitted units
+   * (O2).
+   *
+   * It never suppresses a row. The rows are the publisher's own text; the receipt is a claim
+   * about the page they sit on. What it forbids is the ABSENCE claim, which is the one thing
+   * contradicted arithmetic can falsify, and it makes the response partial so the reader is
+   * told the answer could not be checked end to end.
+   */
+  receiptsIrreconcilable: boolean;
+  /**
+   * The index-identity rows this response authorizes, from the same parse as everything else
+   * (O1). Computed here rather than by a caller holding the raw bytes, because a strip row
+   * states a build date and a signature verdict, which is the strongest claim on the page,
+   * and a claim that strong may only come from a unit this table admitted.
+   */
+  stripRows: EnvelopeStripRow[];
   /** At least one envelope refused. */
   anyRefused: boolean;
   /** Nothing ran and at least one envelope refused or lacked the retrieval mode. */
@@ -1496,6 +1872,8 @@ export function partitionOf(parsed: GovernedResponse): GovernedPartition {
     ambiguityUnits: ranUnits.reduce((sum, unit) => sum + unit.ambiguities.length, 0),
     invalidCount: parsed.unusable,
     conflictedPublishers: parsed.conflicted,
+    receiptsIrreconcilable: parsed.receipts.kind === "irreconcilable",
+    stripRows: envelopeStripRows(parsed),
     anyRefused: refusals.length > 0,
     // A capability REFUSAL is what the filter-limitation copy explains. A publisher that
     // merely lacked the hybrid retrieval mode refused no filter, so it must not select copy
@@ -1519,6 +1897,8 @@ export function partitionGovernedResponse(
       ran: [], ranUnits: [], moreBeyondPage: false, limitations: [],
       modeUnavailablePublishers: [], modeUnavailableCount: 0,
       noCorpus: false, ambiguityUnits: 0, invalidCount: list.length, conflictedPublishers: [],
+      // No schema means nothing was classified, so nothing authorizes a strip claim either.
+      receiptsIrreconcilable: false, stripRows: [],
       anyRefused: false, allRefused: false,
     };
   }
@@ -1537,13 +1917,19 @@ export function searchAbsenceState(
   ranHitCount: number,
 ): "has_results" | "partial_results" | "all_refused" | "no_corpus" | "mixed_no_match"
   | "no_match" | "incomplete_response" {
+  // TWO facts, not one, and they are not the same fact. `invalidCount` counts units this
+  // parser could not read. `receiptsIrreconcilable` is units it read perfectly well whose own
+  // response-wide arithmetic contradicts what they carry, and it was invisible here: a valid
+  // search unit with zero hits beside a receipt reporting one returned row reached the reader
+  // as `Nothing in the corpus matches that.` (O2).
+  const unsupported = partition.invalidCount > 0 || partition.receiptsIrreconcilable;
   // Rows exist, but a sibling response was unusable: the answer is incomplete and says so
   // rather than presenting itself as the whole of what Lex holds.
   if (ranHitCount > 0) {
-    return partition.invalidCount > 0 ? "partial_results" : "has_results";
+    return unsupported ? "partial_results" : "has_results";
   }
   if (partition.noCorpus) return "no_corpus";
-  if (partition.invalidCount > 0) return "incomplete_response";
+  if (unsupported) return "incomplete_response";
   if (partition.allRefused) return "all_refused";
   if (partition.ran.length === 0) return "incomplete_response";
   return partition.anyRefused || partition.modeUnavailableCount > 0
@@ -1699,7 +2085,9 @@ export function projectGovernedEmptiness(
 ): GovernedProjection {
   const envelopes = Array.isArray(raw) ? raw : [raw];
   const partition = partitionGovernedResponse(tool, envelopes);
-  const partial = partition.invalidCount > 0;
+  // As in `searchAbsenceState`: an unreadable unit and a response whose own paging receipts
+  // do not add up are different facts, and both forbid an absence claim (O2).
+  const partial = partition.invalidCount > 0 || partition.receiptsIrreconcilable;
   // Through the table's `ambiguityField`, so these are objects the tool actually declares an
   // ambiguity field for AND whose rows passed that tool's row schema. The raw read this replaces
   // rendered whatever an entry happened to put under `ambiguous_works`, on any tool.

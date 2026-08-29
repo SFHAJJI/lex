@@ -13,7 +13,8 @@ import { normalizeSearchResponse, type PublisherPopulation } from "./searchPopul
 import { fuzzyModeFor, retainedForQuery } from "./api";
 import { clearedSearchResults, LIMITATION_EXPLANATION, parseGovernedResponse,
   projectSearchResponse, searchEmptyPresentation, searchResultsFromError,
-  type SearchResultsState } from "./limitations";
+  withholdingSentence,
+  type SearchResultsState, type WithheldClaims } from "./limitations";
 import { PartialResponseNotice, PopulationFooter, PublisherLimitations } from "./views";
 import type { State } from "./state";
 import { shorten } from "./pickers";
@@ -92,25 +93,6 @@ const DOORS: Door[] = (() => {
 
 const INITIAL_ARTICLES = 8;
 
-/**
- * What to say when a response was narrowed. Named publishers are named, because a reader who
- * knows which publisher is missing can judge the gap; unattributable entries can only be counted,
- * because there is nobody to name.
- */
-function withholdingSentence(
-  withheld: { publishers: string[]; unattributed: number }): string {
-  const named = withheld.publishers.length > 0
-    ? `Results from ${withheld.publishers.join(", ")} are not shown, because that publisher `
-      + "answered this query in ways that contradict each other, so its results cannot be "
-      + "checked."
-    : "";
-  const unnamed = withheld.unattributed > 0
-    ? `${withheld.unattributed} further result set${withheld.unattributed === 1 ? " was" : "s were"}`
-      + " not shown, because they arrived without a publisher to attribute them to."
-    : "";
-  return [named, unnamed].filter((part) => part.length > 0).join(" ");
-}
-
 export default function Search(p: SearchProps) {
   const [text, setText] = useState(p.state.q ?? "");
   const [results, setResults] =
@@ -129,8 +111,7 @@ export default function Search(p: SearchProps) {
    * confident empty sentence, which would otherwise report "nothing matched" for a response
    * that was cut down.
    */
-  const [withheld, setWithheld] =
-    useState<{ publishers: string[]; unattributed: number }>();
+  const [withheld, setWithheld] = useState<WithheldClaims>();
   /**
    * Trust rule 9: a reader told their query was rewritten must be able to undo it. The override
    * stores the exact query it was chosen for, so it can never silently apply to a different one.
@@ -244,21 +225,23 @@ export default function Search(p: SearchProps) {
                           ...(metadataArguments ?? {}) })
       .then((res) => {
         if (!live()) return;
-        p.onEnvelopes(envelopeStripRows(res));
-        // ONE PARSE. Rows, the denominator, the withholding disclosure, the retrieval
-        // mode, the expansions and the absence state are six views of this single typed
-        // result. This used to be three separate walks over `res` in three consecutive
-        // statements, and the comment that stood here promised the opposite of what the
-        // code did: it said one normalized set fed rows, the denominator and absence
-        // authority, above code where a footer could describe a publisher whose rows had
-        // been withheld one statement later. There is now nothing left to disagree with.
+        // ONE PARSE, and it comes FIRST. Rows, the index strip, the denominator, the
+        // withholding disclosure, the retrieval mode, the expansions and the absence
+        // state are seven views of this single typed result. This used to be three
+        // separate walks over `res` in three consecutive statements, and the comment that
+        // stood here promised the opposite of what the code did: it said one normalized
+        // set fed rows, the denominator and absence authority, above code where a footer
+        // could describe a publisher whose rows had been withheld one statement later.
+        // The strip was the last raw walk and the worst of them, because it published a
+        // build date and a valid-signature badge for units this parse had rejected (O1).
+        // There is nothing left to disagree with.
         const parsed = parseGovernedResponse("search", res);
+        p.onEnvelopes(envelopeStripRows(parsed));
         const answer = normalizeSearchResponse(parsed);
         setPopulations(answer.populations);
-        setWithheld(answer.complete ? undefined : {
-          publishers: answer.withheldPublishers,
-          unattributed: answer.unattributedEntries,
-        });
+        // Typed causes, carried rather than merged: the sentence a reader is shown has to
+        // be the one the parse established for that publisher (O3).
+        setWithheld(answer.complete ? undefined : answer.withheld);
         // Round 4 (O3/O4): the ONE production projector reads the parse closed, derives
         // mode and expansion facts from the validated ran units only, and types the
         // absence state; the callback below is presentation mapping, not decision.

@@ -141,9 +141,16 @@ const ranEntry = (publisher: unknown, works = 100) => ({
   population: okPopulation(works),
 });
 
-/** The strip's seam: a row exists and is keyed by the raw value. */
+/**
+ * The strip's seam: a row exists and is keyed by the raw value.
+ *
+ * Through the PARSE, because that is the strip's only input now (O1). The three seams no
+ * longer merely agree about an identity: the strip renders the one this parse validated, so
+ * a divergence would have to be a second validator reappearing inside envelopeStrip.ts,
+ * which is exactly what this property still guards against.
+ */
 const stripAccepts = (value: unknown): boolean => {
-  const rows = envelopeStripRows([{ envelope: { publisher: value } }]);
+  const rows = envelopeStripRows(parseGovernedResponse("search", [ranEntry(value)]));
   return rows.length === 1 && rows[0]!.publisher === value;
 };
 
@@ -204,9 +211,11 @@ test("a padded and an unpadded spelling become neither two identities nor one", 
     "a padded entry's denominator reached the reader");
   assert.equal(normalized.complete, false,
     "an unattributable entry was silently dropped instead of disclosed");
-  assert.equal(normalized.complete === false && normalized.unattributedEntries, 1);
-  assert.deepEqual(normalized.complete === false && normalized.withheldPublishers, [],
+  assert.equal(normalized.complete === false && normalized.withheld.unattributed, 1);
+  assert.deepEqual(normalized.complete === false && normalized.withheld.conflicted, [],
     "an unnamed entry cannot void the publisher it was pretending to be");
+  assert.deepEqual(normalized.complete === false && normalized.withheld.unreadableScope,
+    [], "an unnamed entry was reported as an unreadable scope");
 });
 
 test("a case alias becomes neither a second identity nor the lower-case one", () => {
@@ -214,5 +223,5 @@ test("a case alias becomes neither a second identity nor the lower-case one", ()
     [ranEntry("lu-legilux", 100), ranEntry("LU-Legilux", 999)]));
   assert.deepEqual(normalized.populations.map((p) => p.publisher), ["lu-legilux"]);
   assert.equal(normalized.populations[0]!.population.works_in_scope, 100);
-  assert.equal(normalized.complete === false && normalized.unattributedEntries, 1);
+  assert.equal(normalized.complete === false && normalized.withheld.unattributed, 1);
 });

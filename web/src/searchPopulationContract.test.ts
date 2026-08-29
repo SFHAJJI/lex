@@ -305,8 +305,11 @@ const ranEntry = (publisher: string, works: number, exclusions: string[] = ["a"]
  * disclosure obligation has not gone anywhere: it is carried by the absence state, which types
  * the same response as `partial_results` or `incomplete_response`.
  */
+// The two causes are typed apart now (O3) and this helper joins them again, deliberately:
+// every assertion below is about WHICH publisher was withheld, not about why, and the tests
+// that are about why name the cause explicitly.
 const withheldOf = (n: NormalizedSearchResponse): string[] =>
-  n.complete ? [] : n.withheldPublishers;
+  n.complete ? [] : [...n.withheld.conflicted, ...n.withheld.unreadableScope].sort();
 
 /**
  * The lex_ids the projector would render, read from ONE parse of the raw response.
@@ -415,7 +418,7 @@ test("a successful entry with no publisher is withheld from rows and from the de
     "the fixture no longer classifies ran; this test would prove nothing");
   const normalized = normalizeOf([anonymous, named]);
   assert.equal(normalized.complete, false);
-  assert.equal(normalized.complete === false && normalized.unattributedEntries, 1);
+  assert.equal(normalized.complete === false && normalized.withheld.unattributed, 1);
   assert.deepEqual(withheldOf(normalized), [], "an unnamed entry cannot be named as withheld");
   assert.deepEqual(lexIdsOf([anonymous, named]), ["eu-eurlex:w0"],
     "an unattributable entry's rows reached the reader");
@@ -439,7 +442,7 @@ test("a publisher identity outside the shipped grammar is not an identity", () =
   const padded = { ...ranEntry("lu-legilux", 999), envelope: { status: "ok",
                                                                publisher: " lu-legilux " } };
   const normalized = normalizeOf([ranEntry("lu-legilux", 100), padded]);
-  assert.equal(normalized.complete === false && normalized.unattributedEntries, 1);
+  assert.equal(normalized.complete === false && normalized.withheld.unattributed, 1);
   assert.deepEqual(normalized.populations.map((r) => r.publisher), ["lu-legilux"]);
   assert.equal(queriedPopulationTotal(normalized.populations), 100);
 
@@ -449,7 +452,7 @@ test("a publisher identity outside the shipped grammar is not an identity", () =
   const aliased = { ...ranEntry("lu-legilux", 999), envelope: { status: "ok",
                                                                 publisher: "LU-Legilux" } };
   const cased = normalizeOf([ranEntry("lu-legilux", 100), aliased]);
-  assert.equal(cased.complete === false && cased.unattributedEntries, 1);
+  assert.equal(cased.complete === false && cased.withheld.unattributed, 1);
   assert.deepEqual(cased.populations.map((r) => r.publisher), ["lu-legilux"]);
   assert.equal(queriedPopulationTotal(cased.populations), 100);
 });

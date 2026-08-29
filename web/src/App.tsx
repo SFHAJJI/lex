@@ -3,7 +3,7 @@ import { compoundOperationViews, first, summedCount, summedPopulation, tool,
   unionKnownExclusions,
   type AskReply,
   type OperationReply, type ProvisionItem, type UiEffect } from "./api";
-import { envelopeStripRows, type EnvelopeStripRow } from "./envelopeStrip";
+import type { EnvelopeStripRow } from "./envelopeStrip";
 import { publisherOf, useWorkspace, workSlug, type Space, type State } from "./state";
 import { CitedBy, CoveragePanel, Empty, EnvelopeStrip, EvidenceCoordinates, Gap, InForce, PartialResponseNotice, Provision, PublisherLimitations, Ranking, Timeline,
   VerificationPanel, VersionRail, hasView } from "./views";
@@ -478,7 +478,7 @@ export default function App() {
         // beside them, and only the typed empty states speak for absence.
         const decision = projectGovernedEmptiness(
           "changes_in_period", res, visibleRows.length);
-        setStrip(envelopeStripRows(res));
+        setStrip(partition.stripRows);
         setUi(decision.empty === null
           ? { ranking: { from_date: s.from!, to_date: s.until!, order: by,
                          works_changed: summedCount(ran, "works_changed"),
@@ -564,9 +564,9 @@ export default function App() {
     })
       .then((res) => {
         if (!live()) return;
-        setStrip(envelopeStripRows(res));
         const first = projectGovernedEmptiness("in_force_on", res, 1);
         const partition = first.partition;
+        setStrip(partition.stripRows);
         const ran = partition.ran as any[];
         // in_force_on returns `works` with a `total_works_in_force` count, and its rows carry
         // work/title/document_type/valid_from. Mapped here to the shape the view already speaks.
