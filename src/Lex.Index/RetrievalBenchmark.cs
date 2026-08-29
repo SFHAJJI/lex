@@ -48,36 +48,54 @@ public sealed record RetrievalBenchmarkBaseline(
     string ReviewedBy,
     string ReviewedAt);
 
-public sealed record RetrievalMetricObservation(
-    double? Value,
-    int Denominator,
-    string Status)
+public sealed record RetrievalMetricObservation
 {
+    [JsonInclude]
+    [JsonPropertyName("value")]
+    [JsonPropertyOrder(0)]
+    private double? SerializedValue { get; }
+
+    [JsonPropertyOrder(1)]
+    public int Denominator { get; }
+
+    [JsonPropertyOrder(2)]
+    public string Status { get; }
+
+    [JsonConstructor]
+    private RetrievalMetricObservation(
+        double? serializedValue,
+        int denominator,
+        string status) =>
+        (SerializedValue, Denominator, Status) = (serializedValue, denominator, status);
+
     public static RetrievalMetricObservation Measured(double value, int denominator) =>
         new(value, denominator, "measured");
 
     public static RetrievalMetricObservation Insufficient() =>
         new(null, 0, "insufficient_denominator");
 
+    internal static RetrievalMetricObservation FromSerialized(
+        double? value,
+        int denominator,
+        string status) =>
+        new(value, denominator, status);
+
+    [JsonIgnore]
+    public bool HasMeasuredValue => Status == "measured"
+                                    && SerializedValue is double candidate
+                                    && double.IsFinite(candidate)
+                                    && Denominator > 0;
+
+    public double RequireMeasuredValue() => HasMeasuredValue
+        ? SerializedValue!.Value
+        : throw new InvalidOperationException("The retrieval metric has no measured value.");
+
     public bool IsStructurallyCoherent() => Status switch
     {
-        "measured" => TryGetMeasured(out _),
-        "insufficient_denominator" => Value is null && Denominator == 0,
+        "measured" => HasMeasuredValue,
+        "insufficient_denominator" => SerializedValue is null && Denominator == 0,
         _ => false,
     };
-
-    public bool TryGetMeasured(out double measured)
-    {
-        if (Status == "measured" && Value is double candidate
-            && double.IsFinite(candidate) && Denominator > 0)
-        {
-            measured = candidate;
-            return true;
-        }
-
-        measured = default;
-        return false;
-    }
 }
 
 [method: JsonConstructor]
@@ -530,7 +548,8 @@ public static class RetrievalBenchmarkGate
                && ratios.All(IsUnitIntervalOrInsufficient)
                && IsNonNegativeIntegerOrInsufficient(row.TemporalLeakageFailures)
                && row.LatencyMs.Denominator == 1
-               && row.LatencyMs.TryGetMeasured(out var latency) && latency >= 0;
+               && row.LatencyMs.HasMeasuredValue
+               && row.LatencyMs.RequireMeasuredValue() >= 0;
     }
 
     private static bool MetricsAreValid(RetrievalMetrics? metrics, int sampleCount)
@@ -551,17 +570,18 @@ public static class RetrievalBenchmarkGate
             || ratios.Any(item => !IsUnitIntervalOrInsufficient(item))
             || !IsNonNegativeIntegerOrInsufficient(metrics.TemporalLeakageFailures)
             || new[] { metrics.P50Ms, metrics.P95Ms, metrics.P99Ms }
-                .Any(item => item.TryGetMeasured(out var value) && value < 0))
+                .Any(item => item.HasMeasuredValue && item.RequireMeasuredValue() < 0))
             return false;
 
         var latencies = new[] { metrics.P50Ms, metrics.P95Ms, metrics.P99Ms };
         if (latencies.Any(item => item.Status != "measured"
                                   || item.Denominator != sampleCount))
             return false;
-        return metrics.P50Ms.TryGetMeasured(out var p50)
-               && metrics.P95Ms.TryGetMeasured(out var p95)
-               && metrics.P99Ms.TryGetMeasured(out var p99)
-               && p50 <= p95 && p95 <= p99;
+        return metrics.P50Ms.HasMeasuredValue
+               && metrics.P95Ms.HasMeasuredValue
+               && metrics.P99Ms.HasMeasuredValue
+               && metrics.P50Ms.RequireMeasuredValue() <= metrics.P95Ms.RequireMeasuredValue()
+               && metrics.P95Ms.RequireMeasuredValue() <= metrics.P99Ms.RequireMeasuredValue();
     }
 
     private static bool ControlIsValid(
@@ -608,7 +628,8 @@ public static class RetrievalBenchmarkGate
                       && !control.FailedGateNames.Contains(
                           "anchor_recall_at10_not_below_unshuffled", StringComparer.Ordinal)
             : detected && control.OwnQrelSetRetainedCount == 0
-                       && control.AnchorNdcgAt10.TryGetMeasured(out var ndcg) && ndcg < 0.15;
+                       && control.AnchorNdcgAt10.HasMeasuredValue
+                       && control.AnchorNdcgAt10.RequireMeasuredValue() < 0.15;
     }
 
     private static bool StrataAreValid(
@@ -646,7 +667,8 @@ public static class RetrievalBenchmarkGate
                 if (row.GatePassed is not null
                     || row.Metric != "latency_p95_ms" && !RatioStratumMetrics.Contains(row.Metric)
                     || row.Metric == "latency_p95_ms"
-                       && row.Observation.TryGetMeasured(out var latency) && latency < 0
+                       && row.Observation.HasMeasuredValue
+                       && row.Observation.RequireMeasuredValue() < 0
                     || RatioStratumMetrics.Contains(row.Metric)
                        && !IsUnitIntervalOrInsufficient(row.Observation))
                     return false;
@@ -658,20 +680,22 @@ public static class RetrievalBenchmarkGate
                 return false;
             var expected = row.Metric == "temporal_leakage_failures" ? 0d : 1d;
             var passed = row.Observation.Denominator >= row.InvariantFloor
-                         && row.Observation.TryGetMeasured(out var measured)
-                         && measured == expected;
+                         && row.Observation.HasMeasuredValue
+                         && row.Observation.RequireMeasuredValue() == expected;
             if (row.GatePassed != passed) return false;
         }
         return true;
     }
 
     private static bool IsUnitIntervalOrInsufficient(RetrievalMetricObservation observation) =>
-        !observation.TryGetMeasured(out var value) || value is >= 0 and <= 1;
+        !observation.HasMeasuredValue || observation.RequireMeasuredValue() is >= 0 and <= 1;
 
-    private static bool IsNonNegativeIntegerOrInsufficient(
-        RetrievalMetricObservation observation) =>
-        !observation.TryGetMeasured(out var value)
-        || value >= 0 && value == Math.Truncate(value);
+    private static bool IsNonNegativeIntegerOrInsufficient(RetrievalMetricObservation observation)
+    {
+        if (!observation.HasMeasuredValue) return true;
+        var value = observation.RequireMeasuredValue();
+        return value >= 0 && value == Math.Truncate(value);
+    }
 
     private static bool BlockingStrataCoverAggregate(
         IReadOnlyList<RetrievalBenchmarkStratum> strata, RetrievalMetrics holdout)
@@ -928,14 +952,16 @@ public static class RetrievalBenchmarkRunner
         var conceptualHybrid = RetrievalBenchmarkEvaluation.Score("conceptual-hybrid",
             hybridHoldoutEvaluation.Observations.Where(
                 item => item.Case.Category == "conceptual").ToArray()).Metrics;
-        if (!conceptualKeyword.NdcgAt10.TryGetMeasured(out var conceptualKeywordNdcg)
-            || !conceptualHybrid.NdcgAt10.TryGetMeasured(out var conceptualHybridNdcg)
-            || conceptualKeywordNdcg == 0
-            || conceptualHybridNdcg < conceptualKeywordNdcg * 1.10)
+        if (!conceptualKeyword.NdcgAt10.HasMeasuredValue
+            || !conceptualHybrid.NdcgAt10.HasMeasuredValue
+            || conceptualKeyword.NdcgAt10.RequireMeasuredValue() == 0
+            || conceptualHybrid.NdcgAt10.RequireMeasuredValue()
+               < conceptualKeyword.NdcgAt10.RequireMeasuredValue() * 1.10)
             failures.Add("conceptual nDCG@10 did not improve by at least 10 percent");
-        if (!hybridHoldout.NdcgAt10.TryGetMeasured(out var hybridNdcg)
-            || !keywordHoldout.NdcgAt10.TryGetMeasured(out var keywordNdcg)
-            || hybridNdcg + 0.000001 < keywordNdcg * 0.98)
+        if (!hybridHoldout.NdcgAt10.HasMeasuredValue
+            || !keywordHoldout.NdcgAt10.HasMeasuredValue
+            || hybridHoldout.NdcgAt10.RequireMeasuredValue() + 0.000001
+               < keywordHoldout.NdcgAt10.RequireMeasuredValue() * 0.98)
             failures.Add("holdout nDCG@10 regressed by more than 2 percent");
         failures.AddRange(HoldoutLatencyFailures(hybridHoldout));
         var workingSet = Process.GetCurrentProcess().WorkingSet64;
@@ -971,15 +997,16 @@ public static class RetrievalBenchmarkRunner
     }
 
     internal static IReadOnlyList<string> HoldoutLatencyFailures(RetrievalMetrics hybridHoldout) =>
-        !hybridHoldout.P95Ms.TryGetMeasured(out var p95)
+        !hybridHoldout.P95Ms.HasMeasuredValue
             ? ["holdout warm p95 has insufficient denominator"]
-            : p95 > 250 ? ["holdout warm p95 exceeds 250 ms"] : [];
+            : hybridHoldout.P95Ms.RequireMeasuredValue() > 250
+                ? ["holdout warm p95 exceeds 250 ms"] : [];
 
     private static bool AtLeast(RetrievalMetricObservation observation, double minimum) =>
-        observation.TryGetMeasured(out var measured) && measured >= minimum;
+        observation.HasMeasuredValue && observation.RequireMeasuredValue() >= minimum;
 
     private static bool EqualsValue(RetrievalMetricObservation observation, double expected) =>
-        observation.TryGetMeasured(out var measured) && measured == expected;
+        observation.HasMeasuredValue && observation.RequireMeasuredValue() == expected;
 
     private static string AggregateReviewStatus(IReadOnlyList<RetrievalBenchmarkCase> cases)
     {

@@ -427,7 +427,8 @@ public sealed class ArtifactManifestTests : IDisposable
                     : RetrievalMetricObservation.Measured(expected, denominator);
                 strata.Add(new(metric, collection, category.Key, "holdout", "blocking", 8, 20,
                     Support(denominator, 20), observation,
-                    denominator >= 8 && observation.Value == expected));
+                    denominator >= 8 && observation.HasMeasuredValue
+                    && observation.RequireMeasuredValue() == expected));
             }
 
             AddReported("anchor_mrr", anchorCount);

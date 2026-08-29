@@ -309,15 +309,21 @@ internal static class HybridActivationGate
 
         var hybrid = report.HybridHoldout;
         var keyword = report.KeywordHoldout;
-        if (!hybrid.ExactFirstAccuracy.TryGetMeasured(out var exact) || exact < 1
-            || !hybrid.TemporalLeakageFailures.TryGetMeasured(out var leakage) || leakage != 0
-            || !hybrid.NoHitAccuracy.TryGetMeasured(out var noHit) || noHit < 1
-            || !hybrid.ResolutionAccuracy.TryGetMeasured(out var resolution) || resolution < 1
-            || !hybrid.RoleIntentAccuracy.TryGetMeasured(out var role) || role < 1
-            || !hybrid.P95Ms.TryGetMeasured(out var p95) || p95 > 250
-            || !hybrid.NdcgAt10.TryGetMeasured(out var hybridNdcg)
-            || !keyword.NdcgAt10.TryGetMeasured(out var keywordNdcg)
-            || hybridNdcg + 0.000001 < keywordNdcg * 0.98
+        if (!hybrid.ExactFirstAccuracy.HasMeasuredValue
+            || hybrid.ExactFirstAccuracy.RequireMeasuredValue() < 1
+            || !hybrid.TemporalLeakageFailures.HasMeasuredValue
+            || hybrid.TemporalLeakageFailures.RequireMeasuredValue() != 0
+            || !hybrid.NoHitAccuracy.HasMeasuredValue
+            || hybrid.NoHitAccuracy.RequireMeasuredValue() < 1
+            || !hybrid.ResolutionAccuracy.HasMeasuredValue
+            || hybrid.ResolutionAccuracy.RequireMeasuredValue() < 1
+            || !hybrid.RoleIntentAccuracy.HasMeasuredValue
+            || hybrid.RoleIntentAccuracy.RequireMeasuredValue() < 1
+            || !hybrid.P95Ms.HasMeasuredValue || hybrid.P95Ms.RequireMeasuredValue() > 250
+            || !hybrid.NdcgAt10.HasMeasuredValue
+            || !keyword.NdcgAt10.HasMeasuredValue
+            || hybrid.NdcgAt10.RequireMeasuredValue() + 0.000001
+               < keyword.NdcgAt10.RequireMeasuredValue() * 0.98
             || report.MemoryLimitBytes <= 0
             || report.ProcessMemoryBytes >= report.MemoryLimitBytes * 0.75)
             return new(false, "benchmark_invalid");
