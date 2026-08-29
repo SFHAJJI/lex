@@ -216,7 +216,17 @@ public sealed record InForceView(string Date, int Total, IReadOnlyList<InForceRo
 
 /// <summary>Which articles point at one law: the reverse of the publisher's own cross-references.</summary>
 public sealed record CitedByView(string CitedWork, int CitingArticles, IReadOnlyList<CitedByRow> Rows,
-    string? Status = null, IReadOnlyList<EvidenceContext>? Evidence = null);
+    string? Status = null, IReadOnlyList<EvidenceContext>? Evidence = null,
+    /// <summary>
+    /// Whether the response returned fewer rows than it found, read from the response-wide
+    /// <c>response_row_set.truncated</c> receipt. Carried because without it an empty row list
+    /// is indistinguishable from a genuine absence, and the surface built on it stated that no
+    /// held provision version refers to the law. The receipt is response-wide rather than per
+    /// unit, so it licenses no claim about which unit was cut: it only removes the right to
+    /// claim absence. Null means the response carried no receipt, which is not the same as a
+    /// complete answer.
+    /// </summary>
+    bool? RowsTruncated = null);
 
 public sealed record CitedByRow(string Work, string? Title, string ValidFrom, string Anchor,
                                 string? Num, string? Permalink, string? Jurisdiction = null);
