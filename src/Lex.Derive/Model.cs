@@ -1,11 +1,33 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json.Serialization;
 
 namespace Lex.Derive;
 
 public sealed record Citation(string? Href, string Text);
 
 public sealed record PublisherStructuralEmptyArticle(string Anchor, string WId);
+
+public static class ProvisionGapReason
+{
+    public const string MarkerOnly = "marker_only";
+    public const string MarkerSuspicious = "marker_suspicious";
+}
+
+/// <summary>
+/// A publisher-minted provision coordinate whose wording cannot safely be certified. It carries
+/// structure only. Legal text and a certifying text hash are intentionally not members.
+/// </summary>
+public sealed record ProvisionGap(
+    int DocumentOrder,
+    string Anchor,
+    string? Eli,
+    string Type,
+    string? Num,
+    string? Heading,
+    IReadOnlyList<string> Path,
+    string? ArticleValidFrom,
+    string TextUnavailableReason);
 
 public sealed record Provision(
     string Anchor,
@@ -19,13 +41,25 @@ public sealed record Provision(
     string TextSha256,
     int MdStart,
     int MdEnd,
-    IReadOnlyList<Citation> Citations);
+    IReadOnlyList<Citation> Citations)
+{
+    [JsonIgnore]
+    public int? DocumentOrder { get; init; }
+}
 
 public sealed record Extraction(
     IReadOnlyList<Provision> Provisions,
     string Markdown,
     IReadOnlyList<string> Notes,
-    IReadOnlyList<PublisherStructuralEmptyArticle>? PublisherStructuralEmptyArticles = null);
+    IReadOnlyList<PublisherStructuralEmptyArticle>? PublisherStructuralEmptyArticles = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<ProvisionGap>? ProvisionGaps = null)
+{
+    [JsonIgnore]
+    public string TextCompleteness => (ProvisionGaps?.Count ?? 0) == 0
+        ? "complete"
+        : Provisions.Count == 0 ? "unavailable" : "partial";
+}
 
 internal static class MdUtil
 {

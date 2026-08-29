@@ -1,0 +1,42 @@
+{
+  "profile_id": "pdf-lu/1",
+  "provisions": [
+    {
+      "anchor": "art_1",
+      "eli": null,
+      "type": "article",
+      "num": "Art. 1.",
+      "heading": null,
+      "path": [],
+      "article_valid_from": null,
+      "text_md": "The blue compass points north.",
+      "text_sha256": "ec3b5bb2101aecc293a48df993976dff7980d483c82b289a0a0a43794d2edc64",
+      "md_span": {
+        "start": 34,
+        "end": 64
+      },
+      "citations": []
+    },
+    {
+      "anchor": "art_2",
+      "eli": null,
+      "type": "article",
+      "num": "Art. 2.",
+      "heading": "Invented register",
+      "path": [],
+      "article_valid_from": null,
+      "text_md": "Seven synthetic entries are recorded.",
+      "text_sha256": "0ef846f4a4d7a3d095e5873b5981f7db9eb960d2c618da2e63593dcd08c05ccc",
+      "md_span": {
+        "start": 117,
+        "end": 154
+      },
+      "citations": []
+    }
+  ],
+  "markdown": "\n<a id=\"art_1\"></a>\n\n### Art. 1.\n\nThe blue compass points north.\n\n<a id=\"art_2\"></a>\n\n### Art. 2. Invented register\n\nSeven synthetic entries are recorded.\n",
+  "notes": [
+    "dropped 1 line(s) of front matter"
+  ],
+  "publisher_structural_empty_articles": []
+}

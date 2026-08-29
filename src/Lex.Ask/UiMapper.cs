@@ -136,12 +136,35 @@ public static class UiMapper
         if (status is not null && outcome is LegalOutcome.NeedsClarification
                 or LegalOutcome.NotAvailable or LegalOutcome.NotFound or LegalOutcome.NotComparable)
         {
+            var typedGaps = tool == "as_of" ? TypedProvisionGaps(node) : null;
+            var explanation = tool == "as_of"
+                && status == McpStatus.TextNotAvailable
+                && S(node, "text_completeness") == "partial"
+                && typedGaps is { Count: > 0 }
+                    ? locale == "fr"
+                        ? "Lex détient cette notice éditeur et un libellé certifié pour d'autres coordonnées, mais aucun libellé certifié n'est disponible pour la ou les coordonnées demandées."
+                        : "Lex holds this publisher record and certified wording for other coordinates, but no certified wording is available for the requested coordinate or coordinates."
+                    : Explain(status, locale, tool);
             var gap = new UiEffect(Gap: new GapView(
                 Status: status,
-                Work: S(node, "work") ?? S(node, "lex_id"),
+                Work: CanonicalWork(node, args),
                 Date: S(args, "date") ?? S(args, "as_of"),
-                Explanation: Explain(status, locale, tool),
-                Available: GapChoices(tool, node)));
+                Explanation: explanation,
+                Available: GapChoices(tool, node),
+                ProvisionGaps: typedGaps,
+                TotalProvisionGaps: tool == "as_of"
+                    ? node["total_provision_gaps"]?.GetValue<int?>()
+                    : null,
+                Truncated: tool == "as_of"
+                    && node["truncated"]?.GetValue<bool>() == true,
+                TotalProvisions: tool == "as_of"
+                    ? node["total_provisions"]?.GetValue<int?>()
+                    : null,
+                TextTruncated: tool == "as_of"
+                    && node["text_truncated"]?.GetValue<bool>() == true,
+                TextCompleteness: tool == "as_of"
+                    ? S(node, "text_completeness")
+                    : null));
             var refused = outcome == LegalOutcome.NotComparable && tool == "diff"
                 ? UiEffect.Merge([Diff(node, args), gap])
                 : gap;
@@ -390,6 +413,7 @@ public static class UiMapper
 
     private static bool HasContent(JsonObject o)
         => o["provisions"] is JsonArray { Count: > 0 } || o["states"] is JsonArray { Count: > 0 }
+           || o["provision_gaps"] is JsonArray { Count: > 0 }
            || o["changes"] is JsonArray { Count: > 0 } || o["works"] is JsonArray { Count: > 0 }
            || o["hits"] is JsonArray { Count: > 0 }
            || o["document"] is JsonObject || o["from"] is JsonObject;
@@ -478,6 +502,7 @@ public static class UiMapper
     private static UiEffect Provision(JsonObject o, JsonObject args)
     {
         var doc = o["document"] as JsonObject ?? o;
+        var provisionGaps = TypedProvisionGaps(o);
         var items = (o["provisions"] as JsonArray)?.OfType<JsonObject>()
             .Select(p => new ProvisionItem(
                 Anchor: S(p, "anchor") ?? "",
@@ -486,7 +511,8 @@ public static class UiMapper
                 Sha: S(p, "text_sha256"),
                 TextOmitted: p["text_omitted"]?.GetValue<bool>() == true,
                 TextOmittedReason: S(p, "text_omitted_reason"),
-                Permalink: S(p, "permalink"))).Where(i => i.Text.Length > 0
+                Permalink: S(p, "permalink"),
+                DocumentOrder: p["document_order"]?.GetValue<int?>())).Where(i => i.Text.Length > 0
                     || i.Anchor.Length > 0 || !string.IsNullOrWhiteSpace(i.Heading)).ToList()
             ?? [];
         if (items.Count == 0 && S(doc, "text") is { Length: > 0 } documentText)
@@ -496,7 +522,7 @@ public static class UiMapper
                 TextOmitted: true,
                 TextOmittedReason: S(doc, "text_omitted_reason"),
                 Permalink: S(doc, "permalink") ?? S(doc, "source_uri")));
-        if (items.Count == 0) return new UiEffect();
+        if (items.Count == 0 && provisionGaps.Count == 0) return new UiEffect();
         return new UiEffect(Provision: new ProvisionView(
             Subject: SubjectOf(doc, args),
             ValidFrom: S(doc, "valid_from") ?? "",
@@ -506,8 +532,30 @@ public static class UiMapper
             TotalProvisions: o["total_provisions"]?.GetValue<int?>(),
             Truncated: o["truncated"]?.GetValue<bool>() ?? false,
             TextTruncated: o["text_truncated"]?.GetValue<bool>() ?? false,
-            OutlineOnly: S(args, "mode") == "outline"));
+            OutlineOnly: S(args, "mode") == "outline",
+            ProvisionGaps: provisionGaps,
+            TotalProvisionGaps: o["total_provision_gaps"]?.GetValue<int?>(),
+            TextCompleteness: S(o, "text_completeness")));
     }
+
+    private static IReadOnlyList<ProvisionGapItem> TypedProvisionGaps(JsonObject result) =>
+        (result["provision_gaps"] as JsonArray)?.OfType<JsonObject>()
+            .Select(gap => new ProvisionGapItem(
+                Anchor: S(gap, "anchor") ?? "",
+                DocumentOrder: gap["document_order"]?.GetValue<int>() ?? 0,
+                Num: S(gap, "num"),
+                Heading: S(gap, "heading"),
+                Path: S(gap, "path"),
+                ArticleValidFrom: S(gap, "article_valid_from"),
+                TextUnavailableReason: S(gap, "text_unavailable_reason")
+                    ?? "text_not_available",
+                OfficialSource: S(gap, "official_source"),
+                Eli: S(gap, "eli"),
+                SourceUri: S(gap, "source_uri")))
+            .Where(gap => gap.Anchor.Length > 0)
+            .OrderBy(gap => gap.DocumentOrder)
+            .ToArray()
+        ?? [];
 
     private static UiEffect History(JsonObject o, JsonObject args)
     {

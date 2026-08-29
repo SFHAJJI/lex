@@ -180,7 +180,7 @@ public class Fmx4Tests
             var fmxVersion = Path.Combine(work, "versions", fmxKey);
             Directory.CreateDirectory(Path.Combine(fmxVersion, "en.fmx4"));
             File.WriteAllText(Path.Combine(fmxVersion, "meta.json"),
-                VersionMeta(fmxKey, fmxDate, fmxId, "en.fmx4/main.xml"));
+                VersionMeta(fmxKey, fmxDate, fmxId, "en.fmx4/main.xml", "fmx4"));
             File.WriteAllText(Path.Combine(fmxVersion, "en.fmx4", "main.xml"), Fmx);
 
             var stats = DeriveWriter.Derive(
@@ -202,7 +202,8 @@ public class Fmx4Tests
     }
 
     private static string VersionMeta(
-        string key, DateOnly date, string publisherVersionIdentifier, string observationFile) => $$"""
+        string key, DateOnly date, string publisherVersionIdentifier, string observationFile,
+        string? format = null) => $$"""
         {
           "lex_id": "eu-eurlex:32000r0001:{{key}}",
           "publisher": "eu-eurlex",
@@ -214,6 +215,7 @@ public class Fmx4Tests
             "source_uri": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32000R0001",
             "observations": [{
               "file": "{{observationFile}}",
+              "format": {{(format is null ? "null" : $"\"{format}\"")}},
               "sha256": "fixture",
               "source_uri": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32000R0001"
             }]

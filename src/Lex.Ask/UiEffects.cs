@@ -148,10 +148,30 @@ public sealed record ProvisionView(Subject Subject, string ValidFrom, string? Va
     int? TotalProvisions = null,
     bool Truncated = false,
     bool TextTruncated = false,
-    bool OutlineOnly = false);
+    bool OutlineOnly = false,
+    IReadOnlyList<ProvisionGapItem>? ProvisionGaps = null,
+    int? TotalProvisionGaps = null,
+    string? TextCompleteness = null);
 
 public sealed record ProvisionItem(string Anchor, string? Num, string? Heading, string Text, string? Sha,
-    bool TextOmitted = false, string? TextOmittedReason = null, string? Permalink = null);
+    bool TextOmitted = false, string? TextOmittedReason = null, string? Permalink = null,
+    int? DocumentOrder = null);
+
+/// <summary>
+/// One publisher coordinate retained without legal text because derivation could not certify
+/// wording. It intentionally has no text or text-hash field.
+/// </summary>
+public sealed record ProvisionGapItem(
+    string Anchor,
+    int DocumentOrder,
+    string? Num,
+    string? Heading,
+    string? Path,
+    string? ArticleValidFrom,
+    string TextUnavailableReason,
+    string? OfficialSource,
+    string? Eli = null,
+    string? SourceUri = null);
 
 /// <param name="Changed">Whether the two dates resolved to different publisher versions, or for an
 /// anchored comparison whether that provision moved. Carried because the whole-work comparison has
@@ -289,7 +309,13 @@ public sealed record InForceRow(string Work, string? Title, string? Kind, string
 
 /// <summary>An honest gap: what was asked for, and why Lex cannot show it.</summary>
 public sealed record GapView(string Status, string? Work, string? Date, string Explanation,
-    IReadOnlyList<string> Available, IReadOnlyList<EvidenceContext>? Evidence = null);
+    IReadOnlyList<string> Available, IReadOnlyList<EvidenceContext>? Evidence = null,
+    IReadOnlyList<ProvisionGapItem>? ProvisionGaps = null,
+    int? TotalProvisionGaps = null,
+    bool Truncated = false,
+    int? TotalProvisions = null,
+    bool TextTruncated = false,
+    string? TextCompleteness = null);
 
 /// <summary>
 /// One publisher-specific capability refusal retained beside successful rows from another

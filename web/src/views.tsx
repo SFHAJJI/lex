@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
-  changeCountLabels, populationCoverageLabel, populationScopeLabel, safeHttpsUrl,
-  signatureStatusLabel,
+  boundedPublisherTextLabel, changeCountLabels, isTypedProvisionGap, populationCoverageLabel,
+  populationScopeLabel, provisionCountLabel, provisionSourceUrl, safeHttpsUrl,
+  signatureStatusLabel, typedProvisionGapLabel,
   type ProvisionItem, type RankingRow, type UiEffect,
 } from "./api";
 import { facetLabel, jurisdictionLabel } from "./facets";
@@ -37,9 +38,14 @@ const ms = (d: string) => Date.parse(`${d}T00:00:00Z`);
  * opened an article — so re-dating dropped you at the top of a document you were reading the
  * middle of. It is the one control a point-in-time reader uses constantly, so it stays put.
  */
-export function Provision({ items, toc, validFrom, validTo, work, title, language, anchor, profile, source, timelineSemantics, onPick, onClear, onCite }: {
+export function Provision({ items, toc, validFrom, validTo, work, title, language, anchor, profile,
+  source, textCompleteness, totalProvisions, totalProvisionGaps, truncated, textTruncated,
+  timelineSemantics,
+  onPick, onClear, onCite }: {
   items: ProvisionItem[]; toc: ProvisionItem[]; validFrom: string; validTo?: string;
-  work: string; title: string; language?: string; anchor?: string; profile?: string; source?: string; timelineSemantics?: string;
+  work: string; title: string; language?: string; anchor?: string; profile?: string; source?: string;
+  textCompleteness?: string; totalProvisions?: number; totalProvisionGaps?: number;
+  truncated?: boolean; textTruncated?: boolean; timelineSemantics?: string;
   // `auto` marks an article the reader did not ask for. The rail uses it to decide whether to
   // stay on the law's versions or narrow to this article's texts.
   onPick: (anchor: string, auto?: boolean) => void; onClear: () => void; onCite?: (work: string) => void;
@@ -54,8 +60,11 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
   const officialSource = safeHttpsUrl(source);
   const fromPdf = disclosure === "publisher-pdf";
   const fromGazette = disclosure === "gazette";
-  const outlineOnly = items.length > 0 && items.every((p) => !p.text && !p.text_omitted);
-  const boundedText = items.some((p) => p.text_omitted);
+  const availableItems = items.filter((item) => !isTypedProvisionGap(item));
+  const typedGapLabel = typedProvisionGapLabel(items, textCompleteness);
+  const outlineOnly = availableItems.length > 0
+    && availableItems.every((p) => !p.text && !p.text_omitted);
+  const boundedText = boundedPublisherTextLabel(items, textTruncated);
   const nav = toc.length >= 6 || outlineOnly;
   const pageUrl = typeof window === "undefined" ? "" : window.location.href;
   const evidence = () => ({
@@ -80,11 +89,17 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
         {anchor ? (
           <button className="tag act" onClick={onClear}>article {anchor} ✕</button>
         ) : (
-          <span className="tag">{items.length} article{items.length === 1 ? "" : "s"}</span>
+          <span className="tag">{provisionCountLabel(items,
+            truncated || textTruncated ? totalProvisions : undefined)}</span>
         )}
         {fromPdf ? <span className="tag warn">read from the publisher's PDF</span> : null}
         {fromGazette ? <span className="tag warn">cut from a gazette issue</span> : null}
-        {boundedText ? <span className="tag warn">text shortened for this response</span> : null}
+        {boundedText ? <span className="tag warn">{boundedText}</span> : null}
+        {typedGapLabel ? <span className="tag warn">{typedGapLabel}</span> : null}
+        {(truncated || textTruncated) && typeof totalProvisionGaps === "number"
+          && totalProvisionGaps > 0 ? (
+          <span className="tag warn">{totalProvisionGaps.toLocaleString()} coordinate{totalProvisionGaps === 1 ? "" : "s"} without certified text</span>
+        ) : null}
         {!outlineOnly && items.length > 0 ? (
           <EvidenceActions citation={citationText(evidence())} markdown={() => lawEvidenceMarkdown(evidence())}
                            filename={evidenceFilename(work, anchor ?? validFrom)} />
@@ -135,8 +150,9 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
           ) : null}
         </div>
       ) : items.map((p) => {
-        const exactTextUrl = safeHttpsUrl(p.permalink);
+        const exactTextUrl = provisionSourceUrl(p);
         const hasAnchor = p.anchor.length > 0;
+        const typedGap = isTypedProvisionGap(p);
         return (
         <article key={p.anchor || p.permalink || "document-text"} className="art"
                  id={hasAnchor ? p.anchor : undefined}>
@@ -148,7 +164,15 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
           </h4>
           {/* Publisher text never becomes executable markup: react-markdown creates React nodes
               and ignores raw HTML by default. Export and comparison keep the untouched string. */}
-          {p.text_omitted ? (
+          {typedGap ? (
+            <div className="pdfnote" role="note">
+              <p><strong>Text unavailable.</strong> Lex preserved this publisher coordinate but
+                could not certify wording for it (<span className="mono">{p.text_unavailable_reason}</span>).</p>
+              {exactTextUrl ? <p><a href={exactTextUrl} target="_blank" rel="noopener noreferrer">
+                Open the official publisher source ↗
+              </a></p> : null}
+            </div>
+          ) : p.text_omitted ? (
             <div className="pdfnote">
               <p>This publisher text is held, but it exceeded the bounded API response.</p>
               {exactTextUrl ? <p><a href={exactTextUrl} target="_blank" rel="noopener noreferrer">
@@ -700,9 +724,16 @@ export function InForce({ date, total, rows, populationWorks, populationBasis,
  * textless, say THAT, once, and then show what Lex does hold, because dated versions with sources
  * and hashes are a real answer to a real question, just not to the question about wording.
  */
-export function Gap({ status, explanation, available, held }: {
+export function Gap({ status, explanation, available, held, provision_gaps,
+  total_provision_gaps, truncated, total_provisions, text_truncated, text_completeness }: {
   status: string; explanation: string; available: string[];
   held?: { text: number; total: number; official?: string; kind?: string };
+  provision_gaps?: ProvisionItem[];
+  total_provision_gaps?: number;
+  truncated?: boolean;
+  total_provisions?: number;
+  text_truncated?: boolean;
+  text_completeness?: string;
 }) {
   const whole = held && held.total > 0 && held.text === 0;
   const collection = whole && (held?.kind === "RECUEIL" || held?.kind === "CODE_RECUEIL");
@@ -753,6 +784,41 @@ export function Gap({ status, explanation, available, held }: {
           ) : null}
         </>
       )}
+      {provision_gaps && provision_gaps.length > 0 ? (
+        <div className="gap-provisions" aria-label="Publisher coordinates without certified text">
+          {(truncated || text_truncated) && typeof total_provisions === "number"
+            && total_provisions > provision_gaps.length ? (
+            <p className="sub">Showing {provision_gaps.length.toLocaleString()} of {total_provisions.toLocaleString()} publisher coordinates in this bounded response.</p>
+          ) : truncated && typeof total_provision_gaps === "number"
+            && total_provision_gaps > provision_gaps.length ? (
+            <p className="sub">Showing {provision_gaps.length.toLocaleString()} of {total_provision_gaps.toLocaleString()} publisher coordinates without certified text.</p>
+          ) : null}
+          {text_truncated ? <p className="sub">Some held publisher text was omitted from this bounded response.</p> : null}
+          {typedProvisionGapLabel(provision_gaps, text_completeness) === "partial publisher text"
+            ? <p className="sub">Other publisher coordinates in this state have certified text.</p>
+            : null}
+          {provision_gaps.map((item) => {
+            const source = provisionSourceUrl(item);
+            return (
+              <article className="art" id={item.anchor || undefined}
+                       key={`${item.document_order ?? "gap"}:${item.anchor}`}>
+                <h4>{item.num ?? item.anchor}
+                  {item.heading ? <span className="sub">, {plain(item.heading)}</span> : null}
+                </h4>
+                <div className="pdfnote" role="note">
+                  <p><strong>Text unavailable.</strong> Lex preserved this publisher coordinate
+                    but could not certify wording for it (<span className="mono">
+                      {item.text_unavailable_reason}
+                    </span>).</p>
+                  {source ? <p><a href={source} target="_blank" rel="noopener noreferrer">
+                    Open the official publisher source ↗
+                  </a></p> : null}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : null}
       <p className="sub">
         <a href="/coverage">See exactly what Lex holds and what it lacks →</a>
       </p>

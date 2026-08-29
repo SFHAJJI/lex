@@ -70,6 +70,9 @@ jobs:
         run: |
           dotnet restore tests/Lex.Tests/Lex.Tests.csproj --locked-mode --nologo
           dotnet test tests/Lex.Tests/Lex.Tests.csproj -c Release --no-restore --nologo --filter FullyQualifiedName~Canon1FreezeTests
+      - name: canon/2 byte contract
+        shell: pwsh
+        run: dotnet test tests/Lex.Tests/Lex.Tests.csproj -c Release --no-restore --nologo --filter FullyQualifiedName~Canon2FreezeTests
       - name: DirectML locked dependency graph
         shell: pwsh
         run: |

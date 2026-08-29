@@ -27,6 +27,11 @@ public static class IndexFromCorpus
         if ((articlesRoot is null) != (articlesCommit is null))
             throw new InvalidDataException(
                 "The derived articles path and its full Git commit must be supplied together.");
+        using var articlesSnapshotLock = articlesRoot is null
+            ? null
+            : DerivationGeneration.AcquireGenerationLock(articlesRoot);
+        if (articlesRoot is not null)
+            DerivedPublisherTransaction.RequireNoCommittedTransaction(articlesRoot);
         var stampedCorpusCommit = corpusCommit is null
             ? GitCommit(corpusRoot)
             : RequireCleanGitCheckout(corpusRoot, corpusCommit, "corpus");
@@ -75,12 +80,14 @@ public static class IndexFromCorpus
 
         var docs = new List<DocRow>();
         var provisions = new List<ProvisionRow>();
+        var provisionGaps = new List<ProvisionGapRow>();
         var events = new List<EventRow>();
         var observations = new List<ObservationRow>();
         var derivedProfiles = new SortedSet<string>(StringComparer.Ordinal);
         var indexedProvisionStates = new HashSet<(string Work, string Language, string Anchor, string TextSha)>();
         var indexedProvisionAnchors = new HashSet<(string Work, string Language, string Anchor)>();
         var derivedProvisionCount = 0;
+        var derivedProvisionGapCount = 0;
         var excludedEmptyProvisions = 0;
 
         foreach (var workDir in Directory.EnumerateDirectories(Path.Combine(corpusRoot, "works")))
@@ -120,11 +127,16 @@ public static class IndexFromCorpus
                     if (freshPrimary.Length > 1)
                         throw new InvalidDataException(
                             $"{meta.LexId}/{expr.Language} has ambiguous effective response identity.");
-                    var primaryObservation = freshPrimary.SingleOrDefault()
-                        ?? expr.Observations.LastOrDefault(observation =>
-                            observation.Format is null);
+                    var primaryObservation = PrimaryBodyObservationSelector.Select(
+                        expr.Observations,
+                        observation => new PrimaryBodyObservationShape(
+                            observation.File,
+                            observation.Format,
+                            observation.Http is not null,
+                            observation.Http?.AttemptOutcome));
                     var effectiveSourceUri = primaryObservation?.SourceUri
                         ?? expr.SourceUri;
+                    var effectiveBodySha = primaryObservation?.Sha256;
                     var exprValidFrom = expr.ValidFrom ?? meta.ValidFrom;
                     var languageWorkTitle = string.Equals(
                         workMeta.TitleLanguage, expr.Language, StringComparison.Ordinal)
@@ -143,18 +155,47 @@ public static class IndexFromCorpus
                     // work-level answer would be wrong for half of them.
                     string? profile = null;
                     var indexedInExpression = 0;
+                    var gapsInExpression = 0;
                     if (hasDerived)
                     {
                         using var dd = JsonDocument.Parse(File.ReadAllText(derivedJson!));
-                        var derivedSourceUri = dd.RootElement.TryGetProperty(
-                                "derived_from", out var derivedFrom)
-                            && derivedFrom.TryGetProperty(
-                                "source_uri", out var source)
-                            ? source.GetString() : null;
-                        if (!string.Equals(derivedSourceUri, effectiveSourceUri,
-                                StringComparison.Ordinal))
+                        if (generation?.ArticlesCanon == DerivationGeneration.Canon2)
+                            RejectDuplicateJsonProperties(
+                                dd.RootElement, derivedJson!);
+                        var carriesGapContract = dd.RootElement.TryGetProperty(
+                                "provision_gaps", out _)
+                            || dd.RootElement.TryGetProperty("text_completeness", out _);
+                        var carriesProvisionGaps = dd.RootElement.TryGetProperty(
+                                "provision_gaps", out var gapPayload)
+                            && gapPayload.ValueKind == JsonValueKind.Array
+                            && gapPayload.GetArrayLength() > 0;
+                        var canonTwo = generation?.ArticlesCanon
+                            == DerivationGeneration.Canon2;
+                        if (carriesGapContract && !canonTwo)
                             throw new InvalidDataException(
-                                $"{derivedJson}: source_uri does not match the effective publisher response URI.");
+                                $"{derivedJson}: legacy derivation cannot carry provision-gap evidence.");
+                        if (canonTwo)
+                        {
+                            var selectedDerivedObservation = ValidateCanonTwoDerivedArticle(
+                                dd.RootElement, derivedJson!, publisherId,
+                                workMeta.Slug, Path.GetFileName(versionDir), meta, expr,
+                                primaryObservation, carriesProvisionGaps,
+                                generation!.Profiles);
+                            effectiveSourceUri = selectedDerivedObservation.SourceUri;
+                            effectiveBodySha = selectedDerivedObservation.Sha256;
+                        }
+                        else
+                        {
+                            var derivedSourceUri = dd.RootElement.TryGetProperty(
+                                    "derived_from", out var derivedFrom)
+                                && derivedFrom.TryGetProperty(
+                                    "source_uri", out var source)
+                                ? source.GetString() : null;
+                            if (!string.Equals(derivedSourceUri, effectiveSourceUri,
+                                    StringComparison.Ordinal))
+                                throw new InvalidDataException(
+                                    $"{derivedJson}: source_uri does not match the effective publisher response URI.");
+                        }
                         if (dd.RootElement.TryGetProperty("generator", out var gen)
                             && gen.TryGetProperty("profile", out var pf))
                         {
@@ -181,9 +222,17 @@ public static class IndexFromCorpus
                             if (!string.Equals(textSha, actualTextSha, StringComparison.Ordinal))
                                 throw new InvalidDataException(
                                     $"{derivedJson}: provision {anchor} text_sha256 does not match text_md.");
+                            var ordered = seq;
+                            var hasDocumentOrder = p.TryGetProperty(
+                                    "document_order", out var documentOrder)
+                                && documentOrder.TryGetInt32(out ordered)
+                                && ordered >= 0;
+                            if (carriesProvisionGaps && !hasDocumentOrder)
+                                throw new InvalidDataException(
+                                    $"{derivedJson}: every text provision requires document_order when provision gaps exist.");
                             var candidate = new ProvisionRow(
                                 Rid: rid,
-                                Seq: seq,
+                                Seq: hasDocumentOrder ? ordered : seq,
                                 Anchor: anchor,
                                 ProvisionId: provisionId,
                                 PType: p.GetProperty("type").GetString() ?? "article",
@@ -210,6 +259,16 @@ public static class IndexFromCorpus
                             indexedProvisionStates.Add((workMeta.Slug, expr.Language, anchor, textSha));
                             indexedProvisionAnchors.Add((workMeta.Slug, expr.Language, anchor));
                         }
+                        var parsedGaps = ParseProvisionGaps(
+                            dd.RootElement, rid, derivedJson!);
+                        foreach (var gap in parsedGaps)
+                        {
+                            provisionGaps.Add(gap);
+                            derivedProvisionGapCount++;
+                            gapsInExpression++;
+                            indexedProvisionAnchors.Add(
+                                (workMeta.Slug, expr.Language, gap.Anchor));
+                        }
                     }
 
                     docs.Add(new DocRow(
@@ -230,14 +289,15 @@ public static class IndexFromCorpus
                         TextAvailable: expr.Text.Available,
                         TextPublic: manifest.TextPublic && expr.Text.Available && indexedInExpression > 0,
                         RecordSha: meta.RecordSha256,
-                        BodySha: primaryObservation?.Sha256,
+                        BodySha: effectiveBodySha,
                         SourceUri: effectiveSourceUri,
                         Title: expr.Title ?? languageWorkTitle,
                         TitleShort: expr.TitleShort ?? languageWorkTitle,
                         Body: null,
                         PublicationDate: meta.PublicationDate,
                         StatusNote: meta.InForceStatus,
-                        Profile: indexedInExpression > 0 ? profile : null,
+                        Profile: indexedInExpression > 0 || gapsInExpression > 0
+                            ? profile : null,
                         Hierarchy: meta.Raw.GetValueOrDefault("hierarchy"),
                         // Engineering scope selects what to acquire; it is not publisher legal
                         // metadata and can never become a domain filter or FTS field. Official
@@ -405,9 +465,304 @@ public static class IndexFromCorpus
         stamp["derived_provisions"] = derivedProvisionCount.ToString();
         stamp["indexed_provisions"] = provisions.Count.ToString();
         stamp["excluded_empty_provisions"] = excludedEmptyProvisions.ToString();
+        if (derivedProvisionGapCount > 0)
+            stamp["derived_provision_gaps"] = derivedProvisionGapCount.ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+        var auditedProvisionGaps = SelectAuditedProvisionGaps(
+            generation?.ArticlesCanon, generationSha256,
+            stampedArticlesCommit, provisionGaps);
+        if (articlesRoot is not null)
+        {
+            RequireCleanGitCheckout(
+                articlesRoot, stampedArticlesCommit!, "derived articles");
+            RequireEqual(
+                DerivationGeneration.Sha256File(Path.Combine(
+                    articlesRoot, DerivationGeneration.FileName)),
+                generationSha256!, "final generation sha256",
+                "captured generation sha256");
+        }
         IndexBuilder.Build(dbPath, stamp, docs, provisions, events, observations, signingKeyPem,
-            provisionStates, anchorEventRows, semantic, capabilityExpectation);
-        Console.Error.WriteLine($"  [index] {dbPath}: {docs.Count} rows, {provisions.Count} provisions, {provisionStates.Count} states, {anchorEventRows.Count} anchor events, signed={(signingKeyPem is not null)}");
+            provisionStates, anchorEventRows, semantic, capabilityExpectation,
+            auditedProvisionGaps);
+        Console.Error.WriteLine($"  [index] {dbPath}: {docs.Count} rows, {provisions.Count} provisions, {provisionGaps.Count} provision gaps, {provisionStates.Count} states, {anchorEventRows.Count} anchor events, signed={(signingKeyPem is not null)}");
+    }
+
+    internal static ProvisionGapIndexInput? SelectAuditedProvisionGaps(
+        string? articlesCanon,
+        string? generationSha256,
+        string? articlesCommit,
+        IReadOnlyList<ProvisionGapRow> rows)
+    {
+        if (articlesCanon == DerivationGeneration.Canon2)
+            return ProvisionGapIndexInput.FromGenerationEvidence(
+                articlesCanon, generationSha256, articlesCommit, rows);
+        if (rows.Count > 0)
+            throw new InvalidDataException(
+                "A legacy derivation cannot publish provision-gap rows.");
+        return null;
+    }
+
+    internal static void ValidateGapBearingDerivedArticle(
+        JsonElement root,
+        string sourcePath,
+        string publisherId,
+        string workSlug,
+        string versionKey,
+        VersionMeta version,
+        ExpressionMeta expression,
+        ObservationEntry? primaryObservation)
+    {
+        _ = ValidateCanonTwoDerivedArticle(
+            root, sourcePath, publisherId, workSlug, versionKey, version,
+            expression, primaryObservation, requiresGapProfile: true,
+            [AknLuProfileV3.ProfileId]);
+    }
+
+    private static ObservationEntry ValidateCanonTwoDerivedArticle(
+        JsonElement root,
+        string sourcePath,
+        string publisherId,
+        string workSlug,
+        string versionKey,
+        VersionMeta version,
+        ExpressionMeta expression,
+        ObservationEntry? primaryObservation,
+        bool requiresGapProfile,
+        IReadOnlyList<string> acceptedProfiles)
+    {
+        RequireDerivedString(root, "schema", DeriveWriter.SchemaId, sourcePath);
+        RequireDerivedString(root, "lex_id", version.LexId, sourcePath);
+        RequireDerivedString(root, "language", expression.Language, sourcePath);
+        RequireDerivedString(root, "valid_from",
+            expression.ValidFrom ?? version.ValidFrom, sourcePath);
+        var validTo = ReadDerivedOptionalString(root, "valid_to", sourcePath);
+        if (!string.Equals(validTo, expression.ValidTo, StringComparison.Ordinal))
+            throw new InvalidDataException(
+                $"{sourcePath}: valid_to does not match the selected corpus expression.");
+        RequireDerivedString(root, "valid_time_source",
+            expression.ValidTimeSource, sourcePath);
+
+        if (!root.TryGetProperty("derived_from", out var derivedFrom)
+            || derivedFrom.ValueKind != JsonValueKind.Object)
+            throw new InvalidDataException(
+                $"{sourcePath}: derived_from must bind the selected corpus observation.");
+        RequireDerivedString(derivedFrom, "corpus_repo",
+            $"lex-corpus-{publisherId}", sourcePath);
+        var selectedPrimary = PrimaryBodyObservationSelector.Select(
+            expression.Observations,
+            observation => new PrimaryBodyObservationShape(
+                observation.File,
+                observation.Format,
+                observation.Http is not null,
+                observation.Http?.AttemptOutcome));
+        var derivedPath = ReadDerivedString(derivedFrom, "path", sourcePath);
+        var prefix = $"works/{workSlug}/versions/{versionKey}/";
+        if (!derivedPath.StartsWith(prefix, StringComparison.Ordinal)
+            || derivedPath.Length == prefix.Length)
+            throw new InvalidDataException(
+                $"{sourcePath}: derived_from.path is outside the selected corpus version.");
+        var observationFile = derivedPath[prefix.Length..];
+        var matches = expression.Observations.Where(observation =>
+                string.Equals(observation.File?.Replace('\\', '/'), observationFile,
+                    StringComparison.Ordinal)
+                && (observation.Format is null
+                    ? ReferenceEquals(observation, selectedPrimary)
+                    : observation.Http is null))
+            .ToArray();
+        if (matches.Length != 1)
+            throw new InvalidDataException(
+                $"{sourcePath}: derived_from must bind one accepted corpus observation.");
+        var selectedObservation = matches[0];
+        if (selectedObservation.Format is null
+            && (primaryObservation is null
+                || !ReferenceEquals(primaryObservation, selectedObservation)))
+            throw new InvalidDataException(
+                $"{sourcePath}: derived_from must bind the selected primary corpus observation.");
+        RequireDerivedString(derivedFrom, "sha256",
+            selectedObservation.Sha256 ?? "", sourcePath);
+        RequireDerivedString(derivedFrom, "source_uri",
+            selectedObservation.SourceUri, sourcePath);
+
+        if (!root.TryGetProperty("generator", out var generator)
+            || generator.ValueKind != JsonValueKind.Object)
+            throw new InvalidDataException(
+                $"{sourcePath}: a canon/2 article requires generator.profile.");
+        var profile = ReadDerivedString(generator, "profile", sourcePath);
+        if (!acceptedProfiles.Contains(profile, StringComparer.Ordinal))
+            throw new InvalidDataException(
+                $"{sourcePath}: generator.profile is absent from generation evidence.");
+        var expectedFormat = profile switch
+        {
+            Fmx4EuProfile.ProfileId => "fmx4",
+            PdfLuProfile.ProfileId => "pdf",
+            PdfMemorialLuProfile.ProfileId or PdfMemorialLuProfileV2.ProfileId
+                => "pdf-memorial",
+            _ => null,
+        };
+        if (expectedFormat is null
+            ? !ReferenceEquals(selectedObservation, selectedPrimary)
+            : !string.Equals(selectedObservation.Format, expectedFormat,
+                StringComparison.Ordinal))
+            throw new InvalidDataException(
+                $"{sourcePath}: generator.profile does not match its bound corpus observation.");
+        if (requiresGapProfile && profile != AknLuProfileV3.ProfileId
+            || !requiresGapProfile && profile == AknLuProfileV3.ProfileId)
+            throw new InvalidDataException(
+                $"{sourcePath}: generator.profile does not match provision-gap coverage.");
+        return selectedObservation;
+    }
+
+    private static string ReadDerivedString(
+        JsonElement value, string property, string sourcePath)
+    {
+        if (!value.TryGetProperty(property, out var member)
+            || member.ValueKind != JsonValueKind.String
+            || string.IsNullOrWhiteSpace(member.GetString()))
+            throw new InvalidDataException(
+                $"{sourcePath}: {property} must be a non-empty string.");
+        return member.GetString()!;
+    }
+
+    private static string? ReadDerivedOptionalString(
+        JsonElement value, string property, string sourcePath)
+    {
+        if (!value.TryGetProperty(property, out var member))
+            throw new InvalidDataException(
+                $"{sourcePath}: {property} is required.");
+        return member.ValueKind switch
+        {
+            JsonValueKind.Null => null,
+            JsonValueKind.String => member.GetString(),
+            _ => throw new InvalidDataException(
+                $"{sourcePath}: {property} must be a string or null."),
+        };
+    }
+
+    private static void RequireDerivedString(
+        JsonElement value,
+        string property,
+        string expected,
+        string sourcePath)
+    {
+        var actual = ReadDerivedString(value, property, sourcePath);
+        if (!string.Equals(actual, expected, StringComparison.Ordinal))
+            throw new InvalidDataException(
+                $"{sourcePath}: {property} does not match the selected corpus expression.");
+    }
+
+    private static void RejectDuplicateJsonProperties(
+        JsonElement value,
+        string sourcePath)
+    {
+        if (value.ValueKind == JsonValueKind.Object)
+        {
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var property in value.EnumerateObject())
+            {
+                if (!names.Add(property.Name))
+                    throw new InvalidDataException(
+                        $"{sourcePath}: duplicate JSON properties are not allowed in canon/2 articles.");
+                RejectDuplicateJsonProperties(property.Value, sourcePath);
+            }
+        }
+        else if (value.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in value.EnumerateArray())
+                RejectDuplicateJsonProperties(item, sourcePath);
+        }
+    }
+
+    public static IReadOnlyList<ProvisionGapRow> ParseProvisionGaps(
+        JsonElement root,
+        string rid,
+        string sourcePath)
+    {
+        if (!root.TryGetProperty("provision_gaps", out var gaps))
+        {
+            if (root.TryGetProperty("text_completeness", out _))
+                throw new InvalidDataException(
+                    $"{sourcePath}: text_completeness requires provision_gaps.");
+            return [];
+        }
+        if (gaps.ValueKind != JsonValueKind.Array || gaps.GetArrayLength() == 0)
+            throw new InvalidDataException(
+                $"{sourcePath}: provision_gaps must be a non-empty array.");
+
+        var hasProvisions = root.TryGetProperty("provisions", out var provisionsElement)
+            && provisionsElement.ValueKind == JsonValueKind.Array
+            && provisionsElement.GetArrayLength() > 0;
+        var expectedCompleteness = hasProvisions ? "partial" : "unavailable";
+        if (!root.TryGetProperty("text_completeness", out var completeness)
+            || completeness.ValueKind != JsonValueKind.String
+            || completeness.GetString() != expectedCompleteness)
+            throw new InvalidDataException(
+                $"{sourcePath}: text_completeness does not match provision coverage.");
+
+        var expectedKeys = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "schema", "document_order", "anchor", "provision_id", "eli", "type",
+            "num", "heading", "path", "article_valid_from", "text_unavailable_reason",
+        };
+        static string? OptionalString(JsonElement value, string property)
+        {
+            var member = value.GetProperty(property);
+            return member.ValueKind switch
+            {
+                JsonValueKind.Null => null,
+                JsonValueKind.String => member.GetString(),
+                _ => throw new InvalidDataException(
+                    $"provision gap {property} must be a string or null"),
+            };
+        }
+
+        var result = new List<ProvisionGapRow>(gaps.GetArrayLength());
+        var ridSeparator = rid.IndexOf('|');
+        if (ridSeparator <= 0)
+            throw new InvalidDataException(
+                $"{sourcePath}: provision gaps require a valid parent document identity.");
+        var parentLexId = rid[..ridSeparator];
+        foreach (var gap in gaps.EnumerateArray())
+        {
+            var memberNames = gap.ValueKind == JsonValueKind.Object
+                ? gap.EnumerateObject().Select(member => member.Name).ToArray()
+                : [];
+            if (gap.ValueKind != JsonValueKind.Object
+                || memberNames.Length != expectedKeys.Count
+                || !memberNames.ToHashSet(StringComparer.Ordinal).SetEquals(expectedKeys))
+                throw new InvalidDataException(
+                    $"{sourcePath}: provision gap must use the exact textless schema.");
+            if (gap.GetProperty("schema").ValueKind != JsonValueKind.String
+                || gap.GetProperty("schema").GetString() != "lex-provision-gap/1"
+                || !gap.GetProperty("document_order").TryGetInt32(out var order)
+                || order < 0)
+                throw new InvalidDataException(
+                    $"{sourcePath}: provision gap has an invalid schema or document order.");
+            var anchor = OptionalString(gap, "anchor");
+            var provisionId = OptionalString(gap, "provision_id");
+            var type = OptionalString(gap, "type");
+            var reason = OptionalString(gap, "text_unavailable_reason");
+            if (string.IsNullOrWhiteSpace(anchor)
+                || string.IsNullOrWhiteSpace(provisionId)
+                || !string.Equals(provisionId, $"{parentLexId}#{anchor}",
+                    StringComparison.Ordinal)
+                || string.IsNullOrWhiteSpace(type)
+                || reason is not (
+                    ProvisionGapReason.MarkerOnly or ProvisionGapReason.MarkerSuspicious))
+                throw new InvalidDataException(
+                    $"{sourcePath}: provision gap must name its exact parent document and anchor, with valid coordinates and reason.");
+            var path = gap.GetProperty("path");
+            if (path.ValueKind != JsonValueKind.Array
+                || path.EnumerateArray().Any(value => value.ValueKind != JsonValueKind.String))
+                throw new InvalidDataException(
+                    $"{sourcePath}: provision gap path must contain only strings.");
+            result.Add(new ProvisionGapRow(
+                rid, order, anchor, provisionId, OptionalString(gap, "eli"), type,
+                OptionalString(gap, "num"), OptionalString(gap, "heading"),
+                string.Join(" / ", path.EnumerateArray().Select(value => value.GetString()))
+                    is { Length: > 0 } joined ? joined : null,
+                OptionalString(gap, "article_valid_from"), reason));
+        }
+        return result;
     }
 
     private static string ReadIfExists(string path) => File.Exists(path) ? File.ReadAllText(path) : "";

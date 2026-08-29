@@ -56,9 +56,10 @@ internal static class Canon1FixtureRunner
         if (Directory.EnumerateFileSystemEntries(root).Any())
             throw new InvalidDataException("canon/1 output root must be empty");
 
-        if (!ProfileIds.SequenceEqual(DiscoverProductionProfileIds(), StringComparer.Ordinal))
+        var productionProfiles = DiscoverProductionProfileIds();
+        if (ProfileIds.Any(profile => !productionProfiles.Contains(profile, StringComparer.Ordinal)))
             throw new InvalidDataException(
-                "canon/1 registry does not cover every public Lex.Derive profile id");
+                "canon/1 frozen registry names a profile that production no longer exposes");
         var cases = Cases();
         ValidateProfileIds(cases.Select(value => value.ProfileId));
         Write(root, "contract.json", ContractBytes());

@@ -1,0 +1,26 @@
+{
+  "profile_id": "akn-lu-identical-scl-duplicate/1",
+  "provisions": [
+    {
+      "anchor": "art_duplicate",
+      "eli": null,
+      "type": "article",
+      "num": "Art. 3.",
+      "heading": "Blue table",
+      "path": [],
+      "article_valid_from": null,
+      "text_md": "| Synthetic duplicate repair text. |\n| --- |",
+      "text_sha256": "cd5ca3874dd408ed00851d895fc9c6fa52d978fea633e872fe2a634670c777f7",
+      "md_span": {
+        "start": 53,
+        "end": 97
+      },
+      "citations": []
+    }
+  ],
+  "markdown": "\n<a id=\"art_duplicate\"></a>\n\n### Art. 3. Blue table\n\n| Synthetic duplicate repair text. |\n| --- |\n",
+  "notes": [
+    "one byte-identical duplicate scl:* presentation attribute removed for parsing; publisher evidence unchanged"
+  ],
+  "publisher_structural_empty_articles": []
+}

@@ -175,11 +175,11 @@ public class McpContractTests : IDisposable
                     }).ToJsonString()
                     : null);
             IndexBuilder.Build(db, new Dictionary<string, string>
-            {
-                ["collection"] = "metadata", ["tier"] = "A",
-                ["history_begins"] = "publisher", ["built_at"] = "2026-08-01T00:00:00Z",
-                ["corpus_commit"] = "test",
-            }, [document], [provision], [], [], StampSigner.CreateKeyPem());
+                {
+                    ["collection"] = "metadata", ["tier"] = "A",
+                    ["history_begins"] = "publisher", ["built_at"] = "2026-08-01T00:00:00Z",
+                    ["corpus_commit"] = "test",
+                }, [document], [provision], [], [], StampSigner.CreateKeyPem());
 
             var error = Assert.Throws<InvalidDataException>(() => LexIndexReader.Open(db));
             Assert.Contains("metadata", error.Message, StringComparison.OrdinalIgnoreCase);
@@ -1440,7 +1440,7 @@ public class McpContractTests : IDisposable
         Assert.Equal("t-pub", env["publisher"]!.GetValue<string>());
         Assert.NotNull(env["freshness"]!["built_at"]);
         Assert.True(env["freshness"]!["stamp_signature_valid"]!.GetValue<bool>());
-        Assert.Equal(IndexBuilder.SchemaVersion,
+        Assert.Equal(IndexBuilder.PreviousSchemaVersion,
             env["artifact"]!["index_format"]!.GetValue<string>());
     }
 
@@ -1458,7 +1458,7 @@ public class McpContractTests : IDisposable
                 ["history_begins"] = "publisher", ["built_at"] = "2026-08-01T00:00:00Z",
                 ["corpus_commit"] = "test",
             }, [document], [ContractProvision(document, "tamper test")], [], [], key);
-            RewriteSchema(db, IndexBuilder.PreviousSchemaVersion);
+            RewriteSchema(db, IndexBuilder.LegacySchemaVersion);
 
             using var reader = LexIndexReader.Open(db);
             Assert.False(reader.SignatureValid);

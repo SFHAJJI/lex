@@ -535,7 +535,125 @@ export interface EvidenceContext {
 export interface Citation { work: string; href: string; text?: string }
 export interface ProvisionItem { anchor: string; num?: string; heading?: string; text?: string; text_sha256?: string; path?: string;
                                  citations?: Citation[]; text_omitted?: boolean;
-                                 text_omitted_reason?: string; permalink?: string }
+                                 text_omitted_reason?: string; permalink?: string;
+                                 document_order?: number; text_available?: boolean;
+                                 text_unavailable_reason?: string; source_uri?: string;
+                                 official_source?: string; eli?: string }
+
+export interface ProvisionResponseMeta {
+  totalProvisions?: number;
+  totalProvisionGaps?: number;
+  truncated: boolean;
+  textTruncated: boolean;
+  textCompleteness?: "complete" | "partial" | "unavailable";
+}
+
+function boundedCount(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : undefined;
+}
+
+/** Bounded response facts are authoritative metadata, not guesses from the returned row page. */
+export function provisionResponseMeta(result: any): ProvisionResponseMeta {
+  const completeness = result?.text_completeness;
+  const totalProvisions = boundedCount(result?.total_provisions);
+  const totalProvisionGaps = boundedCount(result?.total_provision_gaps);
+  return {
+    ...(totalProvisions !== undefined ? { totalProvisions } : {}),
+    ...(totalProvisionGaps !== undefined ? { totalProvisionGaps } : {}),
+    truncated: result?.truncated === true,
+    textTruncated: result?.text_truncated === true,
+    ...(completeness === "complete" || completeness === "partial"
+      || completeness === "unavailable"
+      ? { textCompleteness: completeness }
+      : {}),
+  };
+}
+
+export function isTypedProvisionGap(item: ProvisionItem): boolean {
+  return item.text_available === false && Boolean(item.text_unavailable_reason);
+}
+
+export function typedProvisionGapLabel(
+  items: ProvisionItem[], textCompleteness?: string,
+): string | undefined {
+  const gaps = items.filter(isTypedProvisionGap).length;
+  if (gaps === 0) return undefined;
+  if (textCompleteness === "unavailable") return "publisher text unavailable";
+  if (textCompleteness === "partial") return "partial publisher text";
+  if (textCompleteness === "complete") return undefined;
+  return gaps === items.length ? "publisher text unavailable" : "partial publisher text";
+}
+
+/** Keep source candidates independent until the HTTPS-only boundary chooses one. */
+export function provisionSourceUrl(item: ProvisionItem): string | undefined {
+  return safeHttpsUrl(item.permalink, item.eli, item.source_uri, item.official_source);
+}
+
+export function provisionCountLabel(items: ProvisionItem[], totalProvisions?: number): string {
+  const shown = items.length;
+  const total = boundedCount(totalProvisions);
+  const coordinates = items.some(isTypedProvisionGap);
+  const noun = coordinates ? "publisher coordinates" : `article${shown === 1 ? "" : "s"}`;
+  return total !== undefined && total > shown
+    ? `Showing ${shown.toLocaleString("en-US")} of ${total.toLocaleString("en-US")} ${noun}`
+    : `${shown.toLocaleString("en-US")} ${noun}`;
+}
+
+export function boundedPublisherTextLabel(
+  items: ProvisionItem[], textTruncated?: boolean,
+): string | undefined {
+  if (textTruncated) return "some held publisher text omitted from this response";
+  return items.some((item) => item.text_omitted)
+    ? "text shortened for this response"
+    : undefined;
+}
+
+export function provisionEmptyExplanation(meta: ProvisionResponseMeta): string {
+  return meta.textCompleteness === "partial" || meta.textTruncated
+    ? "This bounded response did not include a publisher coordinate. Its partial-text metadata does not establish that publisher text is absent."
+    : "No text is held for this law on that date.";
+}
+
+/** Merge canon/2 text rows and textless gap coordinates without changing legacy V3 order. */
+export function provisionItemsOf(result: any): ProvisionItem[] {
+  const text = Array.isArray(result?.provisions) ? result.provisions as ProvisionItem[] : [];
+  const gaps = Array.isArray(result?.provision_gaps)
+    ? (result.provision_gaps as ProvisionItem[]).map((gap) => ({
+        ...gap,
+        text: undefined,
+        text_sha256: undefined,
+        text_available: false,
+      }))
+    : [];
+  if (gaps.length === 0) return [...text];
+  return [...text, ...gaps]
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => (a.item.document_order ?? Number.MAX_SAFE_INTEGER)
+      - (b.item.document_order ?? Number.MAX_SAFE_INTEGER) || a.index - b.index)
+    .map(({ item }) => item);
+}
+
+export function asOfResult<T = any>(result: T | T[]): T | undefined {
+  const list = (Array.isArray(result) ? result : [result]) as T[];
+  return list.find((item: any) =>
+    (Array.isArray(item?.provisions) && item.provisions.length > 0)
+      || (Array.isArray(item?.provision_gaps) && item.provision_gaps.length > 0))
+    ?? list.find((item: any) =>
+      Array.isArray(item?.provisions) || Array.isArray(item?.provision_gaps)
+        || Boolean(item?.document))
+    ?? list[0];
+}
+
+export function hasTypedProvisionGaps(result: any, anchor?: string): boolean {
+  if (anchor) return Array.isArray(result?.provision_gaps)
+    && result.provision_gaps.some((gap: any) => gap?.anchor === anchor);
+  return (Array.isArray(result?.provision_gaps) && result.provision_gaps.length > 0)
+    || (typeof result?.total_provision_gaps === "number" && result.total_provision_gaps > 0)
+    || result?.text_completeness === "partial"
+    || result?.text_completeness === "unavailable";
+}
 export interface SearchFact {
   work: string; lex_id: string; anchor: string; number?: string; heading?: string;
   snippet?: string; title?: string; valid_from?: string; source_uri?: string; permalink?: string;
@@ -555,7 +673,9 @@ export interface UiEffect {
   conflicted_publishers?: string[];
   provision?: { subject: Subject; valid_from: string; valid_to?: string; provisions: ProvisionItem[]; permalink?: string;
                 evidence?: EvidenceContext[]; total_provisions?: number; truncated?: boolean;
-                text_truncated?: boolean; outline_only?: boolean };
+                text_truncated?: boolean; outline_only?: boolean;
+                provision_gaps?: ProvisionItem[]; total_provision_gaps?: number;
+                text_completeness?: string };
   diff?: { subject: Subject; from_date: string; to_date: string; note?: string; status?: string;
            anchor_from_present?: boolean; anchor_to_present?: boolean; anchor_text_equal?: boolean;
            provision_level_comparable?: boolean;
@@ -604,7 +724,10 @@ export interface UiEffect {
     results?: SearchFact[];
     evidence?: EvidenceContext[];
   };
-  gap?: { status: string; work?: string; date?: string; explanation: string; available: string[]; evidence?: EvidenceContext[] };
+  gap?: { status: string; work?: string; date?: string; explanation: string; available: string[];
+          evidence?: EvidenceContext[]; provision_gaps?: ProvisionItem[];
+          total_provision_gaps?: number; truncated?: boolean; total_provisions?: number;
+          text_truncated?: boolean; text_completeness?: string };
 }
 export interface RankingRow {
   work: string; title?: string; versions_in_period: number; versions_total: number;

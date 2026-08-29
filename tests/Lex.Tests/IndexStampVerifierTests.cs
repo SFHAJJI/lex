@@ -203,7 +203,8 @@ public sealed class IndexStampVerifierTests : IDisposable
             JsonSerializer.Serialize(manifest, CorpusJson.Options) + "\n",
             new UTF8Encoding(false));
         var manifestDigest = Sha(manifestPath);
-        DerivationGeneration.UpdatePublisher(root, "eu-eurlex",
+        Directory.CreateDirectory(Path.Combine(root, "eu-eurlex"));
+        DerivationGeneration.UpdatePublisherWithLocksHeld(root, "eu-eurlex",
             new string('c', 40), manifestDigest, new string('b', 40),
             new string('e', 40), new string('f', 40),
             ["akn-eu/1"]);
@@ -245,6 +246,7 @@ public sealed class IndexStampVerifierTests : IDisposable
             ExpectedDeriverTreeId: new string('f', 40),
             ExpectedGenerationSha256: generationDigest,
             ExpectedProfilesSha256: profilesDigest,
+            ExpectedArticlesCanon: DerivationGeneration.Canon1,
             RequireDerivedProvenance: true));
         Assert.True(digests.IsValid,
             string.Join(Environment.NewLine, digests.ProvenanceErrors));
@@ -396,6 +398,102 @@ public sealed class IndexStampVerifierTests : IDisposable
     }
 
     [Fact]
+    public void Schema_four_promotion_requires_the_exact_generation_file_and_derived_evidence()
+    {
+        var root = TempDirectory();
+        var manifestPath = Path.Combine(root, "manifest.json");
+        var manifest = new ManifestDoc
+        {
+            Publisher = new Dictionary<string, string>
+            {
+                ["id"] = "eu-eurlex", ["name"] = "EU", ["jurisdiction"] = "EU",
+                ["homepage"] = "https://example.invalid",
+            },
+            Tier = "A",
+            Attribution = "test",
+            TextIncluded = true,
+            TextPublic = true,
+            HistoryBegins = "publisher",
+            IngesterVersion = "test",
+            IngesterCodeCommit = new string('b', 40),
+            SourceConfigurationKind = "engineering_scope",
+            SourceConfigurationSha256 = new string('9', 64),
+        };
+        File.WriteAllText(manifestPath,
+            JsonSerializer.Serialize(manifest, CorpusJson.Options) + "\n",
+            new UTF8Encoding(false));
+        var manifestDigest = Sha(manifestPath);
+        Directory.CreateDirectory(Path.Combine(root, "eu-eurlex"));
+        DerivationGeneration.UpdatePublisherWithLocksHeld(root, "eu-eurlex",
+            new string('c', 40), manifestDigest, new string('b', 40),
+            new string('e', 40), new string('f', 40),
+            [AknLuProfileV3.ProfileId], DerivationGeneration.Canon2);
+        var generationPath = Path.Combine(root, DerivationGeneration.FileName);
+        var generationDigest = Sha(generationPath);
+
+        var policyPath = TempFile(".json");
+        File.WriteAllText(policyPath, """
+            {
+              "schema": "lex-capability-policy/1",
+              "collections": {
+                "eu-eurlex": { "unsupported_filters": ["domain"] }
+              }
+            }
+            """, new UTF8Encoding(false));
+        var expectation = CapabilityBuildExpectation.Production(
+            "eu-eurlex", ["domain"], Sha(policyPath));
+        var db = Build(StampSigner.CreateKeyPem(), new Dictionary<string, string>
+        {
+            ["builder_code_commit"] = new string('a', 40),
+            ["ingester_code_commit"] = new string('b', 40),
+            ["deriver_code_commit"] = new string('e', 40),
+            ["deriver_tree_id"] = new string('f', 40),
+            ["corpus_manifest_sha256"] = manifestDigest,
+            ["generation_sha256"] = generationDigest,
+            ["profiles_sha256"] = DerivationGeneration.ProfileDigest(
+                [AknLuProfileV3.ProfileId]),
+        }, expectation, ProvisionGapIndexInput.FromGenerationEvidence(
+            DerivationGeneration.Canon2, generationDigest,
+            new string('d', 40), []));
+
+        var missing = IndexStampVerifier.VerifyPromotion(db,
+            new IndexStampVerificationInputs(
+                ExpectedCollection: "eu-eurlex",
+                CapabilityPolicyPath: policyPath));
+        Assert.False(missing.IsValid);
+        Assert.Contains(missing.ProvenanceErrors, error => error.Contains(
+            "articles generation", StringComparison.Ordinal));
+        Assert.Contains(missing.ProvenanceErrors, error => error.Contains(
+            "articles commit", StringComparison.Ordinal));
+
+        var accepted = IndexStampVerifier.VerifyPromotion(db,
+            new IndexStampVerificationInputs(
+                ExpectedCollection: "eu-eurlex",
+                ExpectedCorpusCommit: new string('c', 40),
+                ExpectedCodeCommit: new string('a', 40),
+                ExpectedArticlesCommit: new string('d', 40),
+                CorpusManifestPath: manifestPath,
+                ArticlesGenerationPath: generationPath,
+                CapabilityPolicyPath: policyPath));
+        Assert.True(accepted.IsValid,
+            string.Join(Environment.NewLine, accepted.ProvenanceErrors));
+
+        File.AppendAllText(generationPath, " \n", new UTF8Encoding(false));
+        var changedGeneration = IndexStampVerifier.VerifyPromotion(db,
+            new IndexStampVerificationInputs(
+                ExpectedCollection: "eu-eurlex",
+                ExpectedCorpusCommit: new string('c', 40),
+                ExpectedCodeCommit: new string('a', 40),
+                ExpectedArticlesCommit: new string('d', 40),
+                CorpusManifestPath: manifestPath,
+                ArticlesGenerationPath: generationPath,
+                CapabilityPolicyPath: policyPath));
+        Assert.False(changedGeneration.IsValid);
+        Assert.Contains(changedGeneration.ProvenanceErrors, error => error.Contains(
+            "generation_sha256", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Command_line_stamp_verifier_requires_external_capability_policy()
     {
         var policyPath = TempFile(".json");
@@ -476,7 +574,8 @@ public sealed class IndexStampVerifierTests : IDisposable
 
     private string Build(string key,
         IReadOnlyDictionary<string, string>? additionalStamp = null,
-        CapabilityBuildExpectation? capabilityExpectation = null)
+        CapabilityBuildExpectation? capabilityExpectation = null,
+        ProvisionGapIndexInput? provisionGaps = null)
     {
         var db = TempFile(".db");
         var text = "Reporting obligations.";
@@ -505,7 +604,8 @@ public sealed class IndexStampVerifierTests : IDisposable
                      new Dictionary<string, string>())
             stamp[name] = value;
         IndexBuilder.Build(db, stamp, [doc], [provision], [], [], key,
-            capabilityExpectation: capabilityExpectation);
+            capabilityExpectation: capabilityExpectation,
+            provisionGaps: provisionGaps);
         return db;
     }
 

@@ -1,0 +1,31 @@
+{
+  "profile_id": "xhtml-eu-xlink-context/1",
+  "provisions": [
+    {
+      "anchor": "art_1",
+      "eli": null,
+      "type": "article",
+      "num": "Article 1",
+      "heading": null,
+      "path": [],
+      "article_valid_from": null,
+      "text_md": "Synthetic xlink citation applies to the blue orchard.",
+      "text_sha256": "01e8ace04fbea6df32d82b4b87b67914d62f87d5f98cccc0d68b6ff9d20ccd89",
+      "md_span": {
+        "start": 36,
+        "end": 89
+      },
+      "citations": [
+        {
+          "href": "https://example.test/xlink",
+          "text": "Synthetic xlink citation"
+        }
+      ]
+    }
+  ],
+  "markdown": "\n<a id=\"art_1\"></a>\n\n### Article 1\n\nSynthetic xlink citation applies to the blue orchard.\n",
+  "notes": [
+    "boundaries: flat format segmented on title-article-norm / title-annex-1; anchors derived from publisher numbering (art_N / anx_N)"
+  ],
+  "publisher_structural_empty_articles": []
+}

@@ -1,0 +1,24 @@
+{
+  "profile_id": "akn-lu/2",
+  "provisions": [
+    {
+      "anchor": "art_ordinary",
+      "eli": null,
+      "type": "article",
+      "num": "Art. 8.",
+      "heading": null,
+      "path": [],
+      "article_valid_from": null,
+      "text_md": "1. 1. loi du 9 juillet 2099",
+      "text_sha256": "12fc24e6f9945b89a42e3b690ad2bdeef0d12e6e8d830404c0aa1291bb1ee445",
+      "md_span": {
+        "start": 41,
+        "end": 68
+      },
+      "citations": []
+    }
+  ],
+  "markdown": "\n<a id=\"art_ordinary\"></a>\n\n### Art. 8.\n\n1. 1. loi du 9 juillet 2099\n",
+  "notes": [],
+  "publisher_structural_empty_articles": []
+}

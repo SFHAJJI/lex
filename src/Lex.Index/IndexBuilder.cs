@@ -1,7 +1,8 @@
-using System.Text.Json.Nodes;
+using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json.Nodes;
 using Microsoft.Data.Sqlite;
 
 namespace Lex.Index;
@@ -12,8 +13,9 @@ namespace Lex.Index;
 /// </summary>
 public static class IndexBuilder
 {
-    public const string SchemaVersion = "lex-index/3";
-    public const string PreviousSchemaVersion = "lex-index/2";
+    public const string SchemaVersion = "lex-index/4";
+    public const string PreviousSchemaVersion = "lex-index/3";
+    public const string LegacySchemaVersion = "lex-index/2";
 
     /// <summary>
     /// One hash over every document identity and every provision hash, in fixed ordinal order.
@@ -76,10 +78,225 @@ public static class IndexBuilder
         foreach (var p in provisions.OrderBy(p => p.Rid, StringComparer.Ordinal).ThenBy(p => p.Seq))
             sb.Append(p.ProvisionId).Append('|')
               .Append(Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(p.TextMd)))).Append('\n');
+        AppendProvisionGapContentDigest(connection, sb);
         AppendPublisherMetadataDigest(connection, sb);
         return Convert.ToHexStringLower(
             System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(sb.ToString())));
     }
+
+    /// <summary>
+    /// Canonical V4 commitment over the complete SQLite trust surface. Schema entries, logical
+    /// rows, FTS shadow rows and stored text bytes are all bound. Stamp rows are excluded because
+    /// the signed stamp contains this digest and would otherwise make the construction circular.
+    /// </summary>
+    internal static string ContentDigestV4(SqliteConnection connection)
+    {
+        using var digest = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        var tables = new List<string>();
+        using (var schema = connection.CreateCommand())
+        {
+            schema.CommandText = """
+                SELECT type,name,tbl_name,sql
+                FROM sqlite_schema
+                WHERE name NOT LIKE 'sqlite_%'
+                ORDER BY type,name,tbl_name
+                """;
+            using var rows = schema.ExecuteReader();
+            while (rows.Read())
+            {
+                AppendV4Marker(digest, "schema");
+                for (var i = 0; i < rows.FieldCount; i++)
+                    AppendV4Value(digest, rows.GetValue(i));
+                if (rows.GetString(0) == "table"
+                    && rows.GetString(1) != "stamp"
+                    && (rows.IsDBNull(3) || !rows.GetString(3).StartsWith(
+                        "CREATE VIRTUAL TABLE", StringComparison.OrdinalIgnoreCase)))
+                    tables.Add(rows.GetString(1));
+            }
+        }
+
+        foreach (var table in tables.Order(StringComparer.Ordinal))
+        {
+            var columns = new List<(string Name, long PrimaryKeyOrder)>();
+            using (var metadata = connection.CreateCommand())
+            {
+                metadata.CommandText = $"PRAGMA table_xinfo({QuoteIdentifier(table)})";
+                using var rows = metadata.ExecuteReader();
+                while (rows.Read())
+                    columns.Add((rows.GetString(1), rows.GetInt64(5)));
+            }
+
+            var rowIdAlias = RowIdAlias(connection, table, columns.Select(column => column.Name));
+
+            AppendV4Marker(digest, "table");
+            AppendV4Value(digest, table);
+            if (rowIdAlias is not null) AppendV4Value(digest, "$sqlite_rowid");
+            foreach (var column in columns) AppendV4Value(digest, column.Name);
+            if (columns.Count == 0) continue;
+
+            var quoted = columns.Select(column => QuoteIdentifier(column.Name)).ToArray();
+            var primaryKey = columns.Where(column => column.PrimaryKeyOrder > 0)
+                .OrderBy(column => column.PrimaryKeyOrder)
+                .Select(column => QuoteIdentifier(column.Name))
+                .ToArray();
+            var rowId = rowIdAlias is null ? null : QuoteIdentifier(rowIdAlias);
+            string[] selected = rowId is null ? quoted : [rowId, .. quoted];
+            string[] order = rowId is not null
+                ? [rowId]
+                : primaryKey.Length == 0
+                ? quoted.Concat(quoted.Select(column => $"typeof({column})")).ToArray()
+                : primaryKey;
+            using var data = connection.CreateCommand();
+            data.CommandText = $"SELECT {string.Join(',', selected)} "
+                + $"FROM {QuoteIdentifier(table)} ORDER BY "
+                + string.Join(',', order);
+            using var dataRows = data.ExecuteReader();
+            while (dataRows.Read())
+            {
+                AppendV4Marker(digest, "row");
+                for (var i = 0; i < dataRows.FieldCount; i++)
+                    AppendV4Value(digest, dataRows.GetValue(i));
+            }
+        }
+        return Convert.ToHexStringLower(digest.GetHashAndReset());
+    }
+
+    private static string? RowIdAlias(
+        SqliteConnection connection,
+        string table,
+        IEnumerable<string> declaredColumns)
+    {
+        using var metadata = connection.CreateCommand();
+        metadata.CommandText = """
+            SELECT "wr" FROM pragma_table_list
+            WHERE "schema"='main' AND "name"=$name
+            """;
+        metadata.Parameters.AddWithValue("$name", table);
+        if (metadata.ExecuteScalar() is not long withoutRowId)
+            throw new InvalidDataException($"Table '{table}' has no SQLite layout metadata.");
+        if (withoutRowId != 0) return null;
+
+        var declared = declaredColumns.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var alias = new[] { "rowid", "_rowid_", "oid" }
+            .FirstOrDefault(candidate => !declared.Contains(candidate));
+        return alias ?? throw new InvalidDataException(
+            $"Table '{table}' shadows every SQLite rowid alias.");
+    }
+
+    private static string QuoteIdentifier(string value) =>
+        $"\"{value.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
+
+    private static void AppendV4Marker(IncrementalHash digest, string value) =>
+        AppendV4Bytes(digest, (byte)'M', Encoding.UTF8.GetBytes(value));
+
+    private static void AppendV4Value(IncrementalHash digest, object value)
+    {
+        switch (value)
+        {
+            case DBNull:
+                AppendV4Bytes(digest, (byte)'N', []);
+                return;
+            case string text:
+                AppendV4Bytes(digest, (byte)'T', Encoding.UTF8.GetBytes(text));
+                return;
+            case byte[] bytes:
+                AppendV4Bytes(digest, (byte)'B', bytes);
+                return;
+            case long integer:
+            {
+                Span<byte> bytes = stackalloc byte[sizeof(long)];
+                BinaryPrimitives.WriteInt64BigEndian(bytes, integer);
+                AppendV4Bytes(digest, (byte)'I', bytes);
+                return;
+            }
+            case double real:
+            {
+                Span<byte> bytes = stackalloc byte[sizeof(long)];
+                BinaryPrimitives.WriteInt64BigEndian(
+                    bytes, BitConverter.DoubleToInt64Bits(real));
+                AppendV4Bytes(digest, (byte)'R', bytes);
+                return;
+            }
+            default:
+                throw new InvalidDataException(
+                    $"Unsupported SQLite value type '{value.GetType().Name}' in V4 digest.");
+        }
+    }
+
+    private static void AppendV4Bytes(
+        IncrementalHash digest, byte type, ReadOnlySpan<byte> value)
+    {
+        Span<byte> header = stackalloc byte[sizeof(byte) + sizeof(long)];
+        header[0] = type;
+        BinaryPrimitives.WriteInt64BigEndian(header[1..], value.Length);
+        digest.AppendData(header);
+        digest.AppendData(value);
+    }
+
+    internal static void AppendProvisionGapContentDigest(
+        SqliteConnection connection,
+        StringBuilder output)
+    {
+        if (!TableExists(connection, "provision_gaps")) return;
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT rid,seq,anchor,provision_id,eli,ptype,num,heading,path,
+                   article_valid_from,text_unavailable_reason
+            FROM provision_gaps ORDER BY rid,seq
+            """;
+        using var rows = command.ExecuteReader();
+        while (rows.Read())
+            AppendDigestRecord(output,
+                "gap", rows.GetString(0),
+                rows.GetInt64(1).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                rows.GetString(2), rows.GetString(3),
+                rows.IsDBNull(4) ? null : rows.GetString(4), rows.GetString(5),
+                rows.IsDBNull(6) ? null : rows.GetString(6),
+                rows.IsDBNull(7) ? null : rows.GetString(7),
+                rows.IsDBNull(8) ? null : rows.GetString(8),
+                rows.IsDBNull(9) ? null : rows.GetString(9),
+                rows.GetString(10));
+    }
+
+    internal static string ProvisionGapDigest(SqliteConnection connection)
+    {
+        if (!TableExists(connection, "provision_gaps"))
+            return Convert.ToHexStringLower(SHA256.HashData([]));
+        var output = new StringBuilder();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT rid,seq,anchor,provision_id,eli,ptype,num,heading,path,
+                   article_valid_from,text_unavailable_reason
+            FROM provision_gaps ORDER BY rid,seq
+            """;
+        using var rows = command.ExecuteReader();
+        while (rows.Read())
+            AppendDigestRecord(output,
+                rows.GetString(0),
+                rows.GetInt64(1).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                rows.GetString(2), rows.GetString(3),
+                rows.IsDBNull(4) ? null : rows.GetString(4), rows.GetString(5),
+                rows.IsDBNull(6) ? null : rows.GetString(6),
+                rows.IsDBNull(7) ? null : rows.GetString(7),
+                rows.IsDBNull(8) ? null : rows.GetString(8),
+                rows.IsDBNull(9) ? null : rows.GetString(9),
+                rows.GetString(10));
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(output.ToString())));
+    }
+
+    internal static bool TableExists(SqliteConnection connection, string table)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=$name";
+        command.Parameters.AddWithValue("$name", table);
+        return command.ExecuteScalar() is not null;
+    }
+
+    internal static bool IsAbsoluteHttpUri(string value) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var uri)
+        && uri.Scheme is "http" or "https"
+        && !string.IsNullOrWhiteSpace(uri.Host);
 
     internal static void AppendPublisherMetadataDigest(SqliteConnection connection, StringBuilder output)
     {
@@ -147,11 +364,51 @@ public static class IndexBuilder
         IEnumerable<ProvisionStateRow>? provisionStates = null,
         IEnumerable<AnchorEventRow>? anchorEvents = null,
         SemanticBuildOptions? semantic = null,
-        CapabilityBuildExpectation? capabilityExpectation = null)
+        CapabilityBuildExpectation? capabilityExpectation = null,
+        ProvisionGapIndexInput? provisionGaps = null)
     {
+        ArgumentNullException.ThrowIfNull(stampValues);
+        var stampInput = stampValues.ToDictionary(
+            pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
         var docRows = docs.ToList();
-        var collection = stampValues.GetValueOrDefault("collection")
+        var collection = stampInput.GetValueOrDefault("collection")
             ?? throw new InvalidDataException("Index collection is required.");
+        var hasProvisionGapCapability = provisionGaps is not null;
+        if (hasProvisionGapCapability)
+        {
+            docRows = docRows
+                .Select(document => document with
+                {
+                    PublisherMetadata = document.PublisherMetadata?
+                        .OrderBy(value => value.Kind, StringComparer.Ordinal)
+                        .ThenBy(value => value.Identifier, StringComparer.Ordinal)
+                        .ThenBy(value => value.Language, StringComparer.Ordinal)
+                        .ThenBy(value => value.Value, StringComparer.Ordinal)
+                        .ThenBy(value => value.SourceUri, StringComparer.Ordinal)
+                        .ThenBy(value => value.CitationIdentity)
+                        .ToArray(),
+                    DocumentRoles = document.DocumentRoles?
+                        .Order(StringComparer.Ordinal).ToArray(),
+                })
+                .OrderBy(document => document.Key, StringComparer.Ordinal)
+                .ThenBy(document => document.Language, StringComparer.Ordinal)
+                .ThenBy(document => document.ValidFrom, StringComparer.Ordinal)
+                .ThenBy(document => document.GroupKey, StringComparer.Ordinal)
+                .ThenBy(document => document.GroupIdentifier, StringComparer.Ordinal)
+                .ToList();
+        }
+        var foreignCollection = !hasProvisionGapCapability ? null : docRows.FirstOrDefault(document =>
+            !string.Equals(document.Collection, collection, StringComparison.Ordinal));
+        if (foreignCollection is not null)
+            throw new InvalidDataException(
+                $"Document '{foreignCollection.Key}' collection does not match the index collection.");
+        var invalidSource = hasProvisionGapCapability
+            ? docRows.FirstOrDefault(document =>
+                document.SourceUri is null || !IsAbsoluteHttpUri(document.SourceUri))
+            : null;
+        if (invalidSource is not null)
+            throw new InvalidDataException(
+                $"Document '{invalidSource.Key}' has an invalid source_uri; absolute HTTP(S) is required.");
         var capabilityRows = CapabilityManifest.Build(docRows);
         CapabilityManifest.ValidateExpectation(collection, capabilityRows, capabilityExpectation);
         var capabilityDigest = CapabilityManifest.Digest(capabilityRows);
@@ -163,15 +420,140 @@ public static class IndexBuilder
         var capabilityPolicyDigest = capabilityExpectation?.PolicySha256
             ?? Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes("unchecked\n")));
         var provisionRows = provisions.ToList();
+        var provisionGapRows = provisionGaps?.Rows.ToList() ?? [];
+        if (hasProvisionGapCapability)
+        {
+            provisionRows = provisionRows
+                .OrderBy(row => row.Rid, StringComparer.Ordinal)
+                .ThenBy(row => row.Seq)
+                .ThenBy(row => row.Anchor, StringComparer.Ordinal)
+                .ToList();
+            provisionGapRows = provisionGapRows
+                .OrderBy(row => row.Rid, StringComparer.Ordinal)
+                .ThenBy(row => row.Seq)
+                .ThenBy(row => row.Anchor, StringComparer.Ordinal)
+                .ToList();
+        }
+        var claimedArticlesCanon = stampInput.GetValueOrDefault("articles_canon");
+        if (!hasProvisionGapCapability && claimedArticlesCanon is not null)
+            throw new InvalidDataException(
+                "articles_canon may be stamped only by the gap-aware index input.");
+        if (hasProvisionGapCapability
+            && claimedArticlesCanon is not null
+            && claimedArticlesCanon != ProvisionGapIndexInput.RequiredArticlesCanon)
+            throw new InvalidDataException(
+                "Provision-gap capability requires articles canon 'canon/2'.");
+        if (hasProvisionGapCapability
+            && !string.Equals(stampInput.GetValueOrDefault("generation_sha256"),
+                provisionGaps!.GenerationSha256, StringComparison.Ordinal))
+            throw new InvalidDataException(
+                "Provision-gap generation_sha256 must match the signed stamp input.");
+        if (hasProvisionGapCapability
+            && !string.Equals(stampInput.GetValueOrDefault("articles_commit"),
+                provisionGaps!.ArticlesCommit, StringComparison.Ordinal))
+            throw new InvalidDataException(
+                "Provision-gap articles_commit must match the signed stamp input.");
         var blankProvision = provisionRows.FirstOrDefault(
             provision => string.IsNullOrWhiteSpace(provision.TextMd));
         if (blankProvision is not null)
             throw new InvalidDataException(
                 $"Provision {blankProvision.ProvisionId} has no non-whitespace body text.");
+        var provisionCoordinates = new HashSet<(string Rid, string Anchor)>();
+        var provisionOrders = new HashSet<(string Rid, int Seq)>();
+        var docByRid = docRows.ToDictionary(
+            document => $"{document.Key}|{document.Language}|{document.ValidFrom}",
+            StringComparer.Ordinal);
+        foreach (var provision in provisionRows)
+        {
+            if (!provisionCoordinates.Add((provision.Rid, provision.Anchor)))
+                throw new InvalidDataException(
+                    $"Provision coordinate {provision.Rid}#{provision.Anchor} is duplicated.");
+            if (provision.Seq < 0 || !provisionOrders.Add((provision.Rid, provision.Seq)))
+                throw new InvalidDataException(
+                    $"Provision order {provision.Rid}/{provision.Seq} is invalid or duplicated.");
+            if (!docByRid.TryGetValue(provision.Rid, out var parentDocument))
+                throw new InvalidDataException(
+                    $"Provision '{provision.ProvisionId}' has no parent document '{provision.Rid}'.");
+            if (hasProvisionGapCapability
+                && !string.Equals(provision.ProvisionId,
+                    $"{parentDocument.Key}#{provision.Anchor}",
+                    StringComparison.Ordinal))
+                throw new InvalidDataException(
+                    $"Provision '{provision.ProvisionId}' does not name its exact parent document and anchor.");
+            var textSha = Convert.ToHexStringLower(SHA256.HashData(
+                Encoding.UTF8.GetBytes(provision.TextMd)));
+            if (!string.Equals(textSha, provision.TextSha,
+                    StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException(
+                    $"Provision '{provision.ProvisionId}' text does not match text_sha.");
+        }
+        foreach (var gap in provisionGapRows)
+        {
+            ValidateProvisionGapForSigning(gap);
+            if (!docByRid.TryGetValue(gap.Rid, out var parentDocument))
+                throw new InvalidDataException(
+                    $"Provision gap '{gap.ProvisionId}' has no parent document '{gap.Rid}'.");
+            if (!string.Equals(gap.ProvisionId,
+                    $"{parentDocument.Key}#{gap.Anchor}",
+                    StringComparison.Ordinal))
+                throw new InvalidDataException(
+                    $"Provision gap '{gap.ProvisionId}' does not name its exact parent document and anchor.");
+            if (!provisionOrders.Add((gap.Rid, gap.Seq)))
+                throw new InvalidDataException(
+                    $"Provision order {gap.Rid}/{gap.Seq} has both text and a gap or is duplicated.");
+            if (!provisionCoordinates.Add((gap.Rid, gap.Anchor)))
+                throw new InvalidDataException(
+                    $"Provision coordinate {gap.Rid}#{gap.Anchor} has both text and a gap.");
+        }
         var provisionStateRows = (provisionStates ?? []).ToList();
         var anchorEventRows = (anchorEvents ?? []).ToList();
         var eventRows = events.ToList();
         var observationRows = observations.ToList();
+        if (hasProvisionGapCapability)
+        {
+            provisionStateRows = provisionStateRows
+                .OrderBy(row => row.GroupKey, StringComparer.Ordinal)
+                .ThenBy(row => row.Language, StringComparer.Ordinal)
+                .ThenBy(row => row.Anchor, StringComparer.Ordinal)
+                .ThenBy(row => row.ValidFrom, StringComparer.Ordinal)
+                .ThenBy(row => row.ValidTo, StringComparer.Ordinal)
+                .ThenBy(row => row.TextSha, StringComparer.Ordinal)
+                .ThenBy(row => row.InVersion, StringComparer.Ordinal)
+                .ThenBy(row => row.ArticleValidFrom, StringComparer.Ordinal)
+                .ThenBy(row => row.IsPrimaryLanguage)
+                .ThenBy(row => row.ValidityConflict)
+                .ToList();
+            anchorEventRows = anchorEventRows
+                .OrderBy(row => row.GroupKey, StringComparer.Ordinal)
+                .ThenBy(row => row.Language, StringComparer.Ordinal)
+                .ThenBy(row => row.AtVersion, StringComparer.Ordinal)
+                .ThenBy(row => row.EType, StringComparer.Ordinal)
+                .ThenBy(row => row.FromAnchor, StringComparer.Ordinal)
+                .ThenBy(row => row.ToAnchor, StringComparer.Ordinal)
+                .ThenBy(row => row.Anchor, StringComparer.Ordinal)
+                .ThenBy(row => row.TextSha, StringComparer.Ordinal)
+                .ThenBy(row => row.IsPrimaryLanguage)
+                .ToList();
+            eventRows = eventRows
+                .OrderBy(row => row.Key, StringComparer.Ordinal)
+                .ThenBy(row => row.ObservedFrom, StringComparer.Ordinal)
+                .ThenBy(row => row.Scope, StringComparer.Ordinal)
+                .ThenBy(row => row.Event, StringComparer.Ordinal)
+                .ThenBy(row => row.Detail, StringComparer.Ordinal)
+                .ThenBy(row => row.FirstMissedAt, StringComparer.Ordinal)
+                .ThenBy(row => row.RunsMissed)
+                .ThenBy(row => row.RunIdentity, StringComparer.Ordinal)
+                .ToList();
+            observationRows = observationRows
+                .OrderBy(row => row.Key, StringComparer.Ordinal)
+                .ThenBy(row => row.Language, StringComparer.Ordinal)
+                .ThenBy(row => row.ExprValidFrom, StringComparer.Ordinal)
+                .ThenBy(row => row.ObservedFrom, StringComparer.Ordinal)
+                .ThenBy(row => row.ObservedTo, StringComparer.Ordinal)
+                .ThenBy(row => row.Sha256, StringComparer.Ordinal)
+                .ThenBy(row => row.SourceUri, StringComparer.Ordinal)
+                .ToList();
+        }
         Dictionary<string, IReadOnlyList<SemanticChunk>>? chunksByTextSha = null;
         List<SemanticChunk>? uniqueSemanticChunks = null;
         long semanticVectorTotal = 0;
@@ -223,6 +605,9 @@ public static class IndexBuilder
             ref lastReportedPercent, ref lastProgressReport, force: true);
 
         var vectorTempPath = semantic is null ? null : semantic.VectorPath + ".tmp-" + Guid.NewGuid().ToString("N");
+        var databaseBuildPath = hasProvisionGapCapability
+            ? dbPath + ".tmp-" + Guid.NewGuid().ToString("N")
+            : dbPath;
         using var semanticWriter = semantic is null ? null
             : new SemanticVectorWriter(vectorTempPath!, semantic.Encoder.Dimensions);
         using var embeddingCache = semantic?.EmbeddingCachePath is { } cachePath
@@ -291,13 +676,26 @@ public static class IndexBuilder
                 }
             }
         }
-        if (File.Exists(dbPath)) File.Delete(dbPath);
-        using var conn = new SqliteConnection($"Data Source={dbPath}");
+        if (File.Exists(databaseBuildPath)) File.Delete(databaseBuildPath);
+        using var conn = new SqliteConnection(
+            $"Data Source={databaseBuildPath};Pooling=False");
         conn.Open();
+        if (hasProvisionGapCapability)
+        {
+            // V4 is finalized on a private sibling file. Retaining SQLite's exclusive lock
+            // across the content and stamp commits also prevents a path-aware competing writer
+            // from changing the post-commit FTS bytes between digesting and signing.
+            using var lockingMode = conn.CreateCommand();
+            lockingMode.CommandText = "PRAGMA locking_mode=EXCLUSIVE";
+            if (!string.Equals(lockingMode.ExecuteScalar() as string, "exclusive",
+                    StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException(
+                    "V4 index finalization requires SQLite exclusive locking mode.");
+        }
 
-        // lex-index/3: an occurrence carries legal identity and dates, while wording lives once
+        // lex-index/3 and /4: an occurrence carries legal identity and dates, while wording lives once
         // in a content-addressed blob. Lexical state is also deduplicated across repeat versions.
-        Exec(conn, """
+        ExecuteSchema(conn, """
             CREATE TABLE docs(
               key TEXT NOT NULL, collection TEXT NOT NULL, group_key TEXT NOT NULL,
               group_identifier TEXT NOT NULL, kind TEXT, language TEXT NOT NULL,
@@ -410,16 +808,28 @@ public static class IndexBuilder
             CREATE TABLE stamp(k TEXT PRIMARY KEY, v TEXT NOT NULL);
             CREATE VIRTUAL TABLE fts USING fts5(work_title, num, heading, text_md, content='');
             CREATE VIRTUAL TABLE fts_vocab USING fts5vocab(fts, 'row');
-            """);
+            """, canonicalLineEndings: hasProvisionGapCapability);
+        if (hasProvisionGapCapability)
+            ExecuteSchema(conn, """
+                CREATE TABLE provision_gaps(
+                  rid TEXT NOT NULL, seq INTEGER NOT NULL, anchor TEXT NOT NULL,
+                  provision_id TEXT NOT NULL, eli TEXT, ptype TEXT NOT NULL, num TEXT,
+                  heading TEXT, path TEXT, article_valid_from TEXT,
+                  text_unavailable_reason TEXT NOT NULL,
+                  PRIMARY KEY(rid,seq), UNIQUE(rid,anchor));
+                CREATE INDEX ix_provision_gaps_rid ON provision_gaps(rid,seq);
+                """, canonicalLineEndings: true);
 
         System.Diagnostics.Stopwatch? finalizationWatch = null;
         long finalizationCompleted = 0;
         long lastFinalizationPercent = -1;
         var lastFinalizationReport = TimeSpan.Zero;
+        Dictionary<string, string>? pendingV4Stamp = null;
         using (var tx = conn.BeginTransaction())
         {
             var databaseWatch = System.Diagnostics.Stopwatch.StartNew();
-            var databaseTotal = (long)docRows.Count + provisionRows.Count + provisionStateRows.Count
+            var databaseTotal = (long)docRows.Count + provisionRows.Count + provisionGapRows.Count
+                + provisionStateRows.Count
                 + anchorEventRows.Count + eventRows.Count + observationRows.Count
                 + capabilityRows.Count;
             long databaseCompleted = 0;
@@ -498,7 +908,6 @@ public static class IndexBuilder
                 DatabaseItemCompleted();
             }
 
-            var docByRid = docRows.ToDictionary(d => $"{d.Key}|{d.Language}|{d.ValidFrom}", StringComparer.Ordinal);
             var insBlob = conn.CreateCommand();
             insBlob.CommandText = "INSERT INTO text_blobs VALUES ($sha,$enc,$original,$stored,$payload)";
             insBlob.Parameters.Add(new SqliteParameter("$sha", SqliteType.Text));
@@ -539,7 +948,7 @@ public static class IndexBuilder
             insProv.Parameters.Add(new SqliteParameter("$state", SqliteType.Integer));
             foreach (var p in new[] { "$rid", "$a", "$pid", "$pt", "$n", "$h", "$path", "$avf", "$wt", "$sha" })
                 insProv.Parameters.Add(new SqliteParameter(p, SqliteType.Text));
-            var citationResolver = new CitationTargetResolver(stampValues["collection"],
+            var citationResolver = new CitationTargetResolver(stampInput["collection"],
                 docRows);
             foreach (var p in provisionRows)
             {
@@ -598,6 +1007,35 @@ public static class IndexBuilder
                 Set(insProv, "$wt", p.WorkTitle); Set(insProv, "$sha", actualSha);
                 insProv.ExecuteNonQuery();
                 WriteCitations(conn, p, citationResolver);
+                DatabaseItemCompleted();
+            }
+
+            var insGap = conn.CreateCommand();
+            insGap.CommandText = """
+                INSERT INTO provision_gaps VALUES ($rid,$seq,$a,$pid,$eli,$pt,$n,$h,$path,$avf,$reason)
+                """;
+            insGap.Parameters.Add(new SqliteParameter("$seq", SqliteType.Integer));
+            foreach (var name in new[]
+                     { "$rid", "$a", "$pid", "$eli", "$pt", "$n", "$h", "$path", "$avf", "$reason" })
+                insGap.Parameters.Add(new SqliteParameter(name, SqliteType.Text));
+            foreach (var gap in provisionGapRows)
+            {
+                if (!docByRid.TryGetValue(gap.Rid, out var parentDocument))
+                    throw new InvalidDataException(
+                        $"Provision gap '{gap.ProvisionId}' has no parent document '{gap.Rid}'.");
+                if (!string.Equals(gap.ProvisionId,
+                        $"{parentDocument.Key}#{gap.Anchor}",
+                        StringComparison.Ordinal))
+                    throw new InvalidDataException(
+                        $"Provision gap '{gap.ProvisionId}' does not name its exact parent document and anchor.");
+                insGap.Parameters["$seq"].Value = gap.Seq;
+                Set(insGap, "$rid", gap.Rid); Set(insGap, "$a", gap.Anchor);
+                Set(insGap, "$pid", gap.ProvisionId); Set(insGap, "$eli", gap.Eli);
+                Set(insGap, "$pt", gap.PType);
+                Set(insGap, "$n", gap.Num); Set(insGap, "$h", gap.Heading);
+                Set(insGap, "$path", gap.Path); Set(insGap, "$avf", gap.ArticleValidFrom);
+                Set(insGap, "$reason", gap.TextUnavailableReason);
+                insGap.ExecuteNonQuery();
                 DatabaseItemCompleted();
             }
 
@@ -683,11 +1121,12 @@ public static class IndexBuilder
             // article's text could be edited inside a released database and the stamp would
             // still verify. Computed HERE, where docs and provisions are written, so no caller
             // can build an index without it and no path can drift from what is stored.
-            var stamp = new Dictionary<string, string>(stampValues)
+            var stamp = new Dictionary<string, string>(stampInput)
             {
-                ["schema"] = SchemaVersion,
+                ["schema"] = hasProvisionGapCapability
+                    ? SchemaVersion
+                    : PreviousSchemaVersion,
                 ["algorithm"] = StampSigner.Algorithm,
-                ["content_digest"] = ContentDigest(conn, docRows, provisionRows),
                 ["work_catalog_version"] = "3",
                 ["capability_manifest_schema"] = CapabilityManifest.Schema,
                 ["capability_manifest_rows"] = capabilityRows.Count.ToString(
@@ -697,6 +1136,16 @@ public static class IndexBuilder
                 ["capability_policy_tier"] = capabilityExpectation?.Tier ?? "unchecked",
                 ["capability_policy_sha256"] = capabilityPolicyDigest,
             };
+            if (!hasProvisionGapCapability)
+                stamp["content_digest"] = ContentDigest(conn, docRows, provisionRows);
+            if (hasProvisionGapCapability)
+            {
+                stamp["articles_canon"] = ProvisionGapIndexInput.RequiredArticlesCanon;
+                stamp["provision_gap_schema"] = "lex-provision-gap/1";
+                stamp["provision_gap_rows"] = provisionGapRows.Count.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture);
+                stamp["provision_gap_sha256"] = ProvisionGapDigest(conn);
+            }
             using (var workCounts = conn.CreateCommand())
             {
                 workCounts.CommandText = """
@@ -741,21 +1190,19 @@ public static class IndexBuilder
                 stamp["embedding_max_batch_tokens"] = semantic.MaxBatchTokens.ToString(
                     System.Globalization.CultureInfo.InvariantCulture);
             }
-            if (signingKeyPem is not null)
+            if (!hasProvisionGapCapability && signingKeyPem is not null)
             {
                 var (sig, pub) = StampSigner.Sign(stamp, signingKeyPem);
                 stamp["signature"] = sig;
                 stamp["public_key"] = pub;
             }
-            var insStamp = conn.CreateCommand();
-            insStamp.CommandText = "INSERT INTO stamp VALUES ($k,$v)";
-            insStamp.Parameters.Add(new SqliteParameter("$k", SqliteType.Text));
-            insStamp.Parameters.Add(new SqliteParameter("$v", SqliteType.Text));
-            foreach (var (k, v) in stamp)
+            if (hasProvisionGapCapability)
             {
-                insStamp.Parameters["$k"].Value = k; insStamp.Parameters["$v"].Value = v;
-                insStamp.ExecuteNonQuery();
+                ValidatePersistedProvisionGaps(conn);
+                pendingV4Stamp = stamp;
             }
+            else
+                InsertStamp(conn, tx, stamp);
 
             finalizationHeartbeat?.SetCurrent("sqlite-commit", 0);
             tx.Commit();
@@ -765,10 +1212,35 @@ public static class IndexBuilder
                 finalizationCompleted, 3, finalizationWatch,
                 ref lastFinalizationPercent, ref lastFinalizationReport, force: true);
         }
+        if (pendingV4Stamp is not null)
+        {
+            // FTS5 can finalize its shadow rows at the bulk commit, so only the post-commit
+            // state is the artifact that may be signed. The private path and retained exclusive
+            // lock make this second transaction unreachable to competing writers.
+            pendingV4Stamp["content_digest"] = ContentDigestV4(conn);
+            if (signingKeyPem is not null)
+            {
+                var (signature, publicKey) = StampSigner.Sign(pendingV4Stamp, signingKeyPem);
+                pendingV4Stamp["signature"] = signature;
+                pendingV4Stamp["public_key"] = publicKey;
+            }
+            using var stampTransaction = conn.BeginTransaction();
+            InsertStamp(conn, stampTransaction, pendingV4Stamp);
+            stampTransaction.Commit();
+        }
         if (semantic is not null)
         {
             semanticWriter!.Dispose();
             File.Move(vectorTempPath!, semantic.VectorPath, overwrite: true);
+        }
+        if (hasProvisionGapCapability)
+        {
+            conn.Close();
+            using (var durable = new FileStream(
+                       databaseBuildPath, FileMode.Open, FileAccess.ReadWrite,
+                       FileShare.Read, bufferSize: 1, FileOptions.WriteThrough))
+                durable.Flush(flushToDisk: true);
+            File.Move(databaseBuildPath, dbPath, overwrite: true);
         }
         // The last step is publication of the durable vector file (or a no-op for lexical-only
         // builds). Keep the same clock so stage elapsed time remains monotonic.
@@ -782,7 +1254,27 @@ public static class IndexBuilder
             semanticWriter?.Dispose();
             if (vectorTempPath is not null && File.Exists(vectorTempPath))
                 File.Delete(vectorTempPath);
+            if (hasProvisionGapCapability && File.Exists(databaseBuildPath))
+                File.Delete(databaseBuildPath);
             throw;
+        }
+    }
+
+    private static void InsertStamp(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        IReadOnlyDictionary<string, string> stamp)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "INSERT INTO stamp VALUES ($key,$value)";
+        command.Parameters.Add(new SqliteParameter("$key", SqliteType.Text));
+        command.Parameters.Add(new SqliteParameter("$value", SqliteType.Text));
+        foreach (var (key, value) in stamp)
+        {
+            command.Parameters["$key"].Value = key;
+            command.Parameters["$value"].Value = value;
+            command.ExecuteNonQuery();
         }
     }
 
@@ -899,11 +1391,88 @@ public static class IndexBuilder
         }
     }
 
-    private static void Exec(SqliteConnection conn, string sql)
+    internal static void ExecuteSchema(
+        SqliteConnection connection,
+        string sql,
+        bool canonicalLineEndings)
     {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = sql;
-        cmd.ExecuteNonQuery();
+        using var command = connection.CreateCommand();
+        command.CommandText = canonicalLineEndings
+            ? sql.ReplaceLineEndings("\n")
+            : sql;
+        command.ExecuteNonQuery();
+    }
+
+    internal static void ValidateProvisionGapForSigning(ProvisionGapRow gap)
+    {
+        ArgumentNullException.ThrowIfNull(gap);
+        if (gap.Seq < 0
+            || string.IsNullOrWhiteSpace(gap.Rid)
+            || gap.Rid.Length > 512
+            || string.IsNullOrWhiteSpace(gap.Anchor)
+            || gap.Anchor.Length > 512
+            || string.IsNullOrWhiteSpace(gap.ProvisionId)
+            || gap.ProvisionId.Length > 1_000
+            || string.IsNullOrWhiteSpace(gap.PType)
+            || gap.PType.Length > 128
+            || gap.Eli?.Length > 4_096
+            || gap.Num?.Length > 512
+            || gap.Heading?.Length > 4_096
+            || gap.Path?.Length > 4_096
+            || gap.ArticleValidFrom?.Length > 64
+            || gap.TextUnavailableReason is not ("marker_only" or "marker_suspicious")
+            || gap.Eli is not null && !IsAbsoluteHttpUri(gap.Eli)
+            || gap.ArticleValidFrom is not null && !DateOnly.TryParseExact(
+                gap.ArticleValidFrom,
+                "yyyy-MM-dd",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None,
+                out _))
+            throw new InvalidDataException(
+                "A provision gap violates the provision-gap metadata contract.");
+    }
+
+    internal static void ValidatePersistedProvisionGaps(SqliteConnection connection)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT rid,seq,anchor,provision_id,eli,ptype,num,heading,path,
+                   article_valid_from,text_unavailable_reason
+            FROM provision_gaps ORDER BY rid,seq
+            """;
+        using var rows = command.ExecuteReader();
+        while (rows.Read())
+        {
+            if (rows.GetValue(1) is not long sequence
+                || sequence is < 0 or > int.MaxValue)
+                throw new InvalidDataException(
+                    "Persisted provision gap violates the provision-gap metadata contract.");
+            ValidateProvisionGapForSigning(new ProvisionGapRow(
+                RequiredText(rows, 0),
+                (int)sequence,
+                RequiredText(rows, 2),
+                RequiredText(rows, 3),
+                OptionalText(rows, 4),
+                RequiredText(rows, 5),
+                OptionalText(rows, 6),
+                OptionalText(rows, 7),
+                OptionalText(rows, 8),
+                OptionalText(rows, 9),
+                RequiredText(rows, 10)));
+        }
+
+        static string RequiredText(SqliteDataReader rows, int ordinal) =>
+            rows.GetValue(ordinal) as string
+            ?? throw new InvalidDataException(
+                "Persisted provision gap violates the provision-gap metadata contract.");
+
+        static string? OptionalText(SqliteDataReader rows, int ordinal) =>
+            rows.IsDBNull(ordinal)
+                ? null
+                : rows.GetValue(ordinal) as string
+                    ?? throw new InvalidDataException(
+                        "Persisted provision gap violates the provision-gap metadata contract.");
     }
 
     private static (string Encoding, byte[] Payload) EncodeText(byte[] utf8)

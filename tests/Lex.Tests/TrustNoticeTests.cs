@@ -1,6 +1,7 @@
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
+using Lex.Derive;
 using Lex.Index;
 using Lex.Web;
 using Microsoft.AspNetCore.Hosting;
@@ -56,6 +57,44 @@ public sealed class TrustNoticeTests : IDisposable
         Assert.DoesNotContain(DerogationHeading, otherCard, StringComparison.Ordinal);
         var targetCard = CardOf(page, "art_l_121-6");
         Assert.Contains(DerogationHeading, targetCard, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Typed_gap_renders_at_its_anchor_with_its_trust_notice_and_blocks_text_diff()
+    {
+        using var site = new NoticeSite(
+            Path.Combine(_root, "gap-anchor"), includeAct: true,
+            targetIsGap: true, includeEarlierState: true);
+        var page = await site.Client.GetStringAsync(
+            "/lu-legilux/loi-2006-07-31-n2/2024-08-04");
+
+        var targetCard = CardOf(page, "art_l_121-6");
+        Assert.Contains(DerogationHeading, targetCard, StringComparison.Ordinal);
+        Assert.Contains("Text unavailable", targetCard, StringComparison.Ordinal);
+        Assert.Contains("marker_only", targetCard, StringComparison.Ordinal);
+        Assert.Contains("https://example.test/loi-2006-07-31-n2#art_l_121-6",
+            targetCard, StringComparison.Ordinal);
+        Assert.DoesNotContain("legal-markdown", targetCard, StringComparison.Ordinal);
+        Assert.DoesNotContain("text SHA", targetCard, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(DerogationHeading,
+            CardOf(page, "art_l_121-7"), StringComparison.Ordinal);
+        Assert.Contains("partial", page, StringComparison.OrdinalIgnoreCase);
+
+        var comparison = await site.Client.GetStringAsync(
+            "/lu-legilux/loi-2006-07-31-n2/diff/2024-07-01/2024-08-04");
+        Assert.Contains("text diff is unavailable", comparison, StringComparison.Ordinal);
+        Assert.Contains("typed text gap", comparison, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("<ins", comparison, StringComparison.Ordinal);
+        Assert.DoesNotContain("<del", comparison, StringComparison.Ordinal);
+
+        var sameVersionComparison = await site.Client.GetStringAsync(
+            "/lu-legilux/loi-2006-07-31-n2/diff/2024-08-04/2024-08-05");
+        Assert.Contains("text diff is unavailable", sameVersionComparison,
+            StringComparison.Ordinal);
+        Assert.Contains("typed text gap", sameVersionComparison,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("<b>No change.</b>", sameVersionComparison,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -206,13 +245,15 @@ public sealed class TrustNoticeTests : IDisposable
         private readonly string _dbPath;
         public HttpClient Client { get; }
 
-        public NoticeSite(string root, bool includeAct)
+        public NoticeSite(
+            string root, bool includeAct,
+            bool targetIsGap = false, bool includeEarlierState = false)
         {
             _root = root;
             Directory.CreateDirectory(Path.Combine(root, "wwwroot", "app"));
             File.WriteAllText(Path.Combine(root, "wwwroot", "app", "workspace.js"), "/* test */\n");
             _dbPath = Path.Combine(root, "index-lu-legilux.db");
-            BuildIndex(_dbPath, includeAct);
+            BuildIndex(_dbPath, includeAct, targetIsGap, includeEarlierState);
             Client = CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
         }
 
@@ -236,7 +277,8 @@ public sealed class TrustNoticeTests : IDisposable
             new(rid, seq, anchor, $"{key}#{anchor}", "article", num, null, "Livre I",
                 null, "Code du travail", text, Sha(text));
 
-        private static void BuildIndex(string path, bool includeAct)
+        private static void BuildIndex(
+            string path, bool includeAct, bool targetIsGap, bool includeEarlierState)
         {
             var codeKey = "lu-legilux:loi-2006-07-31-n2:2024-08-04";
             var code = new DocRow(
@@ -246,6 +288,18 @@ public sealed class TrustNoticeTests : IDisposable
                 "https://example.test/loi-2006-07-31-n2", "Code du travail",
                 "Code du travail", null, "2024-08-04", null);
             var docs = new List<DocRow> { code };
+            DocRow? earlier = null;
+            if (includeEarlierState)
+            {
+                earlier = code with
+                {
+                    Key = "lu-legilux:loi-2006-07-31-n2:2024-07-01",
+                    ValidFrom = "2024-07-01",
+                    ValidTo = "2024-08-04",
+                    RecordSha = Sha("earlier-code"),
+                };
+                docs.Add(earlier);
+            }
             if (includeAct)
                 docs.Add(new DocRow(
                     "lu-legilux:loi-2020-12-19-a1039:2021-07-01", "lu-legilux",
@@ -258,17 +312,50 @@ public sealed class TrustNoticeTests : IDisposable
             var rid = $"{codeKey}|fr|2024-08-04";
             var provisions = new List<ProvisionRow>
             {
-                Provision(rid, codeKey, 1, "art_l_121-6", "Art. L. 121-6",
-                    "Le contrat de travail est suspendu pendant la maladie."),
                 Provision(rid, codeKey, 2, "art_l_121-7", "Art. L. 121-7",
                     "Texte voisin sans rapport avec la protection."),
             };
-            IndexBuilder.Build(path, new Dictionary<string, string>
+            if (!targetIsGap)
+                provisions.Insert(0, Provision(
+                    rid, codeKey, 1, "art_l_121-6", "Art. L. 121-6",
+                    "Le contrat de travail est suspendu pendant la maladie."));
+            if (earlier is not null)
+            {
+                var earlierRid = LexIndexReader.RidOf(earlier);
+                provisions.Add(Provision(
+                    earlierRid, earlier.Key, 1, "art_l_121-6", "Art. L. 121-6",
+                    "Earlier synthetic wording."));
+                provisions.Add(Provision(
+                    earlierRid, earlier.Key, 2, "art_l_121-7", "Art. L. 121-7",
+                    "Earlier neighbouring wording."));
+            }
+            var stamp = new Dictionary<string, string>
             {
                 ["collection"] = "lu-legilux", ["tier"] = "A",
                 ["history_begins"] = "publisher",
                 ["built_at"] = "2026-08-14T00:00:00Z", ["corpus_commit"] = "test",
-            }, docs, provisions, [], [], StampSigner.CreateKeyPem());
+            };
+            ProvisionGapIndexInput? gapInput = null;
+            if (targetIsGap)
+            {
+                const string generationSha =
+                    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+                const string articlesCommit =
+                    "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+                stamp["generation_sha256"] = generationSha;
+                stamp["articles_commit"] = articlesCommit;
+                stamp["articles_canon"] = ProvisionGapIndexInput.RequiredArticlesCanon;
+                gapInput = ProvisionGapIndexInput.FromGenerationEvidence(
+                    ProvisionGapIndexInput.RequiredArticlesCanon,
+                    generationSha, articlesCommit,
+                    [new ProvisionGapRow(
+                        rid, 1, "art_l_121-6", $"{codeKey}#art_l_121-6",
+                        "https://example.test/loi-2006-07-31-n2#art_l_121-6",
+                        "article", "Art. L. 121-6", null, "Livre I", null,
+                        ProvisionGapReason.MarkerOnly)]);
+            }
+            IndexBuilder.Build(path, stamp, docs, provisions, [], [],
+                StampSigner.CreateKeyPem(), provisionGaps: gapInput);
         }
     }
 }

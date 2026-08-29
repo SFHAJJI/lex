@@ -100,6 +100,76 @@ public sealed record ProvisionRow(
     int? StoredTextCharacters = null,
     bool TextLoaded = true);
 
+/// <summary>
+/// One provision coordinate whose wording is withheld because derivation cannot certify it.
+/// This type intentionally has no legal text, text hash, snippet or vector member.
+/// </summary>
+public sealed record ProvisionGapRow(
+    string Rid,
+    int Seq,
+    string Anchor,
+    string ProvisionId,
+    string? Eli,
+    string PType,
+    string? Num,
+    string? Heading,
+    string? Path,
+    string? ArticleValidFrom,
+    string TextUnavailableReason);
+
+/// <summary>
+/// Positive evidence that a complete canon/2 derivation selected the gap-aware index schema.
+/// Null at the builder boundary means the legacy canon/1 schema. An empty row set still carries
+/// the capability because a successful canon/2 audit can legitimately find no gaps.
+/// The builder must bind <see cref="GenerationSha256"/> and <see cref="ArticlesCommit"/> to the
+/// identically named signed stamp values before it publishes schema 4.
+/// </summary>
+public sealed class ProvisionGapIndexInput
+{
+    public const string RequiredArticlesCanon = "canon/2";
+
+    private ProvisionGapIndexInput(
+        string generationSha256,
+        string articlesCommit,
+        IReadOnlyList<ProvisionGapRow> rows)
+    {
+        GenerationSha256 = generationSha256;
+        ArticlesCommit = articlesCommit;
+        Rows = rows;
+    }
+
+    public string GenerationSha256 { get; }
+    public string ArticlesCommit { get; }
+    public IReadOnlyList<ProvisionGapRow> Rows { get; }
+
+    public static ProvisionGapIndexInput FromGenerationEvidence(
+        string? articlesCanon,
+        string? generationSha256,
+        string? articlesCommit,
+        IEnumerable<ProvisionGapRow> rows)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        if (!string.Equals(articlesCanon, RequiredArticlesCanon,
+                StringComparison.Ordinal))
+            throw new InvalidDataException(
+                $"Provision-gap capability requires articles canon '{RequiredArticlesCanon}'.");
+        return new ProvisionGapIndexInput(
+            RequireLowerHex(generationSha256, 64, "generation SHA-256"),
+            RequireLowerHex(articlesCommit, 40, "articles commit"),
+            Array.AsReadOnly(rows.ToArray()));
+    }
+
+    private static string RequireLowerHex(string? value, int length, string label)
+    {
+        if (value is null || value.Length != length
+            || value.Any(character =>
+                character is not (>= '0' and <= '9') and not (>= 'a' and <= 'f')))
+            throw new InvalidDataException(
+                $"Provision-gap {label} must be exact lowercase hexadecimal evidence.");
+        return value;
+    }
+}
+
 public sealed record RetrievalHit(
     DocRow Doc,
     ProvisionRow Provision,
