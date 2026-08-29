@@ -23,7 +23,7 @@ public static class ExplainerEndpoints
         if (observation.Status == "insufficient_denominator")
             return "insufficient_denominator (n=0)";
         if (!observation.TryGetMeasured(out var measured)) return "invalid_metric";
-        return $"{measured.ToString(format, CultureInfo.InvariantCulture)}{suffix} "
+        return $"{measured.Value.ToString(format, CultureInfo.InvariantCulture)}{suffix} "
                + $"(n={observation.Denominator.ToString(CultureInfo.InvariantCulture)})";
     }
 

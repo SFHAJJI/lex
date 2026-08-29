@@ -417,7 +417,7 @@ internal static class RetrievalBenchmarkControls
         var unrelatedIdentical = UnrelatedMetricsEqual(baselineMetrics, controlMetrics)
                                  && nonRankingIdentical;
         var detected = eligibleIds.Count > 0 && retained == 0
-                       && controlMetrics.NdcgAt10.TryGetMeasured(out var ndcg) && ndcg < 0.15
+                       && controlMetrics.NdcgAt10.TryGetMeasured(out var ndcg) && ndcg.Value < 0.15
                        && failed.Count > 0 && membershipIdentical
                        && nonRankingIdentical && unrelatedIdentical;
         var outcome = eligibleIds.Count == 0 ? "insufficient_denominator"
@@ -445,7 +445,7 @@ internal static class RetrievalBenchmarkControls
     private static bool Lower(RetrievalMetricObservation candidate, RetrievalMetricObservation baseline) =>
         candidate.TryGetMeasured(out var candidateValue)
         && baseline.TryGetMeasured(out var baselineValue)
-        && candidateValue + 0.000000000001 < baselineValue;
+        && candidateValue.Value + 0.000000000001 < baselineValue.Value;
 
     private static bool NonRankingEqual(
         RetrievalCaseObservation left, RetrievalCaseObservation right) =>
@@ -560,11 +560,11 @@ internal static class RetrievalBenchmarkStrata
         string metric, RetrievalMetricObservation observation, double expected)
     {
         var support = Support(observation, DefaultStatisticalFloor);
-        var supported = observation.TryGetMeasured(out var measured)
-                        && observation.Denominator >= InvariantFloor;
+        var gatePassed = observation.Denominator >= InvariantFloor
+                         && observation.TryGetMeasured(out var measured)
+                         && measured.Value == expected;
         rows.Add(new(metric, collection, category, "holdout", "blocking", InvariantFloor,
-            DefaultStatisticalFloor, support, observation,
-            supported && measured == expected));
+            DefaultStatisticalFloor, support, observation, gatePassed));
     }
 
     private static string Support(

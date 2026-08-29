@@ -85,12 +85,12 @@ public sealed class RetrievalBenchmarkTests
             _ => new SearchExecution("keyword", [hit], [], new SearchQueryPlan(
                 "shared", "shared", [], null, null, false)), null);
 
-        Assert.Null(metrics.Mrr.Value);
+        Assert.False(metrics.Mrr.TryGetMeasured(out _));
         Assert.Equal(0, metrics.Mrr.Denominator);
         Assert.Equal("insufficient_denominator", metrics.Mrr.Status);
-        Assert.Equal(0, metrics.WorkMrr.Value);
-        Assert.Equal(0, metrics.WorkRecallAt10.Value);
-        Assert.Equal(0, metrics.WorkNdcgAt10.Value);
+        Assert.Equal(0, MetricValue(metrics.WorkMrr));
+        Assert.Equal(0, MetricValue(metrics.WorkRecallAt10));
+        Assert.Equal(0, MetricValue(metrics.WorkNdcgAt10));
     }
 
     [Fact]
@@ -105,12 +105,12 @@ public sealed class RetrievalBenchmarkTests
             _ => new SearchExecution("keyword", [], [], new SearchQueryPlan(
                 "zxqv", "zxqv", [], null, null, false)), null);
 
-        Assert.Equal(1, metrics.NoHitAccuracy.Value);
+        Assert.Equal(1, MetricValue(metrics.NoHitAccuracy));
         Assert.Equal(1, metrics.NoHitAccuracy.Denominator);
         Assert.Equal("measured", metrics.NoHitAccuracy.Status);
-        Assert.Equal(1, metrics.ResolutionAccuracy.Value);
+        Assert.Equal(1, MetricValue(metrics.ResolutionAccuracy));
         Assert.Equal(1, metrics.ResolutionAccuracy.Denominator);
-        Assert.Null(metrics.Mrr.Value);
+        Assert.False(metrics.Mrr.TryGetMeasured(out _));
         Assert.Equal(0, metrics.Mrr.Denominator);
         Assert.Equal("insufficient_denominator", metrics.Mrr.Status);
 
@@ -141,7 +141,8 @@ public sealed class RetrievalBenchmarkTests
         };
         Assert.All(observations, observation =>
         {
-            Assert.Null(observation.Value);
+            Assert.False(observation.TryGetMeasured(out var absent));
+            Assert.Null(absent);
             Assert.Equal(0, observation.Denominator);
             Assert.Equal("insufficient_denominator", observation.Status);
         });
@@ -163,13 +164,13 @@ public sealed class RetrievalBenchmarkTests
         var metrics = RetrievalBenchmarkRunner.Evaluate("anchor", [benchmarkCase],
             _ => new SearchExecution("keyword", [wrongProvision], [], null), null);
 
-        Assert.Equal(0, metrics.Mrr.Value);
+        Assert.Equal(0, MetricValue(metrics.Mrr));
         Assert.Equal(1, metrics.Mrr.Denominator);
-        Assert.Equal(0, metrics.RecallAt10.Value);
-        Assert.Equal(0, metrics.NdcgAt10.Value);
-        Assert.Equal(1, metrics.WorkMrr.Value);
-        Assert.Equal(1, metrics.WorkRecallAt10.Value);
-        Assert.Equal(1, metrics.WorkNdcgAt10.Value);
+        Assert.Equal(0, MetricValue(metrics.RecallAt10));
+        Assert.Equal(0, MetricValue(metrics.NdcgAt10));
+        Assert.Equal(1, MetricValue(metrics.WorkMrr));
+        Assert.Equal(1, MetricValue(metrics.WorkRecallAt10));
+        Assert.Equal(1, MetricValue(metrics.WorkNdcgAt10));
 
         var secondary = wrongProvision with
         {
@@ -185,7 +186,7 @@ public sealed class RetrievalBenchmarkTests
         };
         var gradedMetrics = RetrievalBenchmarkRunner.Evaluate("anchor", [gradedCase],
             _ => new SearchExecution("keyword", [secondary], [], null), null);
-        Assert.Equal(0.5, gradedMetrics.RecallAt10.Value);
+        Assert.Equal(0.5, MetricValue(gradedMetrics.RecallAt10));
         Assert.Equal(1, gradedMetrics.RecallAt10.Denominator);
     }
 
@@ -197,62 +198,59 @@ public sealed class RetrievalBenchmarkTests
 
         Assert.True(insufficient.IsStructurallyCoherent());
         Assert.True(measured.IsStructurallyCoherent());
-        Assert.False(insufficient.TryGetMeasured(out _));
+        Assert.False(insufficient.TryGetMeasured(out var absentValue));
+        Assert.Null(absentValue);
         Assert.True(measured.TryGetMeasured(out var measuredValue));
-        Assert.Equal(12.5, measuredValue);
-        Assert.False(new RetrievalMetricObservation(1, 0, "measured")
+        Assert.Equal(12.5, measuredValue.Value);
+        Assert.False(RetrievalMetricObservation.FromSerialized(1, 0, "measured")
             .IsStructurallyCoherent());
-        Assert.False(new RetrievalMetricObservation(null, 8, "insufficient_denominator")
+        Assert.False(RetrievalMetricObservation.FromSerialized(null, 8, "insufficient_denominator")
             .IsStructurallyCoherent());
-        Assert.False(new RetrievalMetricObservation(null, 0, "not_measured")
+        Assert.False(RetrievalMetricObservation.FromSerialized(null, 0, "not_measured")
             .IsStructurallyCoherent());
-        Assert.False(new RetrievalMetricObservation(double.NaN, 8, "measured")
+        Assert.False(RetrievalMetricObservation.FromSerialized(double.NaN, 8, "measured")
             .TryGetMeasured(out _));
-        Assert.False(new RetrievalMetricObservation(double.PositiveInfinity, 8, "measured")
+        Assert.False(RetrievalMetricObservation.FromSerialized(double.PositiveInfinity, 8, "measured")
             .TryGetMeasured(out _));
         Assert.Equal("insufficient_denominator (n=0)",
             Lex.Web.ExplainerEndpoints.FormatBenchmarkMetric(insufficient, "0.0"));
         Assert.Equal("12.5 ms (n=8)",
             Lex.Web.ExplainerEndpoints.FormatBenchmarkMetric(measured, "0.0", " ms"));
         Assert.Equal("invalid_metric", Lex.Web.ExplainerEndpoints.FormatBenchmarkMetric(
-            new RetrievalMetricObservation(1, 0, "measured"), "0.0"));
+            RetrievalMetricObservation.FromSerialized(1, 0, "measured"), "0.0"));
     }
 
     [Fact]
-    public void Activation_gate_sources_never_compare_nullable_metric_values_directly()
+    public void Metric_observations_make_absent_values_unrepresentable_in_comparisons()
     {
-        var root = RepoRoot();
-        var benchmarkSource = File.ReadAllText(
-            Path.Combine(root, "src", "Lex.Index", "RetrievalBenchmark.cs"));
-        var registrySource = File.ReadAllText(
-            Path.Combine(root, "src", "Lex.Web", "IndexRegistry.cs"));
-        var gateSources = new[]
+        var type = typeof(RetrievalMetricObservation);
+
+        Assert.Null(type.GetProperty("Value"));
+        Assert.DoesNotContain(type.GetMethods(), method => method.Name == "Deconstruct");
+        Assert.Equal(["Denominator", "Status"], type.GetProperties()
+            .Select(property => property.Name).Order(StringComparer.Ordinal).ToArray());
+        var tryGetMeasured = Assert.Single(type.GetMethods(),
+            method => method.Name == "TryGetMeasured");
+        var measuredOut = Assert.Single(tryGetMeasured.GetParameters());
+        Assert.True(measuredOut.ParameterType.IsByRef);
+        Assert.False(measuredOut.ParameterType.GetElementType()!.IsValueType);
+
+        var options = new System.Text.Json.JsonSerializerOptions
         {
-            Slice(benchmarkSource, "public static class RetrievalBenchmarkGate",
-                "public static class RetrievalBenchmarkCatalog"),
-            Slice(benchmarkSource, "public static class RetrievalBenchmarkRunner",
-                "public static class RetrievalBenchmarkArtifactWriter"),
-            File.ReadAllText(Path.Combine(
-                root, "src", "Lex.Index", "RetrievalBenchmarkEvaluation.cs")),
-            Slice(registrySource, "internal static class HybridActivationGate", null),
+            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower,
         };
-        var directNullableAccess = new System.Text.RegularExpressions.Regex(
-            @"\.Value\b",
-            System.Text.RegularExpressions.RegexOptions.CultureInvariant);
-
-        foreach (var source in gateSources)
-            Assert.DoesNotMatch(directNullableAccess, source);
-
-        static string Slice(string source, string startMarker, string? endMarker)
-        {
-            var start = source.IndexOf(startMarker, StringComparison.Ordinal);
-            var end = endMarker is null
-                ? source.Length
-                : source.IndexOf(endMarker, start + startMarker.Length,
-                    StringComparison.Ordinal);
-            Assert.True(start >= 0 && end > start);
-            return source[start..end];
-        }
+        var json = System.Text.Json.JsonSerializer.Serialize(
+            RetrievalMetricObservation.Measured(12.5, 8), options);
+        Assert.Equal("{\"value\":12.5,\"denominator\":8,\"status\":\"measured\"}", json);
+        var measured = System.Text.Json.JsonSerializer.Deserialize<RetrievalMetricObservation>(
+            json, options);
+        Assert.NotNull(measured);
+        Assert.Equal(12.5, MetricValue(measured));
+        var insufficient = System.Text.Json.JsonSerializer.Deserialize<RetrievalMetricObservation>(
+            "{\"value\":null,\"denominator\":0,\"status\":\"insufficient_denominator\"}", options);
+        Assert.NotNull(insufficient);
+        Assert.False(insufficient.TryGetMeasured(out var absent));
+        Assert.Null(absent);
     }
 
     [Fact]
@@ -395,8 +393,8 @@ public sealed class RetrievalBenchmarkTests
 
         Assert.Equal(1, control.Result.EligibleDenominator);
         Assert.Equal("detected", control.Result.Outcome);
-        Assert.Equal(1, baseline.Metrics.ExactFirstAccuracy.Value);
-        Assert.Equal(0, control.Evaluation.Metrics.ExactFirstAccuracy.Value);
+        Assert.Equal(1, MetricValue(baseline.Metrics.ExactFirstAccuracy));
+        Assert.Equal(0, MetricValue(control.Evaluation.Metrics.ExactFirstAccuracy));
         Assert.True(control.Result.NonRankingIdentical);
         Assert.True(control.Result.UnrelatedDenominatorsAndGatesIdentical);
     }
@@ -431,8 +429,8 @@ public sealed class RetrievalBenchmarkTests
         Assert.Equal("detected", control.Result.Outcome);
         Assert.Equal(3, control.Result.EligibleDenominator);
         Assert.Equal(0, control.Result.OwnQrelSetRetainedCount);
-        Assert.Equal(0, control.Result.AnchorNdcgAt10.Value);
-        Assert.True(control.Result.AnchorNdcgAt10.Value < 0.15);
+        Assert.Equal(0, MetricValue(control.Result.AnchorNdcgAt10));
+        Assert.True(MetricValue(control.Result.AnchorNdcgAt10) < 0.15);
         Assert.NotEmpty(control.Result.FailedGateNames);
         Assert.True(control.Result.UnrelatedDenominatorsAndGatesIdentical);
         Assert.Equal(3, control.Evaluation.CaseResults.Count);
@@ -465,8 +463,8 @@ public sealed class RetrievalBenchmarkTests
 
         Assert.Equal("detected", control.Result.Outcome);
         Assert.Equal(2, control.Result.EligibleDenominator);
-        Assert.Equal(1, baseline.Metrics.ExactFirstAccuracy.Value);
-        Assert.Equal(0, control.Evaluation.Metrics.ExactFirstAccuracy.Value);
+        Assert.Equal(1, MetricValue(baseline.Metrics.ExactFirstAccuracy));
+        Assert.Equal(0, MetricValue(control.Evaluation.Metrics.ExactFirstAccuracy));
         Assert.True(control.Result.NonRankingIdentical);
         Assert.True(control.Result.UnrelatedDenominatorsAndGatesIdentical);
     }
@@ -602,7 +600,7 @@ public sealed class RetrievalBenchmarkTests
                     Observation = row.Observation.Denominator == 0
                         ? RetrievalMetricObservation.Measured(1, 1)
                         : RetrievalMetricObservation.Measured(
-                            row.Observation.Value ?? 1, row.Observation.Denominator + 1),
+                            MetricValue(row.Observation), row.Observation.Denominator + 1),
                 }
                 : row).ToArray(),
         }, cases, collection));
@@ -653,16 +651,16 @@ public sealed class RetrievalBenchmarkTests
             _ => new SearchExecution("keyword", [Hit("noise"), Hit("noise"), Hit("a"), Hit("b")], [],
                 new SearchQueryPlan("compare a and b", "", ["a", "b"], null, null, true)), null);
 
-        Assert.Equal(1, metrics.WorkRecallAt10.Value);
-        Assert.InRange(metrics.WorkNdcgAt10.Value!.Value, 0.69, 0.70);
-        Assert.Equal(0.5, metrics.WorkMrr.Value);
-        Assert.Null(metrics.Mrr.Value);
+        Assert.Equal(1, MetricValue(metrics.WorkRecallAt10));
+        Assert.InRange(MetricValue(metrics.WorkNdcgAt10), 0.69, 0.70);
+        Assert.Equal(0.5, MetricValue(metrics.WorkMrr));
+        Assert.False(metrics.Mrr.TryGetMeasured(out _));
 
         var incomplete = RetrievalBenchmarkRunner.Evaluate("comparison", [benchmarkCase],
             _ => new SearchExecution("keyword", [Hit("a")], [],
                 new SearchQueryPlan("compare a and b", "", ["a", "b"], null, null, true)), null);
-        Assert.Equal(0.5, incomplete.WorkRecallAt10.Value);
-        Assert.InRange(incomplete.WorkNdcgAt10.Value!.Value, 0.61, 0.62);
+        Assert.Equal(0.5, MetricValue(incomplete.WorkRecallAt10));
+        Assert.InRange(MetricValue(incomplete.WorkNdcgAt10), 0.61, 0.62);
     }
 
     [Fact]
@@ -886,7 +884,7 @@ public sealed class RetrievalBenchmarkTests
             {
                 HybridHoldout = report.HybridHoldout with
                 {
-                    NdcgAt10 = new RetrievalMetricObservation(1, 0, "measured"),
+                    NdcgAt10 = RetrievalMetricObservation.FromSerialized(1, 0, "measured"),
                 },
             }, collection, report.CodeCommit, stamp, report.ModelId,
             report.ModelRevision, indexManifest, benchmarkManifest);
@@ -1061,7 +1059,7 @@ public sealed class RetrievalBenchmarkTests
                 KeywordHoldout = Metrics(holdout),
                 HybridHoldout = Metrics(holdout) with
                 {
-                    NdcgAt10 = new RetrievalMetricObservation(1, 0, "measured"),
+                    NdcgAt10 = RetrievalMetricObservation.FromSerialized(1, 0, "measured"),
                 },
                 ActivationGatePassed = false,
                 GateFailures = ["malformed anchor metric"],
@@ -1148,12 +1146,12 @@ public sealed class RetrievalBenchmarkTests
             var report = run.Report;
 
             Assert.Equal("lex-retrieval-benchmark/4", report.Schema);
-            Assert.Null(report.KeywordTuning.Mrr.Value);
-            Assert.Null(report.HybridTuning.Mrr.Value);
-            Assert.Equal(1, report.KeywordTuning.WorkMrr.Value);
-            Assert.Equal(1, report.HybridTuning.WorkMrr.Value);
-            Assert.Equal(0, report.KeywordHoldout.WorkMrr.Value);
-            Assert.Equal(0, report.HybridHoldout.WorkMrr.Value);
+            Assert.False(report.KeywordTuning.Mrr.TryGetMeasured(out _));
+            Assert.False(report.HybridTuning.Mrr.TryGetMeasured(out _));
+            Assert.Equal(1, MetricValue(report.KeywordTuning.WorkMrr));
+            Assert.Equal(1, MetricValue(report.HybridTuning.WorkMrr));
+            Assert.Equal(0, MetricValue(report.KeywordHoldout.WorkMrr));
+            Assert.Equal(0, MetricValue(report.HybridHoldout.WorkMrr));
             Assert.False(report.ActivationGatePassed);
             Assert.Equal("lex-retrieval-case-results/1", report.CaseResultsSchema);
             Assert.Equal("case-results.jsonl", report.CaseResultsFile);
@@ -1526,6 +1524,12 @@ public sealed class RetrievalBenchmarkTests
         string schema, RetrievalMetricObservation ndcg) => new(
         schema, "detected", "product_gate", 8,
         ["anchor_ndcg_at10_not_below_unshuffled"], true, true, true, 0, ndcg);
+
+    private static double MetricValue(RetrievalMetricObservation observation)
+    {
+        Assert.True(observation.TryGetMeasured(out var measured));
+        return measured.Value;
+    }
 
     private static void WriteManifest(
         string directory, string stem, byte[] bytes, string privateKey)
