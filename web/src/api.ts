@@ -544,6 +544,16 @@ export function isTypedProvisionGap(item: ProvisionItem): boolean {
   return item.text_available === false && Boolean(item.text_unavailable_reason);
 }
 
+export function typedProvisionGapLabel(
+  items: ProvisionItem[], textCompleteness?: string,
+): string | undefined {
+  const gaps = items.filter(isTypedProvisionGap).length;
+  if (gaps === 0) return undefined;
+  return textCompleteness === "unavailable" || gaps === items.length
+    ? "publisher text unavailable"
+    : "partial publisher text";
+}
+
 /** Merge canon/2 text rows and textless gap coordinates without changing legacy V3 order. */
 export function provisionItemsOf(result: any): ProvisionItem[] {
   const text = Array.isArray(result?.provisions) ? result.provisions as ProvisionItem[] : [];

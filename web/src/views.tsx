@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   changeCountLabels, isTypedProvisionGap, populationCoverageLabel, populationScopeLabel, safeHttpsUrl,
-  signatureStatusLabel,
+  signatureStatusLabel, typedProvisionGapLabel,
   type ProvisionItem, type RankingRow, type UiEffect,
 } from "./api";
 import { facetLabel, jurisdictionLabel } from "./facets";
@@ -57,7 +57,7 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
   const fromPdf = disclosure === "publisher-pdf";
   const fromGazette = disclosure === "gazette";
   const availableItems = items.filter((item) => !isTypedProvisionGap(item));
-  const typedGapCount = items.length - availableItems.length;
+  const typedGapLabel = typedProvisionGapLabel(items, textCompleteness);
   const outlineOnly = availableItems.length > 0
     && availableItems.every((p) => !p.text && !p.text_omitted);
   const boundedText = items.some((p) => p.text_omitted);
@@ -90,9 +90,7 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
         {fromPdf ? <span className="tag warn">read from the publisher's PDF</span> : null}
         {fromGazette ? <span className="tag warn">cut from a gazette issue</span> : null}
         {boundedText ? <span className="tag warn">text shortened for this response</span> : null}
-        {typedGapCount > 0 ? <span className="tag warn">
-          {textCompleteness === "unavailable" ? "publisher text unavailable" : "partial publisher text"}
-        </span> : null}
+        {typedGapLabel ? <span className="tag warn">{typedGapLabel}</span> : null}
         {!outlineOnly && items.length > 0 ? (
           <EvidenceActions citation={citationText(evidence())} markdown={() => lawEvidenceMarkdown(evidence())}
                            filename={evidenceFilename(work, anchor ?? validFrom)} />

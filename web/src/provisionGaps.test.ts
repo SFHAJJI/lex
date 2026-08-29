@@ -5,6 +5,7 @@ import {
   hasTypedProvisionGaps,
   isTypedProvisionGap,
   provisionItemsOf,
+  typedProvisionGapLabel,
 } from "./api.ts";
 import { assistantProvisionLoad, assistantWorkspaceState } from "./assistantShell.ts";
 import { lawEvidenceMarkdown } from "./export.ts";
@@ -40,6 +41,8 @@ test("canon/2 rows preserve mixed publisher order and keep gaps textless", () =>
   assert.equal(hasTypedProvisionGaps(result), true);
   assert.equal(hasTypedProvisionGaps(result, "art_1"), false);
   assert.equal(hasTypedProvisionGaps(result, "art_2"), true);
+  assert.equal(typedProvisionGapLabel(items, result.text_completeness),
+    "partial publisher text");
 });
 
 test("a gap-only publisher result remains selectable and loads as a typed workspace row", () => {
@@ -52,6 +55,8 @@ test("a gap-only publisher result remains selectable and loads as a typed worksp
   };
   assert.equal(asOfResult([{}, result]), result);
   assert.equal(asOfResult([{ provisions: [] }, result]), result);
+  assert.equal(typedProvisionGapLabel(provisionItemsOf(result), undefined),
+    "publisher text unavailable");
 
   const loaded = assistantProvisionLoad({
     provision: {
