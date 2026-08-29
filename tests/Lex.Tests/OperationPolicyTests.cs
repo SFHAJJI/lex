@@ -3033,6 +3033,95 @@ public sealed class OperationPolicyTests
     }
 
     [Fact]
+    public void Cited_by_answer_uses_the_server_derived_exact_completeness_bit()
+    {
+        const string scope = "captured_cross_references_in_held_non_withdrawn_versions";
+        var mapped = UiMapper.From("cited_by", new JsonObject(), new JsonObject
+        {
+            ["envelope"] = new JsonObject
+            {
+                ["status"] = McpStatus.Ok, ["publisher"] = "lu-legilux",
+            },
+            ["cited_work"] = "eu-eurlex:32016r0679",
+            ["citing_articles"] = 1,
+            ["citations"] = new JsonArray(new JsonObject
+            {
+                ["work"] = "lu-legilux:synthetic",
+                ["valid_from"] = "2024-01-01",
+                ["anchor"] = "art_1",
+            }),
+            ["evidence_scope"] = scope,
+            ["response_row_set"] = new JsonObject
+            {
+                ["maximum"] = 50, ["returned"] = 1, ["truncated"] = false,
+            },
+            ["publisher_result_set"] = new JsonObject
+            {
+                ["total"] = 1, ["returned"] = 1, ["maximum"] = 32,
+                ["truncated"] = false,
+            },
+        });
+        Assert.True(mapped.CitedBy!.ExactComplete);
+        Assert.StartsWith("Lex found a total of 1 article",
+            OperationAnswerPolicy.Describe("en", mapped));
+
+        var unrelated = UiEffect.Merge([
+            mapped,
+            new UiEffect(PublisherLimitations:
+            [
+                new(McpStatus.FilterNotSupportedByIndex, "search", "lu-legilux", "LU",
+                    new[] { "domain" }),
+            ]),
+        ]);
+        Assert.True(unrelated.CitedBy!.ExactComplete);
+
+        var separateQuery = UiEffect.Merge([
+            mapped,
+            new UiEffect(PublisherLimitations:
+            [
+                new(McpStatus.FilterNotSupportedByIndex, "cited_by", "eu-eurlex", "EU",
+                    new[] { "domain" }),
+            ]),
+        ]);
+        Assert.True(separateQuery.CitedBy!.ExactComplete);
+
+        var incompleteResult = new JsonObject
+        {
+            ["envelope"] = new JsonObject
+            {
+                ["status"] = McpStatus.Ok, ["publisher"] = "lu-legilux",
+            },
+            ["cited_work"] = "eu-eurlex:32016r0679",
+            ["citing_articles"] = 1,
+            ["citations"] = new JsonArray(new JsonObject
+            {
+                ["work"] = "lu-legilux:synthetic", ["valid_from"] = "2024-01-01",
+                ["anchor"] = "art_1",
+            }),
+            ["evidence_scope"] = scope,
+            ["response_row_set"] = new JsonObject
+            {
+                ["maximum"] = 50, ["returned"] = 1, ["truncated"] = false,
+            },
+            ["publisher_result_set"] = new JsonObject
+            {
+                ["total"] = 2, ["returned"] = 1, ["maximum"] = 32,
+                ["truncated"] = true,
+            },
+        };
+        var incomplete = UiMapper.From("cited_by", new JsonObject(), incompleteResult);
+        Assert.False(incomplete.CitedBy!.ExactComplete);
+        var answer = OperationAnswerPolicy.Describe("en", incomplete);
+        Assert.StartsWith("Lex returned 1 article", answer);
+        Assert.DoesNotContain("a total of", answer);
+        var serialized = JsonSerializer.Serialize(incomplete, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        });
+        Assert.Contains("\"exact_complete\":false", serialized, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Partial_limitation_is_force_appended_after_optional_synthesis_once()
     {
         var limitation = new PublisherLimitationView(

@@ -116,6 +116,29 @@ test("typed effects map to bounded workspace state rather than model-authored li
   } }), undefined);
 });
 
+test("a gap-only comparison refusal preserves both comparison coordinates", () => {
+  const ui = { gap: {
+    status: "text_not_available",
+    work: "eu-eurlex:32013R0575",
+    date: "2020-01-01",
+    comparison_from_date: "2020-01-01",
+    comparison_to_date: "2024-12-31",
+    explanation: "Certified wording is unavailable.",
+    available: [],
+  } };
+
+  assert.deepEqual(assistantWorkspaceState(ui), {
+    space: "law", q: undefined, asOf: undefined, work: "eu-eurlex:32013R0575",
+    date: "2020-01-01", to: "2024-12-31", anchor: undefined, mode: "compare",
+    from: undefined, until: undefined, order: undefined, retrieval: undefined,
+    jurisdiction: undefined, hierarchy: undefined, domain: undefined,
+    sourceClass: undefined, actForm: undefined, bindingStatus: undefined,
+    language: undefined,
+  });
+  assert.equal(assistantWorkspaceUrl(ui),
+    "/?space=law&work=eu-eurlex%3A32013R0575&date=2020-01-01&to=2024-12-31&mode=compare");
+});
+
 test("aggregate results replace stale workspace scope with the exact tool scope", () => {
   const crossCorpus = assistantWorkspaceState({
     ranking: {

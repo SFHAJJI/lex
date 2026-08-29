@@ -713,6 +713,10 @@ public sealed class AskTransportTests
         {
             var result = new JsonObject
             {
+                ["envelope"] = new JsonObject
+                {
+                    ["status"] = McpStatus.Ok, ["publisher"] = "lu-legilux",
+                },
                 ["cited_work"] = "eu-eurlex:32016r0679",
                 ["current_legal_effect_assessed"] = false,
                 ["relationship_type_assessed"] = false,
@@ -724,12 +728,17 @@ public sealed class AskTransportTests
                     ["anchor"] = "art_1",
                     ["num"] = "Art. 1",
                 }),
+                ["publisher_result_set"] = new JsonObject
+                {
+                    ["total"] = 1, ["returned"] = 1, ["maximum"] = 32,
+                    ["truncated"] = false,
+                },
             };
             if (includeScope) result["evidence_scope"] = scope;
             if (truncated is not null)
                 result["response_row_set"] = new JsonObject
                 {
-                    ["truncated"] = truncated,
+                    ["maximum"] = 50, ["returned"] = 1, ["truncated"] = truncated,
                 };
             return OperationAnswerPolicy.Describe(
                 "en", UiMapper.From("cited_by", new JsonObject(), result))!;
@@ -753,7 +762,8 @@ public sealed class AskTransportTests
         var english = OperationAnswerPolicy.Describe("en", new UiEffect(CitedBy: new CitedByView(
             "eu-eurlex:32016r0679", 1, [], RowsTruncated: false,
             EvidenceScope: "captured_cross_references_in_held_non_withdrawn_versions",
-            CurrentLegalEffectAssessed: false, RelationshipTypeAssessed: false)));
+            CurrentLegalEffectAssessed: false, RelationshipTypeAssessed: false,
+            ExactComplete: true)));
         var french = OperationAnswerPolicy.Describe("fr", new UiEffect(CitedBy: new CitedByView(
             "eu-eurlex:32016r0679", 2, [], RowsTruncated: true,
             EvidenceScope: "captured_cross_references_in_held_non_withdrawn_versions",
@@ -806,7 +816,8 @@ public sealed class AskTransportTests
                 item => item.Title == "cited_by aggregate fact");
             return (evidence, JsonNode.Parse(evidence.Excerpt!)!.AsObject());
         }
-        static JsonObject PublisherResult(string publisher, string citingWork)
+        static JsonObject PublisherResult(
+            string publisher, string citingWork, int publisherCount = 1, int responseRows = 1)
         {
             var suffix = publisher.Replace("-", "", StringComparison.Ordinal);
             return new JsonObject
@@ -822,7 +833,16 @@ public sealed class AskTransportTests
                 ["current_legal_effect_assessed"] = false,
                 ["relationship_type_assessed"] = false,
                 ["citing_articles"] = 1,
-                ["response_row_set"] = new JsonObject { ["truncated"] = false },
+                ["publisher_result_set"] = new JsonObject
+                {
+                    ["total"] = publisherCount, ["returned"] = publisherCount,
+                    ["maximum"] = 32, ["truncated"] = false,
+                },
+                ["response_row_set"] = new JsonObject
+                {
+                    ["maximum"] = 50, ["returned"] = responseRows,
+                    ["truncated"] = false,
+                },
                 ["citations"] = new JsonArray(new JsonObject
                 {
                     ["work"] = $"{publisher}:work-{suffix}",
@@ -836,12 +856,24 @@ public sealed class AskTransportTests
 
         var payload = new JsonObject
         {
+            ["envelope"] = new JsonObject
+            {
+                ["status"] = McpStatus.Ok, ["publisher"] = "lu-legilux",
+            },
             ["cited_work"] = "eu-eurlex:32016r0679",
             ["evidence_scope"] = knownScope,
             ["current_legal_effect_assessed"] = false,
             ["relationship_type_assessed"] = false,
             ["citing_articles"] = 1,
-            ["response_row_set"] = new JsonObject { ["truncated"] = false },
+            ["publisher_result_set"] = new JsonObject
+            {
+                ["total"] = 1, ["returned"] = 1, ["maximum"] = 32,
+                ["truncated"] = false,
+            },
+            ["response_row_set"] = new JsonObject
+            {
+                ["maximum"] = 50, ["returned"] = 1, ["truncated"] = false,
+            },
             ["citations"] = new JsonArray(new JsonObject
             {
                 ["work"] = "lu-legilux:loi-example",
@@ -871,7 +903,10 @@ public sealed class AskTransportTests
         payload["response_row_set"] = new JsonObject { ["truncated"] = "not-a-boolean" };
         Assert.Equal("returned_count",
             AggregateFact(payload).Fact["count_semantics"]?.GetValue<string>());
-        payload["response_row_set"] = new JsonObject { ["truncated"] = false };
+        payload["response_row_set"] = new JsonObject
+        {
+            ["maximum"] = 50, ["returned"] = 1, ["truncated"] = false,
+        };
         payload.Remove("evidence_scope");
         Assert.Equal("returned_count",
             AggregateFact(payload).Fact["count_semantics"]?.GetValue<string>());
@@ -881,7 +916,7 @@ public sealed class AskTransportTests
 
         var citedWork = "eu-eurlex:32016r0679";
         var successAndRefusal = new JsonArray(
-            PublisherResult("lu-legilux", citedWork),
+            PublisherResult("lu-legilux", citedWork, publisherCount: 2),
             new JsonObject
             {
                 ["envelope"] = new JsonObject
@@ -890,14 +925,23 @@ public sealed class AskTransportTests
                     ["publisher"] = "eu-eurlex",
                 },
                 ["cited_work"] = citedWork,
+                ["publisher_result_set"] = new JsonObject
+                {
+                    ["total"] = 2, ["returned"] = 2, ["maximum"] = 32,
+                    ["truncated"] = false,
+                },
+                ["response_row_set"] = new JsonObject
+                {
+                    ["maximum"] = 50, ["returned"] = 1, ["truncated"] = false,
+                },
             });
         var partial = AggregateFact(successAndRefusal).Fact;
         Assert.Equal("returned_count", partial["count_semantics"]?.GetValue<string>());
         Assert.Equal(1, partial["count"]?.GetValue<int>());
 
         var twoSuccesses = AggregateFact(new JsonArray(
-            PublisherResult("lu-legilux", citedWork),
-            PublisherResult("eu-eurlex", citedWork))).Fact;
+            PublisherResult("lu-legilux", citedWork, publisherCount: 2, responseRows: 2),
+            PublisherResult("eu-eurlex", citedWork, publisherCount: 2, responseRows: 2))).Fact;
         Assert.Equal("complete_total", twoSuccesses["count_semantics"]?.GetValue<string>());
         Assert.Equal(2, twoSuccesses["count"]?.GetValue<int>());
     }

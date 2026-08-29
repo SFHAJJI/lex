@@ -5,7 +5,7 @@ import { asOfResult, compoundOperationViews, first, provisionEmptyExplanation, p
   type OperationReply, type ProvisionItem, type UiEffect } from "./api";
 import type { EnvelopeStripRow } from "./envelopeStrip";
 import { publisherOf, useWorkspace, workSlug, type Space, type State } from "./state";
-import { CitedBy, CoveragePanel, Empty, EnvelopeStrip, EvidenceCoordinates, Gap, InForce, PartialResponseNotice, Provision, PublisherLimitations, Ranking, Timeline,
+import { CitedBy, ComparisonLimitations, CoveragePanel, Empty, EnvelopeStrip, EvidenceCoordinates, Gap, InForce, PartialResponseNotice, Provision, PublisherLimitations, Ranking, Timeline,
   VerificationPanel, VersionRail, hasView } from "./views";
 import { limitationsFromEffect } from "./limitations";
 import { Compare } from "./Compare";
@@ -936,23 +936,8 @@ export default function App() {
           ? "different versions on these dates"
           : "the same version applied on both dates"}</span>
       </div>}
-      {/* The producer classified these; the note only describes them. Rendering the typed form
-          beside the prose means the limitation is a fact on the page rather than a sentence a
-          reader may or may not finish. An unrecognised code is still shown, verbatim: this
-          panel refusing to interpret a limitation is not a reason to hide that one exists. */}
-      {(view.diff.comparison_limitations ?? []).filter((code) => typeof code === "string").length > 0
-        ? <div className="cnt">{(view.diff.comparison_limitations ?? [])
-            .filter((code) => typeof code === "string")
-            .map((code) => code === "profiles_differ"
-              ? <span className="tag warn" key={code}>different extraction profiles, provisions cannot be paired</span>
-              : code === "typed_text_gap"
-              ? <span className="tag warn" key={code}>typed text gap, wording comparison not certified</span>
-              : <span className="tag warn mono" key={code}>{code}</span>)}</div>
-        : null}
-      {view.diff.comparison_limitations_malformed === true
-        ? <p className="sub" role="status">Comparison limitation data was malformed. Other
-            limitations may be missing.</p>
-        : null}
+      <ComparisonLimitations limitations={view.diff.comparison_limitations}
+        malformed={view.diff.comparison_limitations_malformed} />
       {view.diff.note ? <p>{view.diff.note}</p> : null}
       <button className="operation-open" onClick={() => openDiff(
         view.diff!.subject.work, view.diff!.from_date, view.diff!.to_date)}>

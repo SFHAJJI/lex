@@ -716,6 +716,9 @@ export interface UiEffect {
     jurisdiction?: string; hierarchy?: string; timeline_semantics?: string;
   }[] };
   cited_by?: { cited_work: string; citing_articles: number; status?: string; evidence?: EvidenceContext[];
+               /** The server proved the full citation answer, including scope and every
+                   publisher unit. Only literal true licenses a total or an absence claim. */
+               exact_complete?: boolean;
                /** The response returned fewer rows than it found. Absent means the response
                    carried no receipt, which is not the same as a complete answer, so it is
                    never read as false. */
@@ -753,7 +756,10 @@ export interface UiEffect {
   gap?: { status: string; work?: string; date?: string; explanation: string; available: string[];
           evidence?: EvidenceContext[]; provision_gaps?: ProvisionItem[];
           total_provision_gaps?: number; truncated?: boolean; total_provisions?: number;
-          text_truncated?: boolean; text_completeness?: string };
+          text_truncated?: boolean; text_completeness?: string;
+          comparison_from_date?: string; comparison_to_date?: string;
+          comparison_limitations?: string[];
+          comparison_limitations_malformed?: boolean };
 }
 export interface RankingRow {
   work: string; title?: string; versions_in_period: number; versions_total: number;

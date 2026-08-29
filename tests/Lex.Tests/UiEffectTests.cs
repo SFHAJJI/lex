@@ -540,9 +540,18 @@ public class UiEffectTests
             ["evidence_scope"] = scope?.DeepClone(),
             ["current_legal_effect_assessed"] = legalEffect?.DeepClone(),
             ["relationship_type_assessed"] = relationship?.DeepClone(),
+            ["publisher_result_set"] = new JsonObject
+            {
+                ["total"] = 2, ["returned"] = 2, ["maximum"] = 32,
+                ["truncated"] = false,
+            },
         };
         if (includeTruncated)
-            response["response_row_set"] = new JsonObject { ["truncated"] = truncated?.DeepClone() };
+            response["response_row_set"] = new JsonObject
+            {
+                ["maximum"] = 50, ["returned"] = 2,
+                ["truncated"] = truncated?.DeepClone(),
+            };
         return response;
     }
 
@@ -562,6 +571,7 @@ public class UiEffectTests
         Assert.False(effect.CitedBy.CurrentLegalEffectAssessed);
         Assert.False(effect.CitedBy.RelationshipTypeAssessed);
         Assert.False(effect.CitedBy.RowsTruncated);
+        Assert.True(effect.CitedBy.ExactComplete);
     }
 
     [Fact]
@@ -579,6 +589,7 @@ public class UiEffectTests
         Assert.Null(effect.CitedBy.CurrentLegalEffectAssessed);
         Assert.Null(effect.CitedBy.RelationshipTypeAssessed);
         Assert.Null(effect.CitedBy.RowsTruncated);
+        Assert.False(effect.CitedBy.ExactComplete);
 
         var cut = UiMapper.From("cited_by", Args(("work", "eu-eurlex:32016r0679")),
             new JsonArray(
@@ -587,6 +598,192 @@ public class UiEffectTests
                 CitedPublisher("eu-eurlex", JsonValue.Create(scope), JsonValue.Create(false),
                     JsonValue.Create(false), null, includeTruncated: false)));
         Assert.True(cut.CitedBy!.RowsTruncated);
+        Assert.False(cut.CitedBy.ExactComplete);
+    }
+
+    [Fact]
+    public void Cited_by_exact_completeness_requires_a_coherent_publisher_receipt()
+    {
+        static JsonObject Response(JsonNode? publisherReceipt)
+        {
+            var response = new JsonObject
+            {
+                ["envelope"] = new JsonObject
+                {
+                    ["status"] = McpStatus.Ok, ["publisher"] = "lu-legilux",
+                },
+                ["cited_work"] = "eu-eurlex:32016r0679",
+                ["citing_articles"] = 1,
+                ["citations"] = new JsonArray(new JsonObject
+                {
+                    ["work"] = "lu-legilux:synthetic", ["valid_from"] = "2024-01-01",
+                    ["anchor"] = "art_1",
+                }),
+                ["evidence_scope"] =
+                    "captured_cross_references_in_held_non_withdrawn_versions",
+                ["response_row_set"] = new JsonObject
+                {
+                    ["maximum"] = 50, ["returned"] = 1, ["truncated"] = false,
+                },
+            };
+            if (publisherReceipt is not null)
+                response["publisher_result_set"] = publisherReceipt.DeepClone();
+            return response;
+        }
+
+        JsonNode?[] receipts =
+        [
+            null,
+            new JsonObject
+            {
+                ["total"] = 2, ["returned"] = 1, ["maximum"] = 32,
+                ["truncated"] = false,
+            },
+            new JsonObject
+            {
+                ["total"] = 1, ["returned"] = 1, ["maximum"] = 32,
+                ["truncated"] = true,
+            },
+            new JsonObject
+            {
+                ["total"] = "1", ["returned"] = 1, ["maximum"] = 32,
+                ["truncated"] = false,
+            },
+        ];
+
+        foreach (var receipt in receipts)
+            Assert.False(UiMapper.From("cited_by", new JsonObject(), Response(receipt))
+                .CitedBy!.ExactComplete);
+
+        var exact = Response(new JsonObject
+        {
+            ["total"] = 1, ["returned"] = 1, ["maximum"] = 32,
+            ["truncated"] = false,
+        });
+        Assert.True(UiMapper.From("cited_by", new JsonObject(), exact)
+            .CitedBy!.ExactComplete);
+    }
+
+    [Fact]
+    public void Mixed_cited_by_refusal_reaches_the_view_and_blocks_exact_completeness()
+    {
+        const string scope = "captured_cross_references_in_held_non_withdrawn_versions";
+        var publisherReceipt = new JsonObject
+        {
+            ["total"] = 2, ["returned"] = 2, ["maximum"] = 32,
+            ["truncated"] = false,
+        };
+        var effect = UiMapper.From("cited_by", new JsonObject(), new JsonArray(
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject
+                {
+                    ["status"] = McpStatus.Ok, ["publisher"] = "lu-legilux",
+                    ["jurisdiction"] = "LU",
+                },
+                ["cited_work"] = "eu-eurlex:32016r0679",
+                ["citing_articles"] = 1,
+                ["citations"] = new JsonArray(new JsonObject
+                {
+                    ["work"] = "lu-legilux:synthetic", ["valid_from"] = "2024-01-01",
+                    ["anchor"] = "art_1",
+                }),
+                ["evidence_scope"] = scope,
+                ["response_row_set"] = new JsonObject
+                {
+                    ["maximum"] = 50, ["returned"] = 1, ["truncated"] = false,
+                },
+                ["publisher_result_set"] = publisherReceipt.DeepClone(),
+            },
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject
+                {
+                    ["status"] = McpStatus.FilterNotSupportedByIndex,
+                    ["publisher"] = "eu-eurlex", ["jurisdiction"] = "EU",
+                },
+                ["unsupported_filters"] = new JsonArray("domain"),
+                ["response_row_set"] = new JsonObject
+                {
+                    ["maximum"] = 50, ["returned"] = 1, ["truncated"] = false,
+                },
+                ["publisher_result_set"] = publisherReceipt.DeepClone(),
+            }));
+
+        Assert.Single(effect.CitedBy!.Rows);
+        Assert.False(effect.CitedBy.ExactComplete);
+        Assert.Empty(effect.PublisherLimitations ?? []);
+    }
+
+    [Fact]
+    public void Cited_by_exact_policy_rejects_incoherent_units_and_rows()
+    {
+        static JsonObject Unit(string publisher, int publisherCount = 1, int responseRows = 1) =>
+            new()
+            {
+                ["envelope"] = new JsonObject
+                {
+                    ["status"] = McpStatus.Ok, ["publisher"] = publisher,
+                },
+                ["cited_work"] = "eu-eurlex:32016r0679",
+                ["citing_articles"] = 1,
+                ["citations"] = new JsonArray(new JsonObject
+                {
+                    ["work"] = $"{publisher}:synthetic", ["valid_from"] = "2024-01-01",
+                    ["anchor"] = "art_1",
+                }),
+                ["evidence_scope"] = CitedByResultPolicy.EvidenceScope,
+                ["publisher_result_set"] = new JsonObject
+                {
+                    ["total"] = publisherCount, ["returned"] = publisherCount,
+                    ["maximum"] = 32, ["truncated"] = false,
+                },
+                ["response_row_set"] = new JsonObject
+                {
+                    ["maximum"] = 50, ["returned"] = responseRows,
+                    ["truncated"] = false,
+                },
+            };
+
+        var exact = Unit("lu-legilux");
+        Assert.True(CitedByResultPolicy.IsExact(exact));
+
+        var badStatus = exact.DeepClone().AsObject();
+        badStatus["envelope"]!["status"] = McpStatus.NoResult;
+        Assert.False(CitedByResultPolicy.IsExact(badStatus));
+
+        var badCount = exact.DeepClone().AsObject();
+        badCount["citing_articles"] = 2;
+        Assert.False(CitedByResultPolicy.IsExact(badCount));
+
+        var badRow = exact.DeepClone().AsObject();
+        badRow["citations"]!.AsArray().Add("not-an-object");
+        Assert.False(CitedByResultPolicy.IsExact(badRow));
+
+        var badDate = exact.DeepClone().AsObject();
+        badDate["citations"]![0]!["valid_from"] = "not-a-date";
+        Assert.False(CitedByResultPolicy.IsExact(badDate));
+
+        var partialResponseReceipt = exact.DeepClone().AsObject();
+        partialResponseReceipt["response_row_set"]!.AsObject().Remove("returned");
+        Assert.False(CitedByResultPolicy.IsExact(partialResponseReceipt));
+
+        var pair = new JsonArray(
+            Unit("lu-legilux", publisherCount: 2, responseRows: 2),
+            Unit("eu-eurlex", publisherCount: 2, responseRows: 2));
+        Assert.True(CitedByResultPolicy.IsExact(pair));
+
+        var duplicatePublisher = pair.DeepClone().AsArray();
+        duplicatePublisher[1]!["envelope"]!["publisher"] = "lu-legilux";
+        Assert.False(CitedByResultPolicy.IsExact(duplicatePublisher));
+
+        var mismatchedWork = pair.DeepClone().AsArray();
+        mismatchedWork[1]!["cited_work"] = "eu-eurlex:different";
+        Assert.False(CitedByResultPolicy.IsExact(mismatchedWork));
+
+        var nonObjectSibling = pair.DeepClone().AsArray();
+        nonObjectSibling.Add("hostile");
+        Assert.False(CitedByResultPolicy.IsExact(nonObjectSibling));
     }
 
     private static UiEffect CitedNode(JsonObject extra)
@@ -716,6 +913,31 @@ public class UiEffectTests
         var explicitNull = DiffNode(null);
         explicitNull["comparison_limitations"] = null;
         Assert.True(Diffed(explicitNull).Diff!.ComparisonLimitationsMalformed);
+    }
+
+    [Theory]
+    [InlineData(McpStatus.ProfilesDiffer, "profiles_differ")]
+    [InlineData(McpStatus.TextNotAvailable, "typed_text_gap")]
+    public void Real_diff_refusals_carry_comparison_truth_on_the_gap(
+        string status, string limitation)
+    {
+        var node = DiffNode(new JsonArray(JsonValue.Create(limitation), JsonValue.Create(7)));
+        node["envelope"] = new JsonObject { ["status"] = status };
+
+        var effect = Diffed(node);
+
+        Assert.Equal(status, effect.Gap!.Status);
+        Assert.Equal(new[] { limitation }, effect.Gap.ComparisonLimitations);
+        Assert.True(effect.Gap.ComparisonLimitationsMalformed);
+        Assert.Equal("2024-01-01", effect.Gap.ComparisonFromDate);
+        Assert.Equal("2025-01-01", effect.Gap.ComparisonToDate);
+        if (status == McpStatus.ProfilesDiffer)
+        {
+            Assert.Equal("2024-01-01", effect.Diff!.FromDate);
+            Assert.Equal("2025-01-01", effect.Diff.ToDate);
+        }
+        else
+            Assert.Null(effect.Diff);
     }
 
     /// <summary>

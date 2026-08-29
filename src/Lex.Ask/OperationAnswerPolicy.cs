@@ -185,9 +185,7 @@ internal static class OperationAnswerPolicy
             var one = cited.CitingArticles == 1;
             var recognizedScope = cited.EvidenceScope
                 == "captured_cross_references_in_held_non_withdrawn_versions";
-            var complete = cited.RowsTruncated == false
-                && recognizedScope
-                && effect.PublisherLimitations is not { Count: > 0 };
+            var complete = cited.ExactComplete;
             var count = complete
                 ? fr
                     ? $"Lex a trouvé au total {cited.CitingArticles:n0} {(one ? "article" : "articles")} faisant référence à {cited.CitedWork}."

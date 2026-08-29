@@ -11,9 +11,10 @@ import { expect, test, type Page } from "@playwright/test";
  * list and rendered `No held provision version in this corpus refers to this law.` A mounted probe
  * confirmed that reader outcome before this repair was written.
  *
- * The rule under test is that an absence claim requires a receipt saying nothing was cut. A missing
- * receipt, or one that is not a boolean, is not that receipt. Truthiness would read `null` as false
- * and restore the absence claim, which is the D08 O1 failure in a second place.
+ * The rule under test is that a total or absence claim requires `exact_complete: true`. The server
+ * derives that bit from coherent row and publisher-set receipts, unique and coherent producer
+ * units and rows, and the recognized evidence scope. Missing, false or malformed values license
+ * no such claim.
  *
  * The `/api/ask/stream` response is a controlled fixture. No law payload, no query text and no
  * golden content is read or written by this file.
@@ -22,7 +23,9 @@ import { expect, test, type Page } from "@playwright/test";
 const WORK = "lu-legilux:fixture-cited";
 const ABSENCE = "No held provision version in this corpus refers to this law.";
 const CUT = "returned fewer rows than it found";
+const INCOMPLETE = "This response is incomplete";
 const UNKNOWN = "does not record whether it was complete";
+const UNQUALIFIED = "1 article refers to it";
 
 const row = () => ({
   work: "lu-legilux:citing-work", title: "Citing law", valid_from: "2020-01-01",
@@ -95,14 +98,27 @@ test("a cut response with no surviving rows does not claim nothing refers to the
     await expect(ws).not.toContainText("0 articles refer to it");
   });
 
-test("an empty response that reports nothing was cut may still state the absence",
+test("a non-truncated receipt alone does not license an absence",
   async ({ page }) => {
     const ws = await ask(page, "b023456789abcdef0123456789abcdef", [], false);
 
-    // The one branch holding positive evidence of completeness keeps the definitive sentence.
-    await expect(ws).toContainText(ABSENCE);
+    await expect(ws).not.toContainText(ABSENCE);
+    await expect(ws).toContainText(UNKNOWN);
     await expect(ws).not.toContainText(CUT);
   });
+
+test("only an exact complete receipt licenses an absence", async ({ page }) => {
+  const ws = await ask(page, "bb23456789abcdef0123456789abcdef", [], false, {
+    exact_complete: true,
+    evidence_scope: "captured_cross_references_in_held_non_withdrawn_versions",
+    current_legal_effect_assessed: false,
+    relationship_type_assessed: false,
+  });
+
+  await expect(ws).toContainText(ABSENCE);
+  await expect(ws).not.toContainText(CUT);
+  await expect(ws).not.toContainText(UNKNOWN);
+});
 
 test("an empty response carrying no receipt claims neither absence nor a cut", async ({ page }) => {
   const ws = await ask(page, "c023456789abcdef0123456789abcdef", [], undefined);
@@ -139,20 +155,80 @@ test("a cut response that did return rows says so beside them", async ({ page })
 });
 
 test("a complete response with rows is presented without qualification", async ({ page }) => {
-  const ws = await ask(page, "2123456789abcdef0123456789abcdef", [row()], false);
+  const ws = await ask(page, "2123456789abcdef0123456789abcdef", [row()], false, {
+    exact_complete: true,
+    evidence_scope: "captured_cross_references_in_held_non_withdrawn_versions",
+    current_legal_effect_assessed: false,
+    relationship_type_assessed: false,
+  });
 
   await expect(ws).toContainText("Citing law");
   await expect(ws).toContainText("1 article refers to it");
   await expect(ws).not.toContainText(CUT);
 });
 
+test("a missing evidence scope remains incomplete despite a non-truncated receipt",
+  async ({ page }) => {
+    const ws = await ask(page, "2223456789abcdef0123456789abcdef", [row()], false, {
+      exact_complete: false,
+      current_legal_effect_assessed: false,
+      relationship_type_assessed: false,
+    });
+
+    await expect(ws).not.toContainText(UNQUALIFIED);
+    await expect(ws).toContainText("1 returned in this response");
+    await expect(ws).toContainText(INCOMPLETE);
+  });
+
+test("an unknown evidence scope remains incomplete despite a non-truncated receipt",
+  async ({ page }) => {
+    const ws = await ask(page, "2323456789abcdef0123456789abcdef", [row()], false, {
+      exact_complete: false,
+      evidence_scope: "some_future_scope",
+      current_legal_effect_assessed: false,
+      relationship_type_assessed: false,
+    });
+
+    await expect(ws).not.toContainText(UNQUALIFIED);
+    await expect(ws).toContainText("1 returned in this response");
+    await expect(ws).toContainText(INCOMPLETE);
+  });
+
+test("a truncated publisher set keeps the returned list incomplete",
+  async ({ page }) => {
+    const ws = await ask(page, "2423456789abcdef0123456789abcdef", [row()], false, {
+      exact_complete: false,
+      evidence_scope: "captured_cross_references_in_held_non_withdrawn_versions",
+      current_legal_effect_assessed: false,
+      relationship_type_assessed: false,
+      publisher_result_set: { total: 2, returned: 1, maximum: 8, truncated: true },
+    });
+
+    await expect(ws).not.toContainText(UNQUALIFIED);
+    await expect(ws).toContainText("1 returned in this response");
+    await expect(ws).toContainText(INCOMPLETE);
+  });
+
+test("a malformed complete receipt licenses neither a total nor an absence", async ({ page }) => {
+  const rows = await ask(page, "2523456789abcdef0123456789abcdef", [row()], false, {
+    exact_complete: "true",
+  });
+  await expect(rows).not.toContainText(UNQUALIFIED);
+  await expect(rows).toContainText("1 returned in this response");
+  await expect(rows).toContainText(UNKNOWN);
+
+  const empty = await ask(page, "2623456789abcdef0123456789abcdef", [], false, {
+    exact_complete: 1,
+  });
+  await expect(empty).not.toContainText(ABSENCE);
+  await expect(empty).toContainText(UNKNOWN);
+});
+
 /**
  * A returned row proves that at least one article refers to the law. It does not prove that the
  * number beside it is the total, and cited_by sets citing_articles to the hits that fitted. So an
- * exact total may be stated only against a receipt saying nothing was cut.
+ * exact total may be stated only when the aggregate exact-complete proof is literally true.
  */
-const UNQUALIFIED = "1 article refers to it";
-
 test("rows with no receipt are framed as returned, not as a total", async ({ page }) => {
   const ws = await ask(page, "3123456789abcdef0123456789abcdef", [row()], undefined);
 

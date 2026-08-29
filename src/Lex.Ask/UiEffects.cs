@@ -256,7 +256,13 @@ public sealed record CitedByView(string CitedWork, int CitingArticles, IReadOnly
     /// repeal, or a bare citation. It answers false. Without it the list invites a reader to
     /// supply a relationship the evidence does not carry.
     /// </summary>
-    bool? RelationshipTypeAssessed = null);
+    bool? RelationshipTypeAssessed = null,
+    /// <summary>
+    /// One fail-closed server verdict for whether the count is exact. It requires coherent exact
+    /// publisher and response receipts, unique publishers, matching work and evidence scope, and
+    /// valid status, count and citation-row shapes on every carried publisher unit.
+    /// </summary>
+    bool ExactComplete = false);
 
 public sealed record CitedByRow(string Work, string? Title, string ValidFrom, string Anchor,
                                 string? Num, string? Permalink, string? Jurisdiction = null);
@@ -355,7 +361,11 @@ public sealed record GapView(string Status, string? Work, string? Date, string E
     bool Truncated = false,
     int? TotalProvisions = null,
     bool TextTruncated = false,
-    string? TextCompleteness = null);
+    string? TextCompleteness = null,
+    IReadOnlyList<string>? ComparisonLimitations = null,
+    bool ComparisonLimitationsMalformed = false,
+    string? ComparisonFromDate = null,
+    string? ComparisonToDate = null);
 
 /// <summary>
 /// One publisher-specific capability refusal retained beside successful rows from another

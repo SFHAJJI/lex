@@ -737,6 +737,27 @@ export function InForce({ date, total, rows, populationWorks, populationBasis,
   );
 }
 
+export function ComparisonLimitations({ limitations, malformed }: {
+  limitations?: unknown;
+  malformed?: unknown;
+}) {
+  const codes = Array.isArray(limitations)
+    ? limitations.filter((code): code is string => typeof code === "string")
+    : [];
+  return <>
+    {codes.length > 0 ? <div className="cnt">{codes.map((code, index) =>
+      code === "profiles_differ"
+        ? <span className="tag warn" key={`${code}:${index}`}>different extraction profiles, provisions cannot be paired</span>
+        : code === "typed_text_gap"
+        ? <span className="tag warn" key={`${code}:${index}`}>typed text gap, wording comparison not certified</span>
+        : <span className="tag warn mono" key={`${code}:${index}`}>{code}</span>)}</div> : null}
+    {malformed === true
+      ? <p className="sub" role="status">Comparison limitation data was malformed. Other
+          limitations may be missing.</p>
+      : null}
+  </>;
+}
+
 /**
  * A refusal, and what stands behind it.
  *
@@ -748,7 +769,8 @@ export function InForce({ date, total, rows, populationWorks, populationBasis,
  * and hashes are a real answer to a real question, just not to the question about wording.
  */
 export function Gap({ status, explanation, available, held, provision_gaps,
-  total_provision_gaps, truncated, total_provisions, text_truncated, text_completeness }: {
+  total_provision_gaps, truncated, total_provisions, text_truncated, text_completeness,
+  comparison_limitations, comparison_limitations_malformed }: {
   status: string; explanation: string; available: string[];
   held?: { text: number; total: number; official?: string; kind?: string };
   provision_gaps?: ProvisionItem[];
@@ -757,6 +779,8 @@ export function Gap({ status, explanation, available, held, provision_gaps,
   total_provisions?: number;
   text_truncated?: boolean;
   text_completeness?: string;
+  comparison_limitations?: unknown;
+  comparison_limitations_malformed?: unknown;
 }) {
   const whole = held && held.total > 0 && held.text === 0;
   const collection = whole && (held?.kind === "RECUEIL" || held?.kind === "CODE_RECUEIL");
@@ -766,6 +790,8 @@ export function Gap({ status, explanation, available, held, provision_gaps,
           the decision lives in the tested seam, not in this markup. */}
       {gapBadgeStatus(status) === null ? null
         : <div className="cnt"><span className="tag warn mono">{gapBadgeStatus(status)}</span></div>}
+      <ComparisonLimitations limitations={comparison_limitations}
+        malformed={comparison_limitations_malformed} />
       {whole ? (
         <>
           {collection ? (
@@ -1015,14 +1041,14 @@ export function CitedBy({ view, onOpen }: {
   view: NonNullable<UiEffect["cited_by"]>;
   onOpen: (work: string, date: string, anchor?: string) => void;
 }) {
+  const exactComplete = view.exact_complete === true;
   return (
     <>
       <div className="cnt">
-        {/* "N articles refer to it" is a claim about the law. When the response was cut, N is
-            what fitted (McpCore sets citing_articles to the returned hits), so the same
-            sentence would understate the total and, at zero, assert an absence. Identity
-            comparison only: an absent or malformed receipt is not a complete answer. */}
-        <span className="tag">{view.rows_truncated === false
+        {/* "N articles refer to it" is a claim about the law. `exact_complete` combines coherent
+            row and publisher-set receipts, unique and coherent producer units and rows, and the
+            recognized evidence scope. Only literal true licenses a total. */}
+        <span className="tag">{exactComplete
           ? `${view.citing_articles.toLocaleString()} article${view.citing_articles === 1 ? " refers" : "s refer"} to it`
           : `${view.citing_articles.toLocaleString()} returned in this response`}</span>
         <span className="tag mono">{view.cited_work}</span>
@@ -1056,25 +1082,21 @@ export function CitedBy({ view, onOpen }: {
         ))}
       </ul>
       {view.rows.length > 0 ? (
-        /* A returned row proves that at least one article refers. It does not prove that the
-           number beside it is the total, so only a receipt of false leaves the rows
-           unqualified. */
-        view.rows_truncated === true
+        exactComplete ? null
+        : view.rows_truncated === true
           ? <Empty>This response returned fewer rows than it found.</Empty>
-        : view.rows_truncated === false ? null
+        : view.exact_complete === false
+          ? <Empty>This response is incomplete, so the count is only what this response returned.</Empty>
         : <Empty>This response does not record whether it was complete.</Empty>
+      ) : exactComplete ? (
+        <Empty>No held provision version in this corpus refers to this law.</Empty>
       ) : view.rows_truncated === true ? (
-        /* Rows were cut and none survived for this unit. The receipt is response-wide, so
-           it says nothing about which unit was cut, only that absence cannot be claimed. */
         <Empty>This response returned fewer rows than it found, so an empty list here is
           not evidence that nothing refers to this law.</Empty>
-      ) : view.rows_truncated === false ? (
-        /* The only branch that may state an absence, because it is the only one holding a
-           receipt that nothing was cut. */
-        <Empty>No held provision version in this corpus refers to this law.</Empty>
+      ) : view.exact_complete === false ? (
+        <Empty>No rows were returned. This response is incomplete, so it is not evidence that
+          nothing refers to this law.</Empty>
       ) : (
-        /* No receipt, or one that is not a boolean. Absent evidence is not a negative
-           fact, so this says what happened and claims nothing about the corpus. */
         <Empty>No rows were returned. This response does not record whether it was
           complete.</Empty>
       )}

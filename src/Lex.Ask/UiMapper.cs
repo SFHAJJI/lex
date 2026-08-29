@@ -80,16 +80,22 @@ public static class UiMapper
 
     public static UiEffect From(string tool, JsonObject args, JsonNode result, string locale = "en")
     {
+        var citedByExactComplete = tool == "cited_by"
+            && CitedByResultPolicy.IsExact(result);
         var shapeCheckedResult = WithoutContradictorySuccessfulEmpty(tool, result);
         var publisherCheckedResult = WithoutUnprovenPublisherFacts(tool, shapeCheckedResult);
         var evidence = EvidenceOf(publisherCheckedResult, args);
         var (effectiveResult, publisherLimitations) =
             SplitPublisherLimitations(tool, publisherCheckedResult);
-        UiEffect Finish(UiEffect effect) => WithEvidence(effect, evidence) with
+        UiEffect Finish(UiEffect effect)
         {
-            PublisherLimitations = publisherLimitations.Count == 0
-                ? null : publisherLimitations,
-        };
+            var finished = WithEvidence(effect, evidence);
+            return finished with
+            {
+                PublisherLimitations = publisherLimitations.Count == 0
+                    ? null : publisherLimitations,
+            };
+        }
         if (tool == "coverage") return Finish(CoverageResult(effectiveResult, locale));
         if (effectiveResult is JsonArray { Count: 0 })
         {
@@ -137,6 +143,11 @@ public static class UiMapper
                 or LegalOutcome.NotAvailable or LegalOutcome.NotFound or LegalOutcome.NotComparable)
         {
             var typedGaps = tool == "as_of" ? TypedProvisionGaps(node) : null;
+            IReadOnlyList<string>? comparisonLimitations = null;
+            var comparisonLimitationsMalformed = false;
+            if (tool == "diff")
+                comparisonLimitations = Strings(
+                    node, "comparison_limitations", out comparisonLimitationsMalformed);
             var explanation = tool == "as_of"
                 && status == McpStatus.TextNotAvailable
                 && S(node, "text_completeness") == "partial"
@@ -164,7 +175,13 @@ public static class UiMapper
                     && node["text_truncated"]?.GetValue<bool>() == true,
                 TextCompleteness: tool == "as_of"
                     ? S(node, "text_completeness")
-                    : null));
+                    : null,
+                ComparisonLimitations: comparisonLimitations,
+                ComparisonLimitationsMalformed: comparisonLimitationsMalformed,
+                ComparisonFromDate: tool == "diff"
+                    ? S(args, "from_date") ?? S(node, "from_date") : null,
+                ComparisonToDate: tool == "diff"
+                    ? S(args, "to_date") ?? S(node, "to_date") : null));
             var refused = outcome == LegalOutcome.NotComparable && tool == "diff"
                 ? UiEffect.Merge([Diff(node, args), gap])
                 : gap;
@@ -179,7 +196,7 @@ public static class UiMapper
             "diff" => Diff(node, args),
             "changes_in_period" => Ranking(node, args),
             "in_force_on" => InForce(node, args),
-            "cited_by" => Cited(node),
+            "cited_by" => Cited(node, citedByExactComplete),
             "provenance" => Verification(node),
             "search" => SearchWorkspace(args, effectiveResult),
             _ => new UiEffect(),
@@ -504,11 +521,10 @@ public static class UiMapper
         else
         {
             combined["citing_articles"] = rows.Count;
-            const string evidenceScope =
-                "captured_cross_references_in_held_non_withdrawn_versions";
             combined["evidence_scope"] = parts.All(part =>
-                string.Equals(S(part, "evidence_scope"), evidenceScope, StringComparison.Ordinal))
-                    ? evidenceScope : null;
+                string.Equals(S(part, "evidence_scope"), CitedByResultPolicy.EvidenceScope,
+                    StringComparison.Ordinal))
+                    ? CitedByResultPolicy.EvidenceScope : null;
             combined["current_legal_effect_assessed"] =
                 SharedBoolean(parts, "current_legal_effect_assessed");
             combined["relationship_type_assessed"] =
@@ -728,7 +744,7 @@ public static class UiMapper
     private static string? Within(string? value, int maximum) =>
         value is { Length: > 0 } && value.Length <= maximum ? value : null;
 
-    private static UiEffect Cited(JsonObject o)
+    private static UiEffect Cited(JsonObject o, bool exactComplete)
     {
         if (o["citations"] is not JsonArray rows) return new UiEffect();
         return new UiEffect(CitedBy: new CitedByView(
@@ -746,7 +762,8 @@ public static class UiMapper
             RowsTruncated: B(o["response_row_set"] as JsonObject, "truncated"),
             EvidenceScope: S(o, "evidence_scope"),
             CurrentLegalEffectAssessed: B(o, "current_legal_effect_assessed"),
-            RelationshipTypeAssessed: B(o, "relationship_type_assessed")));
+            RelationshipTypeAssessed: B(o, "relationship_type_assessed"),
+            ExactComplete: exactComplete));
     }
 
     private static UiEffect Ranking(JsonObject o, JsonObject args)

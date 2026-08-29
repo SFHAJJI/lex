@@ -2119,8 +2119,7 @@ public sealed class AskService
 
     private static JsonObject? CitedByAggregateEvidence(JsonNode result)
     {
-        const string knownScope =
-            "captured_cross_references_in_held_non_withdrawn_versions";
+        const string knownScope = CitedByResultPolicy.EvidenceScope;
         static bool? Boolean(JsonNode? node) =>
             node is JsonValue value && value.TryGetValue<bool>(out var fact) ? fact : null;
         static string? Text(JsonNode? node) =>
@@ -2163,14 +2162,7 @@ public sealed class AskService
         var truncated = ConsistentBoolean(parts,
             item => item["response_row_set"]?["truncated"]);
         var scopeRecognized = parts.All(item => Text(item["evidence_scope"]) == knownScope);
-        var complete = members.Length > 0 && members.All(member =>
-            member is JsonObject item
-            && (!publisherBound || LegalOperationPolicy.IsProvenSuccessfulPublisherResult(
-                item, "cited_by"))
-            && Text(item["cited_work"]) == citedWork
-            && item["citations"] is JsonArray
-            && Text(item["evidence_scope"]) == knownScope
-            && Boolean(item["response_row_set"]?["truncated"]) == false);
+        var complete = CitedByResultPolicy.IsExact(result);
         var currentLegalEffect = ConsistentBoolean(parts,
             item => item["current_legal_effect_assessed"]);
         var relationshipType = ConsistentBoolean(parts,
