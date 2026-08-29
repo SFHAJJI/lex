@@ -108,6 +108,18 @@ jobs:
               gh release verify-asset "$release_tag" "$release_dir/$benchmark_manifest" \
                 --repo "$repository" >/dev/null \
                 || { echo "::error::$repo benchmark manifest is not attested by the exact release"; exit 1; }
+              benchmark_case_results=$(jq -er --arg report "retrieval-benchmark-$collection.json" '
+                if (.files | length) == 2
+                   and ([.files[]? | select(.path == $report)] | length) == 1 then
+                  [.files[] | select(.path != $report and (.path | endswith(".jsonl")))]
+                  | if length == 1 then .[0].path else error("missing case results") end
+                else error("unexpected benchmark members") end' \
+                "$release_dir/$benchmark_manifest") \
+                || { echo "::error::$repo benchmark manifest has missing or extra evidence"; exit 1; }
+              case "$benchmark_case_results" in
+                ""|*[!A-Za-z0-9._-]*|/*|*\\*|*/*|..|../*)
+                  echo "::error::$repo benchmark manifest has an unsafe case-results path"; exit 1 ;;
+              esac
             fi
           done
 
@@ -395,6 +407,18 @@ jobs:
                 < "$release_dir/$benchmark_manifest" \
                 >/dev/null \
                 || { echo "::error::$repo benchmark manifest does not bind the exact release"; exit 1; }
+              benchmark_case_results=$(jq -er --arg report "retrieval-benchmark-$collection.json" '
+                if (.files | length) == 2
+                   and ([.files[]? | select(.path == $report)] | length) == 1 then
+                  [.files[] | select(.path != $report and (.path | endswith(".jsonl")))]
+                  | if length == 1 then .[0].path else error("missing case results") end
+                else error("unexpected benchmark members") end' \
+                "$release_dir/$benchmark_manifest") \
+                || { echo "::error::$repo benchmark manifest has missing or extra evidence"; exit 1; }
+              case "$benchmark_case_results" in
+                ""|*[!A-Za-z0-9._-]*|/*|*\\*|*/*|..|../*)
+                  echo "::error::$repo benchmark manifest has an unsafe case-results path"; exit 1 ;;
+              esac
             fi
           done
           index_manifest_count=$(find "$release_dir" -name 'index-*.manifest.json' | wc -l)

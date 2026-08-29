@@ -17,6 +17,79 @@
 # otherwise valid generations.
 set -eu
 
+benchmark_member_path() {
+  bm_root=$1
+  bm_manifest=$2
+  bm_report=$3
+  bm_report_name=$(basename "$bm_report")
+  [ -f "$bm_root/$bm_manifest" ] && [ -f "$bm_root/$bm_report" ] \
+    || { echo "ERROR: signed benchmark report or manifest is missing" >&2; return 1; }
+  bm_member=$(jq -er --arg report "$bm_report_name" '
+    if (.files | length) != 2
+       or ([.files[]? | select(.path == $report)] | length) != 1 then
+      error("benchmark manifest must contain one report and one case-results member")
+    else
+      [.files[] | select(.path != $report and (.path | endswith(".jsonl")))]
+      | if length == 1 then .[0].path else error("case-results member missing") end
+    end' "$bm_root/$bm_manifest") \
+    || { echo "ERROR: signed benchmark manifest has missing or extra members" >&2; return 1; }
+  case "$bm_member" in
+    ""|*[!A-Za-z0-9._-]*|/*|*\\*|*/*|..|../*|*/..|*/../*)
+      echo "ERROR: unsafe case-results artifact path: $bm_member" >&2
+      return 1 ;;
+  esac
+  bm_bound_member=$(jq -er '
+    select(.schema == "lex-retrieval-benchmark/4")
+    | .case_results_file | select(type == "string")' "$bm_root/$bm_report") \
+    || { echo "ERROR: benchmark report has no v4 case-results binding" >&2; return 1; }
+  [ "$bm_member" = "$bm_bound_member" ] \
+    || { echo "ERROR: benchmark report and manifest bind different case-results files" >&2; return 1; }
+  printf '%s\n' "$bm_member"
+}
+
+verify_benchmark_evidence() {
+  verify_root=$1
+  verify_manifest=$2
+  verify_report=$3
+  verify_member=$(benchmark_member_path "$verify_root" "$verify_manifest" "$verify_report") \
+    || return 1
+  [ -f "$verify_root/$verify_member" ] \
+    || { echo "ERROR: signed case-results artifact is missing: $verify_member" >&2; return 1; }
+  declared_size=$(jq -er --arg member "$verify_member" '
+    .files[] | select(.path == $member) | .size
+    | select(type == "number" and . > 0 and floor == .)' "$verify_root/$verify_manifest") \
+    || { echo "ERROR: case-results manifest size is invalid" >&2; return 1; }
+  declared_sha=$(jq -er --arg member "$verify_member" '
+    .files[] | select(.path == $member) | .sha256
+    | select(type == "string" and test("^[0-9a-f]{64}$"))' "$verify_root/$verify_manifest") \
+    || { echo "ERROR: case-results manifest digest is invalid" >&2; return 1; }
+  report_sha=$(jq -er '
+    .case_results_sha256
+    | select(type == "string" and test("^[0-9a-f]{64}$"))' "$verify_root/$verify_report") \
+    || { echo "ERROR: benchmark report case-results digest is invalid" >&2; return 1; }
+  report_count=$(jq -er '
+    .case_results_count | select(type == "number" and . > 0 and floor == .)' "$verify_root/$verify_report") \
+    || { echo "ERROR: benchmark report case-results count is invalid" >&2; return 1; }
+  actual_size=$(wc -c < "$verify_root/$verify_member")
+  actual_sha=$(sha256sum "$verify_root/$verify_member" | cut -d' ' -f1)
+  actual_count=$(wc -l < "$verify_root/$verify_member")
+  final_byte=$(tail -c 1 "$verify_root/$verify_member" | od -An -t u1 | tr -d ' ')
+  [ "$actual_size" -eq "$declared_size" ] \
+    || { echo "ERROR: case-results size does not match signed manifest" >&2; return 1; }
+  [ "$actual_sha" = "$declared_sha" ] && [ "$actual_sha" = "$report_sha" ] \
+    || { echo "ERROR: case-results digest does not match signed evidence" >&2; return 1; }
+  [ "$actual_count" -eq "$report_count" ] && [ "$final_byte" = "10" ] \
+    || { echo "ERROR: case-results row count or LF termination is invalid" >&2; return 1; }
+  printf '%s\n' "$verify_member"
+}
+
+if [ "${1:-}" = "--verify-benchmark-evidence" ]; then
+  [ "$#" -eq 4 ] \
+    || { echo "usage: $0 --verify-benchmark-evidence ROOT MANIFEST REPORT" >&2; exit 2; }
+  verify_benchmark_evidence "$2" "$3" "$4"
+  exit $?
+fi
+
 OUT="${1:-/indexes}"
 REQUIRE_MANIFEST="${LEX_REQUIRE_ARTIFACT_MANIFEST:-0}"
 mkdir -p "$OUT"
@@ -146,7 +219,10 @@ echo "$SETS" | while IFS=: read -r repo collection asset release_tag; do
         echo "ERROR: $repo signed benchmark manifest does not bind the exact index release" >&2
         exit 1
       fi
-      echo "  fetched signed public retrieval benchmark: $benchmark"
+      case_results=$(benchmark_member_path "$OUT" "$benchmark_manifest" "$benchmark")
+      fetch "$OUT/$case_results" "$release_base/$case_results"
+      verify_benchmark_evidence "$OUT" "$benchmark_manifest" "$benchmark" >/dev/null
+      echo "  fetched signed public retrieval benchmark: $benchmark and $case_results"
     else
       rm -f "$OUT/$benchmark" "$OUT/$benchmark_manifest" "$OUT/$benchmark_signature"
       if [ "$REQUIRE_MANIFEST" = "1" ]; then

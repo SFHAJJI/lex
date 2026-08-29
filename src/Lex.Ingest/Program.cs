@@ -80,6 +80,15 @@ switch (args0[0])
         var modelDir = Get("--model-dir") ?? throw new ArgumentException("--model-dir required");
         var vectors = Get("--vectors") ?? Path.ChangeExtension(index, ".vectors");
         var output = Get("--out") ?? throw new ArgumentException("--out required");
+        var outputFullPath = Path.GetFullPath(output);
+        var outputDirectory = Path.GetDirectoryName(outputFullPath)
+                              ?? throw new ArgumentException("--out must name a file");
+        var caseResultsOutput = Path.GetFullPath(Get("--case-results-out") ?? Path.Combine(
+            outputDirectory, Path.GetFileNameWithoutExtension(outputFullPath) + ".cases.jsonl"));
+        var pathComparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        if (!string.Equals(outputDirectory, Path.GetDirectoryName(caseResultsOutput), pathComparison))
+            throw new ArgumentException("--case-results-out must be beside --out");
         var caseSet = RetrievalBenchmarkCatalog.LoadSet(
             Get("--cases") ?? Path.Combine(AppContext.BaseDirectory, "retrieval-cases.json"));
         var baseline = RetrievalBenchmarkCatalog.LoadBaseline(
@@ -92,24 +101,21 @@ switch (args0[0])
         _ = reader.SearchHybrid("protection des donnees personnelles", FilterSet.All, 10);
         cold.Stop();
         var memoryLimit = long.TryParse(Get("--memory-limit-bytes"), out var parsedMemory) ? parsedMemory : 0;
-        var report = RetrievalBenchmarkRunner.Run(reader, caseSet, baseline, index, vectors,
+        var run = RetrievalBenchmarkRunner.RunWithCaseResults(
+            reader, caseSet, baseline, index, vectors,
             Get("--code-commit") ?? "uncommitted", Get("--manifest-id") ?? "unverified",
             Get("--machine") ?? Environment.MachineName,
             Get("--resource") ?? "not supplied", memoryLimit,
             load.Elapsed.TotalMilliseconds, cold.Elapsed.TotalMilliseconds, now,
+            Path.GetFileName(caseResultsOutput),
             progress => Console.Error.WriteLine(
                 $"[benchmark-progress] stage={progress.Stage} items={progress.Completed}/{progress.Total} "
                 + $"percent={(progress.Total == 0 ? 100 : progress.Completed * 100d / progress.Total):0.0} "
                 + $"elapsed={progress.Elapsed:hh\\:mm\\:ss} "
                 + $"eta={(progress.EstimatedRemaining is null ? "calculating" : progress.EstimatedRemaining.Value.ToString(@"hh\:mm\:ss"))}"));
-        File.WriteAllBytes(output, System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(report,
-            new System.Text.Json.JsonSerializerOptions
-            {
-                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower,
-                WriteIndented = true,
-            }));
-        Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(report));
-        return report.ActivationGatePassed ? 0 : 5;
+        RetrievalBenchmarkArtifactWriter.Write(outputFullPath, caseResultsOutput, run);
+        Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(run.Report));
+        return run.Report.ActivationGatePassed ? 0 : 5;
     }
     case "assistant-eval":
     {
@@ -939,6 +945,7 @@ static string FormatDuration(TimeSpan value)
 static void Usage() => Console.Error.WriteLine("""
     lex — point-in-time regulatory text pipeline
       lex embedding-smoke --model-dir PATH [--text TEXT] [--batch-size N]
+      lex benchmark --index FILE.db --model-dir DIR --out REPORT.json [--case-results-out CASES.jsonl]
       lex scope-preview [--publisher ID] [--scope FILE] [--previous-scope FILE] [--wave 1..4]
       lex ingest --publisher ID --corpus PATH --code-commit FULL_SHA --run-id SOURCE_RUN_ID [--scope FILE] [--wave 1..4] [--now ISO]
                  [--fresh [--historical-withdrawal-audit FILE]]

@@ -284,6 +284,95 @@ public sealed class ReleaseWorkflowTests
     }
 
     [Fact]
+    public void Signed_benchmark_case_results_are_fetched_and_checked_from_one_manifest()
+    {
+        var root = RepoRoot();
+        var script = Path.Combine(root, "deploy", "fetch-indexes.sh");
+        var scriptText = File.ReadAllText(script).Replace("\r\n", "\n", StringComparison.Ordinal);
+        var workflow = File.ReadAllText(Path.Combine(root, ".github", "workflows", "deploy.yml"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        Assert.Contains("--verify-benchmark-evidence", scriptText);
+        Assert.Contains("benchmark_member_path", scriptText);
+        Assert.Contains("case-results size does not match signed manifest", scriptText);
+        Assert.Contains("case-results digest does not match signed evidence", scriptText);
+        Assert.Contains("benchmark_case_results=$(jq -er", workflow);
+        Assert.Contains("benchmark manifest has missing or extra evidence", workflow);
+
+        var shell = OperatingSystem.IsWindows()
+            ? @"C:\Program Files\Git\usr\bin\sh.exe" : "/bin/sh";
+        if (!File.Exists(shell)) return;
+        static (int Code, string Output) Start(string executable, params string[] arguments)
+        {
+            var start = new ProcessStartInfo(executable)
+            {
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+            };
+            foreach (var argument in arguments) start.ArgumentList.Add(argument);
+            using var process = Process.Start(start)
+                ?? throw new InvalidOperationException("Shell verification process did not start.");
+            var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+            process.WaitForExit();
+            return (process.ExitCode, output);
+        }
+        if (Start(shell, "-c", "command -v jq >/dev/null 2>&1").Code != 0) return;
+
+        var directory = Path.Combine(Path.GetTempPath(), $"lex-benchmark-fetch-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            const string reportFile = "retrieval-benchmark-eu-eurlex.json";
+            const string caseFile = "retrieval-benchmark-eu-eurlex.cases.jsonl";
+            const string manifestFile = "retrieval-benchmark-eu-eurlex.manifest.json";
+            var caseBytes = System.Text.Encoding.UTF8.GetBytes("{\"case_id\":\"one\"}\n");
+            var caseSha = Convert.ToHexStringLower(
+                System.Security.Cryptography.SHA256.HashData(caseBytes));
+            File.WriteAllBytes(Path.Combine(directory, caseFile), caseBytes);
+            File.WriteAllText(Path.Combine(directory, reportFile),
+                System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    schema = "lex-retrieval-benchmark/4",
+                    case_results_file = caseFile,
+                    case_results_count = 1,
+                    case_results_sha256 = caseSha,
+                }));
+
+            void WriteManifest(bool includeCase, string digest)
+            {
+                var files = new List<object>
+                {
+                    new { path = reportFile, size = 1, sha256 = new string('a', 64) },
+                };
+                if (includeCase)
+                    files.Add(new { path = caseFile, size = caseBytes.Length, sha256 = digest });
+                File.WriteAllText(Path.Combine(directory, manifestFile),
+                    System.Text.Json.JsonSerializer.Serialize(new { files }));
+            }
+
+            (int Code, string Output) Verify() => Start(shell, script,
+                "--verify-benchmark-evidence", directory, manifestFile, reportFile);
+
+            WriteManifest(includeCase: false, caseSha);
+            Assert.NotEqual(0, Verify().Code);
+
+            WriteManifest(includeCase: true, new string('0', 64));
+            Assert.NotEqual(0, Verify().Code);
+
+            WriteManifest(includeCase: true, caseSha);
+            var accepted = Verify();
+            Assert.Equal(0, accepted.Code);
+            Assert.Contains(caseFile, accepted.Output);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Cross_repository_release_credentials_are_confined_before_checkout()
     {
         var deploy = File.ReadAllText(Path.Combine(

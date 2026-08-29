@@ -317,23 +317,70 @@ public sealed class ArtifactManifestTests : IDisposable
         var cases = RetrievalBenchmarkCatalog.Load(
             Path.Combine(RepoRoot(), "evals", "retrieval-cases.json"))
             .Where(item => item.Collection == collection).ToArray();
-        var metrics = new RetrievalMetrics(1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1);
+        var tuningCount = cases.Count(item => item.Split == "tuning");
+        var holdoutCount = cases.Count(item => item.Split == "holdout");
+        RetrievalMetrics Metrics(int denominator)
+        {
+            var measured = RetrievalMetricObservation.Measured(1, denominator);
+            return new RetrievalMetrics(
+                measured, measured, measured, measured, measured, measured,
+                measured, RetrievalMetricObservation.Measured(0, denominator),
+                measured, measured, measured, measured, measured, measured);
+        }
+        var tuningMetrics = Metrics(tuningCount);
+        var holdoutMetrics = Metrics(holdoutCount);
+        var controlNdcg = RetrievalMetricObservation.Measured(0, 8);
+        RetrievalNegativeControlResult Control(string schema) => new(
+            schema, "detected", "product_gate", 8,
+            ["anchor_ndcg_at10_not_below_unshuffled"], true, true, true, 0, controlNdcg);
+        IReadOnlyList<RetrievalBenchmarkStratum> strata =
+        [
+            new("anchor_exact_first_accuracy", collection, "exact", "holdout", "blocking",
+                8, 20, "invariant_only_n8", RetrievalMetricObservation.Measured(1, 8), true),
+            new("anchor_ndcg_at10", collection, "conceptual", "holdout", "reported",
+                8, 20, "invariant_only_n8", RetrievalMetricObservation.Measured(1, 8), null),
+        ];
+        var insufficient = RetrievalMetricObservation.Insufficient();
+        RetrievalBenchmarkCaseResult Row(
+            RetrievalBenchmarkCase benchmarkCase, string stage) => new(
+            "lex-retrieval-case-result/1", stage, benchmarkCase.Id, collection,
+            benchmarkCase.Category, benchmarkCase.Split, new string('a', 64), [], [],
+            insufficient, insufficient, insufficient, insufficient, insufficient,
+            insufficient, insufficient, insufficient,
+            RetrievalMetricObservation.Measured(1, 1), insufficient, insufficient, insufficient);
+        var caseRows = cases.SelectMany(benchmarkCase => benchmarkCase.Split == "tuning"
+            ? new[]
+            {
+                Row(benchmarkCase, "keyword-tuning"), Row(benchmarkCase, "hybrid-tuning"),
+            }
+            : new[]
+            {
+                Row(benchmarkCase, "keyword-holdout"), Row(benchmarkCase, "hybrid-holdout"),
+                Row(benchmarkCase, "shuffled-top10/2"), Row(benchmarkCase, "qrels-shuffle/2"),
+            }).ToArray();
+        var caseJson = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
+        var caseBytes = Encoding.UTF8.GetBytes(string.Concat(caseRows.Select(row =>
+            JsonSerializer.Serialize(row, caseJson) + "\n")));
+        var caseFile = $"retrieval-benchmark-{collection}.cases.jsonl";
+        File.WriteAllBytes(Path.Combine(_dir, caseFile), caseBytes);
         var report = new RetrievalBenchmarkReport(
-            "lex-retrieval-benchmark/3", "2026-08-15T00:00:00Z", cases.Length, "reviewed",
+            "lex-retrieval-benchmark/4", "2026-08-15T00:00:00Z", cases.Length, "reviewed",
             baseline.Schema, baseline.CasesSha256, baseline.CasesSha256,
             $"{baseline.ReviewedBy}@{baseline.ReviewedAt}", CodeCommit, CorpusCommit,
             Convert.ToHexStringLower(SHA256.HashData(indexManifestBytes)),
             "test/e5", "test-revision", "test-runner", "1 cpu, 2 GiB", 1, 1, 100,
             2L * 1024 * 1024 * 1024, new FileInfo(database).Length,
-            new FileInfo(vectors).Length, metrics, metrics, metrics, metrics,
-            cases.Count(item => item.Split == "tuning"),
-            cases.Count(item => item.Split == "holdout"), activationPassed,
-            activationPassed ? [] : ["holdout warm p95 exceeds 250 ms"]);
+            new FileInfo(vectors).Length, tuningMetrics, tuningMetrics,
+            holdoutMetrics, holdoutMetrics, tuningCount, holdoutCount, activationPassed,
+            activationPassed ? [] : ["holdout warm p95 exceeds 250 ms"],
+            strata, Control("shuffled-top10/2"), Control("qrels-shuffle/2"),
+            "lex-retrieval-case-results/1", caseFile, caseRows.Length,
+            Convert.ToHexStringLower(SHA256.HashData(caseBytes)));
         var reportFile = $"retrieval-benchmark-{collection}.json";
         File.WriteAllBytes(Path.Combine(_dir, reportFile), JsonSerializer.SerializeToUtf8Bytes(
             report, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower }));
         var benchmarkManifest = ArtifactManifests.Create(
-            _dir, [reportFile], root.KeyId, report.Timestamp, CodeCommit,
+            _dir, [reportFile, caseFile], root.KeyId, report.Timestamp, CodeCommit,
             new Dictionary<string, string>
             {
                 ["collection"] = collection,
