@@ -63,21 +63,35 @@ const itemLabel = (item: ProvisionItem) => oneLine(item.num ?? item.anchor);
 const itemSha = (item: ProvisionItem) => item.text_sha256;
 
 /**
- * Build a citation for the exact version, and article when one article is on screen.
+ * Every digest stays inside the claim it can support.
  *
- * A citation always states what it can be checked against, and says so plainly when it cannot.
- * The exact text digest is preferred because it is the narrowest claim: it covers the wording the
- * reader actually saw. Where the view holds several articles there is no single such digest, so the
- * document-level record digest stands in. Where neither reached the browser the citation says
- * `no content digest recorded`, because a citation that quietly carries only a permalink looks
- * checkable and is not, and the reader has no way to tell the difference.
+ * The exact text digest is the narrowest and strongest: it covers precisely the wording the reader
+ * saw. It exists only when one article is on screen. Where several are, there is no digest of the
+ * rendered wording at all, and the citation says so rather than substituting a weaker one.
+ *
+ * `record_sha256` hashes serialized version metadata; `body_sha256` is the publisher's own body.
+ * Neither is a digest of the ordered provisions displayed, so where they are carried they are
+ * labelled with what they actually cover. An earlier revision let the record digest stand in for a
+ * wording digest, which made a multi-article citation look verifiable against text it does not
+ * cover.
  */
-function contentDigestField(input: LawEvidence): string {
+function contentDigestFields(input: LawEvidence): string[] {
   const item = input.provisions.length === 1 ? input.provisions[0] : undefined;
-  if (item && itemSha(item)) return `text SHA-256 ${itemSha(item)}`;
-  if (input.recordSha256) return `record SHA-256 ${input.recordSha256}`;
-  if (input.bodySha256) return `body SHA-256 ${input.bodySha256}`;
-  return "no content digest recorded";
+  const exact = item ? itemSha(item) : undefined;
+
+  // One article on screen with its own digest: the narrowest and strongest claim available, and it
+  // covers precisely the wording the reader saw. Nothing else needs saying.
+  if (exact) return [`text SHA-256 ${exact}`];
+
+  // Otherwise there is no digest of the rendered wording, and that has to be said rather than
+  // covered over. `record_sha256` hashes serialized version metadata and `body_sha256` is the
+  // publisher's own body; neither is a digest of the ordered provisions on screen, so both are
+  // carried with the claim they can actually support written next to them.
+  return [
+    "no aggregate text digest recorded",
+    input.recordSha256 ? `record SHA-256 ${input.recordSha256} (version metadata)` : undefined,
+    input.bodySha256 ? `body SHA-256 ${input.bodySha256} (publisher body)` : undefined,
+  ].filter(Boolean) as string[];
 }
 
 /**
@@ -99,21 +113,21 @@ export function citationText(input: LawEvidence): string {
     input.work,
     input.permalink,
     input.source,
-    contentDigestField(input),
+    ...contentDigestFields(input),
     NOT_OFFICIAL,
   ].filter(Boolean).join(" | ");
 }
 
 /**
- * Both sides of a comparison need their own digest, for the same reason and with the same fallback
- * order. A comparison spanning several articles has no single text digest per side, so the
- * document-level record digest stands in; where a side has neither, that side says so rather than
- * going out bare.
+ * Each side of a comparison is held to the same rule as a law citation: a digest is stated with the
+ * claim it supports, and a metadata digest never stands in for a wording one.
  */
-function comparisonSideDigest(label: string, textSha?: string, recordSha?: string): string {
-  if (textSha) return `${label} text SHA-256 ${textSha}`;
-  if (recordSha) return `${label} record SHA-256 ${recordSha}`;
-  return `${label} no content digest recorded`;
+function comparisonSideDigest(label: string, textSha?: string, recordSha?: string): string[] {
+  if (textSha) return [`${label} text SHA-256 ${textSha}`];
+  return [
+    `${label} no aggregate text digest recorded`,
+    recordSha ? `${label} record SHA-256 ${recordSha} (version metadata)` : undefined,
+  ].filter(Boolean) as string[];
 }
 
 export function comparisonCitationText(input: ComparisonEvidence): string {
@@ -124,8 +138,8 @@ export function comparisonCitationText(input: ComparisonEvidence): string {
     `comparison ${input.from} to ${input.to}`,
     input.work,
     input.permalink,
-    comparisonSideDigest(input.from, row?.fromSha, input.fromRecordSha256),
-    comparisonSideDigest(input.to, row?.toSha, input.toRecordSha256),
+    ...comparisonSideDigest(input.from, row?.fromSha, input.fromRecordSha256),
+    ...comparisonSideDigest(input.to, row?.toSha, input.toRecordSha256),
     NOT_OFFICIAL,
   ].filter(Boolean).join(" | ");
 }
