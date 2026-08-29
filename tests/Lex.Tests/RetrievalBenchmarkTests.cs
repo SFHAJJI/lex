@@ -206,13 +206,6 @@ public sealed class RetrievalBenchmarkTests
             Lex.Web.ExplainerEndpoints.FormatBenchmarkMetric(measured, "0.0", " ms"));
         Assert.Equal("invalid_metric", Lex.Web.ExplainerEndpoints.FormatBenchmarkMetric(
             new RetrievalMetricObservation(1, 0, "measured"), "0.0"));
-        Assert.True(Lex.Web.ExplainerEndpoints.BenchmarkRankingIsPublishable(Report()));
-        Assert.False(Lex.Web.ExplainerEndpoints.BenchmarkRankingIsPublishable(
-            Report() with
-            {
-                ShuffledTop10Control = Report().ShuffledTop10Control! with
-                    { Outcome = "escaped" },
-            }));
     }
 
     [Fact]
@@ -550,6 +543,35 @@ public sealed class RetrievalBenchmarkTests
                 }
                 : row).ToArray(),
         }, cases, collection));
+    }
+
+    [Fact]
+    public void Public_benchmark_evidence_requires_the_exact_case_strata_projection()
+    {
+        const string collection = "eu-eurlex";
+        var cases = Cases().Where(item => item.Collection == collection).ToArray();
+        var report = ReportForCases(cases, collection);
+
+        Assert.True(RetrievalBenchmarkGate.IsStructurallyValid(report, collection));
+        Assert.True(Lex.Web.ExplainerEndpoints.BenchmarkRankingIsPublishable(
+            report, cases, collection));
+        Assert.False(Lex.Web.ExplainerEndpoints.BenchmarkRankingIsPublishable(
+            report with
+            {
+                ShuffledTop10Control = report.ShuffledTop10Control! with
+                    { Outcome = "escaped" },
+            }, cases, collection));
+
+        var drifted = report with
+        {
+            HoldoutStrata = report.HoldoutStrata!.Select((row, index) => index == 0
+                ? row with { Category = "invented" }
+                : row).ToArray(),
+        };
+        Assert.True(RetrievalBenchmarkGate.IsStructurallyValid(drifted, collection));
+        Assert.False(RetrievalBenchmarkGate.StrataMatchCases(drifted, cases, collection));
+        Assert.False(Lex.Web.ExplainerEndpoints.BenchmarkRankingIsPublishable(
+            drifted, cases, collection));
     }
 
     [Fact]
@@ -1387,6 +1409,54 @@ public sealed class RetrievalBenchmarkTests
             _ when denominator < statisticalFloor => "invariant_only_n8",
             _ => "statistically_supported",
         };
+    }
+
+    private static RetrievalBenchmarkReport ReportForCases(
+        IReadOnlyCollection<RetrievalBenchmarkCase> cases, string collection)
+    {
+        var tuning = cases.Where(item => item.Split == "tuning").ToArray();
+        var holdout = cases.Where(item => item.Split == "holdout").ToArray();
+        return Report() with
+        {
+            SampleCount = cases.Count,
+            TuningSampleCount = tuning.Length,
+            HoldoutSampleCount = holdout.Length,
+            KeywordTuning = MetricsForCases(tuning),
+            HybridTuning = MetricsForCases(tuning),
+            KeywordHoldout = MetricsForCases(holdout),
+            HybridHoldout = MetricsForCases(holdout),
+            ActivationGatePassed = false,
+            GateFailures = ["blocking evidence is below its support floor"],
+            HoldoutStrata = StrataForCases(cases, collection),
+            CaseResultsCount = 2 * tuning.Length + 4 * holdout.Length,
+        };
+    }
+
+    private static RetrievalMetrics MetricsForCases(
+        IReadOnlyCollection<RetrievalBenchmarkCase> cases)
+    {
+        var anchorCount = cases.Count(item => item.RelevantAnchors is { Count: > 0 });
+        var workCount = cases.Count(item => item.RelevantWorks.Count > 0);
+        var exactCount = cases.Count(item => item.Category == "exact"
+                                             && item.RelevantAnchors is { Count: > 0 });
+        var temporalCount = cases.Count(item => item.AsOf is not null);
+        var noHitCount = cases.Count(item => item.ExpectNoHits);
+        var resolutionCount = cases.Count(item => item.ExpectedResolution is not null);
+        var roleCount = cases.Count(item => item.ExpectedRole is not null);
+
+        static RetrievalMetricObservation Observation(double value, int denominator) =>
+            denominator == 0
+                ? RetrievalMetricObservation.Insufficient()
+                : RetrievalMetricObservation.Measured(value, denominator);
+
+        return new RetrievalMetrics(
+            Observation(1, anchorCount), Observation(1, anchorCount),
+            Observation(1, anchorCount), Observation(1, workCount),
+            Observation(1, workCount), Observation(1, workCount),
+            Observation(1, exactCount), Observation(0, temporalCount),
+            Observation(1, cases.Count), Observation(1, cases.Count),
+            Observation(1, cases.Count), Observation(1, noHitCount),
+            Observation(1, resolutionCount), Observation(1, roleCount));
     }
 
     private static RetrievalNegativeControlResult DetectedControl(

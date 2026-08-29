@@ -26,8 +26,18 @@ public static class ExplainerEndpoints
                + $"(n={observation.Denominator.ToString(CultureInfo.InvariantCulture)})";
     }
 
-    internal static bool BenchmarkRankingIsPublishable(RetrievalBenchmarkReport report) =>
-        RetrievalBenchmarkGate.IsStructurallyValid(report)
+    internal static bool BenchmarkEvidenceMatchesCases(
+        RetrievalBenchmarkReport report,
+        IReadOnlyCollection<RetrievalBenchmarkCase> cases,
+        string collection) =>
+        RetrievalBenchmarkGate.IsStructurallyValid(report, collection)
+        && RetrievalBenchmarkGate.StrataMatchCases(report, cases, collection);
+
+    internal static bool BenchmarkRankingIsPublishable(
+        RetrievalBenchmarkReport report,
+        IReadOnlyCollection<RetrievalBenchmarkCase> cases,
+        string collection) =>
+        BenchmarkEvidenceMatchesCases(report, cases, collection)
         && report.ShuffledTop10Control?.Outcome == "detected"
         && report.QrelsShuffleControl?.Outcome == "detected";
 
@@ -70,7 +80,8 @@ public static class ExplainerEndpoints
             var combinedPassed = compatible && reports.Values.All(item => item.ActivationGatePassed);
             var reportEntry = reports.OrderBy(item => item.Key, StringComparer.Ordinal).FirstOrDefault();
             var report = reportEntry.Value;
-            var controlsDetected = report is not null && BenchmarkRankingIsPublishable(report);
+            var controlsDetected = report is not null && BenchmarkRankingIsPublishable(
+                report, retrievalCases, reportEntry.Key);
             var caseRows = string.Join("", retrievalCases.GroupBy(c => c.Category)
                 .OrderBy(g => g.Key, StringComparer.Ordinal)
                 .Select(g => $"<tr><td>{H(g.Key)}</td><td class=\"mono\">{g.Count()}</td></tr>"));
@@ -155,7 +166,8 @@ public static class ExplainerEndpoints
                 .Where(item => item.Report is not null).ToArray();
             if (reports.Length == 0) return Results.NotFound(new { status = "not_measured_yet" });
             if (reports.Length != collections.Length || reports.Any(item =>
-                    !BenchmarkRankingIsPublishable(item.Report!)))
+                    !BenchmarkRankingIsPublishable(
+                        item.Report!, retrievalCases, item.Collection)))
                 return Results.Json(new
                 {
                     status = "not_publishable",
@@ -215,7 +227,7 @@ public static class ExplainerEndpoints
                 var expectedHoldout = retrievalCases.Count(item => item.Collection == collection
                     && item.Split == "holdout");
                 return report is not null
-                       && RetrievalBenchmarkGate.IsStructurallyValid(report, collection)
+                       && BenchmarkEvidenceMatchesCases(report, retrievalCases, collection)
                        && ctx.Registry.IsArtifactVerified(report.CaseResultsFile!)
                        && RetrievalBenchmarkGate.CaseResultsMatch(report,
                            Path.Combine(ctx.Options.IndexDir, report.CaseResultsFile!))
