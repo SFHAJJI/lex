@@ -21,26 +21,33 @@ const PINNED = "2020-07-17";
 const RECORD_SHA = "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0";
 const BODY_SHA = "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90";
 const TEXT_SHA = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+const LATER = "2021-01-01";
+const LATER_RECORD_SHA = "9988776655443322110099887766554433221100998877665544332211009988";
 
 /** A version whose document carries both document-level digests, with `count` articles. */
-function lawAnswer(count: number, withItemDigest: boolean): Record<string, unknown>[] {
+function lawAnswer(
+  count: number, withItemDigest: boolean, date: string = PINNED,
+): Record<string, unknown>[] {
+  const later = date === LATER;
   return [{
     envelope: {
       publisher: "lu-legilux", jurisdiction: "LU", status: "ok",
       timeline_semantics: "publisher_applicability",
     },
     document: {
-      title: "Fixture law", language: "fr", valid_from: PINNED,
+      title: "Fixture law", language: "fr", valid_from: date,
       extraction_profile: "akn-lu/1",
       source_uri: "https://legilux.public.lu/eli/etat/leg/loi/2020/07/17/a624/jo",
-      record_sha256: RECORD_SHA,
+      // Distinct per side, so a comparison citation that carried one side's digest for both, or
+      // dropped one, is visible rather than plausible.
+      record_sha256: later ? LATER_RECORD_SHA : RECORD_SHA,
       body_sha256: BODY_SHA,
     },
     provisions: Array.from({ length: count }, (_unused, index) => ({
       anchor: `art-${index + 1}`,
       num: `Art. ${index + 1}`,
       heading: `Heading ${index + 1}`,
-      text: `Fixture article ${index + 1}.`,
+      text: `Fixture article ${index + 1}${later ? " as amended" : ""}.`,
       ...(withItemDigest ? { text_sha256: TEXT_SHA } : {}),
     })),
   }];
@@ -64,7 +71,7 @@ const mcpBody = (id: number, payload: unknown) => JSON.stringify({
 async function routeMcp(page: Page, count: number, withItemDigest: boolean): Promise<void> {
   await page.route("**/mcp", async (route: Route) => {
     const request = route.request().postDataJSON() as {
-      id: number; params?: { name?: string };
+      id: number; params?: { name?: string; arguments?: Record<string, unknown> };
     };
     const name = request.params?.name ?? "";
     if (name === "timeline") {
@@ -75,9 +82,18 @@ async function routeMcp(page: Page, count: number, withItemDigest: boolean): Pro
       return;
     }
     if (name === "as_of") {
+      const args = (request.params as { arguments?: Record<string, unknown> } | undefined)
+        ?.arguments ?? {};
+      const date = String(args.date ?? PINNED);
+      // The producer honours an anchor selection, so the fixture must too. Returning every article
+      // regardless made the narrowing journey pass for the wrong reason: the permalink changed
+      // while the citation still described a whole document.
+      const anchors = typeof args.anchors === "string" && args.anchors.length > 0
+        ? args.anchors.split(",").length
+        : count;
       await route.fulfill({
         status: 200, contentType: "application/json",
-        body: mcpBody(request.id, lawAnswer(count, withItemDigest)),
+        body: mcpBody(request.id, lawAnswer(Math.min(anchors, count), withItemDigest, date)),
       });
       return;
     }
@@ -140,7 +156,27 @@ test("the copied citation is rebuilt when the reader moves to another article",
       { waitUntil: "domcontentloaded" });
     await expect(page.locator("article.art").first()).toContainText("Fixture article 1");
     const narrowed = await copiedCitation(page);
-    expect(narrowed).not.toEqual(first);
+    // Not merely different. The narrowed view has one article, so it must gain the exact wording
+    // digest and lose the absence statement. Asserting only inequality would pass on any change.
+    expect(narrowed).toContain(`text SHA-256 ${TEXT_SHA}`);
+    expect(narrowed).not.toContain("no aggregate text digest recorded");
+  });
+
+test("a copied comparison citation carries a labelled digest for each side",
+  async ({ page }) => {
+    await routeMcp(page, 3, false);
+    await page.goto(`/?space=law&work=${WORK}&mode=compare&date=${PINNED}&to=${LATER}`,
+      { waitUntil: "domcontentloaded" });
+    const citation = await copiedCitation(page);
+
+    // UI-O4 applies to both sides. Each side states the absence separately, and each carries its
+    // own record digest labelled for what it covers. A citation reusing one side's digest for both
+    // would pass an inequality check and fail here.
+    expect(citation).toContain(`${PINNED} no aggregate text digest recorded`);
+    expect(citation).toContain(`${LATER} no aggregate text digest recorded`);
+    expect(citation).toContain(`${PINNED} record SHA-256 ${RECORD_SHA} (version metadata)`);
+    expect(citation).toContain(`${LATER} record SHA-256 ${LATER_RECORD_SHA} (version metadata)`);
+    expect(citation).toContain("Lex reading aid, not an official publication");
   });
 
 test("the citation controls survive a 320 pixel viewport without horizontal overflow",
