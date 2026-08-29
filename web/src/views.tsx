@@ -40,7 +40,7 @@ const ms = (d: string) => Date.parse(`${d}T00:00:00Z`);
  */
 export function Provision({ items, toc, validFrom, validTo, work, title, language, anchor, profile,
   source, textCompleteness, totalProvisions, totalProvisionGaps, truncated, textTruncated,
-  timelineSemantics, recordSha256,
+  timelineSemantics, recordSha256, bodySha256,
   onPick, onClear, onCite }: {
   items: ProvisionItem[]; toc: ProvisionItem[]; validFrom: string; validTo?: string;
   work: string; title: string; language?: string; anchor?: string; profile?: string; source?: string;
@@ -48,6 +48,8 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
   truncated?: boolean; textTruncated?: boolean; timelineSemantics?: string;
   /** Document-level digest, so a whole-document citation is checkable and not merely linked. */
   recordSha256?: string;
+  /** Publisher body digest. Covers the publisher body, not the ordered provisions on screen. */
+  bodySha256?: string;
   // `auto` marks an article the reader did not ask for. The rail uses it to decide whether to
   // stay on the law's versions or narrow to this article's texts.
   onPick: (anchor: string, auto?: boolean) => void; onClear: () => void; onCite?: (work: string) => void;
@@ -71,7 +73,7 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
   const pageUrl = typeof window === "undefined" ? "" : window.location.href;
   const evidence = () => ({
     title, work, validFrom, validTo, language, source, permalink: pageUrl, timelineSemantics,
-    extractionProfile: profile, recordSha256, provisions: items,
+    extractionProfile: profile, recordSha256, bodySha256, provisions: items,
     exportedAt: new Date().toISOString(),
   });
 

@@ -115,7 +115,9 @@ test("a citation with no digest available says so instead of omitting it", () =>
     ],
     exportedAt: "2026-08-29T00:00:00.000Z",
   });
-  assert.match(citation, /no content digest recorded/);
+  // Wording narrowed at UI-O4: the absence being stated is specifically an aggregate WORDING
+  // digest, since a metadata digest may still be present and is labelled separately.
+  assert.match(citation, /no aggregate text digest recorded/);
 });
 
 test("a single-provision citation still prefers the exact text digest", () => {
@@ -183,4 +185,96 @@ test("a copied comparison citation says what it is and is not", () => {
     exportedAt: "2026-08-29T00:00:00.000Z",
   });
   assert.match(citation, /not an official publication/);
+});
+
+// UI-O4. record_sha256 hashes serialized VersionMeta, not the ordered rendered provision text. It
+// therefore cannot stand in for a wording digest on a multi-article view. Each digest must stay
+// inside the claim it can actually support, and the absence of a wording digest must be stated
+// rather than papered over with a metadata one.
+test("a multi-provision citation says no aggregate text digest is recorded", () => {
+  const citation = citationText({
+    title: "Sample law",
+    work: "lu-legilux:sample",
+    validFrom: "2020-01-01",
+    permalink: "https://law.soufien.lu/lu-legilux/sample/2020-01-01",
+    recordSha256: "record-digest-aaa",
+    bodySha256: "body-digest-bbb",
+    provisions: [
+      { anchor: "art_1", num: "Article 1", text: "One.", text_sha256: "one" },
+      { anchor: "art_2", num: "Article 2", text: "Two.", text_sha256: "two" },
+    ],
+    exportedAt: "2026-08-29T00:00:00.000Z",
+  });
+  assert.match(citation, /no aggregate text digest recorded/);
+});
+
+test("a multi-provision citation labels the record digest as version metadata, not wording", () => {
+  const citation = citationText({
+    title: "Sample law",
+    work: "lu-legilux:sample",
+    validFrom: "2020-01-01",
+    permalink: "https://law.soufien.lu/lu-legilux/sample/2020-01-01",
+    recordSha256: "record-digest-aaa",
+    provisions: [
+      { anchor: "art_1", num: "Article 1", text: "One." },
+      { anchor: "art_2", num: "Article 2", text: "Two." },
+    ],
+    exportedAt: "2026-08-29T00:00:00.000Z",
+  });
+  assert.match(citation, /record SHA-256 record-digest-aaa \(version metadata\)/);
+  assert.doesNotMatch(citation, /^(?!.*no aggregate text digest recorded).*$/s);
+});
+
+test("a publisher body digest is carried and labelled separately", () => {
+  const citation = citationText({
+    title: "Sample law",
+    work: "lu-legilux:sample",
+    validFrom: "2020-01-01",
+    permalink: "https://law.soufien.lu/lu-legilux/sample/2020-01-01",
+    bodySha256: "body-digest-bbb",
+    provisions: [
+      { anchor: "art_1", num: "Article 1", text: "One." },
+      { anchor: "art_2", num: "Article 2", text: "Two." },
+    ],
+    exportedAt: "2026-08-29T00:00:00.000Z",
+  });
+  assert.match(citation, /body SHA-256 body-digest-bbb \(publisher body\)/);
+});
+
+test("a single-provision citation still carries the exact wording digest and no aggregate notice", () => {
+  const citation = citationText({
+    title: "Sample law",
+    work: "lu-legilux:sample",
+    validFrom: "2020-01-01",
+    permalink: "https://law.soufien.lu/lu-legilux/sample/2020-01-01",
+    recordSha256: "record-digest-aaa",
+    provisions: [{ anchor: "art_1", num: "Article 1", text: "One.", text_sha256: "exact-one" }],
+    exportedAt: "2026-08-29T00:00:00.000Z",
+  });
+  assert.match(citation, /text SHA-256 exact-one/);
+  assert.doesNotMatch(citation, /no aggregate text digest recorded/);
+});
+
+// UI-O4 applies to both sides of a comparison for the same reason: a version-metadata digest is not
+// a digest of the compared wording, and a multi-row comparison has no single wording digest at all.
+test("a multi-row comparison states the absence per side and labels each record digest", () => {
+  const citation = comparisonCitationText({
+    title: "Sample law",
+    work: "lu-legilux:sample",
+    from: "2020-01-01",
+    to: "2021-01-01",
+    permalink: "https://law.soufien.lu/compare",
+    fromRecordSha256: "from-record",
+    toRecordSha256: "to-record",
+    rows: [
+      { label: "Article 1", anchor: "art_1", kind: "changed", pieces: [], fromSha: "a", toSha: "b" },
+      { label: "Article 2", anchor: "art_2", kind: "changed", pieces: [], fromSha: "c", toSha: "d" },
+    ],
+    unchanged: [],
+    punctuationOnly: [],
+    exportedAt: "2026-08-29T00:00:00.000Z",
+  });
+  assert.match(citation, /2020-01-01 no aggregate text digest recorded/);
+  assert.match(citation, /2021-01-01 no aggregate text digest recorded/);
+  assert.match(citation, /2020-01-01 record SHA-256 from-record \(version metadata\)/);
 });
