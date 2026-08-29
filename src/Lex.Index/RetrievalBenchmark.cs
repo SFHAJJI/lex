@@ -153,6 +153,9 @@ public sealed record RetrievalBenchmarkRun(
 
 public static class RetrievalBenchmarkGate
 {
+    internal const int MaxCaseResultsBytes = 64 * 1024 * 1024;
+    internal const int MaxCaseResultLineBytes = 64 * 1024;
+
     private static readonly HashSet<string> RatioStratumMetrics = new(StringComparer.Ordinal)
     {
         "anchor_mrr", "anchor_recall_at10", "anchor_ndcg_at10",
@@ -164,6 +167,13 @@ public static class RetrievalBenchmarkGate
         "anchor_exact_first_accuracy", "temporal_leakage_failures", "no_hit_accuracy",
         "resolution_accuracy", "role_intent_accuracy",
     };
+
+    private static readonly string[] ReportedStratumMetrics =
+    [
+        "anchor_mrr", "anchor_recall_at10", "anchor_ndcg_at10",
+        "legacy_work_mrr", "legacy_work_recall_at10", "legacy_work_ndcg_at10",
+        "latency_p95_ms",
+    ];
 
     private static readonly HashSet<string> CaseResultFields = new(StringComparer.Ordinal)
     {
@@ -252,6 +262,7 @@ public static class RetrievalBenchmarkGate
                 report.HoldoutSampleCount)
             || !StrataAreValid(report.HoldoutStrata, report.HoldoutSampleCount,
                 expectedCollection)
+            || !BlockingStrataCoverAggregate(report.HoldoutStrata!, report.HybridHoldout)
             || report.CaseResultsSchema != "lex-retrieval-case-results/1"
             || !IsSafeCaseResultsFileName(report.CaseResultsFile)
             || report.CaseResultsCount is <= 0 or > 40_000
@@ -275,7 +286,11 @@ public static class RetrievalBenchmarkGate
     {
         try
         {
-            return CaseResultsBytesMatch(report, File.ReadAllBytes(caseResultsPath));
+            var declaredLength = new FileInfo(caseResultsPath).Length;
+            if (!CaseResultsSizeIsValid(report, declaredLength)) return false;
+            using var stream = new FileStream(caseResultsPath, FileMode.Open, FileAccess.Read,
+                FileShare.Read, 64 * 1024, FileOptions.SequentialScan);
+            return stream.Length == declaredLength && CaseResultsStreamMatches(report, stream);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
                                           or ArgumentException or NotSupportedException
@@ -285,57 +300,130 @@ public static class RetrievalBenchmarkGate
         }
     }
 
+    public static bool StrataMatchCases(
+        RetrievalBenchmarkReport report,
+        IReadOnlyCollection<RetrievalBenchmarkCase> cases,
+        string collection)
+    {
+        var holdout = cases.Where(item => item.Collection == collection
+                                          && item.Split == "holdout").ToArray();
+        if (holdout.Length == 0 || holdout.Length != report.HoldoutSampleCount
+            || report.HoldoutStrata is null)
+            return false;
+
+        var expected = new Dictionary<(string Category, string Metric, string Disposition), int>();
+        foreach (var category in holdout.GroupBy(item => item.Category, StringComparer.Ordinal))
+        {
+            var rows = category.ToArray();
+            var anchorCount = rows.Count(item => item.RelevantAnchors is { Count: > 0 });
+            var legacyWorkCount = rows.Count(item => item.RelevantWorks.Count > 0);
+            foreach (var metric in ReportedStratumMetrics)
+            {
+                var denominator = metric switch
+                {
+                    "anchor_mrr" or "anchor_recall_at10" or "anchor_ndcg_at10" => anchorCount,
+                    "legacy_work_mrr" or "legacy_work_recall_at10"
+                        or "legacy_work_ndcg_at10" => legacyWorkCount,
+                    _ => rows.Length,
+                };
+                expected[(category.Key, metric, "reported")] = denominator;
+            }
+
+            void AddBlocking(string metric, int denominator) =>
+                expected[(category.Key, metric, "blocking")] = denominator;
+
+            if (category.Key == "exact")
+                AddBlocking("anchor_exact_first_accuracy", anchorCount);
+            if (rows.Any(item => item.AsOf is not null))
+                AddBlocking("temporal_leakage_failures", rows.Count(item => item.AsOf is not null));
+            if (rows.Any(item => item.ExpectNoHits))
+                AddBlocking("no_hit_accuracy", rows.Count(item => item.ExpectNoHits));
+            if (rows.Any(item => item.ExpectedResolution is not null))
+                AddBlocking("resolution_accuracy",
+                    rows.Count(item => item.ExpectedResolution is not null));
+            if (rows.Any(item => item.ExpectedRole is not null))
+                AddBlocking("role_intent_accuracy", rows.Count(item => item.ExpectedRole is not null));
+        }
+
+        var actual = new Dictionary<(string Category, string Metric, string Disposition), int>();
+        foreach (var row in report.HoldoutStrata)
+        {
+            if (row is null || !actual.TryAdd(
+                    (row.Category, row.Metric, row.Disposition), row.Observation.Denominator))
+                return false;
+        }
+        return actual.Count == expected.Count
+               && expected.All(item => actual.TryGetValue(item.Key, out var denominator)
+                                       && denominator == item.Value);
+    }
+
     public static bool CaseResultsBytesMatch(
         RetrievalBenchmarkReport report, byte[] bytes)
     {
-        if (report.CaseResultsCount <= 0 || !IsSha256(report.CaseResultsSha256)
-            || bytes.Length == 0 || bytes.Length > (long)report.CaseResultsCount * 64 * 1024
-            || bytes[0] != (byte)'{' || bytes[^1] != (byte)'\n'
-            || bytes.Contains((byte)'\r')
-            || bytes.Count(value => value == (byte)'\n') != report.CaseResultsCount
-            || !string.Equals(Convert.ToHexStringLower(SHA256.HashData(bytes)),
-                report.CaseResultsSha256, StringComparison.OrdinalIgnoreCase))
-            return false;
+        if (!CaseResultsSizeIsValid(report, bytes.LongLength)) return false;
+        using var stream = new MemoryStream(bytes, writable: false);
+        return CaseResultsStreamMatches(report, stream);
+    }
+
+    internal static bool CaseResultsSizeIsValid(RetrievalBenchmarkReport report, long length) =>
+        report.CaseResultsCount is > 0 and <= 40_000
+        && IsSha256(report.CaseResultsSha256)
+        && length > 0
+        && length <= MaxCaseResultsBytes
+        && length <= (long)report.CaseResultsCount * MaxCaseResultLineBytes;
+
+    private static bool CaseResultsStreamMatches(
+        RetrievalBenchmarkReport report, Stream stream)
+    {
+        if (!CaseResultsSizeIsValid(report, stream.Length)) return false;
 
         try
         {
-            var lines = new UTF8Encoding(false, true).GetString(bytes).Split('\n');
             var stagesByCase = new Dictionary<string, (string Split, HashSet<string> Stages)>(
                 StringComparer.Ordinal);
             var collections = report.HoldoutStrata?.Select(row => row.Collection)
                 .Distinct(StringComparer.Ordinal).ToArray() ?? [];
             if (collections.Length != 1) return false;
-            foreach (var line in lines.Take(lines.Length - 1))
+
+            var input = new byte[64 * 1024];
+            var line = new byte[MaxCaseResultLineBytes - 1];
+            var lineLength = 0;
+            var rowCount = 0;
+            long totalBytes = 0;
+            using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            int read;
+            while ((read = stream.Read(input, 0, input.Length)) != 0)
             {
-                using var document = JsonDocument.Parse(line);
-                if (document.RootElement.ValueKind != JsonValueKind.Object)
+                totalBytes += read;
+                if (totalBytes > MaxCaseResultsBytes
+                    || totalBytes > (long)report.CaseResultsCount * MaxCaseResultLineBytes)
                     return false;
-                var fields = document.RootElement.EnumerateObject()
-                    .Select(property => property.Name).ToArray();
-                if (fields.Length != CaseResultFields.Count
-                    || !fields.ToHashSet(StringComparer.Ordinal).SetEquals(CaseResultFields))
-                    return false;
-                foreach (var metricName in CaseResultMetricFields)
+                hash.AppendData(input, 0, read);
+                for (var index = 0; index < read; index++)
                 {
-                    if (!document.RootElement.TryGetProperty(metricName, out var metric)
-                        || metric.ValueKind != JsonValueKind.Object)
+                    var value = input[index];
+                    if (value == (byte)'\r') return false;
+                    if (value != (byte)'\n')
+                    {
+                        if (lineLength >= line.Length) return false;
+                        line[lineLength++] = value;
+                        continue;
+                    }
+
+                    if (lineLength == 0 || line[0] != (byte)'{'
+                        || !CaseResultLineMatches(line.AsMemory(0, lineLength), collections[0],
+                            stagesByCase))
                         return false;
-                    var metricFields = metric.EnumerateObject()
-                        .Select(property => property.Name).ToArray();
-                    if (metricFields.Length != MetricObservationFields.Count
-                        || !metricFields.ToHashSet(StringComparer.Ordinal)
-                            .SetEquals(MetricObservationFields))
-                        return false;
+                    rowCount++;
+                    if (rowCount > report.CaseResultsCount) return false;
+                    lineLength = 0;
                 }
-                var row = document.RootElement.Deserialize<RetrievalBenchmarkCaseResult>(CaseResultJson);
-                if (!CaseResultIsValid(row, collections[0])) return false;
-                if (!stagesByCase.TryGetValue(row!.CaseId, out var state))
-                    state = (row.Split, new HashSet<string>(StringComparer.Ordinal));
-                if (state.Split != row.Split || !state.Stages.Add(row.Stage)) return false;
-                stagesByCase[row.CaseId] = state;
             }
 
-            if (stagesByCase.Count != report.SampleCount
+            if (lineLength != 0 || rowCount != report.CaseResultsCount
+                || !string.Equals(Convert.ToHexStringLower(hash.GetHashAndReset()),
+                    report.CaseResultsSha256, StringComparison.OrdinalIgnoreCase)
+                || stagesByCase.Count != report.SampleCount
                 || stagesByCase.Count(item => item.Value.Split == "tuning")
                    != report.TuningSampleCount
                 || stagesByCase.Count(item => item.Value.Split == "holdout")
@@ -354,6 +442,38 @@ public static class RetrievalBenchmarkGate
         {
             return false;
         }
+    }
+
+    private static bool CaseResultLineMatches(
+        ReadOnlyMemory<byte> line, string expectedCollection,
+        IDictionary<string, (string Split, HashSet<string> Stages)> stagesByCase)
+    {
+        using var document = JsonDocument.Parse(line);
+        if (document.RootElement.ValueKind != JsonValueKind.Object) return false;
+        var fields = document.RootElement.EnumerateObject()
+            .Select(property => property.Name).ToArray();
+        if (fields.Length != CaseResultFields.Count
+            || !fields.ToHashSet(StringComparer.Ordinal).SetEquals(CaseResultFields))
+            return false;
+        foreach (var metricName in CaseResultMetricFields)
+        {
+            if (!document.RootElement.TryGetProperty(metricName, out var metric)
+                || metric.ValueKind != JsonValueKind.Object)
+                return false;
+            var metricFields = metric.EnumerateObject()
+                .Select(property => property.Name).ToArray();
+            if (metricFields.Length != MetricObservationFields.Count
+                || !metricFields.ToHashSet(StringComparer.Ordinal)
+                    .SetEquals(MetricObservationFields))
+                return false;
+        }
+        var row = document.RootElement.Deserialize<RetrievalBenchmarkCaseResult>(CaseResultJson);
+        if (!CaseResultIsValid(row, expectedCollection)) return false;
+        if (!stagesByCase.TryGetValue(row!.CaseId, out var state))
+            state = (row.Split, new HashSet<string>(StringComparer.Ordinal));
+        if (state.Split != row.Split || !state.Stages.Add(row.Stage)) return false;
+        stagesByCase[row.CaseId] = state;
+        return true;
     }
 
     private static bool CaseResultIsValid(
@@ -523,6 +643,28 @@ public static class RetrievalBenchmarkGate
             var passed = row.Observation.Denominator >= row.InvariantFloor
                          && row.Observation.Value == expected;
             if (row.GatePassed != passed) return false;
+        }
+        return true;
+    }
+
+    private static bool BlockingStrataCoverAggregate(
+        IReadOnlyList<RetrievalBenchmarkStratum> strata, RetrievalMetrics holdout)
+    {
+        var aggregate = new Dictionary<string, RetrievalMetricObservation>(StringComparer.Ordinal)
+        {
+            ["anchor_exact_first_accuracy"] = holdout.ExactFirstAccuracy,
+            ["temporal_leakage_failures"] = holdout.TemporalLeakageFailures,
+            ["no_hit_accuracy"] = holdout.NoHitAccuracy,
+            ["resolution_accuracy"] = holdout.ResolutionAccuracy,
+            ["role_intent_accuracy"] = holdout.RoleIntentAccuracy,
+        };
+        foreach (var (metric, observation) in aggregate)
+        {
+            var rows = strata.Where(row => row.Disposition == "blocking"
+                                           && row.Metric == metric).ToArray();
+            if (rows.Sum(row => (long)row.Observation.Denominator) != observation.Denominator
+                || observation.Denominator > 0 && rows.Length == 0)
+                return false;
         }
         return true;
     }

@@ -301,6 +301,9 @@ internal static class HybridActivationGate
         if (!identityMatches)
             return new(false, "benchmark_identity_mismatch");
 
+        if (!RetrievalBenchmarkGate.StrataMatchCases(report, expected, collection))
+            return new(false, "benchmark_invalid");
+
         if (!report.ActivationGatePassed)
             return new(false, "benchmark_gate_failed");
 

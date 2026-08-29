@@ -16,6 +16,7 @@
 # `latest` independently for each file would permit a release created mid-build to mix two
 # otherwise valid generations.
 set -eu
+MAX_CASE_RESULTS_BYTES=67108864
 
 benchmark_member_path() {
   bm_root=$1
@@ -47,6 +48,16 @@ benchmark_member_path() {
   printf '%s\n' "$bm_member"
 }
 
+benchmark_member_size() {
+  bm_size_root=$1
+  bm_size_manifest=$2
+  bm_size_member=$3
+  jq -er --arg member "$bm_size_member" '
+    .files[] | select(.path == $member) | .size
+    | select(type == "number" and . > 0 and floor == .)' \
+    "$bm_size_root/$bm_size_manifest"
+}
+
 verify_benchmark_evidence() {
   verify_root=$1
   verify_manifest=$2
@@ -55,10 +66,10 @@ verify_benchmark_evidence() {
     || return 1
   [ -f "$verify_root/$verify_member" ] \
     || { echo "ERROR: signed case-results artifact is missing: $verify_member" >&2; return 1; }
-  declared_size=$(jq -er --arg member "$verify_member" '
-    .files[] | select(.path == $member) | .size
-    | select(type == "number" and . > 0 and floor == .)' "$verify_root/$verify_manifest") \
+  declared_size=$(benchmark_member_size "$verify_root" "$verify_manifest" "$verify_member") \
     || { echo "ERROR: case-results manifest size is invalid" >&2; return 1; }
+  [ "$declared_size" -le "$MAX_CASE_RESULTS_BYTES" ] \
+    || { echo "ERROR: case-results manifest size exceeds the fixed ceiling" >&2; return 1; }
   declared_sha=$(jq -er --arg member "$verify_member" '
     .files[] | select(.path == $member) | .sha256
     | select(type == "string" and test("^[0-9a-f]{64}$"))' "$verify_root/$verify_manifest") \
@@ -110,6 +121,15 @@ fetch() {
     --retry 8 --retry-delay 5 --retry-all-errors \
     --continue-at - \
     --speed-limit 1024 --speed-time 60 \
+    -o "$1" "$2"
+}
+
+fetch_bounded() {
+  curl -fsSL \
+    --retry 8 --retry-delay 5 --retry-all-errors \
+    --continue-at - \
+    --speed-limit 1024 --speed-time 60 \
+    --max-filesize "$3" \
     -o "$1" "$2"
 }
 
@@ -220,7 +240,12 @@ echo "$SETS" | while IFS=: read -r repo collection asset release_tag; do
         exit 1
       fi
       case_results=$(benchmark_member_path "$OUT" "$benchmark_manifest" "$benchmark")
-      fetch "$OUT/$case_results" "$release_base/$case_results"
+      case_results_size=$(benchmark_member_size "$OUT" "$benchmark_manifest" "$case_results") \
+        || { echo "ERROR: case-results manifest size is invalid" >&2; exit 1; }
+      [ "$case_results_size" -le "$MAX_CASE_RESULTS_BYTES" ] \
+        || { echo "ERROR: case-results manifest size exceeds the fixed ceiling" >&2; exit 1; }
+      fetch_bounded "$OUT/$case_results" "$release_base/$case_results" \
+        "$MAX_CASE_RESULTS_BYTES"
       verify_benchmark_evidence "$OUT" "$benchmark_manifest" "$benchmark" >/dev/null
       echo "  fetched signed public retrieval benchmark: $benchmark and $case_results"
     else

@@ -120,6 +120,13 @@ jobs:
                 ""|*[!A-Za-z0-9._-]*|/*|*\\*|*/*|..|../*)
                   echo "::error::$repo benchmark manifest has an unsafe case-results path"; exit 1 ;;
               esac
+              benchmark_case_results_size=$(jq -er --arg member "$benchmark_case_results" '
+                .files[] | select(.path == $member) | .size
+                | select(type == "number" and . > 0 and floor == .)'
+                "$release_dir/$benchmark_manifest") \
+                || { echo "::error::$repo benchmark case-results member has an invalid size"; exit 1; }
+              [ "$benchmark_case_results_size" -le 67108864 ] \
+                || { echo "::error::$repo benchmark case-results member exceeds the fixed byte ceiling"; exit 1; }
             fi
           done
 
@@ -419,6 +426,13 @@ jobs:
                 ""|*[!A-Za-z0-9._-]*|/*|*\\*|*/*|..|../*)
                   echo "::error::$repo benchmark manifest has an unsafe case-results path"; exit 1 ;;
               esac
+              benchmark_case_results_size=$(jq -er --arg member "$benchmark_case_results" '
+                .files[] | select(.path == $member) | .size
+                | select(type == "number" and . > 0 and floor == .)'
+                "$release_dir/$benchmark_manifest") \
+                || { echo "::error::$repo benchmark case-results member has an invalid size"; exit 1; }
+              [ "$benchmark_case_results_size" -le 67108864 ] \
+                || { echo "::error::$repo benchmark case-results member exceeds the fixed byte ceiling"; exit 1; }
             fi
           done
           index_manifest_count=$(find "$release_dir" -name 'index-*.manifest.json' | wc -l)

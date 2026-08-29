@@ -138,7 +138,7 @@ public sealed class ArtifactManifestTests : IDisposable
     }
 
     [Fact]
-    public void Runtime_mounts_vectors_only_when_the_signed_benchmark_passes()
+    public void Runtime_rejects_a_signed_activation_claim_without_supported_strata()
     {
         var release = BuildHybridRelease(activationPassed: true);
         var options = new LexOptions
@@ -154,14 +154,15 @@ public sealed class ArtifactManifestTests : IDisposable
             [release.Root], _ => new FakeEncoder());
 
         var reader = Assert.Single(registry.All).Value;
-        Assert.True(reader.HybridReady);
-        Assert.Equal(new HybridActivationStatus(true, "activated"),
+        Assert.False(reader.HybridReady);
+        Assert.Equal("keyword", reader.SearchHybrid("known", FilterSet.All, 1).RetrievalMode);
+        Assert.Equal(new HybridActivationStatus(false, "benchmark_invalid"),
             registry.HybridActivations[Collection]);
         var readiness = registry.Readiness(options);
         Assert.True(readiness.Ready);
         var publisher = Assert.Single(readiness.Publishers);
-        Assert.True(publisher.HybridReady);
-        Assert.Equal("activated", publisher.HybridStatus);
+        Assert.False(publisher.HybridReady);
+        Assert.Equal("benchmark_invalid", publisher.HybridStatus);
     }
 
     [Theory]
@@ -196,10 +197,11 @@ public sealed class ArtifactManifestTests : IDisposable
     }
 
     [Fact]
-    public void Hybrid_activation_is_independent_per_publisher()
+    public void Hybrid_quarantine_reason_is_independent_per_publisher()
     {
-        var lu = BuildHybridRelease(activationPassed: true);
-        var eu = BuildHybridRelease(activationPassed: false, collection: "eu-eurlex");
+        var lu = BuildHybridRelease(activationPassed: false);
+        var eu = BuildHybridRelease(
+            activationPassed: false, includeBenchmark: false, collection: "eu-eurlex");
         var options = new LexOptions
         {
             IndexDir = _dir,
@@ -212,10 +214,10 @@ public sealed class ArtifactManifestTests : IDisposable
             Options.Create(options), NullLogger<IndexRegistry>.Instance,
             [lu.Root, eu.Root], _ => new FakeEncoder());
 
-        Assert.True(registry.All[Collection].HybridReady);
+        Assert.False(registry.All[Collection].HybridReady);
         Assert.False(registry.All["eu-eurlex"].HybridReady);
-        Assert.Equal("activated", registry.HybridActivations[Collection].Reason);
-        Assert.Equal("benchmark_gate_failed", registry.HybridActivations["eu-eurlex"].Reason);
+        Assert.Equal("benchmark_gate_failed", registry.HybridActivations[Collection].Reason);
+        Assert.Equal("benchmark_missing", registry.HybridActivations["eu-eurlex"].Reason);
         Assert.True(registry.Readiness(options).Ready);
     }
 
@@ -319,27 +321,37 @@ public sealed class ArtifactManifestTests : IDisposable
             .Where(item => item.Collection == collection).ToArray();
         var tuningCount = cases.Count(item => item.Split == "tuning");
         var holdoutCount = cases.Count(item => item.Split == "holdout");
-        RetrievalMetrics Metrics(int denominator)
+        RetrievalMetrics Metrics(IReadOnlyCollection<RetrievalBenchmarkCase> selected)
         {
-            var measured = RetrievalMetricObservation.Measured(1, denominator);
+            RetrievalMetricObservation Observation(double value, int denominator) => denominator == 0
+                ? RetrievalMetricObservation.Insufficient()
+                : RetrievalMetricObservation.Measured(value, denominator);
+            var anchorCount = selected.Count(item => item.RelevantAnchors is { Count: > 0 });
+            var workCount = selected.Count(item => item.RelevantWorks.Count > 0);
+            var exactCount = selected.Count(item => item.Category == "exact"
+                                                   && item.RelevantAnchors is { Count: > 0 });
+            var temporalCount = selected.Count(item => item.AsOf is not null);
+            var noHitCount = selected.Count(item => item.ExpectNoHits);
+            var resolutionCount = selected.Count(item => item.ExpectedResolution is not null);
+            var roleCount = selected.Count(item => item.ExpectedRole is not null);
             return new RetrievalMetrics(
-                measured, measured, measured, measured, measured, measured,
-                measured, RetrievalMetricObservation.Measured(0, denominator),
-                measured, measured, measured, measured, measured, measured);
+                Observation(1, anchorCount), Observation(1, anchorCount),
+                Observation(1, anchorCount), Observation(1, workCount),
+                Observation(1, workCount), Observation(1, workCount),
+                Observation(1, exactCount), Observation(0, temporalCount),
+                Observation(1, selected.Count), Observation(1, selected.Count),
+                Observation(1, selected.Count), Observation(1, noHitCount),
+                Observation(1, resolutionCount), Observation(1, roleCount));
         }
-        var tuningMetrics = Metrics(tuningCount);
-        var holdoutMetrics = Metrics(holdoutCount);
-        var controlNdcg = RetrievalMetricObservation.Measured(0, 8);
+        var tuningCases = cases.Where(item => item.Split == "tuning").ToArray();
+        var holdoutCases = cases.Where(item => item.Split == "holdout").ToArray();
+        var tuningMetrics = Metrics(tuningCases);
+        var holdoutMetrics = Metrics(holdoutCases);
+        var controlNdcg = RetrievalMetricObservation.Insufficient();
         RetrievalNegativeControlResult Control(string schema) => new(
-            schema, "detected", "product_gate", 8,
-            ["anchor_ndcg_at10_not_below_unshuffled"], true, true, true, 0, controlNdcg);
-        IReadOnlyList<RetrievalBenchmarkStratum> strata =
-        [
-            new("anchor_exact_first_accuracy", collection, "exact", "holdout", "blocking",
-                8, 20, "invariant_only_n8", RetrievalMetricObservation.Measured(1, 8), true),
-            new("anchor_ndcg_at10", collection, "conceptual", "holdout", "reported",
-                8, 20, "invariant_only_n8", RetrievalMetricObservation.Measured(1, 8), null),
-        ];
+            schema, "insufficient_denominator", "product_gate", 0,
+            [], true, true, true, 0, controlNdcg);
+        var strata = StrataForCases(holdoutCases, collection);
         var insufficient = RetrievalMetricObservation.Insufficient();
         RetrievalBenchmarkCaseResult Row(
             RetrievalBenchmarkCase benchmarkCase, string stage) => new(
@@ -389,6 +401,63 @@ public sealed class ArtifactManifestTests : IDisposable
             });
         WriteManifest($"retrieval-benchmark-{collection}", benchmarkManifest, privateKey);
         return (root, privateKey);
+    }
+
+    private static IReadOnlyList<RetrievalBenchmarkStratum> StrataForCases(
+        IReadOnlyCollection<RetrievalBenchmarkCase> cases, string collection)
+    {
+        var strata = new List<RetrievalBenchmarkStratum>();
+        foreach (var category in cases.GroupBy(item => item.Category, StringComparer.Ordinal))
+        {
+            var rows = category.ToArray();
+            var anchorCount = rows.Count(item => item.RelevantAnchors is { Count: > 0 });
+            var workCount = rows.Count(item => item.RelevantWorks.Count > 0);
+            void AddReported(string metric, int denominator, int statisticalFloor = 20)
+            {
+                var observation = denominator == 0
+                    ? RetrievalMetricObservation.Insufficient()
+                    : RetrievalMetricObservation.Measured(1, denominator);
+                strata.Add(new(metric, collection, category.Key, "holdout", "reported", 8,
+                    statisticalFloor, Support(denominator, statisticalFloor), observation, null));
+            }
+            void AddBlocking(string metric, int denominator, double expected)
+            {
+                var observation = denominator == 0
+                    ? RetrievalMetricObservation.Insufficient()
+                    : RetrievalMetricObservation.Measured(expected, denominator);
+                strata.Add(new(metric, collection, category.Key, "holdout", "blocking", 8, 20,
+                    Support(denominator, 20), observation,
+                    denominator >= 8 && observation.Value == expected));
+            }
+
+            AddReported("anchor_mrr", anchorCount);
+            AddReported("anchor_recall_at10", anchorCount);
+            AddReported("anchor_ndcg_at10", anchorCount);
+            AddReported("legacy_work_mrr", workCount);
+            AddReported("legacy_work_recall_at10", workCount);
+            AddReported("legacy_work_ndcg_at10", workCount);
+            AddReported("latency_p95_ms", rows.Length, 200);
+            if (category.Key == "exact")
+                AddBlocking("anchor_exact_first_accuracy", anchorCount, 1);
+            if (rows.Any(item => item.AsOf is not null))
+                AddBlocking("temporal_leakage_failures",
+                    rows.Count(item => item.AsOf is not null), 0);
+            if (rows.Any(item => item.ExpectNoHits))
+                AddBlocking("no_hit_accuracy", rows.Count(item => item.ExpectNoHits), 1);
+            if (rows.Any(item => item.ExpectedResolution is not null))
+                AddBlocking("resolution_accuracy",
+                    rows.Count(item => item.ExpectedResolution is not null), 1);
+            if (rows.Any(item => item.ExpectedRole is not null))
+                AddBlocking("role_intent_accuracy", rows.Count(item => item.ExpectedRole is not null), 1);
+        }
+        return strata;
+
+        static string Support(int denominator, int statisticalFloor) => denominator switch
+        {
+            < 8 => "insufficient_denominator",
+            _ when denominator < statisticalFloor => "invariant_only_n8",
+            _ => "statistically_supported",
+        };
     }
 
     private byte[] WriteManifest(string stem, ArtifactManifest manifest, string privateKey)

@@ -486,6 +486,73 @@ public sealed class RetrievalBenchmarkTests
     }
 
     [Fact]
+    public void Every_blocking_metric_must_be_present_before_a_report_is_structurally_valid()
+    {
+        var report = Report();
+        var blocking = report.HoldoutStrata!
+            .Where(row => row.Disposition == "blocking").ToArray();
+
+        Assert.Equal(5, blocking.Length);
+        Assert.All(blocking, omitted =>
+        {
+            var withoutOne = report with
+            {
+                HoldoutStrata = report.HoldoutStrata!
+                    .Where(row => !ReferenceEquals(row, omitted)).ToArray(),
+            };
+            Assert.False(RetrievalBenchmarkGate.IsStructurallyValid(withoutOne, "eu-eurlex"));
+        });
+        Assert.False(RetrievalBenchmarkGate.IsStructurallyValid(report with
+        {
+            HoldoutStrata = report.HoldoutStrata!
+                .Where(row => row.Disposition == "reported").ToArray(),
+        }, "eu-eurlex"));
+    }
+
+    [Fact]
+    public void Signed_strata_are_an_exact_projection_of_the_bound_holdout_cases()
+    {
+        const string collection = "lu-legilux";
+        var cases = Cases().Where(item => item.Collection == collection).ToArray();
+        var strata = StrataForCases(cases, collection);
+        var report = Report() with
+        {
+            HoldoutSampleCount = cases.Count(item => item.Split == "holdout"),
+            HoldoutStrata = strata,
+        };
+
+        Assert.True(RetrievalBenchmarkGate.StrataMatchCases(report, cases, collection));
+        for (var index = 0; index < strata.Count; index++)
+        {
+            var missing = report with
+            {
+                HoldoutStrata = strata.Where((_, position) => position != index).ToArray(),
+            };
+            Assert.False(RetrievalBenchmarkGate.StrataMatchCases(missing, cases, collection));
+        }
+        Assert.False(RetrievalBenchmarkGate.StrataMatchCases(report with
+        {
+            HoldoutStrata = strata.Concat([
+                new RetrievalBenchmarkStratum("anchor_mrr", collection, "invented", "holdout",
+                    "reported", 8, 20, "insufficient_denominator",
+                    RetrievalMetricObservation.Insufficient(), null),
+            ]).ToArray(),
+        }, cases, collection));
+        Assert.False(RetrievalBenchmarkGate.StrataMatchCases(report with
+        {
+            HoldoutStrata = strata.Select((row, index) => index == 0
+                ? row with
+                {
+                    Observation = row.Observation.Denominator == 0
+                        ? RetrievalMetricObservation.Measured(1, 1)
+                        : RetrievalMetricObservation.Measured(
+                            row.Observation.Value ?? 1, row.Observation.Denominator + 1),
+                }
+                : row).ToArray(),
+        }, cases, collection));
+    }
+
+    [Fact]
     public void Comparison_ndcg_scores_every_relevant_work_not_only_the_first()
     {
         RetrievalHit Hit(string work) => new(Doc("eu-eurlex", work),
@@ -752,6 +819,23 @@ public sealed class RetrievalBenchmarkTests
                 ShuffledTop10Control = report.ShuffledTop10Control! with { Outcome = "escaped" },
             }, collection, report.CodeCommit, stamp, report.ModelId,
             report.ModelRevision, indexManifest, benchmarkManifest);
+        var oneCaseMetrics = report.HybridHoldout with
+        {
+            ExactFirstAccuracy = RetrievalMetricObservation.Measured(1, 1),
+            TemporalLeakageFailures = RetrievalMetricObservation.Measured(0, 1),
+            NoHitAccuracy = RetrievalMetricObservation.Measured(1, 1),
+            ResolutionAccuracy = RetrievalMetricObservation.Measured(1, 1),
+            RoleIntentAccuracy = RetrievalMetricObservation.Measured(1, 1),
+        };
+        var omittedBlockingEvidence = report with
+        {
+            HybridHoldout = oneCaseMetrics,
+            HoldoutStrata = report.HoldoutStrata!
+                .Where(row => row.Disposition == "reported").ToArray(),
+        };
+        var omittedBlockingActivation = Lex.Web.HybridActivationGate.Evaluate(
+            omittedBlockingEvidence, collection, report.CodeCommit, stamp, report.ModelId,
+            report.ModelRevision, indexManifest, benchmarkManifest);
         var oversizedHoldout = 10_001 - report.TuningSampleCount;
         var oversizedReport = report with
         {
@@ -780,10 +864,10 @@ public sealed class RetrievalBenchmarkTests
         };
 
         Assert.True(RetrievalBenchmarkGate.IsStructurallyValid(report, collection));
-        Assert.True(accepted.Activated, accepted.Reason);
-        Assert.Equal("activated", accepted.Reason);
+        Assert.False(accepted.Activated);
+        Assert.Equal("benchmark_invalid", accepted.Reason);
         Assert.False(failedGate.Activated);
-        Assert.Equal("benchmark_gate_failed", failedGate.Reason);
+        Assert.Equal("benchmark_invalid", failedGate.Reason);
         Assert.False(wrongRuntime.Activated);
         Assert.Equal("benchmark_identity_mismatch", wrongRuntime.Reason);
         Assert.False(malformedTuple.Activated);
@@ -794,6 +878,10 @@ public sealed class RetrievalBenchmarkTests
         Assert.Equal("benchmark_invalid", missingControl.Reason);
         Assert.False(escapedControl.Activated);
         Assert.Equal("benchmark_invalid", escapedControl.Reason);
+        Assert.False(RetrievalBenchmarkGate.IsStructurallyValid(
+            omittedBlockingEvidence, collection));
+        Assert.False(omittedBlockingActivation.Activated);
+        Assert.Equal("benchmark_invalid", omittedBlockingActivation.Reason);
         Assert.False(RetrievalBenchmarkGate.IsStructurallyValid(oversizedReport, collection));
         Assert.False(RetrievalBenchmarkGate.IsStructurallyValid(report with
         {
@@ -1090,11 +1178,66 @@ public sealed class RetrievalBenchmarkTests
             };
             Assert.False(RetrievalBenchmarkGate.CaseResultsBytesMatch(
                 nestedQueryReport, nestedQueryBytes));
+
+            var unterminatedBytes = rows[..^1];
+            var unterminatedReport = report with
+            {
+                CaseResultsSha256 = Convert.ToHexStringLower(SHA256.HashData(unterminatedBytes)),
+            };
+            Assert.False(RetrievalBenchmarkGate.CaseResultsBytesMatch(
+                unterminatedReport, unterminatedBytes));
+
+            var oversizedLineRows = resultRows.ToArray();
+            var oversizedCaseId = new string('x', 70_000);
+            oversizedLineRows[0] = oversizedLineRows[0] with { CaseId = oversizedCaseId };
+            oversizedLineRows[1] = oversizedLineRows[1] with { CaseId = oversizedCaseId };
+            var oversizedLineBytes = System.Text.Encoding.UTF8.GetBytes(string.Concat(
+                oversizedLineRows.Select(row =>
+                    System.Text.Json.JsonSerializer.Serialize(row, rowJson) + "\n")));
+            var oversizedLineReport = report with
+            {
+                CaseResultsSha256 = Convert.ToHexStringLower(SHA256.HashData(oversizedLineBytes)),
+            };
+            Assert.True(oversizedLineBytes.Length < report.CaseResultsCount * 64 * 1024);
+            Assert.False(RetrievalBenchmarkGate.CaseResultsBytesMatch(
+                oversizedLineReport, oversizedLineBytes));
+
+            var preflightPath = Path.Combine(directory, "oversized-before-read.jsonl");
+            using (var oversized = new FileStream(preflightPath, FileMode.CreateNew,
+                       FileAccess.Write, FileShare.None))
+                oversized.SetLength(8 * 1024 * 1024);
+            var preflightReport = report with
+            {
+                CaseResultsCount = 1,
+                CaseResultsSha256 = new string('0', 64),
+            };
+            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            Assert.False(RetrievalBenchmarkGate.CaseResultsMatch(
+                preflightReport, preflightPath));
+            var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+            Assert.True(allocated < 1024 * 1024,
+                $"oversized input allocated {allocated} bytes before rejection");
         }
         finally
         {
             Directory.Delete(directory, recursive: true);
         }
+    }
+
+    [Fact]
+    public void Case_artifact_total_and_physical_line_size_boundaries_are_closed()
+    {
+        var manyRows = Report() with { CaseResultsCount = 40_000 };
+        Assert.True(RetrievalBenchmarkGate.CaseResultsSizeIsValid(
+            manyRows, RetrievalBenchmarkGate.MaxCaseResultsBytes));
+        Assert.False(RetrievalBenchmarkGate.CaseResultsSizeIsValid(
+            manyRows, (long)RetrievalBenchmarkGate.MaxCaseResultsBytes + 1));
+
+        var oneRow = Report() with { CaseResultsCount = 1 };
+        Assert.True(RetrievalBenchmarkGate.CaseResultsSizeIsValid(
+            oneRow, RetrievalBenchmarkGate.MaxCaseResultLineBytes));
+        Assert.False(RetrievalBenchmarkGate.CaseResultsSizeIsValid(
+            oneRow, (long)RetrievalBenchmarkGate.MaxCaseResultLineBytes + 1));
     }
 
     [Fact]
@@ -1175,9 +1318,76 @@ public sealed class RetrievalBenchmarkTests
     [
         new("anchor_exact_first_accuracy", collection, "exact", "holdout", "blocking",
             8, 20, "invariant_only_n8", RetrievalMetricObservation.Measured(1, 8), true),
+        new("temporal_leakage_failures", collection, "temporal", "holdout", "blocking",
+            8, 20, "invariant_only_n8", RetrievalMetricObservation.Measured(0, 8), true),
+        new("no_hit_accuracy", collection, "negative", "holdout", "blocking",
+            8, 20, "invariant_only_n8", RetrievalMetricObservation.Measured(1, 8), true),
+        new("resolution_accuracy", collection, "resolution", "holdout", "blocking",
+            8, 20, "invariant_only_n8", RetrievalMetricObservation.Measured(1, 8), true),
+        new("role_intent_accuracy", collection, "role", "holdout", "blocking",
+            8, 20, "invariant_only_n8", RetrievalMetricObservation.Measured(1, 8), true),
         new("anchor_ndcg_at10", collection, "conceptual", "holdout", "reported",
             8, 20, "invariant_only_n8", RetrievalMetricObservation.Measured(1, 8), null),
     ];
+
+    private static IReadOnlyList<RetrievalBenchmarkStratum> StrataForCases(
+        IReadOnlyCollection<RetrievalBenchmarkCase> cases, string collection)
+    {
+        var strata = new List<RetrievalBenchmarkStratum>();
+        foreach (var category in cases.Where(item => item.Split == "holdout")
+                     .GroupBy(item => item.Category, StringComparer.Ordinal))
+        {
+            var rows = category.ToArray();
+            var anchorCount = rows.Count(item => item.RelevantAnchors is { Count: > 0 });
+            var workCount = rows.Count(item => item.RelevantWorks.Count > 0);
+
+            void AddReported(string metric, int denominator, int statisticalFloor = 20)
+            {
+                var observation = denominator == 0
+                    ? RetrievalMetricObservation.Insufficient()
+                    : RetrievalMetricObservation.Measured(1, denominator);
+                strata.Add(new(metric, collection, category.Key, "holdout", "reported", 8,
+                    statisticalFloor, Support(denominator, statisticalFloor), observation, null));
+            }
+            void AddBlocking(string metric, int denominator, double expected)
+            {
+                var observation = denominator == 0
+                    ? RetrievalMetricObservation.Insufficient()
+                    : RetrievalMetricObservation.Measured(expected, denominator);
+                strata.Add(new(metric, collection, category.Key, "holdout", "blocking", 8, 20,
+                    Support(denominator, 20), observation, denominator >= 8));
+            }
+
+            AddReported("anchor_mrr", anchorCount);
+            AddReported("anchor_recall_at10", anchorCount);
+            AddReported("anchor_ndcg_at10", anchorCount);
+            AddReported("legacy_work_mrr", workCount);
+            AddReported("legacy_work_recall_at10", workCount);
+            AddReported("legacy_work_ndcg_at10", workCount);
+            AddReported("latency_p95_ms", rows.Length, 200);
+            if (category.Key == "exact")
+                AddBlocking("anchor_exact_first_accuracy", anchorCount, 1);
+            if (rows.Any(item => item.AsOf is not null))
+                AddBlocking("temporal_leakage_failures",
+                    rows.Count(item => item.AsOf is not null), 0);
+            if (rows.Any(item => item.ExpectNoHits))
+                AddBlocking("no_hit_accuracy", rows.Count(item => item.ExpectNoHits), 1);
+            if (rows.Any(item => item.ExpectedResolution is not null))
+                AddBlocking("resolution_accuracy",
+                    rows.Count(item => item.ExpectedResolution is not null), 1);
+            if (rows.Any(item => item.ExpectedRole is not null))
+                AddBlocking("role_intent_accuracy",
+                    rows.Count(item => item.ExpectedRole is not null), 1);
+        }
+        return strata;
+
+        static string Support(int denominator, int statisticalFloor) => denominator switch
+        {
+            < 8 => "insufficient_denominator",
+            _ when denominator < statisticalFloor => "invariant_only_n8",
+            _ => "statistically_supported",
+        };
+    }
 
     private static RetrievalNegativeControlResult DetectedControl(
         string schema, RetrievalMetricObservation ndcg) => new(

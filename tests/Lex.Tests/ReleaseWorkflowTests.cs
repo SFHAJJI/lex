@@ -296,8 +296,11 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("benchmark_member_path", scriptText);
         Assert.Contains("case-results size does not match signed manifest", scriptText);
         Assert.Contains("case-results digest does not match signed evidence", scriptText);
+        Assert.Contains("MAX_CASE_RESULTS_BYTES=67108864", scriptText);
+        Assert.Contains("case-results manifest size exceeds the fixed ceiling", scriptText);
         Assert.Contains("benchmark_case_results=$(jq -er", workflow);
         Assert.Contains("benchmark manifest has missing or extra evidence", workflow);
+        Assert.Contains("benchmark case-results member exceeds the fixed byte ceiling", workflow);
 
         var shell = OperatingSystem.IsWindows()
             ? @"C:\Program Files\Git\usr\bin\sh.exe" : "/bin/sh";
@@ -340,14 +343,15 @@ public sealed class ReleaseWorkflowTests
                     case_results_sha256 = caseSha,
                 }));
 
-            void WriteManifest(bool includeCase, string digest)
+            void WriteManifest(bool includeCase, string digest, long? declaredSize = null)
             {
                 var files = new List<object>
                 {
                     new { path = reportFile, size = 1, sha256 = new string('a', 64) },
                 };
                 if (includeCase)
-                    files.Add(new { path = caseFile, size = caseBytes.Length, sha256 = digest });
+                    files.Add(new { path = caseFile, size = declaredSize ?? caseBytes.Length,
+                        sha256 = digest });
                 File.WriteAllText(Path.Combine(directory, manifestFile),
                     System.Text.Json.JsonSerializer.Serialize(new { files }));
             }
@@ -360,6 +364,11 @@ public sealed class ReleaseWorkflowTests
 
             WriteManifest(includeCase: true, new string('0', 64));
             Assert.NotEqual(0, Verify().Code);
+
+            WriteManifest(includeCase: true, caseSha, declaredSize: 67_108_865);
+            var oversized = Verify();
+            Assert.NotEqual(0, oversized.Code);
+            Assert.Contains("case-results manifest size exceeds the fixed ceiling", oversized.Output);
 
             WriteManifest(includeCase: true, caseSha);
             var accepted = Verify();
