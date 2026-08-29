@@ -1,3 +1,4 @@
+import { titleDateDisagreement, type TitleDateDisagreement } from "./publisherTitle";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { compoundOperationViews, first, summedCount, summedPopulation, tool,
   unionKnownExclusions,
@@ -172,6 +173,7 @@ export default function App() {
     lawGeneration.current += 1;
     if (!s.work) return;
     setLoaded(undefined);
+    setTitleDateConflict(undefined);
     setUi(undefined);
     setStrip([]);
     return () => { lawGeneration.current += 1; };
@@ -219,6 +221,8 @@ export default function App() {
   const [assistantPresentationId, setAssistantPresentationId] = useState<string>();
   const pendingPresentations = useRef(new Set<string>());
   const measuredPresentations = useRef(new Set<string>());
+  // The publisher's own stated date, when it contradicts the one being displayed.
+  const [titleDateConflict, setTitleDateConflict] = useState<TitleDateDisagreement>();
   const [loaded, setLoaded] = useState<{ items: ProvisionItem[]; from: string; to?: string; profile?: string; source?: string; recordSha256?: string }>();
   const [toc, setToc] = useState<ProvisionItem[]>([]);
   const [title, setTitle] = useState<string>();
@@ -381,6 +385,7 @@ export default function App() {
     const live = () => mine === lawGeneration.current;
     // Never show one law's text under another's heading: clear before fetching.
     setLoaded(undefined);
+    setTitleDateConflict(undefined);
     const date = readDate;
     const lang = s.language ? { language: s.language } : {};
     // A code can carry thousands of articles: ask for the outline first and only pull full
@@ -406,6 +411,7 @@ export default function App() {
         const one = first<any>(res, (x) => Array.isArray(x?.provisions) && x.provisions.length > 0);
         const doc = one?.document ?? one;
         setTitle(shorten(doc?.title));
+        setTitleDateConflict(titleDateDisagreement(doc?.title, doc?.valid_from));
         const items = (one?.provisions ?? []) as ProvisionItem[];
         if (items.length === 0 && doc?.text_omitted) items.push({
           anchor: "", heading: doc?.title, text: "", text_omitted: true,
@@ -1065,6 +1071,7 @@ export default function App() {
                                        anchor={s.anchor} profile={loaded.profile}
                                        timelineSemantics={timelineSemantics}
                                        recordSha256={loaded.recordSha256}
+                                       titleDateConflict={titleDateConflict}
                                        source={loaded.source}
                                        onCite={(w) => { clearAssistantView(); go({ work: w, date: undefined, anchor: undefined, to: undefined, mode: "read", space: "law" }); }}
                                        onPick={(a, auto) => { chosenAnchor.current = !auto; go({ anchor: a }); }}
