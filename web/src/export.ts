@@ -12,6 +12,10 @@ export interface LawEvidence {
   permalink: string;
   extractionProfile?: string;
   timelineSemantics?: string;
+  /** Document-level digests. A permalink alone cannot be checked; these are what a reader verifies
+      against when the view holds more than one article, or none with its own text digest. */
+  recordSha256?: string;
+  bodySha256?: string;
   provisions: ProvisionItem[];
   exportedAt: string;
 }
@@ -46,6 +50,8 @@ export interface ComparisonEvidence {
   toVersionValidTo?: string;
   fromExtractionProfile?: string;
   toExtractionProfile?: string;
+  fromRecordSha256?: string;
+  toRecordSha256?: string;
   rows: ComparisonRow[];
   unchanged: string[];
   punctuationOnly: string[];
@@ -56,7 +62,24 @@ const oneLine = (value: string) => value.replace(/\s+/g, " ").trim();
 const itemLabel = (item: ProvisionItem) => oneLine(item.num ?? item.anchor);
 const itemSha = (item: ProvisionItem) => item.text_sha256;
 
-/** Build a citation for the exact version, and article when one article is on screen. */
+/**
+ * Build a citation for the exact version, and article when one article is on screen.
+ *
+ * A citation always states what it can be checked against, and says so plainly when it cannot.
+ * The exact text digest is preferred because it is the narrowest claim: it covers the wording the
+ * reader actually saw. Where the view holds several articles there is no single such digest, so the
+ * document-level record digest stands in. Where neither reached the browser the citation says
+ * `no content digest recorded`, because a citation that quietly carries only a permalink looks
+ * checkable and is not, and the reader has no way to tell the difference.
+ */
+function contentDigestField(input: LawEvidence): string {
+  const item = input.provisions.length === 1 ? input.provisions[0] : undefined;
+  if (item && itemSha(item)) return `text SHA-256 ${itemSha(item)}`;
+  if (input.recordSha256) return `record SHA-256 ${input.recordSha256}`;
+  if (input.bodySha256) return `body SHA-256 ${input.bodySha256}`;
+  return "no content digest recorded";
+}
+
 export function citationText(input: LawEvidence): string {
   const item = input.provisions.length === 1 ? input.provisions[0] : undefined;
   return [
@@ -66,8 +89,20 @@ export function citationText(input: LawEvidence): string {
     input.work,
     input.permalink,
     input.source,
-    item && itemSha(item) ? `text SHA-256 ${itemSha(item)}` : undefined,
+    contentDigestField(input),
   ].filter(Boolean).join(" | ");
+}
+
+/**
+ * Both sides of a comparison need their own digest, for the same reason and with the same fallback
+ * order. A comparison spanning several articles has no single text digest per side, so the
+ * document-level record digest stands in; where a side has neither, that side says so rather than
+ * going out bare.
+ */
+function comparisonSideDigest(label: string, textSha?: string, recordSha?: string): string {
+  if (textSha) return `${label} text SHA-256 ${textSha}`;
+  if (recordSha) return `${label} record SHA-256 ${recordSha}`;
+  return `${label} no content digest recorded`;
 }
 
 export function comparisonCitationText(input: ComparisonEvidence): string {
@@ -78,8 +113,8 @@ export function comparisonCitationText(input: ComparisonEvidence): string {
     `comparison ${input.from} to ${input.to}`,
     input.work,
     input.permalink,
-    row?.fromSha ? `${input.from} text SHA-256 ${row.fromSha}` : undefined,
-    row?.toSha ? `${input.to} text SHA-256 ${row.toSha}` : undefined,
+    comparisonSideDigest(input.from, row?.fromSha, input.fromRecordSha256),
+    comparisonSideDigest(input.to, row?.toSha, input.toRecordSha256),
   ].filter(Boolean).join(" | ");
 }
 

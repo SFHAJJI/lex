@@ -223,7 +223,8 @@ export default function App() {
                                         profile?: string; source?: string;
                                         totalProvisions?: number; totalProvisionGaps?: number;
                                         truncated?: boolean; textTruncated?: boolean;
-                                        textCompleteness?: string }>();
+                                        textCompleteness?: string;
+                                        recordSha256?: string }>();
   const [toc, setToc] = useState<ProvisionItem[]>([]);
   const [title, setTitle] = useState<string>();
   const [versions, setVersions] = useState<string[]>([]);
@@ -425,6 +426,9 @@ export default function App() {
         setLoaded(doc?.valid_from
           ? { items, from: doc.valid_from, to: doc?.valid_to,
               profile: doc?.extraction_profile, source: doc?.source_uri,
+              // Without the digest the copied citation carries a permalink and nothing to
+              // check it against on any view holding more than one article.
+              recordSha256: doc?.record_sha256,
               ...meta }
           : undefined);
         if (items.length === 0)
@@ -1078,6 +1082,7 @@ export default function App() {
                                         work={s.work} title={title ?? s.work} language={servedLang}
                                         anchor={s.anchor} profile={loaded.profile}
                                         timelineSemantics={timelineSemantics}
+                                        recordSha256={loaded.recordSha256}
                                        source={loaded.source}
                                        textCompleteness={loaded.textCompleteness}
                                        totalProvisions={loaded.totalProvisions}
