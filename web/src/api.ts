@@ -3,6 +3,8 @@
 // "play with it" instant and deterministic — and it means the demo is the strongest
 // possible proof that the published API actually works.
 
+import { MAX_PRODUCER_COUNT } from "./searchPopulation.ts";
+
 let id = 0;
 
 async function mcpJson(r: Response): Promise<any> {
@@ -279,9 +281,19 @@ export function populationScopeLabel(value: number | undefined): string | undefi
  */
 export const POPULATION_LIMITS = { maxExclusions: 20, maxExclusionLength: 300 };
 
-/** A count the producer could have minted: a non-negative safe integer, nothing else. */
+/**
+ * A count the producer could have minted: a non-negative integer inside its own Int32 range.
+ *
+ * The ceiling is IMPORTED rather than restated, from the module that owns it, so the three
+ * places that had to agree about it now read one value. This helper used to stop at
+ * `Number.isSafeInteger`, which admits everything from 2^31 to 2^53: numbers that are exact
+ * integers and that `SearchPopulationTotal`, `PopulationTotal` and `Coverage(1).Groups`, all
+ * declared `int`, cannot return. A denominator in that range reached the ranking and in-force
+ * headers as a legal figure while the same value was refused by the parser one module away.
+ */
 function populationCount(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+  return typeof value === "number" && Number.isSafeInteger(value)
+    && value >= 0 && value <= MAX_PRODUCER_COUNT
     ? value : undefined;
 }
 
@@ -302,8 +314,12 @@ function populationCount(value: unknown): number | undefined {
  * a silently smaller legal count, and two individually valid counts can still sum past the safe
  * integer range, where a number has lost precision and is no longer a count.
  *
- * The producer's own range is enforced upstream at classification, so this guards the arithmetic
- * rather than restating a bound that belongs with the shape.
+ * The range is checked HERE as well as at classification, which is a change from what this
+ * comment used to claim. It said the producer's range was enforced upstream so this only had to
+ * guard the arithmetic. That was true of the entries the governed partition hands it and false of
+ * the helper itself, which is exported and took any safe integer: everything from 2^31 to 2^53
+ * passed, and those are values `ChangeTotals` and `InForcePage.TotalGroups`, both `int`, cannot
+ * return. One constant, imported from the module that owns it, is now read by all three doors.
  */
 /**
  * The two change counts, each labelled with the grain the producer actually measured.
@@ -336,7 +352,11 @@ export function summedCount(entries: any[], field: string): number | undefined {
   for (const entry of entries) {
     const raw = (entry as any)?.[field];
     if (raw === undefined) continue;
-    if (typeof raw !== "number" || !Number.isSafeInteger(raw) || raw < 0) return undefined;
+    // The same producer range as every other count: `ChangeTotals` is `(int Works, int
+    // Versions)` and `InForcePage.TotalGroups` is `int`, so a value above this is one the
+    // producer cannot have sent rather than one that is merely large.
+    if (typeof raw !== "number" || !Number.isSafeInteger(raw) || raw < 0
+      || raw > MAX_PRODUCER_COUNT) return undefined;
     if (raw > Number.MAX_SAFE_INTEGER - total) return undefined;
     total += raw;
     seen = true;

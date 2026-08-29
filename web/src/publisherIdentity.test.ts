@@ -3,7 +3,9 @@ import test from "node:test";
 import { MAX_PUBLISHER_IDENTITY, publisherIdentity } from "./publisherIdentity.ts";
 import { envelopeStripRows } from "./envelopeStrip.ts";
 import { normalizeSearchResponse } from "./searchPopulation.ts";
-import { classifyEnvelope, LIMITATION_STATUS, validateLimitation } from "./limitations.ts";
+import {
+  LIMITATION_STATUS, parseGovernedResponse, validateLimitation,
+} from "./limitations.ts";
 
 /**
  * The publisher identity is the join key across three independent disclosures: which index a row
@@ -147,7 +149,8 @@ const stripAccepts = (value: unknown): boolean => {
 
 /** The population footer's seam: a denominator is attributed to the raw value. */
 const populationAccepts = (value: unknown): boolean => {
-  const normalized = normalizeSearchResponse([ranEntry(value)], classifyEnvelope);
+  const normalized = normalizeSearchResponse(
+    parseGovernedResponse("search", [ranEntry(value)]));
   return normalized.populations.length === 1 && normalized.populations[0]!.publisher === value;
 };
 
@@ -193,8 +196,8 @@ test("a padded and an unpadded spelling become neither two identities nor one", 
   // Both directions of the defect at the population seam. Trimming merges them and the padded
   // entry's denominator silently replaces or conflicts with the real one; accepting the padding
   // as its own key splits one publisher into two rows of the footer.
-  const normalized = normalizeSearchResponse(
-    [ranEntry("lu-legilux", 100), ranEntry(" lu-legilux ", 999)], classifyEnvelope);
+  const normalized = normalizeSearchResponse(parseGovernedResponse("search",
+    [ranEntry("lu-legilux", 100), ranEntry(" lu-legilux ", 999)]));
   assert.deepEqual(normalized.populations.map((p) => p.publisher), ["lu-legilux"],
     "the padded spelling became a second identity, or displaced the real one");
   assert.equal(normalized.populations[0]!.population.works_in_scope, 100,
@@ -207,8 +210,8 @@ test("a padded and an unpadded spelling become neither two identities nor one", 
 });
 
 test("a case alias becomes neither a second identity nor the lower-case one", () => {
-  const normalized = normalizeSearchResponse(
-    [ranEntry("lu-legilux", 100), ranEntry("LU-Legilux", 999)], classifyEnvelope);
+  const normalized = normalizeSearchResponse(parseGovernedResponse("search",
+    [ranEntry("lu-legilux", 100), ranEntry("LU-Legilux", 999)]));
   assert.deepEqual(normalized.populations.map((p) => p.publisher), ["lu-legilux"]);
   assert.equal(normalized.populations[0]!.population.works_in_scope, 100);
   assert.equal(normalized.complete === false && normalized.unattributedEntries, 1);

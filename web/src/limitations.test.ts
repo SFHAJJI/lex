@@ -5,18 +5,60 @@ import {
   AMBIGUOUS_ONLY_SENTENCE, LIMITATION_CAP, NO_CORPUS_SENTENCE, NO_CORPUS_STATUS,
   conflictedPublishersSentence, PARTIAL_RESPONSE_SENTENCE, scopedLimitations,
   LIMITATION_EXPLANATION, LIMITATION_STATUS, limitationsForTool, limitationsFromEffect,
-  MIXED_ZERO_SENTENCES, partitionGovernedResponse, projectGovernedEmptiness,
+  MIXED_ZERO_SENTENCES, parseGovernedResponse, partitionGovernedResponse,
+  projectGovernedEmptiness,
   projectSearchResponse, searchAbsenceState, searchEmptyPresentation, searchResultsFromError,
   validateLimitation,
   GOVERNED_FILTERS, MANIFEST_FILTERS,
 } from "./limitations.ts";
 
-const refused = (publisher: string, filters: string[]) => ({
+/**
+ * THE POPULATION IS NOT OPTIONAL DRESSING ON THESE FIXTURES, and it did not used to be here.
+ *
+ * The producer publishes a population on every path these fixtures stand for, and the client now
+ * treats an unreadable required scope as invalidating the whole claim rather than only the scope
+ * field. A fixture without one is therefore a response the producer cannot emit, and every
+ * builder below now carries the one its own status coheres with. See the corrected rule in
+ * limitations.ts: a marker that records a problem and lets the unit go on authorizing rows is
+ * the defect class this table exists to remove.
+ */
+const searchPopulationFor = (status: string, works = 1250) => ({
+  basis: status === LIMITATION_STATUS
+    ? "mounted_scope_before_unsupported_filters"
+    : "selected_metadata_scope",
+  works_in_scope: works,
+  scope_filters_applied: status !== LIMITATION_STATUS,
+  query_ran: status === "ok",
+  known_exclusions: [],
+});
+
+/** `McpCore` changes_in_period: `basis`, `works_in_scope`, `expected_works`, exclusions. */
+const changesPopulation = (works = 1250) => ({
+  basis: "distinct non-withdrawn works in the selected publisher and legal metadata scope",
+  works_in_scope: works,
+  known_exclusions: [],
+});
+
+/** `McpCore` in_force_on: `works_covered` from `Coverage(1).Groups`, never filter-narrowed. */
+const inForcePopulation = (works = 1250) => ({
+  basis: "versioned works only",
+  works_covered: works,
+  known_exclusions: [],
+});
+
+/**
+ * A capability refusal. The population is SEARCH ONLY: `McpCore` attaches one to the search
+ * refusal (`refusal["population"] = SearchPopulation(reader, filter, false, false)`) and returns
+ * `UnsupportedFilterResult` unchanged for the other two, so a changes or in-force refusal
+ * carrying a population is a forgery rather than a harmless extra.
+ */
+const refused = (publisher: string, filters: string[], tool = "search") => ({
   envelope: {
     status: LIMITATION_STATUS, publisher,
     jurisdiction: publisher === "eu-eurlex" ? "eu" : "lu",
   },
   unsupported_filters: filters,
+  ...(tool === "search" ? { population: searchPopulationFor(LIMITATION_STATUS) } : {}),
 });
 
 /** A coherent changes_in_period success: rows and counts agree. */
@@ -25,6 +67,7 @@ const changesOk = (publisher: string, rows: number) => ({
   changes: Array.from({ length: rows }, (_, index) => ({ work: `w${index}` })),
   works_changed: rows,
   new_versions: rows,
+  population: changesPopulation(),
 });
 
 /** A coherent search success. */
@@ -35,7 +78,19 @@ const searchOk = (publisher: string, hits: number, extra: Record<string, unknown
     lex_id: `${publisher}:w${index}:2024-01-01`, title: `Work ${index}`,
     valid_from: "2024-01-01",
   })),
+  population: searchPopulationFor("ok"),
   ...extra,
+});
+
+/**
+ * A coherent retrieval-mode refusal. It carries a population because search publishes one on
+ * this path too (`SearchPopulation(reader, filter, true, false)` beside
+ * `McpStatus.RetrievalModeUnavailable`), and an unreadable required scope now invalidates the
+ * whole claim rather than only the scope field.
+ */
+const modeUnavailable = (publisher: string) => ({
+  envelope: { status: "retrieval_mode_unavailable", publisher },
+  population: searchPopulationFor("retrieval_mode_unavailable"),
 });
 
 /** A coherent in_force_on success. */
@@ -45,12 +100,18 @@ const inForceOk = (publisher: string, rows: number) => ({
     work: `w${index}`, title: `Work ${index}`, valid_from: "2024-01-01",
   })),
   total_works_in_force: rows,
+  population: inForcePopulation(),
 });
 
-/** The production search projection, with the component's own mapping shape. */
+/**
+ * The production search projection, with the component's own mapping shape. It takes raw bytes
+ * and parses them HERE, once, exactly as Search.tsx does: the projector itself no longer accepts
+ * a raw response, so a test cannot exercise a path production cannot reach.
+ */
 const projectSearch = (raw: unknown) =>
-  projectSearchResponse<{ work: string }, { work: string }>(raw, (ran) => {
-    const hits = (ran as any[]).flatMap((entry) => entry?.hits ?? []);
+  projectSearchResponse<{ work: string }, { work: string }>(
+    parseGovernedResponse("search", raw), (ran) => {
+    const hits = ran.flatMap((unit) => unit.rows);
     const works = [...new Map(hits.map((hit: any) => {
       const work = String(hit.lex_id ?? "").split(":").slice(0, 2).join(":");
       return [work, { work }];
@@ -70,7 +131,8 @@ test("only an allowed terminal success status with a valid shape enters ran", ()
     // O3: a successful search must declare the producer's actual retrieval mode.
     ["search", { envelope: { status: "ok" }, hits: [] }, "invalid"],
     ["search", { envelope: { status: "ok" }, hits: [], retrieval_mode: "guess" }, "invalid"],
-    ["search", { envelope: { status: "ok" }, hits: [], retrieval_mode: "keyword" }, "ran"],
+    ["search", { envelope: { status: "ok" }, hits: [], retrieval_mode: "keyword",
+      population: searchPopulationFor("ok") }, "ran"],
     // O4: a null row is not a row. Round 6 admitted it and then threw on lex_id.
     ["search", { envelope: { status: "ok" }, hits: [null], retrieval_mode: "keyword" },
       "invalid"],
@@ -87,15 +149,21 @@ test("only an allowed terminal success status with a valid shape enters ran", ()
     ["search", { hits: [] }, "invalid"],
     ["search", null, "invalid"],
     ["search", "ok", "invalid"],
+    ["search", modeUnavailable("p"), "mode_unavailable"],
+    // The corrected rule: search publishes a population on ALL THREE of its paths, so a claim
+    // whose required scope is unreadable is invalid rather than a claim with a missing number.
     ["search", { envelope: { status: "retrieval_mode_unavailable", publisher: "p" } },
-      "mode_unavailable"],
+      "invalid"],
+    ["search", { envelope: { status: "ok" }, hits: [], retrieval_mode: "keyword" }, "invalid"],
     ["changes_in_period", changesOk("lu-legilux", 1), "ran"],
     ["changes_in_period",
-      { envelope: { status: "no_changes_in_period" }, changes: [], works_changed: 0 }, "ran"],
+      { envelope: { status: "no_changes_in_period" }, changes: [], works_changed: 0,
+        population: changesPopulation() }, "ran"],
     ["changes_in_period", { envelope: { status: "ok" }, changes: [] }, "invalid"],
     ["in_force_on", inForceOk("lu-legilux", 1), "ran"],
     ["in_force_on",
-      { envelope: { status: "no_result" }, works: [], total_works_in_force: 0 }, "ran"],
+      { envelope: { status: "no_result" }, works: [], total_works_in_force: 0,
+        population: inForcePopulation() }, "ran"],
     ["in_force_on", { envelope: { status: "unknown_work" }, works: [] }, "invalid"],
   ];
   for (const [tool, value, kind] of cases) {
@@ -176,35 +244,45 @@ test("a count outside the producer's own integer range is malformed, not merely 
   // Number.isFinite plus Number.isInteger is not that range. 1e20 and 2^53 are exact doubles,
   // both answer true to Number.isInteger, and both passed the count/row coherence checks
   // untouched: a legal count nothing could have minted then reached the screen as fact.
+  //
+  // EVERY FIXTURE HERE CARRIES ITS POPULATION, and that is not decoration. A population is now
+  // required on every ran path, so a fixture without one is invalid whatever its counts say, and
+  // this test went green against a copy of requiredCount with the ceiling removed. It had
+  // stopped testing the bound it is named for. Found by mutation, not by reading.
   const unmintable = [1e20, 2147483648, Number.MAX_SAFE_INTEGER, 2 ** 53, 1e308];
   for (const count of unmintable) {
     assert.equal(classifyEnvelope("in_force_on", {
       envelope: { status: "ok", publisher: "lu-legilux" }, works: [{ work: "a" }],
-      total_works_in_force: count,
+      total_works_in_force: count, population: inForcePopulation(),
     }).kind, "invalid", `in_force_on accepted total_works_in_force ${count}`);
     assert.equal(classifyEnvelope("changes_in_period", {
       envelope: { status: "ok", publisher: "lu-legilux" }, changes: [{ work: "w" }],
-      works_changed: count, new_versions: 1,
+      works_changed: count, new_versions: 1, population: changesPopulation(),
     }).kind, "invalid", `changes_in_period accepted works_changed ${count}`);
     // The secondary aggregate rides the same producer type, so it carries the same bound.
     assert.equal(classifyEnvelope("changes_in_period", {
       envelope: { status: "ok", publisher: "lu-legilux" }, changes: [{ work: "w" }],
-      works_changed: 1, new_versions: count,
+      works_changed: 1, new_versions: count, population: changesPopulation(),
     }).kind, "invalid", `changes_in_period accepted new_versions ${count}`);
+    // The population's own denominator rides it too, on both measures.
+    assert.equal(classifyEnvelope("in_force_on", {
+      envelope: { status: "ok", publisher: "lu-legilux" }, works: [{ work: "a" }],
+      total_works_in_force: 1, population: { ...inForcePopulation(), works_covered: count },
+    }).kind, "invalid", `in_force_on accepted works_covered ${count}`);
   }
   // Int32.MaxValue itself is a count the producer can mint, so this is a bound, not a narrowing.
   assert.equal(classifyEnvelope("in_force_on", {
     envelope: { status: "ok", publisher: "lu-legilux" }, works: [{ work: "a" }],
-    total_works_in_force: 2147483647,
+    total_works_in_force: 2147483647, population: inForcePopulation(),
   }).kind, "ran", "the producer's own maximum was refused");
   assert.equal(classifyEnvelope("changes_in_period", {
     envelope: { status: "ok", publisher: "lu-legilux" }, changes: [{ work: "w" }],
-    works_changed: 2147483647, new_versions: 2147483647,
+    works_changed: 2147483647, new_versions: 2147483647, population: changesPopulation(),
   }).kind, "ran", "the producer's own maximum was refused");
   // Fail closed, exactly as a malformed shape does: no rows, no count, no absence claim.
   const projected = projectGovernedEmptiness("in_force_on", [{
     envelope: { status: "ok", publisher: "lu-legilux" }, works: [{ work: "a" }],
-    total_works_in_force: 1e20,
+    total_works_in_force: 1e20, population: inForcePopulation(),
   }], 0);
   assert.deepEqual(projected.partition.ran, [], "an unmintable count authorized rows");
   assert.equal(projected.partition.invalidCount, 1);
@@ -219,16 +297,16 @@ test("a paged publisher with zero rows beside a positive count is legitimate", (
   // silently dropped whole publishers out of the headline counts.
   assert.equal(classifyEnvelope("changes_in_period", {
     envelope: { status: "ok", publisher: "eu-eurlex" },
-    changes: [], works_changed: 7, new_versions: 7,
+    changes: [], works_changed: 7, new_versions: 7, population: changesPopulation(),
   }).kind, "ran");
   assert.equal(classifyEnvelope("in_force_on", {
     envelope: { status: "ok", publisher: "eu-eurlex" },
-    works: [], total_works_in_force: 412,
+    works: [], total_works_in_force: 412, population: inForcePopulation(),
   }).kind, "ran");
   // And the count still reaches the caller rather than being discarded.
   const partition = partitionGovernedResponse("in_force_on", [
     { envelope: { status: "ok", publisher: "eu-eurlex" }, works: [],
-      total_works_in_force: 412 },
+      total_works_in_force: 412, population: inForcePopulation() },
     inForceOk("lu-legilux", 2),
   ]);
   assert.equal(partition.ran.length, 2);
@@ -241,6 +319,7 @@ test("an all-ambiguity in-force page is content, never an absence claim", () => 
     works: [],
     ambiguous_works: [{ work: "w1" }, { work: "w2" }],
     total_works_in_force: 2,
+    population: inForcePopulation(),
   };
   assert.equal(classifyEnvelope("in_force_on", ambiguousOnly).kind, "ran");
   const decision = projectGovernedEmptiness("in_force_on", [ambiguousOnly], 0);
@@ -279,13 +358,25 @@ test("no_corpus_mounted is a terminal refusal, not a malformed response", () => 
   // classified it invalid and told the reader to retry a request that can never succeed.
   const noCorpus = { status: NO_CORPUS_STATUS, tool_called: "search" };
   assert.equal(classifyEnvelope("search", noCorpus).kind, "no_corpus");
-  assert.equal(classifyEnvelope("in_force_on", noCorpus).kind, "no_corpus");
+  // O17, AND THIS LINE USED TO ASSERT THE OPPOSITE. It required a search terminal object to be
+  // terminal for in_force_on too, which is the defect: `McpCore.CallToolCore` stamps
+  // `["tool_called"] = name`, so this object answered a different question, and honouring it
+  // here tells the reader the corpus holds nothing for the thing they actually asked about.
+  // An absence asserted about the wrong subject is the worst failure this surface has.
+  assert.equal(classifyEnvelope("in_force_on", noCorpus).kind, "invalid");
   const projected = projectSearch([noCorpus]);
   assert.equal(projected.absence, "no_corpus");
   assert.equal(searchEmptyPresentation("no_corpus").sentence, NO_CORPUS_SENTENCE);
   assert.ok(!NO_CORPUS_SENTENCE.toLowerCase().includes("try"),
     "retrying cannot help, so the copy never suggests it");
-  assert.equal(projectGovernedEmptiness("in_force_on", [noCorpus], 0).empty, "no_corpus");
+  // Same object, wrong operation: the in-force surface must not print the corpus sentence from
+  // a terminal answer to a search. It claims nothing instead.
+  assert.equal(projectGovernedEmptiness("in_force_on", [noCorpus], 0).empty,
+    "incomplete_response");
+  assert.equal(
+    projectGovernedEmptiness("in_force_on", [{ ...noCorpus, tool_called: "in_force_on" }], 0)
+      .empty,
+    "no_corpus", "the terminal state was lost for the operation it actually answered");
 });
 
 
@@ -350,8 +441,7 @@ test("a no-corpus unit beside anything that answered never claims the corpus is 
   const siblings: [string, unknown][] = [
     ["ran", searchOk("lu-legilux", 0)],
     ["refused", refused("lu-legilux", ["domain"])],
-    ["mode_unavailable",
-      { envelope: { status: "retrieval_mode_unavailable", publisher: "lu-legilux" } }],
+    ["mode_unavailable", modeUnavailable("lu-legilux")],
     ["invalid", { envelope: { status: "made_up" }, hits: [] }],
   ];
   for (const [label, sibling] of siblings) {
@@ -453,7 +543,7 @@ test("a missing retrieval mode is not a refused filter", () => {
   // Round 5 folded mode-unavailable into allRefused, so a search where no publisher had the
   // hybrid mode rendered the filter-capability explanation, blaming a filter never refused.
   const modeOnly = projectSearch([
-    { envelope: { status: "retrieval_mode_unavailable", publisher: "lu-legilux" } },
+    modeUnavailable("lu-legilux"),
   ]);
   assert.equal(modeOnly.limitations.length, 0, "no capability limitation exists");
   assert.notEqual(modeOnly.absence, "all_refused",
@@ -474,6 +564,7 @@ test("a refused response cannot claim that meaning search ran", () => {
     unsupported_filters: ["domain"],
     retrieval_mode: "hybrid",
     query_expansions: ["invented"],
+    population: searchPopulationFor(LIMITATION_STATUS),
   };
   const projected = projectSearch([lying]);
   assert.equal(projected.modeUsed, undefined, "no mode claim from a refusal");
@@ -515,7 +606,7 @@ test("actual mode lives in the state, so every transition clears it structurally
 
 test("the retrieval-mode notice names only the unavailable publishers", () => {
   const projected = projectSearch([
-    { envelope: { status: "retrieval_mode_unavailable", publisher: "eu-eurlex" } },
+    modeUnavailable("eu-eurlex"),
     searchOk("lu-legilux", 1, { retrieval_mode: "keyword" }),
   ]);
   assert.ok(projected.modeUnavailable?.includes("eu-eurlex"));
@@ -537,13 +628,14 @@ test("row authority: refused envelopes contribute no rows on any governed path",
   assert.equal(searchProjection.works[0].work, "lu-legilux:w0");
 
   const changes = projectGovernedEmptiness("changes_in_period", [
-    { ...refused("eu-eurlex", ["domain"]), changes: [{ work: "smuggled" }], works_changed: 1 },
+    { ...refused("eu-eurlex", ["domain"], "changes_in_period"),
+      changes: [{ work: "smuggled" }], works_changed: 1 },
   ], 0);
   assert.deepEqual(changes.partition.ran, []);
   assert.equal(changes.empty, "all_refused");
 
   const inForce = projectGovernedEmptiness("in_force_on", [
-    { ...refused("lu-legilux", ["hierarchy"]), works: [{ work: "smuggled" }],
+    { ...refused("lu-legilux", ["hierarchy"], "in_force_on"), works: [{ work: "smuggled" }],
       total_works_in_force: 1 },
     inForceOk("eu-eurlex", 2),
   ], 2);
@@ -561,10 +653,10 @@ test("empty-state truth scope stays distinct across every governed path", () => 
   assert.equal(projectSearch([searchOk("lu-legilux", 2)]).absence, "has_results");
 
   assert.equal(projectGovernedEmptiness("changes_in_period",
-    [refused("lu-legilux", ["domain"])], 0).empty, "all_refused");
+    [refused("lu-legilux", ["domain"], "changes_in_period")], 0).empty, "all_refused");
   assert.equal(projectGovernedEmptiness("changes_in_period",
-    [refused("eu-eurlex", ["domain"]), changesOk("lu-legilux", 0)], 0).empty,
-    "mixed_no_match");
+    [refused("eu-eurlex", ["domain"], "changes_in_period"), changesOk("lu-legilux", 0)],
+    0).empty, "mixed_no_match");
   assert.equal(projectGovernedEmptiness("changes_in_period",
     [changesOk("lu-legilux", 0)], 0).empty, "none_matched");
 });
@@ -616,8 +708,13 @@ test("out-of-order and repeated transitions leave nothing stale", () => {
 // product choosing one and asserting it. This lived in the search normalizer only, which left
 // changes_in_period and in_force_on emitting ran=1, limitation=1, invalidCount=0, partial=false.
 
-/** A coherent refusal for one publisher, on any governed tool. */
-const refusalFor = (publisher: string) => refused(publisher, ["domain"]);
+/**
+ * A coherent refusal for one publisher, on any governed tool. The tool is now load-bearing:
+ * search attaches a population to its refusal and the other two do not, so one fixture cannot
+ * stand for all three.
+ */
+const refusalFor = (publisher: string, tool = "search") =>
+  refused(publisher, ["domain"], tool);
 
 /** The coherent success fixture for each governed tool, keyed by tool. */
 const ranFor: Record<string, (publisher: string, rows: number) => unknown> = {
@@ -629,7 +726,7 @@ const ranFor: Record<string, (publisher: string, rows: number) => unknown> = {
 test("ran beside refused for one publisher withholds both, on every governed tool", () => {
   for (const tool of Object.keys(ranFor)) {
     const ranEntry = ranFor[tool]!("lu-legilux", 2);
-    const refusal = refusalFor("lu-legilux");
+    const refusal = refusalFor("lu-legilux", tool);
     // Order reversal: arrival order may not decide which side the reader is shown.
     for (const order of [[ranEntry, refusal], [refusal, ranEntry]]) {
       const partition = partitionGovernedResponse(tool, order);
@@ -678,7 +775,7 @@ test("another publisher renders beside a conflict, but only as partial", () => {
 
 test("a search conflict between ran and an unavailable retrieval mode withholds both", () => {
   // The third pairing, and the one that only search can produce.
-  const mode = { envelope: { status: "retrieval_mode_unavailable", publisher: "lu-legilux" } };
+  const mode = modeUnavailable("lu-legilux");
   for (const order of [[searchOk("lu-legilux", 2), mode], [mode, searchOk("lu-legilux", 2)]]) {
     const partition = partitionGovernedResponse("search", order);
     assert.deepEqual(partition.conflictedPublishers, ["lu-legilux"]);
@@ -694,7 +791,7 @@ test("a search conflict between ran and an unavailable retrieval mode withholds 
 });
 
 test("a refusal beside an unavailable mode for one publisher withholds both", () => {
-  const mode = { envelope: { status: "retrieval_mode_unavailable", publisher: "lu-legilux" } };
+  const mode = modeUnavailable("lu-legilux");
   const partition = partitionGovernedResponse("search", [refusalFor("lu-legilux"), mode]);
   assert.deepEqual(partition.conflictedPublishers, ["lu-legilux"]);
   assert.equal(partition.limitations.length, 0);
@@ -708,7 +805,7 @@ test("a conflict across distinct publishers is not a conflict, on every governed
   // contradicts itself, so both disclosures stand.
   for (const tool of Object.keys(ranFor)) {
     const partition = partitionGovernedResponse(tool,
-      [ranFor[tool]!("lu-legilux", 2), refusalFor("eu-eurlex")]);
+      [ranFor[tool]!("lu-legilux", 2), refusalFor("eu-eurlex", tool)]);
     assert.deepEqual(partition.conflictedPublishers, [], `${tool}: invented a conflict`);
     assert.equal(partition.ran.length, 1, `${tool}: dropped an uncontradicted publisher`);
     assert.equal(partition.limitations.length, 1, `${tool}: dropped a real limitation`);
@@ -719,14 +816,15 @@ test("a conflict across distinct publishers is not a conflict, on every governed
 test("a lone genuine refusal still reaches all_refused, on every governed tool", () => {
   // The other guard: this is the case the copy about coverage exists for, and it must survive.
   for (const tool of Object.keys(ranFor)) {
-    const partition = partitionGovernedResponse(tool, [refusalFor("lu-legilux")]);
+    const partition = partitionGovernedResponse(tool, [refusalFor("lu-legilux", tool)]);
     assert.deepEqual(partition.conflictedPublishers, []);
     assert.equal(partition.limitations.length, 1, `${tool}: silenced a lone refusal`);
     assert.equal(partition.allRefused, true, `${tool}: lost the coverage state`);
   }
   assert.equal(projectSearch([refusalFor("lu-legilux")]).absence, "all_refused");
   assert.equal(
-    projectGovernedEmptiness("in_force_on", [refusalFor("lu-legilux")], 0).empty, "all_refused");
+    projectGovernedEmptiness("in_force_on", [refusalFor("lu-legilux", "in_force_on")], 0).empty,
+    "all_refused");
 });
 
 test("a second unit from one publisher is incoherent whatever it says", () => {
@@ -826,19 +924,13 @@ test("jurisdiction keeps its own vocabulary and is not routed through publisher"
 });
 
 test("a mode-unavailable publisher uses the same grammar as everything else", () => {
-  const alias = classifyEnvelope("search", {
-    envelope: { status: "retrieval_mode_unavailable", publisher: "LU-Legilux" },
-  });
+  const alias = classifyEnvelope("search", modeUnavailable("LU-Legilux"));
   assert.equal(alias.kind, "mode_unavailable");
   assert.equal(alias.kind === "mode_unavailable" && alias.publisher, undefined,
     "a case alias was named as an unavailable publisher");
-  const padded = classifyEnvelope("search", {
-    envelope: { status: "retrieval_mode_unavailable", publisher: " lu-legilux " },
-  });
+  const padded = classifyEnvelope("search", modeUnavailable(" lu-legilux "));
   assert.equal(padded.kind === "mode_unavailable" && padded.publisher, undefined);
-  const real = classifyEnvelope("search", {
-    envelope: { status: "retrieval_mode_unavailable", publisher: "lu-legilux" },
-  });
+  const real = classifyEnvelope("search", modeUnavailable("lu-legilux"));
   assert.equal(real.kind === "mode_unavailable" && real.publisher, "lu-legilux",
     "the fixture never reached the validator with an acceptable identity");
 });
@@ -957,11 +1049,11 @@ test("a row a renderer cannot read is malformed, not empty", () => {
   // A row carrying what the renderer actually consumes is fine.
   assert.equal(classifyEnvelope("search", {
     envelope: { status: "ok" }, hits: [{ lex_id: "lu:w1:2024-01-01" }],
-    retrieval_mode: "keyword",
+    retrieval_mode: "keyword", population: searchPopulationFor("ok"),
   }).kind, "ran");
   assert.equal(classifyEnvelope("in_force_on", {
     envelope: { status: "ok" }, works: [{ lex_id: "lu:w1:2024-01-01" }],
-    total_works_in_force: 1,
+    total_works_in_force: 1, population: inForcePopulation(),
   }).kind, "ran", "in-force rows may be identified by lex_id instead of work");
 });
 
@@ -974,6 +1066,7 @@ test("status and counts must cohere", () => {
   }).kind, "invalid");
   assert.equal(classifyEnvelope("in_force_on", {
     envelope: { status: "no_result" }, works: [], total_works_in_force: 0,
+    population: inForcePopulation(),
   }).kind, "ran");
   // ambiguous_version asserts at least one ambiguity unit exists.
   assert.equal(classifyEnvelope("in_force_on", {
@@ -995,6 +1088,7 @@ test("ambiguity units travel to the caller for rendering", () => {
     works: [{ work: "w1", title: "Determinate", valid_from: "2024-01-01" }],
     ambiguous_works: [{ work: "w2", title: "Ambiguous", valid_from: "2024-01-01" }],
     total_works_in_force: 2,
+    population: inForcePopulation(),
   };
   const decision = projectGovernedEmptiness("in_force_on", [mixed], 1);
   assert.equal(decision.empty, null, "a normal row exists, so this is a result");
@@ -1005,7 +1099,7 @@ test("ambiguity units travel to the caller for rendering", () => {
   const ambiguousPlusInvalid = projectGovernedEmptiness("in_force_on", [
     { envelope: { status: "ambiguous_version", publisher: "lu-legilux" }, works: [],
       ambiguous_works: [{ work: "w2", valid_from: "2024-01-01" }],
-      total_works_in_force: 1 },
+      total_works_in_force: 1, population: inForcePopulation() },
     { envelope: { status: "made_up" }, works: [] },
   ], 0);
   assert.equal(ambiguousPlusInvalid.empty, "ambiguous_only");
@@ -1023,6 +1117,7 @@ test("a capability refusal naming publisher_metadata_identifier is honest, not m
   const refusal = {
     envelope: { status: LIMITATION_STATUS, publisher: "lu-legilux" },
     unsupported_filters: ["publisher_metadata_identifier"],
+    population: searchPopulationFor(LIMITATION_STATUS),
   };
   assert.equal(classifyEnvelope("search", refusal).kind, "refused",
     "an honest capability refusal must never be presented as a malfunction");
@@ -1202,7 +1297,7 @@ test("a locally derived partition value passes the guard unchanged", () => {
   assert.ok(sentence.includes("eu-eurlex") && sentence.includes("lu-legilux"));
   // And a one-publisher partition, the ordinary case, is untouched too.
   const single = partitionGovernedResponse("in_force_on",
-    [inForceOk("lu-legilux", 2), refusalFor("lu-legilux")]);
+    [inForceOk("lu-legilux", 2), refusalFor("lu-legilux", "in_force_on")]);
   assert.ok(conflictedPublishersSentence(single.conflictedPublishers) !== undefined);
 });
 
@@ -1211,7 +1306,7 @@ test("failing closed removes the names, never the incompleteness disclosure", ()
   // PARTIAL_RESPONSE_SENTENCE whenever `partial` is set and only the inner named paragraph from
   // this sentence, so a corrupted name list must cost the reader the names and nothing else.
   const decision = projectGovernedEmptiness("in_force_on",
-    [inForceOk("lu-legilux", 2), refusalFor("lu-legilux")], 0);
+    [inForceOk("lu-legilux", 2), refusalFor("lu-legilux", "in_force_on")], 0);
   assert.equal(decision.partial, true, "the disclosure the caller renders was lost");
   assert.equal(decision.empty, "incomplete_response");
   assert.ok(PARTIAL_RESPONSE_SENTENCE.length > 0 && INCOMPLETE_RESPONSE_SENTENCE.length > 0,
@@ -1223,4 +1318,370 @@ test("failing closed removes the names, never the incompleteness disclosure", ()
   // The honest list from that very same partition still names its publisher.
   assert.ok(conflictedPublishersSentence(decision.partition.conflictedPublishers) !== undefined,
     "failing closed on hostile input also silenced the honest case");
+});
+
+// ---------------------------------------------------------------------------
+// O17: the terminal object names the operation it answered
+// ---------------------------------------------------------------------------
+
+test("a terminal object is read only for the operation it says it answered", () => {
+  // `McpCore.CallToolCore` line 901 stamps `["tool_called"] = name`. Four ways to fail, because
+  // they are four different lies, and each is exercised on its own so a repair that closes one
+  // cannot pass for closing all four.
+  const terminal = (over: Record<string, unknown> = {}) => ({
+    status: NO_CORPUS_STATUS,
+    detail: "This server started with zero verified indexes, so it holds no law.",
+    hosted_endpoint: "https://law.soufien.lu/mcp",
+    tool_called: "in_force_on",
+    ...over,
+  });
+  // The operation it actually answered.
+  assert.equal(classifyEnvelope("in_force_on", terminal()).kind, "no_corpus");
+  // 1. Missing.
+  const { tool_called: _omitted, ...missing } = terminal();
+  assert.equal(classifyEnvelope("in_force_on", missing).kind, "invalid",
+    "a terminal object naming no operation authorized the corpus sentence");
+  // 2. Wrong type: not a bounded identifier at all.
+  for (const wrong of [7, null, {}, [], true, "", "x".repeat(65), "in force on"]) {
+    assert.equal(classifyEnvelope("in_force_on", terminal({ tool_called: wrong })).kind,
+      "invalid", `tool_called ${JSON.stringify(wrong)} was read as an operation`);
+  }
+  // 3. A bounded identifier naming no governed operation. "IN_FORCE_ON" belongs here rather
+  // than under wrong type: the identifier grammar is case-insensitive and the tool set is not,
+  // which is the same split publisherIdentity draws.
+  for (const unknown of ["coverage", "as_of", "IN_FORCE_ON", "in_force_on_"]) {
+    assert.equal(classifyEnvelope("in_force_on", terminal({ tool_called: unknown })).kind,
+      "invalid", `tool_called ${unknown} was read as this operation`);
+  }
+  // 4. A governed operation, but not this one. THE CASE THAT MATTERS: the reader is told the
+  // corpus holds nothing about what they asked, on the strength of an answer to something else.
+  for (const other of ["search", "changes_in_period"]) {
+    assert.equal(classifyEnvelope("in_force_on", terminal({ tool_called: other })).kind,
+      "invalid", `an answer to ${other} spoke for in_force_on`);
+  }
+  // And the whole-surface consequence, not only the classification.
+  assert.equal(
+    projectGovernedEmptiness("in_force_on", [terminal({ tool_called: "search" })], 0).empty,
+    "incomplete_response", "a search terminal object printed the corpus sentence on in-force");
+  assert.equal(projectGovernedEmptiness("in_force_on", [terminal()], 0).empty, "no_corpus");
+});
+
+// ---------------------------------------------------------------------------
+// The corrected scope rule: unreadable invalidates the claim that carries it
+// ---------------------------------------------------------------------------
+
+test("an unreadable required scope invalidates the whole claim, not only the scope", () => {
+  // `parseScope` always detected these. What it did was write the verdict into a field and let
+  // the unit go on authorizing rows, a denominator, a limitation, a mode and an absence claim,
+  // while reporting the response as fully usable. A marker that looks like a check while the
+  // guarantee it implies happens nowhere is the defect class this table exists to remove.
+  const cases: [string, unknown][] = [
+    // Absent, where the producer publishes one on every path.
+    ["search absent", { envelope: { status: "ok", publisher: "lu-legilux" },
+      retrieval_mode: "keyword", hits: [{ lex_id: "lu-legilux:w0" }] }],
+    ["in_force absent", { envelope: { status: "ok", publisher: "lu-legilux" },
+      works: [{ work: "a" }], total_works_in_force: 1 }],
+    ["changes absent", { envelope: { status: "ok", publisher: "lu-legilux" },
+      changes: [{ work: "w" }], works_changed: 1, new_versions: 1 }],
+    // Malformed.
+    ["in_force not an object", { envelope: { status: "ok", publisher: "lu-legilux" },
+      works: [{ work: "a" }], total_works_in_force: 1, population: "1250" }],
+    // Out of the producer's Int32 range.
+    ["in_force overflow", { envelope: { status: "ok", publisher: "lu-legilux" },
+      works: [{ work: "a" }], total_works_in_force: 1,
+      population: { ...inForcePopulation(), works_covered: 2147483648 } }],
+    ["search overflow", { envelope: { status: "ok", publisher: "lu-legilux" },
+      retrieval_mode: "keyword", hits: [{ lex_id: "lu-legilux:w0" }],
+      population: { ...searchPopulationFor("ok"), works_in_scope: 2147483648 } }],
+    // Internally incoherent: a population arriving where the producer publishes none.
+    ["in_force refusal with a population",
+      { ...refused("lu-legilux", ["domain"], "in_force_on"),
+        population: inForcePopulation() }],
+    ["changes refusal with a population",
+      { ...refused("lu-legilux", ["domain"], "changes_in_period"),
+        population: changesPopulation() }],
+  ];
+  const toolOf = (label: string) => label.startsWith("search")
+    ? "search" : label.startsWith("changes") ? "changes_in_period" : "in_force_on";
+  for (const [label, entry] of cases) {
+    const tool = toolOf(label);
+    assert.equal(classifyEnvelope(tool, entry).kind, "invalid",
+      `${label}: an unreadable required scope still produced a unit`);
+    const partition = partitionGovernedResponse(tool, [entry]);
+    assert.deepEqual(partition.ran, [], `${label}: rows survived`);
+    assert.equal(partition.limitations.length, 0, `${label}: a limitation survived`);
+    assert.equal(partition.modeUnavailableCount, 0, `${label}: a mode claim survived`);
+    assert.equal(partition.allRefused, false, `${label}: an absence claim survived`);
+    assert.equal(partition.invalidCount, 1, `${label}: the response looked fully usable`);
+  }
+  // The publisher is NAMED rather than merely counted, so a surface can say whose claim went.
+  const broken = { envelope: { status: "ok", publisher: "lu-legilux" },
+    works: [{ work: "a" }], total_works_in_force: 1, population: "1250" };
+  assert.deepEqual(parseGovernedResponse("in_force_on", [broken]).unreadable, ["lu-legilux"]);
+  assert.equal(parseGovernedResponse("in_force_on", [broken]).scopeAuthority,
+    "usable_units_only");
+});
+
+// ---------------------------------------------------------------------------
+// O16: the producer's paging receipts, per tool
+// ---------------------------------------------------------------------------
+
+test("in_force_on truncation must be the arithmetic the producer performed", () => {
+  // `["truncated"] = total > localOffset + pageUnits`, pageUnits = rows.Count + ambiguities.Count
+  // (McpCore 1155-1157). Every term is on the entry, so this is an exact equality.
+  const page = (over: Record<string, unknown>) => ({
+    envelope: { status: "ok", publisher: "lu-legilux" },
+    works: [{ work: "a" }],
+    total_works_in_force: 5,
+    population: inForcePopulation(),
+    offset: 0,
+    truncated: true,
+    ...over,
+  });
+  assert.equal(classifyEnvelope("in_force_on", page({})).kind, "ran",
+    "the producer's own receipt was refused");
+  assert.equal(classifyEnvelope("in_force_on", page({ truncated: false })).kind, "invalid",
+    "a page claiming to show everything beside a total of 5 and one row was accepted");
+  assert.equal(
+    classifyEnvelope("in_force_on", page({ total_works_in_force: 1, truncated: true })).kind,
+    "invalid", "a truncation claim the counts contradict was accepted");
+  assert.equal(
+    classifyEnvelope("in_force_on", page({ total_works_in_force: 1, truncated: false })).kind,
+    "ran");
+  // Ambiguity units consume the page too, so they count toward pageUnits.
+  assert.equal(classifyEnvelope("in_force_on", page({
+    envelope: { status: "ambiguous_version", publisher: "lu-legilux" },
+    ambiguous_works: [{ work: "b" }], total_works_in_force: 2, truncated: false,
+  })).kind, "ran");
+  assert.equal(classifyEnvelope("in_force_on", page({
+    envelope: { status: "ambiguous_version", publisher: "lu-legilux" },
+    ambiguous_works: [{ work: "b" }], total_works_in_force: 2, truncated: true,
+  })).kind, "invalid", "the ambiguity unit was left out of the page it occupies");
+  // Half a receipt is a shape nothing emits: the producer mints both in one object literal.
+  assert.equal(classifyEnvelope("in_force_on", page({ offset: undefined })).kind, "invalid");
+  assert.equal(classifyEnvelope("in_force_on", page({ truncated: undefined })).kind, "invalid");
+  // Bad types and out-of-range offsets fail closed rather than being ignored.
+  for (const bad of ["0", -1, 1.5, 2147483648, Number.NaN]) {
+    assert.equal(classifyEnvelope("in_force_on", page({ offset: bad })).kind, "invalid",
+      `offset ${String(bad)} was accepted`);
+  }
+  assert.equal(classifyEnvelope("in_force_on", page({ truncated: "yes" })).kind, "invalid");
+});
+
+test("changes_in_period cardinality must equal the rows it shipped", () => {
+  // `["shown"] = rows.Length` (McpCore 1813), then `response_row_set` is minted from `shown` and
+  // `works_changed` in a second pass (1865-1882).
+  const page = (over: Record<string, unknown>) => ({
+    envelope: { status: "ok", publisher: "lu-legilux" },
+    changes: [{ work: "w1" }],
+    works_changed: 5,
+    new_versions: 5,
+    population: changesPopulation(),
+    shown: 1,
+    offset: 0,
+    response_row_set: { maximum: 20, returned: 1, truncated: true },
+    global_response_row_set: { offset: 0, maximum: 20, returned: 1, total: 5, truncated: true },
+    ...over,
+  });
+  assert.equal(classifyEnvelope("changes_in_period", page({})).kind, "ran",
+    "the producer's own receipts were refused");
+  assert.equal(classifyEnvelope("changes_in_period", page({ shown: 2 })).kind, "invalid",
+    "a page claiming to show two rows shipped one");
+  assert.equal(classifyEnvelope("changes_in_period", page({ shown: 0 })).kind, "invalid");
+  // ISOLATED from the row receipt. With `response_row_set` present, a wrong `shown` is also
+  // caught by `returned !== shown`, so removing the `shown` check alone killed no test. The
+  // producer stamps `shown` on the entry itself, so it has to stand on its own.
+  const { response_row_set: _receipt, ...noReceipt } = page({});
+  assert.equal(classifyEnvelope("changes_in_period", noReceipt).kind, "ran",
+    "a page with no row receipt stopped being readable");
+  assert.equal(
+    classifyEnvelope("changes_in_period", { ...noReceipt, shown: 2 }).kind, "invalid",
+    "a cardinality claim was only ever checked through a receipt that may be absent");
+  assert.equal(
+    classifyEnvelope("changes_in_period", { ...noReceipt, shown: "1" }).kind, "invalid");
+  assert.equal(classifyEnvelope("changes_in_period", page({
+    response_row_set: { maximum: 20, returned: 2, truncated: true },
+  })).kind, "invalid", "the row receipt disagreed with the rows");
+  assert.equal(classifyEnvelope("changes_in_period", page({
+    response_row_set: { maximum: 20, returned: 1, truncated: false },
+  })).kind, "invalid", "a page of 1 from a total of 5 claimed to be complete");
+  assert.equal(classifyEnvelope("changes_in_period", page({
+    works_changed: 1, response_row_set: { maximum: 20, returned: 1, truncated: false },
+    global_response_row_set: { offset: 0, maximum: 20, returned: 1, total: 1,
+                               truncated: false },
+  })).kind, "ran", "a genuinely complete page was refused");
+  assert.equal(classifyEnvelope("changes_in_period", page({
+    global_response_row_set: { offset: 0, maximum: 20, returned: 1, total: 5,
+                               truncated: false },
+  })).kind, "invalid", "a global receipt contradicting its own three numbers was accepted");
+  assert.equal(classifyEnvelope("changes_in_period", page({
+    global_response_row_set: { offset: 3, maximum: 20, returned: 1, total: 5, truncated: true },
+  })).kind, "invalid", "two readings of one request offset disagreed");
+  // All or nothing on the entry-level pair.
+  assert.equal(classifyEnvelope("changes_in_period", page({ shown: undefined })).kind,
+    "invalid");
+  assert.equal(classifyEnvelope("changes_in_period", page({ offset: undefined })).kind,
+    "invalid");
+});
+
+test("the publisher receipt must agree with its own three numbers, on every tool", () => {
+  // `MarkPublisherSet` (McpCore 701-712) stamps every item of all three tools and derives both
+  // `returned` and `truncated` from `total` and one constant.
+  const receipt = (over: Record<string, unknown> = {}) => ({
+    total: 2, returned: 2, maximum: 8, truncated: false, ...over,
+  });
+  const withReceipt = (tool: string, publisher_result_set: unknown) => {
+    const base = tool === "search"
+      ? searchOk("lu-legilux", 1)
+      : tool === "changes_in_period" ? changesOk("lu-legilux", 1) : inForceOk("lu-legilux", 1);
+    return { ...base, publisher_result_set };
+  };
+  // COLLECTED, not asserted one at a time. A loop of `assert.equal` stops at the first tool, so
+  // a mutation of the shared receipt reader reported only `search` and said nothing about
+  // whether the other two were covered. Gathering the verdicts makes one mutation name all
+  // three, which is what mutation-testing each tool separately actually requires.
+  const probes: [string, unknown][] = [
+    ["the producer's own receipt", receipt()],
+    ["a receipt that miscounts itself", receipt({ returned: 1 })],
+    ["a truncation claim of 2 out of a maximum of 8", receipt({ truncated: true })],
+    ["a genuine publisher truncation", receipt({ total: 9, returned: 8, truncated: true })],
+    ["a count the producer cannot mint", receipt({ total: "2" })],
+    ["a truthy stand-in for a boolean", receipt({ truncated: 0 })],
+    ["an array", []],
+  ];
+  const expected = ["ran", "invalid", "invalid", "ran", "invalid", "invalid", "invalid"];
+  const tools = ["search", "changes_in_period", "in_force_on"];
+  const verdicts = Object.fromEntries(tools.map((tool) =>
+    [tool, probes.map(([, value]) => classifyEnvelope(tool, withReceipt(tool, value)).kind)]));
+  assert.deepEqual(verdicts,
+    Object.fromEntries(tools.map((tool) => [tool, expected])),
+    `probes in order: ${probes.map(([label]) => label).join("; ")}`);
+});
+
+// ---------------------------------------------------------------------------
+// O12: a page slice is not an absence
+// ---------------------------------------------------------------------------
+
+test("a positive total with nothing on the page never claims the corpus is empty", () => {
+  // The response says there are five states and shows none of them, because one shared
+  // remainingLimit paged this publisher out. Reporting "no publisher state covers that date"
+  // beside it is a confident absence the response itself contradicts.
+  const pagedOut = {
+    envelope: { status: "ok", publisher: "lu-legilux" },
+    works: [],
+    total_works_in_force: 5,
+    population: inForcePopulation(),
+  };
+  assert.equal(classifyEnvelope("in_force_on", pagedOut).kind, "ran",
+    "the fixture stopped being a legitimate paged response");
+  const decision = projectGovernedEmptiness("in_force_on", [pagedOut], 0);
+  assert.equal(decision.partition.moreBeyondPage, true);
+  assert.notEqual(decision.empty, "none_matched",
+    "a page slice was presented as a statement that nothing matched");
+  assert.equal(decision.empty, "incomplete_response");
+
+  // The same for changes_in_period, whose rows are a slice of one globally merged page.
+  const outranked = {
+    envelope: { status: "ok", publisher: "lu-legilux" },
+    changes: [], works_changed: 7, new_versions: 7, population: changesPopulation(),
+  };
+  const changes = projectGovernedEmptiness("changes_in_period", [outranked], 0);
+  assert.equal(changes.partition.moreBeyondPage, true);
+  assert.equal(changes.empty, "incomplete_response");
+
+  // A mixed no-match is an absence claim too, so it is overridden by the same fact.
+  const mixed = projectGovernedEmptiness("changes_in_period",
+    [outranked, refused("eu-eurlex", ["domain"], "changes_in_period")], 0);
+  assert.equal(mixed.empty, "incomplete_response",
+    "a scoped absence sentence still spoke for a page that showed nothing of five");
+
+  // AND THE HONEST ABSENCE SURVIVES, which is the guard against over-correction: a publisher
+  // that really found nothing still says so.
+  const nothing = {
+    envelope: { status: "no_result", publisher: "lu-legilux" },
+    works: [], total_works_in_force: 0, population: inForcePopulation(),
+  };
+  const empty = projectGovernedEmptiness("in_force_on", [nothing], 0);
+  assert.equal(empty.partition.moreBeyondPage, false);
+  assert.equal(empty.empty, "none_matched", "a real absence stopped being stateable");
+  // A truncation receipt is the second, independent way to know the page was a slice.
+  const truncatedPage = {
+    envelope: { status: "no_result", publisher: "lu-legilux" },
+    works: [], total_works_in_force: 0, population: inForcePopulation(),
+    offset: 0, truncated: false,
+  };
+  assert.equal(projectGovernedEmptiness("in_force_on", [truncatedPage], 0).empty,
+    "none_matched", "an untruncated empty page stopped being an absence");
+});
+
+// ---------------------------------------------------------------------------
+// Ambiguity is read only where the table declares the field
+// ---------------------------------------------------------------------------
+
+test("a stray ambiguity field on a tool that has none drives nothing", () => {
+  // `ambiguous_works` is in_force_on's field and no other tool's: `McpCore` emits it only there.
+  // The count used to be read off any ran entry of any tool, so a changes_in_period entry
+  // carrying the field drove that whole surface to `ambiguous_only`, asking the reader to
+  // choose an exact publisher version on a page of period changes. The rows inside it were
+  // never validated either, because nothing on that tool's path looks at them.
+  const strayed = {
+    ...changesOk("lu-legilux", 1),
+    ambiguous_works: [{ nonsense: true }, null],
+  };
+  assert.equal(classifyEnvelope("changes_in_period", strayed).kind, "ran",
+    "a field this tool has no rule for made the entry malformed");
+  const decision = projectGovernedEmptiness("changes_in_period", [strayed], 0);
+  assert.equal(decision.partition.ambiguityUnits, 0,
+    "a field the table does not declare for this tool was counted");
+  assert.deepEqual(decision.ambiguous, [],
+    "an unvalidated object was handed to the caller to render");
+  assert.notEqual(decision.empty, "ambiguous_only");
+  // And in_force_on, where the table DOES declare it, still reads it.
+  const real = {
+    envelope: { status: "ambiguous_version", publisher: "lu-legilux" },
+    works: [], ambiguous_works: [{ work: "w1" }], total_works_in_force: 1,
+    population: inForcePopulation(),
+  };
+  const inForce = projectGovernedEmptiness("in_force_on", [real], 0);
+  assert.equal(inForce.partition.ambiguityUnits, 1);
+  assert.equal(inForce.empty, "ambiguous_only");
+});
+
+// ---------------------------------------------------------------------------
+// The quarantined retrieval mode, pinned at the unit seam
+// ---------------------------------------------------------------------------
+
+test("a quarantined retrieval mode reports unavailability and never falls back", () => {
+  // The producer attaches a population to this path like every other search path:
+  // `["population"] = SearchPopulation(reader, filter, scopeFiltersApplied: true,
+  // queryRan: false)` at McpCore.cs:1385-1386, beside `McpStatus.RetrievalModeUnavailable` at
+  // 1376. With it, the reader is told which publisher cannot honour meaning search and why.
+  const quarantined = {
+    envelope: { publisher: "eu-eurlex", jurisdiction: "EU",
+                status: "retrieval_mode_unavailable" },
+    requested_retrieval_mode: "hybrid",
+    retrieval_unavailable_reason: "benchmark_gate_failed",
+    population: searchPopulationFor("retrieval_mode_unavailable"),
+    hits: [],
+  };
+  const projected = projectSearch([quarantined]);
+  assert.ok(projected.modeUnavailable?.includes("eu-eurlex"),
+    "the reader was not told which publisher cannot honour meaning search");
+  assert.ok(projected.modeUnavailable?.includes("signed retrieval benchmark"),
+    "the fixed explanation was lost");
+  assert.equal(projected.modeUsed, undefined,
+    "a mode the request never got was reported as the mode used");
+  assert.equal(projected.limitations.length, 0, "no filter was refused");
+
+  // WITHOUT the population the producer always sends, the entry is a shape the producer cannot
+  // emit, so it authorizes nothing. What matters for the trust property is what happens next:
+  // the surface claims NOTHING. It does not answer with keyword results, and it does not report
+  // an absence. The reader loses the specific explanation and gains no false answer.
+  const { population: _dropped, ...unstated } = quarantined;
+  const degraded = projectSearch([unstated]);
+  assert.equal(degraded.modeUsed, undefined, "a silent keyword fallback appeared");
+  assert.deepEqual(degraded.works, [], "results were rendered for a mode that never ran");
+  assert.equal(degraded.absence, "incomplete_response",
+    "an unusable response made a claim about the corpus");
+  assert.notEqual(degraded.absence, "no_match");
 });

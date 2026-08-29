@@ -11,8 +11,8 @@ import { ScopeFilters } from "./ScopeFilters";
 import { envelopeStripRows, type EnvelopeStripRow } from "./envelopeStrip";
 import { normalizeSearchResponse, type PublisherPopulation } from "./searchPopulation";
 import { fuzzyModeFor, retainedForQuery } from "./api";
-import { classifyEnvelope, clearedSearchResults, LIMITATION_EXPLANATION, projectSearchResponse,
-  searchEmptyPresentation, searchResultsFromError,
+import { clearedSearchResults, LIMITATION_EXPLANATION, parseGovernedResponse,
+  projectSearchResponse, searchEmptyPresentation, searchResultsFromError,
   type SearchResultsState } from "./limitations";
 import { PartialResponseNotice, PopulationFooter, PublisherLimitations } from "./views";
 import type { State } from "./state";
@@ -245,22 +245,37 @@ export default function Search(p: SearchProps) {
       .then((res) => {
         if (!live()) return;
         p.onEnvelopes(envelopeStripRows(res));
-        // One normalized set feeds rows, the denominator and absence authority. Two passes
-        // over two sets is how a footer ends up describing a different population than the
-        // rows above it, and how rows survive a publisher whose denominator was refused.
-        const answer = normalizeSearchResponse(res, classifyEnvelope);
+        // ONE PARSE. Rows, the denominator, the withholding disclosure, the retrieval
+        // mode, the expansions and the absence state are six views of this single typed
+        // result. This used to be three separate walks over `res` in three consecutive
+        // statements, and the comment that stood here promised the opposite of what the
+        // code did: it said one normalized set fed rows, the denominator and absence
+        // authority, above code where a footer could describe a publisher whose rows had
+        // been withheld one statement later. There is now nothing left to disagree with.
+        const parsed = parseGovernedResponse("search", res);
+        const answer = normalizeSearchResponse(parsed);
         setPopulations(answer.populations);
         setWithheld(answer.complete ? undefined : {
           publishers: answer.withheldPublishers,
           unattributed: answer.unattributedEntries,
         });
-        // Round 4 (O3/O4): the ONE production projector partitions the response closed,
-        // derives mode and expansion facts from the validated ran envelopes only, and types
-        // the absence state; the callback below is presentation mapping, not decision.
+        // Round 4 (O3/O4): the ONE production projector reads the parse closed, derives
+        // mode and expansion facts from the validated ran units only, and types the
+        // absence state; the callback below is presentation mapping, not decision.
         setResults(projectSearchResponse<WorkHit, ArticleHit>(
-          answer.complete ? answer.entries : answer.entriesAfterWithholding,
-          (ranEnvelopes) => {
-          const hits = fusePublisherHits<any>(ranEnvelopes as any[]);
+          parsed,
+          (ranUnits) => {
+          // Adapted from the parsed units, never re-read off the response. Publisher,
+          // jurisdiction, timeline semantics and rows all come from the one parse, so a
+          // hit can no longer reach fusion carrying an identity the table refused.
+          const hits = fusePublisherHits<any>(ranUnits.map((unit) => ({
+            envelope: {
+              publisher: unit.publisher,
+              jurisdiction: unit.jurisdiction,
+              timeline_semantics: unit.timelineSemantics,
+            },
+            hits: unit.rows,
+          })));
           // The same hits answer two different questions, so they are split rather than
           // ranked together: "which law is this" and "where is this said".
           const byWork = new Map<string, WorkHit>();

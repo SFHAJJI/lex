@@ -15,13 +15,20 @@
  * absence claim, since an unverified denominator is worse than a missing one: it invites the
  * reader to check an answer against a number nothing stands behind.
  *
- * ONE SHARED NORMALIZED RESPONSE SET. `normalizeSearchResponse` classifies every entry once and
- * returns the rows, the populations and the completeness verdict from that single pass, so a
- * publisher can never have its hits rendered beside a denominator that was refused, and no
- * projection can disagree with another about which publishers were admitted.
+ * ONE PARSE, NOT ONE PASS. `normalizeSearchResponse` no longer reads a response at all. It takes
+ * the `GovernedResponse` that `limitations.ts` produced from the raw bytes and reshapes it, so
+ * rows, populations and absence authority are three views of one typed parse rather than three
+ * readings of the same untrusted object. A publisher can never have its hits rendered beside a
+ * denominator that was refused, and no projection can disagree with another about which
+ * publishers were admitted, because there is nothing left to disagree with.
+ *
+ * The type import below is deliberately type-only and creates no runtime cycle: limitations.ts
+ * imports this module's validator, and this module imports only its TYPES back. The runtime
+ * direction stays exactly as acyclic as it was.
  */
 
-import { MAX_PUBLISHER_IDENTITY, publisherIdentity } from "./publisherIdentity.ts";
+import { MAX_PUBLISHER_IDENTITY } from "./publisherIdentity.ts";
+import type { GovernedResponse, PublisherUnit } from "./limitations.ts";
 
 export type PopulationBasis =
   | "selected_metadata_scope"
@@ -63,6 +70,29 @@ export const POPULATION_BOUNDS = {
 };
 
 /**
+ * The producer's own numeric range for every count this workspace consumes: C# `int`, end to end.
+ *
+ * Evidence, read from the mint sites rather than assumed. This population's own denominator is
+ * `McpCore.SearchPopulation`, which sets `["works_in_scope"]` from either
+ * `reader.SearchPopulationTotal(filter)` or `reader.PopulationTotal(null)`; both are declared
+ * `public int` in `Lex.Index/IndexReader.cs`. The other two governed populations are the same
+ * shape: `in_force_on` publishes `works_covered` from `r.Coverage(1).Groups`, and `CoverageInfo`
+ * declares `int Groups`. The counts beside the rows are `int` as well: `IndexReader.ChangeTotals`
+ * is `(int Works, int Versions)` and `Rows.InForcePage.TotalGroups` is `int`.
+ *
+ * IT LIVES HERE, not in limitations.ts, because two doors have to agree on it and only one
+ * direction between these modules is acyclic. limitations.ts imports this module; this module
+ * imports publisherIdentity.ts and nothing else at runtime. Putting the constant in the importer
+ * would leave this validator with a copy, and a copy is the defect the whole lane exists to stop:
+ * a value above this reached the search footer as a legal denominator while the same number was
+ * refused one module away.
+ *
+ * A count above this is not merely large. It is a number nothing in that chain can produce, so
+ * accepting it is accepting a forgery.
+ */
+export const MAX_PRODUCER_COUNT = 2147483647;
+
+/**
  * A bounded list, or a single bounded string, and nothing else.
  *
  * EXPORTED so limitations.ts can read the other two tools' `known_exclusions` through this one
@@ -87,10 +117,12 @@ export function exclusionsOf(raw: unknown): string[] | null {
 
 /**
  * The publisher identity a population may be attributed to comes from `publisherIdentity`, the
- * one non-normalizing validator the strip and the limitation list also use. This module used to
- * carry its own copy, whose regex had the `i` flag: "LU-Legilux" was an identity here and not to
- * the producer's ordinal registry lookup, so one raw publisher could pass the duplicate check
- * that the other spelling should have failed. See publisherIdentity.ts for the producer evidence.
+ * one non-normalizing validator the strip and the limitation list also use. It is no longer
+ * called here: the identity now arrives already validated on the parsed unit, which is the point
+ * of the cutover. This module used to carry its own copy, whose regex had the `i` flag:
+ * "LU-Legilux" was an identity here and not to the producer's ordinal registry lookup, so one raw
+ * publisher could pass the duplicate check that the other spelling should have failed. See
+ * publisherIdentity.ts for the producer evidence.
  */
 
 export function validateSearchPopulation(status: unknown, raw: unknown): PopulationVerdict {
@@ -103,9 +135,16 @@ export function validateSearchPopulation(status: unknown, raw: unknown): Populat
   const p = raw as Record<string, unknown>;
 
   const works = p.works_in_scope;
-  // Number.isSafeInteger rejects NaN, Infinity, fractions, and anything past 2^53 in one test.
-  if (!Number.isSafeInteger(works) || (works as number) < 0) {
-    return { valid: false, reason: "works_in_scope is not a non-negative safe integer" };
+  // Two different tests, and both are needed. Number.isSafeInteger rejects NaN, Infinity,
+  // fractions and anything past 2^53, which is a test on whether the VALUE is an exact integer.
+  // MAX_PRODUCER_COUNT is a test on whether it is inside the range the PRODUCER can mint, and
+  // 2^31 to 2^53 is exactly the gap between them: 2147483648 is a perfectly exact integer and a
+  // number `SearchPopulationTotal` cannot return. It used to pass here and be refused by the
+  // parser one module away, so the same response disclosed a denominator on the footer that
+  // authorized no rows above it.
+  if (!Number.isSafeInteger(works) || (works as number) < 0
+    || (works as number) > MAX_PRODUCER_COUNT) {
+    return { valid: false, reason: "works_in_scope is not a count the producer can mint" };
   }
   if (typeof p.basis !== "string" || !BASES.includes(p.basis as PopulationBasis)) {
     return { valid: false, reason: `unknown basis ${String(p.basis)}` };
@@ -158,234 +197,123 @@ export interface PublisherPopulation {
   population: SearchPopulation;
 }
 
-/** Envelope classifications that may carry a population the reader can be shown. */
-const DISCLOSABLE = new Set(["ran", "mode_unavailable", "refused"]);
-
-/**
- * Set equality, not array equality.
- *
- * `known_exclusions` is a set the producer happens to serialize as a list. Two entries that
- * disclose the same exclusions in a different order state one fact, and comparing positionally
- * would call that a conflict and drop a publisher that never disagreed. Two entries that disclose
- * DIFFERENT exclusions disagree about what their denominator leaves out, which is a disagreement
- * about the denominator itself, not a detail beside it.
- */
-function sameExclusions(a: readonly string[], b: readonly string[]): boolean {
-  // Both sides are already de-duplicated by exclusionsOf, so equal size plus containment is set
-  // equality rather than multiset equality.
-  if (a.length !== b.length) return false;
-  const present = new Set(a);
-  return b.every((item) => present.has(item));
-}
-
-/**
- * Logical identity of one publisher's disclosure: every field a reader could check.
- *
- * The `kind` term is kept because this is a DEFINITION of sameness rather than a guard, but a
- * kind difference no longer reaches its verdict: two claim-bearing entries for one publisher
- * that disagree about what it DID are a status conflict, decided from the classification alone
- * before any population is validated. See the conflict comment in normalizeSearchResponse.
- */
-function sameDisclosure(a: PublisherPopulation, b: PublisherPopulation): boolean {
-  return a.kind === b.kind
-    && a.population.works_in_scope === b.population.works_in_scope
-    && a.population.basis === b.population.basis
-    && a.population.query_ran === b.population.query_ran
-    && a.population.scope_filters_applied === b.population.scope_filters_applied
-    && sameExclusions(a.population.known_exclusions, b.population.known_exclusions);
-}
-
 /**
  * The result of one normalization pass over one search response.
  *
+ * AN ADAPTER, NOT A PARSER. It takes the `GovernedResponse` the one door already produced and
+ * reshapes it for the footer. It never sees raw `unknown`, never takes a classifier callback, and
+ * makes no decision about publisher identity, duplicates, row authority or population validity:
+ * every one of those is already decided, once, by `parseGovernedResponse`.
+ *
+ * That is the whole repair. This module used to own a second state machine over the same bytes:
+ * it re-read `envelope.publisher`, re-validated `record.population`, kept its own `voided` and
+ * `statusConflicted` sets and withheld its own rows. Two entry points that both took `unknown`
+ * disagreed, and the disagreement reached the reader: two logically identical ran units for one
+ * publisher collapsed into one surviving population HERE while `parseGovernedResponse` withheld
+ * every row that publisher sent, so the footer reported a denominator for a source the page was
+ * showing nothing from. Disagreement is now not merely prevented but inexpressible, because
+ * there is only one parse to disagree with.
+ *
  * CONTRACT FOR THE CALLER
  *
- * 1. Project rows from the entry list this returns, never from the raw response. The list is the
- *    raw entries minus every entry whose row authority was withheld, so hits from a publisher
- *    whose denominator was refused cannot reach the screen.
- * 2. `populations` is the footer's only source. It holds at most one entry per publisher and
- *    never holds a withheld one, so footer and rows describe the same set by construction.
- * 3. The entry list is named `entries` when nothing was withheld and `entriesAfterWithholding`
- *    when something was. That is deliberate: TypeScript refuses to hand out rows until the caller
- *    has read `complete`, so an incomplete response cannot be presented as a whole one.
- * 4. When `complete` is false the caller must disclose the withholding and must NOT make an
- *    absence claim from these rows. Withheld entries are gone from the list, so the projector can
- *    no longer see that anything was hidden and would otherwise report a confident "nothing
- *    matched" for a response that was cut down.
- * 5. `complete: true` says only that this pass withheld nothing. It is not a health claim about
- *    the response: an envelope the classifier rejects is passed through untouched and surfaces in
- *    the projector's own absence state as `incomplete_response`.
+ * 1. `populations` is the footer's only source. At most one entry per publisher, holding none of
+ *    the withheld ones, so footer and rows describe the same set by construction.
+ * 2. Rows come from the same `GovernedResponse` this was built from, never from the raw response.
+ * 3. When `complete` is false the caller must disclose the withholding and must NOT make an
+ *    absence claim. `projectSearchResponse` reads the same parse and types that state as
+ *    `partial_results` or `incomplete_response`, so the disclosure is structural either way.
+ * 4. `complete: true` says only that nothing was withheld from ATTRIBUTION. It is not a health
+ *    claim about the response: an entry the table rejects is counted in the parse's own
+ *    `unusable` and surfaces in the projector's absence state.
  */
 export type NormalizedSearchResponse =
   | {
-      /** Nothing was withheld: every entry is attributable and every denominator validated. */
+      /** Nothing was withheld: every claim is attributable and every denominator validated. */
       complete: true;
-      /** The entries to project rows from. Entry for entry, the response as received. */
-      entries: unknown[];
-      /** At most one validated population per publisher. */
+      /** At most one validated population per publisher, ordered by publisher. */
       populations: PublisherPopulation[];
     }
   | {
       complete: false;
-      /** The entries to project rows from, with every withheld entry removed. */
-      entriesAfterWithholding: unknown[];
       /** At most one validated population per publisher, holding none of the withheld ones. */
       populations: PublisherPopulation[];
       /**
-       * Named publishers whose population authority is void, sorted. They contribute no
-       * population. Two causes, and they withhold different things: a VOID DENOMINATOR takes
-       * that publisher's rows out of the entry list, while a STATUS CONFLICT leaves every entry
-       * in place and lets partitionGovernedResponse withhold every claim it made. Empty when
-       * only unattributable entries were withheld.
+       * Named publishers whose claims were withheld, sorted and distinct. Two causes, both
+       * decided by the one parse: a SAME-PUBLISHER CONFLICT, where more than one claim-bearing
+       * unit arrived and nothing says which is true, and an UNREADABLE REQUIRED SCOPE, where the
+       * producer publishes a population on every search path and this one will not validate.
+       * Empty when only unattributable entries were withheld.
        */
       withheldPublishers: string[];
       /**
-       * How many disclosable entries carried rows or a population under no bounded publisher
-       * identity. They are withheld, and named to nobody, which is why they are only a count.
+       * How many claim-bearing entries carried no bounded publisher identity. They are withheld,
+       * and named to nobody, which is why they are only a count.
        */
       unattributedEntries: number;
     };
 
 /**
- * Normalize one search response into the single set that rows, population and absence authority
- * all consume. See NormalizedSearchResponse for the caller's contract.
+ * The population a search unit discloses, or nothing when it is not one.
  *
- * Classification comes from `classifyEnvelope`, the same authority the rows come from, so a
- * publisher can never be counted as having answered here while being withheld there, and it is
- * consulted exactly once per entry.
- *
- * A publisher's population authority is void when any of its disclosable entries fails validation
- * or when two of them disagree. Void is decided across the whole response before anything is
- * projected, so it cannot depend on arrival order, and it takes that publisher's ROWS with it: a
- * row list the reader cannot check against a denominator is the exact claim this lane exists to
- * stop.
+ * A NARROWING of an already-validated value, not a second validator. `parseScope` ran the whole
+ * coherence contract for this status before the unit existed; every test here can only refuse
+ * something that pass accepted, and none of them can accept something it refused. They are here
+ * because `ScopeDisclosure` is the shape shared by all three governed tools, and only search's
+ * carries a closed basis vocabulary and the two booleans this footer reads.
  */
-export function normalizeSearchResponse(
-  raw: unknown,
-  classify: (tool: string, entry: unknown) => { kind: string },
-): NormalizedSearchResponse {
-  const list = Array.isArray(raw) ? raw : [raw];
-  const scanned: { entry: unknown; carriesRows: boolean; publisher?: string }[] = [];
-  /** Distinct disclosable classifications seen per publisher; more than one is a conflict. */
-  const kindsByPublisher = new Map<string, Set<string>>();
-  const statusConflicted = new Set<string>();
-  const byPublisher = new Map<string, PublisherPopulation>();
-  const voided = new Set<string>();
-  let unattributed = 0;
-
-  for (const entry of list) {
-    const kind = entry !== null && typeof entry === "object"
-      ? classify("search", entry).kind
-      : "invalid";
-    // Entries the classifier will not disclose stay in the list untouched. They carry no rows and
-    // no population, and removing them would shrink the invalid count the projector builds its
-    // absence state from, turning a response that hid something into a confident "nothing found".
-    if (!DISCLOSABLE.has(kind)) {
-      scanned.push({ entry, carriesRows: false });
-      continue;
-    }
-    const record = entry as Record<string, unknown>;
-    const envelope = (record.envelope ?? {}) as Record<string, unknown>;
-    const publisher = publisherIdentity(envelope.publisher);
-    // Only a ran envelope carries hits. A refusal carries a limitation the reader must still be
-    // told about, so withholding is scoped to row-bearing entries and never silences a refusal.
-    const carriesRows = kind === "ran";
-    scanned.push({ entry, carriesRows, publisher });
-    if (publisher === undefined) {
-      // A denominator nobody is named for cannot be attributed, checked or corrected. Rule 6 asks
-      // whose population this is, not only how large it is. A refusal that discloses neither rows
-      // nor a population has nothing to attribute and passes through without opening a hole.
-      if (carriesRows || record.population !== undefined) unattributed++;
-      continue;
-    }
-    // WHERE THE LINE FALLS between the two kinds of withholding, because the next reader will
-    // otherwise collapse them.
-    //
-    // A STATUS CONFLICT is two claim-bearing entries for ONE publisher that disagree about what
-    // that publisher DID: it ran and it refused, it ran and its retrieval mode was unavailable,
-    // it refused and its mode was unavailable. The response contains both claims and nothing in
-    // it says which is true, so keeping either side is the product picking one and asserting
-    // it. Every claim that publisher made is withheld, the refusal included.
-    //
-    // A VOID DENOMINATOR is narrower. One entry, coherent about what its publisher did, whose
-    // population alone will not validate. Nothing contradicts the claim itself, so a fact that
-    // stands independently of the denominator stands: a lone refusal keeps its limitation and
-    // still reaches all_refused. Only its ROWS go, because a row list the reader cannot check
-    // against a denominator is the claim this lane exists to stop.
-    //
-    // Decided from the CLASSIFICATION alone, before any population is validated, so it holds
-    // whether or not either side's denominator was readable, and it cannot depend on which
-    // entry the transport delivered first.
-    const kinds = kindsByPublisher.get(publisher) ?? new Set<string>();
-    kinds.add(kind);
-    kindsByPublisher.set(publisher, kinds);
-    if (kinds.size > 1) statusConflicted.add(publisher);
-
-    const verdict = validateSearchPopulation(envelope.status, record.population);
-    if (!verdict.valid) {
-      voided.add(publisher);
-      continue;
-    }
-    const candidate: PublisherPopulation = {
-      publisher,
-      kind: kind as PublisherPopulation["kind"],
-      population: verdict.population,
-    };
-    const existing = byPublisher.get(publisher);
-    if (existing === undefined) {
-      byPublisher.set(publisher, candidate);
-      continue;
-    }
-    // Two entries for one publisher that disagree are an incoherent response. Keeping the first
-    // lets arrival order decide what the reader is told, so the publisher drops out of both
-    // projections rather than contributing a number nothing stands behind. Logically identical
-    // duplicates simply collapse.
-    if (!sameDisclosure(existing, candidate)) voided.add(publisher);
-  }
-
-  // A status conflict voids the denominator too: a publisher whose own response cannot say
-  // what it did cannot stand behind a number about what it searched.
-  for (const publisher of statusConflicted) voided.add(publisher);
-  for (const publisher of voided) byPublisher.delete(publisher);
-  const populations = [...byPublisher.values()];
-  const kept = scanned
-    .filter((item) => {
-      // A status-conflicted publisher keeps EVERY entry here, deliberately. The claims are
-      // withheld by partitionGovernedResponse, which is the ONE authority for that across all
-      // three governed tools. Removing either side here would hide the conflict from it and
-      // hand the reader the surviving side after all: the refusal would still produce its
-      // limitation, and the screen would still say this publisher did not run the query about
-      // a response that also said it ran.
-      if (item.publisher !== undefined && statusConflicted.has(item.publisher)) return true;
-      return !(item.carriesRows
-        && (item.publisher === undefined || voided.has(item.publisher)));
-    })
-    .map((item) => item.entry);
-  const withheldPublishers = [...voided].sort();
-  if (withheldPublishers.length === 0 && unattributed === 0) {
-    return { complete: true, entries: kept, populations };
-  }
+function searchPopulationOf(unit: PublisherUnit): PublisherPopulation | undefined {
+  if (unit.scope.kind !== "disclosed") return undefined;
+  const scope = unit.scope.scope;
+  if (scope.measure !== "works_in_scope") return undefined;
+  if (!BASES.includes(scope.basis as PopulationBasis)) return undefined;
+  if (scope.scopeFiltersApplied === undefined || scope.queryRan === undefined) return undefined;
   return {
-    complete: false,
-    entriesAfterWithholding: kept,
-    populations,
-    withheldPublishers,
-    unattributedEntries: unattributed,
+    publisher: unit.publisher,
+    kind: unit.kind,
+    population: {
+      basis: scope.basis as PopulationBasis,
+      works_in_scope: scope.works,
+      scope_filters_applied: scope.scopeFiltersApplied,
+      query_ran: scope.queryRan,
+      known_exclusions: scope.knownExclusions,
+    },
   };
 }
 
 /**
- * Per-publisher populations from one search response.
+ * Reshape one already-parsed search response for the footer. See NormalizedSearchResponse.
+ */
+export function normalizeSearchResponse(
+  parsed: GovernedResponse,
+): NormalizedSearchResponse {
+  const populations = parsed.units
+    .map(searchPopulationOf)
+    .filter((row): row is PublisherPopulation => row !== undefined);
+  // Both causes are named, and they are named TOGETHER because the reader's question is the same
+  // for both: which publisher is this page showing me nothing from. Sorted and de-duplicated
+  // because the two lists are independent and a publisher can in principle appear in neither
+  // order nor only once.
+  const withheldPublishers = [...new Set([...parsed.conflicted, ...parsed.unreadable])].sort();
+  if (withheldPublishers.length === 0 && parsed.unattributed === 0) {
+    return { complete: true, populations };
+  }
+  return {
+    complete: false,
+    populations,
+    withheldPublishers,
+    unattributedEntries: parsed.unattributed,
+  };
+}
+
+/**
+ * Per-publisher populations from one already-parsed search response.
  *
  * The narrow read, for a caller that renders only the footer. Anything that also renders rows
- * must call `normalizeSearchResponse`: populations alone cannot tell it which publishers were
+ * must read `normalizeSearchResponse`: populations alone cannot tell it which publishers were
  * withheld, and rendering their hits beside this footer is the defect O2 named.
  */
-export function searchPopulations(
-  raw: unknown,
-  classify: (tool: string, entry: unknown) => { kind: string },
-): PublisherPopulation[] {
-  return normalizeSearchResponse(raw, classify).populations;
+export function searchPopulations(parsed: GovernedResponse): PublisherPopulation[] {
+  return normalizeSearchResponse(parsed).populations;
 }
 
 /**
@@ -415,13 +343,15 @@ export type QueriedDenominator =
  * the defect is in the set, not in the numbers.
  *
  * A repeated publisher is REFUSED, never collapsed, even when the two rows look identical.
- * normalizeSearchResponse may collapse an identical duplicate because it has the response in
- * front of it: it classified both entries under one authority and validated each against its own
- * envelope status, so "these are one disclosure" is an observation there. Here that context is
- * gone. Two identical-looking rows are equally likely to be one disclosure counted twice by a
- * caller that concatenated two lists, and picking a reading is the guess the order-dependence
- * objection forbade. Refusing costs a legitimate caller nothing, because the normalized set
- * already satisfies the invariant.
+ *
+ * The comment here used to say normalizeSearchResponse MAY collapse an identical duplicate,
+ * because it has the response in front of it. It no longer may, and it never should have: a
+ * second claim-bearing unit for one publisher is a shape the producer cannot emit, so the parse
+ * treats it as a conflict and withholds every claim that publisher made. This function reaches
+ * the same verdict for a narrower reason. Two identical-looking rows are equally likely to be one
+ * disclosure counted twice by a caller that concatenated two lists, and picking a reading is the
+ * guess the order-dependence objection forbade. Refusing costs a legitimate caller nothing,
+ * because the normalized set already satisfies the invariant.
  *
  * Every addend is re-checked for the same reason. The ceiling is checked BEFORE each addition:
  * afterwards there is nothing left to check, since a sum past Number.MAX_SAFE_INTEGER has already

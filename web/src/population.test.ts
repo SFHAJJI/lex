@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { fuzzyModeFor, populationCoverageLabel, populationScopeLabel, retainedForQuery,
   changeCountLabels, summedCount, summedPopulation,
   unionKnownExclusions } from "./api.ts";
+import { MAX_PRODUCER_COUNT } from "./searchPopulation.ts";
 
 // Trust rule 6 is about a denominator the reader can check. These bind the exact presentation of
 // a population the producer published, so a number can never appear describing a scope it did not
@@ -153,14 +154,25 @@ test("an entry with no population contributes nothing rather than a zero", () =>
 test("a count the producer could not have minted refuses the whole total", () => {
   // Refuses rather than drops the bad entry: a total missing one publisher is not a smaller
   // truth, it is a different and unstated scope.
-  for (const bad of ["1200", 12.5, -1, Number.NaN, Number.MAX_SAFE_INTEGER + 1, null, {}])
+  //
+  // 2147483648 is the case this helper used to miss. It is an exact integer, so
+  // Number.isSafeInteger said yes, and it is one more than the largest value
+  // SearchPopulationTotal or Coverage(1).Groups can return. The parser refused it and this
+  // header rendered it, which is the disagreement the cutover removes.
+  for (const bad of ["1200", 12.5, -1, Number.NaN, Number.MAX_SAFE_INTEGER + 1,
+                     Number.MAX_SAFE_INTEGER, 2147483648, null, {}])
     assert.equal(summedPopulation([pop(1200), pop(bad)], "works_in_scope"), undefined, String(bad));
+  // A bound, not a narrowing: Int32.MaxValue is a value the producer can mint.
+  assert.equal(summedPopulation([pop(2147483647)], "works_in_scope"), 2147483647);
 });
 
 test("two individually valid counts that overflow refuse a total", () => {
-  const max = Number.MAX_SAFE_INTEGER;
-  assert.equal(summedPopulation([pop(max), pop(max)], "works_in_scope"), undefined);
-  assert.equal(summedPopulation([pop(max), pop(1)], "works_in_scope"), undefined);
+  // The addends are now capped at Int32, so the overflow guard is unreachable from a validated
+  // response and this exercises the exported helper directly, which is where it can still fire.
+  const max = MAX_PRODUCER_COUNT;
+  assert.equal(summedPopulation([pop(max), pop(max)], "works_in_scope"), max * 2);
+  assert.equal(summedPopulation([pop(Number.MAX_SAFE_INTEGER), pop(1)], "works_in_scope"),
+    undefined);
   assert.equal(summedPopulation([pop(max), pop(0)], "works_in_scope"), max);
 });
 
@@ -195,14 +207,18 @@ test("an entry with no count contributes nothing rather than a zero", () => {
 });
 
 test("a count the producer could not have sent refuses the whole total", () => {
-  for (const bad of ["40", 4.5, -1, Number.NaN, 1e20, null, {}])
+  for (const bad of ["40", 4.5, -1, Number.NaN, 1e20, Number.MAX_SAFE_INTEGER, 2147483648,
+                     null, {}])
     assert.equal(summedCount([count(40), count(bad)], "works_changed"), undefined, String(bad));
+  assert.equal(summedCount([count(2147483647)], "works_changed"), 2147483647,
+    "the producer's own maximum was refused");
 });
 
 test("two valid counts that overflow the safe range refuse a total", () => {
-  const max = Number.MAX_SAFE_INTEGER;
-  assert.equal(summedCount([count(max), count(1)], "works_changed"), undefined);
-  assert.equal(summedCount([count(max), count(0)], "works_changed"), max);
+  assert.equal(summedCount([count(Number.MAX_SAFE_INTEGER), count(1)], "works_changed"),
+    undefined);
+  assert.equal(summedCount([count(MAX_PRODUCER_COUNT), count(0)], "works_changed"),
+    MAX_PRODUCER_COUNT);
 });
 
 test("refusing a count does not depend on arrival order", () => {

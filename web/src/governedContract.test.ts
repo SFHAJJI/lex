@@ -40,6 +40,36 @@ const EXPECTED_KIND: Record<string, string> = {
   invalid: "invalid",
 };
 
+/**
+ * The population the producer publishes beside this (tool, status), if any.
+ *
+ * `McpCore.SearchPopulation` attaches one to all three search paths and derives its two booleans
+ * and its basis from which path it is; the other two tools publish one only where they ran, and
+ * return `UnsupportedFilterResult` unchanged on a refusal.
+ */
+function populationFor(tool: string, status: string): Record<string, unknown> | undefined {
+  if (tool === "search") {
+    const scopeFiltersApplied = status !== "filter_not_supported_by_index";
+    return {
+      basis: scopeFiltersApplied
+        ? "selected_metadata_scope"
+        : "mounted_scope_before_unsupported_filters",
+      works_in_scope: 1250,
+      scope_filters_applied: scopeFiltersApplied,
+      query_ran: status === "ok",
+      known_exclusions: [],
+    };
+  }
+  if (status === "filter_not_supported_by_index") return undefined;
+  return tool === "changes_in_period"
+    ? {
+      basis: "distinct non-withdrawn works in the selected publisher and legal metadata scope",
+      works_in_scope: 1250,
+      known_exclusions: [],
+    }
+    : { basis: "versioned works only", works_covered: 1250, known_exclusions: [] };
+}
+
 /** A minimal envelope that satisfies this tool's declared shape for a given status. */
 function envelopeFor(tool: string, status: string): Record<string, unknown> {
   const rule = contract.shape_rules[tool]!;
@@ -58,6 +88,11 @@ function envelopeFor(tool: string, status: string): Record<string, unknown> {
     envelope: { publisher: "lu-legilux", status },
     [rule.rows_field]: rows,
   };
+  // The producer publishes a population on every path it can classify, and an unreadable
+  // required scope now invalidates the whole claim rather than only the scope. A fixture without
+  // one would classify invalid for every status and this file would pass for the wrong reason.
+  const population = populationFor(tool, status);
+  if (population !== undefined) entry.population = population;
   for (const count of rule.required_counts ?? []) entry[count] = rows.length;
   if (tool === "changes_in_period") entry.new_versions = rows.length;
   if (tool === "search") entry.retrieval_mode = "keyword";
