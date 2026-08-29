@@ -181,7 +181,15 @@ public sealed record DiffView(Subject Subject, string FromDate, string ToDate,
     string? FromPermalink, string? ToPermalink, string? Note, string? Status = null,
     IReadOnlyList<EvidenceContext>? Evidence = null, bool? AnchorFromPresent = null,
     bool? AnchorToPresent = null, bool? AnchorTextEqual = null,
-    bool ProvisionLevelComparable = false, bool? Changed = null);
+    bool ProvisionLevelComparable = false, bool? Changed = null,
+    /// <summary>
+    /// The typed reasons this comparison is limited, exactly as the producer classified them:
+    /// <c>profiles_differ</c>, <c>typed_text_gap</c>. The producer also writes the same facts
+    /// into the prose note, and the note was the only form that reached a reader. Prose cannot
+    /// be branched on, so a surface could not refuse a comparison it was told was uncertifiable;
+    /// it could only print a paragraph and hope the paragraph was read.
+    /// </summary>
+    IReadOnlyList<string>? ComparisonLimitations = null);
 
 public sealed record HistoryView(Subject Subject, string Anchor, int DistinctTexts,
     IReadOnlyList<HistoryState> States, IReadOnlyList<EvidenceContext>? Evidence = null);

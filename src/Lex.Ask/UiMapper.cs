@@ -610,8 +610,12 @@ public static class UiMapper
             AnchorFromPresent: o["anchor_from_present"]?.GetValue<bool?>(),
             AnchorToPresent: o["anchor_to_present"]?.GetValue<bool?>(),
             AnchorTextEqual: o["anchor_text_equal"]?.GetValue<bool?>(),
-            ProvisionLevelComparable: o["provision_level_comparable"]?.GetValue<bool>() ?? false,
-            Changed: o["changed"]?.GetValue<bool?>()));
+            // Both were GetValue calls, which throw on a string or a number and lose the whole
+            // typed result to one malformed field. Same boundary, same rule as the receipt
+            // readers: not exactly true or false means no claim.
+            ProvisionLevelComparable: B(o, "provision_level_comparable") ?? false,
+            Changed: B(o, "changed"),
+            ComparisonLimitations: Strings(o, "comparison_limitations")));
     }
 
     /// Controls the assistant set on the way to its answer, so the workspace lands the same way.
@@ -899,4 +903,20 @@ public static class UiMapper
     /// </summary>
     private static bool? B(JsonObject? o, string k)
         => o?[k] is JsonValue v && v.TryGetValue<bool>(out var b) ? b : null;
+
+    /// <summary>
+    /// The JSON strings in an array, or null when there is no array. Non-string members are
+    /// dropped rather than coerced, and an array of nothing usable becomes null, so a
+    /// malformed list cannot become an empty one and read as no limitations.
+    /// </summary>
+    private static IReadOnlyList<string>? Strings(JsonObject? o, string k)
+    {
+        if (o?[k] is not JsonArray array) return null;
+        var values = array.OfType<JsonValue>()
+            .Select(v => v.TryGetValue<string>(out var s) ? s : null)
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Select(s => s!)
+            .ToList();
+        return values.Count > 0 ? values : null;
+    }
 }

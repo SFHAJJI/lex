@@ -475,6 +475,78 @@ public class UiEffectTests
         Assert.False(eff.CitedBy!.RowsTruncated);
     }
 
+    private static JsonObject DiffNode(JsonNode? limitations, JsonNode? comparable = null,
+                                       JsonNode? changed = null)
+    {
+        var o = new JsonObject
+        {
+            ["envelope"] = new JsonObject { ["status"] = "ok" },
+            ["work"] = "lu-legilux:loi-2006-07-31-n2",
+            ["from"] = new JsonObject { ["valid_from"] = "2024-01-01", ["title"] = "Code du travail" },
+            ["to"] = new JsonObject { ["valid_from"] = "2025-01-01", ["title"] = "Code du travail" },
+        };
+        if (limitations is not null) o["comparison_limitations"] = limitations;
+        if (comparable is not null) o["provision_level_comparable"] = comparable;
+        if (changed is not null) o["changed"] = changed;
+        return o;
+    }
+
+    private static UiEffect Diffed(JsonObject node) => UiMapper.From("diff",
+        Args(("work", "lu-legilux:loi-2006-07-31-n2"), ("from_date", "2024-01-01"),
+             ("to_date", "2025-01-01")), node);
+
+    /// <summary>
+    /// The producer classifies why a comparison is limited and also writes the same facts into the
+    /// prose note. Only the note reached a reader, and a surface cannot branch on a paragraph.
+    /// </summary>
+    [Fact]
+    public void Typed_comparison_limitations_survive_the_mapper()
+    {
+        var eff = Diffed(DiffNode(new JsonArray(
+            JsonValue.Create("profiles_differ"), JsonValue.Create("typed_text_gap"))));
+
+        Assert.Equal(new[] { "profiles_differ", "typed_text_gap" }, eff.Diff!.ComparisonLimitations);
+    }
+
+    /// <summary>
+    /// A malformed list must not become an empty one, because an empty list reads as no limitations,
+    /// which is the one thing this field exists to prevent anybody concluding.
+    /// </summary>
+    [Fact]
+    public void A_limitation_list_with_nothing_usable_is_absent_rather_than_empty()
+    {
+        foreach (var node in new JsonNode?[]
+        {
+            new JsonArray(),
+            new JsonArray(JsonValue.Create(1), JsonValue.Create(true)),
+            new JsonArray(JsonValue.Create("   ")),
+            JsonValue.Create("profiles_differ"),
+            new JsonObject(),
+        })
+        {
+            Assert.Null(Diffed(DiffNode(node)).Diff!.ComparisonLimitations);
+        }
+    }
+
+    /// <summary>
+    /// Both fields were read with GetValue, which throws on a string or a number and loses the whole
+    /// typed operation result to one malformed field.
+    /// </summary>
+    [Fact]
+    public void A_malformed_comparability_or_outcome_field_does_not_throw()
+    {
+        // Parsed fresh on every use: a JsonNode may only ever have one parent, so a shared
+        // instance throws on the second assignment and fails the test for the wrong reason.
+        foreach (var hostile in new[] { "\"true\"", "0", "1.5", "[]", "{}" })
+        {
+            var byComparable = Diffed(DiffNode(null, comparable: JsonNode.Parse(hostile)));
+            Assert.False(byComparable.Diff!.ProvisionLevelComparable);
+
+            var byChanged = Diffed(DiffNode(null, changed: JsonNode.Parse(hostile)));
+            Assert.Null(byChanged.Diff!.Changed);
+        }
+    }
+
     [Fact]
     public void An_as_of_outline_remains_a_navigable_provision_view_without_legal_text()
     {

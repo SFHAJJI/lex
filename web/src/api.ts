@@ -689,6 +689,10 @@ export interface UiEffect {
                outcome, so without this the reader is told a comparison happened and left to guess
                how it came out. It is a record fact about versions, never a claim about the law. */
            changed?: boolean;
+           /** Typed reasons the comparison is limited, as the producer classified them.
+               The same facts are also written into `note`, and prose was the only form that
+               reached a reader; a surface cannot branch on a paragraph. */
+           comparison_limitations?: string[];
            evidence?: EvidenceContext[] };
   history?: { subject: Subject; anchor: string; distinct_texts: number; states: { valid_from: string; valid_to?: string; sha?: string; permalink?: string }[]; evidence?: EvidenceContext[] };
   timeline?: { subject: Subject; rows: { lex_id?: string; valid_from: string; valid_to?: string;
