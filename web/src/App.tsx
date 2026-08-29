@@ -154,6 +154,12 @@ export default function App() {
    * strip survived a paint. A reader saw one frame of yesterday's law under today's date.
    */
   const lawGeneration = useRef(0);
+  // One generation per governing request identity, not one for the whole surface. The four law
+  // effects are keyed on different dependency sets, so a single generation would invalidate an
+  // in-flight request whose own effect will not re-run, and strand its rail empty for good.
+  const workGeneration = useRef(0);
+  const outlineGeneration = useRef(0);
+  const anchorGeneration = useRef(0);
 
   /**
    * The law transition, before paint.
@@ -166,11 +172,49 @@ export default function App() {
     lawGeneration.current += 1;
     if (!s.work) return;
     setLoaded(undefined);
-    setToc([]);
     setUi(undefined);
     setStrip([]);
     return () => { lawGeneration.current += 1; };
   }, [s.work, readDate, s.mode, s.anchor, s.language]);
+
+  /**
+   * The rest of the law surface, cleared at the identity that repopulates it rather than all at
+   * once. A work switch used to leave the previous law title, version rail, languages, held
+   * summary and article history under the next law route, because the only complete reset sat
+   * behind a no-work guard that runs when the reader leaves the surface, never when they move
+   * from one law to another. Observed rather than reasoned: with the next work held, the heading
+   * still named the previous law over an empty body.
+   *
+   * Keyed separately because the identities differ. Title, contents and served language belong to
+   * the outline request; the rails belong to the work; article history belongs to work and anchor.
+   * Clearing any of them on the widest key would empty a rail whose effect does not re-run, which
+   * is the failure this split exists to avoid.
+   */
+  useLayoutEffect(() => {
+    outlineGeneration.current += 1;
+    if (!s.work) return;
+    setToc([]);
+    setTitle(undefined);
+    setServedLang(undefined);
+    return () => { outlineGeneration.current += 1; };
+  }, [s.work, readDate, s.language]);
+
+  useLayoutEffect(() => {
+    workGeneration.current += 1;
+    if (!s.work) return;
+    setVersions([]);
+    setLangs([]);
+    setHeld(undefined);
+    setTimelineSemantics(undefined);
+    return () => { workGeneration.current += 1; };
+  }, [s.work]);
+
+  useLayoutEffect(() => {
+    anchorGeneration.current += 1;
+    if (!s.work || !s.anchor) return;
+    setStates([]);
+    return () => { anchorGeneration.current += 1; };
+  }, [s.work, s.anchor]);
   const [operationViews, setOperationViews] = useState<OperationReply[]>([]);
   const [assistantPresentationId, setAssistantPresentationId] = useState<string>();
   const pendingPresentations = useRef(new Set<string>());
@@ -277,10 +321,11 @@ export default function App() {
     // Never carry one publisher's time semantics across a work switch while the next timeline
     // is loading. The work-id fallback remains correct for currently mounted legacy artifacts.
     setTimelineSemantics(undefined);
-    let live = true;
+    const mine = workGeneration.current;
+    const live = () => mine === workGeneration.current;
     tool<any>("timeline", { work: s.work, limit: 400 })
       .then((res) => {
-        if (!live) return;
+        if (!live()) return;
         const one = first<any>(res, (x) => Array.isArray(x?.versions) && x.versions.length > 0);
         const vs = (one?.versions ?? []) as any[];
         setTimelineSemantics(one?.envelope?.timeline_semantics);
@@ -295,8 +340,7 @@ export default function App() {
                   official: vs[vs.length - 1]?.source_uri,
                   kind: vs[vs.length - 1]?.document_type });
       })
-      .catch(() => { if (live) { setVersions([]); setLangs([]); setTimelineSemantics(undefined); setHeld(undefined); } });
-    return () => { live = false; };
+      .catch(() => { if (live()) { setVersions([]); setLangs([]); setTimelineSemantics(undefined); setHeld(undefined); } });
   }, [s.work]);
 
   // The outline belongs to (law, date) — never to the focused article. It used to be fetched
@@ -304,8 +348,8 @@ export default function App() {
   // and re-dating dropped you at the top of a document you were reading the middle of.
   useEffect(() => {
     if (!s.work) { setToc([]); return; }
-    const mine = lawGeneration.current;
-    const live = () => mine === lawGeneration.current;
+    const mine = outlineGeneration.current;
+    const live = () => mine === outlineGeneration.current;
     tool<any>("as_of", { work: s.work, date: readDate, mode: "outline",
                          ...(s.language ? { language: s.language } : {}) })
       .then((res) => {
@@ -624,15 +668,15 @@ export default function App() {
   // in this law touched?". Falls back to the law's versions when no per-article history exists.
   useEffect(() => {
     if (!s.work || !s.anchor) { setStates([]); return; }
-    let live = true;
+    const mine = anchorGeneration.current;
+    const live = () => mine === anchorGeneration.current;
     tool<any>("article_history", { work: s.work, anchor: s.anchor })
       .then((res) => {
-        if (!live) return;
+        if (!live()) return;
         const one = first<any>(res, (x) => Array.isArray(x?.states) && x.states.length > 0);
         setStates(((one?.states ?? []) as { valid_from: string }[]).map((x) => x.valid_from).sort());
       })
-      .catch(() => live && setStates([]));
-    return () => { live = false; };
+      .catch(() => live() && setStates([]));
   }, [s.work, s.anchor]);
 
   const applyAssistantReply = useCallback((r: AskReply) => {
