@@ -40,9 +40,24 @@ const shaOf = (text: string): string => {
   return hash.toString(16).padStart(64, "0").slice(-64);
 };
 
-const articleText = (num: number, amended: boolean) =>
-  `Fixture article ${num}${amended ? " as amended" : ""}.`;
-const articleSha = (num: number, amended: boolean) => shaOf(articleText(num, amended));
+type Variant = "plain" | "amended" | "punctuation";
+
+const articleText = (num: number, variant: Variant) => {
+  if (variant === "amended") return `Fixture article ${num} as amended.`;
+  // U+2019 against U+0027. Identical after normalisation, different bytes, different digest.
+  const apostrophe = variant === "punctuation" ? "\u2019" : "'";
+  return `Fixture article ${num}, l${apostrophe}alinea.`;
+};
+const articleSha = (num: number, variant: Variant) => shaOf(articleText(num, variant));
+
+/**
+ * How the later version differs from the pinned one.
+ *
+ * `amend` rewrites the wording. `add` leaves existing articles untouched and introduces one new
+ * article. `punctuation` changes only typography, which moves the bytes and the digest without
+ * changing a word.
+ */
+type FixtureMode = "amend" | "add" | "punctuation";
 
 const SOURCE_PINNED = "https://legilux.public.lu/eli/etat/leg/loi/2020/07/17/a624/jo";
 const SOURCE_LATER = "https://legilux.public.lu/eli/etat/leg/loi/2021/01/01/a999/jo";
@@ -52,14 +67,15 @@ const ANCHOR = /^art-(\d+)$/;
 
 /** A version whose document carries both document-level digests, with `count` articles. */
 function lawAnswer(
-  nums: number[], withItemDigest: boolean, date: string = PINNED, addedAtLater: boolean = false,
+  nums: number[], withItemDigest: boolean, date: string = PINNED, mode: FixtureMode = "amend",
 ): Record<string, unknown>[] {
   const later = date === LATER;
-  // In added-article mode the existing articles are untouched and one new article appears, so the
-  // only difference between the two dates is the addition. Otherwise the later version amends its
-  // wording. Either way the digest follows the text, so the fixture cannot present one wording
-  // under another wording's digest.
-  const amended = later && !addedAtLater;
+  // The digest follows the text in every mode, so the fixture cannot present one wording under
+  // another wording's digest, and two articles cannot share one.
+  const variant: Variant = !later ? "plain"
+    : mode === "amend" ? "amended"
+    : mode === "punctuation" ? "punctuation"
+    : "plain";
   return [{
     envelope: {
       publisher: "lu-legilux", jurisdiction: "LU", status: "ok",
@@ -82,8 +98,8 @@ function lawAnswer(
       anchor: `art-${num}`,
       num: `Art. ${num}`,
       heading: `Heading ${num}`,
-      text: articleText(num, amended),
-      ...(withItemDigest ? { text_sha256: articleSha(num, amended) } : {}),
+      text: articleText(num, variant),
+      ...(withItemDigest ? { text_sha256: articleSha(num, variant) } : {}),
     })),
   }];
 }
@@ -107,7 +123,7 @@ const timelineAnswer = (): Record<string, unknown>[] => [{
 const historyAnswer = (): Record<string, unknown>[] => [{
   envelope: { publisher: "lu-legilux", jurisdiction: "LU", status: "ok",
               timeline_semantics: "publisher_applicability" },
-  states: [{ valid_from: PINNED, text_sha256: articleSha(1, false) }],
+  states: [{ valid_from: PINNED, text_sha256: articleSha(1, "plain") }],
 }];
 
 const mcpBody = (id: number, payload: unknown) => JSON.stringify({
@@ -134,7 +150,7 @@ const FIXTURE_METHODS = new Set(["timeline", "as_of", "article_history"]);
  * journey proved came from the environment rather than from the fixture.
  */
 async function routeMcp(
-  page: Page, count: number, withItemDigest: boolean, addedAtLater: boolean = false,
+  page: Page, count: number, withItemDigest: boolean, mode: FixtureMode = "amend",
 ): Promise<string[]> {
   const called: string[] = [];
   await page.route("**/mcp", async (route: Route) => {
@@ -161,7 +177,7 @@ async function routeMcp(
       const args = (request.params as { arguments?: Record<string, unknown> } | undefined)
         ?.arguments ?? {};
       const date = String(args.date ?? PINNED);
-      const available = addedAtLater && date === LATER
+      const available = mode === "add" && date === LATER
         ? Array.from({ length: count + 1 }, (_unused, index) => index + 1)
         : Array.from({ length: count }, (_unused, index) => index + 1);
       // The producer honours an anchor selection, so the fixture must too, and it must honour the
@@ -179,7 +195,7 @@ async function routeMcp(
             .filter((num) => available.includes(num));
       await route.fulfill({
         status: 200, contentType: "application/json",
-        body: mcpBody(request.id, lawAnswer(nums, withItemDigest, date, addedAtLater)),
+        body: mcpBody(request.id, lawAnswer(nums, withItemDigest, date, mode)),
       });
       return;
     }
@@ -248,7 +264,7 @@ test("a copied single-article citation carries the exact wording digest and no a
     const called = await openLaw(page, 1, true);
     const citation = await copiedCitation(page);
 
-    expect(citation).toContain(`text SHA-256 ${articleSha(1, false)}`);
+    expect(citation).toContain(`text SHA-256 ${articleSha(1, "plain")}`);
     // The narrowest claim is available, so the absence sentence must not appear beside it.
     expect(citation).not.toContain("no aggregate text digest recorded");
     expectFixtureServedEverything(called);
@@ -274,8 +290,8 @@ test("the copied citation is rebuilt when the reader moves to another article",
     // article and carry its own wording digest, and must drop the absence statement. Asserting
     // inequality alone would pass on any change, including the wrong one.
     expect(narrowed).toContain("Art. 3");
-    expect(narrowed).toContain(`text SHA-256 ${articleSha(3, false)}`);
-    expect(narrowed).not.toContain(`text SHA-256 ${articleSha(1, false)}`);
+    expect(narrowed).toContain(`text SHA-256 ${articleSha(3, "plain")}`);
+    expect(narrowed).not.toContain(`text SHA-256 ${articleSha(1, "plain")}`);
     expect(narrowed).not.toContain("no aggregate text digest recorded");
     expectFixtureServedEverything(called);
   });
@@ -318,12 +334,12 @@ test("a copied citation for an article whose wording did not change keeps both e
     // comparison to it produces no changed row at all. Classifying from the row count therefore
     // reported no aggregate digest precisely where both exact digests existed, which is the
     // strongest claim the citation can make and the one it was dropping.
-    const called = await routeMcp(page, 1, true, true);
+    const called = await routeMcp(page, 1, true, "add");
     await page.goto(`/?space=law&work=${WORK}&mode=compare&date=${PINNED}&to=${LATER}&anchor=art-1`,
       { waitUntil: "domcontentloaded" });
     const citation = await copiedCitation(page);
 
-    const sha = articleSha(1, false);
+    const sha = articleSha(1, "plain");
     expect(citation).toContain(`${PINNED} text SHA-256 ${sha}`);
     expect(citation).toContain(`${LATER} text SHA-256 ${sha}`);
     expect(citation).not.toContain("no aggregate text digest recorded");
@@ -331,11 +347,32 @@ test("a copied citation for an article whose wording did not change keeps both e
     expectFixtureServedEverything(called);
   });
 
+test("a copied citation for a typographic-only change keeps both exact digests",
+  async ({ page }) => {
+    // O5, the second of its two branches, and the one the previous revision claimed without
+    // reaching. An identical article never enters `moved` and its text is never fetched. A
+    // typographic change does enter `moved`, is fetched and diffed, yields no changed pieces, and
+    // is then filed under punctuation and removed from the rows. Both end with an empty `rows`,
+    // through different code, and only the scope survives either.
+    const called = await routeMcp(page, 1, true, "punctuation");
+    await page.goto(`/?space=law&work=${WORK}&mode=compare&date=${PINNED}&to=${LATER}&anchor=art-1`,
+      { waitUntil: "domcontentloaded" });
+    const citation = await copiedCitation(page);
+
+    // The digests differ here, unlike the identical case, because the bytes really did move. Both
+    // are exact and both must survive.
+    expect(citation).toContain(`${PINNED} text SHA-256 ${articleSha(1, "plain")}`);
+    expect(citation).toContain(`${LATER} text SHA-256 ${articleSha(1, "punctuation")}`);
+    expect(articleSha(1, "plain")).not.toEqual(articleSha(1, "punctuation"));
+    expect(citation).not.toContain("no aggregate text digest recorded");
+    expectFixtureServedEverything(called);
+  });
+
 test("a copied citation for an added article says it was not present, not that a digest is missing",
   async ({ page }) => {
     // One article exists only at the later date, so the comparison has a single added row and the
     // earlier side holds no provision at all.
-    const called = await routeMcp(page, 1, true, true);
+    const called = await routeMcp(page, 1, true, "add");
     await page.goto(`/?space=law&work=${WORK}&mode=compare&date=${PINNED}&to=${LATER}`,
       { waitUntil: "domcontentloaded" });
     const citation = await copiedCitation(page);
