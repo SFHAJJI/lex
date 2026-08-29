@@ -80,6 +80,16 @@ function contentDigestField(input: LawEvidence): string {
   return "no content digest recorded";
 }
 
+/**
+ * What a Lex citation is, stated on the citation itself.
+ *
+ * The Markdown export has always carried this. The citation string never did, and the citation
+ * string is the artifact people actually paste into documents, so a Lex reference could reach a
+ * legal filing reading as though it were the publisher's own record. The official source is named
+ * one field earlier; this says which of the two the reader is holding.
+ */
+const NOT_OFFICIAL = "Lex reading aid, not an official publication";
+
 export function citationText(input: LawEvidence): string {
   const item = input.provisions.length === 1 ? input.provisions[0] : undefined;
   return [
@@ -90,6 +100,7 @@ export function citationText(input: LawEvidence): string {
     input.permalink,
     input.source,
     contentDigestField(input),
+    NOT_OFFICIAL,
   ].filter(Boolean).join(" | ");
 }
 
@@ -115,6 +126,7 @@ export function comparisonCitationText(input: ComparisonEvidence): string {
     input.permalink,
     comparisonSideDigest(input.from, row?.fromSha, input.fromRecordSha256),
     comparisonSideDigest(input.to, row?.toSha, input.toRecordSha256),
+    NOT_OFFICIAL,
   ].filter(Boolean).join(" | ");
 }
 
