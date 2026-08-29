@@ -21,18 +21,45 @@ const WORK = "lu-legilux:fixture-citation";
 const PINNED = "2020-07-17";
 const RECORD_SHA = "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0";
 const BODY_SHA = "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90";
-const TEXT_SHA = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
 const LATER = "2021-01-01";
 const LATER_RECORD_SHA = "9988776655443322110099887766554433221100998877665544332211009988";
 
+/**
+ * A well-formed digest derived from the text it covers.
+ *
+ * Every article previously shared one constant, so a citation that quoted the wrong provision's
+ * digest still matched, and so did one built from a provision the page never requested. Deriving it
+ * from the wording makes both impossible to state accidentally: two articles cannot share a digest,
+ * and one article cannot carry a digest belonging to different wording.
+ */
+const shaOf = (text: string): string => {
+  let hash = 0n;
+  for (const character of text) {
+    hash = (hash * 131n + BigInt(character.codePointAt(0) ?? 0)) % (1n << 256n);
+  }
+  return hash.toString(16).padStart(64, "0").slice(-64);
+};
+
+const articleText = (num: number, amended: boolean) =>
+  `Fixture article ${num}${amended ? " as amended" : ""}.`;
+const articleSha = (num: number, amended: boolean) => shaOf(articleText(num, amended));
+
+const SOURCE_PINNED = "https://legilux.public.lu/eli/etat/leg/loi/2020/07/17/a624/jo";
+const SOURCE_LATER = "https://legilux.public.lu/eli/etat/leg/loi/2021/01/01/a999/jo";
+
+/** `art-3` and nothing else. An unrecognised anchor yields no article, never the first one. */
+const ANCHOR = /^art-(\d+)$/;
+
 /** A version whose document carries both document-level digests, with `count` articles. */
 function lawAnswer(
-  count: number, withItemDigest: boolean, date: string = PINNED, addedAtLater: boolean = false,
+  nums: number[], withItemDigest: boolean, date: string = PINNED, addedAtLater: boolean = false,
 ): Record<string, unknown>[] {
   const later = date === LATER;
-  // One extra article exists only at the later date, so the comparison yields exactly one added
-  // row: the O1 shape, reached through the mounted application rather than the pure function.
-  const total = addedAtLater && later ? count + 1 : count;
+  // In added-article mode the existing articles are untouched and one new article appears, so the
+  // only difference between the two dates is the addition. Otherwise the later version amends its
+  // wording. Either way the digest follows the text, so the fixture cannot present one wording
+  // under another wording's digest.
+  const amended = later && !addedAtLater;
   return [{
     envelope: {
       publisher: "lu-legilux", jurisdiction: "LU", status: "ok",
@@ -41,18 +68,22 @@ function lawAnswer(
     document: {
       title: "Fixture law", language: "fr", valid_from: date,
       extraction_profile: "akn-lu/1",
-      source_uri: "https://legilux.public.lu/eli/etat/leg/loi/2020/07/17/a624/jo",
+      // Distinct per side. A citation that carried one side's source for both, or substituted the
+      // Lex permalink for either, would otherwise read plausibly.
+      source_uri: later
+        ? "https://legilux.public.lu/eli/etat/leg/loi/2021/01/01/a999/jo"
+        : "https://legilux.public.lu/eli/etat/leg/loi/2020/07/17/a624/jo",
       // Distinct per side, so a comparison citation that carried one side's digest for both, or
       // dropped one, is visible rather than plausible.
       record_sha256: later ? LATER_RECORD_SHA : RECORD_SHA,
       body_sha256: BODY_SHA,
     },
-    provisions: Array.from({ length: total }, (_unused, index) => ({
-      anchor: `art-${index + 1}`,
-      num: `Art. ${index + 1}`,
-      heading: `Heading ${index + 1}`,
-      text: `Fixture article ${index + 1}${later ? " as amended" : ""}.`,
-      ...(withItemDigest ? { text_sha256: TEXT_SHA } : {}),
+    provisions: nums.map((num) => ({
+      anchor: `art-${num}`,
+      num: `Art. ${num}`,
+      heading: `Heading ${num}`,
+      text: articleText(num, amended),
+      ...(withItemDigest ? { text_sha256: articleSha(num, amended) } : {}),
     })),
   }];
 }
@@ -76,7 +107,7 @@ const timelineAnswer = (): Record<string, unknown>[] => [{
 const historyAnswer = (): Record<string, unknown>[] => [{
   envelope: { publisher: "lu-legilux", jurisdiction: "LU", status: "ok",
               timeline_semantics: "publisher_applicability" },
-  states: [{ valid_from: PINNED, text_sha256: TEXT_SHA }],
+  states: [{ valid_from: PINNED, text_sha256: articleSha(1, false) }],
 }];
 
 const mcpBody = (id: number, payload: unknown) => JSON.stringify({
@@ -130,16 +161,25 @@ async function routeMcp(
       const args = (request.params as { arguments?: Record<string, unknown> } | undefined)
         ?.arguments ?? {};
       const date = String(args.date ?? PINNED);
-      // The producer honours an anchor selection, so the fixture must too. Returning every article
-      // regardless made the narrowing journey pass for the wrong reason: the permalink changed
-      // while the citation still described a whole document.
-      const anchors = typeof args.anchors === "string" && args.anchors.length > 0
-        ? args.anchors.split(",").length
-        : count;
+      const available = addedAtLater && date === LATER
+        ? Array.from({ length: count + 1 }, (_unused, index) => index + 1)
+        : Array.from({ length: count }, (_unused, index) => index + 1);
+      // The producer honours an anchor selection, so the fixture must too, and it must honour the
+      // identity rather than the count. Counting the requested anchors and regenerating `art-1`
+      // upward meant any single wrong anchor still returned `art-1`, so a request for the wrong
+      // provision satisfied the narrowing assertion. An anchor this fixture does not recognise now
+      // returns no article at all.
+      const requested = typeof args.anchors === "string" && args.anchors.length > 0
+        ? args.anchors.split(",")
+        : undefined;
+      const nums = requested === undefined
+        ? available
+        : requested
+            .map((value) => Number(ANCHOR.exec(value.trim())?.[1] ?? Number.NaN))
+            .filter((num) => available.includes(num));
       await route.fulfill({
         status: 200, contentType: "application/json",
-        body: mcpBody(
-          request.id, lawAnswer(Math.min(anchors, count), withItemDigest, date, addedAtLater)),
+        body: mcpBody(request.id, lawAnswer(nums, withItemDigest, date, addedAtLater)),
       });
       return;
     }
@@ -208,7 +248,7 @@ test("a copied single-article citation carries the exact wording digest and no a
     const called = await openLaw(page, 1, true);
     const citation = await copiedCitation(page);
 
-    expect(citation).toContain(`text SHA-256 ${TEXT_SHA}`);
+    expect(citation).toContain(`text SHA-256 ${articleSha(1, false)}`);
     // The narrowest claim is available, so the absence sentence must not appear beside it.
     expect(citation).not.toContain("no aggregate text digest recorded");
     expectFixtureServedEverything(called);
@@ -222,13 +262,20 @@ test("the copied citation is rebuilt when the reader moves to another article",
 
     // Narrowing to one article must change what the citation can claim. If state were stale the
     // reader would copy a whole-document citation while looking at one article.
-    await page.goto(`/?space=law&work=${WORK}&date=${PINNED}&anchor=art-1&mode=read`,
+    //
+    // The third article, not the first. Narrowing to `art-1` could be satisfied by a fixture that
+    // ignored the anchor and returned the first article anyway, which is how this journey used to
+    // pass. `art-3` is only reachable by honouring the exact requested identity.
+    await page.goto(`/?space=law&work=${WORK}&date=${PINNED}&anchor=art-3&mode=read`,
       { waitUntil: "domcontentloaded" });
-    await expect(page.locator("article.art").first()).toContainText("Fixture article 1");
+    await expect(page.locator("article.art").first()).toContainText("Fixture article 3");
     const narrowed = await copiedCitation(page);
-    // Not merely different. The narrowed view has one article, so it must gain the exact wording
-    // digest and lose the absence statement. Asserting only inequality would pass on any change.
-    expect(narrowed).toContain(`text SHA-256 ${TEXT_SHA}`);
+    // Not merely different. The narrowed view holds one article, so the citation must name that
+    // article and carry its own wording digest, and must drop the absence statement. Asserting
+    // inequality alone would pass on any change, including the wrong one.
+    expect(narrowed).toContain("Art. 3");
+    expect(narrowed).toContain(`text SHA-256 ${articleSha(3, false)}`);
+    expect(narrowed).not.toContain(`text SHA-256 ${articleSha(1, false)}`);
     expect(narrowed).not.toContain("no aggregate text digest recorded");
     expectFixtureServedEverything(called);
   });
@@ -248,6 +295,39 @@ test("a copied comparison citation carries a labelled digest for each side",
     expect(citation).toContain(`${PINNED} record SHA-256 ${RECORD_SHA} (version metadata)`);
     expect(citation).toContain(`${LATER} record SHA-256 ${LATER_RECORD_SHA} (version metadata)`);
     expect(citation).toContain("Lex reading aid, not an official publication");
+    expectFixtureServedEverything(called);
+  });
+
+test("a copied comparison citation names the official source for each side", async ({ page }) => {
+  const called = await routeMcp(page, 3, false);
+  await page.goto(`/?space=law&work=${WORK}&mode=compare&date=${PINNED}&to=${LATER}`,
+    { waitUntil: "domcontentloaded" });
+  const citation = await copiedCitation(page);
+
+  // O4. Both sources are already carried and already rendered in the Markdown export; only the
+  // citation dropped them, which is the one artifact people paste into documents and the one that
+  // calls Lex a reading aid. Naming the aid without naming the record leaves nowhere to check.
+  expect(citation).toContain(`${PINNED} source ${SOURCE_PINNED}`);
+  expect(citation).toContain(`${LATER} source ${SOURCE_LATER}`);
+  expectFixtureServedEverything(called);
+});
+
+test("a copied citation for an article whose wording did not change keeps both exact digests",
+  async ({ page }) => {
+    // O5. In added-article mode `art-1` is untouched between the two dates, so scoping the
+    // comparison to it produces no changed row at all. Classifying from the row count therefore
+    // reported no aggregate digest precisely where both exact digests existed, which is the
+    // strongest claim the citation can make and the one it was dropping.
+    const called = await routeMcp(page, 1, true, true);
+    await page.goto(`/?space=law&work=${WORK}&mode=compare&date=${PINNED}&to=${LATER}&anchor=art-1`,
+      { waitUntil: "domcontentloaded" });
+    const citation = await copiedCitation(page);
+
+    const sha = articleSha(1, false);
+    expect(citation).toContain(`${PINNED} text SHA-256 ${sha}`);
+    expect(citation).toContain(`${LATER} text SHA-256 ${sha}`);
+    expect(citation).not.toContain("no aggregate text digest recorded");
+    expect(citation).toContain("Art. 1");
     expectFixtureServedEverything(called);
   });
 

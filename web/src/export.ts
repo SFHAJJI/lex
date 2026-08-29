@@ -33,6 +33,26 @@ export interface ComparisonRow {
   toText?: string;
 }
 
+/**
+ * The provision a reader asked to compare, and its identity on each side.
+ *
+ * Deliberately separate from `rows`. `rows` is what the visual diff found, and two things never
+ * reach it: an anchor whose text is identical on both sides is filed as unchanged before any text
+ * is fetched, and an anchor whose only differences are typographic is moved to the punctuation
+ * list. Reading the citation's scope off `rows.length` therefore answers a different question from
+ * the one the reader asked, and it fails in the worst direction: an article-scoped comparison of
+ * wording that did not change is exactly the case where both exact digests exist, and it was the
+ * case that lost them.
+ */
+export interface ComparisonScope {
+  anchor: string;
+  label: string;
+  fromSha?: string;
+  toSha?: string;
+  fromPresent: boolean;
+  toPresent: boolean;
+}
+
 export interface ComparisonEvidence {
   title: string;
   work: string;
@@ -53,6 +73,8 @@ export interface ComparisonEvidence {
   toExtractionProfile?: string;
   fromRecordSha256?: string;
   toRecordSha256?: string;
+  /** Set when the reader scoped the comparison to one provision, whatever the diff then found. */
+  scope?: ComparisonScope;
   rows: ComparisonRow[];
   unchanged: string[];
   punctuationOnly: string[];
@@ -62,6 +84,40 @@ export interface ComparisonEvidence {
 const oneLine = (value: string) => value.replace(/\s+/g, " ").trim();
 const itemLabel = (item: ProvisionItem) => oneLine(item.num ?? item.anchor);
 const itemSha = (item: ProvisionItem) => item.text_sha256;
+
+/**
+ * A value is called a SHA-256 here only if it is one.
+ *
+ * Nothing between the SQLite column and this function checks these fields at runtime. The index
+ * builder recomputes each provision digest and refuses a mismatch, so `text_sha256` is sound by
+ * construction when the index is built; `record_sha256` and `body_sha256` are copied onto the index
+ * without a recompute, the MCP response carries no output schema, and the browser parses the whole
+ * payload through a single unchecked cast. A guarantee that holds by construction somewhere else is
+ * not a check here, and here is where the value stops being data and becomes a provenance claim a
+ * reader is invited to act on.
+ *
+ * Case is part of the test, not pedantry. The upstream comparisons are case-insensitive, so an
+ * uppercase digest passes every existing check and arrives intact. It is a real digest and it is
+ * still not the string a reader can paste into a checker and match, so it is not offered as one.
+ */
+const isDigest = (value?: string): value is string =>
+  value !== undefined && /^[0-9a-f]{64}$/.test(value);
+
+/**
+ * Said once when any digest reaching a citation was present but unusable.
+ *
+ * Dropping it silently would be the safer-looking choice and the wrong one: the reader would see a
+ * citation that merely looks thin, with no way to tell an absent digest from a corrupt one, and
+ * nobody would ever learn the index had a problem.
+ */
+const UNRECOGNISED = "digest withheld, not in a recognised form";
+
+const unusable = (...values: (string | undefined)[]): boolean =>
+  values.some((value) => value !== undefined && value !== "" && !isDigest(value));
+
+/** The long form of the same rule, for the Markdown export. */
+const digestOr = (value: string | undefined, absent: string): string =>
+  isDigest(value) ? value : value ? UNRECOGNISED : absent;
 
 /**
  * Every digest stays inside the claim it can support.
@@ -79,10 +135,11 @@ const itemSha = (item: ProvisionItem) => item.text_sha256;
 function contentDigestFields(input: LawEvidence): string[] {
   const item = input.provisions.length === 1 ? input.provisions[0] : undefined;
   const exact = item ? itemSha(item) : undefined;
+  const note = unusable(exact, input.recordSha256, input.bodySha256) ? [UNRECOGNISED] : [];
 
   // One article on screen with its own digest: the narrowest and strongest claim available, and it
   // covers precisely the wording the reader saw. Nothing else needs saying.
-  if (exact) return [`text SHA-256 ${exact}`];
+  if (isDigest(exact)) return [`text SHA-256 ${exact}`, ...note];
 
   // Otherwise there is no digest of the rendered wording, and that has to be said rather than
   // covered over. `record_sha256` hashes serialized version metadata and `body_sha256` is the
@@ -90,8 +147,10 @@ function contentDigestFields(input: LawEvidence): string[] {
   // carried with the claim they can actually support written next to them.
   return [
     "no aggregate text digest recorded",
-    input.recordSha256 ? `record SHA-256 ${input.recordSha256} (version metadata)` : undefined,
-    input.bodySha256 ? `body SHA-256 ${input.bodySha256} (publisher body)` : undefined,
+    isDigest(input.recordSha256)
+      ? `record SHA-256 ${input.recordSha256} (version metadata)` : undefined,
+    isDigest(input.bodySha256) ? `body SHA-256 ${input.bodySha256} (publisher body)` : undefined,
+    ...note,
   ].filter(Boolean) as string[];
 }
 
@@ -133,28 +192,52 @@ function comparisonSideDigest(
   label: string, present: boolean, textSha?: string, recordSha?: string,
 ): string[] {
   if (!present) return [`${label} not present in this version`];
-  if (textSha) return [`${label} text SHA-256 ${textSha}`];
+  const note = unusable(textSha, recordSha) ? [`${label} ${UNRECOGNISED}`] : [];
+  if (isDigest(textSha)) return [`${label} text SHA-256 ${textSha}`, ...note];
   return [
     `${label} no aggregate text digest recorded`,
-    recordSha ? `${label} record SHA-256 ${recordSha} (version metadata)` : undefined,
+    isDigest(recordSha) ? `${label} record SHA-256 ${recordSha} (version metadata)` : undefined,
+    ...note,
+  ].filter(Boolean) as string[];
+}
+
+/**
+ * The official source for each side, labelled by its date.
+ *
+ * `ComparisonEvidence` already carried both and the Markdown export already rendered both; only the
+ * citation dropped them. That is the wrong place to drop them. The citation is the artifact people
+ * paste into documents, and the disclaimer beside it exists to say this is a reading aid rather
+ * than the publisher's record. Saying so without naming the record leaves the reader nowhere to go
+ * to check, which is the same failure as a digest that supports no claim.
+ */
+function comparisonSourceFields(input: ComparisonEvidence): string[] {
+  return [
+    input.fromSource ? `${input.from} source ${input.fromSource}` : undefined,
+    input.toSource ? `${input.to} source ${input.toSource}` : undefined,
   ].filter(Boolean) as string[];
 }
 
 export function comparisonCitationText(input: ComparisonEvidence): string {
-  const row = input.rows.length === 1 ? input.rows[0] : undefined;
-  // Presence is a property of the compared article, not of the digest. Only a single-row comparison
-  // can settle it: with several rows of mixed kinds each side holds some provisions, so both are
-  // present and the aggregate rule applies.
-  const fromPresent = row?.kind !== "added";
-  const toPresent = row?.kind !== "removed";
+  // The recorded scope answers what the reader asked. `rows` is consulted only when no scope was
+  // recorded, which is a whole-document comparison, and there a lone changed row is still the one
+  // provision the citation can speak for.
+  const scope = input.scope;
+  const row = scope ? undefined : (input.rows.length === 1 ? input.rows[0] : undefined);
+  // Presence is a property of the compared article, not of its digest. A whole-document comparison
+  // showing several rows has provisions on both sides, so both are present.
+  const fromPresent = scope ? scope.fromPresent : row?.kind !== "added";
+  const toPresent = scope ? scope.toPresent : row?.kind !== "removed";
   return [
     oneLine(input.title),
-    row ? oneLine(row.label) : undefined,
+    scope ? oneLine(scope.label) : row ? oneLine(row.label) : undefined,
     `comparison ${input.from} to ${input.to}`,
     input.work,
     input.permalink,
-    ...comparisonSideDigest(input.from, fromPresent, row?.fromSha, input.fromRecordSha256),
-    ...comparisonSideDigest(input.to, toPresent, row?.toSha, input.toRecordSha256),
+    ...comparisonSourceFields(input),
+    ...comparisonSideDigest(input.from, fromPresent, scope ? scope.fromSha : row?.fromSha,
+      input.fromRecordSha256),
+    ...comparisonSideDigest(input.to, toPresent, scope ? scope.toSha : row?.toSha,
+      input.toRecordSha256),
     NOT_OFFICIAL,
   ].filter(Boolean).join(" | ");
 }
@@ -199,7 +282,7 @@ export function lawEvidenceMarkdown(input: LawEvidence): string {
       `## ${itemLabel(item)}${heading}`,
       "",
       `- Anchor: ${item.anchor}`,
-      `- Text SHA-256: ${itemSha(item) ?? "not recorded"}`,
+      `- Text SHA-256: ${digestOr(itemSha(item), "not recorded")}`,
       "",
       item.text ?? "",
       "",
@@ -247,8 +330,8 @@ export function comparisonEvidenceMarkdown(input: ComparisonEvidence): string {
       `## ${oneLine(row.label)} (${row.kind})`,
       "",
       `- Anchor: ${row.anchor}`,
-      `- ${input.from} text SHA-256: ${row.fromSha ?? "not present"}`,
-      `- ${input.to} text SHA-256: ${row.toSha ?? "not present"}`,
+      `- ${input.from} text SHA-256: ${digestOr(row.fromSha, "not present")}`,
+      `- ${input.to} text SHA-256: ${digestOr(row.toSha, "not present")}`,
       "",
     );
     lines.push(
