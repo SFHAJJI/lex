@@ -316,6 +316,24 @@ const timelineAnswer = (): Record<string, unknown>[] => [{
 }];
 
 /**
+ * A timeline with a rail worth looking at.
+ *
+ * `versions` becomes one tick per distinct `valid_from`, and the language switcher renders only
+ * when a work exists in more than one, so both need real variety here. `held` counts the rows
+ * carrying text.
+ */
+const richTimeline = (mark: string, dates: string[], languages: string[]):
+  Record<string, unknown>[] => [{
+    envelope: { publisher: "lu-legilux", jurisdiction: "LU", status: "ok",
+                timeline_semantics: "official_consolidation_state" },
+    versions: dates.map((date, index) => ({
+      valid_from: date, language: languages[index % languages.length],
+      text_available: true, document_type: "LOI",
+      source_uri: `https://legilux.public.lu/eli/${mark}/${date}`,
+    })),
+  }];
+
+/**
  * Record every workspace request and answer it from `answer`.
  *
  * The call is recorded BEFORE `answer` is awaited, so a journey can poll for a request that is
@@ -326,6 +344,8 @@ const timelineAnswer = (): Record<string, unknown>[] => [{
 async function routeMcp(
   page: Page, calls: McpCall[],
   answer: (call: McpCall, index: number) => Promise<unknown> | unknown,
+  timelineFor?: (call: McpCall) => Promise<unknown> | unknown,
+  historyFor?: (call: McpCall) => Promise<unknown> | unknown,
 ): Promise<void> {
   await page.route("**/mcp", async (route: Route) => {
     const request = route.request().postDataJSON() as {
@@ -334,8 +354,23 @@ async function routeMcp(
     const name = request.params?.name ?? "";
     const args = request.params?.arguments ?? {};
     if (name === "timeline") {
+      const fixed = timelineFor === undefined;
+      const call: McpCall = { name, args };
+      // Recorded only when a journey asked to drive it, so the call indices the earlier
+      // journeys select on are untouched.
+      if (!fixed) calls.push(call);
+      const body = fixed ? timelineAnswer() : await timelineFor(call);
       await route.fulfill({
-        status: 200, contentType: "application/json", body: mcpBody(request.id, timelineAnswer()),
+        status: 200, contentType: "application/json", body: mcpBody(request.id, body),
+      });
+      return;
+    }
+    if (name === "article_history" && historyFor !== undefined) {
+      const call: McpCall = { name, args };
+      calls.push(call);
+      await route.fulfill({
+        status: 200, contentType: "application/json",
+        body: mcpBody(request.id, await historyFor(call)),
       });
       return;
     }
@@ -355,6 +390,8 @@ const searchDates = (calls: McpCall[]) => calls
   .map((call) => call.args.as_of);
 
 const lawCalls = (calls: McpCall[]) => calls.filter((call) => call.name === "as_of");
+
+const timelineCalls = (calls: McpCall[]) => calls.filter((call) => call.name === "timeline");
 
 /** The law calls for one date in one mode, which is what tells the outline path from the read. */
 const lawCallsFor = (calls: McpCall[], date: string, mode: string) => lawCalls(calls)
@@ -1060,6 +1097,365 @@ test("a prior-day law outline released after the rollover cannot repopulate the 
       expect(await pageText(page)).not.toContain("outline-d14");
       await expect(articles.first()).toContainText("Article text marked text-d15");
       expect(calls).toHaveLength(answered);
+      expect(errors.pageErrors).toEqual([]);
+      expect(errors.consoleErrors).toEqual([]);
+    } finally {
+      release();
+    }
+  });
+
+/** Law A's rail, chosen so every date is unmistakable if it turns up under another law. */
+const ALPHA_DATES = ["2011-01-01", "2012-02-02", "2013-03-03"];
+const BETA_DATES = ["2015-05-05", "2016-06-06"];
+/** A date a reader pinned on a law route. Far from the boundary the clock crosses. */
+const PINNED_LAW = "2019-06-06";
+
+/** The heading falls back to the work id without its publisher when the title is empty. */
+const slugOf = (work: string) => work.split(":").slice(1).join(":");
+
+const railTicks = (page: Page) => page.locator(".railbox button.tick");
+const languageSwitcher = (page: Page) => page.locator('[aria-label="Language of this text"]');
+const railText = async (page: Page) => (await page.locator(".railbox").textContent()) ?? "";
+
+test("switching law in-app leaves no identity of the previous law under the next one",
+  async ({ page }) => {
+    // Journey 11. The reviewer's blocker: the law transition cleared what the read request
+    // repopulates and nothing else, so a work switch left the previous law's title, version
+    // rail and languages standing under the next law's route. Not loading residue, which is
+    // honest, but a wrong-law attribution, which is not.
+    //
+    // THE TRANSITION IS IN-APP, AND THAT IS THE WHOLE POINT. `page.goto` remounts the workspace
+    // and clears every one of these states by construction, so a goto-driven version of this
+    // journey passes against the unrepaired code and proves nothing. The citation link is the
+    // driver: a real reader action that changes `s.work` inside one mount.
+    //
+    // WHAT IS HELD: everything law B asks for. On this transition that is its `timeline` and its
+    // outline `as_of`, and nothing else, because `onCite` clears the anchor, so B issues no
+    // `article_history` and the read effect never reaches its `full` call. Nothing of B has
+    // answered while the assertions below are read.
+    const errors = watchErrors(page);
+    const calls: McpCall[] = [];
+    let release!: () => void;
+    const opened = new Promise<void>((resolve) => { release = resolve; });
+
+    try {
+      await installFixedClock(page);
+      await routeMcp(page, calls,
+        async (call) => {
+          if (call.args.work === WORK_TWO) await opened;
+          return call.args.work === WORK_ONE
+            ? lawAnswer("ALPHA", 7, WORK_TWO)
+            : lawAnswer("BETA", 3);
+        },
+        async (call) => {
+          if (call.args.work === WORK_TWO) await opened;
+          return call.args.work === WORK_ONE
+            ? richTimeline("alpha", ALPHA_DATES, ["fr", "de", "lb"])
+            : richTimeline("beta", BETA_DATES, ["fr", "en"]);
+        });
+
+      const heading = page.locator(".lawhead h2");
+      const articles = page.locator("article.art");
+      const contents = page.locator(".toccol");
+      const ticks = railTicks(page);
+      const langs = languageSwitcher(page);
+
+      // Law A, fully populated. Every locator an emptiness claim is made about below is asserted
+      // here first, carrying A's own values.
+      await page.goto(`/?space=law&work=${WORK_ONE}&mode=read`, { waitUntil: "domcontentloaded" });
+      await expect(heading).toHaveText("Loi ALPHA");
+      await expect(articles).toHaveCount(7);
+      await expect(articles.first()).toContainText("Article text marked ALPHA");
+      await expect(contents).toHaveCount(1);
+      await expect(ticks).toHaveCount(ALPHA_DATES.length);
+      await expect(langs).toHaveCount(1);
+      await expect(langs).toContainText("lb");
+      expect(timelineCalls(calls)).toHaveLength(1);
+      const railBefore = await railText(page);
+      for (const date of ALPHA_DATES) expect(railBefore).toContain(date);
+
+      // The switch, in-app, through a link the publisher's own text carries.
+      await page.locator("button.citelink").first().click();
+
+      // Everything B will answer is held, so what is on screen now is whatever the transition
+      // itself left behind.
+      await expect.poll(() => timelineCalls(calls).filter(
+        (call) => call.args.work === WORK_TWO).length).toBe(1);
+      await expect.poll(() => lawCalls(calls).filter(
+        (call) => call.args.work === WORK_TWO).length).toBeGreaterThanOrEqual(1);
+      // Live rather than blank: B's route is up and loading, and the heading has fallen back to
+      // B's own slug, which is what an emptied title renders as.
+      await expect(page.locator(".sk-law")).toHaveCount(1);
+      await expect(heading).toHaveText(slugOf(WORK_TWO));
+
+      // Non-retrying. A wrong-law attribution corrected when B answers is still a frame in which
+      // the heading named a law the body did not belong to.
+      expect(await articles.count()).toBe(0);
+      expect(await contents.count()).toBe(0);
+      expect(await ticks.count()).toBe(0);
+      expect(await langs.count()).toBe(0);
+      const during = await pageText(page);
+      expect(during).not.toContain("Loi ALPHA");
+      expect(during).not.toContain("marked ALPHA");
+      for (const date of ALPHA_DATES) expect(during).not.toContain(date);
+      // B issues no article history on this transition, because every in-app work switch clears
+      // the anchor, so no arriving request here could mask a missing clear.
+      expect(calls.filter((call) => call.name === "article_history")).toHaveLength(0);
+
+      await page.waitForTimeout(400);
+      expect(await ticks.count()).toBe(0);
+      expect(await langs.count()).toBe(0);
+      expect(await pageText(page)).not.toContain("Loi ALPHA");
+
+      // Released, B renders whole, so every reading above was taken on a page that can still
+      // render each of these locators.
+      release();
+      await expect(heading).toHaveText("Loi BETA");
+      await expect(articles).toHaveCount(3);
+      await expect(articles.first()).toContainText("Article text marked BETA");
+      await expect(ticks).toHaveCount(BETA_DATES.length);
+      await expect(langs).toHaveCount(1);
+      const railAfter = await railText(page);
+      for (const date of BETA_DATES) expect(railAfter).toContain(date);
+      for (const date of ALPHA_DATES) expect(railAfter).not.toContain(date);
+      expect(errors.pageErrors).toEqual([]);
+      expect(errors.consoleErrors).toEqual([]);
+    } finally {
+      release();
+    }
+  });
+
+test("a rollover on a law route clears what the new request repopulates and strands nothing else",
+  async ({ page }) => {
+    // Journey 12, and the other half of the repair. Journey 11 asserts clearing; this asserts
+    // NOT clearing, and the two together are what pin the split.
+    //
+    // A rollover moves `readDate`, which is in the law and outline keys but NOT in the work key.
+    // So the title and contents go, because the outline request that repopulates them has been
+    // re-issued, and the rail and the languages stay, because the effect that repopulates THOSE
+    // is keyed on the work alone and does not re-run. Move any work-keyed clear onto the wider
+    // key and the rail empties with nothing left to fill it: a permanently blank rail on a law
+    // the reader is still reading. That failure is invisible to journey 11, which never changes
+    // the date, and it is the reason the repair is four transitions rather than one.
+    const errors = watchErrors(page);
+    const calls: McpCall[] = [];
+    let release!: () => void;
+    const opened = new Promise<void>((resolve) => { release = resolve; });
+
+    try {
+      await installFixedClock(page);
+      await routeMcp(page, calls,
+        async (call) => {
+          if (call.args.date === DAY_TWO) await opened;
+          return call.args.date === DAY_ONE ? lawAnswer("d14", 7) : lawAnswer("d15", 4);
+        },
+        () => richTimeline("alpha", ALPHA_DATES, ["fr", "de", "lb"]));
+
+      const heading = page.locator(".lawhead h2");
+      const articles = page.locator("article.art");
+      const contents = page.locator(".toccol");
+      const ticks = railTicks(page);
+      const langs = languageSwitcher(page);
+
+      await page.goto(`/?space=law&work=${WORK_ONE}&mode=read`, { waitUntil: "domcontentloaded" });
+      await expect(heading).toHaveText("Loi d14");
+      await expect(articles).toHaveCount(7);
+      await expect(contents).toHaveCount(1);
+      await expect(ticks).toHaveCount(ALPHA_DATES.length);
+      await expect(langs).toHaveCount(1);
+      await expect(page.locator(
+        '[aria-label="Language of this text"] [aria-pressed="true"]')).toHaveCount(1);
+      expect(timelineCalls(calls)).toHaveLength(1);
+
+      await fastForwardPastMidnight(page);
+      await expect.poll(() => lawCalls(calls).filter(
+        (call) => call.args.date === DAY_TWO).length).toBeGreaterThanOrEqual(1);
+      await expect(page.locator(".sk-law")).toHaveCount(1);
+
+      // Cleared, because the request that repopulates them was re-issued for the new day.
+      expect(await articles.count()).toBe(0);
+      expect(await contents.count()).toBe(0);
+      await expect(heading).toHaveText(slugOf(WORK_ONE));
+
+      // NOT cleared, because nothing has been asked to repopulate them. The timeline effect is
+      // keyed on the work, the work did not change, and the count below proves it: one request
+      // for this rail, made at load, never repeated. A clear moved onto the wider key would
+      // empty these with no second request coming.
+      expect(timelineCalls(calls)).toHaveLength(1);
+      expect(await ticks.count()).toBe(ALPHA_DATES.length);
+      expect(await langs.count()).toBe(1);
+      const railDuring = await railText(page);
+      for (const date of ALPHA_DATES) expect(railDuring).toContain(date);
+      // The switcher survives, because it is work-keyed, but no chip may still claim to be the
+      // served language: which language the new day's text comes in is not yet known. This is
+      // the one place `servedLang` is observable, because it is cleared on the outline identity
+      // while `langs` is cleared on the work, so here one is empty and the other is not.
+      expect(await page.locator(
+        '[aria-label="Language of this text"] [aria-pressed="true"]').count()).toBe(0);
+
+      await page.waitForTimeout(400);
+      expect(await ticks.count()).toBe(ALPHA_DATES.length);
+      expect(await langs.count()).toBe(1);
+
+      // And the rail is still whole once the new day lands, so it was never emptied and refilled
+      // behind the assertions above.
+      release();
+      await expect(heading).toHaveText("Loi d15");
+      await expect(articles).toHaveCount(4);
+      await expect(ticks).toHaveCount(ALPHA_DATES.length);
+      await expect(langs).toHaveCount(1);
+      expect(timelineCalls(calls)).toHaveLength(1);
+      expect(errors.pageErrors).toEqual([]);
+      expect(errors.consoleErrors).toEqual([]);
+    } finally {
+      release();
+    }
+  });
+
+test("a pinned date on a law route is untouched by a rollover",
+  async ({ page }) => {
+    // Journey 13, the reviewer's third condition. A reader who pinned a date has not changed
+    // their question because the clock moved, so nothing may be cleared and nothing re-asked.
+    // `readDate` is `s.date ?? today`, so with `s.date` set it does not move and none of the four
+    // keys change.
+    const errors = watchErrors(page);
+    const calls: McpCall[] = [];
+    await installFixedClock(page);
+    await routeMcp(page, calls,
+      (call) => (call.args.date === PINNED_LAW ? lawAnswer("pinned", 7) : lawAnswer("today", 4)),
+      () => richTimeline("alpha", ALPHA_DATES, ["fr", "de", "lb"]));
+
+    const heading = page.locator(".lawhead h2");
+    const articles = page.locator("article.art");
+    const contents = page.locator(".toccol");
+
+    await page.goto(`/?space=law&work=${WORK_ONE}&date=${PINNED_LAW}&mode=read`,
+      { waitUntil: "domcontentloaded" });
+    await expect(heading).toHaveText("Loi pinned");
+    await expect(articles).toHaveCount(7);
+    await expect(contents).toHaveCount(1);
+    await expect(railTicks(page)).toHaveCount(ALPHA_DATES.length);
+    expect(lawCalls(calls).every((call) => call.args.date === PINNED_LAW)).toBe(true);
+    const answered = calls.length;
+
+    const before = await scheduledDayTimers(page);
+    await fastForwardPastMidnight(page);
+    // The clock really crossed and the hook really ran, so the rest of this is not vacuous.
+    await expect.poll(() => scheduledDayTimers(page)).toBe(before + 1);
+    expect(await utcDayInPage(page)).toBe(DAY_TWO);
+
+    await page.waitForTimeout(500);
+    // Nothing re-asked, and nothing cleared. Not one of the four transitions fired, because not
+    // one of their keys moved.
+    expect(calls).toHaveLength(answered);
+    await expect(heading).toHaveText("Loi pinned");
+    await expect(articles).toHaveCount(7);
+    await expect(articles.first()).toContainText("Article text marked pinned");
+    await expect(contents).toHaveCount(1);
+    await expect(railTicks(page)).toHaveCount(ALPHA_DATES.length);
+    await expect(languageSwitcher(page)).toHaveCount(1);
+    expect(await page.locator(".sk-law").count()).toBe(0);
+    expect(errors.pageErrors).toEqual([]);
+    expect(errors.consoleErrors).toEqual([]);
+  });
+
+/** The distinct texts of two different articles, chosen so neither could be mistaken for a rail. */
+const STATES_TWO = ["2001-01-01", "2002-02-02"];
+const STATES_FIVE = ["2005-05-05", "2006-06-06", "2007-07-07"];
+
+const historyAnswer = (states: string[]): Record<string, unknown>[] => [{
+  envelope: { publisher: "lu-legilux", jurisdiction: "LU", status: "ok",
+              timeline_semantics: "official_consolidation_state" },
+  states: states.map((date) => ({ valid_from: date })),
+}];
+
+test("moving between articles drops the previous article's texts and keeps the contents",
+  async ({ page }) => {
+    // Journey 14, the fourth transition. It is the only one whose key is `[s.work, s.anchor]`,
+    // and it is invisible from every work switch: `onCite` and the law picker both clear the
+    // anchor, so `narrowed` is false on arrival at the next law and a stale `states` cannot be
+    // seen there however wrong it is. The transition that DOES expose it is a move between two
+    // articles of one law, which is what this drives.
+    //
+    // BOTH POLARITIES, because this transition sits between two others that must not follow it.
+    // `states` MUST be cleared: the rail narrows to the open article's own texts, and last
+    // article's texts under this article's heading is the same wrong attribution journey 11 is
+    // about, one level down. `toc` MUST NOT be cleared: the contents belong to the outline
+    // identity, which has no anchor in it, so nothing would re-fetch them and the column would
+    // go for good. Moving that clear onto this key is the stranding failure, and the assertion
+    // that catches it is the one that says the contents are still there.
+    const errors = watchErrors(page);
+    const calls: McpCall[] = [];
+    let release!: () => void;
+    const opened = new Promise<void>((resolve) => { release = resolve; });
+
+    try {
+      await installFixedClock(page);
+      await routeMcp(page, calls,
+        () => lawAnswer("ALPHA", 7),
+        () => richTimeline("alpha", ALPHA_DATES, ["fr", "de", "lb"]),
+        async (call) => {
+          if (call.args.anchor === "art-5") await opened;
+          return historyAnswer(call.args.anchor === "art-2" ? STATES_TWO : STATES_FIVE);
+        });
+
+      const tocRows = page.locator(".toccol ul.rows > li");
+      const railScope = page.locator(".railbox .railhead .tag").first();
+      // By accessible name, not by class: `tag act` is also worn by the rail's clear control
+      // and by both evidence actions, so a class selector matches three buttons.
+      const openArticle = page.getByRole("button", { name: /^article art-/ });
+
+      // The law, with a contents column and a rail of the law's own versions.
+      await page.goto(`/?space=law&work=${WORK_ONE}&mode=read`, { waitUntil: "domcontentloaded" });
+      await expect(tocRows).toHaveCount(7);
+      await expect(railScope).toHaveText(`${ALPHA_DATES.length} versions`);
+      expect(calls.filter((call) => call.name === "article_history")).toHaveLength(0);
+      // The outline requests made at load. Nothing below may add to this number: an anchor is
+      // not in the outline identity, so opening an article must not re-ask for the contents.
+      const outlineAtLoad = lawCallsFor(calls, DAY_ONE, "outline").length;
+      expect(outlineAtLoad).toBeGreaterThan(0);
+
+      // Open one article. The rail narrows to that article's texts, and the contents stay,
+      // because the outline identity has no anchor in it.
+      await page.locator(".toccol .rowbtn", { hasText: "Art. 2" }).first().click();
+      await expect(railScope).toHaveText(`${STATES_TWO.length} texts of this article`);
+      const railTwo = await railText(page);
+      for (const date of STATES_TWO) expect(railTwo).toContain(date);
+      await expect(tocRows).toHaveCount(7);
+
+      // Move to another article, holding its history open.
+      await page.locator(".toccol .rowbtn", { hasText: "Art. 5" }).first().click();
+      await expect.poll(() => calls.filter(
+        (call) => call.name === "article_history" && call.args.anchor === "art-5").length).toBe(1);
+      // Live rather than blank, and on the new article: the reader's open-article control names
+      // it, so this window belongs to art-5 and not to the frame before the click.
+      await expect(openArticle).toContainText("article art-5");
+
+      // Cleared. Non-retrying: the previous article's texts standing under this one is a wrong
+      // attribution for exactly as long as it lasts, and the rail states a count and a scope, so
+      // it is making a claim rather than merely showing residue.
+      await expect(railScope).toHaveText(`${ALPHA_DATES.length} versions`);
+      const railDuring = await railText(page);
+      for (const date of STATES_TWO) expect(railDuring).not.toContain(date);
+      for (const date of STATES_FIVE) expect(railDuring).not.toContain(date);
+
+      // NOT cleared, and nothing will re-fetch it if it were: the outline effect is keyed
+      // without the anchor and has not re-run, which the call count proves.
+      expect(await tocRows.count()).toBe(7);
+      expect(lawCallsFor(calls, DAY_ONE, "outline")).toHaveLength(outlineAtLoad);
+
+      await page.waitForTimeout(400);
+      expect(await tocRows.count()).toBe(7);
+      await expect(railScope).toHaveText(`${ALPHA_DATES.length} versions`);
+
+      // Released, the rail narrows again, so the readings above were taken on a page that can
+      // still produce a narrowed rail.
+      release();
+      await expect(railScope).toHaveText(`${STATES_FIVE.length} texts of this article`);
+      const railAfter = await railText(page);
+      for (const date of STATES_FIVE) expect(railAfter).toContain(date);
+      for (const date of STATES_TWO) expect(railAfter).not.toContain(date);
+      await expect(tocRows).toHaveCount(7);
       expect(errors.pageErrors).toEqual([]);
       expect(errors.consoleErrors).toEqual([]);
     } finally {
