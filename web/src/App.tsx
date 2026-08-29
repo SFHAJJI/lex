@@ -18,8 +18,9 @@ import Coach, { COACH_KEY } from "./Coach";
 import { CompareSkeleton, LawSkeleton, ReportSkeleton } from "./Skeleton";
 import { jurisdictionForPublisher, jurisdictionLabel } from "./facets";
 import { latestStateLabel, temporalStatusLabel } from "./temporal";
-import { AMBIGUOUS_ONLY_SENTENCE, INCOMPLETE_RESPONSE_SENTENCE, LIMITATION_EXPLANATION,
-  MIXED_ZERO_SENTENCES, NO_CORPUS_SENTENCE, projectGovernedEmptiness } from "./limitations";
+import { AMBIGUOUS_ONLY_SENTENCE, governedStripRows, INCOMPLETE_RESPONSE_SENTENCE,
+  LIMITATION_EXPLANATION, MIXED_ZERO_SENTENCES, NO_CORPUS_SENTENCE,
+  projectGovernedEmptiness } from "./limitations";
 
 const utcDay = () => new Date().toISOString().slice(0, 10);
 
@@ -326,6 +327,22 @@ export default function App() {
     tool<any>("timeline", { work: s.work, limit: 400 })
       .then((res) => {
         if (!live()) return;
+        // TRUST RULE 4 ON THE TIMELINE SURFACE, through the same door the governed pages use.
+        //
+        // This effect used to clear the strip and never fill it, so the version rail, one of the
+        // two most-read screens in the product, disclosed no index identity at all: the reader
+        // was shown which versions exist without being told which index said so or when it was
+        // built. The freshness was already on the wire. `Envelope` (McpCore 223) stamps
+        // `freshness.built_at`, `corpus_commit` and `stamp_signature_valid` on every path it
+        // builds, timeline's two included (1075 and 1080); this client simply threw them away.
+        //
+        // From the PARSE, never from these bytes (O1). `governedStripRows` is
+        // `parseGovernedResponse` plus `partitionOf`, so a unit the table refuses authorizes no
+        // row, a publisher whose identity the response withheld gets the identity-unavailable
+        // row, and nothing here can render a build date the parser rejected. `first` below still
+        // reads the raw versions for the rail, which is the pre-existing transitional path and is
+        // not a trust claim; the strip is, and it comes only from the parse.
+        setStrip(governedStripRows("timeline", res));
         const one = first<any>(res, (x) => Array.isArray(x?.versions) && x.versions.length > 0);
         const vs = (one?.versions ?? []) as any[];
         setTimelineSemantics(one?.envelope?.timeline_semantics);
@@ -403,6 +420,29 @@ export default function App() {
     fetchRead()
       .then((res) => {
         if (!live()) return;
+        // TRUST RULE 4 ON THE LAW SURFACE. Same door, same parse, same admission rule.
+        //
+        // This effect is the strip's writer for the reading path because its dependency list is
+        // exactly the one the layout transition above clears on: work, date, mode, anchor and
+        // language. The outline effect is keyed more narrowly, so writing from there would blank
+        // the strip whenever a reader opened an article, and the work effect is keyed on the work
+        // alone, so it would blank on every date change.
+        //
+        // TWO WRITERS, AND THE VALUE CANNOT DEPEND ON WHICH LANDS LAST. The timeline effect above
+        // also writes the strip, and on a fresh work both are in flight at once. That is safe
+        // only because every field on a strip row is a property of the INDEX rather than of the
+        // question: publisher, timeline semantics, build date, signature verdict, corpus commit,
+        // code commit, manifest set and content digest. `Resolve` returns at most one reader, so
+        // both calls answered from the same index and disclose the same eight values.
+        //
+        // It is also why the envelope's `provisional` flag is deliberately NOT on the row.
+        // `ProvisionalFor` (McpCore 511-515) compares the REQUEST to the build date, and the two
+        // calls compare different things: `as_of` uses the date being read (978), `timeline` uses
+        // the version dates it found (1076-1077). Putting a request-scoped field on a per-index
+        // row would let effect arrival order decide what the reader is told, which is the defect
+        // class this parse exists to remove. A provisional answer still needs disclosing, beside
+        // the answer rather than inside the index strip.
+        setStrip(governedStripRows("as_of", res));
         const one = first<any>(res, (x) => Array.isArray(x?.provisions) && x.provisions.length > 0);
         const doc = one?.document ?? one;
         setTitle(shorten(doc?.title));

@@ -361,7 +361,7 @@ export function validateLimitation(value: unknown): PublisherLimitation | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
   if (record.status !== LIMITATION_STATUS) return null;
-  const tool = typeof record.tool === "string" && GOVERNED_TOOLS.has(record.tool)
+  const tool = typeof record.tool === "string" && REFUSING_TOOLS.has(record.tool)
     ? record.tool : null;
   if (!tool) return null;
   if (!Array.isArray(record.unsupported_filters)) return null;
@@ -490,10 +490,21 @@ const text = (value: unknown): boolean =>
 // left for it to disagree with (O1).
 
 /**
- * The governed operations, closed at COMPILE time rather than carried as a string. A fourth tool
+ * The governed operations, closed at COMPILE time rather than carried as a string. A sixth tool
  * must be a type error at the call site rather than a silent invalid classification at runtime.
+ *
+ * `as_of` and `timeline` are here for trust rule 4, and they make a STRICTLY WEAKER claim than
+ * the three above them. Each answers about one work from one reader, publishes no population and
+ * stamps no paging receipt, so the only thing this client takes from either is the index identity
+ * the envelope discloses. Their rows in the table below say each of those three out loud rather
+ * than leaving a field undefined, because an undefined field here does not mean "not applicable":
+ * it inherits whatever reading the tool beside it gave the same field. `absenceTotal: undefined`
+ * meant "search decides absence from its fused hit count", so a law tool that quietly inherited it
+ * would have let an empty outline print `Nothing in the corpus matches that.` about a corpus
+ * `as_of` never measured.
  */
-export type GovernedTool = "search" | "changes_in_period" | "in_force_on";
+export type GovernedTool =
+  | "search" | "changes_in_period" | "in_force_on" | "as_of" | "timeline";
 
 /**
  * Which claim a disclosed denominator makes, carried so no renderer can swap the two.
@@ -769,6 +780,18 @@ interface PagingSchema {
   hasTruncated: boolean;
   /** `global_response_row_set` is stamped. */
   hasGlobalRowSet: boolean;
+  /**
+   * `publisher_result_set` is stamped, and `response_row_set` is stamped.
+   *
+   * DECLARED, because a receipt the producer never stamps is not an absent receipt: it is a
+   * field that arrived from somewhere else. `MarkPublisherSet` (McpCore 701-712) and
+   * `MarkResponseRows` (713-725) are reached only from search (1575-1576), in_force_on
+   * (1170-1171) and changes_in_period (1865-1882). `as_of` and `timeline` reach neither, so one
+   * turning up on either is a shape the producer could not have minted, and `receiptsOf` fails
+   * closed on it exactly as it does on a malformed one.
+   */
+  hasPublisherSet: boolean;
+  hasRowSet: boolean;
   /** The equalities this entry's own numbers determine. Everything else is shape-checked only. */
   coherent: (facts: PagingFacts) => boolean;
 }
@@ -919,8 +942,16 @@ export interface UnitReceipts {
  * losing the coverage statement it came to make.
  */
 function receiptsOf(schema: ToolSchema, entry: Record<string, unknown>): UnitReceipts {
-  const publisherSet = publisherSetOf(entry.publisher_result_set);
-  const rowSet = rowSetOf(entry.response_row_set);
+  // Presence is binding both ways now. A tool that stamps a receipt must stamp the producer's
+  // own shape; a tool that stamps none may not carry one at all. The second half is what a bare
+  // `publisherSetOf` could not express: it read a well-formed receipt off a tool whose producer
+  // path never writes one and stored it as evidence about the response.
+  const publisherSet = schema.paging.hasPublisherSet
+    ? publisherSetOf(entry.publisher_result_set)
+    : entry.publisher_result_set === undefined ? undefined : null;
+  const rowSet = schema.paging.hasRowSet
+    ? rowSetOf(entry.response_row_set)
+    : entry.response_row_set === undefined ? undefined : null;
   const globalRowSet = schema.paging.hasGlobalRowSet
     ? globalRowSetOf(entry.global_response_row_set)
     : undefined;
@@ -992,6 +1023,24 @@ function reconcileReceipts(
   if (units.some((unit) => unit.kind !== "ran" && !schema.nonExecutingCoherent(unit.receipts))) {
     return irreconcilable("a unit that never executed receipted rows it could not have returned");
   }
+  // A tool that stamps no response-wide receipt has nothing to reconcile, and saying so here is
+  // not the same as letting every check below pass vacuously. `receiptsOf` has already refused
+  // any receipt that arrived on such a tool, so reaching this point means there is genuinely
+  // nothing on the response to add up, rather than nothing this function happened to find.
+  //
+  // NO MUTATION KILLS THIS LINE TODAY, and that is a fact about the line rather than about the
+  // tests, so it is written down on the precedent of the truncation clause in `partitionOf`.
+  // It is IMPLIED by the receipt flags standing above it: both law rows declare
+  // `hasPublisherSet`, `hasRowSet` and `hasGlobalRowSet` false, so every receipt on such a unit
+  // is `undefined`, `presenceOf` reports none carried, and each branch below returns
+  // `RECONCILED` on its own. Deleting this line changes no behaviour while those flags hold.
+  // What would make it load-bearing is written down rather than left to be rediscovered: give a
+  // receipt-free tool one of those flags, or let `receiptsOf` tolerate an unstamped receipt
+  // instead of refusing it, and this becomes the only thing keeping a forged receipt out of a
+  // reconciliation that has no rows to check it against. It is also the only place the
+  // declaration `commonReceipt: "none"` is honest: the alternative is naming a receipt the
+  // producer never stamps.
+  if (schema.commonReceipt === "none") return RECONCILED;
   const publishers = presenceOf(units.map((unit) => unit.receipts.publisherSet));
   if (publishers.mixed) {
     return irreconcilable("publisher_result_set was stamped on some units and not others");
@@ -1147,10 +1196,52 @@ type ScopeRule =
   | { rule: "bounded_disclosure"; measure: ScopeMeasure; companionCounts: readonly string[] }
   | { rule: "none_published" };
 
+/**
+ * The row set one tool publishes and this client governs, or the statement that there is none.
+ *
+ * `governed: false` is a claim about the PRODUCER, not a gap. `as_of` and `timeline` carry a
+ * different payload per status and per mode, and no single field spans them: `as_of` sends
+ * `provisions` in outline and select and in full where the version is split (McpCore 992-994,
+ * 1033-1035), only `document` in full where it is not (1046-1052), `version_choices` beside
+ * `ambiguous_version` (950), and nothing at all beside `no_version_for_date` (970-973).
+ * `timeline` sends `versions` beside `ok` (1084) and nothing beside `unknown_work` (1075).
+ * Governing one field across those would refuse the producer's own envelopes and take the index
+ * identity off exactly the screens this disclosure exists to reach, and inventing a per-status
+ * row contract to look thorough would be the same defect the scope table refuses.
+ *
+ * It is also not a hole in the strip's admission. The strip claim rides on the envelope, which is
+ * validated in full either way: a mintable publisher, a status inside the tool's closed set, a
+ * build date in the producer's exact grammar, a real boolean signature verdict, no population
+ * where the producer publishes none and no receipt where it stamps none. Row validation never
+ * protected that claim on the other three either: search admits any row with a non-empty
+ * `lex_id`, which a forger satisfies by typing one.
+ */
+type RowsRule =
+  | {
+    governed: true;
+    field: "hits" | "changes" | "works";
+    valid: (row: Record<string, unknown>) => boolean;
+  }
+  | { governed: false };
+
+/**
+ * What an empty response of this tool's may claim about the corpus, and where a tool that may
+ * claim something looks for the count that would falsify it (O12).
+ *
+ * ONE FIELD, because the two questions are not independent and two fields let them disagree. The
+ * shape this replaces was a bare `absenceTotal: string | undefined`, where `undefined` carried a
+ * tool-specific meaning ("search decides absence from its fused hit count") that a later row
+ * would have inherited by writing nothing. `no_authority` cannot be written that way: it is a
+ * positive statement that no empty response of this tool's is evidence about what the corpus
+ * holds, and a schema declaring it cannot also name a total, because there is no total to name.
+ */
+type AbsenceRule =
+  | { rule: "corpus_scope"; total: string | undefined }
+  | { rule: "no_authority" };
+
 interface ToolSchema {
   successStatuses: ReadonlySet<string>;
-  rowsField: "hits" | "changes" | "works";
-  rowValid: (row: Record<string, unknown>) => boolean;
+  rows: RowsRule;
   ambiguityField: string | undefined;
   requiredCounts: readonly string[];
   /**
@@ -1166,11 +1257,12 @@ interface ToolSchema {
   /** Which paging receipts this tool stamps, and the arithmetic its own entry determines. */
   paging: PagingSchema;
   /**
-   * The count whose positivity makes an absence claim false when nothing is visible (O12).
-   * `undefined` for search, which publishes no per-publisher total and decides absence from the
-   * fused hit count instead.
+   * Whether an empty response of this tool's may speak for the corpus, and the count whose
+   * positivity would make that claim false when nothing is visible (O12). `total: undefined`
+   * under `corpus_scope` is search, which publishes no per-publisher total and decides absence
+   * from the fused hit count instead.
    */
-  absenceTotal: string | undefined;
+  absence: AbsenceRule;
   requiresRetrievalMode: boolean;
   /**
    * Which receipt the producer stamps IDENTICALLY on every unit of this tool's response, and
@@ -1179,7 +1271,7 @@ interface ToolSchema {
    * changes_in_period writes a PER UNIT `response_row_set` from its own `shown` and a
    * response-wide `global_response_row_set` beside it.
    */
-  commonReceipt: "row_set" | "global_row_set";
+  commonReceipt: "row_set" | "global_row_set" | "none";
   /** How many rows of one ran unit that receipt's `returned` counts. */
   commonReturned: (facts: { rowCount: number; ambiguityCount: number }) => number;
   /**
@@ -1230,9 +1322,8 @@ const TOOL_SCHEMAS: Readonly<Record<GovernedTool, ToolSchema>> = {
   search: {
     // McpCore search emits `Envelope(r, McpStatus.Ok)` on the executed path and nothing else.
     successStatuses: new Set(["ok"]),
-    rowsField: "hits",
     // The workspace derives every work identity from lex_id.
-    rowValid: (row) => text(row.lex_id),
+    rows: { governed: true, field: "hits", valid: (row) => text(row.lex_id) },
     ambiguityField: undefined,
     requiredCounts: [],
     absentCountsAsZero: new Set(),
@@ -1253,12 +1344,14 @@ const TOOL_SCHEMAS: Readonly<Record<GovernedTool, ToolSchema>> = {
     // from one entry. Shape and range are checked; nothing else can honestly be.
     paging: {
       hasOffset: false, hasShown: false, hasTruncated: false, hasGlobalRowSet: false,
+      hasPublisherSet: true, hasRowSet: true,
       coherent: () => true,
     },
     // Search publishes hits and a population, never a per-publisher result total, so there is no
     // count here whose positivity could contradict an empty page. Inventing one would be the
-    // same defect the scope table refuses for the other two populations.
-    absenceTotal: undefined,
+    // same defect the scope table refuses for the other two populations. The authority itself is
+    // unchanged: an empty search still speaks for the corpus, from the fused hit count.
+    absence: { rule: "corpus_scope", total: undefined },
     // O3: the producer always declares its actual retrieval mode on a successful search
     // (`["retrieval_mode"] = execution.RetrievalMode`). Admitting an envelope without one lets a
     // response of unknown provenance render. This flag is also what makes
@@ -1280,9 +1373,8 @@ const TOOL_SCHEMAS: Readonly<Record<GovernedTool, ToolSchema>> = {
   changes_in_period: {
     // `works == 0 ? McpStatus.NoChangesInPeriod : McpStatus.Ok`.
     successStatuses: new Set(["ok", "no_changes_in_period"]),
-    rowsField: "changes",
     // The ranking view reads work and calls string methods on it.
-    rowValid: (row) => text(row.work),
+    rows: { governed: true, field: "changes", valid: (row) => text(row.work) },
     ambiguityField: undefined,
     // `["works_changed"] = works, ["new_versions"] = versions`, both from
     // `IndexReader.ChangeTotals`, declared `(int Works, int Versions)`.
@@ -1318,6 +1410,7 @@ const TOOL_SCHEMAS: Readonly<Record<GovernedTool, ToolSchema>> = {
     // pass stamps both receipts from those same numbers (1865-1882).
     paging: {
       hasOffset: true, hasShown: true, hasTruncated: false, hasGlobalRowSet: true,
+      hasPublisherSet: true, hasRowSet: true,
       coherent: (facts) => {
         const { shown, offset, rowSet, globalRowSet } = facts.paging;
         // `["shown"] = rows.Length`. A response claiming to show more or fewer rows than it
@@ -1338,7 +1431,7 @@ const TOOL_SCHEMAS: Readonly<Record<GovernedTool, ToolSchema>> = {
     },
     // `["works_changed"] = works` is this publisher's FULL period total, beside its slice of one
     // globally merged page. A positive one with nothing on screen means the page is a slice.
-    absenceTotal: "works_changed",
+    absence: { rule: "corpus_scope", total: "works_changed" },
     requiresRetrievalMode: false,
     // The one tool whose response-wide receipt is the global one (McpCore 1874-1881):
     // `returned` is `candidates.Count`, the single merged page that every unit's rows were
@@ -1374,9 +1467,11 @@ const TOOL_SCHEMAS: Readonly<Record<GovernedTool, ToolSchema>> = {
     // `total == 0 ? McpStatus.NoResult : ambiguities.Count > 0 ? McpStatus.AmbiguousVersion
     // : McpStatus.Ok`.
     successStatuses: new Set(["ok", "no_result", "ambiguous_version"]),
-    rowsField: "works",
     // The in-force view opens rows by work, or by lex_id when the publisher supplies one.
-    rowValid: (row) => text(row.work) || text(row.lex_id),
+    rows: {
+      governed: true, field: "works",
+      valid: (row) => text(row.work) || text(row.lex_id),
+    },
     ambiguityField: "ambiguous_works",
     // `["total_works_in_force"] = total`, from `Rows.InForcePage.TotalGroups`, an `int`.
     requiredCounts: ["total_works_in_force"],
@@ -1412,6 +1507,7 @@ const TOOL_SCHEMAS: Readonly<Record<GovernedTool, ToolSchema>> = {
     // entry, so this one is an exact equality rather than a bound.
     paging: {
       hasOffset: true, hasShown: false, hasTruncated: true, hasGlobalRowSet: false,
+      hasPublisherSet: true, hasRowSet: true,
       coherent: (facts) => {
         const { offset, truncated } = facts.paging;
         if (truncated === undefined || offset === undefined) return true;
@@ -1421,7 +1517,7 @@ const TOOL_SCHEMAS: Readonly<Record<GovernedTool, ToolSchema>> = {
     },
     // `["total_works_in_force"] = total` is the publisher's whole answer for the date, and one
     // shared remainingLimit can page every row of it out of this response.
-    absenceTotal: "total_works_in_force",
+    absence: { rule: "corpus_scope", total: "total_works_in_force" },
     requiresRetrievalMode: false,
     // `MarkResponseRows(outp, limit, limit - remainingLimit, ...)` (McpCore 1171), and
     // `remainingLimit -= rows.Count + ambiguities.Count`, so an ambiguity unit is a returned
@@ -1433,6 +1529,156 @@ const TOOL_SCHEMAS: Readonly<Record<GovernedTool, ToolSchema>> = {
     // As for search: one response-wide `response_row_set` on every item, refusals included.
     nonExecutingCoherent: () => true,
   },
+  /**
+   * THE LAW SURFACE (trust rule 4), and a strictly weaker row than the three above it.
+   *
+   * `as_of` answers about ONE work from ONE reader. It publishes no population, stamps no paging
+   * receipt and has no refusal path, so the only claim this client takes from it is the index
+   * identity its envelope discloses: which index answered, when it was built, and whether its
+   * stamp signature verified. Every field below is pinned to src/Lex.Mcp/McpCore.cs, and every
+   * one that says "none" says it because the producer publishes none.
+   */
+  as_of: {
+    // SEVEN statuses reach an envelope, from four call sites and one mutation. `Envelope`
+    // (McpCore 223) is the single mint site for all of them.
+    //   947  AmbiguousVersion, when more than one version is effective on the date.
+    //   970  `r.WorkExists(w) ? NoVersionForDate : UnknownWork`, so BOTH are envelope statuses.
+    //   978  the `status` variable, which is `TextStatus(r, doc)` from 974. TextStatus (295-299)
+    //        is a closed three-way expression and nothing else: `text_not_available` when the
+    //        version holds no text, `ok` when its text is public, and otherwise
+    //        `text_not_available` or `text_withheld` on the publisher text gate.
+    //   1052 the SAME variable after 1051 reassigns it to `TextNotAvailable`, which 978 can
+    //        already emit, so this site adds no member to the set.
+    // The seventh arrives by MUTATION rather than by a call, and reading only the `Envelope(...)`
+    // sites misses it: `AddSelectedProvisions` (597) overwrites `output["envelope"]["status"]`
+    // with `AnchorNotInVersion` when a mode=select or an anchored mode=outline request matched
+    // none of the anchors it asked for.
+    //
+    // The two envelope-LESS returns are not members and must stay out. McpCore 936 returns a bare
+    // `{ status: unknown_work }` when `Resolve` found no reader at all, and
+    // `UnmountedFilterResult` (263-278) a bare `{ status: unknown_publisher }`. Neither selected
+    // a reader, so neither has an index identity to disclose, and `classifyEntry` already refuses
+    // an entry carrying no envelope. An empty strip is the honest answer to both, and stating an
+    // identity there would be inventing one.
+    successStatuses: new Set([
+      "ok", "text_withheld", "text_not_available", "anchor_not_in_version",
+      "no_version_for_date", "unknown_work", "ambiguous_version",
+    ]),
+    // No governed row set, and no ambiguity array either. `version_choices` (950) is the reader's
+    // next step rather than held content this client counts, and declaring it would put an
+    // `ambiguous_only` state on a surface that has no absence states at all. See `RowsRule`.
+    rows: { governed: false },
+    ambiguityField: undefined,
+    // No count is stamped on every path. `total_provisions` appears in outline (992) and in full
+    // where the version is split into provisions (1033); `anchors_in_version` only on a select
+    // miss (601); the two refusal-shaped statuses carry neither. Requiring any of them would
+    // refuse the producer's own responses, and tolerating one absent would put a number on the
+    // unit that no path guarantees.
+    requiredCounts: [],
+    absentCountsAsZero: new Set(),
+    // Nothing left to cross-check. With no governed rows and no counts, `StatusFacts` carries
+    // only the status, and `successStatuses` has already closed that. Stated rather than left
+    // looking like an oversight: there is no producer invariant here that this could enforce.
+    statusInvariant: () => true,
+    // NO POPULATION ON ANY PATH, for every status. `SearchPopulation` (493-508) is reached only
+    // from search, `r.PopulationTotal` only from changes_in_period and `r.Coverage(1).Groups`
+    // only from in_force_on; no `as_of` return builds a `population` at all. `none_published` is
+    // therefore this producer's own silence rather than a shrug, and `parseScope` fails closed on
+    // a population arriving anyway, exactly as it does for the two refusal rows above.
+    scopeRule: {
+      ok: { rule: "none_published" },
+      text_withheld: { rule: "none_published" },
+      text_not_available: { rule: "none_published" },
+      anchor_not_in_version: { rule: "none_published" },
+      no_version_for_date: { rule: "none_published" },
+      unknown_work: { rule: "none_published" },
+      ambiguous_version: { rule: "none_published" },
+    },
+    // Nothing here is a corpus page. `truncated` and `total_provisions` (992-993, 1033-1034) are
+    // response-size facts about ONE document's provisions, not a slice of a measured population,
+    // and reading them as paging would let a long code's outline become a statement about what
+    // Lex holds. Neither MarkPublisherSet nor MarkResponseRows is reached from this case, so both
+    // receipt flags are false and one arriving anyway is refused in `receiptsOf`.
+    paging: {
+      hasOffset: false, hasShown: false, hasTruncated: false, hasGlobalRowSet: false,
+      hasPublisherSet: false, hasRowSet: false,
+      coherent: () => true,
+    },
+    // NO ABSENCE AUTHORITY, and this is the field it would have been worst to leave undefined.
+    // Under the old shape `absenceTotal: undefined` meant search's reading, "decide absence from
+    // the fused hit count", so an `as_of` row that wrote nothing would have inherited it and let
+    // an empty outline reach `no_match` and print `Nothing in the corpus matches that.` about a
+    // corpus this tool never measured. `as_of` asks one reader about one work and publishes no
+    // denominator, so no empty response of its is evidence about the corpus.
+    absence: { rule: "no_authority" },
+    requiresRetrievalMode: false,
+    // No response-wide receipt is stamped, so there is nothing to reconcile and `commonReturned`
+    // is never read. It answers zero rather than a row count because this tool governs no rows.
+    commonReceipt: "none",
+    commonReturned: () => 0,
+    responseTotal: undefined,
+    // UNREACHABLE rather than trivially true, which is worth the sentence. `as_of` has no
+    // non-executing path: it never calls `UnsupportedFilterResult` (only 1126, 1362 and 1775 do,
+    // for in_force_on, search and changes_in_period), and `requiresRetrievalMode` is false, so
+    // `classifyEntry` can mint neither a refused nor a mode-unavailable unit for it.
+    nonExecutingCoherent: () => true,
+  },
+  /**
+   * THE TIMELINE SURFACE (trust rule 4). The same weaker claim as `as_of`, from the same single
+   * reader: `Resolve` returns at most one, so one call is one envelope.
+   */
+  timeline: {
+    // Two statuses, both from `Envelope` (McpCore 223):
+    //   1075 UnknownWork, returned when `r.Timeline(w, limit, offset)` reports a total of 0.
+    //   1080 Ok, every other return of this case.
+    // As for `as_of`, the envelope-less `{ status: unknown_work }` at 1071 and the bare
+    // `unknown_publisher` from `UnmountedFilterResult` are outside this set: no reader was
+    // selected, so there is no index identity to state.
+    successStatuses: new Set(["ok", "unknown_work"]),
+    // `versions` is real and App.tsx reads it, but it exists only beside `ok` (1084). The
+    // `unknown_work` return at 1075 carries an envelope and `work` and nothing else, so
+    // governing one field across both statuses would refuse that envelope and take the version
+    // rail's index identity off the screen, which is the disclosure this row exists to add.
+    rows: { governed: false },
+    ambiguityField: undefined,
+    // `["total_count"] = total` (1082), from `r.Timeline`. Tolerated absent because the
+    // `unknown_work` return does not carry it, and read as zero there, which is exactly the
+    // value the producer tested to choose that status.
+    requiredCounts: ["total_count"],
+    absentCountsAsZero: new Set(["total_count"]),
+    // THE PRODUCER'S OWN BRANCH, restated as an invariant rather than invented. McpCore 1075 is
+    // `if (total == 0) return ... UnknownWork` and every other return of this case is `Ok`, so
+    // the status and the count determine each other exactly. A forged `ok` reporting no versions,
+    // or an `unknown_work` reporting some, is a shape this tool cannot emit, and either would
+    // otherwise have carried a confident build date onto the strip.
+    statusInvariant: (facts) => facts.status === "unknown_work"
+      ? facts.counts.total_count === 0
+      : facts.counts.total_count > 0,
+    // No population on either path, for the same reason as `as_of`: none of the three population
+    // helpers is reached from this case.
+    scopeRule: {
+      ok: { rule: "none_published" },
+      unknown_work: { rule: "none_published" },
+    },
+    // `["truncated"] = total > offset + limit` (1083) pages this work's version list, not a
+    // corpus population, and this client makes no paging claim from it. No receipt is stamped:
+    // neither MarkPublisherSet nor MarkResponseRows is reached from this case.
+    paging: {
+      hasOffset: false, hasShown: false, hasTruncated: false, hasGlobalRowSet: false,
+      hasPublisherSet: false, hasRowSet: false,
+      coherent: () => true,
+    },
+    // As for `as_of`: one work, one reader, no denominator, so an empty timeline is evidence
+    // about that work and never about the corpus.
+    absence: { rule: "no_authority" },
+    requiresRetrievalMode: false,
+    commonReceipt: "none",
+    commonReturned: () => 0,
+    responseTotal: undefined,
+    // Unreachable for the same two reasons as `as_of`: no `UnsupportedFilterResult` call and no
+    // retrieval mode, so no non-executing unit can exist.
+    nonExecutingCoherent: () => true,
+  },
 };
 
 /**
@@ -1442,6 +1688,24 @@ const TOOL_SCHEMAS: Readonly<Record<GovernedTool, ToolSchema>> = {
  * this membership test, exactly as the shipped classifier reached `SUCCESS_STATUSES[tool]`.
  */
 const GOVERNED_TOOLS: ReadonlySet<string> = new Set(Object.keys(TOOL_SCHEMAS));
+
+/**
+ * The governed operations that can REFUSE a filter, derived from the same table so the two
+ * cannot drift.
+ *
+ * Not every governed tool has a refusal path, and `validateLimitation` must not widen just
+ * because the table grew. `UnsupportedFilterResult` (McpCore 263-278) is called from exactly
+ * three sites, 1126, 1362 and 1775, for in_force_on, search and changes_in_period; `as_of` and
+ * `timeline` reach none of them. The membership test is the tool's own scope rule for the
+ * refusal status: a tool that can refuse has to say what a refusal discloses, and a tool that
+ * cannot has nothing to say about one. Reusing `GOVERNED_TOOLS` here would have accepted an
+ * assistant limitation claiming `as_of` refused a filter, which is a claim the producer cannot
+ * make and which no reader could check.
+ */
+const REFUSING_TOOLS: ReadonlySet<string> = new Set(
+  Object.entries(TOOL_SCHEMAS)
+    .filter(([, schema]) => Object.hasOwn(schema.scopeRule, LIMITATION_STATUS))
+    .map(([tool]) => tool));
 
 /**
  * One publisher's disclosed scope for one already-classified status.
@@ -1555,13 +1819,20 @@ function ranShape(
   status: string,
   receipts: UnitReceipts,
 ): RanShape | null {
-  const rows = entry[schema.rowsField];
-  if (!rowsValid(rows) || !rows.every(schema.rowValid)) return null;
+  // Narrowed ONCE, so the ambiguity block below cannot reach a row validator the rows block
+  // decided this tool does not have.
+  const governedRows = schema.rows.governed ? schema.rows : undefined;
+  let rows: Record<string, unknown>[] = [];
+  if (governedRows !== undefined) {
+    const raw = entry[governedRows.field];
+    if (!rowsValid(raw) || !raw.every(governedRows.valid)) return null;
+    rows = raw;
+  }
   let ambiguities: Record<string, unknown>[] = [];
-  if (schema.ambiguityField !== undefined) {
+  if (governedRows !== undefined && schema.ambiguityField !== undefined) {
     const raw = entry[schema.ambiguityField];
     if (raw !== undefined) {
-      if (!rowsValid(raw) || !raw.every(schema.rowValid)) return null;
+      if (!rowsValid(raw) || !raw.every(governedRows.valid)) return null;
       ambiguities = raw;
     }
   }
@@ -2003,6 +2274,16 @@ export interface GovernedPartition {
    * and a claim that strong may only come from a unit this table admitted.
    */
   stripRows: EnvelopeStripRow[];
+  /**
+   * Whether an empty response of this tool's may speak for the corpus at all, carried onto the
+   * partition so the two absence projectors read one fact rather than each deciding for itself.
+   *
+   * `no_authority` is not a shade of "nothing matched". `as_of` and `timeline` answer about one
+   * work from one reader and measure no population, so an empty one of either is evidence about
+   * that work and about nothing else. An ungoverned tool gets the same verdict for the stronger
+   * reason that nothing about its response was classified at all.
+   */
+  absenceAuthority: "corpus_scope" | "no_authority";
   /** At least one envelope refused. */
   anyRefused: boolean;
   /** Nothing ran and at least one envelope refused or lacked the retrieval mode. */
@@ -2050,9 +2331,8 @@ export function partitionOf(parsed: GovernedResponse): GovernedPartition {
     // `{ total: 9, returned: 8, maximum: 8, truncated: true }` answered `Nothing in the corpus
     // matches that.` about a corpus one publisher of which never reached this client.
     moreBeyondPage: ranUnits.some((unit) => {
-      const total = schema.absenceTotal === undefined
-        ? 0
-        : unit.counts[schema.absenceTotal] ?? 0;
+      const named = schema.absence.rule === "corpus_scope" ? schema.absence.total : undefined;
+      const total = named === undefined ? 0 : unit.counts[named] ?? 0;
       return total > unit.rows.length + unit.ambiguities.length
         || unit.paging.truncated === true;
     }) || ordered.some((unit) => unit.receipts.publisherSet?.truncated === true
@@ -2090,6 +2370,9 @@ export function partitionOf(parsed: GovernedResponse): GovernedPartition {
     conflictedPublishers: parsed.conflicted,
     receiptsIrreconcilable: parsed.receipts.kind === "irreconcilable",
     stripRows: envelopeStripRows(parsed),
+    // Carried from the table rather than re-derived by each projector, so `searchAbsenceState`
+    // and `projectGovernedEmptiness` cannot reach different verdicts about the same response.
+    absenceAuthority: schema.absence.rule,
     anyRefused: refusals.length > 0,
     // A capability REFUSAL is what the filter-limitation copy explains. A publisher that
     // merely lacked the hybrid retrieval mode refused no filter, so it must not select copy
@@ -2099,6 +2382,24 @@ export function partitionOf(parsed: GovernedResponse): GovernedPartition {
     // mutation could kill, which is its own kind of lie about what is tested.
     allRefused: ran.length === 0 && refusals.length > 0 && parsed.unusable === 0,
   };
+}
+
+/**
+ * The index-identity rows one raw governed response authorizes, and nothing else.
+ *
+ * THE SAME DOOR, not a second one. This is `parseGovernedResponse` followed by `partitionOf`,
+ * exactly as the search, changes and in-force surfaces reach the strip; it exists so a surface
+ * whose ONLY claim is the strip does not have to name an emptiness projector it has no absence
+ * authority to use, and so the wrapping of a single-object response into a one-entry list happens
+ * in one place rather than at every law call site.
+ *
+ * It adds no validation, no admission rule and no field. A unit this table refuses contributes
+ * nothing here, a publisher whose identity the response withheld contributes the
+ * identity-unavailable row, and there is no path from this function to a confident build date the
+ * parse did not authorize (O1).
+ */
+export function governedStripRows(tool: GovernedTool, raw: unknown): EnvelopeStripRow[] {
+  return partitionOf(parseGovernedResponse(tool, raw)).stripRows;
 }
 
 export function partitionGovernedResponse(
@@ -2113,8 +2414,18 @@ export function partitionGovernedResponse(
       ran: [], ranUnits: [], moreBeyondPage: false, limitations: [],
       modeUnavailablePublishers: [], modeUnavailableCount: 0,
       noCorpus: false, ambiguityUnits: 0, invalidCount: list.length, conflictedPublishers: [],
-      // No schema means nothing was classified, so nothing authorizes a strip claim either.
-      receiptsIrreconcilable: false, stripRows: [],
+      // No schema means nothing was classified, so nothing authorizes a strip claim either,
+      // and nothing authorizes an absence sentence: this is the strongest form of the same
+      // verdict `as_of` and `timeline` carry, since not one field of the response was read.
+      //
+      // NO MUTATION KILLS THIS VALUE either, and again that is a fact about the value. Both
+      // absence projectors already refuse this partition before they consult the field: a
+      // non-empty list makes `invalidCount` positive, which is `incomplete_response`, and an
+      // empty one leaves `ran` empty, which is `incomplete_response` too. So the declaration is
+      // unreachable rather than untested, and `corpus_scope` here would be equally unobservable
+      // and equally wrong. It is stated correctly because the field is read by name, and the
+      // next projector to consult it must get the true answer for a response nothing parsed.
+      receiptsIrreconcilable: false, stripRows: [], absenceAuthority: "no_authority",
       anyRefused: false, allRefused: false,
     };
   }
@@ -2161,6 +2472,12 @@ export function searchAbsenceState(
   if (unsupported || partition.moreBeyondPage) return "incomplete_response";
   if (partition.allRefused) return "all_refused";
   if (partition.ran.length === 0) return "incomplete_response";
+  // The last gate before the two states that SPEAK FOR THE CORPUS. `no_match` says nothing in
+  // the corpus matches and `mixed_no_match` says the publishers that could apply the filters
+  // returned nothing; both are claims about a measured population, and a tool the table gives no
+  // absence authority measured none. `incomplete_response` is the state already on every governed
+  // surface that claims nothing at all, which is the honest answer here.
+  if (partition.absenceAuthority === "no_authority") return "incomplete_response";
   return partition.anyRefused || partition.modeUnavailableCount > 0
     ? "mixed_no_match"
     : "no_match";
@@ -2347,6 +2664,14 @@ export function projectGovernedEmptiness(
   // the very sentence this is here to stop. The copy asking the reader to try again is a poorer
   // fit than a paging sentence would be, and it is honest: it claims nothing.
   if (partition.moreBeyondPage) {
+    return { partition, empty: "incomplete_response", partial, ambiguous };
+  }
+  // The same boundary as `searchAbsenceState`, read from the same field on the same partition.
+  // `none_matched` and `mixed_no_match` are the two sentences here that speak for the corpus, and
+  // a tool with no absence authority may reach neither: `as_of` and `timeline` ask one reader
+  // about one work and publish no denominator, so an empty response of either is evidence about
+  // that work and about nothing else.
+  if (partition.absenceAuthority === "no_authority") {
     return { partition, empty: "incomplete_response", partial, ambiguous };
   }
   return {

@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { envelopeStripRows, indexFreshnessLabel } from "./envelopeStrip.ts";
 import {
-  parseGovernedResponse, partitionGovernedResponse, type GovernedResponse,
+  governedStripRows, parseGovernedResponse, partitionGovernedResponse,
+  projectGovernedEmptiness, searchAbsenceState, validateLimitation,
+  type GovernedResponse,
 } from "./limitations.ts";
 
 /**
@@ -462,4 +465,351 @@ test("the strip refuses every publisher spelling the producer cannot mint", () =
   }
   assert.equal(stripOf([unit("x".repeat(64))]).length, 1,
     "the producer's own bound must remain renderable");
+});
+
+// ---------------------------------------------------------------------------
+// The law and timeline surfaces (trust rule 4)
+// ---------------------------------------------------------------------------
+//
+// These are the two most-read screens in the product and they disclosed no index identity at
+// all: every law-path call to `setStrip` cleared it and none filled it. The evidence was never
+// missing. `Envelope` (McpCore 223) is the single mint site for every envelope this server
+// sends and stamps `freshness.built_at`, `corpus_commit` and `stamp_signature_valid` on every
+// path it builds, `as_of` (947, 970, 978, 1052 and the 597 mutation) and `timeline` (1075,
+// 1080) included. The client read none of it.
+//
+// THROUGH THE SAME DOOR AS EVERYTHING ELSE. Every fixture below goes to `governedStripRows`,
+// which is `parseGovernedResponse` plus `partitionOf` and adds nothing: one validator, one
+// admission rule, one strip projection. What these pin is that the two new schema rows admit
+// exactly what the producer can emit, and that everything else reaches the reader as an absent
+// identity rather than as a confident one.
+
+const FRESH = {
+  built_at: "2026-08-15T09:22:08Z",
+  corpus_commit: "e9c4df09",
+  stamp_signature_valid: true,
+};
+const ARTIFACT = { code_commit: "abc123", manifest_set_id: "m-1", content_digest: "d-1" };
+
+const LAW_ENVELOPE = {
+  publisher: "lu-legilux",
+  status: "ok",
+  timeline_semantics: "publisher_applicability",
+  freshness: FRESH,
+  artifact: ARTIFACT,
+  // The producer stamps this on every envelope it builds. It is carried in the fixtures because
+  // real responses carry it, and it is deliberately NOT a strip field: see the key-set test.
+  provisional: false,
+};
+
+const RAIL_ENVELOPE = {
+  publisher: "eu-eurlex",
+  status: "ok",
+  timeline_semantics: "official_consolidation_state",
+  freshness: FRESH,
+  artifact: ARTIFACT,
+  provisional: false,
+};
+
+/**
+ * An `as_of` answer the producer can emit. Entry fields and envelope fields are overridden
+ * separately, so an envelope override cannot silently replace the whole envelope.
+ */
+const asOfUnit = (
+  over: Record<string, unknown> = {},
+  env: Record<string, unknown> = {},
+) => ({
+  document: { title: "Code penal", valid_from: "2024-01-01" },
+  // The producer's real shape, response-size facts included. `total_provisions` and `truncated`
+  // are about ONE document's provisions rather than a corpus page (McpCore 992-993, 1033-1034),
+  // and the schema reads neither as paging.
+  total_provisions: 1,
+  truncated: false,
+  provisions: [{ anchor: "art_1", heading: "Article 1", text: "..." }],
+  ...over,
+  envelope: { ...LAW_ENVELOPE, ...env },
+});
+
+/** A `timeline` answer the producer can emit: three versions, so the status must be `ok`. */
+const timelineUnit = (
+  over: Record<string, unknown> = {},
+  env: Record<string, unknown> = {},
+) => ({
+  work: "eu-eurlex:32016R0679",
+  total_count: 3,
+  truncated: false,
+  versions: [{ valid_from: "2016-05-04", language: "en" }],
+  ...over,
+  envelope: { ...RAIL_ENVELOPE, ...env },
+});
+
+test("a law answer discloses the index that answered it", () => {
+  // The row this whole change exists for: it did not exist, so the most-read screen in the
+  // product stated no build date and no signature verdict for the index it was reading from.
+  // The response is a single object rather than a list, because `as_of` answers from one reader.
+  const [row, ...rest] = governedStripRows("as_of", asOfUnit());
+  assert.deepEqual(rest, [], "one reader answered, so there is exactly one identity to state");
+  assert.equal(row.publisher, "lu-legilux");
+  assert.equal(row.builtAt, "2026-08-15T09:22:08Z");
+  assert.equal(row.signatureValid, true);
+  assert.equal(row.corpusCommit, "e9c4df09");
+  assert.equal(row.codeCommit, "abc123");
+  assert.equal(row.manifestSetId, "m-1");
+  assert.equal(row.contentDigest, "d-1");
+  assert.equal(row.timelineSemantics, "publisher_applicability");
+  assert.equal(indexFreshnessLabel(row.builtAt), "index built 2026-08-15T09:22:08Z");
+});
+
+test("the version rail discloses the index that answered it", () => {
+  const [row, ...rest] = governedStripRows("timeline", timelineUnit());
+  assert.deepEqual(rest, []);
+  assert.equal(row.publisher, "eu-eurlex");
+  assert.equal(row.builtAt, "2026-08-15T09:22:08Z");
+  assert.equal(row.signatureValid, true);
+  assert.equal(row.timelineSemantics, "official_consolidation_state");
+});
+
+test("a strip row states index identity only, never a fact about the question", () => {
+  // EVERY FIELD HERE IS A PROPERTY OF THE INDEX, and the law surface is why that has to stay
+  // true. Two effects write this strip for one work, `as_of` on the reading key and `timeline`
+  // on the work key, and both answer from the reader `Resolve` returned, so they agree on all
+  // eight values however they interleave.
+  //
+  // The envelope's `provisional` flag is the field this excludes on purpose. `ProvisionalFor`
+  // (McpCore 511-515) compares the REQUEST to the build date, and the two calls compare
+  // different things: `as_of` uses the date being read (978), `timeline` the version dates it
+  // found (1076-1077). On a per-index row that value would be decided by whichever response
+  // landed last. A provisional answer still has to be disclosed; beside the answer, not here.
+  const [row] = governedStripRows("as_of", asOfUnit());
+  assert.deepEqual(Object.keys(row).sort(), [
+    "builtAt", "codeCommit", "contentDigest", "corpusCommit",
+    "manifestSetId", "publisher", "signatureValid", "timelineSemantics",
+  ]);
+});
+
+test("every envelope status the law tools can emit is admitted", () => {
+  // Derived from the producer, not from the happy path. `as_of` reaches an envelope from four
+  // call sites and one mutation, and admitting fewer statuses than it can emit would blank the
+  // strip on exactly the answers a reader most needs to situate: no version for that date, an
+  // unknown work, withheld text, an anchor this version does not have.
+  for (const status of ["ok", "text_withheld", "text_not_available", "anchor_not_in_version",
+    "no_version_for_date", "unknown_work", "ambiguous_version"]) {
+    const rows = governedStripRows("as_of", asOfUnit({}, { status }));
+    assert.equal(rows.length, 1, `as_of status ${status} disclosed no index`);
+    assert.equal(rows[0].builtAt, "2026-08-15T09:22:08Z",
+      `as_of status ${status} lost its build date`);
+  }
+});
+
+test("a timeline answer that found no versions still discloses its index", () => {
+  // McpCore 1075 returns `unknown_work` with an envelope, a `work` and nothing else: no
+  // `total_count` and no `versions`. Requiring either would refuse the producer's own answer and
+  // take the identity off the version rail, which is the disclosure this change exists to add.
+  const [row, ...rest] = governedStripRows("timeline", {
+    work: "eu-eurlex:absent",
+    envelope: { ...RAIL_ENVELOPE, status: "unknown_work" },
+  });
+  assert.deepEqual(rest, []);
+  assert.equal(row.publisher, "eu-eurlex");
+  assert.equal(row.builtAt, "2026-08-15T09:22:08Z");
+});
+
+test("a timeline status that contradicts its own count is refused", () => {
+  // McpCore 1075 is `if (total == 0) return ... UnknownWork` and every other return of that case
+  // is `Ok`, so the status and the count determine each other exactly. Both directions are
+  // shapes the producer cannot emit, and either would have carried a confident build date.
+  assert.deepEqual(governedStripRows("timeline", timelineUnit({ total_count: 0 })), [],
+    "an ok timeline reporting no versions authorized an identity");
+  assert.deepEqual(
+    governedStripRows("timeline",
+      timelineUnit({ total_count: 3 }, { status: "unknown_work" })),
+    [],
+    "an unknown_work timeline reporting versions authorized an identity");
+});
+
+test("a law envelope carrying a population states no identity rather than a confident one", () => {
+  // `as_of` publishes no population on any path: `SearchPopulation` is reached only from search,
+  // `PopulationTotal` only from changes_in_period and `Coverage(1).Groups` only from
+  // in_force_on. One arriving is not the producer's answer, so the scope is unreadable, the unit
+  // is invalidated whole, and the publisher is named with every field absent. Dropping the row
+  // instead would read as "not mounted", which is a different and false statement.
+  const rows = governedStripRows("as_of", asOfUnit({
+    population: { basis: "selected_metadata_scope", works_in_scope: 12, known_exclusions: [] },
+  }));
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].publisher, "lu-legilux");
+  assert.equal(rows[0].builtAt, undefined, "a rejected unit minted a build date");
+  assert.equal(rows[0].signatureValid, undefined, "a rejected unit minted a signature verdict");
+  assert.equal(rows[0].corpusCommit, undefined);
+  assert.equal(rows[0].timelineSemantics, undefined);
+  assert.equal(indexFreshnessLabel(rows[0].builtAt), "index build date unavailable");
+});
+
+test("a law envelope carrying a receipt its producer never stamps authorizes no row", () => {
+  // `MarkPublisherSet` (McpCore 701-712) and `MarkResponseRows` (713-725) are reached only from
+  // search (1575-1576), in_force_on (1170-1171) and changes_in_period (1865-1882). A receipt on
+  // a law answer did not come from this producer, and a well-formed one is the dangerous case:
+  // it would otherwise be stored as evidence about a response that never carried it.
+  for (const receipt of [
+    { publisher_result_set: { total: 2, returned: 2, maximum: 8, truncated: false } },
+    { response_row_set: { maximum: 8, returned: 1, truncated: false } },
+  ]) {
+    const name = Object.keys(receipt)[0];
+    assert.deepEqual(governedStripRows("as_of", asOfUnit(receipt)), [],
+      `a forged ${name} authorized an as_of strip row`);
+    assert.deepEqual(governedStripRows("timeline", timelineUnit(receipt)), [],
+      `a forged ${name} authorized a timeline strip row`);
+  }
+});
+
+test("a law envelope outside the producer's status set authorizes nothing", () => {
+  // Not the identity-unavailable row. An entry whose status this tool cannot emit never
+  // established that this publisher answered the question at all, and `no_changes_in_period` and
+  // `no_result` are other tools' statuses entirely.
+  for (const status of ["no_changes_in_period", "no_result", "ok ", "OK", ""]) {
+    assert.deepEqual(governedStripRows("as_of", asOfUnit({}, { status })), [],
+      `as_of admitted the status ${JSON.stringify(status)}`);
+  }
+});
+
+test("two law answers for one publisher state no identity rather than the first one", () => {
+  // `Resolve` returns at most one reader, so one call is one envelope and a second is a shape
+  // this producer cannot emit whatever it says. Two identities for one index establish neither,
+  // and keeping the readable one would be the product choosing a side of an incoherence.
+  const rows = governedStripRows("as_of", [
+    asOfUnit(),
+    asOfUnit({}, { freshness: { ...FRESH, built_at: "2026-01-01T00:00:00Z" } }),
+  ]);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].publisher, "lu-legilux");
+  assert.equal(rows[0].builtAt, undefined, "a conflicted publisher kept a build date");
+  assert.equal(rows[0].signatureValid, undefined);
+});
+
+test("a law answer from a server holding no law states no index identity", () => {
+  // The terminal object is global and carries no envelope, so there is no index to name. It also
+  // names the operation it answered (McpCore 901), and a terminal object for another tool may
+  // not speak here: an absence asserted about the wrong subject is the worst failure this
+  // surface has.
+  const terminal = (tool: string) => ({
+    status: "no_corpus_mounted", detail: "no verified indexes", tool_called: tool,
+  });
+  assert.deepEqual(governedStripRows("as_of", terminal("as_of")), []);
+  assert.deepEqual(governedStripRows("as_of", terminal("search")), []);
+  assert.equal(parseGovernedResponse("as_of", terminal("as_of")).noCorpus, true);
+  assert.equal(parseGovernedResponse("as_of", terminal("search")).noCorpus, false,
+    "a terminal object for another tool was accepted as this tool's answer");
+  // An envelope smuggled into the terminal object asserts a mounted index in the same breath as
+  // claiming nothing is mounted.
+  assert.equal(
+    parseGovernedResponse("as_of",
+      { ...terminal("as_of"), envelope: LAW_ENVELOPE }).noCorpus,
+    false);
+});
+
+test("a law entry with no envelope discloses nothing, which is the honest answer", () => {
+  // McpCore 936 and 1071 return a bare `{ status: unknown_work }` when `Resolve` found no reader
+  // at all, and `UnmountedFilterResult` (263-278) a bare `{ status: unknown_publisher }`. No
+  // reader was selected, so there is no index identity in existence to state.
+  assert.deepEqual(governedStripRows("as_of",
+    { status: "unknown_work", work: "lu-legilux:nope" }), []);
+  assert.deepEqual(governedStripRows("timeline",
+    { status: "unknown_publisher", tool_called: "timeline", requested_filter: "publisher" }), []);
+});
+
+test("an empty law answer never authorizes a sentence about the corpus", () => {
+  // THE FIELD IT WOULD HAVE BEEN WRONG TO LEAVE UNDEFINED. Under the previous shape an absent
+  // absence total carried search's reading, "decide absence from the fused hit count", so a law
+  // row that wrote nothing would have inherited it and let an empty outline print `Nothing in
+  // the corpus matches that.` about a corpus `as_of` never measured. Both law tools ask one
+  // reader about one work and publish no denominator, so neither can speak for the corpus.
+  for (const tool of ["as_of", "timeline"]) {
+    const raw = tool === "as_of" ? asOfUnit({ provisions: [] }) : timelineUnit();
+    const projection = projectGovernedEmptiness(tool, raw, 0);
+    assert.equal(projection.partition.absenceAuthority, "no_authority");
+    assert.notEqual(projection.empty, "none_matched", `${tool} claimed the corpus holds nothing`);
+    assert.notEqual(projection.empty, "mixed_no_match");
+    assert.equal(projection.empty, "incomplete_response");
+  }
+  // BOTH DOORS, not one. `searchAbsenceState` reaches the same two corpus sentences by a
+  // different route and had the same gap: it takes a partition, so any caller holding one of a
+  // law response could have asked it to speak for the corpus.
+  for (const tool of ["as_of", "timeline"] as const) {
+    const raw = tool === "as_of" ? asOfUnit({ provisions: [] }) : timelineUnit();
+    const state = searchAbsenceState(partitionGovernedResponse(tool, [raw]), 0);
+    assert.notEqual(state, "no_match", `${tool} claimed the corpus holds nothing`);
+    assert.notEqual(state, "mixed_no_match");
+    assert.equal(state, "incomplete_response");
+  }
+  // The three governed tools keep the authority they had, read through the same field, so this
+  // fails if the new rule is applied more widely than where it belongs.
+  assert.equal(
+    partitionGovernedResponse("search", [unit("lu-legilux")]).absenceAuthority, "corpus_scope");
+  assert.equal(
+    projectGovernedEmptiness("search", [unit("lu-legilux")], 0).empty, "none_matched");
+  assert.equal(
+    searchAbsenceState(partitionGovernedResponse("search", [unit("lu-legilux")]), 0), "no_match");
+});
+
+test("no limitation may claim a law tool refused a filter", () => {
+  // `UnsupportedFilterResult` is called from exactly three sites (McpCore 1126, 1362, 1775) and
+  // neither law tool reaches any of them, so a refusal naming one is a claim the producer cannot
+  // make. The tool gate is derived from each schema's own refusal scope rule rather than from
+  // the set of governed tools, so growing the table does not widen what the assistant's additive
+  // field accepts.
+  const limitation = (tool: string) => ({
+    status: "filter_not_supported_by_index",
+    tool,
+    publisher: "lu-legilux",
+    unsupported_filters: ["domain"],
+  });
+  assert.equal(validateLimitation(limitation("as_of")), null);
+  assert.equal(validateLimitation(limitation("timeline")), null);
+  for (const tool of ["search", "changes_in_period", "in_force_on"]) {
+    assert.equal(validateLimitation(limitation(tool))?.tool, tool,
+      `${tool} lost its refusal contract`);
+  }
+});
+
+test("the law surface reaches the strip through the door the governed pages use", () => {
+  // ONE AUTHORITY, NOT TWO (O1). `governedStripRows` has to be the existing parse and partition
+  // and nothing else: if it ever grows an admission rule of its own, the surface that states a
+  // build date and a signature verdict is again answering from input the parser refused.
+  const raw = asOfUnit();
+  assert.deepEqual(governedStripRows("as_of", raw),
+    partitionGovernedResponse("as_of", [raw]).stripRows);
+  assert.deepEqual(governedStripRows("as_of", raw),
+    envelopeStripRows(parseGovernedResponse("as_of", raw)));
+  // The refused cases have to agree too, or the two doors disagree exactly where it matters.
+  const forged = asOfUnit({}, { status: "no_result" });
+  assert.deepEqual(governedStripRows("as_of", forged),
+    partitionGovernedResponse("as_of", [forged]).stripRows);
+});
+
+test("the law and timeline surfaces feed the strip from the one parse", () => {
+  // STRUCTURAL, on the precedent of the Search.tsx guard in limitations.test.ts, because no node
+  // test can import a .tsx component and App.tsx is where the defect actually lived: eight calls
+  // to `setStrip` and only two of them filling it, none on a law path. Without this, deleting
+  // either call site again kills nothing in the suite. Comments are stripped first, so a
+  // sentence explaining the defect is not a reintroduction of it.
+  const source = readFileSync(new URL("./App.tsx", import.meta.url), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.ok(source.includes("governedStripRows(\"as_of\", res)"),
+    "the law surface stopped disclosing which index answered it");
+  assert.ok(source.includes("governedStripRows(\"timeline\", res)"),
+    "the version rail stopped disclosing which index answered it");
+  // Each call names the tool whose response it is parsing. A law answer parsed under another
+  // tool's schema classifies every unit as invalid and blanks the strip, silently and with no
+  // error anywhere: the reader simply stops being told which index answered.
+  assert.ok(!/governedStripRows\("(search|changes_in_period|in_force_on)"/.test(source),
+    "a law response is being parsed under another tool's schema");
+  // And nothing on this surface reaches past the parse for a trust claim, which is the whole of
+  // O1. The strip's own fields must never be read off a raw response again.
+  assert.ok(!source.includes("envelopeStripRows("),
+    "App.tsx reached past the parse to build strip rows itself");
+  for (const field of ["freshness", "built_at", "stamp_signature_valid", "corpus_commit"]) {
+    assert.ok(!source.includes(field),
+      `App.tsx reads the envelope field ${field} directly instead of through the parse`);
+  }
 });
