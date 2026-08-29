@@ -223,8 +223,28 @@ public sealed class RetrievalBenchmarkTests
     [Fact]
     public void Metric_observations_make_absent_values_unrepresentable_in_comparisons()
     {
+        static string Signature(System.Reflection.MethodInfo method) =>
+            $"{method.ReturnType} {method.Name}("
+            + $"{string.Join(',', method.GetParameters().Select(parameter => parameter.ParameterType))})";
+
         var type = typeof(RetrievalMetricObservation);
 
+        Assert.Equal(typeof(object), type.BaseType);
+        Assert.Empty(type.GetConstructors());
+        var interfaces = type.GetInterfaces().OrderBy(item => item.FullName, StringComparer.Ordinal)
+            .ToArray();
+        var interfaceBindings = interfaces.SelectMany(interfaceType =>
+        {
+            var map = type.GetInterfaceMap(interfaceType);
+            return map.InterfaceMethods.Select((method, index) =>
+                $"{interfaceType}::{Signature(method)} -> {Signature(map.TargetMethods[index])}");
+        }).Order(StringComparer.Ordinal).ToArray();
+        Assert.Equal([
+            "System.IEquatable`1[Lex.Index.RetrievalMetricObservation]::System.Boolean Equals(Lex.Index.RetrievalMetricObservation) -> System.Boolean Equals(Lex.Index.RetrievalMetricObservation)",
+        ], interfaceBindings);
+        Assert.Equal([
+            "System.IEquatable`1[Lex.Index.RetrievalMetricObservation]",
+        ], interfaces.Select(item => item.ToString()).ToArray());
         Assert.Empty(type.GetFields());
         Assert.Equal(["Denominator", "HasMeasuredValue", "Status"], type.GetProperties()
             .Select(property => property.Name).Order(StringComparer.Ordinal).ToArray());
@@ -245,8 +265,7 @@ public sealed class RetrievalBenchmarkTests
             "System.String ToString()",
         ], type.GetMethods()
             .Where(method => method.DeclaringType == type)
-            .Select(method => $"{method.ReturnType} {method.Name}("
-                              + $"{string.Join(',', method.GetParameters().Select(parameter => parameter.ParameterType))})")
+            .Select(Signature)
             .Order(StringComparer.OrdinalIgnoreCase).ToArray());
 
         var options = new System.Text.Json.JsonSerializerOptions
