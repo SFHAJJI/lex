@@ -712,7 +712,10 @@ public static class UiMapper
             // MarkResponseRows), so reading it from this unit reads the response-wide fact.
             // Absent stays null rather than becoming false: a missing receipt is not
             // evidence of a complete answer.
-            RowsTruncated: B(o["response_row_set"] as JsonObject, "truncated")));
+            RowsTruncated: B(o["response_row_set"] as JsonObject, "truncated"),
+            EvidenceScope: S(o, "evidence_scope"),
+            CurrentLegalEffectAssessed: B(o, "current_legal_effect_assessed"),
+            RelationshipTypeAssessed: B(o, "relationship_type_assessed")));
     }
 
     private static UiEffect Ranking(JsonObject o, JsonObject args)

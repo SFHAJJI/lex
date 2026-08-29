@@ -1027,6 +1027,21 @@ export function CitedBy({ view, onOpen }: {
           : `${view.citing_articles.toLocaleString()} returned in this response`}</span>
         <span className="tag mono">{view.cited_work}</span>
       </div>
+      {/* What the producer says this list is, and the two claims it declines. A list of
+          referring articles invites a reader to assume the references are in force and that
+          each one does something to the law. The producer assessed neither, and said so on
+          every response. Only an explicit false is reported as not assessed: an absent or
+          malformed value is not evidence that the work was skipped. */}
+      {view.evidence_scope === "captured_cross_references_in_held_non_withdrawn_versions"
+        ? <p className="sub">Cross references Lex captured, in versions it holds that are not
+            withdrawn.</p>
+        : view.evidence_scope ? <p className="sub mono">{view.evidence_scope}</p> : null}
+      {view.current_legal_effect_assessed === false || view.relationship_type_assessed === false
+        ? <p className="sub">Not assessed: {[
+            view.current_legal_effect_assessed === false ? "whether each reference is currently in effect" : null,
+            view.relationship_type_assessed === false ? "what kind of relationship it is" : null,
+          ].filter(Boolean).join(", ")}.</p>
+        : null}
       <ul className="rows">
         {view.rows.map((r, i) => (
           <li key={`${r.work}-${r.anchor}-${i}`}>

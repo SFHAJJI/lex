@@ -718,6 +718,12 @@ export interface UiEffect {
                    carried no receipt, which is not the same as a complete answer, so it is
                    never read as false. */
                rows_truncated?: boolean;
+               /** What this list is evidence of, and the two things the producer did not
+                   assess. A count of referring articles with no scope beside it reads as a
+                   wider claim than the producer makes. */
+               evidence_scope?: string;
+               current_legal_effect_assessed?: boolean;
+               relationship_type_assessed?: boolean;
                rows: { work: string; title?: string; valid_from: string; anchor: string; num?: string;
                        permalink?: string; jurisdiction?: string }[] };
   coverage?: { evidence?: EvidenceContext[]; publishers: {

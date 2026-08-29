@@ -29,11 +29,13 @@ const row = () => ({
   anchor: "art-1", num: "Art. 1",
 });
 
-async function ask(page: Page, requestId: string, rows: unknown[], truncated: unknown) {
+async function ask(page: Page, requestId: string, rows: unknown[], truncated: unknown,
+                   extra: Record<string, unknown> = {}) {
   const citedBy: Record<string, unknown> = {
     cited_work: WORK, citing_articles: rows.length, rows, status: rows.length ? "ok" : "no_result",
   };
   if (truncated !== undefined) citedBy.rows_truncated = truncated;
+  Object.assign(citedBy, extra);
   const operation = {
     operation_id: `${requestId}:op-1`, order: 0, tool: "cited_by",
     result_class: null, disposition: "answer", legal_outcome: "answer",
@@ -172,3 +174,49 @@ for (const [label, requestId, value] of [
     await expect(ws).toContainText("1 returned in this response");
   });
 }
+
+/**
+ * D24. Every cited_by response carries three scope disclaimers: what the list is evidence of, and
+ * that the producer assessed neither whether the references are currently in effect nor what kind
+ * of relationship each one is. All three stopped at the mapper. A list of referring articles with
+ * none of them beside it invites exactly the two conclusions the producer declines to support.
+ */
+const SCOPE = "captured_cross_references_in_held_non_withdrawn_versions";
+
+test("the scope of the evidence and the two unassessed claims are stated", async ({ page }) => {
+  const ws = await ask(page, "7123456789abcdef0123456789abcdef", [row()], false, {
+    evidence_scope: SCOPE,
+    current_legal_effect_assessed: false,
+    relationship_type_assessed: false,
+  });
+
+  await expect(ws).toContainText("Cross references Lex captured");
+  await expect(ws).toContainText("whether each reference is currently in effect");
+  await expect(ws).toContainText("what kind of relationship it is");
+});
+
+test("a response carrying no disclaimers states none of them", async ({ page }) => {
+  const ws = await ask(page, "8123456789abcdef0123456789abcdef", [row()], false);
+
+  await expect(ws).not.toContainText("Not assessed");
+  await expect(ws).not.toContainText("Cross references Lex captured");
+});
+
+test("an unassessed flag is reported only when it is exactly false", async ({ page }) => {
+  // Truthiness would read the string and the number as assessed, and !value would read an absent
+  // field as not assessed. Both invent a fact about work the producer never reported on.
+  const ws = await ask(page, "9123456789abcdef0123456789abcdef", [row()], false, {
+    current_legal_effect_assessed: "false",
+    relationship_type_assessed: 0,
+  });
+
+  await expect(ws).not.toContainText("Not assessed");
+});
+
+test("a scope this build does not recognise is shown verbatim", async ({ page }) => {
+  const ws = await ask(page, "a223456789abcdef0123456789abcdef", [row()], false, {
+    evidence_scope: "some_future_scope",
+  });
+
+  await expect(ws).toContainText("some_future_scope");
+});

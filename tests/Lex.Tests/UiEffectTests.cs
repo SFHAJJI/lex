@@ -475,6 +475,64 @@ public class UiEffectTests
         Assert.False(eff.CitedBy!.RowsTruncated);
     }
 
+    private static UiEffect CitedNode(JsonObject extra)
+    {
+        var o = new JsonObject
+        {
+            ["envelope"] = new JsonObject { ["status"] = "ok" },
+            ["cited_work"] = "lu-legilux:code-penal",
+            ["citing_articles"] = 1,
+            ["citations"] = new JsonArray(new JsonObject
+            {
+                ["work"] = "lu-legilux:loi-1980-03-07-n1", ["valid_from"] = "2026-09-16",
+                ["anchor"] = "art_37",
+            }),
+        };
+        foreach (var kv in extra) o[kv.Key] = kv.Value?.DeepClone();
+        return UiMapper.From("cited_by", Args(("work", "lu-legilux:code-penal")), o);
+    }
+
+    /// <summary>
+    /// Every cited_by response says what the list is evidence of and names two things it did not
+    /// assess. All three stopped at this mapper, so the surface showed referring articles with
+    /// nothing to stop a reader assuming they are in force and that each one acts on the law.
+    /// </summary>
+    [Fact]
+    public void The_cited_by_scope_disclaimers_reach_the_view()
+    {
+        var eff = CitedNode(new JsonObject
+        {
+            ["evidence_scope"] = "captured_cross_references_in_held_non_withdrawn_versions",
+            ["current_legal_effect_assessed"] = false,
+            ["relationship_type_assessed"] = false,
+        });
+
+        Assert.Equal("captured_cross_references_in_held_non_withdrawn_versions",
+            eff.CitedBy!.EvidenceScope);
+        Assert.False(eff.CitedBy.CurrentLegalEffectAssessed);
+        Assert.False(eff.CitedBy.RelationshipTypeAssessed);
+    }
+
+    /// <summary>
+    /// A malformed flag must not become false. Reporting "not assessed" is a claim about what the
+    /// producer did, and it may only be made from an explicit false.
+    /// </summary>
+    [Fact]
+    public void A_malformed_assessment_flag_is_no_claim()
+    {
+        foreach (var hostile in new[] { "\"false\"", "0", "[]", "null" })
+        {
+            var eff = CitedNode(new JsonObject
+            {
+                ["current_legal_effect_assessed"] = JsonNode.Parse(hostile),
+                ["relationship_type_assessed"] = JsonNode.Parse(hostile),
+            });
+
+            Assert.Null(eff.CitedBy!.CurrentLegalEffectAssessed);
+            Assert.Null(eff.CitedBy.RelationshipTypeAssessed);
+        }
+    }
+
     private static JsonObject DiffNode(JsonNode? limitations, JsonNode? comparable = null,
                                        JsonNode? changed = null)
     {

@@ -234,7 +234,27 @@ public sealed record CitedByView(string CitedWork, int CitingArticles, IReadOnly
     /// claim absence. Null means the response carried no receipt, which is not the same as a
     /// complete answer.
     /// </summary>
-    bool? RowsTruncated = null);
+    bool? RowsTruncated = null,
+    /// <summary>
+    /// What this list is evidence of, verbatim from the producer. The tool answers
+    /// <c>captured_cross_references_in_held_non_withdrawn_versions</c>: references Lex captured,
+    /// in versions it holds, that are not withdrawn. That is a much narrower thing than
+    /// everything that refers to a law, and a count with no scope beside it reads as the wider
+    /// claim.
+    /// </summary>
+    string? EvidenceScope = null,
+    /// <summary>
+    /// Whether the producer assessed that these references are currently legally operative. It
+    /// answers false. Carried because a reader shown a list of referring articles reasonably
+    /// assumes they are in effect, and the producer declines that claim explicitly.
+    /// </summary>
+    bool? CurrentLegalEffectAssessed = null,
+    /// <summary>
+    /// Whether the producer assessed what kind of relationship each reference is: amendment,
+    /// repeal, or a bare citation. It answers false. Without it the list invites a reader to
+    /// supply a relationship the evidence does not carry.
+    /// </summary>
+    bool? RelationshipTypeAssessed = null);
 
 public sealed record CitedByRow(string Work, string? Title, string ValidFrom, string Anchor,
                                 string? Num, string? Permalink, string? Jurisdiction = null);
