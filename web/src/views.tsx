@@ -237,8 +237,8 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
  * navigate to, because the history is the navigation. Scope follows the reader: with an
  * article open it shows that article's distinct texts, otherwise the law's own versions.
  */
-export function VersionRail({ dates, current, compareTo, scope, today, work, timelineSemantics, onPick, onCompare, onClear }: {
-  dates: string[]; current?: string; compareTo?: string; scope: string; today: string; work: string; timelineSemantics?: string;
+export function VersionRail({ dates, current, compareTo, scope, today, work, timelineSemantics, partial, onPick, onCompare, onClear }: {
+  dates: string[]; current?: string; compareTo?: string; scope: string; today: string; work: string; timelineSemantics?: string; partial?: boolean;
   onPick: (d: string) => void; onCompare: (d: string) => void; onClear: () => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
@@ -294,7 +294,12 @@ export function VersionRail({ dates, current, compareTo, scope, today, work, tim
   return (
     <div className="railbox">
       <div className="railhead">
-        <span className="tag">{dates.length} {scope}</span>
+        {/* The count is a claim about the law until it is qualified. "12 versions" says the
+            law has twelve; when the response returned a page of them it has more, and the
+            rail was the last place a reader would look for that. Only an explicit true
+            qualifies it, so an unvalidated value cannot silently withdraw the claim. */}
+        <span className="tag">{dates.length} {scope}
+          {partial === true ? " returned in this response" : ""}</span>
         {median > 0 ? <span className="tag">every {median} days (median)</span> : null}
         {ahead > 0 ? <span className="tag warn">{futureStateLabel(work, ahead, timelineSemantics)}</span> : null}
         {/* Keyed off compareTo, not off finding it on the rail: a compared date need not be one

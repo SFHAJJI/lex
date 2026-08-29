@@ -203,6 +203,7 @@ export default function App() {
     workGeneration.current += 1;
     if (!s.work) return;
     setVersions([]);
+    setVersionsPartial(false);
     setLangs([]);
     setHeld(undefined);
     setTimelineSemantics(undefined);
@@ -228,6 +229,10 @@ export default function App() {
   const [toc, setToc] = useState<ProvisionItem[]>([]);
   const [title, setTitle] = useState<string>();
   const [versions, setVersions] = useState<string[]>([]);
+  // Whether the version list is the whole list. The producer says so on every timeline
+  // response and both paths that fill the rail used to drop it, so a rail built from a
+  // page of versions counted them as if they were all of them.
+  const [versionsPartial, setVersionsPartial] = useState(false);
   const [langs, setLangs] = useState<string[]>([]);
   // The language actually served, read back from the document rather than assumed. The switcher
   // first highlighted langs[0], which is alphabetical, so the Constitution showed French articles
@@ -322,7 +327,7 @@ export default function App() {
     // The index identity belongs to the response that produced the view. Opening a law after a
     // search would otherwise leave the search's strip above a law it never described.
     setStrip([]);
-    if (!s.work) { setVersions([]); setLangs([]); setServedLang(undefined); setTimelineSemantics(undefined); setHeld(undefined); return; }
+    if (!s.work) { setVersions([]); setVersionsPartial(false); setLangs([]); setServedLang(undefined); setTimelineSemantics(undefined); setHeld(undefined); return; }
     // Never carry one publisher's time semantics across a work switch while the next timeline
     // is loading. The work-id fallback remains correct for currently mounted legacy artifacts.
     setTimelineSemantics(undefined);
@@ -336,6 +341,9 @@ export default function App() {
         setTimelineSemantics(one?.envelope?.timeline_semantics);
         const dates = [...new Set(vs.map((v) => String(v.valid_from)))] as string[];
         setVersions(dates.sort());
+        // Identity, not truthiness: this value decides whether the rail may present its
+        // count as the law's version count, and the response is not validated on the way in.
+        setVersionsPartial(one?.truncated === true);
         // Which languages this work exists in. The Constitution is published in French, German
         // and Luxembourgish, and its stored title is German for all three, so a reader looking
         // at the French text sees a German heading above it and reasonably concludes the page is
@@ -345,7 +353,7 @@ export default function App() {
                   official: vs[vs.length - 1]?.source_uri,
                   kind: vs[vs.length - 1]?.document_type });
       })
-      .catch(() => { if (live()) { setVersions([]); setLangs([]); setTimelineSemantics(undefined); setHeld(undefined); } });
+      .catch(() => { if (live()) { setVersions([]); setVersionsPartial(false); setLangs([]); setTimelineSemantics(undefined); setHeld(undefined); } });
   }, [s.work]);
 
   // The outline belongs to (law, date) — never to the focused article. It used to be fetched
@@ -750,6 +758,9 @@ export default function App() {
         const timeline = assistantTimelineSeed(r.ui);
         if (timeline) {
           setVersions(timeline.versions);
+          // assistantTimelineSeed has always returned this. Dropping it let an assistant
+          // answer replace a complete rail with a page of it and say nothing.
+          setVersionsPartial(timeline.truncated === true);
           setLangs(timeline.languages);
         }
         // The rendered view owns navigation. A comparison turn may also read each side via
@@ -822,7 +833,7 @@ export default function App() {
   // Open on the text in force TODAY, never on the oldest version — the oldest is the one most
   // likely to have no stored text, so the old behaviour greeted every visitor with a refusal.
   const pickLaw = (h: { work: string; title: string }) => {
-    clearAssistantView(); setTitle(h.title); setVersions([]);
+    clearAssistantView(); setTitle(h.title); setVersions([]); setVersionsPartial(false);
     go({ work: h.work, date: undefined, anchor: undefined, to: undefined, mode: "read", space: "law" });
   };
 
@@ -837,6 +848,9 @@ export default function App() {
   const narrowed = !!s.anchor && chosenAnchor.current && states.length > 0;
   const railDates = narrowed ? states : versions;
   const railScope = narrowed ? "texts of this article" : "versions";
+  // A narrowed rail is article states from article_history, a different response with its
+  // own completeness. Carrying the timeline flag onto it would qualify the wrong list.
+  const railPartial = narrowed ? false : versionsPartial;
   const at = loaded?.from && railDates.includes(loaded.from) ? loaded.from
            : railDates.filter((d) => d <= (s.date ?? today)).pop();
 
@@ -1038,7 +1052,8 @@ export default function App() {
       ) : null}
 
       {space === "law" && s.work ? (
-        <VersionRail dates={railDates} current={at} compareTo={s.mode === "compare" ? s.to : undefined}
+        <VersionRail dates={railDates} current={at} partial={railPartial}
+                     compareTo={s.mode === "compare" ? s.to : undefined}
                      scope={railScope} today={today} work={s.work} timelineSemantics={timelineSemantics}
                      onPick={(d) => { clearAssistantView(); go({ date: d, to: undefined, mode: "read" }); }}
                      onCompare={(d) => {
