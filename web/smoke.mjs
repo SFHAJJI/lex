@@ -64,6 +64,14 @@ async function mount(url, answer) {
     console.error(`FAIL — bundle loaded but rendered nothing into #workspace at ${url}`);
     process.exit(1);
   }
+  // Close the window before returning. The markup is already a plain string, so nothing below
+  // needs the DOM alive, and an abandoned JSDOM window keeps its timers registered with Node.
+  // The workspace schedules one at the next UTC midnight and reschedules it there forever, so
+  // every mount left a timer roughly a day out; with several mounts the process printed its
+  // final ok line and then simply never exited, which CI reported as a run still in progress
+  // rather than as a failure. React unmounting would release the component half of this, but
+  // the harness owns the window, so the harness closes it.
+  dom.window.close();
   return out;
 }
 
@@ -114,6 +122,7 @@ catch (error) {
 }
 await new Promise((resolve) => setTimeout(resolve, 250));
 const standalone = standaloneDom.window.document.getElementById("assistant-root").innerHTML;
+standaloneDom.window.close();
 if (!/class="askpanel/.test(standalone) || /class="ws"/.test(standalone)) {
   console.error("FAIL - standalone research page did not mount exactly the assistant, without the workspace");
   process.exit(1);

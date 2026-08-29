@@ -98,19 +98,45 @@ export function useWorkspace(): [State, (next: Partial<State>, push?: boolean) =
 
   const go = (next: Partial<State>, push?: boolean) => {
     const merged = { ...state, ...next };
-    // Back should undo "I opened another law", not "I nudged the date". Every control tweak
-    // pushing a history entry meant Back had to be pressed a dozen times to leave a page.
-    if (push === undefined)
-      push = next.work !== undefined && next.work !== state.work
-          || next.q !== undefined && next.q !== state.q
-          || next.space !== undefined && next.space !== state.space;
     const url = toSearch(merged);
+    // `location` rather than `state`, deliberately. A destination identical to the address bar
+    // is not somewhere the reader travelled to, and this is the one comparison in the function
+    // that cannot be fooled by a stale closure, because it reads where the browser actually is
+    // rather than where a captured render thought it was.
+    push = shouldPush(next, state, url, location.search || location.pathname, push);
     if (push) history.pushState(null, "", url);
     else history.replaceState(null, "", url);
     setState(merged);
   };
 
   return [state, go];
+}
+
+/**
+ * Whether a navigation deserves a history entry.
+ *
+ * Two rules. Back should undo "I opened another law", not "I nudged the date", so only a change
+ * of work, question or space pushes; every control tweak replaces. And a destination byte
+ * identical to the address bar never pushes, whatever the caller asked for.
+ *
+ * That second rule exists because one assistant turn applies twice, through the callback captured
+ * when the reader asked their question, so neither apply can see that the other already navigated.
+ * Both compared a destination against the same pre-navigation state, both concluded the space had
+ * changed, and the turn pushed two identical entries. One Back press was then swallowed: popstate
+ * re-read an identical URL, so no governed dependency changed and no effect re-ran, while the
+ * shell cleared its view. The reader was left on a loading state that never resolved.
+ *
+ * Comparing against the current URL rather than against captured state is what makes this immune
+ * by construction rather than by care, which is why the caller passes it in.
+ */
+export function shouldPush(
+  next: Partial<State>, state: State, url: string, here: string,
+  requested?: boolean): boolean {
+  if (url === here) return false;
+  if (requested !== undefined) return requested;
+  return next.work !== undefined && next.work !== state.work
+      || next.q !== undefined && next.q !== state.q
+      || next.space !== undefined && next.space !== state.space;
 }
 
 export const workSlug = (work?: string) => (work ? work.split(":").slice(1).join(":") : "");
