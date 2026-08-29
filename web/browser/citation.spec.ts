@@ -134,20 +134,47 @@ const mcpBody = (id: number, payload: unknown) => JSON.stringify({
 const FIXTURE_METHODS = new Set(["timeline", "as_of", "article_history"]);
 
 /**
- * One line per MCP operation, carrying the arguments that identify the request.
+ * The canonical identity of a request: the method and every argument it carried.
  *
- * The name alone is not the request. `as_of` for the pinned date in outline mode and `as_of` for
- * the later date in full mode are different questions, and a regression that swapped one for the
- * other would be invisible to a check that only reads tool names.
+ * The previous revision listed the arguments it thought identified a request, which meant the ones
+ * it did not think of were invisible. `work` and `language` were among them, so a request for the
+ * wrong law or the wrong language of the right law passed the contract, and `timeline` recorded as
+ * a bare name with no identity at all. Codex demonstrated it by rewriting both arguments before the
+ * fixture recorded and served them, and all ten journeys stayed green.
+ *
+ * Nothing is selected now. Every argument present is rendered, keys sorted so the trace is stable,
+ * values JSON-encoded so a string, a number and a missing value cannot collide. An argument this
+ * file has never heard of shows up in the trace as itself rather than being dropped.
  */
 const operation = (name: string, args: Record<string, unknown>): string => {
-  const text = (key: string) =>
-    typeof args[key] === "string" && (args[key] as string).length > 0
-      ? args[key] as string : undefined;
-  const detail = [text("date"), text("mode"), text("anchors") ?? text("anchor")]
-    .filter(Boolean).join(" ");
-  return detail ? `${name}(${detail})` : name;
+  const rendered = Object.keys(args).sort()
+    .map((key) => `${key}=${JSON.stringify(args[key])}`).join(" ");
+  return rendered ? `${name}(${rendered})` : name;
 };
+
+/**
+ * What this fixture is willing to answer, per method.
+ *
+ * Recording an argument is not the same as refusing a bad one. A trace makes a wrong request
+ * visible after the fact; this refuses to serve it at all, which is the behaviour the fail-closed
+ * route was introduced for. The fixture holds exactly one law in one language, so a request for
+ * another is not its to answer, and answering anyway is how a wrong-work regression survives.
+ */
+const ALLOWED_ARGUMENTS: Record<string, ReadonlySet<string>> = {
+  timeline: new Set(["work", "limit", "language"]),
+  as_of: new Set(["work", "date", "mode", "anchors", "language"]),
+  article_history: new Set(["work", "anchor", "language"]),
+};
+
+function argumentsAreServable(name: string, args: Record<string, unknown>): boolean {
+  const allowed = ALLOWED_ARGUMENTS[name];
+  if (allowed === undefined) return false;
+  // An argument this fixture does not model is a request it cannot honestly answer.
+  if (Object.keys(args).some((key) => !allowed.has(key))) return false;
+  if (args.work !== WORK) return false;
+  if (args.language !== undefined && args.language !== "fr") return false;
+  return true;
+}
 
 /**
  * Answer `as_of`, `timeline` and `article_history` from fixtures, and fail closed on everything
@@ -174,7 +201,20 @@ async function routeMcp(
       id: number; params?: { name?: string; arguments?: Record<string, unknown> };
     };
     const name = request.params?.name ?? "";
-    called.push(operation(name, (request.params?.arguments ?? {}) as Record<string, unknown>));
+    const args = (request.params?.arguments ?? {}) as Record<string, unknown>;
+    called.push(operation(name, args));
+    // Both halves of the same rule: the trace records what was asked, and the route refuses to
+    // answer what this fixture does not hold. A wrong work fails the journey twice over.
+    if (!argumentsAreServable(name, args)) {
+      await route.fulfill({
+        status: 200, contentType: "application/json",
+        body: JSON.stringify({
+          jsonrpc: "2.0", id: request.id,
+          error: { code: -32602, message: `citation fixture does not serve ${name} with these arguments` },
+        }),
+      });
+      return;
+    }
     if (name === "timeline") {
       await route.fulfill({
         status: 200, contentType: "application/json",
@@ -241,28 +281,38 @@ async function routeMcp(
  * defect in my lane and it is not this lane's defect, so it is carried as its own row rather than
  * repaired under a citation change. Whoever fixes it must delete an entry here, deliberately.
  */
+const quoted = (value: string) => JSON.stringify(value);
+
+/** Built exactly as `operation` renders them, so an expectation cannot drift from the recorder. */
+const TIMELINE = `timeline(limit=400 work=${quoted(WORK)})`;
+const asOf = (date: string, mode: string, anchors?: string) => `as_of(${
+  anchors === undefined ? "" : `anchors=${quoted(anchors)} `
+}date=${quoted(date)} mode=${quoted(mode)} work=${quoted(WORK)})`;
+const history = (anchor: string) =>
+  `article_history(anchor=${quoted(anchor)} work=${quoted(WORK)})`;
+
 const LAW_READ = [
-  "timeline",
-  `as_of(${PINNED} outline)`,
-  `as_of(${PINNED} outline)`,
-  `as_of(${PINNED} full)`,
+  TIMELINE,
+  asOf(PINNED, "outline"),
+  asOf(PINNED, "outline"),
+  asOf(PINNED, "full"),
 ];
 
 /** A whole-document comparison: both sides outlined, then the shared rail and title. */
 const COMPARE_WHOLE = [
-  `as_of(${PINNED} outline)`,
-  `as_of(${LATER} outline)`,
-  "timeline",
-  `as_of(${PINNED} outline)`,
+  asOf(PINNED, "outline"),
+  asOf(LATER, "outline"),
+  TIMELINE,
+  asOf(PINNED, "outline"),
 ];
 
 /** A comparison scoped to one article. Note that no text is fetched at all. */
 const COMPARE_ART1 = [
-  `as_of(${PINNED} outline art-1)`,
-  `as_of(${LATER} outline art-1)`,
-  "timeline",
-  `as_of(${PINNED} outline)`,
-  "article_history(art-1)",
+  asOf(PINNED, "outline", "art-1"),
+  asOf(LATER, "outline", "art-1"),
+  TIMELINE,
+  asOf(PINNED, "outline"),
+  history("art-1"),
 ];
 
 /**
@@ -358,10 +408,10 @@ test("the copied citation is rebuilt when the reader moves to another article",
     expect(narrowed).not.toContain("no aggregate text digest recorded");
     expectOperations(called, [
       ...LAW_READ,
-      "timeline",
-      `as_of(${PINNED} outline)`,
-      `as_of(${PINNED} select art-3)`,
-      "article_history(art-3)",
+      TIMELINE,
+      asOf(PINNED, "outline"),
+      asOf(PINNED, "select", "art-3"),
+      history("art-3"),
     ]);
   });
 
@@ -436,8 +486,8 @@ test("a copied citation for a typographic-only change keeps both exact digests",
     expect(citation).not.toContain("no aggregate text digest recorded");
     expectOperations(called, [
       ...COMPARE_ART1,
-      `as_of(${PINNED} select art-1)`,
-      `as_of(${LATER} select art-1)`,
+      asOf(PINNED, "select", "art-1"),
+      asOf(LATER, "select", "art-1"),
     ]);
   });
 
@@ -456,7 +506,7 @@ test("a copied citation for an added article says it was not present, not that a
     expect(citation).toContain(`${PINNED} not present in this version`);
     expect(citation).not.toContain(`${PINNED} no aggregate text digest recorded`);
     expect(citation).not.toContain(`${PINNED} record SHA-256`);
-    expectOperations(called, [...COMPARE_WHOLE, `as_of(${LATER} select art-2)`]);
+    expectOperations(called, [...COMPARE_WHOLE, asOf(LATER, "select", "art-2")]);
   });
 
 test("the citation controls survive a 320 pixel viewport without horizontal overflow",
