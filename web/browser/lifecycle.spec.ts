@@ -128,6 +128,21 @@ async function installFixedClock(page: Page): Promise<void> {
       rawClear.call(window, id);
     }) as unknown as typeof window.clearTimeout;
 
+    // How many workspace responses have actually settled inside the page. The route handler
+    // knows only that it wrote a body; this knows the browser handed one back to the fetch
+    // whose continuation is the guarded write. That difference is what turns "we released the
+    // loser" from an inference into an observation.
+    const rawFetch = window.fetch;
+    let settled = 0;
+    window.fetch = ((input: unknown, init?: unknown) => rawFetch(
+      input as RequestInfo, init as RequestInit).then((response) => {
+        const url = typeof input === "string"
+          ? input : String((input as { url?: string })?.url ?? input);
+        if (url.includes("/mcp")) settled += 1;
+        return response;
+      })) as typeof window.fetch;
+    scope.__lexSettledMcp = () => settled;
+
     // Real visibility is not drivable here. See the file header for what that weakens.
     let hidden = false;
     Object.defineProperty(Document.prototype, "hidden", {
@@ -162,6 +177,10 @@ const pendingDayTimers = async (page: Page) => dayTimers(await pendingDelays(pag
 const setTabHidden = (page: Page, hidden: boolean): Promise<void> => page.evaluate(
   (next) => (window as unknown as { __lexVisibility: (v: boolean) => void })
     .__lexVisibility(next), hidden);
+
+/** Workspace responses the page's own fetch layer has handed back so far. */
+const settledMcp = (page: Page): Promise<number> => page.evaluate(
+  () => (window as unknown as { __lexSettledMcp: () => number }).__lexSettledMcp());
 
 const utcDayInPage = (page: Page): Promise<string> => page.evaluate(
   () => new Date().toISOString().slice(0, 10));
@@ -256,11 +275,13 @@ function searchAnswer(mark: string, works: number, hits = 1): Record<string, unk
  * `valid_from` is withheld in that case on purpose: a validity interval is only claimed when a
  * version actually resolved.
  */
-function lawAnswer(mark: string, provisions: number, cite?: string): Record<string, unknown>[] {
+function lawAnswer(
+  mark: string, provisions: number, cite?: string, validFrom = "2020-07-17",
+): Record<string, unknown>[] {
   const document = provisions === 0
     ? { title: `Loi ${mark}`, language: "fr" }
     : {
-        title: `Loi ${mark}`, language: "fr", valid_from: "2020-07-17",
+        title: `Loi ${mark}`, language: "fr", valid_from: validFrom,
         extraction_profile: "akn-lu/1",
         source_uri: "https://legilux.public.lu/eli/etat/leg/loi/2020/07/17/a624/jo",
       };
@@ -334,6 +355,10 @@ const searchDates = (calls: McpCall[]) => calls
   .map((call) => call.args.as_of);
 
 const lawCalls = (calls: McpCall[]) => calls.filter((call) => call.name === "as_of");
+
+/** The law calls for one date in one mode, which is what tells the outline path from the read. */
+const lawCallsFor = (calls: McpCall[], date: string, mode: string) => lawCalls(calls)
+  .filter((call) => call.args.date === date && call.args.mode === mode);
 
 function watchErrors(page: Page) {
   const consoleErrors: string[] = [];
@@ -711,8 +736,13 @@ test("a prior-day search answer released after the rollover cannot write over th
       await expect(rows).toContainText("Loi marked d15");
       await expect(searched).toContainText("Searched 300 works");
 
-      // Now the previous day's answer arrives, late.
+      // Now the previous day's answer arrives, late. Polling the page's own settled count is
+      // what makes this a delivery rather than a release: a route handler writing a body proves
+      // nothing about the fetch whose continuation carries the guard. Without it, a loser that
+      // silently never arrived would pass every assertion below.
+      const settledBeforeRelease = await settledMcp(page);
       release();
+      await expect.poll(() => settledMcp(page)).toBe(settledBeforeRelease + 1);
       await page.waitForTimeout(500);
 
       expect(await rows.count()).toBe(1);
@@ -840,4 +870,101 @@ test("Back and Forward across a rollover ask for the pinned date and for the cur
     expect(forward.every((call) => call.args.date === DAY_TWO)).toBe(true);
     expect(errors.pageErrors).toEqual([]);
     expect(errors.consoleErrors).toEqual([]);
+  });
+
+test("a prior-day law text released after the rollover cannot write over the new day",
+  async ({ page }) => {
+    // Journey 9. Journey 6's shape on the law read path, which is the case none of the first
+    // eight reached: journey 6 drives the search surface, and journey 5 drives this surface but
+    // holds the NEW day's answer, so the previous day's had already landed and there was no late
+    // writer at all. The repair this kills is the read effect comparing the generation it was
+    // issued under, where a boolean flipped by passive cleanup used to be.
+    //
+    // WHICH REQUEST IS HELD, and why it is the `full` one. In the non-anchor case the read
+    // effect issues two sequential calls, `outline` then `full`, and only the second resolves
+    // the promise whose continuation carries the guard. Holding the outline would stall
+    // `fetchRead` before it had decided anything, and releasing it would then issue a fresh
+    // day one `full` request AFTER the boundary, which is a different situation with a
+    // different shape. Holding the `full` gives the exact case: one complete answer to a
+    // question the reader has already left, arriving whole and late.
+    //
+    // WHY THIS ISOLATES THE READ EFFECT'S GUARD from the outline effect's. Every `outline` call
+    // on both days is answered promptly, so no outline response is ever in flight across the
+    // boundary and the outline effect's own guard is never consulted about a stale response.
+    // Confirmed by mutation: removing the outline guard leaves this journey green.
+    const errors = watchErrors(page);
+    const calls: McpCall[] = [];
+    let release!: () => void;
+    const opened = new Promise<void>((resolve) => { release = resolve; });
+
+    try {
+      await installFixedClock(page);
+      await routeMcp(page, calls, async (call) => {
+        const dayOne = call.args.date === DAY_ONE;
+        // The loser, held from page load. It differs from the winner in four independent ways:
+        // article count, article text, title, and the validity interval in the header. A stale
+        // write cannot land as a coincidence that happens to look like the right answer.
+        if (dayOne && call.args.mode === "full") {
+          await opened;
+          return lawAnswer("d14", 5, undefined, "2018-01-09");
+        }
+        return dayOne
+          ? lawAnswer("d14", 5, undefined, "2018-01-09")
+          : lawAnswer("d15", 2, undefined, "2021-05-05");
+      });
+
+      const articles = page.locator("article.art");
+      const header = page.locator(".lawhead");
+      const gap = page.locator(".gap");
+
+      await page.goto(`/?space=law&work=${WORK_ONE}&mode=read`, { waitUntil: "domcontentloaded" });
+
+      // The loser has left the browser and is being held. The outline effect answered for day
+      // one, so the page is genuinely on day one rather than merely blank: its title is up, and
+      // the text it is still waiting for is the request now hanging.
+      await expect.poll(() => lawCallsFor(calls, DAY_ONE, "full").length).toBe(1);
+      await expect(header).toContainText("Loi d14");
+      await expect(page.locator(".sk-law")).toHaveCount(1);
+      expect(await articles.count()).toBe(0);
+
+      await fastForwardPastMidnight(page);
+
+      // The populated baseline: the new day answered and rendered whole, body and header.
+      await expect(articles).toHaveCount(2);
+      await expect(articles.first()).toContainText("Article text marked d15");
+      await expect(header).toContainText("Loi d15");
+      await expect(header).toContainText("2021-05-05");
+      expect(await gap.count()).toBe(0);
+      expect(lawCallsFor(calls, DAY_TWO, "full")).toHaveLength(1);
+      const answered = calls.length;
+
+      // Now the previous day's text arrives, late and whole. The settled count is read from
+      // inside the page, so this asserts the browser handed the response to the fetch whose
+      // continuation carries the guard, rather than asserting that Playwright wrote a body.
+      const settledBeforeRelease = await settledMcp(page);
+      release();
+      await expect.poll(() => settledMcp(page)).toBe(settledBeforeRelease + 1);
+      await page.waitForTimeout(500);
+
+      // And it wrote nothing. Non-retrying: a write that landed and was corrected a moment later
+      // is still a frame in which the reader was shown the wrong law text under today's date.
+      expect(await articles.count()).toBe(2);
+      await expect(articles.first()).toContainText("Article text marked d15");
+      expect(await page.locator("article.art", { hasText: "marked d14" }).count()).toBe(0);
+      expect(await gap.count()).toBe(0);
+      const head = await header.textContent() ?? "";
+      expect(head).toContain("Loi d15");
+      expect(head).toContain("2021-05-05");
+      expect(head).not.toContain("Loi d14");
+      // The validity interval is the assertion that catches a stale write which happened to
+      // agree about the article count, because `setLoaded` carries both and neither is derived
+      // from the other.
+      expect(head).not.toContain("2018-01-09");
+      // The late answer produced no follow-up request of its own.
+      expect(calls).toHaveLength(answered);
+      expect(errors.pageErrors).toEqual([]);
+      expect(errors.consoleErrors).toEqual([]);
+    } finally {
+      release();
+    }
   });
