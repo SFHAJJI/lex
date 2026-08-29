@@ -85,7 +85,7 @@ public sealed class RetrievalBenchmarkTests
             _ => new SearchExecution("keyword", [hit], [], new SearchQueryPlan(
                 "shared", "shared", [], null, null, false)), null);
 
-        Assert.False(metrics.Mrr.TryGetMeasured(out _));
+        Assert.False(metrics.Mrr.HasMeasuredValue);
         Assert.Equal(0, metrics.Mrr.Denominator);
         Assert.Equal("insufficient_denominator", metrics.Mrr.Status);
         Assert.Equal(0, MetricValue(metrics.WorkMrr));
@@ -110,7 +110,7 @@ public sealed class RetrievalBenchmarkTests
         Assert.Equal("measured", metrics.NoHitAccuracy.Status);
         Assert.Equal(1, MetricValue(metrics.ResolutionAccuracy));
         Assert.Equal(1, metrics.ResolutionAccuracy.Denominator);
-        Assert.False(metrics.Mrr.TryGetMeasured(out _));
+        Assert.False(metrics.Mrr.HasMeasuredValue);
         Assert.Equal(0, metrics.Mrr.Denominator);
         Assert.Equal("insufficient_denominator", metrics.Mrr.Status);
 
@@ -141,8 +141,8 @@ public sealed class RetrievalBenchmarkTests
         };
         Assert.All(observations, observation =>
         {
-            Assert.False(observation.TryGetMeasured(out var absent));
-            Assert.Null(absent);
+            Assert.False(observation.HasMeasuredValue);
+            Assert.Throws<InvalidOperationException>(() => observation.RequireMeasuredValue());
             Assert.Equal(0, observation.Denominator);
             Assert.Equal("insufficient_denominator", observation.Status);
         });
@@ -198,10 +198,10 @@ public sealed class RetrievalBenchmarkTests
 
         Assert.True(insufficient.IsStructurallyCoherent());
         Assert.True(measured.IsStructurallyCoherent());
-        Assert.False(insufficient.TryGetMeasured(out var absentValue));
-        Assert.Null(absentValue);
-        Assert.True(measured.TryGetMeasured(out var measuredValue));
-        Assert.Equal(12.5, measuredValue.Value);
+        Assert.False(insufficient.HasMeasuredValue);
+        Assert.Throws<InvalidOperationException>(() => insufficient.RequireMeasuredValue());
+        Assert.True(measured.HasMeasuredValue);
+        Assert.Equal(12.5, measured.RequireMeasuredValue());
         Assert.False(RetrievalMetricObservation.FromSerialized(1, 0, "measured")
             .IsStructurallyCoherent());
         Assert.False(RetrievalMetricObservation.FromSerialized(null, 8, "insufficient_denominator")
@@ -209,9 +209,9 @@ public sealed class RetrievalBenchmarkTests
         Assert.False(RetrievalMetricObservation.FromSerialized(null, 0, "not_measured")
             .IsStructurallyCoherent());
         Assert.False(RetrievalMetricObservation.FromSerialized(double.NaN, 8, "measured")
-            .TryGetMeasured(out _));
-        Assert.False(RetrievalMetricObservation.FromSerialized(double.PositiveInfinity, 8, "measured")
-            .TryGetMeasured(out _));
+            .HasMeasuredValue);
+        Assert.False(RetrievalMetricObservation.FromSerialized(
+            double.PositiveInfinity, 8, "measured").HasMeasuredValue);
         Assert.Equal("insufficient_denominator (n=0)",
             Lex.Web.ExplainerEndpoints.FormatBenchmarkMetric(insufficient, "0.0"));
         Assert.Equal("12.5 ms (n=8)",
@@ -225,15 +225,29 @@ public sealed class RetrievalBenchmarkTests
     {
         var type = typeof(RetrievalMetricObservation);
 
-        Assert.Null(type.GetProperty("Value"));
-        Assert.DoesNotContain(type.GetMethods(), method => method.Name == "Deconstruct");
-        Assert.Equal(["Denominator", "Status"], type.GetProperties()
+        Assert.Empty(type.GetFields());
+        Assert.Equal(["Denominator", "HasMeasuredValue", "Status"], type.GetProperties()
             .Select(property => property.Name).Order(StringComparer.Ordinal).ToArray());
-        var tryGetMeasured = Assert.Single(type.GetMethods(),
-            method => method.Name == "TryGetMeasured");
-        var measuredOut = Assert.Single(tryGetMeasured.GetParameters());
-        Assert.True(measuredOut.ParameterType.IsByRef);
-        Assert.False(measuredOut.ParameterType.GetElementType()!.IsValueType);
+        Assert.Equal([
+            "Lex.Index.RetrievalMetricObservation <Clone>$()",
+            "Lex.Index.RetrievalMetricObservation Insufficient()",
+            "Lex.Index.RetrievalMetricObservation Measured(System.Double,System.Int32)",
+            "System.Boolean Equals(Lex.Index.RetrievalMetricObservation)",
+            "System.Boolean Equals(System.Object)",
+            "System.Boolean get_HasMeasuredValue()",
+            "System.Boolean IsStructurallyCoherent()",
+            "System.Boolean op_Equality(Lex.Index.RetrievalMetricObservation,Lex.Index.RetrievalMetricObservation)",
+            "System.Boolean op_Inequality(Lex.Index.RetrievalMetricObservation,Lex.Index.RetrievalMetricObservation)",
+            "System.Double RequireMeasuredValue()",
+            "System.Int32 GetHashCode()",
+            "System.Int32 get_Denominator()",
+            "System.String get_Status()",
+            "System.String ToString()",
+        ], type.GetMethods()
+            .Where(method => method.DeclaringType == type)
+            .Select(method => $"{method.ReturnType} {method.Name}("
+                              + $"{string.Join(',', method.GetParameters().Select(parameter => parameter.ParameterType))})")
+            .Order(StringComparer.OrdinalIgnoreCase).ToArray());
 
         var options = new System.Text.Json.JsonSerializerOptions
         {
@@ -249,8 +263,18 @@ public sealed class RetrievalBenchmarkTests
         var insufficient = System.Text.Json.JsonSerializer.Deserialize<RetrievalMetricObservation>(
             "{\"value\":null,\"denominator\":0,\"status\":\"insufficient_denominator\"}", options);
         Assert.NotNull(insufficient);
-        Assert.False(insufficient.TryGetMeasured(out var absent));
-        Assert.Null(absent);
+        Assert.False(insufficient.HasMeasuredValue);
+        Assert.Throws<InvalidOperationException>(() => insufficient.RequireMeasuredValue());
+    }
+
+    [Fact]
+    public void Lifted_null_gate_cannot_pass_an_absent_metric()
+    {
+        static bool PassesFloor(RetrievalMetricObservation observation) =>
+            observation.HasMeasuredValue && !(observation.RequireMeasuredValue() < 0.5);
+
+        Assert.False(PassesFloor(RetrievalMetricObservation.Insufficient()));
+        Assert.True(PassesFloor(RetrievalMetricObservation.Measured(0.5, 8)));
     }
 
     [Fact]
@@ -654,7 +678,7 @@ public sealed class RetrievalBenchmarkTests
         Assert.Equal(1, MetricValue(metrics.WorkRecallAt10));
         Assert.InRange(MetricValue(metrics.WorkNdcgAt10), 0.69, 0.70);
         Assert.Equal(0.5, MetricValue(metrics.WorkMrr));
-        Assert.False(metrics.Mrr.TryGetMeasured(out _));
+        Assert.False(metrics.Mrr.HasMeasuredValue);
 
         var incomplete = RetrievalBenchmarkRunner.Evaluate("comparison", [benchmarkCase],
             _ => new SearchExecution("keyword", [Hit("a")], [],
@@ -1146,8 +1170,8 @@ public sealed class RetrievalBenchmarkTests
             var report = run.Report;
 
             Assert.Equal("lex-retrieval-benchmark/4", report.Schema);
-            Assert.False(report.KeywordTuning.Mrr.TryGetMeasured(out _));
-            Assert.False(report.HybridTuning.Mrr.TryGetMeasured(out _));
+            Assert.False(report.KeywordTuning.Mrr.HasMeasuredValue);
+            Assert.False(report.HybridTuning.Mrr.HasMeasuredValue);
             Assert.Equal(1, MetricValue(report.KeywordTuning.WorkMrr));
             Assert.Equal(1, MetricValue(report.HybridTuning.WorkMrr));
             Assert.Equal(0, MetricValue(report.KeywordHoldout.WorkMrr));
@@ -1527,8 +1551,8 @@ public sealed class RetrievalBenchmarkTests
 
     private static double MetricValue(RetrievalMetricObservation observation)
     {
-        Assert.True(observation.TryGetMeasured(out var measured));
-        return measured.Value;
+        Assert.True(observation.HasMeasuredValue);
+        return observation.RequireMeasuredValue();
     }
 
     private static void WriteManifest(
