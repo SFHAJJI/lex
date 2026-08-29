@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import {
+  absenceAuthorityIncomplete, RETRIEVAL_MODE_UNAVAILABLE_SENTENCE,
   classifyEnvelope, clearedSearchResults, gapBadgeStatus, INCOMPLETE_RESPONSE_SENTENCE,
   AMBIGUOUS_ONLY_SENTENCE, LIMITATION_CAP, NO_CORPUS_SENTENCE, NO_CORPUS_STATUS,
   conflictedPublishersSentence, PARTIAL_RESPONSE_SENTENCE, scopedLimitations,
@@ -551,12 +552,187 @@ test("a missing retrieval mode is not a refused filter", () => {
     modeUnavailable("lu-legilux"),
   ]);
   assert.equal(modeOnly.limitations.length, 0, "no capability limitation exists");
-  assert.notEqual(modeOnly.absence, "all_refused",
+  // PINNED, not merely excluded. This line was `assert.notEqual(..., "all_refused")`, which is
+  // one forbidden value out of eight: it passed for the other seven, and the one it actually
+  // shipped was `incomplete_response`, whose sentence told the reader the response could not be
+  // read and to send it again. A check that cannot fail in the direction that matters is not a
+  // check, and the state it was written to defend never existed until now.
+  assert.equal(modeOnly.absence, "retrieval_mode_unavailable",
     "all_refused selects the filter-refusal copy and no filter was refused");
   assert.ok(modeOnly.modeUnavailable?.includes("lu-legilux"));
 
   // A real capability refusal still reaches all_refused.
   assert.equal(projectSearch([refused("lu-legilux", ["domain"])]).absence, "all_refused");
+});
+
+// ---------------------------------------------------------------------------
+// A complete response saying no index can run this mode (the per-deployment shape)
+// ---------------------------------------------------------------------------
+
+test("an all-mode-unavailable search states the mode, never that the response was unreadable", () => {
+  // THE SHIPPED DEFECT, and it is not a rare envelope: `HybridReady` is
+  // `_encoder is not null && _vectors is not null`, so the repo-built container and every build
+  // without semantic vectors answers exactly this for EVERY hybrid search. The producer's side
+  // is coherent throughout: one unit per publisher, `hits: []`, a population declaring
+  // `query_ran: false`, and receipts that reconcile. The client called it `incomplete_response`
+  // and printed two false things at once, that the response was incomplete and that retrying
+  // might change it.
+  const modeOnly = projectSearch([modeUnavailable("lu-legilux"), modeUnavailable("eu-eurlex")]);
+  assert.equal(modeOnly.absence, "retrieval_mode_unavailable");
+
+  // THE SENTENCE, through the same call Search.tsx makes. The state name is not the product;
+  // a right state mapped to the wrong copy is this defect one layer up.
+  const shown = searchEmptyPresentation(modeOnly.absence);
+  assert.equal(shown.kind, "retrieval_mode_unavailable");
+  assert.equal(shown.sentence, RETRIEVAL_MODE_UNAVAILABLE_SENTENCE);
+  assert.equal(shown.sentence,
+    "Words + meaning is not available on any selected publisher's index, so this query did not "
+    + "run and Lex cannot state what is absent. Choose Exact words to run the same search.");
+
+  // The two claims the shipped copy made, refused by name rather than by state.
+  assert.ok(!shown.sentence.includes("incomplete"),
+    "the page still calls a complete, coherent response incomplete");
+  assert.ok(!/\bagain\b/.test(shown.sentence),
+    "the page still asks for a retry that returns the identical answer");
+  // And it is not a corpus claim either: nothing was measured.
+  assert.ok(!shown.sentence.includes("corpus"));
+  // It names the control that does change the outcome, spelled as the button's own label.
+  assert.ok(shown.sentence.includes("Exact words"));
+
+  // Neither of the two states one branch either side of it, both of which are false here.
+  assert.notEqual(shown.sentence, INCOMPLETE_RESPONSE_SENTENCE);
+  assert.notEqual(shown.sentence, "No selected publisher ran this query.");
+
+  // The count beside it is not authoritative: nothing ran, so a bare "0 laws" would assert an
+  // absence measured by no query at all. This is the half of the repair that a new state added
+  // to the union without a clause here would have silently lost.
+  assert.equal(absenceAuthorityIncomplete(modeOnly.absence), true);
+});
+
+test("a publisher that ran beside one that lacked the mode still speaks only for what ran", () => {
+  // THE MIX. One publisher executed and matched nothing; the other never ran. The response
+  // measured a real population, so it may speak, but only for the publisher that could apply
+  // the query: `mixed_no_match`, exactly as a filter refusal beside a ran unit does.
+  const mixed = projectSearch([modeUnavailable("eu-eurlex"), searchOk("lu-legilux", 0)]);
+  assert.equal(mixed.absence, "mixed_no_match",
+    "a unit that ran was swallowed by the mode-unavailable state");
+  assert.equal(searchEmptyPresentation(mixed.absence).sentence, MIXED_ZERO_SENTENCES.search);
+
+  // And with hits, the mode-unavailable sibling costs nothing but the disclosure.
+  const withHits = projectSearch([modeUnavailable("eu-eurlex"), searchOk("lu-legilux", 2)]);
+  assert.equal(withHits.absence, "has_results");
+  assert.ok(withHits.modeUnavailable?.includes("eu-eurlex"));
+
+  // A genuine refusal beside a mode-unavailable sibling keeps its coverage sentence, because a
+  // typed filter limitation really is there to render. The new state is for the case where the
+  // retrieval mode is the whole story, not a blanket capture of every unit that did not run.
+  const refusedToo = projectSearch([modeUnavailable("eu-eurlex"), refused("lu-legilux", ["domain"])]);
+  assert.equal(refusedToo.absence, "all_refused");
+  assert.equal(refusedToo.limitations.length, 1);
+});
+
+test("a genuinely unreadable response still reports incomplete and asks for a retry", () => {
+  // THE PATH THIS REPAIR MUST NOT WEAKEN. A response that really cannot be read keeps the
+  // incomplete sentence, retry included, because there a retry is the honest advice.
+  const unreadable = projectSearch([{ envelope: { status: "made_up" }, hits: [] }]);
+  assert.equal(unreadable.absence, "incomplete_response");
+  assert.equal(searchEmptyPresentation(unreadable.absence).sentence, INCOMPLETE_RESPONSE_SENTENCE);
+  assert.ok(INCOMPLETE_RESPONSE_SENTENCE.includes("incomplete"));
+  assert.ok(/\bagain\b/.test(INCOMPLETE_RESPONSE_SENTENCE));
+
+  // An unreadable sibling BESIDE a mode-unavailable unit is unreadable first. The mode state is
+  // only for a response every unit of which is coherent, so it can never absorb an invalid one.
+  const poisoned = projectSearch([modeUnavailable("lu-legilux"), { envelope: null }]);
+  assert.equal(poisoned.absence, "incomplete_response",
+    "an invalid sibling was absorbed into the retrieval-mode state");
+
+  // The empty response claims nothing either, and is not the mode state.
+  assert.equal(projectSearch([]).absence, "incomplete_response");
+});
+
+test("the retrieval-mode state cannot arise on a tool that has no retrieval mode", () => {
+  // WHY NO NEW GOVERNED VARIANT WAS ADDED, proved rather than asserted. `requiresRetrievalMode`
+  // is true for search alone, so `retrieval_mode_unavailable` on changes_in_period or in_force_on
+  // is not a mode claim at all: it is an unknown status, which is invalid, which is incomplete.
+  // That is what keeps the `empty` union of eight-branch ternaries in App.tsx unchanged, and if
+  // this ever stops holding those chains need the same audit search just had.
+  for (const tool of ["changes_in_period", "in_force_on"]) {
+    const raw = { envelope: { status: "retrieval_mode_unavailable", publisher: "lu-legilux" } };
+    const partition = partitionGovernedResponse(tool, [raw]);
+    assert.equal(partition.modeUnavailableCount, 0, `${tool} minted a mode claim`);
+    assert.equal(partition.invalidCount, 1, `${tool} admitted an unknown status`);
+    assert.equal(projectGovernedEmptiness(tool, [raw], 0).empty, "incomplete_response");
+  }
+  // The classifier agrees at the unit level, on the same status search calls a mode claim.
+  assert.equal(classifyEnvelope("search",
+    { envelope: { status: "retrieval_mode_unavailable", publisher: "lu-legilux" },
+      population: searchPopulationFor("retrieval_mode_unavailable") }).kind, "mode_unavailable");
+  assert.equal(classifyEnvelope("changes_in_period",
+    { envelope: { status: "retrieval_mode_unavailable", publisher: "lu-legilux" } }).kind,
+    "invalid");
+});
+
+test("every search absence state has copy and a count verdict, with none defaulting", () => {
+  // THE CHAIN THE BRIEF NAMES. A state added to the union without a clause in either consumer
+  // is the confident branch: the widest corpus claim from the presentation, and the bare
+  // authoritative count from the header. Both are switches with `assertNever` now, so this test
+  // is a live inventory rather than the guard itself, and it fails the day the union grows
+  // without this list growing with it.
+  const states = ["has_results", "partial_results", "all_refused", "no_corpus", "mixed_no_match",
+    "no_match", "incomplete_response", "retrieval_mode_unavailable"] as const;
+  const corpusWide = "Nothing in the corpus matches that.";
+  for (const state of states) {
+    const shown = searchEmptyPresentation(state);
+    assert.ok(shown.sentence.length > 0, `${state} rendered no sentence`);
+    // Only the three states that measured a population may reach the widest claim.
+    if (shown.sentence === corpusWide) {
+      assert.ok(["has_results", "partial_results", "no_match"].includes(state),
+        `${state} reached the whole-corpus absence claim`);
+    }
+    assert.equal(typeof absenceAuthorityIncomplete(state), "boolean");
+  }
+  // The verdicts the header depends on, pinned so a silent flip is a failure and not a shrug.
+  assert.deepEqual(states.filter((state) => absenceAuthorityIncomplete(state)),
+    ["partial_results", "mixed_no_match", "incomplete_response", "retrieval_mode_unavailable"]);
+});
+
+test("the search surface renders the empty sentence and the count verdict through the seams", () => {
+  // STRUCTURAL, on the precedent of the withholding guard below, because no node test can import
+  // a .tsx component. It is what makes the sentence assertions above claims about production
+  // rather than about a function the component might have stopped calling. Comments are stripped
+  // first, so a comment explaining the defect is not read as a reintroduction of it.
+  const source = readFileSync(new URL("./Search.tsx", import.meta.url), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.ok(source.includes("searchEmptyPresentation(results.absence)"),
+    "the search surface maps its own state to copy again");
+  assert.ok(source.includes("absenceAuthorityIncomplete(results.absence)"),
+    "the count authority is back to a chain that answers false for anything unlisted");
+  assert.ok(!/results\.absence === "partial_results"\s*\n?\s*\|\|/.test(source),
+    "the authority chain the exhaustive switch replaced is back");
+  // The mode-unavailable reader is not handed the filter-capability explanation, and not the
+  // textless-versions fallback either: both name a cause this response never established.
+  const branchOpen = 'results.absence === "retrieval_mode_unavailable" ? (';
+  assert.ok(source.includes(branchOpen),
+    "the mode-unavailable branch of the empty-state sub-copy is gone");
+
+  // AND THE PROSE INSIDE IT, not merely the branch. Found by mutation: rewriting this paragraph
+  // to "The response was incomplete and could not be read. Try the request again." left the
+  // whole suite green, because every assertion above pins the empty SENTENCE and this is the
+  // paragraph directly beneath it on the page. Both claims the repair exists to remove could be
+  // reintroduced one line lower than everything that was watching for them.
+  const start = source.indexOf(branchOpen) + branchOpen.length;
+  const branch = source.slice(start, source.indexOf(") : (", start));
+  assert.ok(branch.length > 0 && branch.length < 600, "the sub-copy branch could not be read");
+  assert.ok(!/\bincomplete\b/i.test(branch),
+    "the sub-copy calls a complete, coherent response incomplete again");
+  assert.ok(!/\bagain\b/i.test(branch),
+    "the sub-copy asks for a retry that returns the identical answer again");
+  assert.ok(!branch.includes("LIMITATION_EXPLANATION"),
+    "the sub-copy blames a filter that was never refused");
+  // It states the true thing instead: a fact about the mounted index, not about the law.
+  assert.ok(branch.includes("mounted index"),
+    "the sub-copy stopped scoping its claim to the index");
 });
 
 // ---------------------------------------------------------------------------

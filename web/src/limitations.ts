@@ -284,6 +284,25 @@ export const INCOMPLETE_RESPONSE_SENTENCE =
   + "Try the request again.";
 
 /**
+ * Fixed copy for a search every selected publisher answered with
+ * `retrieval_mode_unavailable`. It is the deployment shape, not a rare one: `HybridReady` is
+ * `_encoder is not null && _vectors is not null`, so a build without semantic vectors returns
+ * this for EVERY hybrid search until the index is rebuilt.
+ *
+ * Two things it must not say, both of which the shipped copy did. The response was NOT
+ * incomplete: the producer emitted one coherent unit per publisher with `hits: []` and a
+ * population whose `query_ran` is false, and the receipts reconcile exactly. And retrying is
+ * not an action: the same request returns the same answer for as long as this index is mounted.
+ *
+ * So it names the cause, refuses the absence claim it cannot prove, and points at the one
+ * control that does change the outcome. "Exact words" is the button's own label in Search.tsx,
+ * so the reader is told to press something they can see.
+ */
+export const RETRIEVAL_MODE_UNAVAILABLE_SENTENCE =
+  "Words + meaning is not available on any selected publisher's index, so this query did not "
+  + "run and Lex cannot state what is absent. Choose Exact words to run the same search.";
+
+/**
  * JURISDICTION ONLY, and it stays separate from the publisher validator on purpose.
  *
  * Publisher and jurisdiction are different vocabularies with different grammars, and the producer
@@ -2433,6 +2452,17 @@ export function partitionGovernedResponse(
 }
 
 /**
+ * Every state a search response may present, named once so the projector, the presentation and
+ * the count authority read one union rather than three copies of it that can drift apart.
+ *
+ * `retrieval_mode_unavailable` is the producer's own status, not a client aggregate, because
+ * that is exactly what every unit of such a response carries. It is deliberately NOT in
+ * `CLIENT_GAP_STATES`: a publisher really did say this on the wire.
+ */
+export type SearchAbsence = "has_results" | "partial_results" | "all_refused" | "no_corpus"
+  | "mixed_no_match" | "no_match" | "incomplete_response" | "retrieval_mode_unavailable";
+
+/**
  * What an empty governed surface may claim (round 4, O1/O2). `no_match` speaks for the corpus
  * and requires every envelope to have actually run; any invalid envelope, or an entirely
  * empty response, is `incomplete_response` and claims nothing. An all-refused call is a
@@ -2442,8 +2472,7 @@ export function partitionGovernedResponse(
 export function searchAbsenceState(
   partition: GovernedPartition,
   ranHitCount: number,
-): "has_results" | "partial_results" | "all_refused" | "no_corpus" | "mixed_no_match"
-  | "no_match" | "incomplete_response" {
+): SearchAbsence {
   // TWO facts, not one, and they are not the same fact. `invalidCount` counts units this
   // parser could not read. `receiptsIrreconcilable` is units it read perfectly well whose own
   // response-wide arithmetic contradicts what they carry, and it was invisible here: a valid
@@ -2471,6 +2500,22 @@ export function searchAbsenceState(
   // withdraw, and that is exactly the boundary this check sits on.
   if (unsupported || partition.moreBeyondPage) return "incomplete_response";
   if (partition.allRefused) return "all_refused";
+  // THE COMPLETE RESPONSE THAT SAID NO PUBLISHER COULD RUN THE MODE. Every unit is coherent,
+  // the receipts reconcile, and each one carries `hits: []` beside a population declaring
+  // `query_ran: false`. Nothing here is unreadable and nothing here is a refused filter, so the
+  // two states either side of this line were both false about it: `all_refused` selects the
+  // filter-capability copy, and `incomplete_response` told the reader the response could not be
+  // read and to send it again, which returns the identical answer until the index is rebuilt.
+  //
+  // AFTER `allRefused` deliberately. A response mixing a real filter refusal with a
+  // mode-unavailable sibling has a genuine typed limitation to render and keeps the coverage
+  // sentence it has always had; this state is for the case where the retrieval mode is the whole
+  // story. Ordering also carries the rest of the condition: `unsupported` returned above, so
+  // `invalidCount` is 0 here, and `allRefused` returned above, so with nothing ran there is no
+  // refusal left either. Restating those as clauses would add conditions no mutation could kill.
+  if (partition.ran.length === 0 && partition.modeUnavailableCount > 0) {
+    return "retrieval_mode_unavailable";
+  }
   if (partition.ran.length === 0) return "incomplete_response";
   // The last gate before the two states that SPEAK FOR THE CORPUS. `no_match` says nothing in
   // the corpus matches and `mixed_no_match` says the publishers that could apply the filters
@@ -2495,14 +2540,20 @@ function assertNever(value: never): never {
 }
 
 export function searchEmptyPresentation(
-  state: "all_refused" | "no_corpus" | "mixed_no_match" | "no_match"
-    | "incomplete_response",
+  state: SearchAbsence,
 ): { kind: string; sentence: string } {
   switch (state) {
     case "no_corpus":
       return { kind: "no_corpus", sentence: NO_CORPUS_SENTENCE };
     case "all_refused":
       return { kind: "all_refused", sentence: "No selected publisher ran this query." };
+    // The mode was not authorized for one single index, so this claims nothing about the law
+    // and does not ask for a retry it knows cannot help. It names the control that does help.
+    case "retrieval_mode_unavailable":
+      return {
+        kind: "retrieval_mode_unavailable",
+        sentence: RETRIEVAL_MODE_UNAVAILABLE_SENTENCE,
+      };
     case "mixed_no_match":
       return {
         kind: "mixed_no_match",
@@ -2510,6 +2561,13 @@ export function searchEmptyPresentation(
       };
     case "incomplete_response":
       return { kind: "incomplete_response", sentence: INCOMPLETE_RESPONSE_SENTENCE };
+    // MAPPED HERE RATHER THAN BY THE COMPONENT. Both mean rows rendered, so neither reaches the
+    // empty branch at all, and folding them in keeps the presentation total without widening the
+    // type. It used to be a ternary in Search.tsx, which put the last hop from a state to the
+    // sentence a reader sees outside everything the tests could call: a state could be correct
+    // and the copy beside it wrong, with nothing able to see the gap.
+    case "has_results":
+    case "partial_results":
     case "no_match":
       return { kind: "no_match", sentence: "Nothing in the corpus matches that." };
   }
@@ -2519,6 +2577,37 @@ export function searchEmptyPresentation(
   // not catch a default, so adding an absence state would silently have made the widest
   // possible assertion about the corpus. This turns that into a compile error instead.
   return assertNever(state);
+}
+
+/**
+ * Whether an absence state says the response fell short of the scope the reader selected, so
+ * the header reads `Showing 0 laws` rather than a bare, authoritative `0 laws`, and the
+ * population footer declares its denominator unanswered.
+ *
+ * EXHAUSTIVE ON PURPOSE, and that is the whole reason it exists as a function. This is a
+ * two-valued question asked of an eight-valued union, which is the exact shape a `||` chain
+ * answers silently: a state nobody added a clause for gets `false`, and `false` here is a bare
+ * `0 laws, 0 matching passages` under a response that measured nothing. The switch turns
+ * forgetting into a compile error, in the same way `searchEmptyPresentation` already refuses to
+ * hand an unrecognised state the widest claim this product makes.
+ */
+export function absenceAuthorityIncomplete(absence: SearchAbsence): boolean {
+  switch (absence) {
+    case "partial_results":
+    case "incomplete_response":
+    case "mixed_no_match":
+    // Not one selected publisher executed the query, so the zero beside it counts nothing that
+    // was ever searched. Presenting it bare would be the confident-absence claim in the
+    // denominator that the empty sentence one line above has just refused to make.
+    case "retrieval_mode_unavailable":
+      return true;
+    case "has_results":
+    case "no_match":
+    case "all_refused":
+    case "no_corpus":
+      return false;
+  }
+  return assertNever(absence);
 }
 
 /**
@@ -2547,8 +2636,7 @@ export interface SearchResultsState<W, A> {
   modeUnavailable: string | undefined;
   expansions: string[];
   limitations: PublisherLimitation[];
-  absence: "has_results" | "partial_results" | "all_refused" | "no_corpus"
-    | "mixed_no_match" | "no_match" | "incomplete_response";
+  absence: SearchAbsence;
 }
 
 /** The one cleared tuple: every result-bearing key, one place, three transitions share it. */

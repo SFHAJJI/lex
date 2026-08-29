@@ -11,7 +11,8 @@ import { ScopeFilters } from "./ScopeFilters";
 import { envelopeStripRows, type EnvelopeStripRow } from "./envelopeStrip";
 import { normalizeSearchResponse, type PublisherPopulation } from "./searchPopulation";
 import { fuzzyModeFor, retainedForQuery } from "./api";
-import { clearedSearchResults, LIMITATION_EXPLANATION, parseGovernedResponse,
+import { absenceAuthorityIncomplete, clearedSearchResults, LIMITATION_EXPLANATION,
+  parseGovernedResponse,
   projectSearchResponse, searchEmptyPresentation, searchResultsFromError,
   withholdingSentence,
   type SearchResultsState, type WithheldClaims } from "./limitations";
@@ -307,11 +308,11 @@ export default function Search(p: SearchProps) {
     p.onSubmit(searchSubmission(text));
   };
 
-  // has_results and partial_results both mean rows rendered, so neither can reach the empty
-  // branch; mapping them to no_match keeps the presentation total without widening its type.
-  const emptyPresentation = searchEmptyPresentation(
-    results.absence === "has_results" || results.absence === "partial_results"
-      ? "no_match" : results.absence);
+  // The whole mapping, including the has_results and partial_results cases that never reach the
+  // empty branch, now lives inside the tested seam. It was a ternary here, which left the last
+  // hop from a typed state to the sentence a reader sees in the one file no node test can
+  // import: the state could be right and the copy beside it wrong with nothing able to see it.
+  const emptyPresentation = searchEmptyPresentation(results.absence);
   /**
    * Whether the response fell short of the scope the reader selected, from any cause.
    *
@@ -321,10 +322,12 @@ export default function Search(p: SearchProps) {
    * scope was searched while the notice beside it says the response was not coherent. The
    * denominator has to answer to the final authority, not to the half of it this file owns.
    */
+  // The absence half is an exhaustive switch in limitations.ts rather than the `||` chain that
+  // used to be here. A chain answers `false` for any state nobody remembered, and `false` is the
+  // bare confident count, so the omission that costs the most was the one this file made
+  // silently.
   const authorityIncomplete = withheld !== undefined
-    || results.absence === "partial_results"
-    || results.absence === "incomplete_response"
-    || results.absence === "mixed_no_match";
+    || absenceAuthorityIncomplete(results.absence);
   const groupedResults = groupSearchResults(works, articles);
   const visiblePassages = new Set(articles.slice(0, articleLimit));
   const resultLawCount = groupedResults.reduce((count, section) => count + section.works.length, 0);
@@ -556,6 +559,17 @@ export default function Search(p: SearchProps) {
               {allRefused ? (
                 <p className="sub">{LIMITATION_EXPLANATION}{" "}
                   <a href="/coverage">What Lex holds, and lacks →</a></p>
+              ) : results.absence === "retrieval_mode_unavailable" ? (
+                // NAMED BEFORE THE FALLBACK, which is the hazard this whole repair is about.
+                // Neither existing branch is true here: LIMITATION_EXPLANATION blames a filter
+                // nobody refused, and the fallback explains why a search can find nothing, when
+                // no search ran at all. A state added without a clause lands in that fallback
+                // and is handed the wrong cause for its own absence.
+                <p className="sub">
+                  Meaning search needs an index built with semantic vectors. This states what
+                  the mounted index can do, not what the corpus holds.{" "}
+                  <a href="/coverage">What Lex holds, and lacks →</a>
+                </p>
               ) : (
                 <p className="sub">
                   Search reads the versions that carry text. Lex also holds dated versions whose
