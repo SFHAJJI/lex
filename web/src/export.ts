@@ -12,8 +12,9 @@ export interface LawEvidence {
   permalink: string;
   extractionProfile?: string;
   timelineSemantics?: string;
-  /** Document-level digests. A permalink alone cannot be checked; these are what a reader verifies
-      against when the view holds more than one article, or none with its own text digest. */
+  /** Document-level digests. `recordSha256` covers serialized version metadata and `bodySha256`
+      the publisher's own body. Neither digests the ordered provisions on screen, so neither makes
+      the displayed wording checkable; both are carried labelled with the scope they do have. */
   recordSha256?: string;
   bodySha256?: string;
   provisions: ProvisionItem[];
@@ -121,8 +122,17 @@ export function citationText(input: LawEvidence): string {
 /**
  * Each side of a comparison is held to the same rule as a law citation: a digest is stated with the
  * claim it supports, and a metadata digest never stands in for a wording one.
+ *
+ * A side can also hold no provision at all. Where one article is compared and it was added or
+ * removed, the absent side has no wording to digest, and reporting a missing digest there states the
+ * wrong condition: it reads as text whose digest went unrecorded rather than text that never
+ * existed. The rendered comparison already draws that distinction and says `not in this version`;
+ * the copied citation now keeps it, and carries no digest for a side with nothing to digest.
  */
-function comparisonSideDigest(label: string, textSha?: string, recordSha?: string): string[] {
+function comparisonSideDigest(
+  label: string, present: boolean, textSha?: string, recordSha?: string,
+): string[] {
+  if (!present) return [`${label} not present in this version`];
   if (textSha) return [`${label} text SHA-256 ${textSha}`];
   return [
     `${label} no aggregate text digest recorded`,
@@ -132,14 +142,19 @@ function comparisonSideDigest(label: string, textSha?: string, recordSha?: strin
 
 export function comparisonCitationText(input: ComparisonEvidence): string {
   const row = input.rows.length === 1 ? input.rows[0] : undefined;
+  // Presence is a property of the compared article, not of the digest. Only a single-row comparison
+  // can settle it: with several rows of mixed kinds each side holds some provisions, so both are
+  // present and the aggregate rule applies.
+  const fromPresent = row?.kind !== "added";
+  const toPresent = row?.kind !== "removed";
   return [
     oneLine(input.title),
     row ? oneLine(row.label) : undefined,
     `comparison ${input.from} to ${input.to}`,
     input.work,
     input.permalink,
-    ...comparisonSideDigest(input.from, row?.fromSha, input.fromRecordSha256),
-    ...comparisonSideDigest(input.to, row?.toSha, input.toRecordSha256),
+    ...comparisonSideDigest(input.from, fromPresent, row?.fromSha, input.fromRecordSha256),
+    ...comparisonSideDigest(input.to, toPresent, row?.toSha, input.toRecordSha256),
     NOT_OFFICIAL,
   ].filter(Boolean).join(" | ");
 }

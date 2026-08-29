@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   citationText, comparisonCitationText, comparisonEvidenceMarkdown, evidenceFilename,
-  lawEvidenceMarkdown,
+  lawEvidenceMarkdown, type ComparisonRow,
 } from "./export.ts";
 
 test("law evidence preserves legal text and records provenance", () => {
@@ -83,11 +83,10 @@ test("evidence filename is portable", () => {
   assert.equal(evidenceFilename("EU EUR-Lex:32016R0679", "Article 1 / 2026"), "eu-eur-lex-32016r0679-article-1-2026.md");
 });
 
-// A citation that carries no content digest cannot be checked, and this product's whole claim is
-// that an answer can be checked rather than trusted. The digest was previously emitted only when
-// exactly one provision was on screen, so every whole-document and multi-article citation left
-// with a permalink and nothing to verify against.
-test("a multi-provision citation still carries a checkable digest", () => {
+// A multi-article citation has no digest of the wording on screen, and says so. It still names the
+// version it came from: the record digest identifies the version metadata, a weaker claim than a
+// wording digest and labelled as the weaker one. Before this lane the citation carried neither.
+test("a multi-provision citation carries the version-metadata digest", () => {
   const citation = citationText({
     title: "Sample law",
     work: "lu-legilux:sample",
@@ -277,4 +276,75 @@ test("a multi-row comparison states the absence per side and labels each record 
   assert.match(citation, /2020-01-01 no aggregate text digest recorded/);
   assert.match(citation, /2021-01-01 no aggregate text digest recorded/);
   assert.match(citation, /2020-01-01 record SHA-256 from-record \(version metadata\)/);
+});
+
+// O1. A one-row comparison of an added or removed article has a side where the provision does not
+// exist. Saying no digest was recorded there states the wrong condition: it reads as text whose
+// digest went unrecorded rather than text that never existed. The rendered comparison already says
+// `not in this version`; the copied citation must not contradict it.
+const oneRowComparison = (row: ComparisonRow) => comparisonCitationText({
+  title: "Sample law",
+  work: "lu-legilux:sample",
+  from: "2020-01-01",
+  to: "2021-01-01",
+  permalink: "https://law.soufien.lu/compare",
+  fromRecordSha256: "from-record",
+  toRecordSha256: "to-record",
+  rows: [row],
+  unchanged: [],
+  punctuationOnly: [],
+  exportedAt: "2026-08-29T00:00:00.000Z",
+});
+
+test("an added article is reported as absent on the earlier side, not as a missing digest", () => {
+  const citation = oneRowComparison(
+    { label: "Article 9", anchor: "art_9", kind: "added", pieces: [], toSha: "bb" });
+  assert.match(citation, /2020-01-01 not present in this version/);
+  assert.doesNotMatch(citation, /2020-01-01 no aggregate text digest recorded/);
+  // The absent side carries no digest at all. A record digest there invites the reader to think
+  // something about the article can be checked against it, and nothing can.
+  assert.doesNotMatch(citation, /2020-01-01 record SHA-256/);
+  // The side that does exist keeps its exact wording digest.
+  assert.match(citation, /2021-01-01 text SHA-256 bb/);
+});
+
+test("a removed article is reported as absent on the later side, not as a missing digest", () => {
+  const citation = oneRowComparison(
+    { label: "Article 9", anchor: "art_9", kind: "removed", pieces: [], fromSha: "aa" });
+  assert.match(citation, /2021-01-01 not present in this version/);
+  assert.doesNotMatch(citation, /2021-01-01 no aggregate text digest recorded/);
+  assert.doesNotMatch(citation, /2021-01-01 record SHA-256/);
+  assert.match(citation, /2020-01-01 text SHA-256 aa/);
+});
+
+test("a changed one-row comparison keeps both sides present", () => {
+  const citation = oneRowComparison(
+    { label: "Article 9", anchor: "art_9", kind: "changed", pieces: [], fromSha: "aa", toSha: "bb" });
+  assert.doesNotMatch(citation, /not present in this version/);
+  assert.match(citation, /2020-01-01 text SHA-256 aa/);
+  assert.match(citation, /2021-01-01 text SHA-256 bb/);
+});
+
+test("a multi-row comparison has both sides present regardless of row kinds", () => {
+  // Several rows of mixed kinds means each side holds some provisions, so neither side is absent
+  // and the aggregate rule applies to both.
+  const citation = comparisonCitationText({
+    title: "Sample law",
+    work: "lu-legilux:sample",
+    from: "2020-01-01",
+    to: "2021-01-01",
+    permalink: "https://law.soufien.lu/compare",
+    fromRecordSha256: "from-record",
+    toRecordSha256: "to-record",
+    rows: [
+      { label: "Article 1", anchor: "art_1", kind: "added", pieces: [], toSha: "bb" },
+      { label: "Article 2", anchor: "art_2", kind: "removed", pieces: [], fromSha: "aa" },
+    ],
+    unchanged: [],
+    punctuationOnly: [],
+    exportedAt: "2026-08-29T00:00:00.000Z",
+  });
+  assert.doesNotMatch(citation, /not present in this version/);
+  assert.match(citation, /2020-01-01 no aggregate text digest recorded/);
+  assert.match(citation, /2021-01-01 no aggregate text digest recorded/);
 });
