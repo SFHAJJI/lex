@@ -25,9 +25,28 @@ type Candidate<T extends object> = {
 
 const RRF_K = 60;
 
+/**
+ * What counts as "the same result", which is the only question fusion asks. The producer's
+ * retrieval unit is the provision, not the document: McpCore.cs deduplicates hits on
+ * (work, anchor) and only then caps per work, so one law deliberately returns several
+ * articles that all carry the same document-level lex_id. Identity on lex_id alone therefore
+ * deleted every article after the first, and the passage count was then stated over the
+ * survivors. Identity is the (document, provision) pair: exactly the producer's own unit, so
+ * it merges genuine agreement between two retrievers and nothing else.
+ *
+ * An absent provision is a real shape rather than a missing field. A work-level hit carries
+ * anchor null; an identifier/title fallback hit carries no anchor key at all. Both mean
+ * "this document, no particular article", so both normalize to the same empty provision and
+ * still fuse on document identity across publishers. A real anchor is never empty, so nothing
+ * can collide with that.
+ *
+ * With no lex_id nothing can be identified, so the hit keeps its own publisher and rank and
+ * merges with nothing. Showing a duplicate is the safe failure; deleting a distinct result
+ * is not.
+ */
 function hitIdentity(hit: Record<string, unknown>, publisher: string, rank: number): string {
   const lexId = String(hit.lex_id ?? "");
-  if (lexId) return lexId;
+  if (lexId) return `${lexId}\u001f${String(hit.anchor ?? "")}`;
   return [publisher, hit.work, hit.anchor, hit.valid_from, rank].map(String).join("\u001f");
 }
 
