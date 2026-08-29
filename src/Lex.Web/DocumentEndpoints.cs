@@ -493,15 +493,18 @@ public static class DocumentEndpoints
                             """);
                     else if (row.Gap is { } gap)
                     {
-                        var official = gap.Eli ?? doc.SourceUri;
+                        var officialLink = OfficialGapLink(
+                            permalink: null,
+                            eli: gap.Eli,
+                            sourceUri: doc.SourceUri,
+                            officialSource: null);
                         sb.Append($"""
                             <div class="card" id="{H(row.Anchor)}">
                             <b>{RenderLegalInline(title)}</b>
                             <a class="sub mono" href="#{H(row.Anchor)}" title="permalink to this provision">#{H(row.Anchor)}</a>
                             {(row.ArticleValidFrom is not null && row.ArticleValidFrom != doc.ValidFrom ? $"<span class=\"badge\">applicable {H(row.ArticleValidFrom)}</span>" : "")}{derogation ?? ""}
                             <div class="notice"><b>Text unavailable.</b> Lex preserved this publisher coordinate but could not certify wording for it
-                            (status <span class="mono">{H(gap.TextUnavailableReason)}</span>).
-                            <a href="{H(official)}" rel="noopener">Open the official publisher source</a>.</div>
+                            (status <span class="mono">{H(gap.TextUnavailableReason)}</span>).{officialLink}</div>
                             </div>
                             """);
                     }
@@ -545,6 +548,35 @@ public static class DocumentEndpoints
         });
 
         return app;
+    }
+
+    /// <summary>
+    /// Selects one external publisher source without coalescing candidates before validation.
+    /// Candidate priority matches the browser: permalink, ELI, signed source URI, legacy source.
+    /// </summary>
+    internal static string? OfficialGapSource(
+        string? permalink,
+        string? eli,
+        string? sourceUri,
+        string? officialSource)
+    {
+        foreach (var candidate in new[] { permalink, eli, sourceUri, officialSource })
+            if (candidate is not null
+                && Uri.TryCreate(candidate, UriKind.Absolute, out var uri)
+                && string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+                return uri.AbsoluteUri;
+        return null;
+    }
+
+    internal static string OfficialGapLink(
+        string? permalink,
+        string? eli,
+        string? sourceUri,
+        string? officialSource)
+    {
+        var source = OfficialGapSource(permalink, eli, sourceUri, officialSource);
+        return source is null ? "" :
+            $" <a href=\"{H(source)}\" rel=\"noopener\">Open the official publisher source</a>.";
     }
 
     private static bool TryIsoDate(string? value, out DateOnly date) =>

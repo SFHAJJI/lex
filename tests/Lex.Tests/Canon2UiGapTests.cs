@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Lex.Ask;
+using Lex.Web;
 
 namespace Lex.Tests;
 
@@ -116,6 +117,40 @@ public sealed class Canon2UiGapTests
         Assert.Equal("http://publisher.example/work#art_2", wireGap["eli"]!.GetValue<string>());
         Assert.Equal("https://publisher.example/work", wireGap["source_uri"]!.GetValue<string>());
         Assert.Null(wireGap["official_source"]);
+    }
+
+    [Fact]
+    public void Server_gap_source_skips_http_eli_and_disagreeing_legacy_source()
+    {
+        var selected = DocumentEndpoints.OfficialGapSource(
+            permalink: null,
+            eli: "http://publisher.example/work#art_2",
+            sourceUri: "https://publisher.example/work",
+            officialSource: "https://untrusted.example/legacy");
+
+        Assert.Equal("https://publisher.example/work", selected);
+        var link = DocumentEndpoints.OfficialGapLink(
+            permalink: null,
+            eli: "http://publisher.example/work#art_2",
+            sourceUri: "https://publisher.example/work",
+            officialSource: "https://untrusted.example/legacy");
+        Assert.Contains("href=\"https://publisher.example/work\"", link,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("untrusted.example", link, StringComparison.Ordinal);
+
+        var noLink = DocumentEndpoints.OfficialGapLink(
+            permalink: "javascript:alert(1)",
+            eli: "http://publisher.example/work#art_2",
+            sourceUri: null,
+            officialSource: "data:text/html,active");
+        Assert.Empty(noLink);
+
+        Assert.Equal("https://permalink.example/exact",
+            DocumentEndpoints.OfficialGapSource(
+                permalink: "https://permalink.example/exact",
+                eli: "https://publisher.example/eli",
+                sourceUri: "https://publisher.example/source",
+                officialSource: "https://publisher.example/legacy"));
     }
 
     [Fact]

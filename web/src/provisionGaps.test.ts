@@ -126,6 +126,17 @@ test("HTTP ELI cannot mask a separate HTTPS publisher source", () => {
   assert.equal(provisionSourceUrl(direct), sourceGap.source_uri);
   assert.equal(provisionSourceUrl(assistant!.items[0]), sourceGap.source_uri);
   assert.equal(safeHttpsUrl(direct.eli), undefined);
+
+  const markdown = lawEvidenceMarkdown({
+    title: "Synthetic work",
+    work: "t-pub:work",
+    validFrom: "2025-01-01",
+    permalink: "https://lex.example/t-pub/work/2025-01-01",
+    provisions: [direct],
+    exportedAt: "2026-08-29T00:00:00Z",
+  });
+  assert.match(markdown, /Official source: https:\/\/publisher\.example\/work/);
+  assert.doesNotMatch(markdown, /untrusted\.example|http:\/\/publisher/);
 });
 
 test("malformed bounded metadata authorizes no count or completeness claim", () => {

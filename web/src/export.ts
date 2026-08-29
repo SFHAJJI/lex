@@ -1,4 +1,4 @@
-import { safeHttpsUrl, type ProvisionItem } from "./api.ts";
+import { provisionSourceUrl, type ProvisionItem } from "./api.ts";
 import type { Piece } from "./diff";
 import { evidenceIntervalField, evidenceIntervalLabel } from "./temporal.ts";
 
@@ -108,9 +108,7 @@ export function lawEvidenceMarkdown(input: LawEvidence): string {
   for (const item of input.provisions) {
     const heading = item.heading ? `, ${oneLine(item.heading)}` : "";
     if (item.text_available === false && item.text_unavailable_reason) {
-      const officialSource = safeHttpsUrl(
-        item.permalink, item.eli, item.official_source, item.source_uri,
-      );
+      const officialSource = provisionSourceUrl(item);
       lines.push(
         `## ${itemLabel(item)}${heading}`,
         "",
