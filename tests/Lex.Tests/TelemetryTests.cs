@@ -495,9 +495,8 @@ public sealed class TelemetryTests
     {
         const string traceId = "0123456789abcdef0123456789abcdef";
         const string canary = "REQUEST_CANARY_982A";
-        Activity? stopped = null;
-        using var listener = Listener(LexRequestTelemetry.ActivitySourceName,
-            activity => stopped = activity);
+        Activity? observed = null;
+        using var listener = Listener(LexRequestTelemetry.ActivitySourceName, _ => { });
         using var ambient = new Activity("ambient");
         ambient.SetIdFormat(ActivityIdFormat.W3C);
         ambient.TraceStateString = canary;
@@ -515,16 +514,21 @@ public sealed class TelemetryTests
 
         await LexRequestTelemetry.ObserveAsync(context, Digest, nextContext =>
         {
+            observed = Activity.Current;
             nextContext.Response.StatusCode = 204;
             return Task.CompletedTask;
         });
 
-        Assert.NotNull(stopped);
-        Assert.Equal("lex.request", stopped!.DisplayName);
-        Assert.Equal(ActivityKind.Server, stopped.Kind);
-        Assert.Equal(traceId, stopped.TraceId.ToHexString());
-        Assert.Null(stopped.TraceStateString);
-        Assert.Empty(stopped.Baggage);
+        using (var foreignSource = new ActivitySource(LexRequestTelemetry.ActivitySourceName))
+        using (var foreign = foreignSource.StartActivity("foreign-request"))
+            Assert.NotNull(foreign);
+
+        Assert.NotNull(observed);
+        Assert.Equal("lex.request", observed!.DisplayName);
+        Assert.Equal(ActivityKind.Server, observed.Kind);
+        Assert.Equal(traceId, observed.TraceId.ToHexString());
+        Assert.Null(observed.TraceStateString);
+        Assert.Empty(observed.Baggage);
         Assert.Same(ambient, Activity.Current);
         Assert.Equal(new[]
         {
@@ -532,31 +536,43 @@ public sealed class TelemetryTests
             $"lex.digest={Digest}",
             "lex.response_class=2xx",
             $"lex.surface={surface}",
-        }, Tags(stopped));
-        Assert.DoesNotContain(canary, stopped.ToString(), StringComparison.Ordinal);
+        }, Tags(observed));
+        Assert.DoesNotContain(canary, observed.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task Request_span_ignores_unserved_paths_and_invalid_parent_context()
     {
-        var stopped = new List<Activity>();
-        using var listener = Listener(LexRequestTelemetry.ActivitySourceName, stopped.Add);
+        using var ambient = new Activity("unserved-ambient");
+        ambient.SetIdFormat(ActivityIdFormat.W3C);
+        ambient.Start();
+        Activity? observed = null;
+        Activity? stopped = null;
+        using var listener = Listener(LexRequestTelemetry.ActivitySourceName, activity =>
+        {
+            if (ReferenceEquals(activity, observed)) stopped = activity;
+        });
         var context = new DefaultHttpContext();
         context.Request.Path = "/";
         context.Request.Headers.TraceParent = "hostile";
 
-        await LexRequestTelemetry.ObserveAsync(context, Digest, _ => Task.CompletedTask);
+        await LexRequestTelemetry.ObserveAsync(context, Digest, _ =>
+        {
+            observed = Activity.Current;
+            return Task.CompletedTask;
+        });
 
-        Assert.Empty(stopped);
+        Assert.Same(ambient, observed);
+        Assert.Null(stopped);
+        Assert.Same(ambient, Activity.Current);
     }
 
     [Fact]
     public async Task Request_span_rejects_invalid_parent_and_ambient_propagation()
     {
         const string canary = "AMBIENT_CANARY_93D1";
-        Activity? stopped = null;
-        using var listener = Listener(LexRequestTelemetry.ActivitySourceName,
-            activity => stopped = activity);
+        Activity? observed = null;
+        using var listener = Listener(LexRequestTelemetry.ActivitySourceName, _ => { });
         using var ambient = new Activity("ambient");
         ambient.SetIdFormat(ActivityIdFormat.W3C);
         ambient.TraceStateString = canary;
@@ -568,15 +584,23 @@ public sealed class TelemetryTests
         context.Request.Headers.TraceState = canary;
         context.Request.Headers.Baggage = $"query={canary}";
 
-        await LexRequestTelemetry.ObserveAsync(context, Digest, _ => Task.CompletedTask);
+        await LexRequestTelemetry.ObserveAsync(context, Digest, _ =>
+        {
+            observed = Activity.Current;
+            return Task.CompletedTask;
+        });
 
-        Assert.NotNull(stopped);
-        Assert.NotEqual(ambient.TraceId, stopped!.TraceId);
-        Assert.Null(stopped.ParentId);
-        Assert.Null(stopped.TraceStateString);
-        Assert.Empty(stopped.Baggage);
+        using (var foreignSource = new ActivitySource(LexRequestTelemetry.ActivitySourceName))
+        using (var foreign = foreignSource.StartActivity("foreign-request"))
+            Assert.NotNull(foreign);
+
+        Assert.NotNull(observed);
+        Assert.NotEqual(ambient.TraceId, observed!.TraceId);
+        Assert.Null(observed.ParentId);
+        Assert.Null(observed.TraceStateString);
+        Assert.Empty(observed.Baggage);
         Assert.Same(ambient, Activity.Current);
-        Assert.DoesNotContain(canary, stopped.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(canary, observed.ToString(), StringComparison.Ordinal);
     }
 
     private static Activity Started(string name, string sourceName)
