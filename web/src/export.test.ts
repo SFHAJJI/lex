@@ -82,3 +82,72 @@ test("comparison evidence reconstructs both exact sides from the displayed diff"
 test("evidence filename is portable", () => {
   assert.equal(evidenceFilename("EU EUR-Lex:32016R0679", "Article 1 / 2026"), "eu-eur-lex-32016r0679-article-1-2026.md");
 });
+
+// A citation that carries no content digest cannot be checked, and this product's whole claim is
+// that an answer can be checked rather than trusted. The digest was previously emitted only when
+// exactly one provision was on screen, so every whole-document and multi-article citation left
+// with a permalink and nothing to verify against.
+test("a multi-provision citation still carries a checkable digest", () => {
+  const citation = citationText({
+    title: "Sample law",
+    work: "lu-legilux:sample",
+    validFrom: "2020-01-01",
+    permalink: "https://law.soufien.lu/lu-legilux/sample/2020-01-01",
+    recordSha256: "record-digest-aaa",
+    provisions: [
+      { anchor: "art_1", num: "Article 1", text: "One.", text_sha256: "one" },
+      { anchor: "art_2", num: "Article 2", text: "Two.", text_sha256: "two" },
+    ],
+    exportedAt: "2026-08-29T00:00:00.000Z",
+  });
+  assert.match(citation, /record SHA-256 record-digest-aaa/);
+});
+
+test("a citation with no digest available says so instead of omitting it", () => {
+  const citation = citationText({
+    title: "Sample law",
+    work: "lu-legilux:sample",
+    validFrom: "2020-01-01",
+    permalink: "https://law.soufien.lu/lu-legilux/sample/2020-01-01",
+    provisions: [
+      { anchor: "art_1", num: "Article 1", text: "One." },
+      { anchor: "art_2", num: "Article 2", text: "Two." },
+    ],
+    exportedAt: "2026-08-29T00:00:00.000Z",
+  });
+  assert.match(citation, /no content digest recorded/);
+});
+
+test("a single-provision citation still prefers the exact text digest", () => {
+  const citation = citationText({
+    title: "Sample law",
+    work: "lu-legilux:sample",
+    validFrom: "2020-01-01",
+    permalink: "https://law.soufien.lu/lu-legilux/sample/2020-01-01",
+    recordSha256: "record-digest-aaa",
+    provisions: [{ anchor: "art_1", num: "Article 1", text: "One.", text_sha256: "exact-one" }],
+    exportedAt: "2026-08-29T00:00:00.000Z",
+  });
+  assert.match(citation, /text SHA-256 exact-one/);
+});
+
+test("a multi-row comparison citation carries digests for both sides", () => {
+  const citation = comparisonCitationText({
+    title: "Sample law",
+    work: "lu-legilux:sample",
+    from: "2020-01-01",
+    to: "2021-01-01",
+    permalink: "https://law.soufien.lu/compare",
+    fromRecordSha256: "from-record",
+    toRecordSha256: "to-record",
+    rows: [
+      { label: "Article 1", anchor: "art_1", kind: "changed", pieces: [], fromSha: "a", toSha: "b" },
+      { label: "Article 2", anchor: "art_2", kind: "changed", pieces: [], fromSha: "c", toSha: "d" },
+    ],
+    unchanged: [],
+    punctuationOnly: [],
+    exportedAt: "2026-08-29T00:00:00.000Z",
+  });
+  assert.match(citation, /2020-01-01 record SHA-256 from-record/);
+  assert.match(citation, /2021-01-01 record SHA-256 to-record/);
+});
