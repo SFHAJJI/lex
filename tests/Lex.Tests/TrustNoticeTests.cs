@@ -52,6 +52,10 @@ public sealed class TrustNoticeTests : IDisposable
             "Lex does not hold an instrument matching this identifier. This is not evidence "
             + "that the instrument or law does not exist.", page, StringComparison.Ordinal);
         Assert.Contains("Search the official publisher", page, StringComparison.Ordinal);
+        // No candidates means no held source URI to derive a publisher origin from, so the
+        // phrase stays plain text rather than becoming a destination nobody verified.
+        Assert.Contains("<span class=\"sub\">Search the official publisher</span>",
+            page, StringComparison.Ordinal);
         // The old sterile refusal must not survive anywhere on the page.
         Assert.DoesNotContain("Try <a href=\"/search\">search</a>", page, StringComparison.Ordinal);
     }
@@ -76,6 +80,11 @@ public sealed class TrustNoticeTests : IDisposable
         Assert.Contains("/lu-legilux/loi-2006-07-31-n2", page, StringComparison.Ordinal);
         // The slug that is not held is never offered back as a way to reach it.
         Assert.DoesNotContain("/lu-legilux/loi-2006-07-31-n9", page, StringComparison.Ordinal);
+        // "the official publisher" points at the publisher, derived from a held source URI,
+        // never at this product's own search wearing the publisher's name.
+        Assert.Contains("href=\"https://example.test\"", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("<a href=\"/search\">Search the official publisher</a>",
+            page, StringComparison.Ordinal);
     }
 
     /// <summary>

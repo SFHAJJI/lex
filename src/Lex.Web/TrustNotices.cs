@@ -49,6 +49,17 @@ public static class TrustNotices
 
         var candidates = NearestHeld(reader, workSlug);
 
+        // "the official publisher" must point at the publisher or at nothing. The first draft
+        // linked it to /search, which is Lex's own search: a link that promises the reader is
+        // leaving for the source and does not. The origin is derived from a held record's
+        // publisher-asserted source URI, the same evidence rule the derogation notice follows, and
+        // with no held URI the phrase stays plain text rather than becoming a false destination.
+        var origin = candidates.Select(row => row.SourceUri).Select(OriginOf)
+            .FirstOrDefault(value => value is not null);
+        var publisherAction = origin is null
+            ? "Search the official publisher"
+            : $"<a href=\"{H(origin)}\" rel=\"noopener\">Search the official publisher</a>";
+
         var offered = candidates.Count == 0 ? "" : $"""
             <h2>Possible held records</h2>
             <ul class="rows">
@@ -63,7 +74,7 @@ public static class TrustNotices
             <div class="notice" role="note" aria-label="Instrument not found in held records">
             <b>Instrument not found in held records.</b>
             {body}
-            <span class="sub"><a href="/search">Search the official publisher</a></span>
+            <span class="sub">{publisherAction}</span>
             </div>
             {offered}
             """;
@@ -102,6 +113,17 @@ public static class TrustNotices
         }
         return [];
     }
+
+    /// <summary>
+    /// The https origin of a publisher-asserted source URI, or null. Never guessed: a publisher
+    /// home page this product invented is exactly the kind of unsupported claim the notice
+    /// contract exists to prevent.
+    /// </summary>
+    private static string? OriginOf(string? sourceUri) =>
+        Uri.TryCreate(sourceUri, UriKind.Absolute, out var uri)
+        && string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal)
+            ? $"{uri.Scheme}://{uri.Host}"
+            : null;
 
     /// <summary>
     /// A candidate's human label. The publisher title when there is one, otherwise the work slug,
