@@ -26,12 +26,16 @@
  * would assert a freshness the other does not have.
  *
  * The same rule holds inside one publisher, and the parse enforces it upstream now: at most one
- * claim-bearing unit per publisher survives, and a publisher that sent two is conflicted whatever
- * the two units said. What is left here is the consequence rather than a second comparison. A
- * publisher appearing twice among the units is refused and never collapsed, even when the two
- * rows look identical, exactly as `queriedDenominator` refuses a repeated publisher: arrival order
- * is not evidence, and a reader checking an answer against the wrong corpus commit is the failure
- * this disclosure exists to prevent.
+ * unit per publisher survives, and a publisher that sent two is conflicted whatever the two units
+ * said and whether or not the parse could read both. That last clause is O2 and it is what this
+ * surface most needed: the invariant was counted after invalid units were discarded, so a good
+ * envelope standing beside a same-publisher envelope the table rejected kept its build date and
+ * its valid-signature badge, and the rejected sibling's different identity was simply gone. Two
+ * identities for one index establish neither. What is left here is the consequence rather than a
+ * second comparison. A publisher appearing twice among the units is refused and never collapsed,
+ * even when the two rows look identical, exactly as `queriedDenominator` refuses a repeated
+ * publisher: arrival order is not evidence, and a reader checking an answer against the wrong
+ * corpus commit is the failure this disclosure exists to prevent.
  *
  * Fails closed: a value that is not the type the producer promised becomes undefined, and an
  * absent build date is stated as absent rather than omitted, because an undated screen is exactly

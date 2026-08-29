@@ -632,9 +632,17 @@ test("row authority: refused envelopes contribute no rows on any governed path",
   assert.equal(searchProjection.works.length, 1);
   assert.equal(searchProjection.works[0].work, "lu-legilux:w0");
 
+  // THE FIXTURE WAS THINNER THAN THE PRODUCER, and its counts said so. It carried
+  // `works_changed: 1` on a changes REFUSAL, which `McpCore` 1779 mints as a hard-coded
+  // `refusal["works_changed"] = 0` immediately after the refusal object is built. So the smuggled
+  // row was being carried by a unit the producer cannot emit, and the assertion beneath it pinned
+  // `all_refused`, a coverage sentence reading "No selected publisher ran this query." beside a
+  // unit reporting that a work had changed. The subject of this test is row authority and it is
+  // unchanged; only the forgery is gone, and it now has a test of its own that refuses it rather
+  // than an expectation that believed it.
   const changes = projectGovernedEmptiness("changes_in_period", [
     { ...refused("eu-eurlex", ["domain"], "changes_in_period"),
-      changes: [{ work: "smuggled" }], works_changed: 1 },
+      changes: [{ work: "smuggled" }], works_changed: 0, new_versions: 0 },
   ], 0);
   assert.deepEqual(changes.partition.ran, []);
   assert.equal(changes.empty, "all_refused");
@@ -1972,4 +1980,396 @@ test("the search surface renders the withholding disclosure through this one fun
     "the search surface stopped feeding the strip its one parse");
   assert.ok(!source.includes("envelopeStripRows(res)"),
     "the search surface handed raw response bytes to the trust strip again");
+});
+
+// ---------------------------------------------------------------------------
+// O1: a receipt that expressly proves truncation is never a whole-corpus miss
+// ---------------------------------------------------------------------------
+
+test("a publisher receipt counting answers this response never carried forbids absence", () => {
+  // THE REVIEWER'S FIRST PROBE. Every per-unit door passes: a valid `ok` search envelope, a
+  // coherent population, zero hits, and a `publisher_result_set` whose own three numbers agree
+  // with each other exactly as `MarkPublisherSet` derives them. Sibling equality is vacuous on a
+  // response of one. Only the number of answers actually in front of this client can see it, and
+  // the sentence on the other side of it is the widest claim this product makes.
+  const overcounted = {
+    ...searchOk("lu-legilux", 0),
+    publisher_result_set: { total: 2, returned: 2, maximum: 8, truncated: false },
+  };
+  assert.equal(classifyEnvelope("search", overcounted).kind, "ran",
+    "the fixture stopped classifying ran, so this test would prove nothing");
+  assert.equal(parseGovernedResponse("search", [overcounted]).receipts.kind, "irreconcilable");
+  const projected = projectSearch([overcounted]);
+  assert.notEqual(projected.absence, "no_match",
+    "one answer receipted as two claimed the corpus holds nothing");
+  assert.equal(projected.absence, "incomplete_response");
+  assert.equal(searchEmptyPresentation(projected.absence as "incomplete_response").sentence,
+    INCOMPLETE_RESPONSE_SENTENCE);
+  // The honest reading of the very same receipt: two answers receipted as two, and the absence
+  // is stateable again. Without this the test is satisfied by a verdict that is always
+  // irreconcilable, which would prove nothing about the count.
+  const receipt = { total: 2, returned: 2, maximum: 8, truncated: false };
+  const both = [
+    { ...searchOk("lu-legilux", 0), publisher_result_set: receipt },
+    { ...searchOk("eu-eurlex", 0), publisher_result_set: receipt },
+  ];
+  assert.equal(parseGovernedResponse("search", both).receipts.kind, "reconciled",
+    "the producer's own two-publisher receipt was refused");
+  assert.equal(projectSearch(both).absence, "no_match");
+});
+
+test("a truncated publisher set is not a whole-corpus miss", () => {
+  // THE REVIEWER'S SECOND PROBE. Eight coherent zero-hit units, every receipt agreeing with every
+  // other AND with the eight answers in front of this client, so nothing in the arithmetic is
+  // wrong. `truncated` is the producer saying the ninth selected publisher never reached the
+  // client at all: `MarkPublisherSet` derives it from `total > MaximumPublisherRows`
+  // (McpCore 701-712). A corpus-wide absence over a scope one publisher of which was dropped
+  // before the answer was sent is not a claim this response can support.
+  const receipt = { total: 9, returned: 8, maximum: 8, truncated: true };
+  const eight = Array.from({ length: 8 }, (_, index) =>
+    ({ ...searchOk(`pub-${index}`, 0), publisher_result_set: receipt }));
+  const parsed = parseGovernedResponse("search", eight);
+  assert.equal(parsed.units.length, 8, "the fixture stopped being eight admitted answers");
+  assert.equal(parsed.receipts.kind, "reconciled",
+    "the arithmetic failed, so this test would be about the count rather than the truncation");
+  assert.equal(partitionOf(parsed).invalidCount, 0);
+  assert.equal(partitionOf(parsed).moreBeyondPage, true);
+  const projected = projectSearch(eight);
+  assert.notEqual(projected.absence, "no_match",
+    "a publisher dropped from the response was reported as a corpus holding nothing");
+  assert.equal(projected.absence, "incomplete_response");
+  // Untruncated, the same eight answers are an honest absence and still say so.
+  const whole = eight.map((entry) => ({
+    ...entry, publisher_result_set: { total: 8, returned: 8, maximum: 8, truncated: false },
+  }));
+  assert.equal(partitionOf(parseGovernedResponse("search", whole)).moreBeyondPage, false);
+  assert.equal(projectSearch(whole).absence, "no_match",
+    "a complete publisher set stopped being able to state an absence");
+});
+
+test("a truncated row receipt on an empty search page is not a whole-corpus miss", () => {
+  // THE REVIEWER'S THIRD PROBE, and the one the partition already knew the answer to.
+  // `moreBeyondPage` derived `true` from this receipt and `searchAbsenceState` never read the
+  // field, so the same fact that makes a changes page `incomplete_response` left the search page
+  // saying the corpus holds nothing.
+  const truncated = {
+    ...searchOk("lu-legilux", 0),
+    response_row_set: { maximum: 20, returned: 0, truncated: true },
+  };
+  const parsed = parseGovernedResponse("search", [truncated]);
+  assert.equal(parsed.receipts.kind, "reconciled",
+    "the receipt failed to reconcile, so this test would be about arithmetic instead");
+  const partition = partitionOf(parsed);
+  assert.equal(partition.invalidCount, 0, "the unit was rejected, so nothing here is about paging");
+  assert.equal(partition.moreBeyondPage, true);
+  assert.notEqual(searchAbsenceState(partition, 0), "no_match",
+    "an empty slice of a page was reported as an empty corpus");
+  assert.equal(searchAbsenceState(partition, 0), "incomplete_response");
+  assert.equal(projectSearch([truncated]).absence, "incomplete_response");
+  // The same receipt saying the page was whole: the absence is stateable again.
+  const complete = {
+    ...truncated, response_row_set: { maximum: 20, returned: 0, truncated: false },
+  };
+  assert.equal(partitionOf(parseGovernedResponse("search", [complete])).moreBeyondPage, false);
+  assert.equal(projectSearch([complete]).absence, "no_match",
+    "an untruncated empty page stopped being an absence");
+});
+
+// ---------------------------------------------------------------------------
+// O2: the one-unit-per-publisher invariant is counted before admission
+// ---------------------------------------------------------------------------
+
+/** The identity fields `Envelope` stamps on every path it builds, as the strip renders them. */
+const identified = (publisher: string, hits: number, over: Record<string, unknown> = {}) => {
+  const base = searchOk(publisher, hits);
+  return {
+    ...base,
+    envelope: {
+      ...base.envelope,
+      freshness: {
+        built_at: "2026-08-15T09:01:06Z", corpus_commit: "e9c4df09",
+        stamp_signature_valid: true,
+      },
+      artifact: { code_commit: "abc123", manifest_set_id: "m-1", content_digest: "d-1" },
+      ...over,
+    },
+  };
+};
+
+test("a same-publisher unreadable-scope sibling withholds the claim standing beside it", () => {
+  // THE REVIEWER'S FIRST O2 PROBE, and it is an ORDERING defect rather than a missing rule. The
+  // invariant was counted over ADMITTED claims, so the rejected sibling that proves the violation
+  // had already been discarded by the time anything looked. The page then said both things at
+  // once: a Luxembourg hit rendered above a notice reading "Nothing from lu-legilux is shown
+  // here."
+  const good = identified("lu-legilux", 1);
+  const unreadable = { ...identified("lu-legilux", 1), population: "1250" };
+  assert.equal(classifyEnvelope("search", good).kind, "ran",
+    "the fixture stopped being a valid hit, so this test would prove nothing");
+  assert.equal(classifyEnvelope("search", unreadable).kind, "invalid",
+    "the sibling stopped being rejected, so there is no discarded evidence to count");
+  // ARRIVAL ORDER IS NOT EVIDENCE. Both orders, every seam, one verdict.
+  for (const [label, order] of [
+    ["rejected second", [good, unreadable]], ["rejected first", [unreadable, good]],
+  ] as [string, unknown[]][]) {
+    const parsed = parseGovernedResponse("search", order);
+    assert.deepEqual(parsed.units, [], `${label}: a claim survived its own publisher's conflict`);
+    assert.deepEqual(parsed.conflicted, ["lu-legilux"], `${label}: the invariant saw one unit`);
+    // The typed causes stay apart: this publisher really did publish a scope Lex could not read.
+    assert.deepEqual(parsed.unreadable, ["lu-legilux"], `${label}: the scope cause was lost`);
+    // ROW PROJECTION.
+    const projected = projectSearch(order);
+    assert.deepEqual(projected.works, [], `${label}: the surviving side was asserted as fact`);
+    assert.equal(projected.absence, "incomplete_response", `${label}: an absence was claimed`);
+    // DISCLOSURE COPY.
+    const normalized = normalizeSearchResponse(parsed);
+    assert.equal(normalized.complete, false, `${label}: the response presented itself as whole`);
+    assert.deepEqual(normalized.populations, [], `${label}: a denominator survived`);
+    const sentence = normalized.complete === false
+      ? withholdingSentence(normalized.withheld) : "";
+    assert.ok(sentence.includes("lu-legilux"), `${label}: the withheld publisher was not named`);
+    assert.ok(sentence.includes("more than one"), `${label}: the conflict cause was not stated`);
+    assert.ok(sentence.includes("scope Lex could not read"),
+      `${label}: the unreadable-scope cause was absorbed into the conflict`);
+    // STRIP PROJECTION.
+    const partition = partitionGovernedResponse("search", order);
+    assert.deepEqual(partition.stripRows.map((row) => row.publisher), ["lu-legilux"],
+      `${label}: the mounted publisher was dropped instead of disclosed`);
+    assert.equal(partition.stripRows[0].builtAt, undefined,
+      `${label}: a build date survived a publisher this response established nothing for`);
+    assert.equal(partition.stripRows[0].signatureValid, undefined,
+      `${label}: a signature verdict survived a withheld publisher`);
+  }
+  // A DIFFERENT publisher is not a conflict at all, so the guard is about the invariant rather
+  // than about rejecting anything that arrives beside a rejected unit.
+  const distinct = projectSearch([good, { ...identified("eu-eurlex", 1), population: "1250" }]);
+  assert.deepEqual(distinct.works, [{ work: "lu-legilux:w0" }],
+    "a rejected unit from another publisher withheld a claim it says nothing about");
+});
+
+test("a same-publisher malformed sibling withdraws the good-signature strip", () => {
+  // THE REVIEWER'S SECOND O2 PROBE. The rejected sibling here fails on its ROWS, not its scope,
+  // and it carries an index identity of its own. Two identities for one index establish neither,
+  // so the strongest claim on the page, a build date and a valid-signature badge, may not be
+  // taken from whichever of them this table happened to be able to read.
+  const good = identified("lu-legilux", 1);
+  const malformed = {
+    ...identified("lu-legilux", 1, {
+      freshness: {
+        built_at: "2019-01-01T00:00:00Z", corpus_commit: "deadbeef",
+        stamp_signature_valid: false,
+      },
+      artifact: { code_commit: "zzz999", manifest_set_id: "m-9", content_digest: "d-9" },
+    }),
+    hits: [null],
+  };
+  assert.equal(classifyEnvelope("search", malformed).kind, "invalid",
+    "the sibling stopped being rejected, so this test would prove nothing");
+  for (const [label, order] of [
+    ["malformed second", [good, malformed]], ["malformed first", [malformed, good]],
+  ] as [string, unknown[]][]) {
+    const parsed = parseGovernedResponse("search", order);
+    assert.deepEqual(parsed.conflicted, ["lu-legilux"], `${label}: the invariant saw one unit`);
+    // The cause is a malformed unit, NOT an unreadable scope, and the two sentences stay apart.
+    assert.deepEqual(parsed.unreadable, [],
+      `${label}: a malformed row list was reported as a scope this client could not read`);
+    // ROW PROJECTION.
+    const projected = projectSearch(order);
+    assert.deepEqual(projected.works, [], `${label}: the readable side was asserted as fact`);
+    assert.equal(projected.absence, "incomplete_response", `${label}: an absence was claimed`);
+    // DISCLOSURE COPY.
+    const normalized = normalizeSearchResponse(parsed);
+    assert.equal(normalized.complete, false, `${label}: the response presented itself as whole`);
+    const sentence = normalized.complete === false
+      ? withholdingSentence(normalized.withheld) : "";
+    assert.ok(sentence.includes("lu-legilux"), `${label}: the withheld publisher was not named`);
+    assert.ok(sentence.includes("more than one"), `${label}: the conflict cause was not stated`);
+    assert.ok(!sentence.includes("scope Lex could not read"),
+      `${label}: a malformed sibling was reported as an unreadable scope`);
+    // STRIP PROJECTION: the confident row is gone and the publisher is still disclosed.
+    const rows = partitionGovernedResponse("search", order).stripRows;
+    assert.deepEqual(rows.map((row) => row.publisher), ["lu-legilux"],
+      `${label}: the mounted publisher was dropped instead of disclosed`);
+    assert.equal(rows[0].signatureValid, undefined,
+      `${label}: a valid-signature badge survived two identities for one index`);
+    assert.equal(rows[0].builtAt, undefined,
+      `${label}: a build date survived two identities for one index`);
+    assert.equal(rows[0].corpusCommit, undefined,
+      `${label}: a corpus commit survived two identities for one index`);
+  }
+  // Alone, the good unit still states its identity, so the assertions above are about the
+  // conflict rather than about a strip that has stopped disclosing anything.
+  const alone = partitionGovernedResponse("search", [good]).stripRows;
+  assert.equal(alone[0].signatureValid, true, "the strip stopped disclosing a good signature");
+  assert.equal(alone[0].builtAt, "2026-08-15T09:01:06Z");
+  // AND AN UNATTRIBUTABLE REJECTION IS STILL UNATTRIBUTABLE. An entry with no readable envelope
+  // names no publisher, so it triggers no invariant and withholds nobody's claim; it stays in the
+  // unusable count exactly where it was.
+  const anonymous = projectSearch([good, { envelope: "not an object" }]);
+  assert.deepEqual(anonymous.works, [{ work: "lu-legilux:w0" }],
+    "a rejection that names nobody was attributed to a publisher anyway");
+  assert.deepEqual(parseGovernedResponse("search", [good, { envelope: "x" }]).conflicted, [],
+    "an unattributable rejection was counted against a publisher's unit total");
+});
+
+// ---------------------------------------------------------------------------
+// O3: a changes refusal answers for its own mandatory receipts
+// ---------------------------------------------------------------------------
+
+test("a changes refusal must carry the explicit addend its global receipt sums", () => {
+  // `global_response_row_set.total` is `totalAcrossPublishers`, the sum of every stamped unit's
+  // `works_changed`, and the producer stamps that field on the refusal itself
+  // (`refusal["works_changed"] = 0`, McpCore 1779). The reconciliation read it with `?? 0`, so a
+  // refusal that carried no addend at all was silently counted as one that carried zero: the
+  // arithmetic balanced against a figure the response never stated, and the reader was told
+  // "No selected publisher ran this query."
+  const global = { offset: 0, maximum: 20, returned: 0, total: 0, truncated: false };
+  const silent = {
+    ...refused("eu-eurlex", ["domain"], "changes_in_period"), global_response_row_set: global,
+  };
+  assert.equal(classifyEnvelope("changes_in_period", silent).kind, "refused",
+    "the fixture stopped being a coherent refusal, so this test would prove nothing");
+  assert.equal(parseGovernedResponse("changes_in_period", [silent]).receipts.kind,
+    "irreconcilable");
+  const decision = projectGovernedEmptiness("changes_in_period", [silent], 0);
+  assert.notEqual(decision.empty, "all_refused",
+    "a receipt was reconciled against a zero no unit of this response ever stated");
+  assert.equal(decision.empty, "incomplete_response");
+  assert.equal(decision.partial, true);
+  // The producer's own refusal states the zero, and still reaches the coverage sentence.
+  const stated = { ...silent, works_changed: 0 };
+  assert.equal(parseGovernedResponse("changes_in_period", [stated]).receipts.kind, "reconciled",
+    "the producer's own refusal shape was refused, so this test proves nothing");
+  assert.equal(projectGovernedEmptiness("changes_in_period", [stated], 0).empty, "all_refused");
+  // A ran unit cannot reach that guard at all: `requiredCounts` refuses it one door earlier. So
+  // the rule is stated over every sibling and is REACHED only by the non-executing ones, and
+  // saying so here is what keeps the guard honest about which units it protects.
+  const worksChangedDropped = (entry: Record<string, unknown>) => {
+    const { works_changed: _dropped, ...rest } = entry;
+    return { ...rest, global_response_row_set: global };
+  };
+  assert.equal(classifyEnvelope("changes_in_period",
+    worksChangedDropped(changesOk("lu-legilux", 0))).kind, "invalid",
+    "a ran unit is refused for the missing count before any receipt is reconciled");
+
+  // AND AN ADDEND OF ITS OWN IS REFUSED, not only a missing one. This is the second half of the
+  // same rule and it needs its own probe, because the sum cannot see it: a refusal claiming five
+  // changed works beside a sibling that found none still totals the five the receipt prints, so
+  // the arithmetic agrees about a figure no unit of this response ever sent.
+  // Five changed works either way, so the total the receipt prints is supported by the sum in
+  // both readings and only the second clause can tell them apart. The ran sibling takes the
+  // status its own count coheres with: `works == 0 ? NoChangesInPeriod : Ok`, exactly as the
+  // producer chooses it, and a paged-out publisher legitimately reports its full period total
+  // beside no rows at all.
+  const cancelled = (claimedByTheRefusal: number) => {
+    const mine = 5 - claimedByTheRefusal;
+    const carried = { offset: 0, maximum: 20, returned: 0, total: 5, truncated: true };
+    return [
+      { ...refused("eu-eurlex", ["domain"], "changes_in_period"),
+        works_changed: claimedByTheRefusal, global_response_row_set: carried },
+      { envelope: {
+          status: mine === 0 ? "no_changes_in_period" : "ok", publisher: "lu-legilux",
+        },
+        changes: [], works_changed: mine, new_versions: 0,
+        population: changesPopulation(), global_response_row_set: carried },
+    ];
+  };
+  assert.equal(parseGovernedResponse("changes_in_period", cancelled(0)).receipts.kind,
+    "reconciled",
+    "the honest split was refused, so this probe would prove nothing about the forged one");
+  assert.equal(parseGovernedResponse("changes_in_period", cancelled(5)).receipts.kind,
+    "irreconcilable",
+    "a publisher that refused to look claimed five changed works and the total absorbed it");
+  assert.equal(projectGovernedEmptiness("changes_in_period", cancelled(5), 0).partial, true,
+    "a report whose addends nothing supports presented itself as coherent");
+});
+
+test("a changes refusal's row receipt must be the zero-row shape its producer mints", () => {
+  // `response_row_set` is PER UNIT on this tool alone, minted from that unit's own `shown` and
+  // `works_changed` (McpCore 1865-1875), so a refusal's copy is reconciled against no sibling and
+  // `pagingOf` never sees it: that validator is ran-only, correctly, because the rows a receipt
+  // must cohere with exist only on the executed path. A refusal receipting seven returned change
+  // rows therefore passed every door and reached the reader as a coverage statement.
+  const refusal = {
+    ...refused("eu-eurlex", ["domain"], "changes_in_period"), works_changed: 0,
+  };
+  const loud = {
+    ...refusal, response_row_set: { maximum: 20, returned: 7, truncated: false },
+  };
+  assert.equal(classifyEnvelope("changes_in_period", loud).kind, "refused",
+    "the fixture stopped being a coherent refusal, so this test would prove nothing");
+  assert.equal(parseGovernedResponse("changes_in_period", [loud]).receipts.kind,
+    "irreconcilable");
+  const decision = projectGovernedEmptiness("changes_in_period", [loud], 0);
+  assert.notEqual(decision.empty, "all_refused",
+    "a publisher that never looked receipted seven returned change rows and was believed");
+  assert.equal(decision.empty, "incomplete_response");
+  // `truncated` is minted as `works_changed > shown`, which on a refusal is `0 > 0`.
+  const truncating = {
+    ...refusal, response_row_set: { maximum: 20, returned: 0, truncated: true },
+  };
+  assert.equal(parseGovernedResponse("changes_in_period", [truncating]).receipts.kind,
+    "irreconcilable");
+  // The producer's own refusal receipt, which still reaches the coverage sentence.
+  const minted = {
+    ...refusal, response_row_set: { maximum: 20, returned: 0, truncated: false },
+  };
+  assert.equal(parseGovernedResponse("changes_in_period", [minted]).receipts.kind, "reconciled",
+    "the producer's own refusal receipt was refused, so this test proves nothing");
+  assert.equal(projectGovernedEmptiness("changes_in_period", [minted], 0).empty, "all_refused");
+  // AND NOT ON THE OTHER TWO TOOLS. `MarkResponseRows` stamps ONE response-wide object on every
+  // item of search and in_force_on, refusals included, so their refusals legitimately receipt the
+  // rows their siblings shipped. Applying the zero-row rule there would refuse the producer.
+  const searchPair = [
+    { ...refused("eu-eurlex", ["domain"]),
+      response_row_set: { maximum: 20, returned: 1, truncated: false } },
+    { ...searchOk("lu-legilux", 1),
+      response_row_set: { maximum: 20, returned: 1, truncated: false } },
+  ];
+  assert.equal(parseGovernedResponse("search", searchPair).receipts.kind, "reconciled",
+    "a search refusal was made to answer for the rows its sibling shipped");
+});
+
+test("a changes refusal reporting changed works of its own is refused, not believed", () => {
+  // WIDER THAN THE REVIEW'S OWN CONDITION, and deliberately so, on the mint site rather than on
+  // judgement. `McpCore` 1779 writes `refusal["works_changed"] = 0` unconditionally, immediately
+  // after the refusal object is built, so a changes refusal reporting a changed work is a shape
+  // the producer cannot emit whatever else the response carries. Binding the rule only to
+  // responses that also stamped a `global_response_row_set` left the forgery believed on every
+  // response that did not happen to carry one, and the surface then answered "No selected
+  // publisher ran this query." beside a unit saying a work had changed.
+  const forged = {
+    ...refused("eu-eurlex", ["domain"], "changes_in_period"),
+    works_changed: 1, new_versions: 1,
+  };
+  assert.equal(classifyEnvelope("changes_in_period", forged).kind, "refused",
+    "the fixture stopped being a coherent refusal, so this test would prove nothing");
+  const parsed = parseGovernedResponse("changes_in_period", [forged]);
+  // NO RESPONSE-WIDE RECEIPT ANYWHERE IN IT, which is the whole of the widening: the earlier rule
+  // could only fire inside the reconciliation of a receipt this response never stamped.
+  assert.equal(parsed.units[0].receipts.globalRowSet, undefined,
+    "the fixture grew the receipt whose absence this test is about");
+  assert.equal(parsed.units[0].receipts.rowSet, undefined,
+    "the fixture grew a row receipt, so another rule could be doing the refusing");
+  assert.equal(parsed.receipts.kind, "irreconcilable");
+  const decision = projectGovernedEmptiness("changes_in_period", [forged], 0);
+  assert.notEqual(decision.empty, "all_refused",
+    "a publisher that refused to look reported a changed work and was believed");
+  assert.equal(decision.empty, "incomplete_response");
+  // Row authority is untouched by the count: the refusal's rows were never renderable and are
+  // still not, which is the property the row-authority test above pins on the corrected fixture.
+  assert.deepEqual(decision.partition.ran, [],
+    "a refusal contributed rows once its count was refused");
+  // The producer's own zero still reaches the coverage sentence, so this is a rule about the
+  // forgery rather than a client that has stopped believing refusals.
+  const minted = { ...forged, works_changed: 0, new_versions: 0 };
+  assert.equal(parseGovernedResponse("changes_in_period", [minted]).receipts.kind, "reconciled",
+    "the producer's own refusal shape was refused, so this test proves nothing");
+  assert.equal(projectGovernedEmptiness("changes_in_period", [minted], 0).empty, "all_refused");
+  // AND NOT ON A TOOL THAT MINTS NO SUCH COUNT. in_force_on publishes no per-unit total for a
+  // response-wide receipt to sum, so the same field on its refusal is a stray the table never
+  // reads, and applying a changes rule to it would refuse a response for a shape it never had.
+  assert.equal(projectGovernedEmptiness("in_force_on",
+    [{ ...refused("lu-legilux", ["hierarchy"], "in_force_on"), works_changed: 1 }], 0).empty,
+    "all_refused", "a rule minted for changes_in_period was applied to in_force_on");
 });
