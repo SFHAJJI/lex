@@ -534,7 +534,12 @@ export interface EvidenceContext {
 }
 export interface Citation { work: string; href: string; text?: string }
 export interface ProvisionItem { anchor: string; num?: string; heading?: string; text?: string; text_sha256?: string; path?: string;
-                                 citations?: Citation[]; text_omitted?: boolean;
+                                 citations?: Citation[];
+                                 /** The citation row budget ran out on this provision, so its
+                                     references were cut. Without it a provision whose references
+                                     were all cut is indistinguishable from one that refers to
+                                     nothing: absent evidence rendered as a negative fact. */
+                                 citations_truncated?: boolean; text_omitted?: boolean;
                                  text_omitted_reason?: string; permalink?: string;
                                  document_order?: number; text_available?: boolean;
                                  text_unavailable_reason?: string; source_uri?: string;
@@ -705,6 +710,10 @@ export interface UiEffect {
     jurisdiction?: string; hierarchy?: string; timeline_semantics?: string;
   }[] };
   cited_by?: { cited_work: string; citing_articles: number; status?: string; evidence?: EvidenceContext[];
+               /** The response returned fewer rows than it found. Absent means the response
+                   carried no receipt, which is not the same as a complete answer, so it is
+                   never read as false. */
+               rows_truncated?: boolean;
                rows: { work: string; title?: string; valid_from: string; anchor: string; num?: string;
                        permalink?: string; jurisdiction?: string }[] };
   coverage?: { evidence?: EvidenceContext[]; publishers: {

@@ -703,7 +703,12 @@ public static class UiMapper
                 Work: S(c, "work") ?? "", Title: S(c, "title"), ValidFrom: S(c, "valid_from") ?? "",
                 Anchor: S(c, "anchor") ?? "", Num: S(c, "num"), Permalink: S(c, "permalink"),
                 Jurisdiction: S(c, "jurisdiction"))).ToList(),
-            Status: S(o["envelope"] as JsonObject, "status") ?? S(o, "status")));
+            Status: S(o["envelope"] as JsonObject, "status") ?? S(o, "status"),
+            // The receipt is stamped into every item of the response (McpCore
+            // MarkResponseRows), so reading it from this unit reads the response-wide fact.
+            // Absent stays null rather than becoming false: a missing receipt is not
+            // evidence of a complete answer.
+            RowsTruncated: (o["response_row_set"] as JsonObject)?["truncated"]?.GetValue<bool>()));
     }
 
     private static UiEffect Ranking(JsonObject o, JsonObject args)

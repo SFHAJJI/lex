@@ -382,6 +382,47 @@ public class UiEffectTests
         Assert.Null(eff.Gap);
     }
 
+    /// <summary>
+    /// The truncation receipt must survive the mapper, because it is the only thing that separates
+    /// a cut list from an absent one. `cited_by` sets `citing_articles` to the hits that fitted, so
+    /// the count equals the row count whether or not rows were cut and can never reveal it.
+    /// </summary>
+    [Fact]
+    public void A_truncated_response_carries_its_receipt_into_the_view()
+    {
+        var eff = UiMapper.From("cited_by", Args(("work", "lu-legilux:nothing")), new JsonObject
+        {
+            ["envelope"] = new JsonObject { ["status"] = McpStatus.NoResult },
+            ["cited_work"] = "lu-legilux:nothing",
+            ["citing_articles"] = 0,
+            ["citations"] = new JsonArray(),
+            ["response_row_set"] = new JsonObject
+            {
+                ["maximum"] = 50, ["returned"] = 50, ["truncated"] = true,
+            },
+        });
+
+        Assert.True(eff.CitedBy!.RowsTruncated);
+    }
+
+    /// <summary>
+    /// Absent stays absent. Mapping a missing receipt to false would manufacture evidence that the
+    /// answer was complete, which is the claim the receipt exists to license.
+    /// </summary>
+    [Fact]
+    public void A_response_with_no_receipt_asserts_nothing_about_completeness()
+    {
+        var eff = UiMapper.From("cited_by", Args(("work", "lu-legilux:nothing")), new JsonObject
+        {
+            ["envelope"] = new JsonObject { ["status"] = McpStatus.NoResult },
+            ["cited_work"] = "lu-legilux:nothing",
+            ["citing_articles"] = 0,
+            ["citations"] = new JsonArray(),
+        });
+
+        Assert.Null(eff.CitedBy!.RowsTruncated);
+    }
+
     [Fact]
     public void An_as_of_outline_remains_a_navigable_provision_view_without_legal_text()
     {
