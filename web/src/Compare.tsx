@@ -7,6 +7,7 @@ import { Empty } from "./views";
 import { EvidenceActions } from "./EvidenceActions";
 import {
   comparisonCitationText, comparisonEvidenceMarkdown, evidenceFilename, type ComparisonRow,
+  type ComparisonScope,
 } from "./export";
 import { legalDisplayText } from "./legalText.ts";
 
@@ -48,6 +49,7 @@ export function Compare({ work, title, from, to, anchor }: {
                  { lexId?: string; validFrom?: string; validTo?: string; recordSha256?: string }];
     unavailable?: [string | undefined, string | undefined];
     anchorPopulation?: { before: number; after: number; shared: number };
+    scope?: ComparisonScope;
   }>({ loading: true });
   const [wide, setWide] = useState(() => typeof window !== "undefined" && window.innerWidth >= 900);
   const [showPunct, setShowPunct] = useState(false);
@@ -129,6 +131,22 @@ export function Compare({ work, title, from, to, anchor }: {
         return;
       }
 
+      // Recorded here, from the outline payloads, before any text is fetched and before the diff
+      // decides anything. `scopeOutline` has already narrowed both maps to the requested anchor, so
+      // this is the reader's question stated in its own terms: which provision, present on which
+      // side, and with which exact digest. What the diff later finds cannot change any of that.
+      const scoped = anchor ? A.get(anchor) ?? B.get(anchor) : undefined;
+      const scope: ComparisonScope | undefined = anchor
+        ? {
+            anchor,
+            label: scoped?.num ?? anchor,
+            fromSha: A.get(anchor)?.text_sha256,
+            toSha: B.get(anchor)?.text_sha256,
+            fromPresent: A.has(anchor),
+            toPresent: B.has(anchor),
+          }
+        : undefined;
+
       const anchorPopulation = assessAnchorPopulation(provisionsA, provisionsB);
       if (!anchor && !anchorPopulation.comparable) {
         if (live) setState({
@@ -187,7 +205,7 @@ export function Compare({ work, title, from, to, anchor }: {
         });
       }
       setState({
-        loading: false, rows, unchanged: untouched, punctuation, added, removed,
+        loading: false, rows, unchanged: untouched, punctuation, added, removed, scope,
         profiles: [profA ?? "not recorded", profB ?? "not recorded"],
         sources: [pa?.document?.source_uri, pb?.document?.source_uri],
         permalinks: [pa?.document?.permalink, pb?.document?.permalink],
@@ -287,6 +305,7 @@ export function Compare({ work, title, from, to, anchor }: {
     fromExtractionProfile: state.profiles?.[0], toExtractionProfile: state.profiles?.[1],
     fromRecordSha256: state.documents?.[0].recordSha256,
     toRecordSha256: state.documents?.[1].recordSha256,
+    scope: state.scope,
     rows, unchanged: untouched, punctuationOnly: punct, exportedAt: new Date().toISOString(),
   });
   const comparisonCitation = comparisonCitationText(evidence());
