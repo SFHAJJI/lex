@@ -151,3 +151,36 @@ test("a multi-row comparison citation carries digests for both sides", () => {
   assert.match(citation, /2020-01-01 record SHA-256 from-record/);
   assert.match(citation, /2021-01-01 record SHA-256 to-record/);
 });
+
+// The Markdown export says what it is. The citation string, which is the artifact people actually
+// paste into documents, said nothing at all, so a Lex citation could reach a legal filing reading
+// as though it were the publisher's own record.
+test("a copied citation says what it is and is not", () => {
+  const citation = citationText({
+    title: "Sample law",
+    work: "lu-legilux:sample",
+    validFrom: "2020-01-01",
+    permalink: "https://law.soufien.lu/lu-legilux/sample/2020-01-01",
+    recordSha256: "record-digest-aaa",
+    provisions: [{ anchor: "art_1", num: "Article 1", text: "One.", text_sha256: "one" }],
+    exportedAt: "2026-08-29T00:00:00.000Z",
+  });
+  assert.match(citation, /not an official publication/);
+});
+
+test("a copied comparison citation says what it is and is not", () => {
+  const citation = comparisonCitationText({
+    title: "Sample law",
+    work: "lu-legilux:sample",
+    from: "2020-01-01",
+    to: "2021-01-01",
+    permalink: "https://law.soufien.lu/compare",
+    fromRecordSha256: "from-record",
+    toRecordSha256: "to-record",
+    rows: [],
+    unchanged: [],
+    punctuationOnly: [],
+    exportedAt: "2026-08-29T00:00:00.000Z",
+  });
+  assert.match(citation, /not an official publication/);
+});
