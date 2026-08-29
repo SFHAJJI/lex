@@ -44,7 +44,7 @@ benchmark_member_path() {
   if [ "$bm_shape" = "legacy" ]; then
     if jq -e '
       (.schema | type) == "string"
-      and .schema != "lex-retrieval-benchmark/4"
+      and .schema == "lex-retrieval-benchmark/3"
       and (has("case_results_file") | not)
       and (has("case_results_count") | not)
       and (has("case_results_sha256") | not)' "$bm_root/$bm_report" >/dev/null; then

@@ -222,18 +222,37 @@ public sealed class RetrievalBenchmarkTests
     public void Activation_gate_sources_never_compare_nullable_metric_values_directly()
     {
         var root = RepoRoot();
+        var benchmarkSource = File.ReadAllText(
+            Path.Combine(root, "src", "Lex.Index", "RetrievalBenchmark.cs"));
+        var registrySource = File.ReadAllText(
+            Path.Combine(root, "src", "Lex.Web", "IndexRegistry.cs"));
         var gateSources = new[]
         {
-            Path.Combine(root, "src", "Lex.Index", "RetrievalBenchmark.cs"),
-            Path.Combine(root, "src", "Lex.Index", "RetrievalBenchmarkEvaluation.cs"),
-            Path.Combine(root, "src", "Lex.Web", "IndexRegistry.cs"),
+            Slice(benchmarkSource, "public static class RetrievalBenchmarkGate",
+                "public static class RetrievalBenchmarkCatalog"),
+            Slice(benchmarkSource, "public static class RetrievalBenchmarkRunner",
+                "public static class RetrievalBenchmarkArtifactWriter"),
+            File.ReadAllText(Path.Combine(
+                root, "src", "Lex.Index", "RetrievalBenchmarkEvaluation.cs")),
+            Slice(registrySource, "internal static class HybridActivationGate", null),
         };
-        var liftedComparison = new System.Text.RegularExpressions.Regex(
-            @"\.Value\s*(?:==|!=|<=|>=|<|>)",
+        var directNullableAccess = new System.Text.RegularExpressions.Regex(
+            @"\.Value\b",
             System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
         foreach (var source in gateSources)
-            Assert.DoesNotMatch(liftedComparison, File.ReadAllText(source));
+            Assert.DoesNotMatch(directNullableAccess, source);
+
+        static string Slice(string source, string startMarker, string? endMarker)
+        {
+            var start = source.IndexOf(startMarker, StringComparison.Ordinal);
+            var end = endMarker is null
+                ? source.Length
+                : source.IndexOf(endMarker, start + startMarker.Length,
+                    StringComparison.Ordinal);
+            Assert.True(start >= 0 && end > start);
+            return source[start..end];
+        }
     }
 
     [Fact]

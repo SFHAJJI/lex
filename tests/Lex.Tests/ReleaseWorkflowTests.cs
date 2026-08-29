@@ -455,6 +455,12 @@ public sealed class ReleaseWorkflowTests
                 $"Expected legacy quarantine exit 3, got {legacy.Code}: {legacy.Output}");
             Assert.Contains("LEGACY: signed benchmark has no per-case evidence", legacy.Output);
 
+            File.WriteAllText(Path.Combine(directory, reportFile),
+                System.Text.Json.JsonSerializer.Serialize(new { schema = "unexpected-benchmark" }));
+            var unknownSchema = Verify();
+            Assert.Equal(1, unknownSchema.Code);
+            Assert.Contains("does not match the exact legacy report shape", unknownSchema.Output);
+
             WriteReport(complete: true);
             Assert.NotEqual(0, Verify().Code);
 

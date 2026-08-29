@@ -365,9 +365,14 @@ public static class RetrievalBenchmarkGate
                     (row.Category, row.Metric, row.Disposition), row.Observation.Denominator))
                 return false;
         }
-        return actual.Count == expected.Count
-               && expected.All(item => actual.TryGetValue(item.Key, out var denominator)
-                                       && denominator == item.Value);
+        if (actual.Count != expected.Count) return false;
+        foreach (var (key, expectedDenominator) in expected)
+        {
+            if (!actual.TryGetValue(key, out var denominator)
+                || denominator != expectedDenominator)
+                return false;
+        }
+        return true;
     }
 
     public static bool CaseResultsBytesMatch(
@@ -437,9 +442,9 @@ public static class RetrievalBenchmarkGate
                 || !string.Equals(Convert.ToHexStringLower(hash.GetHashAndReset()),
                     report.CaseResultsSha256, StringComparison.OrdinalIgnoreCase)
                 || stagesByCase.Count != report.SampleCount
-                || stagesByCase.Count(item => item.Value.Split == "tuning")
+                || stagesByCase.Values.Count(item => item.Split == "tuning")
                    != report.TuningSampleCount
-                || stagesByCase.Count(item => item.Value.Split == "holdout")
+                || stagesByCase.Values.Count(item => item.Split == "holdout")
                    != report.HoldoutSampleCount)
                 return false;
             var tuningStages = new HashSet<string>(
