@@ -229,6 +229,7 @@ public sealed class OperationPolicyTests
             ["anchor"] = "art_11",
             ["language"] = "fr",
             ["distinct_texts"] = 6,
+            ["truncated"] = false,
             ["states"] = new JsonArray(
                 new JsonObject { ["valid_from"] = "1919-05-20", ["valid_to"] = "1948-06-01" },
                 new JsonObject { ["valid_from"] = "1948-06-02", ["valid_to"] = "2004-11-28" },
@@ -262,10 +263,13 @@ public sealed class OperationPolicyTests
             [effect with { History = effect.History! with
             {
                 States = [effect.History.States[0], effect.History.States[^1]],
+                Truncated = true,
             } }]);
 
         Assert.DoesNotContain("2004-11-29", bounded, StringComparison.Ordinal);
-        Assert.Contains("latest state beginning 2023-07-01", bounded, StringComparison.Ordinal);
+        Assert.Contains("last returned state beginning 2023-07-01", bounded,
+            StringComparison.Ordinal);
+        Assert.Contains("bounded response is truncated", bounded, StringComparison.Ordinal);
 
         // A history the publisher holds in no stated language invents one nowhere.
         var unstated = OperationAnswerPolicy.Render("en", [result],
