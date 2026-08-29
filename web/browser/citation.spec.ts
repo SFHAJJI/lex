@@ -12,8 +12,9 @@ import { expect, test, type Page, type Route } from "@playwright/test";
  * assertion has a wiring-removal mutation recorded beside it in the repair packet: removing the
  * named prop or field makes that assertion, and only that assertion, fail.
  *
- * The `/mcp` responses are controlled fixtures. No law payload, no query text and no golden content
- * is read or written by this file.
+ * The `/mcp` responses are controlled fixtures and the route fails closed, so no request from this
+ * file reaches a real MCP endpoint. Each journey asserts the bounded set of methods it asked for.
+ * No law payload, no query text and no golden content is read or written by this file.
  */
 
 const WORK = "lu-legilux:fixture-citation";
@@ -26,9 +27,12 @@ const LATER_RECORD_SHA = "998877665544332211009988776655443322110099887766554433
 
 /** A version whose document carries both document-level digests, with `count` articles. */
 function lawAnswer(
-  count: number, withItemDigest: boolean, date: string = PINNED,
+  count: number, withItemDigest: boolean, date: string = PINNED, addedAtLater: boolean = false,
 ): Record<string, unknown>[] {
   const later = date === LATER;
+  // One extra article exists only at the later date, so the comparison yields exactly one added
+  // row: the O1 shape, reached through the mounted application rather than the pure function.
+  const total = addedAtLater && later ? count + 1 : count;
   return [{
     envelope: {
       publisher: "lu-legilux", jurisdiction: "LU", status: "ok",
@@ -43,7 +47,7 @@ function lawAnswer(
       record_sha256: later ? LATER_RECORD_SHA : RECORD_SHA,
       body_sha256: BODY_SHA,
     },
-    provisions: Array.from({ length: count }, (_unused, index) => ({
+    provisions: Array.from({ length: total }, (_unused, index) => ({
       anchor: `art-${index + 1}`,
       num: `Art. ${index + 1}`,
       heading: `Heading ${index + 1}`,
@@ -62,22 +66,63 @@ const timelineAnswer = (): Record<string, unknown>[] => [{
   }],
 }];
 
+/**
+ * Per-article history, requested by the workspace whenever an anchor is selected.
+ *
+ * Nothing in a citation depends on it. It is here because failing closed proved that the narrowing
+ * journey had been issuing this call against the mounted server all along, which is the exact
+ * environmental dependency the fail-closed route removes.
+ */
+const historyAnswer = (): Record<string, unknown>[] => [{
+  envelope: { publisher: "lu-legilux", jurisdiction: "LU", status: "ok",
+              timeline_semantics: "publisher_applicability" },
+  states: [{ valid_from: PINNED, text_sha256: TEXT_SHA }],
+}];
+
 const mcpBody = (id: number, payload: unknown) => JSON.stringify({
   jsonrpc: "2.0", id,
   result: { content: [{ type: "text", text: JSON.stringify(payload) }] },
 });
 
-/** Answer `as_of` and `timeline` from fixtures; pass everything else to the real server. */
-async function routeMcp(page: Page, count: number, withItemDigest: boolean): Promise<void> {
+const FIXTURE_METHODS = new Set(["timeline", "as_of", "article_history"]);
+
+/**
+ * Answer `as_of`, `timeline` and `article_history` from fixtures, and fail closed on everything
+ * else.
+ *
+ * An earlier revision called `route.fallback()` here, handing any unexpected MCP method to the
+ * mounted server. That contradicts the controlled-fixture claim above, and the local empty-index
+ * server is not the only possibility: with `LEX_BROWSER_BASE_URL` set the config starts no server
+ * at all and points every request at that deployment instead. A wiring regression could therefore
+ * issue a real request, receive an unrelated answer, and pass for environmental reasons. Nothing
+ * this fixture does not recognise now leaves the browser.
+ *
+ * The returned array records every method the page asked for, so a journey asserts what it actually
+ * requested rather than assuming. That assertion earned itself immediately: it showed the narrowing
+ * journey had been calling `article_history` against the mounted server, so part of what that
+ * journey proved came from the environment rather than from the fixture.
+ */
+async function routeMcp(
+  page: Page, count: number, withItemDigest: boolean, addedAtLater: boolean = false,
+): Promise<string[]> {
+  const called: string[] = [];
   await page.route("**/mcp", async (route: Route) => {
     const request = route.request().postDataJSON() as {
       id: number; params?: { name?: string; arguments?: Record<string, unknown> };
     };
     const name = request.params?.name ?? "";
+    called.push(name);
     if (name === "timeline") {
       await route.fulfill({
         status: 200, contentType: "application/json",
         body: mcpBody(request.id, timelineAnswer()),
+      });
+      return;
+    }
+    if (name === "article_history") {
+      await route.fulfill({
+        status: 200, contentType: "application/json",
+        body: mcpBody(request.id, historyAnswer()),
       });
       return;
     }
@@ -93,19 +138,42 @@ async function routeMcp(page: Page, count: number, withItemDigest: boolean): Pro
         : count;
       await route.fulfill({
         status: 200, contentType: "application/json",
-        body: mcpBody(request.id, lawAnswer(Math.min(anchors, count), withItemDigest, date)),
+        body: mcpBody(
+          request.id, lawAnswer(Math.min(anchors, count), withItemDigest, date, addedAtLater)),
       });
       return;
     }
-    await route.fallback();
+    // A refusal the application can parse, rather than a network error or a real answer. The
+    // journey then fails on the recorded method set, which names the offending method.
+    await route.fulfill({
+      status: 200, contentType: "application/json",
+      body: JSON.stringify({
+        jsonrpc: "2.0", id: request.id,
+        error: { code: -32601, message: `citation fixture does not serve ${name}` },
+      }),
+    });
   });
+  return called;
 }
 
-async function openLaw(page: Page, count: number, withItemDigest: boolean): Promise<void> {
-  await routeMcp(page, count, withItemDigest);
+/**
+ * Every journey ends with this.
+ *
+ * The first assertion is the point: no method escaped to a real MCP endpoint. The second exists
+ * because the first alone would pass forever on a journey that stopped reaching the wire at all,
+ * which is the empty-baseline failure this repository has been bitten by before.
+ */
+function expectFixtureServedEverything(called: string[]): void {
+  expect(called.filter((name) => !FIXTURE_METHODS.has(name))).toEqual([]);
+  expect(called.length).toBeGreaterThan(0);
+}
+
+async function openLaw(page: Page, count: number, withItemDigest: boolean): Promise<string[]> {
+  const called = await routeMcp(page, count, withItemDigest);
   await page.goto(`/?space=law&work=${WORK}&date=${PINNED}&mode=read`,
     { waitUntil: "domcontentloaded" });
   await expect(page.locator("article.art").first()).toContainText("Fixture article 1");
+  return called;
 }
 
 /** What the reader actually gets, read back from the clipboard rather than from the DOM. */
@@ -121,7 +189,7 @@ test.use({ permissions: ["clipboard-read", "clipboard-write"] });
 
 test("a copied multi-article citation states that no aggregate text digest is recorded",
   async ({ page }) => {
-    await openLaw(page, 3, false);
+    const called = await openLaw(page, 3, false);
     const citation = await copiedCitation(page);
 
     // The claim under test. A metadata digest must not stand in for a wording digest.
@@ -132,21 +200,23 @@ test("a copied multi-article citation states that no aggregate text digest is re
     // Mutation: remove `bodySha256={loaded.bodySha256}` and this one fails alone.
     expect(citation).toContain(`body SHA-256 ${BODY_SHA} (publisher body)`);
     expect(citation).toContain("Lex reading aid, not an official publication");
+    expectFixtureServedEverything(called);
   });
 
 test("a copied single-article citation carries the exact wording digest and no absence notice",
   async ({ page }) => {
-    await openLaw(page, 1, true);
+    const called = await openLaw(page, 1, true);
     const citation = await copiedCitation(page);
 
     expect(citation).toContain(`text SHA-256 ${TEXT_SHA}`);
     // The narrowest claim is available, so the absence sentence must not appear beside it.
     expect(citation).not.toContain("no aggregate text digest recorded");
+    expectFixtureServedEverything(called);
   });
 
 test("the copied citation is rebuilt when the reader moves to another article",
   async ({ page }) => {
-    await openLaw(page, 3, true);
+    const called = await openLaw(page, 3, true);
     const first = await copiedCitation(page);
     expect(first).toContain("no aggregate text digest recorded");
 
@@ -160,11 +230,12 @@ test("the copied citation is rebuilt when the reader moves to another article",
     // digest and lose the absence statement. Asserting only inequality would pass on any change.
     expect(narrowed).toContain(`text SHA-256 ${TEXT_SHA}`);
     expect(narrowed).not.toContain("no aggregate text digest recorded");
+    expectFixtureServedEverything(called);
   });
 
 test("a copied comparison citation carries a labelled digest for each side",
   async ({ page }) => {
-    await routeMcp(page, 3, false);
+    const called = await routeMcp(page, 3, false);
     await page.goto(`/?space=law&work=${WORK}&mode=compare&date=${PINNED}&to=${LATER}`,
       { waitUntil: "domcontentloaded" });
     const citation = await copiedCitation(page);
@@ -177,25 +248,46 @@ test("a copied comparison citation carries a labelled digest for each side",
     expect(citation).toContain(`${PINNED} record SHA-256 ${RECORD_SHA} (version metadata)`);
     expect(citation).toContain(`${LATER} record SHA-256 ${LATER_RECORD_SHA} (version metadata)`);
     expect(citation).toContain("Lex reading aid, not an official publication");
+    expectFixtureServedEverything(called);
+  });
+
+test("a copied citation for an added article says it was not present, not that a digest is missing",
+  async ({ page }) => {
+    // One article exists only at the later date, so the comparison has a single added row and the
+    // earlier side holds no provision at all.
+    const called = await routeMcp(page, 1, true, true);
+    await page.goto(`/?space=law&work=${WORK}&mode=compare&date=${PINNED}&to=${LATER}`,
+      { waitUntil: "domcontentloaded" });
+    const citation = await copiedCitation(page);
+
+    // The whole of O1: an absent provision is a different condition from an unrecorded digest, and
+    // the citation must state the one that is true. Before the repair this side read
+    // `2020-01-01 no aggregate text digest recorded`, which describes text that exists.
+    expect(citation).toContain(`${PINNED} not present in this version`);
+    expect(citation).not.toContain(`${PINNED} no aggregate text digest recorded`);
+    expect(citation).not.toContain(`${PINNED} record SHA-256`);
+    expectFixtureServedEverything(called);
   });
 
 test("the citation controls survive a 320 pixel viewport without horizontal overflow",
   async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 720 });
-    await openLaw(page, 3, false);
+    const called = await openLaw(page, 3, false);
     await expect(page.getByRole("button", { name: "copy citation" })).toBeVisible();
     const overflow = await page.evaluate(() =>
       Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth));
     expect(overflow).toBeLessThanOrEqual(0);
+    expectFixtureServedEverything(called);
   });
 
 test("the law view with citation controls has no serious accessibility violation",
   async ({ page }) => {
-    await openLaw(page, 3, false);
+    const called = await openLaw(page, 3, false);
     const result = await new AxeBuilder({ page }).analyze();
     const severe = result.violations.filter((violation) =>
       violation.impact === "serious" || violation.impact === "critical");
     expect(severe, severe.map((violation) =>
       `${violation.id}: ${violation.nodes.map((node) => node.target.join(" ")).join(", ")}`)
       .join("\n")).toEqual([]);
+    expectFixtureServedEverything(called);
   });

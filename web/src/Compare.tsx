@@ -192,8 +192,8 @@ export function Compare({ work, title, from, to, anchor }: {
         sources: [pa?.document?.source_uri, pb?.document?.source_uri],
         permalinks: [pa?.document?.permalink, pb?.document?.permalink],
         documents: [
-          // Each side carries its own digest, so a comparison spanning several articles stays
-          // checkable. Without it the citation goes out with a link and nothing else.
+          // Each side carries its own version-metadata digest, so the citation identifies the two
+          // compared version records separately. Neither digests the compared wording.
           { lexId: pa?.document?.lex_id, validFrom: pa?.document?.valid_from, validTo: pa?.document?.valid_to,
             recordSha256: pa?.document?.record_sha256 },
           { lexId: pb?.document?.lex_id, validFrom: pb?.document?.valid_from, validTo: pb?.document?.valid_to,

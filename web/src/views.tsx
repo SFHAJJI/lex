@@ -46,7 +46,7 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
   work: string; title: string; language?: string; anchor?: string; profile?: string; source?: string;
   textCompleteness?: string; totalProvisions?: number; totalProvisionGaps?: number;
   truncated?: boolean; textTruncated?: boolean; timelineSemantics?: string;
-  /** Document-level digest, so a whole-document citation is checkable and not merely linked. */
+  /** Version-metadata digest. It identifies the version record, not the wording on screen. */
   recordSha256?: string;
   /** Publisher body digest. Covers the publisher body, not the ordered provisions on screen. */
   bodySha256?: string;
