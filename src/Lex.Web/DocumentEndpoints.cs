@@ -136,7 +136,11 @@ public static class DocumentEndpoints
             if (r is null) return Results.Content(Page("Unknown publisher", $"<p>No index mounted for <b>{H(publisher)}</b>. See <a href=\"/coverage\">coverage</a>.</p>"), "text/html", statusCode: 404);
             var rows = r.TimelineVersions(work).Select(version => version.Version).ToList();
             if (rows.Count == 0)
-                return Results.Content(Page("Unknown work", $"<p>status <span class=\"mono\">unknown_work</span>, no work <b>{H(work)}</b> in {H(publisher)}. Try <a href=\"/search\">search</a>.</p>"), "text/html", statusCode: 404);
+                // The refusal carries the nearest held records. Phase 0 frozen copy, Decision 41.
+                return Results.Content(
+                    Page("Instrument not found in held records",
+                         TrustNotices.UnknownWork(r, publisher, work)),
+                    "text/html", statusCode: 404);
 
             var t = DocTitle(rows[^1]);
             var publisherVersionDates = UsesPublisherVersionDates(r);
@@ -295,7 +299,10 @@ public static class DocumentEndpoints
             if (doc is null)
             {
                 if (!r.WorkExists(work))
-                    return Results.Content(Page("Unknown work", $"<p>status <span class=\"mono\">unknown_work</span>, no work <b>{H(work)}</b>. Try <a href=\"/search\">search</a>.</p>"), "text/html", statusCode: 404);
+                    return Results.Content(
+                        Page("Instrument not found in held records",
+                             TrustNotices.UnknownWork(r, publisher, work)),
+                        "text/html", statusCode: 404);
                 var timeline = r.TimelineVersions(work).Select(version => version.Version).ToList();
                 var sb0 = new StringBuilder();
                 sb0.Append($"""

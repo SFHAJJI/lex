@@ -27,6 +27,90 @@ public static class TrustNotices
     internal const string DerogationActDateText = "19 December 2020";
 
     /// <summary>
+    /// The unknown_work refusal, with the nearest held records. Copy frozen by Decision 41.
+    ///
+    /// The refusal itself always renders, because the page exists precisely when the identifier
+    /// resolves to nothing. What is evidence-conditioned is the candidate block: it appears only
+    /// when the index actually returns held records, so the offer is never a promise the corpus
+    /// cannot keep.
+    ///
+    /// This replaces a sterile refusal. The live page said the work was not held and pointed at
+    /// search, which trains a reader that honesty means uselessness; the verdict names that
+    /// pattern directly. Absence of a record is also never absence of law, which is why the body
+    /// says so in its own second sentence rather than leaving a reader to infer it.
+    /// </summary>
+    public static string UnknownWork(LexIndexReader reader, string publisher, string workSlug)
+    {
+        // One deliberate string: frozen copy must never depend on source-code line wrapping,
+        // because tests and reviews assert it verbatim.
+        var body = "Lex does not hold an instrument matching this identifier. This is not evidence "
+            + "that the instrument or law does not exist. Check the identifier, choose a possible "
+            + "held record below, or search the official publisher.";
+
+        var candidates = NearestHeld(reader, workSlug);
+
+        var offered = candidates.Count == 0 ? "" : $"""
+            <h2>Possible held records</h2>
+            <ul class="rows">
+            {string.Join("", candidates.Select(row => $"""
+                <li><a href="/{H(row.Collection)}/{H(row.GroupKey)}">{H(Describe(row))}</a>
+                <span class="sub mono">{H(row.GroupIdentifier)} &middot; {H(row.Collection)}</span></li>
+                """))}
+            </ul>
+            """;
+
+        return $"""
+            <div class="notice" role="note" aria-label="Instrument not found in held records">
+            <b>Instrument not found in held records.</b>
+            {body}
+            <span class="sub"><a href="/search">Search the official publisher</a></span>
+            </div>
+            {offered}
+            """;
+    }
+
+    /// <summary>
+    /// The held records nearest to a slug that is not held.
+    ///
+    /// The underlying search is a substring match, so the exact miss this notice exists for finds
+    /// nothing on its own: a wrong trailing segment. The verdict's own example is the question
+    /// catalog asking for `loi-2004-11-12-n3` when the held work is `loi-2004-11-12-n1`, and
+    /// `%loi-2004-11-12-n3%` matches neither. So a failed lookup drops the last hyphen segment and
+    /// tries again, which turns that case into `%loi-2004-11-12%` and finds the sibling.
+    ///
+    /// Bounded on purpose: it stops at three attempts and at five characters, because a prefix
+    /// short enough to match anything is not a candidate, it is noise wearing a candidate's shape.
+    /// </summary>
+    private static List<DocRow> NearestHeld(LexIndexReader reader, string workSlug)
+    {
+        var filters = new FilterSet(null, null, null, null);
+        var probe = workSlug;
+        for (var attempt = 0; attempt < 3 && probe.Length >= 5; attempt++)
+        {
+            var hits = reader.SearchWorksByIdentifierOrTitle(probe, filters, 40)
+                .GroupBy(row => row.GroupKey, StringComparer.Ordinal)
+                .Select(group => group.OrderByDescending(row => row.ValidFrom, StringComparer.Ordinal).First())
+                // The requested slug can never be its own candidate: it is the thing not held.
+                .Where(row => !string.Equals(row.GroupKey, workSlug, StringComparison.Ordinal))
+                .Take(5)
+                .ToList();
+            if (hits.Count > 0) return hits;
+
+            var cut = probe.LastIndexOf('-');
+            if (cut < 0) break;
+            probe = probe[..cut];
+        }
+        return [];
+    }
+
+    /// <summary>
+    /// A candidate's human label. The publisher title when there is one, otherwise the work slug,
+    /// because an untitled record still has a coordinate and a blank link is not a choice.
+    /// </summary>
+    private static string Describe(DocRow row) =>
+        string.IsNullOrWhiteSpace(row.Title) ? row.GroupKey : row.Title!;
+
+    /// <summary>
     /// The temporary_derogation notice for one provision card, or null when the typed evidence
     /// condition fails. Evidence: the page is the governed publisher, work and anchor, and the
     /// derogating act is actually held by the mounted index, so both actions resolve to real

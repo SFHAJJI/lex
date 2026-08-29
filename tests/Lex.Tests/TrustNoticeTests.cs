@@ -28,6 +28,73 @@ public sealed class TrustNoticeTests : IDisposable
         try { Directory.Delete(_root, recursive: true); } catch { }
     }
 
+    private const string UnknownWorkHeading = "Instrument not found in held records";
+    private const string CandidateHeading = "Possible held records";
+
+    /// <summary>
+    /// The refusal states the frozen copy, including the sentence that absence of a held record is
+    /// not absence of law. The live page said only that the work was not held and pointed at
+    /// search, which the verdict names as the sterile refusal that trains readers to treat honesty
+    /// as uselessness.
+    /// </summary>
+    [Fact]
+    public async Task The_unknown_work_refusal_states_the_frozen_copy()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "unknown-copy"), includeAct: false);
+        // A refusal is an answer, and it is served with the status that says so, which
+        // GetStringAsync would throw on rather than return.
+        var response = await site.Client.GetAsync("/lu-legilux/zzzz-9999-99-99-n1");
+        var page = await response.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+
+        Assert.Contains(UnknownWorkHeading, page, StringComparison.Ordinal);
+        Assert.Contains(
+            "Lex does not hold an instrument matching this identifier. This is not evidence "
+            + "that the instrument or law does not exist.", page, StringComparison.Ordinal);
+        Assert.Contains("Search the official publisher", page, StringComparison.Ordinal);
+        // The old sterile refusal must not survive anywhere on the page.
+        Assert.DoesNotContain("Try <a href=\"/search\">search</a>", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The case the notice exists for, and the one the underlying substring search cannot reach on
+    /// its own: a wrong trailing segment. This is the shape of the question catalog's own row 4,
+    /// which asked for loi-2004-11-12-n3 when the held work is loi-2004-11-12-n1.
+    /// </summary>
+    [Fact]
+    public async Task A_wrong_trailing_segment_offers_the_held_sibling()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "unknown-near"), includeAct: false);
+        // A refusal is an answer, and it is served with the status that says so, which
+        // GetStringAsync would throw on rather than return.
+        var response = await site.Client.GetAsync("/lu-legilux/loi-2006-07-31-n9");
+        var page = await response.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+
+        Assert.Contains(UnknownWorkHeading, page, StringComparison.Ordinal);
+        Assert.Contains(CandidateHeading, page, StringComparison.Ordinal);
+        Assert.Contains("/lu-legilux/loi-2006-07-31-n2", page, StringComparison.Ordinal);
+        // The slug that is not held is never offered back as a way to reach it.
+        Assert.DoesNotContain("/lu-legilux/loi-2006-07-31-n9", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// No candidates, no candidate heading. An empty offer is worse than none: it promises records
+    /// the corpus does not hold, which is the exact failure the notice contract forbids.
+    /// </summary>
+    [Fact]
+    public async Task Nothing_near_means_no_candidate_block()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "unknown-far"), includeAct: false);
+        // A refusal is an answer, and it is served with the status that says so, which
+        // GetStringAsync would throw on rather than return.
+        var response = await site.Client.GetAsync("/lu-legilux/zzzz-9999-99-99-n1");
+        var page = await response.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+
+        Assert.DoesNotContain(CandidateHeading, page, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Derogation_notice_renders_inside_the_targeted_provision_card_only()
     {
