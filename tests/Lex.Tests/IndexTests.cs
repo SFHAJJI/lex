@@ -611,8 +611,13 @@ public class IndexTests : IDisposable
     [Fact]
     public void Version_four_digest_binds_fts_shadow_bytes()
     {
+        string signedDigest;
         using (var reader = BuildV4())
+        {
             Assert.True(reader.SignatureValid);
+            signedDigest = reader.Stamp["content_digest"];
+        }
+        string mutatedDigest;
         using (var connection = new Microsoft.Data.Sqlite.SqliteConnection(
                    $"Data Source={_db}"))
         {
@@ -620,11 +625,20 @@ public class IndexTests : IDisposable
             using var mutate = connection.CreateCommand();
             mutate.CommandText = "UPDATE fts_data SET block=zeroblob(length(block))";
             Assert.True(mutate.ExecuteNonQuery() > 0);
+            mutatedDigest = IndexBuilder.ContentDigestV4(connection);
         }
 
-        var error = Assert.Throws<InvalidDataException>(() =>
-            LexIndexReader.Open(_db));
-        Assert.Contains("SQLite integrity", error.Message, StringComparison.Ordinal);
+        Assert.NotEqual(signedDigest, mutatedDigest);
+        try
+        {
+            using var tampered = LexIndexReader.Open(_db);
+            Assert.False(tampered.SignatureValid);
+            Assert.Equal(mutatedDigest, tampered.ComputeContentDigest());
+        }
+        catch (InvalidDataException error)
+        {
+            Assert.Contains("SQLite integrity", error.Message, StringComparison.Ordinal);
+        }
 
         using var writable = new Microsoft.Data.Sqlite.SqliteConnection(
             $"Data Source={_db};Default Timeout=1");
