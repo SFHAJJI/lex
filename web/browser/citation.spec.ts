@@ -134,6 +134,22 @@ const mcpBody = (id: number, payload: unknown) => JSON.stringify({
 const FIXTURE_METHODS = new Set(["timeline", "as_of", "article_history"]);
 
 /**
+ * One line per MCP operation, carrying the arguments that identify the request.
+ *
+ * The name alone is not the request. `as_of` for the pinned date in outline mode and `as_of` for
+ * the later date in full mode are different questions, and a regression that swapped one for the
+ * other would be invisible to a check that only reads tool names.
+ */
+const operation = (name: string, args: Record<string, unknown>): string => {
+  const text = (key: string) =>
+    typeof args[key] === "string" && (args[key] as string).length > 0
+      ? args[key] as string : undefined;
+  const detail = [text("date"), text("mode"), text("anchors") ?? text("anchor")]
+    .filter(Boolean).join(" ");
+  return detail ? `${name}(${detail})` : name;
+};
+
+/**
  * Answer `as_of`, `timeline` and `article_history` from fixtures, and fail closed on everything
  * else.
  *
@@ -158,7 +174,7 @@ async function routeMcp(
       id: number; params?: { name?: string; arguments?: Record<string, unknown> };
     };
     const name = request.params?.name ?? "";
-    called.push(name);
+    called.push(operation(name, (request.params?.arguments ?? {}) as Record<string, unknown>));
     if (name === "timeline") {
       await route.fulfill({
         status: 200, contentType: "application/json",
@@ -200,7 +216,7 @@ async function routeMcp(
       return;
     }
     // A refusal the application can parse, rather than a network error or a real answer. The
-    // journey then fails on the recorded method set, which names the offending method.
+    // journey then fails on its recorded trace, which names the offending operation.
     await route.fulfill({
       status: 200, contentType: "application/json",
       body: JSON.stringify({
@@ -213,15 +229,62 @@ async function routeMcp(
 }
 
 /**
- * Every journey ends with this.
+ * The operation traces these journeys actually produce, measured rather than assumed.
  *
- * The first assertion is the point: no method escaped to a real MCP endpoint. The second exists
- * because the first alone would pass forever on a journey that stopped reaching the wire at all,
- * which is the empty-baseline failure this repository has been bitten by before.
+ * `LAW_READ` carries `as_of(... outline)` twice, and that is a real duplicate rather than a quirk of
+ * the fixture: `App.tsx` fetches the outline once for the contents rail at line 358, and again
+ * inside the read effect at line 402 purely to count provisions against the whole-act threshold,
+ * with byte-identical arguments. `COMPARE_WHOLE` carries the same duplicate for the pinned side.
+ * Writing this contract is what made it visible, which is the point of the contract.
+ *
+ * These constants therefore record observed behaviour, not desired behaviour. The duplicate is a
+ * defect in my lane and it is not this lane's defect, so it is carried as its own row rather than
+ * repaired under a citation change. Whoever fixes it must delete an entry here, deliberately.
  */
-function expectFixtureServedEverything(called: string[]): void {
-  expect(called.filter((name) => !FIXTURE_METHODS.has(name))).toEqual([]);
-  expect(called.length).toBeGreaterThan(0);
+const LAW_READ = [
+  "timeline",
+  `as_of(${PINNED} outline)`,
+  `as_of(${PINNED} outline)`,
+  `as_of(${PINNED} full)`,
+];
+
+/** A whole-document comparison: both sides outlined, then the shared rail and title. */
+const COMPARE_WHOLE = [
+  `as_of(${PINNED} outline)`,
+  `as_of(${LATER} outline)`,
+  "timeline",
+  `as_of(${PINNED} outline)`,
+];
+
+/** A comparison scoped to one article. Note that no text is fetched at all. */
+const COMPARE_ART1 = [
+  `as_of(${PINNED} outline art-1)`,
+  `as_of(${LATER} outline art-1)`,
+  "timeline",
+  `as_of(${PINNED} outline)`,
+  "article_history(art-1)",
+];
+
+/**
+ * Every journey ends with its exact operation trace.
+ *
+ * The previous revision asserted only that no operation fell outside a global allowed set and that
+ * at least one occurred. That is a membership check, and I described it as a contract, which it was
+ * not: it cannot see extra traffic that happens to be allowed. Codex demonstrated the gap by
+ * injecting one additional `timeline` operation into every trace, and all ten journeys stayed
+ * green. An extra, missing, duplicated or wrong-argument operation must fail the journey that
+ * caused it, and now does.
+ *
+ * Compared as a sorted multiset rather than an ordered sequence because the comparison view fetches
+ * its two sides concurrently, so their relative order is genuinely unspecified. Cardinality and
+ * arguments are still exact, which is what the objection was about; where the product requires an
+ * order, the journey asserts it separately rather than by accident of scheduling.
+ */
+function expectOperations(called: string[], expected: string[]): void {
+  expect([...called].sort()).toEqual([...expected].sort());
+  // Kept from the previous revision: nothing outside the fixture contract, ever.
+  const names = called.map((entry) => entry.replace(/\(.*$/, ""));
+  expect(names.filter((name) => !FIXTURE_METHODS.has(name))).toEqual([]);
 }
 
 async function openLaw(page: Page, count: number, withItemDigest: boolean): Promise<string[]> {
@@ -256,7 +319,7 @@ test("a copied multi-article citation states that no aggregate text digest is re
     // Mutation: remove `bodySha256={loaded.bodySha256}` and this one fails alone.
     expect(citation).toContain(`body SHA-256 ${BODY_SHA} (publisher body)`);
     expect(citation).toContain("Lex reading aid, not an official publication");
-    expectFixtureServedEverything(called);
+    expectOperations(called, LAW_READ);
   });
 
 test("a copied single-article citation carries the exact wording digest and no absence notice",
@@ -267,7 +330,7 @@ test("a copied single-article citation carries the exact wording digest and no a
     expect(citation).toContain(`text SHA-256 ${articleSha(1, "plain")}`);
     // The narrowest claim is available, so the absence sentence must not appear beside it.
     expect(citation).not.toContain("no aggregate text digest recorded");
-    expectFixtureServedEverything(called);
+    expectOperations(called, LAW_READ);
   });
 
 test("the copied citation is rebuilt when the reader moves to another article",
@@ -293,7 +356,13 @@ test("the copied citation is rebuilt when the reader moves to another article",
     expect(narrowed).toContain(`text SHA-256 ${articleSha(3, "plain")}`);
     expect(narrowed).not.toContain(`text SHA-256 ${articleSha(1, "plain")}`);
     expect(narrowed).not.toContain("no aggregate text digest recorded");
-    expectFixtureServedEverything(called);
+    expectOperations(called, [
+      ...LAW_READ,
+      "timeline",
+      `as_of(${PINNED} outline)`,
+      `as_of(${PINNED} select art-3)`,
+      "article_history(art-3)",
+    ]);
   });
 
 test("a copied comparison citation carries a labelled digest for each side",
@@ -311,7 +380,7 @@ test("a copied comparison citation carries a labelled digest for each side",
     expect(citation).toContain(`${PINNED} record SHA-256 ${RECORD_SHA} (version metadata)`);
     expect(citation).toContain(`${LATER} record SHA-256 ${LATER_RECORD_SHA} (version metadata)`);
     expect(citation).toContain("Lex reading aid, not an official publication");
-    expectFixtureServedEverything(called);
+    expectOperations(called, COMPARE_WHOLE);
   });
 
 test("a copied comparison citation names the official source for each side", async ({ page }) => {
@@ -325,7 +394,7 @@ test("a copied comparison citation names the official source for each side", asy
   // calls Lex a reading aid. Naming the aid without naming the record leaves nowhere to check.
   expect(citation).toContain(`${PINNED} source ${SOURCE_PINNED}`);
   expect(citation).toContain(`${LATER} source ${SOURCE_LATER}`);
-  expectFixtureServedEverything(called);
+  expectOperations(called, COMPARE_WHOLE);
 });
 
 test("a copied citation for an article whose wording did not change keeps both exact digests",
@@ -344,7 +413,7 @@ test("a copied citation for an article whose wording did not change keeps both e
     expect(citation).toContain(`${LATER} text SHA-256 ${sha}`);
     expect(citation).not.toContain("no aggregate text digest recorded");
     expect(citation).toContain("Art. 1");
-    expectFixtureServedEverything(called);
+    expectOperations(called, COMPARE_ART1);
   });
 
 test("a copied citation for a typographic-only change keeps both exact digests",
@@ -365,7 +434,11 @@ test("a copied citation for a typographic-only change keeps both exact digests",
     expect(citation).toContain(`${LATER} text SHA-256 ${articleSha(1, "punctuation")}`);
     expect(articleSha(1, "plain")).not.toEqual(articleSha(1, "punctuation"));
     expect(citation).not.toContain("no aggregate text digest recorded");
-    expectFixtureServedEverything(called);
+    expectOperations(called, [
+      ...COMPARE_ART1,
+      `as_of(${PINNED} select art-1)`,
+      `as_of(${LATER} select art-1)`,
+    ]);
   });
 
 test("a copied citation for an added article says it was not present, not that a digest is missing",
@@ -383,7 +456,7 @@ test("a copied citation for an added article says it was not present, not that a
     expect(citation).toContain(`${PINNED} not present in this version`);
     expect(citation).not.toContain(`${PINNED} no aggregate text digest recorded`);
     expect(citation).not.toContain(`${PINNED} record SHA-256`);
-    expectFixtureServedEverything(called);
+    expectOperations(called, [...COMPARE_WHOLE, `as_of(${LATER} select art-2)`]);
   });
 
 test("the citation controls survive a 320 pixel viewport without horizontal overflow",
@@ -394,7 +467,7 @@ test("the citation controls survive a 320 pixel viewport without horizontal over
     const overflow = await page.evaluate(() =>
       Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth));
     expect(overflow).toBeLessThanOrEqual(0);
-    expectFixtureServedEverything(called);
+    expectOperations(called, LAW_READ);
   });
 
 test("the law view with citation controls has no serious accessibility violation",
@@ -406,5 +479,5 @@ test("the law view with citation controls has no serious accessibility violation
     expect(severe, severe.map((violation) =>
       `${violation.id}: ${violation.nodes.map((node) => node.target.join(" ")).join(", ")}`)
       .join("\n")).toEqual([]);
-    expectFixtureServedEverything(called);
+    expectOperations(called, LAW_READ);
   });
