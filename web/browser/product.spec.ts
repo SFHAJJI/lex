@@ -516,6 +516,19 @@ test("quarantined meaning search stays selected and reports unavailability witho
         },
         requested_retrieval_mode: "hybrid",
         retrieval_unavailable_reason: "benchmark_gate_failed",
+        // The producer always attaches a population to this envelope: McpCore.cs 1385 mints
+        // SearchPopulation(reader, filter, scopeFiltersApplied: true, queryRan: false) beside
+        // McpStatus.RetrievalModeUnavailable. Omitting it made this fixture a shape the
+        // producer cannot emit, and the unified parse correctly refuses it. The trust property
+        // under test is unchanged either way, since neither branch falls back to keyword; what
+        // the unrealistic fixture cost was the specific explanation, not the guarantee.
+        population: {
+          basis: "selected_metadata_scope",
+          works_in_scope: 1250,
+          scope_filters_applied: true,
+          query_ran: false,
+          known_exclusions: [],
+        },
         hits: [],
       }];
       await route.fulfill({
