@@ -143,3 +143,32 @@ test("a complete response with rows is presented without qualification", async (
   await expect(ws).toContainText("1 article refer");
   await expect(ws).not.toContainText(CUT);
 });
+
+/**
+ * A returned row proves that at least one article refers to the law. It does not prove that the
+ * number beside it is the total, and cited_by sets citing_articles to the hits that fitted. So an
+ * exact total may be stated only against a receipt saying nothing was cut.
+ */
+const UNQUALIFIED = "1 article refer to it";
+
+test("rows with no receipt are framed as returned, not as a total", async ({ page }) => {
+  const ws = await ask(page, "3123456789abcdef0123456789abcdef", [row()], undefined);
+
+  await expect(ws).toContainText("Citing law");
+  await expect(ws).not.toContainText(UNQUALIFIED);
+  await expect(ws).toContainText("1 returned in this response");
+  await expect(ws).toContainText(UNKNOWN);
+});
+
+for (const [label, requestId, value] of [
+  ["null", "4123456789abcdef0123456789abcdef", null],
+  ["a string", "5123456789abcdef0123456789abcdef", "false"],
+  ["a number", "6123456789abcdef0123456789abcdef", 1],
+] as readonly (readonly [string, string, unknown])[]) {
+  test(`rows whose receipt is ${label} are framed as returned, not as a total`, async ({ page }) => {
+    const ws = await ask(page, requestId, [row()], value);
+
+    await expect(ws).not.toContainText(UNQUALIFIED);
+    await expect(ws).toContainText("1 returned in this response");
+  });
+}

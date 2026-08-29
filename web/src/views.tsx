@@ -200,10 +200,10 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
               ))}
               {/* The list is what fitted, not what exists. Shown beside the references that did
                   arrive, because a list silently cut reads as a complete one. */}
-              {p.citations_truncated
+              {p.citations_truncated === true
                 ? <span className="cites-h">more not returned in this response</span> : null}
             </div>
-          ) : p.citations_truncated ? (
+          ) : p.citations_truncated === true ? (
             /* The budget cut every reference this provision has. Rendering nothing here would put
                it in the same shape as an article that refers to nothing, which is the one thing
                this response cannot say. The heading stays so the reader sees the same section
@@ -1017,9 +1017,9 @@ export function CitedBy({ view, onOpen }: {
             what fitted (McpCore sets citing_articles to the returned hits), so the same
             sentence would understate the total and, at zero, assert an absence. Identity
             comparison only: an absent or malformed receipt is not a complete answer. */}
-        <span className="tag">{view.rows_truncated === true
-          ? `${view.citing_articles.toLocaleString()} returned in this response`
-          : `${view.citing_articles.toLocaleString()} article${view.citing_articles === 1 ? "" : "s"} refer to it`}</span>
+        <span className="tag">{view.rows_truncated === false
+          ? `${view.citing_articles.toLocaleString()} article${view.citing_articles === 1 ? "" : "s"} refer to it`
+          : `${view.citing_articles.toLocaleString()} returned in this response`}</span>
         <span className="tag mono">{view.cited_work}</span>
       </div>
       <ul className="rows">
@@ -1036,8 +1036,13 @@ export function CitedBy({ view, onOpen }: {
         ))}
       </ul>
       {view.rows.length > 0 ? (
+        /* A returned row proves that at least one article refers. It does not prove that the
+           number beside it is the total, so only a receipt of false leaves the rows
+           unqualified. */
         view.rows_truncated === true
-          ? <Empty>This response returned fewer rows than it found.</Empty> : null
+          ? <Empty>This response returned fewer rows than it found.</Empty>
+        : view.rows_truncated === false ? null
+        : <Empty>This response does not record whether it was complete.</Empty>
       ) : view.rows_truncated === true ? (
         /* Rows were cut and none survived for this unit. The receipt is response-wide, so
            it says nothing about which unit was cut, only that absence cannot be claimed. */

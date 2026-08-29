@@ -708,7 +708,7 @@ public static class UiMapper
             // MarkResponseRows), so reading it from this unit reads the response-wide fact.
             // Absent stays null rather than becoming false: a missing receipt is not
             // evidence of a complete answer.
-            RowsTruncated: (o["response_row_set"] as JsonObject)?["truncated"]?.GetValue<bool>()));
+            RowsTruncated: B(o["response_row_set"] as JsonObject, "truncated")));
     }
 
     private static UiEffect Ranking(JsonObject o, JsonObject args)
@@ -888,4 +888,15 @@ public static class UiMapper
     // loses the whole answer along with its UI payload.
     private static string? S(JsonObject? o, string k)
         => o?[k] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
+
+    /// <summary>
+    /// A JSON boolean, or null for everything else, in the same shape as <see cref="S"/>.
+    ///
+    /// GetValue&lt;bool&gt; throws on a string or a number, which would lose the entire typed
+    /// operation result to one malformed field. The MCP result is an untrusted boundary, so a
+    /// value that is not exactly true or false is not a fact: it degrades to no claim, never to
+    /// an exception and never to false.
+    /// </summary>
+    private static bool? B(JsonObject? o, string k)
+        => o?[k] is JsonValue v && v.TryGetValue<bool>(out var b) ? b : null;
 }

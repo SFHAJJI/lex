@@ -54,6 +54,20 @@ const lawAnswer = (): Record<string, unknown>[] => [{
     { anchor: "art-3", num: "Art. 3", heading: "Entirely cut", text: "Texte trois.",
       citations_truncated: true },
     { anchor: "art-4", num: "Art. 4", heading: "No references", text: "Texte quatre." },
+    /* Values the client contract says cannot occur. provisionItemsOf casts the raw MCP
+       provision array without runtime validation, so the declaration constrains the producer
+       and not the wire. Under truthiness the string "false" and the number 1 each assert that
+       references were cut when nothing was. */
+    { anchor: "art-5", num: "Art. 5", heading: "String receipt", text: "Texte cinq.",
+      citations_truncated: "false" },
+    { anchor: "art-6", num: "Art. 6", heading: "Null receipt", text: "Texte six.",
+      citations_truncated: null },
+    { anchor: "art-7", num: "Art. 7", heading: "Number receipt", text: "Texte sept.",
+      citations_truncated: 1 },
+    { anchor: "art-8", num: "Art. 8", heading: "String receipt beside real references",
+      text: "Texte huit.",
+      citations: [{ work: "lu-legilux:cited-work", href: "#", text: CITED }],
+      citations_truncated: "true" },
   ],
 }];
 
@@ -130,4 +144,20 @@ test("a complete list is presented without qualification", async ({ page }) => {
   await expect(complete).toContainText(CITED);
   // No disclosure may appear where nothing was cut, or the disclosure means nothing anywhere.
   await expect(complete).not.toContainText("not returned in this response");
+});
+
+test("a malformed truncation receipt asserts nothing about the references", async ({ page }) => {
+  await openLaw(page);
+
+  // None of these is the boolean true, so none of them may claim a reference was cut.
+  for (const anchor of ["art-5", "art-6", "art-7"]) {
+    const art = page.locator(`article.art#${anchor}`);
+    await expect(art).not.toContainText("Refers to");
+    await expect(art).not.toContainText("not returned in this response");
+  }
+
+  // Real references beside a malformed receipt are shown, unqualified.
+  const withRefs = page.locator("article.art#art-8");
+  await expect(withRefs).toContainText(CITED);
+  await expect(withRefs).not.toContainText("more not returned");
 });

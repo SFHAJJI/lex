@@ -423,6 +423,58 @@ public class UiEffectTests
         Assert.Null(eff.CitedBy!.RowsTruncated);
     }
 
+    /// <summary>
+    /// The receipt arrives as untrusted JSON, so reading it must neither throw nor invent a value.
+    /// GetValue&lt;bool&gt; threw on the first string and lost the entire typed operation result, which
+    /// turned one malformed field into a lost answer. Every value that is not exactly true or false
+    /// is no claim.
+    /// </summary>
+    [Fact]
+    public void A_malformed_receipt_becomes_no_claim_rather_than_an_exception()
+    {
+        JsonNode?[] hostile =
+        [
+            JsonValue.Create("true"), JsonValue.Create("false"), JsonValue.Create("no"),
+            JsonValue.Create(1), JsonValue.Create(0), JsonValue.Create(1.5),
+            new JsonObject(), new JsonArray(), null,
+        ];
+
+        foreach (var value in hostile)
+        {
+            var eff = UiMapper.From("cited_by", Args(("work", "lu-legilux:nothing")), new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["status"] = McpStatus.NoResult },
+                ["cited_work"] = "lu-legilux:nothing",
+                ["citing_articles"] = 0,
+                ["citations"] = new JsonArray(),
+                ["response_row_set"] = new JsonObject { ["truncated"] = value },
+            });
+
+            Assert.Null(eff.CitedBy!.RowsTruncated);
+        }
+    }
+
+    /// <summary>
+    /// The one value that licenses an absence claim downstream, so it must survive exactly.
+    /// </summary>
+    [Fact]
+    public void A_receipt_of_false_is_carried_as_false()
+    {
+        var eff = UiMapper.From("cited_by", Args(("work", "lu-legilux:nothing")), new JsonObject
+        {
+            ["envelope"] = new JsonObject { ["status"] = McpStatus.NoResult },
+            ["cited_work"] = "lu-legilux:nothing",
+            ["citing_articles"] = 0,
+            ["citations"] = new JsonArray(),
+            ["response_row_set"] = new JsonObject
+            {
+                ["maximum"] = 50, ["returned"] = 0, ["truncated"] = false,
+            },
+        });
+
+        Assert.False(eff.CitedBy!.RowsTruncated);
+    }
+
     [Fact]
     public void An_as_of_outline_remains_a_navigable_provision_view_without_legal_text()
     {
