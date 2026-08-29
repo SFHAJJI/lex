@@ -16,6 +16,32 @@ namespace Lex.Web;
 /// </summary>
 public static class ExplainerEndpoints
 {
+    internal static string FormatBenchmarkMetric(
+        RetrievalMetricObservation observation, string format, string suffix = "")
+    {
+        if (!observation.IsStructurallyCoherent()) return "invalid_metric";
+        if (observation.Status == "insufficient_denominator")
+            return "insufficient_denominator (n=0)";
+        if (!observation.TryGetMeasured(out var measured)) return "invalid_metric";
+        return $"{measured.ToString(format, CultureInfo.InvariantCulture)}{suffix} "
+               + $"(n={observation.Denominator.ToString(CultureInfo.InvariantCulture)})";
+    }
+
+    internal static bool BenchmarkEvidenceMatchesCases(
+        RetrievalBenchmarkReport report,
+        IReadOnlyCollection<RetrievalBenchmarkCase> cases,
+        string collection) =>
+        RetrievalBenchmarkGate.IsStructurallyValid(report, collection)
+        && RetrievalBenchmarkGate.StrataMatchCases(report, cases, collection);
+
+    internal static bool BenchmarkRankingIsPublishable(
+        RetrievalBenchmarkReport report,
+        IReadOnlyCollection<RetrievalBenchmarkCase> cases,
+        string collection) =>
+        BenchmarkEvidenceMatchesCases(report, cases, collection)
+        && report.ShuffledTop10Control?.Outcome == "detected"
+        && report.QrelsShuffleControl?.Outcome == "detected";
+
     public static IEndpointRouteBuilder MapExplainers(this IEndpointRouteBuilder app, WebContext ctx)
     {
         // Re-declared here so every moved route body is byte-identical to what it was in
@@ -55,6 +81,8 @@ public static class ExplainerEndpoints
             var combinedPassed = compatible && reports.Values.All(item => item.ActivationGatePassed);
             var reportEntry = reports.OrderBy(item => item.Key, StringComparer.Ordinal).FirstOrDefault();
             var report = reportEntry.Value;
+            var controlsDetected = report is not null && BenchmarkRankingIsPublishable(
+                report, retrievalCases, reportEntry.Key);
             var caseRows = string.Join("", retrievalCases.GroupBy(c => c.Category)
                 .OrderBy(g => g.Key, StringComparer.Ordinal)
                 .Select(g => $"<tr><td>{H(g.Key)}</td><td class=\"mono\">{g.Count()}</td></tr>"));
@@ -64,6 +92,13 @@ public static class ExplainerEndpoints
                   Hybrid will not become default until exact identifiers, temporal isolation, nDCG@10,
                   regression, latency and memory pass their recorded thresholds.</div>
                   """
+                : !controlsDetected
+                    ? $"""
+                      <div class="notice"><b>Ranking measurements are not publishable yet.</b>
+                      A signed v4 run exists for {H(reportEntry.Key)}, but both required negative
+                      controls have not been detected. No ranking value from that run is displayed
+                      or served as product evidence.</div>
+                      """
                 : $"""
                   <div class="notice"><b>Latest combined gate: {(combinedPassed ? "passed" : "not passed")}.</b>
                   Measured collections: {reports.Count:n0}/{expectedCollections.Length:n0}.
@@ -73,16 +108,16 @@ public static class ExplainerEndpoints
                   {H(report.Timestamp)} over {report.SampleCount:n0} cases.</div>
                   <div class="card"><table>
                   <tr><th>measure</th><th>keyword</th><th>hybrid</th></tr>
-                  <tr><td>tuning MRR</td><td class="mono">{F(report.KeywordTuning.Mrr, "0.000")}</td><td class="mono">{F(report.HybridTuning.Mrr, "0.000")}</td></tr>
-                  <tr><td>tuning Recall@10</td><td class="mono">{F(report.KeywordTuning.RecallAt10, "0.000")}</td><td class="mono">{F(report.HybridTuning.RecallAt10, "0.000")}</td></tr>
-                  <tr><td>tuning nDCG@10</td><td class="mono">{F(report.KeywordTuning.NdcgAt10, "0.000")}</td><td class="mono">{F(report.HybridTuning.NdcgAt10, "0.000")}</td></tr>
-                  <tr><td>holdout nDCG@10</td><td class="mono">{F(report.KeywordHoldout.NdcgAt10, "0.000")}</td><td class="mono">{F(report.HybridHoldout.NdcgAt10, "0.000")}</td></tr>
-                  <tr><td>holdout no-hit accuracy</td><td class="mono">{F(report.KeywordHoldout.NoHitAccuracy, "0.000")}</td><td class="mono">{F(report.HybridHoldout.NoHitAccuracy, "0.000")}</td></tr>
-                  <tr><td>holdout resolution accuracy</td><td class="mono">{F(report.KeywordHoldout.ResolutionAccuracy, "0.000")}</td><td class="mono">{F(report.HybridHoldout.ResolutionAccuracy, "0.000")}</td></tr>
-                  <tr><td>holdout warm p95</td><td class="mono">{F(report.KeywordHoldout.P95Ms, "0.0")} ms</td><td class="mono">{F(report.HybridHoldout.P95Ms, "0.0")} ms</td></tr>
-                  <tr><td>holdout warm p99</td><td class="mono">{F(report.KeywordHoldout.P99Ms, "0.0")} ms</td><td class="mono">{F(report.HybridHoldout.P99Ms, "0.0")} ms</td></tr>
-                  <tr><td>tuning warm p95</td><td class="mono">{F(report.KeywordTuning.P95Ms, "0.0")} ms</td><td class="mono">{F(report.HybridTuning.P95Ms, "0.0")} ms</td></tr>
-                  <tr><td>tuning warm p99</td><td class="mono">{F(report.KeywordTuning.P99Ms, "0.0")} ms</td><td class="mono">{F(report.HybridTuning.P99Ms, "0.0")} ms</td></tr>
+                  <tr><td>tuning anchor MRR</td><td class="mono">{FormatBenchmarkMetric(report.KeywordTuning.Mrr, "0.000")}</td><td class="mono">{FormatBenchmarkMetric(report.HybridTuning.Mrr, "0.000")}</td></tr>
+                  <tr><td>tuning anchor Recall@10</td><td class="mono">{FormatBenchmarkMetric(report.KeywordTuning.RecallAt10, "0.000")}</td><td class="mono">{FormatBenchmarkMetric(report.HybridTuning.RecallAt10, "0.000")}</td></tr>
+                  <tr><td>tuning anchor nDCG@10</td><td class="mono">{FormatBenchmarkMetric(report.KeywordTuning.NdcgAt10, "0.000")}</td><td class="mono">{FormatBenchmarkMetric(report.HybridTuning.NdcgAt10, "0.000")}</td></tr>
+                  <tr><td>holdout anchor nDCG@10</td><td class="mono">{FormatBenchmarkMetric(report.KeywordHoldout.NdcgAt10, "0.000")}</td><td class="mono">{FormatBenchmarkMetric(report.HybridHoldout.NdcgAt10, "0.000")}</td></tr>
+                  <tr><td>holdout no-hit accuracy</td><td class="mono">{FormatBenchmarkMetric(report.KeywordHoldout.NoHitAccuracy, "0.000")}</td><td class="mono">{FormatBenchmarkMetric(report.HybridHoldout.NoHitAccuracy, "0.000")}</td></tr>
+                  <tr><td>holdout resolution accuracy</td><td class="mono">{FormatBenchmarkMetric(report.KeywordHoldout.ResolutionAccuracy, "0.000")}</td><td class="mono">{FormatBenchmarkMetric(report.HybridHoldout.ResolutionAccuracy, "0.000")}</td></tr>
+                  <tr><td>holdout warm p95</td><td class="mono">{FormatBenchmarkMetric(report.KeywordHoldout.P95Ms, "0.0", " ms")}</td><td class="mono">{FormatBenchmarkMetric(report.HybridHoldout.P95Ms, "0.0", " ms")}</td></tr>
+                  <tr><td>holdout warm p99</td><td class="mono">{FormatBenchmarkMetric(report.KeywordHoldout.P99Ms, "0.0", " ms")}</td><td class="mono">{FormatBenchmarkMetric(report.HybridHoldout.P99Ms, "0.0", " ms")}</td></tr>
+                  <tr><td>tuning warm p95</td><td class="mono">{FormatBenchmarkMetric(report.KeywordTuning.P95Ms, "0.0", " ms")}</td><td class="mono">{FormatBenchmarkMetric(report.HybridTuning.P95Ms, "0.0", " ms")}</td></tr>
+                  <tr><td>tuning warm p99</td><td class="mono">{FormatBenchmarkMetric(report.KeywordTuning.P99Ms, "0.0", " ms")}</td><td class="mono">{FormatBenchmarkMetric(report.HybridTuning.P99Ms, "0.0", " ms")}</td></tr>
                   </table><p class="sub">Code <span class="mono">{H(report.CodeCommit)}</span>, corpus
                   <span class="mono">{H(report.CorpusCommit)}</span>, manifest <span class="mono">{H(report.ManifestId)}</span>,
                   model <span class="mono">{H(report.ModelId)}@{H(report.ModelRevision)}</span>.<br>
@@ -131,6 +166,14 @@ public static class ExplainerEndpoints
                     (Collection: collection, Report: LoadReport(collection)))
                 .Where(item => item.Report is not null).ToArray();
             if (reports.Length == 0) return Results.NotFound(new { status = "not_measured_yet" });
+            if (reports.Length != collections.Length || reports.Any(item =>
+                    !BenchmarkRankingIsPublishable(
+                        item.Report!, retrievalCases, item.Collection)))
+                return Results.Json(new
+                {
+                    status = "not_publishable",
+                    reason = "both required negative controls must be detected for every collection",
+                }, statusCode: StatusCodes.Status409Conflict);
             var compatible = RetrievalBenchmarkGate.ReportsAreCompatible(
                 reports.Select(item => item.Report!).ToArray(), collections.Length);
             return Results.Json(new
@@ -156,9 +199,9 @@ public static class ExplainerEndpoints
             {
                 what = "the public relevance judgments the retrieval benchmark is scored against, "
                     + "written and reviewed by the project owner before any measurement",
-                judgment_level = "each case names the works that answer the query, not the "
-                    + "articles, so a run is never credited for finding the right document by "
-                    + "way of the wrong provision",
+                judgment_level = "work labels are continuity evidence. Provision-level anchor "
+                    + "judgments, when present, determine activation ranking metrics. Missing "
+                    + "anchor denominators are reported as insufficient_denominator",
                 splits = "tuning cases may inform changes; holdout cases decide activation and "
                     + "are never tuned against",
                 count = retrievalCases.Count,
@@ -185,17 +228,14 @@ public static class ExplainerEndpoints
                 var expectedHoldout = retrievalCases.Count(item => item.Collection == collection
                     && item.Split == "holdout");
                 return report is not null
-                       && report.Schema == "lex-retrieval-benchmark/3"
+                       && BenchmarkEvidenceMatchesCases(report, retrievalCases, collection)
+                       && ctx.Registry.IsArtifactVerified(report.CaseResultsFile!)
+                       && RetrievalBenchmarkGate.CaseResultsMatch(report,
+                           Path.Combine(ctx.Options.IndexDir, report.CaseResultsFile!))
                        && report.BaselineSchema == retrievalBaseline.Schema
                        && report.SampleCount == expectedCases
                        && report.TuningSampleCount == expectedTuning
                        && report.HoldoutSampleCount == expectedHoldout
-                       && report.KeywordTuning is not null
-                       && report.HybridTuning is not null
-                       && report.KeywordHoldout is not null
-                       && report.HybridHoldout is not null
-                       && report.GateFailures is not null
-                       && report.ActivationGatePassed == (report.GateFailures.Count == 0)
                        && RetrievalBenchmarkGate.HasReleaseIdentity(report)
                        && BenchmarkClaimsMatchVerifiedManifests(
                            report, collection, ctx.Registry.VerifiedArtifactManifests)

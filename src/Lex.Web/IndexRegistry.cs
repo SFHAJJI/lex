@@ -202,7 +202,14 @@ public sealed class IndexRegistry : IDisposable
             var report = JsonSerializer.Deserialize<RetrievalBenchmarkReport>(
                 File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(vectorPath)!, benchmarkFile)),
                 new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower });
-            if (report is null) return new(false, "benchmark_invalid");
+            if (report is null
+                || !RetrievalBenchmarkGate.IsStructurallyValid(report, reader.Collection))
+                return new(false, "benchmark_invalid");
+            if (!_verifiedFiles.Contains(report.CaseResultsFile!))
+                return new(false, "benchmark_missing");
+            if (!RetrievalBenchmarkGate.CaseResultsMatch(report, Path.Combine(
+                    Path.GetDirectoryName(vectorPath)!, report.CaseResultsFile!)))
+                return new(false, "benchmark_invalid");
             if (report.IndexBytes != new FileInfo(Path.Combine(
                     Path.GetDirectoryName(vectorPath)!, indexFile)).Length
                 || report.VectorBytes != new FileInfo(vectorPath).Length)
@@ -254,7 +261,7 @@ internal static class HybridActivationGate
     {
         var expected = Cases.Cases.Where(item => item.Collection == collection).ToArray();
         var failures = report.GateFailures;
-        if (report.Schema != "lex-retrieval-benchmark/3"
+        if (!RetrievalBenchmarkGate.IsStructurallyValid(report, collection)
             || report.BaselineSchema != Baseline.Schema
             || !string.Equals(Cases.Sha256, Baseline.CasesSha256,
                 StringComparison.OrdinalIgnoreCase)
@@ -262,10 +269,7 @@ internal static class HybridActivationGate
             || report.SampleCount != expected.Length
             || report.TuningSampleCount != expected.Count(item => item.Split == "tuning")
             || report.HoldoutSampleCount != expected.Count(item => item.Split == "holdout")
-            || report.KeywordTuning is null || report.HybridTuning is null
-            || report.KeywordHoldout is null || report.HybridHoldout is null
             || failures is null
-            || report.ActivationGatePassed != (failures.Count == 0)
             || report.ReviewStatus is not ("reviewed" or "lawyer-reviewed")
             || !string.Equals(report.ExpectedCasesSha256, Baseline.CasesSha256,
                 StringComparison.OrdinalIgnoreCase)
@@ -297,18 +301,23 @@ internal static class HybridActivationGate
         if (!identityMatches)
             return new(false, "benchmark_identity_mismatch");
 
+        if (!RetrievalBenchmarkGate.StrataMatchCases(report, expected, collection))
+            return new(false, "benchmark_invalid");
+
         if (!report.ActivationGatePassed)
             return new(false, "benchmark_gate_failed");
 
         var hybrid = report.HybridHoldout;
         var keyword = report.KeywordHoldout;
-        if (hybrid.ExactFirstAccuracy < 1
-            || hybrid.TemporalLeakageFailures != 0
-            || hybrid.NoHitAccuracy < 1
-            || hybrid.ResolutionAccuracy < 1
-            || hybrid.RoleIntentAccuracy < 1
-            || hybrid.P95Ms > 250
-            || hybrid.NdcgAt10 + 0.000001 < keyword.NdcgAt10 * 0.98
+        if (!hybrid.ExactFirstAccuracy.TryGetMeasured(out var exact) || exact < 1
+            || !hybrid.TemporalLeakageFailures.TryGetMeasured(out var leakage) || leakage != 0
+            || !hybrid.NoHitAccuracy.TryGetMeasured(out var noHit) || noHit < 1
+            || !hybrid.ResolutionAccuracy.TryGetMeasured(out var resolution) || resolution < 1
+            || !hybrid.RoleIntentAccuracy.TryGetMeasured(out var role) || role < 1
+            || !hybrid.P95Ms.TryGetMeasured(out var p95) || p95 > 250
+            || !hybrid.NdcgAt10.TryGetMeasured(out var hybridNdcg)
+            || !keyword.NdcgAt10.TryGetMeasured(out var keywordNdcg)
+            || hybridNdcg + 0.000001 < keywordNdcg * 0.98
             || report.MemoryLimitBytes <= 0
             || report.ProcessMemoryBytes >= report.MemoryLimitBytes * 0.75)
             return new(false, "benchmark_invalid");
@@ -333,8 +342,9 @@ internal static class HybridActivationGate
                    StringComparison.Ordinal)
                && string.Equals(indexManifest.Sources?.GetValueOrDefault("corpus_commit"),
                    report.CorpusCommit, StringComparison.OrdinalIgnoreCase)
-               && benchmarkManifest.Artifacts.Count == 1
+               && benchmarkManifest.Artifacts.Count == 2
                && benchmarkManifest.Artifacts.Contains(benchmarkFile, StringComparer.Ordinal)
+               && benchmarkManifest.Artifacts.Contains(report.CaseResultsFile!, StringComparer.Ordinal)
                && string.Equals(benchmarkManifest.CodeCommit, report.CodeCommit,
                    StringComparison.OrdinalIgnoreCase)
                && string.Equals(benchmarkManifest.Sources?.GetValueOrDefault("collection"), collection,
