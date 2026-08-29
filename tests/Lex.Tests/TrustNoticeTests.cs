@@ -28,6 +28,48 @@ public sealed class TrustNoticeTests : IDisposable
         try { Directory.Delete(_root, recursive: true); } catch { }
     }
 
+    private const string MetadataOnlyHeading = "No held text match";
+
+    /// <summary>
+    /// A query that matches only the record, never the wording, must not be answered with the
+    /// record. Attack 41 proved this live twice: a speeding question returned tachograph and toll
+    /// regulations, under status ok, because a title match was presented as an answer.
+    /// </summary>
+    [Fact]
+    public async Task A_search_matching_only_metadata_is_answered_with_the_no_hit_card()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "meta-only"), includeAct: false);
+        // The work slug matches the record and appears in no provision text. "travail" would
+        // not do: it is in the wording of art. L. 121-6, so it is a genuine text hit.
+        var page = await site.Client.GetStringAsync("/search?q=loi-2006-07-31-n2");
+
+        Assert.Contains(MetadataOnlyHeading, page, StringComparison.Ordinal);
+        Assert.Contains(
+            "Lex found records that match only in metadata. They are not shown as text answers.",
+            page, StringComparison.Ordinal);
+        Assert.Contains("View coverage and known gaps", page, StringComparison.Ordinal);
+        // Suppressed means suppressed: no result card survives to be read as an answer.
+        Assert.DoesNotContain("<div class=\"card\"><a href=\"/lu-legilux/loi-2006-07-31-n2/",
+            page, StringComparison.Ordinal);
+        // The count-at-build rule forbids a population literal in copy, and the specification's
+        // own figure is wrong: the never-consolidated set is 23,370, not ~24,579.
+        Assert.DoesNotContain("24,579", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A query that reaches the wording is answered with the wording. Suppression must not become
+    /// a general refusal to answer.
+    /// </summary>
+    [Fact]
+    public async Task A_search_matching_provision_text_still_answers()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "text-hit"), includeAct: false);
+        var page = await site.Client.GetStringAsync("/search?q=protection");
+
+        Assert.DoesNotContain(MetadataOnlyHeading, page, StringComparison.Ordinal);
+        Assert.Contains("loi-2006-07-31-n2", page, StringComparison.Ordinal);
+    }
+
     private const string UnknownWorkHeading = "Instrument not found in held records";
     private const string CandidateHeading = "Possible held records";
 

@@ -539,9 +539,39 @@ public static class CatalogueEndpoints
                     var publisherId = result["envelope"]?["publisher"]?.GetValue<string>() ?? "";
                     if (!readers.TryGetValue(publisherId, out var reader)) continue;
                     var hits = result["hits"] as JsonArray ?? [];
-                    sb.Append($"<h2>{H(reader.Stamp.GetValueOrDefault("publisher_name"))} ({H(reader.Stamp.GetValueOrDefault("jurisdiction"))}), {hits.Count} hit(s)</h2>");
-                    foreach (var hit in hits.OfType<JsonObject>())
+                    // A hit that reached no wording matched the record, not the law. The
+                    // assistant path already drops these as filler (AskService); the web page
+                    // presented them as answers, which is how a speeding question returns
+                    // tachograph regulations under status ok.
+                    //
+                    // The discriminator is the absence of a wording reason, not the presence
+                    // of a label. Only the identifier/title FALLBACK stamps
+                    // match=work_identifier_or_title; a work-level metadata hit from the main
+                    // path arrives unlabelled, carrying work_metadata from the FTS over
+                    // identifiers, aliases, titles and facets (WorkSearch). Keying on the
+                    // label alone would miss exactly the hits attack 41 proved live.
+                    static bool ReachedWording(JsonObject hit) =>
+                        hit["match"]?.GetValue<string>() != "work_identifier_or_title"
+                        && (hit["match_reasons"] as JsonArray ?? [])
+                            .Select(reason => reason?.GetValue<string>())
+                            .Any(reason => reason is "keyword" or "semantic");
+                    var shown = hits.OfType<JsonObject>().Where(ReachedWording).ToList();
+                    var metadataOnly = hits.OfType<JsonObject>()
+                        .Where(hit => !ReachedWording(hit)).ToList();
+                    // Only when the noise would BE the answer. Alongside real text hits a
+                    // record match is context, and it keeps its badge below them.
+                    if (shown.Count == 0 && metadataOnly.Count > 0)
                     {
+                        sb.Append($"<h2>{H(reader.Stamp.GetValueOrDefault("publisher_name"))} ({H(reader.Stamp.GetValueOrDefault("jurisdiction"))})</h2>");
+                        sb.Append(TrustNotices.MetadataOnly(reader, metadataOnly
+                            .Select(hit => hit["work"]?.GetValue<string>() ?? "")
+                            .Where(work => work.Length > 0).ToList()));
+                        continue;
+                    }
+                    sb.Append($"<h2>{H(reader.Stamp.GetValueOrDefault("publisher_name"))} ({H(reader.Stamp.GetValueOrDefault("jurisdiction"))}), {shown.Count} hit(s)</h2>");
+                    foreach (var hit in shown.Concat(metadataOnly))
+                    {
+                        var matchedRecordOnly = !ReachedWording(hit);
                         var work = hit["work"]?.GetValue<string>() ?? "";
                         var validFrom = hit["valid_from"]?.GetValue<string>() ?? "";
                         var validTo = hit["valid_to"]?.GetValue<string>();
@@ -556,7 +586,7 @@ public static class CatalogueEndpoints
                             + (anchor is null ? "" : $"#{H(anchor)}");
                         sb.Append($"""
                             <div class="card"><a href="{href}"><b>{H(title)}</b>{(provisionLabel is null ? "" : $",  {H(provisionLabel)}")}</a>
-                            <span class="badge">{H(sourceClass)}</span> <span class="badge mono">{H(validFrom)} → {H(validTo ?? "open")}</span>
+                            <span class="badge">{H(sourceClass)}</span> <span class="badge mono">{H(validFrom)} → {H(validTo ?? "open")}</span>{(matchedRecordOnly ? " <span class=\"badge\">matched on title, not wording</span>" : "")}
                             <div class="snippet">{H(snippet)}</div>
                             <div class="mono sub">{H(provisionId)}</div></div>
                             """);

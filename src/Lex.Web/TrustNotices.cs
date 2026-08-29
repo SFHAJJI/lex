@@ -81,6 +81,57 @@ public static class TrustNotices
     }
 
     /// <summary>
+    /// The metadata_only no-hit card, or null when no metadata-only match was actually suppressed.
+    /// Copy frozen by Decision 41.
+    ///
+    /// The evidence condition is the suppression itself: the notice says Lex found records that
+    /// match only in metadata, so it may only appear when it did. A search that genuinely returned
+    /// nothing is a different state and gets the Phase 2 typed no-hit card, not this one.
+    ///
+    /// Scope note. The verdict's Phase 0 wording is "metadata-only match suppression when the query
+    /// names an absent instrument", which covers only half the failure that was actually proven.
+    /// Attack 41 ran two probes: one naming an instrument, and one purely lay-language query that
+    /// returned tachograph and toll regulations for a speeding question. Both returned status ok
+    /// with metadata matches presented as answers. Detecting whether a query names an instrument is
+    /// also more code than not needing to know. So suppression here is general, and the widening is
+    /// deliberate and declared rather than silently inherited from the narrower sentence.
+    ///
+    /// No population figure appears in this copy. The count-at-build rule forbids literals, and the
+    /// gap matrix proves the specification's own "~24,579 never consolidated" is wrong: the true
+    /// set is 23,370 of a 24,622 population. Coverage computes both at build, so the card links
+    /// there instead of restating a number that would rot.
+    /// </summary>
+    public static string? MetadataOnly(LexIndexReader reader, IReadOnlyList<string> suppressedWorks)
+    {
+        if (suppressedWorks.Count == 0) return null;
+
+        var body = "Lex found records that match only in metadata. They are not shown as text "
+            + "answers. This is not evidence that the named instrument or law does not exist. "
+            + "Check the name or identifier, review coverage and known gaps, or search the "
+            + "official publisher.";
+
+        var origin = suppressedWorks
+            .Select(work => reader.Timeline(work)
+                .OrderBy(document => document.ValidFrom, StringComparer.Ordinal)
+                .Select(document => document.SourceUri)
+                .FirstOrDefault(value => OriginOf(value) is not null))
+            .Select(OriginOf)
+            .FirstOrDefault(value => value is not null);
+        var publisherAction = origin is null
+            ? "Search the official publisher"
+            : $"<a href=\"{H(origin)}\" rel=\"noopener\">Search the official publisher</a>";
+
+        return $"""
+            <div class="notice" role="note" aria-label="No held text match">
+            <b>No held text match.</b>
+            {body}
+            <span class="sub"><a href="/coverage">View coverage and known gaps</a>
+            &nbsp;&nbsp;{publisherAction}</span>
+            </div>
+            """;
+    }
+
+    /// <summary>
     /// The held records nearest to a slug that is not held.
     ///
     /// The underlying search is a substring match, so the exact miss this notice exists for finds
