@@ -895,15 +895,23 @@ export default function App() {
           : view.diff.provision_level_comparable && view.diff.anchor_text_equal === false
             ? <span className="tag">wording changed</span>
           : null}
-      </div> : view.diff.changed === undefined ? null : <div className="cnt">
+      </div> : view.diff.changed !== true && view.diff.changed !== false ? null : <div className="cnt">
         {/* A whole-work comparison has no anchor, so none of the provision-level tags above apply
             and until now it rendered no outcome at all: a reader was told a comparison happened and
             left to guess how it came out. `changed` is the only typed outcome this case has.
 
             It is a record fact, whether the two dates resolved to different publisher versions, so
             the wording speaks about versions and never about the law. "Nothing changed" would be a
-            legal claim this field cannot support and Decision 44 forbids. */}
-        <span className="tag">{view.diff.changed
+            legal claim this field cannot support and Decision 44 forbids.
+
+            Both branches test identity, not truthiness, and the guard above admits only the two
+            real booleans. The stream parser casts parsed JSON to `OperationReply` without runtime
+            validation, so `changed?: boolean` describes what should arrive and constrains nothing
+            that does. Under truthiness a `null` from version skew or malformed transport lands on
+            the reassuring branch and states that the same version applied, which is a claim the
+            producer never made. Every value that is not exactly `true` or `false` is a value this
+            panel cannot interpret, and an uninterpretable outcome is no outcome. */}
+        <span className="tag">{view.diff.changed === true
           ? "different versions on these dates"
           : "the same version applied on both dates"}</span>
       </div>}

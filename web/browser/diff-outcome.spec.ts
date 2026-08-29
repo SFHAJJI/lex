@@ -29,8 +29,15 @@ const WORK = "lu-legilux:fixture-diff";
 const FROM = "2020-01-01";
 const TO = "2021-01-01";
 
-/** The diff operation, with `changed` present or absent as the case under test requires. */
-function diffOperation(requestId: string, changed: boolean | undefined, anchor?: string) {
+/**
+ * The diff operation, with `changed` present or absent as the case under test requires.
+ *
+ * `changed` is deliberately `unknown` rather than `boolean | undefined`. The values that matter
+ * most here are the ones the client contract says cannot occur: the stream parser casts parsed JSON
+ * without validating it, so the declaration constrains the producer and not the wire. A fixture
+ * typed to the declaration could not express the case that produced a false claim.
+ */
+function diffOperation(requestId: string, changed: unknown, anchor?: string) {
   const diff: Record<string, unknown> = {
     subject: { work: WORK, title: "Fixture law", ...(anchor ? { anchor } : {}) },
     from_date: FROM, to_date: TO,
@@ -59,7 +66,7 @@ function companionOperation(requestId: string) {
 }
 
 async function runAssistant(page: Page, requestId: string,
-                            changed: boolean | undefined, anchor?: string) {
+                            changed: unknown, anchor?: string) {
   const operations = [diffOperation(requestId, changed, anchor), companionOperation(requestId)];
   await page.addInitScript(({ requestId, operations }) => {
     const originalFetch = window.fetch.bind(window);
@@ -133,6 +140,30 @@ test("a comparison with no reported outcome states none rather than guessing", a
   await expect(panel).not.toContainText("the same version applied on both dates");
   await expect(panel.getByRole("button", { name: "Open comparison" })).toBeVisible();
 });
+
+/**
+ * Values the declaration forbids and the transport can still deliver. Each one is a value this
+ * panel cannot interpret, and the rule is that an uninterpretable outcome is reported as no
+ * outcome. Truthiness would send `null` and `0` to the reassuring branch and `"no"` to the other,
+ * so each of these once produced a claim the producer never made.
+ */
+const HOSTILE: readonly (readonly [string, string, unknown])[] = [
+  ["null", "5023456789abcdef0123456789abcdef", null],
+  ["a string", "6023456789abcdef0123456789abcdef", "no"],
+  ["a number", "7023456789abcdef0123456789abcdef", 0],
+];
+
+for (const [label, requestId, value] of HOSTILE) {
+  test(`a comparison whose outcome is ${label} makes no claim`, async ({ page }) => {
+    const panel = await runAssistant(page, requestId, value);
+
+    await expect(panel).not.toContainText("the same version applied on both dates");
+    await expect(panel).not.toContainText("different versions on these dates");
+    // The panel itself must still be there. Refusing to interpret one field is not a reason to
+    // withhold the comparison the reader asked for.
+    await expect(panel.getByRole("button", { name: "Open comparison" })).toBeVisible();
+  });
+}
 
 test("an anchored comparison keeps its provision-level tags and gains no whole-work outcome",
   async ({ page }) => {
