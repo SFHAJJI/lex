@@ -19,10 +19,11 @@ public static class ExplainerEndpoints
     internal static string FormatBenchmarkMetric(
         RetrievalMetricObservation observation, string format, string suffix = "")
     {
-        if (!observation.IsCoherent()) return "invalid_metric";
+        if (!observation.IsStructurallyCoherent()) return "invalid_metric";
         if (observation.Status == "insufficient_denominator")
             return "insufficient_denominator (n=0)";
-        return $"{observation.Value!.Value.ToString(format, CultureInfo.InvariantCulture)}{suffix} "
+        if (!observation.TryGetMeasured(out var measured)) return "invalid_metric";
+        return $"{measured.ToString(format, CultureInfo.InvariantCulture)}{suffix} "
                + $"(n={observation.Denominator.ToString(CultureInfo.InvariantCulture)})";
     }
 

@@ -309,14 +309,14 @@ internal static class HybridActivationGate
 
         var hybrid = report.HybridHoldout;
         var keyword = report.KeywordHoldout;
-        if (hybrid.ExactFirstAccuracy.Value is not double exact || exact < 1
-            || hybrid.TemporalLeakageFailures.Value is not double leakage || leakage != 0
-            || hybrid.NoHitAccuracy.Value is not double noHit || noHit < 1
-            || hybrid.ResolutionAccuracy.Value is not double resolution || resolution < 1
-            || hybrid.RoleIntentAccuracy.Value is not double role || role < 1
-            || hybrid.P95Ms.Value is not double p95 || p95 > 250
-            || hybrid.NdcgAt10.Value is not double hybridNdcg
-            || keyword.NdcgAt10.Value is not double keywordNdcg
+        if (!hybrid.ExactFirstAccuracy.TryGetMeasured(out var exact) || exact < 1
+            || !hybrid.TemporalLeakageFailures.TryGetMeasured(out var leakage) || leakage != 0
+            || !hybrid.NoHitAccuracy.TryGetMeasured(out var noHit) || noHit < 1
+            || !hybrid.ResolutionAccuracy.TryGetMeasured(out var resolution) || resolution < 1
+            || !hybrid.RoleIntentAccuracy.TryGetMeasured(out var role) || role < 1
+            || !hybrid.P95Ms.TryGetMeasured(out var p95) || p95 > 250
+            || !hybrid.NdcgAt10.TryGetMeasured(out var hybridNdcg)
+            || !keyword.NdcgAt10.TryGetMeasured(out var keywordNdcg)
             || hybridNdcg + 0.000001 < keywordNdcg * 0.98
             || report.MemoryLimitBytes <= 0
             || report.ProcessMemoryBytes >= report.MemoryLimitBytes * 0.75)

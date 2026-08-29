@@ -195,17 +195,61 @@ public sealed class RetrievalBenchmarkTests
         var insufficient = RetrievalMetricObservation.Insufficient();
         var measured = RetrievalMetricObservation.Measured(12.5, 8);
 
-        Assert.True(insufficient.IsCoherent());
-        Assert.True(measured.IsCoherent());
-        Assert.False(new RetrievalMetricObservation(1, 0, "measured").IsCoherent());
-        Assert.False(new RetrievalMetricObservation(null, 8, "insufficient_denominator").IsCoherent());
-        Assert.False(new RetrievalMetricObservation(null, 0, "not_measured").IsCoherent());
+        Assert.True(insufficient.IsStructurallyCoherent());
+        Assert.True(measured.IsStructurallyCoherent());
+        Assert.False(insufficient.TryGetMeasured(out _));
+        Assert.True(measured.TryGetMeasured(out var measuredValue));
+        Assert.Equal(12.5, measuredValue);
+        Assert.False(new RetrievalMetricObservation(1, 0, "measured")
+            .IsStructurallyCoherent());
+        Assert.False(new RetrievalMetricObservation(null, 8, "insufficient_denominator")
+            .IsStructurallyCoherent());
+        Assert.False(new RetrievalMetricObservation(null, 0, "not_measured")
+            .IsStructurallyCoherent());
+        Assert.False(new RetrievalMetricObservation(double.NaN, 8, "measured")
+            .TryGetMeasured(out _));
+        Assert.False(new RetrievalMetricObservation(double.PositiveInfinity, 8, "measured")
+            .TryGetMeasured(out _));
         Assert.Equal("insufficient_denominator (n=0)",
             Lex.Web.ExplainerEndpoints.FormatBenchmarkMetric(insufficient, "0.0"));
         Assert.Equal("12.5 ms (n=8)",
             Lex.Web.ExplainerEndpoints.FormatBenchmarkMetric(measured, "0.0", " ms"));
         Assert.Equal("invalid_metric", Lex.Web.ExplainerEndpoints.FormatBenchmarkMetric(
             new RetrievalMetricObservation(1, 0, "measured"), "0.0"));
+    }
+
+    [Fact]
+    public void Activation_gate_sources_never_compare_nullable_metric_values_directly()
+    {
+        var root = RepoRoot();
+        var gateSources = new[]
+        {
+            Path.Combine(root, "src", "Lex.Index", "RetrievalBenchmark.cs"),
+            Path.Combine(root, "src", "Lex.Index", "RetrievalBenchmarkEvaluation.cs"),
+            Path.Combine(root, "src", "Lex.Web", "IndexRegistry.cs"),
+        };
+        var liftedComparison = new System.Text.RegularExpressions.Regex(
+            @"\.Value\s*(?:==|!=|<=|>=|<|>)",
+            System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+        foreach (var source in gateSources)
+            Assert.DoesNotMatch(liftedComparison, File.ReadAllText(source));
+    }
+
+    [Fact]
+    public void Negative_controls_are_derived_from_the_hybrid_holdout_arm()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            RepoRoot(), "src", "Lex.Index", "RetrievalBenchmark.cs"));
+
+        Assert.Contains(
+            "RetrievalBenchmarkControls.ShuffledTop10(caseSet, hybridHoldoutEvaluation)", source);
+        Assert.Contains(
+            "RetrievalBenchmarkControls.QrelsShuffle(caseSet, hybridHoldoutEvaluation)", source);
+        Assert.DoesNotContain(
+            "RetrievalBenchmarkControls.ShuffledTop10(caseSet, keywordHoldoutEvaluation)", source);
+        Assert.DoesNotContain(
+            "RetrievalBenchmarkControls.QrelsShuffle(caseSet, keywordHoldoutEvaluation)", source);
     }
 
     [Fact]

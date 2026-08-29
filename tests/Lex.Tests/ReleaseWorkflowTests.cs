@@ -284,6 +284,42 @@ public sealed class ReleaseWorkflowTests
     }
 
     [Fact]
+    public void Benchmark_evidence_workflow_contract_is_always_checked()
+    {
+        var root = RepoRoot();
+        var scriptText = File.ReadAllText(Path.Combine(root, "deploy", "fetch-indexes.sh"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var workflow = File.ReadAllText(Path.Combine(root, ".github", "workflows", "deploy.yml"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var testSource = File.ReadAllText(Path.Combine(
+            root, "tests", "Lex.Tests", "ReleaseWorkflowTests.cs"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        Assert.Equal(2, Regex.Matches(workflow,
+            @"\| select\(type == \""number\"" and \. > 0 and floor == \.\)' \\\n\s+\""\$release_dir/\$benchmark_manifest\""")
+            .Count);
+        Assert.Equal(2, Regex.Matches(workflow, "benchmark_evidence_status=legacy").Count);
+        Assert.Equal(2, Regex.Matches(workflow,
+            "signed legacy benchmark has no per-case evidence; hybrid activation stays quarantined")
+            .Count);
+        Assert.Contains("benchmark_member_path returned an unsupported status", scriptText);
+        Assert.Contains("lex-ops Rebuild 0 publication then produces the v4 report and JSONL member",
+            scriptText);
+        Assert.Contains("[RequiresJqFact]\n    public void "
+                        + "Signed_benchmark_case_results_are_fetched_and_checked_from_one_manifest()",
+            testSource);
+        var executableTestStart = testSource.IndexOf(
+            "    [RequiresJqFact]\n    public void Signed_benchmark_case_results", StringComparison.Ordinal);
+        var executableTestEnd = testSource.IndexOf("\n    [Fact]", executableTestStart + 1,
+            StringComparison.Ordinal);
+        Assert.True(executableTestStart >= 0 && executableTestEnd > executableTestStart);
+        var executableTest = testSource[executableTestStart..executableTestEnd];
+        Assert.DoesNotContain("if (!File.Exists(shell)) return;", executableTest);
+        Assert.DoesNotContain("command -v jq >/dev/null 2>&1\").Code != 0) return;",
+            executableTest);
+    }
+
+    [RequiresJqFact]
     public void Signed_benchmark_case_results_are_fetched_and_checked_from_one_manifest()
     {
         var root = RepoRoot();
@@ -301,10 +337,18 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("benchmark_case_results=$(jq -er", workflow);
         Assert.Contains("benchmark manifest has missing or extra evidence", workflow);
         Assert.Contains("benchmark case-results member exceeds the fixed byte ceiling", workflow);
+        Assert.Equal(2, Regex.Matches(workflow,
+            @"\| select\(type == \""number\"" and \. > 0 and floor == \.\)' \\\n\s+\""\$release_dir/\$benchmark_manifest\""")
+            .Count);
+        Assert.Contains("benchmark_evidence_status=legacy", workflow);
+        Assert.Contains("signed legacy benchmark has no per-case evidence; hybrid activation stays quarantined",
+            workflow);
+        Assert.Contains("benchmark_member_path returned an unsupported status", scriptText);
 
         var shell = OperatingSystem.IsWindows()
             ? @"C:\Program Files\Git\usr\bin\sh.exe" : "/bin/sh";
-        if (!File.Exists(shell)) return;
+        Assert.True(File.Exists(shell),
+            "The protected CI runner must provide a POSIX shell for benchmark evidence tests.");
         static (int Code, string Output) Start(string executable, params string[] arguments)
         {
             var start = new ProcessStartInfo(executable)
@@ -321,7 +365,7 @@ public sealed class ReleaseWorkflowTests
             process.WaitForExit();
             return (process.ExitCode, output);
         }
-        if (Start(shell, "-c", "command -v jq >/dev/null 2>&1").Code != 0) return;
+        Assert.Equal(0, Start(shell, "-c", "command -v jq >/dev/null 2>&1").Code);
 
         var directory = Path.Combine(Path.GetTempPath(), $"lex-benchmark-fetch-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
@@ -334,14 +378,23 @@ public sealed class ReleaseWorkflowTests
             var caseSha = Convert.ToHexStringLower(
                 System.Security.Cryptography.SHA256.HashData(caseBytes));
             File.WriteAllBytes(Path.Combine(directory, caseFile), caseBytes);
-            File.WriteAllText(Path.Combine(directory, reportFile),
-                System.Text.Json.JsonSerializer.Serialize(new
-                {
-                    schema = "lex-retrieval-benchmark/4",
-                    case_results_file = caseFile,
-                    case_results_count = 1,
-                    case_results_sha256 = caseSha,
-                }));
+            void WriteReport(bool complete)
+            {
+                var report = complete
+                    ? System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        schema = "lex-retrieval-benchmark/4",
+                        case_results_file = caseFile,
+                        case_results_count = 1,
+                        case_results_sha256 = caseSha,
+                    })
+                    : System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        schema = "lex-retrieval-benchmark/3",
+                    });
+                File.WriteAllText(Path.Combine(directory, reportFile), report);
+            }
+            WriteReport(complete: true);
 
             void WriteManifest(bool includeCase, string digest, long? declaredSize = null)
             {
@@ -356,10 +409,53 @@ public sealed class ReleaseWorkflowTests
                     System.Text.Json.JsonSerializer.Serialize(new { files }));
             }
 
+            var workflowBlocks = Regex.Matches(workflow,
+                @"^ {14}benchmark_evidence_status=\n.*?^ {14}if \[ \""\$benchmark_evidence_status\"" = \""complete\"" \]; then\n.*?^ {14}fi\n",
+                RegexOptions.Multiline | RegexOptions.Singleline)
+                .Select(match => Regex.Replace(match.Value, @"(?m)^ {14}", ""))
+                .ToArray();
+            Assert.Equal(2, workflowBlocks.Length);
+
+            foreach (var (block, index) in workflowBlocks.Select((value, index) => (value, index)))
+            {
+                var runner = Path.Combine(directory, $"workflow-benchmark-gate-{index}.sh");
+                File.WriteAllText(runner,
+                    "#!/bin/sh\nset -eu\n"
+                    + "repo=test-repo\ncollection=eu-eurlex\n"
+                    + "release_dir=$1\n"
+                    + $"benchmark_manifest={manifestFile}\n"
+                    + block
+                    + "printf 'status=%s size=%s\\n' \"$benchmark_evidence_status\" "
+                    + "\"${benchmark_case_results_size:-none}\"\n");
+
+                WriteManifest(includeCase: true, caseSha);
+                var workflowAccepted = Start(shell, runner, directory);
+                Assert.Equal(0, workflowAccepted.Code);
+                Assert.Contains($"status=complete size={caseBytes.Length}", workflowAccepted.Output);
+
+                WriteManifest(includeCase: true, caseSha, declaredSize: 67_108_865);
+                var workflowOversized = Start(shell, runner, directory);
+                Assert.NotEqual(0, workflowOversized.Code);
+                Assert.Contains("benchmark case-results member exceeds the fixed byte ceiling",
+                    workflowOversized.Output);
+
+                WriteManifest(includeCase: false, caseSha);
+                var workflowLegacy = Start(shell, runner, directory);
+                Assert.Equal(0, workflowLegacy.Code);
+                Assert.Contains("status=legacy size=none", workflowLegacy.Output);
+            }
+
             (int Code, string Output) Verify() => Start(shell, script,
                 "--verify-benchmark-evidence", directory, manifestFile, reportFile);
 
+            WriteReport(complete: false);
             WriteManifest(includeCase: false, caseSha);
+            var legacy = Verify();
+            Assert.True(legacy.Code == 3,
+                $"Expected legacy quarantine exit 3, got {legacy.Code}: {legacy.Output}");
+            Assert.Contains("LEGACY: signed benchmark has no per-case evidence", legacy.Output);
+
+            WriteReport(complete: true);
             Assert.NotEqual(0, Verify().Code);
 
             WriteManifest(includeCase: true, new string('0', 64));
@@ -372,7 +468,8 @@ public sealed class ReleaseWorkflowTests
 
             WriteManifest(includeCase: true, caseSha);
             var accepted = Verify();
-            Assert.Equal(0, accepted.Code);
+            Assert.True(accepted.Code == 0,
+                $"Expected complete evidence acceptance, got {accepted.Code}: {accepted.Output}");
             Assert.Contains(caseFile, accepted.Output);
         }
         finally
@@ -1840,5 +1937,33 @@ public sealed class ReleaseWorkflowTests
         Task.WaitAll(standardOutput, standardError);
         var output = standardOutput.Result + standardError.Result;
         return (process.ExitCode, output);
+    }
+}
+
+internal sealed class RequiresJqFactAttribute : FactAttribute
+{
+    public RequiresJqFactAttribute()
+    {
+        if (string.Equals(Environment.GetEnvironmentVariable("CI"), "true",
+                StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var shell = OperatingSystem.IsWindows()
+            ? @"C:\Program Files\Git\usr\bin\sh.exe" : "/bin/sh";
+        if (!File.Exists(shell))
+        {
+            Skip = "A POSIX shell is not installed on this local reviewer machine.";
+            return;
+        }
+
+        var start = new ProcessStartInfo(shell, "-c \"command -v jq >/dev/null 2>&1\"")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        using var process = Process.Start(start);
+        process?.WaitForExit();
+        if (process is null || process.ExitCode != 0)
+            Skip = "jq is not installed on this local reviewer machine.";
     }
 }

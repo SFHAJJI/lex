@@ -417,7 +417,7 @@ internal static class RetrievalBenchmarkControls
         var unrelatedIdentical = UnrelatedMetricsEqual(baselineMetrics, controlMetrics)
                                  && nonRankingIdentical;
         var detected = eligibleIds.Count > 0 && retained == 0
-                       && controlMetrics.NdcgAt10.Value is double ndcg && ndcg < 0.15
+                       && controlMetrics.NdcgAt10.TryGetMeasured(out var ndcg) && ndcg < 0.15
                        && failed.Count > 0 && membershipIdentical
                        && nonRankingIdentical && unrelatedIdentical;
         var outcome = eligibleIds.Count == 0 ? "insufficient_denominator"
@@ -443,7 +443,8 @@ internal static class RetrievalBenchmarkControls
     }
 
     private static bool Lower(RetrievalMetricObservation candidate, RetrievalMetricObservation baseline) =>
-        candidate.Value is double candidateValue && baseline.Value is double baselineValue
+        candidate.TryGetMeasured(out var candidateValue)
+        && baseline.TryGetMeasured(out var baselineValue)
         && candidateValue + 0.000000000001 < baselineValue;
 
     private static bool NonRankingEqual(
@@ -559,16 +560,17 @@ internal static class RetrievalBenchmarkStrata
         string metric, RetrievalMetricObservation observation, double expected)
     {
         var support = Support(observation, DefaultStatisticalFloor);
-        var supported = observation.IsCoherent() && observation.Denominator >= InvariantFloor;
+        var supported = observation.TryGetMeasured(out var measured)
+                        && observation.Denominator >= InvariantFloor;
         rows.Add(new(metric, collection, category, "holdout", "blocking", InvariantFloor,
             DefaultStatisticalFloor, support, observation,
-            supported && observation.Value == expected));
+            supported && measured == expected));
     }
 
     private static string Support(
         RetrievalMetricObservation observation, int statisticalFloor)
     {
-        if (!observation.IsCoherent()) return "invalid_metric";
+        if (!observation.IsStructurallyCoherent()) return "invalid_metric";
         if (observation.Denominator < InvariantFloor) return "insufficient_denominator";
         if (observation.Denominator < statisticalFloor) return "invariant_only_n8";
         return "statistically_supported";
