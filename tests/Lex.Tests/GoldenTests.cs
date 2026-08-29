@@ -908,11 +908,45 @@ internal static class Golden
         return s.Replace("\r\n", "\n").TrimEnd() + "\n";
     }
 
+    /// <summary>
+    /// V3 page-snapshot unlock. Owner-directed, 2026-08-29.
+    ///
+    /// The page snapshots are a regression lock on rendered HTML. During V3 the pages are
+    /// themselves being replaced: an index around three times the current scope, a new dossier
+    /// architecture, and pages that do not exist yet. Locking output that is scheduled to change
+    /// makes every intended change look like a regression, and it blocks correcting copy that is
+    /// already wrong, which is the opposite of what the lock is for.
+    ///
+    /// So during V3 the page snapshots are neither compared nor rewritten. They are left exactly
+    /// as committed and simply not checked.
+    ///
+    /// The first attempt rewrote them on every run so the diff would stay visible. That was
+    /// wrong: the committed files are LF and the writer emits CRLF on Windows, so one local run
+    /// rewrote all 34 of them with no content change at all. A mechanism that corrupts the
+    /// artifact it is meant to preserve is worse than one that ignores it, so the unlock now
+    /// touches nothing. The cost is that page changes stop appearing in review diffs until the
+    /// lock is restored, which is the trade the owner asked for.
+    ///
+    /// Tool-response snapshots are deliberately NOT unlocked. The MCP contract is not being
+    /// redesigned, and those snapshots are what protect the answers themselves.
+    ///
+    /// RESTORE AT THE END OF V3: set this to false and delete it and PageSnapshotUnlocked, then
+    /// regenerate once and read the whole diff. The pre-change branch protection is recorded in
+    /// C:/lex-v3/coordination/freezes/GOLDEN-LOCK-RESTORE-STATE-20260829.json, and the required
+    /// check trusted-golden-diff must be added back to main.
+    /// </summary>
+    private const bool V3PageSnapshotsUnlocked = true;
+
+    private static bool PageSnapshotUnlocked(string name) =>
+        V3PageSnapshotsUnlocked && name.StartsWith("page-", StringComparison.Ordinal);
+
     public static void Assert(string name, string actual)
     {
+        var update = Environment.GetEnvironmentVariable("LEX_GOLDEN_UPDATE") == "1";
+        // An explicit update request still wins, so the lock can be restored in one command.
+        if (!update && PageSnapshotUnlocked(name)) return;
         var path = Path.Combine(Dir, $"{name}.txt");
-        AssertFile(path, actual,
-            Environment.GetEnvironmentVariable("LEX_GOLDEN_UPDATE") == "1");
+        AssertFile(path, actual, update);
     }
 
     internal static void AssertFile(string path, string actual, bool updateMode)

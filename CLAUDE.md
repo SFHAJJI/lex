@@ -25,6 +25,38 @@ comments.
 **Only official publisher endpoints.** Respect `robots.txt`. User-Agent
 `Lex/0.1 (+https://github.com/SFHAJJI/lex)`.
 
+## Build V3, do not evolve V2 into it
+
+Owner ruling, 2026-08-29. The goal is a V3 that is clean and consistent with the V3 specs. The
+journey there does not have to be clean.
+
+Breaking changes are allowed. Deleting a component is allowed. **Deleting unit tests and
+integration tests is allowed** when they describe V2 behaviour that a V3 component replaces. Do not
+spend effort preserving, migrating or negotiating around something V3 removes. If a test, a guard or
+a contract stands between you and implementing a V3 component as specified, delete it and say so in
+the commit; do not build machinery to satisfy it.
+
+The failure this corrects: two co-owners spent a day on an acceptance protocol for page snapshots
+while the pages themselves were scheduled to be replaced by a new index roughly three times the
+scope and a new dossier architecture. Eight contract revisions, no product change. That is the shape
+to watch for. Process is not the product.
+
+This applies to both co-owners.
+
+### Page snapshots are unlocked during V3
+
+Page snapshots are still written and committed, but they are not checked and the gate is off, since
+V3 changes the pages by design. Restore the lock as a V3 closing step:
+
+- set `V3PageSnapshotsUnlocked` to false in `tests/Lex.Tests/GoldenTests.cs` and delete it,
+- regenerate once with `LEX_GOLDEN_UPDATE=1` and read the whole diff,
+- re-enable the `trusted-golden-diff` workflow,
+- add `trusted-golden-diff` back to the required checks on `main`.
+
+The exact pre-change branch protection is recorded in
+`C:/lex-v3/coordination/freezes/GOLDEN-LOCK-RESTORE-STATE-20260829.json`. MCP tool-response
+snapshots stay locked: the tool contract is not being redesigned and they protect the answers.
+
 ## The golden tests are the safety net
 
 Snapshots cover every rendered page and every MCP tool response, with targeted contract and
