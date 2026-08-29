@@ -1,4 +1,4 @@
-import type { UiEffect } from "./api";
+import { provisionItemsOf, type UiEffect } from "./api.ts";
 import type { State } from "./state";
 
 export const STARTER_PROMPTS = [
@@ -10,15 +10,21 @@ export const STARTER_PROMPTS = [
 
 export interface AssistantPanelState { open: boolean; minimized: boolean }
 
-/** Only a complete provision effect may seed the reader without a follow-up fetch. */
+/** Only an unbounded provision effect may seed the reader without a follow-up fetch. */
 export function assistantProvisionLoad(ui?: UiEffect) {
   const provision = ui?.provision;
   if (!provision || provision.truncated || provision.text_truncated || provision.outline_only)
     return undefined;
+  const evidence = provision.evidence?.[0];
   return {
-    items: provision.provisions,
+    items: provisionItemsOf(provision),
     from: provision.valid_from,
     to: provision.valid_to,
+    ...(evidence?.source_uri ? { source: evidence.source_uri } : {}),
+    ...(evidence?.extraction_profile ? { profile: evidence.extraction_profile } : {}),
+    ...(provision.text_completeness
+      ? { textCompleteness: provision.text_completeness }
+      : {}),
   };
 }
 
@@ -69,13 +75,22 @@ function workspaceUrl(values: Record<string, string | undefined>): string {
 /** Every typed operation defines a complete workspace scope, including cleared old state. */
 export function assistantWorkspaceState(ui?: UiEffect): Partial<State> | undefined {
   if (!ui) return undefined;
+  const gapSubject = ui.gap?.work ? {
+    work: ui.gap.work,
+    date: ui.gap.date,
+    anchor: ui.gap.provision_gaps?.length === 1
+      ? ui.gap.provision_gaps[0]?.anchor
+      : undefined,
+    language: undefined,
+  } : undefined;
   const legalSubject = ui.diff?.subject ?? ui.provision?.subject
-    ?? ui.history?.subject ?? ui.timeline?.subject;
+    ?? ui.history?.subject ?? ui.timeline?.subject ?? gapSubject;
   if (legalSubject?.work) return {
     space: "law", q: undefined, asOf: undefined,
     work: legalSubject.work,
     date: ui.diff?.from_date ?? (ui.provision
-      ? legalSubject.date ?? ui.provision.valid_from : legalSubject.date),
+      ? legalSubject.date ?? ui.provision.valid_from
+      : ui.gap?.date ?? legalSubject.date),
     to: ui.diff?.to_date, anchor: legalSubject.anchor ?? ui.history?.anchor,
     mode: ui.diff ? "compare" : "read",
     from: undefined, until: undefined, order: undefined, retrieval: undefined,

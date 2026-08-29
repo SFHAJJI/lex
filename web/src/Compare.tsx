@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { CompareSkeleton } from "./Skeleton";
-import { first, tool } from "./api";
+import { asOfResult, first, hasTypedProvisionGaps, tool } from "./api";
 import { diffWords, changed } from "./diff";
 import { assessAnchorPopulation, isUnavailableOutlineSide, scopeOutline } from "./comparison";
 import { Empty } from "./views";
@@ -82,8 +82,16 @@ export function Compare({ work, title, from, to, anchor }: {
 
     (async () => {
       const [oa, ob] = await Promise.all([outline(from), outline(to)]);
-      const pa = first<any>(oa, (x) => Array.isArray(x?.provisions) && x.provisions.length > 0);
-      const pb = first<any>(ob, (x) => Array.isArray(x?.provisions) && x.provisions.length > 0);
+      const pa = asOfResult<any>(oa);
+      const pb = asOfResult<any>(ob);
+      if (hasTypedProvisionGaps(pa, anchor) || hasTypedProvisionGaps(pb, anchor)) {
+        if (live) setState({
+          loading: false,
+          error: "TYPED_GAP",
+          sources: [pa?.document?.source_uri, pb?.document?.source_uri],
+        });
+        return;
+      }
       // Keep the client honest during rolling deployment too: an older MCP build ignored
       // anchors in outline mode and returned the whole document, which made an article-scoped
       // permalink display hundreds of unrelated additions and removals.
@@ -220,6 +228,16 @@ export function Compare({ work, title, from, to, anchor }: {
       </Empty>
     );
   }
+  if (state.error === "TYPED_GAP")
+    return (
+      <Empty>
+        This comparison is unavailable because one or both versions contain a typed text gap.
+        Lex will not compare a partial body as if it were complete. Open the{" "}
+        <a href={`/${work.replace(":", "/")}/${from}`}>{from} record</a>{" and "}
+        <a href={`/${work.replace(":", "/")}/${to}`}>{to} record</a> to inspect the retained
+        coordinates and official publisher sources.
+      </Empty>
+    );
   if (state.error === "PROFILE_MISMATCH") {
     const [pA, pB] = state.profiles ?? ["", ""];
     return (

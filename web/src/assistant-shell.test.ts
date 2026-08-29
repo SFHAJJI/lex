@@ -39,6 +39,22 @@ test("navigating from an assistant reply never retains stale publisher text", ()
   } }), undefined);
 });
 
+test("assistant-seeded legal text preserves its publisher source and extraction profile", () => {
+  const load = assistantProvisionLoad({ provision: {
+    subject: { work: "eu-eurlex:32016r0679", date: "2021-01-01" },
+    valid_from: "2021-01-01",
+    provisions: [{ anchor: "art_6", text: "Lawful processing." }],
+    evidence: [{
+      provisional: false,
+      source_uri: "https://publisher.example/exact",
+      extraction_profile: "xhtml-eu/1",
+    }],
+  } });
+
+  assert.equal(load?.source, "https://publisher.example/exact");
+  assert.equal(load?.profile, "xhtml-eu/1");
+});
+
 test("first visit opens and only valid tab-scoped state is restored", () => {
   // Absent state means the reader has never chosen, and the assistant is the product, so it
   // opens. Unparseable state is not the same thing: it could be tampering, so it stays closed.
