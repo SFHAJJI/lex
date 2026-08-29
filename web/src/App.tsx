@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { asOfResult, compoundOperationViews, first, provisionItemsOf, summedCount, summedPopulation, tool,
+import { asOfResult, compoundOperationViews, first, provisionEmptyExplanation, provisionItemsOf, provisionResponseMeta, summedCount, summedPopulation, tool,
   unionKnownExclusions,
   type AskReply,
   type OperationReply, type ProvisionItem, type UiEffect } from "./api";
@@ -221,6 +221,8 @@ export default function App() {
   const measuredPresentations = useRef(new Set<string>());
   const [loaded, setLoaded] = useState<{ items: ProvisionItem[]; from: string; to?: string;
                                         profile?: string; source?: string;
+                                        totalProvisions?: number; totalProvisionGaps?: number;
+                                        truncated?: boolean; textTruncated?: boolean;
                                         textCompleteness?: string }>();
   const [toc, setToc] = useState<ProvisionItem[]>([]);
   const [title, setTitle] = useState<string>();
@@ -409,6 +411,7 @@ export default function App() {
         const doc = one?.document ?? one;
         setTitle(shorten(doc?.title));
         const items = provisionItemsOf(one);
+        const meta = provisionResponseMeta(one);
         if (items.length === 0 && doc?.text_omitted) items.push({
           anchor: "", heading: doc?.title, text: "", text_omitted: true,
           text_omitted_reason: doc?.text_omitted_reason,
@@ -422,10 +425,21 @@ export default function App() {
         setLoaded(doc?.valid_from
           ? { items, from: doc.valid_from, to: doc?.valid_to,
               profile: doc?.extraction_profile, source: doc?.source_uri,
-              textCompleteness: one?.text_completeness }
+              ...meta }
           : undefined);
         if (items.length === 0)
-          setUi({ gap: { status: one?.envelope?.status ?? "no_result", explanation: "No text is held for this law on that date.", available: [] } });
+          setUi({ gap: {
+            status: meta.textCompleteness === "partial" || meta.textTruncated
+              ? "partial_response"
+              : one?.envelope?.status ?? "no_result",
+            explanation: provisionEmptyExplanation(meta),
+            available: [],
+            total_provisions: meta.totalProvisions,
+            total_provision_gaps: meta.totalProvisionGaps,
+            truncated: meta.truncated,
+            text_truncated: meta.textTruncated,
+            text_completeness: meta.textCompleteness,
+          } });
         else setUi(undefined);
       })
       .catch(() => { if (live()) setUi({ gap: { status: "error", explanation: "That version could not be loaded.", available: [] } }); });
@@ -1061,11 +1075,15 @@ export default function App() {
                                   onPage={(p) => { setPage(Math.max(0, p)); clearAssistantView(); }} onOpen={openLaw} /> :
          s.work && s.mode === "compare" ? <Compare work={s.work} title={title ?? s.work} from={s.date ?? today} to={s.to ?? today} anchor={s.anchor} /> :
          s.work && loaded ? <Provision items={loaded.items} toc={toc} validFrom={loaded.from} validTo={loaded.to}
-                                       work={s.work} title={title ?? s.work} language={servedLang}
-                                       anchor={s.anchor} profile={loaded.profile}
-                                       timelineSemantics={timelineSemantics}
+                                        work={s.work} title={title ?? s.work} language={servedLang}
+                                        anchor={s.anchor} profile={loaded.profile}
+                                        timelineSemantics={timelineSemantics}
                                        source={loaded.source}
                                        textCompleteness={loaded.textCompleteness}
+                                       totalProvisions={loaded.totalProvisions}
+                                       totalProvisionGaps={loaded.totalProvisionGaps}
+                                       truncated={loaded.truncated}
+                                       textTruncated={loaded.textTruncated}
                                        onCite={(w) => { clearAssistantView(); go({ work: w, date: undefined, anchor: undefined, to: undefined, mode: "read", space: "law" }); }}
                                        onPick={(a, auto) => { chosenAnchor.current = !auto; go({ anchor: a }); }}
                                        onClear={() => go({ anchor: undefined })} /> :

@@ -154,7 +154,8 @@ public sealed record ProvisionView(Subject Subject, string ValidFrom, string? Va
     string? TextCompleteness = null);
 
 public sealed record ProvisionItem(string Anchor, string? Num, string? Heading, string Text, string? Sha,
-    bool TextOmitted = false, string? TextOmittedReason = null, string? Permalink = null);
+    bool TextOmitted = false, string? TextOmittedReason = null, string? Permalink = null,
+    int? DocumentOrder = null);
 
 /// <summary>
 /// One publisher coordinate retained without legal text because derivation could not certify
@@ -168,7 +169,9 @@ public sealed record ProvisionGapItem(
     string? Path,
     string? ArticleValidFrom,
     string TextUnavailableReason,
-    string? OfficialSource);
+    string? OfficialSource,
+    string? Eli = null,
+    string? SourceUri = null);
 
 /// <param name="Changed">Whether the two dates resolved to different publisher versions, or for an
 /// anchored comparison whether that provision moved. Carried because the whole-work comparison has
@@ -309,7 +312,10 @@ public sealed record GapView(string Status, string? Work, string? Date, string E
     IReadOnlyList<string> Available, IReadOnlyList<EvidenceContext>? Evidence = null,
     IReadOnlyList<ProvisionGapItem>? ProvisionGaps = null,
     int? TotalProvisionGaps = null,
-    bool Truncated = false);
+    bool Truncated = false,
+    int? TotalProvisions = null,
+    bool TextTruncated = false,
+    string? TextCompleteness = null);
 
 /// <summary>
 /// One publisher-specific capability refusal retained beside successful rows from another

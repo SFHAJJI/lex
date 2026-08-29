@@ -540,6 +540,37 @@ export interface ProvisionItem { anchor: string; num?: string; heading?: string;
                                  text_unavailable_reason?: string; source_uri?: string;
                                  official_source?: string; eli?: string }
 
+export interface ProvisionResponseMeta {
+  totalProvisions?: number;
+  totalProvisionGaps?: number;
+  truncated: boolean;
+  textTruncated: boolean;
+  textCompleteness?: "complete" | "partial" | "unavailable";
+}
+
+function boundedCount(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : undefined;
+}
+
+/** Bounded response facts are authoritative metadata, not guesses from the returned row page. */
+export function provisionResponseMeta(result: any): ProvisionResponseMeta {
+  const completeness = result?.text_completeness;
+  const totalProvisions = boundedCount(result?.total_provisions);
+  const totalProvisionGaps = boundedCount(result?.total_provision_gaps);
+  return {
+    ...(totalProvisions !== undefined ? { totalProvisions } : {}),
+    ...(totalProvisionGaps !== undefined ? { totalProvisionGaps } : {}),
+    truncated: result?.truncated === true,
+    textTruncated: result?.text_truncated === true,
+    ...(completeness === "complete" || completeness === "partial"
+      || completeness === "unavailable"
+      ? { textCompleteness: completeness }
+      : {}),
+  };
+}
+
 export function isTypedProvisionGap(item: ProvisionItem): boolean {
   return item.text_available === false && Boolean(item.text_unavailable_reason);
 }
@@ -549,9 +580,40 @@ export function typedProvisionGapLabel(
 ): string | undefined {
   const gaps = items.filter(isTypedProvisionGap).length;
   if (gaps === 0) return undefined;
-  return textCompleteness === "unavailable" || gaps === items.length
-    ? "publisher text unavailable"
-    : "partial publisher text";
+  if (textCompleteness === "unavailable") return "publisher text unavailable";
+  if (textCompleteness === "partial") return "partial publisher text";
+  if (textCompleteness === "complete") return undefined;
+  return gaps === items.length ? "publisher text unavailable" : "partial publisher text";
+}
+
+/** Keep source candidates independent until the HTTPS-only boundary chooses one. */
+export function provisionSourceUrl(item: ProvisionItem): string | undefined {
+  return safeHttpsUrl(item.permalink, item.eli, item.source_uri, item.official_source);
+}
+
+export function provisionCountLabel(items: ProvisionItem[], totalProvisions?: number): string {
+  const shown = items.length;
+  const total = boundedCount(totalProvisions);
+  const coordinates = items.some(isTypedProvisionGap);
+  const noun = coordinates ? "publisher coordinates" : `article${shown === 1 ? "" : "s"}`;
+  return total !== undefined && total > shown
+    ? `Showing ${shown.toLocaleString("en-US")} of ${total.toLocaleString("en-US")} ${noun}`
+    : `${shown.toLocaleString("en-US")} ${noun}`;
+}
+
+export function boundedPublisherTextLabel(
+  items: ProvisionItem[], textTruncated?: boolean,
+): string | undefined {
+  if (textTruncated) return "some held publisher text omitted from this response";
+  return items.some((item) => item.text_omitted)
+    ? "text shortened for this response"
+    : undefined;
+}
+
+export function provisionEmptyExplanation(meta: ProvisionResponseMeta): string {
+  return meta.textCompleteness === "partial" || meta.textTruncated
+    ? "This bounded response did not include a publisher coordinate. Its partial-text metadata does not establish that publisher text is absent."
+    : "No text is held for this law on that date.";
 }
 
 /** Merge canon/2 text rows and textless gap coordinates without changing legacy V3 order. */
@@ -563,8 +625,6 @@ export function provisionItemsOf(result: any): ProvisionItem[] {
         text: undefined,
         text_sha256: undefined,
         text_available: false,
-        source_uri: gap.official_source ?? gap.source_uri,
-        permalink: gap.eli ?? gap.official_source ?? gap.source_uri,
       }))
     : [];
   if (gaps.length === 0) return [...text];
@@ -614,7 +674,8 @@ export interface UiEffect {
   provision?: { subject: Subject; valid_from: string; valid_to?: string; provisions: ProvisionItem[]; permalink?: string;
                 evidence?: EvidenceContext[]; total_provisions?: number; truncated?: boolean;
                 text_truncated?: boolean; outline_only?: boolean;
-                provision_gaps?: ProvisionItem[]; text_completeness?: string };
+                provision_gaps?: ProvisionItem[]; total_provision_gaps?: number;
+                text_completeness?: string };
   diff?: { subject: Subject; from_date: string; to_date: string; note?: string; status?: string;
            anchor_from_present?: boolean; anchor_to_present?: boolean; anchor_text_equal?: boolean;
            provision_level_comparable?: boolean;
@@ -665,7 +726,8 @@ export interface UiEffect {
   };
   gap?: { status: string; work?: string; date?: string; explanation: string; available: string[];
           evidence?: EvidenceContext[]; provision_gaps?: ProvisionItem[];
-          total_provision_gaps?: number; truncated?: boolean };
+          total_provision_gaps?: number; truncated?: boolean; total_provisions?: number;
+          text_truncated?: boolean; text_completeness?: string };
 }
 export interface RankingRow {
   work: string; title?: string; versions_in_period: number; versions_total: number;

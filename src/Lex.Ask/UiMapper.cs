@@ -156,7 +156,15 @@ public static class UiMapper
                     ? node["total_provision_gaps"]?.GetValue<int?>()
                     : null,
                 Truncated: tool == "as_of"
-                    && node["truncated"]?.GetValue<bool>() == true));
+                    && node["truncated"]?.GetValue<bool>() == true,
+                TotalProvisions: tool == "as_of"
+                    ? node["total_provisions"]?.GetValue<int?>()
+                    : null,
+                TextTruncated: tool == "as_of"
+                    && node["text_truncated"]?.GetValue<bool>() == true,
+                TextCompleteness: tool == "as_of"
+                    ? S(node, "text_completeness")
+                    : null));
             var refused = outcome == LegalOutcome.NotComparable && tool == "diff"
                 ? UiEffect.Merge([Diff(node, args), gap])
                 : gap;
@@ -503,7 +511,8 @@ public static class UiMapper
                 Sha: S(p, "text_sha256"),
                 TextOmitted: p["text_omitted"]?.GetValue<bool>() == true,
                 TextOmittedReason: S(p, "text_omitted_reason"),
-                Permalink: S(p, "permalink"))).Where(i => i.Text.Length > 0
+                Permalink: S(p, "permalink"),
+                DocumentOrder: p["document_order"]?.GetValue<int?>())).Where(i => i.Text.Length > 0
                     || i.Anchor.Length > 0 || !string.IsNullOrWhiteSpace(i.Heading)).ToList()
             ?? [];
         if (items.Count == 0 && S(doc, "text") is { Length: > 0 } documentText)
@@ -540,7 +549,9 @@ public static class UiMapper
                 ArticleValidFrom: S(gap, "article_valid_from"),
                 TextUnavailableReason: S(gap, "text_unavailable_reason")
                     ?? "text_not_available",
-                OfficialSource: S(gap, "eli") ?? S(gap, "source_uri")))
+                OfficialSource: S(gap, "official_source"),
+                Eli: S(gap, "eli"),
+                SourceUri: S(gap, "source_uri")))
             .Where(gap => gap.Anchor.Length > 0)
             .OrderBy(gap => gap.DocumentOrder)
             .ToArray()

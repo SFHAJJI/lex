@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Lex.Ask;
 
@@ -18,7 +19,8 @@ public sealed class Canon2UiGapTests
         Assert.Equal("art_2", gap.Anchor);
         Assert.Equal(1, gap.DocumentOrder);
         Assert.Equal("marker_only", gap.TextUnavailableReason);
-        Assert.Equal("https://publisher.example/work#art_2", gap.OfficialSource);
+        Assert.Equal("https://publisher.example/work#art_2", gap.Eli);
+        Assert.Equal("https://publisher.example/work", gap.SourceUri);
     }
 
     [Fact]
@@ -36,9 +38,84 @@ public sealed class Canon2UiGapTests
         var gap = Assert.Single(refusal.ProvisionGaps!);
         Assert.Equal("art_2", gap.Anchor);
         Assert.Equal("marker_only", gap.TextUnavailableReason);
-        Assert.Equal("https://publisher.example/work#art_2", gap.OfficialSource);
+        Assert.Equal("https://publisher.example/work#art_2", gap.Eli);
+        Assert.Equal("https://publisher.example/work", gap.SourceUri);
         Assert.Equal(2_001, refusal.TotalProvisionGaps);
         Assert.True(refusal.Truncated);
+    }
+
+    [Fact]
+    public void As_of_preserves_nullable_document_order_for_assistant_text_rows()
+    {
+        var result = Result("ok", includeText: true);
+        result["provisions"]!.AsArray().Add(new JsonObject
+        {
+            ["document_order"] = 2,
+            ["anchor"] = "art_3",
+            ["num"] = "Art. 3",
+            ["text"] = "More synthetic publisher wording.",
+            ["text_sha256"] = new string('b', 64),
+        });
+
+        var effect = UiMapper.From("as_of", Arguments("full"), result);
+
+        var provision = Assert.IsType<ProvisionView>(effect.Provision);
+        Assert.Collection(provision.Provisions,
+            first => Assert.Equal(0, first.DocumentOrder),
+            third => Assert.Equal(2, third.DocumentOrder));
+
+        var wire = JsonNode.Parse(JsonSerializer.Serialize(effect, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        }))!.AsObject();
+        var rows = wire["provision"]!["provisions"]!.AsArray();
+        Assert.Equal(0, rows[0]!["document_order"]!.GetValue<int>());
+        Assert.Equal(2, rows[1]!["document_order"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public void Partial_refusal_preserves_bounded_totals_and_omitted_text_signal()
+    {
+        var result = Result("text_not_available", includeText: false);
+        result["text_completeness"] = "partial";
+        result["total_provisions"] = 2_001;
+        result["total_provision_gaps"] = 2_000;
+        result["truncated"] = true;
+        result["text_truncated"] = true;
+
+        var effect = UiMapper.From("as_of", Arguments("full"), result);
+
+        var gap = Assert.IsType<GapView>(effect.Gap);
+        Assert.Equal("partial", gap.TextCompleteness);
+        Assert.Equal(2_001, gap.TotalProvisions);
+        Assert.Equal(2_000, gap.TotalProvisionGaps);
+        Assert.True(gap.Truncated);
+        Assert.True(gap.TextTruncated);
+    }
+
+    [Fact]
+    public void Typed_gap_keeps_insecure_eli_separate_from_safe_source_uri()
+    {
+        var result = Result("ok", includeText: true);
+        var row = result["provision_gaps"]!.AsArray()[0]!.AsObject();
+        row["eli"] = "http://publisher.example/work#art_2";
+        row["source_uri"] = "https://publisher.example/work";
+
+        var effect = UiMapper.From("as_of", Arguments("full"), result);
+
+        var gap = Assert.Single(Assert.IsType<ProvisionView>(effect.Provision).ProvisionGaps!);
+        Assert.Equal("http://publisher.example/work#art_2", gap.Eli);
+        Assert.Equal("https://publisher.example/work", gap.SourceUri);
+
+        var wire = JsonNode.Parse(JsonSerializer.Serialize(effect, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+        }))!.AsObject();
+        var wireGap = wire["provision"]!["provision_gaps"]![0]!.AsObject();
+        Assert.Equal("http://publisher.example/work#art_2", wireGap["eli"]!.GetValue<string>());
+        Assert.Equal("https://publisher.example/work", wireGap["source_uri"]!.GetValue<string>());
+        Assert.Null(wireGap["official_source"]);
     }
 
     [Fact]

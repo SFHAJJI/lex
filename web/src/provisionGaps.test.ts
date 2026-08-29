@@ -4,7 +4,13 @@ import {
   asOfResult,
   hasTypedProvisionGaps,
   isTypedProvisionGap,
+  boundedPublisherTextLabel,
+  provisionCountLabel,
+  provisionEmptyExplanation,
   provisionItemsOf,
+  provisionResponseMeta,
+  provisionSourceUrl,
+  safeHttpsUrl,
   typedProvisionGapLabel,
 } from "./api.ts";
 import { assistantProvisionLoad, assistantWorkspaceState } from "./assistantShell.ts";
@@ -37,12 +43,102 @@ test("canon/2 rows preserve mixed publisher order and keep gaps textless", () =>
   assert.equal(isTypedProvisionGap(items[1]), true);
   assert.equal(items[1].text, undefined);
   assert.equal(items[1].text_sha256, undefined);
-  assert.equal(items[1].permalink, gap.eli);
+  assert.equal(items[1].eli, gap.eli);
+  assert.equal(provisionSourceUrl(items[1]), gap.eli);
   assert.equal(hasTypedProvisionGaps(result), true);
   assert.equal(hasTypedProvisionGaps(result, "art_1"), false);
   assert.equal(hasTypedProvisionGaps(result, "art_2"), true);
   assert.equal(typedProvisionGapLabel(items, result.text_completeness),
     "partial publisher text");
+});
+
+test("assistant text and typed gaps retain one publisher document order", () => {
+  const provision = {
+    subject: { work: "t-pub:work" },
+    valid_from: "2025-01-01",
+    text_completeness: "partial",
+    provisions: [
+      { document_order: 0, anchor: "art_1", text: "One." },
+      { document_order: 2, anchor: "art_3", text: "Three." },
+    ],
+    provision_gaps: [gap],
+  };
+
+  assert.deepEqual(assistantProvisionLoad({ provision })?.items.map((item) => item.anchor),
+    ["art_1", "art_2", "art_3"]);
+});
+
+test("authoritative partial completeness survives an all-gap bounded page", () => {
+  const provisionGaps = Array.from({ length: 2_000 }, (_, index) => ({
+    ...gap,
+    document_order: index,
+    anchor: `art_${index + 1}`,
+  }));
+  const result = {
+    text_completeness: "partial",
+    total_provisions: 2_001,
+    total_provision_gaps: 2_000,
+    truncated: true,
+    text_truncated: true,
+    provisions: [],
+    provision_gaps: provisionGaps,
+  };
+  const items = provisionItemsOf(result);
+  const meta = provisionResponseMeta(result);
+
+  assert.equal(typedProvisionGapLabel(items, result.text_completeness),
+    "partial publisher text");
+  assert.deepEqual(meta, {
+    totalProvisions: 2_001,
+    totalProvisionGaps: 2_000,
+    truncated: true,
+    textTruncated: true,
+    textCompleteness: "partial",
+  });
+  assert.equal(provisionCountLabel(items, meta.totalProvisions),
+    "Showing 2,000 of 2,001 publisher coordinates");
+  assert.equal(boundedPublisherTextLabel(items, meta.textTruncated),
+    "some held publisher text omitted from this response");
+  assert.doesNotMatch(typedProvisionGapLabel(items, result.text_completeness)!,
+    /unavailable/);
+  assert.doesNotMatch(provisionEmptyExplanation(meta), /No text is held/);
+  assert.match(provisionEmptyExplanation(meta), /does not establish.*absent/);
+});
+
+test("HTTP ELI cannot mask a separate HTTPS publisher source", () => {
+  const sourceGap = {
+    ...gap,
+    eli: "http://publisher.example/work#art_2",
+    source_uri: "https://publisher.example/work",
+    official_source: "https://untrusted.example/legacy",
+  };
+  const [direct] = provisionItemsOf({ provisions: [], provision_gaps: [sourceGap] });
+  const assistant = assistantProvisionLoad({ provision: {
+    subject: { work: "t-pub:work" },
+    valid_from: "2025-01-01",
+    provisions: [],
+    provision_gaps: [sourceGap],
+    text_completeness: "unavailable",
+  } });
+
+  assert.equal(direct.eli, sourceGap.eli);
+  assert.equal(direct.source_uri, sourceGap.source_uri);
+  assert.equal(provisionSourceUrl(direct), sourceGap.source_uri);
+  assert.equal(provisionSourceUrl(assistant!.items[0]), sourceGap.source_uri);
+  assert.equal(safeHttpsUrl(direct.eli), undefined);
+});
+
+test("malformed bounded metadata authorizes no count or completeness claim", () => {
+  assert.deepEqual(provisionResponseMeta({
+    total_provisions: Number.MAX_SAFE_INTEGER + 1,
+    total_provision_gaps: -1,
+    truncated: 1,
+    text_truncated: "true",
+    text_completeness: "partial ",
+  }), {
+    truncated: false,
+    textTruncated: false,
+  });
 });
 
 test("a gap-only publisher result remains selectable and loads as a typed workspace row", () => {
@@ -119,8 +215,8 @@ test("assistant gap official_source survives mapping and export", () => {
     eli: undefined,
     official_source: "https://publisher.example/exact#art_2",
   }] });
-  assert.equal(item.source_uri, "https://publisher.example/exact#art_2");
-  assert.equal(item.permalink, "https://publisher.example/exact#art_2");
+  assert.equal(item.official_source, "https://publisher.example/exact#art_2");
+  assert.equal(provisionSourceUrl(item), "https://publisher.example/exact#art_2");
 
   const markdown = lawEvidenceMarkdown({
     title: "Synthetic work",
