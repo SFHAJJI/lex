@@ -968,3 +968,101 @@ test("a prior-day law text released after the rollover cannot write over the new
       release();
     }
   });
+
+test("a prior-day law outline released after the rollover cannot repopulate the contents",
+  async ({ page }) => {
+    // Journey 10. The outline effect's generation guard, which journey 9 deliberately does not
+    // reach and which nothing else in this file was killing.
+    //
+    // THE DISCRIMINATOR IS `s.anchor`, AND IT IS STRUCTURAL. The obvious way to build this is to
+    // hold "the first outline request", because on a default law route the outline effect and
+    // the read effect each issue a byte-identical `mode: "outline"` call and only React's
+    // effect-declaration order separates them. That would make this test a hostage to a
+    // declaration order nobody would think to preserve. It is avoidable: the read effect's
+    // `fetchRead` takes its `mode: "select"` branch whenever an anchor is set and then never
+    // asks for an outline at all, so on an anchored route the ONE `mode: "outline"` request
+    // belongs to the outline effect by construction. The journey selects on the request's own
+    // arguments, never on arrival order.
+    //
+    // NOT the dependency sets. `s.language` is in BOTH lists, so changing it re-runs both
+    // effects; the only deps unique to the read effect are `s.mode` and `s.anchor`, and those
+    // suppress the read effect rather than identifying its request. Request identity is what
+    // this needed, and `s.anchor` supplies it.
+    //
+    // `toc` IS THE OBSERVABLE because the read effect never writes it. A stale outline write
+    // moves the contents column and nothing else can, so what this asserts cannot be satisfied
+    // or broken by the read path.
+    const errors = watchErrors(page);
+    const calls: McpCall[] = [];
+    let release!: () => void;
+    const opened = new Promise<void>((resolve) => { release = resolve; });
+
+    try {
+      await installFixedClock(page);
+      await routeMcp(page, calls, async (call) => {
+        const dayOne = call.args.date === DAY_ONE;
+        if (call.args.mode === "outline") {
+          // The loser, held from page load, and the only outline request on this route.
+          // Nine entries against the winner's seven, and headings that name their day, so a
+          // stale write changes both the count and the words.
+          if (dayOne) { await opened; return lawAnswer("outline-d14", 9); }
+          return lawAnswer("outline-d15", 7);
+        }
+        return dayOne ? lawAnswer("text-d14", 1) : lawAnswer("text-d15", 1);
+      });
+
+      const articles = page.locator("article.art");
+      const contents = page.locator(".toccol");
+      const tocRows = page.locator(".toccol ul.rows > li");
+
+      await page.goto(`/?space=law&work=${WORK_ONE}&anchor=art-1&mode=read`,
+        { waitUntil: "domcontentloaded" });
+
+      // Day one's READ path completed, so the page is genuinely populated on day one rather
+      // than merely blank: its article text is on screen. Only its outline is still hanging,
+      // which is why there is no contents column beside it yet.
+      await expect(articles).toHaveCount(1);
+      await expect(articles.first()).toContainText("Article text marked text-d14");
+      expect(await contents.count()).toBe(0);
+      expect(lawCallsFor(calls, DAY_ONE, "outline")).toHaveLength(1);
+      expect(lawCallsFor(calls, DAY_ONE, "select")).toHaveLength(1);
+      // The read effect asked for a selection, not an outline, so the held request above is the
+      // outline effect's by construction rather than by arrival order.
+      expect(lawCallsFor(calls, DAY_ONE, "outline")).toHaveLength(1);
+
+      await fastForwardPastMidnight(page);
+
+      // The populated baseline: the new day's contents rendered whole, beside the new day's text.
+      await expect(contents).toHaveCount(1);
+      await expect(tocRows).toHaveCount(7);
+      await expect(contents).toContainText("Heading outline-d15");
+      await expect(articles.first()).toContainText("Article text marked text-d15");
+      expect(lawCallsFor(calls, DAY_TWO, "outline")).toHaveLength(1);
+      const answered = calls.length;
+
+      // The previous day's outline arrives, late and whole, and the page is asked to confirm it
+      // received it rather than the harness confirming it sent it.
+      const settledBeforeRelease = await settledMcp(page);
+      release();
+      await expect.poll(() => settledMcp(page)).toBe(settledBeforeRelease + 1);
+      await page.waitForTimeout(500);
+
+      // And it wrote nothing. Non-retrying: a contents column that took yesterday's articles and
+      // was corrected a moment later still offered the reader nine links into a document that
+      // has seven.
+      expect(await tocRows.count()).toBe(7);
+      expect(await page.locator(".toccol ul.rows > li",
+        { hasText: "Heading outline-d14" }).count()).toBe(0);
+      await expect(contents).toContainText("Heading outline-d15");
+      expect(await page.locator(".toccol .tochead .mono").textContent()).toBe("7");
+      // `outline-d14` is a string ONLY the held outline response carries, in its headings and in
+      // its document title, so this is a claim about that response and not about the read path.
+      expect(await pageText(page)).not.toContain("outline-d14");
+      await expect(articles.first()).toContainText("Article text marked text-d15");
+      expect(calls).toHaveLength(answered);
+      expect(errors.pageErrors).toEqual([]);
+      expect(errors.consoleErrors).toEqual([]);
+    } finally {
+      release();
+    }
+  });
