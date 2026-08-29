@@ -1027,7 +1027,9 @@ public sealed class AskTransportTests
             admission: new AskAdmissionController(
                 TimeProvider.System, perClientDaily: 10, globalDaily: 10, concurrent: 1),
             plannerDeadline: TimeSpan.FromMilliseconds(50),
-            firstResultDeadline: TimeSpan.FromMilliseconds(100));
+            // Keep the outer deadline well clear of the planner deadline so this test proves
+            // planner cancellation and lease release even when the full suite delays continuations.
+            firstResultDeadline: TimeSpan.FromSeconds(2));
         var history = new JsonArray(new JsonObject
         {
             ["role"] = "user",
