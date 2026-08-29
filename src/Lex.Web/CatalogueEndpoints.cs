@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json.Nodes;
 using Lex.Index;
@@ -536,8 +537,19 @@ public static class CatalogueEndpoints
                 }
                 foreach (var result in envelopes.OfType<JsonObject>())
                 {
-                    var publisherId = result["envelope"]?["publisher"]?.GetValue<string>() ?? "";
-                    if (!readers.TryGetValue(publisherId, out var reader)) continue;
+                    // Silently skipping an envelope makes a whole publisher's results vanish
+                    // from a page that gives the reader no way to know it answered. Absence is
+                    // never implied here, so an envelope this page cannot attribute is
+                    // disclosed rather than dropped. The read is also strict: the previous
+                    // GetValue threw on a non-string publisher and took the whole page with it.
+                    if (!TryAttribute(result, readers, out var reader))
+                    {
+                        sb.Append("<div class=\"notice\" role=\"note\">A publisher answered and its "
+                            + "results could not be attributed to a mounted index, so they are not "
+                            + "shown. This is not evidence that it found nothing.</div>");
+                        continue;
+                    }
+                    var publisherId = reader.Collection;
                     var hits = result["hits"] as JsonArray ?? [];
                     // A hit that reached no wording matched the record, not the law. The
                     // assistant path already drops these as filler (AskService); the web page
@@ -716,5 +728,30 @@ public static class CatalogueEndpoints
         });
 
         return app;
+    }
+
+    /// <summary>
+    /// The mounted reader a search envelope belongs to, or false when it belongs to none.
+    ///
+    /// Separated from the page so the hostile cases are testable: the envelope is MCP output and
+    /// therefore untrusted, and both failure directions were live here. A non-string publisher
+    /// threw out of GetValue and took the entire search page with it; an absent one became the
+    /// empty string, missed the registry, and dropped that publisher's hits with no trace on the
+    /// page at all. The second is the worse of the two: a reader cannot see results that were
+    /// never rendered, so a partial answer reads as a complete one.
+    /// </summary>
+    public static bool TryAttribute(
+        JsonObject result,
+        IReadOnlyDictionary<string, LexIndexReader> readers,
+        [NotNullWhen(true)] out LexIndexReader? reader)
+    {
+        reader = null;
+        // Every hop is checked, including that `envelope` is an object at all: indexing a
+        // JsonValue with a property name throws, which the hostile test found immediately.
+        return result["envelope"] is JsonObject envelope
+            && envelope["publisher"] is JsonValue value
+            && value.TryGetValue<string>(out var publisher)
+            && publisher.Length > 0
+            && readers.TryGetValue(publisher, out reader);
     }
 }

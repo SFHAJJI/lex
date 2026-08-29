@@ -1,6 +1,7 @@
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json.Nodes;
 using Lex.Derive;
 using Lex.Index;
 using Lex.Web;
@@ -26,6 +27,37 @@ public sealed class TrustNoticeTests : IDisposable
     public void Dispose()
     {
         try { Directory.Delete(_root, recursive: true); } catch { }
+    }
+
+    /// <summary>
+    /// Search-envelope attribution, both hostile directions. The envelope is MCP output, so it is
+    /// untrusted: a non-string publisher used to throw out of GetValue and take the entire search
+    /// page with it, and an absent one became the empty string, missed the registry, and dropped
+    /// that publisher's hits with nothing on the page to say so.
+    /// </summary>
+    [Fact]
+    public void An_unattributable_search_envelope_is_refused_rather_than_throwing()
+    {
+        var readers = new Dictionary<string, LexIndexReader>(StringComparer.Ordinal);
+
+        foreach (var envelope in new[]
+        {
+            "{}",
+            "{\"envelope\":{}}",
+            "{\"envelope\":{\"publisher\":null}}",
+            "{\"envelope\":{\"publisher\":\"\"}}",
+            "{\"envelope\":{\"publisher\":7}}",
+            "{\"envelope\":{\"publisher\":true}}",
+            "{\"envelope\":{\"publisher\":[]}}",
+            "{\"envelope\":{\"publisher\":{}}}",
+            "{\"envelope\":\"lu-legilux\"}",
+            "{\"envelope\":{\"publisher\":\"not-mounted\"}}",
+        })
+        {
+            var node = (JsonObject)JsonNode.Parse(envelope)!;
+            Assert.False(CatalogueEndpoints.TryAttribute(node, readers, out var reader));
+            Assert.Null(reader);
+        }
     }
 
     private const string MetadataOnlyHeading = "No held text match";
