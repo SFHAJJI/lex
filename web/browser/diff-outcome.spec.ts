@@ -38,7 +38,7 @@ const TO = "2021-01-01";
  * typed to the declaration could not express the case that produced a false claim.
  */
 function diffOperation(requestId: string, changed: unknown, anchor?: string,
-                       limitations?: unknown) {
+                       limitations?: unknown, limitationsMalformed?: boolean) {
   const diff: Record<string, unknown> = {
     subject: { work: WORK, title: "Fixture law", ...(anchor ? { anchor } : {}) },
     from_date: FROM, to_date: TO,
@@ -46,6 +46,7 @@ function diffOperation(requestId: string, changed: unknown, anchor?: string,
   };
   if (changed !== undefined) diff.changed = changed;
   if (limitations !== undefined) diff.comparison_limitations = limitations;
+  if (limitationsMalformed === true) diff.comparison_limitations_malformed = true;
   return {
     operation_id: `${requestId}:op-1`, order: 0, tool: "diff",
     result_class: null, disposition: "answer", legal_outcome: "answer",
@@ -68,8 +69,9 @@ function companionOperation(requestId: string) {
 }
 
 async function runAssistant(page: Page, requestId: string,
-                            changed: unknown, anchor?: string, limitations?: unknown) {
-  const operations = [diffOperation(requestId, changed, anchor, limitations),
+                            changed: unknown, anchor?: string, limitations?: unknown,
+                            limitationsMalformed?: boolean) {
+  const operations = [diffOperation(requestId, changed, anchor, limitations, limitationsMalformed),
                       companionOperation(requestId)];
   await page.addInitScript(({ requestId, operations }) => {
     const originalFetch = window.fetch.bind(window);
@@ -205,4 +207,21 @@ test("a comparison with no limitations states none", async ({ page }) => {
 
   await expect(panel).not.toContainText("different extraction profiles");
   await expect(panel).not.toContainText("not certified");
+  await expect(panel).not.toContainText("limitation data was malformed");
+});
+
+test("valid limitations survive malformed siblings and the malformed field is explicit",
+  async ({ page }) => {
+    const panel = await runAssistant(page, "b123456789abcdef0123456789abcdef", true, undefined,
+      ["profiles_differ"], true);
+
+    await expect(panel).toContainText("different extraction profiles");
+    await expect(panel).toContainText("limitation data was malformed");
+  });
+
+test("a present non-array limitation field is reported as malformed", async ({ page }) => {
+  const panel = await runAssistant(page, "c123456789abcdef0123456789abcdef", true, undefined,
+    undefined, true);
+
+  await expect(panel).toContainText("limitation data was malformed");
 });

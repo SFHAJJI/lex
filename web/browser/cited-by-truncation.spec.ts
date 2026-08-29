@@ -142,7 +142,7 @@ test("a complete response with rows is presented without qualification", async (
   const ws = await ask(page, "2123456789abcdef0123456789abcdef", [row()], false);
 
   await expect(ws).toContainText("Citing law");
-  await expect(ws).toContainText("1 article refer");
+  await expect(ws).toContainText("1 article refers to it");
   await expect(ws).not.toContainText(CUT);
 });
 
@@ -151,7 +151,7 @@ test("a complete response with rows is presented without qualification", async (
  * number beside it is the total, and cited_by sets citing_articles to the hits that fitted. So an
  * exact total may be stated only against a receipt saying nothing was cut.
  */
-const UNQUALIFIED = "1 article refer to it";
+const UNQUALIFIED = "1 article refers to it";
 
 test("rows with no receipt are framed as returned, not as a total", async ({ page }) => {
   const ws = await ask(page, "3123456789abcdef0123456789abcdef", [row()], undefined);

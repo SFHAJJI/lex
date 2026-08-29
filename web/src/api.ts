@@ -693,11 +693,13 @@ export interface UiEffect {
                The same facts are also written into `note`, and prose was the only form that
                reached a reader; a surface cannot branch on a paragraph. */
            comparison_limitations?: string[];
+           /** The producer field was present but not wholly usable. Valid siblings remain. */
+           comparison_limitations_malformed?: boolean;
            evidence?: EvidenceContext[] };
-  history?: { subject: Subject; anchor: string; distinct_texts: number; states: { valid_from: string; valid_to?: string; sha?: string; permalink?: string }[]; evidence?: EvidenceContext[] };
+  history?: { subject: Subject; anchor: string; distinct_texts: number; truncated?: boolean; states: { valid_from: string; valid_to?: string; sha?: string; permalink?: string }[]; evidence?: EvidenceContext[] };
   timeline?: { subject: Subject; rows: { lex_id?: string; valid_from: string; valid_to?: string;
                 title?: string; language?: string; permalink?: string; record_sha256?: string }[];
-                total_count: number; truncated: boolean;
+                total_count: number; truncated?: boolean;
                 evidence?: EvidenceContext[] };
   ranking?: { from_date: string; to_date: string; order: string;
               // Absent when the producer's counts could not be summed honestly. A count that

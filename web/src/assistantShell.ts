@@ -10,6 +10,11 @@ export const STARTER_PROMPTS = [
 
 export interface AssistantPanelState { open: boolean; minimized: boolean }
 
+/** An untrusted boundary value licenses a completeness claim only when it is exactly false. */
+export function reportedTruncation(value: unknown): boolean | undefined {
+  return value === true ? true : value === false ? false : undefined;
+}
+
 /** Only an unbounded provision effect may seed the reader without a follow-up fetch. */
 export function assistantProvisionLoad(ui?: UiEffect) {
   const provision = ui?.provision;
@@ -37,7 +42,7 @@ export function assistantTimelineSeed(ui?: UiEffect) {
     languages: [...new Set(timeline.rows.map((row) => row.language).filter(
       (value): value is string => Boolean(value)))].sort(),
     total: timeline.total_count,
-    truncated: timeline.truncated,
+    truncated: reportedTruncation(timeline.truncated),
   };
 }
 

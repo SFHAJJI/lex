@@ -189,15 +189,17 @@ public sealed record DiffView(Subject Subject, string FromDate, string ToDate,
     /// be branched on, so a surface could not refuse a comparison it was told was uncertifiable;
     /// it could only print a paragraph and hope the paragraph was read.
     /// </summary>
-    IReadOnlyList<string>? ComparisonLimitations = null);
+    IReadOnlyList<string>? ComparisonLimitations = null,
+    bool ComparisonLimitationsMalformed = false);
 
 public sealed record HistoryView(Subject Subject, string Anchor, int DistinctTexts,
-    IReadOnlyList<HistoryState> States, IReadOnlyList<EvidenceContext>? Evidence = null);
+    IReadOnlyList<HistoryState> States, IReadOnlyList<EvidenceContext>? Evidence = null,
+    bool? Truncated = null);
 
 public sealed record HistoryState(string ValidFrom, string? ValidTo, string? Sha, string? Permalink);
 
 public sealed record TimelineView(Subject Subject, IReadOnlyList<TimelineState> Rows,
-    int TotalCount, bool Truncated, IReadOnlyList<EvidenceContext>? Evidence = null);
+    int TotalCount, bool? Truncated, IReadOnlyList<EvidenceContext>? Evidence = null);
 
 public sealed record TimelineState(string? LexId, string ValidFrom, string? ValidTo, string? Title,
     string? Language, string? Permalink, string? RecordSha256);

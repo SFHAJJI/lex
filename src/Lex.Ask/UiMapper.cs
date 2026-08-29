@@ -426,6 +426,13 @@ public static class UiMapper
     /// </summary>
     private static JsonObject? Aggregate(string tool, JsonArray result)
     {
+        static bool? SharedBoolean(IReadOnlyList<JsonObject> values, string field)
+        {
+            var facts = values.Select(value => B(value, field)).ToArray();
+            return facts.Length > 0 && facts[0] is not null
+                && facts.All(fact => fact == facts[0]) ? facts[0] : null;
+        }
+
         var parts = result.OfType<JsonObject>().ToList();
         if (parts.Count == 0) return null;
         var aggregateStatus = LegalOperationPolicy.StatusForResult(result);
@@ -495,7 +502,27 @@ public static class UiMapper
             if (ambiguous.Count > 0) combined["ambiguous_works"] = ambiguous;
         }
         else
+        {
             combined["citing_articles"] = rows.Count;
+            const string evidenceScope =
+                "captured_cross_references_in_held_non_withdrawn_versions";
+            combined["evidence_scope"] = parts.All(part =>
+                string.Equals(S(part, "evidence_scope"), evidenceScope, StringComparison.Ordinal))
+                    ? evidenceScope : null;
+            combined["current_legal_effect_assessed"] =
+                SharedBoolean(parts, "current_legal_effect_assessed");
+            combined["relationship_type_assessed"] =
+                SharedBoolean(parts, "relationship_type_assessed");
+
+            var truncation = parts.Select(part =>
+                B(part["response_row_set"] as JsonObject, "truncated")).ToArray();
+            var aggregateTruncation = truncation.Any(value => value == true)
+                ? true
+                : truncation.All(value => value == false) ? false : (bool?)null;
+            var receipt = combined["response_row_set"] as JsonObject ?? new JsonObject();
+            receipt["truncated"] = aggregateTruncation;
+            combined["response_row_set"] = receipt;
+        }
         return combined;
     }
 
@@ -566,7 +593,8 @@ public static class UiMapper
             Anchor: S(o, "anchor") ?? "",
             DistinctTexts: o["distinct_texts"]?.GetValue<int>() ?? states.Count,
             States: states.OfType<JsonObject>().Select(s => new HistoryState(
-                S(s, "valid_from") ?? "", S(s, "valid_to"), S(s, "text_sha256"), S(s, "permalink"))).ToList()));
+                S(s, "valid_from") ?? "", S(s, "valid_to"), S(s, "text_sha256"), S(s, "permalink"))).ToList(),
+            Truncated: B(o, "truncated")));
     }
 
     private static UiEffect Timeline(JsonObject o, JsonObject args)
@@ -588,7 +616,7 @@ public static class UiMapper
                 S(version, "permalink"),
                 S(version, "record_sha256"))).ToList(),
             TotalCount: o["total_count"]?.GetValue<int>() ?? rows.Count,
-            Truncated: o["truncated"]?.GetValue<bool>() ?? false));
+            Truncated: B(o, "truncated")));
     }
 
     private static UiEffect Diff(JsonObject o, JsonObject args)
@@ -599,6 +627,8 @@ public static class UiMapper
         // diff returns the two resolved documents as `from` / `to`, not a list.
         var a = o["from"] as JsonObject;
         var b = o["to"] as JsonObject;
+        var comparisonLimitations = Strings(
+            o, "comparison_limitations", out var comparisonLimitationsMalformed);
         return new UiEffect(Diff: new DiffView(
             Subject: new Subject(CanonicalWork(o, args),
                 S(b, "title") ?? S(a, "title"), from, S(o, "anchor"),
@@ -615,7 +645,8 @@ public static class UiMapper
             // readers: not exactly true or false means no claim.
             ProvisionLevelComparable: B(o, "provision_level_comparable") ?? false,
             Changed: B(o, "changed"),
-            ComparisonLimitations: Strings(o, "comparison_limitations")));
+            ComparisonLimitations: comparisonLimitations,
+            ComparisonLimitationsMalformed: comparisonLimitationsMalformed));
     }
 
     /// Controls the assistant set on the way to its answer, so the workspace lands the same way.
@@ -908,18 +939,29 @@ public static class UiMapper
         => o?[k] is JsonValue v && v.TryGetValue<bool>(out var b) ? b : null;
 
     /// <summary>
-    /// The JSON strings in an array, or null when there is no array. Non-string members are
-    /// dropped rather than coerced, and an array of nothing usable becomes null, so a
-    /// malformed list cannot become an empty one and read as no limitations.
+    /// The usable JSON strings in an array. A present malformed field is reported separately,
+    /// while valid siblings survive, so damage can neither erase a real limitation nor hide.
     /// </summary>
-    private static IReadOnlyList<string>? Strings(JsonObject? o, string k)
+    private static IReadOnlyList<string>? Strings(JsonObject? o, string k, out bool malformed)
     {
-        if (o?[k] is not JsonArray array) return null;
-        var values = array.OfType<JsonValue>()
-            .Select(v => v.TryGetValue<string>(out var s) ? s : null)
-            .Where(s => !string.IsNullOrWhiteSpace(s))
-            .Select(s => s!)
-            .ToList();
+        malformed = false;
+        if (o is null || !o.ContainsKey(k)) return null;
+        if (o[k] is not JsonArray array)
+        {
+            malformed = true;
+            return null;
+        }
+        var values = new List<string>(array.Count);
+        foreach (var item in array)
+        {
+            if (item is JsonValue value
+                && value.TryGetValue<string>(out var text)
+                && !string.IsNullOrWhiteSpace(text))
+                values.Add(text);
+            else
+                malformed = true;
+        }
+        if (array.Count == 0) malformed = true;
         return values.Count > 0 ? values : null;
     }
 }

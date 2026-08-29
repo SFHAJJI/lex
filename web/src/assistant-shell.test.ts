@@ -197,6 +197,15 @@ test("timeline effects seed the version rail before the workspace follow-up fetc
     total: 3,
     truncated: true,
   });
+
+  assert.equal(assistantTimelineSeed({ timeline: {
+    subject: { work: "eu-eurlex:32013r0575" }, total_count: 1,
+    rows: [{ valid_from: "2024-01-01" }],
+  } })?.truncated, undefined);
+  assert.equal(assistantTimelineSeed({ timeline: {
+    subject: { work: "eu-eurlex:32013r0575" }, total_count: 1,
+    rows: [{ valid_from: "2024-01-01" }], truncated: "false" as unknown as boolean,
+  } })?.truncated, undefined);
 });
 
 test("same-date timeline states never expose an ambiguous date-only destination", () => {

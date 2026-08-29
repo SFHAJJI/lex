@@ -294,12 +294,10 @@ export function VersionRail({ dates, current, compareTo, scope, today, work, tim
   return (
     <div className="railbox">
       <div className="railhead">
-        {/* The count is a claim about the law until it is qualified. "12 versions" says the
-            law has twelve; when the response returned a page of them it has more, and the
-            rail was the last place a reader would look for that. Only an explicit true
-            qualifies it, so an unvalidated value cannot silently withdraw the claim. */}
+        {/* These are unique dates, not version rows. Only an explicit false receipt licenses
+            presenting them as the complete set. Missing or malformed evidence stays qualified. */}
         <span className="tag">{dates.length} {scope}
-          {partial === true ? " returned in this response" : ""}</span>
+          {partial === false ? "" : " returned in this response"}</span>
         {median > 0 ? <span className="tag">every {median} days (median)</span> : null}
         {ahead > 0 ? <span className="tag warn">{futureStateLabel(work, ahead, timelineSemantics)}</span> : null}
         {/* Keyed off compareTo, not off finding it on the rail: a compared date need not be one
@@ -370,8 +368,8 @@ export function Timeline({ view, onOpen }: {
   return (
     <section className="evidence-panel" aria-labelledby="timeline-result-title">
       <div className="cnt">
-        <span className="tag">{view.total_count.toLocaleString()} dated versions</span>
-        {view.truncated ? <span className="tag">showing {view.rows.length}</span> : null}
+        <span className="tag">{view.total_count.toLocaleString()} dated version{view.total_count === 1 ? "" : "s"}</span>
+        {view.truncated !== false ? <span className="tag">showing {view.rows.length}</span> : null}
       </div>
       <h2 id="timeline-result-title">Version history</h2>
       <ol className="rows">
@@ -388,9 +386,11 @@ export function Timeline({ view, onOpen }: {
           </li>
         ))}
       </ol>
-      {view.truncated ? (
+      {view.truncated !== false ? (
         <p className="sub" role="status">
-          This result is incomplete. Open the law to load the complete version rail.
+          {view.truncated === true
+            ? "This result is incomplete. Open the law to load the complete version rail."
+            : "This response does not record whether the result is complete. Open the law to load its version rail."}
         </p>
       ) : null}
     </section>
@@ -1023,7 +1023,7 @@ export function CitedBy({ view, onOpen }: {
             sentence would understate the total and, at zero, assert an absence. Identity
             comparison only: an absent or malformed receipt is not a complete answer. */}
         <span className="tag">{view.rows_truncated === false
-          ? `${view.citing_articles.toLocaleString()} article${view.citing_articles === 1 ? "" : "s"} refer to it`
+          ? `${view.citing_articles.toLocaleString()} article${view.citing_articles === 1 ? " refers" : "s refer"} to it`
           : `${view.citing_articles.toLocaleString()} returned in this response`}</span>
         <span className="tag mono">{view.cited_work}</span>
       </div>

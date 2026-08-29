@@ -1961,10 +1961,12 @@ public sealed class AskService
         return new Step("step", tool.Replace('_', ' '));
     }
 
-    private static (string? Status, JsonArray Docs) Summarize(JsonNode result)
+    internal static (string? Status, JsonArray Docs) Summarize(JsonNode result)
     {
         var status = LegalOperationPolicy.StatusForResult(result);
         var docs = new JsonArray();
+        if (CitedByAggregateEvidence(result) is { } aggregate)
+            docs.Add(aggregate);
 
         // Pinpoints: the exact provision text the tool returned, quotable next to the
         // claim it grounds (anti-misgrounding: a reader can compare the answer against
@@ -2113,6 +2115,87 @@ public sealed class AskService
             Walk(result);
         }
         return (status, docs);
+    }
+
+    private static JsonObject? CitedByAggregateEvidence(JsonNode result)
+    {
+        const string knownScope =
+            "captured_cross_references_in_held_non_withdrawn_versions";
+        static bool? Boolean(JsonNode? node) =>
+            node is JsonValue value && value.TryGetValue<bool>(out var fact) ? fact : null;
+        static string? Text(JsonNode? node) =>
+            node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
+        static bool? ConsistentBoolean(
+            IEnumerable<JsonObject> entries, Func<JsonObject, JsonNode?> select)
+        {
+            bool? fact = null;
+            foreach (var entry in entries)
+            {
+                var current = Boolean(select(entry));
+                if (current is null || fact is not null && fact != current) return null;
+                fact = current;
+            }
+            return fact;
+        }
+
+        var members = result switch
+        {
+            JsonArray array => array.ToArray(),
+            JsonObject item => [(JsonNode?)item],
+            _ => [],
+        };
+        var objects = members.OfType<JsonObject>().ToArray();
+        var publisherBound = objects.Any(LegalOperationPolicy.HasPublisherEnvelope);
+        var candidates = objects.Where(item => Text(item["cited_work"]) is not null
+                                               && item["citations"] is JsonArray).ToArray();
+        var citedWork = candidates.Select(item => Text(item["cited_work"]))
+            .FirstOrDefault(item => item is not null);
+        if (citedWork is null) return null;
+        var parts = candidates.Where(item => Text(item["cited_work"]) == citedWork
+                                             && (!publisherBound
+                                                 || LegalOperationPolicy
+                                                     .IsProvenSuccessfulPublisherResult(
+                                                         item, "cited_by")))
+            .ToArray();
+        if (parts.Length == 0) return null;
+
+        var returned = parts.Sum(item => (item["citations"] as JsonArray)?.Count ?? 0);
+        var truncated = ConsistentBoolean(parts,
+            item => item["response_row_set"]?["truncated"]);
+        var scopeRecognized = parts.All(item => Text(item["evidence_scope"]) == knownScope);
+        var complete = members.Length > 0 && members.All(member =>
+            member is JsonObject item
+            && (!publisherBound || LegalOperationPolicy.IsProvenSuccessfulPublisherResult(
+                item, "cited_by"))
+            && Text(item["cited_work"]) == citedWork
+            && item["citations"] is JsonArray
+            && Text(item["evidence_scope"]) == knownScope
+            && Boolean(item["response_row_set"]?["truncated"]) == false);
+        var currentLegalEffect = ConsistentBoolean(parts,
+            item => item["current_legal_effect_assessed"]);
+        var relationshipType = ConsistentBoolean(parts,
+            item => item["relationship_type_assessed"]);
+        var fact = new JsonObject
+        {
+            ["fact"] = "cited_by_aggregate",
+            ["cited_work"] = citedWork,
+            ["count"] = returned,
+            ["count_semantics"] = complete ? "complete_total" : "returned_count",
+            ["response_rows_truncated"] = truncated is null
+                ? null : JsonValue.Create(truncated.Value),
+            ["evidence_scope"] = scopeRecognized ? knownScope : null,
+            ["evidence_scope_recognized"] = scopeRecognized,
+            ["current_legal_effect_assessed"] = currentLegalEffect is null
+                ? null : JsonValue.Create(currentLegalEffect.Value),
+            ["relationship_type_assessed"] = relationshipType is null
+                ? null : JsonValue.Create(relationshipType.Value),
+        };
+        return new JsonObject
+        {
+            ["lex_id"] = citedWork,
+            ["title"] = "cited_by aggregate fact",
+            ["snippet"] = fact.ToJsonString(),
+        };
     }
 
     /// <summary>

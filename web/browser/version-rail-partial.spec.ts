@@ -31,15 +31,15 @@ const mcpBody = (id: number, payload: unknown) => JSON.stringify({
   result: { content: [{ type: "text", text: JSON.stringify(payload) }] },
 });
 
-const timelineAnswer = (truncated: unknown) => {
+const timelineAnswer = (truncated: unknown, dates = DATES) => {
   const unit: Record<string, unknown> = {
     envelope: { publisher: "lu-legilux", jurisdiction: "LU", status: "ok",
                 timeline_semantics: "publisher_applicability" },
-    versions: DATES.map((valid_from) => ({
+    versions: dates.map((valid_from) => ({
       valid_from, language: "fr", text_available: true, document_type: "LOI",
       source_uri: "https://legilux.public.lu/eli/etat/leg/loi/2020/07/17/a624/jo",
     })),
-    total_count: DATES.length,
+    total_count: dates.length,
   };
   if (truncated !== undefined) unit.truncated = truncated;
   return [unit];
@@ -57,7 +57,7 @@ const lawAnswer = () => [{
 }];
 
 /** Serve only what this fixture models; refuse anything else rather than falling through. */
-async function routeMcp(page: Page, truncated: unknown): Promise<void> {
+async function routeMcp(page: Page, truncated: unknown, dates = DATES): Promise<void> {
   await page.route("**/mcp", async (route: Route) => {
     const request = route.request().postDataJSON() as {
       id: number; params?: { name?: string; arguments?: Record<string, unknown> };
@@ -76,13 +76,13 @@ async function routeMcp(page: Page, truncated: unknown): Promise<void> {
     }
     await route.fulfill({
       status: 200, contentType: "application/json",
-      body: mcpBody(request.id, name === "timeline" ? timelineAnswer(truncated) : lawAnswer()),
+      body: mcpBody(request.id, name === "timeline" ? timelineAnswer(truncated, dates) : lawAnswer()),
     });
   });
 }
 
-async function openLaw(page: Page, truncated: unknown) {
-  await routeMcp(page, truncated);
+async function openLaw(page: Page, truncated: unknown, dates = DATES) {
+  await routeMcp(page, truncated, dates);
   await page.goto(`/?space=law&work=${WORK}&date=${PINNED}&mode=read`,
                   { waitUntil: "domcontentloaded" });
   const head = page.locator(".railhead");
@@ -99,17 +99,84 @@ test("a truncated timeline response stops the rail counting versions as the whol
     await expect(head).toContainText(String(DATES.length));
   });
 
-test("a complete timeline response leaves the count unqualified", async ({ page }) => {
+test("a complete timeline response leaves the distinct-date count unqualified", async ({ page }) => {
   const head = await openLaw(page, false);
 
-  await expect(head).toContainText(`${DATES.length} versions`);
+  await expect(head).toContainText(`${DATES.length} distinct version dates`);
   await expect(head).not.toContainText("returned in this response");
 });
 
-test("a response with no truncation field claims nothing either way", async ({ page }) => {
+test("one unique date uses the singular version-date label", async ({ page }) => {
+  const head = await openLaw(page, false, [PINNED]);
+
+  await expect(head).toContainText("1 distinct version date");
+  await expect(head).not.toContainText("1 distinct version dates");
+});
+
+test("same-date publisher versions are counted as one distinct version date", async ({ page }) => {
+  const head = await openLaw(page, false, [PINNED, PINNED]);
+
+  await expect(head).toContainText("1 distinct version date");
+  await expect(head).not.toContainText("2 distinct version dates");
+});
+
+test("a user-selected article rail names distinct text dates and qualifies true or unknown completeness",
+  async ({ page }) => {
+    const provisions = Array.from({ length: 6 }, (_, index) => ({
+      anchor: `art-${index + 1}`, num: `Art. ${index + 1}`, heading: `Heading ${index + 1}`,
+      text: `Fixture text ${index + 1}.`, path: "Part one",
+    }));
+    await page.route("**/mcp", async (route: Route) => {
+      const request = route.request().postDataJSON() as {
+        id: number; params?: { name?: string; arguments?: Record<string, unknown> };
+      };
+      const name = request.params?.name;
+      const args = request.params?.arguments ?? {};
+      let answer: unknown;
+      if (name === "timeline" && args.work === WORK) answer = timelineAnswer(false);
+      else if (name === "as_of" && args.work === WORK) answer = [{
+        ...lawAnswer()[0], provisions,
+      }];
+      else if (name === "article_history" && args.work === WORK) {
+        const first = args.anchor === "art-1";
+        const history: Record<string, unknown> = {
+          envelope: { publisher: "lu-legilux", jurisdiction: "LU", status: "ok" },
+          work: WORK, anchor: args.anchor,
+          distinct_texts: first ? 3 : 1,
+          states: (first ? ["2018-01-01", "2019-01-01", "2019-01-01"] : [PINNED])
+            .map((valid_from) => ({ valid_from })),
+        };
+        if (first) history.truncated = true;
+        answer = [history];
+      } else {
+        await route.fulfill({
+          status: 200, contentType: "application/json",
+          body: JSON.stringify({
+            jsonrpc: "2.0", id: request.id,
+            error: { code: -32602, message: `article rail fixture does not serve ${name}` },
+          }),
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 200, contentType: "application/json", body: mcpBody(request.id, answer),
+      });
+    });
+
+    await page.goto(`/?space=law&work=${WORK}&date=${PINNED}&mode=read`,
+                    { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: "Art. 1, Heading 1", exact: true }).click();
+    const head = page.locator(".railhead");
+    await expect(head).toContainText("2 distinct article text dates returned in this response");
+
+    await page.getByRole("button", { name: "Art. 2, Heading 2", exact: true }).click();
+    await expect(head).toContainText("1 distinct article text date returned in this response");
+  });
+
+test("a response with no truncation field does not claim completeness", async ({ page }) => {
   const head = await openLaw(page, undefined);
 
-  await expect(head).not.toContainText("returned in this response");
+  await expect(head).toContainText("returned in this response");
 });
 
 /**
@@ -119,17 +186,17 @@ test("a response with no truncation field claims nothing either way", async ({ p
 for (const [label, value] of [
   ["a string", "true"], ["a number", 1], ["null", null],
 ] as readonly (readonly [string, unknown])[]) {
-  test(`a truncation field that is ${label} qualifies nothing`, async ({ page }) => {
+  test(`a truncation field that is ${label} does not claim completeness`, async ({ page }) => {
     const head = await openLaw(page, value);
 
-    await expect(head).not.toContainText("returned in this response");
+    await expect(head).toContainText("returned in this response");
   });
 }
 
 test("an assistant answer that reseeds the rail from a shorter list says so", async ({ page }) => {
   // A complete rail first, so the reseed is replacing something the reader already trusts.
   const head = await openLaw(page, false);
-  await expect(head).toContainText(`${DATES.length} versions`);
+  await expect(head).toContainText(`${DATES.length} distinct version dates`);
 
   const requestId = "7023456789abcdef0123456789abcdef";
   const seeded = DATES.slice(0, 2);

@@ -283,6 +283,7 @@ public class UiEffectTests
                 },
                 ["work"] = "32013r0575",
                 ["total_count"] = 2,
+                ["truncated"] = false,
                 ["versions"] = new JsonArray(
                     new JsonObject
                     {
@@ -336,6 +337,49 @@ public class UiEffectTests
         Assert.Equal(9, eff.Timeline!.TotalCount);
         Assert.True(eff.Timeline.Truncated);
         Assert.Single(eff.Timeline.Rows);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("\"false\"")]
+    [InlineData("0")]
+    public void A_timeline_without_an_exact_completeness_receipt_stays_unknown(string? hostile)
+    {
+        var response = new JsonObject
+        {
+            ["envelope"] = new JsonObject { ["status"] = "ok" },
+            ["work"] = "32013r0575",
+            ["total_count"] = 1,
+            ["versions"] = new JsonArray(new JsonObject { ["valid_from"] = "2024-01-01" }),
+        };
+        if (hostile is not null) response["truncated"] = JsonNode.Parse(hostile);
+
+        var effect = UiMapper.From("timeline", Args(("work", "eu-eurlex:32013r0575")), response);
+
+        Assert.Null(effect.Timeline!.Truncated);
+    }
+
+    [Fact]
+    public void Article_history_retains_its_completeness_receipt()
+    {
+        var response = new JsonObject
+        {
+            ["envelope"] = new JsonObject { ["status"] = "ok" },
+            ["work"] = "32013r0575",
+            ["anchor"] = "art_92",
+            ["distinct_texts"] = 3,
+            ["truncated"] = true,
+            ["states"] = new JsonArray(new JsonObject { ["valid_from"] = "2024-01-01" }),
+        };
+
+        var effect = UiMapper.From("article_history",
+            Args(("work", "eu-eurlex:32013r0575"), ("anchor", "art_92")), response);
+
+        Assert.True(effect.History!.Truncated);
+        response["truncated"] = JsonValue.Create("true");
+        Assert.Null(UiMapper.From("article_history",
+            Args(("work", "eu-eurlex:32013r0575"), ("anchor", "art_92")), response)
+            .History!.Truncated);
     }
 
     [Fact]
@@ -475,6 +519,76 @@ public class UiEffectTests
         Assert.False(eff.CitedBy!.RowsTruncated);
     }
 
+    private static JsonObject CitedPublisher(
+        string publisher, JsonNode? scope, JsonNode? legalEffect, JsonNode? relationship,
+        JsonNode? truncated, bool includeTruncated = true)
+    {
+        var response = new JsonObject
+        {
+            ["envelope"] = new JsonObject
+            {
+                ["status"] = "ok", ["publisher"] = publisher,
+                ["jurisdiction"] = publisher == "lu-legilux" ? "LU" : "EU",
+            },
+            ["cited_work"] = "eu-eurlex:32016r0679",
+            ["citing_articles"] = 1,
+            ["citations"] = new JsonArray(new JsonObject
+            {
+                ["work"] = $"{publisher}:citing-work", ["valid_from"] = "2024-01-01",
+                ["anchor"] = "art_1",
+            }),
+            ["evidence_scope"] = scope?.DeepClone(),
+            ["current_legal_effect_assessed"] = legalEffect?.DeepClone(),
+            ["relationship_type_assessed"] = relationship?.DeepClone(),
+        };
+        if (includeTruncated)
+            response["response_row_set"] = new JsonObject { ["truncated"] = truncated?.DeepClone() };
+        return response;
+    }
+
+    [Fact]
+    public void Two_successful_cited_by_parts_preserve_only_shared_scope_assessments_and_completeness()
+    {
+        const string scope = "captured_cross_references_in_held_non_withdrawn_versions";
+        var effect = UiMapper.From("cited_by", Args(("work", "eu-eurlex:32016r0679")),
+            new JsonArray(
+                CitedPublisher("lu-legilux", JsonValue.Create(scope), JsonValue.Create(false),
+                    JsonValue.Create(false), JsonValue.Create(false)),
+                CitedPublisher("eu-eurlex", JsonValue.Create(scope), JsonValue.Create(false),
+                    JsonValue.Create(false), JsonValue.Create(false))));
+
+        Assert.Equal(2, effect.CitedBy!.CitingArticles);
+        Assert.Equal(scope, effect.CitedBy.EvidenceScope);
+        Assert.False(effect.CitedBy.CurrentLegalEffectAssessed);
+        Assert.False(effect.CitedBy.RelationshipTypeAssessed);
+        Assert.False(effect.CitedBy.RowsTruncated);
+    }
+
+    [Fact]
+    public void Two_successful_cited_by_parts_with_missing_malformed_or_mismatched_facts_claim_nothing()
+    {
+        const string scope = "captured_cross_references_in_held_non_withdrawn_versions";
+        var effect = UiMapper.From("cited_by", Args(("work", "eu-eurlex:32016r0679")),
+            new JsonArray(
+                CitedPublisher("lu-legilux", JsonValue.Create(scope), JsonValue.Create(false),
+                    JsonValue.Create(false), JsonValue.Create(false)),
+                CitedPublisher("eu-eurlex", null, JsonValue.Create("false"),
+                    JsonValue.Create(true), null, includeTruncated: false)));
+
+        Assert.Null(effect.CitedBy!.EvidenceScope);
+        Assert.Null(effect.CitedBy.CurrentLegalEffectAssessed);
+        Assert.Null(effect.CitedBy.RelationshipTypeAssessed);
+        Assert.Null(effect.CitedBy.RowsTruncated);
+
+        var cut = UiMapper.From("cited_by", Args(("work", "eu-eurlex:32016r0679")),
+            new JsonArray(
+                CitedPublisher("lu-legilux", JsonValue.Create(scope), JsonValue.Create(false),
+                    JsonValue.Create(false), JsonValue.Create(true)),
+                CitedPublisher("eu-eurlex", JsonValue.Create(scope), JsonValue.Create(false),
+                    JsonValue.Create(false), null, includeTruncated: false)));
+        Assert.True(cut.CitedBy!.RowsTruncated);
+    }
+
     private static UiEffect CitedNode(JsonObject extra)
     {
         var o = new JsonObject
@@ -564,6 +678,7 @@ public class UiEffectTests
             JsonValue.Create("profiles_differ"), JsonValue.Create("typed_text_gap"))));
 
         Assert.Equal(new[] { "profiles_differ", "typed_text_gap" }, eff.Diff!.ComparisonLimitations);
+        Assert.False(eff.Diff.ComparisonLimitationsMalformed);
     }
 
     /// <summary>
@@ -571,7 +686,7 @@ public class UiEffectTests
     /// which is the one thing this field exists to prevent anybody concluding.
     /// </summary>
     [Fact]
-    public void A_limitation_list_with_nothing_usable_is_absent_rather_than_empty()
+    public void A_malformed_limitation_field_is_explicit_rather_than_an_empty_list()
     {
         foreach (var node in new JsonNode?[]
         {
@@ -582,8 +697,25 @@ public class UiEffectTests
             new JsonObject(),
         })
         {
-            Assert.Null(Diffed(DiffNode(node)).Diff!.ComparisonLimitations);
+            var diff = Diffed(DiffNode(node)).Diff!;
+            Assert.Null(diff.ComparisonLimitations);
+            Assert.True(diff.ComparisonLimitationsMalformed);
         }
+    }
+
+    [Fact]
+    public void Valid_limitations_survive_malformed_siblings_and_the_damage_is_reported()
+    {
+        var diff = Diffed(DiffNode(new JsonArray(
+            JsonValue.Create("profiles_differ"), JsonValue.Create(7), JsonValue.Create("  ")))).Diff!;
+
+        Assert.Equal(new[] { "profiles_differ" }, diff.ComparisonLimitations);
+        Assert.True(diff.ComparisonLimitationsMalformed);
+        Assert.False(Diffed(DiffNode(null)).Diff!.ComparisonLimitationsMalformed);
+
+        var explicitNull = DiffNode(null);
+        explicitNull["comparison_limitations"] = null;
+        Assert.True(Diffed(explicitNull).Diff!.ComparisonLimitationsMalformed);
     }
 
     /// <summary>
