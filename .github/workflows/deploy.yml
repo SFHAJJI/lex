@@ -108,6 +108,42 @@ jobs:
               gh release verify-asset "$release_tag" "$release_dir/$benchmark_manifest" \
                 --repo "$repository" >/dev/null \
                 || { echo "::error::$repo benchmark manifest is not attested by the exact release"; exit 1; }
+              benchmark_evidence_status=
+              if jq -e --arg report "retrieval-benchmark-$collection.json" '
+                (.files | type) == "array"
+                and (.files | length) == 2
+                and ([.files[]? | select(.path == $report)] | length) == 1
+                and ([.files[]? | select(.path != $report and (.path | endswith(".jsonl")))] | length) == 1' \
+                "$release_dir/$benchmark_manifest" >/dev/null; then
+                benchmark_evidence_status=complete
+                benchmark_case_results=$(jq -er --arg report "retrieval-benchmark-$collection.json" '
+                  [.files[] | select(.path != $report and (.path | endswith(".jsonl")))]
+                  | if length == 1 then .[0].path else error("missing case results") end' \
+                  "$release_dir/$benchmark_manifest") \
+                  || { echo "::error::$repo benchmark manifest has missing or extra evidence"; exit 1; }
+              elif jq -e --arg report "retrieval-benchmark-$collection.json" '
+                (.files | type) == "array"
+                and (.files | length) == 1
+                and .files[0].path == $report' \
+                "$release_dir/$benchmark_manifest" >/dev/null; then
+                benchmark_evidence_status=legacy
+                echo "::notice::$repo signed legacy benchmark has no per-case evidence; hybrid activation stays quarantined"
+              else
+                echo "::error::$repo benchmark manifest has missing or extra evidence"; exit 1
+              fi
+              if [ "$benchmark_evidence_status" = "complete" ]; then
+                case "$benchmark_case_results" in
+                  ""|*[!A-Za-z0-9._-]*|/*|*\\*|*/*|..|../*)
+                    echo "::error::$repo benchmark manifest has an unsafe case-results path"; exit 1 ;;
+                esac
+                benchmark_case_results_size=$(jq -er --arg member "$benchmark_case_results" '
+                  .files[] | select(.path == $member) | .size
+                  | select(type == "number" and . > 0 and floor == .)' \
+                  "$release_dir/$benchmark_manifest") \
+                  || { echo "::error::$repo benchmark case-results member has an invalid size"; exit 1; }
+                [ "$benchmark_case_results_size" -le 67108864 ] \
+                  || { echo "::error::$repo benchmark case-results member exceeds the fixed byte ceiling"; exit 1; }
+              fi
             fi
           done
 
@@ -395,6 +431,42 @@ jobs:
                 < "$release_dir/$benchmark_manifest" \
                 >/dev/null \
                 || { echo "::error::$repo benchmark manifest does not bind the exact release"; exit 1; }
+              benchmark_evidence_status=
+              if jq -e --arg report "retrieval-benchmark-$collection.json" '
+                (.files | type) == "array"
+                and (.files | length) == 2
+                and ([.files[]? | select(.path == $report)] | length) == 1
+                and ([.files[]? | select(.path != $report and (.path | endswith(".jsonl")))] | length) == 1' \
+                "$release_dir/$benchmark_manifest" >/dev/null; then
+                benchmark_evidence_status=complete
+                benchmark_case_results=$(jq -er --arg report "retrieval-benchmark-$collection.json" '
+                  [.files[] | select(.path != $report and (.path | endswith(".jsonl")))]
+                  | if length == 1 then .[0].path else error("missing case results") end' \
+                  "$release_dir/$benchmark_manifest") \
+                  || { echo "::error::$repo benchmark manifest has missing or extra evidence"; exit 1; }
+              elif jq -e --arg report "retrieval-benchmark-$collection.json" '
+                (.files | type) == "array"
+                and (.files | length) == 1
+                and .files[0].path == $report' \
+                "$release_dir/$benchmark_manifest" >/dev/null; then
+                benchmark_evidence_status=legacy
+                echo "::notice::$repo signed legacy benchmark has no per-case evidence; hybrid activation stays quarantined"
+              else
+                echo "::error::$repo benchmark manifest has missing or extra evidence"; exit 1
+              fi
+              if [ "$benchmark_evidence_status" = "complete" ]; then
+                case "$benchmark_case_results" in
+                  ""|*[!A-Za-z0-9._-]*|/*|*\\*|*/*|..|../*)
+                    echo "::error::$repo benchmark manifest has an unsafe case-results path"; exit 1 ;;
+                esac
+                benchmark_case_results_size=$(jq -er --arg member "$benchmark_case_results" '
+                  .files[] | select(.path == $member) | .size
+                  | select(type == "number" and . > 0 and floor == .)' \
+                  "$release_dir/$benchmark_manifest") \
+                  || { echo "::error::$repo benchmark case-results member has an invalid size"; exit 1; }
+                [ "$benchmark_case_results_size" -le 67108864 ] \
+                  || { echo "::error::$repo benchmark case-results member exceeds the fixed byte ceiling"; exit 1; }
+              fi
             fi
           done
           index_manifest_count=$(find "$release_dir" -name 'index-*.manifest.json' | wc -l)
