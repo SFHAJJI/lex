@@ -702,3 +702,31 @@ button.publisher-metadata-chip[aria-pressed="true"] { border-color: var(--fg); c
 .trust-notice b { display: block; margin-bottom: 2px; }
 .trust-notice .actions { margin-top: 4px; font-size: 12.5px; }
 .trust-notice .actions a { margin-right: 14px; display: inline-block; }
+
+/* The product's signature line. Pinned under the data view, quiet until asked: it must be
+   present on every screen without competing with the law for attention. */
+.envelope-strip { margin-top: 1.25rem; border-top: 1px solid var(--line); padding-top: .5rem; }
+.envelope-strip > summary { cursor: pointer; list-style: none; color: var(--muted);
+  font-size: .78rem; display: flex; flex-direction: column; gap: .15rem; }
+.envelope-strip > summary::-webkit-details-marker { display: none; }
+.envelope-line { display: flex; flex-wrap: wrap; gap: .5rem; align-items: baseline; }
+.envelope-line > span + span::before { content: "|"; margin-right: .5rem; opacity: .45; }
+.envelope-identity { display: grid; grid-template-columns: auto 1fr; gap: .15rem .75rem;
+  margin: .5rem 0 0; font-size: .74rem; color: var(--muted); }
+.envelope-identity > div { display: contents; }
+.envelope-identity dt { opacity: .8; }
+.envelope-identity dd { margin: 0; overflow-wrap: anywhere; }
+
+/* The denominator sits with the results it describes, quiet but never optional: a zero-hit
+   screen without it makes the claim that no such law exists. */
+.population-footer { margin-top: 1rem; padding-top: .6rem; border-top: 1px solid var(--line);
+  font-size: .82rem; }
+.population-footer p { margin: 0 0 .25rem; }
+.population-footer .sub { font-size: .78rem; opacity: .85; }
+
+/* The revert is an action, not a footnote: a reader told their words were changed must be able
+   to see the way back without hunting for it. */
+.expansion button.ghost { margin-top: .35rem; font-size: .78rem; padding: .2rem .55rem; }
+.linklike { background: none; border: 0; padding: 0; font: inherit; color: var(--accent);
+  text-decoration: underline; cursor: pointer; }
+.linklike:hover { text-decoration: none; }

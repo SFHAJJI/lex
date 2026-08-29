@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { safeHttpsUrl, tool } from "./api";
 import { facetLabel as label, jurisdictionForPublisher, jurisdictionLabel } from "./facets";
 import {
@@ -8,6 +8,14 @@ import {
   type PublisherMetadata,
 } from "./publisherMetadata";
 import { ScopeFilters } from "./ScopeFilters";
+import { envelopeStripRows, type EnvelopeStripRow } from "./envelopeStrip";
+import { normalizeSearchResponse, type PublisherPopulation } from "./searchPopulation";
+import { fuzzyModeFor, retainedForQuery } from "./api";
+import { clearedSearchResults, LIMITATION_EXPLANATION, parseGovernedResponse,
+  projectSearchResponse, searchEmptyPresentation, searchResultsFromError,
+  withholdingSentence,
+  type SearchResultsState, type WithheldClaims } from "./limitations";
+import { PartialResponseNotice, PopulationFooter, PublisherLimitations } from "./views";
 import type { State } from "./state";
 import { shorten } from "./pickers";
 import { ResultsSkeleton } from "./Skeleton";
@@ -44,6 +52,12 @@ export interface SearchProps {
   onAsOf: (d?: string) => void;
   onRefine: (next: Partial<State>) => void;
   onMonitor: () => void;
+  /**
+   * The index identity behind these results, lifted so the shell's EnvelopeStrip describes the
+   * response actually on screen. Trust rule 4 puts freshness on every data view, and the search
+   * surface is the most used one.
+   */
+  onEnvelopes: (rows: EnvelopeStripRow[]) => void;
 }
 
 type HitMeta = {
@@ -81,13 +95,45 @@ const INITIAL_ARTICLES = 8;
 
 export default function Search(p: SearchProps) {
   const [text, setText] = useState(p.state.q ?? "");
-  const [works, setWorks] = useState<WorkHit[]>([]);
-  const [articles, setArticles] = useState<ArticleHit[]>([]);
+  const [results, setResults] =
+    useState<SearchResultsState<WorkHit, ArticleHit>>(clearedSearchResults);
+  const { works, articles, error, modeUnavailable, expansions, limitations } = results;
+  const allRefused = results.absence === "all_refused";
   const [busy, setBusy] = useState(false);
-  const [modeUsed, setModeUsed] = useState<"keyword" | "hybrid" | "unavailable">("keyword");
-  const [modeUnavailable, setModeUnavailable] = useState<string>();
-  const [expansions, setExpansions] = useState<string[]>([]);
-  const [error, setError] = useState<string>();
+  // The denominator behind whatever this response showed, kept from the response itself so the
+  // footer can never describe a different query than the one on screen.
+  const [populations, setPopulations] = useState<PublisherPopulation[]>([]);
+  /**
+   * What this response could not attribute. A publisher whose population authority is void
+   * loses its rows as well as its denominator, and rows the reader cannot check against a
+   * denominator are the exact claim this lane exists to stop. Withholding them silently would
+   * trade one wrong answer for a quieter one, so it is disclosed and it suppresses the
+   * confident empty sentence, which would otherwise report "nothing matched" for a response
+   * that was cut down.
+   */
+  const [withheld, setWithheld] = useState<WithheldClaims>();
+  /**
+   * Trust rule 9: a reader told their query was rewritten must be able to undo it. The override
+   * stores the exact query it was chosen for, so it can never silently apply to a different one.
+   * Typing a new question restores the default rather than carrying a decision the reader made
+   * about words they are no longer searching for.
+   */
+  const [exactQuery, setExactQuery] = useState<string>();
+
+  /**
+   * Every piece of state derived from a response, cleared together. Rows, limitations, the
+   * denominator and the index identity all describe one query; clearing them in separate places
+   * is how a screen ends up showing three different answers at once.
+   */
+  const clearResponseState = useCallback(() => {
+    setResults(clearedSearchResults);
+    setPopulations([]);
+    setWithheld(undefined);
+    p.onEnvelopes([]);
+  }, [p.onEnvelopes]);
+
+
+
   const [articleLimit, setArticleLimit] = useState(INITIAL_ARTICLES);
   const [metadataFilter, setMetadataFilter] = useState<{
     query: string; metadata: PublisherMetadata;
@@ -103,7 +149,19 @@ export default function Search(p: SearchProps) {
   }, []);
 
   const q = p.state.q ?? "";
+  // Bound to the exact submitted query. Any other query resolves to the default, so the override
+  // cannot outlive the words it was chosen for.
+  const fuzzyMode = fuzzyModeFor(exactQuery, q);
   const asOf = p.state.asOf;
+  /**
+   * The date the request actually carries. It is not `asOf`: with no explicit date the
+   * request falls back to today, and today moves. Depending on `asOf` alone meant a
+   * rerender after the calendar day changed updated the visible default while the rows,
+   * strip, population and limitations stayed on the previous day, and no new request was
+   * issued. One value, used by the request and by both dependency lists, so the thing
+   * sent and the thing watched cannot drift apart.
+   */
+  const requestAsOf = asOf ?? p.today;
   const retrieval = p.state.retrieval ?? "keyword";
   const jurisdiction = p.state.jurisdiction ?? "";
   const hierarchy = p.state.hierarchy ?? "";
@@ -114,24 +172,50 @@ export default function Search(p: SearchProps) {
   const language = p.state.language ?? "";
   // Bind the component-memory filter to the exact submitted query that produced its server row.
   // A new query drops it synchronously, without putting an opaque publisher URI in URL state.
-  const activeMetadata = metadataFilter?.query === q ? metadataFilter.metadata : undefined;
+  const activeMetadata = retainedForQuery(metadataFilter, q)?.metadata;
   const metadataArguments = activeMetadata
     ? publisherMetadataFilterArguments(activeMetadata)
     : undefined;
   const metadataIdentifier = metadataArguments?.publisher_metadata_identifier;
 
-  useEffect(() => {
-    if (!q.trim()) { setWorks([]); setArticles([]); setError(undefined); return; }
-    let live = true;
+  /**
+   * The request generation. Every response carries the generation it was asked under, and
+   * only the current generation may write. A boolean captured per effect run could not do
+   * this job: it is flipped by passive cleanup, which runs after the next paint, so a
+   * response arriving in that interval was still live and still allowed to write.
+   */
+  const generation = useRef(0);
+
+  /**
+   * The state transition, before paint.
+   *
+   * Clearing in a passive effect left a committed frame in which the request arguments had
+   * already changed and the previous answer was still on screen, so a reader saw rows,
+   * limitations and a denominator attributed to a date, a retrieval mode or a scope filter
+   * they had already left. Changing the question remounts and needs none of this; changing
+   * anything else about the request does not, which is the case this covers.
+   *
+   * Cleanup advances the generation too, so unmounting invalidates an outstanding request
+   * rather than leaving it able to write into a component that no longer exists.
+   */
+  useLayoutEffect(() => {
+    generation.current += 1;
+    clearResponseState();
+    if (!q.trim()) { setBusy(false); return; }
     setArticleLimit(INITIAL_ARTICLES);
     setBusy(true);
-    setError(undefined);
-    setModeUnavailable(undefined);
-    setExpansions([]);
-    setWorks([]);
-    setArticles([]);
-    tool<any>("search", { query: q.trim(), limit: 40, time_scope: "as_of", as_of: asOf ?? p.today,
-                          retrieval_mode: retrieval, fuzzy: "auto",
+    return () => { generation.current += 1; };
+  }, [q, requestAsOf, retrieval, jurisdiction, hierarchy, domain, sourceClass, actForm,
+      bindingStatus, language, metadataIdentifier, fuzzyMode, clearResponseState]);
+
+  useEffect(() => {
+    if (!q.trim()) return;
+    // Read after the layout effect above has advanced it, so this is the generation this
+    // request belongs to.
+    const mine = generation.current;
+    const live = () => mine === generation.current;
+    tool<any>("search", { query: q.trim(), limit: 40, time_scope: "as_of", as_of: requestAsOf,
+                          retrieval_mode: retrieval, fuzzy: fuzzyMode,
                           ...(jurisdiction ? { jurisdiction } : {}),
                           ...(hierarchy ? { hierarchy } : {}), ...(domain ? { domain } : {}),
                           ...(actForm ? { act_form: actForm } : {}),
@@ -140,69 +224,119 @@ export default function Search(p: SearchProps) {
                           ...(sourceClass ? { source_class: sourceClass } : {}),
                           ...(metadataArguments ?? {}) })
       .then((res) => {
-        if (!live) return;
-        const envelopes = Array.isArray(res) ? res : [res];
-        const hits = fusePublisherHits<any>(envelopes);
-        const unavailable = envelopes.filter((e: any) =>
-          e?.envelope?.status === "retrieval_mode_unavailable");
-        const usedHybrid = envelopes.some((e: any) => e?.retrieval_mode === "hybrid");
-        const usedKeyword = envelopes.some((e: any) => e?.retrieval_mode === "keyword");
-        setModeUsed(usedHybrid ? "hybrid" : usedKeyword ? "keyword" : "unavailable");
-        if (unavailable.length > 0) {
-          const publishers = unavailable
-            .map((e: any) => String(e?.envelope?.publisher ?? ""))
-            .filter(Boolean)
-            .join(", ");
-          setModeUnavailable(`Words + meaning is unavailable${publishers ? ` for ${publishers}` : ""}: its signed retrieval benchmark has not authorized it. Choose Exact words.`);
-        }
-        setExpansions([...new Set(envelopes.flatMap((e: any) => e?.query_expansions ?? []))] as string[]);
-        // The same hits answer two different questions, so they are split rather than ranked
-        // together: "which law is this" and "where is this said". A reader almost always wants
-        // the first when they typed a name, and the second when they typed words.
-        const byWork = new Map<string, WorkHit>();
-        const arts: ArticleHit[] = [];
-        for (const h of hits) {
-          const work = String(h.lex_id ?? "").split(":").slice(0, 2).join(":");
-          if (!work) continue;
-          const title = shorten(h.title) ?? work;
-          const meta: HitMeta = {
-            jurisdiction: h._jurisdiction ?? jurisdictionForPublisher(work.split(":")[0]),
-            timelineSemantics: h._timelineSemantics,
-            validFrom: h.valid_from, validTo: h.valid_to, hierarchy: h.hierarchy,
-            language: h.language, domains: Array.isArray(h.domains) ? h.domains : [],
-            consolidationStatus: h.consolidation_status,
-            matchReasons: Array.isArray(h.match_reasons) ? h.match_reasons : [],
-            publisherMetadata: parsePublisherMetadata(h.matched_publisher_metadata),
+        if (!live()) return;
+        // ONE PARSE, and it comes FIRST. Rows, the index strip, the denominator, the
+        // withholding disclosure, the retrieval mode, the expansions and the absence
+        // state are seven views of this single typed result. This used to be three
+        // separate walks over `res` in three consecutive statements, and the comment that
+        // stood here promised the opposite of what the code did: it said one normalized
+        // set fed rows, the denominator and absence authority, above code where a footer
+        // could describe a publisher whose rows had been withheld one statement later.
+        // The strip was the last raw walk and the worst of them, because it published a
+        // build date and a valid-signature badge for units this parse had rejected (O1).
+        // There is nothing left to disagree with.
+        const parsed = parseGovernedResponse("search", res);
+        p.onEnvelopes(envelopeStripRows(parsed));
+        const answer = normalizeSearchResponse(parsed);
+        setPopulations(answer.populations);
+        // Typed causes, carried rather than merged: the sentence a reader is shown has to
+        // be the one the parse established for that publisher (O3).
+        setWithheld(answer.complete ? undefined : answer.withheld);
+        // Round 4 (O3/O4): the ONE production projector reads the parse closed, derives
+        // mode and expansion facts from the validated ran units only, and types the
+        // absence state; the callback below is presentation mapping, not decision.
+        setResults(projectSearchResponse<WorkHit, ArticleHit>(
+          parsed,
+          (ranUnits) => {
+          // Adapted from the parsed units, never re-read off the response. Publisher,
+          // jurisdiction, timeline semantics and rows all come from the one parse, so a
+          // hit can no longer reach fusion carrying an identity the table refused.
+          const hits = fusePublisherHits<any>(ranUnits.map((unit) => ({
+            envelope: {
+              publisher: unit.publisher,
+              jurisdiction: unit.jurisdiction,
+              timeline_semantics: unit.timelineSemantics,
+            },
+            hits: unit.rows,
+          })));
+          // The same hits answer two different questions, so they are split rather than
+          // ranked together: "which law is this" and "where is this said".
+          const byWork = new Map<string, WorkHit>();
+          const arts: ArticleHit[] = [];
+          for (const h of hits) {
+            const work = String(h.lex_id ?? "").split(":").slice(0, 2).join(":");
+            if (!work) continue;
+            const title = shorten(h.title) ?? work;
+            const meta: HitMeta = {
+              jurisdiction: h._jurisdiction ?? jurisdictionForPublisher(work.split(":")[0]),
+              timelineSemantics: h._timelineSemantics,
+              validFrom: h.valid_from, validTo: h.valid_to, hierarchy: h.hierarchy,
+              language: h.language, domains: Array.isArray(h.domains) ? h.domains : [],
+              consolidationStatus: h.consolidation_status,
+              matchReasons: Array.isArray(h.match_reasons) ? h.match_reasons : [],
+              publisherMetadata: parsePublisherMetadata(h.matched_publisher_metadata),
+            };
+            const existing = byWork.get(work);
+            if (!existing) byWork.set(work, { work, title, ...meta });
+            else if (!existing.publisherMetadata && meta.publisherMetadata)
+              byWork.set(work, { ...existing, publisherMetadata: meta.publisherMetadata });
+            if (h.anchor)
+              arts.push({ work, title, anchor: h.anchor, num: h.provision_num,
+                          snippet: h.snippet, ...meta, validFrom: String(h.valid_from) });
+          }
+          const visibleWorks = [...byWork.values()].slice(0, 8);
+          const visibleWorkIds = new Set(visibleWorks.map((work) => work.work));
+          // Passages explain why one of the visible laws matched; they never introduce a
+          // ninth law after the work cap.
+          return {
+            works: visibleWorks,
+            articles: arts.filter((article) => visibleWorkIds.has(article.work)).slice(0, 25),
+            ranHitCount: hits.length,
           };
-          const existing = byWork.get(work);
-          if (!existing) byWork.set(work, { work, title, ...meta });
-          else if (!existing.publisherMetadata && meta.publisherMetadata)
-            byWork.set(work, { ...existing, publisherMetadata: meta.publisherMetadata });
-          if (h.anchor)
-            arts.push({ work, title, anchor: h.anchor, num: h.provision_num,
-                        snippet: h.snippet, ...meta, validFrom: String(h.valid_from) });
-        }
-        const visibleWorks = [...byWork.values()].slice(0, 8);
-        const visibleWorkIds = new Set(visibleWorks.map((work) => work.work));
-        setWorks(visibleWorks);
-        // Passages explain why one of the visible laws matched. They are not an independent
-        // result inventory and must never introduce a ninth law after the work cap was applied.
-        setArticles(arts.filter((article) => visibleWorkIds.has(article.work)).slice(0, 25));
+        }));
       })
-      .catch(() => { if (live) { setWorks([]); setArticles([]); setError("Search could not be reached. Try again."); } })
-      .finally(() => { if (live) setBusy(false); });
-    return () => { live = false; };
-  }, [q, asOf, retrieval, jurisdiction, hierarchy, domain, sourceClass, actForm, bindingStatus,
-      language, metadataIdentifier]);
+      .catch(() => {
+        if (live()) setResults(searchResultsFromError("Search could not be reached. Try again."));
+      })
+      .finally(() => { if (live()) setBusy(false); });
+  }, [q, requestAsOf, retrieval, jurisdiction, hierarchy, domain, sourceClass, actForm, bindingStatus,
+      language, metadataIdentifier, fuzzyMode, clearResponseState]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     p.onSubmit(searchSubmission(text));
   };
 
+  // has_results and partial_results both mean rows rendered, so neither can reach the empty
+  // branch; mapping them to no_match keeps the presentation total without widening its type.
+  const emptyPresentation = searchEmptyPresentation(
+    results.absence === "has_results" || results.absence === "partial_results"
+      ? "no_match" : results.absence);
+  /**
+   * Whether the response fell short of the scope the reader selected, from any cause.
+   *
+   * Deriving this from `withheld` alone was too narrow: that is only the case this module
+   * detects. The projector independently classifies a malformed or unattributable sibling as
+   * partial or incomplete, and in that state the unqualified sentence claims the whole selected
+   * scope was searched while the notice beside it says the response was not coherent. The
+   * denominator has to answer to the final authority, not to the half of it this file owns.
+   */
+  const authorityIncomplete = withheld !== undefined
+    || results.absence === "partial_results"
+    || results.absence === "incomplete_response"
+    || results.absence === "mixed_no_match";
   const groupedResults = groupSearchResults(works, articles);
   const visiblePassages = new Set(articles.slice(0, articleLimit));
   const resultLawCount = groupedResults.reduce((count, section) => count + section.works.length, 0);
+  const laws = `${resultLawCount} law${resultLawCount === 1 ? "" : "s"}`;
+  const passages =
+    `${articles.length} matching passage${articles.length === 1 ? "" : "s"}`;
+  // The same authority the denominator answers to. Testing only the withholding this file
+  // detects left a valid publisher beside an invalid sibling rendering a bare count under a
+  // partial notice, which is the claim the comment above already said was not authorized.
+  const countedResults = error !== undefined || authorityIncomplete
+    ? `Showing ${laws}, ${passages}`
+    : `${laws}, ${passages}`;
 
   return (
     <section className="finder" aria-label="Search the corpus">
@@ -252,9 +386,19 @@ export default function Search(p: SearchProps) {
       {q ? (
         <div className="results">
           <div className="res-head">
-            <span className="sub">{busy ? "Searching…" : `${resultLawCount} law${resultLawCount === 1 ? "" : "s"}, ${articles.length} matching passage${articles.length === 1 ? "" : "s"}`}</span>
-            <span className="badge">{modeUsed === "hybrid" ? "words + meaning"
-              : modeUsed === "unavailable" ? "meaning unavailable" : "exact words"}</span>
+            {/* A bare count is a claim about the answer. It is only that when the response
+                was authoritative and complete: after a transport error, or when a
+                publisher's rows were withheld, "0 laws" reads as an absence the response
+                cannot support. In those states the header says only what is on screen. */}
+            <span className="sub">{busy ? "Searching…" : countedResults}</span>
+            {/* An unknown mode is not an unavailable mode: in flight and after a transport
+                error the badge states nothing rather than a false capability claim. */}
+            {results.modeUsed === undefined
+              ? (results.modeUnavailable
+                  ? <span className="badge">meaning unavailable</span>
+                  : null)
+              : <span className="badge">{results.modeUsed === "hybrid"
+                  ? "words + meaning" : "exact words"}</span>}
             <span className="grow" />
             <div className="search-mode" role="group" aria-label="Search method">
               <button className={retrieval === "keyword" ? "on" : ""}
@@ -276,6 +420,11 @@ export default function Search(p: SearchProps) {
 
           <ScopeFilters values={p.state} onChange={p.onRefine} />
 
+          <PublisherLimitations items={limitations} tool="search" />
+          {/* Rows rendered, but a sibling response was unusable: say so rather than
+              letting an incomplete answer look complete (PR293 review, O1). */}
+          <PartialResponseNotice partial={results.absence === "partial_results"} />
+
           {activeMetadata ? (
             <div className="metadata-filter" role="status">
               <span>Filtering by {publisherMetadataCaption(activeMetadata.kind)}: <b>{activeMetadata.displayLabel}</b></span>
@@ -285,7 +434,38 @@ export default function Search(p: SearchProps) {
             </div>
           ) : null}
 
-          {expansions.length > 0 ? <p className="sub expansion">Spelling fallback tried: {expansions.join(", ")}</p> : null}
+          {expansions.length > 0 && fuzzyMode === "auto" ? (
+            <div className="sub expansion" role="note" aria-label="Query interpretation"
+                 data-testid="interpretation-notice">
+              <p>Spelling fallback tried: {expansions.join(", ")}</p>
+              <button type="button" className="ghost" data-testid="relaxation-revert"
+                      onClick={() => {
+                        // Clear before the rerun, not after it: rows, limitations and the
+                        // denominator all describe the relaxed query, and leaving them on screen
+                        // during the refetch shows results attributed to a query no longer running.
+                        clearResponseState();
+                        setExactQuery(q.trim());
+                      }}>
+                Search these exact words instead
+              </button>
+            </div>
+          ) : null}
+          {fuzzyMode === "off" ? (
+            <p className="sub expansion" data-testid="exact-words-notice">
+              Searching these exact words. No spelling fallback was applied.{" "}
+              <button type="button" className="linklike" data-testid="relaxation-restore"
+                      onClick={() => {
+                        // Both directions of this control clear, not just one. Restoring the
+                        // fallback reruns the query exactly as reverting to exact words does,
+                        // so leaving the exact-words rows and denominator on screen during the
+                        // rerun would attribute them to a search that is no longer running.
+                        clearResponseState();
+                        setExactQuery(undefined);
+                      }}>
+                Allow spelling fallback again
+              </button>
+            </p>
+          ) : null}
 
           {busy && works.length === 0 && articles.length === 0 ? <ResultsSkeleton /> : null}
 
@@ -355,16 +535,42 @@ export default function Search(p: SearchProps) {
             </button>
           ) : null}
 
-          {!busy && !error && works.length === 0 && articles.length === 0 ? (
-            <div className="empty">
-              <p>Nothing in the corpus matches that.</p>
-              <p className="sub">
-                Search reads the versions that carry text. Lex also holds dated versions whose
-                wording the publisher never issued, and those can be dated but not searched.{" "}
-                <a href="/coverage">What Lex holds, and lacks →</a>
-              </p>
+          {!busy && !error && withheld !== undefined ? (
+            // Disclosed, never silent. A publisher whose population authority is void loses its
+            // rows along with its denominator, so this response is narrower than the scope the
+            // reader asked for, and nothing left in it can support an absence claim.
+            <div className="sub expansion" role="note" data-testid="withholding-notice">
+              <p>{withholdingSentence(withheld)}</p>
             </div>
           ) : null}
+
+          {!busy && !error && withheld === undefined
+           && works.length === 0 && articles.length === 0 ? (
+            // The empty sentence is a typed truth claim scoped by searchEmptyPresentation
+            // (review round 2, O1): corpus-wide only when every publisher ran; scoped to the
+            // publishers that ran when one refused; coverage-only when all refused. It is
+            // withdrawn entirely when anything was withheld, because a narrowed response cannot
+            // support a claim about the scope the reader actually asked about.
+            <div className="empty" data-search-empty={emptyPresentation.kind}>
+              <p>{emptyPresentation.sentence}</p>
+              {allRefused ? (
+                <p className="sub">{LIMITATION_EXPLANATION}{" "}
+                  <a href="/coverage">What Lex holds, and lacks →</a></p>
+              ) : (
+                <p className="sub">
+                  Search reads the versions that carry text. Lex also holds dated versions whose
+                  wording the publisher never issued, and those can be dated but not searched.{" "}
+                  <a href="/coverage">What Lex holds, and lacks →</a>
+                </p>
+              )}
+            </div>
+          ) : null}
+
+          {/* Rule 6: the population behind the list, the zero, or the refusal alike. Rendered
+              from validated envelopes only, so an invalid sibling contributes nothing. */}
+          {!busy && !error
+            ? <PopulationFooter rows={populations} incomplete={authorityIncomplete} />
+            : null}
         </div>
       ) : null}
     </section>

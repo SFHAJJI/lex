@@ -1,8 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
-  populationScopeLabel, safeHttpsUrl, signatureStatusLabel, type ProvisionItem, type RankingRow, type UiEffect,
+  changeCountLabels, populationCoverageLabel, populationScopeLabel, safeHttpsUrl,
+  signatureStatusLabel,
+  type ProvisionItem, type RankingRow, type UiEffect,
 } from "./api";
 import { facetLabel, jurisdictionLabel } from "./facets";
+import { indexFreshnessLabel, type EnvelopeStripRow } from "./envelopeStrip";
+import { populationExclusions, queriedDenominator, unqueriedPopulations,
+  type PublisherPopulation } from "./searchPopulation";
 import { publisherOf, workSlug } from "./state";
 import { shorten } from "./pickers";
 import { assistantTimelineRows } from "./assistantShell";
@@ -16,6 +21,9 @@ import {
 } from "./temporal";
 import { extractionDisclosure } from "./extractionProfile";
 import { HISTORICAL_DENSITY, historicalDensityApplies } from "./notices";
+import { gapBadgeStatus, LIMITATION_EXPLANATION, limitationsFromEffect,
+  conflictedPublishersSentence, PARTIAL_RESPONSE_SENTENCE, scopedLimitations,
+  type PublisherLimitation } from "./limitations";
 
 const permalink = (work: string, date: string, anchor?: string) =>
   `/${publisherOf(work)}/${workSlug(work)}/${date}${anchor ? `#${anchor}` : ""}`;
@@ -397,7 +405,8 @@ function labelled(dates: string[], xs: number[], width: number, cur: number, cmp
 export function Ranking({ rows, worksChanged, newVersions, populationWorks, knownExclusions,
                           from, to, page, hasMore, jurisdiction,
                           onOpen, onOpenRecord, onPage }: {
-  rows: RankingRow[]; worksChanged: number; newVersions: number; from: string; to: string;
+  rows: RankingRow[]; worksChanged: number | undefined; newVersions: number | undefined;
+  from: string; to: string;
   populationWorks?: number; knownExclusions?: string[]; jurisdiction?: string;
   page: number; hasMore: boolean;
   onOpen: (work: string, from: string, to: string) => void;
@@ -418,8 +427,9 @@ export function Ranking({ rows, worksChanged, newVersions, populationWorks, know
       {/* One row, not three. The layer's meaning belongs beside its counts, because "820 changed"
           only means anything once you know 820 of what. */}
       <div className="cnt">
-        <span className="tag">{worksChanged.toLocaleString()} received publisher versions</span>
-        <span className="tag">{newVersions.toLocaleString()} publisher version dates</span>
+        {changeCountLabels(worksChanged, newVersions).map((label) => (
+          <span className="tag" key={label}>{label}</span>
+        ))}
         {populationLabel ? <span className="tag">{populationLabel}</span> : null}
         <span className="tag mono">{from} → {to}</span>
         <span className="layers-hint">Every selected jurisdiction shares one dated ranking</span>
@@ -497,7 +507,8 @@ export function Ranking({ rows, worksChanged, newVersions, populationWorks, know
           <button className="ghost" disabled={page === 0} onClick={() => onPage(page - 1)}>
             ← previous
           </button>
-          <span className="sub mono">{page * 25 + 1}–{page * 25 + rows.length} of {worksChanged.toLocaleString()}</span>
+          <span className="sub mono">{page * 25 + 1}–{page * 25 + rows.length}
+            {worksChanged !== undefined ? ` of ${worksChanged.toLocaleString()}` : ""}</span>
           <button className="ghost" disabled={!hasMore} onClick={() => onPage(page + 1)}>
             next →
           </button>
@@ -507,31 +518,160 @@ export function Ranking({ rows, worksChanged, newVersions, populationWorks, know
   );
 }
 
-export function InForce({ date, total, rows, page, hasMore, onOpen, onPage }: {
-  date: string; total: number;
+/**
+ * The denominator behind a result list, an empty result, or a refusal.
+ *
+ * Trust rule 6 requires the population behind every list and count, and never-implied rules 3 and
+ * 7 forbid reading a zero as an absence of law or implying the search reached beyond what it
+ * disclosed. A zero-hit screen with no denominator makes exactly the claim rule 3 forbids.
+ *
+ * A publisher that did not run the query is shown separately and never added in. Its scope is a
+ * real fact about what is mounted, but adding it to a "searched N works" sentence would claim the
+ * query covered ground it never touched. When nothing ran at all there is no denominator rather
+ * than a zero, because zero asserts that an empty corpus was searched.
+ */
+export function PopulationFooter(
+  { rows, incomplete }: { rows: PublisherPopulation[]; incomplete?: boolean }) {
+  if (rows.length === 0) return null;
+  // Three states, not two. A missing total means either that no publisher ran the query or
+  // that the disclosed scopes cannot be added into one honest number, and the sentence for
+  // one is false for the other. Reading the number alone loses that distinction.
+  const denominator = queriedDenominator(rows);
+  const unqueried = unqueriedPopulations(rows);
+  const exclusions = populationExclusions(rows);
+  return (
+    <div className="population-footer" data-testid="population-footer">
+      {denominator.kind === "total"
+        ? <p data-testid="population-searched">
+            {incomplete
+              // Says what the figure covers, never why it is short. A withheld publisher need
+              // not have rows on screen, and the withholding may be entirely unattributed, so
+              // both "shown above" and "another publisher" can be false. The withholding
+              // notice states the cause; this states the scope.
+              ? `Searched ${denominator.works.toLocaleString()} works across the publishers `
+                + "whose disclosed scope this query could use. That is less than the scope you "
+                + "selected."
+              : `Searched ${denominator.works.toLocaleString()} works in the selected scope.`}
+          </p>
+        : denominator.kind === "none_ran"
+        ? <p data-testid="population-searched">
+            No publisher ran this query, so no works were searched.
+          </p>
+        : <p data-testid="population-searched">
+            The publishers that ran this query disclosed scopes that cannot be added into one
+            number, so no total is shown.
+          </p>}
+      {unqueried.map((r) => (
+        <p key={r.publisher ?? "unnamed"} className="sub" data-testid="population-not-queried">
+          {r.publisher ?? "One selected publisher"}: {r.population.works_in_scope.toLocaleString()}
+          {r.population.scope_filters_applied
+            ? " works in the selected scope, not queried."
+            : " works mounted before the unsupported filters, not queried."}
+        </p>
+      ))}
+      {exclusions.length > 0
+        ? <p className="sub" data-testid="population-exclusions">
+            Known exclusions: {exclusions.join(" · ")} <a href="/coverage">See coverage</a>
+          </p>
+        : null}
+    </div>
+  );
+}
+
+/**
+ * The product's signature line: which index answered, how fresh it is, and whether its stamp
+ * verified. Trust rule 4 puts this on every data view without exception, and rule 8 forbids
+ * implying data is fresher than its build, which is what an undated screen does.
+ *
+ * One line per mounted publisher, because freshness is a property of each index rather than of
+ * the product. The publisher identifier renders verbatim; there is no publisher display name in
+ * the envelope, and inventing one would put a word on screen that no response carried.
+ */
+export function EnvelopeStrip({ rows }: { rows: EnvelopeStripRow[] }) {
+  if (rows.length === 0) return null;
+  const identities = (r: EnvelopeStripRow) => ([
+    ["corpus commit", r.corpusCommit], ["code commit", r.codeCommit],
+    ["manifest set", r.manifestSetId], ["content digest", r.contentDigest],
+  ] as const).filter(([, v]) => v !== undefined);
+  return (
+    <details className="envelope-strip" data-testid="envelope-strip">
+      <summary>
+        {rows.map((r) => (
+          <span className="envelope-line" key={r.publisher}>
+            <span className="mono">{r.publisher}</span>
+            {r.timelineSemantics ? <span>{facetLabel(r.timelineSemantics)}</span> : null}
+            <span data-testid="envelope-built-at">{indexFreshnessLabel(r.builtAt)}</span>
+            <span>{signatureStatusLabel(r.signatureValid)}</span>
+          </span>
+        ))}
+      </summary>
+      {rows.map((r) => (
+        <dl className="envelope-identity" key={r.publisher}>
+          {identities(r).map(([label, value]) => (
+            <div key={label}>
+              <dt>{label}</dt>
+              <dd className="mono">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      ))}
+    </details>
+  );
+}
+
+export function InForce({ date, total, rows, populationWorks, populationBasis,
+                          populationScopeFiltersApplied, knownExclusions,
+                          page, hasMore, onOpen, onPage }: {
+  date: string; total: number | undefined;
+  populationWorks?: number; populationBasis?: string;
+  populationScopeFiltersApplied?: boolean; knownExclusions?: string[];
   rows: { work: string; title?: string; kind?: string; valid_from: string;
-          jurisdiction?: string; hierarchy?: string; timeline_semantics?: string }[];
+          jurisdiction?: string; hierarchy?: string; timeline_semantics?: string;
+          /** The publisher exposes several identified versions for this work on this date. */
+          ambiguous?: boolean }[];
   page: number; hasMore: boolean;
   onOpen: (work: string, date: string) => void;
   onPage: (page: number) => void;
 }) {
+  // Trust rule 6: a count of states means nothing without the population it was drawn from.
+  const populationLabel = populationCoverageLabel(
+    populationWorks, populationBasis, populationScopeFiltersApplied !== false);
   return (
     <>
       <div className="cnt">
-        <span className="tag">{total.toLocaleString()} publisher states</span>
+        {total !== undefined ? (
+          <span className="tag">{total.toLocaleString()} publisher states</span>
+        ) : null}
+        {populationLabel
+          ? <span className="tag" data-testid="in-force-population">{populationLabel}</span>
+          : null}
         <span className="tag mono">on {date}</span>
       </div>
+      {knownExclusions && knownExclusions.length > 0
+        ? <p className="sub" data-testid="in-force-exclusions">
+            Known exclusions: {knownExclusions.join(" · ")} <a href="/coverage">See coverage</a>
+          </p>
+        : null}
       <ul className="rows">
         {rows.map((r) => (
           <li key={r.work}>
             <button className="rowbtn" onClick={() => onOpen(r.work, r.valid_from)}>
               <span>{r.title ?? r.work}</span>
               <span className="hitmeta">
+                {/* An ambiguity unit is NOT a determinate version. Rendering it unmarked
+                    would assert the publisher identified one, which it did not. */}
+                {r.ambiguous
+                  ? <span className="tag warn" data-testid="ambiguous-version-row">
+                      several identified versions
+                    </span>
+                  : null}
                 {r.jurisdiction ? <span>{jurisdictionLabel(r.jurisdiction)}</span> : null}
                 {r.hierarchy ? <span>{facetLabel(r.hierarchy)}</span> : null}
                 {r.kind ? <span>{facetLabel(r.kind)}</span> : null}
                 <span className="mono">
-                  {usesPublisherVersionDates(r.work, r.timeline_semantics) ? `publisher version ${r.valid_from}` : `in force since ${r.valid_from}`}
+                  {r.ambiguous
+                    ? `choose a version for ${r.valid_from}`
+                    : usesPublisherVersionDates(r.work, r.timeline_semantics) ? `publisher version ${r.valid_from}` : `in force since ${r.valid_from}`}
                 </span>
               </span>
             </button>
@@ -541,7 +681,8 @@ export function InForce({ date, total, rows, page, hasMore, onOpen, onPage }: {
       {(page > 0 || hasMore) ? (
         <div className="pager">
           <button className="ghost" disabled={page === 0} onClick={() => onPage(page - 1)}>← previous</button>
-          <span className="sub mono">{page * 25 + 1}–{page * 25 + rows.length} of {total.toLocaleString()}</span>
+          <span className="sub mono">{page * 25 + 1}–{page * 25 + rows.length}
+            {total !== undefined ? ` of ${total.toLocaleString()}` : ""}</span>
           <button className="ghost" disabled={!hasMore} onClick={() => onPage(page + 1)}>next →</button>
         </div>
       ) : null}
@@ -567,7 +708,10 @@ export function Gap({ status, explanation, available, held }: {
   const collection = whole && (held?.kind === "RECUEIL" || held?.kind === "CODE_RECUEIL");
   return (
     <div className="gap">
-      <div className="cnt"><span className="tag warn mono">{status}</span></div>
+      {/* Client presentation states are not wire statuses and never wear the badge (O5);
+          the decision lives in the tested seam, not in this markup. */}
+      {gapBadgeStatus(status) === null ? null
+        : <div className="cnt"><span className="tag warn mono">{gapBadgeStatus(status)}</span></div>}
       {whole ? (
         <>
           {collection ? (
@@ -622,7 +766,75 @@ export function Empty({ children }: { children: React.ReactNode }) {
 
 export const hasView = (ui?: UiEffect) =>
   !!(ui && (ui.provision || ui.diff || ui.history || ui.timeline || ui.ranking || ui.in_force
-    || ui.cited_by || ui.coverage || ui.verification || ui.gap));
+    || ui.cited_by || ui.coverage || ui.verification || ui.gap
+    // A partial result whose only additive disclosure is a capability limitation is still a
+    // result; discarding it would silently hide the one publisher that answered honestly.
+    || limitationsFromEffect(ui.publisher_limitations).length > 0));
+
+/**
+ * Typed publisher capability limitations, rendered beside supported rows, never instead of
+ * them. Information, not error: the reader keeps the answer and learns exactly which publisher
+ * did not run the query and for which governed filters. Input is validated fail closed by the
+ * caller or here; malformed entries never render and never suppress the primary view.
+ */
+/**
+ * Disclosed beside verified rows when a sibling publisher response could not be read
+ * (PR293 review, O1). Round 6 computed this state and rendered nothing, so an incomplete
+ * answer presented itself as the complete holding.
+ */
+export function PartialResponseNotice(
+  { partial, conflicted }: { partial?: boolean; conflicted?: string[] }) {
+  if (!partial) return null;
+  // Named when they can be named. A withheld publisher is not merely missing: it sent more than
+  // one answer for this query, so every claim it made was withheld, and a reader deciding
+  // whether this answer covers what they care about needs to know which publisher that was.
+  //
+  // This comment used to say the publisher contradicted itself. That stopped being true when a
+  // duplicate became incoherent even where the two units agree, and it outlived the copy it was
+  // written to explain by one commit. The sentence itself is built and validated below.
+  const names = conflictedPublishersSentence(conflicted ?? []);
+  return (
+    <div className="trust-notice" role="note" data-testid="partial-response-notice"
+         aria-label="Incomplete response">
+      <b>These results are incomplete</b>
+      <p className="sub">{PARTIAL_RESPONSE_SENTENCE}</p>
+      {names !== undefined ? (
+        <p className="sub" data-testid="conflicted-publishers">{names}</p>
+      ) : null}
+    </div>
+  );
+}
+
+export function PublisherLimitations({ items, tool }: {
+  items: PublisherLimitation[];
+  /**
+   * The operation this surface renders (round 4, O6). When given, only limitations carrying
+   * this tool render here; when absent the surface is multi-tool and every row labels its
+   * operation visibly, so a search limitation can never masquerade as in-force evidence.
+   */
+  tool?: string;
+}) {
+  const scoped = scopedLimitations(items, tool);
+  if (scoped.length === 0) return null;
+  return (
+    <div className="trust-notice" role="note" aria-label="Publisher limitation">
+      <b>Some publishers did not run this query</b>
+      {scoped.map((item, index) => (
+        <p key={index} className="limitation-row">
+          {(item.publisher ?? item.jurisdiction ?? "One selected publisher")}
+          {": the filter"}{item.unsupported_filters.length > 1 ? "s" : ""}{" "}
+          <code>{item.unsupported_filters.join(", ")}</code>
+          {" "}{item.unsupported_filters.length > 1 ? "are" : "is"} not described by its index
+          for this scope.
+          {tool === undefined
+            ? <span className="sub mono"> ({item.tool})</span>
+            : null}
+        </p>
+      ))}
+      <p className="limitation-row sub">{LIMITATION_EXPLANATION}</p>
+    </div>
+  );
+}
 
 export function EvidenceCoordinates({ ui }: { ui: UiEffect }) {
   const evidence = ui.provision?.evidence ?? ui.diff?.evidence ?? ui.history?.evidence

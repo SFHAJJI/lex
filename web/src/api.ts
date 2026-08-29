@@ -3,6 +3,8 @@
 // "play with it" instant and deterministic — and it means the demo is the strongest
 // possible proof that the published API actually works.
 
+import { MAX_PRODUCER_COUNT } from "./searchPopulation.ts";
+
 let id = 0;
 
 async function mcpJson(r: Response): Promise<any> {
@@ -255,6 +257,188 @@ export function populationScopeLabel(value: number | undefined): string | undefi
   return value === undefined ? undefined : `${value.toLocaleString()} works in selected scope`;
 }
 
+/**
+ * in_force_on publishes `works_covered` from `Coverage(1).Groups`, which counts a publisher's
+ * versioned works and is NOT narrowed by the request's metadata filters, unlike the ranking
+ * surface's filter-aware `works_in_scope`. Reusing "in selected scope" here would overstate what
+ * was actually covered under any filter, which is the false denominator that trust rule 6 and
+ * never-implied rule 7 exist to prevent. The producer publishes its own `basis` string for
+ * exactly this reason, so it is rendered instead of a basis the browser invents.
+ */
+/**
+ * Known exclusions arrive per publisher. The previous union built a Set of the arrays themselves,
+ * so identical exclusions across two publishers never de-duplicated and a publisher with none
+ * contributed a truthy empty array that rendered as a stray separator under "Known exclusions:".
+ * Flattening first makes the Set do the work it was there to do.
+ */
+/**
+ * Bounds on a population disclosure, applied at the point the value crosses into the product.
+ *
+ * These are not defensive decoration. A population figure is a legal scope claim: it tells the
+ * reader how much of the corpus an answer speaks for. Anything that reaches the screen as a
+ * denominator has to be a value the producer could actually have minted, and a transport object
+ * is not the producer.
+ */
+export const POPULATION_LIMITS = { maxExclusions: 20, maxExclusionLength: 300 };
+
+/**
+ * A count the producer could have minted: a non-negative integer inside its own Int32 range.
+ *
+ * The ceiling is IMPORTED rather than restated, from the module that owns it, so the three
+ * places that had to agree about it now read one value. This helper used to stop at
+ * `Number.isSafeInteger`, which admits everything from 2^31 to 2^53: numbers that are exact
+ * integers and that `SearchPopulationTotal`, `PopulationTotal` and `Coverage(1).Groups`, all
+ * declared `int`, cannot return. A denominator in that range reached the ranking and in-force
+ * headers as a legal figure while the same value was refused by the parser one module away.
+ */
+function populationCount(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isSafeInteger(value)
+    && value >= 0 && value <= MAX_PRODUCER_COUNT
+    ? value : undefined;
+}
+
+/**
+ * The summed population across publishers, or undefined if it cannot be stated honestly.
+ *
+ * Refuses rather than coerces. The previous form added `?? 0` per entry, so a string, a fraction,
+ * a negative or a missing value silently became zero and shrank a denominator the reader was
+ * invited to check an answer against. Overflow refuses too: two individually valid counts can sum
+ * past the safe integer range, and a number that has lost precision is not a denominator.
+ */
+/**
+ * The summed value of a top-level count across publishers, or undefined if it cannot be stated.
+ *
+ * Same refusal as summedPopulation and for the same reason, but for the counts that sit beside the
+ * rows rather than inside the population object: works changed, new versions, total works in
+ * force. Adding with a zero default let a string, a fraction, a negative or a missing value become
+ * a silently smaller legal count, and two individually valid counts can still sum past the safe
+ * integer range, where a number has lost precision and is no longer a count.
+ *
+ * The range is checked HERE as well as at classification, which is a change from what this
+ * comment used to claim. It said the producer's range was enforced upstream so this only had to
+ * guard the arithmetic. That was true of the entries the governed partition hands it and false of
+ * the helper itself, which is exported and took any safe integer: everything from 2^31 to 2^53
+ * passed, and those are values `ChangeTotals` and `InForcePage.TotalGroups`, both `int`, cannot
+ * return. One constant, imported from the module that owns it, is now read by all three doors.
+ */
+/**
+ * The two change counts, each labelled with the grain the producer actually measured.
+ *
+ * `IndexReader.ChangeTotals` returns `(int Works, int Versions)` and `McpCore` publishes the first
+ * as `works_changed` and the second as `new_versions`. The ranking header rendered the work count
+ * as "received publisher versions", which puts a version label on a work count. That is a false
+ * dimension rather than a wording preference: a reader comparing the two numbers was comparing
+ * versions to versions, and one of them was works.
+ *
+ * Neutral about what a version means, because that differs between publishers and the timeline
+ * semantics are disclosed separately. It says a version was dated in the window, not that any
+ * wording changed, which the producer does not claim.
+ */
+export function changeCountLabels(
+  worksChanged: number | undefined, newVersions: number | undefined): string[] {
+  const labels: string[] = [];
+  if (worksChanged !== undefined)
+    labels.push(`${worksChanged.toLocaleString()} work${worksChanged === 1 ? "" : "s"} `
+      + "with a new publisher version");
+  if (newVersions !== undefined)
+    labels.push(`${newVersions.toLocaleString()} publisher version`
+      + `${newVersions === 1 ? "" : "s"} dated in this window`);
+  return labels;
+}
+
+export function summedCount(entries: any[], field: string): number | undefined {
+  let total = 0;
+  let seen = false;
+  for (const entry of entries) {
+    const raw = (entry as any)?.[field];
+    if (raw === undefined) continue;
+    // The same producer range as every other count: `ChangeTotals` is `(int Works, int
+    // Versions)` and `InForcePage.TotalGroups` is `int`, so a value above this is one the
+    // producer cannot have sent rather than one that is merely large.
+    if (typeof raw !== "number" || !Number.isSafeInteger(raw) || raw < 0
+      || raw > MAX_PRODUCER_COUNT) return undefined;
+    if (raw > Number.MAX_SAFE_INTEGER - total) return undefined;
+    total += raw;
+    seen = true;
+  }
+  return seen ? total : undefined;
+}
+
+export function summedPopulation(
+  entries: any[], field: "works_in_scope" | "works_covered"): number | undefined {
+  let total = 0;
+  let seen = false;
+  for (const entry of entries) {
+    const raw = (entry as any)?.population?.[field];
+    if (raw === undefined) continue;
+    const value = populationCount(raw);
+    if (value === undefined) return undefined;
+    if (value > Number.MAX_SAFE_INTEGER - total) return undefined;
+    total += value;
+    seen = true;
+  }
+  return seen ? total : undefined;
+}
+
+/** Bounded, de-duplicated, never interpreted. Overlong or oversized sets are refused, not cut. */
+export function unionKnownExclusions(entries: any[]): string[] {
+  const all = entries.flatMap((e) => e?.population?.known_exclusions ?? []);
+  if (!all.every((x: unknown): x is string =>
+    typeof x === "string" && x.trim().length > 0
+    && x.length <= POPULATION_LIMITS.maxExclusionLength)) return [];
+  const unique = [...new Set(all as string[])];
+  return unique.length <= POPULATION_LIMITS.maxExclusions ? unique : [];
+}
+
+/**
+ * Whether the reader's "exact words" override applies to the query now on screen.
+ *
+ * Trust rule 9 requires a one-tap revert of any relaxation. The override is bound to the exact
+ * query it was chosen for: a reader who turned off spelling fallback for one question has said
+ * nothing about the next one, and carrying the decision forward would silently narrow a search
+ * they never narrowed. Anything but an exact match resolves to the default.
+ */
+export function fuzzyModeFor(
+  exactQuery: string | undefined, query: string): "auto" | "off" {
+  return exactQuery !== undefined && exactQuery === query.trim() ? "off" : "auto";
+}
+
+
+/**
+ * The same rule for any state a reader bound to one question: kept while that question is on
+ * screen, cleared the moment a different one is submitted.
+ *
+ * Hiding such a state when the question differs is not the same as clearing it. A hidden value
+ * is dormant, and returning to the earlier question later silently reapplies a narrowing the
+ * reader authorised once, on a visit they never authorised. That distinction cost this lane two
+ * separate defects, one on the exact-words override and one on the publisher metadata filter,
+ * so the rule is exported once and both callers use it.
+ */
+export function retainedForQuery<T extends { query: string }>(
+  current: T | undefined, submittedQuery: string): T | undefined {
+  // Trimmed on both sides, because that is the identity the request carries and the identity
+  // the component is keyed by. Comparing raw strings while the key trims left a gap: a padded
+  // resubmission did not remount, so the filter was hidden rather than discarded, and the
+  // unpadded question then reactivated it. Three notions of one question is two too many.
+  return current !== undefined && current.query.trim() !== submittedQuery.trim()
+    ? undefined : current;
+}
+
+export function populationCoverageLabel(
+  works: number | undefined,
+  basis: string | undefined,
+  scopeFiltersApplied: boolean,
+): string | undefined {
+  if (works === undefined) return undefined;
+  // Whether the request carried filters is a fact about what this client sent, not an inference
+  // about the corpus, so saying so is honest where silently implying the filters narrowed the
+  // denominator would not be.
+  const counted = `${works.toLocaleString()} works covered`
+    + (scopeFiltersApplied ? "" : " before the selected filters");
+  const stated = typeof basis === "string" ? basis.trim() : "";
+  return stated.length > 0 && stated.length <= 120 ? `${counted}, ${stated}` : counted;
+}
+
 /** Page-specific actions are useful only after an answer that did not end in a gap. */
 export function shouldOfferContextualFollowUps(reply: AskReply): boolean {
   return !reply.error && !reply.clarification && !reply.ui?.gap;
@@ -357,6 +541,18 @@ export interface SearchFact {
   snippet?: string; title?: string; valid_from?: string; source_uri?: string; permalink?: string;
 }
 export interface UiEffect {
+  /** Additive: typed per-publisher capability refusals beside a primary view. Validated fail
+      closed in the browser; malformed entries are ignored and never suppress a view. */
+  publisher_limitations?: unknown;
+  /** Verified rows rendered while a sibling publisher response was unusable (PR293 O1). */
+  partial_response?: boolean;
+  /**
+   * Publishers whose own response contradicted itself, so every claim they made was withheld.
+   * Named rather than counted: a reader who knows which publisher is missing can judge the gap,
+   * and "these results are incomplete" alone does not tell them whether the missing part is the
+   * one they care about.
+   */
+  conflicted_publishers?: string[];
   provision?: { subject: Subject; valid_from: string; valid_to?: string; provisions: ProvisionItem[]; permalink?: string;
                 evidence?: EvidenceContext[]; total_provisions?: number; truncated?: boolean;
                 text_truncated?: boolean; outline_only?: boolean };
@@ -369,10 +565,17 @@ export interface UiEffect {
                 title?: string; language?: string; permalink?: string; record_sha256?: string }[];
                 total_count: number; truncated: boolean;
                 evidence?: EvidenceContext[] };
-  ranking?: { from_date: string; to_date: string; order: string; works_changed: number; new_versions: number;
+  ranking?: { from_date: string; to_date: string; order: string;
+              // Absent when the producer's counts could not be summed honestly. A count that
+              // has lost precision, or that was assembled from a malformed value, is not a
+              // smaller truth: it is no count, and the surface must say nothing rather than a
+              // number nothing stands behind.
+              works_changed: number | undefined; new_versions: number | undefined;
               population_works?: number; population_basis?: string; known_exclusions?: string[];
               rows: RankingRow[]; status?: string; evidence?: EvidenceContext[] };
-  in_force?: { date: string; total: number; status?: string; evidence?: EvidenceContext[]; rows: {
+  in_force?: { date: string; total: number | undefined; status?: string; evidence?: EvidenceContext[];
+               population_works?: number; population_basis?: string;
+               population_scope_filters_applied?: boolean; known_exclusions?: string[]; rows: {
     work: string; title?: string; kind?: string; valid_from: string; permalink?: string;
     jurisdiction?: string; hierarchy?: string; timeline_semantics?: string;
   }[] };
