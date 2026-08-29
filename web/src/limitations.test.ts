@@ -1805,6 +1805,33 @@ test("a forged global total in changes_in_period fails closed", () => {
     "a publisher that refused to look reported seven changed works and was believed");
 });
 
+test("a changes global receipt counting rows the response did not carry forbids absence", () => {
+  // The sibling of the forged-total case, and it was missing. The global receipt states two
+  // numbers the response must support: `total`, which the report prints, and `returned`, which
+  // says how many change rows this page actually carried. The total had a test; `returned` did
+  // not, and dropping its equality left the whole suite green.
+  //
+  // It matters for the same reason the search row receipt does. A response whose own receipt says
+  // a row was returned, carrying no rows, would otherwise render a confident absence about a page
+  // slice, which is the false-absence path this reconciliation exists to close.
+  const globalFor = (returned: number) => ({
+    offset: 0, maximum: 20, returned, total: 2, truncated: false,
+  });
+  const honest = [
+    { ...changesOk("lu-legilux", 1), global_response_row_set: globalFor(2) },
+    { ...changesOk("eu-eurlex", 1), global_response_row_set: globalFor(2) },
+  ];
+  assert.equal(parseGovernedResponse("changes_in_period", honest).receipts.kind, "reconciled",
+    "a coherent response was refused, so this test proves nothing about the incoherent one");
+  const overcounted = honest.map((entry) =>
+    ({ ...entry, global_response_row_set: globalFor(3) }));
+  assert.equal(parseGovernedResponse("changes_in_period", overcounted).receipts.kind,
+    "irreconcilable",
+    "a receipt claimed a third change row the response never carried and was believed");
+  assert.equal(projectGovernedEmptiness("changes_in_period", overcounted, 2).partial, true);
+});
+
+
 test("in_force_on counts its ambiguity units as returned rows", () => {
   // `remainingLimit -= rows.Count + ambiguities.Count`, so a page of one row and one ambiguity
   // unit reports two returned. Counting visible rows only would make every ambiguous page
