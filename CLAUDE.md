@@ -166,10 +166,14 @@ route and MCP behavior you changed.
 - `Lex.Mcp` is the tool logic, shared by the stdio server and the HTTP endpoint (D27, one MCP
   binary). It never summarises or advises (F10); it returns publisher text or a machine-readable
   refusal.
-- `Lex.Web` is routing only. `Program.cs` stays near 71 lines; pages live in `*Endpoints.cs`
-  (F14/F15 enforce the split).
-- The 947 MB index is gitignored and baked into the image. A repo-built container therefore
-  mounts zero indexes and must answer `no_corpus_mounted`, never `[]`.
+- `Lex.Web` keeps routing and composition in `Program.cs`. At protected main `820bfb3`, that file
+  is 149 lines, not 71; pages live in `*Endpoints.cs` (F14/F15 enforce the split). Re-measure
+  before repeating the line count after that commit.
+- The packaged 2026-08-16 snapshot contains 1,306,578,944 bytes of SQLite databases, about
+  1.31 GB decimal, plus vector and model sidecars. Deployment fetches these gitignored artifacts
+  from exact signed release tags and fails when a required tag or artifact is invalid. A source
+  build deliberately started without fetched indexes mounts zero indexes and must answer
+  `no_corpus_mounted`, never `[]`.
 
 ## Before a local pipeline run
 
