@@ -44,8 +44,8 @@ export function Compare({ work, title, from, to, anchor }: {
     profiles?: [string, string];
     sources?: [string | undefined, string | undefined];
     permalinks?: [string | undefined, string | undefined];
-    documents?: [{ lexId?: string; validFrom?: string; validTo?: string },
-                 { lexId?: string; validFrom?: string; validTo?: string }];
+    documents?: [{ lexId?: string; validFrom?: string; validTo?: string; recordSha256?: string },
+                 { lexId?: string; validFrom?: string; validTo?: string; recordSha256?: string }];
     unavailable?: [string | undefined, string | undefined];
     anchorPopulation?: { before: number; after: number; shared: number };
   }>({ loading: true });
@@ -184,8 +184,12 @@ export function Compare({ work, title, from, to, anchor }: {
         sources: [pa?.document?.source_uri, pb?.document?.source_uri],
         permalinks: [pa?.document?.permalink, pb?.document?.permalink],
         documents: [
-          { lexId: pa?.document?.lex_id, validFrom: pa?.document?.valid_from, validTo: pa?.document?.valid_to },
-          { lexId: pb?.document?.lex_id, validFrom: pb?.document?.valid_from, validTo: pb?.document?.valid_to },
+          // Each side carries its own digest, so a comparison spanning several articles stays
+          // checkable. Without it the citation goes out with a link and nothing else.
+          { lexId: pa?.document?.lex_id, validFrom: pa?.document?.valid_from, validTo: pa?.document?.valid_to,
+            recordSha256: pa?.document?.record_sha256 },
+          { lexId: pb?.document?.lex_id, validFrom: pb?.document?.valid_from, validTo: pb?.document?.valid_to,
+            recordSha256: pb?.document?.record_sha256 },
         ],
       });
     })().catch((e) => live && setState({ loading: false, error: String(e?.message ?? e) }));
@@ -263,6 +267,8 @@ export function Compare({ work, title, from, to, anchor }: {
     fromVersionValidFrom: state.documents?.[0].validFrom, fromVersionValidTo: state.documents?.[0].validTo,
     toVersionValidFrom: state.documents?.[1].validFrom, toVersionValidTo: state.documents?.[1].validTo,
     fromExtractionProfile: state.profiles?.[0], toExtractionProfile: state.profiles?.[1],
+    fromRecordSha256: state.documents?.[0].recordSha256,
+    toRecordSha256: state.documents?.[1].recordSha256,
     rows, unchanged: untouched, punctuationOnly: punct, exportedAt: new Date().toISOString(),
   });
   const comparisonCitation = comparisonCitationText(evidence());

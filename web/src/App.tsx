@@ -219,7 +219,7 @@ export default function App() {
   const [assistantPresentationId, setAssistantPresentationId] = useState<string>();
   const pendingPresentations = useRef(new Set<string>());
   const measuredPresentations = useRef(new Set<string>());
-  const [loaded, setLoaded] = useState<{ items: ProvisionItem[]; from: string; to?: string; profile?: string; source?: string }>();
+  const [loaded, setLoaded] = useState<{ items: ProvisionItem[]; from: string; to?: string; profile?: string; source?: string; recordSha256?: string }>();
   const [toc, setToc] = useState<ProvisionItem[]>([]);
   const [title, setTitle] = useState<string>();
   const [versions, setVersions] = useState<string[]>([]);
@@ -419,7 +419,10 @@ export default function App() {
         // either half alone: one of them is lying and the reader cannot tell which.
         setLoaded(doc?.valid_from
           ? { items, from: doc.valid_from, to: doc?.valid_to,
-              profile: doc?.extraction_profile, source: doc?.source_uri }
+              profile: doc?.extraction_profile, source: doc?.source_uri,
+              // Without this the copied citation carries a permalink and nothing to check
+              // it against on any view holding more than one article.
+              recordSha256: doc?.record_sha256 }
           : undefined);
         if (items.length === 0)
           setUi({ gap: { status: one?.envelope?.status ?? "no_result", explanation: "No text is held for this law on that date.", available: [] } });
@@ -1061,6 +1064,7 @@ export default function App() {
                                        work={s.work} title={title ?? s.work} language={servedLang}
                                        anchor={s.anchor} profile={loaded.profile}
                                        timelineSemantics={timelineSemantics}
+                                       recordSha256={loaded.recordSha256}
                                        source={loaded.source}
                                        onCite={(w) => { clearAssistantView(); go({ work: w, date: undefined, anchor: undefined, to: undefined, mode: "read", space: "law" }); }}
                                        onPick={(a, auto) => { chosenAnchor.current = !auto; go({ anchor: a }); }}

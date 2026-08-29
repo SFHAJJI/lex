@@ -37,9 +37,11 @@ const ms = (d: string) => Date.parse(`${d}T00:00:00Z`);
  * opened an article — so re-dating dropped you at the top of a document you were reading the
  * middle of. It is the one control a point-in-time reader uses constantly, so it stays put.
  */
-export function Provision({ items, toc, validFrom, validTo, work, title, language, anchor, profile, source, timelineSemantics, onPick, onClear, onCite }: {
+export function Provision({ items, toc, validFrom, validTo, work, title, language, anchor, profile, source, timelineSemantics, recordSha256, onPick, onClear, onCite }: {
   items: ProvisionItem[]; toc: ProvisionItem[]; validFrom: string; validTo?: string;
   work: string; title: string; language?: string; anchor?: string; profile?: string; source?: string; timelineSemantics?: string;
+  /** Document-level digest, so a whole-document citation is checkable and not merely linked. */
+  recordSha256?: string;
   // `auto` marks an article the reader did not ask for. The rail uses it to decide whether to
   // stay on the law's versions or narrow to this article's texts.
   onPick: (anchor: string, auto?: boolean) => void; onClear: () => void; onCite?: (work: string) => void;
@@ -60,7 +62,8 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
   const pageUrl = typeof window === "undefined" ? "" : window.location.href;
   const evidence = () => ({
     title, work, validFrom, validTo, language, source, permalink: pageUrl, timelineSemantics,
-    extractionProfile: profile, provisions: items, exportedAt: new Date().toISOString(),
+    extractionProfile: profile, recordSha256, provisions: items,
+    exportedAt: new Date().toISOString(),
   });
 
   // A code too large to render whole used to open onto an apology with a button beside it. Open
