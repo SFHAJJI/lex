@@ -547,6 +547,11 @@ public sealed class TelemetryTests
         ambient.SetIdFormat(ActivityIdFormat.W3C);
         ambient.Start();
         Activity? observed = null;
+        Activity? stopped = null;
+        using var listener = Listener(LexRequestTelemetry.ActivitySourceName, activity =>
+        {
+            if (ReferenceEquals(activity, observed)) stopped = activity;
+        });
         var context = new DefaultHttpContext();
         context.Request.Path = "/";
         context.Request.Headers.TraceParent = "hostile";
@@ -558,6 +563,7 @@ public sealed class TelemetryTests
         });
 
         Assert.Same(ambient, observed);
+        Assert.Null(stopped);
         Assert.Same(ambient, Activity.Current);
     }
 
