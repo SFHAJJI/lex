@@ -85,18 +85,12 @@ public enum StagedResponseRejectionReason
     BodyTooLarge = 1,
     ResponseIncomplete = 2,
     TransportInterrupted = 3,
-    RecoveryOutcomeUnknown = 4,
 }
 
 public enum PrivateEvidenceAttemptDisposition
 {
     Response = 1,
     NoResponse = 2,
-    /// <summary>
-    /// Recovery found a durable start without a terminal. The process may have
-    /// stopped before sending or while the send/result state was unknowable.
-    /// </summary>
-    NotAttemptedOrSendStateUnknown = 3,
 }
 
 public sealed class PrivateEvidenceAttemptRecord
@@ -436,6 +430,11 @@ public sealed class PrivateEvidenceBundle : IDisposable
         }
     }
 
+    /// <summary>
+    /// Opens only a fully sealed bundle whose manifest and commit marker verify.
+    /// Unsealed state is never normalized or promoted. It remains untouched for
+    /// forensic inspection, and acquisition must restart under a distinct identity.
+    /// </summary>
     public static PrivateEvidenceBundle Open(
         string stagingRoot, PrivateEvidenceAcquisitionPlan expectedPlan)
     {
@@ -450,14 +449,11 @@ public sealed class PrivateEvidenceBundle : IDisposable
             ownerLock = EvidenceFiles.OpenOwnerLock(root);
             EvidenceFiles.RequireRootIdentity(
                 root, rootHandle, "Private evidence staging root");
-            RecoverInitialCreate(root, rootHandle, expectedPlan);
             var hasManifest = rootHandle.EntryExists(ManifestFileName);
             var hasCommit = rootHandle.EntryExists(CommitMarkerFileName);
-            if (!hasManifest && hasCommit)
+            if (!hasManifest || !hasCommit)
                 throw new InvalidDataException(
-                    "Private evidence commit marker exists without its manifest.");
-            if (!hasManifest)
-                EvidenceFiles.CleanupTemporaryFiles(root, rootHandle);
+                    "Unsealed private evidence is retained for forensics and cannot be reopened; start a new acquisition with a distinct trusted run identity.");
             var planBytes = EvidenceFiles.ReadBounded(
                 rootHandle,
                 PlanFileName,
@@ -470,25 +466,12 @@ public sealed class PrivateEvidenceBundle : IDisposable
                 throw new InvalidDataException(
                     "Private evidence plan does not match the trusted plan.");
 
-            if (!hasCommit)
-                RecoverInitialDirectories(root, rootHandle);
             var attempts = LoadAttemptStarts(root, rootHandle, parsedPlan);
-            ReconcileAttemptHead(
-                rootHandle,
-                parsedPlan,
-                attempts,
-                allowRecovery: !hasManifest);
-            if (!hasManifest)
-                RecoverPendingCaptures(root, rootHandle, attempts);
+            VerifyAttemptHead(rootHandle, parsedPlan, attempts);
             var records = LoadReceipts(root, rootHandle);
-            if (!hasManifest)
-                TerminalizeRecoveredAttempts(
-                    rootHandle, parsedPlan, attempts, records);
             LoadAttemptTerminals(
                 root, rootHandle, parsedPlan, attempts);
             ValidateAttemptResponses(attempts, records);
-            if (!hasManifest)
-                EvidenceFiles.DeleteOrphanObjects(root, rootHandle, records);
 
             var bundle = new PrivateEvidenceBundle(
                 root,
@@ -497,23 +480,8 @@ public sealed class PrivateEvidenceBundle : IDisposable
                 rootHandle,
                 attempts,
                 records,
-                isSealed: false);
-            if (hasManifest)
-            {
-                bundle.VerifyStage(
-                    includeManifest: true, includeCommit: hasCommit);
-                if (!hasCommit)
-                {
-                    bundle.WriteCommitMarker();
-                    bundle.VerifyStage(
-                        includeManifest: true, includeCommit: true);
-                }
-                bundle._sealed = true;
-            }
-            else
-            {
-                bundle.VerifyStage(includeManifest: false, includeCommit: false);
-            }
+                isSealed: true);
+            bundle.VerifyStage(includeManifest: true, includeCommit: true);
             return bundle;
         }
         catch
@@ -599,23 +567,6 @@ public sealed class PrivateEvidenceBundle : IDisposable
             RequireOpen();
             RequireLiveAttempt(attempt);
             var request = attempt.Request;
-            RefreshRecoveredCaptures();
-            if (_records.TryGetValue(request.RequestId, out var recovered))
-            {
-                var comparableResponse = recovered.Evidence.BodyComplete
-                    ? response
-                    : response.MarkBodyIncomplete();
-                if (recovered.Response != comparableResponse.ToRecordedClaim())
-                    throw new InvalidDataException(
-                        "Recovered response metadata differs from the supplied response.");
-                PersistAttemptTerminal(
-                    attempt.State,
-                    PrivateEvidenceAttemptDisposition.Response,
-                    EvidenceJson.Sha256(EvidenceJson.WriteReceipt(recovered)));
-                _liveAttempts.Remove(attempt);
-                return recovered.Evidence;
-            }
-
             EvidenceFiles.WriteAtomic(
                 _rootHandle,
                 EvidenceFiles.CaptureIntentRelative(request.RequestId),
@@ -709,7 +660,6 @@ public sealed class PrivateEvidenceBundle : IDisposable
         try
         {
             RequireOpen();
-            RefreshRecoveredCaptures();
             if (_liveAttempts.Count != 0
                 || _attempts.Any(attempt => attempt.Terminal is null))
                 throw new InvalidOperationException(
@@ -751,305 +701,6 @@ public sealed class PrivateEvidenceBundle : IDisposable
         _rootHandle.Dispose();
         _ownerLock.Dispose();
         _gate.Dispose();
-    }
-
-    private static void RecoverInitialCreate(
-        string root,
-        HandleBoundRoot rootHandle,
-        PrivateEvidenceAcquisitionPlan expectedPlan)
-    {
-        if (rootHandle.EntryExists(PlanFileName)) return;
-        EvidenceFiles.RequireRootIdentity(
-            root, rootHandle, "Private evidence staging root");
-        var entries = Directory.EnumerateFileSystemEntries(root)
-            .Select(Path.GetFileName)
-            .ToArray();
-        if (entries.Any(name => name != OwnerLockFileName
-                                && name != ObjectsDirectoryName
-                                && name != AttemptsDirectoryName
-                                && name != PendingDirectoryName
-                                && name != ReceiptsDirectoryName
-                                && name is not null
-                                && !name.StartsWith($".{PlanFileName}-",
-                                    StringComparison.Ordinal)))
-            throw new InvalidDataException(
-                "Incomplete private evidence creation cannot be recovered safely.");
-        foreach (var directory in new[]
-                 {
-                     ObjectsDirectoryName,
-                     AttemptsDirectoryName,
-                     PendingDirectoryName,
-                     ReceiptsDirectoryName,
-                 })
-        {
-            if (rootHandle.EntryExists(directory)
-                && (!rootHandle.Exists(directory, expectDirectory: true)
-                    || Directory.EnumerateFileSystemEntries(
-                        Path.Combine(root, directory)).Any()))
-                throw new InvalidDataException(
-                    "Incomplete private evidence creation cannot replace captured state.");
-        }
-        EvidenceFiles.CleanupTemporaryFiles(root, rootHandle);
-        EvidenceFiles.WriteAtomic(
-            rootHandle, PlanFileName, EvidenceJson.WritePlan(expectedPlan));
-    }
-
-    private static void RecoverInitialDirectories(
-        string root, HandleBoundRoot rootHandle)
-    {
-        EvidenceFiles.RequireRootIdentity(
-            root, rootHandle, "Private evidence staging root");
-        var directories = new[]
-        {
-            ObjectsDirectoryName,
-            AttemptsDirectoryName,
-            PendingDirectoryName,
-            ReceiptsDirectoryName,
-        };
-        if (directories.All(directory =>
-                rootHandle.EntryExists(directory)
-                && rootHandle.Exists(directory, expectDirectory: true)))
-            return;
-        if (rootHandle.EntryExists(ManifestFileName)
-            || rootHandle.EntryExists(CommitMarkerFileName))
-            throw new InvalidDataException(
-                "A sealed private evidence bundle is missing a required directory.");
-        var allowed = new HashSet<string>(StringComparer.Ordinal)
-        {
-            OwnerLockFileName,
-            PlanFileName,
-            ObjectsDirectoryName,
-            AttemptsDirectoryName,
-            PendingDirectoryName,
-            ReceiptsDirectoryName,
-        };
-        foreach (var entry in Directory.EnumerateFileSystemEntries(root))
-        {
-            if (!allowed.Contains(Path.GetFileName(entry)))
-                throw new InvalidDataException(
-                    "Incomplete private evidence creation has an unexpected entry.");
-        }
-        foreach (var directory in directories)
-        {
-            if (rootHandle.EntryExists(directory))
-            {
-                if (!rootHandle.Exists(directory, expectDirectory: true)
-                    || Directory.EnumerateFileSystemEntries(
-                        Path.Combine(root, directory)).Any())
-                    throw new InvalidDataException(
-                        "Incomplete private evidence creation cannot replace captured state.");
-                continue;
-            }
-            rootHandle.EnsureDirectory(directory);
-        }
-        EvidenceFiles.RequireRootIdentity(
-            root, rootHandle, "Private evidence staging root");
-    }
-
-    private void RefreshRecoveredCaptures()
-    {
-        RecoverPendingCaptures(_root, _rootHandle, _attempts);
-        foreach (var record in LoadReceipts(_root, _rootHandle))
-        {
-            if (_records.TryGetValue(record.Request.RequestId, out var current))
-            {
-                if (!EvidenceJson.SameRecords([current], [record]))
-                    throw new InvalidDataException(
-                        "Recovered private evidence conflicts with live state.");
-                continue;
-            }
-            _records.Add(record.Request.RequestId, record);
-        }
-        foreach (var attempt in _attempts.Where(attempt =>
-                     attempt.Terminal is null
-                     && _records.ContainsKey(attempt.Request.RequestId)))
-        {
-            var record = _records[attempt.Request.RequestId];
-            PersistAttemptTerminal(
-                attempt,
-                PrivateEvidenceAttemptDisposition.Response,
-                EvidenceJson.Sha256(EvidenceJson.WriteReceipt(record)));
-        }
-        _liveAttempts.RemoveWhere(token => token.State.Terminal is not null);
-    }
-
-    private static void RecoverPendingCaptures(
-        string root,
-        HandleBoundRoot rootHandle,
-        IReadOnlyCollection<PrivateEvidenceAttemptState> attempts)
-    {
-        if (!rootHandle.Exists(PendingDirectoryName, expectDirectory: true))
-            throw new InvalidDataException(
-                "Private evidence pending directory is missing.");
-        EvidenceFiles.RequireRootIdentity(
-            root, rootHandle, "Private evidence staging root");
-        var requestIds = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var path in Directory.EnumerateFileSystemEntries(
-                     Path.Combine(root, PendingDirectoryName)))
-        {
-            var name = Path.GetFileName(path);
-            var suffix = name.EndsWith(".intent.json", StringComparison.Ordinal)
-                ? ".intent.json"
-                : name.EndsWith(".outcome.json", StringComparison.Ordinal)
-                    ? ".outcome.json"
-                    : name.EndsWith(".body", StringComparison.Ordinal)
-                        ? ".body"
-                        : null;
-            if (suffix is null
-                || name.Length != 64 + suffix.Length
-                || !EvidenceFiles.IsSha256(name[..64]))
-                throw new InvalidDataException(
-                    "Private evidence pending entry has an invalid name.");
-            var relative = PendingDirectoryName + "/" + name;
-            if (!rootHandle.Exists(relative, expectDirectory: false))
-                throw new InvalidDataException(
-                    "Private evidence pending directory contains a non-file entry.");
-            requestIds.Add(name[..64]);
-        }
-        EvidenceFiles.RequireRootIdentity(
-            root, rootHandle, "Private evidence staging root");
-
-        foreach (var requestId in requestIds.Order(StringComparer.Ordinal))
-        {
-            if (!rootHandle.EntryExists(
-                    EvidenceFiles.CaptureIntentRelative(requestId)))
-                throw new InvalidDataException(
-                    "Private evidence pending state has no capture intent.");
-            _ = RecoverPendingCapture(rootHandle, attempts, requestId);
-        }
-    }
-
-    private static StagedResponseRecord RecoverPendingCapture(
-        HandleBoundRoot rootHandle,
-        IReadOnlyCollection<PrivateEvidenceAttemptState> attempts,
-        string requestId)
-    {
-        var intent = EvidenceJson.ParseCaptureIntent(EvidenceFiles.ReadBounded(
-            rootHandle,
-            EvidenceFiles.CaptureIntentRelative(requestId),
-            MaximumCaptureJournalBytes,
-            "Private evidence capture intent"));
-        var planned = attempts.SingleOrDefault(attempt =>
-            attempt.Request.RequestId == requestId);
-        if (planned is null
-            || planned.Request != intent.Request
-            || planned.AttemptSha256 != intent.AttemptSha256
-            || intent.Request.RequestId != requestId)
-            throw new InvalidDataException(
-                "Private evidence capture intent is not an exact attempt member.");
-
-        var bodyRelative = EvidenceFiles.CaptureBodyRelative(requestId);
-        var outcomeRelative = EvidenceFiles.CaptureOutcomeRelative(requestId);
-        var receiptRelative = EvidenceFiles.ResponseReceiptRelative(requestId);
-        var bodyExists = rootHandle.EntryExists(bodyRelative);
-        var outcomeExists = rootHandle.EntryExists(outcomeRelative);
-        if (rootHandle.EntryExists(receiptRelative))
-        {
-            var record = EvidenceJson.ParseReceipt(EvidenceFiles.ReadBounded(
-                rootHandle,
-                receiptRelative,
-                MaximumResponseReceiptBytes,
-                "Private evidence response receipt"));
-            RequireIntentMatchesRecord(intent, record);
-            if (outcomeExists)
-            {
-                var outcome = EvidenceJson.ParseCaptureOutcome(
-                    EvidenceFiles.ReadBounded(
-                        rootHandle,
-                        outcomeRelative,
-                        MaximumCaptureJournalBytes,
-                        "Private evidence capture outcome"),
-                    intent.Request,
-                    intent.Response);
-                var expected = RecordFromIntent(intent, outcome);
-                if (!EvidenceJson.SameRecords([record], [expected]))
-                    throw new InvalidDataException(
-                        "Private evidence receipt conflicts with its capture outcome.");
-            }
-            EvidenceFiles.VerifyObject(
-                rootHandle,
-                EvidenceFiles.ObjectRelative(record.Evidence.ObjectSha256),
-                record.Evidence.ObjectSha256,
-                record.Evidence.ByteLength);
-            if (bodyExists)
-            {
-                EvidenceFiles.VerifyObject(
-                    rootHandle,
-                    bodyRelative,
-                    record.Evidence.ObjectSha256,
-                    record.Evidence.ByteLength);
-                rootHandle.DeleteFile(bodyRelative);
-            }
-            CleanupCaptureJournal(rootHandle, requestId);
-            return record;
-        }
-
-        StagedResponseEvidence evidence;
-        if (outcomeExists)
-        {
-            evidence = EvidenceJson.ParseCaptureOutcome(
-                EvidenceFiles.ReadBounded(
-                    rootHandle,
-                    outcomeRelative,
-                    MaximumCaptureJournalBytes,
-                    "Private evidence capture outcome"),
-                intent.Request,
-                intent.Response);
-        }
-        else
-        {
-            if (!bodyExists)
-            {
-                using (var empty = rootHandle.CreateNewFile(bodyRelative))
-                    empty.Flush(flushToDisk: true);
-                rootHandle.FlushDirectory(PendingDirectoryName);
-            }
-            var retained = EvidenceFiles.HashBoundedObject(
-                rootHandle,
-                bodyRelative,
-                checked(intent.Request.MaximumResponseBytes + 1));
-            var reason = retained.Length
-                         == intent.Request.MaximumResponseBytes + 1
-                ? StagedResponseRejectionReason.BodyTooLarge
-                : StagedResponseRejectionReason.RecoveryOutcomeUnknown;
-            evidence = new RejectedStagedResponseEvidence(
-                requestId, retained.Sha256, retained.Length, reason);
-            EvidenceFiles.WriteAtomic(
-                rootHandle,
-                outcomeRelative,
-                EvidenceJson.WriteCaptureOutcome(evidence));
-        }
-
-        var recovered = RecordFromIntent(intent, evidence);
-        PublishPendingCapture(rootHandle, recovered);
-        return recovered;
-    }
-
-    private static void RequireIntentMatchesRecord(
-        PendingCaptureIntent intent, StagedResponseRecord record)
-    {
-        var expected = RecordFromIntent(intent, record.Evidence);
-        if (!EvidenceJson.SameRecords([record], [expected]))
-            throw new InvalidDataException(
-                "Private evidence receipt conflicts with its capture intent.");
-    }
-
-    private static StagedResponseRecord RecordFromIntent(
-        PendingCaptureIntent intent, StagedResponseEvidence evidence)
-    {
-        if (evidence is RejectedStagedResponseEvidence
-            {
-                Reason: StagedResponseRejectionReason.ResponseIncomplete,
-            }
-            && intent.Response.BodyComplete)
-            throw new InvalidDataException(
-                "Response-incomplete evidence conflicts with its capture intent.");
-        return new StagedResponseRecord(
-            intent.Request,
-            evidence.BodyComplete
-                ? intent.Response
-                : intent.Response.MarkBodyIncomplete(),
-            evidence);
     }
 
     private static void PublishPendingCapture(
@@ -1103,7 +754,7 @@ public sealed class PrivateEvidenceBundle : IDisposable
                 "Private evidence response receipt"));
             if (!EvidenceJson.SameRecords([current], [record]))
                 throw new InvalidDataException(
-                    "Private evidence response receipt changed during recovery.");
+                    "Private evidence response receipt changed during publication.");
         }
         else
         {
@@ -1203,23 +854,14 @@ public sealed class PrivateEvidenceBundle : IDisposable
         return ordered;
     }
 
-    private static void ReconcileAttemptHead(
+    private static void VerifyAttemptHead(
         HandleBoundRoot rootHandle,
         PrivateEvidenceAcquisitionPlan plan,
-        IReadOnlyList<PrivateEvidenceAttemptState> attempts,
-        bool allowRecovery)
+        IReadOnlyList<PrivateEvidenceAttemptState> attempts)
     {
         if (!rootHandle.EntryExists(AttemptHeadFileName))
-        {
-            if (!allowRecovery || attempts.Count != 0)
-                throw new InvalidDataException(
-                    "Private evidence attempt head is missing.");
-            EvidenceFiles.WriteAtomic(
-                rootHandle,
-                AttemptHeadFileName,
-                EvidenceJson.WriteAttemptHead(plan, 0, null));
-            return;
-        }
+            throw new InvalidDataException(
+                "Private evidence attempt head is missing.");
 
         var head = EvidenceJson.ParseAttemptHead(EvidenceFiles.ReadBounded(
             rootHandle,
@@ -1232,32 +874,9 @@ public sealed class PrivateEvidenceBundle : IDisposable
         if (head.HeadAttemptSha256 != expectedHead)
             throw new InvalidDataException(
                 "Private evidence attempt head does not match its published prefix.");
-        if (head.AttemptCount == attempts.Count) return;
-        if (!allowRecovery || head.AttemptCount != attempts.Count - 1)
+        if (head.AttemptCount != attempts.Count)
             throw new InvalidDataException(
-                "Private evidence attempt head detects a missing or multiple tail.");
-
-        // BeginAttempt exposes no token until the head is durable. Therefore one
-        // extra start may be rolled forward only while it has no later state.
-        var unpublished = attempts[^1].Request;
-        if (rootHandle.EntryExists(
-                EvidenceFiles.AttemptTerminalRelative(unpublished))
-            || rootHandle.EntryExists(
-                EvidenceFiles.ResponseReceiptRelative(unpublished.RequestId))
-            || rootHandle.EntryExists(
-                EvidenceFiles.CaptureIntentRelative(unpublished.RequestId))
-            || rootHandle.EntryExists(
-                EvidenceFiles.CaptureOutcomeRelative(unpublished.RequestId))
-            || rootHandle.EntryExists(
-                EvidenceFiles.CaptureBodyRelative(unpublished.RequestId)))
-            throw new InvalidDataException(
-                "An unpublished attempt tail already has response or terminal state.");
-        EvidenceFiles.WriteAtomic(
-            rootHandle,
-            AttemptHeadFileName,
-            EvidenceJson.WriteAttemptHead(
-                plan, attempts.Count, attempts[^1].AttemptSha256),
-            replace: true);
+                "Private evidence attempt head does not match its exact inventory.");
     }
 
     private static void LoadAttemptTerminals(
@@ -1301,42 +920,6 @@ public sealed class PrivateEvidenceBundle : IDisposable
         }
         EvidenceFiles.RequireRootIdentity(
             root, rootHandle, "Private evidence staging root");
-    }
-
-    private static void TerminalizeRecoveredAttempts(
-        HandleBoundRoot rootHandle,
-        PrivateEvidenceAcquisitionPlan plan,
-        IReadOnlyList<PrivateEvidenceAttemptState> attempts,
-        IReadOnlyCollection<StagedResponseRecord> records)
-    {
-        var responses = records.ToDictionary(
-            record => record.Request.RequestId, StringComparer.Ordinal);
-        foreach (var attempt in attempts)
-        {
-            if (rootHandle.EntryExists(
-                    EvidenceFiles.AttemptTerminalRelative(attempt.Request)))
-                continue;
-            if (responses.TryGetValue(
-                    attempt.Request.RequestId, out var response))
-            {
-                PersistAttemptTerminal(
-                    rootHandle,
-                    plan,
-                    attempt,
-                    PrivateEvidenceAttemptDisposition.Response,
-                    EvidenceJson.Sha256(EvidenceJson.WriteReceipt(response)));
-            }
-            else
-            {
-                PersistAttemptTerminal(
-                    rootHandle,
-                    plan,
-                    attempt,
-                    PrivateEvidenceAttemptDisposition
-                        .NotAttemptedOrSendStateUnknown,
-                    responseReceiptSha256: null);
-            }
-        }
     }
 
     private void PersistAttemptTerminal(

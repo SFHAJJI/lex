@@ -252,334 +252,7 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
     }
 
     [Fact]
-    public async Task Restart_recovers_created_captured_and_sealed_states()
-    {
-        var request = Request(0);
-        var plan = Plan(request);
-        var staging = EmptyDirectory("restart");
-
-        using (PrivateEvidenceBundle.Create(staging, plan))
-        {
-        }
-        using (var created = PrivateEvidenceBundle.Open(staging, plan))
-        {
-            Assert.False(created.IsSealed);
-            Assert.Empty(created.Records);
-            var attempt = created.BeginAttempt(request);
-            await created.CaptureAsync(
-                attempt,
-                Response(),
-                new MemoryStream([9, 8, 7], writable: false));
-        }
-        using (var captured = PrivateEvidenceBundle.Open(staging, plan))
-        {
-            Assert.False(captured.IsSealed);
-            Assert.Single(captured.Records);
-            Assert.Single(captured.Attempts);
-            await captured.SealAsync();
-        }
-        using (var sealedBundle = PrivateEvidenceBundle.Open(staging, plan))
-        {
-            Assert.True(sealedBundle.IsSealed);
-            Assert.Single(sealedBundle.Records);
-            Assert.Throws<InvalidOperationException>(() =>
-                sealedBundle.BeginAttempt(Request(1)));
-        }
-    }
-
-    [Fact]
-    public void Restart_recovers_each_atomic_create_boundary()
-    {
-        var plan = Plan(Request(0));
-        var beforePlan = EmptyDirectory("create-before-plan");
-        using (PrivateEvidenceBundle.Create(beforePlan, plan))
-        {
-        }
-        File.Delete(Path.Combine(beforePlan, PrivateEvidenceBundle.PlanFileName));
-        File.Delete(Path.Combine(
-            beforePlan, PrivateEvidenceBundle.AttemptHeadFileName));
-        Directory.Delete(Path.Combine(
-            beforePlan, PrivateEvidenceBundle.ObjectsDirectoryName));
-        Directory.Delete(Path.Combine(
-            beforePlan, PrivateEvidenceBundle.ReceiptsDirectoryName));
-        using (var recovered = PrivateEvidenceBundle.Open(beforePlan, plan))
-            Assert.False(recovered.IsSealed);
-
-        var beforeDirectories = EmptyDirectory("create-before-directories");
-        using (PrivateEvidenceBundle.Create(beforeDirectories, plan))
-        {
-        }
-        File.Delete(Path.Combine(
-            beforeDirectories, PrivateEvidenceBundle.AttemptHeadFileName));
-        Directory.Delete(Path.Combine(
-            beforeDirectories, PrivateEvidenceBundle.ObjectsDirectoryName));
-        Directory.Delete(Path.Combine(
-            beforeDirectories, PrivateEvidenceBundle.ReceiptsDirectoryName));
-        using var reopened = PrivateEvidenceBundle.Open(beforeDirectories, plan);
-        Assert.False(reopened.IsSealed);
-    }
-
-    [Fact]
-    public async Task Reopen_recovers_orphans_and_finishes_a_valid_interrupted_seal()
-    {
-        var request = Request(0);
-        var plan = Plan(request);
-        var staging = EmptyDirectory("recovery");
-        string manifestPath;
-        string commitPath;
-
-        using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
-        {
-            var attempt = bundle.BeginAttempt(request);
-            await bundle.CaptureAsync(
-                attempt,
-                Response(),
-                new MemoryStream([1, 2, 3], writable: false));
-            await File.WriteAllBytesAsync(Path.Combine(
-                staging,
-                PrivateEvidenceBundle.ObjectsDirectoryName,
-                new string('a', 64) + ".bin"), [4, 5]);
-            await File.WriteAllBytesAsync(Path.Combine(
-                staging,
-                PrivateEvidenceBundle.ObjectsDirectoryName,
-                ".capture-interrupted.tmp"), [6]);
-        }
-
-        using (var recovered = PrivateEvidenceBundle.Open(staging, plan))
-        {
-            Assert.Single(Directory.EnumerateFiles(Path.Combine(
-                staging, PrivateEvidenceBundle.ObjectsDirectoryName)));
-            await recovered.SealAsync();
-            manifestPath = Path.Combine(
-                staging, PrivateEvidenceBundle.ManifestFileName);
-            commitPath = Path.Combine(
-                staging, PrivateEvidenceBundle.CommitMarkerFileName);
-            Assert.True(File.Exists(manifestPath));
-            Assert.True(File.Exists(commitPath));
-        }
-
-        File.Delete(commitPath);
-        using var resealed = PrivateEvidenceBundle.Open(staging, plan);
-        Assert.True(resealed.IsSealed);
-        Assert.True(File.Exists(commitPath));
-    }
-
-    [Fact]
-    public void Restart_preserves_pending_bytes_without_inventing_an_outcome()
-    {
-        var prefixRequest = Request(0, maximumResponseBytes: 8);
-        var oversizedRequest = Request(1, maximumResponseBytes: 3);
-        var plan = Plan(prefixRequest, oversizedRequest);
-        var staging = EmptyDirectory("pending-prefix");
-        string prefixAttemptSha256;
-        string oversizedAttemptSha256;
-        using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
-        {
-            prefixAttemptSha256 = bundle.BeginAttempt(prefixRequest)
-                .AttemptSha256;
-            oversizedAttemptSha256 = bundle.BeginAttempt(oversizedRequest)
-                .AttemptSha256;
-        }
-
-        WriteCaptureIntent(
-            staging, prefixAttemptSha256, prefixRequest, Response());
-        File.WriteAllBytes(PendingBodyPath(staging, prefixRequest), [1, 2]);
-        WriteCaptureIntent(
-            staging, oversizedAttemptSha256, oversizedRequest, Response());
-        File.WriteAllBytes(PendingBodyPath(staging, oversizedRequest), [3, 4, 5, 6]);
-
-        using var recovered = PrivateEvidenceBundle.Open(staging, plan);
-
-        Assert.Collection(
-            recovered.Records,
-            first =>
-            {
-                var evidence = Assert.IsType<RejectedStagedResponseEvidence>(
-                    first.Evidence);
-                Assert.Equal(StagedResponseRejectionReason.RecoveryOutcomeUnknown,
-                    evidence.Reason);
-                Assert.Equal(2, evidence.ByteLength);
-                Assert.Equal(Sha256([1, 2]), evidence.ObjectSha256);
-            },
-            second =>
-            {
-                var evidence = Assert.IsType<RejectedStagedResponseEvidence>(
-                    second.Evidence);
-                Assert.Equal(StagedResponseRejectionReason.BodyTooLarge,
-                    evidence.Reason);
-                Assert.Equal(4, evidence.ByteLength);
-            });
-        Assert.Empty(Directory.EnumerateFileSystemEntries(Path.Combine(
-            staging, PrivateEvidenceBundle.PendingDirectoryName)));
-    }
-
-    [Fact]
-    public void Restart_finishes_a_durable_outcome_after_object_move()
-    {
-        var request = Request(0);
-        var response = Response();
-        var plan = Plan(request);
-        var staging = EmptyDirectory("pending-object");
-        string attemptSha256;
-        using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
-        {
-            attemptSha256 = bundle.BeginAttempt(request).AttemptSha256;
-        }
-
-        byte[] body = [7, 8, 9];
-        var objectSha256 = Convert.ToHexStringLower(SHA256.HashData(body));
-        WriteCaptureIntent(staging, attemptSha256, request, response);
-        WriteCaptureOutcome(
-            staging,
-            request,
-            objectSha256,
-            body.Length,
-            StagedResponseDisposition.Complete,
-            rejectionReason: null);
-        File.WriteAllBytes(Path.Combine(
-            staging,
-            PrivateEvidenceBundle.ObjectsDirectoryName,
-            objectSha256 + ".bin"), body);
-
-        using var recovered = PrivateEvidenceBundle.Open(staging, plan);
-
-        var record = Assert.Single(recovered.Records);
-        Assert.IsType<CompleteStagedResponseEvidence>(record.Evidence);
-        Assert.Equal(objectSha256, record.Evidence.ObjectSha256);
-        Assert.Empty(Directory.EnumerateFileSystemEntries(Path.Combine(
-            staging, PrivateEvidenceBundle.PendingDirectoryName)));
-    }
-
-    [Fact]
-    public async Task A_cancelled_capture_is_recovered_before_a_same_input_live_retry()
-    {
-        var request = Request(0);
-        var plan = Plan(request);
-        var staging = EmptyDirectory("cancelled-capture");
-        using var bundle = PrivateEvidenceBundle.Create(staging, plan);
-        var attempt = bundle.BeginAttempt(request);
-
-        await Assert.ThrowsAsync<OperationCanceledException>(() =>
-            bundle.CaptureAsync(
-                attempt,
-                Response(),
-                new CancelAfterPrefixStream([1, 2, 3])));
-
-        var recovered = Assert.IsType<RejectedStagedResponseEvidence>(
-            await bundle.CaptureAsync(
-                attempt,
-                Response(),
-                new ThrowOnReadStream()));
-        Assert.Equal(StagedResponseRejectionReason.RecoveryOutcomeUnknown,
-            recovered.Reason);
-        Assert.Equal(3, recovered.ByteLength);
-        Assert.Empty(Directory.EnumerateFileSystemEntries(Path.Combine(
-            staging, PrivateEvidenceBundle.PendingDirectoryName)));
-    }
-
-    [Fact]
-    public async Task Recovering_multiple_live_attempts_retires_every_terminal_token()
-    {
-        var plan = DynamicPlan();
-        var staging = EmptyDirectory("multiple-live-recovery");
-        using var bundle = PrivateEvidenceBundle.Create(staging, plan);
-        var first = bundle.BeginAttempt(Request(0));
-        var second = bundle.BeginAttempt(Request(1, physicalAttempt: 2));
-
-        await Assert.ThrowsAsync<OperationCanceledException>(() =>
-            bundle.CaptureAsync(
-                first,
-                Response(),
-                new CancelAfterPrefixStream([1])));
-        await Assert.ThrowsAsync<OperationCanceledException>(() =>
-            bundle.CaptureAsync(
-                second,
-                Response(),
-                new CancelAfterPrefixStream([2])));
-        _ = await bundle.CaptureAsync(
-            second,
-            Response(bodyComplete: false),
-            new ThrowOnReadStream());
-
-        var receipt = await bundle.SealAsync();
-        Assert.Equal(2, receipt.Attempts.Count);
-        Assert.All(receipt.Attempts, attempt => Assert.Equal(
-            PrivateEvidenceAttemptDisposition.Response,
-            attempt.Disposition));
-    }
-
-    [Fact]
-    public async Task Recovered_capture_rejects_different_response_metadata()
-    {
-        var plan = DynamicPlan();
-        var staging = EmptyDirectory("recovered-metadata-mismatch");
-        using var bundle = PrivateEvidenceBundle.Create(staging, plan);
-        var attempt = bundle.BeginAttempt(Request(0));
-        await Assert.ThrowsAsync<OperationCanceledException>(() =>
-            bundle.CaptureAsync(
-                attempt,
-                Response(),
-                new CancelAfterPrefixStream([1, 2])));
-
-        await Assert.ThrowsAsync<InvalidDataException>(() =>
-            bundle.CaptureAsync(
-                attempt,
-                Response(statusCode: 201),
-                new ThrowOnReadStream()));
-        var receipt = await bundle.SealAsync();
-        Assert.Equal(200, Assert.Single(receipt.Records).Response.StatusCode);
-    }
-
-    [Fact]
-    public async Task Recovery_is_reentrant_and_a_committed_tree_is_never_normalized()
-    {
-        var request = Request(0);
-        var plan = Plan(request);
-        var interrupted = EmptyDirectory("recovery-reentrant");
-        using (PrivateEvidenceBundle.Create(interrupted, plan))
-        {
-        }
-        File.Delete(Path.Combine(interrupted, PrivateEvidenceBundle.PlanFileName));
-        File.Delete(Path.Combine(
-            interrupted, PrivateEvidenceBundle.AttemptHeadFileName));
-        Directory.Delete(Path.Combine(
-            interrupted, PrivateEvidenceBundle.ObjectsDirectoryName));
-        Directory.Delete(Path.Combine(
-            interrupted, PrivateEvidenceBundle.ReceiptsDirectoryName));
-        Directory.Delete(Path.Combine(
-            interrupted, PrivateEvidenceBundle.PendingDirectoryName));
-        Directory.CreateDirectory(Path.Combine(
-            interrupted, PrivateEvidenceBundle.ObjectsDirectoryName));
-
-        using (var recovered = PrivateEvidenceBundle.Open(interrupted, plan))
-            Assert.False(recovered.IsSealed);
-
-        var committed = EmptyDirectory("committed-exact");
-        using (var bundle = PrivateEvidenceBundle.Create(committed, plan))
-        {
-            var attempt = bundle.BeginAttempt(request);
-            await bundle.CaptureAsync(
-                attempt,
-                Response(),
-                new MemoryStream([1, 2, 3], writable: false));
-            await bundle.SealAsync();
-        }
-        var foreignObject = Path.Combine(
-            committed,
-            PrivateEvidenceBundle.ObjectsDirectoryName,
-            new string('a', 64) + ".bin");
-        await File.WriteAllBytesAsync(foreignObject, [4]);
-
-        PrivateEvidenceBundle? unexpectedlyOpened = null;
-        var error = Record.Exception(() =>
-            unexpectedlyOpened = PrivateEvidenceBundle.Open(committed, plan));
-        unexpectedlyOpened?.Dispose();
-        Assert.IsType<InvalidDataException>(error);
-        Assert.True(File.Exists(foreignObject));
-    }
-
-    [Fact]
-    public async Task Final_rehash_and_strict_reopen_fail_closed_on_mutation()
+    public async Task Final_rehash_fails_closed_on_object_mutation()
     {
         var request = Request(0);
         var plan = Plan(request);
@@ -599,17 +272,6 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
             Assert.False(File.Exists(Path.Combine(
                 staging, PrivateEvidenceBundle.CommitMarkerFileName)));
         }
-
-        var strict = EmptyDirectory("strict-json");
-        using (PrivateEvidenceBundle.Create(strict, plan))
-        {
-        }
-        var planPath = Path.Combine(strict, PrivateEvidenceBundle.PlanFileName);
-        var planJson = await File.ReadAllTextAsync(planPath);
-        await File.WriteAllTextAsync(planPath,
-            planJson.TrimEnd()[..^1] + ",\"unexpected\":true}\n");
-        Assert.Throws<InvalidDataException>(() =>
-            PrivateEvidenceBundle.Open(strict, plan));
     }
 
     [Fact]
@@ -665,18 +327,22 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         var error = Record.Exception(() =>
             unexpectedlyOpened = PrivateEvidenceBundle.Open(staging, plan));
         unexpectedlyOpened?.Dispose();
-        Assert.IsType<InvalidDataException>(error);
+        Assert.Contains(
+            "retained for forensics",
+            Assert.IsType<InvalidDataException>(error).Message,
+            StringComparison.Ordinal);
         Assert.True(File.Exists(tamper));
         Assert.False(File.Exists(commit));
     }
 
     [Fact]
-    public void Strict_json_rejects_duplicate_members()
+    public async Task Strict_json_rejects_duplicate_members()
     {
         var plan = Plan(Request(0));
         var staging = EmptyDirectory("duplicate-json");
-        using (PrivateEvidenceBundle.Create(staging, plan))
+        using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
         {
+            await bundle.SealAsync();
         }
         var planPath = Path.Combine(staging, PrivateEvidenceBundle.PlanFileName);
         var json = File.ReadAllText(planPath);
@@ -687,6 +353,25 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
 
         Assert.Throws<InvalidDataException>(() =>
             PrivateEvidenceBundle.Open(staging, plan));
+    }
+
+    [Fact]
+    public async Task Commit_without_manifest_is_not_a_sealed_bundle()
+    {
+        var plan = DynamicPlan();
+        var staging = EmptyDirectory("commit-without-manifest");
+        using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
+            await bundle.SealAsync();
+        File.Delete(Path.Combine(
+            staging, PrivateEvidenceBundle.ManifestFileName));
+
+        var error = Assert.Throws<InvalidDataException>(() =>
+            PrivateEvidenceBundle.Open(staging, plan));
+
+        Assert.Contains("retained for forensics", error.Message,
+            StringComparison.Ordinal);
+        Assert.True(File.Exists(Path.Combine(
+            staging, PrivateEvidenceBundle.CommitMarkerFileName)));
     }
 
     [Fact]
@@ -798,78 +483,152 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
     }
 
     [Fact]
-    public void Attempt_head_detects_published_tail_deletion()
+    public void Unsealed_restart_refuses_tail_and_head_rollback_without_mutation()
     {
         var plan = DynamicPlan();
         var staging = EmptyDirectory("attempt-head-tail-deletion");
         using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
             _ = bundle.BeginAttempt(Request(0));
 
-        File.Delete(Assert.Single(Directory.EnumerateFiles(
+        var start = Assert.Single(Directory.EnumerateFiles(
             Path.Combine(staging, PrivateEvidenceBundle.AttemptsDirectoryName),
-            "*.start.json")));
+            "*.start.json"));
+        File.Delete(start);
+        WriteAttemptHead(staging, plan, 0, null);
+        var before = Directory.EnumerateFileSystemEntries(
+            staging, "*", SearchOption.AllDirectories).Order().ToArray();
 
-        PrivateEvidenceBundle? unexpectedlyOpened = null;
-        var error = Record.Exception(() =>
-            unexpectedlyOpened = PrivateEvidenceBundle.Open(staging, plan));
-        unexpectedlyOpened?.Dispose();
-        Assert.Contains(
-            "attempt head",
-            Assert.IsType<InvalidDataException>(error).Message,
+        var error = Assert.Throws<InvalidDataException>(() =>
+            PrivateEvidenceBundle.Open(staging, plan));
+
+        Assert.Contains("retained for forensics", error.Message,
+            StringComparison.Ordinal);
+        Assert.Equal(before, Directory.EnumerateFileSystemEntries(
+            staging, "*", SearchOption.AllDirectories).Order());
+    }
+
+    [Fact]
+    public async Task Sealed_reopen_rejects_missing_tail_with_unchanged_head()
+    {
+        var (staging, plan) = await SealedTwoAttemptBundle(
+            "sealed-missing-tail", responses: false);
+        var starts = Directory.EnumerateFiles(Path.Combine(
+                staging, PrivateEvidenceBundle.AttemptsDirectoryName),
+            "*.start.json").Order().ToArray();
+        File.Delete(starts[^1]);
+
+        var error = Assert.Throws<InvalidDataException>(() =>
+            PrivateEvidenceBundle.Open(staging, plan));
+        Assert.Contains("attempt head", error.Message,
             StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Attempt_head_rolls_forward_one_unpublished_canonical_tail()
+    public async Task Sealed_reopen_rejects_multiple_tail_inventory()
     {
-        var plan = DynamicPlan();
-        var staging = EmptyDirectory("attempt-head-crash-window");
-        string attemptSha256;
-        using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
-        {
-            attemptSha256 = bundle.BeginAttempt(Request(0)).AttemptSha256;
-            using var publishedHead = JsonDocument.Parse(File.ReadAllBytes(
-                Path.Combine(
-                    staging, PrivateEvidenceBundle.AttemptHeadFileName)));
-            Assert.Equal(1, publishedHead.RootElement
-                .GetProperty("attempt_count").GetInt32());
-            Assert.Equal(attemptSha256, publishedHead.RootElement
-                .GetProperty("head_attempt_sha256").GetString());
-        }
-        WriteAttemptHead(staging, plan, attemptCount: 0, headSha256: null);
+        var (staging, plan) = await SealedTwoAttemptBundle(
+            "sealed-multiple-tail", responses: false);
+        var starts = Directory.EnumerateFiles(Path.Combine(
+                staging, PrivateEvidenceBundle.AttemptsDirectoryName),
+            "*.start.json").Order().ToArray();
+        using var second = JsonDocument.Parse(File.ReadAllBytes(starts[^1]));
+        var predecessor = second.RootElement.GetProperty(
+            "attempt_sha256").GetString()!;
+        var extra = Request(2, physicalAttempt: 3);
+        var extraSha256 = WriteAttemptStart(
+            staging, plan, extra, predecessor);
+        WriteAttemptHead(staging, plan, 3, extraSha256);
 
-        using var recovered = PrivateEvidenceBundle.Open(staging, plan);
-
-        Assert.Equal(
-            PrivateEvidenceAttemptDisposition.NotAttemptedOrSendStateUnknown,
-            Assert.Single(recovered.Attempts).Disposition);
-        using var head = JsonDocument.Parse(File.ReadAllBytes(
-            Path.Combine(staging, PrivateEvidenceBundle.AttemptHeadFileName)));
-        Assert.Equal(1, head.RootElement.GetProperty("attempt_count").GetInt32());
-        Assert.Equal(attemptSha256,
-            head.RootElement.GetProperty("head_attempt_sha256").GetString());
+        Assert.Throws<InvalidDataException>(() =>
+            PrivateEvidenceBundle.Open(staging, plan));
     }
 
     [Fact]
-    public void Attempt_head_never_rolls_back_a_terminal_tail()
+    public async Task Sealed_reopen_rejects_coherent_tail_and_head_rollback()
+    {
+        var (staging, plan) = await SealedTwoAttemptBundle(
+            "sealed-tail-head-rollback", responses: false);
+        var attempts = Path.Combine(
+            staging, PrivateEvidenceBundle.AttemptsDirectoryName);
+        var starts = Directory.EnumerateFiles(
+            attempts, "*.start.json").Order().ToArray();
+        var terminals = Directory.EnumerateFiles(
+            attempts, "*.terminal.json").Order().ToArray();
+        File.Delete(starts[^1]);
+        File.Delete(terminals[^1]);
+        using var first = JsonDocument.Parse(File.ReadAllBytes(starts[0]));
+        WriteAttemptHead(staging, plan, 1,
+            first.RootElement.GetProperty("attempt_sha256").GetString());
+
+        Assert.Throws<InvalidDataException>(() =>
+            PrivateEvidenceBundle.Open(staging, plan));
+    }
+
+    [Fact]
+    public async Task Sealed_reopen_rejects_non_tail_terminal_and_receipt_deletion()
+    {
+        var (staging, plan) = await SealedTwoAttemptBundle(
+            "sealed-nontail-deletion", responses: true);
+        File.Delete(Directory.EnumerateFiles(Path.Combine(
+                staging, PrivateEvidenceBundle.AttemptsDirectoryName),
+            "*.terminal.json").Order().First());
+        File.Delete(Directory.EnumerateFiles(Path.Combine(
+                staging, PrivateEvidenceBundle.ReceiptsDirectoryName),
+            "*.json").Order().First());
+
+        Assert.Throws<InvalidDataException>(() =>
+            PrivateEvidenceBundle.Open(staging, plan));
+    }
+
+    [Fact]
+    public async Task Sealed_reopen_rejects_total_attempt_and_head_wipe()
+    {
+        var (staging, plan) = await SealedTwoAttemptBundle(
+            "sealed-total-attempt-wipe", responses: false);
+        foreach (var path in Directory.EnumerateFiles(Path.Combine(
+                     staging, PrivateEvidenceBundle.AttemptsDirectoryName)))
+            File.Delete(path);
+        WriteAttemptHead(staging, plan, 0, null);
+
+        Assert.Throws<InvalidDataException>(() =>
+            PrivateEvidenceBundle.Open(staging, plan));
+    }
+
+    [Fact]
+    public void Unsealed_restart_does_not_create_a_missing_pending_body()
     {
         var plan = DynamicPlan();
-        var staging = EmptyDirectory("attempt-head-terminal-tail");
+        var staging = EmptyDirectory("unsealed-no-empty-body");
+        var request = Request(0);
         using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
         {
-            var attempt = bundle.BeginAttempt(Request(0));
-            bundle.RecordNoResponse(attempt);
+            var attempt = bundle.BeginAttempt(request);
+            WriteCaptureIntent(
+                staging, attempt.AttemptSha256, request, Response());
         }
-        WriteAttemptHead(staging, plan, attemptCount: 0, headSha256: null);
+        var body = PendingBodyPath(staging, request);
+        Assert.False(File.Exists(body));
 
-        PrivateEvidenceBundle? unexpectedlyOpened = null;
-        var error = Record.Exception(() =>
-            unexpectedlyOpened = PrivateEvidenceBundle.Open(staging, plan));
-        unexpectedlyOpened?.Dispose();
-        Assert.Contains(
-            "already has response or terminal state",
-            Assert.IsType<InvalidDataException>(error).Message,
-            StringComparison.Ordinal);
+        Assert.Throws<InvalidDataException>(() =>
+            PrivateEvidenceBundle.Open(staging, plan));
+
+        Assert.False(File.Exists(body));
+    }
+
+    [Fact]
+    public async Task Seal_final_verification_rejects_attempt_head_mutation()
+    {
+        var plan = DynamicPlan();
+        var staging = EmptyDirectory("seal-head-guard");
+        using var bundle = PrivateEvidenceBundle.Create(staging, plan);
+        var attempt = bundle.BeginAttempt(Request(0));
+        bundle.RecordNoResponse(attempt);
+        WriteAttemptHead(staging, plan, 0, null);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            bundle.SealAsync());
+        Assert.False(File.Exists(Path.Combine(
+            staging, PrivateEvidenceBundle.ManifestFileName)));
     }
 
     [Fact]
@@ -925,25 +684,48 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
             redirectHop:
                 SourceRequestIdentity.MaximumRedirectHopCoordinate + 1));
 
-        RecordedSourceRequest Persisted(int physicalAttempt, int redirectHop) =>
-            RecordedSourceRequest.FromPersistedClaim(
-                new string('0', 64),
+        RecordedSourceRequest Persisted(int physicalAttempt, int redirectHop)
+        {
+            const string redactedUri = "https://legilux.public.lu/source";
+            var rawTargetSha256 = Sha256(
+                "https://legilux.public.lu/source?private=bound-only");
+            var requestId = Sha256(string.Join('\n',
+                "lex-source-request/2",
+                "legilux",
+                "filestore",
+                "GET",
+                redactedUri,
+                rawTargetSha256,
+                string.Empty,
+                "0",
+                "1024",
+                physicalAttempt.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture),
+                redirectHop.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture)));
+            // A persisted redacted URI cannot recompute the digest of the raw
+            // target. Restoration verifies the stored, self-consistent claim.
+            return RecordedSourceRequest.FromPersistedClaim(
+                requestId,
                 "legilux",
                 "filestore",
                 SourceRequestMethod.Get,
-                "https://legilux.public.lu/source",
-                Sha256("https://legilux.public.lu/source"),
+                redactedUri,
+                rawTargetSha256,
                 requestBodySha256: null,
                 ordinal: 0,
                 maximumResponseBytes: 1024,
                 physicalAttempt,
                 redirectHop);
+        }
 
         Assert.Throws<InvalidDataException>(() => Persisted(
             SourceRequestIdentity.MaximumPhysicalAttemptCoordinate + 1, 0));
         Assert.Throws<InvalidDataException>(() => Persisted(
             1, SourceRequestIdentity.MaximumRedirectHopCoordinate + 1));
-        Assert.Throws<InvalidDataException>(() => Persisted(1, 0));
+        var valid = Persisted(1, 0);
+        Assert.Equal(1, valid.PhysicalAttempt);
+        Assert.Equal(0, valid.RedirectHop);
     }
 
     [Fact]
@@ -982,40 +764,6 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
     }
 
     [Fact]
-    public void Reopen_rejects_a_directly_crafted_attempt_inventory_above_cap()
-    {
-        var plan = DynamicPlan();
-        var staging = EmptyDirectory("crafted-attempt-cap");
-        string predecessor;
-        using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
-        {
-            for (var ordinal = 0;
-                 ordinal < PrivateEvidenceBundle.MaximumAttemptsPerBundle;
-                 ordinal++)
-            {
-                var attempt = bundle.BeginAttempt(Request(
-                    ordinal,
-                    $"https://legilux.public.lu/source/{ordinal / 16}",
-                    physicalAttempt: ordinal % 16 + 1));
-                bundle.RecordNoResponse(attempt);
-            }
-            predecessor = bundle.Attempts[^1].AttemptSha256;
-        }
-
-        var request = Request(PrivateEvidenceBundle.MaximumAttemptsPerBundle);
-        _ = WriteAttemptStart(staging, plan, request, predecessor);
-
-        PrivateEvidenceBundle? unexpectedlyOpened = null;
-        var error = Record.Exception(() =>
-            unexpectedlyOpened = PrivateEvidenceBundle.Open(staging, plan));
-        unexpectedlyOpened?.Dispose();
-        Assert.Contains(
-            "exceeds its bundle cap",
-            Assert.IsType<InvalidDataException>(error).Message,
-            StringComparison.Ordinal);
-    }
-
-    [Fact]
     public async Task Live_attempts_block_seal_and_tokens_are_bundle_bound()
     {
         var plan = DynamicPlan();
@@ -1033,57 +781,6 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
 
         first.RecordNoResponse(attempt);
         await first.SealAsync();
-    }
-
-    [Fact]
-    public async Task Restart_terminalizes_an_unfinished_attempt_without_overclaiming_send()
-    {
-        var plan = DynamicPlan();
-        var staging = EmptyDirectory("unknown-attempt");
-        using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
-            _ = bundle.BeginAttempt(Request(0));
-
-        using var recovered = PrivateEvidenceBundle.Open(staging, plan);
-
-        var attempt = Assert.Single(recovered.Attempts);
-        Assert.Equal(
-            PrivateEvidenceAttemptDisposition.NotAttemptedOrSendStateUnknown,
-            attempt.Disposition);
-        var receipt = await recovered.SealAsync();
-        Assert.Equal(attempt.TerminalSha256,
-            Assert.Single(receipt.Attempts).TerminalSha256);
-    }
-
-    [Fact]
-    public async Task Restart_binds_a_durable_receipt_to_its_missing_terminal()
-    {
-        var plan = DynamicPlan();
-        var staging = EmptyDirectory("receipt-before-terminal");
-        var request = Request(0);
-        using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
-        {
-            var attempt = bundle.BeginAttempt(request);
-            await bundle.CaptureAsync(
-                attempt,
-                Response(),
-                new MemoryStream([5, 6, 7], writable: false));
-        }
-        File.Delete(Assert.Single(Directory.EnumerateFiles(
-            Path.Combine(staging, PrivateEvidenceBundle.AttemptsDirectoryName),
-            "*.terminal.json")));
-
-        using var recovered = PrivateEvidenceBundle.Open(staging, plan);
-
-        var terminal = Assert.Single(recovered.Attempts);
-        Assert.Equal(PrivateEvidenceAttemptDisposition.Response,
-            terminal.Disposition);
-        Assert.Equal(
-            Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(
-                Assert.Single(Directory.EnumerateFiles(Path.Combine(
-                    staging,
-                    PrivateEvidenceBundle.ReceiptsDirectoryName)))))),
-            terminal.ResponseReceiptSha256);
-        await recovered.SealAsync();
     }
 
     [Fact]
@@ -1232,6 +929,32 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         return path;
     }
 
+    private async Task<(string Root, PrivateEvidenceAcquisitionPlan Plan)>
+        SealedTwoAttemptBundle(string name, bool responses)
+    {
+        var root = EmptyDirectory(name);
+        var plan = DynamicPlan();
+        using var bundle = PrivateEvidenceBundle.Create(root, plan);
+        for (var ordinal = 0; ordinal < 2; ordinal++)
+        {
+            var attempt = bundle.BeginAttempt(Request(
+                ordinal, physicalAttempt: ordinal + 1));
+            if (responses)
+            {
+                await bundle.CaptureAsync(
+                    attempt,
+                    Response(),
+                    new MemoryStream([(byte)(ordinal + 1)], writable: false));
+            }
+            else
+            {
+                bundle.RecordNoResponse(attempt);
+            }
+        }
+        await bundle.SealAsync();
+        return (root, plan);
+    }
+
     private static string ReadEmittedText(string root)
     {
         var builder = new StringBuilder();
@@ -1307,34 +1030,6 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
                     response.EffectiveSourceUri,
                     response.EffectiveSourceUriSha256,
                     response.BodyComplete,
-                },
-            });
-    }
-
-    private static void WriteCaptureOutcome(
-        string root,
-        SourceRequestIdentity request,
-        string objectSha256,
-        long byteLength,
-        StagedResponseDisposition disposition,
-        StagedResponseRejectionReason? rejectionReason)
-    {
-        WriteTestJson(
-            Path.Combine(
-                root,
-                PrivateEvidenceBundle.PendingDirectoryName,
-                request.RequestId + ".outcome.json"),
-            new
-            {
-                Schema = PrivateEvidenceBundle.CaptureOutcomeSchema,
-                Evidence = new
-                {
-                    Disposition = disposition.ToString().ToLowerInvariant(),
-                    request.RequestId,
-                    ObjectSha256 = objectSha256,
-                    ByteLength = byteLength,
-                    RejectionReason = rejectionReason?.ToString()
-                        .ToLowerInvariant(),
                 },
             });
     }

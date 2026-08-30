@@ -139,11 +139,6 @@ internal sealed record ParsedManifest(
     string AttemptInventorySha256,
     IReadOnlyList<StagedResponseRecord> Records);
 
-internal sealed record PendingCaptureIntent(
-    string AttemptSha256,
-    RecordedSourceRequest Request,
-    RecordedResponseMetadata Response);
-
 internal static class EvidenceJson
 {
     private static readonly JsonSerializerOptions Options = CreateOptions();
@@ -403,49 +398,6 @@ internal static class EvidenceJson
             throw new InvalidDataException(
                 "Private evidence response receipt is not canonical.");
         return record;
-    }
-
-    public static PendingCaptureIntent ParseCaptureIntent(byte[] bytes)
-    {
-        var document = Deserialize<CaptureIntentDocument>(bytes, "capture intent");
-        if (document.Schema != PrivateEvidenceBundle.CaptureIntentSchema
-            || !EvidenceFiles.IsSha256(document.AttemptSha256)
-            || document.Request is null
-            || document.Response is null)
-            throw new InvalidDataException(
-                "Private evidence capture intent schema is invalid.");
-        var result = new PendingCaptureIntent(
-            document.AttemptSha256,
-            Restore(document.Request),
-            Restore(document.Response));
-        if (document.BodyFileName != result.Request.RequestId + ".body")
-            throw new InvalidDataException(
-                "Private evidence capture intent does not bind its body file.");
-        if (!bytes.AsSpan().SequenceEqual(
-                WriteCaptureIntent(
-                    result.AttemptSha256, result.Request, result.Response)))
-            throw new InvalidDataException(
-                "Private evidence capture intent is not canonical.");
-        return result;
-    }
-
-    public static StagedResponseEvidence ParseCaptureOutcome(
-        byte[] bytes,
-        RecordedSourceRequest request,
-        RecordedResponseMetadata response)
-    {
-        var document = Deserialize<CaptureOutcomeDocument>(
-            bytes, "capture outcome");
-        if (document.Schema != PrivateEvidenceBundle.CaptureOutcomeSchema
-            || document.Evidence is null)
-            throw new InvalidDataException(
-                "Private evidence capture outcome schema is invalid.");
-        var evidence = Restore(
-            document.Evidence, request, response, requireRetainedState: false);
-        if (!bytes.AsSpan().SequenceEqual(WriteCaptureOutcome(evidence)))
-            throw new InvalidDataException(
-                "Private evidence capture outcome is not canonical.");
-        return evidence;
     }
 
     public static ParsedManifest ParseManifest(byte[] bytes)

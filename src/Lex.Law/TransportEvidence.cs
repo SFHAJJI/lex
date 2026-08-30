@@ -99,6 +99,7 @@ public sealed record SourceRequestIdentity
 /// <summary>
 /// A non-authoritative request claim restored from a journal. Validation proves
 /// bounded syntax and internal identifier consistency only, never that a request ran.
+/// Its redacted URI cannot recompute or authenticate the stored raw-target digest.
 /// It cannot be converted into a live request identity.
 /// </summary>
 public sealed record RecordedSourceRequest

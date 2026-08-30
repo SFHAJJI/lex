@@ -138,18 +138,6 @@ internal static class EvidenceFiles
                 "Private evidence object length or SHA-256 changed.");
     }
 
-    public static (string Sha256, long Length) HashBoundedObject(
-        HandleBoundRoot root, string relative, long maximumLength)
-    {
-        using var stream = root.OpenRead(relative);
-        if (stream.Length < 0 || stream.Length > maximumLength)
-            throw new InvalidDataException(
-                "Pending private evidence exceeds its retained byte bound.");
-        var length = stream.Length;
-        var sha256 = Convert.ToHexStringLower(SHA256.HashData(stream));
-        return (sha256, length);
-    }
-
     public static void WriteAtomic(
         HandleBoundRoot root,
         string finalRelative,
@@ -173,82 +161,6 @@ internal static class EvidenceFiles
             TryDelete(root, temp);
             throw;
         }
-    }
-
-    public static void CleanupTemporaryFiles(
-        string rootPath, HandleBoundRoot root)
-    {
-        RequireRootIdentity(rootPath, root, "Private evidence staging root");
-        foreach (var directory in new[]
-                 {
-                     ".",
-                     PrivateEvidenceBundle.AttemptsDirectoryName,
-                     PrivateEvidenceBundle.ObjectsDirectoryName,
-                     PrivateEvidenceBundle.ReceiptsDirectoryName,
-                     PrivateEvidenceBundle.PendingDirectoryName,
-                  })
-        {
-            if (directory != "." && !root.EntryExists(directory)) continue;
-            var absolute = directory == "."
-                ? rootPath
-                : Path.Combine(rootPath, directory);
-            foreach (var path in Directory.EnumerateFiles(
-                         absolute, "*", SearchOption.TopDirectoryOnly))
-            {
-                var name = Path.GetFileName(path);
-                var allowed = directory == "."
-                    ? name.StartsWith($".{PrivateEvidenceBundle.PlanFileName}-",
-                          StringComparison.Ordinal)
-                      || name.StartsWith(
-                          $".{PrivateEvidenceBundle.AttemptHeadFileName}-",
-                          StringComparison.Ordinal)
-                      || name.StartsWith(
-                          $".{PrivateEvidenceBundle.ManifestFileName}-",
-                          StringComparison.Ordinal)
-                      || name.StartsWith(
-                          $".{PrivateEvidenceBundle.CommitMarkerFileName}-",
-                          StringComparison.Ordinal)
-                    : directory == PrivateEvidenceBundle.ObjectsDirectoryName
-                        ? name.StartsWith(".capture-", StringComparison.Ordinal)
-                        : name.StartsWith(".", StringComparison.Ordinal);
-                if (allowed && name.EndsWith(".tmp", StringComparison.Ordinal))
-                    root.DeleteFile(Relative(directory, name));
-            }
-        }
-        RequireRootIdentity(rootPath, root, "Private evidence staging root");
-    }
-
-    public static void DeleteOrphanObjects(
-        string rootPath,
-        HandleBoundRoot root,
-        IReadOnlyCollection<StagedResponseRecord> records)
-    {
-        RequireRootIdentity(rootPath, root, "Private evidence staging root");
-        var objectsRoot = Path.Combine(
-            rootPath, PrivateEvidenceBundle.ObjectsDirectoryName);
-        if (!root.Exists(
-                PrivateEvidenceBundle.ObjectsDirectoryName,
-                expectDirectory: true))
-            throw new InvalidDataException(
-                "Private evidence objects directory is missing.");
-        var expected = records.Select(record =>
-                record.Evidence.ObjectSha256 + ".bin")
-            .ToHashSet(StringComparer.Ordinal);
-        foreach (var path in Directory.EnumerateFileSystemEntries(objectsRoot))
-        {
-            var name = Path.GetFileName(path);
-            var relative = Relative(
-                PrivateEvidenceBundle.ObjectsDirectoryName, name);
-            if (!root.Exists(relative, expectDirectory: false))
-                throw new InvalidDataException(
-                    "Private evidence objects directory contains a non-file entry.");
-            if (name.Length != 68 || !name.EndsWith(".bin", StringComparison.Ordinal)
-                || !IsSha256(name[..64]))
-                throw new InvalidDataException(
-                    "Private evidence object has an invalid name.");
-            if (!expected.Contains(name)) root.DeleteFile(relative);
-        }
-        RequireRootIdentity(rootPath, root, "Private evidence staging root");
     }
 
     public static void VerifyExactLayout(
