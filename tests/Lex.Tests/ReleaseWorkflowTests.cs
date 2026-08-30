@@ -40,8 +40,9 @@ public sealed class ReleaseWorkflowTests
             "azurerm_virtual_machine_data_disk_attachment",
             "azurerm_virtual_network",
         };
-        var actual = Directory.EnumerateFiles(
-                Path.Combine(RepoRoot(), "infra"), "*.tf", SearchOption.AllDirectories)
+        var infra = Path.Combine(RepoRoot(), "infra");
+        var actual = Directory.EnumerateFiles(infra, "*.tf", SearchOption.AllDirectories)
+            .Where(path => IsRepositoryTerraformPath(infra, path))
             .SelectMany(path => TerraformAzureRmTypes(File.ReadAllText(path)))
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
@@ -55,12 +56,24 @@ public sealed class ReleaseWorkflowTests
     {
         var infra = Path.Combine(RepoRoot(), "infra");
         var terraformJson = Directory.EnumerateFiles(infra, "*", SearchOption.AllDirectories)
+            .Where(path => IsRepositoryTerraformPath(infra, path))
             .Where(path => path.EndsWith(".tf.json", StringComparison.OrdinalIgnoreCase))
             .Select(path => Path.GetRelativePath(infra, path))
             .Order(StringComparer.Ordinal)
             .ToArray();
 
         Assert.Empty(terraformJson);
+    }
+
+    [Fact]
+    public void Terraform_inventory_ignores_only_the_generated_working_directory()
+    {
+        var infra = Path.Combine(RepoRoot(), "infra");
+
+        Assert.False(IsRepositoryTerraformPath(infra,
+            Path.Combine(infra, ".terraform", "modules", "foreign.tf")));
+        Assert.True(IsRepositoryTerraformPath(infra,
+            Path.Combine(infra, "modules", "owned", "main.tf")));
     }
 
     [Theory]
@@ -1958,6 +1971,15 @@ public sealed class ReleaseWorkflowTests
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToArray();
+    }
+
+    private static bool IsRepositoryTerraformPath(string infra, string path)
+    {
+        var segments = Path.GetRelativePath(infra, path)
+            .Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
+                StringSplitOptions.RemoveEmptyEntries);
+        return segments.Length > 0
+               && !segments[0].Equals(".terraform", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string TerraformResource(string terraform, string type, string name)
