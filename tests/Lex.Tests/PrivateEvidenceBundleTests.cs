@@ -366,12 +366,67 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
 
         var recovered = Assert.IsType<RejectedStagedResponseEvidence>(
             await bundle.CaptureAsync(
-                attempt, Response(), new ThrowOnReadStream()));
+                attempt,
+                Response(bodyComplete: false),
+                new ThrowOnReadStream()));
         Assert.Equal(StagedResponseRejectionReason.TransportInterrupted,
             recovered.Reason);
         Assert.Equal(3, recovered.ByteLength);
         Assert.Empty(Directory.EnumerateFileSystemEntries(Path.Combine(
             staging, PrivateEvidenceBundle.PendingDirectoryName)));
+    }
+
+    [Fact]
+    public async Task Recovering_multiple_live_attempts_retires_every_terminal_token()
+    {
+        var plan = DynamicPlan();
+        var staging = EmptyDirectory("multiple-live-recovery");
+        using var bundle = PrivateEvidenceBundle.Create(staging, plan);
+        var first = bundle.BeginAttempt(Request(0));
+        var second = bundle.BeginAttempt(Request(1, physicalAttempt: 2));
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            bundle.CaptureAsync(
+                first,
+                Response(),
+                new CancelAfterPrefixStream([1])));
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            bundle.CaptureAsync(
+                second,
+                Response(),
+                new CancelAfterPrefixStream([2])));
+        _ = await bundle.CaptureAsync(
+            second,
+            Response(bodyComplete: false),
+            new ThrowOnReadStream());
+
+        var receipt = await bundle.SealAsync();
+        Assert.Equal(2, receipt.Attempts.Count);
+        Assert.All(receipt.Attempts, attempt => Assert.Equal(
+            PrivateEvidenceAttemptDisposition.Response,
+            attempt.Disposition));
+    }
+
+    [Fact]
+    public async Task Recovered_capture_rejects_different_response_metadata()
+    {
+        var plan = DynamicPlan();
+        var staging = EmptyDirectory("recovered-metadata-mismatch");
+        using var bundle = PrivateEvidenceBundle.Create(staging, plan);
+        var attempt = bundle.BeginAttempt(Request(0));
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            bundle.CaptureAsync(
+                attempt,
+                Response(),
+                new CancelAfterPrefixStream([1, 2])));
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            bundle.CaptureAsync(
+                attempt,
+                Response(bodyComplete: false, statusCode: 201),
+                new ThrowOnReadStream()));
+        var receipt = await bundle.SealAsync();
+        Assert.Equal(200, Assert.Single(receipt.Records).Response.StatusCode);
     }
 
     [Fact]
@@ -476,6 +531,39 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
 
         Assert.Throws<InvalidDataException>(() =>
             PrivateEvidenceBundle.Open(staging, plan));
+        Assert.False(File.Exists(commit));
+    }
+
+    [Fact]
+    public async Task Manifest_without_commit_never_cleans_temporary_tampering()
+    {
+        var request = Request(0);
+        var plan = DynamicPlan();
+        var staging = EmptyDirectory("manifest-temp-tamper");
+        using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
+        {
+            var attempt = bundle.BeginAttempt(request);
+            await bundle.CaptureAsync(
+                attempt,
+                Response(),
+                new MemoryStream([1], writable: false));
+            await bundle.SealAsync();
+        }
+        var commit = Path.Combine(
+            staging, PrivateEvidenceBundle.CommitMarkerFileName);
+        var tamper = Path.Combine(
+            staging,
+            PrivateEvidenceBundle.ObjectsDirectoryName,
+            ".capture-tamper.tmp");
+        File.Delete(commit);
+        await File.WriteAllBytesAsync(tamper, [9]);
+
+        PrivateEvidenceBundle? unexpectedlyOpened = null;
+        var error = Record.Exception(() =>
+            unexpectedlyOpened = PrivateEvidenceBundle.Open(staging, plan));
+        unexpectedlyOpened?.Dispose();
+        Assert.IsType<InvalidDataException>(error);
+        Assert.True(File.Exists(tamper));
         Assert.False(File.Exists(commit));
     }
 
@@ -604,6 +692,41 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         Assert.Equal(
             sealedReceipt.Attempts.Select(attempt => attempt.TerminalSha256),
             reopened.Attempts.Select(attempt => attempt.TerminalSha256));
+    }
+
+    [Fact]
+    public async Task Bundle_cap_rejects_before_append_and_maximum_bundle_reopens()
+    {
+        var plan = DynamicPlan();
+        var staging = EmptyDirectory("attempt-cap");
+        using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
+        {
+            for (var ordinal = 0;
+                 ordinal < PrivateEvidenceBundle.MaximumAttemptsPerBundle;
+                 ordinal++)
+            {
+                var attempt = bundle.BeginAttempt(Request(
+                    ordinal,
+                    physicalAttempt: ordinal %
+                        SourceRequestIdentity.MaximumPhysicalAttempt + 1));
+                bundle.RecordNoResponse(attempt);
+            }
+
+            Assert.Throws<InvalidOperationException>(() =>
+                bundle.BeginAttempt(Request(
+                    PrivateEvidenceBundle.MaximumAttemptsPerBundle)));
+            Assert.Equal(
+                PrivateEvidenceBundle.MaximumAttemptsPerBundle * 2,
+                Directory.EnumerateFiles(Path.Combine(
+                    staging, PrivateEvidenceBundle.AttemptsDirectoryName))
+                    .Count());
+            await bundle.SealAsync();
+        }
+
+        using var reopened = PrivateEvidenceBundle.Open(staging, plan);
+        Assert.True(reopened.IsSealed);
+        Assert.Equal(PrivateEvidenceBundle.MaximumAttemptsPerBundle,
+            reopened.Attempts.Count);
     }
 
     [Fact]
@@ -804,8 +927,9 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
 
     private static BoundedResponseMetadata Response(
         string uri = "https://legilux.public.lu/final",
-        bool bodyComplete = true) => BoundedResponseMetadata.Create(
-        200,
+        bool bodyComplete = true,
+        int statusCode = 200) => BoundedResponseMetadata.Create(
+        statusCode,
         "application/xml",
         "utf-8",
         "\"publisher-etag\"",

@@ -302,6 +302,13 @@ public sealed class PrivateEvidenceStageReceipt
 /// </summary>
 public sealed class PrivateEvidenceBundle : IDisposable
 {
+    /// <summary>
+    /// Acquisition must stop before this many physical attempts and continue in
+    /// a new bundle whose trusted run identity is distinct. Attempts never spill
+    /// implicitly between bundles. The cap keeps a worst-case canonical manifest
+    /// below its readback bound.
+    /// </summary>
+    public const int MaximumAttemptsPerBundle = 64;
     public const string PlanSchema = "lex-private-evidence-plan/3";
     public const string ResponseReceiptSchema =
         "lex-private-evidence-response/3";
@@ -436,7 +443,7 @@ public sealed class PrivateEvidenceBundle : IDisposable
             if (!hasManifest && hasCommit)
                 throw new InvalidDataException(
                     "Private evidence commit marker exists without its manifest.");
-            if (!hasCommit)
+            if (!hasManifest)
                 EvidenceFiles.CleanupTemporaryFiles(root, rootHandle);
             var planBytes = EvidenceFiles.ReadBounded(
                 rootHandle,
@@ -511,6 +518,9 @@ public sealed class PrivateEvidenceBundle : IDisposable
         try
         {
             RequireOpen();
+            if (_attempts.Count >= MaximumAttemptsPerBundle)
+                throw new InvalidOperationException(
+                    "Private evidence attempt cap reached; continue in a new bundle with a distinct trusted run identity.");
             if (request.Publisher != _plan.Publisher)
                 throw new InvalidDataException(
                     "A physical attempt must belong to the bundle publisher.");
@@ -566,6 +576,9 @@ public sealed class PrivateEvidenceBundle : IDisposable
             RefreshRecoveredCaptures();
             if (_records.TryGetValue(request.RequestId, out var recovered))
             {
+                if (recovered.Response != response)
+                    throw new InvalidDataException(
+                        "Recovered response metadata differs from the supplied response.");
                 PersistAttemptTerminal(
                     attempt.State,
                     PrivateEvidenceAttemptDisposition.Response,
@@ -677,6 +690,9 @@ public sealed class PrivateEvidenceBundle : IDisposable
             VerifyStage(includeManifest: false, includeCommit: false);
             var manifestBytes = EvidenceJson.WriteManifest(
                 _plan, attempts, ordered);
+            if (manifestBytes.Length > MaximumManifestBytes)
+                throw new InvalidDataException(
+                    "Private evidence manifest exceeds its readback bound; partition the acquisition before sealing.");
             EvidenceFiles.WriteAtomic(
                 _rootHandle, ManifestFileName, manifestBytes);
             VerifyStage(includeManifest: true, includeCommit: false);
@@ -823,6 +839,7 @@ public sealed class PrivateEvidenceBundle : IDisposable
                 PrivateEvidenceAttemptDisposition.Response,
                 EvidenceJson.Sha256(EvidenceJson.WriteReceipt(record)));
         }
+        _liveAttempts.RemoveWhere(token => token.State.Terminal is not null);
     }
 
     private static void RecoverPendingCaptures(
@@ -1136,6 +1153,10 @@ public sealed class PrivateEvidenceBundle : IDisposable
             root, rootHandle, "Private evidence staging root");
 
         var ordered = starts.OrderBy(attempt => attempt.Request.Ordinal).ToList();
+        if (ordered.Count > MaximumAttemptsPerBundle)
+            throw new InvalidDataException(
+                "Private evidence attempt inventory exceeds its bundle cap.");
+        var requestIds = new HashSet<string>(StringComparer.Ordinal);
         for (var index = 0; index < ordered.Count; index++)
         {
             var attempt = ordered[index];
@@ -1144,8 +1165,7 @@ public sealed class PrivateEvidenceBundle : IDisposable
                 : ordered[index - 1].AttemptSha256;
             if (attempt.Request.Ordinal != index
                 || attempt.PredecessorAttemptSha256 != predecessor
-                || ordered.Take(index).Any(previous =>
-                    previous.Request.RequestId == attempt.Request.RequestId))
+                || !requestIds.Add(attempt.Request.RequestId))
                 throw new InvalidDataException(
                     "Private evidence attempt chain has a gap, duplicate, or invalid predecessor.");
         }
@@ -1316,6 +1336,7 @@ public sealed class PrivateEvidenceBundle : IDisposable
         EvidenceFiles.RequireRootIdentity(
             root, rootHandle, "Private evidence staging root");
         var records = new List<StagedResponseRecord>();
+        var requestIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var path in Directory.EnumerateFileSystemEntries(receiptsRoot))
         {
             var name = Path.GetFileName(path);
@@ -1334,8 +1355,7 @@ public sealed class PrivateEvidenceBundle : IDisposable
                 "Private evidence response receipt");
             var record = EvidenceJson.ParseReceipt(bytes);
             if (name[..64] != record.Request.RequestId
-                || records.Any(item =>
-                    item.Request.RequestId == record.Request.RequestId))
+                || !requestIds.Add(record.Request.RequestId))
                 throw new InvalidDataException(
                     "Private evidence receipt identity is not unique and exact.");
             EvidenceFiles.VerifyObject(
