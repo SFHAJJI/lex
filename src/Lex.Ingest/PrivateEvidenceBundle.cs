@@ -550,7 +550,6 @@ public sealed class PrivateEvidenceBundle : IDisposable
                     current.Request.RequestId == recordedRequest.RequestId))
                 throw new InvalidDataException(
                     "A physical attempt request identity must be unique.");
-            ValidateNextAttempt(_attempts, recordedRequest);
 
             var predecessor = _attempts.LastOrDefault()?.AttemptSha256;
             var state = new PrivateEvidenceAttemptState(
@@ -1200,7 +1199,6 @@ public sealed class PrivateEvidenceBundle : IDisposable
                 || !requestIds.Add(attempt.Request.RequestId))
                 throw new InvalidDataException(
                     "Private evidence attempt chain has a gap, duplicate, or invalid predecessor.");
-            ValidateNextAttempt(ordered.Take(index), attempt.Request);
         }
         return ordered;
     }
@@ -1260,43 +1258,6 @@ public sealed class PrivateEvidenceBundle : IDisposable
             EvidenceJson.WriteAttemptHead(
                 plan, attempts.Count, attempts[^1].AttemptSha256),
             replace: true);
-    }
-
-    private static void ValidateNextAttempt(
-        IEnumerable<PrivateEvidenceAttemptState> attempts,
-        RecordedSourceRequest request)
-    {
-        var key = LogicalRequestKey.From(request);
-        var previous = attempts.LastOrDefault(attempt =>
-            LogicalRequestKey.From(attempt.Request) == key)?.Request;
-        // A new bundle may continue a bounded coordinate from an earlier bundle.
-        if (previous is null) return;
-        var nextRetry = request.PhysicalAttempt == previous.PhysicalAttempt + 1
-                        && request.RedirectHop == previous.RedirectHop;
-        var nextRedirect = request.PhysicalAttempt == previous.PhysicalAttempt
-                           && request.RedirectHop == previous.RedirectHop + 1;
-        if (!nextRetry && !nextRedirect)
-            throw new InvalidDataException(
-                "A repeated logical request must advance exactly one retry or redirect coordinate.");
-    }
-
-    private readonly record struct LogicalRequestKey(
-        string Publisher,
-        string Channel,
-        SourceRequestMethod Method,
-        string RequestUri,
-        string RequestUriSha256,
-        string? RequestBodySha256,
-        long MaximumResponseBytes)
-    {
-        public static LogicalRequestKey From(RecordedSourceRequest request) => new(
-            request.Publisher,
-            request.Channel,
-            request.Method,
-            request.RequestUri,
-            request.RequestUriSha256,
-            request.RequestBodySha256,
-            request.MaximumResponseBytes);
     }
 
     private static void LoadAttemptTerminals(

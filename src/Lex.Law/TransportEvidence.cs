@@ -14,12 +14,16 @@ public enum SourceRequestMethod
 /// <summary>
 /// A closed identity for one physical publisher request. Persisted URIs contain
 /// no user info, query, or fragment. Their full raw targets are bound only by SHA-256.
+/// Physical-attempt and redirect-hop values are bounded reported coordinates.
+/// The private journal does not enforce retry or redirect policy, stable chain
+/// identity, ordering, or send count. A publisher session must do so before send.
 /// </summary>
 public sealed record SourceRequestIdentity
 {
     public const int MaximumUriLength = 8192;
     public const int MaximumOrdinal = 999_999;
-    public const int MaximumPhysicalAttempt = 16;
+    public const int MaximumPhysicalAttemptCoordinate = 16;
+    public const int MaximumRedirectHopCoordinate = 16;
 
     private readonly RecordedSourceRequest _recorded;
 
@@ -37,7 +41,16 @@ public sealed record SourceRequestIdentity
     public string? RequestBodySha256 => _recorded.RequestBodySha256;
     public int Ordinal => _recorded.Ordinal;
     public long MaximumResponseBytes => _recorded.MaximumResponseBytes;
+    /// <summary>
+    /// An individually bounded caller-reported coordinate, not a send count.
+    /// The publisher session must enforce retry policy before sending.
+    /// </summary>
     public int PhysicalAttempt => _recorded.PhysicalAttempt;
+
+    /// <summary>
+    /// An individually bounded caller-reported coordinate, not a redirect policy.
+    /// The publisher session must enforce redirect policy before sending.
+    /// </summary>
     public int RedirectHop => _recorded.RedirectHop;
 
     public static SourceRequestIdentity Create(
@@ -135,13 +148,17 @@ public sealed record RecordedSourceRequest
             throw new InvalidDataException(
                 "Maximum response bytes is outside its allowed bound.");
         MaximumResponseBytes = maximumResponseBytes;
-        if (physicalAttempt is < 1 or > SourceRequestIdentity.MaximumPhysicalAttempt)
+        if (physicalAttempt is < 1
+            or > SourceRequestIdentity.MaximumPhysicalAttemptCoordinate)
             throw new InvalidDataException(
-                $"Physical attempt must be between 1 and {SourceRequestIdentity.MaximumPhysicalAttempt}.");
+                "Physical attempt coordinate must be between 1 and "
+                + $"{SourceRequestIdentity.MaximumPhysicalAttemptCoordinate}.");
         PhysicalAttempt = physicalAttempt;
-        if (redirectHop is < 0 or > SourceRequestIdentity.MaximumPhysicalAttempt)
+        if (redirectHop is < 0
+            or > SourceRequestIdentity.MaximumRedirectHopCoordinate)
             throw new InvalidDataException(
-                $"Redirect hop must be between 0 and {SourceRequestIdentity.MaximumPhysicalAttempt}.");
+                "Redirect hop coordinate must be between 0 and "
+                + $"{SourceRequestIdentity.MaximumRedirectHopCoordinate}.");
         RedirectHop = redirectHop;
         var expectedRequestId = TransportEvidenceValidation.ComputeRequestId(
             Publisher,
@@ -168,7 +185,16 @@ public sealed record RecordedSourceRequest
     public string? RequestBodySha256 { get; }
     public int Ordinal { get; }
     public long MaximumResponseBytes { get; }
+    /// <summary>
+    /// A bounded journal claim only. The journal does not enforce retry ordering,
+    /// stable original-request chain identity, or send count.
+    /// </summary>
     public int PhysicalAttempt { get; }
+
+    /// <summary>
+    /// A bounded journal claim only. The journal does not enforce redirect policy
+    /// or ordering. The publisher session must enforce policy before sending.
+    /// </summary>
     public int RedirectHop { get; }
 
     public static RecordedSourceRequest FromPersistedClaim(

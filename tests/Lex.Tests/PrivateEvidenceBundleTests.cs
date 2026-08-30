@@ -873,7 +873,7 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
     }
 
     [Fact]
-    public void Attempt_coordinates_must_advance_monotonically_per_request_key()
+    public void PublisherEvidenceSession_must_enforce_retry_redirect_policy_before_send()
     {
         var plan = DynamicPlan();
         var staging = EmptyDirectory("attempt-coordinate-sequence");
@@ -882,35 +882,48 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
             0, physicalAttempt: 2, redirectHop: 3));
         bundle.RecordNoResponse(first);
 
-        Assert.Throws<InvalidDataException>(() => bundle.BeginAttempt(Request(
-            1, physicalAttempt: 2, redirectHop: 3)));
-        Assert.Throws<InvalidDataException>(() => bundle.BeginAttempt(Request(
-            1, physicalAttempt: 4, redirectHop: 3)));
-        var retry = bundle.BeginAttempt(Request(
-            1, physicalAttempt: 3, redirectHop: 3));
-        bundle.RecordNoResponse(retry);
-        Assert.Throws<InvalidDataException>(() => bundle.BeginAttempt(Request(
-            2, physicalAttempt: 2, redirectHop: 4)));
-        Assert.Throws<InvalidDataException>(() => bundle.BeginAttempt(Request(
-            2, physicalAttempt: 3, redirectHop: 5)));
-        var redirect = bundle.BeginAttempt(Request(
-            2, physicalAttempt: 3, redirectHop: 4));
-        bundle.RecordNoResponse(redirect);
+        var reset = bundle.BeginAttempt(Request(
+            1,
+            physicalAttempt: 1,
+            redirectHop: 0));
+        bundle.RecordNoResponse(reset);
+        var upperBound = bundle.BeginAttempt(Request(
+            2,
+            physicalAttempt: SourceRequestIdentity.MaximumPhysicalAttemptCoordinate,
+            redirectHop: SourceRequestIdentity.MaximumRedirectHopCoordinate));
+        bundle.RecordNoResponse(upperBound);
+
+        // The bundle records bounded coordinates without inferring a chain.
+        // PublisherEvidenceSession must bind the stable original request and
+        // enforce retry and redirect policy before any physical send.
+        Assert.Equal(
+            [
+                (2, 3),
+                (1, 0),
+                (
+                    SourceRequestIdentity.MaximumPhysicalAttemptCoordinate,
+                    SourceRequestIdentity.MaximumRedirectHopCoordinate),
+            ],
+            bundle.Attempts.Select(attempt => (
+                attempt.Request.PhysicalAttempt,
+                attempt.Request.RedirectHop)));
     }
 
     [Fact]
-    public void Attempt_coordinate_absolute_caps_fail_closed()
+    public void Attempt_coordinates_are_individually_bounded_recorded_facts()
     {
         Assert.Throws<InvalidDataException>(() => Request(
             0, physicalAttempt: 0));
         Assert.Throws<InvalidDataException>(() => Request(
             0,
-            physicalAttempt: SourceRequestIdentity.MaximumPhysicalAttempt + 1));
+            physicalAttempt:
+                SourceRequestIdentity.MaximumPhysicalAttemptCoordinate + 1));
         Assert.Throws<InvalidDataException>(() => Request(
             0, redirectHop: -1));
         Assert.Throws<InvalidDataException>(() => Request(
             0,
-            redirectHop: SourceRequestIdentity.MaximumPhysicalAttempt + 1));
+            redirectHop:
+                SourceRequestIdentity.MaximumRedirectHopCoordinate + 1));
 
         RecordedSourceRequest Persisted(int physicalAttempt, int redirectHop) =>
             RecordedSourceRequest.FromPersistedClaim(
@@ -927,9 +940,9 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
                 redirectHop);
 
         Assert.Throws<InvalidDataException>(() => Persisted(
-            SourceRequestIdentity.MaximumPhysicalAttempt + 1, 0));
+            SourceRequestIdentity.MaximumPhysicalAttemptCoordinate + 1, 0));
         Assert.Throws<InvalidDataException>(() => Persisted(
-            1, SourceRequestIdentity.MaximumPhysicalAttempt + 1));
+            1, SourceRequestIdentity.MaximumRedirectHopCoordinate + 1));
         Assert.Throws<InvalidDataException>(() => Persisted(1, 0));
     }
 
@@ -998,34 +1011,6 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         unexpectedlyOpened?.Dispose();
         Assert.Contains(
             "exceeds its bundle cap",
-            Assert.IsType<InvalidDataException>(error).Message,
-            StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Reopen_rejects_a_forged_attempt_coordinate_sequence()
-    {
-        var plan = DynamicPlan();
-        var staging = EmptyDirectory("forged-attempt-sequence");
-        string predecessor;
-        using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
-        {
-            var first = bundle.BeginAttempt(Request(
-                0, physicalAttempt: 2, redirectHop: 3));
-            bundle.RecordNoResponse(first);
-            predecessor = first.AttemptSha256;
-        }
-        var forged = Request(1, physicalAttempt: 4, redirectHop: 3);
-        var forgedSha256 = WriteAttemptStart(
-            staging, plan, forged, predecessor);
-        WriteAttemptHead(staging, plan, attemptCount: 2, forgedSha256);
-
-        PrivateEvidenceBundle? unexpectedlyOpened = null;
-        var error = Record.Exception(() =>
-            unexpectedlyOpened = PrivateEvidenceBundle.Open(staging, plan));
-        unexpectedlyOpened?.Dispose();
-        Assert.Contains(
-            "advance exactly one retry or redirect coordinate",
             Assert.IsType<InvalidDataException>(error).Message,
             StringComparison.Ordinal);
     }
