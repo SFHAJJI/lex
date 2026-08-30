@@ -1,46 +1,85 @@
 using System.Security.Cryptography;
-using System.Text.Json;
-using System.Text.Json.Serialization;
+using System.Text;
 using Lex.Law;
 using Lex.Temporal;
 
 namespace Lex.Ingest;
 
-public sealed record PrivateEvidenceBundleIdentity
+/// <summary>
+/// The exact request inventory and identities for one private capture bundle.
+/// Changing the corpus baseline, scope, endpoint policy, or any request changes
+/// the bundle identity.
+/// </summary>
+public sealed record PrivateEvidenceAcquisitionPlan
 {
-    public PrivateEvidenceBundleIdentity(
+    public PrivateEvidenceAcquisitionPlan(
         string runIdentity,
         string codeCommit,
         string publisher,
-        int sequence,
-        string? previousBundleSha256)
+        string baselineCorpusSha256,
+        string enumerationScopeSha256,
+        string endpointPolicySha256,
+        IReadOnlyCollection<SourceRequestIdentity> requests)
     {
         RunIdentity = IngestRunIdentity.Require(
             runIdentity, "Private evidence run identity");
         CodeCommit = CodeIdentity.RequireFullCommit(
             codeCommit, nameof(codeCommit));
         Publisher = RequirePublisher(publisher);
-        if (sequence is < 0 or > SourceRequestIdentity.MaximumOrdinal)
+        BaselineCorpusSha256 = CodeIdentity.RequireSha256(
+            baselineCorpusSha256, nameof(baselineCorpusSha256));
+        EnumerationScopeSha256 = CodeIdentity.RequireSha256(
+            enumerationScopeSha256, nameof(enumerationScopeSha256));
+        EndpointPolicySha256 = CodeIdentity.RequireSha256(
+            endpointPolicySha256, nameof(endpointPolicySha256));
+        ArgumentNullException.ThrowIfNull(requests);
+        var ordered = requests
+            .OrderBy(request => request.Ordinal)
+            .ThenBy(request => request.RequestId, StringComparer.Ordinal)
+            .ToArray();
+        if (ordered.Length == 0)
             throw new InvalidDataException(
-                "Private evidence sequence is outside its allowed bound.");
-        Sequence = sequence;
-        if (sequence == 0 && previousBundleSha256 is not null)
-            throw new InvalidDataException(
-                "The first private evidence bundle cannot name a predecessor.");
-        if (sequence > 0 && previousBundleSha256 is null)
-            throw new InvalidDataException(
-                "A chained private evidence bundle must name its predecessor.");
-        PreviousBundleSha256 = previousBundleSha256 is null
-            ? null
-            : CodeIdentity.RequireSha256(
-                previousBundleSha256, nameof(previousBundleSha256));
+                "Private evidence acquisition plan must contain a request.");
+        var requestIds = new HashSet<string>(StringComparer.Ordinal);
+        for (var index = 0; index < ordered.Length; index++)
+        {
+            var request = ordered[index]
+                ?? throw new InvalidDataException(
+                    "Private evidence acquisition plan contains a null request.");
+            if (request.Ordinal != index
+                || request.Publisher != Publisher
+                || !requestIds.Add(request.RequestId))
+                throw new InvalidDataException(
+                    "Private evidence requests must be unique, contiguous, and publisher-bound.");
+        }
+        Requests = Array.AsReadOnly(ordered);
+        AcquisitionPlanSha256 = EvidenceJson.HashAcquisitionPlan(ordered);
+        BundleId = HashBundleIdentity();
     }
 
     public string RunIdentity { get; }
     public string CodeCommit { get; }
     public string Publisher { get; }
-    public int Sequence { get; }
-    public string? PreviousBundleSha256 { get; }
+    public string BaselineCorpusSha256 { get; }
+    public string EnumerationScopeSha256 { get; }
+    public string EndpointPolicySha256 { get; }
+    public string AcquisitionPlanSha256 { get; }
+    public string BundleId { get; }
+    public IReadOnlyList<SourceRequestIdentity> Requests { get; }
+
+    private string HashBundleIdentity()
+    {
+        var canonical = string.Join('\n',
+            "lex-private-evidence-bundle-id/2",
+            RunIdentity,
+            CodeCommit,
+            Publisher,
+            BaselineCorpusSha256,
+            EnumerationScopeSha256,
+            EndpointPolicySha256,
+            AcquisitionPlanSha256);
+        return EvidenceJson.Sha256(Encoding.UTF8.GetBytes(canonical));
+    }
 
     private static string RequirePublisher(string? value)
     {
@@ -57,169 +96,274 @@ public sealed record PrivateEvidenceBundleIdentity
     }
 }
 
-/// <summary>A local handle. It is not durable evidence and cannot open response bytes.</summary>
-public sealed record StagedEvidenceRef
+public enum StagedResponseDisposition
 {
-    public StagedEvidenceRef(
-        string requestId, string objectSha256, long byteLength)
+    Complete = 1,
+    Rejected = 2,
+}
+
+public enum StagedResponseRejectionReason
+{
+    BodyTooLarge = 1,
+    ResponseIncomplete = 2,
+    TransportInterrupted = 3,
+}
+
+/// <summary>
+/// Local-only response evidence. This hierarchy is intentionally separate from
+/// EvidenceRef, so no staged or rejected response can enter a publisher parser.
+/// </summary>
+public abstract class StagedResponseEvidence
+{
+    internal StagedResponseEvidence(
+        string requestId,
+        string objectSha256,
+        long byteLength,
+        bool bodyComplete)
     {
         RequestId = CodeIdentity.RequireSha256(requestId, nameof(requestId));
         ObjectSha256 = CodeIdentity.RequireSha256(
             objectSha256, nameof(objectSha256));
-        if (byteLength is < 0 or > EvidenceRef.MaximumByteLength)
+        if (byteLength is < 0 or > EvidenceRef.MaximumByteLength + 1)
             throw new InvalidDataException(
-                "Staged evidence byte length is outside its allowed bound.");
+                "Staged response byte length is outside its allowed bound.");
         ByteLength = byteLength;
+        BodyComplete = bodyComplete;
     }
 
     public string RequestId { get; }
     public string ObjectSha256 { get; }
     public long ByteLength { get; }
+    public bool BodyComplete { get; }
+    public abstract StagedResponseDisposition Disposition { get; }
 }
 
-public sealed record PrivateEvidenceRecord(
-    SourceRequestIdentity Request,
-    BoundedResponseMetadata Response,
-    EvidenceRef Evidence);
-
-/// <summary>
-/// A locally sealed receipt. Local flushes improve staging crash behavior but do not
-/// establish remote durability.
-/// </summary>
-public sealed record PrivateEvidenceBundleReceipt
+public sealed class CompleteStagedResponseEvidence : StagedResponseEvidence
 {
-    public PrivateEvidenceBundleReceipt(
-        string stagingRoot,
-        PrivateEvidenceBundleIdentity identity,
-        string manifestSha256,
-        IReadOnlyCollection<EvidenceRef> evidence)
+    internal CompleteStagedResponseEvidence(
+        string requestId, string objectSha256, long byteLength)
+        : base(requestId, objectSha256, byteLength, bodyComplete: true)
     {
-        if (!Path.IsPathFullyQualified(stagingRoot))
+        if (byteLength > EvidenceRef.MaximumByteLength)
             throw new InvalidDataException(
-                "Private evidence staging root must be absolute.");
-        StagingRoot = Path.TrimEndingDirectorySeparator(
-            Path.GetFullPath(stagingRoot));
-        Identity = identity ?? throw new ArgumentNullException(nameof(identity));
+                "Complete staged response exceeds the durable evidence bound.");
+    }
+
+    public override StagedResponseDisposition Disposition =>
+        StagedResponseDisposition.Complete;
+}
+
+public sealed class RejectedStagedResponseEvidence : StagedResponseEvidence
+{
+    internal RejectedStagedResponseEvidence(
+        string requestId,
+        string objectSha256,
+        long byteLength,
+        StagedResponseRejectionReason reason)
+        : base(requestId, objectSha256, byteLength, bodyComplete: false)
+    {
+        if (!Enum.IsDefined(reason))
+            throw new InvalidDataException(
+                "Staged response rejection reason is unsupported.");
+        Reason = reason;
+    }
+
+    public StagedResponseRejectionReason Reason { get; }
+    public override StagedResponseDisposition Disposition =>
+        StagedResponseDisposition.Rejected;
+}
+
+public sealed class StagedResponseRecord
+{
+    internal StagedResponseRecord(
+        SourceRequestIdentity request,
+        BoundedResponseMetadata response,
+        StagedResponseEvidence evidence)
+    {
+        Request = request ?? throw new ArgumentNullException(nameof(request));
+        Response = response ?? throw new ArgumentNullException(nameof(response));
+        Evidence = evidence ?? throw new ArgumentNullException(nameof(evidence));
+        if (request.RequestId != evidence.RequestId
+            || response.BodyComplete != evidence.BodyComplete)
+            throw new InvalidDataException(
+                "Staged response identity or completion state is inconsistent.");
+    }
+
+    public SourceRequestIdentity Request { get; }
+    public BoundedResponseMetadata Response { get; }
+    public StagedResponseEvidence Evidence { get; }
+}
+
+/// <summary>A receipt for a sealed local stage, never a remote durability claim.</summary>
+public sealed class PrivateEvidenceStageReceipt
+{
+    internal PrivateEvidenceStageReceipt(
+        string bundleId,
+        string manifestSha256,
+        IReadOnlyCollection<StagedResponseRecord> records)
+    {
+        BundleId = CodeIdentity.RequireSha256(bundleId, nameof(bundleId));
         ManifestSha256 = CodeIdentity.RequireSha256(
             manifestSha256, nameof(manifestSha256));
-        ArgumentNullException.ThrowIfNull(evidence);
-        var ordered = evidence
-            .OrderBy(item => item.RequestId, StringComparer.Ordinal)
-            .ToArray();
-        if (ordered.Length == 0
-            || ordered.Select(item => item.RequestId)
-                .Distinct(StringComparer.Ordinal).Count() != ordered.Length)
-            throw new InvalidDataException(
-                "Private evidence receipt must inventory unique verified requests.");
-        Evidence = Array.AsReadOnly(ordered);
+        ArgumentNullException.ThrowIfNull(records);
+        Records = Array.AsReadOnly(records
+            .OrderBy(record => record.Request.Ordinal)
+            .ToArray());
     }
 
-    public string StagingRoot { get; }
-    public PrivateEvidenceBundleIdentity Identity { get; }
+    public string BundleId { get; }
     public string ManifestSha256 { get; }
-    public IReadOnlyList<EvidenceRef> Evidence { get; }
-
-    /// <summary>
-    /// Returns the commit-last marker for the already verified evidence inventory.
-    /// The caller remains responsible for uploading and reading this marker back.
-    /// </summary>
-    public byte[] CreateCommitMarkerBytes()
-    {
-        var bytes = EvidenceJson.Write(new CommitDocument(
-            PrivateEvidenceBundle.CommitMarkerSchema,
-            ManifestSha256,
-            Identity,
-            Evidence));
-        if (bytes.Length > PrivateEvidenceBundle.MaximumMarkerBytes)
-            throw new InvalidDataException(
-                "Private evidence commit marker exceeds its size bound.");
-        return bytes;
-    }
-}
-
-public sealed class VerifiedPrivateEvidenceBundle : IVerifiedResponseSet
-{
-    private readonly string _root;
-    private readonly IReadOnlyDictionary<string, PrivateEvidenceRecord> _byRequest;
-
-    internal VerifiedPrivateEvidenceBundle(
-        string root,
-        PrivateEvidenceBundleIdentity identity,
-        IReadOnlyList<PrivateEvidenceRecord> records)
-    {
-        _root = root;
-        Identity = identity;
-        Records = records;
-        _byRequest = records.ToDictionary(
-            record => record.Request.RequestId, StringComparer.Ordinal);
-    }
-
-    public PrivateEvidenceBundleIdentity Identity { get; }
-    public IReadOnlyList<PrivateEvidenceRecord> Records { get; }
-
-    public Stream OpenBody(EvidenceRef evidence)
-    {
-        ArgumentNullException.ThrowIfNull(evidence);
-        if (!_byRequest.TryGetValue(evidence.RequestId, out var record)
-            || record.Evidence != evidence)
-            throw new InvalidDataException(
-                "Evidence reference does not belong to this verified response set.");
-        return EvidenceFiles.OpenVerifiedObject(_root, evidence);
-    }
+    public IReadOnlyList<StagedResponseRecord> Records { get; }
 }
 
 /// <summary>
-/// Local capture, sealing, and readback mechanics. This type is deliberately not an
-/// IRawResponseSink because CaptureAsync alone makes no remote durability claim.
+/// Crash-recoverable local staging for physical response bytes. The root must be
+/// owned exclusively by the evidence sidecar identity. The held owner lock protects
+/// cooperating processes; this type does not claim safety against a hostile process
+/// running as the same operating-system identity.
 /// </summary>
-public sealed class PrivateEvidenceBundle
+public sealed class PrivateEvidenceBundle : IDisposable
 {
-    public const string ManifestSchema = "lex-private-evidence-bundle/1";
-    public const string CommitMarkerSchema = "lex-private-evidence-commit/1";
-    public const string ResponseReceiptSchema = "lex-private-evidence-response/1";
+    public const string PlanSchema = "lex-private-evidence-plan/2";
+    public const string AcquisitionPlanSchema =
+        "lex-private-evidence-acquisition-plan/2";
+    public const string ResponseReceiptSchema =
+        "lex-private-evidence-response/2";
+    public const string ManifestSchema = "lex-private-evidence-bundle/2";
+    public const string CommitMarkerSchema =
+        "lex-private-evidence-stage-commit/2";
+    public const string PlanFileName = "plan.json";
     public const string ManifestFileName = "manifest.json";
     public const string CommitMarkerFileName = "commit.json";
+    public const string OwnerLockFileName = "owner.lock";
     public const string ObjectsDirectoryName = "objects";
     public const string ReceiptsDirectoryName = "receipts";
-    public const long MaximumBodyBytes = EvidenceRef.MaximumByteLength;
+    private const int MaximumPlanBytes = 16 * 1024 * 1024;
     private const int MaximumManifestBytes = 16 * 1024 * 1024;
     private const int MaximumResponseReceiptBytes = 64 * 1024;
-    internal const int MaximumMarkerBytes = 8 * 1024 * 1024;
+    private const int MaximumMarkerBytes = 64 * 1024;
 
     private readonly string _root;
     private readonly string _objectsRoot;
     private readonly string _receiptsRoot;
-    private readonly PrivateEvidenceBundleIdentity _identity;
-    private readonly List<StagedRecord> _records = [];
-    private readonly Dictionary<string, EvidenceRef> _verified =
-        new(StringComparer.Ordinal);
+    private readonly PrivateEvidenceAcquisitionPlan _plan;
+    private readonly Dictionary<string, StagedResponseRecord> _records;
+    private readonly FileStream _ownerLock;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private bool _sealed;
+    private bool _disposed;
 
     private PrivateEvidenceBundle(
-        string root, PrivateEvidenceBundleIdentity identity)
+        string root,
+        PrivateEvidenceAcquisitionPlan plan,
+        FileStream ownerLock,
+        IReadOnlyCollection<StagedResponseRecord>? records = null,
+        bool isSealed = false)
     {
         _root = root;
         _objectsRoot = Path.Combine(root, ObjectsDirectoryName);
         _receiptsRoot = Path.Combine(root, ReceiptsDirectoryName);
-        _identity = identity;
+        _plan = plan;
+        _ownerLock = ownerLock;
+        _records = (records ?? [])
+            .ToDictionary(record => record.Request.RequestId, StringComparer.Ordinal);
+        _sealed = isSealed;
     }
 
+    public PrivateEvidenceAcquisitionPlan Plan => _plan;
+    public bool IsSealed => _sealed;
+    public IReadOnlyList<StagedResponseRecord> Records => OrderedRecords();
+
     public static PrivateEvidenceBundle Create(
-        string stagingRoot, PrivateEvidenceBundleIdentity identity)
+        string stagingRoot, PrivateEvidenceAcquisitionPlan plan)
     {
-        ArgumentNullException.ThrowIfNull(identity);
+        ArgumentNullException.ThrowIfNull(plan);
         var root = EvidenceFiles.RequireRoot(
             stagingRoot, "Private evidence staging root");
         if (Directory.EnumerateFileSystemEntries(root).Any())
             throw new InvalidDataException(
-                "Private evidence staging root must be empty and caller-owned.");
-        Directory.CreateDirectory(Path.Combine(root, ObjectsDirectoryName));
-        Directory.CreateDirectory(Path.Combine(root, ReceiptsDirectoryName));
-        return new PrivateEvidenceBundle(root, identity);
+                "Private evidence staging root must be empty and sidecar-owned.");
+
+        FileStream? ownerLock = null;
+        try
+        {
+            ownerLock = EvidenceFiles.CreateOwnerLock(root);
+            EvidenceFiles.WriteAtomic(
+                Path.Combine(root, PlanFileName), EvidenceJson.WritePlan(plan));
+            Directory.CreateDirectory(Path.Combine(root, ObjectsDirectoryName));
+            Directory.CreateDirectory(Path.Combine(root, ReceiptsDirectoryName));
+            var bundle = new PrivateEvidenceBundle(root, plan, ownerLock);
+            bundle.VerifyStage(includeManifest: false, includeCommit: false);
+            return bundle;
+        }
+        catch
+        {
+            ownerLock?.Dispose();
+            throw;
+        }
     }
 
-    public async Task<StagedEvidenceRef> CaptureAsync(
+    public static PrivateEvidenceBundle Open(
+        string stagingRoot, PrivateEvidenceAcquisitionPlan expectedPlan)
+    {
+        ArgumentNullException.ThrowIfNull(expectedPlan);
+        var root = EvidenceFiles.RequireRoot(
+            stagingRoot, "Private evidence staging root");
+        FileStream? ownerLock = null;
+        try
+        {
+            ownerLock = EvidenceFiles.OpenOwnerLock(root);
+            RecoverInitialCreate(root, expectedPlan);
+            EvidenceFiles.CleanupTemporaryFiles(root);
+            var planBytes = EvidenceFiles.ReadBounded(
+                root,
+                Path.Combine(root, PlanFileName),
+                MaximumPlanBytes,
+                "Private evidence plan");
+            var parsedPlan = EvidenceJson.ParsePlan(planBytes);
+            if (parsedPlan.BundleId != expectedPlan.BundleId
+                || !planBytes.AsSpan().SequenceEqual(
+                    EvidenceJson.WritePlan(expectedPlan)))
+                throw new InvalidDataException(
+                    "Private evidence plan does not match the trusted plan.");
+
+            RecoverInitialDirectories(root);
+            var records = LoadReceipts(root, parsedPlan);
+            EvidenceFiles.DeleteOrphanObjects(root, records);
+            var hasManifest = File.Exists(Path.Combine(root, ManifestFileName));
+            var hasCommit = File.Exists(Path.Combine(root, CommitMarkerFileName));
+            if (!hasManifest && hasCommit)
+                throw new InvalidDataException(
+                    "Private evidence commit marker exists without its manifest.");
+
+            var bundle = new PrivateEvidenceBundle(
+                root, parsedPlan, ownerLock, records, isSealed: false);
+            if (hasManifest)
+            {
+                bundle.VerifyStage(
+                    includeManifest: true, includeCommit: hasCommit);
+                if (!hasCommit)
+                {
+                    bundle.WriteCommitMarker();
+                    bundle.VerifyStage(
+                        includeManifest: true, includeCommit: true);
+                }
+                bundle._sealed = true;
+            }
+            else
+            {
+                bundle.VerifyStage(includeManifest: false, includeCommit: false);
+            }
+            return bundle;
+        }
+        catch
+        {
+            ownerLock?.Dispose();
+            throw;
+        }
+    }
+
+    public async Task<StagedResponseEvidence> CaptureAsync(
         SourceRequestIdentity request,
         BoundedResponseMetadata response,
         Stream body,
@@ -235,69 +379,55 @@ public sealed class PrivateEvidenceBundle
         try
         {
             RequireOpen();
-            EvidenceFiles.RequireRoot(_root, "Private evidence staging root");
-            EvidenceFiles.RequireEntry(
-                _root, _objectsRoot, "Private evidence objects directory");
-            EvidenceFiles.RequireEntry(
-                _root, _receiptsRoot, "Private evidence receipts directory");
-            if (!string.Equals(
-                    request.Publisher, _identity.Publisher,
-                    StringComparison.Ordinal))
+            var planned = _plan.Requests.ElementAtOrDefault(request.Ordinal);
+            if (planned is null || planned != request)
                 throw new InvalidDataException(
-                    "Request publisher does not match the evidence bundle.");
-            if (_records.Any(record =>
-                    record.Request.RequestId == request.RequestId
-                    || record.Request.Ordinal == request.Ordinal))
-                throw new InvalidDataException(
-                    "Request identity or ordinal is duplicated.");
+                    "Response request is not the exact planned request.");
+            if (_records.TryGetValue(request.RequestId, out var recovered))
+                return recovered.Evidence;
 
             var temp = Path.Combine(
                 _objectsRoot, $".capture-{Guid.NewGuid():N}.tmp");
             try
             {
-                var staged = await WriteBodyAsync(
-                    request.RequestId, body, temp, cancellationToken)
+                var write = await WriteBodyAsync(
+                    request, response.BodyComplete, body, temp, cancellationToken)
                     .ConfigureAwait(false);
-                var final = EvidenceFiles.ObjectPath(_root, staged.ObjectSha256);
-                if (File.Exists(final))
+                var objectPath = EvidenceFiles.ObjectPath(
+                    _root, write.ObjectSha256);
+                if (File.Exists(objectPath))
                 {
-                    EvidenceFiles.VerifyObject(final, staged);
+                    EvidenceFiles.VerifyObject(
+                        _root, objectPath, write.ObjectSha256, write.ByteLength);
                     File.Delete(temp);
                 }
                 else
                 {
-                    File.Move(temp, final, overwrite: false);
+                    File.Move(temp, objectPath, overwrite: false);
                 }
-                var record = new StagedRecord(request, response, staged);
-                var receiptBytes = EvidenceJson.WriteResponseReceipt(record);
-                if (receiptBytes.Length > MaximumResponseReceiptBytes)
-                    throw new InvalidDataException(
-                        "Private evidence response receipt exceeds its size bound.");
-                var receiptPath = EvidenceFiles.ResponseReceiptPath(
-                    _root, request.RequestId);
-                if (File.Exists(receiptPath))
-                {
-                    var existing = EvidenceFiles.ReadBounded(
-                        _root,
-                        receiptPath,
-                        MaximumResponseReceiptBytes,
-                        "Private evidence response receipt");
-                    if (!existing.AsSpan().SequenceEqual(receiptBytes))
-                        throw new InvalidDataException(
-                            "Existing response receipt does not match the capture.");
-                }
-                else
-                {
-                    await WriteAtomicAsync(
-                        receiptPath, receiptBytes, cancellationToken)
-                        .ConfigureAwait(false);
-                }
-                _records.Add(record);
-                return staged;
+
+                StagedResponseEvidence evidence = write.RejectionReason is null
+                    ? new CompleteStagedResponseEvidence(
+                        request.RequestId, write.ObjectSha256, write.ByteLength)
+                    : new RejectedStagedResponseEvidence(
+                        request.RequestId,
+                        write.ObjectSha256,
+                        write.ByteLength,
+                        write.RejectionReason.Value);
+                var retainedResponse = evidence.BodyComplete
+                    ? response
+                    : response.MarkBodyIncomplete();
+                var record = new StagedResponseRecord(
+                    request, retainedResponse, evidence);
+                EvidenceFiles.WriteAtomic(
+                    EvidenceFiles.ResponseReceiptPath(_root, request.RequestId),
+                    EvidenceJson.WriteReceipt(record));
+                _records.Add(request.RequestId, record);
+                return evidence;
             }
             catch
             {
-                TryDelete(temp);
+                EvidenceFiles.TryDelete(temp);
                 throw;
             }
         }
@@ -307,43 +437,7 @@ public sealed class PrivateEvidenceBundle
         }
     }
 
-    /// <summary>
-    /// Verifies a separate copy of one staged response. A sidecar can use this transition
-    /// after its remote upload and readback; only the returned EvidenceRef may reach parsers.
-    /// </summary>
-    public EvidenceRef VerifyStagedReadback(
-        string readbackRoot, StagedEvidenceRef staged)
-    {
-        ArgumentNullException.ThrowIfNull(staged);
-        _gate.Wait();
-        try
-        {
-            RequireOpen();
-            var root = EvidenceFiles.RequireRoot(
-                readbackRoot, "Private evidence readback root");
-            if (EvidenceFiles.PathsOverlap(root, _root))
-                throw new InvalidDataException(
-                    "Evidence readback must be separate from staging.");
-            var record = _records.SingleOrDefault(
-                item => item.Evidence == staged);
-            if (record is null)
-                throw new InvalidDataException(
-                    "Staged evidence does not belong to this bundle.");
-            VerifyResponseReceipt(root, record);
-            EvidenceFiles.VerifyObject(
-                EvidenceFiles.ObjectPath(root, staged.ObjectSha256), staged);
-            var verified = new EvidenceRef(
-                staged.RequestId, staged.ObjectSha256, staged.ByteLength);
-            _verified[verified.RequestId] = verified;
-            return verified;
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
-
-    public async Task<PrivateEvidenceBundleReceipt> SealAsync(
+    public async Task<PrivateEvidenceStageReceipt> SealAsync(
         CancellationToken cancellationToken = default)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -351,33 +445,24 @@ public sealed class PrivateEvidenceBundle
         {
             RequireOpen();
             var ordered = OrderedRecords();
-            if (ordered.Length == 0 || _verified.Count != ordered.Length
-                || ordered.Any(record =>
-                    !_verified.TryGetValue(
-                        record.Request.RequestId, out var verified)
-                    || !SameEvidence(record.Evidence, verified)))
+            if (ordered.Length != _plan.Requests.Count
+                || ordered.Where((record, index) =>
+                    record.Request != _plan.Requests[index]).Any())
                 throw new InvalidDataException(
-                    "Every staged response must pass separate readback before sealing.");
+                    "Sealed response inventory must exactly equal the acquisition plan.");
 
-            VerifyLayout(
-                _root, ordered, includeManifest: false, includeMarker: false);
-            var bytes = EvidenceJson.Write(new ManifestDocument(
-                ManifestSchema, _identity, ordered));
-            if (bytes.Length > MaximumManifestBytes)
-                throw new InvalidDataException(
-                    "Private evidence manifest exceeds its size bound.");
-            await WriteAtomicAsync(
-                Path.Combine(_root, ManifestFileName), bytes, cancellationToken)
-                .ConfigureAwait(false);
-            VerifyLayout(
-                _root, ordered, includeManifest: true, includeMarker: false);
+            VerifyStage(includeManifest: false, includeCommit: false);
+            var manifestBytes = EvidenceJson.WriteManifest(_plan, ordered);
+            EvidenceFiles.WriteAtomic(
+                Path.Combine(_root, ManifestFileName), manifestBytes);
+            VerifyStage(includeManifest: true, includeCommit: false);
+            WriteCommitMarker();
+            VerifyStage(includeManifest: true, includeCommit: true);
             _sealed = true;
-            return new PrivateEvidenceBundleReceipt(
-                _root,
-                _identity,
-                Convert.ToHexStringLower(SHA256.HashData(bytes)),
-                ordered.Select(record =>
-                    _verified[record.Request.RequestId]).ToArray());
+            return new PrivateEvidenceStageReceipt(
+                _plan.BundleId,
+                EvidenceJson.Sha256(manifestBytes),
+                ordered);
         }
         finally
         {
@@ -385,97 +470,220 @@ public sealed class PrivateEvidenceBundle
         }
     }
 
-    public static VerifiedPrivateEvidenceBundle VerifyReadback(
-        string readbackRoot, PrivateEvidenceBundleReceipt receipt)
+    public void Dispose()
     {
-        ArgumentNullException.ThrowIfNull(receipt);
-        var root = EvidenceFiles.RequireRoot(
-            readbackRoot, "Private evidence readback root");
-        if (EvidenceFiles.PathsOverlap(root, receipt.StagingRoot))
-            throw new InvalidDataException(
-                "Bundle readback must be separate from staging.");
+        if (_disposed) return;
+        _disposed = true;
+        _ownerLock.Dispose();
+        _gate.Dispose();
+    }
 
+    private static void RecoverInitialCreate(
+        string root, PrivateEvidenceAcquisitionPlan expectedPlan)
+    {
+        var planPath = Path.Combine(root, PlanFileName);
+        if (File.Exists(planPath)) return;
+        var entries = Directory.EnumerateFileSystemEntries(root)
+            .Select(Path.GetFileName)
+            .ToArray();
+        if (entries.Any(name => name != OwnerLockFileName
+                                && name is not null
+                                && !name.StartsWith($".{PlanFileName}-",
+                                    StringComparison.Ordinal)))
+            throw new InvalidDataException(
+                "Incomplete private evidence creation cannot be recovered safely.");
+        EvidenceFiles.CleanupTemporaryFiles(root);
+        Directory.CreateDirectory(Path.Combine(root, ObjectsDirectoryName));
+        Directory.CreateDirectory(Path.Combine(root, ReceiptsDirectoryName));
+        EvidenceFiles.WriteAtomic(planPath, EvidenceJson.WritePlan(expectedPlan));
+    }
+
+    private static void RecoverInitialDirectories(string root)
+    {
+        var objects = Path.Combine(root, ObjectsDirectoryName);
+        var receipts = Path.Combine(root, ReceiptsDirectoryName);
+        if (Directory.Exists(objects) && Directory.Exists(receipts)) return;
+        if (File.Exists(Path.Combine(root, ManifestFileName))
+            || File.Exists(Path.Combine(root, CommitMarkerFileName)))
+            throw new InvalidDataException(
+                "A sealed private evidence bundle is missing a required directory.");
+        var allowed = new HashSet<string>(StringComparer.Ordinal)
+        {
+            OwnerLockFileName,
+            PlanFileName,
+            ObjectsDirectoryName,
+            ReceiptsDirectoryName,
+        };
+        foreach (var entry in Directory.EnumerateFileSystemEntries(root))
+        {
+            if (!allowed.Contains(Path.GetFileName(entry)))
+                throw new InvalidDataException(
+                    "Incomplete private evidence creation has an unexpected entry.");
+        }
+        foreach (var directory in new[] { objects, receipts })
+        {
+            if (File.Exists(directory)
+                || Directory.Exists(directory)
+                && Directory.EnumerateFileSystemEntries(directory).Any())
+                throw new InvalidDataException(
+                    "Incomplete private evidence creation cannot replace captured state.");
+            Directory.CreateDirectory(directory);
+        }
+    }
+
+    private static IReadOnlyList<StagedResponseRecord> LoadReceipts(
+        string root, PrivateEvidenceAcquisitionPlan plan)
+    {
+        var receiptsRoot = Path.Combine(root, ReceiptsDirectoryName);
+        EvidenceFiles.RequireDirectory(root, receiptsRoot,
+            "Private evidence receipts directory");
+        var planned = plan.Requests.ToDictionary(
+            request => request.RequestId, StringComparer.Ordinal);
+        var records = new List<StagedResponseRecord>();
+        foreach (var path in Directory.EnumerateFileSystemEntries(receiptsRoot))
+        {
+            var verified = EvidenceFiles.RequireEntry(
+                root, path, "Private evidence response receipt");
+            if (!File.Exists(verified) || Directory.Exists(verified))
+                throw new InvalidDataException(
+                    "Private evidence receipts directory contains a non-file entry.");
+            var name = Path.GetFileName(verified);
+            if (name.Length != 69 || !name.EndsWith(".json", StringComparison.Ordinal)
+                || !EvidenceFiles.IsSha256(name[..64]))
+                throw new InvalidDataException(
+                    "Private evidence response receipt has an invalid name.");
+            var bytes = EvidenceFiles.ReadBounded(
+                root,
+                verified,
+                MaximumResponseReceiptBytes,
+                "Private evidence response receipt");
+            var record = EvidenceJson.ParseReceipt(bytes);
+            if (name[..64] != record.Request.RequestId
+                || !planned.TryGetValue(
+                    record.Request.RequestId, out var plannedRequest)
+                || plannedRequest != record.Request
+                || records.Any(item =>
+                    item.Request.RequestId == record.Request.RequestId))
+                throw new InvalidDataException(
+                    "Private evidence receipt is not an exact unique plan member.");
+            EvidenceFiles.VerifyObject(
+                root,
+                EvidenceFiles.ObjectPath(root, record.Evidence.ObjectSha256),
+                record.Evidence.ObjectSha256,
+                record.Evidence.ByteLength);
+            records.Add(record);
+        }
+        return records;
+    }
+
+    private void VerifySealedManifest(bool includeCommit)
+    {
+        var ordered = OrderedRecords();
+        if (ordered.Length != _plan.Requests.Count)
+            throw new InvalidDataException(
+                "Private evidence manifest cannot seal an incomplete plan.");
         var manifestBytes = EvidenceFiles.ReadBounded(
-            root,
-            Path.Combine(root, ManifestFileName),
+            _root,
+            Path.Combine(_root, ManifestFileName),
             MaximumManifestBytes,
             "Private evidence manifest");
-        if (!string.Equals(
-                Convert.ToHexStringLower(SHA256.HashData(manifestBytes)),
-                receipt.ManifestSha256,
-                StringComparison.Ordinal))
-            throw new InvalidDataException(
-                "Manifest does not match the sealed receipt.");
         var parsed = EvidenceJson.ParseManifest(manifestBytes);
-        if (parsed.Identity != receipt.Identity)
+        if (parsed.BundleId != _plan.BundleId
+            || parsed.AcquisitionPlanSha256 != _plan.AcquisitionPlanSha256
+            || !EvidenceJson.SameRecords(parsed.Records, ordered))
             throw new InvalidDataException(
-                "Manifest run, code, publisher, or chain does not match the receipt.");
-
-        var receiptByRequest = receipt.Evidence.ToDictionary(
-            item => item.RequestId, StringComparer.Ordinal);
-        if (parsed.Records.Count != receiptByRequest.Count
-            || parsed.Records.Any(record =>
-                !receiptByRequest.TryGetValue(
-                    record.Request.RequestId, out var evidence)
-                || !SameEvidence(record.Evidence, evidence)))
-            throw new InvalidDataException(
-                "Manifest evidence inventory does not match the sealed receipt.");
-
-        VerifyLayout(
-            root, parsed.Records, includeManifest: true, includeMarker: true);
-        var marker = EvidenceFiles.ReadBounded(
-            root,
-            Path.Combine(root, CommitMarkerFileName),
+                "Private evidence manifest does not match its plan and receipts.");
+        if (!includeCommit) return;
+        var commitBytes = EvidenceFiles.ReadBounded(
+            _root,
+            Path.Combine(_root, CommitMarkerFileName),
             MaximumMarkerBytes,
             "Private evidence commit marker");
-        if (!marker.AsSpan().SequenceEqual(receipt.CreateCommitMarkerBytes()))
+        var expected = EvidenceJson.WriteCommit(
+            _plan, manifestBytes, ordered);
+        if (!commitBytes.AsSpan().SequenceEqual(expected))
             throw new InvalidDataException(
-                "Commit marker does not exactly match the verified inventory.");
+                "Private evidence commit marker does not match the final rehash.");
+    }
 
-        foreach (var record in parsed.Records)
-            VerifyResponseReceipt(root, record);
-        foreach (var group in parsed.Records.GroupBy(
+    private void WriteCommitMarker()
+    {
+        var ordered = OrderedRecords();
+        var manifestBytes = EvidenceFiles.ReadBounded(
+            _root,
+            Path.Combine(_root, ManifestFileName),
+            MaximumManifestBytes,
+            "Private evidence manifest");
+        var parsed = EvidenceJson.ParseManifest(manifestBytes);
+        if (parsed.BundleId != _plan.BundleId
+            || !EvidenceJson.SameRecords(parsed.Records, ordered))
+            throw new InvalidDataException(
+                "Private evidence manifest changed before commit.");
+        EvidenceFiles.WriteAtomic(
+            Path.Combine(_root, CommitMarkerFileName),
+            EvidenceJson.WriteCommit(_plan, manifestBytes, ordered));
+    }
+
+    private void VerifyStage(bool includeManifest, bool includeCommit)
+    {
+        var planBytes = EvidenceFiles.ReadBounded(
+            _root,
+            Path.Combine(_root, PlanFileName),
+            MaximumPlanBytes,
+            "Private evidence plan");
+        if (!planBytes.AsSpan().SequenceEqual(EvidenceJson.WritePlan(_plan)))
+            throw new InvalidDataException("Private evidence plan changed.");
+
+        var ordered = OrderedRecords();
+        EvidenceFiles.VerifyExactLayout(
+            _root, ordered, includeManifest, includeCommit);
+        foreach (var record in ordered)
+        {
+            var receiptBytes = EvidenceFiles.ReadBounded(
+                _root,
+                EvidenceFiles.ResponseReceiptPath(
+                    _root, record.Request.RequestId),
+                MaximumResponseReceiptBytes,
+                "Private evidence response receipt");
+            if (!receiptBytes.AsSpan().SequenceEqual(
+                    EvidenceJson.WriteReceipt(record)))
+                throw new InvalidDataException(
+                    "Private evidence response receipt changed.");
+        }
+        foreach (var group in ordered.GroupBy(
                      record => record.Evidence.ObjectSha256,
                      StringComparer.Ordinal))
         {
             var first = group.First().Evidence;
-            if (group.Any(item => item.Evidence.ByteLength != first.ByteLength))
+            if (group.Any(record =>
+                    record.Evidence.ByteLength != first.ByteLength))
                 throw new InvalidDataException(
-                    "One object has conflicting declared lengths.");
+                    "One staged object has conflicting lengths.");
             EvidenceFiles.VerifyObject(
-                EvidenceFiles.ObjectPath(root, first.ObjectSha256), first);
+                _root,
+                EvidenceFiles.ObjectPath(_root, first.ObjectSha256),
+                first.ObjectSha256,
+                first.ByteLength);
         }
-
-        var records = parsed.Records.Select(record => new PrivateEvidenceRecord(
-            record.Request,
-            record.Response,
-            receiptByRequest[record.Request.RequestId])).ToArray();
-        return new VerifiedPrivateEvidenceBundle(root, parsed.Identity, records);
+        if (includeManifest) VerifySealedManifest(includeCommit);
     }
 
-    private StagedRecord[] OrderedRecords()
-    {
-        var ordered = _records
-            .OrderBy(record => record.Request.Ordinal)
-            .ThenBy(record => record.Request.RequestId, StringComparer.Ordinal)
-            .ToArray();
-        for (var index = 0; index < ordered.Length; index++)
-        {
-            if (ordered[index].Request.Ordinal != index)
-                throw new InvalidDataException(
-                    "Request ordinals must be contiguous from zero.");
-        }
-        return ordered;
-    }
+    private StagedResponseRecord[] OrderedRecords() => _records.Values
+        .OrderBy(record => record.Request.Ordinal)
+        .ThenBy(record => record.Request.RequestId, StringComparer.Ordinal)
+        .ToArray();
 
     private void RequireOpen()
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         if (_sealed)
-            throw new InvalidOperationException("Evidence bundle is already sealed.");
+            throw new InvalidOperationException(
+                "Private evidence bundle is already sealed.");
     }
 
-    private static async Task<StagedEvidenceRef> WriteBodyAsync(
-        string requestId,
+    private static async Task<CaptureWriteResult> WriteBodyAsync(
+        SourceRequestIdentity request,
+        bool declaredBodyComplete,
         Stream source,
         string tempPath,
         CancellationToken cancellationToken)
@@ -483,6 +691,9 @@ public sealed class PrivateEvidenceBundle
         var buffer = new byte[64 * 1024];
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         long length = 0;
+        var reachedEnd = false;
+        var interrupted = false;
+        var retainedLimit = checked(request.MaximumResponseBytes + 1);
         await using (var destination = new FileStream(tempPath, new FileStreamOptions
         {
             Mode = FileMode.CreateNew,
@@ -492,368 +703,53 @@ public sealed class PrivateEvidenceBundle
             Options = FileOptions.Asynchronous | FileOptions.WriteThrough,
         }))
         {
-            while (true)
+            while (length < retainedLimit)
             {
-                var read = await source.ReadAsync(buffer, cancellationToken)
-                    .ConfigureAwait(false);
-                if (read == 0) break;
-                if (length > MaximumBodyBytes - read)
+                var requested = (int)Math.Min(buffer.Length, retainedLimit - length);
+                int read;
+                try
+                {
+                    read = await source.ReadAsync(
+                            buffer.AsMemory(0, requested), cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                catch (IOException)
+                {
+                    interrupted = true;
+                    break;
+                }
+                if (read == 0)
+                {
+                    reachedEnd = true;
+                    break;
+                }
+                if (read < 0 || read > requested)
                     throw new InvalidDataException(
-                        $"Response body exceeds {MaximumBodyBytes} bytes.");
+                        "Response body stream returned an invalid byte count.");
                 hash.AppendData(buffer, 0, read);
                 await destination.WriteAsync(
-                    buffer.AsMemory(0, read), cancellationToken)
+                        buffer.AsMemory(0, read), cancellationToken)
                     .ConfigureAwait(false);
                 length += read;
             }
             await destination.FlushAsync(cancellationToken).ConfigureAwait(false);
             destination.Flush(flushToDisk: true);
         }
-        return new StagedEvidenceRef(
-            requestId,
-            Convert.ToHexStringLower(hash.GetHashAndReset()),
-            length);
-    }
 
-    private static async Task WriteAtomicAsync(
-        string finalPath, byte[] bytes, CancellationToken cancellationToken)
-    {
-        var temp = Path.Combine(
-            Path.GetDirectoryName(finalPath)!,
-            $".{Path.GetFileName(finalPath)}-{Guid.NewGuid():N}.tmp");
-        try
-        {
-            await using (var stream = new FileStream(temp, new FileStreamOptions
-            {
-                Mode = FileMode.CreateNew,
-                Access = FileAccess.Write,
-                Share = FileShare.None,
-                BufferSize = 64 * 1024,
-                Options = FileOptions.Asynchronous | FileOptions.WriteThrough,
-            }))
-            {
-                await stream.WriteAsync(bytes, cancellationToken)
-                    .ConfigureAwait(false);
-                await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
-                stream.Flush(flushToDisk: true);
-            }
-            File.Move(temp, finalPath, overwrite: false);
-        }
-        catch
-        {
-            TryDelete(temp);
-            throw;
-        }
-    }
-
-    private static void VerifyLayout(
-        string root,
-        IReadOnlyCollection<StagedRecord> records,
-        bool includeManifest,
-        bool includeMarker)
-    {
-        var expectedRoot = new HashSet<string>(StringComparer.Ordinal)
-        {
-            "D:" + ObjectsDirectoryName,
-            "D:" + ReceiptsDirectoryName,
-        };
-        if (includeManifest) expectedRoot.Add("F:" + ManifestFileName);
-        if (includeMarker) expectedRoot.Add("F:" + CommitMarkerFileName);
-        var actualRoot = Directory.EnumerateFileSystemEntries(root)
-            .Select(entry => EvidenceFiles.EntryKey(root, entry))
-            .ToHashSet(StringComparer.Ordinal);
-        if (!actualRoot.SetEquals(expectedRoot))
-            throw new InvalidDataException(
-                "Evidence bundle root does not have the exact required file set.");
-
-        var objectsRoot = Path.Combine(root, ObjectsDirectoryName);
-        var expectedObjects = records
-            .Select(record => "F:" + record.Evidence.ObjectSha256 + ".bin")
-            .ToHashSet(StringComparer.Ordinal);
-        var actualObjects = Directory.EnumerateFileSystemEntries(objectsRoot)
-            .Select(entry => EvidenceFiles.EntryKey(root, entry))
-            .Select(key => key[..2] + Path.GetFileName(key[2..]))
-            .ToHashSet(StringComparer.Ordinal);
-        if (!actualObjects.SetEquals(expectedObjects))
-            throw new InvalidDataException(
-                "Evidence objects do not match the manifest exactly.");
-
-        var receiptsRoot = Path.Combine(root, ReceiptsDirectoryName);
-        var expectedReceipts = records
-            .Select(record => "F:" + record.Request.RequestId + ".json")
-            .ToHashSet(StringComparer.Ordinal);
-        var actualReceipts = Directory.EnumerateFileSystemEntries(receiptsRoot)
-            .Select(entry => EvidenceFiles.EntryKey(root, entry))
-            .Select(key => key[..2] + Path.GetFileName(key[2..]))
-            .ToHashSet(StringComparer.Ordinal);
-        if (!actualReceipts.SetEquals(expectedReceipts))
-            throw new InvalidDataException(
-                "Evidence response receipts do not match the manifest exactly.");
-    }
-
-    private static bool SameEvidence(
-        StagedEvidenceRef staged, EvidenceRef verified) =>
-        staged.RequestId == verified.RequestId
-        && staged.ObjectSha256 == verified.ObjectSha256
-        && staged.ByteLength == verified.ByteLength;
-
-    private static void VerifyResponseReceipt(
-        string root, StagedRecord record)
-    {
-        var expected = EvidenceJson.WriteResponseReceipt(record);
-        var actual = EvidenceFiles.ReadBounded(
-            root,
-            EvidenceFiles.ResponseReceiptPath(
-                root, record.Request.RequestId),
-            MaximumResponseReceiptBytes,
-            "Private evidence response receipt");
-        if (!actual.AsSpan().SequenceEqual(expected))
-            throw new InvalidDataException(
-                "Response receipt does not exactly match its request and evidence.");
-    }
-
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            if (File.Exists(path)) File.Delete(path);
-        }
-        catch (Exception error) when (error is IOException
-                                      or UnauthorizedAccessException)
-        {
-        }
+        StagedResponseRejectionReason? rejection =
+            length == retainedLimit
+                ? StagedResponseRejectionReason.BodyTooLarge
+                : interrupted
+                    ? StagedResponseRejectionReason.TransportInterrupted
+                    : !reachedEnd || !declaredBodyComplete
+                        ? StagedResponseRejectionReason.ResponseIncomplete
+                        : null;
+        return new CaptureWriteResult(
+            Convert.ToHexStringLower(hash.GetHashAndReset()), length, rejection);
     }
 }
 
-internal sealed record StagedRecord(
-    SourceRequestIdentity Request,
-    BoundedResponseMetadata Response,
-    StagedEvidenceRef Evidence);
-
-internal sealed record ManifestDocument(
-    string Schema,
-    PrivateEvidenceBundleIdentity Identity,
-    IReadOnlyList<StagedRecord> Records);
-
-internal sealed record CommitDocument(
-    string Schema,
-    string ManifestSha256,
-    PrivateEvidenceBundleIdentity Identity,
-    IReadOnlyList<EvidenceRef> Evidence);
-
-internal sealed record ResponseReceiptDocument(
-    string Schema,
-    StagedRecord Record);
-
-internal sealed record ParsedManifest(
-    PrivateEvidenceBundleIdentity Identity,
-    IReadOnlyList<StagedRecord> Records);
-
-internal static class EvidenceJson
-{
-    private static readonly JsonSerializerOptions Options = CreateOptions();
-
-    public static byte[] Write<T>(T value)
-    {
-        var json = JsonSerializer.SerializeToUtf8Bytes(value, Options);
-        return [.. json, (byte)'\n'];
-    }
-
-    public static byte[] WriteResponseReceipt(StagedRecord record) =>
-        Write(new ResponseReceiptDocument(
-            PrivateEvidenceBundle.ResponseReceiptSchema, record));
-
-    public static ParsedManifest ParseManifest(byte[] bytes)
-    {
-        ManifestDocument document;
-        try
-        {
-            document = JsonSerializer.Deserialize<ManifestDocument>(bytes, Options)
-                ?? throw new InvalidDataException("Evidence manifest is empty.");
-        }
-        catch (JsonException error)
-        {
-            throw new InvalidDataException(
-                "Evidence manifest is not strict JSON.", error);
-        }
-        if (document.Identity is null || document.Records is null
-            || document.Records.Any(record => record is null
-                                              || record.Request is null
-                                              || record.Response is null
-                                              || record.Evidence is null))
-            throw new InvalidDataException("Evidence manifest is incomplete.");
-        if (!string.Equals(
-                document.Schema,
-                PrivateEvidenceBundle.ManifestSchema,
-                StringComparison.Ordinal))
-            throw new InvalidDataException("Evidence manifest schema is unsupported.");
-
-        var ordered = document.Records
-            .OrderBy(record => record.Request.Ordinal)
-            .ThenBy(record => record.Request.RequestId, StringComparer.Ordinal)
-            .ToArray();
-        if (ordered.Length == 0)
-            throw new InvalidDataException("Evidence manifest has no records.");
-        var requests = new HashSet<string>(StringComparer.Ordinal);
-        for (var index = 0; index < ordered.Length; index++)
-        {
-            var record = ordered[index];
-            if (record.Request.Ordinal != index
-                || !requests.Add(record.Request.RequestId)
-                || record.Request.Publisher != document.Identity.Publisher
-                || record.Evidence.RequestId != record.Request.RequestId)
-                throw new InvalidDataException(
-                    "Evidence manifest request identity is inconsistent.");
-        }
-
-        var canonical = Write(new ManifestDocument(
-            document.Schema, document.Identity, ordered));
-        if (!bytes.AsSpan().SequenceEqual(canonical))
-            throw new InvalidDataException(
-                "Evidence manifest is not in canonical form.");
-        return new ParsedManifest(document.Identity, ordered);
-    }
-
-    private static JsonSerializerOptions CreateOptions()
-    {
-        var options = new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-            PropertyNameCaseInsensitive = false,
-            UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
-            WriteIndented = false,
-            MaxDepth = 16,
-        };
-        options.Converters.Add(new JsonStringEnumConverter<SourceRequestMethod>(
-            JsonNamingPolicy.SnakeCaseUpper, allowIntegerValues: false));
-        return options;
-    }
-}
-
-internal static class EvidenceFiles
-{
-    public static string RequireRoot(string path, string description)
-    {
-        if (string.IsNullOrEmpty(path) || !Path.IsPathFullyQualified(path))
-            throw new InvalidDataException($"{description} must be absolute.");
-        var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
-        if (!Directory.Exists(full))
-            throw new InvalidDataException($"{description} does not exist.");
-        ProtectedPath.RequireExisting(full, full, description);
-        return full;
-    }
-
-    public static string RequireEntry(
-        string root, string path, string description) =>
-        ProtectedPath.RequireExisting(root, path, description);
-
-    public static string ObjectPath(string root, string sha256) => Path.Combine(
-        root,
-        PrivateEvidenceBundle.ObjectsDirectoryName,
-        CodeIdentity.RequireSha256(
-            sha256, "Private evidence object SHA-256") + ".bin");
-
-    public static string ResponseReceiptPath(string root, string requestId) =>
-        Path.Combine(
-            root,
-            PrivateEvidenceBundle.ReceiptsDirectoryName,
-            CodeIdentity.RequireSha256(
-                requestId, "Private evidence request ID") + ".json");
-
-    public static string EntryKey(string root, string path)
-    {
-        var verified = RequireEntry(root, path, "Private evidence entry");
-        return Directory.Exists(verified)
-            ? "D:" + Path.GetRelativePath(root, verified)
-            : File.Exists(verified)
-                ? "F:" + Path.GetRelativePath(root, verified)
-                : throw new InvalidDataException(
-                    "Evidence bundle contains an unsupported entry.");
-    }
-
-    public static void VerifyObject(string path, StagedEvidenceRef expected)
-    {
-        var root = Path.GetDirectoryName(Path.GetDirectoryName(path)!)!;
-        using var stream = OpenVerified(
-            root, path, expected.ObjectSha256, expected.ByteLength);
-    }
-
-    public static Stream OpenVerifiedObject(string root, EvidenceRef expected)
-    {
-        RequireRoot(root, "Private evidence readback root");
-        return OpenVerified(
-            root,
-            ObjectPath(root, expected.ObjectSha256),
-            expected.ObjectSha256,
-            expected.ByteLength);
-    }
-
-    public static byte[] ReadBounded(
-        string root, string path, int maximumBytes, string description)
-    {
-        var verified = RequireEntry(root, path, description);
-        if (!File.Exists(verified) || Directory.Exists(verified))
-            throw new InvalidDataException($"{description} is not a regular file.");
-        var length = new FileInfo(verified).Length;
-        if (length is < 1 || length > maximumBytes)
-            throw new InvalidDataException(
-                $"{description} length is outside its allowed bound.");
-        var bytes = File.ReadAllBytes(verified);
-        if (bytes.LongLength != length)
-            throw new InvalidDataException($"{description} changed while read.");
-        return bytes;
-    }
-
-    public static bool PathsOverlap(string left, string right)
-    {
-        var first = Path.TrimEndingDirectorySeparator(Path.GetFullPath(left));
-        var second = Path.TrimEndingDirectorySeparator(Path.GetFullPath(right));
-        var comparison = OperatingSystem.IsWindows()
-            ? StringComparison.OrdinalIgnoreCase
-            : StringComparison.Ordinal;
-        return string.Equals(first, second, comparison)
-               || IsWithin(first, second, comparison)
-               || IsWithin(second, first, comparison);
-    }
-
-    private static bool IsWithin(
-        string candidate, string parent, StringComparison comparison)
-    {
-        var prefix = Path.EndsInDirectorySeparator(parent)
-            ? parent
-            : parent + Path.DirectorySeparatorChar;
-        return candidate.StartsWith(prefix, comparison);
-    }
-
-    private static FileStream OpenRead(string path) => new(path, new FileStreamOptions
-    {
-        Mode = FileMode.Open,
-        Access = FileAccess.Read,
-        Share = FileShare.Read,
-        Options = FileOptions.SequentialScan,
-    });
-
-    private static FileStream OpenVerified(
-        string root, string path, string sha256, long byteLength)
-    {
-        var verified = RequireEntry(root, path, "Private evidence object");
-        if (!File.Exists(verified) || Directory.Exists(verified))
-            throw new InvalidDataException(
-                "Private evidence object is not a regular file.");
-        var stream = OpenRead(verified);
-        try
-        {
-            if (stream.Length != byteLength
-                || Convert.ToHexStringLower(SHA256.HashData(stream)) != sha256)
-                throw new InvalidDataException(
-                    "Evidence object length or SHA-256 does not match its receipt.");
-            stream.Position = 0;
-            return stream;
-        }
-        catch
-        {
-            stream.Dispose();
-            throw;
-        }
-    }
-}
+internal sealed record CaptureWriteResult(
+    string ObjectSha256,
+    long ByteLength,
+    StagedResponseRejectionReason? RejectionReason);

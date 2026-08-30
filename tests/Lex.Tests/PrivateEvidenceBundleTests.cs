@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using Lex.Ingest;
 using Lex.Law;
 
@@ -10,456 +10,444 @@ namespace Lex.Tests;
 public sealed class PrivateEvidenceBundleTests : IDisposable
 {
     private const string CodeCommit = "0123456789abcdef0123456789abcdef01234567";
-    private const string PreviousBundle =
-        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    private const string BaselineCorpus =
+        "1111111111111111111111111111111111111111111111111111111111111111";
+    private const string EnumerationScope =
+        "2222222222222222222222222222222222222222222222222222222222222222";
+    private const string EndpointPolicy =
+        "3333333333333333333333333333333333333333333333333333333333333333";
     private readonly string _root = Path.Combine(
         Path.GetTempPath(), $"lex-private-evidence-{Guid.NewGuid():N}");
 
     public PrivateEvidenceBundleTests() => Directory.CreateDirectory(_root);
 
     [Fact]
-    public async Task Capture_seal_and_separate_readback_preserve_exact_bytes_and_identity()
+    public void Local_staging_cannot_construct_or_return_durable_evidence()
     {
-        var staging = EmptyDirectory("staging");
-        var bundle = PrivateEvidenceBundle.Create(staging, BundleIdentity());
-        var bytes = new byte[] { 0xef, 0xbb, 0xbf, 0x00, 0xc3, 0x28, 0xff };
-        var later = Request(1, SourceRequestMethod.Get,
-            "https://legilux.public.lu/eli/etat/leg/loi/2020/12/19/a1068/jo");
-        var earlier = Request(0, SourceRequestMethod.Post,
-            "https://legilux.public.lu/sparqlendpoint");
+        Assert.Empty(typeof(EvidenceRef).GetConstructors());
+        Assert.False(typeof(IRawResponseSink).IsAssignableFrom(
+            typeof(PrivateEvidenceBundle)));
+        Assert.DoesNotContain(typeof(PrivateEvidenceBundle).GetMethods(), method =>
+            ReturnsType(method.ReturnType, typeof(EvidenceRef)));
+        Assert.False(typeof(EvidenceRef).IsAssignableFrom(
+            typeof(CompleteStagedResponseEvidence)));
+        Assert.False(typeof(EvidenceRef).IsAssignableFrom(
+            typeof(RejectedStagedResponseEvidence)));
+        Assert.DoesNotContain(
+            typeof(EvidenceRef).Assembly
+                .GetCustomAttributes(typeof(InternalsVisibleToAttribute), false)
+                .Cast<InternalsVisibleToAttribute>(),
+            attribute => attribute.AssemblyName.StartsWith(
+                "Lex.Ingest", StringComparison.Ordinal));
+    }
 
-        var laterStaged = await bundle.CaptureAsync(
-            later, Response("application/xml", bodyComplete: false),
-            new MemoryStream(bytes, writable: false));
-        var earlierStaged = await bundle.CaptureAsync(
-            earlier, Response("application/sparql-results+json"),
-            new MemoryStream(bytes, writable: false));
-        Assert.Throws<InvalidDataException>(() =>
-            bundle.VerifyStagedReadback(staging, laterStaged));
-        Directory.CreateDirectory(Path.Combine(
-            _root, PrivateEvidenceBundle.ObjectsDirectoryName));
-        Directory.CreateDirectory(Path.Combine(
-            _root, PrivateEvidenceBundle.ReceiptsDirectoryName));
-        File.Copy(
-            Assert.Single(Directory.EnumerateFiles(Path.Combine(
-                staging, PrivateEvidenceBundle.ObjectsDirectoryName))),
-            Path.Combine(_root, PrivateEvidenceBundle.ObjectsDirectoryName,
-                laterStaged.ObjectSha256 + ".bin"));
-        File.Copy(
-            Path.Combine(staging, PrivateEvidenceBundle.ReceiptsDirectoryName,
-                laterStaged.RequestId + ".json"),
-            Path.Combine(_root, PrivateEvidenceBundle.ReceiptsDirectoryName,
-                laterStaged.RequestId + ".json"));
-        Assert.Throws<InvalidDataException>(() =>
-            bundle.VerifyStagedReadback(_root, laterStaged));
-        var readback = CopyBundle(staging, "readback");
-        var laterRef = bundle.VerifyStagedReadback(readback, laterStaged);
-        var earlierRef = bundle.VerifyStagedReadback(readback, earlierStaged);
+    [Fact]
+    public async Task Persisted_uri_evidence_strips_secrets_and_binds_full_target_digest()
+    {
+        const string request =
+            "https://request-user:request-pass@legilux.public.lu/source?query-sentinel=medical#request-fragment";
+        const string effective =
+            "https://effective-user:effective-pass@legilux.public.lu/final?effective-sentinel=employment#effective-fragment";
+        var sourceRequest = Request(0, request);
+        var response = Response(effective);
+        var staging = EmptyDirectory("uri-privacy");
+
+        using (var bundle = PrivateEvidenceBundle.Create(
+                   staging, Plan(sourceRequest)))
+        {
+            await bundle.CaptureAsync(
+                sourceRequest,
+                response,
+                new MemoryStream([1, 2, 3], writable: false));
+            await bundle.SealAsync();
+        }
+
+        Assert.Equal("https://legilux.public.lu/source", sourceRequest.RequestUri);
+        Assert.Equal(Sha256(request), sourceRequest.RequestUriSha256);
+        Assert.Equal("https://legilux.public.lu/final", response.EffectiveSourceUri);
+        Assert.Equal(Sha256(effective), response.EffectiveSourceUriSha256);
+
+        var emitted = ReadEmittedText(staging);
+        Assert.DoesNotContain("request-user", emitted, StringComparison.Ordinal);
+        Assert.DoesNotContain("request-pass", emitted, StringComparison.Ordinal);
+        Assert.DoesNotContain("query-sentinel", emitted, StringComparison.Ordinal);
+        Assert.DoesNotContain("request-fragment", emitted, StringComparison.Ordinal);
+        Assert.DoesNotContain("effective-user", emitted, StringComparison.Ordinal);
+        Assert.DoesNotContain("effective-pass", emitted, StringComparison.Ordinal);
+        Assert.DoesNotContain("effective-sentinel", emitted, StringComparison.Ordinal);
+        Assert.DoesNotContain("effective-fragment", emitted, StringComparison.Ordinal);
+        Assert.Contains(Sha256(request), emitted, StringComparison.Ordinal);
+        Assert.Contains(Sha256(effective), emitted, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Oversized_capture_retains_exact_cap_plus_one_as_rejected_evidence()
+    {
+        var request = Request(0, maximumResponseBytes: 3);
+        var staging = EmptyDirectory("oversized");
+
+        using var bundle = PrivateEvidenceBundle.Create(staging, Plan(request));
+        var outcome = await bundle.CaptureAsync(
+            request,
+            Response(),
+            new MemoryStream([1, 2, 3, 4, 5], writable: false));
+        var rejected = Assert.IsType<RejectedStagedResponseEvidence>(outcome);
+
+        Assert.Equal(StagedResponseRejectionReason.BodyTooLarge, rejected.Reason);
+        Assert.Equal(4, rejected.ByteLength);
+        Assert.False(rejected.BodyComplete);
+        Assert.DoesNotContain(typeof(RejectedStagedResponseEvidence).GetMethods(),
+            method => method.Name == "OpenBody");
+        var retained = await File.ReadAllBytesAsync(Assert.Single(
+            Directory.EnumerateFiles(Path.Combine(
+                staging, PrivateEvidenceBundle.ObjectsDirectoryName))));
+        Assert.Equal(new byte[] { 1, 2, 3, 4 }, retained);
+
         var receipt = await bundle.SealAsync();
+        Assert.Single(receipt.Records);
+        Assert.IsType<RejectedStagedResponseEvidence>(receipt.Records[0].Evidence);
+    }
 
-        var digest = Sha256(bytes);
-        Assert.Equal(digest, laterRef.ObjectSha256);
-        Assert.Equal(bytes.LongLength, laterRef.ByteLength);
-        Assert.Equal(later.RequestId, laterRef.RequestId);
-        Assert.Equal(earlier.RequestId, earlierRef.RequestId);
-        Assert.DoesNotContain(typeof(EvidenceRef).GetProperties(), property =>
-            property.PropertyType == typeof(byte[])
-            || typeof(Stream).IsAssignableFrom(property.PropertyType)
-            || property.Name.Contains("Path", StringComparison.OrdinalIgnoreCase));
-        Assert.DoesNotContain(typeof(StagedEvidenceRef).GetProperties(), property =>
-            property.PropertyType == typeof(byte[])
-            || typeof(Stream).IsAssignableFrom(property.PropertyType)
-            || property.Name.Contains("Path", StringComparison.OrdinalIgnoreCase));
-        Assert.IsNotAssignableFrom<IRawResponseSink>(bundle);
-        Assert.Single(Directory.EnumerateFiles(
-            Path.Combine(staging, PrivateEvidenceBundle.ObjectsDirectoryName),
-            "*", SearchOption.TopDirectoryOnly));
-        Assert.Equal(2, Directory.EnumerateFiles(
-            Path.Combine(staging, PrivateEvidenceBundle.ReceiptsDirectoryName),
-            "*", SearchOption.TopDirectoryOnly).Count());
+    [Fact]
+    public async Task Incomplete_and_interrupted_responses_are_retained_but_not_derivable()
+    {
+        var incompleteRequest = Request(0);
+        var interruptedRequest = Request(1, physicalAttempt: 2);
+        var staging = EmptyDirectory("incomplete");
+
+        using var bundle = PrivateEvidenceBundle.Create(
+            staging, Plan(incompleteRequest, interruptedRequest));
+        var incomplete = Assert.IsType<RejectedStagedResponseEvidence>(
+            await bundle.CaptureAsync(
+                incompleteRequest,
+                Response(bodyComplete: false),
+                new MemoryStream([1, 2], writable: false)));
+        var interrupted = Assert.IsType<RejectedStagedResponseEvidence>(
+            await bundle.CaptureAsync(
+                interruptedRequest,
+                Response(),
+                new ThrowAfterPrefixStream([3, 4])));
+
+        Assert.Equal(StagedResponseRejectionReason.ResponseIncomplete,
+            incomplete.Reason);
+        Assert.Equal(StagedResponseRejectionReason.TransportInterrupted,
+            interrupted.Reason);
+        Assert.False(incomplete.BodyComplete);
+        Assert.False(interrupted.BodyComplete);
+        await bundle.SealAsync();
+    }
+
+    [Fact]
+    public async Task Restart_recovers_created_captured_and_sealed_states()
+    {
+        var request = Request(0);
+        var plan = Plan(request);
+        var staging = EmptyDirectory("restart");
+
+        using (PrivateEvidenceBundle.Create(staging, plan))
+        {
+        }
+        using (var created = PrivateEvidenceBundle.Open(staging, plan))
+        {
+            Assert.False(created.IsSealed);
+            Assert.Empty(created.Records);
+            await created.CaptureAsync(
+                request,
+                Response(),
+                new MemoryStream([9, 8, 7], writable: false));
+        }
+        using (var captured = PrivateEvidenceBundle.Open(staging, plan))
+        {
+            Assert.False(captured.IsSealed);
+            Assert.Single(captured.Records);
+            var replay = await captured.CaptureAsync(
+                request, Response(), new ThrowOnReadStream());
+            Assert.Equal(captured.Records[0].Evidence.ObjectSha256,
+                replay.ObjectSha256);
+            await captured.SealAsync();
+        }
+        using (var sealedBundle = PrivateEvidenceBundle.Open(staging, plan))
+        {
+            Assert.True(sealedBundle.IsSealed);
+            Assert.Single(sealedBundle.Records);
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                sealedBundle.CaptureAsync(
+                    request,
+                    Response(),
+                    new MemoryStream([1], writable: false)));
+        }
+    }
+
+    [Fact]
+    public void Restart_recovers_each_atomic_create_boundary()
+    {
+        var plan = Plan(Request(0));
+        var beforePlan = EmptyDirectory("create-before-plan");
+        using (PrivateEvidenceBundle.Create(beforePlan, plan))
+        {
+        }
+        File.Delete(Path.Combine(beforePlan, PrivateEvidenceBundle.PlanFileName));
+        Directory.Delete(Path.Combine(
+            beforePlan, PrivateEvidenceBundle.ObjectsDirectoryName));
+        Directory.Delete(Path.Combine(
+            beforePlan, PrivateEvidenceBundle.ReceiptsDirectoryName));
+        using (var recovered = PrivateEvidenceBundle.Open(beforePlan, plan))
+            Assert.False(recovered.IsSealed);
+
+        var beforeDirectories = EmptyDirectory("create-before-directories");
+        using (PrivateEvidenceBundle.Create(beforeDirectories, plan))
+        {
+        }
+        Directory.Delete(Path.Combine(
+            beforeDirectories, PrivateEvidenceBundle.ObjectsDirectoryName));
+        Directory.Delete(Path.Combine(
+            beforeDirectories, PrivateEvidenceBundle.ReceiptsDirectoryName));
+        using var reopened = PrivateEvidenceBundle.Open(beforeDirectories, plan);
+        Assert.False(reopened.IsSealed);
+    }
+
+    [Fact]
+    public async Task Reopen_recovers_orphans_and_finishes_a_valid_interrupted_seal()
+    {
+        var request = Request(0);
+        var plan = Plan(request);
+        var staging = EmptyDirectory("recovery");
+        string manifestPath;
+        string commitPath;
+
+        using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
+        {
+            await bundle.CaptureAsync(
+                request,
+                Response(),
+                new MemoryStream([1, 2, 3], writable: false));
+            await File.WriteAllBytesAsync(Path.Combine(
+                staging,
+                PrivateEvidenceBundle.ObjectsDirectoryName,
+                new string('a', 64) + ".bin"), [4, 5]);
+            await File.WriteAllBytesAsync(Path.Combine(
+                staging,
+                PrivateEvidenceBundle.ObjectsDirectoryName,
+                ".capture-interrupted.tmp"), [6]);
+        }
+
+        using (var recovered = PrivateEvidenceBundle.Open(staging, plan))
+        {
+            Assert.Single(Directory.EnumerateFiles(Path.Combine(
+                staging, PrivateEvidenceBundle.ObjectsDirectoryName)));
+            await recovered.SealAsync();
+            manifestPath = Path.Combine(
+                staging, PrivateEvidenceBundle.ManifestFileName);
+            commitPath = Path.Combine(
+                staging, PrivateEvidenceBundle.CommitMarkerFileName);
+            Assert.True(File.Exists(manifestPath));
+            Assert.True(File.Exists(commitPath));
+        }
+
+        File.Delete(commitPath);
+        using var resealed = PrivateEvidenceBundle.Open(staging, plan);
+        Assert.True(resealed.IsSealed);
+        Assert.True(File.Exists(commitPath));
+    }
+
+    [Fact]
+    public async Task Final_rehash_and_strict_reopen_fail_closed_on_mutation()
+    {
+        var request = Request(0);
+        var plan = Plan(request);
+        var staging = EmptyDirectory("mutated-object");
+
+        using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
+        {
+            await bundle.CaptureAsync(
+                request,
+                Response(),
+                new MemoryStream([1, 2, 3], writable: false));
+            var objectPath = Assert.Single(Directory.EnumerateFiles(Path.Combine(
+                staging, PrivateEvidenceBundle.ObjectsDirectoryName)));
+            await File.WriteAllBytesAsync(objectPath, [3, 2, 1]);
+            await Assert.ThrowsAsync<InvalidDataException>(() => bundle.SealAsync());
+            Assert.False(File.Exists(Path.Combine(
+                staging, PrivateEvidenceBundle.CommitMarkerFileName)));
+        }
+
+        var strict = EmptyDirectory("strict-json");
+        using (PrivateEvidenceBundle.Create(strict, plan))
+        {
+        }
+        var planPath = Path.Combine(strict, PrivateEvidenceBundle.PlanFileName);
+        var planJson = await File.ReadAllTextAsync(planPath);
+        await File.WriteAllTextAsync(planPath,
+            planJson.TrimEnd()[..^1] + ",\"unexpected\":true}\n");
+        Assert.Throws<InvalidDataException>(() =>
+            PrivateEvidenceBundle.Open(strict, plan));
+    }
+
+    [Fact]
+    public async Task Interrupted_seal_never_commits_an_inexact_file_set()
+    {
+        var request = Request(0);
+        var plan = Plan(request);
+        var staging = EmptyDirectory("interrupted-seal-inexact");
+        using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
+        {
+            await bundle.CaptureAsync(
+                request,
+                Response(),
+                new MemoryStream([1, 2, 3], writable: false));
+            await bundle.SealAsync();
+        }
+        var commit = Path.Combine(
+            staging, PrivateEvidenceBundle.CommitMarkerFileName);
+        File.Delete(commit);
+        await File.WriteAllTextAsync(Path.Combine(staging, "foreign"), "x");
+
+        Assert.Throws<InvalidDataException>(() =>
+            PrivateEvidenceBundle.Open(staging, plan));
+        Assert.False(File.Exists(commit));
+    }
+
+    [Fact]
+    public void Strict_json_rejects_duplicate_members()
+    {
+        var plan = Plan(Request(0));
+        var staging = EmptyDirectory("duplicate-json");
+        using (PrivateEvidenceBundle.Create(staging, plan))
+        {
+        }
+        var planPath = Path.Combine(staging, PrivateEvidenceBundle.PlanFileName);
+        var json = File.ReadAllText(planPath);
+        File.WriteAllText(planPath, json.Replace(
+            "{\"schema\":",
+            "{\"schema\":\"duplicate\",\"schema\":",
+            StringComparison.Ordinal));
+
+        Assert.Throws<InvalidDataException>(() =>
+            PrivateEvidenceBundle.Open(staging, plan));
+    }
+
+    [Fact]
+    public async Task Seal_requires_exact_planned_inventory_and_commit_is_last()
+    {
+        var first = Request(0);
+        var second = Request(1);
+        var staging = EmptyDirectory("exact-plan");
+
+        using var bundle = PrivateEvidenceBundle.Create(
+            staging, Plan(first, second));
+        await bundle.CaptureAsync(
+            first,
+            Response(),
+            new MemoryStream([1], writable: false));
+        await Assert.ThrowsAsync<InvalidDataException>(() => bundle.SealAsync());
+        Assert.False(File.Exists(Path.Combine(
+            staging, PrivateEvidenceBundle.ManifestFileName)));
         Assert.False(File.Exists(Path.Combine(
             staging, PrivateEvidenceBundle.CommitMarkerFileName)));
 
-        var manifestBytes = await File.ReadAllBytesAsync(Path.Combine(
-            staging, PrivateEvidenceBundle.ManifestFileName));
-        Assert.NotEmpty(manifestBytes);
-        Assert.NotEqual(0xef, manifestBytes[0]);
-        Assert.Equal((byte)'\n', manifestBytes[^1]);
-        Assert.DoesNotContain((byte)'\r', manifestBytes);
-        using (var manifest = JsonDocument.Parse(manifestBytes))
-        {
-            var records = manifest.RootElement.GetProperty("records");
-            Assert.Equal([0, 1], records.EnumerateArray()
+        await bundle.CaptureAsync(
+            second,
+            Response(),
+            new MemoryStream([2], writable: false));
+        await bundle.SealAsync();
+        Assert.True(File.Exists(Path.Combine(
+            staging, PrivateEvidenceBundle.ManifestFileName)));
+        Assert.True(File.Exists(Path.Combine(
+            staging, PrivateEvidenceBundle.CommitMarkerFileName)));
+
+        using var manifest = JsonDocument.Parse(await File.ReadAllBytesAsync(
+            Path.Combine(staging, PrivateEvidenceBundle.ManifestFileName)));
+        Assert.Equal(
+            [first.RequestId, second.RequestId],
+            manifest.RootElement.GetProperty("records").EnumerateArray()
                 .Select(record => record.GetProperty("request")
-                    .GetProperty("ordinal").GetInt32()).ToArray());
-            Assert.All(records.EnumerateArray(), record =>
-                Assert.Equal(digest, record.GetProperty("evidence")
-                    .GetProperty("object_sha256").GetString()));
-        }
-
-        File.Copy(
-            Path.Combine(staging, PrivateEvidenceBundle.ManifestFileName),
-            Path.Combine(readback, PrivateEvidenceBundle.ManifestFileName));
-        var markerBytes = receipt.CreateCommitMarkerBytes();
-        using (var marker = JsonDocument.Parse(markerBytes))
-            Assert.Equal(2, marker.RootElement.GetProperty("evidence")
-                .GetArrayLength());
-        await File.WriteAllBytesAsync(
-            Path.Combine(readback, PrivateEvidenceBundle.CommitMarkerFileName),
-            markerBytes);
-
-        var verified = PrivateEvidenceBundle.VerifyReadback(readback, receipt);
-        Assert.Equal(2, verified.Records.Count);
-        using var reopened = verified.OpenBody(earlierRef);
-        using var copy = new MemoryStream();
-        await reopened.CopyToAsync(copy);
-        Assert.Equal(bytes, copy.ToArray());
+                    .GetProperty("request_id").GetString()!).ToArray());
     }
 
     [Fact]
-    public void Request_identity_is_closed_and_response_metadata_is_bounded()
+    public void Bundle_identity_binds_corpus_scope_policy_and_acquisition_plan()
     {
-        var post = Request(0, SourceRequestMethod.Post,
-            "https://legilux.public.lu/sparqlendpoint");
-        var same = Request(0, SourceRequestMethod.Post,
-            "https://legilux.public.lu/sparqlendpoint");
-        Assert.Equal(post.RequestId, same.RequestId);
-        var retry = new SourceRequestIdentity(
-            "legilux", "sparql", SourceRequestMethod.Post,
-            "https://legilux.public.lu/sparqlendpoint", Sha256("query"), 0,
-            physicalAttempt: 2, redirectHop: 0);
-        var redirect = new SourceRequestIdentity(
-            "legilux", "sparql", SourceRequestMethod.Post,
-            "https://legilux.public.lu/sparqlendpoint", Sha256("query"), 0,
-            physicalAttempt: 1, redirectHop: 1);
-        Assert.NotEqual(post.RequestId, retry.RequestId);
-        Assert.NotEqual(post.RequestId, redirect.RequestId);
+        var request = Request(0);
+        var baseline = Plan(request);
+        var changedCorpus = Plan(
+            [request], baselineCorpus: new string('4', 64));
+        var changedScope = Plan(
+            [request], enumerationScope: new string('5', 64));
+        var changedPolicy = Plan(
+            [request], endpointPolicy: new string('6', 64));
+        var changedRequest = Plan(Request(
+            0, "https://legilux.public.lu/different"));
 
-        Assert.Throws<InvalidDataException>(() => new SourceRequestIdentity(
-            "legilux", "sparql", (SourceRequestMethod)99,
-            "https://legilux.public.lu/sparqlendpoint", Sha256("query"), 0));
-        Assert.Throws<InvalidDataException>(() => new SourceRequestIdentity(
-            "legilux", "sparql", SourceRequestMethod.Get,
-            "https://legilux.public.lu/source", Sha256("unexpected"), 0));
-        Assert.Throws<InvalidDataException>(() => new SourceRequestIdentity(
-            "legilux", "sparql", SourceRequestMethod.Post,
-            "https://legilux.public.lu/source", null, 0));
-        Assert.Throws<InvalidDataException>(() => new SourceRequestIdentity(
-            "legilux", "sparql", SourceRequestMethod.Get,
-            "http://legilux.public.lu/source", null, 0));
-        Assert.Throws<InvalidDataException>(() => new SourceRequestIdentity(
-            "legilux", "sparql", SourceRequestMethod.Get,
-            "https://user:secret@legilux.public.lu/source", null, 0));
-
-        var fetchedAt = DateTimeOffset.Parse("2026-08-30T10:11:12Z");
-        Assert.Throws<InvalidDataException>(() => new BoundedResponseMetadata(
-            99, "text/plain", "utf-8", null, null, fetchedAt,
-            "https://legilux.public.lu/source", true));
-        Assert.Throws<InvalidDataException>(() => new BoundedResponseMetadata(
-            200, new string('x', 257), "utf-8", null, null, fetchedAt,
-            "https://legilux.public.lu/source", true));
-        Assert.Throws<InvalidDataException>(() => new BoundedResponseMetadata(
-            200, "   ", "utf-8", null, null, fetchedAt,
-            "https://legilux.public.lu/source", true));
-        Assert.Throws<InvalidDataException>(() => new BoundedResponseMetadata(
-            200, "text/plain", "utf-8", "bad\rvalue", null, fetchedAt,
-            "https://legilux.public.lu/source", true));
-        Assert.Throws<InvalidDataException>(() => new BoundedResponseMetadata(
-            200, "text/plain", "utf-8", null, null,
-            DateTimeOffset.Parse("2026-08-30T12:11:12+02:00"),
-            "https://legilux.public.lu/source", true));
-        Assert.Throws<InvalidDataException>(() => new SourceRequestIdentity(
-            "legilux", "sparql", SourceRequestMethod.Get,
-            "https://legilux.public.lu/source", null, 0,
-            physicalAttempt: 17));
+        Assert.NotEqual(baseline.BundleId, changedCorpus.BundleId);
+        Assert.NotEqual(baseline.BundleId, changedScope.BundleId);
+        Assert.NotEqual(baseline.BundleId, changedPolicy.BundleId);
+        Assert.NotEqual(baseline.BundleId, changedRequest.BundleId);
+        Assert.Equal(baseline.AcquisitionPlanSha256,
+            changedCorpus.AcquisitionPlanSha256);
+        Assert.NotEqual(baseline.AcquisitionPlanSha256,
+            changedRequest.AcquisitionPlanSha256);
     }
 
     [Fact]
-    public async Task Failed_capture_leaves_no_publishable_object_and_can_be_retried()
+    public void Exclusive_owner_lock_blocks_a_second_live_owner()
     {
-        var staging = EmptyDirectory("interrupted");
-        var bundle = PrivateEvidenceBundle.Create(staging, BundleIdentity());
-        var request = Request(0, SourceRequestMethod.Get,
-            "https://legilux.public.lu/source");
+        var plan = Plan(Request(0));
+        var staging = EmptyDirectory("exclusive");
 
-        await Assert.ThrowsAsync<IOException>(() => bundle.CaptureAsync(
-            request, Response("application/octet-stream"),
-            new ThrowAfterPrefixStream([1, 2, 3])));
-
-        Assert.Empty(Directory.EnumerateFileSystemEntries(
-            Path.Combine(staging, PrivateEvidenceBundle.ObjectsDirectoryName)));
-        Assert.Empty(Directory.EnumerateFileSystemEntries(
-            Path.Combine(staging, PrivateEvidenceBundle.ReceiptsDirectoryName)));
-        var reference = await bundle.CaptureAsync(
-            request, Response("application/octet-stream"),
-            new MemoryStream([1, 2, 3], writable: false));
-        Assert.Equal(Sha256(new byte[] { 1, 2, 3 }), reference.ObjectSha256);
-    }
-
-    [Fact]
-    public async Task Evidence_ref_requires_body_and_response_receipt_readback()
-    {
-        var staging = EmptyDirectory("receipt-boundary");
-        var bundle = PrivateEvidenceBundle.Create(staging, BundleIdentity());
-        var staged = await bundle.CaptureAsync(
-            Request(0, SourceRequestMethod.Get,
-                "https://legilux.public.lu/source"),
-            Response("application/xml"),
-            new MemoryStream([1, 2, 3], writable: false));
-        var readback = CopyBundle(staging, "receipt-boundary-readback");
-        var receipt = Assert.Single(Directory.EnumerateFiles(Path.Combine(
-            readback, PrivateEvidenceBundle.ReceiptsDirectoryName)));
-        var bytes = await File.ReadAllBytesAsync(receipt);
-        bytes[0] ^= 0xff;
-        await File.WriteAllBytesAsync(receipt, bytes);
-
+        using var first = PrivateEvidenceBundle.Create(staging, plan);
         Assert.Throws<InvalidDataException>(() =>
-            bundle.VerifyStagedReadback(readback, staged));
-
-        File.Copy(
-            Assert.Single(Directory.EnumerateFiles(Path.Combine(
-                staging, PrivateEvidenceBundle.ReceiptsDirectoryName))),
-            receipt,
-            overwrite: true);
-        var verified = bundle.VerifyStagedReadback(readback, staged);
-        Assert.Equal(staged.RequestId, verified.RequestId);
+            PrivateEvidenceBundle.Open(staging, plan));
     }
 
-    [Fact]
-    public async Task Seal_rejects_incomplete_ordinals_and_capture_after_seal()
-    {
-        var unverifiedStaging = EmptyDirectory("unverified");
-        var unverified = PrivateEvidenceBundle.Create(
-            unverifiedStaging, BundleIdentity());
-        await unverified.CaptureAsync(
-            Request(0, SourceRequestMethod.Get, "https://legilux.public.lu/source"),
-            Response("text/plain"), new MemoryStream([1], writable: false));
-        await Assert.ThrowsAsync<InvalidDataException>(() => unverified.SealAsync());
+    private static bool ReturnsType(Type candidate, Type forbidden) =>
+        candidate == forbidden
+        || candidate.IsGenericType
+        && candidate.GetGenericArguments().Any(argument =>
+            ReturnsType(argument, forbidden));
 
-        var staging = EmptyDirectory("sealed");
-        var bundle = PrivateEvidenceBundle.Create(staging, BundleIdentity());
-        var staged = await bundle.CaptureAsync(
-            Request(1, SourceRequestMethod.Get, "https://legilux.public.lu/source"),
-            Response("text/plain"), new MemoryStream([1], writable: false));
-        var stagedReadback = CopyBundle(staging, "sealed-readback");
-        bundle.VerifyStagedReadback(stagedReadback, staged);
-        await Assert.ThrowsAsync<InvalidDataException>(() => bundle.SealAsync());
+    private PrivateEvidenceAcquisitionPlan Plan(
+        params SourceRequestIdentity[] requests) => Plan(
+        requests, BaselineCorpus, EnumerationScope, EndpointPolicy);
 
-        var completeStaging = EmptyDirectory("complete-sealed");
-        var complete = PrivateEvidenceBundle.Create(
-            completeStaging, BundleIdentity());
-        var request = Request(0, SourceRequestMethod.Get,
-            "https://legilux.public.lu/source");
-        var completeStaged = await complete.CaptureAsync(
-            request, Response("text/plain"),
-            new MemoryStream([1], writable: false));
-        var completeReadback = CopyBundle(
-            completeStaging, "complete-sealed-readback");
-        complete.VerifyStagedReadback(completeReadback, completeStaged);
-        await complete.SealAsync();
-
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            complete.CaptureAsync(request, Response("text/plain"),
-                new MemoryStream([2], writable: false)));
-    }
-
-    [Fact]
-    public void Staging_root_must_be_absolute_empty_and_link_free()
-    {
-        Assert.Throws<InvalidDataException>(() => PrivateEvidenceBundle.Create(
-            "relative-evidence", BundleIdentity()));
-
-        var nonempty = EmptyDirectory("nonempty");
-        File.WriteAllText(Path.Combine(nonempty, "foreign.txt"), "foreign");
-        Assert.Throws<InvalidDataException>(() => PrivateEvidenceBundle.Create(
-            nonempty, BundleIdentity()));
-
-        var target = EmptyDirectory("link-target");
-        var link = Path.Combine(_root, "linked-staging");
-        try
-        {
-            Directory.CreateSymbolicLink(link, target);
-        }
-        catch (Exception error) when (error is IOException
-                                      or UnauthorizedAccessException
-                                      or PlatformNotSupportedException)
-        {
-            return;
-        }
-        Assert.Throws<InvalidDataException>(() => PrivateEvidenceBundle.Create(
-            link, BundleIdentity()));
-    }
-
-    [Theory]
-    [InlineData("missing-marker")]
-    [InlineData("extra-file")]
-    [InlineData("corrupt-object")]
-    [InlineData("missing-response-receipt")]
-    [InlineData("corrupt-response-receipt")]
-    [InlineData("marker-run")]
-    [InlineData("marker-code")]
-    [InlineData("marker-chain")]
-    [InlineData("manifest-request")]
-    [InlineData("manifest-length")]
-    [InlineData("missing-record")]
-    public async Task Readback_verification_fails_closed_on_bundle_mutations(string mutation)
-    {
-        var (staging, receipt) = await CreateSealedBundle(mutation);
-        var readback = CopyBundle(staging, $"readback-{mutation}");
-        var markerPath = Path.Combine(
-            readback, PrivateEvidenceBundle.CommitMarkerFileName);
-        await File.WriteAllBytesAsync(markerPath, receipt.CreateCommitMarkerBytes());
-        var objectPath = Assert.Single(Directory.EnumerateFiles(Path.Combine(
-            readback, PrivateEvidenceBundle.ObjectsDirectoryName)));
-        var responseReceiptPath = Assert.Single(Directory.EnumerateFiles(Path.Combine(
-            readback, PrivateEvidenceBundle.ReceiptsDirectoryName)));
-
-        switch (mutation)
-        {
-            case "missing-marker":
-                File.Delete(markerPath);
-                break;
-            case "extra-file":
-                await File.WriteAllTextAsync(Path.Combine(readback, "extra"), "x");
-                break;
-            case "corrupt-object":
-                var corrupt = await File.ReadAllBytesAsync(objectPath);
-                corrupt[0] ^= 0xff;
-                await File.WriteAllBytesAsync(objectPath, corrupt);
-                break;
-            case "missing-response-receipt":
-                File.Delete(responseReceiptPath);
-                break;
-            case "corrupt-response-receipt":
-                var corruptReceipt = await File.ReadAllBytesAsync(responseReceiptPath);
-                corruptReceipt[0] ^= 0xff;
-                await File.WriteAllBytesAsync(responseReceiptPath, corruptReceipt);
-                break;
-            case "marker-run":
-            case "marker-code":
-            case "marker-chain":
-                var marker = JsonNode.Parse(await File.ReadAllTextAsync(markerPath))!.AsObject();
-                marker["identity"]![mutation[7..] switch
-                {
-                    "run" => "run_identity",
-                    "code" => "code_commit",
-                    _ => "previous_bundle_sha256",
-                }] = mutation == "marker-code"
-                    ? new string('f', 40)
-                    : mutation == "marker-chain"
-                        ? new string('b', 64)
-                        : "gha:wrong-run";
-                await WriteJsonNode(markerPath, marker);
-                break;
-            case "manifest-request":
-            case "manifest-length":
-            case "missing-record":
-                var manifestPath = Path.Combine(
-                    readback, PrivateEvidenceBundle.ManifestFileName);
-                var manifest = JsonNode.Parse(
-                    await File.ReadAllTextAsync(manifestPath))!.AsObject();
-                var records = manifest["records"]!.AsArray();
-                if (mutation == "manifest-request")
-                    records[0]!["request"]!["channel"] = "different";
-                else if (mutation == "manifest-length")
-                    records[0]!["evidence"]!["byte_length"] = 999;
-                else
-                    records.Clear();
-                await WriteJsonNode(manifestPath, manifest);
-                receipt = ReceiptForMutatedManifest(
-                    staging, manifestPath, receipt.Evidence);
-                await File.WriteAllBytesAsync(
-                    markerPath, receipt.CreateCommitMarkerBytes());
-                break;
-        }
-
-        Assert.Throws<InvalidDataException>(() =>
-            PrivateEvidenceBundle.VerifyReadback(readback, receipt));
-    }
-
-    [Fact]
-    public async Task Strict_manifest_rejects_unknown_members_even_with_matching_receipt()
-    {
-        var (staging, originalReceipt) = await CreateSealedBundle("unknown-member");
-        var readback = CopyBundle(staging, "readback-unknown-member");
-        var manifestPath = Path.Combine(
-            readback, PrivateEvidenceBundle.ManifestFileName);
-        var manifest = JsonNode.Parse(
-            await File.ReadAllTextAsync(manifestPath))!.AsObject();
-        manifest["unknown"] = true;
-        await WriteJsonNode(manifestPath, manifest);
-        var receipt = ReceiptForMutatedManifest(
-            staging, manifestPath, originalReceipt.Evidence);
-        await File.WriteAllBytesAsync(Path.Combine(
-            readback, PrivateEvidenceBundle.CommitMarkerFileName),
-            receipt.CreateCommitMarkerBytes());
-
-        Assert.Throws<InvalidDataException>(() =>
-            PrivateEvidenceBundle.VerifyReadback(readback, receipt));
-    }
-
-    [Fact]
-    public async Task Readback_must_be_a_separate_directory_and_match_trusted_identity()
-    {
-        var (staging, receipt) = await CreateSealedBundle("separate");
-        await File.WriteAllBytesAsync(Path.Combine(
-            staging, PrivateEvidenceBundle.CommitMarkerFileName),
-            receipt.CreateCommitMarkerBytes());
-        Assert.Throws<InvalidDataException>(() =>
-            PrivateEvidenceBundle.VerifyReadback(staging, receipt));
-
-        File.Delete(Path.Combine(staging, PrivateEvidenceBundle.CommitMarkerFileName));
-        var readback = CopyBundle(staging, "readback-wrong-identity");
-        var wrong = new PrivateEvidenceBundleReceipt(
-            staging,
-            new PrivateEvidenceBundleIdentity(
-                "gha:different", CodeCommit, "legilux", 1, PreviousBundle),
-            receipt.ManifestSha256,
-            receipt.Evidence);
-        await File.WriteAllBytesAsync(Path.Combine(
-            readback, PrivateEvidenceBundle.CommitMarkerFileName),
-            wrong.CreateCommitMarkerBytes());
-
-        Assert.Throws<InvalidDataException>(() =>
-            PrivateEvidenceBundle.VerifyReadback(readback, wrong));
-    }
-
-    private async Task<(string Staging, PrivateEvidenceBundleReceipt Receipt)>
-        CreateSealedBundle(string name)
-    {
-        var staging = EmptyDirectory($"staging-{name}");
-        var bundle = PrivateEvidenceBundle.Create(staging, BundleIdentity());
-        var staged = await bundle.CaptureAsync(
-            Request(0, SourceRequestMethod.Post,
-                "https://legilux.public.lu/sparqlendpoint"),
-            Response("application/sparql-results+json"),
-            new MemoryStream(Encoding.UTF8.GetBytes("{\"head\":{}}"), writable: false));
-        var readback = CopyBundle(staging, $"object-readback-{name}");
-        bundle.VerifyStagedReadback(readback, staged);
-        return (staging, await bundle.SealAsync());
-    }
-
-    private PrivateEvidenceBundleReceipt ReceiptForMutatedManifest(
-        string staging,
-        string manifestPath,
-        IReadOnlyCollection<EvidenceRef> evidence) => new(
-        staging, BundleIdentity(), Sha256(File.ReadAllBytes(manifestPath)), evidence);
-
-    private static PrivateEvidenceBundleIdentity BundleIdentity() => new(
-        "gha:2026-08-30T101112Z", CodeCommit, "legilux", 1, PreviousBundle);
+    private static PrivateEvidenceAcquisitionPlan Plan(
+        IReadOnlyCollection<SourceRequestIdentity> requests,
+        string baselineCorpus = BaselineCorpus,
+        string enumerationScope = EnumerationScope,
+        string endpointPolicy = EndpointPolicy) => new(
+        "gha:2026-08-30T101112Z",
+        CodeCommit,
+        "legilux",
+        baselineCorpus,
+        enumerationScope,
+        endpointPolicy,
+        requests);
 
     private static SourceRequestIdentity Request(
-        int ordinal, SourceRequestMethod method, string uri) => new(
-        "legilux", "sparql", method, uri,
-        method == SourceRequestMethod.Post ? Sha256("query") : null,
-        ordinal);
+        int ordinal,
+        string uri = "https://legilux.public.lu/source",
+        long maximumResponseBytes = 1024,
+        int physicalAttempt = 1) => SourceRequestIdentity.Create(
+        "legilux",
+        "filestore",
+        SourceRequestMethod.Get,
+        uri,
+        requestBodySha256: null,
+        ordinal,
+        maximumResponseBytes,
+        physicalAttempt,
+        redirectHop: 0);
 
     private static BoundedResponseMetadata Response(
-        string contentType, bool bodyComplete = true) => new(
-        200, contentType, "utf-8", "\"publisher-etag\"",
+        string uri = "https://legilux.public.lu/final",
+        bool bodyComplete = true) => BoundedResponseMetadata.Create(
+        200,
+        "application/xml",
+        "utf-8",
+        "\"publisher-etag\"",
         DateTimeOffset.Parse("2026-08-29T09:00:00Z"),
         DateTimeOffset.Parse("2026-08-30T10:11:12Z"),
-        "https://legilux.public.lu/final", bodyComplete);
+        uri,
+        bodyComplete);
 
     private string EmptyDirectory(string name)
     {
@@ -468,33 +456,33 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         return path;
     }
 
-    private string CopyBundle(string source, string name)
+    private static string ReadEmittedText(string root)
     {
-        var destination = Path.Combine(_root, name);
-        Directory.CreateDirectory(destination);
-        foreach (var directory in Directory.EnumerateDirectories(
-                     source, "*", SearchOption.AllDirectories))
-            Directory.CreateDirectory(Path.Combine(destination,
-                Path.GetRelativePath(source, directory)));
-        foreach (var file in Directory.EnumerateFiles(
-                     source, "*", SearchOption.AllDirectories))
+        var builder = new StringBuilder();
+        foreach (var path in new[]
+                 {
+                     Path.Combine(root, PrivateEvidenceBundle.PlanFileName),
+                     Path.Combine(root, PrivateEvidenceBundle.ReceiptsDirectoryName),
+                     Path.Combine(root, PrivateEvidenceBundle.ManifestFileName),
+                     Path.Combine(root, PrivateEvidenceBundle.CommitMarkerFileName),
+                 })
         {
-            var target = Path.Combine(destination, Path.GetRelativePath(source, file));
-            File.Copy(file, target);
+            if (Directory.Exists(path))
+            {
+                foreach (var file in Directory.EnumerateFiles(
+                             path, "*", SearchOption.TopDirectoryOnly))
+                    builder.Append(File.ReadAllText(file));
+            }
+            else if (File.Exists(path))
+            {
+                builder.Append(File.ReadAllText(path));
+            }
         }
-        return destination;
+        return builder.ToString();
     }
 
-    private static async Task WriteJsonNode(string path, JsonNode node) =>
-        await File.WriteAllTextAsync(path,
-            node.ToJsonString(new JsonSerializerOptions { WriteIndented = false }) + "\n",
-            new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-
     private static string Sha256(string value) =>
-        Sha256(Encoding.UTF8.GetBytes(value));
-
-    private static string Sha256(byte[] value) =>
-        Convert.ToHexStringLower(SHA256.HashData(value));
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 
     public void Dispose()
     {
@@ -522,12 +510,38 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
             Memory<byte> buffer, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (_returnedPrefix) throw new IOException("injected interrupted response");
+            if (_returnedPrefix) throw new IOException("injected interruption");
             _returnedPrefix = true;
             prefix.CopyTo(buffer);
             return ValueTask.FromResult(prefix.Length);
         }
 
+        public override void Flush() => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) =>
+            throw new NotSupportedException();
+        public override void SetLength(long value) =>
+            throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
+    }
+
+    private sealed class ThrowOnReadStream : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            throw new InvalidOperationException("body must not be read");
+        public override ValueTask<int> ReadAsync(
+            Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("body must not be read");
         public override void Flush() => throw new NotSupportedException();
         public override long Seek(long offset, SeekOrigin origin) =>
             throw new NotSupportedException();

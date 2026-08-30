@@ -11,22 +11,27 @@ public enum SourceRequestMethod
     Post = 2,
 }
 
-/// <summary>A closed identity for one publisher request whose response can be replayed.</summary>
+/// <summary>
+/// A closed identity for one physical publisher request. Persisted URIs contain
+/// no user info, query, or fragment. Their full raw targets are bound only by SHA-256.
+/// </summary>
 public sealed record SourceRequestIdentity
 {
     public const int MaximumUriLength = 8192;
     public const int MaximumOrdinal = 999_999;
     public const int MaximumPhysicalAttempt = 16;
 
-    public SourceRequestIdentity(
+    private SourceRequestIdentity(
         string publisher,
         string channel,
         SourceRequestMethod method,
         string requestUri,
+        string requestUriSha256,
         string? requestBodySha256,
         int ordinal,
-        int physicalAttempt = 1,
-        int redirectHop = 0)
+        long maximumResponseBytes,
+        int physicalAttempt,
+        int redirectHop)
     {
         Publisher = TransportEvidenceValidation.RequireToken(
             publisher, 64, nameof(publisher));
@@ -35,8 +40,10 @@ public sealed record SourceRequestIdentity
         if (!Enum.IsDefined(method))
             throw new InvalidDataException("Request method is not supported.");
         Method = method;
-        RequestUri = TransportEvidenceValidation.RequireHttpsUri(
+        RequestUri = TransportEvidenceValidation.RequireRedactedHttpsUri(
             requestUri, MaximumUriLength, nameof(requestUri));
+        RequestUriSha256 = CodeIdentity.RequireSha256(
+            requestUriSha256, nameof(requestUriSha256));
         if (method == SourceRequestMethod.Get)
         {
             if (requestBodySha256 is not null)
@@ -54,6 +61,10 @@ public sealed record SourceRequestIdentity
             throw new InvalidDataException(
                 $"Request ordinal must be between 0 and {MaximumOrdinal}.");
         Ordinal = ordinal;
+        if (maximumResponseBytes is < 1 or > EvidenceRef.MaximumByteLength)
+            throw new InvalidDataException(
+                "Maximum response bytes is outside its allowed bound.");
+        MaximumResponseBytes = maximumResponseBytes;
         if (physicalAttempt is < 1 or > MaximumPhysicalAttempt)
             throw new InvalidDataException(
                 $"Physical attempt must be between 1 and {MaximumPhysicalAttempt}.");
@@ -70,32 +81,84 @@ public sealed record SourceRequestIdentity
     public string Channel { get; }
     public SourceRequestMethod Method { get; }
     public string RequestUri { get; }
+    public string RequestUriSha256 { get; }
     public string? RequestBodySha256 { get; }
     public int Ordinal { get; }
+    public long MaximumResponseBytes { get; }
     public int PhysicalAttempt { get; }
     public int RedirectHop { get; }
+
+    public static SourceRequestIdentity Create(
+        string publisher,
+        string channel,
+        SourceRequestMethod method,
+        string requestUri,
+        string? requestBodySha256,
+        int ordinal,
+        long maximumResponseBytes,
+        int physicalAttempt = 1,
+        int redirectHop = 0)
+    {
+        var redacted = TransportEvidenceValidation.RedactHttpsUri(
+            requestUri, MaximumUriLength, nameof(requestUri));
+        return new SourceRequestIdentity(
+            publisher,
+            channel,
+            method,
+            redacted,
+            TransportEvidenceValidation.Sha256(requestUri),
+            requestBodySha256,
+            ordinal,
+            maximumResponseBytes,
+            physicalAttempt,
+            redirectHop);
+    }
+
+    /// <summary>Reconstructs validated redacted metadata read from a private receipt.</summary>
+    public static SourceRequestIdentity RestorePersisted(
+        string publisher,
+        string channel,
+        SourceRequestMethod method,
+        string requestUri,
+        string requestUriSha256,
+        string? requestBodySha256,
+        int ordinal,
+        long maximumResponseBytes,
+        int physicalAttempt,
+        int redirectHop) => new(
+        publisher,
+        channel,
+        method,
+        requestUri,
+        requestUriSha256,
+        requestBodySha256,
+        ordinal,
+        maximumResponseBytes,
+        physicalAttempt,
+        redirectHop);
 
     private string ComputeRequestId()
     {
         var canonical = string.Join('\n',
-            "lex-source-request/1",
+            "lex-source-request/2",
             Publisher,
             Channel,
             Method == SourceRequestMethod.Get ? "GET" : "POST",
             RequestUri,
+            RequestUriSha256,
             RequestBodySha256 ?? string.Empty,
             Ordinal.ToString(CultureInfo.InvariantCulture),
+            MaximumResponseBytes.ToString(CultureInfo.InvariantCulture),
             PhysicalAttempt.ToString(CultureInfo.InvariantCulture),
             RedirectHop.ToString(CultureInfo.InvariantCulture));
-        return Convert.ToHexStringLower(SHA256.HashData(
-            Encoding.UTF8.GetBytes(canonical)));
+        return TransportEvidenceValidation.Sha256(canonical);
     }
 }
 
 /// <summary>Bounded response facts retained beside exact transport bytes.</summary>
 public sealed record BoundedResponseMetadata
 {
-    public BoundedResponseMetadata(
+    private BoundedResponseMetadata(
         int statusCode,
         string? contentType,
         string? charset,
@@ -103,6 +166,7 @@ public sealed record BoundedResponseMetadata
         DateTimeOffset? lastModified,
         DateTimeOffset fetchedAt,
         string effectiveSourceUri,
+        string effectiveSourceUriSha256,
         bool bodyComplete)
     {
         if (statusCode is < 100 or > 599)
@@ -119,9 +183,12 @@ public sealed record BoundedResponseMetadata
             lastModified, nameof(lastModified));
         FetchedAt = TransportEvidenceValidation.RequireUtc(
             fetchedAt, nameof(fetchedAt));
-        EffectiveSourceUri = TransportEvidenceValidation.RequireHttpsUri(
-            effectiveSourceUri, SourceRequestIdentity.MaximumUriLength,
+        EffectiveSourceUri = TransportEvidenceValidation.RequireRedactedHttpsUri(
+            effectiveSourceUri,
+            SourceRequestIdentity.MaximumUriLength,
             nameof(effectiveSourceUri));
+        EffectiveSourceUriSha256 = CodeIdentity.RequireSha256(
+            effectiveSourceUriSha256, nameof(effectiveSourceUriSha256));
         BodyComplete = bodyComplete;
     }
 
@@ -132,15 +199,79 @@ public sealed record BoundedResponseMetadata
     public DateTimeOffset? LastModified { get; }
     public DateTimeOffset FetchedAt { get; }
     public string EffectiveSourceUri { get; }
+    public string EffectiveSourceUriSha256 { get; }
     public bool BodyComplete { get; }
+
+    public static BoundedResponseMetadata Create(
+        int statusCode,
+        string? contentType,
+        string? charset,
+        string? entityTag,
+        DateTimeOffset? lastModified,
+        DateTimeOffset fetchedAt,
+        string effectiveSourceUri,
+        bool bodyComplete)
+    {
+        var redacted = TransportEvidenceValidation.RedactHttpsUri(
+            effectiveSourceUri,
+            SourceRequestIdentity.MaximumUriLength,
+            nameof(effectiveSourceUri));
+        return new BoundedResponseMetadata(
+            statusCode,
+            contentType,
+            charset,
+            entityTag,
+            lastModified,
+            fetchedAt,
+            redacted,
+            TransportEvidenceValidation.Sha256(effectiveSourceUri),
+            bodyComplete);
+    }
+
+    /// <summary>Reconstructs validated redacted metadata read from a private receipt.</summary>
+    public static BoundedResponseMetadata RestorePersisted(
+        int statusCode,
+        string? contentType,
+        string? charset,
+        string? entityTag,
+        DateTimeOffset? lastModified,
+        DateTimeOffset fetchedAt,
+        string effectiveSourceUri,
+        string effectiveSourceUriSha256,
+        bool bodyComplete) => new(
+        statusCode,
+        contentType,
+        charset,
+        entityTag,
+        lastModified,
+        fetchedAt,
+        effectiveSourceUri,
+        effectiveSourceUriSha256,
+        bodyComplete);
+
+    public BoundedResponseMetadata MarkBodyIncomplete() => BodyComplete
+        ? new BoundedResponseMetadata(
+            StatusCode,
+            ContentType,
+            Charset,
+            EntityTag,
+            LastModified,
+            FetchedAt,
+            EffectiveSourceUri,
+            EffectiveSourceUriSha256,
+            bodyComplete: false)
+        : this;
 }
 
-/// <summary>A content-addressed reference. Bytes are opened only by a verified bundle.</summary>
+/// <summary>
+/// A durable content reference. Only the authenticated durable sink implementation in
+/// this assembly can issue one after create-only upload and full remote readback.
+/// </summary>
 public sealed record EvidenceRef
 {
     public const long MaximumByteLength = 128L * 1024 * 1024;
 
-    public EvidenceRef(string requestId, string objectSha256, long byteLength)
+    internal EvidenceRef(string requestId, string objectSha256, long byteLength)
     {
         RequestId = CodeIdentity.RequireSha256(requestId, nameof(requestId));
         ObjectSha256 = CodeIdentity.RequireSha256(
@@ -157,8 +288,9 @@ public sealed record EvidenceRef
 }
 
 /// <summary>
-/// Persists one physical HTTP response before returning. A successful return means the
-/// exact bytes were uploaded to private storage, read back, and verified.
+/// Persists one physical response before returning. A successful return requires an
+/// authenticated create-only remote upload followed by full SHA-256 and length readback.
+/// Local staging types deliberately cannot implement this transition.
 /// </summary>
 public interface IRawResponseSink
 {
@@ -196,20 +328,29 @@ internal static class TransportEvidenceValidation
         return value;
     }
 
-    public static string RequireHttpsUri(
+    public static string RedactHttpsUri(
         string? value, int maximumLength, string field)
     {
-        if (string.IsNullOrEmpty(value)
-            || value.Length > maximumLength
-            || value.Any(char.IsControl)
-            || !Uri.TryCreate(value, UriKind.Absolute, out var uri)
-            || !string.Equals(uri.Scheme, Uri.UriSchemeHttps,
-                StringComparison.OrdinalIgnoreCase)
-            || string.IsNullOrEmpty(uri.Host)
-            || !string.IsNullOrEmpty(uri.UserInfo)
+        var uri = ParseHttpsUri(value, maximumLength, field);
+        var builder = new UriBuilder(uri)
+        {
+            UserName = string.Empty,
+            Password = string.Empty,
+            Query = string.Empty,
+            Fragment = string.Empty,
+        };
+        return builder.Uri.AbsoluteUri;
+    }
+
+    public static string RequireRedactedHttpsUri(
+        string? value, int maximumLength, string field)
+    {
+        var uri = ParseHttpsUri(value, maximumLength, field);
+        if (!string.IsNullOrEmpty(uri.UserInfo)
+            || !string.IsNullOrEmpty(uri.Query)
             || !string.IsNullOrEmpty(uri.Fragment))
             throw new InvalidDataException(
-                $"{field} must be a bounded absolute HTTPS URI without user info or fragment.");
+                $"{field} must not persist user info, query, or fragment.");
         return uri.AbsoluteUri;
     }
 
@@ -234,4 +375,22 @@ internal static class TransportEvidenceValidation
     public static DateTimeOffset? RequireOptionalUtc(
         DateTimeOffset? value, string field) =>
         value is null ? null : RequireUtc(value.Value, field);
+
+    public static string Sha256(string value) => Convert.ToHexStringLower(
+        SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+
+    private static Uri ParseHttpsUri(
+        string? value, int maximumLength, string field)
+    {
+        if (string.IsNullOrEmpty(value)
+            || value.Length > maximumLength
+            || value.Any(char.IsControl)
+            || !Uri.TryCreate(value, UriKind.Absolute, out var uri)
+            || !string.Equals(uri.Scheme, Uri.UriSchemeHttps,
+                StringComparison.OrdinalIgnoreCase)
+            || string.IsNullOrEmpty(uri.Host))
+            throw new InvalidDataException(
+                $"{field} must be a bounded absolute HTTPS URI.");
+        return uri;
+    }
 }
