@@ -249,6 +249,99 @@ public sealed class TrustNoticeTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// A whole-call refusal arrives as a bare object rather than the usual array. The page cast it
+    /// to an array with an empty fallback, so the render loop never ran and the reader was shown a
+    /// search form above nothing at all: no count, no notice, no explanation. A blank result area
+    /// is the worst answer available, because it is the one a reader fills in themselves.
+    /// </summary>
+    [Fact]
+    public async Task An_unmounted_publisher_is_answered_rather_than_rendered_blank()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "whole-call"), includeAct: false);
+        var page = await site.Client.GetStringAsync("/search?q=protection&publisher=zzz");
+
+        Assert.Contains("This query did not run", page, StringComparison.Ordinal);
+        Assert.Contains("unknown_publisher", page, StringComparison.Ordinal);
+        // Never a count, and never an absence claim about the law.
+        Assert.DoesNotContain("hit(s)", page, StringComparison.Ordinal);
+        // The producer states the guarantee in its own words; the page relays it rather than
+        // paraphrasing a legal claim into copy nobody reviewed.
+        Assert.Contains("This is not a statement that the corpus is empty",
+            page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The ordinary path must keep working: a real query still renders real hits and no refusal.
+    /// A refusal branch that swallows the happy path is the obvious way to break this.
+    /// </summary>
+    [Fact]
+    public async Task A_mounted_publisher_still_answers_normally()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "whole-call-ok"), includeAct: false);
+        var page = await site.Client.GetStringAsync("/search?q=protection&publisher=lu-legilux");
+
+        Assert.DoesNotContain("This query did not run", page, StringComparison.Ordinal);
+        Assert.Contains("hit(s)", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The envelope status read, hostile cases. Untrusted MCP output: anything that is not a real
+    /// string is no status, never a crash and never a coincidental "ok".
+    /// </summary>
+    [Fact]
+    public void An_envelope_status_is_read_strictly_or_not_at_all()
+    {
+        Assert.Equal("ok", TrustNotices.EnvelopeStatus(
+            (JsonObject)JsonNode.Parse("{\"envelope\":{\"status\":\"ok\"}}")!));
+
+        foreach (var hostile in new[]
+        {
+            "{}", "{\"envelope\":{}}", "{\"envelope\":{\"status\":null}}",
+            "{\"envelope\":{\"status\":\"\"}}", "{\"envelope\":{\"status\":7}}",
+            "{\"envelope\":{\"status\":true}}", "{\"envelope\":{\"status\":[]}}",
+            "{\"envelope\":\"ok\"}",
+        })
+        {
+            Assert.Null(TrustNotices.EnvelopeStatus((JsonObject)JsonNode.Parse(hostile)!));
+        }
+    }
+
+    /// <summary>
+    /// A count is a claim, so a publisher that did not run the query gets its typed reason instead
+    /// of a zero. These two statuses are not reachable from the server search page today, because
+    /// it hardcodes keyword retrieval and sets no governed filter, so the copy is asserted directly
+    /// rather than through a page that cannot currently produce them.
+    /// </summary>
+    [Fact]
+    public void A_publisher_that_did_not_run_states_its_reason_and_no_count()
+    {
+        var filtered = TrustNotices.SearchEnvelopeRefusal("filter_not_supported_by_index",
+            (JsonObject)JsonNode.Parse("{\"unsupported_filters\":[\"domain\",\"hierarchy\"]}")!);
+        Assert.Contains("did not run this query", filtered, StringComparison.Ordinal);
+        Assert.Contains("not evidence that a law or record is absent", filtered, StringComparison.Ordinal);
+        Assert.Contains("domain, hierarchy", filtered, StringComparison.Ordinal);
+        Assert.DoesNotContain("hit(s)", filtered, StringComparison.Ordinal);
+
+        var mode = TrustNotices.SearchEnvelopeRefusal("retrieval_mode_unavailable", new JsonObject());
+        Assert.Contains("signed retrieval benchmark has not authorized it", mode, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A corpus-wide zero is only honest when the corpus was searched. The browser lane already
+    /// refuses to say nothing matches when a publisher could not run; this keeps the server lane
+    /// from making the claim the browser declines to make.
+    /// </summary>
+    [Fact]
+    public void A_corpus_wide_absence_is_only_stated_when_the_corpus_was_searched()
+    {
+        Assert.Null(TrustNotices.SearchAbsence(ran: 2, refused: 0));
+        Assert.Contains("No selected publisher ran this query",
+            TrustNotices.SearchAbsence(ran: 0, refused: 2)!, StringComparison.Ordinal);
+        Assert.Contains("could apply these filters",
+            TrustNotices.SearchAbsence(ran: 1, refused: 1)!, StringComparison.Ordinal);
+    }
+
     private const string MetadataOnlyHeading = "No held text match";
 
     /// <summary>

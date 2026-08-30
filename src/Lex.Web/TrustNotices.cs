@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Lex.Index;
 using static Lex.Web.PageShell;
 
@@ -25,6 +26,139 @@ public static class TrustNotices
     internal const string DerogationAnchor = "art_l_121-6";
     internal const string DerogationAct = "loi-2020-12-19-a1039";
     internal const string DerogationActDateText = "19 December 2020";
+
+    /// <summary>
+    /// A JSON string, or null for anything else. Deliberately a local copy of the same idiom
+    /// Lex.Ask uses: this assembly cannot reach that one, and a lenient reader at an untrusted
+    /// boundary is how an absent field becomes a positive claim.
+    /// </summary>
+    private static string? S(JsonObject? o, string k) =>
+        o?[k] is JsonValue v && v.TryGetValue<string>(out var s) && s.Length > 0 ? s : null;
+
+    /// <summary>
+    /// The JSON strings in an array, or null when there is no usable one. An array of nothing
+    /// usable becomes null rather than empty, so a malformed list cannot read as "none named".
+    /// </summary>
+    private static IReadOnlyList<string>? Strings(JsonObject? o, string k)
+    {
+        if (o?[k] is not JsonArray array) return null;
+        var values = array.OfType<JsonValue>()
+            .Select(v => v.TryGetValue<string>(out var s) ? s : null)
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Select(s => s!)
+            .ToList();
+        return values.Count > 0 ? values : null;
+    }
+
+    /// <summary>
+    /// The envelope status of one search result, read strictly. Untrusted MCP output: every hop is
+    /// checked, and anything that is not a real string is no status rather than a crash.
+    /// </summary>
+    public static string? EnvelopeStatus(JsonObject result) =>
+        result["envelope"] is JsonObject envelope
+        && envelope["status"] is JsonValue value
+        && value.TryGetValue<string>(out var status)
+        && status.Length > 0
+            ? status
+            : null;
+
+    /// <summary>
+    /// A refusal that applies to the WHOLE call rather than to one publisher, or null when the
+    /// object is not one.
+    ///
+    /// These arrive as a bare object rather than the usual array, which is why the page used to
+    /// lose them entirely: the array cast fell back to empty, the render loop never ran, and the
+    /// reader was shown a search form above nothing at all. A blank result area is the worst
+    /// possible answer, because it is the one a reader fills in themselves.
+    ///
+    /// No Decision freezes this copy. no_corpus_mounted matches the browser lane's sentence so the
+    /// two surfaces cannot drift; unknown_publisher has no browser copy, so the producer's own
+    /// detail is rendered rather than a sentence invented here.
+    /// </summary>
+    public static string? WholeCallRefusal(JsonObject refusal)
+    {
+        if (refusal["status"] is not JsonValue statusValue
+            || !statusValue.TryGetValue<string>(out var status)
+            || status.Length == 0)
+            return null;
+
+        var body = status switch
+        {
+            "no_corpus_mounted" =>
+                "This server has no verified legal index mounted, so it holds no law and cannot "
+                + "answer legal questions. This is a deployment state, not a statement about the law.",
+            _ => S(refusal, "detail")
+                 ?? "This query did not run. That is a statement about this request, not evidence "
+                    + "that a law or record is absent.",
+        };
+
+        // The mounted alternatives, when the producer named them, so the refusal is answerable.
+        var mounted = Strings(refusal, "mounted_publishers");
+        var choices = mounted is null
+            ? ""
+            : $"""<span class="sub">Mounted publishers: {H(string.Join(", ", mounted))}</span>""";
+
+        return $"""
+            <div class="notice" role="note" aria-label="This query did not run">
+            <b>This query did not run.</b> <span class="mono">{H(status)}</span>
+            {body}
+            {choices}
+            <span class="sub"><a href="/coverage">View coverage and known gaps</a></span>
+            </div>
+            """;
+    }
+
+    /// <summary>
+    /// One publisher's typed refusal, rendered instead of a hit count.
+    ///
+    /// A count is a claim. These envelopes carry query_ran false, so printing "0 hit(s)" beside
+    /// them says nothing matched when in fact nothing was searched. Copy follows the browser lane
+    /// rather than being invented, so the same typed state reads the same on both surfaces.
+    /// </summary>
+    public static string SearchEnvelopeRefusal(string status, JsonObject result)
+    {
+        var body = status switch
+        {
+            "filter_not_supported_by_index" =>
+                "This publisher's index does not describe the requested filter for the requested "
+                + "scope, so it did not run this query. That is a statement about Lex's coverage, "
+                + "not evidence that a law or record is absent.",
+            "retrieval_mode_unavailable" =>
+                "Words and meaning retrieval is unavailable here: its signed retrieval benchmark "
+                + "has not authorized it. Exact keyword matching still runs.",
+            _ => "This publisher did not run the query. That is a statement about this request, "
+                 + "not evidence that a law or record is absent.",
+        };
+
+        var filters = Strings(result, "unsupported_filters");
+        var named = filters is null
+            ? ""
+            : $"""<span class="sub mono">{H(string.Join(", ", filters))}</span>""";
+
+        return $"""
+            <div class="notice" role="note" aria-label="This publisher did not run the query">
+            <b>Did not run.</b> <span class="mono">{H(status)}</span>
+            {body}
+            {named}
+            </div>
+            """;
+    }
+
+    /// <summary>
+    /// What the page may say once every publisher has answered or refused.
+    ///
+    /// A corpus-wide zero is only honest when the corpus was actually searched. The browser lane
+    /// already refuses to say nothing matches when a publisher was unable to run, and this keeps
+    /// the server lane from making the claim the browser declines to make.
+    /// </summary>
+    public static string? SearchAbsence(int ran, int refused) =>
+        refused == 0 ? null
+        : ran == 0
+            ? """<div class="notice" role="note"><b>No selected publisher ran this query.</b></div>"""
+            : """
+              <div class="notice" role="note"><b>No match was returned by the publishers that
+              could apply these filters.</b></div>
+              """;
 
     /// <summary>
     /// The unmatched-route refusal.

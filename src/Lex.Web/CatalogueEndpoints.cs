@@ -532,7 +532,21 @@ public static class CatalogueEndpoints
                 JsonArray envelopes;
                 try
                 {
-                    envelopes = mcpCore.CallTool("search", searchArguments) as JsonArray ?? [];
+                    // CallTool returns a JsonNode. A per-publisher answer is an array, but a
+                    // WHOLE-CALL refusal is a bare object: unknown_publisher and
+                    // no_corpus_mounted both arrive that way. The old cast fell back to an
+                    // empty array, the loop never ran, and the page rendered the form and
+                    // nothing else. No count, no notice, no explanation: a reader who typed a
+                    // publisher that is not mounted was shown a blank result area and left to
+                    // conclude whatever they liked.
+                    var answer = mcpCore.CallTool("search", searchArguments);
+                    if (answer is JsonObject refusal && TrustNotices.WholeCallRefusal(refusal) is { } card)
+                    {
+                        sb.Append(card);
+                        return Results.Content(Page("Search", sb.ToString(), extraHead: NoIndexFollow),
+                                               "text/html");
+                    }
+                    envelopes = answer as JsonArray ?? [];
                 }
                 catch (ArgumentException error)
                 {
@@ -540,6 +554,7 @@ public static class CatalogueEndpoints
                         $"<div class=\"notice\">status <span class=\"mono\">invalid_request</span>, "
                         + $"{H(error.Message)}</div>", extraHead: NoIndexFollow), "text/html", statusCode: 400);
                 }
+                var ranPublishers = 0; var refusedPublishers = 0;
                 foreach (var result in envelopes.OfType<JsonObject>())
                 {
                     // Silently skipping an envelope makes a whole publisher's results vanish
@@ -585,6 +600,17 @@ public static class CatalogueEndpoints
                             .Where(work => work.Length > 0).ToList()));
                         continue;
                     }
+                    // A count is a claim. An envelope that refused never ran the query, so it
+                    // gets its typed reason instead of a zero that reads as "nothing matches".
+                    var status = TrustNotices.EnvelopeStatus(result);
+                    if (status is not null && status != "ok")
+                    {
+                        sb.Append($"<h2>{H(reader.Stamp.GetValueOrDefault("publisher_name"))} ({H(reader.Stamp.GetValueOrDefault("jurisdiction"))})</h2>");
+                        sb.Append(TrustNotices.SearchEnvelopeRefusal(status, result));
+                        refusedPublishers++;
+                        continue;
+                    }
+                    ranPublishers++;
                     sb.Append($"<h2>{H(reader.Stamp.GetValueOrDefault("publisher_name"))} ({H(reader.Stamp.GetValueOrDefault("jurisdiction"))}), {shown.Count} hit(s)</h2>");
                     foreach (var hit in shown.Concat(metadataOnly))
                     {
@@ -609,6 +635,9 @@ public static class CatalogueEndpoints
                             """);
                     }
                 }
+                // Once every publisher has answered or refused, the page may only state a
+                // corpus-wide absence if the corpus was actually searched.
+                sb.Append(TrustNotices.SearchAbsence(ranPublishers, refusedPublishers));
             }
             return Results.Content(Page("Search", sb.ToString(), extraHead: NoIndexFollow), "text/html");
         });
