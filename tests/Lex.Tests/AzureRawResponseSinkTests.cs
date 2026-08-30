@@ -130,7 +130,11 @@ public sealed class AzureRawResponseSinkTests
         Assert.Equal(
             AzureEvidenceStoreFailureKind.Ambiguous,
             Assert.IsType<AzureEvidenceStoreException>(uncanceled).Kind);
-        Assert.Same(canceled, propagated);
+        var safeCancellation = Assert.IsType<OperationCanceledException>(propagated);
+        Assert.NotSame(canceled, safeCancellation);
+        Assert.Equal(source.Token, safeCancellation.CancellationToken);
+        Assert.DoesNotContain(
+            secret, safeCancellation.ToString(), StringComparison.Ordinal);
         Assert.DoesNotContain(secret, uncanceled.ToString(), StringComparison.Ordinal);
     }
 
@@ -346,6 +350,7 @@ public sealed class AzureRawResponseSinkTests
     [Fact]
     public async Task Deferred_cancellation_propagates_only_after_the_supplied_token_is_canceled()
     {
+        const string secret = "hostile-read-cancellation-secret";
         using var cancellation = new CancellationTokenSource();
         var store = new RecordingStore
         {
@@ -353,18 +358,44 @@ public sealed class AzureRawResponseSinkTests
             {
                 cancellation.Cancel();
                 return new OperationCanceledException(
-                    "bounded cancellation", innerException: null, token);
+                    secret, innerException: null, token);
             }),
         };
         var sink = new AzureRawResponseSink(
             store, EvidenceRetentionLane.Nightly90Days);
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+        var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             sink.CaptureVerifiedAsync(
                 Request(), Response(), new MemoryStream([4, 5, 6]),
                 cancellation.Token));
 
         Assert.Equal(1, store.ReadbackCount);
+        Assert.DoesNotContain(secret, error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Canceled_deferred_CanRead_failure_is_sanitized()
+    {
+        const string secret = "hostile-can-read-cancellation-secret";
+        using var cancellation = new CancellationTokenSource();
+        var store = new RecordingStore
+        {
+            ReadbackStreamFactory = () => new ThrowingCanReadStream(() =>
+            {
+                cancellation.Cancel();
+                return new OperationCanceledException(secret);
+            }),
+        };
+        var sink = new AzureRawResponseSink(
+            store, EvidenceRetentionLane.Nightly90Days);
+
+        var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            sink.CaptureVerifiedAsync(
+                Request(), Response(), new MemoryStream([4, 5, 6]),
+                cancellation.Token));
+
+        Assert.Equal(1, store.ReadbackCount);
+        Assert.DoesNotContain(secret, error.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -820,5 +851,29 @@ public sealed class AzureRawResponseSinkTests
             IsDisposed = true;
             base.Dispose(disposing);
         }
+    }
+
+    private sealed class ThrowingCanReadStream(Func<Exception> errorFactory)
+        : Stream
+    {
+        public override bool CanRead => throw errorFactory();
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
+        public override void Flush() => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) =>
+            throw new NotSupportedException();
+        public override void SetLength(long value) =>
+            throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
     }
 }

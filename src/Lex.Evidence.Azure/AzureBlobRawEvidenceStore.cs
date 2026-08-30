@@ -246,7 +246,10 @@ internal sealed class AzureBlobRawEvidenceStore : IAzureRawEvidenceStore
     {
         if (error is OperationCanceledException)
             return cancellationToken.IsCancellationRequested
-                ? error
+                ? new OperationCanceledException(
+                    "Azure evidence operation was canceled.",
+                    innerException: null,
+                    token: cancellationToken)
                 : new AzureEvidenceStoreException(
                     AzureEvidenceStoreFailureKind.Ambiguous);
         if (error is AzureEvidenceStoreException) return error;
