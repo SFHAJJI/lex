@@ -20,6 +20,7 @@
  * primary view. Nothing here copies or logs query text; every sentence is fixed.
  */
 
+import { IDENTIFIER, PUBLISHER } from "./workCandidates.ts";
 import { publisherIdentity } from "./publisherIdentity.ts";
 // IMPORTED, not copied. The search coherence table is read from
 // tests/Lex.Tests/search-population-contract.json by exactly one validator, and a second
@@ -2056,9 +2057,17 @@ export function metadataPopulationOf(
     // positive metadata-only claim is an absence claim about wording.
     && parsed.receipts.kind === "reconciled";
 
-  const canonicalDate = (value: unknown): boolean =>
-    typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
-    && !Number.isNaN(Date.parse(value));
+  // A shape check plus Date.parse is not a date check. JavaScript NORMALISES: 2024-02-30 parses
+  // happily and becomes 2024-03-01, so a day that never existed would have passed and gone on to
+  // authorise a suppression. The round trip back to the same text is what rejects it, and year
+  // zero is excluded outright because it round-trips while naming no date a publisher can mint.
+  const canonicalDate = (value: unknown): boolean => {
+    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    if (value.startsWith("0000-")) return false;
+    const parsed = new Date(`${value}T00:00:00Z`);
+    return !Number.isNaN(parsed.getTime())
+      && parsed.toISOString().slice(0, 10) === value;
+  };
 
   for (const unit of partitionOf(parsed).ranUnits) {
     for (const row of unit.rows) {
@@ -2070,6 +2079,14 @@ export function metadataPopulationOf(
       if (parts.length < 2 || parts.length > 3
           || parts.some((part) => part.length === 0)) { claimable = false; continue; }
       const [publisher, group] = parts;
+      // The SHARED producer grammar, not a third copy of it: the notice validates rows with these
+      // same two expressions, and checking only for nonempty colon segments here left a group
+      // carrying a slash claimable, whereupon the notice rejected it and silently dropped the
+      // disclosure and the official link. That is O16 again, reached by a different road.
+      if (!PUBLISHER.test(publisher) || !IDENTIFIER.test(group)) { claimable = false; continue; }
+      // A version segment, when present, is an identifier too. It is not required to be a date:
+      // this validates the shape the producer can mint rather than guessing at its meaning.
+      if (parts.length === 3 && !IDENTIFIER.test(parts[2])) { claimable = false; continue; }
       // The row must belong to the unit that carried it.
       if (publisher !== unit.publisher) { claimable = false; continue; }
       if (!canonicalDate(row.valid_from)) { claimable = false; continue; }

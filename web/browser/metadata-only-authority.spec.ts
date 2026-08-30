@@ -192,6 +192,51 @@ test("a non-canonical date cannot authorise suppression", async ({ page }) => {
  * segment then carried a colon, so it rejected every ordinary row and silently dropped the
  * disclosure and the official-publisher link that are the whole point of the notice.
  */
+/**
+ * O17. A shape check plus Date.parse is not a date check: JavaScript normalises, so 2024-02-30
+ * parses happily and becomes 2024-03-01. A day that never existed would have authorised a
+ * suppression.
+ */
+test("a date that never existed cannot authorise suppression", async ({ page }) => {
+  for (const invalid of ["2024-02-30", "2023-02-29", "2024-13-01", "2024-00-10", "0000-01-01"]) {
+    const body = await search(page, [unit({ hits: [metadataHit({ valid_from: invalid })] })]);
+    expect(body).not.toContain(HEADING);
+  }
+});
+
+test("a real leap day is a real date and still suppresses", async ({ page }) => {
+  const body = await search(page, [unit({ hits: [metadataHit({ valid_from: "2024-02-29" })] })]);
+
+  expect(body).toContain(HEADING);
+});
+
+/**
+ * O18. Nonempty colon segments are not the producer's grammar. A group carrying a slash stayed
+ * claimable, and the notice then rejected it and silently dropped the disclosure and the official
+ * link, which is O16 reached by a different road.
+ */
+test("a coordinate outside the producer grammar cannot authorise suppression",
+  async ({ page }) => {
+    for (const bad of [
+      "lu-legilux:bad/group:2024-08-04",
+      "lu-legilux:bad group:2024-08-04",
+      `lu-legilux:${"g".repeat(250)}:2024-08-04`,
+      "lu legilux:fixture-authority:2024-08-04",
+      "lu-legilux:fixture-authority:bad/version",
+    ]) {
+      const body = await search(page, [unit({ hits: [metadataHit({ lex_id: bad })] })]);
+      expect(body).not.toContain(HEADING);
+    }
+  });
+
+test("the two-segment work form is a coordinate too", async ({ page }) => {
+  const body = await search(page, [unit({
+    hits: [metadataHit({ lex_id: "lu-legilux:fixture-authority" })],
+  })]);
+
+  expect(body).toContain(HEADING);
+});
+
 test("an ordinary version id still renders the disclosure and the official link",
   async ({ page }) => {
     const body = await search(page, [unit()]);
