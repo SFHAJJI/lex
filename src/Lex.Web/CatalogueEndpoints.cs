@@ -748,8 +748,6 @@ public static class CatalogueEndpoints
         // only when every hit is POSITIVELY metadata. An unknown reason renders through the normal
         // path and never triggers this notice.
         var population = MatchLanes.ResponsePopulation(envelopes);
-        var metadataOnly = population.Count > 0 && MatchLanes.MetadataOnly(
-            population.Select(item => MatchLanes.ReasonsOf(item.Hit)).ToArray());
 
         static string Heading(LexIndexReader reader, string suffix = "") =>
             $"<h2>{H(reader.Stamp.GetValueOrDefault("publisher_name"))} "
@@ -781,6 +779,24 @@ public static class CatalogueEndpoints
         static bool HasUsableDestination(JsonObject hit) =>
             TrustNotices.Text(hit["work"])?.Trim() is { Length: > 0 }
             && TryIsoDate(TrustNotices.Text(hit["valid_from"]), out _);
+
+        // A response-level claim may not be made ACROSS answers this page could not read.
+        // ResponsePopulation skips those silently, by design, so deciding metadata_only from it
+        // alone let the page disclose an unreadable answer and, in the same breath, positively
+        // claim that every record matched only metadata, hiding a valid row behind that notice.
+        // Any unreadable contributor disables the claim; the readable metadata rows then render
+        // visibly, carrying their own badge, which says less and says it truthfully.
+        bool Unreadable(JsonNode? node) =>
+            node is not JsonObject result
+            || !TryAttribute(result, readers, out _)
+            || (TrustNotices.Ran(result)
+                && (!Classifiable(result, out var readable)
+                    || readable.OfType<JsonObject>().Any(hit => !HasUsableDestination(hit))));
+
+        var metadataOnly = population.Count > 0
+            && !envelopes.Any(Unreadable)
+            && MatchLanes.MetadataOnly(
+                population.Select(item => MatchLanes.ReasonsOf(item.Hit)).ToArray());
 
         foreach (var node in envelopes)
         {

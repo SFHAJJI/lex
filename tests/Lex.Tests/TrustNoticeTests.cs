@@ -748,16 +748,20 @@ public sealed class TrustNoticeTests : IDisposable
         Directory.CreateDirectory(scratch);
         try
         {
-            // The primary checkout, where .git is a directory.
-            Assert.True(IsRepositoryRoot(RepositoryRoot()));
-            Assert.True(Directory.Exists(Path.Combine(RepositoryRoot(), ".git")));
+            // Wherever this suite is running, INCLUDING a linked worktree, which is the
+            // integration environment. Asserting the directory form here assumed the primary
+            // checkout and failed in exactly the place the guard exists to protect.
+            var current = RepositoryRoot();
+            Assert.True(IsRepositoryRoot(current));
+            Assert.True(Directory.Exists(Path.Combine(current, ".git"))
+                        || File.Exists(Path.Combine(current, ".git")));
 
             // A linked worktree, where git writes .git as a FILE.
             var worktree = Path.Combine(scratch, "linked");
-            var git = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+            using var git = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
                 "git", $"worktree add --detach \"{worktree}\"")
             {
-                WorkingDirectory = RepositoryRoot(),
+                WorkingDirectory = current,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
             })!;
@@ -773,14 +777,18 @@ public sealed class TrustNoticeTests : IDisposable
             }
             finally
             {
-                var remove = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
-                    "git", $"worktree remove --force \"{worktree}\"")
-                {
-                    WorkingDirectory = RepositoryRoot(),
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                })!;
+                using var remove = System.Diagnostics.Process.Start(
+                    new System.Diagnostics.ProcessStartInfo(
+                        "git", $"worktree remove --force \"{worktree}\"")
+                    {
+                        WorkingDirectory = current,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                    })!;
                 remove.WaitForExit();
+                // A cleanup that failed quietly leaves a worktree registered against the repository
+                // for every future run, so it is asserted rather than hoped for.
+                Assert.True(remove.ExitCode == 0, remove.StandardError.ReadToEnd());
             }
 
             // And neither form present is not a root.
@@ -959,6 +967,66 @@ public sealed class TrustNoticeTests : IDisposable
             StringComparison.Ordinal);
         // It matched a name, and the badge must not claim it matched the wording either.
         Assert.DoesNotContain("matched on title, not wording", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// O7. The response-level claim is made ACROSS answers, so one it could not read poisons it.
+    /// ResponsePopulation skips unreadable shapes silently, by design, so deciding metadata_only
+    /// from it alone made the page disclose an unreadable answer and, in the same breath, claim
+    /// that every record matched only metadata. The valid row was hidden behind that notice.
+    /// </summary>
+    [Theory]
+    // A top-level sibling of the wrong shape, beside a successful metadata answer.
+    [InlineData("\"a publisher answered\"")]
+    [InlineData("7")]
+    public void An_unreadable_sibling_disables_the_response_level_metadata_claim(string sibling)
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "poison"), includeAct: false);
+        using var reader = site.Reader();
+        var readers = new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader };
+
+        var envelopes = (JsonArray)JsonNode.Parse("[" + sibling + "]")!;
+        envelopes.Add(JsonNode.Parse("""
+            {"envelope":{"publisher":"lu-legilux","status":"ok"},
+             "population":{"query_ran":true},
+             "hits":[{"work":"lu-legilux:loi-2006-07-31-n2","valid_from":"2024-08-04",
+                      "title":"Code du travail","match_reasons":["work_metadata"]}]}
+            """));
+
+        var page = CatalogueEndpoints.RenderSearchResults(envelopes, readers);
+
+        // The unreadable answer is disclosed.
+        Assert.Contains("could not be read", page, StringComparison.Ordinal);
+        // And no positive claim is made across it.
+        Assert.DoesNotContain(MatchLanes.Heading, page, StringComparison.Ordinal);
+        // The valid row is not hidden behind a notice that was never earned.
+        Assert.Contains("1 hit(s)", page, StringComparison.Ordinal);
+        Assert.Contains("matched only in metadata", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The same poisoning from inside one envelope: a hit that is not an object makes that
+    /// publisher's answer unreadable, and the claim is across publishers, so it falls too.
+    /// </summary>
+    [Fact]
+    public void A_non_object_hit_disables_the_response_level_metadata_claim()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "poisonhit"), includeAct: false);
+        using var reader = site.Reader();
+        var readers = new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader };
+
+        var page = CatalogueEndpoints.RenderSearchResults(
+            [(JsonObject)JsonNode.Parse("""
+                {"envelope":{"publisher":"lu-legilux","status":"ok"},
+                 "population":{"query_ran":true},
+                 "hits":[{"work":"lu-legilux:loi-2006-07-31-n2","valid_from":"2024-08-04",
+                          "match_reasons":["work_metadata"]},
+                         "lu-legilux:another"]}
+                """)!],
+            readers);
+
+        Assert.Contains("could not be read", page, StringComparison.Ordinal);
+        Assert.DoesNotContain(MatchLanes.Heading, page, StringComparison.Ordinal);
     }
 
     /// <summary>
