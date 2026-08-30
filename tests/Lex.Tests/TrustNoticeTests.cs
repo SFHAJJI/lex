@@ -1040,6 +1040,32 @@ public sealed class TrustNoticeTests : IDisposable
     }
 
     /// <summary>
+    /// A disclosure coordinate and its render destination are one fact. A missing, blank or
+    /// contradictory work field cannot both refuse rendering and authorize a positive metadata
+    /// claim from the same publisher envelope.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("   ")]
+    [InlineData("a-different-work")]
+    public void An_unusable_work_authorises_no_metadata_claim(string? work)
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "workcoordinate"), includeAct: false);
+        using var reader = site.Reader();
+        var readers = new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader };
+        var result = CompleteMetadataSearchResult();
+        var hit = (JsonObject)((JsonArray)result["hits"]!)[0]!;
+        if (work is null) hit.Remove("work");
+        else hit["work"] = work;
+
+        var page = CatalogueEndpoints.RenderSearchResults([result], readers);
+
+        Assert.Contains("could not be read", page, StringComparison.Ordinal);
+        Assert.DoesNotContain(MatchLanes.Heading, page, StringComparison.Ordinal);
+        Assert.DoesNotContain("Code du travail", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// O21, second half. A truncated row set means the response is a PAGE of the answer, and
     /// "everything that matched, matched only records" is not a claim a page can support.
     /// </summary>

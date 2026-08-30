@@ -859,13 +859,28 @@ public static class CatalogueEndpoints
         }
 
         /// <summary>
-        /// A hit is rendered as a link to a dated version, so it needs coordinates that make one.
-        /// Length > 0 was not enough: a whitespace work and a malformed date both passed it and
-        /// produced a broken link wearing the authority of a citation.
+        /// A rendered hit needs a usable dated destination. Canonical V3 coordinates are checked
+        /// by the same validator that authorizes metadata disclosure, so their explicit work field
+        /// cannot disagree with the group encoded in lex_id. Legacy V2 coordinates remain readable
+        /// until Rebuild 0 replaces the mounted indexes, but never authorize a V3 metadata claim.
         /// </summary>
-        static bool HasUsableDestination(JsonObject hit) =>
-            TrustNotices.Text(hit["work"])?.Trim() is { Length: > 0 }
-            && TryIsoDate(TrustNotices.Text(hit["valid_from"]), out _);
+        static bool HasUsableDestination(string publisherId, JsonObject hit)
+        {
+            if (TrustNotices.Text(hit["work"])?.Trim() is not { Length: > 0 } work
+                || TrustNotices.Text(hit["valid_from"]) is not { } validFrom
+                || !TryIsoDate(validFrom, out _)) return false;
+            var lexId = TrustNotices.Text(hit["lex_id"]);
+            if (lexId is null) return true;
+            if (lexId.Contains("--", StringComparison.Ordinal))
+                return DisclosureRowOf(publisherId, hit) is not null;
+            var parts = lexId.Split(':');
+            var normalizedWork = work.StartsWith(publisherId + ":", StringComparison.Ordinal)
+                ? work[(publisherId.Length + 1)..] : work;
+            return parts.Length == 3
+                && string.Equals(parts[0], publisherId, StringComparison.Ordinal)
+                && string.Equals(parts[1], normalizedWork, StringComparison.Ordinal)
+                && string.Equals(parts[2], validFrom, StringComparison.Ordinal);
+        }
 
         // The population is the partition THIS PAGE accepted, and nothing else. A status filter
         // is not that partition: status ok with query_ran false is a query nobody executed, and the
@@ -973,7 +988,7 @@ public static class CatalogueEndpoints
                 continue;
             }
             var rows = hits.OfType<JsonObject>().ToList();
-            if (rows.Any(hit => !HasUsableDestination(hit)))
+            if (rows.Any(hit => !HasUsableDestination(publisherId, hit)))
             {
                 sb.Append(Heading(reader));
                 sb.Append(TrustNotices.UnreadableResults());
@@ -1061,6 +1076,11 @@ public static class CatalogueEndpoints
         var (publisher, group, version) = (parts[0], parts[1], parts[2]);
         // The row must belong to the publisher whose envelope carried it.
         if (!string.Equals(publisher, publisherId, StringComparison.Ordinal)) return null;
+        // The producer's explicit render destination and the group encoded in its canonical
+        // coordinate are one fact. Missing or contradictory spellings make the whole row
+        // unreadable; accepting either one alone allowed a refusal and a positive claim together.
+        if (TrustNotices.Text(hit["work"]) is not { } work
+            || !string.Equals(work, group, StringComparison.Ordinal)) return null;
         var separator = version.IndexOf("--", StringComparison.Ordinal);
         if (separator != 10) return null;
         var versionDate = version[..separator];
