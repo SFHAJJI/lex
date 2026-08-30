@@ -991,6 +991,79 @@ public sealed class TrustNoticeTests : IDisposable
     }
 
     /// <summary>
+    /// O21. The server validated only a nonblank work and an ISO date before suppressing, while
+    /// MatchLanes.NoticeHtml applies a stricter grammar afterwards. So a coordinate the notice
+    /// would reject still suppressed the cards, and then lost its own disclosure: the reader was
+    /// left with a notice containing nothing, which is the worst of both answers.
+    ///
+    /// Lex.Temporal.VersionIdentity is the rule, and DateOf accepts nothing but
+    /// yyyy-MM-dd--<64 lowercase hex>.
+    /// </summary>
+    [Theory]
+    // A bare date, which the fixtures used to bless and the producer cannot mint.
+    [InlineData("lu-legilux:loi-2006-07-31-n2:2024-08-04")]
+    // A short, an uppercase and an over-long hash.
+    [InlineData("lu-legilux:loi-2006-07-31-n2:2024-08-04--abc123")]
+    [InlineData("lu-legilux:loi-2006-07-31-n2:2024-08-04--AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
+    // A group the notice's own grammar rejects, which is how the disclosure went missing.
+    [InlineData("lu-legilux:bad/group:2024-08-04--HASH")]
+    // Someone else's publisher.
+    [InlineData("eu-eurlex:loi-2006-07-31-n2:2024-08-04--HASH")]
+    // A version date that disagrees with valid_from. They are two spellings of one fact, so a
+    // response where they differ is not a coordinate anyone can place.
+    [InlineData("lu-legilux:loi-2006-07-31-n2:2024-08-05--HASH")]
+    // Two segments, which is a work id and not a search coordinate.
+    [InlineData("lu-legilux:loi-2006-07-31-n2")]
+    public void A_coordinate_the_producer_cannot_mint_authorises_no_suppression(string lexId)
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "coord"), includeAct: false);
+        using var reader = site.Reader();
+        var readers = new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader };
+
+        var page = CatalogueEndpoints.RenderSearchResults(
+            [(JsonObject)JsonNode.Parse(
+                "{\"envelope\":{\"publisher\":\"lu-legilux\",\"status\":\"ok\"},"
+                + "\"population\":{\"query_ran\":true},\"hits\":[{"
+                + "\"work\":\"loi-2006-07-31-n2\",\"lex_id\":\""
+                + lexId.Replace("HASH", HASH, StringComparison.Ordinal)
+                + "\",\"valid_from\":\"2024-08-04\","
+                + "\"match_reasons\":[\"work_metadata\"]}]}")!],
+            readers);
+
+        Assert.DoesNotContain(MatchLanes.Heading, page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// O21, second half. A truncated row set means the response is a PAGE of the answer, and
+    /// "everything that matched, matched only records" is not a claim a page can support.
+    /// </summary>
+    [Fact]
+    public void A_truncated_row_set_authorises_no_response_wide_claim()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "rowset"), includeAct: false);
+        using var reader = site.Reader();
+        var readers = new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader };
+
+        var page = CatalogueEndpoints.RenderSearchResults(
+            [(JsonObject)JsonNode.Parse(
+                "{\"envelope\":{\"publisher\":\"lu-legilux\",\"status\":\"ok\"},"
+                + "\"population\":{\"query_ran\":true},"
+                + "\"response_row_set\":{\"truncated\":true},\"hits\":[{"
+                + "\"work\":\"loi-2006-07-31-n2\",\"lex_id\":\"" + CANONICAL + "\","
+                + "\"valid_from\":\"2024-08-04\","
+                + "\"match_reasons\":[\"work_metadata\"]}]}")!],
+            readers);
+
+        Assert.DoesNotContain(MatchLanes.Heading, page, StringComparison.Ordinal);
+    }
+
+    /// <summary>A genuine canonical version key, per Lex.Temporal.VersionIdentity.</summary>
+    private const string HASH =
+        "b23a72504925a2065967c3f3032ac905ae1ac921048419c5f8a1b54c1fec7ce5";
+    private const string CANONICAL =
+        "lu-legilux:loi-2006-07-31-n2:2024-08-04--b23a72504925a2065967c3f3032ac905ae1ac921048419c5f8a1b54c1fec7ce5";
+
+    /// <summary>
     /// O7 amended. The population is the partition THIS PAGE accepted. A status filter is not that
     /// partition: status ok with query_ran false is a query nobody executed, the render loop
     /// refuses it, and admitting its rows let the page emit a positive metadata-only claim about an
@@ -1007,7 +1080,7 @@ public sealed class TrustNoticeTests : IDisposable
             [(JsonObject)JsonNode.Parse("""
                 {"envelope":{"publisher":"lu-legilux","status":"ok"},
                  "population":{"query_ran":false},
-                 "hits":[{"work":"lu-legilux:loi-2006-07-31-n2","valid_from":"2024-08-04",
+                 "hits":[{"work":"loi-2006-07-31-n2","lex_id":"lu-legilux:loi-2006-07-31-n2:2024-08-04--b23a72504925a2065967c3f3032ac905ae1ac921048419c5f8a1b54c1fec7ce5","valid_from":"2024-08-04",
                           "title":"Code du travail","match_reasons":["work_metadata"]}]}
                 """)!],
             readers);
@@ -1042,7 +1115,7 @@ public sealed class TrustNoticeTests : IDisposable
              (JsonObject)JsonNode.Parse("""
                 {"envelope":{"publisher":"lu-legilux","status":"ok"},
                  "population":{"query_ran":true},
-                 "hits":[{"work":"lu-legilux:loi-2006-07-31-n2","valid_from":"2024-08-04",
+                 "hits":[{"work":"loi-2006-07-31-n2","lex_id":"lu-legilux:loi-2006-07-31-n2:2024-08-04--b23a72504925a2065967c3f3032ac905ae1ac921048419c5f8a1b54c1fec7ce5","valid_from":"2024-08-04",
                           "title":"Code du travail","match_reasons":["work_metadata"]}]}
                 """)!],
             readers);
@@ -1073,7 +1146,7 @@ public sealed class TrustNoticeTests : IDisposable
         envelopes.Add(JsonNode.Parse("""
             {"envelope":{"publisher":"lu-legilux","status":"ok"},
              "population":{"query_ran":true},
-             "hits":[{"work":"lu-legilux:loi-2006-07-31-n2","valid_from":"2024-08-04",
+             "hits":[{"work":"loi-2006-07-31-n2","lex_id":"lu-legilux:loi-2006-07-31-n2:2024-08-04--b23a72504925a2065967c3f3032ac905ae1ac921048419c5f8a1b54c1fec7ce5","valid_from":"2024-08-04",
                       "title":"Code du travail","match_reasons":["work_metadata"]}]}
             """));
 
@@ -1103,7 +1176,7 @@ public sealed class TrustNoticeTests : IDisposable
             [(JsonObject)JsonNode.Parse("""
                 {"envelope":{"publisher":"lu-legilux","status":"ok"},
                  "population":{"query_ran":true},
-                 "hits":[{"work":"lu-legilux:loi-2006-07-31-n2","valid_from":"2024-08-04",
+                 "hits":[{"work":"loi-2006-07-31-n2","lex_id":"lu-legilux:loi-2006-07-31-n2:2024-08-04--b23a72504925a2065967c3f3032ac905ae1ac921048419c5f8a1b54c1fec7ce5","valid_from":"2024-08-04",
                           "match_reasons":["work_metadata"]},
                          "lu-legilux:another"]}
                 """)!],
@@ -1192,7 +1265,7 @@ public sealed class TrustNoticeTests : IDisposable
         var records = (JsonObject)JsonNode.Parse("""
             {"envelope":{"publisher":"lu-legilux","status":"ok"},
              "population":{"query_ran":true},
-             "hits":[{"work":"lu-legilux:loi-2006-07-31-n2","valid_from":"2024-08-04",
+             "hits":[{"work":"loi-2006-07-31-n2","lex_id":"lu-legilux:loi-2006-07-31-n2:2024-08-04--b23a72504925a2065967c3f3032ac905ae1ac921048419c5f8a1b54c1fec7ce5","valid_from":"2024-08-04",
                       "title":"Code du travail","match_reasons":["work_metadata"]}]}
             """)!;
         var refusal = (JsonObject)JsonNode.Parse("""
@@ -1227,7 +1300,7 @@ public sealed class TrustNoticeTests : IDisposable
             [(JsonObject)JsonNode.Parse("""
                 {"envelope":{"publisher":"lu-legilux","status":"ok"},
                  "population":{"query_ran":true},
-                 "hits":[{"work":"lu-legilux:loi-2006-07-31-n2","valid_from":"2024-08-04",
+                 "hits":[{"work":"loi-2006-07-31-n2","lex_id":"lu-legilux:loi-2006-07-31-n2:2024-08-04--b23a72504925a2065967c3f3032ac905ae1ac921048419c5f8a1b54c1fec7ce5","valid_from":"2024-08-04",
                           "match_reasons":["work_metadata"]},
                          {"work":"lu-legilux:loi-2006-07-31-n2","valid_from":"2024-07-01",
                           "match_reasons":["semantic_work"]}]}

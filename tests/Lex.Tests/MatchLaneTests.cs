@@ -89,6 +89,12 @@ public sealed class MatchLaneTests : IDisposable
     /// vocabulary from the ranking sources read-only and fails when the table and the code
     /// disagree in either direction, so a new upstream reason forces a deliberate lane ruling.
     /// </summary>
+    /// <summary>
+    /// The Codex Q1 amendment: the canary must cover the COMPLETE reason vocabulary the
+    /// producer code emits, not merely reasons occurring in a fixture corpus. It derives that
+    /// vocabulary from the ranking sources read-only and fails when the table and the code
+    /// disagree in either direction, so a new upstream reason forces a deliberate lane ruling.
+    /// </summary>
     [Fact]
     public void Drift_canary_derives_the_complete_producer_vocabulary()
     {
@@ -252,175 +258,6 @@ public sealed class MatchLaneTests : IDisposable
             "an unclassifiable hit must never authorize suppression");
     }
 
-    [Fact]
-    public void Response_population_admits_only_authoritative_successful_envelopes()
-    {
-        // B1+B2 review, O5: a refused or malformed envelope's rows are not evidence, and
-        // admitting them lets a refusal suppress a real answer behind the notice.
-        var envelopes = new JsonArray(
-            new JsonObject
-            {
-                ["envelope"] = new JsonObject
-                {
-                    ["publisher"] = "lu-legilux", ["status"] = "filter_not_supported_by_index",
-                },
-                ["hits"] = new JsonArray(new JsonObject
-                {
-                    ["work"] = "refused", ["match_reasons"] = new JsonArray("work_metadata"),
-                }),
-            },
-            new JsonObject
-            {
-                ["envelope"] = new JsonObject { ["publisher"] = "eu-eurlex" },
-                ["hits"] = new JsonArray(new JsonObject { ["work"] = "no-status" }),
-            },
-            new JsonObject
-            {
-                ["envelope"] = new JsonObject { ["publisher"] = "lu-legilux", ["status"] = "ok" },
-                ["hits"] = new JsonArray(new JsonObject
-                {
-                    ["work"] = "real", ["match_reasons"] = new JsonArray("work_metadata"),
-                }),
-            });
-        var (population, complete) = MatchLanes.ResponsePopulation(envelopes);
-        Assert.Single(population);
-        Assert.Equal("real", population[0].Hit["work"]!.GetValue<string>());
-        Assert.False(complete, "the status-less envelope makes the population incomplete");
-    }
-
-    [Fact]
-    public void Search_never_emits_no_result_so_it_cannot_authorize_suppression()
-    {
-        // Verified against the producer: the search case emits ok,
-        // retrieval_mode_unavailable, unknown_work, unknown_anchor and no_provision_history.
-        var crossOperation = new JsonArray(new JsonObject
-        {
-            ["envelope"] = new JsonObject
-            {
-                ["publisher"] = "lu-legilux", ["status"] = "no_result",
-            },
-            ["hits"] = new JsonArray(new JsonObject
-            {
-                ["work"] = "w1", ["match_reasons"] = new JsonArray("work_metadata"),
-            }),
-        });
-        var (rows, complete) = MatchLanes.ResponsePopulation(crossOperation);
-        Assert.Empty(rows);
-        Assert.True(complete, "a non-success status is skipped, not malformed");
-        Assert.False(MatchLanes.MetadataOnly(
-            rows.Select(item => MatchLanes.ReasonsOf(item.Hit)).ToArray()));
-    }
-
-    [Fact]
-    public void An_incomplete_population_can_never_authorize_the_positive_claim()
-    {
-        // A successful envelope with a malformed hits field was read as empty in round 1, so
-        // a sibling metadata-only response still suppressed real answers.
-        var malformed = new JsonArray(
-            new JsonObject
-            {
-                ["envelope"] = new JsonObject
-                {
-                    ["publisher"] = "eu-eurlex", ["status"] = "ok",
-                },
-                ["hits"] = "not-an-array",
-            },
-            new JsonObject
-            {
-                ["envelope"] = new JsonObject
-                {
-                    ["publisher"] = "lu-legilux", ["status"] = "ok",
-                },
-                ["hits"] = new JsonArray(new JsonObject
-                {
-                    ["work"] = "w1", ["match_reasons"] = new JsonArray("work_metadata"),
-                }),
-            });
-        var (rows, complete) = MatchLanes.ResponsePopulation(malformed);
-        Assert.Single(rows);
-        Assert.False(complete);
-
-        // A present but wrong-typed reasons field is malformed evidence, not absent evidence.
-        var badReason = new JsonArray(new JsonObject
-        {
-            ["envelope"] = new JsonObject { ["publisher"] = "lu-legilux", ["status"] = "ok" },
-            ["hits"] = new JsonArray(new JsonObject
-            {
-                ["work"] = "w1", ["match_reasons"] = new JsonArray(42),
-            }),
-        });
-        Assert.False(MatchLanes.ResponsePopulation(badReason).Complete);
-
-        // The clean case stays complete so suppression remains reachable.
-        var clean = new JsonArray(new JsonObject
-        {
-            ["envelope"] = new JsonObject { ["publisher"] = "lu-legilux", ["status"] = "ok" },
-            ["hits"] = new JsonArray(new JsonObject
-            {
-                ["work"] = "w1", ["match_reasons"] = new JsonArray("work_metadata"),
-            }),
-        });
-        var (cleanRows, cleanComplete) = MatchLanes.ResponsePopulation(clean);
-        Assert.True(cleanComplete);
-        Assert.True(MatchLanes.MetadataOnly(
-            cleanRows.Select(item => MatchLanes.ReasonsOf(item.Hit)).ToArray()));
-    }
-
-    [Fact]
-    public void A_truncated_row_set_uses_the_fallback_sentence_instead_of_a_count()
-    {
-        // B1+B2 review, O4: response_row_set.truncated exists on the wire. I had asserted in
-        // writing that it did not, without checking.
-        var truncated = new JsonArray(new JsonObject
-        {
-            ["envelope"] = new JsonObject { ["publisher"] = "lu-legilux", ["status"] = "ok" },
-            ["response_row_set"] = new JsonObject { ["truncated"] = true },
-        });
-        Assert.True(MatchLanes.AnyRowSetTruncated(truncated));
-        Assert.False(MatchLanes.AnyRowSetTruncated(new JsonArray(new JsonObject
-        {
-            ["envelope"] = new JsonObject { ["publisher"] = "lu-legilux", ["status"] = "ok" },
-            ["response_row_set"] = new JsonObject { ["truncated"] = false },
-        })));
-
-        var twelve = Enumerable.Range(0, 12).Select(index => new MatchLanes.DisclosureRow(
-            "lu-legilux", $"w-{index}", "2024-01-01", $"Work {index}")).ToArray();
-        var withCount = MatchLanes.NoticeHtml(["lu-legilux"], twelve);
-        Assert.Contains("and 2 more returned matches", withCount, StringComparison.Ordinal);
-
-        var withoutCount = MatchLanes.NoticeHtml(["lu-legilux"], twelve, truncated: true);
-        Assert.Contains("additional returned matches are not shown", withoutCount,
-            StringComparison.Ordinal);
-        Assert.DoesNotContain("more returned matches", withoutCount, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Response_population_skips_refused_envelopes_without_blocking_the_state()
-    {
-        var envelopes = new JsonArray(
-            new JsonObject
-            {
-                ["envelope"] = new JsonObject
-                {
-                    ["publisher"] = "eu-eurlex", ["status"] = "retrieval_mode_unavailable",
-                },
-            },
-            new JsonObject
-            {
-                ["envelope"] = new JsonObject { ["publisher"] = "lu-legilux", ["status"] = "ok" },
-                ["hits"] = new JsonArray(new JsonObject
-                {
-                    ["work"] = "w1",
-                    ["match_reasons"] = new JsonArray("work_metadata"),
-                }),
-            });
-        var (population, complete) = MatchLanes.ResponsePopulation(envelopes);
-        Assert.Single(population);
-        Assert.Equal("lu-legilux", population[0].Publisher);
-        Assert.True(complete, "a refused sibling is skipped, not malformed");
-        Assert.True(MatchLanes.MetadataOnly(
-            population.Select(item => MatchLanes.ReasonsOf(item.Hit)).ToArray()));
-    }
 
     [Fact]
     public void Served_reasons_read_fail_open_to_unclassified()
@@ -553,7 +390,10 @@ public sealed class MatchLaneTests : IDisposable
 
         private static void BuildLuIndex(string path)
         {
-            var key = "lu-legilux:loi-fin-0001:2024-01-01";
+            var key = "lu-legilux:loi-fin-0001:2024-01-01--4b3f9be80e4e10f895cd5f2698dda45424b3966c2aa6aedf57e9383ee807f19f";
+            // A GENUINE canonical version key. VersionIdentity mints
+            // yyyy-MM-dd--sha256(publisher version identifier), and DateOf accepts nothing
+            // else, so a bare-date fixture blessed a coordinate the producer cannot emit.
             var doc = new DocRow(
                 key, "lu-legilux", "loi-fin-0001", "official:loi-fin-0001", "LOI", "fr",
                 "2024-01-01", null, "publisher", "2026-08-14T00:00:00Z", false, true, true,
@@ -578,7 +418,10 @@ public sealed class MatchLaneTests : IDisposable
 
         private static void BuildEuIndex(string path)
         {
-            var key = "eu-eurlex:reg-fin-0002:2023-05-01";
+            var key = "eu-eurlex:reg-fin-0002:2023-05-01--6df900a28da8636a2a1002a2f6ac7ec87842b1da6a86f27b825b625b25b25925";
+            // A GENUINE canonical version key. VersionIdentity mints
+            // yyyy-MM-dd--sha256(publisher version identifier), and DateOf accepts nothing
+            // else, so a bare-date fixture blessed a coordinate the producer cannot emit.
             var doc = new DocRow(
                 key, "eu-eurlex", "reg-fin-0002", "official:reg-fin-0002", "REG", "en",
                 "2023-05-01", null, "publisher", "2026-08-14T00:00:00Z", false, true, true,

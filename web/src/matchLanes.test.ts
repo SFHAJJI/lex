@@ -102,10 +102,3 @@ test("the frozen metadata_only copy is byte-equal to Decision 41", () => {
 // browser/metadata-only-authority.spec.ts. Lane classification and metadataOnlyResponse stay,
 // because those are the lane policy itself and are bound by match-lane-cases.json.
 // ---------------------------------------------------------------------------
-
-
-
-
-
-
-

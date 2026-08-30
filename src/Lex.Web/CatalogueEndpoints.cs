@@ -787,7 +787,19 @@ public static class CatalogueEndpoints
         // sibling, an unattributable publisher, a non-object hit, or a hit with no usable
         // destination. The readable metadata rows then render visibly with their own badge, which
         // says less and says it truthfully.
-        var population = new List<(string Publisher, JsonObject Hit)>();
+        // ONE validated, attributed, receipt-reconciled disclosure population, projected before
+        // any suppression and then used for the notice itself. This page previously validated only
+        // a nonblank work and an ISO date before suppressing, while MatchLanes.NoticeHtml applies a
+        // stricter grammar afterwards, so a coordinate like a slashed group or a bare work id
+        // suppressed the cards and THEN lost its own disclosure: the reader got a notice with
+        // nothing in it, which is the worst of both answers.
+        //
+        // The coordinate rule is Lex.Temporal.VersionIdentity, which is the single source of truth
+        // for what a search hit's lex_id is: publisher:group:yyyy-MM-dd--<64 lowercase hex>, the
+        // date being the version's valid_from and the hash a SHA-256 of the publisher's own version
+        // identifier. Anything wider than that is a coordinate the producer cannot mint.
+        var population = new List<MatchLanes.DisclosureRow>();
+        var reasons = new List<IReadOnlyList<string?>>();
         var complete = true;
         foreach (var node in envelopes)
         {
@@ -799,20 +811,32 @@ public static class CatalogueEndpoints
             }
             // A refusal contributes nothing and blocks nothing: it is not evidence either way.
             if (!TrustNotices.Ran(result)) continue;
-            if (!Classifiable(result, out var accepdedHits)
-                || accepdedHits.OfType<JsonObject>().Any(hit => !HasUsableDestination(hit)))
+            // The producer's own response-wide receipt. A truncated row set means the response is
+            // a page of the answer, and "everything that matched, matched only records" is not a
+            // claim a page of the answer can support.
+            if ((result["response_row_set"] as JsonObject)?["truncated"] is JsonValue marker
+                && marker.TryGetValue<bool>(out var truncated) && truncated)
+                complete = false;
+            if (!Classifiable(result, out var acceptedHits))
             {
                 complete = false;
                 continue;
             }
-            foreach (var hit in accepdedHits.OfType<JsonObject>())
-                population.Add((accepted.Collection, hit));
+            foreach (var hit in acceptedHits.OfType<JsonObject>())
+            {
+                if (DisclosureRowOf(accepted.Collection, hit) is not { } row)
+                {
+                    complete = false;
+                    continue;
+                }
+                population.Add(row);
+                reasons.Add(MatchLanes.ReasonsOf(hit));
+            }
         }
 
         var metadataOnly = complete
             && population.Count > 0
-            && MatchLanes.MetadataOnly(
-                population.Select(item => MatchLanes.ReasonsOf(item.Hit)).ToArray());
+            && MatchLanes.MetadataOnly(reasons);
 
         foreach (var node in envelopes)
         {
@@ -914,14 +938,11 @@ public static class CatalogueEndpoints
 
         if (metadataOnly)
         {
+            // The rows were validated when the population was projected, and the truncation fact
+            // was reconciled there too, so the notice is handed evidence rather than raw fields.
             sb.Append(MatchLanes.NoticeHtml(
-                population.Select(item => item.Publisher).ToArray(),
-                population.Select(item => new MatchLanes.DisclosureRow(
-                    item.Publisher,
-                    TrustNotices.Text(item.Hit["work"]) ?? "",
-                    TrustNotices.Text(item.Hit["valid_from"]) ?? "",
-                    TrustNotices.Text(item.Hit["title"]) ?? "")).ToArray(),
-                MatchLanes.AnyRowSetTruncated(envelopes)));
+                population.Select(row => row.Publisher).Distinct(StringComparer.Ordinal).ToArray(),
+                population));
             // The notice names the records, so something WAS put in front of the reader.
             presented += population.Count;
         }
@@ -932,6 +953,43 @@ public static class CatalogueEndpoints
         return sb.ToString();
     }
 
+
+    /// <summary>
+    /// One disclosure row from one served hit, or null when the hit carries no coordinate the
+    /// producer could have minted.
+    ///
+    /// Lex.Temporal.VersionIdentity is the source of truth: a search hit's lex_id is DocJson's
+    /// d.Key, which is publisher:group:yyyy-MM-dd--<64 lowercase hex>, the date being the
+    /// version's valid_from and the hash a SHA-256 over the publisher's own version identifier.
+    /// The notice needs publisher:group, so the coordinate is split here rather than handed over
+    /// whole and rejected there.
+    /// </summary>
+    public static MatchLanes.DisclosureRow? DisclosureRowOf(string publisherId, JsonObject hit)
+    {
+        if (TrustNotices.Text(hit["lex_id"]) is not { } lexId) return null;
+        var parts = lexId.Split(':');
+        if (parts.Length != 3) return null;
+        var (publisher, group, version) = (parts[0], parts[1], parts[2]);
+        // The row must belong to the publisher whose envelope carried it.
+        if (!string.Equals(publisher, publisherId, StringComparison.Ordinal)) return null;
+        var separator = version.IndexOf("--", StringComparison.Ordinal);
+        if (separator != 10) return null;
+        var versionDate = version[..separator];
+        var hash = version[(separator + 2)..];
+        if (hash.Length != 64 || !hash.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f'))
+            return null;
+        if (!TryIsoDate(versionDate, out _)) return null;
+        // The version key carries its own date and it is the same fact as valid_from. Two
+        // spellings of one fact that disagree are not a coordinate.
+        if (TrustNotices.Text(hit["valid_from"]) is not { } validFrom
+            || !string.Equals(validFrom, versionDate, StringComparison.Ordinal)
+            || !TryIsoDate(validFrom, out _)) return null;
+        // The notice's own grammar, asked here rather than discovered there. Validating loosely
+        // now and strictly at render time is what left a notice with nothing in it.
+        if (!MatchLanes.IsDisclosable(publisher, group, validFrom)) return null;
+        return new MatchLanes.DisclosureRow(
+            publisher, group, validFrom, TrustNotices.Text(hit["title"]) ?? "");
+    }
 
     /// <summary>
     /// The mounted reader a search envelope belongs to, or false when it belongs to none.

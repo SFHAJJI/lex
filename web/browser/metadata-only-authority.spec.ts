@@ -28,7 +28,8 @@ const envelope = (extra: Record<string, unknown> = {}) => ({
 });
 
 const metadataHit = (extra: Record<string, unknown> = {}) => ({
-  lex_id: "lu-legilux:fixture-authority:2024-08-04",
+  // A GENUINE canonical key: yyyy-MM-dd--sha256(publisher version id), per VersionIdentity.
+  lex_id: "lu-legilux:fixture-authority:2024-08-04--74422504dcb92c9661b9977cc9c7b4dadb9ae730b43343f10f8ae5e7b91ebc11",
   title: "Fixture instrument",
   language: "fr",
   valid_from: "2024-08-04",
@@ -205,7 +206,14 @@ test("a date that never existed cannot authorise suppression", async ({ page }) 
 });
 
 test("a real leap day is a real date and still suppresses", async ({ page }) => {
-  const body = await search(page, [unit({ hits: [metadataHit({ valid_from: "2024-02-29" })] })]);
+  // The version key carries the same date, because they are one fact. A fixture where they
+  // disagree is not a leap-day case, it is the date-mismatch case one test below.
+  const body = await search(page, [unit({
+    hits: [metadataHit({
+      valid_from: "2024-02-29",
+      lex_id: "lu-legilux:fixture-authority:2024-02-29--74422504dcb92c9661b9977cc9c7b4dadb9ae730b43343f10f8ae5e7b91ebc11",
+    })],
+  })]);
 
   expect(body).toContain(HEADING);
 });
@@ -229,12 +237,30 @@ test("a coordinate outside the producer grammar cannot authorise suppression",
     }
   });
 
-test("the two-segment work form is a coordinate too", async ({ page }) => {
+/**
+ * O20. The two-segment work form is NOT a search coordinate. A hit's lex_id is DocJson's d.Key,
+ * which VersionIdentity mints as publisher:group:yyyy-MM-dd--sha256. My earlier fixture blessed a
+ * shape the producer cannot emit, so the test agreed with the code about something untrue.
+ */
+test("a coordinate the producer cannot mint authorises nothing", async ({ page }) => {
+  for (const impossible of [
+    "lu-legilux:fixture-authority",
+    "lu-legilux:fixture-authority:2024-08-04",
+    "lu-legilux:fixture-authority:2024-08-04--abc123",
+    `lu-legilux:fixture-authority:2024-08-04--${"A".repeat(64)}`,
+    `lu-legilux:fixture-authority:2024-08-04--${"f".repeat(63)}`,
+  ]) {
+    const body = await search(page, [unit({ hits: [metadataHit({ lex_id: impossible })] })]);
+    expect(body).not.toContain(HEADING);
+  }
+});
+
+test("a version key whose date disagrees with valid_from authorises nothing", async ({ page }) => {
   const body = await search(page, [unit({
-    hits: [metadataHit({ lex_id: "lu-legilux:fixture-authority" })],
+    hits: [metadataHit({ valid_from: "2024-08-05" })],
   })]);
 
-  expect(body).toContain(HEADING);
+  expect(body).not.toContain(HEADING);
 });
 
 test("an ordinary version id still renders the disclosure and the official link",

@@ -112,58 +112,7 @@ public static class MatchLanes
     /// </summary>
     private static readonly HashSet<string> SearchSuccessStatuses = ["ok"];
 
-    /// <summary>
-    /// The authoritative population plus whether it is COMPLETE. Round 1 discarded response
-    /// invalidity: a successful envelope whose hits field was malformed was read as empty, so
-    /// a sibling metadata-only response could still authorize suppression (B1+B2 round 2
-    /// review, O2). An incomplete population makes the positive claim unreachable.
-    /// </summary>
-    public static (IReadOnlyList<(string Publisher, JsonObject Hit)> Rows, bool Complete)
-        ResponsePopulation(JsonArray envelopes)
-    {
-        var rows = new List<(string, JsonObject)>();
-        var complete = true;
-        foreach (var node in envelopes)
-        {
-            if (node is not JsonObject result) { complete = false; continue; }
-            var envelope = result["envelope"] as JsonObject;
-            var status = envelope?["status"] is JsonValue statusValue
-                && statusValue.TryGetValue<string>(out var statusText) ? statusText : null;
-            if (status is null) { complete = false; continue; }
-            // Only an authoritative successful envelope may contribute to the positive
-            // metadata_only claim; a refusal's rows are not evidence.
-            if (!SearchSuccessStatuses.Contains(status)) continue;
-            if (result["hits"] is not JsonArray hits) { complete = false; continue; }
-            var publisher = envelope!["publisher"] is JsonValue value
-                && value.TryGetValue<string>(out var text) ? text : "";
-            foreach (var hitNode in hits)
-            {
-                if (hitNode is not JsonObject hit) { complete = false; continue; }
-                // A reasons field that is present but not an array of strings is malformed
-                // evidence, not absent evidence.
-                if (hit["match_reasons"] is { } reasonsNode
-                    && (reasonsNode is not JsonArray reasons
-                        || reasons.Any(reason => reason is not JsonValue member
-                            || !member.TryGetValue<string>(out _))))
-                {
-                    complete = false;
-                    continue;
-                }
-                rows.Add((publisher, hit));
-            }
-        }
-        return (rows, complete);
-    }
 
-    /// <summary>
-    /// True when any envelope reports a truncated row set (B1+B2 review, O4). The producer
-    /// carries response_row_set.truncated; an exact overflow count would be a claim the
-    /// response cannot support, so the countersigned fallback sentence is used instead.
-    /// </summary>
-    public static bool AnyRowSetTruncated(JsonArray envelopes) =>
-        envelopes.OfType<JsonObject>().Any(result =>
-            (result["response_row_set"] as JsonObject)?["truncated"] is JsonValue value
-            && value.TryGetValue<bool>(out var truncated) && truncated);
 
     /// <summary>
     /// The server-page notice plus the subordinate disclosure list, for the ONE response-level
@@ -173,6 +122,18 @@ public static class MatchLanes
     /// One exact-host official action renders per represented collection. Byte-exact
     /// boundaries and append-only insertion, per the B1 classifier finding.
     /// </summary>
+    /// <summary>
+    /// Whether these parts form a coordinate this notice can actually disclose.
+    ///
+    /// Exposed because the page must decide BEFORE it suppresses. Validating loosely up there
+    /// and strictly down here is how a row suppressed the cards and then lost its own
+    /// disclosure, leaving a notice with nothing in it.
+    /// </summary>
+    public static bool IsDisclosable(string publisher, string work, string validFrom) =>
+        PublisherGrammar.IsMatch(publisher)
+        && WorkGrammar.IsMatch(work)
+        && DateGrammar.IsMatch(validFrom);
+
     public static string NoticeHtml(
         IReadOnlyList<string> collections,
         IReadOnlyList<DisclosureRow> rows,

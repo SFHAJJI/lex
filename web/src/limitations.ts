@@ -2074,22 +2074,27 @@ export function metadataPopulationOf(
       const lexId = row.lex_id;
       if (typeof lexId !== "string") { claimable = false; continue; }
       const parts = lexId.split(":");
-      // publisher:group, or publisher:group:version. Anything else is not a coordinate this
-      // producer mints, and a row we cannot place is not evidence about the response.
-      if (parts.length < 2 || parts.length > 3
-          || parts.some((part) => part.length === 0)) { claimable = false; continue; }
-      const [publisher, group] = parts;
-      // The SHARED producer grammar, not a third copy of it: the notice validates rows with these
-      // same two expressions, and checking only for nonempty colon segments here left a group
-      // carrying a slash claimable, whereupon the notice rejected it and silently dropped the
-      // disclosure and the official link. That is O16 again, reached by a different road.
+      // A search hit's lex_id is DocJson's d.Key, and Lex.Temporal.VersionIdentity is the single
+      // source of truth for what that is: publisher:group:yyyy-MM-dd--<64 lowercase hex>, where
+      // the date is the version's valid_from and the hash is SHA-256 of the publisher's own
+      // version identifier. Accepting a two-segment work id, a short or uppercase hash, or a
+      // version date that disagrees with valid_from meant this client's idea of a coordinate was
+      // WIDER than anything the producer can mint, so rows that cannot exist were still able to
+      // authorise a suppression.
+      if (parts.length !== 3) { claimable = false; continue; }
+      const [publisher, group, version] = parts;
+      // The shared producer grammar for the first two segments, imported rather than copied, so
+      // this and the notice cannot drift into disagreeing about what a coordinate is.
       if (!PUBLISHER.test(publisher) || !IDENTIFIER.test(group)) { claimable = false; continue; }
-      // A version segment, when present, is an identifier too. It is not required to be a date:
-      // this validates the shape the producer can mint rather than guessing at its meaning.
-      if (parts.length === 3 && !IDENTIFIER.test(parts[2])) { claimable = false; continue; }
+      const canonicalVersion = /^(\d{4}-\d{2}-\d{2})--([0-9a-f]{64})$/.exec(version);
+      if (canonicalVersion === null) { claimable = false; continue; }
       // The row must belong to the unit that carried it.
       if (publisher !== unit.publisher) { claimable = false; continue; }
       if (!canonicalDate(row.valid_from)) { claimable = false; continue; }
+      // The version key carries its own date, and it is the same fact as valid_from. Two spellings
+      // of one fact that disagree are not a coordinate; they are a response nobody can place.
+      if (canonicalVersion[1] !== row.valid_from) { claimable = false; continue; }
+      if (!canonicalDate(canonicalVersion[1])) { claimable = false; continue; }
       if (row.valid_to !== undefined && row.valid_to !== null
           && !canonicalDate(row.valid_to)) { claimable = false; continue; }
       // Reasons may be absent, which is unknown and renders; present but not an array of strings
