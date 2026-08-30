@@ -62,10 +62,22 @@ public static class FallbackEndpoints
     public static IEndpointRouteBuilder MapFallbackRoute(
         this IEndpointRouteBuilder app, WebContext ctx)
     {
-        // Explicit catch-all. MapFallback(RequestDelegate) defaults to {*path:nonfile}, which
-        // excludes anything that looks like a file, so /no-such.css and /api/no-such.json fell
-        // through to the zero-byte 404 this module exists to remove.
-        app.MapFallback("{*path}", (HttpContext http) =>
+        // Two registrations on purpose, and the split is load-bearing.
+        //
+        // The machine lanes need a catch-all that admits dots, because /api/no-such.json is an
+        // ordinary request there and the default {*path:nonfile} pattern excludes it.
+        //
+        // The human lane keeps nonfile. A blanket {*path} also swallows requests for static
+        // assets, which is exactly why that constraint is the framework default: replacing it
+        // turned three passing asset tests from OK into NotFound. An extensionless path is what
+        // a reader types; a .css or .js request is the asset lane and an HTML page is not a
+        // useful answer to it.
+        app.MapFallback("/api/{*rest}", Answer);
+        app.MapFallback("/mcp/{*rest}", Answer);
+        app.MapFallback(Answer);
+        return app;
+
+        IResult Answer(HttpContext http)
         {
             var path = http.Request.Path.Value ?? "";
             var accept = http.Request.Headers.Accept.ToString();
@@ -84,7 +96,6 @@ public static class FallbackEndpoints
                 Page(ctx.PublicBase, "Page not found", TrustNotices.UnknownRoute(),
                      extraHead: NoIndexFollow),
                 "text/html", statusCode: 404);
-        });
-        return app;
+        }
     }
 }

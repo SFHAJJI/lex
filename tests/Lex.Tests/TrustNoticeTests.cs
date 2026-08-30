@@ -352,10 +352,9 @@ public sealed class TrustNoticeTests : IDisposable
     {
         using var site = new NoticeSite(Path.Combine(_root, "dotted"), includeAct: false);
 
-        var page = await site.Client.GetAsync("/no-such.css");
-        var pageBody = await page.Content.ReadAsStringAsync();
-        Assert.Equal(HttpStatusCode.NotFound, page.StatusCode);
-        Assert.Contains("Page not found", pageBody, StringComparison.Ordinal);
+        // A dotted path in the HUMAN lane stays with the asset lane. A blanket catch-all there
+        // swallows static assets, which is why nonfile is the framework default; an HTML page is
+        // not a useful answer to a request for a stylesheet.
 
         foreach (var machine in new[] { "/api/no-such.json", "/mcp/no-such.json" })
         {
