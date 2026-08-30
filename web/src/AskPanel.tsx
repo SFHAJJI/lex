@@ -2,7 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { AskExecutionDetails, AskMessage, Step } from "./api";
-import { STARTER_PROMPTS, parseAssistantPanelState } from "./assistantShell";
+import {
+  STARTER_PROMPTS,
+  assistantPanelStateAfterNavigation,
+  initialAssistantPanelState,
+} from "./assistantShell";
 
 export interface AskPanelProps {
   q: string;
@@ -16,7 +20,7 @@ export interface AskPanelProps {
   onSubmit: (text: string) => void;
   onReset: () => void;
   onOpenStep: (step: Step) => void;
-  followUps?: { label: string; run: () => void }[];
+  followUps?: { label: string; run: () => void; navigates?: boolean }[];
 }
 
 const compactJson = (value: unknown, maximum: number) => {
@@ -155,6 +159,7 @@ function ExecutionDetails({ value }: { value?: AskExecutionDetails }) {
 }
 
 const PANEL_KEY = "lex.ask.panel.v1";
+const NAVIGATION_DISMISSAL_KEY = "lex.ask.dismiss-on-navigation.v1";
 const MODAL_QUERY = "(width < 1100px)";
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 // Kept in step with the .askpanel transition in styles.css.
@@ -169,9 +174,13 @@ export default function AskPanel(p: AskPanelProps) {
   // asked. A stored choice always wins over both.
   const initial = useRef((() => {
     let raw: string | null = null;
-    try { raw = sessionStorage.getItem(PANEL_KEY); } catch { raw = null; }
-    const stored = parseAssistantPanelState(raw);
-    return raw === null && modalViewport() ? { open: false, minimized: false } : stored;
+    let dismissAfterNavigation = false;
+    try {
+      raw = sessionStorage.getItem(PANEL_KEY);
+      dismissAfterNavigation = sessionStorage.getItem(NAVIGATION_DISMISSAL_KEY) === "1";
+      sessionStorage.removeItem(NAVIGATION_DISMISSAL_KEY);
+    } catch { raw = null; }
+    return initialAssistantPanelState(raw, modalViewport(), dismissAfterNavigation);
   })()).current;
   const [open, setOpen] = useState(initial.open);
   const [minimized, setMinimized] = useState(initial.minimized);
@@ -263,6 +272,22 @@ export default function AskPanel(p: AskPanelProps) {
   }, [p.conversation.length, p.activeQuestion, p.steps.length, p.said]);
 
   const show = () => { setOpen(true); setMinimized(false); };
+  const runNavigation = (run: () => void) => {
+    if (modal) {
+      const next = assistantPanelStateAfterNavigation({ open, minimized }, modal);
+      setClosing(false);
+      setOpen(next.open);
+      setMinimized(next.minimized);
+      // location.assign can unload before the state effect runs. Persist synchronously so the
+      // destination does not restore the modal over the workspace the reader just requested.
+      try {
+        sessionStorage.setItem(PANEL_KEY, JSON.stringify(next));
+        sessionStorage.setItem(NAVIGATION_DISMISSAL_KEY, "1");
+      }
+      catch { /* Tab-scoped state is optional in restricted browsing modes. */ }
+    }
+    run();
+  };
   // The panel used to appear and vanish on the same frame it mounted and unmounted, so opening the
   // assistant read as a jump-cut. It now stays mounted for the length of its own exit transition and
   // enters from the closed state on the first frame, which is also what makes the default-open panel
@@ -340,7 +365,8 @@ export default function AskPanel(p: AskPanelProps) {
               aria-label="What the assistant is finding">
               {p.steps.map((step, index) => <li key={index} className={step.kind}>
                 <span>{step.text}</span>
-                {step.work ? <button className="chipmini" onClick={() => p.onOpenStep(step)}>open →</button> : null}
+                {step.work ? <button className="chipmini"
+                  onClick={() => runNavigation(() => p.onOpenStep(step))}>open →</button> : null}
               </li>)}
               {p.busy ? <li className="pending"><span>working…</span></li> : null}
             </ol> : null}
@@ -349,7 +375,9 @@ export default function AskPanel(p: AskPanelProps) {
             {p.said ? <ExecutionDetails value={p.execution} /> : null}
             {p.said && (p.followUps?.length ?? 0) > 0 ? <div className="ap-next">
               {p.followUps!.map((followUp) => <button key={followUp.label} className="ap-chip next"
-                onClick={followUp.run}>{followUp.label}</button>)}
+                onClick={() => followUp.navigates
+                  ? runNavigation(followUp.run)
+                  : followUp.run()}>{followUp.label}</button>)}
             </div> : null}
           </div>
 

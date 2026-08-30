@@ -5,10 +5,30 @@ import {
   assistantProvisionLoad,
   assistantTimelineSeed,
   assistantTimelineRows,
+  assistantPanelStateAfterNavigation,
+  initialAssistantPanelState,
   assistantWorkspaceState,
   assistantWorkspaceUrl,
   parseAssistantPanelState,
 } from "./assistantShell.ts";
+
+test("workspace navigation dismisses only a modal assistant", () => {
+  const open = { open: true, minimized: false };
+  assert.deepEqual(assistantPanelStateAfterNavigation(open, true),
+    { open: false, minimized: false });
+  assert.deepEqual(assistantPanelStateAfterNavigation(open, false), open);
+});
+
+test("a modal navigation dismissal survives a reload race exactly once", () => {
+  assert.deepEqual(initialAssistantPanelState(
+    '{"open":true,"minimized":false}', true, true),
+  { open: false, minimized: false });
+  assert.deepEqual(initialAssistantPanelState(
+    '{"open":true,"minimized":false}', true, false),
+  { open: true, minimized: false });
+  assert.deepEqual(initialAssistantPanelState(null, true, false),
+    { open: false, minimized: false });
+});
 
 test("navigating from an assistant reply never retains stale publisher text", () => {
   const full = {

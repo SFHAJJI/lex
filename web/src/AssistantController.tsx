@@ -186,9 +186,16 @@ export default function AssistantController({
         ...unavailableActions.map((action) => ({
           label: action.label,
           run: () => location.assign(action.href),
+          navigates: true,
         })),
-        ...(resultUrl ? [{ label: "Open the structured result", run: () => location.assign(resultUrl) }] : []),
-        ...(allowContextualFollowUps ? contextualFollowUps ?? [] : []),
+        ...(resultUrl ? [{
+          label: "Open the structured result",
+          run: () => location.assign(resultUrl),
+          navigates: true,
+        }] : []),
+        ...(allowContextualFollowUps
+          ? (contextualFollowUps ?? []).map((followUp) => ({ ...followUp, navigates: true }))
+          : []),
       ];
 
   return <AskPanel
