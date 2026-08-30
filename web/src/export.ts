@@ -1,6 +1,7 @@
 import { provisionSourceUrl, type ProvisionItem } from "./api.ts";
 import type { Piece } from "./diff";
 import { evidenceIntervalField, evidenceIntervalLabel } from "./temporal.ts";
+import { HISTORICAL_DENSITY, historicalDensityApplies } from "./notices.ts";
 
 export interface LawEvidence {
   title: string;
@@ -358,6 +359,111 @@ export function comparisonEvidenceMarkdown(input: ComparisonEvidence): string {
   }
   if (input.unchanged.length > 0) {
     lines.push("## Identical provisions", "", input.unchanged.join(", "), "");
+  }
+
+  return `${lines.join("\n").trimEnd()}\n`;
+}
+
+/** One law that moved inside an exported window, as the change report already received it. */
+export interface PeriodRow {
+  work: string;
+  title?: string;
+  versions_in_period: number;
+  first_change: string;
+  last_change: string;
+  permalink?: string;
+  jurisdiction?: string;
+}
+
+export interface PeriodEvidence {
+  from: string;
+  until: string;
+  rows: PeriodRow[];
+  jurisdiction?: string;
+  worksChanged?: number;
+  newVersions?: number;
+  populationWorks?: number;
+  knownExclusions?: string[];
+  permalink: string;
+  exportedAt: string;
+}
+
+const PERIOD_NOT_OFFICIAL =
+  "Lex reading aid, a count of changes observed in held states, not an official publication";
+
+/**
+ * The density caveat is DERIVED here from the same server-provided facts the page reads, and is
+ * never accepted as a flag from the caller. That is the whole point of this function.
+ *
+ * On screen the caveat sits beside the count, so a reader sees both. An exported file travels
+ * without the page: it is pasted into a mail, attached to a memo, quoted in a report. If the
+ * caveat lived only in the view, the exported count would arrive somewhere else reading as a
+ * complete statement of legal change, which for a pre-2017 Luxembourg window it is not. Deriving
+ * it from `from`, the scoped jurisdiction and the rows' own jurisdictions means the page and the
+ * file cannot disagree, and no caller can suppress it by passing the wrong argument.
+ */
+function periodDensityLines(input: PeriodEvidence): string[] {
+  if (!historicalDensityApplies(
+    input.from, input.jurisdiction, input.rows.map((row) => row.jurisdiction))) return [];
+  return [`> **${HISTORICAL_DENSITY.heading}.** ${HISTORICAL_DENSITY.body}`, ""];
+}
+
+const periodScope = (input: PeriodEvidence): string =>
+  input.jurisdiction ? `${input.jurisdiction} law` : "all held jurisdictions";
+
+export function periodCitationText(input: PeriodEvidence): string {
+  return [
+    `Changes ${input.from} to ${input.until}`,
+    periodScope(input),
+    input.worksChanged === undefined ? undefined : `${input.worksChanged} works changed`,
+    input.permalink,
+    PERIOD_NOT_OFFICIAL,
+  ].filter(Boolean).join(" | ");
+}
+
+export function periodEvidenceMarkdown(input: PeriodEvidence): string {
+  const lines = [
+    `# Changes ${input.from} to ${input.until}`,
+    "",
+    `> ${PERIOD_NOT_OFFICIAL}. This is not legal advice.`,
+    "",
+    ...periodDensityLines(input),
+    `- Window: ${input.from} to ${input.until}`,
+    `- Scope: ${periodScope(input)}`,
+    `- Works changed: ${input.worksChanged ?? "not recorded"}`,
+    `- New versions: ${input.newVersions ?? "not recorded"}`,
+    `- Works in scope: ${input.populationWorks ?? "not recorded"}`,
+    `- Lex permalink: ${input.permalink}`,
+    `- Exported at: ${input.exportedAt}`,
+    "",
+  ];
+
+  if (input.knownExclusions?.length) {
+    lines.push(
+      "## Known exclusions",
+      "",
+      ...input.knownExclusions.map((reason) => `- ${oneLine(reason)}`),
+      "",
+    );
+  }
+
+  lines.push("## Laws that changed", "");
+  if (input.rows.length === 0) {
+    // An empty report is a real answer and says so, rather than rendering a bare heading that
+    // reads as a truncated document.
+    lines.push("No held law changed inside this window.", "");
+  }
+  for (const row of input.rows) {
+    lines.push(
+      `### ${oneLine(row.title ?? row.work)}`,
+      "",
+      `- Work: ${row.work}`,
+      `- Versions in period: ${row.versions_in_period}`,
+      `- First change: ${row.first_change}`,
+      `- Last change: ${row.last_change}`,
+      `- Lex permalink: ${row.permalink ?? "not recorded"}`,
+      "",
+    );
   }
 
   return `${lines.join("\n").trimEnd()}\n`;

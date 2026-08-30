@@ -13,7 +13,10 @@ import { publisherOf, workSlug } from "./state";
 import { shorten } from "./pickers";
 import { assistantTimelineRows } from "./assistantShell";
 import { EvidenceActions } from "./EvidenceActions";
-import { citationText, evidenceFilename, lawEvidenceMarkdown } from "./export";
+import {
+  citationText, evidenceFilename, lawEvidenceMarkdown, periodCitationText,
+  periodEvidenceMarkdown,
+} from "./export";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { remarkLegalText } from "./legalText.ts";
@@ -472,6 +475,12 @@ export function Ranking({ rows, worksChanged, newVersions, populationWorks, know
   // legal change. The condition reads only server-provided facts (the echoed window and the
   // rows' own jurisdictions); the browser never infers legal state.
   const density = historicalDensityApplies(from, jurisdiction, rows.map((r) => r.jurisdiction));
+  const periodEvidence = () => ({
+    from, until: to, rows, jurisdiction, worksChanged, newVersions, populationWorks,
+    knownExclusions,
+    permalink: window.location.href,
+    exportedAt: new Date().toISOString(),
+  });
 
   // Scope controls stay above the rows, so a filter that matches nothing never removes its own
   // escape hatch.
@@ -486,6 +495,14 @@ export function Ranking({ rows, worksChanged, newVersions, populationWorks, know
         {populationLabel ? <span className="tag">{populationLabel}</span> : null}
         <span className="tag mono">{from} → {to}</span>
         <span className="layers-hint">Every selected jurisdiction shares one dated ranking</span>
+        {/* The caveat this report may carry lives on the page, and the page is exactly
+            what an exported file leaves behind. periodEvidenceMarkdown therefore derives
+            the caveat again from these same server facts rather than taking a flag, so a
+            file that travels into a mail or a memo cannot state the count without it. */}
+        <EvidenceActions
+          citation={periodCitationText(periodEvidence())}
+          markdown={() => periodEvidenceMarkdown(periodEvidence())}
+          filename={evidenceFilename(`changes-${from}-${to}`, jurisdiction ?? "all")} />
       </div>
       {knownExclusions && knownExclusions.length > 0
         ? <p className="sub">Known exclusions: {knownExclusions.join(" · ")}</p>

@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   citationText, comparisonCitationText, comparisonEvidenceMarkdown, evidenceFilename,
-  lawEvidenceMarkdown, type ComparisonRow, type ComparisonScope,
+  lawEvidenceMarkdown, periodCitationText, periodEvidenceMarkdown,
+  type ComparisonRow, type ComparisonScope, type PeriodEvidence,
 } from "./export.ts";
+import { HISTORICAL_DENSITY } from "./notices.ts";
 
 /**
  * A well-formed digest for a fixture.
@@ -573,4 +575,88 @@ test("a well-formed digest is still stated, so the guard is not simply refusing 
   });
   assert.match(citation, new RegExp(`text SHA-256 ${good}`));
   assert.doesNotMatch(citation, /digest withheld/);
+});
+
+
+/**
+ * A change report whose window opens before 2017 with Luxembourg law in scope. The page shows the
+ * density caveat beside this count; these tests hold the exported FILE to the same standard,
+ * because the file is what actually travels away from the page.
+ */
+const periodFixture = (over: Partial<PeriodEvidence> = {}): PeriodEvidence => ({
+  from: "2015-01-01",
+  until: "2016-12-31",
+  jurisdiction: "lu",
+  rows: [{
+    work: "lu-legilux:loi-2006-07-31-n2",
+    title: "Code du travail",
+    versions_in_period: 2,
+    first_change: "2015-03-04",
+    last_change: "2016-11-02",
+    permalink: "https://law.soufien.lu/lu-legilux/loi-2006-07-31-n2",
+    jurisdiction: "lu",
+  }],
+  worksChanged: 1,
+  newVersions: 2,
+  populationWorks: 4000,
+  permalink: "https://law.soufien.lu/changed?from=2015-01-01",
+  exportedAt: "2026-08-30T10:00:00Z",
+  ...over,
+});
+
+test("an exported pre-2017 Luxembourg report carries the density caveat in the file", () => {
+  const md = periodEvidenceMarkdown(periodFixture());
+  assert.ok(md.includes(HISTORICAL_DENSITY.heading),
+    "the exported document must carry the caveat heading");
+  assert.ok(md.includes(HISTORICAL_DENSITY.body),
+    "the exported document must carry the frozen Decision 41 body verbatim");
+});
+
+test("a window that does not reach before 2017 carries no caveat", () => {
+  const md = periodEvidenceMarkdown(periodFixture({ from: "2019-01-01", until: "2020-01-01" }));
+  assert.ok(!md.includes(HISTORICAL_DENSITY.heading));
+});
+
+test("a pre-2017 window with no Luxembourg law in scope carries no caveat", () => {
+  const md = periodEvidenceMarkdown(periodFixture({
+    jurisdiction: "eu",
+    rows: [{ ...periodFixture().rows[0], jurisdiction: "eu" }],
+  }));
+  assert.ok(!md.includes(HISTORICAL_DENSITY.heading));
+});
+
+/**
+ * The caveat is DERIVED from the rows the server returned, never accepted as a caller flag. An
+ * unscoped report that happens to hold a Luxembourg row still warns, which is the case a caller
+ * could most easily have suppressed by accident.
+ */
+test("an unscoped pre-2017 report still warns when a Luxembourg row is present", () => {
+  const md = periodEvidenceMarkdown(periodFixture({ jurisdiction: undefined }));
+  assert.ok(md.includes(HISTORICAL_DENSITY.heading));
+});
+
+test("every exported report and citation says it is not an official publication", () => {
+  const md = periodEvidenceMarkdown(periodFixture({ from: "2019-01-01" }));
+  assert.ok(md.includes("not an official publication"));
+  assert.ok(periodCitationText(periodFixture()).includes("not an official publication"));
+});
+
+test("an empty report states the absence instead of rendering a bare heading", () => {
+  const md = periodEvidenceMarkdown(periodFixture({ rows: [], worksChanged: 0 }));
+  assert.ok(md.includes("No held law changed inside this window."));
+});
+
+test("the exported report states its window, scope and counts", () => {
+  const md = periodEvidenceMarkdown(periodFixture());
+  assert.ok(md.includes("- Window: 2015-01-01 to 2016-12-31"));
+  assert.ok(md.includes("- Works changed: 1"));
+  assert.ok(md.includes("Code du travail"));
+});
+
+test("counts the producer did not send are named, never rendered as zero", () => {
+  const md = periodEvidenceMarkdown(periodFixture({
+    worksChanged: undefined, newVersions: undefined, populationWorks: undefined,
+  }));
+  assert.ok(md.includes("- Works changed: not recorded"));
+  assert.ok(!md.includes("- Works changed: 0"));
 });
