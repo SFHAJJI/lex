@@ -203,7 +203,23 @@ public sealed class AzureRawResponseSink : IRawResponseSink
         IReadOnlyDictionary<string, string> expectedMetadata,
         CancellationToken cancellationToken)
     {
-        if (!readback.Content.CanRead
+        bool canRead;
+        try
+        {
+            canRead = readback.Content.CanRead;
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            throw new AzureEvidenceStoreException(
+                AzureEvidenceStoreFailureKind.Ambiguous);
+        }
+
+        if (!canRead
             || readback.ContentLength != expectedBody.Length
             || !string.Equals(readback.VersionId, expectedVersion.VersionId,
                 StringComparison.Ordinal)
@@ -213,42 +229,41 @@ public sealed class AzureRawResponseSink : IRawResponseSink
             throw new InvalidDataException(
                 "Remote evidence properties did not match the captured body.");
 
-        try
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        var buffer = new byte[64 * 1024];
+        long length = 0;
+        while (true)
         {
-            using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-            var buffer = new byte[64 * 1024];
-            long length = 0;
-            while (true)
+            int read;
+            try
             {
-                var read = await readback.Content.ReadAsync(buffer, cancellationToken)
+                read = await readback.Content.ReadAsync(buffer, cancellationToken)
                     .ConfigureAwait(false);
-                if (read == 0) break;
-                if (length > expectedBody.Length - read)
-                    throw new InvalidDataException(
-                        "Remote evidence readback exceeded the captured length.");
-                hash.AppendData(buffer, 0, read);
-                length += read;
+            }
+            catch (OperationCanceledException)
+                when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch
+            {
+                throw new AzureEvidenceStoreException(
+                    AzureEvidenceStoreFailureKind.Ambiguous);
             }
 
-            var digest = Convert.ToHexStringLower(hash.GetHashAndReset());
-            if (length != expectedBody.Length
-                || !string.Equals(digest, expectedBody.Sha256, StringComparison.Ordinal))
+            if (read == 0) break;
+            if (length > expectedBody.Length - read)
                 throw new InvalidDataException(
-                    "Remote evidence bytes did not match the captured body.");
+                    "Remote evidence readback exceeded the captured length.");
+            hash.AppendData(buffer, 0, read);
+            length += read;
         }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (InvalidDataException)
-        {
-            throw;
-        }
-        catch
-        {
-            throw new AzureEvidenceStoreException(
-                AzureEvidenceStoreFailureKind.Ambiguous);
-        }
+
+        var digest = Convert.ToHexStringLower(hash.GetHashAndReset());
+        if (length != expectedBody.Length
+            || !string.Equals(digest, expectedBody.Sha256, StringComparison.Ordinal))
+            throw new InvalidDataException(
+                "Remote evidence bytes did not match the captured body.");
     }
 
     private static bool MetadataMatches(
@@ -281,8 +296,9 @@ public sealed class AzureRawResponseSink : IRawResponseSink
         if (expected.Lane == EvidenceRetentionLane.Nightly90Days)
         {
             if (expected.ImmutableUntil is null
+                || actual.ImmutableUntil is null
                 || actual.ImmutableUntil < expected.ImmutableUntil
-                || actual.ImmutabilityMode is not ("Unlocked" or "Locked"))
+                || actual.ImmutabilityMode != "Locked")
                 throw new InvalidDataException(
                     "Azure did not confirm the nightly immutability policy.");
             return;
@@ -322,10 +338,18 @@ public sealed class AzureRawResponseSink : IRawResponseSink
         DateTimeOffset fetchedAt) => lane switch
         {
             EvidenceRetentionLane.Nightly90Days => new(
-                lane, fetchedAt.AddDays(90)),
+                lane, CeilingToWholeUtcSecond(fetchedAt.AddDays(90))),
             EvidenceRetentionLane.EvidenceReleaseIndefinite => new(lane, null),
             _ => throw new ArgumentOutOfRangeException(nameof(lane)),
         };
+
+    private static DateTimeOffset CeilingToWholeUtcSecond(
+        DateTimeOffset value)
+    {
+        var remainder = value.Ticks % TimeSpan.TicksPerSecond;
+        if (remainder == 0) return value;
+        return value.AddTicks(TimeSpan.TicksPerSecond - remainder);
+    }
 
     private static string BlobName(
         EvidenceRetentionLane lane,
