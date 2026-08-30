@@ -1040,6 +1040,30 @@ public sealed class TrustNoticeTests : IDisposable
     }
 
     /// <summary>
+    /// Rebuild 0 has not replaced every mounted V2 coordinate yet. Its same-date disambiguator is
+    /// a readable route, but it is not a canon/2 identity and therefore cannot authorize a V3
+    /// response-wide metadata claim.
+    /// </summary>
+    [Fact]
+    public void A_v2_same_date_disambiguator_renders_without_authorising_v3_suppression()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "v2-disambiguator"), includeAct: false);
+        using var reader = site.Reader();
+        var result = CompleteMetadataSearchResult();
+        var hit = (JsonObject)((JsonArray)result["hits"]!)[0]!;
+        hit["lex_id"] = "lu-legilux:loi-2006-07-31-n2:2024-08-04--02";
+
+        var page = CatalogueEndpoints.RenderSearchResults(
+            [result], new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader });
+
+        Assert.Contains("1 hit(s)", page, StringComparison.Ordinal);
+        Assert.Contains("Code du travail", page, StringComparison.Ordinal);
+        Assert.Contains("matched only in metadata", page, StringComparison.Ordinal);
+        Assert.DoesNotContain(MatchLanes.Heading, page, StringComparison.Ordinal);
+        Assert.DoesNotContain("could not be read", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// A disclosure coordinate and its render destination are one fact. A missing, blank or
     /// contradictory work field cannot both refuse rendering and authorize a positive metadata
     /// claim from the same publisher envelope.

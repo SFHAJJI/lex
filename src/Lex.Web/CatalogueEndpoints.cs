@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json.Nodes;
 using Lex.Index;
 using Lex.Mcp;
+using Lex.Temporal;
 using static Lex.Web.PageShell;
 using static Lex.Web.Fragments;
 
@@ -871,16 +872,36 @@ public static class CatalogueEndpoints
                 || !TryIsoDate(validFrom, out _)) return false;
             var lexId = TrustNotices.Text(hit["lex_id"]);
             if (lexId is null) return true;
-            if (lexId.Contains("--", StringComparison.Ordinal))
-                return DisclosureRowOf(publisherId, hit) is not null;
             var parts = lexId.Split(':');
+            if (parts.Length != 3) return false;
+            if (IsCanonicalVersion(parts[2]))
+                return DisclosureRowOf(publisherId, hit) is not null;
             var normalizedWork = work.StartsWith(publisherId + ":", StringComparison.Ordinal)
                 ? work[(publisherId.Length + 1)..] : work;
-            return parts.Length == 3
-                && string.Equals(parts[0], publisherId, StringComparison.Ordinal)
+            return string.Equals(parts[0], publisherId, StringComparison.Ordinal)
                 && string.Equals(parts[1], normalizedWork, StringComparison.Ordinal)
-                && string.Equals(parts[2], validFrom, StringComparison.Ordinal);
+                && IsReadableLegacyVersion(parts[2], validFrom);
         }
+
+        static bool IsCanonicalVersion(string version)
+        {
+            try
+            {
+                VersionIdentity.DateOf(version);
+                return true;
+            }
+            catch (InvalidDataException)
+            {
+                return false;
+            }
+        }
+
+        static bool IsReadableLegacyVersion(string version, string validFrom) =>
+            string.Equals(version, validFrom, StringComparison.Ordinal)
+            || version.Length == 14
+            && string.Equals(version[..10], validFrom, StringComparison.Ordinal)
+            && version[10..12] == "--"
+            && version[12..].All(character => character is >= '0' and <= '9');
 
         // The population is the partition THIS PAGE accepted, and nothing else. A status filter
         // is not that partition: status ok with query_ran false is a query nobody executed, and the
