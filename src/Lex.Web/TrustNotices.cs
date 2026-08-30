@@ -80,6 +80,43 @@ public static class TrustNotices
             """;
     }
 
+    /// <summary>The 2017 boundary below which Legilux consolidation coverage thins.</summary>
+    internal const string LuDensityBoundary = "2017-01-01";
+
+    /// <summary>
+    /// The historical_density notice, or null when the window does not reach before 2017 with
+    /// Luxembourg in scope. Copy frozen by Decision 41.
+    ///
+    /// This is the fifth Phase 0 notice and it existed only in the browser bundle. The
+    /// server-rendered change report is the one surface in this lane that counts changes, so the
+    /// same reader was given the caveat in the workspace and not on the page that states the
+    /// number. The predicate mirrors the browser's exactly: the window must start before the
+    /// boundary AND Luxembourg must be in scope, both from server-provided facts.
+    /// </summary>
+    public static string? HistoricalDensity(string fromDate, IEnumerable<string> jurisdictions)
+    {
+        if (string.CompareOrdinal(fromDate, LuDensityBoundary) >= 0) return null;
+        if (!jurisdictions.Any(IsLuxembourg)) return null;
+
+        var body = "For Luxembourg periods before 2017, Lex holds fewer dated consolidation "
+            + "states. This result counts changes observed in held states, not every legal "
+            + "change. A lower count may reflect coverage.";
+
+        return $"""
+            <div class="notice" role="note" aria-label="Historical coverage is less dense">
+            <b>Historical coverage is less dense.</b>
+            {body}
+            <span class="sub"><a href="/coverage">View coverage for this period</a></span>
+            </div>
+            """;
+    }
+
+    private static bool IsLuxembourg(string? value) =>
+        value is not null
+        && (value.Equals("lu", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("lu-legilux", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("luxembourg", StringComparison.OrdinalIgnoreCase));
+
     /// <summary>
     /// The metadata_only no-hit card, or null when no metadata-only match was actually suppressed.
     /// Copy frozen by Decision 41.

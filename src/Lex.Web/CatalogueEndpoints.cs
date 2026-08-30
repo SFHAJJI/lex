@@ -384,7 +384,7 @@ public static class CatalogueEndpoints
                     "LU" => """
                       The publisher only maintains consolidated (amendments-merged) editions for some laws,
                       the codes and frequently amended acts. Lex holds <b>all of those</b>. The other
-                      ≈24,579 Luxembourg acts never get a consolidated edition; they are <b>not here yet</b>
+                      Luxembourg acts never get a consolidated edition; they are <b>not here yet</b>
                       (and we won't guess dates for texts we haven't seen).
                       """,
                     "EU" => $" The mounted index contains {c.Groups:n0} EU acts and related legal materials from the reviewed scope. Expansion remains gated by the scope preview and corpus release.",
@@ -479,7 +479,12 @@ public static class CatalogueEndpoints
                     }
                     var gap = r.Stamp.GetValueOrDefault("jurisdiction", "").ToUpperInvariant() switch
                     {
-                        "LU" => "Approximately 24,579 never-consolidated Luxembourg acts are not ingested (date coverage unmeasured).",
+                        // No count. The count-at-build rule forbids a population literal in copy,
+                        // and this one is measurably wrong: the gap matrix puts the
+                        // never-consolidated set at 23,370 of a 24,622 population, not 24,579. It
+                        // cannot be computed here either, because those acts are precisely the ones
+                        // not ingested, so the honest move is to state the class and not size it.
+                        "LU" => "Never-consolidated Luxembourg acts are not ingested (count and date coverage unmeasured).",
                         "EU" => "EU coverage is the reviewed configured scope, not the complete EUR-Lex universe.",
                         _ => "Coverage is limited to this publisher's configured and verified scope.",
                     };
@@ -674,9 +679,15 @@ public static class CatalogueEndpoints
                 <div class="card" style="border-color:var(--accent)">
                   <b>{totalWorks:n0} law(s) changed</b> between {H(f)} and {H(t)},
                   producing <b>{totalVersions:n0} new version(s)</b>.
-                  {(totalWorks == 0 ? "Nothing moved in this window, which is itself an answer." : "")}
+                  {(totalWorks == 0 ? "No held state changed in this window. That is what Lex "
+                      + "observed, not a finding that no law changed." : "")}
                 </div>
                 """);
+            // The fifth Phase 0 notice. It shipped in the browser bundle and never here, on the
+            // one page in this lane that states a change count.
+            sb.Append(TrustNotices.HistoricalDensity(f, publisher is { Length: > 0 }
+                ? [publisher]
+                : readers.Values.Select(r => r.Stamp.GetValueOrDefault("jurisdiction", r.Collection))));
             sb.Append(blocks);
             sb.Append($"""
                 <p class="sub">Same data, from your own code:

@@ -60,6 +60,67 @@ public sealed class TrustNoticeTests : IDisposable
         }
     }
 
+    private const string DensityHeading = "Historical coverage is less dense";
+
+    /// <summary>
+    /// The fifth Phase 0 notice shipped in the browser bundle and never in the server lane, so the
+    /// same reader was given the caveat in the workspace and not on the page that states the count.
+    /// The predicate is both halves: the window reaches before 2017 AND Luxembourg is in scope.
+    /// </summary>
+    [Fact]
+    public void The_density_caveat_appears_only_for_a_pre_2017_luxembourg_window()
+    {
+        var rendered = TrustNotices.HistoricalDensity("2016-12-31", ["LU"]);
+        Assert.NotNull(rendered);
+        Assert.Contains(DensityHeading, rendered, StringComparison.Ordinal);
+        Assert.Contains(
+            "For Luxembourg periods before 2017, Lex holds fewer dated consolidation states. This "
+            + "result counts changes observed in held states, not every legal change. A lower count "
+            + "may reflect coverage.", rendered, StringComparison.Ordinal);
+
+        // The boundary itself is not "before".
+        Assert.Null(TrustNotices.HistoricalDensity("2017-01-01", ["LU"]));
+        Assert.Null(TrustNotices.HistoricalDensity("2020-01-01", ["LU"]));
+        // Luxembourg must be in scope; the caveat is about Legilux consolidation density.
+        Assert.Null(TrustNotices.HistoricalDensity("2016-12-31", ["EU"]));
+        Assert.Null(TrustNotices.HistoricalDensity("2016-12-31", []));
+        // Every spelling the server can supply for the same jurisdiction.
+        foreach (var spelling in new[] { "lu", "LU", "lu-legilux", "Luxembourg" })
+            Assert.NotNull(TrustNotices.HistoricalDensity("2016-12-31", [spelling]));
+    }
+
+    /// <summary>
+    /// A change report with no rows may state what Lex observed. It may not state that no law
+    /// changed, because the count is computed from held consolidation states only.
+    /// </summary>
+    [Fact]
+    public async Task An_empty_change_report_does_not_claim_that_no_law_changed()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "changed-empty"), includeAct: false);
+        var page = await site.Client.GetStringAsync("/changed?from=1900-01-01&to=1900-12-31");
+
+        Assert.DoesNotContain("Nothing moved in this window", page, StringComparison.Ordinal);
+        Assert.Contains("not a finding that no law changed", page, StringComparison.Ordinal);
+        // A pre-2017 Luxembourg window carries the caveat on the page that states the number.
+        Assert.Contains(DensityHeading, page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The count-at-build rule forbids a population literal in copy, and this one is measurably
+    /// wrong: the never-consolidated set is 23,370 of a 24,622 population, not 24,579.
+    /// </summary>
+    [Fact]
+    public async Task No_page_states_the_stale_population_figure()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "no-literal"), includeAct: false);
+
+        foreach (var route in new[] { "/coverage", "/in-force-on?date=2024-08-04" })
+        {
+            var page = await site.Client.GetStringAsync(route);
+            Assert.DoesNotContain("24,579", page, StringComparison.Ordinal);
+        }
+    }
+
     private const string MetadataOnlyHeading = "No held text match";
 
     /// <summary>
@@ -482,6 +543,10 @@ public sealed class TrustNoticeTests : IDisposable
             var stamp = new Dictionary<string, string>
             {
                 ["collection"] = "lu-legilux", ["tier"] = "A",
+                // Without this the jurisdiction switch on /in-force-on falls to its default
+                // branch and the Luxembourg population disclosure never renders, which made an
+                // assertion about that copy pass against a page that never contained it.
+                ["jurisdiction"] = "LU",
                 ["history_begins"] = "publisher",
                 ["built_at"] = "2026-08-14T00:00:00Z", ["corpus_commit"] = "test",
             };
