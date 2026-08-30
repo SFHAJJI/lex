@@ -1,0 +1,447 @@
+using Azure.Core;
+using Lex.Law;
+using System.Globalization;
+using System.Security.Cryptography;
+
+namespace Lex.Evidence.Azure;
+
+public enum EvidenceRetentionLane
+{
+    Nightly90Days = 1,
+    EvidenceReleaseIndefinite = 2,
+}
+
+public sealed class AzureRawResponseSink : IRawResponseSink
+{
+    internal static readonly TimeSpan OverallDeadline = TimeSpan.FromMinutes(2);
+    internal const int MaximumAttempts = 3;
+
+    private readonly IAzureRawEvidenceStore _store;
+    private readonly EvidenceRetentionLane _retentionLane;
+    private readonly TimeProvider _timeProvider;
+    private readonly TimeSpan _overallDeadline;
+
+    public AzureRawResponseSink(
+        Uri containerUri,
+        TokenCredential credential,
+        EvidenceRetentionLane retentionLane)
+    {
+        ArgumentNullException.ThrowIfNull(credential);
+        _retentionLane = RequireRetentionLane(retentionLane);
+        _store = new AzureBlobRawEvidenceStore(
+            RequireSafeContainerUri(containerUri), credential);
+        _timeProvider = TimeProvider.System;
+        _overallDeadline = OverallDeadline;
+    }
+
+    internal AzureRawResponseSink(
+        IAzureRawEvidenceStore store,
+        EvidenceRetentionLane retentionLane,
+        TimeProvider? timeProvider = null,
+        TimeSpan? overallDeadline = null)
+    {
+        _store = store ?? throw new ArgumentNullException(nameof(store));
+        _retentionLane = RequireRetentionLane(retentionLane);
+        _timeProvider = timeProvider ?? TimeProvider.System;
+        _overallDeadline = overallDeadline ?? OverallDeadline;
+        if (_overallDeadline <= TimeSpan.Zero
+            || _overallDeadline > OverallDeadline)
+            throw new ArgumentOutOfRangeException(nameof(overallDeadline));
+    }
+
+    public async Task<EvidenceRef> CaptureAsync(
+        SourceRequestIdentity request,
+        BoundedResponseMetadata response,
+        Stream body,
+        CancellationToken cancellationToken = default)
+    {
+        await CaptureVerifiedAsync(
+            request, response, body, cancellationToken).ConfigureAwait(false);
+        throw new NotSupportedException(
+            "EvidenceRef issuance awaits the reviewed Lex.Law authority boundary.");
+    }
+
+    internal async Task<AzureVerifiedEvidence> CaptureVerifiedAsync(
+        SourceRequestIdentity request,
+        BoundedResponseMetadata response,
+        Stream body,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(response);
+        ArgumentNullException.ThrowIfNull(body);
+        if (!response.BodyComplete)
+            throw new InvalidDataException(
+                "Incomplete publisher bytes cannot become durable evidence.");
+        if (!body.CanRead)
+            throw new InvalidDataException("The publisher body is not readable.");
+
+        using var deadline = new CancellationTokenSource(
+            _overallDeadline, _timeProvider);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken, deadline.Token);
+        var token = linked.Token;
+
+        await using var buffered = await BufferBodyAsync(
+            body, request.MaximumResponseBytes, token).ConfigureAwait(false);
+        var blobName = BlobName(_retentionLane, request.RequestId, buffered.Sha256);
+        var metadata = Metadata(
+            _retentionLane, request.RequestId, buffered.Sha256, buffered.Length);
+        var retention = RetentionRequest(_retentionLane, response.FetchedAt);
+        AzureEvidenceObjectVersion? version = null;
+
+        for (var attempt = 1; attempt <= MaximumAttempts; attempt++)
+        {
+            token.ThrowIfCancellationRequested();
+            try
+            {
+                if (version is null)
+                {
+                    buffered.Content.Position = 0;
+                    try
+                    {
+                        version = await _store.CreateOnlyAsync(
+                            blobName,
+                            buffered.Content,
+                            metadata,
+                            token).ConfigureAwait(false);
+                    }
+                    catch (AzureEvidenceStoreException error)
+                        when (error.Kind is AzureEvidenceStoreFailureKind.AlreadyExists
+                            or AzureEvidenceStoreFailureKind.Ambiguous)
+                    {
+                        version = await _store.ResolveCurrentVersionAsync(
+                            blobName, token).ConfigureAwait(false);
+                    }
+                }
+
+                await using var readback = await _store.ReadbackAsync(
+                    blobName, version, token).ConfigureAwait(false);
+                await VerifyReadbackAsync(
+                    readback, version, buffered, metadata, token)
+                    .ConfigureAwait(false);
+
+                var retentionFacts = await _store.ApplyAndReadRetentionAsync(
+                    blobName, version, retention, token).ConfigureAwait(false);
+                VerifyRetention(retention, version, retentionFacts);
+
+                return new AzureVerifiedEvidence(
+                    request.RequestId, buffered.Sha256, buffered.Length);
+            }
+            catch (AzureEvidenceStoreException error)
+                when (error.Kind is AzureEvidenceStoreFailureKind.Ambiguous)
+            {
+                // The same blob name and, once known, the same version are retried.
+                if (attempt == MaximumAttempts) break;
+            }
+            catch (AzureEvidenceStoreException error)
+                when (error.Kind is AzureEvidenceStoreFailureKind.Rejected)
+            {
+                throw new IOException(
+                    "Azure rejected the raw evidence operation.");
+            }
+        }
+
+        throw new IOException(
+            "Raw evidence could not be verified after three attempts.");
+    }
+
+    private static async Task<BufferedBody> BufferBodyAsync(
+        Stream body,
+        long maximumBytes,
+        CancellationToken cancellationToken)
+    {
+        var content = new MemoryStream();
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        var buffer = new byte[64 * 1024];
+        long length = 0;
+        try
+        {
+            while (true)
+            {
+                var read = await body.ReadAsync(buffer, cancellationToken)
+                    .ConfigureAwait(false);
+                if (read == 0) break;
+                if (length > maximumBytes - read)
+                    throw new InvalidDataException(
+                        "The publisher body exceeds its declared byte bound.");
+                await content.WriteAsync(buffer.AsMemory(0, read), cancellationToken)
+                    .ConfigureAwait(false);
+                hash.AppendData(buffer, 0, read);
+                length += read;
+            }
+
+            content.Position = 0;
+            return new BufferedBody(
+                content,
+                length,
+                Convert.ToHexStringLower(hash.GetHashAndReset()));
+        }
+        catch (OperationCanceledException)
+        {
+            await content.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
+        catch (InvalidDataException)
+        {
+            await content.DisposeAsync().ConfigureAwait(false);
+            throw new InvalidDataException(
+                "Publisher response bytes could not be buffered.");
+        }
+        catch
+        {
+            await content.DisposeAsync().ConfigureAwait(false);
+            throw new IOException(
+                "Publisher response bytes could not be buffered.");
+        }
+    }
+
+    private static async Task VerifyReadbackAsync(
+        AzureEvidenceReadback readback,
+        AzureEvidenceObjectVersion expectedVersion,
+        BufferedBody expectedBody,
+        IReadOnlyDictionary<string, string> expectedMetadata,
+        CancellationToken cancellationToken)
+    {
+        if (!readback.Content.CanRead
+            || readback.ContentLength != expectedBody.Length
+            || !string.Equals(readback.VersionId, expectedVersion.VersionId,
+                StringComparison.Ordinal)
+            || !string.Equals(readback.ETag, expectedVersion.ETag,
+                StringComparison.Ordinal)
+            || !MetadataMatches(readback.Metadata, expectedMetadata))
+            throw new InvalidDataException(
+                "Remote evidence properties did not match the captured body.");
+
+        try
+        {
+            using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            var buffer = new byte[64 * 1024];
+            long length = 0;
+            while (true)
+            {
+                var read = await readback.Content.ReadAsync(buffer, cancellationToken)
+                    .ConfigureAwait(false);
+                if (read == 0) break;
+                if (length > expectedBody.Length - read)
+                    throw new InvalidDataException(
+                        "Remote evidence readback exceeded the captured length.");
+                hash.AppendData(buffer, 0, read);
+                length += read;
+            }
+
+            var digest = Convert.ToHexStringLower(hash.GetHashAndReset());
+            if (length != expectedBody.Length
+                || !string.Equals(digest, expectedBody.Sha256, StringComparison.Ordinal))
+                throw new InvalidDataException(
+                    "Remote evidence bytes did not match the captured body.");
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (InvalidDataException)
+        {
+            throw;
+        }
+        catch
+        {
+            throw new AzureEvidenceStoreException(
+                AzureEvidenceStoreFailureKind.Ambiguous);
+        }
+    }
+
+    private static bool MetadataMatches(
+        IReadOnlyDictionary<string, string> actual,
+        IReadOnlyDictionary<string, string> expected)
+    {
+        if (actual.Count != expected.Count) return false;
+        foreach (var pair in expected)
+        {
+            var match = actual.FirstOrDefault(candidate =>
+                string.Equals(candidate.Key, pair.Key,
+                    StringComparison.OrdinalIgnoreCase));
+            if (match.Key is null
+                || !string.Equals(match.Value, pair.Value, StringComparison.Ordinal))
+                return false;
+        }
+        return true;
+    }
+
+    private static void VerifyRetention(
+        AzureEvidenceRetentionRequest expected,
+        AzureEvidenceObjectVersion version,
+        AzureEvidenceRetentionFacts actual)
+    {
+        if (!string.Equals(actual.VersionId, version.VersionId,
+                StringComparison.Ordinal))
+            throw new InvalidDataException(
+                "Azure returned retention facts for a different blob version.");
+
+        if (expected.Lane == EvidenceRetentionLane.Nightly90Days)
+        {
+            if (expected.ImmutableUntil is null
+                || actual.ImmutableUntil < expected.ImmutableUntil
+                || actual.ImmutabilityMode is not ("Unlocked" or "Locked"))
+                throw new InvalidDataException(
+                    "Azure did not confirm the nightly immutability policy.");
+            return;
+        }
+
+        if (!actual.HasLegalHold)
+            throw new InvalidDataException(
+                "Azure did not confirm the release evidence legal hold.");
+    }
+
+    private static Uri RequireSafeContainerUri(Uri? value)
+    {
+        if (value is null
+            || !value.IsAbsoluteUri
+            || !string.Equals(value.Scheme, Uri.UriSchemeHttps,
+                StringComparison.OrdinalIgnoreCase)
+            || string.IsNullOrEmpty(value.Host)
+            || !string.IsNullOrEmpty(value.UserInfo)
+            || !string.IsNullOrEmpty(value.Query)
+            || !string.IsNullOrEmpty(value.Fragment))
+            throw new ArgumentException(
+                "The evidence container must be an absolute HTTPS URI without credentials, query, or fragment.",
+                nameof(value));
+        return value;
+    }
+
+    private static EvidenceRetentionLane RequireRetentionLane(
+        EvidenceRetentionLane value) => value switch
+        {
+            EvidenceRetentionLane.Nightly90Days => value,
+            EvidenceRetentionLane.EvidenceReleaseIndefinite => value,
+            _ => throw new ArgumentOutOfRangeException(nameof(value)),
+        };
+
+    private static AzureEvidenceRetentionRequest RetentionRequest(
+        EvidenceRetentionLane lane,
+        DateTimeOffset fetchedAt) => lane switch
+        {
+            EvidenceRetentionLane.Nightly90Days => new(
+                lane, fetchedAt.AddDays(90)),
+            EvidenceRetentionLane.EvidenceReleaseIndefinite => new(lane, null),
+            _ => throw new ArgumentOutOfRangeException(nameof(lane)),
+        };
+
+    private static string BlobName(
+        EvidenceRetentionLane lane,
+        string requestId,
+        string objectSha256) =>
+        $"{LaneToken(lane)}/{requestId}/{objectSha256}";
+
+    private static IReadOnlyDictionary<string, string> Metadata(
+        EvidenceRetentionLane lane,
+        string requestId,
+        string objectSha256,
+        long byteLength) => new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["schema"] = "lex-raw-response-1",
+            ["request_id"] = requestId,
+            ["object_sha256"] = objectSha256,
+            ["byte_length"] = byteLength.ToString(CultureInfo.InvariantCulture),
+            ["retention_lane"] = LaneToken(lane),
+        };
+
+    private static string LaneToken(EvidenceRetentionLane lane) => lane switch
+    {
+        EvidenceRetentionLane.Nightly90Days => "nightly_90d",
+        EvidenceRetentionLane.EvidenceReleaseIndefinite =>
+            "evidence_release_indefinite",
+        _ => throw new ArgumentOutOfRangeException(nameof(lane)),
+    };
+
+    private sealed class BufferedBody(
+        MemoryStream content, long length, string sha256) : IAsyncDisposable
+    {
+        public MemoryStream Content { get; } = content;
+        public long Length { get; } = length;
+        public string Sha256 { get; } = sha256;
+        public ValueTask DisposeAsync() => Content.DisposeAsync();
+    }
+
+}
+
+internal sealed record AzureVerifiedEvidence(
+    string RequestId,
+    string ObjectSha256,
+    long ByteLength);
+
+internal enum AzureEvidenceStoreFailureKind
+{
+    AlreadyExists,
+    Ambiguous,
+    Rejected,
+}
+
+internal sealed class AzureEvidenceStoreException(
+    AzureEvidenceStoreFailureKind kind) : IOException("Evidence storage operation failed.")
+{
+    public AzureEvidenceStoreFailureKind Kind { get; } = kind;
+}
+
+internal sealed record AzureEvidenceObjectVersion(string VersionId, string ETag);
+
+internal sealed class AzureEvidenceReadback(
+    Stream content,
+    long contentLength,
+    IReadOnlyDictionary<string, string> metadata,
+    string versionId,
+    string etag) : IAsyncDisposable
+{
+    public Stream Content { get; } = content;
+    public long ContentLength { get; } = contentLength;
+    public IReadOnlyDictionary<string, string> Metadata { get; } = metadata;
+    public string VersionId { get; } = versionId;
+    public string ETag { get; } = etag;
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await Content.DisposeAsync().ConfigureAwait(false);
+        }
+        catch
+        {
+            throw new AzureEvidenceStoreException(
+                AzureEvidenceStoreFailureKind.Ambiguous);
+        }
+    }
+}
+
+internal sealed record AzureEvidenceRetentionRequest(
+    EvidenceRetentionLane Lane,
+    DateTimeOffset? ImmutableUntil);
+
+internal sealed record AzureEvidenceRetentionFacts(
+    string VersionId,
+    DateTimeOffset? ImmutableUntil,
+    string? ImmutabilityMode,
+    bool HasLegalHold);
+
+internal interface IAzureRawEvidenceStore
+{
+    Task<AzureEvidenceObjectVersion> CreateOnlyAsync(
+        string blobName,
+        Stream content,
+        IReadOnlyDictionary<string, string> metadata,
+        CancellationToken cancellationToken);
+
+    Task<AzureEvidenceObjectVersion> ResolveCurrentVersionAsync(
+        string blobName,
+        CancellationToken cancellationToken);
+
+    Task<AzureEvidenceReadback> ReadbackAsync(
+        string blobName,
+        AzureEvidenceObjectVersion version,
+        CancellationToken cancellationToken);
+
+    Task<AzureEvidenceRetentionFacts> ApplyAndReadRetentionAsync(
+        string blobName,
+        AzureEvidenceObjectVersion version,
+        AzureEvidenceRetentionRequest retention,
+        CancellationToken cancellationToken);
+}
