@@ -6,6 +6,58 @@ namespace Lex.Tests;
 public sealed class ReleaseWorkflowTests
 {
     [Fact]
+    public void Terraform_uses_only_reviewed_AzureRM_types()
+    {
+        var approved = new[]
+        {
+            "azurerm_client_config",
+            "azurerm_dns_a_record",
+            "azurerm_dns_zone",
+            "azurerm_federated_identity_credential",
+            "azurerm_key_vault",
+            "azurerm_key_vault_key",
+            "azurerm_linux_virtual_machine",
+            "azurerm_managed_disk",
+            "azurerm_network_interface",
+            "azurerm_network_security_group",
+            "azurerm_public_ip",
+            "azurerm_resource_group",
+            "azurerm_role_assignment",
+            "azurerm_role_definition",
+            "azurerm_subnet",
+            "azurerm_subnet_network_security_group_association",
+            "azurerm_user_assigned_identity",
+            "azurerm_virtual_machine_data_disk_attachment",
+            "azurerm_virtual_network",
+        };
+        var actual = Directory.EnumerateFiles(
+                Path.Combine(RepoRoot(), "infra"), "*.tf", SearchOption.AllDirectories)
+            .SelectMany(path => TerraformAzureRmTypes(File.ReadAllText(path)))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(approved, actual);
+    }
+
+    [Theory]
+    [InlineData("/* note */ data \"azurerm_storage_account\" \"x\" {}",
+        "azurerm_storage_account")]
+    [InlineData("# note\ndata \"azurerm_cognitive_account\" \"x\" {}",
+        "azurerm_cognitive_account")]
+    [InlineData("# note\ndata \"azurerm_container_registry\" \"x\" {}",
+        "azurerm_container_registry")]
+    [InlineData("# note\ndata \"azurerm_application_insights\" \"x\" {}",
+        "azurerm_application_insights")]
+    [InlineData("// note\nresource \"azurerm_key_vault_secret\" \"x\" {}",
+        "azurerm_key_vault_secret")]
+    public void Terraform_type_inventory_cannot_be_hidden_by_leading_comments(
+        string terraform, string expected)
+    {
+        Assert.Contains(expected, TerraformAzureRmTypes(terraform));
+    }
+
+    [Fact]
     public void Telemetry_drift_is_the_immediate_post_login_pre_mutation_gate()
     {
         var workflow = File.ReadAllText(Path.Combine(RepoRoot(), ".github", "workflows", "deploy.yml"))
@@ -1873,6 +1925,16 @@ public sealed class ReleaseWorkflowTests
             directory = Directory.GetParent(directory)?.FullName
                         ?? throw new InvalidOperationException("Repository root not found.");
         return directory;
+    }
+
+    private static string[] TerraformAzureRmTypes(string terraform)
+    {
+        return Regex.Matches(terraform, @"\bazurerm_[a-z0-9_]+\b",
+                RegexOptions.CultureInvariant)
+            .Select(match => match.Value)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
     }
 
     private static string TerraformResource(string terraform, string type, string name)
