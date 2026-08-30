@@ -40,7 +40,7 @@ reviewer's proposed machinery was reduced to the smallest contract that closes i
 | P1-25 fixtures cannot reach cases | Accepted | Extended fixture is required before phase completion, section 8.1 |
 | P1-26 stale/failed live eval not blocking | Accepted | Signed report must pass and match candidate identities, section 8.3 |
 | P1-27 evaluator fails open | Accepted | Ungradeable and empty-context rows fail release mode, section 8.3 |
-| P1-28 golden adoption unsafe | Accepted | Explicit update flag, family review and dirty-golden failure, sections 11 and 12 |
+| P1-28 golden adoption unsafe | Superseded by owner ruling | Explicit update flag and family review remain advisory; golden results never gate delivery |
 | P1-29 paused automation copy false | Accepted | Scheduler/freshness state is evidence-derived, sections 4.1 and 9 |
 | P1-30 rollback unspecified | Accepted | Exact revision/manifest rollback and rehearsal, sections 7.1 and 12 |
 | P1-31 signing Actions-bound | Accepted with different solution | Keep Key Vault OIDC and run short free public workflows; do not introduce local PEM signing, sections 4.1 and 9 |

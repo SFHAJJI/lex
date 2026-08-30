@@ -655,8 +655,9 @@ each pull request stays reviewable:
    and consistency cleanup.
 
 Every behavior slice begins with a failing regression. Golden changes are separate by page family,
-require `LEX_GOLDEN_UPDATE=1`, assert non-trivial content, and fail CI when tests leave golden files
-dirty or untracked.
+require `LEX_GOLDEN_UPDATE=1`, and assert non-trivial content. The later owner ruling supersedes the
+original dirty-golden gate: golden comparisons are advisory and never gate CI, rebuilds, signing,
+deployment, or promotion.
 
 ## 12. Release gates
 

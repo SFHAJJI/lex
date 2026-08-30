@@ -40,6 +40,9 @@ jobs:
         shell: bash
         run: npm --prefix "$GITHUB_WORKSPACE/web" ci --ignore-scripts --no-audit --no-fund
       - name: Classify the detached candidate with trusted code
+        # This is review evidence, never a merge, rebuild, signing, deploy, or
+        # promotion gate. A rejected diff remains visible in this step's log.
+        continue-on-error: true
         shell: bash
         env:
           TRUSTED_BASE_SHA: ${{ github.event.pull_request.base.sha }}

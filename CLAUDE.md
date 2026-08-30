@@ -59,9 +59,9 @@ git diff --numstat tests/Lex.Tests/golden/
 ```
 
 An update is intentional evidence, not an approval mechanism. Read any resulting diff before
-committing it. Do not add a golden-diff workflow or status context to required checks unless the
-owner issues a new explicit ruling. The existing `trusted-golden-diff` workflow and its tooling
-tests are non-blocking diagnostics only.
+committing it. Never add a golden-diff workflow or status context to required checks, rebuild,
+signing, deployment or promotion gates. The existing `trusted-golden-diff` workflow and its
+tooling tests are non-blocking diagnostics only; its classifier step is explicitly allowed to fail.
 
 For JSON tool snapshots, the classifier accepts only exact RFC 6901 additions. Tool responses use
 the fixed outer `pointer` `/result/content/0/text` plus a `document_pointer` into its JSON string.
