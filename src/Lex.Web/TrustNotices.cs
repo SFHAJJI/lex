@@ -92,11 +92,18 @@ public static class TrustNotices
     /// same reader was given the caveat in the workspace and not on the page that states the
     /// number. The predicate mirrors the browser's exactly: the window must start before the
     /// boundary AND Luxembourg must be in scope, both from server-provided facts.
+    ///
+    /// The publisher href is a literal here on purpose. Decision 41 ships it as part of this
+    /// notice, so using it follows frozen copy rather than guessing a home page, which is why
+    /// unknown_work derives its origin from held evidence and this one does not.
     /// </summary>
-    public static string? HistoricalDensity(string fromDate, IEnumerable<string> jurisdictions)
+    public static string? HistoricalDensity(
+        string fromDate, IEnumerable<LexIndexReader> selectedReaders)
     {
         if (string.CompareOrdinal(fromDate, LuDensityBoundary) >= 0) return null;
-        if (!jurisdictions.Any(IsLuxembourg)) return null;
+        // Only readers that actually ran. An unrecognised publisher value selects none, and a
+        // caveat about a set that never ran is an observation nobody made.
+        if (!selectedReaders.Any(IsLuxembourgReader)) return null;
 
         var body = "For Luxembourg periods before 2017, Lex holds fewer dated consolidation "
             + "states. This result counts changes observed in held states, not every legal "
@@ -106,10 +113,18 @@ public static class TrustNotices
             <div class="notice" role="note" aria-label="Historical coverage is less dense">
             <b>Historical coverage is less dense.</b>
             {body}
-            <span class="sub"><a href="/coverage">View coverage for this period</a></span>
+            <span class="sub"><a href="/coverage">View coverage for this period</a>
+            &nbsp;&nbsp;<a href="https://legilux.public.lu" rel="noopener">Open the official publisher</a></span>
             </div>
             """;
     }
+
+    /// <summary>
+    /// Whether a mounted reader is the Luxembourg publisher, by its own stamp or collection.
+    /// </summary>
+    public static bool IsLuxembourgReader(LexIndexReader reader) =>
+        IsLuxembourg(reader.Stamp.GetValueOrDefault("jurisdiction"))
+        || IsLuxembourg(reader.Collection);
 
     private static bool IsLuxembourg(string? value) =>
         value is not null

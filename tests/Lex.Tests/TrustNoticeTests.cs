@@ -62,36 +62,74 @@ public sealed class TrustNoticeTests : IDisposable
 
     private const string DensityHeading = "Historical coverage is less dense";
 
-    /// <summary>
-    /// The fifth Phase 0 notice shipped in the browser bundle and never in the server lane, so the
-    /// same reader was given the caveat in the workspace and not on the page that states the count.
-    /// The predicate is both halves: the window reaches before 2017 AND Luxembourg is in scope.
-    /// </summary>
-    [Fact]
-    public void The_density_caveat_appears_only_for_a_pre_2017_luxembourg_window()
+    private static string PrimaryCount(string page)
     {
-        var rendered = TrustNotices.HistoricalDensity("2016-12-31", ["LU"]);
-        Assert.NotNull(rendered);
-        Assert.Contains(DensityHeading, rendered, StringComparison.Ordinal);
-        Assert.Contains(
-            "For Luxembourg periods before 2017, Lex holds fewer dated consolidation states. This "
-            + "result counts changes observed in held states, not every legal change. A lower count "
-            + "may reflect coverage.", rendered, StringComparison.Ordinal);
-
-        // The boundary itself is not "before".
-        Assert.Null(TrustNotices.HistoricalDensity("2017-01-01", ["LU"]));
-        Assert.Null(TrustNotices.HistoricalDensity("2020-01-01", ["LU"]));
-        // Luxembourg must be in scope; the caveat is about Legilux consolidation density.
-        Assert.Null(TrustNotices.HistoricalDensity("2016-12-31", ["EU"]));
-        Assert.Null(TrustNotices.HistoricalDensity("2016-12-31", []));
-        // Every spelling the server can supply for the same jurisdiction.
-        foreach (var spelling in new[] { "lu", "LU", "lu-legilux", "Luxembourg" })
-            Assert.NotNull(TrustNotices.HistoricalDensity("2016-12-31", [spelling]));
+        var m = System.Text.RegularExpressions.Regex.Match(page, @"<b>([\d,]+) held work\(s\) changed</b>");
+        Assert.True(m.Success, "primary count not found on the change report");
+        return m.Groups[1].Value;
     }
 
     /// <summary>
-    /// A change report with no rows may state what Lex observed. It may not state that no law
-    /// changed, because the count is computed from held consolidation states only.
+    /// One resolved reader set decides the totals, the blocks and the caveat. The filter accepted
+    /// null only, so an absent publisher and an empty one selected different sets from the same
+    /// form, and an unrecognised value selected none while still reaching the caveat.
+    /// </summary>
+    [Fact]
+    public async Task The_report_scope_does_not_depend_on_how_the_form_spells_no_publisher()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "scope"), includeAct: false);
+        const string window = "/changed?from=2020-01-01&to=2026-01-01";
+
+        var absent = await site.Client.GetStringAsync(window);
+        var empty = await site.Client.GetStringAsync(window + "&publisher=");
+        var named = await site.Client.GetStringAsync(window + "&publisher=lu-legilux");
+
+        Assert.Equal(PrimaryCount(absent), PrimaryCount(empty));
+        Assert.Equal(PrimaryCount(absent), PrimaryCount(named));
+    }
+
+    /// <summary>
+    /// An unrecognised publisher selects no reader. A caveat about a set that never ran is an
+    /// observation nobody made.
+    /// </summary>
+    [Fact]
+    public async Task An_unrecognised_publisher_selects_nothing_and_states_no_observation()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "alias"), includeAct: false);
+
+        // "LU" is the jurisdiction, never a mounted collection id.
+        var page = await site.Client.GetStringAsync(
+            "/changed?from=1900-01-01&to=1900-12-31&publisher=LU");
+
+        Assert.Equal("0", PrimaryCount(page));
+        Assert.DoesNotContain(DensityHeading, page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The caveat carries both frozen Decision 41 actions, and appears only for a pre-2017 window
+    /// with a Luxembourg reader actually in the resolved set.
+    /// </summary>
+    [Fact]
+    public async Task The_density_caveat_carries_both_frozen_actions_for_a_pre_2017_window()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "density"), includeAct: false);
+
+        var before = await site.Client.GetStringAsync("/changed?from=1900-01-01&to=1900-12-31");
+        Assert.Contains(DensityHeading, before, StringComparison.Ordinal);
+        Assert.Contains(
+            "For Luxembourg periods before 2017, Lex holds fewer dated consolidation states. This "
+            + "result counts changes observed in held states, not every legal change. A lower count "
+            + "may reflect coverage.", before, StringComparison.Ordinal);
+        Assert.Contains("View coverage for this period", before, StringComparison.Ordinal);
+        Assert.Contains("Open the official publisher", before, StringComparison.Ordinal);
+
+        // The boundary itself is not "before".
+        var after = await site.Client.GetStringAsync("/changed?from=2017-01-01&to=2026-01-01");
+        Assert.DoesNotContain(DensityHeading, after, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The primary count is a claim about held records, never about the law.
     /// </summary>
     [Fact]
     public async Task An_empty_change_report_does_not_claim_that_no_law_changed()
@@ -99,25 +137,42 @@ public sealed class TrustNoticeTests : IDisposable
         using var site = new NoticeSite(Path.Combine(_root, "changed-empty"), includeAct: false);
         var page = await site.Client.GetStringAsync("/changed?from=1900-01-01&to=1900-12-31");
 
+        Assert.DoesNotContain("law(s) changed", page, StringComparison.Ordinal);
         Assert.DoesNotContain("Nothing moved in this window", page, StringComparison.Ordinal);
+        Assert.Contains("held work(s) changed", page, StringComparison.Ordinal);
         Assert.Contains("not a finding that no law changed", page, StringComparison.Ordinal);
-        // A pre-2017 Luxembourg window carries the caveat on the page that states the number.
-        Assert.Contains(DensityHeading, page, StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// The count-at-build rule forbids a population literal in copy, and this one is measurably
-    /// wrong: the never-consolidated set is 23,370 of a 24,622 population, not 24,579.
+    /// Both routes must DISCLOSE the never-consolidated class and must not SIZE it. Asserting the
+    /// absence of one stale literal is not enough: deleting the disclosure, or changing the figure
+    /// by one, both pass such a test.
     /// </summary>
     [Fact]
-    public async Task No_page_states_the_stale_population_figure()
+    public async Task Both_routes_disclose_the_unconsolidated_class_without_sizing_it()
     {
-        using var site = new NoticeSite(Path.Combine(_root, "no-literal"), includeAct: false);
+        using var site = new NoticeSite(Path.Combine(_root, "unsized"), includeAct: false);
 
-        foreach (var route in new[] { "/coverage", "/in-force-on?date=2024-08-04" })
+        foreach (var (route, marker) in new[]
+        {
+            ("/coverage", "never get a consolidated edition"),
+            ("/in-force-on?date=2024-08-04", "Never-consolidated Luxembourg acts are not ingested"),
+        })
         {
             var page = await site.Client.GetStringAsync(route);
-            Assert.DoesNotContain("24,579", page, StringComparison.Ordinal);
+            Assert.Contains(marker, page, StringComparison.Ordinal);
+
+            // No population size in the sentence that carries the class. Counts on these pages
+            // are rendered with thousands separators (:n0), so the grouped form is what a
+            // restored figure looks like; a bare year such as 2024 is not a population claim.
+            var at = page.IndexOf(marker, StringComparison.Ordinal);
+            var from = page.LastIndexOf('.', Math.Max(0, at - 1));
+            var to = page.IndexOf('.', at + marker.Length);
+            var sentence = page[(from < 0 ? 0 : from)..(to < 0 ? page.Length : to)];
+            var sized = System.Text.RegularExpressions.Regex.Match(
+                sentence, @"\d{1,3}(,\d{3})+");
+            Assert.False(sized.Success,
+                $"{route} states a population size next to the class disclosure: {sized.Value}");
         }
     }
 

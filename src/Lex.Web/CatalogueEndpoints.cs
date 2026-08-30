@@ -647,10 +647,18 @@ public static class CatalogueEndpoints
                   <a href="/changed?from=2020-03-01&to=2021-07-01&order=by_churn">the pandemic, by churn</a></p>
                 """);
 
+            // One resolved set, then every number and every notice derives from it. Previously
+            // the filter accepted null only, so an absent publisher and an empty one selected
+            // different sets from the same form, and an unrecognised value such as LU selected
+            // no reader at all while still being handed to the caveat, which then reported a
+            // Luxembourg observation about a set that never ran.
+            var selected = readers.Values
+                .Where(x => string.IsNullOrEmpty(publisher) || x.Collection == publisher)
+                .OrderBy(x => x.Collection, StringComparer.Ordinal)
+                .ToList();
             var totalWorks = 0; var totalVersions = 0;
             var blocks = new StringBuilder();
-            foreach (var r in readers.Values.Where(x => publisher is null || x.Collection == publisher)
-                                     .OrderBy(x => x.Collection, StringComparer.Ordinal))
+            foreach (var r in selected)
             {
                 var (works, versions) = r.ChangeTotals(f, t, null);
                 totalWorks += works; totalVersions += versions;
@@ -677,17 +685,15 @@ public static class CatalogueEndpoints
 
             sb.Append($"""
                 <div class="card" style="border-color:var(--accent)">
-                  <b>{totalWorks:n0} law(s) changed</b> between {H(f)} and {H(t)},
-                  producing <b>{totalVersions:n0} new version(s)</b>.
-                  {(totalWorks == 0 ? "No held state changed in this window. That is what Lex "
-                      + "observed, not a finding that no law changed." : "")}
+                  <b>{totalWorks:n0} held work(s) changed</b> between {H(f)} and {H(t)},
+                  producing <b>{totalVersions:n0} new held state(s)</b>.
+                  {(totalWorks == 0 ? "That is what Lex observed in held states, not a finding "
+                      + "that no law changed." : "")}
                 </div>
                 """);
             // The fifth Phase 0 notice. It shipped in the browser bundle and never here, on the
             // one page in this lane that states a change count.
-            sb.Append(TrustNotices.HistoricalDensity(f, publisher is { Length: > 0 }
-                ? [publisher]
-                : readers.Values.Select(r => r.Stamp.GetValueOrDefault("jurisdiction", r.Collection))));
+            sb.Append(TrustNotices.HistoricalDensity(f, selected));
             sb.Append(blocks);
             sb.Append($"""
                 <p class="sub">Same data, from your own code:
