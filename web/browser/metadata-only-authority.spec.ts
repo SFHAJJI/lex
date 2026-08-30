@@ -141,6 +141,85 @@ test("an accepted metadata publisher beside an unreadable one authorises nothing
     expect(body).not.toContain(HEADING);
   });
 
+/**
+ * O14. Attribution completeness is not whole-response authority. A clean metadata unit beside an
+ * unknown-status sibling leaves the normalized answer "complete" while the parse has already
+ * counted that sibling unusable, so the positive claim was still reachable over a response one
+ * publisher of which was never read.
+ */
+test("a clean metadata unit beside an unusable sibling authorises nothing", async ({ page }) => {
+  const body = await search(page, [
+    unit(),
+    unit({ envelope: envelope({ publisher: "eu-eurlex", jurisdiction: "EU",
+                                status: "a_state_this_client_has_never_seen" }) }),
+  ]);
+
+  expect(body).not.toContain(HEADING);
+});
+
+/**
+ * O15. The search row schema validates lex_id as nonempty text and nothing else, so a plausible
+ * string coordinate with an invalid date stayed in the accepted rows and could suppress. Each of
+ * these is one invalid row in an otherwise clean metadata response.
+ */
+test("a malformed string coordinate cannot authorise suppression", async ({ page }) => {
+  const body = await search(page, [unit({
+    hits: [metadataHit({ lex_id: "no-colon-here" })],
+  })]);
+
+  expect(body).not.toContain(HEADING);
+});
+
+test("a coordinate belonging to another publisher cannot authorise suppression",
+  async ({ page }) => {
+    const body = await search(page, [unit({
+      hits: [metadataHit({ lex_id: "eu-eurlex:someone-elses-work:2024-08-04" })],
+    })]);
+
+    expect(body).not.toContain(HEADING);
+  });
+
+test("a non-canonical date cannot authorise suppression", async ({ page }) => {
+  const body = await search(page, [unit({
+    hits: [metadataHit({ valid_from: "2024-8-4" })],
+  })]);
+
+  expect(body).not.toContain(HEADING);
+});
+
+/**
+ * O16. The notice needs publisher:group. It was handed the full version lex_id, whose group
+ * segment then carried a colon, so it rejected every ordinary row and silently dropped the
+ * disclosure and the official-publisher link that are the whole point of the notice.
+ */
+test("an ordinary version id still renders the disclosure and the official link",
+  async ({ page }) => {
+    const body = await search(page, [unit()]);
+    expect(body).toContain(HEADING);
+
+    // The disclosure list sits inside a collapsed details, so it is read from the DOM rather
+    // than from visible text. Its presence is the point: the association evidence stays
+    // inspectable without ever being presented as an answer.
+    const notice = page.locator('[data-testid="metadata-only-notice"]');
+    await expect(notice).toHaveCount(1);
+    const disclosed = notice.locator("details li");
+    await expect(disclosed).toHaveCount(1);
+    expect(await disclosed.first().textContent()).toContain("Fixture instrument");
+    // The coordinate reached the notice as publisher:group, so the group is the work and NOT
+    // the version id. That is the whole of O16: handed the version id, the notice rejected the
+    // row and dropped this disclosure entirely.
+    const row = (await disclosed.first().textContent()) ?? "";
+    expect(row).toContain("fixture-authority");
+    expect(row).toContain("lu-legilux");
+    expect(row).not.toContain("2024-08-04");
+
+    // And both agreed actions are present.
+    await expect(notice.getByRole("link", { name: "View coverage and known gaps" }))
+      .toHaveCount(1);
+    await expect(notice.getByRole("link", { name: "Search the official publisher" }))
+      .toHaveCount(1);
+  });
+
 test("a malformed coordinate cannot authorise suppression", async ({ page }) => {
   const body = await search(page, [unit({
     hits: [metadataHit({ lex_id: 42, valid_from: "not-a-date" })],

@@ -2009,6 +2009,91 @@ export interface GovernedPartition {
   allRefused: boolean;
 }
 
+
+/** One row of the metadata population, with a coordinate the notice can actually use. */
+export interface MetadataPopulationRow {
+  /** `publisher:group`, NOT the version lex_id. */
+  work: string;
+  title: string;
+  reasons: unknown;
+}
+
+/**
+ * The response-level metadata population, projected once from the governed parse.
+ *
+ * Three separate things went wrong when this decision was assembled from parts, and this function
+ * exists so they cannot come apart again.
+ *
+ * `complete` on the normalized answer means ATTRIBUTION completeness only. A clean metadata unit
+ * beside an unknown-status sibling leaves it true while the parse counted the sibling unusable, so
+ * a positive response-level claim was still reachable over a response one publisher of which was
+ * never read. `claimable` here is the whole-response authority instead: nothing unusable, nothing
+ * conflicted, no unreadable scope, nothing unattributed.
+ *
+ * The search row schema validates `lex_id` as nonempty text and nothing else, so a plausible string
+ * with an invalid `valid_from`, or a malformed coordinate, stayed in `ranUnits` and could suppress.
+ * Every row is validated here: the coordinate must be producer-minted, its publisher must agree
+ * with the unit that carried it, and the optional dates must be canonical. One invalid row makes
+ * the positive claim unreachable rather than shrinking the evidence quietly.
+ *
+ * And the notice needs `publisher:group`; it was being handed the full version lex_id, whose group
+ * segment then carried a colon, so it rejected every ordinary row and dropped the disclosure and
+ * the official link that are the point of the notice.
+ *
+ * Nothing here re-reads the raw response. The governed parse is the only authority.
+ */
+export function metadataPopulationOf(
+  parsed: GovernedResponse,
+): { population: MetadataPopulationRow[]; claimable: boolean } {
+  const population: MetadataPopulationRow[] = [];
+  // Whole-response authority. Any of these means some part of the response was not read, and a
+  // claim made ACROSS publishers may not be made over a part nobody read.
+  let claimable = parsed.unusable === 0
+    && parsed.conflicted.length === 0
+    && parsed.unreadable.length === 0
+    && parsed.unattributed === 0
+    // Arithmetic the producer's own receipts cannot support forbids an absence claim, and a
+    // positive metadata-only claim is an absence claim about wording.
+    && parsed.receipts.kind === "reconciled";
+
+  const canonicalDate = (value: unknown): boolean =>
+    typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
+    && !Number.isNaN(Date.parse(value));
+
+  for (const unit of partitionOf(parsed).ranUnits) {
+    for (const row of unit.rows) {
+      const lexId = row.lex_id;
+      if (typeof lexId !== "string") { claimable = false; continue; }
+      const parts = lexId.split(":");
+      // publisher:group, or publisher:group:version. Anything else is not a coordinate this
+      // producer mints, and a row we cannot place is not evidence about the response.
+      if (parts.length < 2 || parts.length > 3
+          || parts.some((part) => part.length === 0)) { claimable = false; continue; }
+      const [publisher, group] = parts;
+      // The row must belong to the unit that carried it.
+      if (publisher !== unit.publisher) { claimable = false; continue; }
+      if (!canonicalDate(row.valid_from)) { claimable = false; continue; }
+      if (row.valid_to !== undefined && row.valid_to !== null
+          && !canonicalDate(row.valid_to)) { claimable = false; continue; }
+      // Reasons may be absent, which is unknown and renders; present but not an array of strings
+      // is malformed evidence rather than absent evidence.
+      if (row.match_reasons !== undefined && row.match_reasons !== null
+          && (!Array.isArray(row.match_reasons)
+              || row.match_reasons.some((reason) => typeof reason !== "string"))) {
+        claimable = false;
+        continue;
+      }
+      population.push({
+        work: `${publisher}:${group}`,
+        title: typeof row.title === "string" ? row.title : "",
+        reasons: row.match_reasons,
+      });
+    }
+  }
+
+  return { population, claimable };
+}
+
 /**
  * The partition, as a view of ONE parse and nothing else. It takes the parsed response rather
  * than bytes, so a caller that already parsed cannot cause a second parse by reaching for it.
