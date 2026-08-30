@@ -94,10 +94,6 @@ public sealed record LicenceChannelEvidence
 public sealed record ManifestationLicenceEvidence
 {
     public const int MaximumIdentifierLength = 4_096;
-    private const string CreativeCommonsBy40 =
-        "http://creativecommons.org/licenses/by/4.0/";
-    private const string LicenceScl =
-        "http://data.legilux.public.lu/resource/authority/license/licenceSCL";
 
     private ManifestationLicenceEvidence(
         string manifestationIdentifier,
@@ -145,65 +141,24 @@ public sealed record ManifestationLicenceEvidence
     private static LicenceComparison Compare(
         LicenceChannelEvidence sparql, LicenceChannelEvidence file)
     {
-        switch ((sparql.State, file.State))
-        {
-            case (LicenceChannelState.Absent, LicenceChannelState.Absent):
-                return LicenceComparison.LicenceUnresolved;
-            case (LicenceChannelState.Absent, LicenceChannelState.Present):
-                return ExactFileUris(file) is null
-                    ? LicenceComparison.LicenceUnresolved
-                    : LicenceComparison.LicenceConflict;
-            case (LicenceChannelState.Present, LicenceChannelState.Absent):
-                return ExactSparqlUris(sparql) is null
-                    ? LicenceComparison.LicenceUnresolved
-                    : LicenceComparison.LicenceConflict;
-            case (LicenceChannelState.Present, LicenceChannelState.Present):
-                break;
-            default:
-                return LicenceComparison.LicenceUnresolved;
-        }
-
-        var sparqlUris = ExactSparqlUris(sparql);
-        var fileUris = ExactFileUris(file);
-        if (sparqlUris is null || fileUris is null)
+        if (sparql.State is LicenceChannelState.Invalid or LicenceChannelState.NotObserved
+            || file.State is LicenceChannelState.Invalid or LicenceChannelState.NotObserved)
             return LicenceComparison.LicenceUnresolved;
-        return sparqlUris.SequenceEqual(fileUris, StringComparer.Ordinal)
+
+        if (sparql.State == LicenceChannelState.Absent
+            && file.State == LicenceChannelState.Absent)
+            return LicenceComparison.LicenceUnresolved;
+
+        if (sparql.State == LicenceChannelState.Absent
+            || file.State == LicenceChannelState.Absent)
+            return LicenceComparison.LicenceConflict;
+
+        var sparqlUris = sparql.Claims.Select(claim => claim.LicenceUri!)
+            .ToHashSet(StringComparer.Ordinal);
+        var fileUris = file.Claims.Select(claim => claim.LicenceUri!)
+            .ToHashSet(StringComparer.Ordinal);
+        return sparqlUris.SetEquals(fileUris)
             ? LicenceComparison.Agreed
             : LicenceComparison.LicenceConflict;
     }
-
-    private static string[]? ExactSparqlUris(LicenceChannelEvidence channel)
-    {
-        if (channel.Claims.Count == 0
-            || channel.Claims.Any(claim => !IsExactSparqlClaim(claim)))
-            return null;
-        return OrderedUris(channel);
-    }
-
-    private static string[]? ExactFileUris(LicenceChannelEvidence channel)
-    {
-        if (channel.Claims.Count == 0
-            || channel.Claims.Any(claim => !IsExactFileClaim(claim)))
-            return null;
-        return OrderedUris(channel);
-    }
-
-    private static string[] OrderedUris(LicenceChannelEvidence channel) =>
-        channel.Claims.Select(claim => claim.LicenceUri!)
-            .Distinct(StringComparer.Ordinal)
-            .Order(StringComparer.Ordinal)
-            .ToArray();
-
-    private static bool IsExactSparqlClaim(LicenceClaim claim) =>
-        string.Equals(claim.TermType, "uri", StringComparison.Ordinal)
-        && string.Equals(claim.Value, claim.LicenceUri, StringComparison.Ordinal)
-        && Uri.TryCreate(claim.LicenceUri, UriKind.Absolute, out var uri)
-        && uri.Scheme is "http" or "https"
-        && !string.IsNullOrEmpty(uri.Host);
-
-    private static bool IsExactFileClaim(LicenceClaim claim) =>
-        string.Equals(claim.TermType, "token", StringComparison.Ordinal)
-        && (claim.Value, claim.LicenceUri) is
-            ("CC-BY-4.0", CreativeCommonsBy40)
-                or ("licenceSCL", LicenceScl);
 }

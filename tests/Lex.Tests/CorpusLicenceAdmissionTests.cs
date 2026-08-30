@@ -1,5 +1,6 @@
 using Lex.Ingest;
 using Lex.Law;
+using Lex.Sources.Legilux;
 
 namespace Lex.Tests;
 
@@ -53,6 +54,23 @@ public sealed class CorpusLicenceAdmissionTests
     }
 
     [Fact]
+    public void Conflict_marker_cannot_turn_invalid_data_into_observed_disagreement()
+    {
+        var invalid = LicenceChannelEvidence.Invalid([
+            new LicenceClaim("literal", "unknown", null),
+        ]);
+        var evidence = EvidenceWithComparison(
+            invalid,
+            LicenceChannelEvidence.Present([
+                FileClaim("CC-BY-4.0", CreativeCommonsBy40),
+            ]),
+            LicenceComparison.LicenceConflict);
+
+        AssertDenied(PublicTextAdmission.LicenceUnresolved,
+            LicencePublicAdmission.Assess(evidence));
+    }
+
+    [Fact]
     public void Agreed_marker_cannot_override_channel_disagreement()
     {
         var evidence = EvidenceWithComparison(
@@ -75,9 +93,9 @@ public sealed class CorpusLicenceAdmissionTests
             new LicenceClaim("literal", CreativeCommonsBy40, CreativeCommonsBy40),
         ]);
 
-        var evidence = Evidence(literal, literal);
-
-        Assert.Equal(LicenceComparison.LicenceUnresolved, evidence.Comparison);
+        Assert.Equal(LicenceComparison.LicenceUnresolved,
+            LegiluxLicenceContract.Compare(literal, literal, out var agreedUris));
+        Assert.Empty(agreedUris);
     }
 
     [Fact]
@@ -118,7 +136,8 @@ public sealed class CorpusLicenceAdmissionTests
         var file = corruptSparql ? validFile : corrupt;
 
         Assert.Equal(LicenceComparison.LicenceUnresolved,
-            Evidence(sparql, file).Comparison);
+            LegiluxLicenceContract.Compare(sparql, file, out var agreedUris));
+        Assert.Empty(agreedUris);
         AssertDenied(PublicTextAdmission.LicenceUnresolved,
             LicencePublicAdmission.Assess(EvidenceWithComparison(
                 sparql, file, LicenceComparison.Agreed)));
@@ -165,6 +184,22 @@ public sealed class CorpusLicenceAdmissionTests
         var result = LicencePublicAdmission.Assess(evidence);
 
         AssertDenied(PublicTextAdmission.LicenceConflict, result);
+    }
+
+    [Fact]
+    public void Admission_compares_the_complete_validated_channel_sets()
+    {
+        var evidence = Evidence(
+            LicenceChannelEvidence.Present([
+                UriClaim(CreativeCommonsBy40),
+                UriClaim(LicenceScl),
+            ]),
+            LicenceChannelEvidence.Present([
+                FileClaim("CC-BY-4.0", CreativeCommonsBy40),
+            ]));
+
+        AssertDenied(PublicTextAdmission.LicenceConflict,
+            LicencePublicAdmission.Assess(evidence));
     }
 
     [Fact]
