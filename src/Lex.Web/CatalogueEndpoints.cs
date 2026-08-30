@@ -284,7 +284,10 @@ public static class CatalogueEndpoints
                     ["@type"] = "Person", ["name"] = "Soufien Hajji", ["url"] = "https://soufien.lu",
                 },
                 ["keywords"] = new JsonArray("legislation", "Luxembourg", "European Union",
-                    "consolidated law", "point-in-time", "legal data", "open data"),
+                    // No openness or reuse keyword. "open data" is a claim about how the
+                    // publishers' material may be reused, which is what admission establishes and
+                    // has three ways of answering no. Free to read is a fact about this site.
+                    "consolidated law", "point-in-time", "legal data", "free to read"),
                 ["temporalCoverage"] =
                     $"{span.Select(c => c.EarliestValidFrom).Min()}/{span.Select(c => c.LatestValidFrom).Max()}",
                 ["spatialCoverage"] = new JsonArray(
@@ -744,10 +747,6 @@ public static class CatalogueEndpoints
         // Answers this page could not read. Counted, never guessed at.
         var unreadable = 0;
 
-        // Decided ONCE across the whole response rather than per publisher, per the B2 ruling, and
-        // only when every hit is POSITIVELY metadata. An unknown reason renders through the normal
-        // path and never triggers this notice.
-        var population = MatchLanes.ResponsePopulation(envelopes);
 
         static string Heading(LexIndexReader reader, string suffix = "") =>
             $"<h2>{H(reader.Stamp.GetValueOrDefault("publisher_name"))} "
@@ -780,21 +779,38 @@ public static class CatalogueEndpoints
             TrustNotices.Text(hit["work"])?.Trim() is { Length: > 0 }
             && TryIsoDate(TrustNotices.Text(hit["valid_from"]), out _);
 
-        // A response-level claim may not be made ACROSS answers this page could not read.
-        // ResponsePopulation skips those silently, by design, so deciding metadata_only from it
-        // alone let the page disclose an unreadable answer and, in the same breath, positively
-        // claim that every record matched only metadata, hiding a valid row behind that notice.
-        // Any unreadable contributor disables the claim; the readable metadata rows then render
-        // visibly, carrying their own badge, which says less and says it truthfully.
-        bool Unreadable(JsonNode? node) =>
-            node is not JsonObject result
-            || !TryAttribute(result, readers, out _)
-            || (TrustNotices.Ran(result)
-                && (!Classifiable(result, out var readable)
-                    || readable.OfType<JsonObject>().Any(hit => !HasUsableDestination(hit))));
+        // The population is the partition THIS PAGE accepted, and nothing else. A status filter
+        // is not that partition: status ok with query_ran false is a query nobody executed, and the
+        // render loop refuses it, so admitting its rows here let the page emit a positive
+        // metadata-only claim over an envelope it had already declined to show. The claim is made
+        // ACROSS answers, so it also falls whenever any contributor is unreadable: a wrong-shaped
+        // sibling, an unattributable publisher, a non-object hit, or a hit with no usable
+        // destination. The readable metadata rows then render visibly with their own badge, which
+        // says less and says it truthfully.
+        var population = new List<(string Publisher, JsonObject Hit)>();
+        var complete = true;
+        foreach (var node in envelopes)
+        {
+            if (node is not JsonObject result
+                || !TryAttribute(result, readers, out var accepted))
+            {
+                complete = false;
+                continue;
+            }
+            // A refusal contributes nothing and blocks nothing: it is not evidence either way.
+            if (!TrustNotices.Ran(result)) continue;
+            if (!Classifiable(result, out var accepdedHits)
+                || accepdedHits.OfType<JsonObject>().Any(hit => !HasUsableDestination(hit)))
+            {
+                complete = false;
+                continue;
+            }
+            foreach (var hit in accepdedHits.OfType<JsonObject>())
+                population.Add((accepted.Collection, hit));
+        }
 
-        var metadataOnly = population.Count > 0
-            && !envelopes.Any(Unreadable)
+        var metadataOnly = complete
+            && population.Count > 0
             && MatchLanes.MetadataOnly(
                 population.Select(item => MatchLanes.ReasonsOf(item.Hit)).ToArray());
 

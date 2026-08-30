@@ -436,7 +436,7 @@ public static class ExplainerEndpoints
                 <div class="card">
                 <b><a href="https://law.soufien.lu">law.soufien.lu</a></b> &middot; this one
                 <p class="sub">Point-in-time Luxembourg and reviewed-scope EU law: {{works:n0}} works as
-                {{versions:n0}} dated versions, a public MCP server, open datasets, and a signed index
+                {{versions:n0}} dated versions, a public MCP server, published datasets, and a signed index
                 whose stamp commits to a digest of its own content. The hard part was never the AI; it was
                 that a law has no single text, only a text per date.
                 <a href="/built/decisions">The decision that shaped it, and what it cost →</a></p>
@@ -682,7 +682,7 @@ public static class ExplainerEndpoints
                 """;
             return Results.Content(Page("For developers", body, null, "dev",
                 canonicalPath: "/developers",
-                description: "Connect to the public read-only Lex MCP server, inspect typed tools, try requests and reuse the open legal datasets."), "text/html");
+                description: "Connect to the public read-only Lex MCP server, inspect typed tools, try requests and read the published legal datasets."), "text/html");
         });
 
         // ---- /how-it-works: plain-language product method. Coverage, artifact verification and

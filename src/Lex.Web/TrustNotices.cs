@@ -261,20 +261,27 @@ public static class TrustNotices
 
     public static string? SearchAbsence(int ran, int refused, int hits, int unreadable = 0) =>
         // A publisher that answered with hits makes any no-match sentence false, however many
-        // others refused. Absence is stated only when something ran and everything that ran
-        // returned nothing.
+        // others refused.
         //
-        // An answer this page could not classify blocks the sentence outright. Neither form
-        // below is knowable while some publisher returned something we failed to read: not
-        // that nobody ran, and not that nothing matched.
-        unreadable > 0 ? null
-        : hits > 0 || refused == 0 ? null
-        : ran == 0
-            ? """<div class="notice" role="note"><b>No selected publisher ran this query.</b></div>"""
-            : """
+        // An answer this page could not classify blocks the sentence outright. Neither form below
+        // is knowable while some publisher returned something we failed to read: not that nobody
+        // ran, and not that nothing matched.
+        //
+        // A refusal is not a PRECONDITION for saying nothing matched. Requiring one made a plain
+        // successful search that found nothing render as a blank result area, which is the one
+        // answer a reader fills in themselves, and it is the same blank page this module was built
+        // to remove. What the sentence needs is that something RAN and that nothing was presented.
+        unreadable > 0 || hits > 0 ? null
+        : ran > 0
+            ? """
               <div class="notice" role="note"><b>No match was returned by the publishers that
               could apply these filters.</b></div>
-              """;
+              """
+            // Nothing ran. That is worth saying only when something refused; with no publisher
+            // either way there is no query to describe.
+            : refused > 0
+                ? """<div class="notice" role="note"><b>No selected publisher ran this query.</b></div>"""
+                : null;
 
     /// <summary>
     /// The unmatched-route refusal.

@@ -10,6 +10,9 @@ import {
 import { ScopeFilters } from "./ScopeFilters";
 import { envelopeStripRows, type EnvelopeStripRow } from "./envelopeStrip";
 import { normalizeSearchResponse, type PublisherPopulation } from "./searchPopulation";
+import { anyRowSetTruncated, metadataOnlyFromResponse,
+  type PopulationEntry } from "./matchLanes";
+import { MetadataOnlyNotice } from "./metadataOnlyNotice";
 import { fuzzyModeFor, retainedForQuery } from "./api";
 import { clearedSearchResults, LIMITATION_EXPLANATION, parseGovernedResponse,
   projectSearchResponse, searchEmptyPresentation, searchResultsFromError,
@@ -97,6 +100,13 @@ export default function Search(p: SearchProps) {
   const [text, setText] = useState(p.state.q ?? "");
   const [results, setResults] =
     useState<SearchResultsState<WorkHit, ArticleHit>>(clearedSearchResults);
+  // The B2 response-level state, decided from the RAW envelopes before fusion, the display cap
+  // and the passage filter, so it describes the whole response rather than the visible slice.
+  // The server page reached this months ago; this lane rendered work_metadata-only hits as
+  // answers because matchLanes.ts was in the tree with no production import at all.
+  const [metadataOnly, setMetadataOnly] = useState(false);
+  const [metadataPopulation, setMetadataPopulation] = useState<PopulationEntry[]>([]);
+  const [responseTruncated, setResponseTruncated] = useState(false);
   const { works, articles, error, modeUnavailable, expansions, limitations } = results;
   const allRefused = results.absence === "all_refused";
   const [busy, setBusy] = useState(false);
@@ -127,6 +137,9 @@ export default function Search(p: SearchProps) {
    */
   const clearResponseState = useCallback(() => {
     setResults(clearedSearchResults);
+    setMetadataOnly(false);
+    setMetadataPopulation([]);
+    setResponseTruncated(false);
     setPopulations([]);
     setWithheld(undefined);
     p.onEnvelopes([]);
@@ -237,6 +250,12 @@ export default function Search(p: SearchProps) {
         // There is nothing left to disagree with.
         const parsed = parseGovernedResponse("search", res);
         p.onEnvelopes(envelopeStripRows(parsed));
+        // Read off the raw response, deliberately: the decision needs the authoritative
+        // population, and everything below this line narrows it for display.
+        const decision = metadataOnlyFromResponse(res);
+        setMetadataOnly(decision.metadataOnly);
+        setMetadataPopulation(decision.population);
+        setResponseTruncated(anyRowSetTruncated(res));
         const answer = normalizeSearchResponse(parsed);
         setPopulations(answer.populations);
         // Typed causes, carried rather than merged: the sentence a reader is shown has to
@@ -296,7 +315,12 @@ export default function Search(p: SearchProps) {
         }));
       })
       .catch(() => {
-        if (live()) setResults(searchResultsFromError("Search could not be reached. Try again."));
+        if (live()) {
+          setResults(searchResultsFromError("Search could not be reached. Try again."));
+          setMetadataOnly(false);
+          setMetadataPopulation([]);
+          setResponseTruncated(false);
+        }
       })
       .finally(() => { if (live()) setBusy(false); });
   }, [q, requestAsOf, retrieval, jurisdiction, hierarchy, domain, sourceClass, actForm, bindingStatus,
@@ -471,7 +495,18 @@ export default function Search(p: SearchProps) {
 
           {error ? <div className="empty"><p>{error}</p></div> : null}
 
-          {groupedResults.map((section) => (
+          {/*
+            * The whole response matched only in metadata, so the records are disclosed and none
+            * of them is presented as an answer. Decided on the raw envelopes before fusion, the
+            * display cap and the passage filter, so it describes the response rather than what
+            * survived to the screen. The results below are suppressed rather than shown beneath
+            * it, because a record match rendered as a hit IS the claim this notice refuses.
+            */}
+          {metadataOnly
+            ? <MetadataOnlyNotice works={metadataPopulation} truncated={responseTruncated} />
+            : null}
+
+          {metadataOnly ? null : groupedResults.map((section) => (
             <section className="res-jurisdiction" key={section.jurisdiction}>
               <h4 className="res-h">
                 {jurisdictionLabel(section.jurisdiction)}

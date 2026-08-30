@@ -338,15 +338,25 @@ public sealed class TrustNoticeTests : IDisposable
     [Fact]
     public void A_corpus_wide_absence_is_only_stated_when_the_corpus_was_searched()
     {
-        Assert.Null(TrustNotices.SearchAbsence(ran: 2, refused: 0, hits: 0));
-        Assert.Contains("No selected publisher ran this query",
-            TrustNotices.SearchAbsence(ran: 0, refused: 2, hits: 0)!, StringComparison.Ordinal);
+        // O10. A refusal is not a PRECONDITION for saying nothing matched. This line asserted the
+        // opposite and so locked the defect in place: a plain successful search that found
+        // nothing rendered as a blank result area, which is the one answer a reader fills in
+        // themselves and the very blank page this module exists to remove.
+        Assert.Contains("could apply these filters",
+            TrustNotices.SearchAbsence(ran: 2, refused: 0, hits: 0)!, StringComparison.Ordinal);
         Assert.Contains("could apply these filters",
             TrustNotices.SearchAbsence(ran: 1, refused: 1, hits: 0)!, StringComparison.Ordinal);
+        Assert.Contains("No selected publisher ran this query",
+            TrustNotices.SearchAbsence(ran: 0, refused: 2, hits: 0)!, StringComparison.Ordinal);
+        // Nothing ran and nothing refused: there is no query to describe, so there is no
+        // sentence. This is the one case where silence is the honest answer.
+        Assert.Null(TrustNotices.SearchAbsence(ran: 0, refused: 0, hits: 0));
         // A publisher that answered with hits makes any no-match sentence false, however
         // many others refused.
         Assert.Null(TrustNotices.SearchAbsence(ran: 1, refused: 1, hits: 3));
         Assert.Null(TrustNotices.SearchAbsence(ran: 2, refused: 5, hits: 1));
+        // An unreadable answer still blocks both forms.
+        Assert.Null(TrustNotices.SearchAbsence(ran: 2, refused: 0, hits: 0, unreadable: 1));
     }
 
     /// <summary>
@@ -621,6 +631,11 @@ public sealed class TrustNoticeTests : IDisposable
             // into a DataDownload description and sat in the footer, where a test checking one URL
             // and one key could not see it. A licence claim is a claim in any spelling.
             foreach (var wording in new[] { "CC-BY", "CC BY", "creative commons" })
+                Assert.DoesNotContain(wording, page, StringComparison.OrdinalIgnoreCase);
+            // O11. Openness and reuse are claims about how the publishers' material may be used,
+            // which is exactly what per-artifact admission establishes and has three ways of
+            // answering no. Neutral access wording until it exists.
+            foreach (var wording in new[] { "open data", "open datasets", "open legal" })
                 Assert.DoesNotContain(wording, page, StringComparison.OrdinalIgnoreCase);
         }
 
@@ -967,6 +982,69 @@ public sealed class TrustNoticeTests : IDisposable
             StringComparison.Ordinal);
         // It matched a name, and the badge must not claim it matched the wording either.
         Assert.DoesNotContain("matched on title, not wording", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// O7 amended. The population is the partition THIS PAGE accepted. A status filter is not that
+    /// partition: status ok with query_ran false is a query nobody executed, the render loop
+    /// refuses it, and admitting its rows let the page emit a positive metadata-only claim about an
+    /// envelope it had already declined to show.
+    /// </summary>
+    [Fact]
+    public void A_refused_receipt_cannot_authorise_the_metadata_claim()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "falsereceipt"), includeAct: false);
+        using var reader = site.Reader();
+        var readers = new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader };
+
+        var page = CatalogueEndpoints.RenderSearchResults(
+            [(JsonObject)JsonNode.Parse("""
+                {"envelope":{"publisher":"lu-legilux","status":"ok"},
+                 "population":{"query_ran":false},
+                 "hits":[{"work":"lu-legilux:loi-2006-07-31-n2","valid_from":"2024-08-04",
+                          "title":"Code du travail","match_reasons":["work_metadata"]}]}
+                """)!],
+            readers);
+
+        // The envelope is refused, so it authorises nothing.
+        Assert.DoesNotContain(MatchLanes.Heading, page, StringComparison.Ordinal);
+        Assert.DoesNotContain("1 hit(s)", page, StringComparison.Ordinal);
+        // And the refusal itself is disclosed rather than swallowed. The receipt denies execution
+        // explicitly here, so the page may say so rather than only that the result is unusable.
+        Assert.Contains("Did not run.", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The third contributor shape from the amendment: a publisher this page cannot attribute,
+    /// beside a valid metadata answer. It answered, we cannot say what it answered, so no claim may
+    /// be made across it.
+    /// </summary>
+    [Fact]
+    public void An_unattributable_publisher_disables_the_metadata_claim()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "unattrmeta"), includeAct: false);
+        using var reader = site.Reader();
+        var readers = new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader };
+
+        var page = CatalogueEndpoints.RenderSearchResults(
+            [(JsonObject)JsonNode.Parse("""
+                {"envelope":{"publisher":"not-mounted","status":"ok"},
+                 "population":{"query_ran":true},
+                 "hits":[{"work":"x:y","valid_from":"2024-08-04",
+                          "match_reasons":["work_metadata"]}]}
+                """)!,
+             (JsonObject)JsonNode.Parse("""
+                {"envelope":{"publisher":"lu-legilux","status":"ok"},
+                 "population":{"query_ran":true},
+                 "hits":[{"work":"lu-legilux:loi-2006-07-31-n2","valid_from":"2024-08-04",
+                          "title":"Code du travail","match_reasons":["work_metadata"]}]}
+                """)!],
+            readers);
+
+        Assert.Contains("could not be attributed", page, StringComparison.Ordinal);
+        Assert.DoesNotContain(MatchLanes.Heading, page, StringComparison.Ordinal);
+        // The readable row still renders rather than hiding behind a claim that was never earned.
+        Assert.Contains("1 hit(s)", page, StringComparison.Ordinal);
     }
 
     /// <summary>

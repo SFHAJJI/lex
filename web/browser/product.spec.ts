@@ -580,7 +580,12 @@ test("official metadata chips apply only the exact server URI and HTTP provenanc
           language: "en",
           valid_from: "2024-01-01",
           valid_to: null,
-          match_reasons: ["work_metadata"],
+          // A text reason beside the metadata one, which is what the producer emits when a hit
+          // matches both (IndexReader fuses reasons). Without it this response is metadata-only
+          // under the B2 lane ruling, the Decision 41 notice replaces the results, and this test
+          // loses the cards it exists to inspect. Its subject is the exact server URI and inert
+          // HTTP provenance, not lane classification.
+          match_reasons: ["keyword", "work_metadata"],
           matched_publisher_metadata: {
             kind: "eurovoc_domain",
             identifier,
