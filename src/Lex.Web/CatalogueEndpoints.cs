@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Text;
 using System.Text.Json.Nodes;
 using Lex.Index;
@@ -896,12 +897,20 @@ public static class CatalogueEndpoints
             }
         }
 
-        static bool IsReadableLegacyVersion(string version, string validFrom) =>
-            string.Equals(version, validFrom, StringComparison.Ordinal)
-            || version.Length == 14
-            && string.Equals(version[..10], validFrom, StringComparison.Ordinal)
-            && version[10..12] == "--"
-            && version[12..].All(character => character is >= '0' and <= '9');
+        static bool IsReadableLegacyVersion(string version, string validFrom)
+        {
+            if (string.Equals(version, validFrom, StringComparison.Ordinal)) return true;
+            if (version.Length < 14
+                || !string.Equals(version[..10], validFrom, StringComparison.Ordinal)
+                || version[10..12] != "--") return false;
+            var suffix = version[12..];
+            return int.TryParse(suffix, NumberStyles.None, CultureInfo.InvariantCulture,
+                       out var ordinal)
+                && ordinal >= 2
+                && string.Equals(suffix,
+                    ordinal.ToString("00", CultureInfo.InvariantCulture),
+                    StringComparison.Ordinal);
+        }
 
         // The population is the partition THIS PAGE accepted, and nothing else. A status filter
         // is not that partition: status ok with query_ran false is a query nobody executed, and the
