@@ -135,6 +135,7 @@ public sealed class SparqlClient(string endpoint, TimeSpan? pause = null)
         byte[] utf8Json)
     {
         using var doc = JsonDocument.Parse(utf8Json);
+        RejectDuplicateProperties(doc.RootElement);
         var rows = new List<Dictionary<string, SparqlTerm>>();
         foreach (var binding in doc.RootElement.GetProperty("results")
                      .GetProperty("bindings").EnumerateArray())
@@ -153,6 +154,26 @@ public sealed class SparqlClient(string endpoint, TimeSpan? pause = null)
             rows.Add(row);
         }
         return rows;
+    }
+
+    private static void RejectDuplicateProperties(JsonElement value)
+    {
+        if (value.ValueKind == JsonValueKind.Object)
+        {
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var property in value.EnumerateObject())
+            {
+                if (!names.Add(property.Name))
+                    throw new JsonException(
+                        "A SPARQL response object contains a duplicate property name.");
+                RejectDuplicateProperties(property.Value);
+            }
+            return;
+        }
+
+        if (value.ValueKind == JsonValueKind.Array)
+            foreach (var item in value.EnumerateArray())
+                RejectDuplicateProperties(item);
     }
 
     /// <summary>

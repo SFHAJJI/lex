@@ -44,6 +44,19 @@ public sealed class LegiluxPagingTests : IDisposable
     }
 
     [Fact]
+    public void Duplicate_properties_inside_a_binding_term_fail_closed()
+    {
+        var response = Encoding.UTF8.GetBytes("""
+            {"results":{"bindings":[{"license":{"type":"uri","value":"first","value":"second"}}]}}
+            """);
+
+        var error = Assert.Throws<JsonException>(() =>
+            SparqlClient.ParseSelectResponse(response));
+
+        Assert.Contains("duplicate", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Declared_oversized_response_is_rejected_before_content_is_read_and_POST_is_preserved()
     {
         var content = new FailOnSerializationContent(
