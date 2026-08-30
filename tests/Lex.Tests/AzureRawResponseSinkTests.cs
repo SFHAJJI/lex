@@ -80,12 +80,8 @@ public sealed class AzureRawResponseSinkTests
             ["schema"] = "lex-raw-response-1",
         };
 
-        var retention = new AzureEvidenceRetentionRequest(
-            EvidenceRetentionLane.Nightly90Days,
-            new DateTimeOffset(2026, 11, 28, 4, 0, 0, TimeSpan.Zero),
-            new DateTimeOffset(2026, 11, 28, 4, 1, 0, TimeSpan.Zero));
         var upload = AzureBlobRawEvidenceStore.CreateUploadOptions(
-            metadata, retention);
+            metadata, EvidenceRetentionLane.Nightly90Days);
         var download = AzureBlobRawEvidenceStore.CreateDownloadOptions("\"etag-1\"");
 
         Assert.Equal(ETag.All, upload.Conditions.IfNoneMatch);
@@ -105,28 +101,19 @@ public sealed class AzureRawResponseSinkTests
     {
         var upload = AzureBlobRawEvidenceStore.CreateUploadOptions(
             new Dictionary<string, string>(),
-            new AzureEvidenceRetentionRequest(
-                EvidenceRetentionLane.EvidenceReleaseIndefinite, null, null));
+            EvidenceRetentionLane.EvidenceReleaseIndefinite);
 
         Assert.True(upload.LegalHold);
         Assert.Null(upload.ImmutabilityPolicy);
     }
 
-    [Theory]
-    [InlineData((int)EvidenceRetentionLane.Nightly90Days, false)]
-    [InlineData(999, true)]
-    public void Invalid_retention_is_rejected_before_the_SDK_boundary(
-        int lane,
-        bool hasExpiry)
+    [Fact]
+    public void Invalid_retention_is_rejected_before_the_SDK_boundary()
     {
-        var retention = new AzureEvidenceRetentionRequest(
-            (EvidenceRetentionLane)lane,
-            hasExpiry ? DateTimeOffset.UtcNow : null,
-            hasExpiry ? DateTimeOffset.UtcNow.AddMinutes(1) : null);
-
         Assert.Throws<InvalidDataException>(() =>
             AzureBlobRawEvidenceStore.CreateUploadOptions(
-                new Dictionary<string, string>(), retention));
+                new Dictionary<string, string>(),
+                (EvidenceRetentionLane)999));
     }
 
     [Fact]
@@ -308,6 +295,23 @@ public sealed class AzureRawResponseSinkTests
         Assert.Equal(
             ["create", "resolve", "readback", "retention"], store.Calls);
         Assert.Single(store.BlobNames.Distinct(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task Ambiguous_preflight_retries_before_the_single_create()
+    {
+        var store = new RecordingStore();
+        store.PreflightFailures.Enqueue(new AzureEvidenceStoreException(
+            AzureEvidenceStoreFailureKind.Ambiguous));
+        var sink = new AzureRawResponseSink(
+            store, EvidenceRetentionLane.Nightly90Days);
+
+        await sink.CaptureVerifiedAsync(
+            Request(), Response(), new MemoryStream([4, 5, 6]));
+
+        Assert.Equal(2, store.PreflightCount);
+        Assert.Equal(1, store.CreateCount);
+        Assert.Equal(["create", "readback", "retention"], store.Calls);
     }
 
     [Fact]
@@ -605,6 +609,27 @@ public sealed class AzureRawResponseSinkTests
             store.RetentionRequests.Single().ImmutableUntil);
     }
 
+    [Fact]
+    public async Task Delayed_create_accepts_inherited_expiry_from_server_creation_time()
+    {
+        var createdAt = new DateTimeOffset(
+            2026, 8, 30, 4, 10, 0, TimeSpan.Zero);
+        var store = new RecordingStore
+        {
+            VersionCreatedAt = createdAt,
+            RetentionFactsFactory = (version, _) => new(
+                version.VersionId,
+                createdAt.AddDays(90),
+                "Locked",
+                false),
+        };
+        var sink = new AzureRawResponseSink(
+            store, EvidenceRetentionLane.Nightly90Days);
+
+        await sink.CaptureVerifiedAsync(
+            Request(), Response(), new MemoryStream([1]));
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("Unlocked")]
@@ -659,14 +684,19 @@ public sealed class AzureRawResponseSinkTests
                 Request(), Response(), new MemoryStream([1])));
     }
 
-    [Fact]
-    public async Task Nightly_lane_rejects_later_retention_than_requested()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Nightly_lane_rejects_unbounded_later_retention(
+        bool maximumValue)
     {
         var store = new RecordingStore
         {
             RetentionFactsFactory = (version, request) => new(
                 version.VersionId,
-                request.ImmutableUntilMaximum!.Value.AddSeconds(1),
+                maximumValue
+                    ? DateTimeOffset.MaxValue
+                    : request.ImmutableUntilMaximum!.Value.AddDays(1),
                 "Locked",
                 false),
         };
@@ -855,13 +885,17 @@ public sealed class AzureRawResponseSinkTests
 
     private sealed class RecordingStore : IAzureRawEvidenceStore
     {
-        private readonly AzureEvidenceObjectVersion _version =
-            new("version-1", "\"etag-1\"");
+        private AzureEvidenceObjectVersion Version =>
+            new(
+                "version-1",
+                "\"etag-1\"",
+                VersionCreatedAt);
 
         public List<string> Calls { get; } = [];
         public List<string> BlobNames { get; } = [];
         public List<AzureEvidenceRetentionRequest> RetentionRequests { get; } = [];
         public Queue<Exception> CreateFailures { get; } = new();
+        public Queue<Exception> PreflightFailures { get; } = new();
         public Queue<Exception> ResolveFailures { get; } = new();
         public Queue<Exception> ReadbackFailures { get; } = new();
         public IReadOnlyDictionary<string, string>? UploadMetadata { get; private set; }
@@ -872,6 +906,8 @@ public sealed class AzureRawResponseSinkTests
         public string? ReadbackVersionId { get; set; }
         public string? ReadbackETag { get; set; }
         public bool BlockCreateUntilCancelled { get; set; }
+        public DateTimeOffset VersionCreatedAt { get; set; } =
+            new(2026, 8, 30, 4, 0, 1, TimeSpan.Zero);
         public Func<Stream>? ReadbackStreamFactory { get; set; }
         public Func<AzureEvidenceObjectVersion,
             AzureEvidenceRetentionRequest,
@@ -880,18 +916,27 @@ public sealed class AzureRawResponseSinkTests
         public int CallCount => Calls.Count;
         public int CreateCount => Calls.Count(call => call == "create");
         public int ReadbackCount => Calls.Count(call => call == "readback");
+        public int PreflightCount { get; private set; }
+
+        public Task VerifyCreatePrerequisitesAsync(
+            EvidenceRetentionLane retentionLane,
+            CancellationToken cancellationToken)
+        {
+            PreflightCount++;
+            if (PreflightFailures.TryDequeue(out var failure)) throw failure;
+            return Task.CompletedTask;
+        }
 
         public async Task<AzureEvidenceObjectVersion> CreateOnlyAsync(
             string blobName,
             Stream content,
             IReadOnlyDictionary<string, string> metadata,
-            AzureEvidenceRetentionRequest retention,
+            EvidenceRetentionLane retentionLane,
             CancellationToken cancellationToken)
         {
             Calls.Add("create");
             BlobNames.Add(blobName);
             UploadMetadata = new Dictionary<string, string>(metadata);
-            RetentionRequests.Add(retention);
             using var copy = new MemoryStream();
             await content.CopyToAsync(copy, cancellationToken);
             UploadedBytes = copy.ToArray();
@@ -899,7 +944,7 @@ public sealed class AzureRawResponseSinkTests
             if (BlockCreateUntilCancelled)
                 await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             if (CreateFailures.TryDequeue(out var failure)) throw failure;
-            return _version;
+            return Version;
         }
 
         public Task<AzureEvidenceObjectVersion> ResolveCurrentVersionAsync(
@@ -909,7 +954,7 @@ public sealed class AzureRawResponseSinkTests
             Calls.Add("resolve");
             BlobNames.Add(blobName);
             if (ResolveFailures.TryDequeue(out var failure)) throw failure;
-            return Task.FromResult(_version);
+            return Task.FromResult(Version);
         }
 
         public Task<AzureEvidenceReadback> ReadbackAsync(
@@ -934,11 +979,13 @@ public sealed class AzureRawResponseSinkTests
         public Task<AzureEvidenceRetentionFacts> ReadRetentionAsync(
             string blobName,
             AzureEvidenceObjectVersion version,
+            AzureEvidenceRetentionRequest expectedRetention,
             CancellationToken cancellationToken)
         {
             Calls.Add("retention");
             BlobNames.Add(blobName);
-            var retention = RetentionRequests[^1];
+            RetentionRequests.Add(expectedRetention);
+            var retention = expectedRetention;
             var facts = RetentionFactsFactory?.Invoke(version, retention)
                 ?? (retention.Lane == EvidenceRetentionLane.Nightly90Days
                     ? new AzureEvidenceRetentionFacts(

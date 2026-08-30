@@ -41,37 +41,44 @@ internal sealed class AzureBlobRawEvidenceStore : IAzureRawEvidenceStore
         return options;
     }
 
+    public async Task VerifyCreatePrerequisitesAsync(
+        EvidenceRetentionLane retentionLane,
+        CancellationToken cancellationToken)
+    {
+        ValidateRetentionLane(retentionLane);
+        if (retentionLane != EvidenceRetentionLane.Nightly90Days) return;
+        try
+        {
+            var properties = await _container.GetPropertiesAsync(
+                conditions: null,
+                cancellationToken).ConfigureAwait(false);
+            RequireNightlyContainerPolicy(
+                properties.Value.HasImmutabilityPolicy == true);
+        }
+        catch (Exception error)
+        {
+            throw MapFailure(error, cancellationToken);
+        }
+    }
+
     public async Task<AzureEvidenceObjectVersion> CreateOnlyAsync(
         string blobName,
         Stream content,
         IReadOnlyDictionary<string, string> metadata,
-        AzureEvidenceRetentionRequest retention,
+        EvidenceRetentionLane retentionLane,
         CancellationToken cancellationToken)
     {
-        ValidateRetention(retention);
-        if (retention.Lane == EvidenceRetentionLane.Nightly90Days)
-        {
-            try
-            {
-                var properties = await _container.GetPropertiesAsync(
-                    conditions: null,
-                    cancellationToken).ConfigureAwait(false);
-                RequireNightlyContainerPolicy(
-                    properties.Value.HasImmutabilityPolicy == true);
-            }
-            catch (Exception error)
-            {
-                throw MapFailure(error, cancellationToken);
-            }
-        }
+        ValidateRetentionLane(retentionLane);
         try
         {
             var response = await _container.GetBlobClient(blobName).UploadAsync(
                 content,
-                CreateUploadOptions(metadata, retention),
+                CreateUploadOptions(metadata, retentionLane),
                 cancellationToken).ConfigureAwait(false);
             return RequireVersion(
-                response.Value.VersionId, response.Value.ETag.ToString());
+                response.Value.VersionId,
+                response.Value.ETag.ToString(),
+                response.Value.LastModified);
         }
         catch (Exception error)
         {
@@ -90,7 +97,9 @@ internal sealed class AzureBlobRawEvidenceStore : IAzureRawEvidenceStore
                     conditions: null,
                     cancellationToken).ConfigureAwait(false);
             return RequireVersion(
-                response.Value.VersionId, response.Value.ETag.ToString());
+                response.Value.VersionId,
+                response.Value.ETag.ToString(),
+                response.Value.LastModified);
         }
         catch (Exception error)
         {
@@ -127,6 +136,7 @@ internal sealed class AzureBlobRawEvidenceStore : IAzureRawEvidenceStore
     public async Task<AzureEvidenceRetentionFacts> ReadRetentionAsync(
         string blobName,
         AzureEvidenceObjectVersion version,
+        AzureEvidenceRetentionRequest expectedRetention,
         CancellationToken cancellationToken)
     {
         try
@@ -153,9 +163,9 @@ internal sealed class AzureBlobRawEvidenceStore : IAzureRawEvidenceStore
 
     internal static BlobUploadOptions CreateUploadOptions(
         IReadOnlyDictionary<string, string> metadata,
-        AzureEvidenceRetentionRequest retention)
+        EvidenceRetentionLane retentionLane)
     {
-        ValidateRetention(retention);
+        ValidateRetentionLane(retentionLane);
         return new BlobUploadOptions
         {
             Metadata = new Dictionary<string, string>(metadata),
@@ -169,7 +179,7 @@ internal sealed class AzureBlobRawEvidenceStore : IAzureRawEvidenceStore
             // Nightly blobs must inherit the provisioned locked 90-day
             // container default. A per-blob upload override is always unlocked.
             ImmutabilityPolicy = null,
-            LegalHold = retention.Lane == EvidenceRetentionLane.EvidenceReleaseIndefinite,
+            LegalHold = retentionLane == EvidenceRetentionLane.EvidenceReleaseIndefinite,
         };
     }
 
@@ -213,24 +223,12 @@ internal sealed class AzureBlobRawEvidenceStore : IAzureRawEvidenceStore
         }
     }
 
-    private static void ValidateRetention(AzureEvidenceRetentionRequest retention)
+    private static void ValidateRetentionLane(EvidenceRetentionLane retentionLane)
     {
-        ArgumentNullException.ThrowIfNull(retention);
-        if (retention.Lane == EvidenceRetentionLane.Nightly90Days)
-        {
-            if (retention.ImmutableUntil is null
-                || retention.ImmutableUntilMaximum is null
-                || retention.ImmutableUntilMaximum < retention.ImmutableUntil)
-                throw new InvalidDataException(
-                    "The nightly retention verification window is invalid.");
-            return;
-        }
-        if (retention.Lane == EvidenceRetentionLane.EvidenceReleaseIndefinite
-            && retention.ImmutableUntil is null
-            && retention.ImmutableUntilMaximum is null)
-            return;
-        throw new InvalidDataException(
-            "The evidence retention request is not supported.");
+        if (retentionLane is not EvidenceRetentionLane.Nightly90Days
+            and not EvidenceRetentionLane.EvidenceReleaseIndefinite)
+            throw new InvalidDataException(
+                "The evidence retention lane is not supported.");
     }
 
     internal static void RequireNightlyContainerPolicy(bool hasPolicy)
@@ -241,8 +239,10 @@ internal sealed class AzureBlobRawEvidenceStore : IAzureRawEvidenceStore
     }
 
     private static AzureEvidenceObjectVersion RequireVersion(
-        string? versionId, string? etag) =>
-        new(RequireValue(versionId), RequireValue(etag));
+        string? versionId,
+        string? etag,
+        DateTimeOffset createdAt) =>
+        new(RequireValue(versionId), RequireValue(etag), createdAt);
 
     private static string RequireValue(string? value)
     {

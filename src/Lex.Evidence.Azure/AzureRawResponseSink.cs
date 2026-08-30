@@ -133,9 +133,8 @@ public sealed class AzureRawResponseSink : IRawResponseSink
         var blobName = BlobName(_retentionLane, request.RequestId, buffered.Sha256);
         var metadata = Metadata(
             _retentionLane, request.RequestId, buffered.Sha256, buffered.Length);
-        var retention = RetentionRequest(
-            _retentionLane, response.FetchedAt, _timeProvider.GetUtcNow());
         AzureEvidenceObjectVersion? version = null;
+        var prerequisitesVerified = false;
         var createAttempted = false;
 
         for (var attempt = 1; attempt <= MaximumAttempts; attempt++)
@@ -147,6 +146,12 @@ public sealed class AzureRawResponseSink : IRawResponseSink
                 {
                     if (!createAttempted)
                     {
+                        if (!prerequisitesVerified)
+                        {
+                            await _store.VerifyCreatePrerequisitesAsync(
+                                _retentionLane, token).ConfigureAwait(false);
+                            prerequisitesVerified = true;
+                        }
                         createAttempted = true;
                         buffered.Content.Position = 0;
                         try
@@ -155,7 +160,7 @@ public sealed class AzureRawResponseSink : IRawResponseSink
                                 blobName,
                                 buffered.Content,
                                 metadata,
-                                retention,
+                                _retentionLane,
                                 token).ConfigureAwait(false);
                         }
                         catch (AzureEvidenceStoreException error)
@@ -173,6 +178,8 @@ public sealed class AzureRawResponseSink : IRawResponseSink
                     }
                 }
 
+                var retention = RetentionRequest(
+                    _retentionLane, response.FetchedAt, version.CreatedAt);
                 var readback = await _store.ReadbackAsync(
                     blobName, version, token).ConfigureAwait(false);
                 Exception? verificationFailure = null;
@@ -200,7 +207,7 @@ public sealed class AzureRawResponseSink : IRawResponseSink
                 }
 
                 var retentionFacts = await _store.ReadRetentionAsync(
-                    blobName, version, token).ConfigureAwait(false);
+                    blobName, version, retention, token).ConfigureAwait(false);
                 VerifyRetention(retention, version, retentionFacts);
 
                 return new AzureVerifiedEvidence(
@@ -428,13 +435,13 @@ public sealed class AzureRawResponseSink : IRawResponseSink
     private static AzureEvidenceRetentionRequest RetentionRequest(
         EvidenceRetentionLane lane,
         DateTimeOffset fetchedAt,
-        DateTimeOffset observedNow) => lane switch
+        DateTimeOffset versionCreatedAt) => lane switch
         {
             EvidenceRetentionLane.Nightly90Days => new(
                 lane,
                 CeilingToWholeUtcSecond(fetchedAt.AddDays(90)),
                 CeilingToWholeUtcSecond(
-                    observedNow.AddDays(90).Add(RetentionClockTolerance))),
+                    versionCreatedAt.AddDays(90).Add(RetentionClockTolerance))),
             EvidenceRetentionLane.EvidenceReleaseIndefinite =>
                 new(lane, null, null),
             _ => throw new ArgumentOutOfRangeException(nameof(lane)),
@@ -504,7 +511,10 @@ internal sealed class AzureEvidenceStoreException(
     public AzureEvidenceStoreFailureKind Kind { get; } = kind;
 }
 
-internal sealed record AzureEvidenceObjectVersion(string VersionId, string ETag);
+internal sealed record AzureEvidenceObjectVersion(
+    string VersionId,
+    string ETag,
+    DateTimeOffset CreatedAt);
 
 internal sealed class AzureEvidenceReadback(
     Stream content,
@@ -546,11 +556,15 @@ internal sealed record AzureEvidenceRetentionFacts(
 
 internal interface IAzureRawEvidenceStore
 {
+    Task VerifyCreatePrerequisitesAsync(
+        EvidenceRetentionLane retentionLane,
+        CancellationToken cancellationToken);
+
     Task<AzureEvidenceObjectVersion> CreateOnlyAsync(
         string blobName,
         Stream content,
         IReadOnlyDictionary<string, string> metadata,
-        AzureEvidenceRetentionRequest retention,
+        EvidenceRetentionLane retentionLane,
         CancellationToken cancellationToken);
 
     Task<AzureEvidenceObjectVersion> ResolveCurrentVersionAsync(
@@ -565,5 +579,6 @@ internal interface IAzureRawEvidenceStore
     Task<AzureEvidenceRetentionFacts> ReadRetentionAsync(
         string blobName,
         AzureEvidenceObjectVersion version,
+        AzureEvidenceRetentionRequest expectedRetention,
         CancellationToken cancellationToken);
 }
