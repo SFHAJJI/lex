@@ -1,4 +1,4 @@
-using System.Globalization;
+using Microsoft.Net.Http.Headers;
 using static Lex.Web.PageShell;
 
 namespace Lex.Web;
@@ -28,36 +28,67 @@ public static class FallbackEndpoints
         || path.StartsWith(lane + "/", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Whether the client prefers JSON over HTML, by Accept quality rather than token presence.
+    /// Whether the client prefers JSON over HTML, by Accept negotiation.
     ///
-    /// Accept is a quality-ranked list. Treating any mention of text/html as a preference hands a
-    /// page to a client that wrote text/html;q=0, which is that client stating plainly it will not
-    /// take HTML. On a tie the human surface wins: a browser sending both is asking for a page, and
-    /// a reader shown raw JSON is worse off than a script handed HTML it can ignore.
+    /// The framework's strict parser does the parsing. A hand-rolled one got this wrong in four
+    /// ways at once: `;;;` threw and returned 500, wildcards were ignored so `text/html;q=0,*/*;q=1`
+    /// chose HTML for a client that had just refused it, `application/*` was not recognised as
+    /// covering JSON, and a comma inside a quoted parameter split a single range into two.
+    ///
+    /// Ranking is by specificity first, then quality, which is what RFC 7231 requires: a precise
+    /// range beats a wildcard even when the wildcard carries a higher q. On a tie the human surface
+    /// wins, because a browser sending both is asking for a page.
     /// </summary>
     private static bool PrefersJson(string accept)
     {
-        double json = -1, html = -1;
-        foreach (var part in accept.Split(',',
-                     StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var segments = part.Split(';',
-                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            var quality = 1d;
-            foreach (var parameter in segments.Skip(1))
-                if (parameter.StartsWith("q=", StringComparison.OrdinalIgnoreCase)
-                    && double.TryParse(parameter[2..], NumberStyles.Float,
-                                       CultureInfo.InvariantCulture, out var parsed))
-                    quality = parsed;
+        if (!MediaTypeHeaderValue.TryParseList([accept], out var ranges) || ranges.Count == 0)
+            return false;
 
-            if (segments[0].Equals("application/json", StringComparison.OrdinalIgnoreCase))
-                json = Math.Max(json, quality);
-            else if (segments[0].Equals("text/html", StringComparison.OrdinalIgnoreCase))
-                html = Math.Max(html, quality);
-        }
+        var json = QualityFor(ranges, "application/json");
+        var html = QualityFor(ranges, "text/html");
         // q=0 is a refusal, not a preference, and a tie is not a preference either.
         return json > 0 && json > html;
     }
+
+    /// <summary>
+    /// The quality the client attached to one representation, taken from the MOST SPECIFIC range
+    /// that covers it, or -1 when nothing covers it.
+    /// </summary>
+    private static double QualityFor(IList<MediaTypeHeaderValue> ranges, string representation)
+    {
+        // The framework owns both hard parts: tokenising quoted parameters and q, and deciding
+        // whether a range covers a representation. IsSubsetOf is the one that does NOT work
+        // here, because it compares parameters, so application/json is not a subset of
+        // */*;q=1 and a client accepting everything looked like one accepting nothing.
+        var specificity = -1;
+        var quality = -1d;
+        foreach (var range in ranges)
+        {
+            if (!range.MatchesMediaType(representation)) continue;
+            // A range whose q cannot be read states nothing, so it neither wins nor blocks a
+            // less specific range that did state something.
+            if (QualityOf(range) is not { } stated) continue;
+            var precision = range.MatchesAllTypes ? 0 : range.MatchesAllSubTypes ? 1 : 2;
+            if (precision <= specificity) continue;
+            specificity = precision;
+            quality = stated;
+        }
+        return quality;
+    }
+
+    /// <summary>
+    /// The quality the client stated, or null when it stated one this parser cannot read.
+    ///
+    /// Quality is null for two different headers: a range carrying no q parameter, which
+    /// RFC 7231 defines as q=1, and a range whose q is malformed or out of range, such as
+    /// q=.5 or q=1.5. Reading both as 1 lets a value the client got wrong assert the loudest
+    /// preference available. That is how application/*;q=1,text/html;q=.5 became a tie and
+    /// served a page to a client that had asked for JSON.
+    /// </summary>
+    private static double? QualityOf(MediaTypeHeaderValue range) =>
+        range.Quality is { } q
+            ? q is >= 0 and <= 1 ? q : null
+            : NameValueHeaderValue.Find(range.Parameters, "q") is null ? 1d : null;
 
     public static IEndpointRouteBuilder MapFallbackRoute(
         this IEndpointRouteBuilder app, WebContext ctx)

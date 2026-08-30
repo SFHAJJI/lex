@@ -352,7 +352,7 @@ public sealed class TrustNoticeTests : IDisposable
     /// nothing for a whole class of URLs and returned the zero-byte 404 it was written to remove.
     /// </summary>
     [Fact]
-    public async Task A_dotted_path_is_answered_like_any_other()
+    public async Task A_dotted_machine_path_is_answered_like_any_other()
     {
         using var site = new NoticeSite(Path.Combine(_root, "dotted"), includeAct: false);
 
@@ -399,6 +399,36 @@ public sealed class TrustNoticeTests : IDisposable
             StringComparison.Ordinal);
         Assert.Contains("Page not found", await Ask("application/json,text/html"),
             StringComparison.Ordinal);
+
+        // Wildcards are ranges too. A client that refused HTML outright and accepts anything
+        // else is asking for the machine body, and application/* covers JSON.
+        Assert.Contains("unknown_route", await Ask("text/html;q=0,*/*;q=1"),
+            StringComparison.Ordinal);
+        Assert.Contains("unknown_route", await Ask("application/*;q=1,text/html;q=.5"),
+            StringComparison.Ordinal);
+        // A comma inside a quoted parameter is not a range separator, and this range sets q=0.
+        Assert.Contains("Page not found",
+            await Ask("application/json;profile=\"x,text/html;q=0\";q=0"),
+            StringComparison.Ordinal);
+        // A precise range overrides a wildcard for the representation it names. That decides
+        // which range speaks for that representation; it does not decide which representation
+        // wins. Here the client downranked JSON itself, so the wildcard speaks only for HTML.
+        Assert.Contains("Page not found", await Ask("application/json;q=0.1,*/*;q=1"),
+            StringComparison.Ordinal);
+        // The mirror image, and the reason the two rules must not be conflated: a client that
+        // ranks HTML below everything else is asking for the machine body. It would be
+        // incoherent for q=0 above to mean that while q=0.4 here did not.
+        Assert.Contains("unknown_route", await Ask("text/html;q=0.4,*/*;q=1"),
+            StringComparison.Ordinal);
+        // A q outside 0..1 is not a louder preference, it is an unreadable one. Reading it as
+        // stated would let it outrank every well-formed range in the header.
+        Assert.Contains("Page not found", await Ask("text/html;q=0.4,application/json;q=1.5"),
+            StringComparison.Ordinal);
+
+        // Malformed headers answer, they do not crash. The hand parser threw on these and
+        // returned 500, which is a worse refusal than the blank page this module replaced.
+        foreach (var malformed in new[] { ";;;", ",,,", "=", "application/json;q=", "q=1", "" })
+            Assert.Contains("Page not found", await Ask(malformed), StringComparison.Ordinal);
     }
 
     /// <summary>
