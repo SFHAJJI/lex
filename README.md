@@ -13,4 +13,4 @@ npm run build --prefix web
 pwsh -File eng/verify-v3-tree.ps1
 ```
 
-<!-- Temporary exact-head branch-protection probe. -->
+<!-- Temporary skipped-head branch-protection probe. -->
