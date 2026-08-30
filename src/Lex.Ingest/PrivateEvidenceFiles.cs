@@ -89,11 +89,11 @@ internal static class EvidenceFiles
         CodeIdentity.RequireSha256(
             requestId, "Private evidence request ID") + ".json";
 
-    public static string AttemptStartRelative(SourceRequestIdentity request) =>
+    public static string AttemptStartRelative(RecordedSourceRequest request) =>
         PrivateEvidenceBundle.AttemptsDirectoryName + "/" +
         AttemptPrefix(request) + ".start.json";
 
-    public static string AttemptTerminalRelative(SourceRequestIdentity request) =>
+    public static string AttemptTerminalRelative(RecordedSourceRequest request) =>
         PrivateEvidenceBundle.AttemptsDirectoryName + "/" +
         AttemptPrefix(request) + ".terminal.json";
 
@@ -151,7 +151,10 @@ internal static class EvidenceFiles
     }
 
     public static void WriteAtomic(
-        HandleBoundRoot root, string finalRelative, byte[] bytes)
+        HandleBoundRoot root,
+        string finalRelative,
+        byte[] bytes,
+        bool replace = false)
     {
         var parent = NormalizeParent(finalRelative);
         var tempName = $".{Path.GetFileName(finalRelative)}-{Guid.NewGuid():N}.tmp";
@@ -163,7 +166,7 @@ internal static class EvidenceFiles
                 stream.Write(bytes);
                 stream.Flush(flushToDisk: true);
             }
-            root.Move(temp, finalRelative, replace: false);
+            root.Move(temp, finalRelative, replace);
         }
         catch
         {
@@ -195,6 +198,9 @@ internal static class EvidenceFiles
                 var name = Path.GetFileName(path);
                 var allowed = directory == "."
                     ? name.StartsWith($".{PrivateEvidenceBundle.PlanFileName}-",
+                          StringComparison.Ordinal)
+                      || name.StartsWith(
+                          $".{PrivateEvidenceBundle.AttemptHeadFileName}-",
                           StringComparison.Ordinal)
                       || name.StartsWith(
                           $".{PrivateEvidenceBundle.ManifestFileName}-",
@@ -261,6 +267,7 @@ internal static class EvidenceFiles
             "D:" + PrivateEvidenceBundle.ReceiptsDirectoryName,
             "F:" + PrivateEvidenceBundle.OwnerLockFileName,
             "F:" + PrivateEvidenceBundle.PlanFileName,
+            "F:" + PrivateEvidenceBundle.AttemptHeadFileName,
         };
         if (includeManifest)
             expectedRoot.Add("F:" + PrivateEvidenceBundle.ManifestFileName);
@@ -364,12 +371,12 @@ internal static class EvidenceFiles
         CodeIdentity.RequireSha256(
             requestId, "Private evidence request ID") + suffix;
 
-    private static string AttemptPrefix(SourceRequestIdentity request) =>
+    private static string AttemptPrefix(RecordedSourceRequest request) =>
         request.Ordinal.ToString("D6", System.Globalization.CultureInfo.InvariantCulture)
         + "-" + request.RequestId;
 
     private static string AttemptFileName(
-        SourceRequestIdentity request, string suffix) =>
+        RecordedSourceRequest request, string suffix) =>
         AttemptPrefix(request) + suffix;
 
     private static string NormalizeParent(string relative)

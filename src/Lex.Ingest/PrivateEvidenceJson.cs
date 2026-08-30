@@ -82,6 +82,16 @@ internal sealed record AttemptStartDocument(
     string AttemptSha256,
     RequestDocument Request);
 
+internal sealed record AttemptHeadDocument(
+    string Schema,
+    string BundleId,
+    int AttemptCount,
+    string? HeadAttemptSha256);
+
+internal sealed record ParsedAttemptHead(
+    int AttemptCount,
+    string? HeadAttemptSha256);
+
 internal sealed record AttemptTerminalPayloadDocument(
     string Schema,
     string BundleId,
@@ -131,8 +141,8 @@ internal sealed record ParsedManifest(
 
 internal sealed record PendingCaptureIntent(
     string AttemptSha256,
-    SourceRequestIdentity Request,
-    BoundedResponseMetadata Response);
+    RecordedSourceRequest Request,
+    RecordedResponseMetadata Response);
 
 internal static class EvidenceJson
 {
@@ -158,7 +168,15 @@ internal static class EvidenceJson
     public static byte[] WriteCaptureIntent(
         string attemptSha256,
         SourceRequestIdentity request,
-        BoundedResponseMetadata response) => Write(new CaptureIntentDocument(
+        BoundedResponseMetadata response) => WriteCaptureIntent(
+        attemptSha256,
+        request.ToRecordedClaim(),
+        response.ToRecordedClaim());
+
+    private static byte[] WriteCaptureIntent(
+        string attemptSha256,
+        RecordedSourceRequest request,
+        RecordedResponseMetadata response) => Write(new CaptureIntentDocument(
         PrivateEvidenceBundle.CaptureIntentSchema,
         CodeIdentity.RequireSha256(attemptSha256, nameof(attemptSha256)),
         request.RequestId + ".body",
@@ -195,7 +213,7 @@ internal static class EvidenceJson
     public static string HashAttemptStart(
         PrivateEvidenceAcquisitionPlan plan,
         string? predecessorAttemptSha256,
-        SourceRequestIdentity request) => Sha256(Write(
+        RecordedSourceRequest request) => Sha256(Write(
         new AttemptChainDocument(
             PrivateEvidenceBundle.AttemptChainSchema,
             plan.BundleId,
@@ -234,6 +252,40 @@ internal static class EvidenceJson
             throw new InvalidDataException(
                 "Private evidence attempt start is not canonical or self-consistent.");
         return attempt;
+    }
+
+    public static byte[] WriteAttemptHead(
+        PrivateEvidenceAcquisitionPlan plan,
+        int attemptCount,
+        string? headAttemptSha256) => Write(new AttemptHeadDocument(
+        PrivateEvidenceBundle.AttemptHeadSchema,
+        plan.BundleId,
+        attemptCount,
+        headAttemptSha256));
+
+    public static ParsedAttemptHead ParseAttemptHead(
+        byte[] bytes, PrivateEvidenceAcquisitionPlan plan)
+    {
+        var document = Deserialize<AttemptHeadDocument>(bytes, "attempt head");
+        if (document.Schema != PrivateEvidenceBundle.AttemptHeadSchema
+            || document.BundleId != plan.BundleId
+            || document.AttemptCount is < 0
+                or > PrivateEvidenceBundle.MaximumAttemptsPerBundle
+            || document.AttemptCount == 0
+                && document.HeadAttemptSha256 is not null
+            || document.AttemptCount > 0
+                && document.HeadAttemptSha256 is null)
+            throw new InvalidDataException(
+                "Private evidence attempt head schema or state is invalid.");
+        var headSha256 = document.HeadAttemptSha256 is null
+            ? null
+            : CodeIdentity.RequireSha256(
+                document.HeadAttemptSha256, "Attempt head SHA-256");
+        if (!bytes.AsSpan().SequenceEqual(WriteAttemptHead(
+                plan, document.AttemptCount, headSha256)))
+            throw new InvalidDataException(
+                "Private evidence attempt head is not canonical.");
+        return new ParsedAttemptHead(document.AttemptCount, headSha256);
     }
 
     public static PrivateEvidenceAttemptRecord CreateAttemptTerminal(
@@ -379,8 +431,8 @@ internal static class EvidenceJson
 
     public static StagedResponseEvidence ParseCaptureOutcome(
         byte[] bytes,
-        SourceRequestIdentity request,
-        BoundedResponseMetadata response)
+        RecordedSourceRequest request,
+        RecordedResponseMetadata response)
     {
         var document = Deserialize<CaptureOutcomeDocument>(
             bytes, "capture outcome");
@@ -460,7 +512,7 @@ internal static class EvidenceJson
         }
     }
 
-    private static RequestDocument ToDocument(SourceRequestIdentity request) => new(
+    private static RequestDocument ToDocument(RecordedSourceRequest request) => new(
         request.RequestId,
         request.Publisher,
         request.Channel,
@@ -473,7 +525,7 @@ internal static class EvidenceJson
         request.PhysicalAttempt,
         request.RedirectHop);
 
-    private static ResponseDocument ToDocument(BoundedResponseMetadata response) => new(
+    private static ResponseDocument ToDocument(RecordedResponseMetadata response) => new(
         response.StatusCode,
         response.ContentType,
         response.Charset,
@@ -498,9 +550,10 @@ internal static class EvidenceJson
         ToDocument(record.Response),
         ToDocument(record.Evidence));
 
-    private static SourceRequestIdentity Restore(RequestDocument document)
+    private static RecordedSourceRequest Restore(RequestDocument document)
     {
-        var request = SourceRequestIdentity.RestorePersisted(
+        var request = RecordedSourceRequest.FromPersistedClaim(
+            document.RequestId,
             document.Publisher,
             document.Channel,
             document.Method,
@@ -511,9 +564,6 @@ internal static class EvidenceJson
             document.MaximumResponseBytes,
             document.PhysicalAttempt,
             document.RedirectHop);
-        if (request.RequestId != document.RequestId)
-            throw new InvalidDataException(
-                "Persisted source request ID does not match its fields.");
         return request;
     }
 
@@ -531,8 +581,8 @@ internal static class EvidenceJson
         return new StagedResponseRecord(request, response, evidence);
     }
 
-    private static BoundedResponseMetadata Restore(ResponseDocument document) =>
-        BoundedResponseMetadata.RestorePersisted(
+    private static RecordedResponseMetadata Restore(ResponseDocument document) =>
+        RecordedResponseMetadata.FromPersistedClaim(
             document.StatusCode,
             document.ContentType,
             document.Charset,
@@ -545,8 +595,8 @@ internal static class EvidenceJson
 
     private static StagedResponseEvidence Restore(
         EvidenceDocument document,
-        SourceRequestIdentity request,
-        BoundedResponseMetadata response,
+        RecordedSourceRequest request,
+        RecordedResponseMetadata response,
         bool requireRetainedState)
     {
         if (document.RequestId != request.RequestId)

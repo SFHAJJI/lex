@@ -53,6 +53,59 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
             !type.IsAbstract
             && !type.IsInterface
             && typeof(IRawResponseSink).IsAssignableFrom(type));
+
+        Assert.Empty(typeof(SourceRequestIdentity).GetConstructors());
+        Assert.Equal("Create", Assert.Single(
+            typeof(SourceRequestIdentity).GetMethods(
+                BindingFlags.Public | BindingFlags.Static),
+            method => method.ReturnType == typeof(SourceRequestIdentity)).Name);
+        Assert.Empty(typeof(BoundedResponseMetadata).GetConstructors());
+        Assert.Equal("Create", Assert.Single(
+            typeof(BoundedResponseMetadata).GetMethods(
+                BindingFlags.Public | BindingFlags.Static),
+            method => method.ReturnType == typeof(BoundedResponseMetadata)).Name);
+        Assert.DoesNotContain(
+            typeof(RecordedSourceRequest).GetMethods(),
+            method => ReturnsType(
+                method.ReturnType, typeof(SourceRequestIdentity)));
+        Assert.DoesNotContain(
+            typeof(RecordedResponseMetadata).GetMethods(),
+            method => ReturnsType(
+                method.ReturnType, typeof(BoundedResponseMetadata)));
+
+        var beginAttempt = Assert.Single(
+            typeof(PrivateEvidenceBundle).GetMethods(),
+            method => method.Name == nameof(PrivateEvidenceBundle.BeginAttempt));
+        var localCapture = Assert.Single(
+            typeof(PrivateEvidenceBundle).GetMethods(),
+            method => method.Name == nameof(PrivateEvidenceBundle.CaptureAsync));
+        var durableCapture = Assert.Single(
+            typeof(IRawResponseSink).GetMethods(),
+            method => method.Name == nameof(IRawResponseSink.CaptureAsync));
+        Assert.Equal(
+            [typeof(SourceRequestIdentity)],
+            beginAttempt.GetParameters().Select(parameter =>
+                parameter.ParameterType));
+        Assert.Contains(
+            localCapture.GetParameters(),
+            parameter => parameter.ParameterType
+                         == typeof(BoundedResponseMetadata));
+        Assert.Contains(
+            durableCapture.GetParameters(),
+            parameter => parameter.ParameterType
+                         == typeof(SourceRequestIdentity));
+        Assert.Contains(
+            durableCapture.GetParameters(),
+            parameter => parameter.ParameterType
+                         == typeof(BoundedResponseMetadata));
+        Assert.DoesNotContain(
+            beginAttempt.GetParameters()
+                .Concat(localCapture.GetParameters())
+                .Concat(durableCapture.GetParameters()),
+            parameter => parameter.ParameterType
+                         == typeof(RecordedSourceRequest)
+                         || parameter.ParameterType
+                         == typeof(RecordedResponseMetadata));
     }
 
     [Fact]
@@ -70,6 +123,7 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
                    staging, Plan(sourceRequest)))
         {
             var attempt = bundle.BeginAttempt(sourceRequest);
+            Assert.Same(sourceRequest, attempt.Request);
             await bundle.CaptureAsync(
                 attempt,
                 response,
@@ -93,6 +147,19 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         Assert.DoesNotContain("effective-fragment", emitted, StringComparison.Ordinal);
         Assert.Contains(Sha256(request), emitted, StringComparison.Ordinal);
         Assert.Contains(Sha256(effective), emitted, StringComparison.Ordinal);
+
+        using var reopened = PrivateEvidenceBundle.Open(
+            staging, Plan(sourceRequest));
+        var reopenedRecord = Assert.Single(reopened.Records);
+        var recorded = reopenedRecord.Request;
+        Assert.IsType<RecordedSourceRequest>(recorded);
+        Assert.IsType<RecordedResponseMetadata>(reopenedRecord.Response);
+        Assert.IsType<RecordedSourceRequest>(
+            Assert.Single(reopened.Attempts).Request);
+        Assert.Equal(sourceRequest.RequestId, recorded.RequestId);
+        Assert.Equal(sourceRequest.RequestUriSha256, recorded.RequestUriSha256);
+        Assert.NotEqual(Sha256(recorded.RequestUri), recorded.RequestUriSha256);
+        Assert.IsNotType<SourceRequestIdentity>(recorded);
     }
 
     [Fact]
@@ -156,6 +223,35 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
     }
 
     [Fact]
+    public async Task Inline_transport_read_failures_are_retained_as_interrupted()
+    {
+        Func<Exception>[] failures =
+        [
+            () => new HttpRequestException("injected transport failure"),
+            () => new System.Net.Sockets.SocketException(10060),
+            () => new TimeoutException("injected timeout"),
+        ];
+        for (var index = 0; index < failures.Length; index++)
+        {
+            var staging = EmptyDirectory($"inline-transport-{index}");
+            using var bundle = PrivateEvidenceBundle.Create(
+                staging, DynamicPlan());
+            var attempt = bundle.BeginAttempt(Request(0));
+
+            var rejected = Assert.IsType<RejectedStagedResponseEvidence>(
+                await bundle.CaptureAsync(
+                    attempt,
+                    Response(),
+                    new ThrowAfterPrefixStream([1, 2], failures[index]())));
+
+            Assert.Equal(
+                StagedResponseRejectionReason.TransportInterrupted,
+                rejected.Reason);
+            Assert.Equal(2, rejected.ByteLength);
+        }
+    }
+
+    [Fact]
     public async Task Restart_recovers_created_captured_and_sealed_states()
     {
         var request = Request(0);
@@ -200,6 +296,8 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         {
         }
         File.Delete(Path.Combine(beforePlan, PrivateEvidenceBundle.PlanFileName));
+        File.Delete(Path.Combine(
+            beforePlan, PrivateEvidenceBundle.AttemptHeadFileName));
         Directory.Delete(Path.Combine(
             beforePlan, PrivateEvidenceBundle.ObjectsDirectoryName));
         Directory.Delete(Path.Combine(
@@ -211,6 +309,8 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         using (PrivateEvidenceBundle.Create(beforeDirectories, plan))
         {
         }
+        File.Delete(Path.Combine(
+            beforeDirectories, PrivateEvidenceBundle.AttemptHeadFileName));
         Directory.Delete(Path.Combine(
             beforeDirectories, PrivateEvidenceBundle.ObjectsDirectoryName));
         Directory.Delete(Path.Combine(
@@ -265,7 +365,7 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
     }
 
     [Fact]
-    public void Restart_finalizes_pending_prefix_and_cap_plus_one_without_refetch()
+    public void Restart_preserves_pending_bytes_without_inventing_an_outcome()
     {
         var prefixRequest = Request(0, maximumResponseBytes: 8);
         var oversizedRequest = Request(1, maximumResponseBytes: 3);
@@ -296,9 +396,10 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
             {
                 var evidence = Assert.IsType<RejectedStagedResponseEvidence>(
                     first.Evidence);
-                Assert.Equal(StagedResponseRejectionReason.TransportInterrupted,
+                Assert.Equal(StagedResponseRejectionReason.RecoveryOutcomeUnknown,
                     evidence.Reason);
                 Assert.Equal(2, evidence.ByteLength);
+                Assert.Equal(Sha256([1, 2]), evidence.ObjectSha256);
             },
             second =>
             {
@@ -369,7 +470,7 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
                 attempt,
                 Response(),
                 new ThrowOnReadStream()));
-        Assert.Equal(StagedResponseRejectionReason.TransportInterrupted,
+        Assert.Equal(StagedResponseRejectionReason.RecoveryOutcomeUnknown,
             recovered.Reason);
         Assert.Equal(3, recovered.ByteLength);
         Assert.Empty(Directory.EnumerateFileSystemEntries(Path.Combine(
@@ -439,6 +540,8 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         {
         }
         File.Delete(Path.Combine(interrupted, PrivateEvidenceBundle.PlanFileName));
+        File.Delete(Path.Combine(
+            interrupted, PrivateEvidenceBundle.AttemptHeadFileName));
         Directory.Delete(Path.Combine(
             interrupted, PrivateEvidenceBundle.ObjectsDirectoryName));
         Directory.Delete(Path.Combine(
@@ -590,7 +693,7 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
     public async Task Seal_requires_terminal_runtime_inventory_and_commit_is_last()
     {
         var first = Request(0);
-        var second = Request(1);
+        var second = Request(1, physicalAttempt: 2);
         var staging = EmptyDirectory("exact-plan");
 
         using var bundle = PrivateEvidenceBundle.Create(
@@ -695,6 +798,142 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
     }
 
     [Fact]
+    public void Attempt_head_detects_published_tail_deletion()
+    {
+        var plan = DynamicPlan();
+        var staging = EmptyDirectory("attempt-head-tail-deletion");
+        using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
+            _ = bundle.BeginAttempt(Request(0));
+
+        File.Delete(Assert.Single(Directory.EnumerateFiles(
+            Path.Combine(staging, PrivateEvidenceBundle.AttemptsDirectoryName),
+            "*.start.json")));
+
+        PrivateEvidenceBundle? unexpectedlyOpened = null;
+        var error = Record.Exception(() =>
+            unexpectedlyOpened = PrivateEvidenceBundle.Open(staging, plan));
+        unexpectedlyOpened?.Dispose();
+        Assert.Contains(
+            "attempt head",
+            Assert.IsType<InvalidDataException>(error).Message,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Attempt_head_rolls_forward_one_unpublished_canonical_tail()
+    {
+        var plan = DynamicPlan();
+        var staging = EmptyDirectory("attempt-head-crash-window");
+        string attemptSha256;
+        using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
+        {
+            attemptSha256 = bundle.BeginAttempt(Request(0)).AttemptSha256;
+            using var publishedHead = JsonDocument.Parse(File.ReadAllBytes(
+                Path.Combine(
+                    staging, PrivateEvidenceBundle.AttemptHeadFileName)));
+            Assert.Equal(1, publishedHead.RootElement
+                .GetProperty("attempt_count").GetInt32());
+            Assert.Equal(attemptSha256, publishedHead.RootElement
+                .GetProperty("head_attempt_sha256").GetString());
+        }
+        WriteAttemptHead(staging, plan, attemptCount: 0, headSha256: null);
+
+        using var recovered = PrivateEvidenceBundle.Open(staging, plan);
+
+        Assert.Equal(
+            PrivateEvidenceAttemptDisposition.NotAttemptedOrSendStateUnknown,
+            Assert.Single(recovered.Attempts).Disposition);
+        using var head = JsonDocument.Parse(File.ReadAllBytes(
+            Path.Combine(staging, PrivateEvidenceBundle.AttemptHeadFileName)));
+        Assert.Equal(1, head.RootElement.GetProperty("attempt_count").GetInt32());
+        Assert.Equal(attemptSha256,
+            head.RootElement.GetProperty("head_attempt_sha256").GetString());
+    }
+
+    [Fact]
+    public void Attempt_head_never_rolls_back_a_terminal_tail()
+    {
+        var plan = DynamicPlan();
+        var staging = EmptyDirectory("attempt-head-terminal-tail");
+        using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
+        {
+            var attempt = bundle.BeginAttempt(Request(0));
+            bundle.RecordNoResponse(attempt);
+        }
+        WriteAttemptHead(staging, plan, attemptCount: 0, headSha256: null);
+
+        PrivateEvidenceBundle? unexpectedlyOpened = null;
+        var error = Record.Exception(() =>
+            unexpectedlyOpened = PrivateEvidenceBundle.Open(staging, plan));
+        unexpectedlyOpened?.Dispose();
+        Assert.Contains(
+            "already has response or terminal state",
+            Assert.IsType<InvalidDataException>(error).Message,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Attempt_coordinates_must_advance_monotonically_per_request_key()
+    {
+        var plan = DynamicPlan();
+        var staging = EmptyDirectory("attempt-coordinate-sequence");
+        using var bundle = PrivateEvidenceBundle.Create(staging, plan);
+        var first = bundle.BeginAttempt(Request(
+            0, physicalAttempt: 2, redirectHop: 3));
+        bundle.RecordNoResponse(first);
+
+        Assert.Throws<InvalidDataException>(() => bundle.BeginAttempt(Request(
+            1, physicalAttempt: 2, redirectHop: 3)));
+        Assert.Throws<InvalidDataException>(() => bundle.BeginAttempt(Request(
+            1, physicalAttempt: 4, redirectHop: 3)));
+        var retry = bundle.BeginAttempt(Request(
+            1, physicalAttempt: 3, redirectHop: 3));
+        bundle.RecordNoResponse(retry);
+        Assert.Throws<InvalidDataException>(() => bundle.BeginAttempt(Request(
+            2, physicalAttempt: 2, redirectHop: 4)));
+        Assert.Throws<InvalidDataException>(() => bundle.BeginAttempt(Request(
+            2, physicalAttempt: 3, redirectHop: 5)));
+        var redirect = bundle.BeginAttempt(Request(
+            2, physicalAttempt: 3, redirectHop: 4));
+        bundle.RecordNoResponse(redirect);
+    }
+
+    [Fact]
+    public void Attempt_coordinate_absolute_caps_fail_closed()
+    {
+        Assert.Throws<InvalidDataException>(() => Request(
+            0, physicalAttempt: 0));
+        Assert.Throws<InvalidDataException>(() => Request(
+            0,
+            physicalAttempt: SourceRequestIdentity.MaximumPhysicalAttempt + 1));
+        Assert.Throws<InvalidDataException>(() => Request(
+            0, redirectHop: -1));
+        Assert.Throws<InvalidDataException>(() => Request(
+            0,
+            redirectHop: SourceRequestIdentity.MaximumPhysicalAttempt + 1));
+
+        RecordedSourceRequest Persisted(int physicalAttempt, int redirectHop) =>
+            RecordedSourceRequest.FromPersistedClaim(
+                new string('0', 64),
+                "legilux",
+                "filestore",
+                SourceRequestMethod.Get,
+                "https://legilux.public.lu/source",
+                Sha256("https://legilux.public.lu/source"),
+                requestBodySha256: null,
+                ordinal: 0,
+                maximumResponseBytes: 1024,
+                physicalAttempt,
+                redirectHop);
+
+        Assert.Throws<InvalidDataException>(() => Persisted(
+            SourceRequestIdentity.MaximumPhysicalAttempt + 1, 0));
+        Assert.Throws<InvalidDataException>(() => Persisted(
+            1, SourceRequestIdentity.MaximumPhysicalAttempt + 1));
+        Assert.Throws<InvalidDataException>(() => Persisted(1, 0));
+    }
+
+    [Fact]
     public async Task Bundle_cap_rejects_before_append_and_maximum_bundle_reopens()
     {
         var plan = DynamicPlan();
@@ -707,8 +946,8 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
             {
                 var attempt = bundle.BeginAttempt(Request(
                     ordinal,
-                    physicalAttempt: ordinal %
-                        SourceRequestIdentity.MaximumPhysicalAttempt + 1));
+                    $"https://legilux.public.lu/source/{ordinal / 16}",
+                    physicalAttempt: ordinal % 16 + 1));
                 bundle.RecordNoResponse(attempt);
             }
 
@@ -743,49 +982,15 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
             {
                 var attempt = bundle.BeginAttempt(Request(
                     ordinal,
-                    physicalAttempt: ordinal %
-                        SourceRequestIdentity.MaximumPhysicalAttempt + 1));
+                    $"https://legilux.public.lu/source/{ordinal / 16}",
+                    physicalAttempt: ordinal % 16 + 1));
                 bundle.RecordNoResponse(attempt);
             }
             predecessor = bundle.Attempts[^1].AttemptSha256;
         }
 
         var request = Request(PrivateEvidenceBundle.MaximumAttemptsPerBundle);
-        var requestDocument = new
-        {
-            request.RequestId,
-            request.Publisher,
-            request.Channel,
-            Method = request.Method.ToString().ToLowerInvariant(),
-            request.RequestUri,
-            request.RequestUriSha256,
-            request.RequestBodySha256,
-            request.Ordinal,
-            request.MaximumResponseBytes,
-            request.PhysicalAttempt,
-            request.RedirectHop,
-        };
-        var attemptSha256 = Convert.ToHexStringLower(SHA256.HashData(
-            TestJsonBytes(new
-            {
-                Schema = PrivateEvidenceBundle.AttemptChainSchema,
-                BundleId = plan.BundleId,
-                PredecessorAttemptSha256 = predecessor,
-                Request = requestDocument,
-            })));
-        File.WriteAllBytes(
-            Path.Combine(
-                staging,
-                PrivateEvidenceBundle.AttemptsDirectoryName,
-                $"{request.Ordinal:D6}-{request.RequestId}.start.json"),
-            TestJsonBytes(new
-            {
-                Schema = PrivateEvidenceBundle.AttemptStartSchema,
-                BundleId = plan.BundleId,
-                PredecessorAttemptSha256 = predecessor,
-                AttemptSha256 = attemptSha256,
-                Request = requestDocument,
-            }));
+        _ = WriteAttemptStart(staging, plan, request, predecessor);
 
         PrivateEvidenceBundle? unexpectedlyOpened = null;
         var error = Record.Exception(() =>
@@ -793,6 +998,34 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         unexpectedlyOpened?.Dispose();
         Assert.Contains(
             "exceeds its bundle cap",
+            Assert.IsType<InvalidDataException>(error).Message,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Reopen_rejects_a_forged_attempt_coordinate_sequence()
+    {
+        var plan = DynamicPlan();
+        var staging = EmptyDirectory("forged-attempt-sequence");
+        string predecessor;
+        using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
+        {
+            var first = bundle.BeginAttempt(Request(
+                0, physicalAttempt: 2, redirectHop: 3));
+            bundle.RecordNoResponse(first);
+            predecessor = first.AttemptSha256;
+        }
+        var forged = Request(1, physicalAttempt: 4, redirectHop: 3);
+        var forgedSha256 = WriteAttemptStart(
+            staging, plan, forged, predecessor);
+        WriteAttemptHead(staging, plan, attemptCount: 2, forgedSha256);
+
+        PrivateEvidenceBundle? unexpectedlyOpened = null;
+        var error = Record.Exception(() =>
+            unexpectedlyOpened = PrivateEvidenceBundle.Open(staging, plan));
+        unexpectedlyOpened?.Dispose();
+        Assert.Contains(
+            "advance exactly one retry or redirect coordinate",
             Assert.IsType<InvalidDataException>(error).Message,
             StringComparison.Ordinal);
     }
@@ -982,7 +1215,8 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         int ordinal,
         string uri = "https://legilux.public.lu/source",
         long maximumResponseBytes = 1024,
-        int physicalAttempt = 1) => SourceRequestIdentity.Create(
+        int physicalAttempt = 1,
+        int redirectHop = 0) => SourceRequestIdentity.Create(
         "legilux",
         "filestore",
         SourceRequestMethod.Get,
@@ -991,7 +1225,7 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         ordinal,
         maximumResponseBytes,
         physicalAttempt,
-        redirectHop: 0);
+        redirectHop);
 
     private static BoundedResponseMetadata Response(
         string uri = "https://legilux.public.lu/final",
@@ -1019,6 +1253,7 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         foreach (var path in new[]
                  {
                      Path.Combine(root, PrivateEvidenceBundle.PlanFileName),
+                     Path.Combine(root, PrivateEvidenceBundle.AttemptHeadFileName),
                      Path.Combine(root, PrivateEvidenceBundle.AttemptsDirectoryName),
                      Path.Combine(root, PrivateEvidenceBundle.PendingDirectoryName),
                      Path.Combine(root, PrivateEvidenceBundle.ReceiptsDirectoryName),
@@ -1041,7 +1276,10 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
     }
 
     private static string Sha256(string value) =>
-        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+        Sha256(Encoding.UTF8.GetBytes(value));
+
+    private static string Sha256(byte[] value) =>
+        Convert.ToHexStringLower(SHA256.HashData(value));
 
     private static void WriteCaptureIntent(
         string root,
@@ -1116,6 +1354,67 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
             });
     }
 
+    private static void WriteAttemptHead(
+        string root,
+        PrivateEvidenceAcquisitionPlan plan,
+        int attemptCount,
+        string? headSha256)
+    {
+        WriteTestJson(
+            Path.Combine(root, PrivateEvidenceBundle.AttemptHeadFileName),
+            new
+            {
+                Schema = PrivateEvidenceBundle.AttemptHeadSchema,
+                BundleId = plan.BundleId,
+                AttemptCount = attemptCount,
+                HeadAttemptSha256 = headSha256,
+            });
+    }
+
+    private static string WriteAttemptStart(
+        string root,
+        PrivateEvidenceAcquisitionPlan plan,
+        SourceRequestIdentity request,
+        string predecessor)
+    {
+        var requestDocument = new
+        {
+            request.RequestId,
+            request.Publisher,
+            request.Channel,
+            Method = request.Method.ToString().ToLowerInvariant(),
+            request.RequestUri,
+            request.RequestUriSha256,
+            request.RequestBodySha256,
+            request.Ordinal,
+            request.MaximumResponseBytes,
+            request.PhysicalAttempt,
+            request.RedirectHop,
+        };
+        var attemptSha256 = Convert.ToHexStringLower(SHA256.HashData(
+            TestJsonBytes(new
+            {
+                Schema = PrivateEvidenceBundle.AttemptChainSchema,
+                BundleId = plan.BundleId,
+                PredecessorAttemptSha256 = predecessor,
+                Request = requestDocument,
+            })));
+        File.WriteAllBytes(
+            Path.Combine(
+                root,
+                PrivateEvidenceBundle.AttemptsDirectoryName,
+                $"{request.Ordinal:D6}-{request.RequestId}.start.json"),
+            TestJsonBytes(new
+            {
+                Schema = PrivateEvidenceBundle.AttemptStartSchema,
+                BundleId = plan.BundleId,
+                PredecessorAttemptSha256 = predecessor,
+                AttemptSha256 = attemptSha256,
+                Request = requestDocument,
+            }));
+        return attemptSha256;
+    }
+
     private static string PendingBodyPath(
         string root, SourceRequestIdentity request) => Path.Combine(
         root,
@@ -1142,7 +1441,9 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true);
     }
 
-    private sealed class ThrowAfterPrefixStream(byte[] prefix) : Stream
+    private sealed class ThrowAfterPrefixStream(
+        byte[] prefix,
+        Exception? failure = null) : Stream
     {
         private bool _returnedPrefix;
 
@@ -1163,7 +1464,8 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
             Memory<byte> buffer, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (_returnedPrefix) throw new IOException("injected interruption");
+            if (_returnedPrefix)
+                throw failure ?? new IOException("injected interruption");
             _returnedPrefix = true;
             prefix.CopyTo(buffer);
             return ValueTask.FromResult(prefix.Length);

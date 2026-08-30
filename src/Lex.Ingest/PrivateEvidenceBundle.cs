@@ -85,6 +85,7 @@ public enum StagedResponseRejectionReason
     BodyTooLarge = 1,
     ResponseIncomplete = 2,
     TransportInterrupted = 3,
+    RecoveryOutcomeUnknown = 4,
 }
 
 public enum PrivateEvidenceAttemptDisposition
@@ -101,7 +102,7 @@ public enum PrivateEvidenceAttemptDisposition
 public sealed class PrivateEvidenceAttemptRecord
 {
     internal PrivateEvidenceAttemptRecord(
-        SourceRequestIdentity request,
+        RecordedSourceRequest request,
         string? predecessorAttemptSha256,
         string attemptSha256,
         PrivateEvidenceAttemptDisposition disposition,
@@ -129,7 +130,7 @@ public sealed class PrivateEvidenceAttemptRecord
             terminalSha256, nameof(terminalSha256));
     }
 
-    public SourceRequestIdentity Request { get; }
+    public RecordedSourceRequest Request { get; }
     public string? PredecessorAttemptSha256 { get; }
     public string AttemptSha256 { get; }
     public PrivateEvidenceAttemptDisposition Disposition { get; }
@@ -140,13 +141,16 @@ public sealed class PrivateEvidenceAttemptRecord
 public sealed class PrivateEvidencePhysicalAttempt
 {
     internal PrivateEvidencePhysicalAttempt(
-        PrivateEvidenceBundle owner, PrivateEvidenceAttemptState state)
+        PrivateEvidenceBundle owner,
+        PrivateEvidenceAttemptState state,
+        SourceRequestIdentity request)
     {
         Owner = owner;
         State = state;
+        Request = request;
     }
 
-    public SourceRequestIdentity Request => State.Request;
+    public SourceRequestIdentity Request { get; }
     public string AttemptSha256 => State.AttemptSha256;
 
     internal PrivateEvidenceBundle Owner { get; }
@@ -156,7 +160,7 @@ public sealed class PrivateEvidencePhysicalAttempt
 internal sealed class PrivateEvidenceAttemptState
 {
     public PrivateEvidenceAttemptState(
-        SourceRequestIdentity request,
+        RecordedSourceRequest request,
         string? predecessorAttemptSha256,
         string attemptSha256,
         PrivateEvidenceAttemptRecord? terminal = null)
@@ -167,7 +171,7 @@ internal sealed class PrivateEvidenceAttemptState
         Terminal = terminal;
     }
 
-    public SourceRequestIdentity Request { get; }
+    public RecordedSourceRequest Request { get; }
     public string? PredecessorAttemptSha256 { get; }
     public string AttemptSha256 { get; }
     public PrivateEvidenceAttemptRecord? Terminal { get; set; }
@@ -240,8 +244,8 @@ public sealed class RejectedStagedResponseEvidence : StagedResponseEvidence
 public sealed class StagedResponseRecord
 {
     internal StagedResponseRecord(
-        SourceRequestIdentity request,
-        BoundedResponseMetadata response,
+        RecordedSourceRequest request,
+        RecordedResponseMetadata response,
         StagedResponseEvidence evidence)
     {
         Request = request ?? throw new ArgumentNullException(nameof(request));
@@ -253,8 +257,8 @@ public sealed class StagedResponseRecord
                 "Staged response identity or completion state is inconsistent.");
     }
 
-    public SourceRequestIdentity Request { get; }
-    public BoundedResponseMetadata Response { get; }
+    public RecordedSourceRequest Request { get; }
+    public RecordedResponseMetadata Response { get; }
     public StagedResponseEvidence Evidence { get; }
 }
 
@@ -299,6 +303,7 @@ public sealed class PrivateEvidenceStageReceipt
 /// one non-link directory handle, and data reads and mutations are handle-relative.
 /// Name enumeration revalidates that file identity. The owner lock coordinates peers;
 /// hostile code already running as the same operating-system identity is out of scope.
+/// Journal hashes prove internal consistency, not authenticity or external attestation.
 /// </summary>
 public sealed class PrivateEvidenceBundle : IDisposable
 {
@@ -318,6 +323,8 @@ public sealed class PrivateEvidenceBundle : IDisposable
         "lex-private-evidence-capture-outcome/1";
     public const string AttemptStartSchema =
         "lex-private-evidence-attempt-start/1";
+    public const string AttemptHeadSchema =
+        "lex-private-evidence-attempt-head/1";
     public const string AttemptTerminalSchema =
         "lex-private-evidence-attempt-terminal/1";
     public const string AttemptChainSchema =
@@ -328,6 +335,7 @@ public sealed class PrivateEvidenceBundle : IDisposable
     public const string CommitMarkerSchema =
         "lex-private-evidence-stage-commit/3";
     public const string PlanFileName = "plan.json";
+    public const string AttemptHeadFileName = "attempt-head.json";
     public const string ManifestFileName = "manifest.json";
     public const string CommitMarkerFileName = "commit.json";
     public const string OwnerLockFileName = "owner.lock";
@@ -340,6 +348,7 @@ public sealed class PrivateEvidenceBundle : IDisposable
     private const int MaximumResponseReceiptBytes = 64 * 1024;
     private const int MaximumCaptureJournalBytes = 64 * 1024;
     private const int MaximumAttemptJournalBytes = 64 * 1024;
+    private const int MaximumAttemptHeadBytes = 64 * 1024;
     private const int MaximumMarkerBytes = 64 * 1024;
 
     private readonly string _root;
@@ -410,6 +419,10 @@ public sealed class PrivateEvidenceBundle : IDisposable
             rootHandle.EnsureDirectory(ObjectsDirectoryName);
             rootHandle.EnsureDirectory(PendingDirectoryName);
             rootHandle.EnsureDirectory(ReceiptsDirectoryName);
+            EvidenceFiles.WriteAtomic(
+                rootHandle,
+                AttemptHeadFileName,
+                EvidenceJson.WriteAttemptHead(plan, 0, null));
             var bundle = new PrivateEvidenceBundle(
                 root, plan, ownerLock, rootHandle);
             bundle.VerifyStage(includeManifest: false, includeCommit: false);
@@ -460,6 +473,11 @@ public sealed class PrivateEvidenceBundle : IDisposable
             if (!hasCommit)
                 RecoverInitialDirectories(root, rootHandle);
             var attempts = LoadAttemptStarts(root, rootHandle, parsedPlan);
+            ReconcileAttemptHead(
+                rootHandle,
+                parsedPlan,
+                attempts,
+                allowRecovery: !hasManifest);
             if (!hasManifest)
                 RecoverPendingCaptures(root, rootHandle, attempts);
             var records = LoadReceipts(root, rootHandle);
@@ -524,25 +542,34 @@ public sealed class PrivateEvidenceBundle : IDisposable
             if (request.Publisher != _plan.Publisher)
                 throw new InvalidDataException(
                     "A physical attempt must belong to the bundle publisher.");
-            if (request.Ordinal != _attempts.Count)
+            var recordedRequest = request.ToRecordedClaim();
+            if (recordedRequest.Ordinal != _attempts.Count)
                 throw new InvalidDataException(
                     "A physical attempt ordinal must append without a gap.");
             if (_attempts.Any(current =>
-                    current.Request.RequestId == request.RequestId))
+                    current.Request.RequestId == recordedRequest.RequestId))
                 throw new InvalidDataException(
                     "A physical attempt request identity must be unique.");
+            ValidateNextAttempt(_attempts, recordedRequest);
 
             var predecessor = _attempts.LastOrDefault()?.AttemptSha256;
             var state = new PrivateEvidenceAttemptState(
-                request,
+                recordedRequest,
                 predecessor,
-                EvidenceJson.HashAttemptStart(_plan, predecessor, request));
+                EvidenceJson.HashAttemptStart(
+                    _plan, predecessor, recordedRequest));
             EvidenceFiles.WriteAtomic(
                 _rootHandle,
-                EvidenceFiles.AttemptStartRelative(request),
+                EvidenceFiles.AttemptStartRelative(recordedRequest),
                 EvidenceJson.WriteAttemptStart(_plan, state));
+            EvidenceFiles.WriteAtomic(
+                _rootHandle,
+                AttemptHeadFileName,
+                EvidenceJson.WriteAttemptHead(
+                    _plan, _attempts.Count + 1, state.AttemptSha256),
+                replace: true);
             _attempts.Add(state);
-            var token = new PrivateEvidencePhysicalAttempt(this, state);
+            var token = new PrivateEvidencePhysicalAttempt(this, state, request);
             _liveAttempts.Add(token);
             return token;
         }
@@ -579,7 +606,7 @@ public sealed class PrivateEvidenceBundle : IDisposable
                 var comparableResponse = recovered.Evidence.BodyComplete
                     ? response
                     : response.MarkBodyIncomplete();
-                if (recovered.Response != comparableResponse)
+                if (recovered.Response != comparableResponse.ToRecordedClaim())
                     throw new InvalidDataException(
                         "Recovered response metadata differs from the supplied response.");
                 PersistAttemptTerminal(
@@ -621,7 +648,9 @@ public sealed class PrivateEvidenceBundle : IDisposable
                 ? response
                 : response.MarkBodyIncomplete();
             var record = new StagedResponseRecord(
-                request, retainedResponse, evidence);
+                request.ToRecordedClaim(),
+                retainedResponse.ToRecordedClaim(),
+                evidence);
             EvidenceFiles.WriteAtomic(
                 _rootHandle,
                 EvidenceFiles.CaptureOutcomeRelative(request.RequestId),
@@ -983,7 +1012,7 @@ public sealed class PrivateEvidenceBundle : IDisposable
             var reason = retained.Length
                          == intent.Request.MaximumResponseBytes + 1
                 ? StagedResponseRejectionReason.BodyTooLarge
-                : StagedResponseRejectionReason.TransportInterrupted;
+                : StagedResponseRejectionReason.RecoveryOutcomeUnknown;
             evidence = new RejectedStagedResponseEvidence(
                 requestId, retained.Sha256, retained.Length, reason);
             EvidenceFiles.WriteAtomic(
@@ -1171,8 +1200,103 @@ public sealed class PrivateEvidenceBundle : IDisposable
                 || !requestIds.Add(attempt.Request.RequestId))
                 throw new InvalidDataException(
                     "Private evidence attempt chain has a gap, duplicate, or invalid predecessor.");
+            ValidateNextAttempt(ordered.Take(index), attempt.Request);
         }
         return ordered;
+    }
+
+    private static void ReconcileAttemptHead(
+        HandleBoundRoot rootHandle,
+        PrivateEvidenceAcquisitionPlan plan,
+        IReadOnlyList<PrivateEvidenceAttemptState> attempts,
+        bool allowRecovery)
+    {
+        if (!rootHandle.EntryExists(AttemptHeadFileName))
+        {
+            if (!allowRecovery || attempts.Count != 0)
+                throw new InvalidDataException(
+                    "Private evidence attempt head is missing.");
+            EvidenceFiles.WriteAtomic(
+                rootHandle,
+                AttemptHeadFileName,
+                EvidenceJson.WriteAttemptHead(plan, 0, null));
+            return;
+        }
+
+        var head = EvidenceJson.ParseAttemptHead(EvidenceFiles.ReadBounded(
+            rootHandle,
+            AttemptHeadFileName,
+            MaximumAttemptHeadBytes,
+            "Private evidence attempt head"), plan);
+        var expectedHead = head.AttemptCount == 0
+            ? null
+            : attempts.ElementAtOrDefault(head.AttemptCount - 1)?.AttemptSha256;
+        if (head.HeadAttemptSha256 != expectedHead)
+            throw new InvalidDataException(
+                "Private evidence attempt head does not match its published prefix.");
+        if (head.AttemptCount == attempts.Count) return;
+        if (!allowRecovery || head.AttemptCount != attempts.Count - 1)
+            throw new InvalidDataException(
+                "Private evidence attempt head detects a missing or multiple tail.");
+
+        // BeginAttempt exposes no token until the head is durable. Therefore one
+        // extra start may be rolled forward only while it has no later state.
+        var unpublished = attempts[^1].Request;
+        if (rootHandle.EntryExists(
+                EvidenceFiles.AttemptTerminalRelative(unpublished))
+            || rootHandle.EntryExists(
+                EvidenceFiles.ResponseReceiptRelative(unpublished.RequestId))
+            || rootHandle.EntryExists(
+                EvidenceFiles.CaptureIntentRelative(unpublished.RequestId))
+            || rootHandle.EntryExists(
+                EvidenceFiles.CaptureOutcomeRelative(unpublished.RequestId))
+            || rootHandle.EntryExists(
+                EvidenceFiles.CaptureBodyRelative(unpublished.RequestId)))
+            throw new InvalidDataException(
+                "An unpublished attempt tail already has response or terminal state.");
+        EvidenceFiles.WriteAtomic(
+            rootHandle,
+            AttemptHeadFileName,
+            EvidenceJson.WriteAttemptHead(
+                plan, attempts.Count, attempts[^1].AttemptSha256),
+            replace: true);
+    }
+
+    private static void ValidateNextAttempt(
+        IEnumerable<PrivateEvidenceAttemptState> attempts,
+        RecordedSourceRequest request)
+    {
+        var key = LogicalRequestKey.From(request);
+        var previous = attempts.LastOrDefault(attempt =>
+            LogicalRequestKey.From(attempt.Request) == key)?.Request;
+        // A new bundle may continue a bounded coordinate from an earlier bundle.
+        if (previous is null) return;
+        var nextRetry = request.PhysicalAttempt == previous.PhysicalAttempt + 1
+                        && request.RedirectHop == previous.RedirectHop;
+        var nextRedirect = request.PhysicalAttempt == previous.PhysicalAttempt
+                           && request.RedirectHop == previous.RedirectHop + 1;
+        if (!nextRetry && !nextRedirect)
+            throw new InvalidDataException(
+                "A repeated logical request must advance exactly one retry or redirect coordinate.");
+    }
+
+    private readonly record struct LogicalRequestKey(
+        string Publisher,
+        string Channel,
+        SourceRequestMethod Method,
+        string RequestUri,
+        string RequestUriSha256,
+        string? RequestBodySha256,
+        long MaximumResponseBytes)
+    {
+        public static LogicalRequestKey From(RecordedSourceRequest request) => new(
+            request.Publisher,
+            request.Channel,
+            request.Method,
+            request.RequestUri,
+            request.RequestUriSha256,
+            request.RequestBodySha256,
+            request.MaximumResponseBytes);
     }
 
     private static void LoadAttemptTerminals(
@@ -1439,6 +1563,17 @@ public sealed class PrivateEvidenceBundle : IDisposable
             "Private evidence plan");
         if (!planBytes.AsSpan().SequenceEqual(EvidenceJson.WritePlan(_plan)))
             throw new InvalidDataException("Private evidence plan changed.");
+        var headBytes = EvidenceFiles.ReadBounded(
+            _rootHandle,
+            AttemptHeadFileName,
+            MaximumAttemptHeadBytes,
+            "Private evidence attempt head");
+        if (!headBytes.AsSpan().SequenceEqual(EvidenceJson.WriteAttemptHead(
+                _plan,
+                _attempts.Count,
+                _attempts.LastOrDefault()?.AttemptSha256)))
+            throw new InvalidDataException(
+                "Private evidence attempt head changed.");
 
         var ordered = OrderedRecords();
         EvidenceFiles.VerifyExactLayout(
@@ -1553,7 +1688,10 @@ public sealed class PrivateEvidenceBundle : IDisposable
                         buffer.AsMemory(0, requested), cancellationToken)
                     .ConfigureAwait(false);
             }
-            catch (IOException)
+            catch (Exception error) when (error is IOException
+                                          or HttpRequestException
+                                          or System.Net.Sockets.SocketException
+                                          or TimeoutException)
             {
                 interrupted = true;
                 break;
