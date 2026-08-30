@@ -12,8 +12,10 @@ internal sealed record SparqlTerm(string Type, string Value);
 public sealed class SparqlClient(string endpoint, TimeSpan? pause = null)
 {
     internal const int SortedTopMaximum = 10_000;
+    internal const int ResponseMaximumBytes = 128 * 1024 * 1024;
     private static readonly HttpClient Http = CreateClient();
     private static readonly SourceRetryPolicy RetryPolicy = new(MaximumAttempts: 4);
+    private readonly HttpClient _http = Http;
     private readonly TimeSpan _pause = pause ?? TimeSpan.FromMilliseconds(1500);
     private readonly Func<string, CancellationToken, Task<List<Dictionary<string, string>>>>? _selectOverride;
     private readonly Func<string, CancellationToken, Task<List<Dictionary<string, SparqlTerm>>>>? _selectTermsOverride;
@@ -26,6 +28,13 @@ public sealed class SparqlClient(string endpoint, TimeSpan? pause = null)
     internal SparqlClient(
         Func<string, CancellationToken, Task<List<Dictionary<string, SparqlTerm>>>> select)
         : this("https://test.invalid", TimeSpan.Zero) => _selectTermsOverride = select;
+
+    internal SparqlClient(HttpClient http)
+        : this("https://test.invalid", TimeSpan.Zero)
+    {
+        ArgumentNullException.ThrowIfNull(http);
+        _http = http;
+    }
 
     private static HttpClient CreateClient()
     {
@@ -61,11 +70,11 @@ public sealed class SparqlClient(string endpoint, TimeSpan? pause = null)
         var sinceLast = DateTimeOffset.UtcNow - _lastRequest;
         if (sinceLast < _pause) await Task.Delay(_pause - sinceLast, ct);
 
-        var sent = await SourceHttp.SendAsync(Http, () => new HttpRequestMessage(HttpMethod.Post, endpoint)
+        var sent = await SourceHttp.SendAsync(_http, () => new HttpRequestMessage(HttpMethod.Post, endpoint)
         {
             Content = new FormUrlEncodedContent(
                 new[] { new KeyValuePair<string, string>("query", query) }),
-        }, RetryPolicy, ct, completion: HttpCompletionOption.ResponseContentRead);
+        }, RetryPolicy, ct, completion: HttpCompletionOption.ResponseHeadersRead);
         _lastRequest = DateTimeOffset.UtcNow;
         using var resp = sent.Response;
         if (resp is null || sent.RetryExhausted || !resp.IsSuccessStatusCode)
@@ -75,15 +84,50 @@ public sealed class SparqlClient(string endpoint, TimeSpan? pause = null)
                 sent.FailureDetail ?? $"The official SPARQL endpoint returned HTTP {(int?)resp?.StatusCode}."),
                 sent.Attempts);
 
+        if (resp.Content.Headers.ContentLength is > ResponseMaximumBytes)
+            throw ResponseTooLarge(sent.Attempts);
+
         try
         {
-            var bytes = await resp.Content.ReadAsByteArrayAsync(ct);
-            return ParseSelectResponse(bytes);
+            await using var stream = await resp.Content.ReadAsStreamAsync(ct);
+            var bounded = await ReadBoundedResponseAsync(
+                stream, ResponseMaximumBytes, ct);
+            if (bounded.LimitExceeded)
+                throw ResponseTooLarge(sent.Attempts);
+            return ParseSelectResponse(bounded.Bytes);
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException or KeyNotFoundException)
         {
             throw new SourceAcquisitionException(new SourceBuildIssue(
                 "enumeration_parser_failure", "lu-legilux", ex.Message), sent.Attempts);
+        }
+    }
+
+    private static SourceAcquisitionException ResponseTooLarge(int attempts) =>
+        new(new SourceBuildIssue(
+            "enumeration_response_too_large",
+            "lu-legilux",
+            $"The official SPARQL response exceeds {ResponseMaximumBytes} bytes."),
+            attempts);
+
+    internal static async Task<(byte[] Bytes, bool LimitExceeded)> ReadBoundedResponseAsync(
+        Stream stream, int maximumBytes, CancellationToken ct)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumBytes);
+        using var output = new MemoryStream(Math.Min(maximumBytes, 1024 * 1024));
+        var buffer = new byte[64 * 1024];
+        while (true)
+        {
+            var remaining = maximumBytes - checked((int)output.Length);
+            var requested = remaining < buffer.Length ? remaining + 1 : buffer.Length;
+            var read = await stream.ReadAsync(buffer.AsMemory(0, requested), ct);
+            if (read == 0) return (output.ToArray(), false);
+            if (read > remaining)
+            {
+                if (remaining > 0) output.Write(buffer, 0, remaining);
+                return (output.ToArray(), true);
+            }
+            output.Write(buffer, 0, read);
         }
     }
 
@@ -102,7 +146,9 @@ public sealed class SparqlClient(string endpoint, TimeSpan? pause = null)
                     ?? throw new JsonException("A SPARQL result term is missing its type.");
                 var value = property.Value.GetProperty("value").GetString()
                     ?? throw new JsonException("A SPARQL result term is missing its value.");
-                row[property.Name] = new SparqlTerm(type, value);
+                if (!row.TryAdd(property.Name, new SparqlTerm(type, value)))
+                    throw new JsonException(
+                        $"A SPARQL result binding contains duplicate name '{property.Name}'.");
             }
             rows.Add(row);
         }
