@@ -63,6 +63,31 @@ public static class TrustNotices
             : null;
 
     /// <summary>
+    /// Whether the producer's own receipt says the query ran, or null when it did not say.
+    ///
+    /// This is authoritative and the status alone is not: an envelope can be ok and still carry
+    /// query_ran false. A page that reads only the status will print a count for a query nobody
+    /// executed.
+    /// </summary>
+    public static bool? QueryRan(JsonObject result) =>
+        result["population"] is JsonObject population
+        && population["query_ran"] is JsonValue value
+        && value.TryGetValue<bool>(out var ran)
+            ? ran
+            : null;
+
+    /// <summary>
+    /// Whether one publisher's envelope may be presented as a result set.
+    ///
+    /// Fail closed, and deliberately a named rule rather than a condition inline in the page: only
+    /// an exact ok whose own receipt does not deny execution counts. A missing or malformed status,
+    /// an ok carrying query_ran false, or a refusal that arrived with rows in it all mean the same
+    /// thing here, which is that nothing about this envelope may be rendered as an answer.
+    /// </summary>
+    public static bool Ran(JsonObject result) =>
+        EnvelopeStatus(result) == "ok" && QueryRan(result) != false;
+
+    /// <summary>
     /// A refusal that applies to the WHOLE call rather than to one publisher, or null when the
     /// object is not one.
     ///
@@ -101,7 +126,7 @@ public static class TrustNotices
         return $"""
             <div class="notice" role="note" aria-label="This query did not run">
             <b>This query did not run.</b> <span class="mono">{H(status)}</span>
-            {body}
+            {H(body)}
             {choices}
             <span class="sub"><a href="/coverage">View coverage and known gaps</a></span>
             </div>
@@ -117,6 +142,9 @@ public static class TrustNotices
     /// </summary>
     public static string SearchEnvelopeRefusal(string status, JsonObject result)
     {
+        // An execution claim needs the receipt that supports it. Without an explicit
+        // query_ran false this says only that no result is usable, which is what is known.
+        var lead = QueryRan(result) == false ? "Did not run." : "No usable result.";
         var body = status switch
         {
             "filter_not_supported_by_index" =>
@@ -125,7 +153,7 @@ public static class TrustNotices
                 + "not evidence that a law or record is absent.",
             "retrieval_mode_unavailable" =>
                 "Words and meaning retrieval is unavailable here: its signed retrieval benchmark "
-                + "has not authorized it. Exact keyword matching still runs.",
+                + "has not authorized it. Exact keyword matching remains available.",
             _ => "This publisher did not run the query. That is a statement about this request, "
                  + "not evidence that a law or record is absent.",
         };
@@ -137,7 +165,7 @@ public static class TrustNotices
 
         return $"""
             <div class="notice" role="note" aria-label="This publisher did not run the query">
-            <b>Did not run.</b> <span class="mono">{H(status)}</span>
+            <b>{lead}</b> <span class="mono">{H(status)}</span>
             {body}
             {named}
             </div>
@@ -151,8 +179,11 @@ public static class TrustNotices
     /// already refuses to say nothing matches when a publisher was unable to run, and this keeps
     /// the server lane from making the claim the browser declines to make.
     /// </summary>
-    public static string? SearchAbsence(int ran, int refused) =>
-        refused == 0 ? null
+    public static string? SearchAbsence(int ran, int refused, int hits) =>
+        // A publisher that answered with hits makes any no-match sentence false, however many
+        // others refused. Absence is stated only when something ran and everything that ran
+        // returned nothing.
+        hits > 0 || refused == 0 ? null
         : ran == 0
             ? """<div class="notice" role="note"><b>No selected publisher ran this query.</b></div>"""
             : """

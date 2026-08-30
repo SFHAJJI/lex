@@ -335,11 +335,15 @@ public sealed class TrustNoticeTests : IDisposable
     [Fact]
     public void A_corpus_wide_absence_is_only_stated_when_the_corpus_was_searched()
     {
-        Assert.Null(TrustNotices.SearchAbsence(ran: 2, refused: 0));
+        Assert.Null(TrustNotices.SearchAbsence(ran: 2, refused: 0, hits: 0));
         Assert.Contains("No selected publisher ran this query",
-            TrustNotices.SearchAbsence(ran: 0, refused: 2)!, StringComparison.Ordinal);
+            TrustNotices.SearchAbsence(ran: 0, refused: 2, hits: 0)!, StringComparison.Ordinal);
         Assert.Contains("could apply these filters",
-            TrustNotices.SearchAbsence(ran: 1, refused: 1)!, StringComparison.Ordinal);
+            TrustNotices.SearchAbsence(ran: 1, refused: 1, hits: 0)!, StringComparison.Ordinal);
+        // A publisher that answered with hits makes any no-match sentence false, however
+        // many others refused.
+        Assert.Null(TrustNotices.SearchAbsence(ran: 1, refused: 1, hits: 3));
+        Assert.Null(TrustNotices.SearchAbsence(ran: 2, refused: 5, hits: 1));
     }
 
     /// <summary>
@@ -395,6 +399,73 @@ public sealed class TrustNoticeTests : IDisposable
             StringComparison.Ordinal);
         Assert.Contains("Page not found", await Ask("application/json,text/html"),
             StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The producer's detail is reflected input: unknown_publisher embeds the publisher the reader
+    /// typed. Interpolating it unescaped is a reflected XSS, which is what shipped in 482883d.
+    /// </summary>
+    [Fact]
+    public async Task A_reflected_publisher_value_is_encoded()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "xss"), includeAct: false);
+        var page = await site.Client.GetStringAsync(
+            "/search?q=protection&publisher=%3Cscript%3Ealert(1)%3C/script%3E");
+
+        Assert.DoesNotContain("<script>alert(1)</script>", page, StringComparison.Ordinal);
+        Assert.Contains("&lt;script&gt;", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Only an exact ok whose own receipt does not deny it counts as a run. An ok envelope carrying
+    /// query_ran false describes a query nobody executed, so it may not produce a count.
+    /// </summary>
+    [Fact]
+    public void An_execution_claim_needs_the_receipt_that_supports_it()
+    {
+        var denied = (JsonObject)JsonNode.Parse("{\"population\":{\"query_ran\":false}}")!;
+        Assert.False(TrustNotices.QueryRan(denied));
+        Assert.Contains("Did not run.", TrustNotices.SearchEnvelopeRefusal("ok", denied),
+            StringComparison.Ordinal);
+
+        // Without a receipt the page states what it knows, not that execution was skipped.
+        foreach (var silent in new[] { "{}", "{\"population\":{}}", "{\"population\":{\"query_ran\":\"false\"}}" })
+        {
+            var node = (JsonObject)JsonNode.Parse(silent)!;
+            Assert.Null(TrustNotices.QueryRan(node));
+            Assert.Contains("No usable result.",
+                TrustNotices.SearchEnvelopeRefusal("filter_not_supported_by_index", node),
+                StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// Fail closed on classification. Reading hits before the status let a missing or malformed
+    /// status, an ok carrying query_ran false, or a refusal arriving with rows, all render results
+    /// or a count for a query nobody executed.
+    /// </summary>
+    [Fact]
+    public void Only_an_exact_ok_with_an_undenied_receipt_may_be_presented()
+    {
+        Assert.True(TrustNotices.Ran((JsonObject)JsonNode.Parse(
+            "{\"envelope\":{\"status\":\"ok\"}}")!));
+        Assert.True(TrustNotices.Ran((JsonObject)JsonNode.Parse(
+            "{\"envelope\":{\"status\":\"ok\"},\"population\":{\"query_ran\":true}}")!));
+
+        foreach (var closed in new[]
+        {
+            // ok, but the producer's own receipt denies execution
+            "{\"envelope\":{\"status\":\"ok\"},\"population\":{\"query_ran\":false}}",
+            // a refusal that arrived carrying rows anyway
+            "{\"envelope\":{\"status\":\"filter_not_supported_by_index\"},\"hits\":[{}]}",
+            "{\"envelope\":{\"status\":\"retrieval_mode_unavailable\"}}",
+            // no status at all, or one that is not a string
+            "{}", "{\"envelope\":{}}", "{\"envelope\":{\"status\":7}}",
+            "{\"envelope\":{\"status\":\"\"}}", "{\"envelope\":\"ok\"}",
+        })
+        {
+            Assert.False(TrustNotices.Ran((JsonObject)JsonNode.Parse(closed)!), closed);
+        }
     }
 
     private const string MetadataOnlyHeading = "No held text match";

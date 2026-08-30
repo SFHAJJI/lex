@@ -554,7 +554,7 @@ public static class CatalogueEndpoints
                         $"<div class=\"notice\">status <span class=\"mono\">invalid_request</span>, "
                         + $"{H(error.Message)}</div>", extraHead: NoIndexFollow), "text/html", statusCode: 400);
                 }
-                var ranPublishers = 0; var refusedPublishers = 0;
+                var ranPublishers = 0; var refusedPublishers = 0; var shownHits = 0;
                 foreach (var result in envelopes.OfType<JsonObject>())
                 {
                     // Silently skipping an envelope makes a whole publisher's results vanish
@@ -570,6 +570,19 @@ public static class CatalogueEndpoints
                         continue;
                     }
                     var publisherId = reader.Collection;
+                    // Classify before touching hits, and fail closed. Reading hits first let a
+                    // missing or malformed status, an ok envelope carrying query_ran false, or a
+                    // refusal arriving with hostile rows, all render results or a count for a
+                    // query nobody executed. Only an exact ok whose own receipt does not deny it
+                    // counts as a run; everything else states what is known and shows nothing.
+                    var status = TrustNotices.EnvelopeStatus(result);
+                    if (!TrustNotices.Ran(result))
+                    {
+                        sb.Append($"<h2>{H(reader.Stamp.GetValueOrDefault("publisher_name"))} ({H(reader.Stamp.GetValueOrDefault("jurisdiction"))})</h2>");
+                        sb.Append(TrustNotices.SearchEnvelopeRefusal(status ?? "unusable_result", result));
+                        refusedPublishers++;
+                        continue;
+                    }
                     var hits = result["hits"] as JsonArray ?? [];
                     // A hit that reached no wording matched the record, not the law. The
                     // assistant path already drops these as filler (AskService); the web page
@@ -600,17 +613,8 @@ public static class CatalogueEndpoints
                             .Where(work => work.Length > 0).ToList()));
                         continue;
                     }
-                    // A count is a claim. An envelope that refused never ran the query, so it
-                    // gets its typed reason instead of a zero that reads as "nothing matches".
-                    var status = TrustNotices.EnvelopeStatus(result);
-                    if (status is not null && status != "ok")
-                    {
-                        sb.Append($"<h2>{H(reader.Stamp.GetValueOrDefault("publisher_name"))} ({H(reader.Stamp.GetValueOrDefault("jurisdiction"))})</h2>");
-                        sb.Append(TrustNotices.SearchEnvelopeRefusal(status, result));
-                        refusedPublishers++;
-                        continue;
-                    }
                     ranPublishers++;
+                    shownHits += shown.Count;
                     sb.Append($"<h2>{H(reader.Stamp.GetValueOrDefault("publisher_name"))} ({H(reader.Stamp.GetValueOrDefault("jurisdiction"))}), {shown.Count} hit(s)</h2>");
                     foreach (var hit in shown.Concat(metadataOnly))
                     {
@@ -637,7 +641,7 @@ public static class CatalogueEndpoints
                 }
                 // Once every publisher has answered or refused, the page may only state a
                 // corpus-wide absence if the corpus was actually searched.
-                sb.Append(TrustNotices.SearchAbsence(ranPublishers, refusedPublishers));
+                sb.Append(TrustNotices.SearchAbsence(ranPublishers, refusedPublishers, shownHits));
             }
             return Results.Content(Page("Search", sb.ToString(), extraHead: NoIndexFollow), "text/html");
         });
