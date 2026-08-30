@@ -264,14 +264,14 @@ public sealed record BoundedResponseMetadata
 }
 
 /// <summary>
-/// A durable content reference. Only the authenticated durable sink implementation in
-/// this assembly can issue one after create-only upload and full remote readback.
+/// A durable content reference. No issuer is implemented in the local-staging slice.
+/// A durable sink may issue one only after create-only upload and full remote readback.
 /// </summary>
 public sealed record EvidenceRef
 {
     public const long MaximumByteLength = 128L * 1024 * 1024;
 
-    internal EvidenceRef(string requestId, string objectSha256, long byteLength)
+    private EvidenceRef(string requestId, string objectSha256, long byteLength)
     {
         RequestId = CodeIdentity.RequireSha256(requestId, nameof(requestId));
         ObjectSha256 = CodeIdentity.RequireSha256(
@@ -290,7 +290,8 @@ public sealed record EvidenceRef
 /// <summary>
 /// Persists one physical response before returning. A successful return requires an
 /// authenticated create-only remote upload followed by full SHA-256 and length readback.
-/// Local staging types deliberately cannot implement this transition.
+/// This slice deliberately supplies no implementation or issuance factory. The durable
+/// sink integration must add a separately reviewed non-public issuance capability.
 /// </summary>
 public interface IRawResponseSink
 {

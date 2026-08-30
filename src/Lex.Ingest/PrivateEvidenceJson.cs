@@ -64,6 +64,16 @@ internal sealed record ResponseReceiptDocument(
     string Schema,
     RecordDocument Record);
 
+internal sealed record CaptureIntentDocument(
+    string Schema,
+    string BodyFileName,
+    RequestDocument Request,
+    ResponseDocument Response);
+
+internal sealed record CaptureOutcomeDocument(
+    string Schema,
+    EvidenceDocument Evidence);
+
 internal sealed record ManifestDocument(
     string Schema,
     string BundleId,
@@ -81,6 +91,10 @@ internal sealed record ParsedManifest(
     string BundleId,
     string AcquisitionPlanSha256,
     IReadOnlyList<StagedResponseRecord> Records);
+
+internal sealed record PendingCaptureIntent(
+    SourceRequestIdentity Request,
+    BoundedResponseMetadata Response);
 
 internal static class EvidenceJson
 {
@@ -103,6 +117,19 @@ internal static class EvidenceJson
         Write(new ResponseReceiptDocument(
             PrivateEvidenceBundle.ResponseReceiptSchema,
             ToDocument(record)));
+
+    public static byte[] WriteCaptureIntent(
+        SourceRequestIdentity request,
+        BoundedResponseMetadata response) => Write(new CaptureIntentDocument(
+        PrivateEvidenceBundle.CaptureIntentSchema,
+        request.RequestId + ".body",
+        ToDocument(request),
+        ToDocument(response)));
+
+    public static byte[] WriteCaptureOutcome(StagedResponseEvidence evidence) =>
+        Write(new CaptureOutcomeDocument(
+            PrivateEvidenceBundle.CaptureOutcomeSchema,
+            ToDocument(evidence)));
 
     public static byte[] WriteManifest(
         PrivateEvidenceAcquisitionPlan plan,
@@ -169,6 +196,45 @@ internal static class EvidenceJson
             throw new InvalidDataException(
                 "Private evidence response receipt is not canonical.");
         return record;
+    }
+
+    public static PendingCaptureIntent ParseCaptureIntent(byte[] bytes)
+    {
+        var document = Deserialize<CaptureIntentDocument>(bytes, "capture intent");
+        if (document.Schema != PrivateEvidenceBundle.CaptureIntentSchema
+            || document.Request is null
+            || document.Response is null)
+            throw new InvalidDataException(
+                "Private evidence capture intent schema is invalid.");
+        var result = new PendingCaptureIntent(
+            Restore(document.Request), Restore(document.Response));
+        if (document.BodyFileName != result.Request.RequestId + ".body")
+            throw new InvalidDataException(
+                "Private evidence capture intent does not bind its body file.");
+        if (!bytes.AsSpan().SequenceEqual(
+                WriteCaptureIntent(result.Request, result.Response)))
+            throw new InvalidDataException(
+                "Private evidence capture intent is not canonical.");
+        return result;
+    }
+
+    public static StagedResponseEvidence ParseCaptureOutcome(
+        byte[] bytes,
+        SourceRequestIdentity request,
+        BoundedResponseMetadata response)
+    {
+        var document = Deserialize<CaptureOutcomeDocument>(
+            bytes, "capture outcome");
+        if (document.Schema != PrivateEvidenceBundle.CaptureOutcomeSchema
+            || document.Evidence is null)
+            throw new InvalidDataException(
+                "Private evidence capture outcome schema is invalid.");
+        var evidence = Restore(
+            document.Evidence, request, response, requireRetainedState: false);
+        if (!bytes.AsSpan().SequenceEqual(WriteCaptureOutcome(evidence)))
+            throw new InvalidDataException(
+                "Private evidence capture outcome is not canonical.");
+        return evidence;
     }
 
     public static ParsedManifest ParseManifest(byte[] bytes)
@@ -307,24 +373,29 @@ internal static class EvidenceJson
             throw new InvalidDataException(
                 "Private evidence response record is incomplete.");
         var request = Restore(document.Request);
-        var response = BoundedResponseMetadata.RestorePersisted(
-            document.Response.StatusCode,
-            document.Response.ContentType,
-            document.Response.Charset,
-            document.Response.EntityTag,
-            document.Response.LastModified,
-            document.Response.FetchedAt,
-            document.Response.EffectiveSourceUri,
-            document.Response.EffectiveSourceUriSha256,
-            document.Response.BodyComplete);
-        var evidence = Restore(document.Evidence, request, response);
+        var response = Restore(document.Response);
+        var evidence = Restore(
+            document.Evidence, request, response, requireRetainedState: true);
         return new StagedResponseRecord(request, response, evidence);
     }
+
+    private static BoundedResponseMetadata Restore(ResponseDocument document) =>
+        BoundedResponseMetadata.RestorePersisted(
+            document.StatusCode,
+            document.ContentType,
+            document.Charset,
+            document.EntityTag,
+            document.LastModified,
+            document.FetchedAt,
+            document.EffectiveSourceUri,
+            document.EffectiveSourceUriSha256,
+            document.BodyComplete);
 
     private static StagedResponseEvidence Restore(
         EvidenceDocument document,
         SourceRequestIdentity request,
-        BoundedResponseMetadata response)
+        BoundedResponseMetadata response,
+        bool requireRetainedState)
     {
         if (document.RequestId != request.RequestId)
             throw new InvalidDataException(
@@ -342,7 +413,8 @@ internal static class EvidenceJson
                     document.ObjectSha256,
                     document.ByteLength);
             case StagedResponseDisposition.Rejected:
-                if (document.RejectionReason is null || response.BodyComplete)
+                if (document.RejectionReason is null
+                    || requireRetainedState && response.BodyComplete)
                     throw new InvalidDataException(
                         "Rejected private evidence outcome is inconsistent.");
                 if (document.RejectionReason

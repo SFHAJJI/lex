@@ -1,5 +1,6 @@
-using System.Security.Cryptography;
+using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Lex.Ingest;
@@ -25,6 +26,13 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
     public void Local_staging_cannot_construct_or_return_durable_evidence()
     {
         Assert.Empty(typeof(EvidenceRef).GetConstructors());
+        var constructor = Assert.Single(
+            typeof(EvidenceRef).GetConstructors(
+                BindingFlags.Instance | BindingFlags.NonPublic),
+            candidate => candidate.GetParameters().Select(parameter =>
+                    parameter.ParameterType).SequenceEqual(
+                [typeof(string), typeof(string), typeof(long)]));
+        Assert.True(constructor.IsPrivate);
         Assert.False(typeof(IRawResponseSink).IsAssignableFrom(
             typeof(PrivateEvidenceBundle)));
         Assert.DoesNotContain(typeof(PrivateEvidenceBundle).GetMethods(), method =>
@@ -39,6 +47,10 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
                 .Cast<InternalsVisibleToAttribute>(),
             attribute => attribute.AssemblyName.StartsWith(
                 "Lex.Ingest", StringComparison.Ordinal));
+        Assert.DoesNotContain(typeof(IRawResponseSink).Assembly.GetTypes(), type =>
+            !type.IsAbstract
+            && !type.IsInterface
+            && typeof(IRawResponseSink).IsAssignableFrom(type));
     }
 
     [Fact]
@@ -248,6 +260,149 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         using var resealed = PrivateEvidenceBundle.Open(staging, plan);
         Assert.True(resealed.IsSealed);
         Assert.True(File.Exists(commitPath));
+    }
+
+    [Fact]
+    public void Restart_finalizes_pending_prefix_and_cap_plus_one_without_refetch()
+    {
+        var prefixRequest = Request(0, maximumResponseBytes: 8);
+        var oversizedRequest = Request(1, maximumResponseBytes: 3);
+        var plan = Plan(prefixRequest, oversizedRequest);
+        var staging = EmptyDirectory("pending-prefix");
+        using (PrivateEvidenceBundle.Create(staging, plan))
+        {
+        }
+
+        WriteCaptureIntent(staging, prefixRequest, Response());
+        File.WriteAllBytes(PendingBodyPath(staging, prefixRequest), [1, 2]);
+        WriteCaptureIntent(staging, oversizedRequest, Response());
+        File.WriteAllBytes(PendingBodyPath(staging, oversizedRequest), [3, 4, 5, 6]);
+
+        using var recovered = PrivateEvidenceBundle.Open(staging, plan);
+
+        Assert.Collection(
+            recovered.Records,
+            first =>
+            {
+                var evidence = Assert.IsType<RejectedStagedResponseEvidence>(
+                    first.Evidence);
+                Assert.Equal(StagedResponseRejectionReason.TransportInterrupted,
+                    evidence.Reason);
+                Assert.Equal(2, evidence.ByteLength);
+            },
+            second =>
+            {
+                var evidence = Assert.IsType<RejectedStagedResponseEvidence>(
+                    second.Evidence);
+                Assert.Equal(StagedResponseRejectionReason.BodyTooLarge,
+                    evidence.Reason);
+                Assert.Equal(4, evidence.ByteLength);
+            });
+        Assert.Empty(Directory.EnumerateFileSystemEntries(Path.Combine(
+            staging, PrivateEvidenceBundle.PendingDirectoryName)));
+    }
+
+    [Fact]
+    public void Restart_finishes_a_durable_outcome_after_object_move()
+    {
+        var request = Request(0);
+        var response = Response();
+        var plan = Plan(request);
+        var staging = EmptyDirectory("pending-object");
+        using (PrivateEvidenceBundle.Create(staging, plan))
+        {
+        }
+
+        byte[] body = [7, 8, 9];
+        var objectSha256 = Convert.ToHexStringLower(SHA256.HashData(body));
+        WriteCaptureIntent(staging, request, response);
+        WriteCaptureOutcome(
+            staging,
+            request,
+            objectSha256,
+            body.Length,
+            StagedResponseDisposition.Complete,
+            rejectionReason: null);
+        File.WriteAllBytes(Path.Combine(
+            staging,
+            PrivateEvidenceBundle.ObjectsDirectoryName,
+            objectSha256 + ".bin"), body);
+
+        using var recovered = PrivateEvidenceBundle.Open(staging, plan);
+
+        var record = Assert.Single(recovered.Records);
+        Assert.IsType<CompleteStagedResponseEvidence>(record.Evidence);
+        Assert.Equal(objectSha256, record.Evidence.ObjectSha256);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(Path.Combine(
+            staging, PrivateEvidenceBundle.PendingDirectoryName)));
+    }
+
+    [Fact]
+    public async Task A_cancelled_capture_is_recovered_before_a_live_retry()
+    {
+        var request = Request(0);
+        var plan = Plan(request);
+        var staging = EmptyDirectory("cancelled-capture");
+        using var bundle = PrivateEvidenceBundle.Create(staging, plan);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            bundle.CaptureAsync(
+                request,
+                Response(),
+                new CancelAfterPrefixStream([1, 2, 3])));
+
+        var recovered = Assert.IsType<RejectedStagedResponseEvidence>(
+            await bundle.CaptureAsync(request, Response(), new ThrowOnReadStream()));
+        Assert.Equal(StagedResponseRejectionReason.TransportInterrupted,
+            recovered.Reason);
+        Assert.Equal(3, recovered.ByteLength);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(Path.Combine(
+            staging, PrivateEvidenceBundle.PendingDirectoryName)));
+    }
+
+    [Fact]
+    public async Task Recovery_is_reentrant_and_a_committed_tree_is_never_normalized()
+    {
+        var request = Request(0);
+        var plan = Plan(request);
+        var interrupted = EmptyDirectory("recovery-reentrant");
+        using (PrivateEvidenceBundle.Create(interrupted, plan))
+        {
+        }
+        File.Delete(Path.Combine(interrupted, PrivateEvidenceBundle.PlanFileName));
+        Directory.Delete(Path.Combine(
+            interrupted, PrivateEvidenceBundle.ObjectsDirectoryName));
+        Directory.Delete(Path.Combine(
+            interrupted, PrivateEvidenceBundle.ReceiptsDirectoryName));
+        Directory.Delete(Path.Combine(
+            interrupted, PrivateEvidenceBundle.PendingDirectoryName));
+        Directory.CreateDirectory(Path.Combine(
+            interrupted, PrivateEvidenceBundle.ObjectsDirectoryName));
+
+        using (var recovered = PrivateEvidenceBundle.Open(interrupted, plan))
+            Assert.False(recovered.IsSealed);
+
+        var committed = EmptyDirectory("committed-exact");
+        using (var bundle = PrivateEvidenceBundle.Create(committed, plan))
+        {
+            await bundle.CaptureAsync(
+                request,
+                Response(),
+                new MemoryStream([1, 2, 3], writable: false));
+            await bundle.SealAsync();
+        }
+        var foreignObject = Path.Combine(
+            committed,
+            PrivateEvidenceBundle.ObjectsDirectoryName,
+            new string('a', 64) + ".bin");
+        await File.WriteAllBytesAsync(foreignObject, [4]);
+
+        PrivateEvidenceBundle? unexpectedlyOpened = null;
+        var error = Record.Exception(() =>
+            unexpectedlyOpened = PrivateEvidenceBundle.Open(committed, plan));
+        unexpectedlyOpened?.Dispose();
+        Assert.IsType<InvalidDataException>(error);
+        Assert.True(File.Exists(foreignObject));
     }
 
     [Fact]
@@ -462,6 +617,7 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         foreach (var path in new[]
                  {
                      Path.Combine(root, PrivateEvidenceBundle.PlanFileName),
+                     Path.Combine(root, PrivateEvidenceBundle.PendingDirectoryName),
                      Path.Combine(root, PrivateEvidenceBundle.ReceiptsDirectoryName),
                      Path.Combine(root, PrivateEvidenceBundle.ManifestFileName),
                      Path.Combine(root, PrivateEvidenceBundle.CommitMarkerFileName),
@@ -483,6 +639,93 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
 
     private static string Sha256(string value) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+
+    private static void WriteCaptureIntent(
+        string root,
+        SourceRequestIdentity request,
+        BoundedResponseMetadata response)
+    {
+        WriteTestJson(
+            Path.Combine(
+                root,
+                PrivateEvidenceBundle.PendingDirectoryName,
+                request.RequestId + ".intent.json"),
+            new
+            {
+                Schema = PrivateEvidenceBundle.CaptureIntentSchema,
+                BodyFileName = request.RequestId + ".body",
+                Request = new
+                {
+                    request.RequestId,
+                    request.Publisher,
+                    request.Channel,
+                    Method = request.Method.ToString().ToLowerInvariant(),
+                    request.RequestUri,
+                    request.RequestUriSha256,
+                    request.RequestBodySha256,
+                    request.Ordinal,
+                    request.MaximumResponseBytes,
+                    request.PhysicalAttempt,
+                    request.RedirectHop,
+                },
+                Response = new
+                {
+                    response.StatusCode,
+                    response.ContentType,
+                    response.Charset,
+                    response.EntityTag,
+                    response.LastModified,
+                    response.FetchedAt,
+                    response.EffectiveSourceUri,
+                    response.EffectiveSourceUriSha256,
+                    response.BodyComplete,
+                },
+            });
+    }
+
+    private static void WriteCaptureOutcome(
+        string root,
+        SourceRequestIdentity request,
+        string objectSha256,
+        long byteLength,
+        StagedResponseDisposition disposition,
+        StagedResponseRejectionReason? rejectionReason)
+    {
+        WriteTestJson(
+            Path.Combine(
+                root,
+                PrivateEvidenceBundle.PendingDirectoryName,
+                request.RequestId + ".outcome.json"),
+            new
+            {
+                Schema = PrivateEvidenceBundle.CaptureOutcomeSchema,
+                Evidence = new
+                {
+                    Disposition = disposition.ToString().ToLowerInvariant(),
+                    request.RequestId,
+                    ObjectSha256 = objectSha256,
+                    ByteLength = byteLength,
+                    RejectionReason = rejectionReason?.ToString()
+                        .ToLowerInvariant(),
+                },
+            });
+    }
+
+    private static string PendingBodyPath(
+        string root, SourceRequestIdentity request) => Path.Combine(
+        root,
+        PrivateEvidenceBundle.PendingDirectoryName,
+        request.RequestId + ".body");
+
+    private static void WriteTestJson(string path, object document)
+    {
+        var options = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        };
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(document, options);
+        File.WriteAllBytes(path, [.. bytes, (byte)'\n']);
+    }
 
     public void Dispose()
     {
@@ -542,6 +785,42 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         public override ValueTask<int> ReadAsync(
             Memory<byte> buffer, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("body must not be read");
+        public override void Flush() => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) =>
+            throw new NotSupportedException();
+        public override void SetLength(long value) =>
+            throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
+    }
+
+    private sealed class CancelAfterPrefixStream(byte[] prefix) : Stream
+    {
+        private bool _returnedPrefix;
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
+
+        public override ValueTask<int> ReadAsync(
+            Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            if (_returnedPrefix)
+                throw new OperationCanceledException("injected cancellation");
+            _returnedPrefix = true;
+            prefix.CopyTo(buffer);
+            return ValueTask.FromResult(prefix.Length);
+        }
+
         public override void Flush() => throw new NotSupportedException();
         public override long Seek(long offset, SeekOrigin origin) =>
             throw new NotSupportedException();
