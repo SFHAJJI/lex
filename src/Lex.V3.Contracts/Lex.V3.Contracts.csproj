@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Lex.V3.Contracts</RootNamespace>
+    <AssemblyName>Lex.V3.Contracts</AssemblyName>
+  </PropertyGroup>
+</Project>

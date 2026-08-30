@@ -1,35 +1,13 @@
 {
-  "name": "lex-workspace",
+  "name": "lex-v3-web",
+  "version": "0.0.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "dev": "vite",
-    "test": "node --test src/*.test.ts",
-    "build": "tsc --noEmit && npm test && vite build && node smoke.mjs",
-    "test:browser": "playwright test",
-    "test:browser-release": "playwright test browser/assistant-release.spec.ts",
-    "test:lighthouse": "playwright test browser/lighthouse.spec.ts"
-  },
-  "dependencies": {
-    "mdast-util-to-string": "4.0.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1",
-    "remark-parse": "11.0.0",
-    "unified": "11.0.5"
-  },
-  "devDependencies": {
-    "@axe-core/playwright": "4.12.1",
-    "@playwright/test": "1.62.1",
-    "@types/node": "^26.1.2",
-    "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
-    "@vitejs/plugin-react": "^6.0.5",
-    "jsdom": "^29.1.1",
-    "lighthouse": "13.4.1",
-    "parse5": "8.0.1",
-    "typescript": "^5.6.3",
-    "vite": "^8.2.1"
+    "build": "node scripts/build.mjs",
+    "test": "node --test test/*.test.mjs"
   }
 }

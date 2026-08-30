@@ -1,8 +1,0 @@
-<akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0" xmlns:scl="http://www.scl.lu">
-  <act><body><chapter><heading>Invented chapter</heading>
-    <article id="art_one"><num>Art. 1.</num><heading>Compass rule</heading>
-      <scl:metadata><scl:jolux name="uriThis">https://example.test/eli/synthetic/art1</scl:jolux><scl:jolux name="dateApplicability">2099-01-02</scl:jolux></scl:metadata>
-      <alinea><content><p>The blue compass points to <ref href="https://example.test/reference">the synthetic register</ref>.</p></content></alinea>
-    </article>
-  </chapter></body></act>
-</akomaNtoso>

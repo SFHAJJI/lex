@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Lex.V3.Contracts/Lex.V3.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Lex.V3.Tests/Lex.V3.Tests.csproj" />
+  </Folder>
+</Solution>

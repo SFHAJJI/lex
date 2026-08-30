@@ -1,6 +1,0 @@
-<akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0">
-  <act><body>
-    <article id="art_empty" wId="/eli/etat/leg/loi/2099/01/01/n99/art_empty"><num/><alinea><content><p/></content></alinea></article>
-    <article id="art_real" wId="/eli/etat/leg/loi/2099/01/01/n99/art_real"><num>Art. 2.</num><heading>Non-BMP span</heading><alinea><content><p>The synthetic compass 🧭 points north.</p></content></alinea></article>
-  </body></act>
-</akomaNtoso>

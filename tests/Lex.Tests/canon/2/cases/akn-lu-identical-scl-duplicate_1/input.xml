@@ -1,5 +1,0 @@
-<akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0" xmlns:scl="http://www.scl.lu">
-  <act><body><article id="art_duplicate"><num>Art. 3.</num><heading>Blue table</heading>
-    <alinea><content><table scl:cols-nb="5" scl:cols-nb="5"><tr><td>Synthetic duplicate repair text.</td></tr></table></content></alinea>
-  </article></body></act>
-</akomaNtoso>

@@ -1,29 +1,9 @@
-bin/
-obj/
-# Contents, not the directory: git never descends into an excluded directory, so a
-# negation inside one is silently ignored. The 947 MB of indexes stay out; the build
-# script must be tracked or a clean clone cannot build the image.
-deploy/*
-!deploy/fetch-indexes.sh
-!deploy/publish-assistant-evaluation.ps1
-!deploy/capability-policy.json
-!deploy/telemetry-policy.json
-!deploy/trusted-artifact-roots.json
-!deploy/trusted-evaluation-review-roots.json
-!deploy/embedding-model/
-!deploy/embedding-model/model-manifest.json
-*.db
-*.pem
-.terraform/
-*.tfstate
-*.tfstate.*
-*.tfplan
-crash.log
-.vs/
-evals/out/
+**/bin/
+**/obj/
+**/TestResults/
+artifacts/
+web/dist/
 web/node_modules/
-web/playwright-report/
-web/test-results/
-src/Lex.Web/wwwroot/app/
-__pycache__/
-*.pyc
+.env
+.env.*
+!.env.example

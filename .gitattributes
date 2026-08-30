@@ -1,10 +1,9 @@
-evals/retrieval-*.json text eol=lf
-evals/assistant-*.json text eol=lf
-evals/assistant-cases-v3.review.json -text whitespace=cr-at-eol
-evals/assistant-cases-v3.review.sig -text
-deploy/trusted-evaluation-review-roots.json text eol=lf
-src/Lex.Sources.EurLex/eu-scope.json text eol=lf
-tests/Lex.Tests/canon/** text eol=lf
-tests/Lex.Tests/canon/**/*.pdf binary
-**/packages.lock.json text eol=lf
-**/packages.directml.lock.json text eol=lf
+* text=auto eol=lf
+*.ps1 text eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary

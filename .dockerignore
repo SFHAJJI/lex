@@ -1,14 +1,9 @@
+.git
+.github
 **/bin
 **/obj
-.git
-*.md
-# npm installs inside the node stage; shipping 66 MB of node_modules in the build context
-# only slows the upload and risks platform-specific binaries leaking in.
+**/TestResults
+artifacts
+web/dist
 web/node_modules
-# the bundle is produced by the node stage, never taken from a developer's machine
-src/Lex.Web/wwwroot/app
-
-# The indexes are fetched from the published GitHub releases at build time
-# (deploy/fetch-indexes.sh), so they must NOT be uploaded as build context.
-# This is the difference between a 950 MB upload per deploy and a few MB.
-deploy/indexes
+.env*
