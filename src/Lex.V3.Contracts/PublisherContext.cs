@@ -101,7 +101,8 @@ internal static class ContractValidation
 {
     public const int MaximumIdentifierLength = 256;
     public const int MaximumDisplayTitleScalars = 512;
-    public const string IdentifierPattern = "^(?=.*[^ ])[ -~]{1,256}$";
+    public const string IdentifierPattern =
+        "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])";
     public const string SyntheticRequestReference = "req_0123456789abcdef0123456789abcdef";
     public const string SyntheticEliCoordinate = "eli/synthetic-preview";
     public const string SyntheticCelexCoordinate = "celex:synthetic-preview";

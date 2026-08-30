@@ -5,14 +5,14 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 256,
-      "pattern": "^(?=.*[^ ])[ -~]{1,256}$",
+      "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])",
       "const": "lex-v3-preview-object-set/1"
     },
     "object_set_id": {
       "type": "string",
       "minLength": 1,
       "maxLength": 256,
-      "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+      "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
     },
     "objects": {
       "type": "array",
@@ -35,15 +35,15 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 256,
-                "pattern": "^preview:[ -~]{1,248}$"
+                "pattern": "^preview:[ -~]{1,248}(?![\\s\\S])"
               },
               "version_key": {
                 "type": "string",
-                "pattern": "^preview:[ -~]{1,248}$"
+                "pattern": "^preview:[ -~]{1,248}(?![\\s\\S])"
               },
               "anchor": {
                 "type": "string",
-                "pattern": "^preview:[ -~]{1,248}$"
+                "pattern": "^preview:[ -~]{1,248}(?![\\s\\S])"
               },
               "body_holding_state": {
                 "enum": [
@@ -72,13 +72,13 @@
                 ],
                 "minLength": 64,
                 "maxLength": 64,
-                "pattern": "^[0-9a-f]{64}$"
+                "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
               },
               "object_id": {
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 256,
-                "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
               }
             },
             "required": [
@@ -121,7 +121,7 @@
                       "type": "string",
                       "minLength": 64,
                       "maxLength": 64,
-                      "pattern": "^[0-9a-f]{64}$"
+                      "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
                     },
                     "body_holding_disposition": {
                       "const": "synthetic_fixture"
@@ -149,7 +149,7 @@
                       "type": "string",
                       "minLength": 64,
                       "maxLength": 64,
-                      "pattern": "^[0-9a-f]{64}$"
+                      "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
                     },
                     "body_holding_disposition": {
                       "const": "synthetic_fixture_withheld"
@@ -177,7 +177,7 @@
                       "const": null,
                       "minLength": 64,
                       "maxLength": 64,
-                      "pattern": "^[0-9a-f]{64}$"
+                      "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
                     },
                     "body_holding_disposition": {
                       "const": "unknown_pending_evidence"

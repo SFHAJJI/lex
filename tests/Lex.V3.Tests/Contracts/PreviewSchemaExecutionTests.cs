@@ -124,30 +124,7 @@ public sealed class PreviewSchemaExecutionTests
     [TestMethod]
     public void SchemaAndRuntimeRejectTheSameManifestIdentifierOverflow()
     {
-        var manifest = new PreviewArtifactManifest(
-            V3SchemaIds.PreviewArtifact,
-            V3SchemaResourceIds.PreviewArtifact,
-            PreviewSchemaExporter.ComputeSha256(
-                PreviewSchemaExporter.ExportUtf8(V3SchemaIds.PreviewArtifact)),
-            "synthetic_preview",
-            synthetic: true,
-            "synthetic_test",
-            new PreviewEnvironment("preview", "preview-slot"),
-            new PreviewIssuer("preview_attestor", "preview-issuer", "preview-key"),
-            PreviewSchemaExporter.ExportContractSet(),
-            new PreviewPayloadDescriptor(
-                V3SchemaIds.PreviewPayload,
-                V3SchemaResourceIds.PreviewPayload,
-                PreviewSchemaExporter.ComputeSha256(
-                    PreviewSchemaExporter.ExportUtf8(V3SchemaIds.PreviewPayload)),
-                Digest,
-                0,
-                "application/json"),
-            new PreviewAttestation(
-                "preview_mechanics_only",
-                "ECDSA-P256-SHA256",
-                "ieee-p1363",
-                new string('A', 86)));
+        var manifest = CreateManifest();
         var node = JsonNode.Parse(ContractJson.Serialize(manifest))!.AsObject();
         var schema = BuildSchema(V3SchemaIds.PreviewArtifact);
 
@@ -156,6 +133,69 @@ public sealed class PreviewSchemaExecutionTests
         Assert.IsFalse(schema.Evaluate(ToElement(node), EvaluationOptions()).IsValid);
         Assert.ThrowsExactly<System.Text.Json.JsonException>(() =>
             ContractJson.Deserialize<PreviewArtifactManifest>(node.ToJsonString()));
+    }
+
+    [TestMethod]
+    public void SchemaAndRuntimeRejectTerminalLineFeedAcrossStringBoundaries()
+    {
+        var payloadSchema = BuildPayloadSchema(ReadPayloadSchema());
+        foreach (var mutate in new Action<JsonObject>[]
+                 {
+                     root => root["operation_catalog"]!["catalog_id"] = "preview-catalog\n",
+                     root => root["envelopes"]![0]!["context"]!["snapshot"]!["snapshot_sha256"] =
+                         Digest + "\n",
+                     root => root["envelopes"]![0]!["refusal"]!["requested_coordinate"] =
+                         "eli/synthetic-preview\n",
+                     root =>
+                     {
+                         var coordinate = JsonNode.Parse(ContractJson.Serialize<PreviewObject>(
+                             new PreviewSyntheticCoordinate(
+                                 "preview-object",
+                                 synthetic: true,
+                                 "preview:work",
+                                 "preview:version",
+                                 "preview:anchor",
+                                 BodyHoldingState.NotHeld,
+                                 PreviewBodyDispositionReason.UnknownPendingEvidence,
+                                 body: null,
+                                 bodySha256: null)))!.AsObject();
+                         coordinate["work_id"] = "preview:work\n";
+                         root["object_set"]!["objects"] = new JsonArray(coordinate);
+                     },
+                     root =>
+                     {
+                         var candidate = JsonNode.Parse(ContractJson.Serialize(
+                             new HeldRecordCandidate(
+                                 "preview:held:lu-legilux",
+                                 "Candidate",
+                                 PublisherId.LuLegilux)))!.AsObject();
+                         candidate["title"] = "Candidate\n";
+                         root["envelopes"]![0]!["refusal"]!["possible_held_records"] =
+                             new JsonArray(candidate);
+                     },
+                 })
+        {
+            var root = JsonNode.Parse(ContractJson.Serialize(CreateActivePayload()))!.AsObject();
+            mutate(root);
+            Assert.IsFalse(payloadSchema.Evaluate(ToElement(root), EvaluationOptions()).IsValid);
+            Assert.ThrowsExactly<System.Text.Json.JsonException>(() =>
+                ContractJson.Deserialize<PreviewPayload>(root.ToJsonString()));
+        }
+
+        var manifestSchema = BuildSchema(V3SchemaIds.PreviewArtifact);
+        foreach (var mutate in new Action<JsonObject>[]
+                 {
+                     root => root["issuer"]!["issuer_id"] = "preview-issuer\n",
+                     root => root["schema_sha256"] = Digest + "\n",
+                     root => root["attestation"]!["signature"] = new string('A', 86) + "\n",
+                 })
+        {
+            var root = JsonNode.Parse(ContractJson.Serialize(CreateManifest()))!.AsObject();
+            mutate(root);
+            Assert.IsFalse(manifestSchema.Evaluate(ToElement(root), EvaluationOptions()).IsValid);
+            Assert.ThrowsExactly<System.Text.Json.JsonException>(() =>
+                ContractJson.Deserialize<PreviewArtifactManifest>(root.ToJsonString()));
+        }
     }
 
     [TestMethod]
@@ -311,6 +351,31 @@ public sealed class PreviewSchemaExecutionTests
             objectSet,
             new PreviewEnvelope[] { PreviewRefusalEnvelope.Create(context, refusal) });
     }
+
+    private static PreviewArtifactManifest CreateManifest() => new(
+        V3SchemaIds.PreviewArtifact,
+        V3SchemaResourceIds.PreviewArtifact,
+        PreviewSchemaExporter.ComputeSha256(
+            PreviewSchemaExporter.ExportUtf8(V3SchemaIds.PreviewArtifact)),
+        "synthetic_preview",
+        synthetic: true,
+        "synthetic_test",
+        new PreviewEnvironment("preview", "preview-slot"),
+        new PreviewIssuer("preview_attestor", "preview-issuer", "preview-key"),
+        PreviewSchemaExporter.ExportContractSet(),
+        new PreviewPayloadDescriptor(
+            V3SchemaIds.PreviewPayload,
+            V3SchemaResourceIds.PreviewPayload,
+            PreviewSchemaExporter.ComputeSha256(
+                PreviewSchemaExporter.ExportUtf8(V3SchemaIds.PreviewPayload)),
+            Digest,
+            0,
+            "application/json"),
+        new PreviewAttestation(
+            "preview_mechanics_only",
+            "ECDSA-P256-SHA256",
+            "ieee-p1363",
+            new string('A', 86)));
 
     private static JsonObject ReadPayloadSchema() =>
         JsonNode.Parse(File.ReadAllText(Path.Combine(

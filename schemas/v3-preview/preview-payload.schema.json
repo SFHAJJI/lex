@@ -5,7 +5,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 256,
-      "pattern": "^(?=.*[^ ])[ -~]{1,256}$",
+      "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])",
       "const": "lex-v3-preview-payload/1"
     },
     "operation_catalog": {
@@ -58,14 +58,14 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "pattern": "^(?=.*[^ ])[ -~]{1,256}$",
+          "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])",
           "const": "lex-v3-preview-operation-catalog/1"
         },
         "catalog_id": {
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+          "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
         },
         "entries": {
           "type": "array",
@@ -105,7 +105,7 @@
                 ],
                 "minLength": 1,
                 "maxLength": 256,
-                "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
               },
               "request": {
                 "type": "object",
@@ -114,13 +114,13 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 256,
-                    "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                    "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
                   },
                   "sha256": {
                     "type": "string",
                     "minLength": 64,
                     "maxLength": 64,
-                    "pattern": "^[0-9a-f]{64}$"
+                    "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
                   }
                 },
                 "required": [
@@ -137,13 +137,13 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 256,
-                    "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                    "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
                   },
                   "sha256": {
                     "type": "string",
                     "minLength": 64,
                     "maxLength": 64,
-                    "pattern": "^[0-9a-f]{64}$"
+                    "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
                   }
                 },
                 "required": [
@@ -166,31 +166,31 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 256,
-                "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
               },
               "capability_requirement": {
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 256,
-                "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
               },
               "rest_projection": {
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 256,
-                "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
               },
               "mcp_projection": {
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 256,
-                "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
               },
               "html_projection": {
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 256,
-                "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
               }
             },
             "required": [
@@ -232,14 +232,14 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "pattern": "^(?=.*[^ ])[ -~]{1,256}$",
+          "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])",
           "const": "lex-v3-preview-refusal-registry/1"
         },
         "registry_id": {
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+          "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
         },
         "entries": {
           "type": "array",
@@ -317,14 +317,14 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "pattern": "^(?=.*[^ ])[ -~]{1,256}$",
+          "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])",
           "const": "lex-v3-preview-object-set/1"
         },
         "object_set_id": {
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+          "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
         },
         "objects": {
           "type": "array",
@@ -347,15 +347,15 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 256,
-                    "pattern": "^preview:[ -~]{1,248}$"
+                    "pattern": "^preview:[ -~]{1,248}(?![\\s\\S])"
                   },
                   "version_key": {
                     "type": "string",
-                    "pattern": "^preview:[ -~]{1,248}$"
+                    "pattern": "^preview:[ -~]{1,248}(?![\\s\\S])"
                   },
                   "anchor": {
                     "type": "string",
-                    "pattern": "^preview:[ -~]{1,248}$"
+                    "pattern": "^preview:[ -~]{1,248}(?![\\s\\S])"
                   },
                   "body_holding_state": {
                     "enum": [
@@ -384,13 +384,13 @@
                     ],
                     "minLength": 64,
                     "maxLength": 64,
-                    "pattern": "^[0-9a-f]{64}$"
+                    "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
                   },
                   "object_id": {
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 256,
-                    "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                    "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
                   }
                 },
                 "required": [
@@ -433,7 +433,7 @@
                           "type": "string",
                           "minLength": 64,
                           "maxLength": 64,
-                          "pattern": "^[0-9a-f]{64}$"
+                          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
                         },
                         "body_holding_disposition": {
                           "const": "synthetic_fixture"
@@ -461,7 +461,7 @@
                           "type": "string",
                           "minLength": 64,
                           "maxLength": 64,
-                          "pattern": "^[0-9a-f]{64}$"
+                          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
                         },
                         "body_holding_disposition": {
                           "const": "synthetic_fixture_withheld"
@@ -489,7 +489,7 @@
                           "const": null,
                           "minLength": 64,
                           "maxLength": 64,
-                          "pattern": "^[0-9a-f]{64}$"
+                          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
                         },
                         "body_holding_disposition": {
                           "const": "unknown_pending_evidence"
@@ -537,13 +537,13 @@
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 256,
-                  "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                  "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
                 },
                 "object_set_sha256": {
                   "type": "string",
                   "minLength": 64,
                   "maxLength": 64,
-                  "pattern": "^[0-9a-f]{64}$"
+                  "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
                 }
               },
               "required": [
@@ -557,7 +557,7 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 256,
-              "pattern": "^(?=.*[^ ])[ -~]{1,256}$",
+              "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])",
               "const": "lex-v3-preview-envelope/1"
             },
             "object_type": {
@@ -611,19 +611,19 @@
                       ],
                       "minLength": 1,
                       "maxLength": 256,
-                      "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                      "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
                     },
                     "catalog_id": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 256,
-                      "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                      "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
                     },
                     "catalog_sha256": {
                       "type": "string",
                       "minLength": 64,
                       "maxLength": 64,
-                      "pattern": "^[0-9a-f]{64}$"
+                      "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
                     }
                   },
                   "required": [
@@ -641,20 +641,20 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 256,
-                      "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                      "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
                     },
                     "schema": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 256,
-                      "pattern": "^(?=.*[^ ])[ -~]{1,256}$",
+                      "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])",
                       "const": "lex-v3-preview-refusal-registry/1"
                     },
                     "sha256": {
                       "type": "string",
                       "minLength": 64,
                       "maxLength": 64,
-                      "pattern": "^[0-9a-f]{64}$"
+                      "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
                     }
                   },
                   "required": [
@@ -672,13 +672,13 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 256,
-                      "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                      "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
                     },
                     "snapshot_sha256": {
                       "type": "string",
                       "minLength": 64,
                       "maxLength": 64,
-                      "pattern": "^[0-9a-f]{64}$"
+                      "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
                     }
                   },
                   "required": [
@@ -695,7 +695,7 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 256,
-                      "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                      "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
                     }
                   },
                   "required": [
@@ -708,7 +708,7 @@
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 256,
-                  "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                  "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
                 },
                 "runtime": {
                   "type": "object",
@@ -717,13 +717,13 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 256,
-                      "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                      "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
                     },
                     "source_sha256": {
                       "type": "string",
                       "minLength": 64,
                       "maxLength": 64,
-                      "pattern": "^[0-9a-f]{64}$"
+                      "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
                     }
                   },
                   "required": [
@@ -740,13 +740,13 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 256,
-                      "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                      "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
                     },
                     "source_sha256": {
                       "type": "string",
                       "minLength": 64,
                       "maxLength": 64,
-                      "pattern": "^[0-9a-f]{64}$"
+                      "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
                     }
                   },
                   "required": [
@@ -786,7 +786,7 @@
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 256,
-                  "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                  "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
                 },
                 "provisionality": {
                   "enum": [
@@ -889,13 +889,13 @@
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 256,
-                        "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                        "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
                       },
                       "title": {
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 512,
-                        "pattern": "^(?=[\\s\\S]*[^\\u0009-\\u000D\\u0020\\u0085\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000])[^\\u0000-\\u001F\\u007F-\\u009F\\u2028\\u2029]\u002B$",
+                        "pattern": "^(?=[\\s\\S]*[^\\u0009-\\u000D\\u0020\\u0085\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000])[^\\u0000-\\u001F\\u007F-\\u009F\\u2028\\u2029]\u002B(?![\\s\\S])",
                         "x_runtime_invariants": [
                           "valid Unicode scalar sequence",
                           "contains at least one non-whitespace Unicode scalar"
@@ -1147,7 +1147,7 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 256,
-              "pattern": "^(?=.*[^ ])[ -~]{1,256}$",
+              "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])",
               "const": "lex-v3-preview-envelope/1"
             },
             "object_type": {
@@ -1181,7 +1181,7 @@
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 256,
-                  "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                  "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
                 },
                 "runtime": {
                   "$ref": "#/anyOf/0/properties/context/properties/runtime"
@@ -1201,7 +1201,7 @@
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 256,
-                  "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                  "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
                 },
                 "provisionality": {
                   "enum": [

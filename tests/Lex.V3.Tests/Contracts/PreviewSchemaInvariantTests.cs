@@ -8,7 +8,7 @@ namespace Lex.V3.Tests.Contracts;
 public sealed class PreviewSchemaInvariantTests
 {
     private const string Draft202012 = "https://json-schema.org/draft/2020-12/schema";
-    private const string Sha256Pattern = "^[0-9a-f]{64}$";
+    private const string Sha256Pattern = "^[0-9a-f]{64}(?![\\s\\S])";
 
     [TestMethod]
     public void ArtifactSchemaPinsEverySyntheticMarkerAndBound()
@@ -55,7 +55,9 @@ public sealed class PreviewSchemaInvariantTests
         var signature = Property(attestation, "signature");
         Assert.AreEqual(86, IntKeyword(signature, "minLength"));
         Assert.AreEqual(86, IntKeyword(signature, "maxLength"));
-        Assert.AreEqual("^[A-Za-z0-9_-]{86}$", StringKeyword(signature, "pattern"));
+        Assert.AreEqual(
+            "^[A-Za-z0-9_-]{86}(?![\\s\\S])",
+            StringKeyword(signature, "pattern"));
     }
 
     [TestMethod]

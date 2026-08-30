@@ -123,8 +123,8 @@ public static class PreviewSchemaExporter
 
 internal static class PreviewSchemaHardener
 {
-    private const string Sha256Pattern = "^[0-9a-f]{64}$";
-    private const string SignaturePattern = "^[A-Za-z0-9_-]{86}$";
+    private const string Sha256Pattern = "^[0-9a-f]{64}(?![\\s\\S])";
+    private const string SignaturePattern = "^[A-Za-z0-9_-]{86}(?![\\s\\S])";
     private static readonly HashSet<string> IdentifierPropertyNames = new(StringComparer.Ordinal)
     {
         "schema",
@@ -329,9 +329,12 @@ internal static class PreviewSchemaHardener
                 var branch = branchNode as JsonObject
                     ?? throw new InvalidOperationException("The preview object branch must be an object.");
                 SetConst(Property(branch, "synthetic"), true);
-                Property(branch, "work_id")["pattern"] = "^preview:[ -~]{1,248}$";
-                Property(branch, "version_key")["pattern"] = "^preview:[ -~]{1,248}$";
-                Property(branch, "anchor")["pattern"] = "^preview:[ -~]{1,248}$";
+                Property(branch, "work_id")["pattern"] =
+                    "^preview:[ -~]{1,248}(?![\\s\\S])";
+                Property(branch, "version_key")["pattern"] =
+                    "^preview:[ -~]{1,248}(?![\\s\\S])";
+                Property(branch, "anchor")["pattern"] =
+                    "^preview:[ -~]{1,248}(?![\\s\\S])";
                 branch["x_runtime_invariants"] = new JsonArray(
                     "body_sha256 is SHA-256 over the exact strict UTF-8 body bytes",
                     "body_holding_state and body_holding_disposition use the closed preview matrix",
@@ -676,7 +679,8 @@ internal static class PreviewSchemaHardener
                         propertySchema["pattern"] =
                             "^(?=[\\s\\S]*[^\\u0009-\\u000D\\u0020\\u0085\\u00A0\\u1680" +
                             "\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000])" +
-                            "[^\\u0000-\\u001F\\u007F-\\u009F\\u2028\\u2029]+$";
+                            "[^\\u0000-\\u001F\\u007F-\\u009F\\u2028\\u2029]+" +
+                            "(?![\\s\\S])";
                         propertySchema["x_runtime_invariants"] = new JsonArray(
                             "valid Unicode scalar sequence",
                             "contains at least one non-whitespace Unicode scalar");
@@ -721,7 +725,7 @@ internal static class PreviewSchemaHardener
             {
                 schema["minLength"] = 1;
                 schema["maxLength"] = PreviewContractLimits.MaximumManifestStringBytes;
-                schema["pattern"] = "^[ -~]+$";
+                schema["pattern"] = "^[ -~]+(?![\\s\\S])";
             }
 
             foreach (var child in schema)

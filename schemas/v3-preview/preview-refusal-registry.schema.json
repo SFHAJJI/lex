@@ -5,14 +5,14 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 256,
-      "pattern": "^(?=.*[^ ])[ -~]{1,256}$",
+      "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])",
       "const": "lex-v3-preview-refusal-registry/1"
     },
     "registry_id": {
       "type": "string",
       "minLength": 1,
       "maxLength": 256,
-      "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+      "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
     },
     "entries": {
       "type": "array",
