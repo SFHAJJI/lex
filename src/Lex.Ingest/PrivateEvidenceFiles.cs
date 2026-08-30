@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using Lex.Law;
 using Lex.Temporal;
 
 namespace Lex.Ingest;
@@ -88,6 +89,14 @@ internal static class EvidenceFiles
         CodeIdentity.RequireSha256(
             requestId, "Private evidence request ID") + ".json";
 
+    public static string AttemptStartRelative(SourceRequestIdentity request) =>
+        PrivateEvidenceBundle.AttemptsDirectoryName + "/" +
+        AttemptPrefix(request) + ".start.json";
+
+    public static string AttemptTerminalRelative(SourceRequestIdentity request) =>
+        PrivateEvidenceBundle.AttemptsDirectoryName + "/" +
+        AttemptPrefix(request) + ".terminal.json";
+
     public static string CaptureIntentRelative(string requestId) =>
         PendingRelative(requestId, ".intent.json");
 
@@ -170,6 +179,7 @@ internal static class EvidenceFiles
         foreach (var directory in new[]
                  {
                      ".",
+                     PrivateEvidenceBundle.AttemptsDirectoryName,
                      PrivateEvidenceBundle.ObjectsDirectoryName,
                      PrivateEvidenceBundle.ReceiptsDirectoryName,
                      PrivateEvidenceBundle.PendingDirectoryName,
@@ -238,12 +248,14 @@ internal static class EvidenceFiles
     public static void VerifyExactLayout(
         string rootPath,
         HandleBoundRoot root,
+        IReadOnlyCollection<PrivateEvidenceAttemptState> attempts,
         IReadOnlyCollection<StagedResponseRecord> records,
         bool includeManifest,
         bool includeCommit)
     {
         var expectedRoot = new HashSet<string>(StringComparer.Ordinal)
         {
+            "D:" + PrivateEvidenceBundle.AttemptsDirectoryName,
             "D:" + PrivateEvidenceBundle.ObjectsDirectoryName,
             "D:" + PrivateEvidenceBundle.PendingDirectoryName,
             "D:" + PrivateEvidenceBundle.ReceiptsDirectoryName,
@@ -265,6 +277,19 @@ internal static class EvidenceFiles
             .SetEquals(expectedObjects))
             throw new InvalidDataException(
                 "Private evidence objects do not exactly match the receipts.");
+
+        var expectedAttempts = attempts.SelectMany(attempt =>
+            attempt.Terminal is null
+                ? new[] { "F:" + AttemptFileName(attempt.Request, ".start.json") }
+                :
+                [
+                    "F:" + AttemptFileName(attempt.Request, ".start.json"),
+                    "F:" + AttemptFileName(attempt.Request, ".terminal.json"),
+                ]).ToHashSet(StringComparer.Ordinal);
+        if (!EntrySet(rootPath, root, PrivateEvidenceBundle.AttemptsDirectoryName)
+            .SetEquals(expectedAttempts))
+            throw new InvalidDataException(
+                "Private evidence attempt files do not exactly match the ledger.");
 
         var expectedReceipts = records.Select(record =>
                 "F:" + record.Request.RequestId + ".json")
@@ -338,6 +363,14 @@ internal static class EvidenceFiles
         PrivateEvidenceBundle.PendingDirectoryName + "/" +
         CodeIdentity.RequireSha256(
             requestId, "Private evidence request ID") + suffix;
+
+    private static string AttemptPrefix(SourceRequestIdentity request) =>
+        request.Ordinal.ToString("D6", System.Globalization.CultureInfo.InvariantCulture)
+        + "-" + request.RequestId;
+
+    private static string AttemptFileName(
+        SourceRequestIdentity request, string suffix) =>
+        AttemptPrefix(request) + suffix;
 
     private static string NormalizeParent(string relative)
     {

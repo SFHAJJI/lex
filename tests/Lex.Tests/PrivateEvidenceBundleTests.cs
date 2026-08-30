@@ -17,6 +17,8 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         "2222222222222222222222222222222222222222222222222222222222222222";
     private const string EndpointPolicy =
         "3333333333333333333333333333333333333333333333333333333333333333";
+    private const string AcquisitionPolicy =
+        "4444444444444444444444444444444444444444444444444444444444444444";
     private readonly string _root = Path.Combine(
         Path.GetTempPath(), $"lex-private-evidence-{Guid.NewGuid():N}");
 
@@ -67,8 +69,9 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         using (var bundle = PrivateEvidenceBundle.Create(
                    staging, Plan(sourceRequest)))
         {
+            var attempt = bundle.BeginAttempt(sourceRequest);
             await bundle.CaptureAsync(
-                sourceRequest,
+                attempt,
                 response,
                 new MemoryStream([1, 2, 3], writable: false));
             await bundle.SealAsync();
@@ -99,8 +102,9 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         var staging = EmptyDirectory("oversized");
 
         using var bundle = PrivateEvidenceBundle.Create(staging, Plan(request));
+        var attempt = bundle.BeginAttempt(request);
         var outcome = await bundle.CaptureAsync(
-            request,
+            attempt,
             Response(),
             new MemoryStream([1, 2, 3, 4, 5], writable: false));
         var rejected = Assert.IsType<RejectedStagedResponseEvidence>(outcome);
@@ -129,14 +133,16 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
 
         using var bundle = PrivateEvidenceBundle.Create(
             staging, Plan(incompleteRequest, interruptedRequest));
+        var incompleteAttempt = bundle.BeginAttempt(incompleteRequest);
         var incomplete = Assert.IsType<RejectedStagedResponseEvidence>(
             await bundle.CaptureAsync(
-                incompleteRequest,
+                incompleteAttempt,
                 Response(bodyComplete: false),
                 new MemoryStream([1, 2], writable: false)));
+        var interruptedAttempt = bundle.BeginAttempt(interruptedRequest);
         var interrupted = Assert.IsType<RejectedStagedResponseEvidence>(
             await bundle.CaptureAsync(
-                interruptedRequest,
+                interruptedAttempt,
                 Response(),
                 new ThrowAfterPrefixStream([3, 4])));
 
@@ -163,8 +169,9 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         {
             Assert.False(created.IsSealed);
             Assert.Empty(created.Records);
+            var attempt = created.BeginAttempt(request);
             await created.CaptureAsync(
-                request,
+                attempt,
                 Response(),
                 new MemoryStream([9, 8, 7], writable: false));
         }
@@ -172,21 +179,15 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         {
             Assert.False(captured.IsSealed);
             Assert.Single(captured.Records);
-            var replay = await captured.CaptureAsync(
-                request, Response(), new ThrowOnReadStream());
-            Assert.Equal(captured.Records[0].Evidence.ObjectSha256,
-                replay.ObjectSha256);
+            Assert.Single(captured.Attempts);
             await captured.SealAsync();
         }
         using (var sealedBundle = PrivateEvidenceBundle.Open(staging, plan))
         {
             Assert.True(sealedBundle.IsSealed);
             Assert.Single(sealedBundle.Records);
-            await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                sealedBundle.CaptureAsync(
-                    request,
-                    Response(),
-                    new MemoryStream([1], writable: false)));
+            Assert.Throws<InvalidOperationException>(() =>
+                sealedBundle.BeginAttempt(Request(1)));
         }
     }
 
@@ -229,8 +230,9 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
 
         using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
         {
+            var attempt = bundle.BeginAttempt(request);
             await bundle.CaptureAsync(
-                request,
+                attempt,
                 Response(),
                 new MemoryStream([1, 2, 3], writable: false));
             await File.WriteAllBytesAsync(Path.Combine(
@@ -269,13 +271,21 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         var oversizedRequest = Request(1, maximumResponseBytes: 3);
         var plan = Plan(prefixRequest, oversizedRequest);
         var staging = EmptyDirectory("pending-prefix");
-        using (PrivateEvidenceBundle.Create(staging, plan))
+        string prefixAttemptSha256;
+        string oversizedAttemptSha256;
+        using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
         {
+            prefixAttemptSha256 = bundle.BeginAttempt(prefixRequest)
+                .AttemptSha256;
+            oversizedAttemptSha256 = bundle.BeginAttempt(oversizedRequest)
+                .AttemptSha256;
         }
 
-        WriteCaptureIntent(staging, prefixRequest, Response());
+        WriteCaptureIntent(
+            staging, prefixAttemptSha256, prefixRequest, Response());
         File.WriteAllBytes(PendingBodyPath(staging, prefixRequest), [1, 2]);
-        WriteCaptureIntent(staging, oversizedRequest, Response());
+        WriteCaptureIntent(
+            staging, oversizedAttemptSha256, oversizedRequest, Response());
         File.WriteAllBytes(PendingBodyPath(staging, oversizedRequest), [3, 4, 5, 6]);
 
         using var recovered = PrivateEvidenceBundle.Open(staging, plan);
@@ -309,13 +319,15 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         var response = Response();
         var plan = Plan(request);
         var staging = EmptyDirectory("pending-object");
-        using (PrivateEvidenceBundle.Create(staging, plan))
+        string attemptSha256;
+        using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
         {
+            attemptSha256 = bundle.BeginAttempt(request).AttemptSha256;
         }
 
         byte[] body = [7, 8, 9];
         var objectSha256 = Convert.ToHexStringLower(SHA256.HashData(body));
-        WriteCaptureIntent(staging, request, response);
+        WriteCaptureIntent(staging, attemptSha256, request, response);
         WriteCaptureOutcome(
             staging,
             request,
@@ -344,15 +356,17 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         var plan = Plan(request);
         var staging = EmptyDirectory("cancelled-capture");
         using var bundle = PrivateEvidenceBundle.Create(staging, plan);
+        var attempt = bundle.BeginAttempt(request);
 
         await Assert.ThrowsAsync<OperationCanceledException>(() =>
             bundle.CaptureAsync(
-                request,
+                attempt,
                 Response(),
                 new CancelAfterPrefixStream([1, 2, 3])));
 
         var recovered = Assert.IsType<RejectedStagedResponseEvidence>(
-            await bundle.CaptureAsync(request, Response(), new ThrowOnReadStream()));
+            await bundle.CaptureAsync(
+                attempt, Response(), new ThrowOnReadStream()));
         Assert.Equal(StagedResponseRejectionReason.TransportInterrupted,
             recovered.Reason);
         Assert.Equal(3, recovered.ByteLength);
@@ -385,8 +399,9 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         var committed = EmptyDirectory("committed-exact");
         using (var bundle = PrivateEvidenceBundle.Create(committed, plan))
         {
+            var attempt = bundle.BeginAttempt(request);
             await bundle.CaptureAsync(
-                request,
+                attempt,
                 Response(),
                 new MemoryStream([1, 2, 3], writable: false));
             await bundle.SealAsync();
@@ -414,8 +429,9 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
 
         using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
         {
+            var attempt = bundle.BeginAttempt(request);
             await bundle.CaptureAsync(
-                request,
+                attempt,
                 Response(),
                 new MemoryStream([1, 2, 3], writable: false));
             var objectPath = Assert.Single(Directory.EnumerateFiles(Path.Combine(
@@ -446,8 +462,9 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         var staging = EmptyDirectory("interrupted-seal-inexact");
         using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
         {
+            var attempt = bundle.BeginAttempt(request);
             await bundle.CaptureAsync(
-                request,
+                attempt,
                 Response(),
                 new MemoryStream([1, 2, 3], writable: false));
             await bundle.SealAsync();
@@ -482,7 +499,7 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
     }
 
     [Fact]
-    public async Task Seal_requires_exact_planned_inventory_and_commit_is_last()
+    public async Task Seal_requires_terminal_runtime_inventory_and_commit_is_last()
     {
         var first = Request(0);
         var second = Request(1);
@@ -490,20 +507,20 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
 
         using var bundle = PrivateEvidenceBundle.Create(
             staging, Plan(first, second));
+        var firstAttempt = bundle.BeginAttempt(first);
         await bundle.CaptureAsync(
-            first,
+            firstAttempt,
             Response(),
             new MemoryStream([1], writable: false));
-        await Assert.ThrowsAsync<InvalidDataException>(() => bundle.SealAsync());
+        var secondAttempt = bundle.BeginAttempt(second);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            bundle.SealAsync());
         Assert.False(File.Exists(Path.Combine(
             staging, PrivateEvidenceBundle.ManifestFileName)));
         Assert.False(File.Exists(Path.Combine(
             staging, PrivateEvidenceBundle.CommitMarkerFileName)));
 
-        await bundle.CaptureAsync(
-            second,
-            Response(),
-            new MemoryStream([2], writable: false));
+        bundle.RecordNoResponse(secondAttempt);
         await bundle.SealAsync();
         Assert.True(File.Exists(Path.Combine(
             staging, PrivateEvidenceBundle.ManifestFileName)));
@@ -513,14 +530,14 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         using var manifest = JsonDocument.Parse(await File.ReadAllBytesAsync(
             Path.Combine(staging, PrivateEvidenceBundle.ManifestFileName)));
         Assert.Equal(
-            [first.RequestId, second.RequestId],
+            [first.RequestId],
             manifest.RootElement.GetProperty("records").EnumerateArray()
                 .Select(record => record.GetProperty("request")
                     .GetProperty("request_id").GetString()!).ToArray());
     }
 
     [Fact]
-    public void Bundle_identity_binds_corpus_scope_policy_and_acquisition_plan()
+    public void Bundle_identity_binds_stable_policies_not_runtime_attempts()
     {
         var request = Request(0);
         var baseline = Plan(request);
@@ -530,17 +547,200 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
             [request], enumerationScope: new string('5', 64));
         var changedPolicy = Plan(
             [request], endpointPolicy: new string('6', 64));
+        var changedAcquisitionPolicy = Plan(
+            [request], acquisitionPolicy: new string('7', 64));
         var changedRequest = Plan(Request(
             0, "https://legilux.public.lu/different"));
 
         Assert.NotEqual(baseline.BundleId, changedCorpus.BundleId);
         Assert.NotEqual(baseline.BundleId, changedScope.BundleId);
         Assert.NotEqual(baseline.BundleId, changedPolicy.BundleId);
-        Assert.NotEqual(baseline.BundleId, changedRequest.BundleId);
-        Assert.Equal(baseline.AcquisitionPlanSha256,
-            changedCorpus.AcquisitionPlanSha256);
-        Assert.NotEqual(baseline.AcquisitionPlanSha256,
-            changedRequest.AcquisitionPlanSha256);
+        Assert.NotEqual(baseline.BundleId, changedAcquisitionPolicy.BundleId);
+        Assert.Equal(baseline.BundleId, changedRequest.BundleId);
+        Assert.Equal(AcquisitionPolicy, baseline.AcquisitionPolicySha256);
+    }
+
+    [Fact]
+    public async Task Runtime_attempts_append_before_send_without_unused_slots()
+    {
+        var plan = DynamicPlan();
+        var staging = EmptyDirectory("dynamic-attempts");
+        PrivateEvidenceStageReceipt sealedReceipt;
+        using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
+        {
+            var first = bundle.BeginAttempt(Request(0));
+            Assert.Single(Directory.EnumerateFiles(Path.Combine(
+                staging, PrivateEvidenceBundle.AttemptsDirectoryName),
+                "*.start.json"));
+            Assert.DoesNotContain(
+                "\"requests\"",
+                File.ReadAllText(Path.Combine(
+                    staging, PrivateEvidenceBundle.PlanFileName)),
+                StringComparison.Ordinal);
+            Assert.Empty(bundle.Records);
+            await bundle.CaptureAsync(
+                first,
+                Response(),
+                new MemoryStream([1, 2, 3], writable: false));
+
+            var retry = bundle.BeginAttempt(Request(1, physicalAttempt: 2));
+            bundle.RecordNoResponse(retry);
+            sealedReceipt = await bundle.SealAsync();
+        }
+
+        Assert.Equal(2, sealedReceipt.Attempts.Count);
+        Assert.Equal(
+            [
+                PrivateEvidenceAttemptDisposition.Response,
+                PrivateEvidenceAttemptDisposition.NoResponse,
+            ],
+            sealedReceipt.Attempts.Select(attempt => attempt.Disposition));
+        Assert.Equal(
+            sealedReceipt.Attempts[^1].AttemptSha256,
+            sealedReceipt.AttemptChainSha256);
+        Assert.Matches("^[0-9a-f]{64}$", sealedReceipt.AttemptInventorySha256);
+
+        using var reopened = PrivateEvidenceBundle.Open(staging, plan);
+        Assert.Equal(
+            sealedReceipt.Attempts.Select(attempt => attempt.TerminalSha256),
+            reopened.Attempts.Select(attempt => attempt.TerminalSha256));
+    }
+
+    [Fact]
+    public async Task Live_attempts_block_seal_and_tokens_are_bundle_bound()
+    {
+        var plan = DynamicPlan();
+        var firstRoot = EmptyDirectory("attempt-owner-a");
+        var secondRoot = EmptyDirectory("attempt-owner-b");
+        using var first = PrivateEvidenceBundle.Create(firstRoot, plan);
+        using var second = PrivateEvidenceBundle.Create(secondRoot, plan);
+        var attempt = first.BeginAttempt(Request(0));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => first.SealAsync());
+        await Assert.ThrowsAsync<InvalidDataException>(() => second.CaptureAsync(
+            attempt,
+            Response(),
+            new MemoryStream([1], writable: false)));
+
+        first.RecordNoResponse(attempt);
+        await first.SealAsync();
+    }
+
+    [Fact]
+    public async Task Restart_terminalizes_an_unfinished_attempt_without_overclaiming_send()
+    {
+        var plan = DynamicPlan();
+        var staging = EmptyDirectory("unknown-attempt");
+        using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
+            _ = bundle.BeginAttempt(Request(0));
+
+        using var recovered = PrivateEvidenceBundle.Open(staging, plan);
+
+        var attempt = Assert.Single(recovered.Attempts);
+        Assert.Equal(
+            PrivateEvidenceAttemptDisposition.NotAttemptedOrSendStateUnknown,
+            attempt.Disposition);
+        var receipt = await recovered.SealAsync();
+        Assert.Equal(attempt.TerminalSha256,
+            Assert.Single(receipt.Attempts).TerminalSha256);
+    }
+
+    [Fact]
+    public async Task Restart_binds_a_durable_receipt_to_its_missing_terminal()
+    {
+        var plan = DynamicPlan();
+        var staging = EmptyDirectory("receipt-before-terminal");
+        var request = Request(0);
+        using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
+        {
+            var attempt = bundle.BeginAttempt(request);
+            await bundle.CaptureAsync(
+                attempt,
+                Response(),
+                new MemoryStream([5, 6, 7], writable: false));
+        }
+        File.Delete(Assert.Single(Directory.EnumerateFiles(
+            Path.Combine(staging, PrivateEvidenceBundle.AttemptsDirectoryName),
+            "*.terminal.json")));
+
+        using var recovered = PrivateEvidenceBundle.Open(staging, plan);
+
+        var terminal = Assert.Single(recovered.Attempts);
+        Assert.Equal(PrivateEvidenceAttemptDisposition.Response,
+            terminal.Disposition);
+        Assert.Equal(
+            Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(
+                Assert.Single(Directory.EnumerateFiles(Path.Combine(
+                    staging,
+                    PrivateEvidenceBundle.ReceiptsDirectoryName)))))),
+            terminal.ResponseReceiptSha256);
+        await recovered.SealAsync();
+    }
+
+    [Fact]
+    public async Task Strict_reopen_rejects_a_response_terminal_without_its_receipt()
+    {
+        var plan = DynamicPlan();
+        var staging = EmptyDirectory("terminal-without-receipt");
+        using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
+        {
+            var attempt = bundle.BeginAttempt(Request(0));
+            await bundle.CaptureAsync(
+                attempt,
+                Response(),
+                new MemoryStream([8], writable: false));
+        }
+        File.Delete(Assert.Single(Directory.EnumerateFiles(Path.Combine(
+            staging, PrivateEvidenceBundle.ReceiptsDirectoryName))));
+
+        Assert.Throws<InvalidDataException>(() =>
+            PrivateEvidenceBundle.Open(staging, plan));
+    }
+
+    [Fact]
+    public async Task Attempt_chain_and_inventory_bind_order_requests_and_outcomes()
+    {
+        async Task<PrivateEvidenceStageReceipt> Build(
+            string name,
+            bool reverse,
+            bool secondHasResponse)
+        {
+            var root = EmptyDirectory(name);
+            using var bundle = PrivateEvidenceBundle.Create(root, DynamicPlan());
+            var first = bundle.BeginAttempt(Request(
+                0,
+                reverse
+                    ? "https://legilux.public.lu/second"
+                    : "https://legilux.public.lu/first"));
+            bundle.RecordNoResponse(first);
+            var second = bundle.BeginAttempt(Request(
+                1,
+                reverse
+                    ? "https://legilux.public.lu/first"
+                    : "https://legilux.public.lu/second"));
+            if (secondHasResponse)
+                await bundle.CaptureAsync(
+                    second,
+                    Response(),
+                    new MemoryStream([9], writable: false));
+            else
+                bundle.RecordNoResponse(second);
+            return await bundle.SealAsync();
+        }
+
+        var baseline = await Build("attempt-digest-a", reverse: false,
+            secondHasResponse: false);
+        var reordered = await Build("attempt-digest-b", reverse: true,
+            secondHasResponse: false);
+        var changedOutcome = await Build("attempt-digest-c", reverse: false,
+            secondHasResponse: true);
+
+        Assert.NotEqual(baseline.AttemptChainSha256,
+            reordered.AttemptChainSha256);
+        Assert.Equal(baseline.AttemptChainSha256,
+            changedOutcome.AttemptChainSha256);
+        Assert.NotEqual(baseline.AttemptInventorySha256,
+            changedOutcome.AttemptInventorySha256);
     }
 
     [Fact]
@@ -568,14 +768,24 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         IReadOnlyCollection<SourceRequestIdentity> requests,
         string baselineCorpus = BaselineCorpus,
         string enumerationScope = EnumerationScope,
-        string endpointPolicy = EndpointPolicy) => new(
+        string endpointPolicy = EndpointPolicy,
+        string acquisitionPolicy = AcquisitionPolicy) => new(
         "gha:2026-08-30T101112Z",
         CodeCommit,
         "legilux",
         baselineCorpus,
         enumerationScope,
         endpointPolicy,
-        requests);
+        acquisitionPolicy);
+
+    private static PrivateEvidenceAcquisitionPlan DynamicPlan() => new(
+        "gha:2026-08-30T101112Z",
+        CodeCommit,
+        "legilux",
+        BaselineCorpus,
+        EnumerationScope,
+        EndpointPolicy,
+        AcquisitionPolicy);
 
     private static SourceRequestIdentity Request(
         int ordinal,
@@ -617,6 +827,7 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         foreach (var path in new[]
                  {
                      Path.Combine(root, PrivateEvidenceBundle.PlanFileName),
+                     Path.Combine(root, PrivateEvidenceBundle.AttemptsDirectoryName),
                      Path.Combine(root, PrivateEvidenceBundle.PendingDirectoryName),
                      Path.Combine(root, PrivateEvidenceBundle.ReceiptsDirectoryName),
                      Path.Combine(root, PrivateEvidenceBundle.ManifestFileName),
@@ -642,6 +853,7 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
 
     private static void WriteCaptureIntent(
         string root,
+        string attemptSha256,
         SourceRequestIdentity request,
         BoundedResponseMetadata response)
     {
@@ -653,6 +865,7 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
             new
             {
                 Schema = PrivateEvidenceBundle.CaptureIntentSchema,
+                AttemptSha256 = attemptSha256,
                 BodyFileName = request.RequestId + ".body",
                 Request = new
                 {

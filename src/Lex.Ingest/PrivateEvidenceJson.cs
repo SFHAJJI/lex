@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -8,10 +7,6 @@ using Lex.Temporal;
 
 namespace Lex.Ingest;
 
-internal sealed record AcquisitionPlanDocument(
-    string Schema,
-    IReadOnlyList<RequestDocument> Requests);
-
 internal sealed record PlanDocument(
     string Schema,
     string RunIdentity,
@@ -20,9 +15,8 @@ internal sealed record PlanDocument(
     string BaselineCorpusSha256,
     string EnumerationScopeSha256,
     string EndpointPolicySha256,
-    string AcquisitionPlanSha256,
-    string BundleId,
-    IReadOnlyList<RequestDocument> Requests);
+    string AcquisitionPolicySha256,
+    string BundleId);
 
 internal sealed record RequestDocument(
     string RequestId,
@@ -66,6 +60,7 @@ internal sealed record ResponseReceiptDocument(
 
 internal sealed record CaptureIntentDocument(
     string Schema,
+    string AttemptSha256,
     string BodyFileName,
     RequestDocument Request,
     ResponseDocument Response);
@@ -74,25 +69,68 @@ internal sealed record CaptureOutcomeDocument(
     string Schema,
     EvidenceDocument Evidence);
 
+internal sealed record AttemptChainDocument(
+    string Schema,
+    string BundleId,
+    string? PredecessorAttemptSha256,
+    RequestDocument Request);
+
+internal sealed record AttemptStartDocument(
+    string Schema,
+    string BundleId,
+    string? PredecessorAttemptSha256,
+    string AttemptSha256,
+    RequestDocument Request);
+
+internal sealed record AttemptTerminalPayloadDocument(
+    string Schema,
+    string BundleId,
+    string AttemptSha256,
+    PrivateEvidenceAttemptDisposition Disposition,
+    string? ResponseReceiptSha256);
+
+internal sealed record AttemptTerminalDocument(
+    string Schema,
+    string BundleId,
+    string AttemptSha256,
+    PrivateEvidenceAttemptDisposition Disposition,
+    string? ResponseReceiptSha256,
+    string TerminalSha256);
+
+internal sealed record AttemptInventoryEntryDocument(
+    int Ordinal,
+    string AttemptSha256,
+    string TerminalSha256,
+    PrivateEvidenceAttemptDisposition Disposition,
+    string? ResponseReceiptSha256);
+
+internal sealed record AttemptInventoryDocument(
+    string Schema,
+    string BundleId,
+    IReadOnlyList<AttemptInventoryEntryDocument> Attempts);
+
 internal sealed record ManifestDocument(
     string Schema,
     string BundleId,
-    string AcquisitionPlanSha256,
+    string AttemptChainSha256,
+    string AttemptInventorySha256,
     IReadOnlyList<RecordDocument> Records);
 
 internal sealed record CommitDocument(
     string Schema,
     string BundleId,
-    string AcquisitionPlanSha256,
     string ManifestSha256,
-    string InventorySha256);
+    string AttemptChainSha256,
+    string AttemptInventorySha256);
 
 internal sealed record ParsedManifest(
     string BundleId,
-    string AcquisitionPlanSha256,
+    string AttemptChainSha256,
+    string AttemptInventorySha256,
     IReadOnlyList<StagedResponseRecord> Records);
 
 internal sealed record PendingCaptureIntent(
+    string AttemptSha256,
     SourceRequestIdentity Request,
     BoundedResponseMetadata Response);
 
@@ -109,9 +147,8 @@ internal static class EvidenceJson
             plan.BaselineCorpusSha256,
             plan.EnumerationScopeSha256,
             plan.EndpointPolicySha256,
-            plan.AcquisitionPlanSha256,
-            plan.BundleId,
-            plan.Requests.Select(ToDocument).ToArray()));
+            plan.AcquisitionPolicySha256,
+            plan.BundleId));
 
     public static byte[] WriteReceipt(StagedResponseRecord record) =>
         Write(new ResponseReceiptDocument(
@@ -119,9 +156,11 @@ internal static class EvidenceJson
             ToDocument(record)));
 
     public static byte[] WriteCaptureIntent(
+        string attemptSha256,
         SourceRequestIdentity request,
         BoundedResponseMetadata response) => Write(new CaptureIntentDocument(
         PrivateEvidenceBundle.CaptureIntentSchema,
+        CodeIdentity.RequireSha256(attemptSha256, nameof(attemptSha256)),
         request.RequestId + ".body",
         ToDocument(request),
         ToDocument(response)));
@@ -133,29 +172,148 @@ internal static class EvidenceJson
 
     public static byte[] WriteManifest(
         PrivateEvidenceAcquisitionPlan plan,
+        IReadOnlyList<PrivateEvidenceAttemptRecord> attempts,
         IReadOnlyList<StagedResponseRecord> records) => Write(
         new ManifestDocument(
             PrivateEvidenceBundle.ManifestSchema,
             plan.BundleId,
-            plan.AcquisitionPlanSha256,
+            HashAttemptChain(plan, attempts),
+            HashAttemptInventory(plan, attempts),
             records.Select(ToDocument).ToArray()));
 
     public static byte[] WriteCommit(
         PrivateEvidenceAcquisitionPlan plan,
         byte[] manifestBytes,
-        IReadOnlyList<StagedResponseRecord> records) => Write(
+        IReadOnlyList<PrivateEvidenceAttemptRecord> attempts) => Write(
         new CommitDocument(
             PrivateEvidenceBundle.CommitMarkerSchema,
             plan.BundleId,
-            plan.AcquisitionPlanSha256,
             Sha256(manifestBytes),
-            HashInventory(records)));
+            HashAttemptChain(plan, attempts),
+            HashAttemptInventory(plan, attempts)));
 
-    public static string HashAcquisitionPlan(
-        IReadOnlyList<SourceRequestIdentity> requests) => Sha256(Write(
-        new AcquisitionPlanDocument(
-            PrivateEvidenceBundle.AcquisitionPlanSchema,
-            requests.Select(ToDocument).ToArray())));
+    public static string HashAttemptStart(
+        PrivateEvidenceAcquisitionPlan plan,
+        string? predecessorAttemptSha256,
+        SourceRequestIdentity request) => Sha256(Write(
+        new AttemptChainDocument(
+            PrivateEvidenceBundle.AttemptChainSchema,
+            plan.BundleId,
+            predecessorAttemptSha256,
+            ToDocument(request))));
+
+    public static byte[] WriteAttemptStart(
+        PrivateEvidenceAcquisitionPlan plan,
+        PrivateEvidenceAttemptState attempt) => Write(
+        new AttemptStartDocument(
+            PrivateEvidenceBundle.AttemptStartSchema,
+            plan.BundleId,
+            attempt.PredecessorAttemptSha256,
+            attempt.AttemptSha256,
+            ToDocument(attempt.Request)));
+
+    public static PrivateEvidenceAttemptState ParseAttemptStart(
+        byte[] bytes, PrivateEvidenceAcquisitionPlan plan)
+    {
+        var document = Deserialize<AttemptStartDocument>(bytes, "attempt start");
+        if (document.Schema != PrivateEvidenceBundle.AttemptStartSchema
+            || document.BundleId != plan.BundleId
+            || document.Request is null)
+            throw new InvalidDataException(
+                "Private evidence attempt start schema or bundle is invalid.");
+        var request = Restore(document.Request);
+        var expectedSha256 = HashAttemptStart(
+            plan, document.PredecessorAttemptSha256, request);
+        var attempt = new PrivateEvidenceAttemptState(
+            request,
+            document.PredecessorAttemptSha256,
+            CodeIdentity.RequireSha256(
+                document.AttemptSha256, "Attempt SHA-256"));
+        if (attempt.AttemptSha256 != expectedSha256
+            || !bytes.AsSpan().SequenceEqual(WriteAttemptStart(plan, attempt)))
+            throw new InvalidDataException(
+                "Private evidence attempt start is not canonical or self-consistent.");
+        return attempt;
+    }
+
+    public static PrivateEvidenceAttemptRecord CreateAttemptTerminal(
+        PrivateEvidenceAcquisitionPlan plan,
+        PrivateEvidenceAttemptState attempt,
+        PrivateEvidenceAttemptDisposition disposition,
+        string? responseReceiptSha256)
+    {
+        var payload = new AttemptTerminalPayloadDocument(
+            PrivateEvidenceBundle.AttemptTerminalSchema,
+            plan.BundleId,
+            attempt.AttemptSha256,
+            disposition,
+            responseReceiptSha256);
+        return new PrivateEvidenceAttemptRecord(
+            attempt.Request,
+            attempt.PredecessorAttemptSha256,
+            attempt.AttemptSha256,
+            disposition,
+            responseReceiptSha256,
+            Sha256(Write(payload)));
+    }
+
+    public static byte[] WriteAttemptTerminal(
+        PrivateEvidenceAcquisitionPlan plan,
+        PrivateEvidenceAttemptRecord attempt) => Write(
+        new AttemptTerminalDocument(
+            PrivateEvidenceBundle.AttemptTerminalSchema,
+            plan.BundleId,
+            attempt.AttemptSha256,
+            attempt.Disposition,
+            attempt.ResponseReceiptSha256,
+            attempt.TerminalSha256));
+
+    public static PrivateEvidenceAttemptRecord ParseAttemptTerminal(
+        byte[] bytes,
+        PrivateEvidenceAcquisitionPlan plan,
+        PrivateEvidenceAttemptState attempt)
+    {
+        var document = Deserialize<AttemptTerminalDocument>(
+            bytes, "attempt terminal");
+        if (document.Schema != PrivateEvidenceBundle.AttemptTerminalSchema
+            || document.BundleId != plan.BundleId
+            || document.AttemptSha256 != attempt.AttemptSha256)
+            throw new InvalidDataException(
+                "Private evidence attempt terminal schema or identity is invalid.");
+        var expected = CreateAttemptTerminal(
+            plan,
+            attempt,
+            document.Disposition,
+            document.ResponseReceiptSha256);
+        if (document.TerminalSha256 != expected.TerminalSha256
+            || !bytes.AsSpan().SequenceEqual(
+                WriteAttemptTerminal(plan, expected)))
+            throw new InvalidDataException(
+                "Private evidence attempt terminal is not canonical or self-consistent.");
+        return expected;
+    }
+
+    public static string HashAttemptChain(
+        PrivateEvidenceAcquisitionPlan plan,
+        IReadOnlyList<PrivateEvidenceAttemptRecord> attempts) => attempts.Count == 0
+        ? Sha256(Encoding.UTF8.GetBytes(string.Join('\n',
+            PrivateEvidenceBundle.AttemptChainSchema,
+            plan.BundleId,
+            "empty")))
+        : attempts[^1].AttemptSha256;
+
+    public static string HashAttemptInventory(
+        PrivateEvidenceAcquisitionPlan plan,
+        IReadOnlyList<PrivateEvidenceAttemptRecord> attempts) => Sha256(Write(
+        new AttemptInventoryDocument(
+            PrivateEvidenceBundle.AttemptInventorySchema,
+            plan.BundleId,
+            attempts.Select(attempt => new AttemptInventoryEntryDocument(
+                attempt.Request.Ordinal,
+                attempt.AttemptSha256,
+                attempt.TerminalSha256,
+                attempt.Disposition,
+                attempt.ResponseReceiptSha256)).ToArray())));
 
     public static string Sha256(byte[] value) =>
         Convert.ToHexStringLower(SHA256.HashData(value));
@@ -163,11 +321,9 @@ internal static class EvidenceJson
     public static PrivateEvidenceAcquisitionPlan ParsePlan(byte[] bytes)
     {
         var document = Deserialize<PlanDocument>(bytes, "plan");
-        if (document.Requests is null
-            || document.Schema != PrivateEvidenceBundle.PlanSchema)
+        if (document.Schema != PrivateEvidenceBundle.PlanSchema)
             throw new InvalidDataException(
-                "Private evidence plan schema or request inventory is invalid.");
-        var requests = document.Requests.Select(Restore).ToArray();
+                "Private evidence plan schema is invalid.");
         var plan = new PrivateEvidenceAcquisitionPlan(
             document.RunIdentity,
             document.CodeCommit,
@@ -175,9 +331,8 @@ internal static class EvidenceJson
             document.BaselineCorpusSha256,
             document.EnumerationScopeSha256,
             document.EndpointPolicySha256,
-            requests);
-        if (plan.AcquisitionPlanSha256 != document.AcquisitionPlanSha256
-            || plan.BundleId != document.BundleId
+            document.AcquisitionPolicySha256);
+        if (plan.BundleId != document.BundleId
             || !bytes.AsSpan().SequenceEqual(WritePlan(plan)))
             throw new InvalidDataException(
                 "Private evidence plan is not canonical or self-consistent.");
@@ -202,17 +357,21 @@ internal static class EvidenceJson
     {
         var document = Deserialize<CaptureIntentDocument>(bytes, "capture intent");
         if (document.Schema != PrivateEvidenceBundle.CaptureIntentSchema
+            || !EvidenceFiles.IsSha256(document.AttemptSha256)
             || document.Request is null
             || document.Response is null)
             throw new InvalidDataException(
                 "Private evidence capture intent schema is invalid.");
         var result = new PendingCaptureIntent(
-            Restore(document.Request), Restore(document.Response));
+            document.AttemptSha256,
+            Restore(document.Request),
+            Restore(document.Response));
         if (document.BodyFileName != result.Request.RequestId + ".body")
             throw new InvalidDataException(
                 "Private evidence capture intent does not bind its body file.");
         if (!bytes.AsSpan().SequenceEqual(
-                WriteCaptureIntent(result.Request, result.Response)))
+                WriteCaptureIntent(
+                    result.AttemptSha256, result.Request, result.Response)))
             throw new InvalidDataException(
                 "Private evidence capture intent is not canonical.");
         return result;
@@ -250,7 +409,8 @@ internal static class EvidenceJson
         var canonical = Write(new ManifestDocument(
             document.Schema,
             document.BundleId,
-            document.AcquisitionPlanSha256,
+            document.AttemptChainSha256,
+            document.AttemptInventorySha256,
             records.Select(ToDocument).ToArray()));
         if (!bytes.AsSpan().SequenceEqual(canonical))
             throw new InvalidDataException(
@@ -258,7 +418,10 @@ internal static class EvidenceJson
         return new ParsedManifest(
             CodeIdentity.RequireSha256(document.BundleId, "Bundle ID"),
             CodeIdentity.RequireSha256(
-                document.AcquisitionPlanSha256, "Acquisition plan SHA-256"),
+                document.AttemptChainSha256, "Attempt chain SHA-256"),
+            CodeIdentity.RequireSha256(
+                document.AttemptInventorySha256,
+                "Attempt inventory SHA-256"),
             records);
     }
 
@@ -274,17 +437,6 @@ internal static class EvidenceJson
                 return false;
         }
         return true;
-    }
-
-    private static string HashInventory(
-        IReadOnlyList<StagedResponseRecord> records)
-    {
-        var canonical = string.Join('\n', records.Select(record => string.Join(':',
-            record.Request.RequestId,
-            record.Evidence.Disposition.ToString(),
-            record.Evidence.ObjectSha256,
-            record.Evidence.ByteLength.ToString(CultureInfo.InvariantCulture))));
-        return Sha256(Encoding.UTF8.GetBytes(canonical));
     }
 
     private static byte[] Write<T>(T value)
@@ -454,6 +606,9 @@ internal static class EvidenceJson
                 JsonNamingPolicy.SnakeCaseLower, allowIntegerValues: false));
         options.Converters.Add(
             new JsonStringEnumConverter<StagedResponseRejectionReason>(
+                JsonNamingPolicy.SnakeCaseLower, allowIntegerValues: false));
+        options.Converters.Add(
+            new JsonStringEnumConverter<PrivateEvidenceAttemptDisposition>(
                 JsonNamingPolicy.SnakeCaseLower, allowIntegerValues: false));
         return options;
     }

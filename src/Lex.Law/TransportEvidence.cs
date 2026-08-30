@@ -265,7 +265,9 @@ public sealed record BoundedResponseMetadata
 
 /// <summary>
 /// A durable content reference. No issuer is implemented in the local-staging slice.
-/// A durable sink may issue one only after create-only upload and full remote readback.
+/// A durable sink may issue one only after create-only upload and full remote readback
+/// match the pre-upload local length and digest. Once remote creation succeeds, a
+/// readback failure remains one unverified object and must not mint another remote name.
 /// </summary>
 public sealed record EvidenceRef
 {
@@ -291,7 +293,8 @@ public sealed record EvidenceRef
 /// Persists one physical response before returning. A successful return requires an
 /// authenticated create-only remote upload followed by full SHA-256 and length readback.
 /// This slice deliberately supplies no implementation or issuance factory. The durable
-/// sink integration must add a separately reviewed non-public issuance capability.
+/// sink integration must add a separately reviewed non-public issuance capability and
+/// preserve one remote object identity across readback retries.
 /// </summary>
 public interface IRawResponseSink
 {
