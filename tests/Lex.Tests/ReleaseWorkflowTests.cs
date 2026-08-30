@@ -9,8 +9,17 @@ public sealed class ReleaseWorkflowTests
     public void Terraform_backend_pins_Entra_blob_authorization()
     {
         var versions = File.ReadAllText(Path.Combine(RepoRoot(), "infra", "versions.tf"));
+        var backend = Regex.Match(
+            versions,
+            "(?ms)^[ \\t]*backend[ \\t]+\\\"azurerm\\\"[ \\t]*\\{(?<body>.*?)^[ \\t]*\\}");
+        Assert.True(backend.Success, "infra/versions.tf must contain an active azurerm backend block.");
+        var authorizationAssignments = Regex.Matches(
+            backend.Groups["body"].Value,
+            "(?m)^[ \\t]*use_azuread_auth[ \\t]*=[ \\t]*(?<value>[^#\\r\\n]+)")
+            .Select(match => match.Groups["value"].Value.Trim())
+            .ToArray();
 
-        Assert.Contains("use_azuread_auth = true", versions, StringComparison.Ordinal);
+        Assert.Equal(["true"], authorizationAssignments);
         Assert.DoesNotContain("access_key", versions, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("sas_token", versions, StringComparison.OrdinalIgnoreCase);
     }
