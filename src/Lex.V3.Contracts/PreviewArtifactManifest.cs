@@ -14,11 +14,15 @@ public sealed record PreviewEnvironment
         }
 
         Class = @class;
-        Binding = ContractValidation.RequireIdentifier(binding, nameof(binding));
-        if (binding.Length > 2_048)
+        ArgumentException.ThrowIfNullOrWhiteSpace(binding);
+        if (binding.Length > 2_048 || binding.Any(static character => character is < ' ' or > '~'))
         {
-            throw new ArgumentException("Preview environment binding is too long.", nameof(binding));
+            throw new ArgumentException(
+                "Preview environment binding must be bounded printable ASCII.",
+                nameof(binding));
         }
+
+        Binding = binding;
     }
 
     public string Class { get; }
@@ -50,14 +54,46 @@ public sealed record PreviewIssuer
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record PreviewTrackedSchemaReference
+{
+    [JsonConstructor]
+    public PreviewTrackedSchemaReference(string schema, string schemaResource, string sha256)
+    {
+        Schema = ContractValidation.RequireIdentifier(schema, nameof(schema));
+        SchemaResource = RequireSchemaResource(schema, schemaResource, nameof(schemaResource));
+        Sha256 = ContractValidation.RequireSha256(sha256, nameof(sha256));
+    }
+
+    public string Schema { get; }
+
+    public string SchemaResource { get; }
+
+    public string Sha256 { get; }
+
+    private static string RequireSchemaResource(
+        string schema,
+        string schemaResource,
+        string parameterName)
+    {
+        var expected = V3SchemaResourceIds.ForWireSchema(schema);
+        if (!string.Equals(schemaResource, expected, StringComparison.Ordinal))
+        {
+            throw new ArgumentException("The schema resource does not match its wire identity.", parameterName);
+        }
+
+        return schemaResource;
+    }
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record PreviewContractSet
 {
     [JsonConstructor]
     public PreviewContractSet(
-        ContractReference envelope,
-        ContractReference objectSet,
-        ContractReference operationCatalog,
-        ContractReference refusalRegistry)
+        PreviewTrackedSchemaReference envelope,
+        PreviewTrackedSchemaReference objectSet,
+        PreviewTrackedSchemaReference operationCatalog,
+        PreviewTrackedSchemaReference refusalRegistry)
     {
         Envelope = RequireSchema(envelope, V3SchemaIds.PreviewEnvelope, nameof(envelope));
         ObjectSet = RequireSchema(objectSet, V3SchemaIds.PreviewObjectSet, nameof(objectSet));
@@ -71,16 +107,16 @@ public sealed record PreviewContractSet
             nameof(refusalRegistry));
     }
 
-    public ContractReference Envelope { get; }
+    public PreviewTrackedSchemaReference Envelope { get; }
 
-    public ContractReference ObjectSet { get; }
+    public PreviewTrackedSchemaReference ObjectSet { get; }
 
-    public ContractReference OperationCatalog { get; }
+    public PreviewTrackedSchemaReference OperationCatalog { get; }
 
-    public ContractReference RefusalRegistry { get; }
+    public PreviewTrackedSchemaReference RefusalRegistry { get; }
 
-    private static ContractReference RequireSchema(
-        ContractReference value,
+    private static PreviewTrackedSchemaReference RequireSchema(
+        PreviewTrackedSchemaReference value,
         string expectedSchema,
         string parameterName)
     {
@@ -98,7 +134,13 @@ public sealed record PreviewContractSet
 public sealed record PreviewPayloadDescriptor
 {
     [JsonConstructor]
-    public PreviewPayloadDescriptor(string schema, string sha256, long bytes, string mediaType)
+    public PreviewPayloadDescriptor(
+        string schema,
+        string schemaResource,
+        string schemaSha256,
+        string sha256,
+        long bytes,
+        string mediaType)
     {
         if (!string.Equals(schema, V3SchemaIds.PreviewPayload, StringComparison.Ordinal))
         {
@@ -116,12 +158,26 @@ public sealed record PreviewPayloadDescriptor
         }
 
         Schema = schema;
+        if (!string.Equals(
+                schemaResource,
+                V3SchemaResourceIds.PreviewPayload,
+                StringComparison.Ordinal))
+        {
+            throw new ArgumentException("Unexpected preview payload schema resource.", nameof(schemaResource));
+        }
+
+        SchemaResource = schemaResource;
+        SchemaSha256 = ContractValidation.RequireSha256(schemaSha256, nameof(schemaSha256));
         Sha256 = ContractValidation.RequireSha256(sha256, nameof(sha256));
         Bytes = bytes;
         MediaType = mediaType;
     }
 
     public string Schema { get; }
+
+    public string SchemaResource { get; }
+
+    public string SchemaSha256 { get; }
 
     public string Sha256 { get; }
 
@@ -155,6 +211,7 @@ public sealed record PreviewAttestation
             throw new ArgumentException("Unexpected preview signature format.", nameof(signatureFormat));
         }
 
+        ArgumentNullException.ThrowIfNull(signature);
         if (signature.Length != 86 || signature.Any(static value =>
                 !char.IsAsciiLetterOrDigit(value) && value is not '-' and not '_'))
         {
@@ -182,6 +239,8 @@ public sealed record PreviewArtifactManifest
     [JsonConstructor]
     public PreviewArtifactManifest(
         string schema,
+        string schemaResource,
+        string schemaSha256,
         string evidenceClass,
         bool synthetic,
         string sourceKind,
@@ -212,6 +271,16 @@ public sealed record PreviewArtifactManifest
         }
 
         Schema = schema;
+        if (!string.Equals(
+                schemaResource,
+                V3SchemaResourceIds.PreviewArtifact,
+                StringComparison.Ordinal))
+        {
+            throw new ArgumentException("Unexpected preview artifact schema resource.", nameof(schemaResource));
+        }
+
+        SchemaResource = schemaResource;
+        SchemaSha256 = ContractValidation.RequireSha256(schemaSha256, nameof(schemaSha256));
         EvidenceClass = evidenceClass;
         Synthetic = true;
         SourceKind = sourceKind;
@@ -223,6 +292,10 @@ public sealed record PreviewArtifactManifest
     }
 
     public string Schema { get; }
+
+    public string SchemaResource { get; }
+
+    public string SchemaSha256 { get; }
 
     public string EvidenceClass { get; }
 

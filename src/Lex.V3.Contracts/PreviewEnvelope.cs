@@ -26,21 +26,18 @@ public static class PreviewSchemaGraph
         });
 }
 
-[JsonConverter(typeof(JsonStringEnumConverter<PreviewCapabilityState>))]
 public enum PreviewCapabilityState
 {
     [JsonStringEnumMemberName("preview_mechanics_only")]
     MechanicsOnly,
 }
 
-[JsonConverter(typeof(JsonStringEnumConverter<PreviewProvisionality>))]
 public enum PreviewProvisionality
 {
     [JsonStringEnumMemberName("all")]
     All,
 }
 
-[JsonConverter(typeof(JsonStringEnumConverter<PreviewSourceKind>))]
 public enum PreviewSourceKind
 {
     [JsonStringEnumMemberName("synthetic_test")]
@@ -108,21 +105,35 @@ public sealed record PreviewSnapshotReference
 public sealed record PreviewArtifactReference
 {
     [JsonConstructor]
-    public PreviewArtifactReference(
-        string artifactId,
-        string manifestSha256,
-        string payloadSha256)
+    public PreviewArtifactReference(string artifactId)
     {
         ArtifactId = ContractValidation.RequireIdentifier(artifactId, nameof(artifactId));
-        ManifestSha256 = ContractValidation.RequireSha256(manifestSha256, nameof(manifestSha256));
-        PayloadSha256 = ContractValidation.RequireSha256(payloadSha256, nameof(payloadSha256));
     }
 
     public string ArtifactId { get; }
+}
 
-    public string ManifestSha256 { get; }
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record PreviewRefusalRegistryReference
+{
+    [JsonConstructor]
+    public PreviewRefusalRegistryReference(string registryId, string schema, string sha256)
+    {
+        RegistryId = ContractValidation.RequireIdentifier(registryId, nameof(registryId));
+        if (!string.Equals(schema, V3SchemaIds.PreviewRefusalRegistry, StringComparison.Ordinal))
+        {
+            throw new ArgumentException("The envelope must bind the preview refusal registry.", nameof(schema));
+        }
 
-    public string PayloadSha256 { get; }
+        Schema = schema;
+        Sha256 = ContractValidation.RequireSha256(sha256, nameof(sha256));
+    }
+
+    public string RegistryId { get; }
+
+    public string Schema { get; }
+
+    public string Sha256 { get; }
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -144,19 +155,27 @@ public sealed record ComponentIdentity
 public sealed record PreviewFreshness
 {
     [JsonConstructor]
-    public PreviewFreshness(DateTimeOffset observedAt)
+    public PreviewFreshness(DateTimeOffset observedAt, PreviewUpstreamHealth upstreamHealth)
     {
         if (observedAt == default)
         {
             throw new ArgumentException("Preview observation time is required.", nameof(observedAt));
         }
 
+        if (upstreamHealth != PreviewUpstreamHealth.NotApplicableSynthetic)
+        {
+            throw new ArgumentException(
+                "Preview upstream health must be not_applicable_synthetic.",
+                nameof(upstreamHealth));
+        }
+
         ObservedAt = observedAt.ToUniversalTime();
+        UpstreamHealth = upstreamHealth;
     }
 
     public DateTimeOffset ObservedAt { get; }
 
-    public string UpstreamHealth => "not_applicable_synthetic";
+    public PreviewUpstreamHealth UpstreamHealth { get; }
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -166,7 +185,7 @@ public sealed record PreviewEnvelopeContext
     public PreviewEnvelopeContext(
         string requestRef,
         PreviewOperationReference operation,
-        ContractReference refusalRegistry,
+        PreviewRefusalRegistryReference refusalRegistry,
         PreviewSnapshotReference snapshot,
         PreviewArtifactReference artifact,
         string indexFormat,
@@ -181,10 +200,6 @@ public sealed record PreviewEnvelopeContext
         RequestRef = RequireRequestReference(requestRef);
         Operation = operation ?? throw new ArgumentNullException(nameof(operation));
         RefusalRegistry = refusalRegistry ?? throw new ArgumentNullException(nameof(refusalRegistry));
-        if (!string.Equals(refusalRegistry.Schema, V3SchemaIds.PreviewRefusalRegistry, StringComparison.Ordinal))
-        {
-            throw new ArgumentException("The envelope must bind the preview refusal registry.", nameof(refusalRegistry));
-        }
 
         Snapshot = snapshot ?? throw new ArgumentNullException(nameof(snapshot));
         Artifact = artifact ?? throw new ArgumentNullException(nameof(artifact));
@@ -204,7 +219,7 @@ public sealed record PreviewEnvelopeContext
         Capabilities = capabilities;
         Freshness = freshness ?? throw new ArgumentNullException(nameof(freshness));
         Jurisdiction = ContractValidation.RequireIdentifier(jurisdiction, nameof(jurisdiction));
-        Provisionality = provisionality;
+        Provisionality = ContractValidation.RequireDefined(provisionality, nameof(provisionality));
         Source = source ?? throw new ArgumentNullException(nameof(source));
     }
 
@@ -212,7 +227,7 @@ public sealed record PreviewEnvelopeContext
 
     public PreviewOperationReference Operation { get; }
 
-    public ContractReference RefusalRegistry { get; }
+    public PreviewRefusalRegistryReference RefusalRegistry { get; }
 
     public PreviewSnapshotReference Snapshot { get; }
 
@@ -235,15 +250,7 @@ public sealed record PreviewEnvelopeContext
     public PreviewSourceContext Source { get; }
 
     private static string RequireRequestReference(string value)
-    {
-        value = ContractValidation.RequireIdentifier(value, nameof(value));
-        if (!value.StartsWith("req_", StringComparison.Ordinal) || value.Length is < 20 or > 128)
-        {
-            throw new ArgumentException("Request references must be opaque req_ identifiers.", nameof(value));
-        }
-
-        return value;
-    }
+        => ContractValidation.RequireOpaqueRequestReference(value, nameof(value));
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -265,9 +272,9 @@ public sealed record PreviewObjectSetReference
 [JsonDerivedType(typeof(PreviewSuccessEnvelope), "success")]
 [JsonDerivedType(typeof(PreviewRefusalEnvelope), "refusal")]
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public abstract record PreviewEnvelope
+public abstract class PreviewEnvelope
 {
-    protected PreviewEnvelope(
+    private protected PreviewEnvelope(
         string schema,
         string objectType,
         string status,
@@ -299,7 +306,7 @@ public abstract record PreviewEnvelope
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record PreviewSuccessEnvelope : PreviewEnvelope
+public sealed class PreviewSuccessEnvelope : PreviewEnvelope
 {
     [JsonConstructor]
     public PreviewSuccessEnvelope(
@@ -327,7 +334,7 @@ public sealed record PreviewSuccessEnvelope : PreviewEnvelope
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record PreviewRefusalEnvelope : PreviewEnvelope
+public sealed class PreviewRefusalEnvelope : PreviewEnvelope
 {
     [JsonConstructor]
     public PreviewRefusalEnvelope(

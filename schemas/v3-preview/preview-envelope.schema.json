@@ -13,44 +13,96 @@
           "type": "object",
           "properties": {
             "object_set_id": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
             },
             "object_set_sha256": {
-              "type": "string"
+              "type": "string",
+              "minLength": 64,
+              "maxLength": 64,
+              "pattern": "^[0-9a-f]{64}$"
             }
           },
           "required": [
             "object_set_id",
             "object_set_sha256"
           ],
-          "additionalProperties": false
+          "additionalProperties": false,
+          "maxProperties": 128
         },
         "schema": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^(?=.*[^ ])[ -~]{1,256}$",
+          "const": "lex-v3-preview-envelope/1"
         },
         "object_type": {
-          "type": "string"
+          "type": "string",
+          "const": "envelope"
         },
         "status": {
-          "type": "string"
+          "type": "string",
+          "const": "ok"
         },
         "context": {
           "type": "object",
           "properties": {
             "request_ref": {
-              "type": "string"
+              "type": "string",
+              "const": "req_0123456789abcdef0123456789abcdef"
             },
             "operation": {
               "type": "object",
               "properties": {
                 "operation_id": {
-                  "type": "string"
+                  "type": "string",
+                  "enum": [
+                    "resolve",
+                    "search",
+                    "browse",
+                    "concepts",
+                    "dossier",
+                    "manifestation",
+                    "as_of",
+                    "as_observed",
+                    "knowable_on",
+                    "timeline",
+                    "article_history",
+                    "diff",
+                    "status_on",
+                    "in_force_on",
+                    "changes_in_period",
+                    "relations",
+                    "classification",
+                    "cited_by",
+                    "citation",
+                    "transposition",
+                    "provenance",
+                    "verify",
+                    "evidence_bundle",
+                    "events",
+                    "answer_drift",
+                    "coverage",
+                    "ask"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
                 },
                 "catalog_id": {
-                  "type": "string"
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
                 },
                 "catalog_sha256": {
-                  "type": "string"
+                  "type": "string",
+                  "minLength": 64,
+                  "maxLength": 64,
+                  "pattern": "^[0-9a-f]{64}$"
                 }
               },
               "required": [
@@ -58,94 +110,130 @@
                 "catalog_id",
                 "catalog_sha256"
               ],
-              "additionalProperties": false
+              "additionalProperties": false,
+              "maxProperties": 128
             },
             "refusal_registry": {
               "type": "object",
               "properties": {
+                "registry_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                },
                 "schema": {
-                  "type": "string"
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "pattern": "^(?=.*[^ ])[ -~]{1,256}$",
+                  "const": "lex-v3-preview-refusal-registry/1"
                 },
                 "sha256": {
-                  "type": "string"
+                  "type": "string",
+                  "minLength": 64,
+                  "maxLength": 64,
+                  "pattern": "^[0-9a-f]{64}$"
                 }
               },
               "required": [
+                "registry_id",
                 "schema",
                 "sha256"
               ],
-              "additionalProperties": false
+              "additionalProperties": false,
+              "maxProperties": 128
             },
             "snapshot": {
               "type": "object",
               "properties": {
                 "snapshot_id": {
-                  "type": "string"
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
                 },
                 "snapshot_sha256": {
-                  "type": "string"
+                  "type": "string",
+                  "minLength": 64,
+                  "maxLength": 64,
+                  "pattern": "^[0-9a-f]{64}$"
                 }
               },
               "required": [
                 "snapshot_id",
                 "snapshot_sha256"
               ],
-              "additionalProperties": false
+              "additionalProperties": false,
+              "maxProperties": 128
             },
             "artifact": {
               "type": "object",
               "properties": {
                 "artifact_id": {
-                  "type": "string"
-                },
-                "manifest_sha256": {
-                  "type": "string"
-                },
-                "payload_sha256": {
-                  "type": "string"
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
                 }
               },
               "required": [
-                "artifact_id",
-                "manifest_sha256",
-                "payload_sha256"
+                "artifact_id"
               ],
-              "additionalProperties": false
+              "additionalProperties": false,
+              "maxProperties": 128
             },
             "index_format": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
             },
             "runtime": {
               "type": "object",
               "properties": {
                 "component_id": {
-                  "type": "string"
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
                 },
                 "source_sha256": {
-                  "type": "string"
+                  "type": "string",
+                  "minLength": 64,
+                  "maxLength": 64,
+                  "pattern": "^[0-9a-f]{64}$"
                 }
               },
               "required": [
                 "component_id",
                 "source_sha256"
               ],
-              "additionalProperties": false
+              "additionalProperties": false,
+              "maxProperties": 128
             },
             "builder": {
               "type": "object",
               "properties": {
                 "component_id": {
-                  "type": "string"
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
                 },
                 "source_sha256": {
-                  "type": "string"
+                  "type": "string",
+                  "minLength": 64,
+                  "maxLength": 64,
+                  "pattern": "^[0-9a-f]{64}$"
                 }
               },
               "required": [
                 "component_id",
                 "source_sha256"
               ],
-              "additionalProperties": false
+              "additionalProperties": false,
+              "maxProperties": 128
             },
             "capabilities": {
               "enum": [
@@ -160,19 +248,24 @@
                   "format": "date-time"
                 },
                 "upstream_health": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
+                  "enum": [
+                    "not_applicable_synthetic"
+                  ],
+                  "const": "not_applicable_synthetic"
                 }
               },
               "required": [
-                "observed_at"
+                "observed_at",
+                "upstream_health"
               ],
-              "additionalProperties": false
+              "additionalProperties": false,
+              "maxProperties": 128
             },
             "jurisdiction": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
             },
             "provisionality": {
               "enum": [
@@ -191,7 +284,8 @@
               "required": [
                 "source_kind"
               ],
-              "additionalProperties": false
+              "additionalProperties": false,
+              "maxProperties": 128
             }
           },
           "required": [
@@ -209,7 +303,8 @@
             "provisionality",
             "source"
           ],
-          "additionalProperties": false
+          "additionalProperties": false,
+          "maxProperties": 128
         }
       },
       "required": [
@@ -232,7 +327,8 @@
             "code": {
               "enum": [
                 "identifier_unknown"
-              ]
+              ],
+              "const": "identifier_unknown"
             },
             "checked_identifier_family": {
               "enum": [
@@ -243,7 +339,13 @@
               ]
             },
             "requested_coordinate": {
-              "type": "string"
+              "type": "string",
+              "enum": [
+                "eli/synthetic-preview",
+                "celex:synthetic-preview",
+                "memorial:synthetic-preview",
+                "historical_legal_id:synthetic-preview"
+              ]
             },
             "publisher_contexts_checked": {
               "type": "array",
@@ -252,7 +354,10 @@
                   "lu-legilux",
                   "eu-eurlex"
                 ]
-              }
+              },
+              "maxItems": 2,
+              "minItems": 1,
+              "uniqueItems": true
             },
             "possible_held_records": {
               "type": "array",
@@ -260,36 +365,87 @@
                 "type": "object",
                 "properties": {
                   "identifier": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256,
+                    "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
                   },
                   "title": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512,
+                    "pattern": "^(?=[\\s\\S]*[^\\u0009-\\u000D\\u0020\\u0085\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000])[^\\u0000-\\u001F\\u007F-\\u009F\\u2028\\u2029]\u002B$",
+                    "x_runtime_invariants": [
+                      "valid Unicode scalar sequence",
+                      "contains at least one non-whitespace Unicode scalar"
+                    ]
                   },
                   "publisher": {
                     "enum": [
                       "lu-legilux",
                       "eu-eurlex"
                     ]
-                  },
-                  "permalink": {
-                    "type": "string",
-                    "format": "uri"
                   }
                 },
                 "required": [
                   "identifier",
                   "title",
-                  "publisher",
-                  "permalink"
+                  "publisher"
                 ],
-                "additionalProperties": false
-              }
+                "additionalProperties": false,
+                "maxProperties": 128,
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "publisher": {
+                          "const": "lu-legilux"
+                        }
+                      },
+                      "required": [
+                        "publisher"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "identifier": {
+                          "const": "preview:held:lu-legilux"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "publisher": {
+                          "const": "eu-eurlex"
+                        }
+                      },
+                      "required": [
+                        "publisher"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "identifier": {
+                          "const": "preview:held:eu-eurlex"
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              "maxItems": 4096
             },
             "official_search_actions": {
               "type": "array",
               "items": {
                 "type": "object",
                 "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "publisher_search"
+                  },
                   "publisher": {
                     "enum": [
                       "lu-legilux",
@@ -302,11 +458,55 @@
                   }
                 },
                 "required": [
+                  "kind",
                   "publisher",
                   "uri"
                 ],
-                "additionalProperties": false
-              }
+                "additionalProperties": false,
+                "maxProperties": 128,
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "publisher": {
+                          "const": "lu-legilux"
+                        }
+                      },
+                      "required": [
+                        "publisher"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "uri": {
+                          "const": "https://legilux.public.lu/search"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "publisher": {
+                          "const": "eu-eurlex"
+                        }
+                      },
+                      "required": [
+                        "publisher"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "uri": {
+                          "const": "https://eur-lex.europa.eu/advanced-search-form.html"
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              "maxItems": 4096,
+              "minItems": 1
             },
             "what_would_answer": {
               "type": "array",
@@ -316,10 +516,13 @@
                   "new_official_observation",
                   "expanded_official_scope"
                 ]
-              }
+              },
+              "maxItems": 4096,
+              "minItems": 1
             },
             "asserts_absence_of_law": {
-              "type": "boolean"
+              "type": "boolean",
+              "const": false
             }
           },
           "required": [
@@ -332,22 +535,114 @@
             "what_would_answer",
             "asserts_absence_of_law"
           ],
-          "additionalProperties": false
+          "additionalProperties": false,
+          "maxProperties": 128,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "checked_identifier_family": {
+                    "const": "eli"
+                  }
+                },
+                "required": [
+                  "checked_identifier_family"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "requested_coordinate": {
+                    "const": "eli/synthetic-preview"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "checked_identifier_family": {
+                    "const": "celex"
+                  }
+                },
+                "required": [
+                  "checked_identifier_family"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "requested_coordinate": {
+                    "const": "celex:synthetic-preview"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "checked_identifier_family": {
+                    "const": "memorial"
+                  }
+                },
+                "required": [
+                  "checked_identifier_family"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "requested_coordinate": {
+                    "const": "memorial:synthetic-preview"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "checked_identifier_family": {
+                    "const": "historical_legal_id"
+                  }
+                },
+                "required": [
+                  "checked_identifier_family"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "requested_coordinate": {
+                    "const": "historical_legal_id:synthetic-preview"
+                  }
+                }
+              }
+            }
+          ],
+          "x_runtime_invariants": [
+            "official search actions exactly cover publisher_contexts_checked in canonical order",
+            "possible held records are unique by publisher and identifier, publisher-ordered, and limited to publisher_contexts_checked",
+            "publisher_contexts_checked is unique and uses canonical LU then EU order",
+            "what_would_answer is non-empty, unique, defined, and uses declared enum order"
+          ]
         },
         "schema": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^(?=.*[^ ])[ -~]{1,256}$",
+          "const": "lex-v3-preview-envelope/1"
         },
         "object_type": {
-          "type": "string"
+          "type": "string",
+          "const": "envelope"
         },
         "status": {
-          "type": "string"
+          "type": "string",
+          "const": "identifier_unknown"
         },
         "context": {
           "type": "object",
           "properties": {
             "request_ref": {
-              "type": "string"
+              "type": "string",
+              "const": "req_0123456789abcdef0123456789abcdef"
             },
             "operation": {
               "$ref": "#/anyOf/0/properties/context/properties/operation"
@@ -362,7 +657,10 @@
               "$ref": "#/anyOf/0/properties/context/properties/artifact"
             },
             "index_format": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
             },
             "runtime": {
               "$ref": "#/anyOf/0/properties/context/properties/runtime"
@@ -379,7 +677,10 @@
               "$ref": "#/anyOf/0/properties/context/properties/freshness"
             },
             "jurisdiction": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
             },
             "provisionality": {
               "enum": [
@@ -405,7 +706,8 @@
             "provisionality",
             "source"
           ],
-          "additionalProperties": false
+          "additionalProperties": false,
+          "maxProperties": 128
         }
       },
       "required": [
@@ -418,6 +720,11 @@
       "additionalProperties": false
     }
   ],
-  "$id": "lex-v3-preview-envelope/1",
-  "$schema": "https://json-schema.org/draft/2020-12/schema"
+  "$id": "urn:uuid:caee1a0e-fe35-4c42-bf0e-5ad5106114c0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "maxProperties": 128,
+  "x_runtime_invariants": [
+    "runtime and builder component identifiers are distinct",
+    "refusal status exactly equals its payload refusal code"
+  ]
 }

@@ -2,100 +2,173 @@
   "type": "object",
   "properties": {
     "schema": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^(?=.*[^ ])[ -~]{1,256}$",
+      "const": "lex-v3-preview-operation-catalog/1"
     },
     "catalog_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
     },
     "entries": {
-      "type": [
-        "array",
-        "null"
-      ],
+      "type": "array",
       "items": {
         "type": "object",
         "properties": {
           "operation_id": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "resolve",
+              "search",
+              "browse",
+              "concepts",
+              "dossier",
+              "manifestation",
+              "as_of",
+              "as_observed",
+              "knowable_on",
+              "timeline",
+              "article_history",
+              "diff",
+              "status_on",
+              "in_force_on",
+              "changes_in_period",
+              "relations",
+              "classification",
+              "cited_by",
+              "citation",
+              "transposition",
+              "provenance",
+              "verify",
+              "evidence_bundle",
+              "events",
+              "answer_drift",
+              "coverage",
+              "ask"
+            ],
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
           },
           "request": {
             "type": "object",
             "properties": {
               "schema": {
-                "type": "string"
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
               },
               "sha256": {
-                "type": "string"
+                "type": "string",
+                "minLength": 64,
+                "maxLength": 64,
+                "pattern": "^[0-9a-f]{64}$"
               }
             },
             "required": [
               "schema",
               "sha256"
             ],
-            "additionalProperties": false
+            "additionalProperties": false,
+            "maxProperties": 128
           },
           "success": {
             "type": "object",
             "properties": {
               "schema": {
-                "type": "string"
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
               },
               "sha256": {
-                "type": "string"
+                "type": "string",
+                "minLength": 64,
+                "maxLength": 64,
+                "pattern": "^[0-9a-f]{64}$"
               }
             },
             "required": [
               "schema",
               "sha256"
             ],
-            "additionalProperties": false
+            "additionalProperties": false,
+            "maxProperties": 128
           },
           "allowed_refusals": {
-            "type": [
-              "array",
-              "null"
-            ],
+            "type": "array",
             "items": {
               "enum": [
                 "identifier_unknown"
               ]
-            }
+            },
+            "maxItems": 4096
           },
           "deterministic_order": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
           },
           "capability_requirement": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
           },
           "rest_projection": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
           },
           "mcp_projection": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
           },
           "html_projection": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
           }
         },
         "required": [
           "operation_id",
           "request",
           "success",
+          "allowed_refusals",
           "deterministic_order",
           "capability_requirement",
           "rest_projection",
           "mcp_projection",
           "html_projection"
         ],
-        "additionalProperties": false
-      }
+        "additionalProperties": false,
+        "maxProperties": 128
+      },
+      "maxItems": 4096
     }
   },
   "required": [
     "schema",
-    "catalog_id"
+    "catalog_id",
+    "entries"
   ],
   "additionalProperties": false,
-  "$id": "lex-v3-preview-operation-catalog/1",
-  "$schema": "https://json-schema.org/draft/2020-12/schema"
+  "$id": "urn:uuid:9771ad74-c254-4b4d-9bb3-c8fbc71befba",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "maxProperties": 128,
+  "x_runtime_invariants": [
+    "operation identifiers are unique and entries use immutable operation-inventory order",
+    "allowed refusal codes are unique, defined, and use declared enum order",
+    "catalog collections reject null members"
+  ]
 }

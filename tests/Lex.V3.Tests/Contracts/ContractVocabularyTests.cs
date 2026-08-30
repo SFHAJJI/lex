@@ -128,18 +128,42 @@ public sealed class ContractVocabularyTests
     }
 
     [TestMethod]
+    public void ContractEnumsRejectNumericRepresentations()
+    {
+        const string numericEnum = "{\"body_holding_state\":2,\"retrieval_outcome\":0}";
+
+        Assert.ThrowsExactly<JsonException>(() =>
+            ContractJson.Deserialize<HoldingProbe>(numericEnum));
+    }
+
+    [TestMethod]
+    public void EveryContractEnumUsesOnlyItsExactDeclaredWireToken()
+    {
+        AssertExactEnum(PublisherId.LuLegilux, "lu-legilux");
+        AssertExactEnum(TimelineSemantics.PublisherApplicability, "publisher_applicability");
+        AssertExactEnum(BodyHoldingState.HeldPublic, "held_public");
+        AssertExactEnum(PreviewBodyDispositionReason.SyntheticFixture, "synthetic_fixture");
+        AssertExactEnum(PreviewUpstreamHealth.NotApplicableSynthetic, "not_applicable_synthetic");
+        AssertExactEnum(RetrievalOutcome.MetadataOnly, "metadata_only");
+        AssertExactEnum(IdentifierFamily.Eli, "eli");
+        AssertExactEnum(RefusalCode.IdentifierUnknown, "identifier_unknown");
+        AssertExactEnum(WhatWouldAnswerAction.CorrectedIdentifier, "corrected_identifier");
+        AssertExactEnum(PreviewCapabilityState.MechanicsOnly, "preview_mechanics_only");
+        AssertExactEnum(PreviewProvisionality.All, "all");
+        AssertExactEnum(PreviewSourceKind.SyntheticTest, "synthetic_test");
+    }
+
+    [TestMethod]
     public void IdentifierUnknownPayloadIsCompleteAndStrict()
     {
         var refusal = IdentifierUnknownRefusal.Create(
             IdentifierFamily.Eli,
-            "eli/lu/loi/2099/01/01/n1",
+            "eli/synthetic-preview",
             new[] { PublisherId.LuLegilux },
             Array.Empty<HeldRecordCandidate>(),
             new[]
             {
-                PublisherSearchAction.Create(
-                    PublisherId.LuLegilux,
-                    new Uri("https://legilux.public.lu/search")),
+                PublisherSearchAction.Create(PublisherId.LuLegilux),
             },
             new[] { WhatWouldAnswerAction.CorrectedIdentifier });
 
@@ -153,18 +177,62 @@ public sealed class ContractVocabularyTests
         Assert.ThrowsExactly<JsonException>(() =>
             ContractJson.Deserialize<IdentifierUnknownRefusal>(unknownMember.ToJsonString()));
 
-        var missingPayload = JsonNode.Parse(json)!.AsObject();
-        missingPayload.Remove("what_would_answer");
-        Assert.ThrowsExactly<JsonException>(() =>
-            ContractJson.Deserialize<IdentifierUnknownRefusal>(missingPayload.ToJsonString()));
-
         Assert.ThrowsExactly<ArgumentException>(() => IdentifierUnknownRefusal.Create(
             IdentifierFamily.Eli,
-            "eli/lu/loi/2099/01/01/n1",
+            "eli/synthetic-preview",
             new[] { PublisherId.LuLegilux },
             Array.Empty<HeldRecordCandidate>(),
             Array.Empty<PublisherSearchAction>(),
             new[] { WhatWouldAnswerAction.CorrectedIdentifier }));
+    }
+
+    [TestMethod]
+    [DataRow("code")]
+    [DataRow("checked_identifier_family")]
+    [DataRow("requested_coordinate")]
+    [DataRow("publisher_contexts_checked")]
+    [DataRow("possible_held_records")]
+    [DataRow("official_search_actions")]
+    [DataRow("what_would_answer")]
+    [DataRow("asserts_absence_of_law")]
+    public void IdentifierUnknownRejectsEveryMissingMandatoryMember(string member)
+    {
+        var refusal = IdentifierUnknownRefusal.Create(
+            IdentifierFamily.Eli,
+            "eli/synthetic-preview",
+            new[] { PublisherId.LuLegilux },
+            Array.Empty<HeldRecordCandidate>(),
+            new[] { PublisherSearchAction.Create(PublisherId.LuLegilux) },
+            new[] { WhatWouldAnswerAction.CorrectedIdentifier });
+        var node = JsonNode.Parse(ContractJson.Serialize(refusal))!.AsObject();
+        node.Remove(member);
+
+        Assert.ThrowsExactly<JsonException>(() =>
+            ContractJson.Deserialize<IdentifierUnknownRefusal>(node.ToJsonString()));
+    }
+
+    private static void AssertExactEnum<TEnum>(TEnum value, string wireToken)
+        where TEnum : struct, Enum
+    {
+        Assert.AreEqual($"\"{wireToken}\"", ContractJson.Serialize(value));
+        Assert.AreEqual(value, ContractJson.Deserialize<TEnum>($"\"{wireToken}\""));
+
+        foreach (var invalid in new[]
+                 {
+                     wireToken.ToUpperInvariant(),
+                     value.ToString(),
+                     "0",
+                     wireToken + " ",
+                     " " + wireToken,
+                 }.Distinct(StringComparer.Ordinal))
+        {
+            Assert.ThrowsExactly<JsonException>(() =>
+                ContractJson.Deserialize<TEnum>($"\"{invalid}\""), invalid);
+        }
+
+        Assert.ThrowsExactly<JsonException>(() => ContractJson.Deserialize<TEnum>("0"));
+        var undefined = (TEnum)Enum.ToObject(typeof(TEnum), 999);
+        Assert.ThrowsExactly<JsonException>(() => ContractJson.Serialize(undefined));
     }
 
     private sealed record HoldingProbe(

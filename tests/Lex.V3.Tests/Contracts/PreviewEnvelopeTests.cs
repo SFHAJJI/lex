@@ -90,30 +90,33 @@ public sealed class PreviewEnvelopeTests
     }
 
     private static PreviewEnvelopeContext CreateContext() => new(
-        requestRef: "req_0123456789abcdef",
+        requestRef: "req_0123456789abcdef0123456789abcdef",
         operation: new PreviewOperationReference("resolve", "preview-catalog", Digest),
-        refusalRegistry: new ContractReference(V3SchemaIds.PreviewRefusalRegistry, Digest),
+        refusalRegistry: new PreviewRefusalRegistryReference(
+            "preview-registry",
+            V3SchemaIds.PreviewRefusalRegistry,
+            Digest),
         snapshot: new PreviewSnapshotReference("preview-snapshot", Digest),
-        artifact: new PreviewArtifactReference("preview-artifact", Digest, Digest),
+        artifact: new PreviewArtifactReference("preview-artifact"),
         indexFormat: "preview-index/1",
         runtime: new ComponentIdentity("lex-v3-preview-runtime", Digest),
         builder: new ComponentIdentity("lex-v3-preview-builder", Digest),
         capabilities: PreviewCapabilityState.MechanicsOnly,
-        freshness: new PreviewFreshness(DateTimeOffset.Parse("2026-08-30T18:00:00Z")),
+        freshness: new PreviewFreshness(
+            DateTimeOffset.Parse("2026-08-30T18:00:00Z"),
+            PreviewUpstreamHealth.NotApplicableSynthetic),
         jurisdiction: "synthetic-preview-no-jurisdiction",
         provisionality: PreviewProvisionality.All,
         source: PreviewSourceContext.SyntheticTest);
 
     private static IdentifierUnknownRefusal CreateRefusal() => IdentifierUnknownRefusal.Create(
         IdentifierFamily.Eli,
-        "eli/lu/loi/2099/01/01/n1",
+        "eli/synthetic-preview",
         new[] { PublisherId.LuLegilux },
         Array.Empty<HeldRecordCandidate>(),
         new[]
         {
-            PublisherSearchAction.Create(
-                PublisherId.LuLegilux,
-                new Uri("https://legilux.public.lu/search")),
+            PublisherSearchAction.Create(PublisherId.LuLegilux),
         },
         new[] { WhatWouldAnswerAction.CorrectedIdentifier });
 }

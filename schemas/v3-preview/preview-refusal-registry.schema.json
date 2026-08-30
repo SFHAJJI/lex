@@ -2,10 +2,17 @@
   "type": "object",
   "properties": {
     "schema": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^(?=.*[^ ])[ -~]{1,256}$",
+      "const": "lex-v3-preview-refusal-registry/1"
     },
     "registry_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
     },
     "entries": {
       "type": "array",
@@ -19,17 +26,46 @@
           },
           "mandatory_fields": {
             "type": "array",
-            "items": {
-              "type": "string"
-            }
+            "items": false,
+            "maxItems": 8,
+            "minItems": 8,
+            "prefixItems": [
+              {
+                "const": "code"
+              },
+              {
+                "const": "checked_identifier_family"
+              },
+              {
+                "const": "requested_coordinate"
+              },
+              {
+                "const": "publisher_contexts_checked"
+              },
+              {
+                "const": "possible_held_records"
+              },
+              {
+                "const": "official_search_actions"
+              },
+              {
+                "const": "what_would_answer"
+              },
+              {
+                "const": "asserts_absence_of_law"
+              }
+            ]
           }
         },
         "required": [
           "code",
           "mandatory_fields"
         ],
-        "additionalProperties": false
-      }
+        "additionalProperties": false,
+        "maxProperties": 128
+      },
+      "maxItems": 1,
+      "minItems": 1
     }
   },
   "required": [
@@ -38,6 +74,12 @@
     "entries"
   ],
   "additionalProperties": false,
-  "$id": "lex-v3-preview-refusal-registry/1",
-  "$schema": "https://json-schema.org/draft/2020-12/schema"
+  "$id": "urn:uuid:28beec07-21f2-4049-bd87-58fb6dacfb7a",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "maxProperties": 128,
+  "x_runtime_invariants": [
+    "the registry contains identifier_unknown exactly once",
+    "mandatory_fields exactly equals the frozen ordered field set",
+    "registry collections reject null members"
+  ]
 }

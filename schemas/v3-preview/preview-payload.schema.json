@@ -2,115 +2,244 @@
   "type": "object",
   "properties": {
     "schema": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^(?=.*[^ ])[ -~]{1,256}$",
+      "const": "lex-v3-preview-payload/1"
     },
+    "operation_catalog": {
+      "$ref": "urn:uuid:9771ad74-c254-4b4d-9bb3-c8fbc71befba"
+    },
+    "refusal_registry": {
+      "$ref": "urn:uuid:28beec07-21f2-4049-bd87-58fb6dacfb7a"
+    },
+    "object_set": {
+      "$ref": "urn:uuid:87e642f4-501b-4a0f-a124-2906f8b4b831"
+    },
+    "envelopes": {
+      "type": "array",
+      "items": {
+        "$ref": "urn:uuid:caee1a0e-fe35-4c42-bf0e-5ad5106114c0"
+      },
+      "maxItems": 16
+    }
+  },
+  "required": [
+    "schema",
+    "operation_catalog",
+    "refusal_registry",
+    "object_set",
+    "envelopes"
+  ],
+  "additionalProperties": false,
+  "$id": "urn:uuid:f6c0e06f-1140-48da-8aa2-0195d5377f5d",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "maxProperties": 128,
+  "x_runtime_invariants": [
+    "each envelope references an active operation and binds the embedded catalog id and canonical digest",
+    "each envelope binds the embedded refusal-registry id, schema, and canonical digest",
+    "each success envelope binds the embedded object-set id and canonical digest",
+    "each refusal code is allowed by its active operation descriptor",
+    "all embedded collections reject null members"
+  ],
+  "x_max_stream_bytes": 8388608,
+  "x_max_json_depth": 32,
+  "x_max_json_tokens": 100000,
+  "x_max_object_members": 128,
+  "x_max_array_items": 4096,
+  "x_max_property_name_utf8_bytes": 128,
+  "x_max_string_value_utf8_bytes": 1048576,
+  "$defs": {
     "operation_catalog": {
       "type": "object",
       "properties": {
         "schema": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^(?=.*[^ ])[ -~]{1,256}$",
+          "const": "lex-v3-preview-operation-catalog/1"
         },
         "catalog_id": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
         },
         "entries": {
-          "type": [
-            "array",
-            "null"
-          ],
+          "type": "array",
           "items": {
             "type": "object",
             "properties": {
               "operation_id": {
-                "type": "string"
+                "type": "string",
+                "enum": [
+                  "resolve",
+                  "search",
+                  "browse",
+                  "concepts",
+                  "dossier",
+                  "manifestation",
+                  "as_of",
+                  "as_observed",
+                  "knowable_on",
+                  "timeline",
+                  "article_history",
+                  "diff",
+                  "status_on",
+                  "in_force_on",
+                  "changes_in_period",
+                  "relations",
+                  "classification",
+                  "cited_by",
+                  "citation",
+                  "transposition",
+                  "provenance",
+                  "verify",
+                  "evidence_bundle",
+                  "events",
+                  "answer_drift",
+                  "coverage",
+                  "ask"
+                ],
+                "minLength": 1,
+                "maxLength": 256,
+                "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
               },
               "request": {
                 "type": "object",
                 "properties": {
                   "schema": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256,
+                    "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
                   },
                   "sha256": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 64,
+                    "maxLength": 64,
+                    "pattern": "^[0-9a-f]{64}$"
                   }
                 },
                 "required": [
                   "schema",
                   "sha256"
                 ],
-                "additionalProperties": false
+                "additionalProperties": false,
+                "maxProperties": 128
               },
               "success": {
                 "type": "object",
                 "properties": {
                   "schema": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256,
+                    "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
                   },
                   "sha256": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 64,
+                    "maxLength": 64,
+                    "pattern": "^[0-9a-f]{64}$"
                   }
                 },
                 "required": [
                   "schema",
                   "sha256"
                 ],
-                "additionalProperties": false
+                "additionalProperties": false,
+                "maxProperties": 128
               },
               "allowed_refusals": {
-                "type": [
-                  "array",
-                  "null"
-                ],
+                "type": "array",
                 "items": {
                   "enum": [
                     "identifier_unknown"
                   ]
-                }
+                },
+                "maxItems": 4096
               },
               "deterministic_order": {
-                "type": "string"
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
               },
               "capability_requirement": {
-                "type": "string"
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
               },
               "rest_projection": {
-                "type": "string"
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
               },
               "mcp_projection": {
-                "type": "string"
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
               },
               "html_projection": {
-                "type": "string"
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
               }
             },
             "required": [
               "operation_id",
               "request",
               "success",
+              "allowed_refusals",
               "deterministic_order",
               "capability_requirement",
               "rest_projection",
               "mcp_projection",
               "html_projection"
             ],
-            "additionalProperties": false
-          }
+            "additionalProperties": false,
+            "maxProperties": 128
+          },
+          "maxItems": 4096
         }
       },
       "required": [
         "schema",
-        "catalog_id"
+        "catalog_id",
+        "entries"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "$id": "urn:uuid:9771ad74-c254-4b4d-9bb3-c8fbc71befba",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "maxProperties": 128,
+      "x_runtime_invariants": [
+        "operation identifiers are unique and entries use immutable operation-inventory order",
+        "allowed refusal codes are unique, defined, and use declared enum order",
+        "catalog collections reject null members"
+      ]
     },
     "refusal_registry": {
       "type": "object",
       "properties": {
         "schema": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^(?=.*[^ ])[ -~]{1,256}$",
+          "const": "lex-v3-preview-refusal-registry/1"
         },
         "registry_id": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
         },
         "entries": {
           "type": "array",
@@ -124,17 +253,46 @@
               },
               "mandatory_fields": {
                 "type": "array",
-                "items": {
-                  "type": "string"
-                }
+                "items": false,
+                "maxItems": 8,
+                "minItems": 8,
+                "prefixItems": [
+                  {
+                    "const": "code"
+                  },
+                  {
+                    "const": "checked_identifier_family"
+                  },
+                  {
+                    "const": "requested_coordinate"
+                  },
+                  {
+                    "const": "publisher_contexts_checked"
+                  },
+                  {
+                    "const": "possible_held_records"
+                  },
+                  {
+                    "const": "official_search_actions"
+                  },
+                  {
+                    "const": "what_would_answer"
+                  },
+                  {
+                    "const": "asserts_absence_of_law"
+                  }
+                ]
               }
             },
             "required": [
               "code",
               "mandatory_fields"
             ],
-            "additionalProperties": false
-          }
+            "additionalProperties": false,
+            "maxProperties": 128
+          },
+          "maxItems": 1,
+          "minItems": 1
         }
       },
       "required": [
@@ -142,16 +300,31 @@
         "registry_id",
         "entries"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "$id": "urn:uuid:28beec07-21f2-4049-bd87-58fb6dacfb7a",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "maxProperties": 128,
+      "x_runtime_invariants": [
+        "the registry contains identifier_unknown exactly once",
+        "mandatory_fields exactly equals the frozen ordered field set",
+        "registry collections reject null members"
+      ]
     },
     "object_set": {
       "type": "object",
       "properties": {
         "schema": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^(?=.*[^ ])[ -~]{1,256}$",
+          "const": "lex-v3-preview-object-set/1"
         },
         "object_set_id": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
         },
         "objects": {
           "type": "array",
@@ -167,22 +340,35 @@
                     "const": "preview_coordinate"
                   },
                   "synthetic": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "const": true
                   },
                   "work_id": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256,
+                    "pattern": "^preview:[ -~]{1,248}$"
                   },
                   "version_key": {
-                    "type": "string"
+                    "type": "string",
+                    "pattern": "^preview:[ -~]{1,248}$"
                   },
                   "anchor": {
-                    "type": "string"
+                    "type": "string",
+                    "pattern": "^preview:[ -~]{1,248}$"
                   },
                   "body_holding_state": {
                     "enum": [
                       "held_public",
                       "held_withheld",
                       "not_held"
+                    ]
+                  },
+                  "body_holding_disposition": {
+                    "enum": [
+                      "synthetic_fixture",
+                      "synthetic_fixture_withheld",
+                      "unknown_pending_evidence"
                     ]
                   },
                   "body": {
@@ -195,10 +381,16 @@
                     "type": [
                       "string",
                       "null"
-                    ]
+                    ],
+                    "minLength": 64,
+                    "maxLength": 64,
+                    "pattern": "^[0-9a-f]{64}$"
                   },
                   "object_id": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256,
+                    "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
                   }
                 },
                 "required": [
@@ -207,14 +399,110 @@
                   "version_key",
                   "anchor",
                   "body_holding_state",
+                  "body_holding_disposition",
                   "body",
                   "body_sha256",
                   "object_id"
                 ],
-                "additionalProperties": false
+                "additionalProperties": false,
+                "x_runtime_invariants": [
+                  "body_sha256 is SHA-256 over the exact strict UTF-8 body bytes",
+                  "body_holding_state and body_holding_disposition use the closed preview matrix",
+                  "held-public body is a valid Unicode scalar sequence with visible non-whitespace content",
+                  "held-public body is at most the runtime UTF-8 byte bound"
+                ],
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "body_holding_state": {
+                          "const": "held_public"
+                        }
+                      },
+                      "required": [
+                        "body_holding_state"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "body_sha256": {
+                          "type": "string",
+                          "minLength": 64,
+                          "maxLength": 64,
+                          "pattern": "^[0-9a-f]{64}$"
+                        },
+                        "body_holding_disposition": {
+                          "const": "synthetic_fixture"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "body_holding_state": {
+                          "const": "held_withheld"
+                        }
+                      },
+                      "required": [
+                        "body_holding_state"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "body": {
+                          "const": null
+                        },
+                        "body_sha256": {
+                          "type": "string",
+                          "minLength": 64,
+                          "maxLength": 64,
+                          "pattern": "^[0-9a-f]{64}$"
+                        },
+                        "body_holding_disposition": {
+                          "const": "synthetic_fixture_withheld"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "body_holding_state": {
+                          "const": "not_held"
+                        }
+                      },
+                      "required": [
+                        "body_holding_state"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "body": {
+                          "const": null
+                        },
+                        "body_sha256": {
+                          "const": null,
+                          "minLength": 64,
+                          "maxLength": 64,
+                          "pattern": "^[0-9a-f]{64}$"
+                        },
+                        "body_holding_disposition": {
+                          "const": "unknown_pending_evidence"
+                        }
+                      }
+                    }
+                  }
+                ]
               }
-            ]
-          }
+            ],
+            "maxProperties": 128
+          },
+          "maxItems": 256
         }
       },
       "required": [
@@ -222,441 +510,744 @@
         "object_set_id",
         "objects"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "$id": "urn:uuid:87e642f4-501b-4a0f-a124-2906f8b4b831",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "maxProperties": 128,
+      "x_runtime_invariants": [
+        "object identifiers are unique and objects use object-id ordinal order",
+        "object collections reject null members"
+      ]
     },
-    "envelopes": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": [
-          "branch"
-        ],
-        "anyOf": [
-          {
-            "properties": {
-              "branch": {
-                "const": "success"
-              },
-              "result": {
-                "type": "object",
-                "properties": {
-                  "object_set_id": {
-                    "type": "string"
-                  },
-                  "object_set_sha256": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "object_set_id",
-                  "object_set_sha256"
-                ],
-                "additionalProperties": false
-              },
-              "schema": {
-                "type": "string"
-              },
-              "object_type": {
-                "type": "string"
-              },
-              "status": {
-                "type": "string"
-              },
-              "context": {
-                "type": "object",
-                "properties": {
-                  "request_ref": {
-                    "type": "string"
-                  },
-                  "operation": {
-                    "type": "object",
-                    "properties": {
-                      "operation_id": {
-                        "type": "string"
-                      },
-                      "catalog_id": {
-                        "type": "string"
-                      },
-                      "catalog_sha256": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "operation_id",
-                      "catalog_id",
-                      "catalog_sha256"
-                    ],
-                    "additionalProperties": false
-                  },
-                  "refusal_registry": {
-                    "type": "object",
-                    "properties": {
-                      "schema": {
-                        "type": "string"
-                      },
-                      "sha256": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "schema",
-                      "sha256"
-                    ],
-                    "additionalProperties": false
-                  },
-                  "snapshot": {
-                    "type": "object",
-                    "properties": {
-                      "snapshot_id": {
-                        "type": "string"
-                      },
-                      "snapshot_sha256": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "snapshot_id",
-                      "snapshot_sha256"
-                    ],
-                    "additionalProperties": false
-                  },
-                  "artifact": {
-                    "type": "object",
-                    "properties": {
-                      "artifact_id": {
-                        "type": "string"
-                      },
-                      "manifest_sha256": {
-                        "type": "string"
-                      },
-                      "payload_sha256": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "artifact_id",
-                      "manifest_sha256",
-                      "payload_sha256"
-                    ],
-                    "additionalProperties": false
-                  },
-                  "index_format": {
-                    "type": "string"
-                  },
-                  "runtime": {
-                    "type": "object",
-                    "properties": {
-                      "component_id": {
-                        "type": "string"
-                      },
-                      "source_sha256": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "component_id",
-                      "source_sha256"
-                    ],
-                    "additionalProperties": false
-                  },
-                  "builder": {
-                    "type": "object",
-                    "properties": {
-                      "component_id": {
-                        "type": "string"
-                      },
-                      "source_sha256": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "component_id",
-                      "source_sha256"
-                    ],
-                    "additionalProperties": false
-                  },
-                  "capabilities": {
-                    "enum": [
-                      "preview_mechanics_only"
-                    ]
-                  },
-                  "freshness": {
-                    "type": "object",
-                    "properties": {
-                      "observed_at": {
-                        "type": "string",
-                        "format": "date-time"
-                      },
-                      "upstream_health": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      }
-                    },
-                    "required": [
-                      "observed_at"
-                    ],
-                    "additionalProperties": false
-                  },
-                  "jurisdiction": {
-                    "type": "string"
-                  },
-                  "provisionality": {
-                    "enum": [
-                      "all"
-                    ]
-                  },
-                  "source": {
-                    "type": "object",
-                    "properties": {
-                      "source_kind": {
-                        "enum": [
-                          "synthetic_test"
-                        ]
-                      }
-                    },
-                    "required": [
-                      "source_kind"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "required": [
-                  "request_ref",
-                  "operation",
-                  "refusal_registry",
-                  "snapshot",
-                  "artifact",
-                  "index_format",
-                  "runtime",
-                  "builder",
-                  "capabilities",
-                  "freshness",
-                  "jurisdiction",
-                  "provisionality",
-                  "source"
-                ],
-                "additionalProperties": false
-              }
+    "envelope": {
+      "type": "object",
+      "required": [
+        "branch"
+      ],
+      "anyOf": [
+        {
+          "properties": {
+            "branch": {
+              "const": "success"
             },
-            "required": [
-              "result",
-              "schema",
-              "object_type",
-              "status",
-              "context"
-            ],
-            "additionalProperties": false
+            "result": {
+              "type": "object",
+              "properties": {
+                "object_set_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                },
+                "object_set_sha256": {
+                  "type": "string",
+                  "minLength": 64,
+                  "maxLength": 64,
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              },
+              "required": [
+                "object_set_id",
+                "object_set_sha256"
+              ],
+              "additionalProperties": false,
+              "maxProperties": 128
+            },
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^(?=.*[^ ])[ -~]{1,256}$",
+              "const": "lex-v3-preview-envelope/1"
+            },
+            "object_type": {
+              "type": "string",
+              "const": "envelope"
+            },
+            "status": {
+              "type": "string",
+              "const": "ok"
+            },
+            "context": {
+              "type": "object",
+              "properties": {
+                "request_ref": {
+                  "type": "string",
+                  "const": "req_0123456789abcdef0123456789abcdef"
+                },
+                "operation": {
+                  "type": "object",
+                  "properties": {
+                    "operation_id": {
+                      "type": "string",
+                      "enum": [
+                        "resolve",
+                        "search",
+                        "browse",
+                        "concepts",
+                        "dossier",
+                        "manifestation",
+                        "as_of",
+                        "as_observed",
+                        "knowable_on",
+                        "timeline",
+                        "article_history",
+                        "diff",
+                        "status_on",
+                        "in_force_on",
+                        "changes_in_period",
+                        "relations",
+                        "classification",
+                        "cited_by",
+                        "citation",
+                        "transposition",
+                        "provenance",
+                        "verify",
+                        "evidence_bundle",
+                        "events",
+                        "answer_drift",
+                        "coverage",
+                        "ask"
+                      ],
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                    },
+                    "catalog_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                    },
+                    "catalog_sha256": {
+                      "type": "string",
+                      "minLength": 64,
+                      "maxLength": 64,
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  },
+                  "required": [
+                    "operation_id",
+                    "catalog_id",
+                    "catalog_sha256"
+                  ],
+                  "additionalProperties": false,
+                  "maxProperties": 128
+                },
+                "refusal_registry": {
+                  "type": "object",
+                  "properties": {
+                    "registry_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                    },
+                    "schema": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "pattern": "^(?=.*[^ ])[ -~]{1,256}$",
+                      "const": "lex-v3-preview-refusal-registry/1"
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "minLength": 64,
+                      "maxLength": 64,
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  },
+                  "required": [
+                    "registry_id",
+                    "schema",
+                    "sha256"
+                  ],
+                  "additionalProperties": false,
+                  "maxProperties": 128
+                },
+                "snapshot": {
+                  "type": "object",
+                  "properties": {
+                    "snapshot_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                    },
+                    "snapshot_sha256": {
+                      "type": "string",
+                      "minLength": 64,
+                      "maxLength": 64,
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  },
+                  "required": [
+                    "snapshot_id",
+                    "snapshot_sha256"
+                  ],
+                  "additionalProperties": false,
+                  "maxProperties": 128
+                },
+                "artifact": {
+                  "type": "object",
+                  "properties": {
+                    "artifact_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                    }
+                  },
+                  "required": [
+                    "artifact_id"
+                  ],
+                  "additionalProperties": false,
+                  "maxProperties": 128
+                },
+                "index_format": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                },
+                "runtime": {
+                  "type": "object",
+                  "properties": {
+                    "component_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                    },
+                    "source_sha256": {
+                      "type": "string",
+                      "minLength": 64,
+                      "maxLength": 64,
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  },
+                  "required": [
+                    "component_id",
+                    "source_sha256"
+                  ],
+                  "additionalProperties": false,
+                  "maxProperties": 128
+                },
+                "builder": {
+                  "type": "object",
+                  "properties": {
+                    "component_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                    },
+                    "source_sha256": {
+                      "type": "string",
+                      "minLength": 64,
+                      "maxLength": 64,
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  },
+                  "required": [
+                    "component_id",
+                    "source_sha256"
+                  ],
+                  "additionalProperties": false,
+                  "maxProperties": 128
+                },
+                "capabilities": {
+                  "enum": [
+                    "preview_mechanics_only"
+                  ]
+                },
+                "freshness": {
+                  "type": "object",
+                  "properties": {
+                    "observed_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "upstream_health": {
+                      "enum": [
+                        "not_applicable_synthetic"
+                      ],
+                      "const": "not_applicable_synthetic"
+                    }
+                  },
+                  "required": [
+                    "observed_at",
+                    "upstream_health"
+                  ],
+                  "additionalProperties": false,
+                  "maxProperties": 128
+                },
+                "jurisdiction": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                },
+                "provisionality": {
+                  "enum": [
+                    "all"
+                  ]
+                },
+                "source": {
+                  "type": "object",
+                  "properties": {
+                    "source_kind": {
+                      "enum": [
+                        "synthetic_test"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "source_kind"
+                  ],
+                  "additionalProperties": false,
+                  "maxProperties": 128
+                }
+              },
+              "required": [
+                "request_ref",
+                "operation",
+                "refusal_registry",
+                "snapshot",
+                "artifact",
+                "index_format",
+                "runtime",
+                "builder",
+                "capabilities",
+                "freshness",
+                "jurisdiction",
+                "provisionality",
+                "source"
+              ],
+              "additionalProperties": false,
+              "maxProperties": 128
+            }
           },
-          {
-            "properties": {
-              "branch": {
-                "const": "refusal"
-              },
-              "refusal": {
-                "type": "object",
-                "properties": {
-                  "code": {
-                    "enum": [
-                      "identifier_unknown"
-                    ]
-                  },
-                  "checked_identifier_family": {
-                    "enum": [
-                      "eli",
-                      "celex",
-                      "memorial",
-                      "historical_legal_id"
-                    ]
-                  },
-                  "requested_coordinate": {
-                    "type": "string"
-                  },
-                  "publisher_contexts_checked": {
-                    "type": "array",
-                    "items": {
-                      "enum": [
-                        "lu-legilux",
-                        "eu-eurlex"
-                      ]
-                    }
-                  },
-                  "possible_held_records": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "identifier": {
-                          "type": "string"
-                        },
-                        "title": {
-                          "type": "string"
-                        },
-                        "publisher": {
-                          "enum": [
-                            "lu-legilux",
-                            "eu-eurlex"
-                          ]
-                        },
-                        "permalink": {
-                          "type": "string",
-                          "format": "uri"
-                        }
-                      },
-                      "required": [
-                        "identifier",
-                        "title",
-                        "publisher",
-                        "permalink"
-                      ],
-                      "additionalProperties": false
-                    }
-                  },
-                  "official_search_actions": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "publisher": {
-                          "enum": [
-                            "lu-legilux",
-                            "eu-eurlex"
-                          ]
-                        },
-                        "uri": {
-                          "type": "string",
-                          "format": "uri"
-                        }
-                      },
-                      "required": [
-                        "publisher",
-                        "uri"
-                      ],
-                      "additionalProperties": false
-                    }
-                  },
-                  "what_would_answer": {
-                    "type": "array",
-                    "items": {
-                      "enum": [
-                        "corrected_identifier",
-                        "new_official_observation",
-                        "expanded_official_scope"
-                      ]
-                    }
-                  },
-                  "asserts_absence_of_law": {
-                    "type": "boolean"
-                  }
-                },
-                "required": [
-                  "code",
-                  "checked_identifier_family",
-                  "requested_coordinate",
-                  "publisher_contexts_checked",
-                  "possible_held_records",
-                  "official_search_actions",
-                  "what_would_answer",
-                  "asserts_absence_of_law"
-                ],
-                "additionalProperties": false
-              },
-              "schema": {
-                "type": "string"
-              },
-              "object_type": {
-                "type": "string"
-              },
-              "status": {
-                "type": "string"
-              },
-              "context": {
-                "type": "object",
-                "properties": {
-                  "request_ref": {
-                    "type": "string"
-                  },
-                  "operation": {
-                    "$ref": "#/properties/envelopes/items/anyOf/0/properties/context/properties/operation"
-                  },
-                  "refusal_registry": {
-                    "$ref": "#/properties/envelopes/items/anyOf/0/properties/context/properties/refusal_registry"
-                  },
-                  "snapshot": {
-                    "$ref": "#/properties/envelopes/items/anyOf/0/properties/context/properties/snapshot"
-                  },
-                  "artifact": {
-                    "$ref": "#/properties/envelopes/items/anyOf/0/properties/context/properties/artifact"
-                  },
-                  "index_format": {
-                    "type": "string"
-                  },
-                  "runtime": {
-                    "$ref": "#/properties/envelopes/items/anyOf/0/properties/context/properties/runtime"
-                  },
-                  "builder": {
-                    "$ref": "#/properties/envelopes/items/anyOf/0/properties/context/properties/builder"
-                  },
-                  "capabilities": {
-                    "enum": [
-                      "preview_mechanics_only"
-                    ]
-                  },
-                  "freshness": {
-                    "$ref": "#/properties/envelopes/items/anyOf/0/properties/context/properties/freshness"
-                  },
-                  "jurisdiction": {
-                    "type": "string"
-                  },
-                  "provisionality": {
-                    "enum": [
-                      "all"
-                    ]
-                  },
-                  "source": {
-                    "$ref": "#/properties/envelopes/items/anyOf/0/properties/context/properties/source"
-                  }
-                },
-                "required": [
-                  "request_ref",
-                  "operation",
-                  "refusal_registry",
-                  "snapshot",
-                  "artifact",
-                  "index_format",
-                  "runtime",
-                  "builder",
-                  "capabilities",
-                  "freshness",
-                  "jurisdiction",
-                  "provisionality",
-                  "source"
-                ],
-                "additionalProperties": false
-              }
+          "required": [
+            "result",
+            "schema",
+            "object_type",
+            "status",
+            "context"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "properties": {
+            "branch": {
+              "const": "refusal"
             },
-            "required": [
-              "refusal",
-              "schema",
-              "object_type",
-              "status",
-              "context"
-            ],
-            "additionalProperties": false
-          }
-        ]
-      }
+            "refusal": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "enum": [
+                    "identifier_unknown"
+                  ],
+                  "const": "identifier_unknown"
+                },
+                "checked_identifier_family": {
+                  "enum": [
+                    "eli",
+                    "celex",
+                    "memorial",
+                    "historical_legal_id"
+                  ]
+                },
+                "requested_coordinate": {
+                  "type": "string",
+                  "enum": [
+                    "eli/synthetic-preview",
+                    "celex:synthetic-preview",
+                    "memorial:synthetic-preview",
+                    "historical_legal_id:synthetic-preview"
+                  ]
+                },
+                "publisher_contexts_checked": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "lu-legilux",
+                      "eu-eurlex"
+                    ]
+                  },
+                  "maxItems": 2,
+                  "minItems": 1,
+                  "uniqueItems": true
+                },
+                "possible_held_records": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "identifier": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256,
+                        "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                      },
+                      "title": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 512,
+                        "pattern": "^(?=[\\s\\S]*[^\\u0009-\\u000D\\u0020\\u0085\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000])[^\\u0000-\\u001F\\u007F-\\u009F\\u2028\\u2029]\u002B$",
+                        "x_runtime_invariants": [
+                          "valid Unicode scalar sequence",
+                          "contains at least one non-whitespace Unicode scalar"
+                        ]
+                      },
+                      "publisher": {
+                        "enum": [
+                          "lu-legilux",
+                          "eu-eurlex"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "identifier",
+                      "title",
+                      "publisher"
+                    ],
+                    "additionalProperties": false,
+                    "maxProperties": 128,
+                    "allOf": [
+                      {
+                        "if": {
+                          "properties": {
+                            "publisher": {
+                              "const": "lu-legilux"
+                            }
+                          },
+                          "required": [
+                            "publisher"
+                          ]
+                        },
+                        "then": {
+                          "properties": {
+                            "identifier": {
+                              "const": "preview:held:lu-legilux"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "if": {
+                          "properties": {
+                            "publisher": {
+                              "const": "eu-eurlex"
+                            }
+                          },
+                          "required": [
+                            "publisher"
+                          ]
+                        },
+                        "then": {
+                          "properties": {
+                            "identifier": {
+                              "const": "preview:held:eu-eurlex"
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "maxItems": 4096
+                },
+                "official_search_actions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "publisher_search"
+                      },
+                      "publisher": {
+                        "enum": [
+                          "lu-legilux",
+                          "eu-eurlex"
+                        ]
+                      },
+                      "uri": {
+                        "type": "string",
+                        "format": "uri"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "publisher",
+                      "uri"
+                    ],
+                    "additionalProperties": false,
+                    "maxProperties": 128,
+                    "allOf": [
+                      {
+                        "if": {
+                          "properties": {
+                            "publisher": {
+                              "const": "lu-legilux"
+                            }
+                          },
+                          "required": [
+                            "publisher"
+                          ]
+                        },
+                        "then": {
+                          "properties": {
+                            "uri": {
+                              "const": "https://legilux.public.lu/search"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "if": {
+                          "properties": {
+                            "publisher": {
+                              "const": "eu-eurlex"
+                            }
+                          },
+                          "required": [
+                            "publisher"
+                          ]
+                        },
+                        "then": {
+                          "properties": {
+                            "uri": {
+                              "const": "https://eur-lex.europa.eu/advanced-search-form.html"
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "maxItems": 4096,
+                  "minItems": 1
+                },
+                "what_would_answer": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "corrected_identifier",
+                      "new_official_observation",
+                      "expanded_official_scope"
+                    ]
+                  },
+                  "maxItems": 4096,
+                  "minItems": 1
+                },
+                "asserts_absence_of_law": {
+                  "type": "boolean",
+                  "const": false
+                }
+              },
+              "required": [
+                "code",
+                "checked_identifier_family",
+                "requested_coordinate",
+                "publisher_contexts_checked",
+                "possible_held_records",
+                "official_search_actions",
+                "what_would_answer",
+                "asserts_absence_of_law"
+              ],
+              "additionalProperties": false,
+              "maxProperties": 128,
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "checked_identifier_family": {
+                        "const": "eli"
+                      }
+                    },
+                    "required": [
+                      "checked_identifier_family"
+                    ]
+                  },
+                  "then": {
+                    "properties": {
+                      "requested_coordinate": {
+                        "const": "eli/synthetic-preview"
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "checked_identifier_family": {
+                        "const": "celex"
+                      }
+                    },
+                    "required": [
+                      "checked_identifier_family"
+                    ]
+                  },
+                  "then": {
+                    "properties": {
+                      "requested_coordinate": {
+                        "const": "celex:synthetic-preview"
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "checked_identifier_family": {
+                        "const": "memorial"
+                      }
+                    },
+                    "required": [
+                      "checked_identifier_family"
+                    ]
+                  },
+                  "then": {
+                    "properties": {
+                      "requested_coordinate": {
+                        "const": "memorial:synthetic-preview"
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "checked_identifier_family": {
+                        "const": "historical_legal_id"
+                      }
+                    },
+                    "required": [
+                      "checked_identifier_family"
+                    ]
+                  },
+                  "then": {
+                    "properties": {
+                      "requested_coordinate": {
+                        "const": "historical_legal_id:synthetic-preview"
+                      }
+                    }
+                  }
+                }
+              ],
+              "x_runtime_invariants": [
+                "official search actions exactly cover publisher_contexts_checked in canonical order",
+                "possible held records are unique by publisher and identifier, publisher-ordered, and limited to publisher_contexts_checked",
+                "publisher_contexts_checked is unique and uses canonical LU then EU order",
+                "what_would_answer is non-empty, unique, defined, and uses declared enum order"
+              ]
+            },
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^(?=.*[^ ])[ -~]{1,256}$",
+              "const": "lex-v3-preview-envelope/1"
+            },
+            "object_type": {
+              "type": "string",
+              "const": "envelope"
+            },
+            "status": {
+              "type": "string",
+              "const": "identifier_unknown"
+            },
+            "context": {
+              "type": "object",
+              "properties": {
+                "request_ref": {
+                  "type": "string",
+                  "const": "req_0123456789abcdef0123456789abcdef"
+                },
+                "operation": {
+                  "$ref": "#/anyOf/0/properties/context/properties/operation"
+                },
+                "refusal_registry": {
+                  "$ref": "#/anyOf/0/properties/context/properties/refusal_registry"
+                },
+                "snapshot": {
+                  "$ref": "#/anyOf/0/properties/context/properties/snapshot"
+                },
+                "artifact": {
+                  "$ref": "#/anyOf/0/properties/context/properties/artifact"
+                },
+                "index_format": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                },
+                "runtime": {
+                  "$ref": "#/anyOf/0/properties/context/properties/runtime"
+                },
+                "builder": {
+                  "$ref": "#/anyOf/0/properties/context/properties/builder"
+                },
+                "capabilities": {
+                  "enum": [
+                    "preview_mechanics_only"
+                  ]
+                },
+                "freshness": {
+                  "$ref": "#/anyOf/0/properties/context/properties/freshness"
+                },
+                "jurisdiction": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "pattern": "^(?=.*[^ ])[ -~]{1,256}$"
+                },
+                "provisionality": {
+                  "enum": [
+                    "all"
+                  ]
+                },
+                "source": {
+                  "$ref": "#/anyOf/0/properties/context/properties/source"
+                }
+              },
+              "required": [
+                "request_ref",
+                "operation",
+                "refusal_registry",
+                "snapshot",
+                "artifact",
+                "index_format",
+                "runtime",
+                "builder",
+                "capabilities",
+                "freshness",
+                "jurisdiction",
+                "provisionality",
+                "source"
+              ],
+              "additionalProperties": false,
+              "maxProperties": 128
+            }
+          },
+          "required": [
+            "refusal",
+            "schema",
+            "object_type",
+            "status",
+            "context"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "$id": "urn:uuid:caee1a0e-fe35-4c42-bf0e-5ad5106114c0",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "maxProperties": 128,
+      "x_runtime_invariants": [
+        "runtime and builder component identifiers are distinct",
+        "refusal status exactly equals its payload refusal code"
+      ]
     }
-  },
-  "required": [
-    "schema",
-    "operation_catalog",
-    "refusal_registry",
-    "object_set",
-    "envelopes"
-  ],
-  "additionalProperties": false,
-  "$id": "lex-v3-preview-payload/1",
-  "$schema": "https://json-schema.org/draft/2020-12/schema"
+  }
 }

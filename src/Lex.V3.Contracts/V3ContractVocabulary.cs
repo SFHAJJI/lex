@@ -14,6 +14,27 @@ public static class V3SchemaIds
     public const string PreviewArtifactSignature = "lex-v3-preview-artifact-signature/1";
 }
 
+public static class V3SchemaResourceIds
+{
+    public const string PreviewArtifact = "urn:uuid:94b202e8-f515-45e0-8891-6cbee0f2d32b";
+    public const string PreviewPayload = "urn:uuid:f6c0e06f-1140-48da-8aa2-0195d5377f5d";
+    public const string PreviewEnvelope = "urn:uuid:caee1a0e-fe35-4c42-bf0e-5ad5106114c0";
+    public const string PreviewObjectSet = "urn:uuid:87e642f4-501b-4a0f-a124-2906f8b4b831";
+    public const string PreviewOperationCatalog = "urn:uuid:9771ad74-c254-4b4d-9bb3-c8fbc71befba";
+    public const string PreviewRefusalRegistry = "urn:uuid:28beec07-21f2-4049-bd87-58fb6dacfb7a";
+
+    public static string ForWireSchema(string schema) => schema switch
+    {
+        V3SchemaIds.PreviewArtifact => PreviewArtifact,
+        V3SchemaIds.PreviewPayload => PreviewPayload,
+        V3SchemaIds.PreviewEnvelope => PreviewEnvelope,
+        V3SchemaIds.PreviewObjectSet => PreviewObjectSet,
+        V3SchemaIds.PreviewOperationCatalog => PreviewOperationCatalog,
+        V3SchemaIds.PreviewRefusalRegistry => PreviewRefusalRegistry,
+        _ => throw new ArgumentException("Unknown preview schema identity.", nameof(schema)),
+    };
+}
+
 public static class V3ContractVocabulary
 {
     public static ReadOnlyCollection<string> CoreObjectTypes { get; } = Array.AsReadOnly(
@@ -77,7 +98,6 @@ public static class V3ContractVocabulary
         });
 }
 
-[JsonConverter(typeof(JsonStringEnumConverter<PublisherId>))]
 public enum PublisherId
 {
     [JsonStringEnumMemberName("lu-legilux")]
@@ -87,7 +107,6 @@ public enum PublisherId
     EuEurLex,
 }
 
-[JsonConverter(typeof(JsonStringEnumConverter<TimelineSemantics>))]
 public enum TimelineSemantics
 {
     [JsonStringEnumMemberName("publisher_applicability")]
@@ -97,7 +116,6 @@ public enum TimelineSemantics
     OfficialConsolidationState,
 }
 
-[JsonConverter(typeof(JsonStringEnumConverter<BodyHoldingState>))]
 public enum BodyHoldingState
 {
     [JsonStringEnumMemberName("held_public")]
@@ -110,14 +128,30 @@ public enum BodyHoldingState
     NotHeld,
 }
 
-[JsonConverter(typeof(JsonStringEnumConverter<RetrievalOutcome>))]
+public enum PreviewBodyDispositionReason
+{
+    [JsonStringEnumMemberName("synthetic_fixture")]
+    SyntheticFixture,
+
+    [JsonStringEnumMemberName("synthetic_fixture_withheld")]
+    SyntheticFixtureWithheld,
+
+    [JsonStringEnumMemberName("unknown_pending_evidence")]
+    UnknownPendingEvidence,
+}
+
+public enum PreviewUpstreamHealth
+{
+    [JsonStringEnumMemberName("not_applicable_synthetic")]
+    NotApplicableSynthetic,
+}
+
 public enum RetrievalOutcome
 {
     [JsonStringEnumMemberName("metadata_only")]
     MetadataOnly,
 }
 
-[JsonConverter(typeof(JsonStringEnumConverter<IdentifierFamily>))]
 public enum IdentifierFamily
 {
     [JsonStringEnumMemberName("eli")]
@@ -133,14 +167,12 @@ public enum IdentifierFamily
     HistoricalLegalId,
 }
 
-[JsonConverter(typeof(JsonStringEnumConverter<RefusalCode>))]
 public enum RefusalCode
 {
     [JsonStringEnumMemberName("identifier_unknown")]
     IdentifierUnknown,
 }
 
-[JsonConverter(typeof(JsonStringEnumConverter<WhatWouldAnswerAction>))]
 public enum WhatWouldAnswerAction
 {
     [JsonStringEnumMemberName("corrected_identifier")]

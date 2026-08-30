@@ -4,6 +4,8 @@
     <AssemblyName>Lex.V3.Tests</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="JsonSchema.Net" Version="9.4.0" PrivateAssets="all" />
+    <ProjectReference Include="../../src/Lex.V3.Artifacts/Lex.V3.Artifacts.csproj" />
     <ProjectReference Include="../../src/Lex.V3.Contracts/Lex.V3.Contracts.csproj" />
   </ItemGroup>
 </Project>

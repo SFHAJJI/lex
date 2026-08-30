@@ -41,7 +41,25 @@ public sealed record PreviewOperationDescriptor
         OperationId = operationId;
         Request = request ?? throw new ArgumentNullException(nameof(request));
         Success = success ?? throw new ArgumentNullException(nameof(success));
-        AllowedRefusals = Array.AsReadOnly((allowedRefusals ?? throw new ArgumentNullException(nameof(allowedRefusals))).ToArray());
+        var refusalCopy = (allowedRefusals ?? throw new ArgumentNullException(nameof(allowedRefusals))).ToArray();
+        if (refusalCopy.Distinct().Count() != refusalCopy.Length)
+        {
+            throw new ArgumentException("Allowed refusal codes must be unique.", nameof(allowedRefusals));
+        }
+
+        foreach (var refusal in refusalCopy)
+        {
+            ContractValidation.RequireDefined(refusal, nameof(allowedRefusals));
+        }
+
+        if (!refusalCopy.SequenceEqual(refusalCopy.OrderBy(static refusal => refusal)))
+        {
+            throw new ArgumentException(
+                "Allowed refusal codes must use declared enum order.",
+                nameof(allowedRefusals));
+        }
+
+        AllowedRefusals = Array.AsReadOnly(refusalCopy);
         DeterministicOrder = ContractValidation.RequireIdentifier(deterministicOrder, nameof(deterministicOrder));
         CapabilityRequirement = ContractValidation.RequireIdentifier(capabilityRequirement, nameof(capabilityRequirement));
         RestProjection = ContractValidation.RequireIdentifier(restProjection, nameof(restProjection));
@@ -55,7 +73,7 @@ public sealed record PreviewOperationDescriptor
 
     public ContractReference Success { get; }
 
-    public ReadOnlyCollection<RefusalCode> AllowedRefusals { get; }
+    public IReadOnlyList<RefusalCode> AllowedRefusals { get; }
 
     public string DeterministicOrder { get; }
 
@@ -85,9 +103,22 @@ public sealed record PreviewOperationCatalog
         Schema = schema;
         CatalogId = ContractValidation.RequireIdentifier(catalogId, nameof(catalogId));
         var copy = (entries ?? throw new ArgumentNullException(nameof(entries))).ToArray();
+        if (copy.Any(static entry => entry is null))
+        {
+            throw new ArgumentException("Catalog entries cannot contain null.", nameof(entries));
+        }
+
         if (copy.Select(static entry => entry.OperationId).Distinct(StringComparer.Ordinal).Count() != copy.Length)
         {
             throw new ArgumentException("An operation can appear only once in a catalog.", nameof(entries));
+        }
+
+        if (!copy.SequenceEqual(copy.OrderBy(static entry =>
+                V3ContractVocabulary.OperationIds.IndexOf(entry.OperationId))))
+        {
+            throw new ArgumentException(
+                "Catalog entries must use the immutable operation-inventory order.",
+                nameof(entries));
         }
 
         Entries = Array.AsReadOnly(copy);
@@ -97,7 +128,7 @@ public sealed record PreviewOperationCatalog
 
     public string CatalogId { get; }
 
-    public ReadOnlyCollection<PreviewOperationDescriptor> Entries { get; }
+    public IReadOnlyList<PreviewOperationDescriptor> Entries { get; }
 
     public static PreviewOperationCatalog StageZero { get; } = new(
         V3SchemaIds.PreviewOperationCatalog,

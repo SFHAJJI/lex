@@ -30,7 +30,7 @@ public sealed class PreviewSchemaTests
                     MaxDepth = 64,
                 });
             Assert.AreEqual(
-                schemaId,
+                V3SchemaResourceIds.ForWireSchema(schemaId),
                 document.RootElement.GetProperty("$id").GetString(),
                 schemaId);
         }

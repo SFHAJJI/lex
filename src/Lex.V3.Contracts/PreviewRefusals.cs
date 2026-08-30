@@ -10,13 +10,14 @@ public sealed record HeldRecordCandidate
     public HeldRecordCandidate(
         string identifier,
         string title,
-        PublisherId publisher,
-        Uri permalink)
+        PublisherId publisher)
     {
-        Identifier = ContractValidation.RequireIdentifier(identifier, nameof(identifier));
-        Title = ContractValidation.RequireIdentifier(title, nameof(title));
-        Publisher = publisher;
-        Permalink = RequireHttps(permalink, nameof(permalink));
+        Publisher = ContractValidation.RequireDefined(publisher, nameof(publisher));
+        Identifier = ContractValidation.RequireHeldRecordIdentifier(
+            Publisher,
+            identifier,
+            nameof(identifier));
+        Title = ContractValidation.RequireDisplayTitle(title, nameof(title));
     }
 
     public string Identifier { get; }
@@ -25,47 +26,58 @@ public sealed record HeldRecordCandidate
 
     public PublisherId Publisher { get; }
 
-    public Uri Permalink { get; }
+}
 
-    internal static Uri RequireHttps(Uri value, string parameterName)
+internal static class PreviewOfficialPublisherLinks
+{
+    public const string LuSearch = "https://legilux.public.lu/search";
+    public const string EuSearch = "https://eur-lex.europa.eu/advanced-search-form.html";
+
+    public static Uri Search(PublisherId publisher) => publisher switch
     {
-        ArgumentNullException.ThrowIfNull(value, parameterName);
-        if (!value.IsAbsoluteUri || !string.Equals(value.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal))
-        {
-            throw new ArgumentException("Contract links must be absolute HTTPS URIs.", parameterName);
-        }
-
-        return value;
-    }
+        PublisherId.LuLegilux => new Uri(LuSearch, UriKind.Absolute),
+        PublisherId.EuEurLex => new Uri(EuSearch, UriKind.Absolute),
+        _ => throw new ArgumentOutOfRangeException(nameof(publisher)),
+    };
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record PublisherSearchAction
 {
     [JsonConstructor]
-    public PublisherSearchAction(PublisherId publisher, Uri uri)
+    public PublisherSearchAction(string kind, PublisherId publisher, Uri uri)
     {
-        Publisher = publisher;
-        Uri = HeldRecordCandidate.RequireHttps(uri, nameof(uri));
-
-        var expectedHost = publisher switch
+        if (!string.Equals(kind, "publisher_search", StringComparison.Ordinal))
         {
-            PublisherId.LuLegilux => "legilux.public.lu",
-            PublisherId.EuEurLex => "eur-lex.europa.eu",
-            _ => throw new ArgumentOutOfRangeException(nameof(publisher)),
-        };
-
-        if (!string.Equals(Uri.IdnHost, expectedHost, StringComparison.OrdinalIgnoreCase))
-        {
-            throw new ArgumentException("The search action must point to its official publisher host.", nameof(uri));
+            throw new ArgumentException(
+                "Preview publisher actions must use the publisher_search kind.",
+                nameof(kind));
         }
+
+        Kind = kind;
+        Publisher = ContractValidation.RequireDefined(publisher, nameof(publisher));
+        ArgumentNullException.ThrowIfNull(uri);
+        var expected = PreviewOfficialPublisherLinks.Search(publisher);
+
+        if (!string.Equals(uri.OriginalString, expected.AbsoluteUri, StringComparison.Ordinal) ||
+            !string.Equals(uri.AbsoluteUri, expected.AbsoluteUri, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "Publisher search actions are fixed generic official links and carry no user input.",
+                nameof(uri));
+        }
+
+        Uri = expected;
     }
+
+    public string Kind { get; }
 
     public PublisherId Publisher { get; }
 
     public Uri Uri { get; }
 
-    public static PublisherSearchAction Create(PublisherId publisher, Uri uri) => new(publisher, uri);
+    public static PublisherSearchAction Create(PublisherId publisher) =>
+        new("publisher_search", publisher, PreviewOfficialPublisherLinks.Search(publisher));
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -93,17 +105,80 @@ public sealed record IdentifierUnknownRefusal
         }
 
         Code = code;
-        CheckedIdentifierFamily = checkedIdentifierFamily;
-        RequestedCoordinate = ContractValidation.RequireIdentifier(requestedCoordinate, nameof(requestedCoordinate));
+        CheckedIdentifierFamily = ContractValidation.RequireDefined(
+            checkedIdentifierFamily,
+            nameof(checkedIdentifierFamily));
+        RequestedCoordinate = ContractValidation.RequireRequestedCoordinate(
+            checkedIdentifierFamily,
+            requestedCoordinate,
+            nameof(requestedCoordinate));
         PublisherContextsChecked = RequireDistinctNonEmpty(
             publisherContextsChecked,
             nameof(publisherContextsChecked));
-        PossibleHeldRecords = Array.AsReadOnly(
-            (possibleHeldRecords ?? throw new ArgumentNullException(nameof(possibleHeldRecords))).ToArray());
+        foreach (var publisher in PublisherContextsChecked)
+        {
+            ContractValidation.RequireDefined(publisher, nameof(publisherContextsChecked));
+        }
+
+        if (PublisherContextsChecked.Count == 2 &&
+            (PublisherContextsChecked[0] != PublisherId.LuLegilux ||
+             PublisherContextsChecked[1] != PublisherId.EuEurLex))
+        {
+            throw new ArgumentException(
+                "Checked publisher contexts must use canonical LU then EU ordering.",
+                nameof(publisherContextsChecked));
+        }
+
+        var candidateCopy = (possibleHeldRecords ?? throw new ArgumentNullException(nameof(possibleHeldRecords)))
+            .ToArray();
+        if (candidateCopy.Any(static candidate => candidate is null) ||
+            candidateCopy
+                .Select(static candidate => (candidate.Publisher, candidate.Identifier))
+                .Distinct()
+                .Count() != candidateCopy.Length)
+        {
+            throw new ArgumentException(
+                "Held-record candidates must be non-null and unique by publisher and identifier.",
+                nameof(possibleHeldRecords));
+        }
+
+
+        if (!candidateCopy.SequenceEqual(candidateCopy
+                .OrderBy(static candidate => candidate.Publisher)
+                .ThenBy(static candidate => candidate.Identifier, StringComparer.Ordinal)))
+        {
+            throw new ArgumentException(
+                "Held-record candidates must use publisher then identifier order.",
+                nameof(possibleHeldRecords));
+        }
+
+        PossibleHeldRecords = Array.AsReadOnly(candidateCopy);
         OfficialSearchActions = RequireDistinctNonEmpty(
             officialSearchActions,
             nameof(officialSearchActions));
         WhatWouldAnswer = RequireDistinctNonEmpty(whatWouldAnswer, nameof(whatWouldAnswer));
+        foreach (var action in WhatWouldAnswer)
+        {
+            ContractValidation.RequireDefined(action, nameof(whatWouldAnswer));
+        }
+
+        if (!WhatWouldAnswer.SequenceEqual(WhatWouldAnswer.OrderBy(static action => action)))
+        {
+            throw new ArgumentException(
+                "What-would-answer actions must use declared enum order.",
+                nameof(whatWouldAnswer));
+        }
+
+        if (PossibleHeldRecords.Any(candidate => !PublisherContextsChecked.Contains(candidate.Publisher)) ||
+            !OfficialSearchActions
+                .Select(static action => action.Publisher)
+                .SequenceEqual(PublisherContextsChecked))
+        {
+            throw new ArgumentException(
+                "Candidate records and official actions must be bound to the checked publishers.",
+                nameof(officialSearchActions));
+        }
+
         AssertsAbsenceOfLaw = false;
     }
 
@@ -147,9 +222,9 @@ public sealed record IdentifierUnknownRefusal
     {
         ArgumentNullException.ThrowIfNull(values, parameterName);
         var copy = values.ToArray();
-        if (copy.Length == 0)
+        if (copy.Length == 0 || copy.Any(static value => value is null))
         {
-            throw new ArgumentException("The collection must not be empty.", parameterName);
+            throw new ArgumentException("The collection must be non-empty and contain no null.", parameterName);
         }
 
         if (copy.Distinct().Count() != copy.Length)
