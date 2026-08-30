@@ -272,7 +272,12 @@ public static class CatalogueEndpoints
                     + "including every available official consolidation in the mounted scope, with explicit publisher timeline semantics, "
                     + "per-article history, explicit coverage gaps, and a SHA-256 chain to the publisher's own bytes.",
                 ["url"] = $"{ctx.PublicBase}/browse",
-                ["license"] = "https://creativecommons.org/licenses/by/4.0/",
+                // No license here either. This Dataset node is arguably Lex's own catalogue
+                // metadata rather than the publishers' text, so a claim about it would be ours to
+                // make. But the same literal sat in both places as though the distinction had
+                // never come up, and it named a licence for a dataset whose whole content is
+                // derived from publisher material under terms we have not established. Free to
+                // access is a fact about this site and stays; a redistribution licence is not.
                 ["isAccessibleForFree"] = true,
                 ["creator"] = new JsonObject
                 {

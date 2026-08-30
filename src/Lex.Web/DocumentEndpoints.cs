@@ -206,7 +206,15 @@ public static class DocumentEndpoints
                 ["inLanguage"] = lang,
                 ["temporalCoverage"] = rows[^1].ValidTo is null
                     ? $"{rows[0].ValidFrom}/.." : $"{rows[0].ValidFrom}/{rows[^1].ValidTo}",
-                ["license"] = "https://creativecommons.org/licenses/by/4.0/",
+                // No license here. A Legislation node describes the PUBLISHER'S legal text, and
+                // this line asserted CC BY 4.0 for every work of every publisher, hardcoded, on
+                // the authority of nothing. Whether a publisher's text may be redistributed under
+                // a named licence is exactly what the licence evidence work exists to establish,
+                // and its own outcome set has three ways for the answer to be no. Machine-readable
+                // and on every page made it the largest unsupported claim on the site.
+                //
+                // It stays out until an evidence-backed admission can populate it per work rather
+                // than a constant asserting it for all of them.
                 ["isBasedOn"] = rows[^1].SourceUri,
             };
             // An open consolidation interval proves only that this is the latest wording EUR-Lex

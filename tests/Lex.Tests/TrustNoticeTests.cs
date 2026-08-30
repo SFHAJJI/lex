@@ -570,6 +570,38 @@ public sealed class TrustNoticeTests : IDisposable
     }
 
     /// <summary>
+    /// The site published a CC BY 4.0 licence for the publishers' legal text, hardcoded into the
+    /// schema.org node of every work page and the catalogue, on the authority of nothing.
+    ///
+    /// Whether a publisher's text may be redistributed under a named licence is precisely what the
+    /// licence evidence work exists to establish, and its outcome set has three ways for the answer
+    /// to be no. A claim in machine-readable form on every page, about someone else's material, is
+    /// the largest instance of the class this product exists to prevent.
+    /// </summary>
+    [Fact]
+    public async Task No_page_asserts_a_licence_for_the_publishers_text()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "licence"), includeAct: false);
+
+        foreach (var route in new[]
+        {
+            "/lu-legilux/loi-2006-07-31-n2", "/browse", "/coverage",
+            "/lu-legilux/loi-2006-07-31-n2/2024-08-04",
+        })
+        {
+            var page = await site.Client.GetStringAsync(route);
+
+            Assert.DoesNotContain("creativecommons.org", page, StringComparison.OrdinalIgnoreCase);
+            // The schema.org key itself, so a different licence URL cannot slip back in.
+            Assert.DoesNotContain("\"license\"", page, StringComparison.Ordinal);
+        }
+
+        // Free to access is a fact about this site and is not a redistribution claim, so it stays.
+        Assert.Contains("isAccessibleForFree", await site.Client.GetStringAsync("/browse"),
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// O2. Every lane that reached the provision text is an answer. fuzzy is one: it is the same
     /// provision search re-run over a token-expanded query, and both other consumers of these
     /// values, the assistant at AskService.HasDirectProvisionEvidence and the React reader, group
