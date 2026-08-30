@@ -22,11 +22,14 @@ public sealed class CorpusLicenceAdmissionTests
     [Fact]
     public void Unknown_comparison_value_is_unresolved()
     {
-        var ccBy = LicenceChannelEvidence.Present([
-            Claim("CC-BY-4.0", CreativeCommonsBy40),
+        var sparqlCcBy = LicenceChannelEvidence.Present([
+            UriClaim(CreativeCommonsBy40),
+        ]);
+        var fileCcBy = LicenceChannelEvidence.Present([
+            FileClaim("CC-BY-4.0", CreativeCommonsBy40),
         ]);
         var evidence = EvidenceWithComparison(
-            ccBy, ccBy, (LicenceComparison)int.MaxValue);
+            sparqlCcBy, fileCcBy, (LicenceComparison)int.MaxValue);
 
         Assert.Equal((LicenceComparison)int.MaxValue, evidence.Comparison);
         AssertDenied(PublicTextAdmission.LicenceUnresolved,
@@ -39,11 +42,11 @@ public sealed class CorpusLicenceAdmissionTests
         var invalid = LicenceChannelEvidence.Invalid([
             new LicenceClaim("literal", "unknown", null),
         ]);
-        var ccBy = LicenceChannelEvidence.Present([
-            Claim("CC-BY-4.0", CreativeCommonsBy40),
+        var fileCcBy = LicenceChannelEvidence.Present([
+            FileClaim("CC-BY-4.0", CreativeCommonsBy40),
         ]);
         var evidence = EvidenceWithComparison(
-            invalid, ccBy, LicenceComparison.Agreed);
+            invalid, fileCcBy, LicenceComparison.Agreed);
 
         AssertDenied(PublicTextAdmission.LicenceUnresolved,
             LicencePublicAdmission.Assess(evidence));
@@ -54,23 +57,97 @@ public sealed class CorpusLicenceAdmissionTests
     {
         var evidence = EvidenceWithComparison(
             LicenceChannelEvidence.Present([
-                Claim("CC-BY-4.0", CreativeCommonsBy40),
+                UriClaim(CreativeCommonsBy40),
             ]),
             LicenceChannelEvidence.Present([
-                Claim("licenceSCL", LicenceScl),
+                FileClaim("licenceSCL", LicenceScl),
             ]),
             LicenceComparison.Agreed);
 
-        AssertDenied(PublicTextAdmission.LicenceConflict,
+        AssertDenied(PublicTextAdmission.LicenceUnresolved,
             LicencePublicAdmission.Assess(evidence));
     }
 
     [Fact]
-    public void Exact_agreed_cc_by_is_the_only_initially_admitted_basis()
+    public void Literal_claims_with_exact_uri_are_not_agreed()
+    {
+        var literal = LicenceChannelEvidence.Present([
+            new LicenceClaim("literal", CreativeCommonsBy40, CreativeCommonsBy40),
+        ]);
+
+        var evidence = Evidence(literal, literal);
+
+        Assert.Equal(LicenceComparison.LicenceUnresolved, evidence.Comparison);
+    }
+
+    [Fact]
+    public void Agreed_marker_cannot_admit_literal_claims_with_exact_uri()
+    {
+        var literal = LicenceChannelEvidence.Present([
+            new LicenceClaim("literal", CreativeCommonsBy40, CreativeCommonsBy40),
+        ]);
+        var evidence = EvidenceWithComparison(
+            literal, literal, LicenceComparison.Agreed);
+
+        AssertDenied(PublicTextAdmission.LicenceUnresolved,
+            LicencePublicAdmission.Assess(evidence));
+    }
+
+    [Theory]
+    [InlineData(true, "uri", "http://publisher.example/not-the-licence", CreativeCommonsBy40)]
+    [InlineData(true, "uri", "ftp://creativecommons.org/licenses/by/4.0/",
+        "ftp://creativecommons.org/licenses/by/4.0/")]
+    [InlineData(false, "token", "CC-BY-4.0", LicenceScl)]
+    [InlineData(false, "unknown", "CC-BY-4.0", CreativeCommonsBy40)]
+    public void Channel_claim_integrity_mismatches_are_unresolved(
+        bool corruptSparql,
+        string termType,
+        string value,
+        string licenceUri)
+    {
+        var validSparql = LicenceChannelEvidence.Present([
+            UriClaim(CreativeCommonsBy40),
+        ]);
+        var validFile = LicenceChannelEvidence.Present([
+            FileClaim("CC-BY-4.0", CreativeCommonsBy40),
+        ]);
+        var corrupt = LicenceChannelEvidence.Present([
+            new LicenceClaim(termType, value, licenceUri),
+        ]);
+        var sparql = corruptSparql ? corrupt : validSparql;
+        var file = corruptSparql ? validFile : corrupt;
+
+        Assert.Equal(LicenceComparison.LicenceUnresolved,
+            Evidence(sparql, file).Comparison);
+        AssertDenied(PublicTextAdmission.LicenceUnresolved,
+            LicencePublicAdmission.Assess(EvidenceWithComparison(
+                sparql, file, LicenceComparison.Agreed)));
+    }
+
+    [Fact]
+    public void Conflict_marker_disagreeing_with_valid_channels_is_unresolved()
+    {
+        var sparqlCcBy = LicenceChannelEvidence.Present([
+            UriClaim(CreativeCommonsBy40),
+        ]);
+        var fileCcBy = LicenceChannelEvidence.Present([
+            FileClaim("CC-BY-4.0", CreativeCommonsBy40),
+        ]);
+        var evidence = EvidenceWithComparison(
+            sparqlCcBy, fileCcBy, LicenceComparison.LicenceConflict);
+
+        AssertDenied(PublicTextAdmission.LicenceUnresolved,
+            LicencePublicAdmission.Assess(evidence));
+    }
+
+    [Fact]
+    public void Exact_sparql_uri_and_file_token_cc_by_are_admitted()
     {
         var evidence = Evidence(
-            LicenceChannelEvidence.Present([Claim("CC-BY-4.0", CreativeCommonsBy40)]),
-            LicenceChannelEvidence.Present([Claim("CC-BY-4.0", CreativeCommonsBy40)]));
+            LicenceChannelEvidence.Present([UriClaim(CreativeCommonsBy40)]),
+            LicenceChannelEvidence.Present([
+                FileClaim("CC-BY-4.0", CreativeCommonsBy40),
+            ]));
 
         var result = LicencePublicAdmission.Assess(evidence);
 
@@ -82,8 +159,8 @@ public sealed class CorpusLicenceAdmissionTests
     public void Channel_disagreement_is_a_conflict_and_has_no_basis()
     {
         var evidence = Evidence(
-            LicenceChannelEvidence.Present([Claim("CC-BY-4.0", CreativeCommonsBy40)]),
-            LicenceChannelEvidence.Present([Claim("licenceSCL", LicenceScl)]));
+            LicenceChannelEvidence.Present([UriClaim(CreativeCommonsBy40)]),
+            LicenceChannelEvidence.Present([FileClaim("licenceSCL", LicenceScl)]));
 
         var result = LicencePublicAdmission.Assess(evidence);
 
@@ -95,7 +172,7 @@ public sealed class CorpusLicenceAdmissionTests
     {
         var awaiting = ManifestationLicenceEvidence.AwaitingFile(
             "https://publisher.example/m", "https://publisher.example/file",
-            LicenceChannelEvidence.Present([Claim("CC-BY-4.0", CreativeCommonsBy40)]));
+            LicenceChannelEvidence.Present([UriClaim(CreativeCommonsBy40)]));
         var invalid = Evidence(
             LicenceChannelEvidence.Invalid([new LicenceClaim("literal", "unknown", null)]),
             LicenceChannelEvidence.Invalid([new LicenceClaim("token", "unknown", null)]));
@@ -111,8 +188,11 @@ public sealed class CorpusLicenceAdmissionTests
     [Fact]
     public void Absent_channel_never_admits_public_text()
     {
-        var ccBy = LicenceChannelEvidence.Present([
-            Claim("CC-BY-4.0", CreativeCommonsBy40),
+        var sparqlCcBy = LicenceChannelEvidence.Present([
+            UriClaim(CreativeCommonsBy40),
+        ]);
+        var fileCcBy = LicenceChannelEvidence.Present([
+            FileClaim("CC-BY-4.0", CreativeCommonsBy40),
         ]);
 
         AssertDenied(PublicTextAdmission.LicenceUnresolved,
@@ -120,26 +200,26 @@ public sealed class CorpusLicenceAdmissionTests
                 LicenceChannelEvidence.Absent, LicenceChannelEvidence.Absent)));
         AssertDenied(PublicTextAdmission.LicenceConflict,
             LicencePublicAdmission.Assess(Evidence(
-                LicenceChannelEvidence.Absent, ccBy)));
+                LicenceChannelEvidence.Absent, fileCcBy)));
         AssertDenied(PublicTextAdmission.LicenceConflict,
             LicencePublicAdmission.Assess(Evidence(
-                ccBy, LicenceChannelEvidence.Absent)));
+                sparqlCcBy, LicenceChannelEvidence.Absent)));
     }
 
     [Fact]
     public void Agreed_unreviewed_or_ambiguous_basis_is_unsupported()
     {
         var scl = Evidence(
-            LicenceChannelEvidence.Present([Claim("licenceSCL", LicenceScl)]),
-            LicenceChannelEvidence.Present([Claim("licenceSCL", LicenceScl)]));
+            LicenceChannelEvidence.Present([UriClaim(LicenceScl)]),
+            LicenceChannelEvidence.Present([FileClaim("licenceSCL", LicenceScl)]));
         var ambiguous = Evidence(
             LicenceChannelEvidence.Present([
-                Claim("CC-BY-4.0", CreativeCommonsBy40),
-                Claim("licenceSCL", LicenceScl),
+                UriClaim(CreativeCommonsBy40),
+                UriClaim(LicenceScl),
             ]),
             LicenceChannelEvidence.Present([
-                Claim("CC-BY-4.0", CreativeCommonsBy40),
-                Claim("licenceSCL", LicenceScl),
+                FileClaim("CC-BY-4.0", CreativeCommonsBy40),
+                FileClaim("licenceSCL", LicenceScl),
             ]));
 
         AssertDenied(PublicTextAdmission.LicenceUnsupported,
@@ -154,18 +234,24 @@ public sealed class CorpusLicenceAdmissionTests
     [InlineData("http://creativecommons.org/licenses/by/3.0/")]
     [InlineData("http://creativecommons.org/licenses/by-sa/4.0/")]
     [InlineData("http://CREATIVECOMMONS.ORG/licenses/by/4.0/")]
-    public void Agreed_cc_by_uri_near_misses_are_unsupported(string licenceUri)
+    public void Cc_by_uri_near_misses_are_unresolved(string licenceUri)
     {
-        var evidence = Evidence(
-            LicenceChannelEvidence.Present([Claim("licence", licenceUri)]),
-            LicenceChannelEvidence.Present([Claim("licence", licenceUri)]));
+        var evidence = EvidenceWithComparison(
+            LicenceChannelEvidence.Present([UriClaim(licenceUri)]),
+            LicenceChannelEvidence.Present([
+                FileClaim("CC-BY-4.0", licenceUri),
+            ]),
+            LicenceComparison.Agreed);
 
-        AssertDenied(PublicTextAdmission.LicenceUnsupported,
+        AssertDenied(PublicTextAdmission.LicenceUnresolved,
             LicencePublicAdmission.Assess(evidence));
     }
 
-    private static LicenceClaim Claim(string value, string uri) =>
-        new("uri", value, uri);
+    private static LicenceClaim UriClaim(string uri) =>
+        new("uri", uri, uri);
+
+    private static LicenceClaim FileClaim(string token, string uri) =>
+        new("token", token, uri);
 
     private static ManifestationLicenceEvidence Evidence(
         LicenceChannelEvidence sparql,
