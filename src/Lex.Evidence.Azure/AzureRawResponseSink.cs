@@ -209,7 +209,9 @@ public sealed class AzureRawResponseSink : IRawResponseSink
 
                 var retentionFacts = await _store.ReadRetentionAsync(
                     blobName, version, retention, token).ConfigureAwait(false);
-                VerifyRetention(retention, version, retentionFacts);
+                var verificationNow = _timeProvider.GetUtcNow();
+                VerifyRetention(
+                    retention, version, retentionFacts, verificationNow);
 
                 return new AzureVerifiedEvidence(
                     request.RequestId, buffered.Sha256, buffered.Length);
@@ -384,7 +386,8 @@ public sealed class AzureRawResponseSink : IRawResponseSink
     private static void VerifyRetention(
         AzureEvidenceRetentionRequest expected,
         AzureEvidenceObjectVersion version,
-        AzureEvidenceRetentionFacts actual)
+        AzureEvidenceRetentionFacts actual,
+        DateTimeOffset verificationNow)
     {
         if (!string.Equals(actual.VersionId, version.VersionId,
                 StringComparison.Ordinal))
@@ -398,6 +401,7 @@ public sealed class AzureRawResponseSink : IRawResponseSink
                 || actual.ImmutableUntil is null
                 || actual.ImmutableUntil < expected.ImmutableUntil
                 || actual.ImmutableUntil > expected.ImmutableUntilMaximum
+                || actual.ImmutableUntil <= verificationNow
                 || actual.ImmutabilityMode != "Locked")
                 throw new InvalidDataException(
                     "Azure did not confirm the nightly immutability policy.");

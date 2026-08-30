@@ -776,6 +776,31 @@ public sealed class AzureRawResponseSinkTests
                 Request(), Response(), new MemoryStream([1])));
     }
 
+    [Fact]
+    public async Task Nightly_lane_rejects_expiry_reached_after_retention_read()
+    {
+        var createdAt = new DateTimeOffset(
+            2026, 8, 30, 4, 0, 0, TimeSpan.Zero);
+        var expiry = createdAt.AddDays(90);
+        var timeProvider = new AdvancingTimeProvider(createdAt);
+        var store = new RecordingStore
+        {
+            VersionCreatedAt = createdAt,
+            RetentionFactsFactory = (version, _) =>
+            {
+                timeProvider.AdvanceTo(expiry);
+                return new AzureEvidenceRetentionFacts(
+                    version.VersionId, expiry, "Locked", false);
+            },
+        };
+        var sink = new AzureRawResponseSink(
+            store, EvidenceRetentionLane.Nightly90Days, timeProvider);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            sink.CaptureVerifiedAsync(
+                Request(), Response(), new MemoryStream([1])));
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("Unlocked")]
@@ -833,25 +858,34 @@ public sealed class AzureRawResponseSinkTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Nightly_lane_rejects_unbounded_later_retention(
+    public async Task Nightly_lane_rejects_expiry_beyond_one_minute_or_unbounded(
         bool maximumValue)
     {
+        var createdAt = new DateTimeOffset(
+            2026, 8, 30, 4, 0, 0, TimeSpan.Zero);
         var store = new RecordingStore
         {
-            RetentionFactsFactory = (version, request) => new(
+            VersionCreatedAt = createdAt,
+            RetentionFactsFactory = (version, _) => new(
                 version.VersionId,
                 maximumValue
                     ? DateTimeOffset.MaxValue
-                    : request.ImmutableUntilMaximum!.Value.AddDays(1),
+                    : createdAt.AddDays(90).AddMinutes(1).AddSeconds(1),
                 "Locked",
                 false),
         };
         var sink = new AzureRawResponseSink(
-            store, EvidenceRetentionLane.Nightly90Days);
+            store,
+            EvidenceRetentionLane.Nightly90Days,
+            new FixedTimeProvider(createdAt));
 
         await Assert.ThrowsAsync<InvalidDataException>(() =>
             sink.CaptureVerifiedAsync(
                 Request(), Response(), new MemoryStream([1])));
+
+        Assert.Equal(
+            createdAt.AddDays(90).AddMinutes(1),
+            store.RetentionRequests.Single().ImmutableUntilMaximum);
     }
 
     [Fact]
@@ -1165,6 +1199,15 @@ public sealed class AzureRawResponseSinkTests
     private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => utcNow;
+    }
+
+    private sealed class AdvancingTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        private DateTimeOffset _utcNow = utcNow;
+
+        public override DateTimeOffset GetUtcNow() => _utcNow;
+
+        public void AdvanceTo(DateTimeOffset value) => _utcNow = value;
     }
 
     private sealed class ThrowingReadStream(
