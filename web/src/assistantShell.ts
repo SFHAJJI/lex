@@ -1,5 +1,7 @@
-import { provisionItemsOf, type UiEffect } from "./api.ts";
+import { provisionItemsOf, reportedTruncation, type UiEffect } from "./api.ts";
 import type { State } from "./state";
+
+export { reportedTruncation } from "./api.ts";
 
 export const STARTER_PROMPTS = [
   "Show Article 6 of the GDPR as it stood on 1 January 2021.",
@@ -13,7 +15,10 @@ export interface AssistantPanelState { open: boolean; minimized: boolean }
 /** Only an unbounded provision effect may seed the reader without a follow-up fetch. */
 export function assistantProvisionLoad(ui?: UiEffect) {
   const provision = ui?.provision;
-  if (!provision || provision.truncated || provision.text_truncated || provision.outline_only)
+  if (!provision
+      || reportedTruncation(provision.truncated) !== false
+      || reportedTruncation(provision.text_truncated) !== false
+      || provision.outline_only)
     return undefined;
   const evidence = provision.evidence?.[0];
   return {
@@ -37,7 +42,7 @@ export function assistantTimelineSeed(ui?: UiEffect) {
     languages: [...new Set(timeline.rows.map((row) => row.language).filter(
       (value): value is string => Boolean(value)))].sort(),
     total: timeline.total_count,
-    truncated: timeline.truncated,
+    truncated: reportedTruncation(timeline.truncated),
   };
 }
 
@@ -75,6 +80,10 @@ function workspaceUrl(values: Record<string, string | undefined>): string {
 /** Every typed operation defines a complete workspace scope, including cleared old state. */
 export function assistantWorkspaceState(ui?: UiEffect): Partial<State> | undefined {
   if (!ui) return undefined;
+  const gapComparison = typeof ui.gap?.comparison_from_date === "string"
+    && ui.gap.comparison_from_date.length > 0
+    && typeof ui.gap.comparison_to_date === "string"
+    && ui.gap.comparison_to_date.length > 0;
   const gapSubject = ui.gap?.work ? {
     work: ui.gap.work,
     date: ui.gap.date,
@@ -88,11 +97,12 @@ export function assistantWorkspaceState(ui?: UiEffect): Partial<State> | undefin
   if (legalSubject?.work) return {
     space: "law", q: undefined, asOf: undefined,
     work: legalSubject.work,
-    date: ui.diff?.from_date ?? (ui.provision
+    date: ui.diff?.from_date ?? (gapComparison ? ui.gap!.comparison_from_date : ui.provision
       ? legalSubject.date ?? ui.provision.valid_from
       : ui.gap?.date ?? legalSubject.date),
-    to: ui.diff?.to_date, anchor: legalSubject.anchor ?? ui.history?.anchor,
-    mode: ui.diff ? "compare" : "read",
+    to: ui.diff?.to_date ?? (gapComparison ? ui.gap!.comparison_to_date : undefined),
+    anchor: legalSubject.anchor ?? ui.history?.anchor,
+    mode: ui.diff || gapComparison ? "compare" : "read",
     from: undefined, until: undefined, order: undefined, retrieval: undefined,
     jurisdiction: undefined, hierarchy: undefined, domain: undefined,
     sourceClass: undefined, actForm: undefined, bindingStatus: undefined,

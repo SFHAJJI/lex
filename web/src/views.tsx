@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   boundedPublisherTextLabel, changeCountLabels, isTypedProvisionGap, populationCoverageLabel,
-  populationScopeLabel, provisionCountLabel, provisionSourceUrl, safeHttpsUrl,
+  populationScopeLabel, provisionCompletenessUnknown, provisionCountLabel, provisionSourceUrl, safeHttpsUrl,
   signatureStatusLabel, typedProvisionGapLabel,
   type ProvisionItem, type RankingRow, type UiEffect,
 } from "./api";
@@ -69,6 +69,7 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
   const outlineOnly = availableItems.length > 0
     && availableItems.every((p) => !p.text && !p.text_omitted);
   const boundedText = boundedPublisherTextLabel(items, textTruncated);
+  const completenessUnknown = truncated === undefined || textTruncated === undefined;
   const nav = toc.length >= 6 || outlineOnly;
   const pageUrl = typeof window === "undefined" ? "" : window.location.href;
   const evidence = () => ({
@@ -95,7 +96,7 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
           <button className="tag act" onClick={onClear}>article {anchor} ✕</button>
         ) : (
           <span className="tag">{provisionCountLabel(items,
-            truncated || textTruncated ? totalProvisions : undefined)}</span>
+            totalProvisions, truncated === false && textTruncated === false)}</span>
         )}
         {fromPdf ? <span className="tag warn">read from the publisher's PDF</span> : null}
         {fromGazette ? <span className="tag warn">cut from a gazette issue</span> : null}
@@ -141,6 +142,11 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
             </p>
           ) : null}
         </div>
+      ) : null}
+      {completenessUnknown ? (
+        <p className="pdfnote" role="status">
+          Response completeness was not reported. The displayed publisher rows may be partial.
+        </p>
       ) : null}
       {outlineOnly ? (
         // A blank pane next to a table of contents is a dead end. Offer the thing a reader
@@ -237,8 +243,8 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
  * navigate to, because the history is the navigation. Scope follows the reader: with an
  * article open it shows that article's distinct texts, otherwise the law's own versions.
  */
-export function VersionRail({ dates, current, compareTo, scope, today, work, timelineSemantics, onPick, onCompare, onClear }: {
-  dates: string[]; current?: string; compareTo?: string; scope: string; today: string; work: string; timelineSemantics?: string;
+export function VersionRail({ dates, current, compareTo, scope, today, work, timelineSemantics, partial, onPick, onCompare, onClear }: {
+  dates: string[]; current?: string; compareTo?: string; scope: string; today: string; work: string; timelineSemantics?: string; partial?: boolean;
   onPick: (d: string) => void; onCompare: (d: string) => void; onClear: () => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
@@ -294,7 +300,10 @@ export function VersionRail({ dates, current, compareTo, scope, today, work, tim
   return (
     <div className="railbox">
       <div className="railhead">
-        <span className="tag">{dates.length} {scope}</span>
+        {/* These are unique dates, not version rows. Only an explicit false receipt licenses
+            presenting them as the complete set. Missing or malformed evidence stays qualified. */}
+        <span className="tag">{dates.length} {scope}
+          {partial === false ? "" : " returned in this response"}</span>
         {median > 0 ? <span className="tag">every {median} days (median)</span> : null}
         {ahead > 0 ? <span className="tag warn">{futureStateLabel(work, ahead, timelineSemantics)}</span> : null}
         {/* Keyed off compareTo, not off finding it on the rail: a compared date need not be one
@@ -365,8 +374,8 @@ export function Timeline({ view, onOpen }: {
   return (
     <section className="evidence-panel" aria-labelledby="timeline-result-title">
       <div className="cnt">
-        <span className="tag">{view.total_count.toLocaleString()} dated versions</span>
-        {view.truncated ? <span className="tag">showing {view.rows.length}</span> : null}
+        <span className="tag">{view.total_count.toLocaleString()} dated version{view.total_count === 1 ? "" : "s"}</span>
+        {view.truncated !== false ? <span className="tag">showing {view.rows.length}</span> : null}
       </div>
       <h2 id="timeline-result-title">Version history</h2>
       <ol className="rows">
@@ -383,9 +392,11 @@ export function Timeline({ view, onOpen }: {
           </li>
         ))}
       </ol>
-      {view.truncated ? (
+      {view.truncated !== false ? (
         <p className="sub" role="status">
-          This result is incomplete. Open the law to load the complete version rail.
+          {view.truncated === true
+            ? "This result is incomplete. Open the law to load the complete version rail."
+            : "This response does not record whether the result is complete. Open the law to load its version rail."}
         </p>
       ) : null}
     </section>
@@ -732,6 +743,27 @@ export function InForce({ date, total, rows, populationWorks, populationBasis,
   );
 }
 
+export function ComparisonLimitations({ limitations, malformed }: {
+  limitations?: unknown;
+  malformed?: unknown;
+}) {
+  const codes = Array.isArray(limitations)
+    ? limitations.filter((code): code is string => typeof code === "string")
+    : [];
+  return <>
+    {codes.length > 0 ? <div className="cnt">{codes.map((code, index) =>
+      code === "profiles_differ"
+        ? <span className="tag warn" key={`${code}:${index}`}>different extraction profiles, provisions cannot be paired</span>
+        : code === "typed_text_gap"
+        ? <span className="tag warn" key={`${code}:${index}`}>typed text gap, wording comparison not certified</span>
+        : <span className="tag warn mono" key={`${code}:${index}`}>{code}</span>)}</div> : null}
+    {malformed === true
+      ? <p className="sub" role="status">Comparison limitation data was malformed. Other
+          limitations may be missing.</p>
+      : null}
+  </>;
+}
+
 /**
  * A refusal, and what stands behind it.
  *
@@ -743,24 +775,40 @@ export function InForce({ date, total, rows, populationWorks, populationBasis,
  * and hashes are a real answer to a real question, just not to the question about wording.
  */
 export function Gap({ status, explanation, available, held, provision_gaps,
-  total_provision_gaps, truncated, total_provisions, text_truncated, text_completeness }: {
+  total_provision_gaps, truncated, total_provisions, text_truncated, text_completeness,
+  comparison_limitations, comparison_limitations_malformed }: {
   status: string; explanation: string; available: string[];
   held?: { text: number; total: number; official?: string; kind?: string };
   provision_gaps?: ProvisionItem[];
   total_provision_gaps?: number;
-  truncated?: boolean;
+  truncated?: boolean | null;
   total_provisions?: number;
-  text_truncated?: boolean;
+  text_truncated?: boolean | null;
   text_completeness?: string;
+  comparison_limitations?: unknown;
+  comparison_limitations_malformed?: unknown;
 }) {
   const whole = held && held.total > 0 && held.text === 0;
   const collection = whole && (held?.kind === "RECUEIL" || held?.kind === "CODE_RECUEIL");
+  const completenessUnknown = provisionCompletenessUnknown({
+    status,
+    provision_gaps, total_provision_gaps, total_provisions,
+    text_completeness, truncated, text_truncated,
+  });
   return (
     <div className="gap">
       {/* Client presentation states are not wire statuses and never wear the badge (O5);
           the decision lives in the tested seam, not in this markup. */}
       {gapBadgeStatus(status) === null ? null
         : <div className="cnt"><span className="tag warn mono">{gapBadgeStatus(status)}</span></div>}
+      <ComparisonLimitations limitations={comparison_limitations}
+        malformed={comparison_limitations_malformed} />
+      {completenessUnknown ? (
+        <p className="pdfnote" role="status">
+          Response completeness was not reported. These returned coordinates do not establish
+          that publisher text is absent.
+        </p>
+      ) : null}
       {whole ? (
         <>
           {collection ? (
@@ -1010,18 +1058,33 @@ export function CitedBy({ view, onOpen }: {
   view: NonNullable<UiEffect["cited_by"]>;
   onOpen: (work: string, date: string, anchor?: string) => void;
 }) {
+  const exactComplete = view.exact_complete === true;
   return (
     <>
       <div className="cnt">
-        {/* "N articles refer to it" is a claim about the law. When the response was cut, N is
-            what fitted (McpCore sets citing_articles to the returned hits), so the same
-            sentence would understate the total and, at zero, assert an absence. Identity
-            comparison only: an absent or malformed receipt is not a complete answer. */}
-        <span className="tag">{view.rows_truncated === false
-          ? `${view.citing_articles.toLocaleString()} article${view.citing_articles === 1 ? "" : "s"} refer to it`
+        {/* "N articles refer to it" is a claim about the law. `exact_complete` combines coherent
+            row and publisher-set receipts, unique and coherent producer units and rows, and the
+            recognized evidence scope. Only literal true licenses a total. */}
+        <span className="tag">{exactComplete
+          ? `${view.citing_articles.toLocaleString()} article${view.citing_articles === 1 ? " refers" : "s refer"} to it`
           : `${view.citing_articles.toLocaleString()} returned in this response`}</span>
         <span className="tag mono">{view.cited_work}</span>
       </div>
+      {/* What the producer says this list is, and the two claims it declines. A list of
+          referring articles invites a reader to assume the references are in force and that
+          each one does something to the law. The producer assessed neither, and said so on
+          every response. Only an explicit false is reported as not assessed: an absent or
+          malformed value is not evidence that the work was skipped. */}
+      {view.evidence_scope === "captured_cross_references_in_held_non_withdrawn_versions"
+        ? <p className="sub">Cross references Lex captured, in versions it holds that are not
+            withdrawn.</p>
+        : view.evidence_scope ? <p className="sub mono">{view.evidence_scope}</p> : null}
+      {view.current_legal_effect_assessed === false || view.relationship_type_assessed === false
+        ? <p className="sub">Not assessed: {[
+            view.current_legal_effect_assessed === false ? "whether each reference is currently in effect" : null,
+            view.relationship_type_assessed === false ? "what kind of relationship it is" : null,
+          ].filter(Boolean).join(", ")}.</p>
+        : null}
       <ul className="rows">
         {view.rows.map((r, i) => (
           <li key={`${r.work}-${r.anchor}-${i}`}>
@@ -1036,25 +1099,21 @@ export function CitedBy({ view, onOpen }: {
         ))}
       </ul>
       {view.rows.length > 0 ? (
-        /* A returned row proves that at least one article refers. It does not prove that the
-           number beside it is the total, so only a receipt of false leaves the rows
-           unqualified. */
-        view.rows_truncated === true
+        exactComplete ? null
+        : view.rows_truncated === true
           ? <Empty>This response returned fewer rows than it found.</Empty>
-        : view.rows_truncated === false ? null
+        : view.exact_complete === false
+          ? <Empty>This response is incomplete, so the count is only what this response returned.</Empty>
         : <Empty>This response does not record whether it was complete.</Empty>
+      ) : exactComplete ? (
+        <Empty>No held provision version in this corpus refers to this law.</Empty>
       ) : view.rows_truncated === true ? (
-        /* Rows were cut and none survived for this unit. The receipt is response-wide, so
-           it says nothing about which unit was cut, only that absence cannot be claimed. */
         <Empty>This response returned fewer rows than it found, so an empty list here is
           not evidence that nothing refers to this law.</Empty>
-      ) : view.rows_truncated === false ? (
-        /* The only branch that may state an absence, because it is the only one holding a
-           receipt that nothing was cut. */
-        <Empty>No held provision version in this corpus refers to this law.</Empty>
+      ) : view.exact_complete === false ? (
+        <Empty>No rows were returned. This response is incomplete, so it is not evidence that
+          nothing refers to this law.</Empty>
       ) : (
-        /* No receipt, or one that is not a boolean. Absent evidence is not a negative
-           fact, so this says what happened and claims nothing about the corpus. */
         <Empty>No rows were returned. This response does not record whether it was
           complete.</Empty>
       )}

@@ -75,6 +75,25 @@ public sealed class Canon2UiGapTests
     }
 
     [Fact]
+    public void Document_order_fails_closed_at_the_untrusted_boundary()
+    {
+        foreach (var hostile in new[] { "\"2\"", "[]", "{}", "-1" })
+        {
+            var textResult = Result("ok", includeText: true);
+            textResult["provisions"]!.AsArray()[0]!["document_order"] = JsonNode.Parse(hostile);
+            var textView = Assert.IsType<ProvisionView>(
+                UiMapper.From("as_of", Arguments("full"), textResult).Provision);
+            Assert.Null(Assert.Single(textView.Provisions).DocumentOrder);
+
+            var gapResult = Result("text_not_available", includeText: false);
+            gapResult["provision_gaps"]!.AsArray()[0]!["document_order"] = JsonNode.Parse(hostile);
+            var gapView = Assert.IsType<GapView>(
+                UiMapper.From("as_of", Arguments("full"), gapResult).Gap);
+            Assert.Equal(0, Assert.Single(gapView.ProvisionGaps!).DocumentOrder);
+        }
+    }
+
+    [Fact]
     public void Partial_refusal_preserves_bounded_totals_and_omitted_text_signal()
     {
         var result = Result("text_not_available", includeText: false);
@@ -92,6 +111,46 @@ public sealed class Canon2UiGapTests
         Assert.Equal(2_000, gap.TotalProvisionGaps);
         Assert.True(gap.Truncated);
         Assert.True(gap.TextTruncated);
+    }
+
+    [Fact]
+    public void Refusal_truncation_receipts_fail_closed_at_the_untrusted_boundary()
+    {
+        static GapView Map(JsonObject result) => Assert.IsType<GapView>(
+            UiMapper.From("as_of", Arguments("full"), result).Gap);
+
+        var absent = Map(Result("text_not_available", includeText: false));
+        Assert.Null(absent.Truncated);
+        Assert.Null(absent.TextTruncated);
+
+        foreach (var hostile in new[] { "\"false\"", "0", "[]", "{}" })
+        {
+            var byRows = Result("text_not_available", includeText: false);
+            byRows["truncated"] = JsonNode.Parse(hostile);
+            byRows["text_truncated"] = false;
+            Assert.Null(Map(byRows).Truncated);
+
+            var byText = Result("text_not_available", includeText: false);
+            byText["truncated"] = false;
+            byText["text_truncated"] = JsonNode.Parse(hostile);
+            Assert.Null(Map(byText).TextTruncated);
+        }
+
+        var exact = Result("text_not_available", includeText: false);
+        exact["truncated"] = false;
+        exact["text_truncated"] = false;
+        Assert.False(Map(exact).Truncated);
+        Assert.False(Map(exact).TextTruncated);
+
+        foreach (var field in new[] { "total_provision_gaps", "total_provisions" })
+        {
+            var malformedCount = Result("text_not_available", includeText: false);
+            malformedCount[field] = "40";
+            var mapped = Map(malformedCount);
+            Assert.Null(field == "total_provision_gaps"
+                ? mapped.TotalProvisionGaps
+                : mapped.TotalProvisions);
+        }
     }
 
     [Fact]

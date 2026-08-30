@@ -25,47 +25,43 @@ comments.
 **Only official publisher endpoints.** Respect `robots.txt`. User-Agent
 `Lex/0.1 (+https://github.com/SFHAJJI/lex)`.
 
-## The golden tests are the safety net
+## Build V3, do not evolve V2 into it
 
-Snapshots cover every rendered page and every MCP tool response, with targeted contract and
-architecture assertions beside them. Do not hard-code the counts here; the test runner is the
-source of truth as the suite grows.
+Owner ruling, 2026-08-29. The goal is a V3 that is clean and consistent with the V3 specs. The
+journey there does not have to be clean.
+
+Breaking changes are allowed. Deleting a component is allowed. **Deleting unit tests and
+integration tests is allowed** when they describe V2 behaviour that a V3 component replaces. Do not
+spend effort preserving, migrating or negotiating around something V3 removes. If a test, a guard or
+a contract stands between you and implementing a V3 component as specified, delete it and say so in
+the commit; do not build machinery to satisfy it.
+
+The failure this corrects: two co-owners spent a day on an acceptance protocol for page snapshots
+while the pages themselves were scheduled to be replaced by a new index roughly three times the
+scope and a new dossier architecture. Eight contract revisions, no product change. That is the shape
+to watch for. Process is not the product.
+
+This applies to both co-owners.
+
+### Golden snapshots are diagnostics during V3
+
+Page and MCP tool-response snapshots remain committed as optional review evidence, but no golden
+comparison or approval is a gate for a pull request, rebuild, promotion, or deployment. Normal test
+runs skip byte-for-byte snapshot comparison while continuing to run the targeted contract,
+architecture, and browser assertions beside the snapshots.
+
+Run a snapshot comparison only when it is useful to the product change being reviewed:
 
 ```bash
-dotnet test tests/Lex.Tests/Lex.Tests.csproj          # verify
-LEX_GOLDEN_UPDATE=1 dotnet test ...                   # accept an INTENDED change
-git diff --numstat tests/Lex.Tests/golden/            # then READ the diff before committing
+LEX_GOLDEN_VERIFY=1 dotnet test tests/Lex.Tests/Lex.Tests.csproj
+LEX_GOLDEN_UPDATE=1 dotnet test tests/Lex.Tests/Lex.Tests.csproj
+git diff --numstat tests/Lex.Tests/golden/
 ```
 
-The review of that diff *is* the safety mechanism. A change that touches snapshots you did not
-expect is a regression you have not noticed yet.
-
-Golden changes pass through the base-controlled `trusted-golden-diff` workflow on
-`pull_request_target`, limited to `main`. Before checkout it requires the event base ref to be
-`main` and the event base repository to equal `github.repository`. It checks out the exact event
-base, installs the locked trusted parser dependency with lifecycle scripts disabled, validates the
-event SHAs and numeric pull request number, fetches the pull request merge ref into a detached
-temporary worktree, and executes only the base copies of the classifier and parser against that
-candidate. Candidate code is never executed. Candidate HTML reaches the parser only as bounded
-stdin bytes. Ordinary pull request CI still tests tooling, but it is not the snapshot-acceptance
-gate.
-
-The trusted job reads the event and intent files with fixed allocation ceilings, then reads exactly
-one bounded `json` fence from the pull request body as data. It never evaluates that text. The
-external `lex-golden-diff-intent/1` document must bind `base_commit` to the separately supplied full
-`--base` SHA and contain exactly one of `additions` or `html_selectors`. A change with no golden
-files needs no intent fence.
-
-After this bootstrap change merges, repository administration must require the base workflow in a
-repository ruleset when GitHub accepts the `workflows` rule. A required branch-protection status
-context named `trusted-golden-diff` is only the fallback. A status context plus the GitHub Actions
-app identity does not identify one workflow, and duplicate job names across workflows are
-ambiguous. The classifier rejects a statically recoverable trusted check name in any other
-candidate workflow, including YAML Unicode escapes and line continuations, but a dynamic expression
-can construct the same name without that marker. The fallback is not a security boundary against a
-compromised repository writer. Once the canonical workflow exists in the trusted base, the
-classifier also requires its mode and bytes to remain exactly identical in the candidate. Changing
-or removing that workflow needs the separately governed repository-administration path.
+An update is intentional evidence, not an approval mechanism. Read any resulting diff before
+committing it. Do not add a golden-diff workflow or status context to required checks unless the
+owner issues a new explicit ruling. The existing `trusted-golden-diff` workflow and its tooling
+tests are non-blocking diagnostics only.
 
 For JSON tool snapshots, the classifier accepts only exact RFC 6901 additions. Tool responses use
 the fixed outer `pointer` `/result/content/0/text` plus a `document_pointer` into its JSON string.

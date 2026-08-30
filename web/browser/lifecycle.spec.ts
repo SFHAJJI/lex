@@ -81,8 +81,8 @@ const HOUR = 3_600_000;
 const WORK_ONE = "lu-legilux:loi-2020-07-17-a624";
 const WORK_TWO = "lu-legilux:loi-2019-03-01-b100";
 
-/** The workspace's own sentence for a law that holds no text on the date asked for. */
-const GAP_SENTENCE = "No text is held for this law on that date.";
+/** The workspace's own sentence when no publisher version covers the requested date. */
+const GAP_SENTENCE = "Lex holds this law, but no publisher version covers that date.";
 
 interface McpCall { name: string; args: Record<string, unknown> }
 
@@ -683,7 +683,7 @@ test("the previous day's gap is cleared before paint, not when the new day's ans
       const skeleton = page.locator(".sk-law");
       const articles = page.locator("article.art");
 
-      // The populated baseline is the gap itself: this law holds no text on day one.
+      // The populated baseline is the gap itself: no publisher version covers day one.
       await page.goto(`/?space=law&work=${WORK_ONE}&mode=read`, { waitUntil: "domcontentloaded" });
       await expect(gap).toHaveCount(1);
       await expect(gap).toContainText(GAP_SENTENCE);
@@ -1408,7 +1408,10 @@ test("moving between articles drops the previous article's texts and keeps the c
       // The law, with a contents column and a rail of the law's own versions.
       await page.goto(`/?space=law&work=${WORK_ONE}&mode=read`, { waitUntil: "domcontentloaded" });
       await expect(tocRows).toHaveCount(7);
-      await expect(railScope).toHaveText(`${ALPHA_DATES.length} versions`);
+      // This legacy fixture intentionally carries no truncation receipt. The V3 rail must name
+      // returned distinct dates without promoting them to the law's complete version count.
+      await expect(railScope).toHaveText(
+        `${ALPHA_DATES.length} distinct version dates returned in this response`);
       expect(calls.filter((call) => call.name === "article_history")).toHaveLength(0);
       // The outline requests made at load. Nothing below may add to this number: an anchor is
       // not in the outline identity, so opening an article must not re-ask for the contents.
@@ -1418,7 +1421,8 @@ test("moving between articles drops the previous article's texts and keeps the c
       // Open one article. The rail narrows to that article's texts, and the contents stay,
       // because the outline identity has no anchor in it.
       await page.locator(".toccol .rowbtn", { hasText: "Art. 2" }).first().click();
-      await expect(railScope).toHaveText(`${STATES_TWO.length} texts of this article`);
+      await expect(railScope).toHaveText(
+        `${STATES_TWO.length} distinct article text dates returned in this response`);
       const railTwo = await railText(page);
       for (const date of STATES_TWO) expect(railTwo).toContain(date);
       await expect(tocRows).toHaveCount(7);
@@ -1434,7 +1438,8 @@ test("moving between articles drops the previous article's texts and keeps the c
       // Cleared. Non-retrying: the previous article's texts standing under this one is a wrong
       // attribution for exactly as long as it lasts, and the rail states a count and a scope, so
       // it is making a claim rather than merely showing residue.
-      await expect(railScope).toHaveText(`${ALPHA_DATES.length} versions`);
+      await expect(railScope).toHaveText(
+        `${ALPHA_DATES.length} distinct version dates returned in this response`);
       const railDuring = await railText(page);
       for (const date of STATES_TWO) expect(railDuring).not.toContain(date);
       for (const date of STATES_FIVE) expect(railDuring).not.toContain(date);
@@ -1446,12 +1451,14 @@ test("moving between articles drops the previous article's texts and keeps the c
 
       await page.waitForTimeout(400);
       expect(await tocRows.count()).toBe(7);
-      await expect(railScope).toHaveText(`${ALPHA_DATES.length} versions`);
+      await expect(railScope).toHaveText(
+        `${ALPHA_DATES.length} distinct version dates returned in this response`);
 
       // Released, the rail narrows again, so the readings above were taken on a page that can
       // still produce a narrowed rail.
       release();
-      await expect(railScope).toHaveText(`${STATES_FIVE.length} texts of this article`);
+      await expect(railScope).toHaveText(
+        `${STATES_FIVE.length} distinct article text dates returned in this response`);
       const railAfter = await railText(page);
       for (const date of STATES_FIVE) expect(railAfter).toContain(date);
       for (const date of STATES_TWO) expect(railAfter).not.toContain(date);

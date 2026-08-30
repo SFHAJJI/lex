@@ -17,6 +17,8 @@ test("navigating from an assistant reply never retains stale publisher text", ()
       valid_from: "2021-01-01",
       valid_to: "2021-12-31",
       provisions: [{ anchor: "art_6", text: "Lawful processing." }],
+      truncated: false,
+      text_truncated: false,
     },
   };
   assert.deepEqual(assistantProvisionLoad(full), {
@@ -33,6 +35,16 @@ test("navigating from an assistant reply never retains stale publisher text", ()
   assert.equal(assistantProvisionLoad({ provision: {
     ...full.provision, truncated: true,
   } }), undefined);
+  const { truncated: _truncated, ...withoutTruncation } = full.provision;
+  assert.equal(assistantProvisionLoad({ provision: withoutTruncation }), undefined);
+  const { text_truncated: _textTruncated, ...withoutTextTruncation } = full.provision;
+  assert.equal(assistantProvisionLoad({ provision: withoutTextTruncation }), undefined);
+  assert.equal(assistantProvisionLoad({ provision: {
+    ...full.provision, truncated: "false" as unknown as boolean,
+  } }), undefined);
+  assert.equal(assistantProvisionLoad({ provision: {
+    ...full.provision, text_truncated: 0 as unknown as boolean,
+  } }), undefined);
   assert.equal(assistantProvisionLoad({ diff: {
     subject: { work: "eu-eurlex:32013r0575" },
     from_date: "2020-01-01", to_date: "2024-12-31",
@@ -44,6 +56,8 @@ test("assistant-seeded legal text preserves its publisher source and extraction 
     subject: { work: "eu-eurlex:32016r0679", date: "2021-01-01" },
     valid_from: "2021-01-01",
     provisions: [{ anchor: "art_6", text: "Lawful processing." }],
+    truncated: false,
+    text_truncated: false,
     evidence: [{
       provisional: false,
       source_uri: "https://publisher.example/exact",
@@ -114,6 +128,29 @@ test("typed effects map to bounded workspace state rather than model-authored li
   assert.equal(assistantWorkspaceUrl({ gap: {
     status: "no_result", explanation: "No result", available: [],
   } }), undefined);
+});
+
+test("a gap-only comparison refusal preserves both comparison coordinates", () => {
+  const ui = { gap: {
+    status: "text_not_available",
+    work: "eu-eurlex:32013R0575",
+    date: "2020-01-01",
+    comparison_from_date: "2020-01-01",
+    comparison_to_date: "2024-12-31",
+    explanation: "Certified wording is unavailable.",
+    available: [],
+  } };
+
+  assert.deepEqual(assistantWorkspaceState(ui), {
+    space: "law", q: undefined, asOf: undefined, work: "eu-eurlex:32013R0575",
+    date: "2020-01-01", to: "2024-12-31", anchor: undefined, mode: "compare",
+    from: undefined, until: undefined, order: undefined, retrieval: undefined,
+    jurisdiction: undefined, hierarchy: undefined, domain: undefined,
+    sourceClass: undefined, actForm: undefined, bindingStatus: undefined,
+    language: undefined,
+  });
+  assert.equal(assistantWorkspaceUrl(ui),
+    "/?space=law&work=eu-eurlex%3A32013R0575&date=2020-01-01&to=2024-12-31&mode=compare");
 });
 
 test("aggregate results replace stale workspace scope with the exact tool scope", () => {
@@ -197,6 +234,15 @@ test("timeline effects seed the version rail before the workspace follow-up fetc
     total: 3,
     truncated: true,
   });
+
+  assert.equal(assistantTimelineSeed({ timeline: {
+    subject: { work: "eu-eurlex:32013r0575" }, total_count: 1,
+    rows: [{ valid_from: "2024-01-01" }],
+  } })?.truncated, undefined);
+  assert.equal(assistantTimelineSeed({ timeline: {
+    subject: { work: "eu-eurlex:32013r0575" }, total_count: 1,
+    rows: [{ valid_from: "2024-01-01" }], truncated: "false" as unknown as boolean,
+  } })?.truncated, undefined);
 });
 
 test("same-date timeline states never expose an ambiguous date-only destination", () => {

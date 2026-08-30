@@ -37,13 +37,16 @@ const TO = "2021-01-01";
  * without validating it, so the declaration constrains the producer and not the wire. A fixture
  * typed to the declaration could not express the case that produced a false claim.
  */
-function diffOperation(requestId: string, changed: unknown, anchor?: string) {
+function diffOperation(requestId: string, changed: unknown, anchor?: string,
+                       limitations?: unknown, limitationsMalformed?: boolean) {
   const diff: Record<string, unknown> = {
     subject: { work: WORK, title: "Fixture law", ...(anchor ? { anchor } : {}) },
     from_date: FROM, to_date: TO,
     provision_level_comparable: false,
   };
   if (changed !== undefined) diff.changed = changed;
+  if (limitations !== undefined) diff.comparison_limitations = limitations;
+  if (limitationsMalformed === true) diff.comparison_limitations_malformed = true;
   return {
     operation_id: `${requestId}:op-1`, order: 0, tool: "diff",
     result_class: null, disposition: "answer", legal_outcome: "answer",
@@ -53,21 +56,30 @@ function diffOperation(requestId: string, changed: unknown, anchor?: string) {
 }
 
 /**
- * A second view-carrying operation, which is what makes the reply compound. It is deliberately the
- * most inert view the renderer has, so nothing it draws can be mistaken for the panel under test.
+ * A second view-carrying operation, which is what makes the reply compound. Provenance has no
+ * workspace destination, so it cannot overwrite the comparison route under test.
  */
 function companionOperation(requestId: string) {
   return {
-    operation_id: `${requestId}:op-2`, order: 1, tool: "search",
+    operation_id: `${requestId}:op-2`, order: 1, tool: "provenance",
     result_class: null, disposition: "answer", legal_outcome: "answer",
-    transport_outcome: "completed", effects: ["workspace"],
-    ui: { workspace: { page: 0 } },
+    transport_outcome: "completed", effects: ["verification"],
+    ui: { verification: { lex_id: `${WORK}@${FROM}` } },
   };
 }
 
 async function runAssistant(page: Page, requestId: string,
-                            changed: unknown, anchor?: string) {
-  const operations = [diffOperation(requestId, changed, anchor), companionOperation(requestId)];
+                            changed: unknown, anchor?: string, limitations?: unknown,
+                            limitationsMalformed?: boolean) {
+  const operations = [diffOperation(requestId, changed, anchor, limitations, limitationsMalformed),
+                      companionOperation(requestId)];
+  await runOperations(page, requestId, operations);
+  const panel = page.getByRole("region", { name: "Comparison result" });
+  await expect(panel).toBeVisible();
+  return panel;
+}
+
+async function runOperations(page: Page, requestId: string, operations: unknown[]) {
   await page.addInitScript(({ requestId, operations }) => {
     const originalFetch = window.fetch.bind(window);
     window.fetch = (input, init) => {
@@ -109,9 +121,43 @@ data: ${envelope(operations.length + 1, {
   await expect(page.locator(".askpanel")).toBeVisible();
   await page.getByRole("textbox", { name: "Ask Lex" }).fill("compare these dates");
   await page.getByRole("button", { name: "Ask", exact: true }).click();
-  const panel = page.getByRole("region", { name: "Comparison result" });
-  await expect(panel).toBeVisible();
-  return panel;
+}
+
+async function runRefusal(page: Page, requestId: string, status: string,
+                          limitations: unknown, limitationsMalformed = false) {
+  const gap: Record<string, unknown> = {
+    status,
+    work: WORK,
+    date: FROM,
+    explanation: status === "profiles_differ"
+      ? "The two versions use different extraction profiles."
+      : "Certified wording is not available for every requested coordinate.",
+    available: [],
+    comparison_from_date: FROM,
+    comparison_to_date: TO,
+    comparison_limitations: limitations,
+  };
+  if (limitationsMalformed) gap.comparison_limitations_malformed = true;
+  const diff = {
+    subject: { work: WORK, title: "Fixture law" },
+    from_date: FROM,
+    to_date: TO,
+    status,
+    comparison_limitations: limitations,
+    comparison_limitations_malformed: limitationsMalformed,
+  };
+  const keepsDiff = status === "profiles_differ";
+  const operation = {
+    operation_id: `${requestId}:op-1`, order: 0, tool: "diff",
+    result_class: null, disposition: "refuse",
+    legal_outcome: keepsDiff ? "not_comparable" : "not_available",
+    transport_outcome: "completed", effects: keepsDiff ? ["diff", "gap"] : ["gap"],
+    ui: keepsDiff ? { diff, gap } : { gap },
+  };
+  await runOperations(page, requestId, [operation, companionOperation(requestId)]);
+  const gapPanel = page.locator(".operation-result .gap").first();
+  await expect(gapPanel).toBeVisible();
+  return gapPanel;
 }
 
 test("a whole-work comparison that moved states which versions applied", async ({ page }) => {
@@ -173,4 +219,81 @@ test("an anchored comparison keeps its provision-level tags and gains no whole-w
     // whole-work sentence must not appear beside it.
     await expect(panel).toContainText("art_1");
     await expect(panel).not.toContainText("different versions on these dates");
+  });
+
+/**
+ * D18. The producer classifies why a comparison is limited, in `comparison_limitations`, and writes
+ * the same facts into the prose note. Only the note reached a reader. Prose cannot be branched on,
+ * so no surface could refuse a comparison it had been told was uncertifiable; it could only print a
+ * paragraph and hope the paragraph was finished.
+ */
+test("typed comparison limitations are stated, not left to the prose note", async ({ page }) => {
+  const panel = await runAssistant(page, "8023456789abcdef0123456789abcdef", true, undefined,
+    ["profiles_differ", "typed_text_gap"]);
+
+  await expect(panel).toContainText("different extraction profiles");
+  await expect(panel).toContainText("wording comparison not certified");
+});
+
+test("a limitation this panel cannot interpret is still shown", async ({ page }) => {
+  const panel = await runAssistant(page, "9023456789abcdef0123456789abcdef", true, undefined,
+    ["some_future_reason"]);
+
+  // Refusing to interpret a limitation is not a reason to hide that one exists.
+  await expect(panel).toContainText("some_future_reason");
+});
+
+test("a comparison with no limitations states none", async ({ page }) => {
+  const panel = await runAssistant(page, "a123456789abcdef0123456789abcdef", true);
+
+  await expect(panel).not.toContainText("different extraction profiles");
+  await expect(panel).not.toContainText("not certified");
+  await expect(panel).not.toContainText("limitation data was malformed");
+});
+
+test("valid limitations survive malformed siblings and the malformed field is explicit",
+  async ({ page }) => {
+    const panel = await runAssistant(page, "b123456789abcdef0123456789abcdef", true, undefined,
+      ["profiles_differ"], true);
+
+    await expect(panel).toContainText("different extraction profiles");
+    await expect(panel).toContainText("limitation data was malformed");
+  });
+
+test("a present non-array limitation field is reported as malformed", async ({ page }) => {
+  const panel = await runAssistant(page, "c123456789abcdef0123456789abcdef", true, undefined,
+    undefined, true);
+
+  await expect(panel).toContainText("limitation data was malformed");
+});
+
+test("a profiles-differ refusal renders its typed comparison limitation", async ({ page }) => {
+  const gap = await runRefusal(page, "d123456789abcdef0123456789abcdef",
+    "profiles_differ", ["profiles_differ"]);
+
+  await expect(gap).toContainText("different extraction profiles");
+  await expect(gap).toContainText("provisions cannot be paired");
+  await expect.poll(() => new URL(page.url()).searchParams.get("mode")).toBe("compare");
+  await expect.poll(() => new URL(page.url()).searchParams.get("work")).toBe(WORK);
+  await expect.poll(() => new URL(page.url()).searchParams.get("to")).toBe(TO);
+});
+
+test("a text-unavailable refusal renders its typed text-gap limitation", async ({ page }) => {
+  const gap = await runRefusal(page, "e123456789abcdef0123456789abcdef",
+    "text_not_available", ["typed_text_gap"]);
+
+  await expect(gap).toContainText("typed text gap");
+  await expect(gap).toContainText("wording comparison not certified");
+  await expect.poll(() => new URL(page.url()).searchParams.get("mode")).toBe("compare");
+  await expect.poll(() => new URL(page.url()).searchParams.get("work")).toBe(WORK);
+  await expect.poll(() => new URL(page.url()).searchParams.get("to")).toBe(TO);
+});
+
+test("a refusal reports malformed limitation data without hiding valid facts",
+  async ({ page }) => {
+    const gap = await runRefusal(page, "f123456789abcdef0123456789abcdef",
+      "text_not_available", ["typed_text_gap"], true);
+
+    await expect(gap).toContainText("typed text gap");
+    await expect(gap).toContainText("limitation data was malformed");
   });

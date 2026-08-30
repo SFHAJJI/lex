@@ -181,9 +181,45 @@ internal static class OperationAnswerPolicy
                 : $"Lex found {inForce.Total:n0} publisher-observed states{scope} covering {inForce.Date}. This is not an exhaustive legal-effect inventory.";
         }
         if (effect.CitedBy is { } cited)
-            return fr
-                ? $"Lex a trouvé {cited.CitingArticles:n0} article(s) faisant référence à {cited.CitedWork}."
-                : $"Lex found {cited.CitingArticles:n0} article(s) referring to {cited.CitedWork}.";
+        {
+            var one = cited.CitingArticles == 1;
+            var recognizedScope = cited.EvidenceScope
+                == "captured_cross_references_in_held_non_withdrawn_versions";
+            var complete = cited.ExactComplete;
+            var count = complete
+                ? fr
+                    ? $"Lex a trouvé au total {cited.CitingArticles:n0} {(one ? "article" : "articles")} faisant référence à {cited.CitedWork}."
+                    : $"Lex found a total of {cited.CitingArticles:n0} {(one ? "article" : "articles")} referring to {cited.CitedWork}."
+                : fr
+                    ? $"Lex a renvoyé {cited.CitingArticles:n0} {(one ? "article" : "articles")} faisant référence à {cited.CitedWork}."
+                    : $"Lex returned {cited.CitingArticles:n0} {(one ? "article" : "articles")} referring to {cited.CitedWork}.";
+            var scope = recognizedScope
+                ? fr
+                    ? " Les éléments de preuve couvrent les renvois capturés par Lex dans les versions éditeur détenues et non retirées."
+                    : " The evidence covers cross-references Lex captured in held, non-withdrawn publisher versions."
+                : fr
+                    ? " La réponse ne contient pas de périmètre de preuve reconnu."
+                    : " The response does not carry a recognized evidence scope.";
+            var legalEffect = cited.CurrentLegalEffectAssessed == false
+                ? fr
+                    ? one
+                        ? " Lex n'a pas évalué si ce renvoi produit actuellement un effet juridique."
+                        : " Lex n'a pas évalué si ces renvois produisent actuellement un effet juridique."
+                    : one
+                        ? " Lex did not assess whether this reference is currently legally operative."
+                        : " Lex did not assess whether these references are currently legally operative."
+                : "";
+            var relationship = cited.RelationshipTypeAssessed == false
+                ? fr
+                    ? one
+                        ? " Lex n'a pas classé son type de relation."
+                        : " Lex n'a pas classé leurs types de relation."
+                    : one
+                        ? " Lex did not classify its relationship type."
+                        : " Lex did not classify their relationship types."
+                : "";
+            return count + scope + legalEffect + relationship;
+        }
         if (effect.Provision is { } provision)
         {
             var served = Served(fr, provision.Subject.Date, provision.ValidFrom);
@@ -196,30 +232,30 @@ internal static class OperationAnswerPolicy
                     : $" It includes {gapTotal:n0} coordinate(s) without certified wording, marked as typed gaps.";
                 return fr
                     ? $"La table des matières publiée de {Name(provision.Subject)} au {provision.ValidFrom} est affichée ci-dessous"
-                      + (provision.Truncated ? "; cette vue bornée n'en montre qu'une partie." : ".")
+                      + (provision.Truncated == true ? "; cette vue bornée n'en montre qu'une partie." : ".")
                       + gapDisclosure + served
                     : $"The publisher table of contents for {Name(provision.Subject)} at {provision.ValidFrom} is open below"
-                      + (provision.Truncated ? "; this bounded view shows only part of it." : ".")
+                      + (provision.Truncated == true ? "; this bounded view shows only part of it." : ".")
                       + gapDisclosure + served;
             }
             if (provision.ProvisionGaps is { Count: > 0 } typedGaps)
             {
                 var totalGaps = provision.TotalProvisionGaps ?? typedGaps.Count;
-                var bounded = provision.Truncated || provision.TextTruncated
+                var bounded = provision.Truncated != false || provision.TextTruncated != false
                     || totalGaps > typedGaps.Count;
                 if (bounded)
                     return fr
                         ? $"Lex détient un état éditeur partiel de {Name(provision.Subject)} au {provision.ValidFrom} : {totalGaps:n0} coordonnée(s) publiée(s) n'ont pas de libellé certifié. Cette réponse bornée affiche {typedGaps.Count:n0} lacune(s) typée(s)"
-                          + (provision.TextTruncated ? " et omet une partie du texte éditeur détenu" : "")
+                          + (provision.TextTruncated == true ? " et omet une partie du texte éditeur détenu" : "")
                           + "; une source officielle accompagne chaque lacune affichée." + served
                         : $"Lex holds a partial publisher state for {Name(provision.Subject)} at {provision.ValidFrom}: {totalGaps:n0} published coordinate(s) have no certified wording. This bounded response shows {typedGaps.Count:n0} typed gap(s)"
-                          + (provision.TextTruncated ? " and omits some held publisher text" : "")
+                          + (provision.TextTruncated == true ? " and omits some held publisher text" : "")
                           + "; an official source accompanies each shown gap." + served;
                 return fr
                     ? $"Lex affiche le texte éditeur certifié disponible de {Name(provision.Subject)} au {provision.ValidFrom}, mais {typedGaps.Count:n0} coordonnée(s) publiée(s) n'ont pas de libellé certifié. Les lacunes typées et leurs sources officielles sont affichées ci-dessous." + served
                     : $"Lex shows the available certified publisher text for {Name(provision.Subject)} at {provision.ValidFrom}, but {typedGaps.Count:n0} published coordinate(s) have no certified wording. The typed gaps and their official sources are shown below." + served;
             }
-            if (provision.TextTruncated)
+            if (provision.TextTruncated == true)
                 return fr
                     ? $"Lex détient le texte publié de {Name(provision.Subject)} au {provision.ValidFrom}, mais cette réponse bornée n'en affiche qu'une partie. Les liens officiels sont disponibles ci-dessous." + served
                     : $"Lex holds the publisher text for {Name(provision.Subject)} at {provision.ValidFrom}, but this bounded response shows only part of it. The official links are available below." + served;
@@ -255,16 +291,35 @@ internal static class OperationAnswerPolicy
             var starts = history.States.Select(state => state.ValidFrom)
                 .Where(value => value.Length > 0)
                 .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
-            var dates = starts.Length switch
+            var returnedStateCount = history.States.Count;
+            var completeDates = starts.Length switch
             {
                 0 => "",
-                1 => fr ? $", daté du {starts[0]}" : $", dated {starts[0]}",
-                <= MaximumListedHistoryDates when starts.Length >= history.DistinctTexts => fr
+                1 when returnedStateCount == 1 => fr
+                    ? $", daté du {starts[0]}"
+                    : $", dated {starts[0]}",
+                1 => fr
+                    ? $", avec des états débutant le {starts[0]}"
+                    : $", with states beginning {starts[0]}",
+                <= MaximumListedHistoryDates when starts.Length == returnedStateCount => fr
                     ? $", avec des états débutant les {string.Join(", ", starts)}"
                     : $", with states beginning {string.Join(", ", starts)}",
                 _ => fr
                     ? $", du {starts[0]} au dernier état commençant le {starts[^1]}"
                     : $", from {starts[0]} through the latest state beginning {starts[^1]}",
+            };
+            var returnedDates = starts.Length switch
+            {
+                0 => "",
+                1 when returnedStateCount == 1 => fr
+                    ? $", avec un état renvoyé daté du {starts[0]}"
+                    : $", with one returned state dated {starts[0]}",
+                1 => fr
+                    ? $", avec {returnedStateCount:n0} états renvoyés débutant le {starts[0]}"
+                    : $", with {returnedStateCount:n0} returned states beginning {starts[0]}",
+                _ => fr
+                    ? $", avec des états renvoyés du {starts[0]} au dernier état renvoyé commençant le {starts[^1]}"
+                    : $", with returned states from {starts[0]} through the last returned state beginning {starts[^1]}",
             };
             var semantics = history.Evidence?.Select(item => item.TimelineSemantics)
                 .FirstOrDefault(value => value is { Length: > 0 });
@@ -286,9 +341,33 @@ internal static class OperationAnswerPolicy
             var expression = history.Subject.Language is { Length: > 0 } language
                 ? (fr ? $"l'expression {language} de " : $"the {language} expression of ")
                 : "";
-            return fr
-                ? $"L'historique vérifié de {history.Anchor} dans {expression}{Name(history.Subject)} contient {history.DistinctTexts:n0} texte(s) distinct(s){dates}. Ce sont des {kind}, pas des conclusions sur l'effet juridique."
-                : $"The verified history of {history.Anchor} in {expression}{Name(history.Subject)} contains {history.DistinctTexts:n0} distinct text(s){dates}. These are {kind}, not conclusions about legal effect.";
+            // McpCore.article_history assigns ProvisionStateCount (COUNT(*)) to distinct_texts.
+            // This surface therefore names publisher states, not an unproved DISTINCT text count.
+            var reportedUnit = fr
+                ? history.DistinctTexts == 1 ? "état de l'éditeur" : "états de l'éditeur"
+                : history.DistinctTexts == 1 ? "publisher state" : "publisher states";
+            var returnedUnit = fr
+                ? returnedStateCount == 1 ? "état" : "états"
+                : returnedStateCount == 1 ? "state" : "states";
+            var historyResult = history.Truncated == false
+                ? fr
+                    ? $"L'historique vérifié de {history.Anchor} dans {expression}{Name(history.Subject)} contient {history.DistinctTexts:n0} {reportedUnit}{completeDates}."
+                    : $"The verified history of {history.Anchor} in {expression}{Name(history.Subject)} contains {history.DistinctTexts:n0} {reportedUnit}{completeDates}."
+                : fr
+                    ? $"L'historique vérifié de {history.Anchor} dans {expression}{Name(history.Subject)} signale {history.DistinctTexts:n0} {reportedUnit} et renvoie {returnedStateCount:n0} {returnedUnit}{returnedDates}."
+                    : $"The verified history of {history.Anchor} in {expression}{Name(history.Subject)} reports {history.DistinctTexts:n0} {reportedUnit} and returns {returnedStateCount:n0} {returnedUnit}{returnedDates}.";
+            var historyCompleteness = history.Truncated switch
+            {
+                true => fr ? " Cette réponse bornée est tronquée."
+                    : " This bounded response is truncated.",
+                null => fr ? " La réponse n'indique pas si l'historique est complet."
+                    : " The response does not record whether the history is complete.",
+                _ => "",
+            };
+            return historyResult + (fr
+                ? $" Ce sont des {kind}, pas des conclusions sur l'effet juridique."
+                : $" These are {kind}, not conclusions about legal effect.")
+                + historyCompleteness;
         }
         if (effect.Timeline is { } timeline)
         {
@@ -308,16 +387,30 @@ internal static class OperationAnswerPolicy
                     : "publisher applicability states",
                 _ => fr ? "états de version de l'éditeur" : "publisher version states",
             };
-            var dates = first is null ? "" : first == last
+            var completeDates = first is null ? "" : first == last
                 ? (fr ? $", daté du {first}" : $", dated {first}")
                 : (fr ? $", du {first} au dernier état commençant le {last}"
                     : $", from {first} through the latest state beginning {last}");
-            var bounded = timeline.Truncated
-                ? (fr ? " Cette vue bornée est tronquée." : " This bounded view is truncated.")
-                : "";
-            return fr
-                ? $"Lex détient {timeline.TotalCount:n0} {kind} pour {Name(timeline.Subject)}{dates}. Ce sont des dates éditeur, pas une conclusion sur l'effet juridique.{bounded}"
-                : $"Lex holds {timeline.TotalCount:n0} {kind} for {Name(timeline.Subject)}{dates}. These are publisher dates, not a conclusion about legal effect.{bounded}";
+            var returnedDates = first is null ? "" : first == last
+                ? (fr ? $", avec un état renvoyé daté du {first}"
+                    : $", with one returned state dated {first}")
+                : (fr ? $", avec des états renvoyés du {first} au dernier état renvoyé commençant le {last}"
+                    : $", with returned states from {first} through the last returned state beginning {last}");
+            var timelineResult = timeline.Truncated switch
+            {
+                false => fr
+                    ? $"Lex détient {timeline.TotalCount:n0} {kind} pour {Name(timeline.Subject)}{completeDates}."
+                    : $"Lex holds {timeline.TotalCount:n0} {kind} for {Name(timeline.Subject)}{completeDates}.",
+                true => fr
+                    ? $"Lex a renvoyé {timeline.Rows.Count:n0} sur {timeline.TotalCount:n0} {kind} pour {Name(timeline.Subject)}{returnedDates}. Cette vue bornée est tronquée."
+                    : $"Lex returned {timeline.Rows.Count:n0} of {timeline.TotalCount:n0} {kind} for {Name(timeline.Subject)}{returnedDates}. This bounded view is truncated.",
+                null => fr
+                    ? $"Lex a renvoyé {timeline.Rows.Count:n0} {kind} pour {Name(timeline.Subject)}{returnedDates}. La réponse n'indique pas si la chronologie est complète."
+                    : $"Lex returned {timeline.Rows.Count:n0} {kind} for {Name(timeline.Subject)}{returnedDates}. The response does not record whether the timeline is complete.",
+            };
+            return timelineResult + (fr
+                ? " Ce sont des dates éditeur, pas une conclusion sur l'effet juridique."
+                : " These are publisher dates, not a conclusion about legal effect.");
         }
         if (effect.Coverage is { } coverage)
         {

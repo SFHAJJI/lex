@@ -1,17 +1,18 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { asOfResult, compoundOperationViews, first, provisionEmptyExplanation, provisionItemsOf, provisionResponseMeta, summedCount, summedPopulation, tool,
+import { asOfResult, compoundOperationViews, first, provisionGapPresentation, provisionItemsOf, provisionResponseMeta, summedCount, summedPopulation, tool,
   unionKnownExclusions,
   type AskReply,
   type OperationReply, type ProvisionItem, type UiEffect } from "./api";
 import type { EnvelopeStripRow } from "./envelopeStrip";
 import { publisherOf, useWorkspace, workSlug, type Space, type State } from "./state";
-import { CitedBy, CoveragePanel, Empty, EnvelopeStrip, EvidenceCoordinates, Gap, InForce, PartialResponseNotice, Provision, PublisherLimitations, Ranking, Timeline,
+import { CitedBy, ComparisonLimitations, CoveragePanel, Empty, EnvelopeStrip, EvidenceCoordinates, Gap, InForce, PartialResponseNotice, Provision, PublisherLimitations, Ranking, Timeline,
   VerificationPanel, VersionRail, hasView } from "./views";
 import { limitationsFromEffect } from "./limitations";
 import { Compare } from "./Compare";
 import { LawPicker, shorten } from "./pickers";
 import AssistantController from "./AssistantController";
-import { assistantProvisionLoad, assistantTimelineSeed, assistantWorkspaceState } from "./assistantShell";
+import { assistantProvisionLoad, assistantTimelineSeed, assistantWorkspaceState,
+  reportedTruncation } from "./assistantShell";
 import Search from "./Search";
 import Period from "./Period";
 import Coach, { COACH_KEY } from "./Coach";
@@ -203,6 +204,7 @@ export default function App() {
     workGeneration.current += 1;
     if (!s.work) return;
     setVersions([]);
+    setVersionsPartial(undefined);
     setLangs([]);
     setHeld(undefined);
     setTimelineSemantics(undefined);
@@ -213,6 +215,7 @@ export default function App() {
     anchorGeneration.current += 1;
     if (!s.work || !s.anchor) return;
     setStates([]);
+    setStatesPartial(undefined);
     return () => { anchorGeneration.current += 1; };
   }, [s.work, s.anchor]);
   const [operationViews, setOperationViews] = useState<OperationReply[]>([]);
@@ -228,6 +231,10 @@ export default function App() {
   const [toc, setToc] = useState<ProvisionItem[]>([]);
   const [title, setTitle] = useState<string>();
   const [versions, setVersions] = useState<string[]>([]);
+  // Whether the version list is the whole list. The producer says so on every timeline
+  // response and both paths that fill the rail used to drop it, so a rail built from a
+  // page of versions counted them as if they were all of them.
+  const [versionsPartial, setVersionsPartial] = useState<boolean>();
   const [langs, setLangs] = useState<string[]>([]);
   // The language actually served, read back from the document rather than assumed. The switcher
   // first highlighted langs[0], which is alphabetical, so the Constitution showed French articles
@@ -242,6 +249,7 @@ export default function App() {
   // it rather than fetched separately, so the strip describes THIS answer's index.
   const [strip, setStrip] = useState<EnvelopeStripRow[]>([]);
   const [states, setStates] = useState<string[]>([]);
+  const [statesPartial, setStatesPartial] = useState<boolean>();
   const [coached, setCoached] = useState(() => {
     try { return localStorage.getItem(COACH_KEY) === "1"; } catch { return true; }
   });
@@ -322,7 +330,7 @@ export default function App() {
     // The index identity belongs to the response that produced the view. Opening a law after a
     // search would otherwise leave the search's strip above a law it never described.
     setStrip([]);
-    if (!s.work) { setVersions([]); setLangs([]); setServedLang(undefined); setTimelineSemantics(undefined); setHeld(undefined); return; }
+    if (!s.work) { setVersions([]); setVersionsPartial(undefined); setLangs([]); setServedLang(undefined); setTimelineSemantics(undefined); setHeld(undefined); return; }
     // Never carry one publisher's time semantics across a work switch while the next timeline
     // is loading. The work-id fallback remains correct for currently mounted legacy artifacts.
     setTimelineSemantics(undefined);
@@ -336,6 +344,9 @@ export default function App() {
         setTimelineSemantics(one?.envelope?.timeline_semantics);
         const dates = [...new Set(vs.map((v) => String(v.valid_from)))] as string[];
         setVersions(dates.sort());
+        // Identity, not truthiness: this value decides whether the rail may present its
+        // count as the law's version count, and the response is not validated on the way in.
+        setVersionsPartial(reportedTruncation(one?.truncated));
         // Which languages this work exists in. The Constitution is published in French, German
         // and Luxembourgish, and its stored title is German for all three, so a reader looking
         // at the French text sees a German heading above it and reasonably concludes the page is
@@ -345,7 +356,7 @@ export default function App() {
                   official: vs[vs.length - 1]?.source_uri,
                   kind: vs[vs.length - 1]?.document_type });
       })
-      .catch(() => { if (live()) { setVersions([]); setLangs([]); setTimelineSemantics(undefined); setHeld(undefined); } });
+      .catch(() => { if (live()) { setVersions([]); setVersionsPartial(undefined); setLangs([]); setTimelineSemantics(undefined); setHeld(undefined); } });
   }, [s.work]);
 
   // The outline belongs to (law, date) — never to the focused article. It used to be fetched
@@ -432,12 +443,10 @@ export default function App() {
               bodySha256: doc?.body_sha256,
               ...meta }
           : undefined);
-        if (items.length === 0)
+        const gap = provisionGapPresentation(one, items, meta);
+        if (gap)
           setUi({ gap: {
-            status: meta.textCompleteness === "partial" || meta.textTruncated
-              ? "partial_response"
-              : one?.envelope?.status ?? "no_result",
-            explanation: provisionEmptyExplanation(meta),
+            ...gap,
             available: [],
             total_provisions: meta.totalProvisions,
             total_provision_gaps: meta.totalProvisionGaps,
@@ -689,16 +698,18 @@ export default function App() {
   // reader actually has ("when did this paragraph change?") rather than "when was anything
   // in this law touched?". Falls back to the law's versions when no per-article history exists.
   useEffect(() => {
-    if (!s.work || !s.anchor) { setStates([]); return; }
+    if (!s.work || !s.anchor) { setStates([]); setStatesPartial(undefined); return; }
     const mine = anchorGeneration.current;
     const live = () => mine === anchorGeneration.current;
     tool<any>("article_history", { work: s.work, anchor: s.anchor })
       .then((res) => {
         if (!live()) return;
         const one = first<any>(res, (x) => Array.isArray(x?.states) && x.states.length > 0);
-        setStates(((one?.states ?? []) as { valid_from: string }[]).map((x) => x.valid_from).sort());
+        setStates([...new Set(((one?.states ?? []) as { valid_from: string }[])
+          .map((x) => x.valid_from))].sort());
+        setStatesPartial(reportedTruncation(one?.truncated));
       })
-      .catch(() => live() && setStates([]));
+      .catch(() => { if (live()) { setStates([]); setStatesPartial(undefined); } });
   }, [s.work, s.anchor]);
 
   const applyAssistantReply = useCallback((r: AskReply) => {
@@ -750,6 +761,9 @@ export default function App() {
         const timeline = assistantTimelineSeed(r.ui);
         if (timeline) {
           setVersions(timeline.versions);
+          // assistantTimelineSeed has always returned this. Dropping it let an assistant
+          // answer replace a complete rail with a page of it and say nothing.
+          setVersionsPartial(timeline.truncated);
           setLangs(timeline.languages);
         }
         // The rendered view owns navigation. A comparison turn may also read each side via
@@ -822,7 +836,7 @@ export default function App() {
   // Open on the text in force TODAY, never on the oldest version — the oldest is the one most
   // likely to have no stored text, so the old behaviour greeted every visitor with a refusal.
   const pickLaw = (h: { work: string; title: string }) => {
-    clearAssistantView(); setTitle(h.title); setVersions([]);
+    clearAssistantView(); setTitle(h.title); setVersions([]); setVersionsPartial(undefined);
     go({ work: h.work, date: undefined, anchor: undefined, to: undefined, mode: "read", space: "law" });
   };
 
@@ -836,7 +850,12 @@ export default function App() {
   // dated versions, was being hidden by the convenience that lands you in it.
   const narrowed = !!s.anchor && chosenAnchor.current && states.length > 0;
   const railDates = narrowed ? states : versions;
-  const railScope = narrowed ? "texts of this article" : "versions";
+  const railScope = narrowed
+    ? `distinct article text date${railDates.length === 1 ? "" : "s"}`
+    : `distinct version date${railDates.length === 1 ? "" : "s"}`;
+  // A narrowed rail is article states from article_history, a different response with its
+  // own completeness. Carrying the timeline flag onto it would qualify the wrong list.
+  const railPartial = narrowed ? statesPartial : versionsPartial;
   const at = loaded?.from && railDates.includes(loaded.from) ? loaded.from
            : railDates.filter((d) => d <= (s.date ?? today)).pop();
 
@@ -915,6 +934,8 @@ export default function App() {
           ? "different versions on these dates"
           : "the same version applied on both dates"}</span>
       </div>}
+      <ComparisonLimitations limitations={view.diff.comparison_limitations}
+        malformed={view.diff.comparison_limitations_malformed} />
       {view.diff.note ? <p>{view.diff.note}</p> : null}
       <button className="operation-open" onClick={() => openDiff(
         view.diff!.subject.work, view.diff!.from_date, view.diff!.to_date)}>
@@ -1038,7 +1059,8 @@ export default function App() {
       ) : null}
 
       {space === "law" && s.work ? (
-        <VersionRail dates={railDates} current={at} compareTo={s.mode === "compare" ? s.to : undefined}
+        <VersionRail dates={railDates} current={at} partial={railPartial}
+                     compareTo={s.mode === "compare" ? s.to : undefined}
                      scope={railScope} today={today} work={s.work} timelineSemantics={timelineSemantics}
                      onPick={(d) => { clearAssistantView(); go({ date: d, to: undefined, mode: "read" }); }}
                      onCompare={(d) => {

@@ -36,7 +36,9 @@ public sealed class OfficialMetadataPolicyTests : IDisposable
 
         Assert.Contains("<IsTestProject>true</IsTestProject>", project, StringComparison.Ordinal);
         Assert.Contains("trx;LogFileName=ci.trx", workflow, StringComparison.Ordinal);
-        Assert.Contains("if total < 300 or executed < 300", workflow, StringComparison.Ordinal);
+        Assert.Contains("if total <= 0", workflow, StringComparison.Ordinal);
+        Assert.Contains("if executed != total", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("expected at least 300", workflow, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -80,6 +80,11 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         var res = await _site.Client.GetAsync(path);
         var body = await res.Content.ReadAsStringAsync();
         var renderedBody = body.Length == 0 ? "" : Golden.Normalise(body);
+        var expectedStatus = name is "work-unknown" or "work-baddate"
+            ? HttpStatusCode.NotFound
+            : HttpStatusCode.OK;
+        Assert.Equal(expectedStatus, res.StatusCode);
+        Assert.NotEmpty(renderedBody.Trim());
         Golden.Assert($"page-{name}", $"HTTP {(int)res.StatusCode}\n{renderedBody}");
     }
 
@@ -454,6 +459,7 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
                   + tool + "\",\"arguments\":" + args + "}}";
         var res = await _site.Client.PostAsync("/mcp",
             new StringContent(rpc, Encoding.UTF8, "application/json"));
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
         var body = await McpJson(res);
         // A malformed request returns an empty body, and an empty snapshot would happily become
         // the baseline and then "pass" forever. The first version of this file did exactly that.
@@ -908,11 +914,26 @@ internal static class Golden
         return s.Replace("\r\n", "\n").TrimEnd() + "\n";
     }
 
+    /// <summary>
+    /// V3 snapshot diagnostic mode. Owner-directed, 2026-08-30.
+    ///
+    /// The snapshots describe V2 surfaces that V3 is replacing. They remain available as
+    /// optional evidence, but they do not gate normal tests, pull requests, rebuilds, promotions,
+    /// or deployments.
+    ///
+    /// Normal runs neither compare nor rewrite snapshots. LEX_GOLDEN_VERIFY=1 opts into a
+    /// comparison and LEX_GOLDEN_UPDATE=1 opts into a rewrite.
+    ///
+    /// This applies equally to page and tool-response snapshots. Targeted behavioral tests remain
+    /// active and are the required regression protection during the V3 replacement.
+    /// </summary>
     public static void Assert(string name, string actual)
     {
+        var update = Environment.GetEnvironmentVariable("LEX_GOLDEN_UPDATE") == "1";
+        var verify = Environment.GetEnvironmentVariable("LEX_GOLDEN_VERIFY") == "1";
+        if (!update && !verify) return;
         var path = Path.Combine(Dir, $"{name}.txt");
-        AssertFile(path, actual,
-            Environment.GetEnvironmentVariable("LEX_GOLDEN_UPDATE") == "1");
+        AssertFile(path, actual, update);
     }
 
     internal static void AssertFile(string path, string actual, bool updateMode)

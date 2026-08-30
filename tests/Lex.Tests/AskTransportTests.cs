@@ -705,6 +705,306 @@ public sealed class AskTransportTests
     }
 
     [Fact]
+    public void Cited_by_answer_claims_a_complete_total_only_from_an_exact_false_receipt()
+    {
+        const string knownScope =
+            "captured_cross_references_in_held_non_withdrawn_versions";
+        static string Render(JsonNode? truncated, string? scope, bool includeScope = true)
+        {
+            var result = new JsonObject
+            {
+                ["envelope"] = new JsonObject
+                {
+                    ["status"] = McpStatus.Ok, ["publisher"] = "lu-legilux",
+                },
+                ["cited_work"] = "eu-eurlex:32016r0679",
+                ["current_legal_effect_assessed"] = false,
+                ["relationship_type_assessed"] = false,
+                ["citing_articles"] = 1,
+                ["citations"] = new JsonArray(new JsonObject
+                {
+                    ["work"] = "lu-legilux:loi-example",
+                    ["valid_from"] = "2026-01-01",
+                    ["anchor"] = "art_1",
+                    ["num"] = "Art. 1",
+                }),
+                ["publisher_result_set"] = new JsonObject
+                {
+                    ["total"] = 1, ["returned"] = 1, ["maximum"] = 32,
+                    ["truncated"] = false,
+                },
+            };
+            if (includeScope) result["evidence_scope"] = scope;
+            if (truncated is not null)
+                result["response_row_set"] = new JsonObject
+                {
+                    ["maximum"] = 50, ["returned"] = 1, ["truncated"] = truncated,
+                };
+            return OperationAnswerPolicy.Describe(
+                "en", UiMapper.From("cited_by", new JsonObject(), result))!;
+        }
+
+        Assert.StartsWith("Lex found a total of 1 article referring to",
+            Render(false, knownScope));
+        Assert.StartsWith("Lex returned 1 article referring to", Render(true, knownScope));
+        Assert.StartsWith("Lex returned 1 article referring to", Render(null, knownScope));
+        Assert.StartsWith("Lex returned 1 article referring to",
+            Render("not-a-boolean", knownScope));
+        Assert.StartsWith("Lex returned 1 article referring to",
+            Render(false, null, includeScope: false));
+        Assert.StartsWith("Lex returned 1 article referring to",
+            Render(false, "future_unreviewed_scope"));
+    }
+
+    [Fact]
+    public void Cited_by_answer_states_scope_and_false_assessments_with_grammatical_counts()
+    {
+        var english = OperationAnswerPolicy.Describe("en", new UiEffect(CitedBy: new CitedByView(
+            "eu-eurlex:32016r0679", 1, [], RowsTruncated: false,
+            EvidenceScope: "captured_cross_references_in_held_non_withdrawn_versions",
+            CurrentLegalEffectAssessed: false, RelationshipTypeAssessed: false,
+            ExactComplete: true)));
+        var french = OperationAnswerPolicy.Describe("fr", new UiEffect(CitedBy: new CitedByView(
+            "eu-eurlex:32016r0679", 2, [], RowsTruncated: true,
+            EvidenceScope: "captured_cross_references_in_held_non_withdrawn_versions",
+            CurrentLegalEffectAssessed: false, RelationshipTypeAssessed: false)));
+        var limited = OperationAnswerPolicy.Describe("en", new UiEffect(
+            CitedBy: new CitedByView(
+                "eu-eurlex:32016r0679", 1, [], RowsTruncated: false,
+                EvidenceScope: "captured_cross_references_in_held_non_withdrawn_versions"),
+            PublisherLimitations:
+            [
+                new(McpStatus.FilterNotSupportedByIndex, "cited_by", "eu-eurlex", "EU", []),
+            ]));
+
+        Assert.Equal(
+            "Lex found a total of 1 article referring to eu-eurlex:32016r0679. "
+            + "The evidence covers cross-references Lex captured in held, non-withdrawn publisher versions. "
+            + "Lex did not assess whether this reference is currently legally operative. "
+            + "Lex did not classify its relationship type.", english);
+        Assert.Equal(
+            "Lex a renvoyé 2 articles faisant référence à eu-eurlex:32016r0679. "
+            + "Les éléments de preuve couvrent les renvois capturés par Lex dans les versions éditeur détenues et non retirées. "
+            + "Lex n'a pas évalué si ces renvois produisent actuellement un effet juridique. "
+            + "Lex n'a pas classé leurs types de relation.", french);
+        Assert.StartsWith("Lex returned 1 article referring to", limited);
+        Assert.DoesNotContain("a total of", limited);
+    }
+
+    [Fact]
+    public void Cited_by_answer_does_not_repeat_an_unrecognized_evidence_scope()
+    {
+        var answer = OperationAnswerPolicy.Describe("en", new UiEffect(CitedBy: new CitedByView(
+            "eu-eurlex:32016r0679", 0, [], RowsTruncated: null,
+            EvidenceScope: "future_unreviewed_scope")));
+
+        Assert.Contains("The response does not carry a recognized evidence scope.", answer);
+        Assert.DoesNotContain("future_unreviewed_scope", answer);
+    }
+
+    [Fact]
+    public void Cited_by_synthesis_evidence_starts_with_a_bounded_aggregate_fact()
+    {
+        const string knownScope =
+            "captured_cross_references_in_held_non_withdrawn_versions";
+        static (AgentEvidence Evidence, JsonObject Fact) AggregateFact(JsonNode source)
+        {
+            var (status, docs) = AskService.Summarize(source);
+            var ledger = new AgentEvidenceLedger();
+            ledger.Observe("cited_by", status, docs, source, new JsonObject());
+            var evidence = Assert.Single(ledger.Evidence,
+                item => item.Title == "cited_by aggregate fact");
+            return (evidence, JsonNode.Parse(evidence.Excerpt!)!.AsObject());
+        }
+        static JsonObject PublisherResult(
+            string publisher, string citingWork, int publisherCount = 1, int responseRows = 1)
+        {
+            var suffix = publisher.Replace("-", "", StringComparison.Ordinal);
+            return new JsonObject
+            {
+                ["envelope"] = new JsonObject
+                {
+                    ["status"] = McpStatus.Ok,
+                    ["publisher"] = publisher,
+                },
+                ["cited_work"] = citingWork,
+                ["evidence_scope"] =
+                    "captured_cross_references_in_held_non_withdrawn_versions",
+                ["current_legal_effect_assessed"] = false,
+                ["relationship_type_assessed"] = false,
+                ["citing_articles"] = 1,
+                ["publisher_result_set"] = new JsonObject
+                {
+                    ["total"] = publisherCount, ["returned"] = publisherCount,
+                    ["maximum"] = 32, ["truncated"] = false,
+                },
+                ["response_row_set"] = new JsonObject
+                {
+                    ["maximum"] = 50, ["returned"] = responseRows,
+                    ["truncated"] = false,
+                },
+                ["citations"] = new JsonArray(new JsonObject
+                {
+                    ["work"] = $"{publisher}:work-{suffix}",
+                    ["title"] = "Example",
+                    ["valid_from"] = "2026-01-01",
+                    ["anchor"] = "art_1",
+                    ["num"] = "Art. 1",
+                }),
+            };
+        }
+
+        var payload = new JsonObject
+        {
+            ["envelope"] = new JsonObject
+            {
+                ["status"] = McpStatus.Ok, ["publisher"] = "lu-legilux",
+            },
+            ["cited_work"] = "eu-eurlex:32016r0679",
+            ["evidence_scope"] = knownScope,
+            ["current_legal_effect_assessed"] = false,
+            ["relationship_type_assessed"] = false,
+            ["citing_articles"] = 1,
+            ["publisher_result_set"] = new JsonObject
+            {
+                ["total"] = 1, ["returned"] = 1, ["maximum"] = 32,
+                ["truncated"] = false,
+            },
+            ["response_row_set"] = new JsonObject
+            {
+                ["maximum"] = 50, ["returned"] = 1, ["truncated"] = false,
+            },
+            ["citations"] = new JsonArray(new JsonObject
+            {
+                ["work"] = "lu-legilux:loi-example",
+                ["title"] = "Example",
+                ["valid_from"] = "2026-01-01",
+                ["anchor"] = "art_1",
+                ["num"] = "Art. 1",
+            }),
+        };
+
+        var (aggregate, fact) = AggregateFact(payload);
+        Assert.Equal("complete_total", fact["count_semantics"]?.GetValue<string>());
+        Assert.Equal(1, fact["count"]?.GetValue<int>());
+        Assert.Equal(
+            "captured_cross_references_in_held_non_withdrawn_versions",
+            fact["evidence_scope"]?.GetValue<string>());
+        Assert.False(fact["current_legal_effect_assessed"]?.GetValue<bool>());
+        Assert.False(fact["relationship_type_assessed"]?.GetValue<bool>());
+        Assert.True(aggregate.Excerpt!.Length <= 8_000);
+
+        payload["response_row_set"]!["truncated"] = true;
+        Assert.Equal("returned_count",
+            AggregateFact(payload).Fact["count_semantics"]?.GetValue<string>());
+        payload.Remove("response_row_set");
+        Assert.Equal("returned_count",
+            AggregateFact(payload).Fact["count_semantics"]?.GetValue<string>());
+        payload["response_row_set"] = new JsonObject { ["truncated"] = "not-a-boolean" };
+        Assert.Equal("returned_count",
+            AggregateFact(payload).Fact["count_semantics"]?.GetValue<string>());
+        payload["response_row_set"] = new JsonObject
+        {
+            ["maximum"] = 50, ["returned"] = 1, ["truncated"] = false,
+        };
+        payload.Remove("evidence_scope");
+        Assert.Equal("returned_count",
+            AggregateFact(payload).Fact["count_semantics"]?.GetValue<string>());
+        payload["evidence_scope"] = "future_unreviewed_scope";
+        Assert.Equal("returned_count",
+            AggregateFact(payload).Fact["count_semantics"]?.GetValue<string>());
+
+        var citedWork = "eu-eurlex:32016r0679";
+        var successAndRefusal = new JsonArray(
+            PublisherResult("lu-legilux", citedWork, publisherCount: 2),
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject
+                {
+                    ["status"] = McpStatus.FilterNotSupportedByIndex,
+                    ["publisher"] = "eu-eurlex",
+                },
+                ["cited_work"] = citedWork,
+                ["publisher_result_set"] = new JsonObject
+                {
+                    ["total"] = 2, ["returned"] = 2, ["maximum"] = 32,
+                    ["truncated"] = false,
+                },
+                ["response_row_set"] = new JsonObject
+                {
+                    ["maximum"] = 50, ["returned"] = 1, ["truncated"] = false,
+                },
+            });
+        var partial = AggregateFact(successAndRefusal).Fact;
+        Assert.Equal("returned_count", partial["count_semantics"]?.GetValue<string>());
+        Assert.Equal(1, partial["count"]?.GetValue<int>());
+
+        var twoSuccesses = AggregateFact(new JsonArray(
+            PublisherResult("lu-legilux", citedWork, publisherCount: 2, responseRows: 2),
+            PublisherResult("eu-eurlex", citedWork, publisherCount: 2, responseRows: 2))).Fact;
+        Assert.Equal("complete_total", twoSuccesses["count_semantics"]?.GetValue<string>());
+        Assert.Equal(2, twoSuccesses["count"]?.GetValue<int>());
+    }
+
+    [Fact]
+    public void Timeline_answer_qualifies_true_and_unknown_completeness_receipts()
+    {
+        var subject = new Subject("lu-legilux:loi-example", "Example law", null, null);
+        TimelineView View(bool? truncated) => new(subject,
+            [
+                new(null, "2020-01-01", null, null, null, null, null),
+                new(null, "2021-01-01", null, null, null, null, null),
+            ], TotalCount: 3, Truncated: truncated);
+
+        var complete = OperationAnswerPolicy.Describe(
+            "en", new UiEffect(Timeline: View(false)))!;
+        var bounded = OperationAnswerPolicy.Describe(
+            "en", new UiEffect(Timeline: View(true)))!;
+        var unknown = OperationAnswerPolicy.Describe(
+            "en", new UiEffect(Timeline: View(null)))!;
+
+        Assert.Contains("Lex holds 3 publisher version states", complete);
+        Assert.Contains("latest state beginning 2021-01-01", complete);
+        Assert.Contains("Lex returned 2 of 3 publisher version states", bounded);
+        Assert.Contains("last returned state beginning 2021-01-01", bounded);
+        Assert.Contains("This bounded view is truncated.", bounded);
+        Assert.DoesNotContain("latest state", bounded);
+        Assert.Contains("Lex returned 2 publisher version states", unknown);
+        Assert.Contains("does not record whether the timeline is complete", unknown);
+        Assert.DoesNotContain("latest state", unknown);
+    }
+
+    [Fact]
+    public void History_answer_never_calls_a_bounded_or_unknown_last_row_latest()
+    {
+        var subject = new Subject(
+            "lu-legilux:loi-example", "Example law", null, "art_1", "fr");
+        HistoryView View(bool? truncated) => new(subject, "art_1",
+            DistinctTexts: truncated == false ? 2 : 3,
+            States:
+            [
+                new("2020-01-01", null, null, null),
+                new("2021-01-01", null, null, null),
+            ], Truncated: truncated);
+
+        var complete = OperationAnswerPolicy.Describe(
+            "en", new UiEffect(History: View(false)))!;
+        var bounded = OperationAnswerPolicy.Describe(
+            "en", new UiEffect(History: View(true)))!;
+        var unknown = OperationAnswerPolicy.Describe(
+            "en", new UiEffect(History: View(null)))!;
+
+        Assert.Contains("contains 2 publisher states", complete);
+        Assert.Contains("states beginning 2020-01-01, 2021-01-01", complete);
+        Assert.Contains("reports 3 publisher states and returns 2 states", bounded);
+        Assert.Contains("last returned state beginning 2021-01-01", bounded);
+        Assert.Contains("This bounded response is truncated.", bounded);
+        Assert.DoesNotContain("latest state", bounded);
+        Assert.Contains("does not record whether the history is complete", unknown);
+        Assert.DoesNotContain("latest state", unknown);
+    }
+
+    [Fact]
     public async Task Reader_cancellation_after_one_result_preserves_it_and_terminates_the_rest()
     {
         using var cancellation = new CancellationTokenSource();
@@ -772,7 +1072,9 @@ public sealed class AskTransportTests
             admission: new AskAdmissionController(
                 TimeProvider.System, perClientDaily: 10, globalDaily: 10, concurrent: 1),
             plannerDeadline: TimeSpan.FromMilliseconds(50),
-            firstResultDeadline: TimeSpan.FromMilliseconds(100));
+            // Keep the outer deadline well clear of the planner deadline so this test proves
+            // planner cancellation and lease release even when the full suite delays continuations.
+            firstResultDeadline: TimeSpan.FromSeconds(2));
         var history = new JsonArray(new JsonObject
         {
             ["role"] = "user",

@@ -283,6 +283,7 @@ public class UiEffectTests
                 },
                 ["work"] = "32013r0575",
                 ["total_count"] = 2,
+                ["truncated"] = false,
                 ["versions"] = new JsonArray(
                     new JsonObject
                     {
@@ -336,6 +337,49 @@ public class UiEffectTests
         Assert.Equal(9, eff.Timeline!.TotalCount);
         Assert.True(eff.Timeline.Truncated);
         Assert.Single(eff.Timeline.Rows);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("\"false\"")]
+    [InlineData("0")]
+    public void A_timeline_without_an_exact_completeness_receipt_stays_unknown(string? hostile)
+    {
+        var response = new JsonObject
+        {
+            ["envelope"] = new JsonObject { ["status"] = "ok" },
+            ["work"] = "32013r0575",
+            ["total_count"] = 1,
+            ["versions"] = new JsonArray(new JsonObject { ["valid_from"] = "2024-01-01" }),
+        };
+        if (hostile is not null) response["truncated"] = JsonNode.Parse(hostile);
+
+        var effect = UiMapper.From("timeline", Args(("work", "eu-eurlex:32013r0575")), response);
+
+        Assert.Null(effect.Timeline!.Truncated);
+    }
+
+    [Fact]
+    public void Article_history_retains_its_completeness_receipt()
+    {
+        var response = new JsonObject
+        {
+            ["envelope"] = new JsonObject { ["status"] = "ok" },
+            ["work"] = "32013r0575",
+            ["anchor"] = "art_92",
+            ["distinct_texts"] = 3,
+            ["truncated"] = true,
+            ["states"] = new JsonArray(new JsonObject { ["valid_from"] = "2024-01-01" }),
+        };
+
+        var effect = UiMapper.From("article_history",
+            Args(("work", "eu-eurlex:32013r0575"), ("anchor", "art_92")), response);
+
+        Assert.True(effect.History!.Truncated);
+        response["truncated"] = JsonValue.Create("true");
+        Assert.Null(UiMapper.From("article_history",
+            Args(("work", "eu-eurlex:32013r0575"), ("anchor", "art_92")), response)
+            .History!.Truncated);
     }
 
     [Fact]
@@ -475,6 +519,450 @@ public class UiEffectTests
         Assert.False(eff.CitedBy!.RowsTruncated);
     }
 
+    private static JsonObject CitedPublisher(
+        string publisher, JsonNode? scope, JsonNode? legalEffect, JsonNode? relationship,
+        JsonNode? truncated, bool includeTruncated = true)
+    {
+        var response = new JsonObject
+        {
+            ["envelope"] = new JsonObject
+            {
+                ["status"] = "ok", ["publisher"] = publisher,
+                ["jurisdiction"] = publisher == "lu-legilux" ? "LU" : "EU",
+            },
+            ["cited_work"] = "eu-eurlex:32016r0679",
+            ["citing_articles"] = 1,
+            ["citations"] = new JsonArray(new JsonObject
+            {
+                ["work"] = $"{publisher}:citing-work", ["valid_from"] = "2024-01-01",
+                ["anchor"] = "art_1",
+            }),
+            ["evidence_scope"] = scope?.DeepClone(),
+            ["current_legal_effect_assessed"] = legalEffect?.DeepClone(),
+            ["relationship_type_assessed"] = relationship?.DeepClone(),
+            ["publisher_result_set"] = new JsonObject
+            {
+                ["total"] = 2, ["returned"] = 2, ["maximum"] = 32,
+                ["truncated"] = false,
+            },
+        };
+        if (includeTruncated)
+            response["response_row_set"] = new JsonObject
+            {
+                ["maximum"] = 50, ["returned"] = 2,
+                ["truncated"] = truncated?.DeepClone(),
+            };
+        return response;
+    }
+
+    [Fact]
+    public void Two_successful_cited_by_parts_preserve_only_shared_scope_assessments_and_completeness()
+    {
+        const string scope = "captured_cross_references_in_held_non_withdrawn_versions";
+        var effect = UiMapper.From("cited_by", Args(("work", "eu-eurlex:32016r0679")),
+            new JsonArray(
+                CitedPublisher("lu-legilux", JsonValue.Create(scope), JsonValue.Create(false),
+                    JsonValue.Create(false), JsonValue.Create(false)),
+                CitedPublisher("eu-eurlex", JsonValue.Create(scope), JsonValue.Create(false),
+                    JsonValue.Create(false), JsonValue.Create(false))));
+
+        Assert.Equal(2, effect.CitedBy!.CitingArticles);
+        Assert.Equal(scope, effect.CitedBy.EvidenceScope);
+        Assert.False(effect.CitedBy.CurrentLegalEffectAssessed);
+        Assert.False(effect.CitedBy.RelationshipTypeAssessed);
+        Assert.False(effect.CitedBy.RowsTruncated);
+        Assert.True(effect.CitedBy.ExactComplete);
+    }
+
+    [Fact]
+    public void Two_successful_cited_by_parts_with_missing_malformed_or_mismatched_facts_claim_nothing()
+    {
+        const string scope = "captured_cross_references_in_held_non_withdrawn_versions";
+        var effect = UiMapper.From("cited_by", Args(("work", "eu-eurlex:32016r0679")),
+            new JsonArray(
+                CitedPublisher("lu-legilux", JsonValue.Create(scope), JsonValue.Create(false),
+                    JsonValue.Create(false), JsonValue.Create(false)),
+                CitedPublisher("eu-eurlex", null, JsonValue.Create("false"),
+                    JsonValue.Create(true), null, includeTruncated: false)));
+
+        Assert.Null(effect.CitedBy!.EvidenceScope);
+        Assert.Null(effect.CitedBy.CurrentLegalEffectAssessed);
+        Assert.Null(effect.CitedBy.RelationshipTypeAssessed);
+        Assert.Null(effect.CitedBy.RowsTruncated);
+        Assert.False(effect.CitedBy.ExactComplete);
+
+        var cut = UiMapper.From("cited_by", Args(("work", "eu-eurlex:32016r0679")),
+            new JsonArray(
+                CitedPublisher("lu-legilux", JsonValue.Create(scope), JsonValue.Create(false),
+                    JsonValue.Create(false), JsonValue.Create(true)),
+                CitedPublisher("eu-eurlex", JsonValue.Create(scope), JsonValue.Create(false),
+                    JsonValue.Create(false), null, includeTruncated: false)));
+        Assert.True(cut.CitedBy!.RowsTruncated);
+        Assert.False(cut.CitedBy.ExactComplete);
+    }
+
+    [Fact]
+    public void Cited_by_exact_completeness_requires_a_coherent_publisher_receipt()
+    {
+        static JsonObject Response(JsonNode? publisherReceipt)
+        {
+            var response = new JsonObject
+            {
+                ["envelope"] = new JsonObject
+                {
+                    ["status"] = McpStatus.Ok, ["publisher"] = "lu-legilux",
+                },
+                ["cited_work"] = "eu-eurlex:32016r0679",
+                ["citing_articles"] = 1,
+                ["citations"] = new JsonArray(new JsonObject
+                {
+                    ["work"] = "lu-legilux:synthetic", ["valid_from"] = "2024-01-01",
+                    ["anchor"] = "art_1",
+                }),
+                ["evidence_scope"] =
+                    "captured_cross_references_in_held_non_withdrawn_versions",
+                ["current_legal_effect_assessed"] = false,
+                ["relationship_type_assessed"] = false,
+                ["response_row_set"] = new JsonObject
+                {
+                    ["maximum"] = 50, ["returned"] = 1, ["truncated"] = false,
+                },
+            };
+            if (publisherReceipt is not null)
+                response["publisher_result_set"] = publisherReceipt.DeepClone();
+            return response;
+        }
+
+        JsonNode?[] receipts =
+        [
+            null,
+            new JsonObject
+            {
+                ["total"] = 2, ["returned"] = 1, ["maximum"] = 32,
+                ["truncated"] = false,
+            },
+            new JsonObject
+            {
+                ["total"] = 1, ["returned"] = 1, ["maximum"] = 32,
+                ["truncated"] = true,
+            },
+            new JsonObject
+            {
+                ["total"] = "1", ["returned"] = 1, ["maximum"] = 32,
+                ["truncated"] = false,
+            },
+        ];
+
+        foreach (var receipt in receipts)
+            Assert.False(UiMapper.From("cited_by", new JsonObject(), Response(receipt))
+                .CitedBy!.ExactComplete);
+
+        var exact = Response(new JsonObject
+        {
+            ["total"] = 1, ["returned"] = 1, ["maximum"] = 32,
+            ["truncated"] = false,
+        });
+        Assert.True(UiMapper.From("cited_by", new JsonObject(), exact)
+            .CitedBy!.ExactComplete);
+    }
+
+    [Fact]
+    public void Mixed_cited_by_refusal_reaches_the_view_and_blocks_exact_completeness()
+    {
+        const string scope = "captured_cross_references_in_held_non_withdrawn_versions";
+        var publisherReceipt = new JsonObject
+        {
+            ["total"] = 2, ["returned"] = 2, ["maximum"] = 32,
+            ["truncated"] = false,
+        };
+        var effect = UiMapper.From("cited_by", new JsonObject(), new JsonArray(
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject
+                {
+                    ["status"] = McpStatus.Ok, ["publisher"] = "lu-legilux",
+                    ["jurisdiction"] = "LU",
+                },
+                ["cited_work"] = "eu-eurlex:32016r0679",
+                ["citing_articles"] = 1,
+                ["citations"] = new JsonArray(new JsonObject
+                {
+                    ["work"] = "lu-legilux:synthetic", ["valid_from"] = "2024-01-01",
+                    ["anchor"] = "art_1",
+                }),
+                ["evidence_scope"] = scope,
+                ["response_row_set"] = new JsonObject
+                {
+                    ["maximum"] = 50, ["returned"] = 1, ["truncated"] = false,
+                },
+                ["publisher_result_set"] = publisherReceipt.DeepClone(),
+            },
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject
+                {
+                    ["status"] = McpStatus.FilterNotSupportedByIndex,
+                    ["publisher"] = "eu-eurlex", ["jurisdiction"] = "EU",
+                },
+                ["unsupported_filters"] = new JsonArray("domain"),
+                ["response_row_set"] = new JsonObject
+                {
+                    ["maximum"] = 50, ["returned"] = 1, ["truncated"] = false,
+                },
+                ["publisher_result_set"] = publisherReceipt.DeepClone(),
+            }));
+
+        Assert.Single(effect.CitedBy!.Rows);
+        Assert.False(effect.CitedBy.ExactComplete);
+        Assert.Empty(effect.PublisherLimitations ?? []);
+    }
+
+    [Fact]
+    public void Cited_by_exact_policy_rejects_incoherent_units_and_rows()
+    {
+        static JsonObject Unit(string publisher, int publisherCount = 1, int responseRows = 1) =>
+            new()
+            {
+                ["envelope"] = new JsonObject
+                {
+                    ["status"] = McpStatus.Ok, ["publisher"] = publisher,
+                },
+                ["cited_work"] = "eu-eurlex:32016r0679",
+                ["citing_articles"] = 1,
+                ["citations"] = new JsonArray(new JsonObject
+                {
+                    ["work"] = $"{publisher}:synthetic", ["valid_from"] = "2024-01-01",
+                    ["anchor"] = "art_1",
+                }),
+                ["evidence_scope"] = CitedByResultPolicy.EvidenceScope,
+                ["current_legal_effect_assessed"] = false,
+                ["relationship_type_assessed"] = false,
+                ["publisher_result_set"] = new JsonObject
+                {
+                    ["total"] = publisherCount, ["returned"] = publisherCount,
+                    ["maximum"] = 32, ["truncated"] = false,
+                },
+                ["response_row_set"] = new JsonObject
+                {
+                    ["maximum"] = 50, ["returned"] = responseRows,
+                    ["truncated"] = false,
+                },
+            };
+
+        var exact = Unit("lu-legilux");
+        Assert.True(CitedByResultPolicy.IsExact(exact));
+
+        var badStatus = exact.DeepClone().AsObject();
+        badStatus["envelope"]!["status"] = McpStatus.NoResult;
+        Assert.False(CitedByResultPolicy.IsExact(badStatus));
+
+        var badCount = exact.DeepClone().AsObject();
+        badCount["citing_articles"] = 2;
+        Assert.False(CitedByResultPolicy.IsExact(badCount));
+
+        var badRow = exact.DeepClone().AsObject();
+        badRow["citations"]!.AsArray().Add("not-an-object");
+        Assert.False(CitedByResultPolicy.IsExact(badRow));
+
+        var badDate = exact.DeepClone().AsObject();
+        badDate["citations"]![0]!["valid_from"] = "not-a-date";
+        Assert.False(CitedByResultPolicy.IsExact(badDate));
+
+        var partialResponseReceipt = exact.DeepClone().AsObject();
+        partialResponseReceipt["response_row_set"]!.AsObject().Remove("returned");
+        Assert.False(CitedByResultPolicy.IsExact(partialResponseReceipt));
+
+        var pair = new JsonArray(
+            Unit("lu-legilux", publisherCount: 2, responseRows: 2),
+            Unit("eu-eurlex", publisherCount: 2, responseRows: 2));
+        Assert.True(CitedByResultPolicy.IsExact(pair));
+
+        var duplicatePublisher = pair.DeepClone().AsArray();
+        duplicatePublisher[1]!["envelope"]!["publisher"] = "lu-legilux";
+        Assert.False(CitedByResultPolicy.IsExact(duplicatePublisher));
+
+        var mismatchedWork = pair.DeepClone().AsArray();
+        mismatchedWork[1]!["cited_work"] = "eu-eurlex:different";
+        Assert.False(CitedByResultPolicy.IsExact(mismatchedWork));
+
+        var nonObjectSibling = pair.DeepClone().AsArray();
+        nonObjectSibling.Add("hostile");
+        Assert.False(CitedByResultPolicy.IsExact(nonObjectSibling));
+    }
+
+    private static UiEffect CitedNode(JsonObject extra)
+    {
+        var o = new JsonObject
+        {
+            ["envelope"] = new JsonObject { ["status"] = "ok" },
+            ["cited_work"] = "lu-legilux:code-penal",
+            ["citing_articles"] = 1,
+            ["citations"] = new JsonArray(new JsonObject
+            {
+                ["work"] = "lu-legilux:loi-1980-03-07-n1", ["valid_from"] = "2026-09-16",
+                ["anchor"] = "art_37",
+            }),
+        };
+        foreach (var kv in extra) o[kv.Key] = kv.Value?.DeepClone();
+        return UiMapper.From("cited_by", Args(("work", "lu-legilux:code-penal")), o);
+    }
+
+    /// <summary>
+    /// Every cited_by response says what the list is evidence of and names two things it did not
+    /// assess. All three stopped at this mapper, so the surface showed referring articles with
+    /// nothing to stop a reader assuming they are in force and that each one acts on the law.
+    /// </summary>
+    [Fact]
+    public void The_cited_by_scope_disclaimers_reach_the_view()
+    {
+        var eff = CitedNode(new JsonObject
+        {
+            ["evidence_scope"] = "captured_cross_references_in_held_non_withdrawn_versions",
+            ["current_legal_effect_assessed"] = false,
+            ["relationship_type_assessed"] = false,
+        });
+
+        Assert.Equal("captured_cross_references_in_held_non_withdrawn_versions",
+            eff.CitedBy!.EvidenceScope);
+        Assert.False(eff.CitedBy.CurrentLegalEffectAssessed);
+        Assert.False(eff.CitedBy.RelationshipTypeAssessed);
+    }
+
+    /// <summary>
+    /// A malformed flag must not become false. Reporting "not assessed" is a claim about what the
+    /// producer did, and it may only be made from an explicit false.
+    /// </summary>
+    [Fact]
+    public void A_malformed_assessment_flag_is_no_claim()
+    {
+        foreach (var hostile in new[] { "\"false\"", "0", "[]", "null" })
+        {
+            var eff = CitedNode(new JsonObject
+            {
+                ["current_legal_effect_assessed"] = JsonNode.Parse(hostile),
+                ["relationship_type_assessed"] = JsonNode.Parse(hostile),
+            });
+
+            Assert.Null(eff.CitedBy!.CurrentLegalEffectAssessed);
+            Assert.Null(eff.CitedBy.RelationshipTypeAssessed);
+        }
+    }
+
+    private static JsonObject DiffNode(JsonNode? limitations, JsonNode? comparable = null,
+                                       JsonNode? changed = null)
+    {
+        var o = new JsonObject
+        {
+            ["envelope"] = new JsonObject { ["status"] = "ok" },
+            ["work"] = "lu-legilux:loi-2006-07-31-n2",
+            ["from"] = new JsonObject { ["valid_from"] = "2024-01-01", ["title"] = "Code du travail" },
+            ["to"] = new JsonObject { ["valid_from"] = "2025-01-01", ["title"] = "Code du travail" },
+        };
+        if (limitations is not null) o["comparison_limitations"] = limitations;
+        if (comparable is not null) o["provision_level_comparable"] = comparable;
+        if (changed is not null) o["changed"] = changed;
+        return o;
+    }
+
+    private static UiEffect Diffed(JsonObject node) => UiMapper.From("diff",
+        Args(("work", "lu-legilux:loi-2006-07-31-n2"), ("from_date", "2024-01-01"),
+             ("to_date", "2025-01-01")), node);
+
+    /// <summary>
+    /// The producer classifies why a comparison is limited and also writes the same facts into the
+    /// prose note. Only the note reached a reader, and a surface cannot branch on a paragraph.
+    /// </summary>
+    [Fact]
+    public void Typed_comparison_limitations_survive_the_mapper()
+    {
+        var eff = Diffed(DiffNode(new JsonArray(
+            JsonValue.Create("profiles_differ"), JsonValue.Create("typed_text_gap"))));
+
+        Assert.Equal(new[] { "profiles_differ", "typed_text_gap" }, eff.Diff!.ComparisonLimitations);
+        Assert.False(eff.Diff.ComparisonLimitationsMalformed);
+    }
+
+    /// <summary>
+    /// A malformed list must not become an empty one, because an empty list reads as no limitations,
+    /// which is the one thing this field exists to prevent anybody concluding.
+    /// </summary>
+    [Fact]
+    public void A_malformed_limitation_field_is_explicit_rather_than_an_empty_list()
+    {
+        foreach (var node in new JsonNode?[]
+        {
+            new JsonArray(),
+            new JsonArray(JsonValue.Create(1), JsonValue.Create(true)),
+            new JsonArray(JsonValue.Create("   ")),
+            JsonValue.Create("profiles_differ"),
+            new JsonObject(),
+        })
+        {
+            var diff = Diffed(DiffNode(node)).Diff!;
+            Assert.Null(diff.ComparisonLimitations);
+            Assert.True(diff.ComparisonLimitationsMalformed);
+        }
+    }
+
+    [Fact]
+    public void Valid_limitations_survive_malformed_siblings_and_the_damage_is_reported()
+    {
+        var diff = Diffed(DiffNode(new JsonArray(
+            JsonValue.Create("profiles_differ"), JsonValue.Create(7), JsonValue.Create("  ")))).Diff!;
+
+        Assert.Equal(new[] { "profiles_differ" }, diff.ComparisonLimitations);
+        Assert.True(diff.ComparisonLimitationsMalformed);
+        Assert.False(Diffed(DiffNode(null)).Diff!.ComparisonLimitationsMalformed);
+
+        var explicitNull = DiffNode(null);
+        explicitNull["comparison_limitations"] = null;
+        Assert.True(Diffed(explicitNull).Diff!.ComparisonLimitationsMalformed);
+    }
+
+    [Theory]
+    [InlineData(McpStatus.ProfilesDiffer, "profiles_differ")]
+    [InlineData(McpStatus.TextNotAvailable, "typed_text_gap")]
+    public void Real_diff_refusals_carry_comparison_truth_on_the_gap(
+        string status, string limitation)
+    {
+        var node = DiffNode(new JsonArray(JsonValue.Create(limitation), JsonValue.Create(7)));
+        node["envelope"] = new JsonObject { ["status"] = status };
+
+        var effect = Diffed(node);
+
+        Assert.Equal(status, effect.Gap!.Status);
+        Assert.Equal(new[] { limitation }, effect.Gap.ComparisonLimitations);
+        Assert.True(effect.Gap.ComparisonLimitationsMalformed);
+        Assert.Equal("2024-01-01", effect.Gap.ComparisonFromDate);
+        Assert.Equal("2025-01-01", effect.Gap.ComparisonToDate);
+        if (status == McpStatus.ProfilesDiffer)
+        {
+            Assert.Equal("2024-01-01", effect.Diff!.FromDate);
+            Assert.Equal("2025-01-01", effect.Diff.ToDate);
+        }
+        else
+            Assert.Null(effect.Diff);
+    }
+
+    /// <summary>
+    /// Both fields were read with GetValue, which throws on a string or a number and loses the whole
+    /// typed operation result to one malformed field.
+    /// </summary>
+    [Fact]
+    public void A_malformed_comparability_or_outcome_field_does_not_throw()
+    {
+        // Parsed fresh on every use: a JsonNode may only ever have one parent, so a shared
+        // instance throws on the second assignment and fails the test for the wrong reason.
+        foreach (var hostile in new[] { "\"true\"", "0", "1.5", "[]", "{}" })
+        {
+            var byComparable = Diffed(DiffNode(null, comparable: JsonNode.Parse(hostile)));
+            Assert.False(byComparable.Diff!.ProvisionLevelComparable);
+
+            var byChanged = Diffed(DiffNode(null, changed: JsonNode.Parse(hostile)));
+            Assert.Null(byChanged.Diff!.Changed);
+        }
+    }
+
     [Fact]
     public void An_as_of_outline_remains_a_navigable_provision_view_without_legal_text()
     {
@@ -536,6 +1024,46 @@ public class UiEffectTests
         Assert.Equal(500, provision.TotalProvisions);
         Assert.True(Assert.Single(provision.Provisions).TextOmitted);
         Assert.Null(eff.Gap);
+    }
+
+    [Fact]
+    public void Provision_truncation_receipts_fail_closed_at_the_untrusted_boundary()
+    {
+        static ProvisionView Map(JsonNode? truncated, bool includeTruncated,
+            JsonNode? textTruncated, bool includeTextTruncated)
+        {
+            var response = new JsonObject
+            {
+                ["document"] = new JsonObject
+                {
+                    ["work"] = "eu-eurlex:32016r0679",
+                    ["valid_from"] = "2021-01-01",
+                },
+                ["provisions"] = new JsonArray(new JsonObject
+                {
+                    ["anchor"] = "art_6", ["text"] = "Lawful processing.",
+                }),
+            };
+            if (includeTruncated) response["truncated"] = truncated;
+            if (includeTextTruncated) response["text_truncated"] = textTruncated;
+            return Assert.IsType<ProvisionView>(UiMapper.From("as_of",
+                Args(("work", "eu-eurlex:32016r0679"), ("date", "2021-01-01")),
+                response).Provision);
+        }
+
+        var absent = Map(null, false, null, false);
+        Assert.Null(absent.Truncated);
+        Assert.Null(absent.TextTruncated);
+
+        foreach (var hostile in new[] { "\"false\"", "0", "[]", "{}" })
+        {
+            Assert.Null(Map(JsonNode.Parse(hostile), true, JsonValue.Create(false), true).Truncated);
+            Assert.Null(Map(JsonValue.Create(false), true, JsonNode.Parse(hostile), true).TextTruncated);
+        }
+
+        var exact = Map(JsonValue.Create(false), true, JsonValue.Create(false), true);
+        Assert.False(exact.Truncated);
+        Assert.False(exact.TextTruncated);
     }
 
     [Fact]

@@ -146,8 +146,8 @@ public sealed record ProvisionView(Subject Subject, string ValidFrom, string? Va
     IReadOnlyList<ProvisionItem> Provisions, string? Permalink,
     IReadOnlyList<EvidenceContext>? Evidence = null,
     int? TotalProvisions = null,
-    bool Truncated = false,
-    bool TextTruncated = false,
+    bool? Truncated = null,
+    bool? TextTruncated = null,
     bool OutlineOnly = false,
     IReadOnlyList<ProvisionGapItem>? ProvisionGaps = null,
     int? TotalProvisionGaps = null,
@@ -181,15 +181,25 @@ public sealed record DiffView(Subject Subject, string FromDate, string ToDate,
     string? FromPermalink, string? ToPermalink, string? Note, string? Status = null,
     IReadOnlyList<EvidenceContext>? Evidence = null, bool? AnchorFromPresent = null,
     bool? AnchorToPresent = null, bool? AnchorTextEqual = null,
-    bool ProvisionLevelComparable = false, bool? Changed = null);
+    bool ProvisionLevelComparable = false, bool? Changed = null,
+    /// <summary>
+    /// The typed reasons this comparison is limited, exactly as the producer classified them:
+    /// <c>profiles_differ</c>, <c>typed_text_gap</c>. The producer also writes the same facts
+    /// into the prose note, and the note was the only form that reached a reader. Prose cannot
+    /// be branched on, so a surface could not refuse a comparison it was told was uncertifiable;
+    /// it could only print a paragraph and hope the paragraph was read.
+    /// </summary>
+    IReadOnlyList<string>? ComparisonLimitations = null,
+    bool ComparisonLimitationsMalformed = false);
 
 public sealed record HistoryView(Subject Subject, string Anchor, int DistinctTexts,
-    IReadOnlyList<HistoryState> States, IReadOnlyList<EvidenceContext>? Evidence = null);
+    IReadOnlyList<HistoryState> States, IReadOnlyList<EvidenceContext>? Evidence = null,
+    bool? Truncated = null);
 
 public sealed record HistoryState(string ValidFrom, string? ValidTo, string? Sha, string? Permalink);
 
 public sealed record TimelineView(Subject Subject, IReadOnlyList<TimelineState> Rows,
-    int TotalCount, bool Truncated, IReadOnlyList<EvidenceContext>? Evidence = null);
+    int TotalCount, bool? Truncated, IReadOnlyList<EvidenceContext>? Evidence = null);
 
 public sealed record TimelineState(string? LexId, string ValidFrom, string? ValidTo, string? Title,
     string? Language, string? Permalink, string? RecordSha256);
@@ -226,7 +236,33 @@ public sealed record CitedByView(string CitedWork, int CitingArticles, IReadOnly
     /// claim absence. Null means the response carried no receipt, which is not the same as a
     /// complete answer.
     /// </summary>
-    bool? RowsTruncated = null);
+    bool? RowsTruncated = null,
+    /// <summary>
+    /// What this list is evidence of, verbatim from the producer. The tool answers
+    /// <c>captured_cross_references_in_held_non_withdrawn_versions</c>: references Lex captured,
+    /// in versions it holds, that are not withdrawn. That is a much narrower thing than
+    /// everything that refers to a law, and a count with no scope beside it reads as the wider
+    /// claim.
+    /// </summary>
+    string? EvidenceScope = null,
+    /// <summary>
+    /// Whether the producer assessed that these references are currently legally operative. It
+    /// answers false. Carried because a reader shown a list of referring articles reasonably
+    /// assumes they are in effect, and the producer declines that claim explicitly.
+    /// </summary>
+    bool? CurrentLegalEffectAssessed = null,
+    /// <summary>
+    /// Whether the producer assessed what kind of relationship each reference is: amendment,
+    /// repeal, or a bare citation. It answers false. Without it the list invites a reader to
+    /// supply a relationship the evidence does not carry.
+    /// </summary>
+    bool? RelationshipTypeAssessed = null,
+    /// <summary>
+    /// One fail-closed server verdict for whether the count is exact. It requires coherent exact
+    /// publisher and response receipts, unique publishers, matching work and evidence scope, and
+    /// valid status, count and citation-row shapes on every carried publisher unit.
+    /// </summary>
+    bool ExactComplete = false);
 
 public sealed record CitedByRow(string Work, string? Title, string ValidFrom, string Anchor,
                                 string? Num, string? Permalink, string? Jurisdiction = null);
@@ -322,10 +358,14 @@ public sealed record GapView(string Status, string? Work, string? Date, string E
     IReadOnlyList<string> Available, IReadOnlyList<EvidenceContext>? Evidence = null,
     IReadOnlyList<ProvisionGapItem>? ProvisionGaps = null,
     int? TotalProvisionGaps = null,
-    bool Truncated = false,
+    bool? Truncated = null,
     int? TotalProvisions = null,
-    bool TextTruncated = false,
-    string? TextCompleteness = null);
+    bool? TextTruncated = null,
+    string? TextCompleteness = null,
+    IReadOnlyList<string>? ComparisonLimitations = null,
+    bool ComparisonLimitationsMalformed = false,
+    string? ComparisonFromDate = null,
+    string? ComparisonToDate = null);
 
 /// <summary>
 /// One publisher-specific capability refusal retained beside successful rows from another
