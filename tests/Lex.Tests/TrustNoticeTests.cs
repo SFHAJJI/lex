@@ -519,6 +519,112 @@ public sealed class TrustNoticeTests : IDisposable
     }
 
     /// <summary>
+    /// O7. The mixed state, constructed directly because the fixture cannot reach it: one
+    /// publisher that ran and matched only records, beside one that refused.
+    ///
+    /// Moving the counters before the early return fixed the "nobody ran" claim and left the
+    /// "no match" claim false, because the count was still shown.Count, which is zero in exactly
+    /// this case. The page named matching records and then closed by saying no match was
+    /// returned. What suppresses a corpus-wide absence is not what was rendered as text, it is
+    /// whether anything at all was put in front of the reader as a match.
+    /// </summary>
+    [Fact]
+    public void A_page_that_named_matching_records_may_not_say_no_match_was_returned()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "mixed"), includeAct: false);
+        using var reader = site.Reader();
+        var readers = new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader };
+
+        // Ran, and matched only on the record. The work is the real fixture work so the card
+        // resolves an origin exactly as it would in production.
+        var records = (JsonObject)JsonNode.Parse("""
+            {"envelope":{"publisher":"lu-legilux","status":"ok"},
+             "population":{"query_ran":true},
+             "hits":[{"work":"lu-legilux:loi-2006-07-31-n2",
+                      "match":"work_identifier_or_title","match_reasons":[]}]}
+            """)!;
+        // A sibling that could not run, which is what makes the absence sentence eligible.
+        var refusal = (JsonObject)JsonNode.Parse("""
+            {"envelope":{"publisher":"lu-legilux","status":"filter_not_supported_by_index"},
+             "population":{"query_ran":false}}
+            """)!;
+
+        var page = CatalogueEndpoints.RenderSearchResults([records, refusal], readers);
+
+        // The card is there, so the page has just told the reader that records matched.
+        Assert.Contains("Lex found records that match only in metadata", page,
+            StringComparison.Ordinal);
+        // Therefore neither absence sentence may follow it.
+        Assert.DoesNotContain("No match was returned", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("No selected publisher ran this query", page,
+            StringComparison.Ordinal);
+        // The refusal is still disclosed rather than swallowed.
+        Assert.Contains("filter_not_supported_by_index", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The other half of the same rule. A publisher that ran and presented nothing, beside one
+    /// that refused, is the state the absence sentence exists for, so it must still appear.
+    /// </summary>
+    [Fact]
+    public void A_page_that_presented_nothing_still_states_the_absence()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "absent"), includeAct: false);
+        using var reader = site.Reader();
+        var readers = new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader };
+
+        var empty = (JsonObject)JsonNode.Parse("""
+            {"envelope":{"publisher":"lu-legilux","status":"ok"},
+             "population":{"query_ran":true},"hits":[]}
+            """)!;
+        var refusal = (JsonObject)JsonNode.Parse("""
+            {"envelope":{"publisher":"lu-legilux","status":"retrieval_mode_unavailable"},
+             "population":{"query_ran":false}}
+            """)!;
+
+        var page = CatalogueEndpoints.RenderSearchResults([empty, refusal], readers);
+
+        Assert.Contains("No match was returned", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("Lex found records that match only in metadata", page,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A record-only card with no nameable work presents nothing, so it announces nothing. The
+    /// heading used to be written before the card, which left a publisher heading above silence.
+    /// </summary>
+    [Fact]
+    public void A_record_card_with_no_nameable_work_announces_nothing()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "nameless"), includeAct: false);
+        using var reader = site.Reader();
+        var readers = new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader };
+
+        // work is a number, which the strict reader declines, so no record can be named.
+        var nameless = (JsonObject)JsonNode.Parse("""
+            {"envelope":{"publisher":"lu-legilux","status":"ok"},
+             "population":{"query_ran":true},
+             "hits":[{"work":7,"match":"work_identifier_or_title","match_reasons":[9,true]}]}
+            """)!;
+        var refusal = (JsonObject)JsonNode.Parse("""
+            {"envelope":{"publisher":"lu-legilux","status":"filter_not_supported_by_index"},
+             "population":{"query_ran":false}}
+            """)!;
+
+        // Hostile field types are read, not thrown on.
+        var page = CatalogueEndpoints.RenderSearchResults([nameless, refusal], readers);
+
+        Assert.DoesNotContain("Lex found records that match only in metadata", page,
+            StringComparison.Ordinal);
+        // And no heading either. The heading used to be written before the card was known to
+        // exist, which announced a publisher and then said nothing about it. Exactly one heading
+        // belongs on this page, the refusal's.
+        Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(page, "<h2").Count);
+        // Nothing was presented, so the absence sentence is honest here.
+        Assert.Contains("No match was returned", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// H() does not make a destination safe to follow. Neither javascript: nor data: contains a
     /// character HtmlEncode touches, so ten href sites were encoding hostile URLs into working
     /// hostile links. The index-side scheme checks they leaned on are both conditional: the
