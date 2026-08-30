@@ -826,7 +826,7 @@ export interface UiEffect {
           comparison_limitations?: string[];
           comparison_limitations_malformed?: boolean;
           actions?: unknown; requested_locale?: string; fallback_locale?: string;
-          available_locales?: string[] };
+          available_locales?: string[]; localized_notices?: Record<string, string> };
 }
 
 export interface AssistantUnavailableAction {

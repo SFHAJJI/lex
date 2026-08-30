@@ -2594,7 +2594,7 @@ public sealed class AskService
         AskAdmissionLane admissionLane = AskAdmissionLane.Public)
     {
         if (_legacyAuthoritativeAssistantContained)
-            return AssistantV3Unavailable(CurrentRequest(history));
+            return AssistantV3Unavailable();
         if (!Enabled)
             return new AskOutcome(503, new JsonObject
             {
@@ -2818,12 +2818,12 @@ public sealed class AskService
         }
     }
 
-    public AskOutcome? ContainLegacyAuthoritativeRequest(string currentRequest) =>
+    public AskOutcome? ContainLegacyAuthoritativeRequest() =>
         _legacyAuthoritativeAssistantContained
-            ? AssistantV3Unavailable(currentRequest)
+            ? AssistantV3Unavailable()
             : null;
 
-    private static AskOutcome AssistantV3Unavailable(string currentRequest)
+    private static AskOutcome AssistantV3Unavailable()
     {
         const string english =
             "The assistant is temporarily unavailable while Lex installs its deterministic V3 answer path, checkable against its sources. Search and held publisher text remain available.";
@@ -2831,21 +2831,18 @@ public sealed class AskService
             "L'assistant est temporairement indisponible pendant que Lex met en place son parcours de réponse V3 déterministe et vérifiable par ses sources. La recherche et les textes publiés que Lex détient restent disponibles.";
         const string localizationUnavailable =
             "Lex cannot provide this assistant notice in the requested language yet. The assistant is unavailable during the V3 answer-path replacement. Search and held publisher text remain available.";
-        var detected = ConfidentContainmentLocale(currentRequest);
-        var (status, reply, requested, rendered, fallback) = detected switch
-        {
-            "en" => ("assistant_v3_unavailable", english, "en", "en", (string?)null),
-            "fr" => ("assistant_v3_unavailable", french, "fr", "fr", (string?)null),
-            _ => ("localization_unavailable", localizationUnavailable,
-                "undetermined", "en", "en"),
-        };
         var effect = new UiEffect(Gap: new GapView(
-            status, null, null, reply, [],
+            "localization_unavailable", null, null, localizationUnavailable, [],
             Actions: ["search", "browse"],
-            RequestedLocale: requested,
-            FallbackLocale: fallback,
-            AvailableLocales: ["en", "fr"]));
-        var body = Body(reply, rendered, [], [effect]);
+            RequestedLocale: "undetermined",
+            FallbackLocale: "en",
+            AvailableLocales: ["en", "fr"],
+            LocalizedNotices: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["en"] = english,
+                ["fr"] = french,
+            }));
+        var body = Body(localizationUnavailable, "en", [], [effect]);
         body["operations"] = new JsonArray();
         body["narrated"] = false;
         return new AskOutcome(
@@ -2853,33 +2850,6 @@ public sealed class AskService
             ConversationContext: null,
             ContextDisposition: AskConversationContextDisposition.Clear,
             RetainConversation: false);
-    }
-
-    private static string CurrentRequest(JsonArray history)
-    {
-        if (history.Count == 0 || history[^1] is not JsonObject message
-            || message["role"] is not JsonValue roleValue
-            || !roleValue.TryGetValue<string>(out var role)
-            || role != "user"
-            || message["content"] is not JsonValue contentValue
-            || !contentValue.TryGetValue<string>(out var content))
-            return "";
-        return content;
-    }
-
-    private static string? ConfidentContainmentLocale(string currentRequest)
-    {
-        var tokens = WordToken.Matches(currentRequest)
-            .Select(match => match.Value.ToLowerInvariant()).ToArray();
-        if (tokens.Any(SharedEnglishFrenchFrame.Contains)) return null;
-        var french = tokens.Any(FrenchFrame.Contains);
-        var english = tokens.Any(EnglishFrame.Contains);
-        return (french, english) switch
-        {
-            (true, false) => "fr",
-            (false, true) => "en",
-            _ => null,
-        };
     }
 
     private static AskOutcome SubjectClarificationOutcome(

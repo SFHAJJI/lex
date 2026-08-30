@@ -21,8 +21,9 @@ public sealed class AssistantV3ContainmentTests
         "Lex cannot provide this assistant notice in the requested language yet. The assistant is unavailable during the V3 answer-path replacement. Search and held publisher text remain available.";
 
     [Theory]
-    [InlineData("What does this law say?", "assistant_v3_unavailable", "en", null, EnglishNotice)]
-    [InlineData("Que prévoit cette loi ?", "assistant_v3_unavailable", "fr", null, FrenchNotice)]
+    [InlineData("What does this law say?", "localization_unavailable", "undetermined", "en", LocalizationNotice)]
+    [InlineData("Que prévoit cette loi ?", "localization_unavailable", "undetermined", "en", LocalizationNotice)]
+    [InlineData("Was sagt dieses Gesetz?", "localization_unavailable", "undetermined", "en", LocalizationNotice)]
     [InlineData("32016R0679", "localization_unavailable", "undetermined", "en", LocalizationNotice)]
     [InlineData("que dice esta ley", "localization_unavailable", "undetermined", "en", LocalizationNotice)]
     [InlineData("Cite this law", "localization_unavailable", "undetermined", "en", LocalizationNotice)]
@@ -73,6 +74,10 @@ public sealed class AssistantV3ContainmentTests
         Assert.Equal(expectedRequestedLocale, gap["requested_locale"]?.GetValue<string>());
         Assert.Equal(expectedFallbackLocale, gap["fallback_locale"]?.GetValue<string>());
         Assert.Equal(["en", "fr"], Strings(gap["available_locales"]));
+        Assert.Equal(EnglishNotice,
+            gap["localized_notices"]!["en"]?.GetValue<string>());
+        Assert.Equal(FrenchNotice,
+            gap["localized_notices"]!["fr"]?.GetValue<string>());
         Assert.Equal(["search", "browse"], Strings(gap["actions"]));
         Assert.Empty(gap["available"]!.AsArray());
         Assert.DoesNotContain("href", outcome.Body.ToJsonString(), StringComparison.Ordinal);
@@ -119,7 +124,7 @@ public sealed class AssistantV3ContainmentTests
         using var response = await client.SendAsync(Request(path, null, stream));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("assistant_v3_unavailable",
+        Assert.Equal("localization_unavailable",
             (await Payload(response, stream))["ui"]!["gap"]!["status"]?.GetValue<string>());
         Assert.Equal(1, threads.Count);
         Assert.Equal(originalHistory, await RetainedHistory(threads, token));
@@ -138,9 +143,29 @@ public sealed class AssistantV3ContainmentTests
             Request(path, new string('A', AskThreadRegistry.TokenLength), stream));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("assistant_v3_unavailable",
+        Assert.Equal("localization_unavailable",
             (await Payload(response, stream))["ui"]!["gap"]!["status"]?.GetValue<string>());
         Assert.Equal(0, threads.Count);
+    }
+
+    [Theory]
+    [InlineData("/api/ask", false)]
+    [InlineData("/api/ask/stream", true)]
+    public async Task Containment_does_not_bypass_evaluation_admission_authorization(
+        string path, bool stream)
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+        using var request = Request(path, null, stream);
+        request.Headers.Add("X-Lex-Evaluation-Admission", new string('A', 43));
+
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Contains("Evaluation request was not authorized.", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("assistant_v3_unavailable", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("localization_unavailable", body, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -152,6 +177,7 @@ public sealed class AssistantV3ContainmentTests
         var how = await client.GetStringAsync("/how-it-works");
         var stories = await client.GetStringAsync("/stories");
         var architecture = await client.GetStringAsync("/built/assistant");
+        var find = await client.GetStringAsync("/find");
 
         Assert.Contains(EnglishNotice, how, StringComparison.Ordinal);
         Assert.DoesNotContain("may plan searches and explain retrieved evidence", how,
@@ -159,6 +185,12 @@ public sealed class AssistantV3ContainmentTests
         Assert.DoesNotContain("Ask the assistant", stories, StringComparison.Ordinal);
         Assert.Contains(EnglishNotice, architecture, StringComparison.Ordinal);
         Assert.Contains("Historical V2 architecture", architecture, StringComparison.Ordinal);
+        Assert.DoesNotContain("assistant</a> takes a plain question", find,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("A bounded agent around a deterministic legal core", architecture,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("optional composition architecture of the Lex assistant", architecture,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -191,7 +223,7 @@ public sealed class AssistantV3ContainmentTests
         using var ordinaryResponse = await client.SendAsync(ordinary);
         Assert.Equal(HttpStatusCode.OK, ordinaryResponse.StatusCode);
         var ordinaryBody = JsonNode.Parse(await ordinaryResponse.Content.ReadAsStringAsync())!.AsObject();
-        Assert.Equal("assistant_v3_unavailable",
+        Assert.Equal("localization_unavailable",
             ordinaryBody["ui"]!["gap"]!["status"]?.GetValue<string>());
         Assert.Null(ordinaryBody["thread_token"]);
         Assert.Equal(1, threads.RetainedTurnsFor(token));
@@ -214,7 +246,7 @@ public sealed class AssistantV3ContainmentTests
             line => line.StartsWith("data: ", StringComparison.Ordinal));
         var envelope = JsonNode.Parse(data[6..])!.AsObject();
         var payload = envelope["payload"]!.AsObject();
-        Assert.Equal("assistant_v3_unavailable",
+        Assert.Equal("localization_unavailable",
             payload["ui"]!["gap"]!["status"]?.GetValue<string>());
         Assert.Null(payload["thread_token"]);
         Assert.Equal(1, threads.RetainedTurnsFor(token));

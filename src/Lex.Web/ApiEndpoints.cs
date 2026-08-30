@@ -206,13 +206,6 @@ public static class ApiEndpoints
             if (!TryEvaluationToken(req.Headers, out var evaluationToken))
                 return Results.Json(
                     new { error = "Invalid X-Lex-Evaluation-Admission." }, statusCode: 400);
-            if (askService.ContainLegacyAuthoritativeRequest(message) is { } containment)
-            {
-                res.Headers["X-Lex-Request-Id"] = Guid.NewGuid().ToString("N");
-                return Results.Content(
-                    containment.Body.ToJsonString(), "application/json",
-                    statusCode: containment.Status);
-            }
             var requestBodySha256 = Convert.ToHexStringLower(SHA256.HashData(body));
             if (evaluationToken is not null
                 && !EvaluationInspectionAccepted(evaluationAdmissions.Inspect(
@@ -221,6 +214,13 @@ public static class ApiEndpoints
                 return Results.Json(
                     new { error = "Evaluation request was not authorized." },
                     statusCode: evaluationStatus);
+            if (askService.ContainLegacyAuthoritativeRequest() is { } containment)
+            {
+                res.Headers["X-Lex-Request-Id"] = Guid.NewGuid().ToString("N");
+                return Results.Content(
+                    containment.Body.ToJsonString(), "application/json",
+                    statusCode: containment.Status);
+            }
             // Last X-Forwarded-For element: appended by our ingress, not spoofable by the client
             // (the first element is client-controlled and would reset the per-IP cap).
             var ip = ClientAddress(req);
@@ -332,7 +332,16 @@ public static class ApiEndpoints
                 await Reject(400, "Invalid X-Lex-Evaluation-Admission.");
                 return;
             }
-            if (askService.ContainLegacyAuthoritativeRequest(message) is { } containment)
+            var requestBodySha256 = Convert.ToHexStringLower(SHA256.HashData(body));
+            if (evaluationToken is not null
+                && !EvaluationInspectionAccepted(evaluationAdmissions.Inspect(
+                    evaluationToken, idempotencyKey, requestBodySha256, threadToken),
+                    out var evaluationStatus))
+            {
+                await Reject(evaluationStatus, "Evaluation request was not authorized.");
+                return;
+            }
+            if (askService.ContainLegacyAuthoritativeRequest() is { } containment)
             {
                 var containmentRequestId = Guid.NewGuid().ToString("N");
                 res.Headers.ContentType = "text/event-stream";
@@ -350,15 +359,6 @@ public static class ApiEndpoints
                     $"event: done\ndata: {envelope.ToJsonString()}\n\n",
                     req.HttpContext.RequestAborted);
                 await res.Body.FlushAsync(req.HttpContext.RequestAborted);
-                return;
-            }
-            var requestBodySha256 = Convert.ToHexStringLower(SHA256.HashData(body));
-            if (evaluationToken is not null
-                && !EvaluationInspectionAccepted(evaluationAdmissions.Inspect(
-                    evaluationToken, idempotencyKey, requestBodySha256, threadToken),
-                    out var evaluationStatus))
-            {
-                await Reject(evaluationStatus, "Evaluation request was not authorized.");
                 return;
             }
             var ip = ClientAddress(req);

@@ -14,7 +14,7 @@ and a hashed provenance record, and an honest, machine-readable refusal when it
 cannot know.
 
 **[Live demo](https://law.soufien.lu)** ·
-**[Ask the AI](https://law.soufien.lu)** ·
+**[Search held law](https://law.soufien.lu)** ·
 **[MCP endpoint](https://law.soufien.lu/mcp)** ·
 **[Dataset (CC-BY)](https://github.com/SFHAJJI/lex-articles)** ·
 **[Examples](https://github.com/SFHAJJI/lex-articles/tree/main/examples)** ·

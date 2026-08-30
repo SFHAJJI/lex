@@ -713,7 +713,7 @@ public static class CatalogueEndpoints
                 <p class="sub">All {readers.Values.Sum(r => r.Coverage().Groups):n0} publisher works and collections, by source and type.</p>
                 <p><a href="/browse"><b>Open the catalogue →</b></a></p></div>
 
-                <p class="sub">Not sure where to start? The <a href="/">assistant</a> takes a plain question,
+                <p class="sub">Not sure where to start? Search held law above, browse the catalogue,
                 or read <a href="/stories">four laws with a story</a>.</p>
                 """;
             return Results.Content(Page("Find a law", body, null, "find",
