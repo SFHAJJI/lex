@@ -25,6 +25,9 @@ public sealed class AssistantV3ContainmentTests
     [InlineData("Que prévoit cette loi ?", "assistant_v3_unavailable", "fr", null, FrenchNotice)]
     [InlineData("32016R0679", "localization_unavailable", "undetermined", "en", LocalizationNotice)]
     [InlineData("que dice esta ley", "localization_unavailable", "undetermined", "en", LocalizationNotice)]
+    [InlineData("Cite this law", "localization_unavailable", "undetermined", "en", LocalizationNotice)]
+    [InlineData("Comment on this law", "localization_unavailable", "undetermined", "en", LocalizationNotice)]
+    [InlineData("Figure this out", "localization_unavailable", "undetermined", "en", LocalizationNotice)]
     public async Task Contained_service_returns_the_reviewed_typed_result(
         string question,
         string expectedStatus,

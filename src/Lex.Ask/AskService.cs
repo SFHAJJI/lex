@@ -2871,6 +2871,7 @@ public sealed class AskService
     {
         var tokens = WordToken.Matches(currentRequest)
             .Select(match => match.Value.ToLowerInvariant()).ToArray();
+        if (tokens.Any(SharedEnglishFrenchFrame.Contains)) return null;
         var french = tokens.Any(FrenchFrame.Contains);
         var english = tokens.Any(EnglishFrame.Contains);
         return (french, english) switch
@@ -2941,6 +2942,13 @@ public sealed class AskService
         "give", "list", "find", "quote", "compare", "explain", "does", "do", "did", "is",
         "are", "was", "were", "must", "should", "shall", "can", "could", "will", "would",
         "need", "i", "my", "me", "you", "your", "under", "between", "whether",
+    };
+
+    // These spellings are ordinary English verbs and French frame words. Their presence cannot
+    // confidently select either reviewed catalogue, even when another function word is present.
+    private static readonly HashSet<string> SharedEnglishFrenchFrame = new(StringComparer.Ordinal)
+    {
+        "cite", "comment", "figure",
     };
 
     private static readonly HashSet<string> FrenchFunction = new(StringComparer.Ordinal)
