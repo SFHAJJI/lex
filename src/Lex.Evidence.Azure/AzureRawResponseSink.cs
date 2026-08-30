@@ -208,15 +208,9 @@ public sealed class AzureRawResponseSink : IRawResponseSink
         {
             canRead = readback.Content.CanRead;
         }
-        catch (OperationCanceledException)
-            when (cancellationToken.IsCancellationRequested)
+        catch (Exception error)
         {
-            throw;
-        }
-        catch
-        {
-            throw new AzureEvidenceStoreException(
-                AzureEvidenceStoreFailureKind.Ambiguous);
+            throw SafeReadbackFailure(error, cancellationToken);
         }
 
         if (!canRead
@@ -240,15 +234,9 @@ public sealed class AzureRawResponseSink : IRawResponseSink
                 read = await readback.Content.ReadAsync(buffer, cancellationToken)
                     .ConfigureAwait(false);
             }
-            catch (OperationCanceledException)
-                when (cancellationToken.IsCancellationRequested)
+            catch (Exception error)
             {
-                throw;
-            }
-            catch
-            {
-                throw new AzureEvidenceStoreException(
-                    AzureEvidenceStoreFailureKind.Ambiguous);
+                throw SafeReadbackFailure(error, cancellationToken);
             }
 
             if (read == 0) break;
@@ -282,6 +270,18 @@ public sealed class AzureRawResponseSink : IRawResponseSink
         }
         return true;
     }
+
+    private static Exception SafeReadbackFailure(
+        Exception error,
+        CancellationToken cancellationToken) =>
+        error is OperationCanceledException
+            && cancellationToken.IsCancellationRequested
+                ? new OperationCanceledException(
+                    "Azure evidence readback was canceled.",
+                    innerException: null,
+                    token: cancellationToken)
+                : new AzureEvidenceStoreException(
+                    AzureEvidenceStoreFailureKind.Ambiguous);
 
     private static void VerifyRetention(
         AzureEvidenceRetentionRequest expected,
