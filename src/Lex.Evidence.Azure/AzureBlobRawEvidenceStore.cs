@@ -4,6 +4,7 @@ using Azure.Storage;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Lex.Law;
+using System.Runtime.ExceptionServices;
 
 namespace Lex.Evidence.Azure;
 
@@ -44,20 +45,37 @@ internal sealed class AzureBlobRawEvidenceStore : IAzureRawEvidenceStore
         string blobName,
         Stream content,
         IReadOnlyDictionary<string, string> metadata,
+        AzureEvidenceRetentionRequest retention,
         CancellationToken cancellationToken)
     {
+        ValidateRetention(retention);
+        if (retention.Lane == EvidenceRetentionLane.Nightly90Days)
+        {
+            try
+            {
+                var properties = await _container.GetPropertiesAsync(
+                    conditions: null,
+                    cancellationToken).ConfigureAwait(false);
+                RequireNightlyContainerPolicy(
+                    properties.Value.HasImmutabilityPolicy == true);
+            }
+            catch (Exception error)
+            {
+                throw MapFailure(error, cancellationToken);
+            }
+        }
         try
         {
             var response = await _container.GetBlobClient(blobName).UploadAsync(
                 content,
-                CreateUploadOptions(metadata),
+                CreateUploadOptions(metadata, retention),
                 cancellationToken).ConfigureAwait(false);
             return RequireVersion(
                 response.Value.VersionId, response.Value.ETag.ToString());
         }
         catch (Exception error)
         {
-            throw MapFailure(error, cancellationToken);
+            throw MapFailure(error, cancellationToken, isCreate: true);
         }
     }
 
@@ -106,41 +124,14 @@ internal sealed class AzureBlobRawEvidenceStore : IAzureRawEvidenceStore
         }
     }
 
-    public async Task<AzureEvidenceRetentionFacts> ApplyAndReadRetentionAsync(
+    public async Task<AzureEvidenceRetentionFacts> ReadRetentionAsync(
         string blobName,
         AzureEvidenceObjectVersion version,
-        AzureEvidenceRetentionRequest retention,
         CancellationToken cancellationToken)
     {
         try
         {
             var blob = VersionClient(blobName, version.VersionId);
-            if (retention.Lane == EvidenceRetentionLane.Nightly90Days)
-            {
-                if (retention.ImmutableUntil is null)
-                    throw new InvalidDataException(
-                        "The nightly retention request has no expiry.");
-                // Version-level immutability requires versioning and version-level
-                // immutability support on the account or container.
-                // https://learn.microsoft.com/azure/storage/blobs/immutable-policy-configure-version-scope
-                await blob.SetImmutabilityPolicyAsync(
-                    CreateImmutabilityPolicy(retention.ImmutableUntil.Value),
-                    conditions: null,
-                    cancellationToken).ConfigureAwait(false);
-            }
-            else if (retention.Lane
-                == EvidenceRetentionLane.EvidenceReleaseIndefinite)
-            {
-                await blob.SetLegalHoldAsync(
-                    hasLegalHold: true,
-                    cancellationToken).ConfigureAwait(false);
-            }
-            else
-            {
-                throw new InvalidDataException(
-                    "The evidence retention lane is not supported.");
-            }
-
             var response = await blob.GetPropertiesAsync(
                 conditions: null,
                 cancellationToken).ConfigureAwait(false);
@@ -161,22 +152,26 @@ internal sealed class AzureBlobRawEvidenceStore : IAzureRawEvidenceStore
         _container.GetBlobClient(blobName).WithVersion(versionId);
 
     internal static BlobUploadOptions CreateUploadOptions(
-        IReadOnlyDictionary<string, string> metadata) => new()
+        IReadOnlyDictionary<string, string> metadata,
+        AzureEvidenceRetentionRequest retention)
     {
-        Metadata = new Dictionary<string, string>(metadata),
-        TransferOptions = new StorageTransferOptions
+        ValidateRetention(retention);
+        return new BlobUploadOptions
         {
-            InitialTransferSize = EvidenceRef.MaximumByteLength,
-            MaximumTransferSize = EvidenceRef.MaximumByteLength,
-            MaximumConcurrency = 1,
-        },
-        // Azure documents ETag.All as the wildcard for If-None-Match.
-        // https://learn.microsoft.com/dotnet/api/azure.storage.blobs.models.blobrequestconditions
-        Conditions = new BlobRequestConditions
-        {
-            IfNoneMatch = ETag.All,
-        },
-    };
+            Metadata = new Dictionary<string, string>(metadata),
+            TransferOptions = new StorageTransferOptions
+            {
+                InitialTransferSize = EvidenceRef.MaximumByteLength,
+                MaximumTransferSize = EvidenceRef.MaximumByteLength,
+                MaximumConcurrency = 1,
+            },
+            Conditions = new BlobRequestConditions { IfNoneMatch = ETag.All },
+            // Nightly blobs must inherit the provisioned locked 90-day
+            // container default. A per-blob upload override is always unlocked.
+            ImmutabilityPolicy = null,
+            LegalHold = retention.Lane == EvidenceRetentionLane.EvidenceReleaseIndefinite,
+        };
+    }
 
     internal static BlobDownloadOptions CreateDownloadOptions(string etag) =>
         new()
@@ -186,13 +181,6 @@ internal sealed class AzureBlobRawEvidenceStore : IAzureRawEvidenceStore
                 IfMatch = new ETag(etag),
             },
         };
-
-    internal static BlobImmutabilityPolicy CreateImmutabilityPolicy(
-        DateTimeOffset immutableUntil) => new()
-    {
-        ExpiresOn = immutableUntil,
-        PolicyMode = BlobImmutabilityPolicyMode.Locked,
-    };
 
     internal static async Task<AzureEvidenceReadback> TakeReadbackOwnershipAsync(
         Stream content,
@@ -210,7 +198,7 @@ internal sealed class AzureBlobRawEvidenceStore : IAzureRawEvidenceStore
                 RequireValue(versionId),
                 RequireValue(etag));
         }
-        catch
+        catch (Exception error)
         {
             try
             {
@@ -218,11 +206,38 @@ internal sealed class AzureBlobRawEvidenceStore : IAzureRawEvidenceStore
             }
             catch
             {
-                throw new AzureEvidenceStoreException(
-                    AzureEvidenceStoreFailureKind.Ambiguous);
+                // The constructor/validation failure has precedence.
             }
+            ExceptionDispatchInfo.Capture(error).Throw();
             throw;
         }
+    }
+
+    private static void ValidateRetention(AzureEvidenceRetentionRequest retention)
+    {
+        ArgumentNullException.ThrowIfNull(retention);
+        if (retention.Lane == EvidenceRetentionLane.Nightly90Days)
+        {
+            if (retention.ImmutableUntil is null
+                || retention.ImmutableUntilMaximum is null
+                || retention.ImmutableUntilMaximum < retention.ImmutableUntil)
+                throw new InvalidDataException(
+                    "The nightly retention verification window is invalid.");
+            return;
+        }
+        if (retention.Lane == EvidenceRetentionLane.EvidenceReleaseIndefinite
+            && retention.ImmutableUntil is null
+            && retention.ImmutableUntilMaximum is null)
+            return;
+        throw new InvalidDataException(
+            "The evidence retention request is not supported.");
+    }
+
+    internal static void RequireNightlyContainerPolicy(bool hasPolicy)
+    {
+        if (!hasPolicy)
+            throw new AzureEvidenceStoreException(
+                AzureEvidenceStoreFailureKind.Rejected);
     }
 
     private static AzureEvidenceObjectVersion RequireVersion(
@@ -242,7 +257,8 @@ internal sealed class AzureBlobRawEvidenceStore : IAzureRawEvidenceStore
     internal static Exception MapFailure(
         Exception error,
         CancellationToken cancellationToken,
-        bool missingIsAmbiguous = false)
+        bool missingIsAmbiguous = false,
+        bool isCreate = false)
     {
         if (error is OperationCanceledException)
             return cancellationToken.IsCancellationRequested
@@ -255,7 +271,7 @@ internal sealed class AzureBlobRawEvidenceStore : IAzureRawEvidenceStore
         if (error is AzureEvidenceStoreException) return error;
         if (error is RequestFailedException failed)
         {
-            if (failed.Status == 412)
+            if (isCreate && failed.Status == 412)
                 return new AzureEvidenceStoreException(
                     AzureEvidenceStoreFailureKind.AlreadyExists);
             if (missingIsAmbiguous && failed.Status == 404)
