@@ -34,9 +34,14 @@ an artifact cannot manufacture the separate project-owner approval required to r
 human reviewer can manage the review key but has no artifact-sign operation; the OIDC publisher
 can sign artifacts but has no access to the review vault.
 
-Initialize the remote state backend with explicit values:
+Sign in with Microsoft Entra ID using a principal that has `Storage Blob Data Contributor` at the
+state container scope. The source configuration pins Entra authorization. Do not override it with
+`ARM_ACCESS_KEY`, an access-key backend option or a backend SAS token. Initialize it with explicit
+non-secret values:
 
 ```text
+az login
+az account set --subscription "..."
 terraform init \
   -backend-config="resource_group_name=..." \
   -backend-config="storage_account_name=..." \
