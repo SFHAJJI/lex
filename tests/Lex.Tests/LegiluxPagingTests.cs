@@ -13,6 +13,20 @@ public sealed class LegiluxPagingTests : IDisposable
     public LegiluxPagingTests() => Directory.CreateDirectory(_root);
 
     [Fact]
+    public void Manifestation_query_projects_exact_identity_and_licence_terms()
+    {
+        var query = LegiluxAdapter.ManifestationQuery(limit: 101, offset: 202);
+
+        Assert.Contains("SELECT ?c ?expr ?m ?fmt ?file ?license", query,
+            StringComparison.Ordinal);
+        Assert.Contains("OPTIONAL { ?m jolux:license ?license }", query,
+            StringComparison.Ordinal);
+        Assert.Contains("ORDER BY ?c ?expr ?m ?fmt ?file ?license", query,
+            StringComparison.Ordinal);
+        Assert.EndsWith("LIMIT 101 OFFSET 202", query, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Repeated_full_pages_detect_cap_plus_one_without_growing_the_accumulator()
     {
         const int totalRows = 11;

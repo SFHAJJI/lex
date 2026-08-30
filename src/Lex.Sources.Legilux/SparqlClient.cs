@@ -3,6 +3,8 @@ using Lex.Law;
 
 namespace Lex.Sources.Legilux;
 
+internal sealed record SparqlTerm(string Type, string Value);
+
 /// <summary>
 /// Minimal SPARQL-protocol client. Sequential, paced, identifying UA (D14).
 /// The endpoint is the publisher's officially published open-data access channel.
@@ -14,11 +16,16 @@ public sealed class SparqlClient(string endpoint, TimeSpan? pause = null)
     private static readonly SourceRetryPolicy RetryPolicy = new(MaximumAttempts: 4);
     private readonly TimeSpan _pause = pause ?? TimeSpan.FromMilliseconds(1500);
     private readonly Func<string, CancellationToken, Task<List<Dictionary<string, string>>>>? _selectOverride;
+    private readonly Func<string, CancellationToken, Task<List<Dictionary<string, SparqlTerm>>>>? _selectTermsOverride;
     private DateTimeOffset _lastRequest = DateTimeOffset.MinValue;
 
     internal SparqlClient(
         Func<string, CancellationToken, Task<List<Dictionary<string, string>>>> select)
         : this("https://test.invalid", TimeSpan.Zero) => _selectOverride = select;
+
+    internal SparqlClient(
+        Func<string, CancellationToken, Task<List<Dictionary<string, SparqlTerm>>>> select)
+        : this("https://test.invalid", TimeSpan.Zero) => _selectTermsOverride = select;
 
     private static HttpClient CreateClient()
     {
@@ -33,6 +40,23 @@ public sealed class SparqlClient(string endpoint, TimeSpan? pause = null)
     public async Task<List<Dictionary<string, string>>> SelectAsync(string query, CancellationToken ct)
     {
         if (_selectOverride is not null) return await _selectOverride(query, ct);
+        var terms = await SelectTermsAsync(query, ct);
+        return terms.Select(row => row.ToDictionary(
+            entry => entry.Key, entry => entry.Value.Value, StringComparer.Ordinal)).ToList();
+    }
+
+    internal async Task<List<Dictionary<string, SparqlTerm>>> SelectTermsAsync(
+        string query, CancellationToken ct)
+    {
+        if (_selectTermsOverride is not null) return await _selectTermsOverride(query, ct);
+        if (_selectOverride is not null)
+        {
+            var rows = await _selectOverride(query, ct);
+            return rows.Select(row => row.ToDictionary(
+                entry => entry.Key,
+                entry => new SparqlTerm("untyped", entry.Value),
+                StringComparer.Ordinal)).ToList();
+        }
         // Politeness: sequential with a pause between requests.
         var sinceLast = DateTimeOffset.UtcNow - _lastRequest;
         if (sinceLast < _pause) await Task.Delay(_pause - sinceLast, ct);
@@ -53,17 +77,8 @@ public sealed class SparqlClient(string endpoint, TimeSpan? pause = null)
 
         try
         {
-            await using var stream = await resp.Content.ReadAsStreamAsync(ct);
-            using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
-            var rows = new List<Dictionary<string, string>>();
-            foreach (var binding in doc.RootElement.GetProperty("results").GetProperty("bindings").EnumerateArray())
-            {
-                var row = new Dictionary<string, string>(StringComparer.Ordinal);
-                foreach (var prop in binding.EnumerateObject())
-                    row[prop.Name] = prop.Value.GetProperty("value").GetString() ?? "";
-                rows.Add(row);
-            }
-            return rows;
+            var bytes = await resp.Content.ReadAsByteArrayAsync(ct);
+            return ParseSelectResponse(bytes);
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException or KeyNotFoundException)
         {
@@ -72,17 +87,52 @@ public sealed class SparqlClient(string endpoint, TimeSpan? pause = null)
         }
     }
 
+    internal static List<Dictionary<string, SparqlTerm>> ParseSelectResponse(
+        byte[] utf8Json)
+    {
+        using var doc = JsonDocument.Parse(utf8Json);
+        var rows = new List<Dictionary<string, SparqlTerm>>();
+        foreach (var binding in doc.RootElement.GetProperty("results")
+                     .GetProperty("bindings").EnumerateArray())
+        {
+            var row = new Dictionary<string, SparqlTerm>(StringComparer.Ordinal);
+            foreach (var property in binding.EnumerateObject())
+            {
+                var type = property.Value.GetProperty("type").GetString()
+                    ?? throw new JsonException("A SPARQL result term is missing its type.");
+                var value = property.Value.GetProperty("value").GetString()
+                    ?? throw new JsonException("A SPARQL result term is missing its value.");
+                row[property.Name] = new SparqlTerm(type, value);
+            }
+            rows.Add(row);
+        }
+        return rows;
+    }
+
     /// <summary>
     /// Runs a paged query; <paramref name="pagedQuery"/> receives (limit, offset), and the
     /// mandatory total maximum is checked before any page is appended.
     /// </summary>
     public async Task<List<Dictionary<string, string>>> SelectPagedAsync(
         Func<int, int, string> pagedQuery, int pageSize, int maximumRows,
-        CancellationToken ct, Action<int>? onPage = null)
+        CancellationToken ct, Action<int>? onPage = null) =>
+        await SelectPagedCoreAsync(
+            pagedQuery, SelectAsync, pageSize, maximumRows, ct, onPage);
+
+    internal async Task<List<Dictionary<string, SparqlTerm>>> SelectTermsPagedAsync(
+        Func<int, int, string> pagedQuery, int pageSize, int maximumRows,
+        CancellationToken ct, Action<int>? onPage = null) =>
+        await SelectPagedCoreAsync(
+            pagedQuery, SelectTermsAsync, pageSize, maximumRows, ct, onPage);
+
+    private static async Task<List<Dictionary<string, T>>> SelectPagedCoreAsync<T>(
+        Func<int, int, string> pagedQuery,
+        Func<string, CancellationToken, Task<List<Dictionary<string, T>>>> select,
+        int pageSize, int maximumRows, CancellationToken ct, Action<int>? onPage)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(pageSize);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumRows);
-        var all = new List<Dictionary<string, string>>(Math.Min(pageSize, maximumRows));
+        var all = new List<Dictionary<string, T>>(Math.Min(pageSize, maximumRows));
         while (true)
         {
             var remaining = maximumRows - all.Count;
@@ -90,7 +140,7 @@ public sealed class SparqlClient(string endpoint, TimeSpan? pause = null)
             if ((long)all.Count + requestSize > SortedTopMaximum)
                 throw new InvalidDataException(
                     $"The Legilux Virtuoso endpoint cannot verify a sorted result beyond {SortedTopMaximum} rows; use a bounded VALUES batch instead.");
-            var page = await SelectAsync(pagedQuery(requestSize, all.Count), ct);
+            var page = await select(pagedQuery(requestSize, all.Count), ct);
             if (page.Count > requestSize)
                 throw new InvalidDataException(
                     $"The SPARQL endpoint returned {page.Count} rows for a {requestSize}-row page.");
