@@ -60,6 +60,79 @@ public sealed class TrustNoticeTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// An unmatched route used to return HTTP 404 with a zero-byte body: no chrome, no reason, no
+    /// way forward. It is the largest refusal surface on the site and it said nothing at all.
+    /// </summary>
+    [Fact]
+    public async Task An_unmatched_route_answers_instead_of_returning_nothing()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "fallback"), includeAct: false);
+
+        foreach (var route in new[]
+        {
+            "/no-such-page",
+            // An unmounted publisher prefix and a stale work address both land here, which is why
+            // the copy must not let a missing route read as a missing law.
+            "/fr-legifrance/anything",
+            "/lu-legilux/loi-2006-07-31-n2/2024-08-04/extra/segment",
+        })
+        {
+            var response = await site.Client.GetAsync(route);
+            var body = await response.Content.ReadAsStringAsync();
+
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            Assert.NotEqual(0, body.Length);
+            Assert.Contains("Page not found", body, StringComparison.Ordinal);
+            Assert.Contains("That is a statement about this site, not about the law",
+                body, StringComparison.Ordinal);
+            // A refusal is an answer, so it carries somewhere to go.
+            Assert.Contains("/coverage", body, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// The machine lanes and JSON-preferring clients get a typed body. Handing an HTML page to a
+    /// client that asked for JSON is its own small lie about what happened.
+    /// </summary>
+    [Fact]
+    public async Task An_unmatched_machine_route_answers_in_json()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "fallback-json"), includeAct: false);
+
+        foreach (var route in new[] { "/api/no-such-thing", "/mcp/no-such-thing" })
+        {
+            var response = await site.Client.GetAsync(route);
+            var body = await response.Content.ReadAsStringAsync();
+
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            Assert.Contains("unknown_route", body, StringComparison.Ordinal);
+            Assert.DoesNotContain("<html", body, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Near-prefix paths are ordinary pages, not machine lanes. A prefix test rather than
+        // a segment test hands a reader JSON for a mistyped page.
+        foreach (var nearPrefix in new[] { "/apiculture", "/mcproxy", "/apis", "/mcp-notes" })
+        {
+            var page = await site.Client.GetAsync(nearPrefix);
+            var pageBody = await page.Content.ReadAsStringAsync();
+
+            Assert.Equal(HttpStatusCode.NotFound, page.StatusCode);
+            Assert.Contains("Page not found", pageBody, StringComparison.Ordinal);
+            Assert.DoesNotContain("unknown_route", pageBody, StringComparison.Ordinal);
+        }
+
+        // A JSON-preferring client on an ordinary path is answered the same way.
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/no-such-page");
+        request.Headers.Add("Accept", "application/json");
+        var negotiated = await site.Client.SendAsync(request);
+        var negotiatedBody = await negotiated.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.NotFound, negotiated.StatusCode);
+        Assert.Contains("unknown_route", negotiatedBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("<html", negotiatedBody, StringComparison.OrdinalIgnoreCase);
+    }
+
     private const string DensityHeading = "Historical coverage is less dense";
 
     private static string PrimaryCount(string page)

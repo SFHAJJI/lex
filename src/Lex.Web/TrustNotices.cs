@@ -27,6 +27,28 @@ public static class TrustNotices
     internal const string DerogationActDateText = "19 December 2020";
 
     /// <summary>
+    /// The unmatched-route refusal.
+    ///
+    /// Not a Decision 41 notice: none of the five covers a route, so this follows the house pattern
+    /// rather than claiming frozen status for copy nobody froze.
+    ///
+    /// The not-evidence sentence is doing real work here rather than being boilerplate. An unmounted
+    /// publisher prefix and a stale work link both land on this page, so a reader who typed a law's
+    /// address and got a blank 404 could reasonably read it as Lex saying that law does not exist.
+    /// Before this existed the site said nothing at all, which is the worst version of that.
+    /// </summary>
+    public static string UnknownRoute() => """
+        <div class="notice" role="note" aria-label="Page not found">
+        <b>Page not found.</b>
+        No page exists at this address. That is a statement about this site, not about the law:
+        Lex may hold the instrument you were looking for at a different address.
+        <span class="sub"><a href="/search">Search the held text</a>
+        &nbsp;&nbsp;<a href="/browse">Browse everything held</a>
+        &nbsp;&nbsp;<a href="/coverage">View coverage and known gaps</a></span>
+        </div>
+        """;
+
+    /// <summary>
     /// The unknown_work refusal, with the nearest held records. Copy frozen by Decision 41.
     ///
     /// The refusal itself always renders, because the page exists precisely when the identifier
