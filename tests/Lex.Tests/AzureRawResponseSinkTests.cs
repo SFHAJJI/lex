@@ -25,7 +25,7 @@ public sealed class AzureRawResponseSinkTests
     }
 
     [Fact]
-    public void Azure_nightly_policy_is_version_level_unlocked_until_the_requested_instant()
+    public void Azure_nightly_policy_is_version_level_locked_until_the_requested_instant()
     {
         var until = new DateTimeOffset(
             2026, 11, 28, 4, 0, 0, TimeSpan.Zero);
@@ -33,7 +33,27 @@ public sealed class AzureRawResponseSinkTests
         var policy = AzureBlobRawEvidenceStore.CreateImmutabilityPolicy(until);
 
         Assert.Equal(until, policy.ExpiresOn);
-        Assert.Equal(BlobImmutabilityPolicyMode.Unlocked, policy.PolicyMode);
+        Assert.Equal(BlobImmutabilityPolicyMode.Locked, policy.PolicyMode);
+    }
+
+    [Theory]
+    [InlineData("", "\"etag-1\"")]
+    [InlineData("version-1", "")]
+    public async Task Invalid_download_identity_is_disposed_before_wrapper_ownership(
+        string versionId,
+        string etag)
+    {
+        var content = new TrackingStream([1]);
+
+        await Assert.ThrowsAsync<AzureEvidenceStoreException>(() =>
+            AzureBlobRawEvidenceStore.TakeReadbackOwnershipAsync(
+                content,
+                1,
+                new Dictionary<string, string>(),
+                versionId,
+                etag));
+
+        Assert.True(content.IsDisposed);
     }
 
     [Theory]
@@ -87,10 +107,31 @@ public sealed class AzureRawResponseSinkTests
         var mapped = Assert.IsType<AzureEvidenceStoreException>(
             AzureBlobRawEvidenceStore.MapFailure(
                 new RequestFailedException(status, secret),
+                CancellationToken.None,
                 missingIsAmbiguous));
 
         Assert.Equal((AzureEvidenceStoreFailureKind)expectedKind, mapped.Kind);
         Assert.DoesNotContain(secret, mapped.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Azure_cancellation_is_propagated_only_for_a_canceled_supplied_token()
+    {
+        const string secret = "sdk-cancellation-secret";
+        var uncanceled = AzureBlobRawEvidenceStore.MapFailure(
+            new OperationCanceledException(secret), CancellationToken.None);
+        using var source = new CancellationTokenSource();
+        source.Cancel();
+        var canceled = new OperationCanceledException(secret);
+
+        var propagated = AzureBlobRawEvidenceStore.MapFailure(
+            canceled, source.Token);
+
+        Assert.Equal(
+            AzureEvidenceStoreFailureKind.Ambiguous,
+            Assert.IsType<AzureEvidenceStoreException>(uncanceled).Kind);
+        Assert.Same(canceled, propagated);
+        Assert.DoesNotContain(secret, uncanceled.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -134,7 +175,9 @@ public sealed class AzureRawResponseSinkTests
 
         var error = await Assert.ThrowsAsync<IOException>(() =>
             sink.CaptureVerifiedAsync(
-                Request(), Response(), new ThrowingReadStream(secret)));
+                Request(),
+                Response(),
+                new ThrowingReadStream(_ => new IOException(secret))));
 
         Assert.Equal("Publisher response bytes could not be buffered.", error.Message);
         Assert.DoesNotContain(secret, error.ToString(), StringComparison.Ordinal);
@@ -258,7 +301,8 @@ public sealed class AzureRawResponseSinkTests
         const string secret = "azure-uri-query-secret";
         var store = new RecordingStore
         {
-            ReadbackStreamFactory = () => new ThrowingReadStream(secret),
+            ReadbackStreamFactory = () =>
+                new ThrowingReadStream(_ => new IOException(secret)),
         };
         var sink = new AzureRawResponseSink(
             store, EvidenceRetentionLane.Nightly90Days);
@@ -270,6 +314,57 @@ public sealed class AzureRawResponseSinkTests
         Assert.Equal(1, store.CreateCount);
         Assert.Equal(3, store.ReadbackCount);
         Assert.DoesNotContain(secret, error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Deferred_invalid_data_and_uncanceled_cancellation_are_sanitized()
+    {
+        const string secret = "publisher-query-secret";
+        foreach (var exception in new Exception[]
+        {
+            new InvalidDataException(secret),
+            new OperationCanceledException(secret),
+        })
+        {
+            var store = new RecordingStore
+            {
+                ReadbackStreamFactory = () =>
+                    new ThrowingReadStream(_ => exception),
+            };
+            var sink = new AzureRawResponseSink(
+                store, EvidenceRetentionLane.Nightly90Days);
+
+            var error = await Assert.ThrowsAsync<IOException>(() =>
+                sink.CaptureVerifiedAsync(
+                    Request(), Response(), new MemoryStream([4, 5, 6])));
+
+            Assert.Equal(3, store.ReadbackCount);
+            Assert.DoesNotContain(secret, error.ToString(), StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task Deferred_cancellation_propagates_only_after_the_supplied_token_is_canceled()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var store = new RecordingStore
+        {
+            ReadbackStreamFactory = () => new ThrowingReadStream(token =>
+            {
+                cancellation.Cancel();
+                return new OperationCanceledException(
+                    "bounded cancellation", innerException: null, token);
+            }),
+        };
+        var sink = new AzureRawResponseSink(
+            store, EvidenceRetentionLane.Nightly90Days);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            sink.CaptureVerifiedAsync(
+                Request(), Response(), new MemoryStream([4, 5, 6]),
+                cancellation.Token));
+
+        Assert.Equal(1, store.ReadbackCount);
     }
 
     [Fact]
@@ -361,16 +456,49 @@ public sealed class AzureRawResponseSinkTests
             store.RetentionRequests.Single().Lane);
     }
 
+    [Fact]
+    public async Task Nightly_expiry_is_ceiled_to_the_next_whole_UTC_second()
+    {
+        var fetchedAt = new DateTimeOffset(
+            2026, 8, 30, 4, 0, 0, TimeSpan.Zero).AddTicks(1);
+        var store = new RecordingStore();
+        var sink = new AzureRawResponseSink(
+            store, EvidenceRetentionLane.Nightly90Days);
+
+        await sink.CaptureVerifiedAsync(
+            Request(), Response(fetchedAt: fetchedAt), new MemoryStream([1]));
+
+        Assert.Equal(
+            new DateTimeOffset(2026, 11, 28, 4, 0, 1, TimeSpan.Zero),
+            store.RetentionRequests.Single().ImmutableUntil);
+    }
+
     [Theory]
     [InlineData(null)]
-    [InlineData("Mutable")]
-    public async Task Nightly_lane_rejects_missing_or_unknown_immutability_mode(
+    [InlineData("Unlocked")]
+    public async Task Nightly_lane_rejects_missing_or_unlocked_immutability_mode(
         string? mode)
     {
         var store = new RecordingStore
         {
             RetentionFactsFactory = (version, request) => new(
                 version.VersionId, request.ImmutableUntil, mode, false),
+        };
+        var sink = new AzureRawResponseSink(
+            store, EvidenceRetentionLane.Nightly90Days);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            sink.CaptureVerifiedAsync(
+                Request(), Response(), new MemoryStream([1])));
+    }
+
+    [Fact]
+    public async Task Nightly_lane_rejects_missing_expiry()
+    {
+        var store = new RecordingStore
+        {
+            RetentionFactsFactory = (version, _) => new(
+                version.VersionId, null, "Locked", false),
         };
         var sink = new AzureRawResponseSink(
             store, EvidenceRetentionLane.Nightly90Days);
@@ -388,7 +516,7 @@ public sealed class AzureRawResponseSinkTests
             RetentionFactsFactory = (version, request) => new(
                 version.VersionId,
                 request.ImmutableUntil!.Value.AddSeconds(-1),
-                "Unlocked",
+                "Locked",
                 false),
         };
         var sink = new AzureRawResponseSink(
@@ -525,14 +653,16 @@ public sealed class AzureRawResponseSinkTests
 
     private static BoundedResponseMetadata Response(
         bool bodyComplete = true,
-        string? entityTag = "\"publisher-etag\"") =>
+        string? entityTag = "\"publisher-etag\"",
+        DateTimeOffset? fetchedAt = null) =>
         BoundedResponseMetadata.Create(
             200,
             "application/xml",
             "utf-8",
             entityTag,
             lastModified: null,
-            new DateTimeOffset(2026, 8, 30, 4, 0, 0, TimeSpan.Zero),
+            fetchedAt
+                ?? new DateTimeOffset(2026, 8, 30, 4, 0, 0, TimeSpan.Zero),
             "https://publisher.invalid/file.xml?private=query",
             bodyComplete);
 
@@ -626,7 +756,7 @@ public sealed class AzureRawResponseSinkTests
                     ? new AzureEvidenceRetentionFacts(
                         version.VersionId,
                         retention.ImmutableUntil,
-                        "Unlocked",
+                        "Locked",
                         false)
                     : new AzureEvidenceRetentionFacts(
                         version.VersionId,
@@ -651,7 +781,8 @@ public sealed class AzureRawResponseSinkTests
                 "Credential must not be used by the constructor."));
     }
 
-    private sealed class ThrowingReadStream(string secret) : Stream
+    private sealed class ThrowingReadStream(
+        Func<CancellationToken, Exception> errorFactory) : Stream
     {
         public override bool CanRead => true;
         public override bool CanSeek => false;
@@ -664,12 +795,12 @@ public sealed class AzureRawResponseSinkTests
         }
 
         public override int Read(byte[] buffer, int offset, int count) =>
-            throw new IOException(secret);
+            throw errorFactory(CancellationToken.None);
 
         public override ValueTask<int> ReadAsync(
             Memory<byte> buffer,
             CancellationToken cancellationToken = default) =>
-            ValueTask.FromException<int>(new IOException(secret));
+            ValueTask.FromException<int>(errorFactory(cancellationToken));
 
         public override void Flush() => throw new NotSupportedException();
         public override long Seek(long offset, SeekOrigin origin) =>
@@ -678,5 +809,16 @@ public sealed class AzureRawResponseSinkTests
             throw new NotSupportedException();
         public override void Write(byte[] buffer, int offset, int count) =>
             throw new NotSupportedException();
+    }
+
+    private sealed class TrackingStream(byte[] bytes) : MemoryStream(bytes)
+    {
+        public bool IsDisposed { get; private set; }
+
+        protected override void Dispose(bool disposing)
+        {
+            IsDisposed = true;
+            base.Dispose(disposing);
+        }
     }
 }

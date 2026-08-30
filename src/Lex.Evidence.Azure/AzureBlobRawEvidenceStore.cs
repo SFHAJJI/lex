@@ -57,7 +57,7 @@ internal sealed class AzureBlobRawEvidenceStore : IAzureRawEvidenceStore
         }
         catch (Exception error)
         {
-            throw MapFailure(error);
+            throw MapFailure(error, cancellationToken);
         }
     }
 
@@ -76,7 +76,8 @@ internal sealed class AzureBlobRawEvidenceStore : IAzureRawEvidenceStore
         }
         catch (Exception error)
         {
-            throw MapFailure(error, missingIsAmbiguous: true);
+            throw MapFailure(
+                error, cancellationToken, missingIsAmbiguous: true);
         }
     }
 
@@ -92,16 +93,16 @@ internal sealed class AzureBlobRawEvidenceStore : IAzureRawEvidenceStore
                     CreateDownloadOptions(version.ETag),
                     cancellationToken).ConfigureAwait(false);
             var download = response.Value;
-            return new AzureEvidenceReadback(
+            return await TakeReadbackOwnershipAsync(
                 download.Content,
                 download.Details.ContentLength,
                 new Dictionary<string, string>(download.Details.Metadata),
-                RequireValue(download.Details.VersionId),
-                RequireValue(download.Details.ETag.ToString()));
+                download.Details.VersionId,
+                download.Details.ETag.ToString()).ConfigureAwait(false);
         }
         catch (Exception error)
         {
-            throw MapFailure(error);
+            throw MapFailure(error, cancellationToken);
         }
     }
 
@@ -152,7 +153,7 @@ internal sealed class AzureBlobRawEvidenceStore : IAzureRawEvidenceStore
         }
         catch (Exception error)
         {
-            throw MapFailure(error);
+            throw MapFailure(error, cancellationToken);
         }
     }
 
@@ -190,8 +191,39 @@ internal sealed class AzureBlobRawEvidenceStore : IAzureRawEvidenceStore
         DateTimeOffset immutableUntil) => new()
     {
         ExpiresOn = immutableUntil,
-        PolicyMode = BlobImmutabilityPolicyMode.Unlocked,
+        PolicyMode = BlobImmutabilityPolicyMode.Locked,
     };
+
+    internal static async Task<AzureEvidenceReadback> TakeReadbackOwnershipAsync(
+        Stream content,
+        long contentLength,
+        IReadOnlyDictionary<string, string> metadata,
+        string? versionId,
+        string? etag)
+    {
+        try
+        {
+            return new AzureEvidenceReadback(
+                content,
+                contentLength,
+                metadata,
+                RequireValue(versionId),
+                RequireValue(etag));
+        }
+        catch
+        {
+            try
+            {
+                await content.DisposeAsync().ConfigureAwait(false);
+            }
+            catch
+            {
+                throw new AzureEvidenceStoreException(
+                    AzureEvidenceStoreFailureKind.Ambiguous);
+            }
+            throw;
+        }
+    }
 
     private static AzureEvidenceObjectVersion RequireVersion(
         string? versionId, string? etag) =>
@@ -209,9 +241,14 @@ internal sealed class AzureBlobRawEvidenceStore : IAzureRawEvidenceStore
 
     internal static Exception MapFailure(
         Exception error,
+        CancellationToken cancellationToken,
         bool missingIsAmbiguous = false)
     {
-        if (error is OperationCanceledException) return error;
+        if (error is OperationCanceledException)
+            return cancellationToken.IsCancellationRequested
+                ? error
+                : new AzureEvidenceStoreException(
+                    AzureEvidenceStoreFailureKind.Ambiguous);
         if (error is AzureEvidenceStoreException) return error;
         if (error is RequestFailedException failed)
         {
