@@ -1,15 +1,13 @@
-data "azurerm_storage_account" "indexes" {
-  name                = var.index_storage_account_name
-  resource_group_name = data.azurerm_resource_group.platform.name
-}
-
 data "azurerm_dns_zone" "public" {
   name                = var.public_dns_zone_name
   resource_group_name = data.azurerm_resource_group.platform.name
 }
 
 locals {
-  index_blob_container_scope = "${data.azurerm_storage_account.indexes.id}/blobServices/default/containers/lex"
+  # A storage-account data source exports live account keys into Terraform state.
+  # Build the management-plane identifier from non-secret inputs instead.
+  index_storage_account_id   = "/subscriptions/${var.subscription_id}/resourceGroups/${data.azurerm_resource_group.platform.name}/providers/Microsoft.Storage/storageAccounts/${var.index_storage_account_name}"
+  index_blob_container_scope = "${local.index_storage_account_id}/blobServices/default/containers/lex"
 }
 
 resource "azurerm_role_assignment" "runtime_index_reader" {
