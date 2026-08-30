@@ -6,6 +6,71 @@ namespace Lex.Tests;
 public sealed class ReleaseWorkflowTests
 {
     [Fact]
+    public void Terraform_uses_only_reviewed_AzureRM_types()
+    {
+        var approved = new[]
+        {
+            "azurerm_client_config",
+            "azurerm_dns_a_record",
+            "azurerm_dns_zone",
+            "azurerm_federated_identity_credential",
+            "azurerm_key_vault",
+            "azurerm_key_vault_key",
+            "azurerm_linux_virtual_machine",
+            "azurerm_managed_disk",
+            "azurerm_network_interface",
+            "azurerm_network_security_group",
+            "azurerm_public_ip",
+            "azurerm_resource_group",
+            "azurerm_role_assignment",
+            "azurerm_role_definition",
+            "azurerm_subnet",
+            "azurerm_subnet_network_security_group_association",
+            "azurerm_user_assigned_identity",
+            "azurerm_virtual_machine_data_disk_attachment",
+            "azurerm_virtual_network",
+        };
+        var actual = Directory.EnumerateFiles(
+                Path.Combine(RepoRoot(), "infra"), "*.tf", SearchOption.AllDirectories)
+            .SelectMany(path => TerraformAzureRmTypes(File.ReadAllText(path)))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(approved, actual);
+    }
+
+    [Fact]
+    public void Terraform_JSON_configuration_is_rejected_fail_closed()
+    {
+        var infra = Path.Combine(RepoRoot(), "infra");
+        var terraformJson = Directory.EnumerateFiles(infra, "*", SearchOption.AllDirectories)
+            .Where(path => path.EndsWith(".tf.json", StringComparison.OrdinalIgnoreCase))
+            .Select(path => Path.GetRelativePath(infra, path))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Empty(terraformJson);
+    }
+
+    [Theory]
+    [InlineData("/* note */ data \"azurerm_storage_account\" \"x\" {}",
+        "azurerm_storage_account")]
+    [InlineData("# note\ndata \"azurerm_cognitive_account\" \"x\" {}",
+        "azurerm_cognitive_account")]
+    [InlineData("# note\ndata \"azurerm_container_registry\" \"x\" {}",
+        "azurerm_container_registry")]
+    [InlineData("# note\ndata \"azurerm_application_insights\" \"x\" {}",
+        "azurerm_application_insights")]
+    [InlineData("// note\nresource \"azurerm_key_vault_secret\" \"x\" {}",
+        "azurerm_key_vault_secret")]
+    public void Terraform_type_inventory_cannot_be_hidden_by_leading_comments(
+        string terraform, string expected)
+    {
+        Assert.Contains(expected, TerraformAzureRmTypes(terraform));
+    }
+
+    [Fact]
     public void Telemetry_drift_is_the_immediate_post_login_pre_mutation_gate()
     {
         var workflow = File.ReadAllText(Path.Combine(RepoRoot(), ".github", "workflows", "deploy.yml"))
@@ -75,7 +140,7 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("assignable_scopes = [data.azurerm_resource_group.platform.id]", config);
         Assert.Contains("scope              = local.container_app_environment_id", terraform);
         Assert.Contains("scope              = local.container_app_id", terraform);
-        Assert.Contains("scope              = data.azurerm_application_insights.web.id", terraform);
+        Assert.Contains("scope              = local.application_insights_id", terraform);
 
         var workspaces = TerraformResource(terraform, "azurerm_role_definition",
             "deploy_telemetry_workspace_reader");
@@ -90,7 +155,7 @@ public sealed class ReleaseWorkflowTests
             terraform);
         Assert.DoesNotContain("workspace.resource_id", terraform, StringComparison.Ordinal);
         Assert.Contains("workspace.resource_group_name", terraform, StringComparison.Ordinal);
-        Assert.Contains("data.azurerm_application_insights.web.workspace_id", terraform,
+        Assert.DoesNotContain("data.azurerm_application_insights", terraform,
             StringComparison.Ordinal);
 
         var combined = config + workspaces;
@@ -889,7 +954,7 @@ public sealed class ReleaseWorkflowTests
         }, actionEntries);
         Assert.Contains("scope       = data.azurerm_resource_group.platform.id", role);
         Assert.Contains("assignable_scopes = [data.azurerm_resource_group.platform.id]", role);
-        Assert.Contains("scope              = data.azurerm_application_insights.web.id", terraform[end..]);
+        Assert.Contains("scope              = local.application_insights_id", terraform[end..]);
 
         start = terraform.IndexOf(
             "resource \"azurerm_role_definition\" \"deploy_log_analytics_table_policy_reader\"",
@@ -914,10 +979,17 @@ public sealed class ReleaseWorkflowTests
         Assert.DoesNotContain("log_analytics_resource_group_id", terraform);
         Assert.Contains("scope              = local.telemetry_application_insights_workspace_id",
             terraform[end..]);
-        Assert.Contains("check \"telemetry_application_insights_workspace_pin\"", terraform);
+        Assert.DoesNotContain("data.azurerm_application_insights", terraform,
+            StringComparison.Ordinal);
+        var workflow = File.ReadAllText(Path.Combine(
+            RepoRoot(), ".github", "workflows", "deploy.yml"));
         Assert.Contains(
-            "lower(data.azurerm_application_insights.web.workspace_id) == lower(local.telemetry_application_insights_workspace_id)",
-            terraform);
+            "application_insights_workspace_id=$(telemetry_scalar", workflow,
+            StringComparison.Ordinal);
+        Assert.Contains("properties.WorkspaceResourceId", workflow, StringComparison.Ordinal);
+        Assert.Contains(
+            "python3 scripts/deploy/telemetry_policy.py \"$policy\" \"$telemetry_dir/readback.json\"",
+            workflow, StringComparison.Ordinal);
 
         var queryRole = TerraformResource(terraform, "azurerm_role_definition",
             "deploy_container_apps_privacy_query_reader");
@@ -1866,6 +1938,16 @@ public sealed class ReleaseWorkflowTests
             directory = Directory.GetParent(directory)?.FullName
                         ?? throw new InvalidOperationException("Repository root not found.");
         return directory;
+    }
+
+    private static string[] TerraformAzureRmTypes(string terraform)
+    {
+        return Regex.Matches(terraform, @"\bazurerm_[a-z0-9_]+\b",
+                RegexOptions.CultureInvariant)
+            .Select(match => match.Value)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
     }
 
     private static string TerraformResource(string terraform, string type, string name)
