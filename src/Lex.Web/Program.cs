@@ -128,7 +128,7 @@ var ctx = new WebContext(
     app.Services.GetRequiredService<TimeProvider>());
 
 app.Logger.LogInformation("Assistant {State}; {Count} index(es) mounted from {Dir}",
-    ctx.Ask.Enabled ? "enabled" : "disabled (no AOAI endpoint, identity/key or deployment)",
+    ctx.Ask.Enabled ? "enabled" : "disabled",
     ctx.Registry.Count, options.IndexDir);
 
 // ---- routes: grouped by the question each answers, not by HTTP verb or URL shape --------

@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   actionableClarificationChoices,
+  assistantUnavailableActions,
   AssistantResponseError,
   askQuestionError,
   askStreaming,
   clarificationFollowUp,
   executionDetails,
   resetAskThread,
+  retainsAssistantConversation,
   shouldOfferContextualFollowUps,
   type AskMessage,
   type AskReply,
   type AskExecutionDetails,
+  type AssistantUnavailableAction,
   type ClarificationChoice,
   type Step,
 } from "./api";
@@ -48,6 +51,7 @@ export default function AssistantController({
   const [conversation, setConversation] = useState<AskMessage[]>([]);
   const [activeQuestion, setActiveQuestion] = useState<string>();
   const [execution, setExecution] = useState<AskExecutionDetails>();
+  const [unavailableActions, setUnavailableActions] = useState<AssistantUnavailableAction[]>([]);
   const [clarification, setClarification] = useState<{
     context: string; choices: ClarificationChoice[];
   }>();
@@ -70,6 +74,7 @@ export default function AssistantController({
       setSteps([]);
       setClarification(undefined);
       setExecution(undefined);
+      setUnavailableActions([]);
       return;
     }
     setConversation(history.current);
@@ -81,6 +86,7 @@ export default function AssistantController({
     setSteps([]);
     setClarification(undefined);
     setExecution(undefined);
+    setUnavailableActions([]);
     abort.current?.abort();
     const controller = new AbortController();
     abort.current = controller;
@@ -111,6 +117,7 @@ export default function AssistantController({
       const details = executionDetails(reply);
       setSaid(reply.error ?? visibleReply);
       setExecution(details);
+      setUnavailableActions(assistantUnavailableActions(reply.ui));
       const choices = reply.clarification
         ? actionableClarificationChoices(reply.clarification)
         : undefined;
@@ -118,7 +125,11 @@ export default function AssistantController({
         ? { context: question, choices }
         : undefined);
       setAllowContextualFollowUps(shouldOfferContextualFollowUps(reply));
-      if (!reply.error) {
+      if (!retainsAssistantConversation(reply)) {
+        threadToken.current = undefined;
+        history.current = [];
+        setConversation([]);
+      } else if (!reply.error) {
         threadToken.current = reply.thread_token;
         history.current = boundedVisibleConversation([
           ...history.current,
@@ -139,6 +150,7 @@ export default function AssistantController({
         setSaid(error instanceof AssistantResponseError
           ? error.message : "The request failed, try again.");
         setExecution(undefined);
+        setUnavailableActions([]);
       }
     } finally {
       if (abort.current === controller) setBusy(false);
@@ -161,6 +173,7 @@ export default function AssistantController({
     setSteps([]);
     setClarification(undefined);
     setExecution(undefined);
+    setUnavailableActions([]);
     setBusy(false);
   }, []);
 
@@ -170,6 +183,10 @@ export default function AssistantController({
         run: () => submit(clarificationFollowUp(clarification.context, choice)),
       }))
     : [
+        ...unavailableActions.map((action) => ({
+          label: action.label,
+          run: () => location.assign(action.href),
+        })),
         ...(resultUrl ? [{ label: "Open the structured result", run: () => location.assign(resultUrl) }] : []),
         ...(allowContextualFollowUps ? contextualFollowUps ?? [] : []),
       ];

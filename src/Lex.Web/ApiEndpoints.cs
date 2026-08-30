@@ -256,12 +256,13 @@ public static class ApiEndpoints
                         ? AskAdmissionLane.Public
                         : AskAdmissionLane.Evaluation);
                 var (status, bodyJson) = outcome;
-                var stored = status == 200 && bodyJson["error"] is null
+                var stored = outcome.RetainConversation
+                    && status == 200 && bodyJson["error"] is null
                     && AssistantReply(bodyJson) is { } assistant
                     && thread.Commit(
                         message, assistant, outcome.ConversationContext,
                         outcome.ContextDisposition);
-                if (stored || threadToken is not null)
+                if (outcome.RetainConversation && (stored || threadToken is not null))
                     bodyJson["thread_token"] = thread.Token;
                 var json = bodyJson.ToJsonString();
                 if (outcome.RetainForReplay)
@@ -555,12 +556,13 @@ public static class ApiEndpoints
                 {
                     ["operation_result_emitted_ms"] = firstOperationEmittedMilliseconds,
                 };
-            var stored = status == 200 && bodyJson["error"] is null
+            var stored = outcome.RetainConversation
+                && status == 200 && bodyJson["error"] is null
                 && AssistantReply(bodyJson) is { } assistant
                 && ownedThread.Commit(
                     message, assistant, outcome.ConversationContext,
                     outcome.ContextDisposition);
-            if (stored || threadToken is not null)
+            if (outcome.RetainConversation && (stored || threadToken is not null))
                 bodyJson["thread_token"] = ownedThread.Token;
             if (outcome.RetainForReplay)
                 ownedEvaluationUse?.Commit(stored ? ownedThread.Token : null);

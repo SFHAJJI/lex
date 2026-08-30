@@ -309,11 +309,9 @@ export default function AskPanel(p: AskPanelProps) {
 
         {!minimized ? <>
           <p className="ap-notice">
-            You are talking to an <b>AI assistant</b>. It answers only from the laws Lex holds,
-            with the date and source for every claim, or it declines. It can still be wrong and
-            it is not legal advice. Up to six turns stay in this browser tab; submitted text is
-            processed by this server and Azure OpenAI. Do not submit confidential client facts.
-            <a href="/developers#assistant-data">Data handling</a>.
+            The assistant is temporarily unavailable while Lex installs its deterministic V3
+            answer path, checkable against its sources. Search and held publisher text remain
+            available.
           </p>
 
           <div className="ap-body" ref={body}>
