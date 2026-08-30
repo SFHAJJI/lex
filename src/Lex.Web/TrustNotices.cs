@@ -151,17 +151,26 @@ public static class TrustNotices
             ? "That is a statement about this request, not evidence that a law or record is absent."
             : "That is a statement about this response, not evidence that a law or record is absent.";
 
-        var body = status switch
-        {
-            "no_corpus_mounted" =>
-                "This server has no verified legal index mounted, so it holds no law and cannot "
-                + "answer legal questions. This is a deployment state, not a statement about the law.",
-            // The producer's own sentence when it wrote one, whatever the status means.
-            _ => S(refusal, "detail")
-                 ?? (denied
-                     ? "This query did not run. " + tail
-                     : "Lex could not use this response. " + tail),
-        };
+        // A recognised non-execution status whose own receipt says it ran is contradictory, and
+        // the BODY has to follow the lead rather than keep asserting the status. Reporting the
+        // no-index sentence, or relaying the producer detail written to explain it, would restate
+        // the half of the contradiction the page has just declined to believe.
+        var contradictory = ran == true
+            && status is "no_corpus_mounted" or "unknown_publisher";
+        var body = contradictory
+            ? "Lex could not use this response: it reports a state that its own receipt "
+              + "contradicts. " + tail
+            : status switch
+            {
+                "no_corpus_mounted" =>
+                    "This server has no verified legal index mounted, so it holds no law and cannot "
+                    + "answer legal questions. This is a deployment state, not a statement about the law.",
+                // The producer's own sentence when it wrote one, whatever the status means.
+                _ => S(refusal, "detail")
+                     ?? (denied
+                         ? "This query did not run. " + tail
+                         : "Lex could not use this response. " + tail),
+            };
 
         // The mounted alternatives, when the producer named them, so the refusal is answerable.
         var mounted = Strings(refusal, "mounted_publishers");

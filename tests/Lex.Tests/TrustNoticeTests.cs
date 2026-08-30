@@ -672,69 +672,6 @@ public sealed class TrustNoticeTests : IDisposable
     }
 
     /// <summary>
-    /// An article-number match is a real article row selected by its number. It is neither a
-    /// wording match nor a record match, and calling it a title match named the wrong thing: a bare
-    /// "Article 14" produces only these, so the page suppressed every hit and then reported that
-    /// nothing had been presented.
-    /// </summary>
-    [Fact]
-    public void An_article_number_match_is_shown_and_labelled_for_what_it_matched()
-    {
-        using var site = new NoticeSite(Path.Combine(_root, "artnum"), includeAct: false);
-        using var reader = site.Reader();
-        var readers = new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader };
-
-        var page = CatalogueEndpoints.RenderSearchResults(
-            [(JsonObject)JsonNode.Parse("""
-                {"envelope":{"publisher":"lu-legilux","status":"ok"},
-                 "population":{"query_ran":true},
-                 "hits":[{"work":"lu-legilux:loi-2006-07-31-n2","anchor":"art_l_121-6",
-                          "title":"Code du travail","valid_from":"2024-08-04",
-                          "provision_num":"Art. L. 121-6",
-                          "match_reasons":["article_intent"]}]}
-                """)!],
-            readers);
-
-        Assert.Contains("1 hit(s)", page, StringComparison.Ordinal);
-        Assert.Contains("matched on article number, not wording", page, StringComparison.Ordinal);
-        // The label it never looked at.
-        Assert.DoesNotContain("matched on title, not wording", page, StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    /// The suppression still has to work, or the repair would have bought back attack 41: a record
-    /// match presented as though it answered the question.
-    ///
-    /// These are the FUZZY record lanes: bm25 over identifiers, aliases, titles and facets, and
-    /// vector neighbours. They fire on partial overlap, which is how a speeding question returned
-    /// tachograph regulations. The exact_ and contained_ identity lanes are not here, because those
-    /// fire only when the query is, or wholly contains, the instrument's own name.
-    /// </summary>
-    [Theory]
-    [InlineData("work_metadata")]
-    [InlineData("semantic_work")]
-    [InlineData("semantic_concept")]
-    [InlineData("ambiguous_exact_identifier")]
-    public void A_record_lane_is_still_not_presented_as_an_answer(string reason)
-    {
-        using var site = new NoticeSite(Path.Combine(_root, "rec" + reason), includeAct: false);
-        using var reader = site.Reader();
-        var readers = new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader };
-
-        var page = CatalogueEndpoints.RenderSearchResults(
-            [(JsonObject)JsonNode.Parse(
-                "{\"envelope\":{\"publisher\":\"lu-legilux\",\"status\":\"ok\"},"
-                + "\"population\":{\"query_ran\":true},\"hits\":[{"
-                + "\"work\":\"lu-legilux:loi-2006-07-31-n2\","
-                + "\"match_reasons\":[\"" + reason + "\"]}]}")!],
-            readers);
-
-        Assert.Contains("Lex found records that match only in metadata", page,
-            StringComparison.Ordinal);
-        Assert.DoesNotContain("1 hit(s)", page, StringComparison.Ordinal);
-    }
-
-    /// <summary>
     /// Addendum (a). Disclosing an unattributable publisher is not enough. It answered, and this
     /// page cannot say what it answered, so a corpus-wide absence beside it would still be a claim
     /// about a response nobody read.
@@ -775,6 +712,13 @@ public sealed class TrustNoticeTests : IDisposable
     [InlineData("\"work\":\"lu-legilux:loi-2006-07-31-n2\",\"valid_from\":\"\"")]
     [InlineData("\"work\":\"lu-legilux:loi-2006-07-31-n2\",\"valid_from\":true")]
     [InlineData("\"work\":\"lu-legilux:loi-2006-07-31-n2\"")]
+    // Round 3 O3: Length > 0 accepted both of these and built an authoritative-looking link.
+    [InlineData("\"work\":\"   \",\"valid_from\":\"2024-08-04\"")]
+    [InlineData("\"work\":\"\\t\\n\",\"valid_from\":\"2024-08-04\"")]
+    [InlineData("\"work\":\"lu-legilux:x\",\"valid_from\":\"04-08-2024\"")]
+    [InlineData("\"work\":\"lu-legilux:x\",\"valid_from\":\"2024-13-45\"")]
+    [InlineData("\"work\":\"lu-legilux:x\",\"valid_from\":\"yesterday\"")]
+    [InlineData("\"work\":\"lu-legilux:x\",\"valid_from\":\"2024-08-04T00:00:00Z\"")]
     public void A_hit_without_a_usable_destination_is_not_rendered_as_one(string coordinates)
     {
         using var site = new NoticeSite(Path.Combine(_root, "dest"), includeAct: false);
@@ -795,6 +739,34 @@ public sealed class TrustNoticeTests : IDisposable
     }
 
     /// <summary>
+    /// Round 3 O3, second half. A path component is percent-encoded, not HTML-encoded: H()
+    /// neutralises what breaks markup and leaves what breaks a URL, so a work carrying a slash or
+    /// a hash rewrote the rest of the address while still looking like a citation.
+    /// </summary>
+    [Fact]
+    public void A_link_component_is_encoded_for_the_url_not_for_the_markup()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "encode"), includeAct: false);
+        using var reader = site.Reader();
+
+        var page = CatalogueEndpoints.RenderSearchResults(
+            [(JsonObject)JsonNode.Parse("""
+                {"envelope":{"publisher":"lu-legilux","status":"ok"},
+                 "population":{"query_ran":true},
+                 "hits":[{"work":"lu-legilux:a/b#c","valid_from":"2024-08-04",
+                          "anchor":"art/1#x","match_reasons":["keyword"]}]}
+                """)!],
+            new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader });
+
+        Assert.Contains("1 hit(s)", page, StringComparison.Ordinal);
+        // The separators the work carried are data, not structure.
+        Assert.Contains("lu-legilux%3Aa%2Fb%23c", page, StringComparison.Ordinal);
+        Assert.Contains("art%2F1%23x", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("href=\"/lu-legilux/lu-legilux:a/b#c", page,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Addendum (c). The receipt outranks the status name. A recognised non-execution status
     /// arriving with query_ran true is a contradiction, and the page may not resolve it by picking
     /// the half it recognises.
@@ -806,11 +778,24 @@ public sealed class TrustNoticeTests : IDisposable
         {
             "{\"status\":\"no_corpus_mounted\",\"population\":{\"query_ran\":true}}",
             "{\"status\":\"unknown_publisher\",\"population\":{\"query_ran\":true}}",
+            "{\"status\":\"no_corpus_mounted\",\"detail\":\"No index is mounted here.\","
+            + "\"population\":{\"query_ran\":true}}",
+            "{\"status\":\"unknown_publisher\",\"detail\":\"Publisher zzz is not mounted.\","
+            + "\"population\":{\"query_ran\":true}}",
         })
         {
             var card = TrustNotices.WholeCallRefusal((JsonObject)JsonNode.Parse(contradictory)!);
             Assert.DoesNotContain("did not run", card, StringComparison.Ordinal);
             Assert.Contains("No usable result.", card, StringComparison.Ordinal);
+            // The BODY has to follow the lead. Keeping the status-specific sentence, or relaying
+            // the producer detail written to explain it, restates the half of the contradiction
+            // the page has just declined to believe.
+            Assert.DoesNotContain("no verified legal index mounted", card,
+                StringComparison.Ordinal);
+            Assert.DoesNotContain("No index is mounted here.", card, StringComparison.Ordinal);
+            Assert.DoesNotContain("Publisher zzz is not mounted.", card,
+                StringComparison.Ordinal);
+            Assert.Contains("its own receipt", card, StringComparison.Ordinal);
         }
 
         // Unchanged where there is no contradiction to resolve.
@@ -856,31 +841,144 @@ public sealed class TrustNoticeTests : IDisposable
     }
 
     /// <summary>
-    /// An identity match that resolved to more than one work is NOT an identification. Presenting
-    /// one of several as the instrument would be a guess, so the ambiguous_ variants stay
-    /// suppressed. This is the boundary of the test above rather than a restatement of it.
+    /// The agreed lane table (MatchLanes plus tests/Lex.Tests/match-lane-cases.json) decides these,
+    /// not this page. These cases pin what the PAGE does with each lane's verdict.
+    ///
+    /// Ambiguity arises only during identity resolution, so an ambiguous_ reason is identity and
+    /// renders. I had it suppressed, which hid a real identification behind a notice saying the
+    /// records matched only in metadata.
     /// </summary>
     [Theory]
     [InlineData("ambiguous_exact_identifier")]
     [InlineData("ambiguous_exact_title")]
     [InlineData("ambiguous_contained_title")]
-    public void An_identity_match_resolving_to_several_works_is_not_an_identification(string reason)
+    [InlineData("exact_identifier")]
+    [InlineData("exact_title")]
+    [InlineData("contained_publisher_short_title")]
+    public void An_identity_lane_renders_and_says_it_matched_a_name(string reason)
     {
-        using var site = new NoticeSite(Path.Combine(_root, "amb" + reason), includeAct: false);
+        var page = Rendered(reason);
+
+        Assert.Contains("1 hit(s)", page, StringComparison.Ordinal);
+        Assert.Contains("matched the name of this law, not its wording", page,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(MatchLanes.Heading, page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A text lane is the answer itself and carries no qualifying badge. article_intent is text:
+    /// the article-number sweep returns the provision, found by the same pass as the words.
+    /// </summary>
+    [Theory]
+    [InlineData("keyword")]
+    [InlineData("fuzzy")]
+    [InlineData("semantic")]
+    [InlineData("article_intent")]
+    public void A_text_lane_renders_without_qualifying_the_match(string reason)
+    {
+        var page = Rendered(reason);
+
+        Assert.Contains("1 hit(s)", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("matched the name of this law", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("matched only in metadata", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("match not classified", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// An unknown reason, and the two work-vector lanes the ruling leaves unclassified, render and
+    /// are never suppressed, but the page may not assert a lane it has not been given. Both of
+    /// these were suppressed as metadata by my own classifier.
+    /// </summary>
+    [Theory]
+    [InlineData("semantic_work")]
+    [InlineData("semantic_concept")]
+    [InlineData("a_reason_this_page_has_never_seen")]
+    public void An_unclassified_lane_renders_and_asserts_nothing(string reason)
+    {
+        var page = Rendered(reason);
+
+        Assert.Contains("1 hit(s)", page, StringComparison.Ordinal);
+        Assert.Contains("match not classified", page, StringComparison.Ordinal);
+        // Never the metadata notice: only positively known metadata may trigger that.
+        Assert.DoesNotContain(MatchLanes.Heading, page, StringComparison.Ordinal);
+        Assert.DoesNotContain("matched the name of this law", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The one lane that is never an answer, and the notice is a RESPONSE-level state rather than a
+    /// per-publisher one. Beside a refusal it must also block the corpus-wide absence, because the
+    /// page has just named records that matched.
+    /// </summary>
+    [Fact]
+    public void A_positively_metadata_response_is_answered_with_the_notice_and_no_absence()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "metaonly"), includeAct: false);
+        using var reader = site.Reader();
+        var readers = new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader };
+
+        var records = (JsonObject)JsonNode.Parse("""
+            {"envelope":{"publisher":"lu-legilux","status":"ok"},
+             "population":{"query_ran":true},
+             "hits":[{"work":"lu-legilux:loi-2006-07-31-n2","valid_from":"2024-08-04",
+                      "title":"Code du travail","match_reasons":["work_metadata"]}]}
+            """)!;
+        var refusal = (JsonObject)JsonNode.Parse("""
+            {"envelope":{"publisher":"lu-legilux","status":"filter_not_supported_by_index"},
+             "population":{"query_ran":false}}
+            """)!;
+
+        var page = CatalogueEndpoints.RenderSearchResults([records, refusal], readers);
+
+        Assert.Contains(MatchLanes.Heading, page, StringComparison.Ordinal);
+        Assert.DoesNotContain("1 hit(s)", page, StringComparison.Ordinal);
+        // The page has just named a matching record, so neither absence sentence may follow it.
+        Assert.DoesNotContain("No match was returned", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("No selected publisher ran this query", page,
+            StringComparison.Ordinal);
+        // The refusal is still disclosed rather than swallowed.
+        Assert.Contains("filter_not_supported_by_index", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// One unclassified hit beside metadata hits disables the notice for the whole response, so a
+    /// hit nobody classified cannot be swept into a positive claim about all of them.
+    /// </summary>
+    [Fact]
+    public void One_unclassified_hit_disables_the_response_level_metadata_claim()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "mixedlane"), includeAct: false);
         using var reader = site.Reader();
         var readers = new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader };
 
         var page = CatalogueEndpoints.RenderSearchResults(
+            [(JsonObject)JsonNode.Parse("""
+                {"envelope":{"publisher":"lu-legilux","status":"ok"},
+                 "population":{"query_ran":true},
+                 "hits":[{"work":"lu-legilux:loi-2006-07-31-n2","valid_from":"2024-08-04",
+                          "match_reasons":["work_metadata"]},
+                         {"work":"lu-legilux:loi-2006-07-31-n2","valid_from":"2024-07-01",
+                          "match_reasons":["semantic_work"]}]}
+                """)!],
+            readers);
+
+        Assert.DoesNotContain(MatchLanes.Heading, page, StringComparison.Ordinal);
+        Assert.Contains("2 hit(s)", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>One publisher, one hit, one reason: the shape most of these cases need.</summary>
+    private string Rendered(string reason)
+    {
+        using var site = new NoticeSite(
+            Path.Combine(_root, "lane-" + reason), includeAct: false);
+        using var reader = site.Reader();
+        return CatalogueEndpoints.RenderSearchResults(
             [(JsonObject)JsonNode.Parse(
                 "{\"envelope\":{\"publisher\":\"lu-legilux\",\"status\":\"ok\"},"
                 + "\"population\":{\"query_ran\":true},\"hits\":[{"
-                + "\"work\":\"lu-legilux:loi-2006-07-31-n2\","
+                + "\"work\":\"lu-legilux:loi-2006-07-31-n2\",\"valid_from\":\"2024-08-04\","
+                + "\"title\":\"Code du travail\",\"snippet\":\"Le contrat est suspendu.\","
                 + "\"match_reasons\":[\"" + reason + "\"]}]}")!],
-            readers);
-
-        Assert.Contains("Lex found records that match only in metadata", page,
-            StringComparison.Ordinal);
-        Assert.DoesNotContain("1 hit(s)", page, StringComparison.Ordinal);
+            new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader });
     }
 
     /// <summary>
@@ -1046,50 +1144,6 @@ public sealed class TrustNoticeTests : IDisposable
             Assert.Contains("aria-label=\"This query did not run\"", card,
                 StringComparison.Ordinal);
         }
-    }
-
-    /// <summary>
-    /// O7. The mixed state, constructed directly because the fixture cannot reach it: one
-    /// publisher that ran and matched only records, beside one that refused.
-    ///
-    /// Moving the counters before the early return fixed the "nobody ran" claim and left the
-    /// "no match" claim false, because the count was still shown.Count, which is zero in exactly
-    /// this case. The page named matching records and then closed by saying no match was
-    /// returned. What suppresses a corpus-wide absence is not what was rendered as text, it is
-    /// whether anything at all was put in front of the reader as a match.
-    /// </summary>
-    [Fact]
-    public void A_page_that_named_matching_records_may_not_say_no_match_was_returned()
-    {
-        using var site = new NoticeSite(Path.Combine(_root, "mixed"), includeAct: false);
-        using var reader = site.Reader();
-        var readers = new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader };
-
-        // Ran, and matched only on the record. The work is the real fixture work so the card
-        // resolves an origin exactly as it would in production.
-        var records = (JsonObject)JsonNode.Parse("""
-            {"envelope":{"publisher":"lu-legilux","status":"ok"},
-             "population":{"query_ran":true},
-             "hits":[{"work":"lu-legilux:loi-2006-07-31-n2",
-                      "match":"work_identifier_or_title","match_reasons":[]}]}
-            """)!;
-        // A sibling that could not run, which is what makes the absence sentence eligible.
-        var refusal = (JsonObject)JsonNode.Parse("""
-            {"envelope":{"publisher":"lu-legilux","status":"filter_not_supported_by_index"},
-             "population":{"query_ran":false}}
-            """)!;
-
-        var page = CatalogueEndpoints.RenderSearchResults([records, refusal], readers);
-
-        // The card is there, so the page has just told the reader that records matched.
-        Assert.Contains("Lex found records that match only in metadata", page,
-            StringComparison.Ordinal);
-        // Therefore neither absence sentence may follow it.
-        Assert.DoesNotContain("No match was returned", page, StringComparison.Ordinal);
-        Assert.DoesNotContain("No selected publisher ran this query", page,
-            StringComparison.Ordinal);
-        // The refusal is still disclosed rather than swallowed.
-        Assert.Contains("filter_not_supported_by_index", page, StringComparison.Ordinal);
     }
 
     /// <summary>

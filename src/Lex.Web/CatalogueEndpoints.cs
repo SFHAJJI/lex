@@ -722,10 +722,15 @@ public static class CatalogueEndpoints
     /// The result area for one search: what each publisher contributed, and then whatever absence
     /// the page may honestly state once they have all answered.
     ///
-    /// Separated from the route so the mixed states can be constructed directly, because they
-    /// cannot be reached through the fixture. It mounts one publisher, and the executed search path
-    /// always stamps ok with query_ran true, so no page-level test can produce a publisher that ran
-    /// beside one that refused. That is exactly the state where the absence rule went wrong.
+    /// Lane policy is NOT here. MatchLanes owns it, its normative case table binds this page and
+    /// the TypeScript reader to the same answers, and a second policy in this file is exactly what
+    /// produced a page that suppressed ambiguous identity and called an unknown reason metadata.
+    /// What stays here is the envelope handling: attribution, refusals, and answers this page
+    /// cannot read at all.
+    ///
+    /// Separated from the route so the mixed states can be constructed directly. The fixture mounts
+    /// one publisher and the executed search path always stamps ok with query_ran true, so no
+    /// page-level test can put a publisher that ran beside one that refused.
     /// </summary>
     public static string RenderSearchResults(
         JsonArray envelopes, IReadOnlyDictionary<string, LexIndexReader> readers)
@@ -734,21 +739,28 @@ public static class CatalogueEndpoints
         var ran = 0;
         var refused = 0;
         // Everything the page put in front of the reader AS A MATCH, which is not the same as the
-        // wording hits it rendered as text. Counting only wording hits left the corpus-wide absence
-        // sentence free to say no match was returned directly underneath a card naming the records
-        // that had just matched. A count is a claim, and so is a zero.
+        // hits it rendered as text. A count is a claim, and so is a zero.
         var presented = 0;
-        // Answers this page could not classify. Counted, never guessed at.
+        // Answers this page could not read. Counted, never guessed at.
         var unreadable = 0;
 
+        // Decided ONCE across the whole response rather than per publisher, per the B2 ruling, and
+        // only when every hit is POSITIVELY metadata. An unknown reason renders through the normal
+        // path and never triggers this notice.
+        var population = MatchLanes.ResponsePopulation(envelopes);
+        var metadataOnly = population.Count > 0 && MatchLanes.MetadataOnly(
+            population.Select(item => MatchLanes.ReasonsOf(item.Hit)).ToArray());
+
+        static string Heading(LexIndexReader reader, string suffix = "") =>
+            $"<h2>{H(reader.Stamp.GetValueOrDefault("publisher_name"))} "
+            + $"({H(reader.Stamp.GetValueOrDefault("jurisdiction"))}){suffix}</h2>";
+
         /// <summary>
-        /// Whether this publisher's results can be classified at all.
-        ///
-        /// Absent hits is a real empty result and stays one. Hits that are present but are not
-        /// an array, an element that is not an object, or match_reasons present but not an
-        /// array, are none of them empty results: they are answers the page cannot read. The
-        /// old reads collapsed every one of them into an empty array, and an empty array here
-        /// becomes a corpus-wide claim that nothing matched.
+        /// Whether this publisher's answer has a readable SHAPE. Lane semantics are not decided
+        /// here: a reason that is unknown, or not even a string, is an unknown reason to MatchLanes,
+        /// which renders it and asserts nothing about it. What this rejects is a response the page
+        /// cannot walk at all, because reading one of those as an empty result turns an answer
+        /// nobody parsed into a corpus-wide claim that nothing matched.
         /// </summary>
         static bool Classifiable(JsonObject result, out JsonArray hits)
         {
@@ -758,61 +770,46 @@ public static class CatalogueEndpoints
                 if (raw is not JsonArray array) return false;
                 hits = array;
             }
-            foreach (var hit in hits)
-            {
-                if (hit is not JsonObject entry) return false;
-                // Every hit names a work, whether it is rendered as a link or named on the
-                // record card, so a hit without one cannot be presented at all.
-                if (TrustNotices.Text(entry["work"]) is not { Length: > 0 }) return false;
-                if (entry["match_reasons"] is not { } reasons) continue;
-                if (reasons is not JsonArray listed) return false;
-                // An array of the wrong things is not an array of reasons. Checking only the
-                // container let [9,true] through as "no wording reason", which is a reading of
-                // the response rather than a fact about it: the page then labelled a valid work
-                // as matched on its title, which the response never said.
-                foreach (var reason in listed)
-                    if (TrustNotices.Text(reason) is null) return false;
-            }
-            return true;
+            return hits.All(hit => hit is JsonObject);
         }
 
-        static string Heading(LexIndexReader reader, string suffix = "") =>
-            $"<h2>{H(reader.Stamp.GetValueOrDefault("publisher_name"))} "
-            + $"({H(reader.Stamp.GetValueOrDefault("jurisdiction"))}){suffix}</h2>";
+        /// <summary>
+        /// A hit is rendered as a link to a dated version, so it needs coordinates that make one.
+        /// Length > 0 was not enough: a whitespace work and a malformed date both passed it and
+        /// produced a broken link wearing the authority of a citation.
+        /// </summary>
+        static bool HasUsableDestination(JsonObject hit) =>
+            TrustNotices.Text(hit["work"])?.Trim() is { Length: > 0 }
+            && TryIsoDate(TrustNotices.Text(hit["valid_from"]), out _);
 
         foreach (var node in envelopes)
         {
-            // A sibling of the wrong shape was silently erased by OfType, and erasing it is how
-            // it became an absence: beside a refusal the page went on to say no selected
-            // publisher ran this query, about a response it had thrown away unread.
+            // A sibling of the wrong shape was silently erased by OfType, and erasing it is how it
+            // became an absence: beside a refusal the page went on to say no selected publisher ran
+            // this query, about a response it had thrown away unread.
             if (node is not JsonObject result)
             {
                 sb.Append(TrustNotices.UnreadableResults());
                 unreadable++;
                 continue;
             }
+
             // Silently skipping an envelope makes a whole publisher's results vanish from a page
-            // that gives the reader no way to know it answered. Absence is never implied here, so
-            // an envelope this page cannot attribute is disclosed rather than dropped. The read is
-            // also strict: the previous GetValue threw on a non-string publisher and took the whole
-            // page with it.
+            // that gives the reader no way to know it answered.
             if (!TryAttribute(result, readers, out var reader))
             {
                 sb.Append("<div class=\"notice\" role=\"note\">A publisher answered and its "
                     + "results could not be attributed to a mounted index, so they are not "
                     + "shown. This is not evidence that it found nothing.</div>");
-                // Disclosing it is not enough. A publisher answered and this page cannot say
-                // what it answered, so a corpus-wide absence beside it would be a claim about
-                // a response nobody read.
+                // Disclosing it is not enough. It answered and this page cannot say what it
+                // answered, so an absence beside it is a claim about a response nobody read.
                 unreadable++;
                 continue;
             }
             var publisherId = reader.Collection;
-            // Classify before touching hits, and fail closed. Reading hits first let a missing or
-            // malformed status, an ok envelope carrying query_ran false, or a refusal arriving with
-            // hostile rows, all render results or a count for a query nobody executed. Only an
-            // exact ok whose own receipt confirms it counts as a run; everything else states what
-            // is known and shows nothing.
+
+            // Classify before touching hits, and fail closed. Only an exact ok whose own receipt
+            // confirms it counts as a run; everything else states what is known and shows nothing.
             var status = TrustNotices.EnvelopeStatus(result);
             if (!TrustNotices.Ran(result))
             {
@@ -821,9 +818,8 @@ public static class CatalogueEndpoints
                 refused++;
                 continue;
             }
-            // Classify before reading, and disclose rather than guess. This publisher ran, so
-            // the run is counted either way; what it returned is what could not be read.
             ran++;
+
             if (!Classifiable(result, out var hits))
             {
                 sb.Append(Heading(reader));
@@ -831,116 +827,34 @@ public static class CatalogueEndpoints
                 unreadable++;
                 continue;
             }
-            // A hit that reached no wording matched the record, not the law. The assistant path
-            // already drops these as filler (AskService); the web page presented them as answers,
-            // which is how a speeding question returns tachograph regulations under status ok.
-            //
-            // The discriminator is the absence of a wording reason, not the presence of a label.
-            // Only the identifier/title FALLBACK stamps match=work_identifier_or_title; a work-level
-            // metadata hit from the main path arrives unlabelled, carrying work_metadata from the
-            // FTS over identifiers, aliases, titles and facets (WorkSearch). Keying on the label
-            // alone would miss exactly the hits attack 41 proved live.
-            //
-            // Every field below is read strictly. GetValue<string> THROWS on a number or a bool, so
-            // one malformed field in one hit from any publisher took the entire page down with a
-            // 500. A value of the wrong type is not the string, and it is not a page failure.
-            static IEnumerable<string?> Reasons(JsonObject hit) =>
-                (hit["match_reasons"] as JsonArray ?? []).Select(TrustNotices.Text);
-
-            // The lanes that reached the provision's own text. fuzzy belongs here and was
-            // missing: it is the SAME provision search re-run over a token-expanded query
-            // (IndexReader.SearchV3), and the assistant path counts it too
-            // (AskService.HasDirectProvisionEvidence). Leaving it out hid real text answers when
-            // they were a publisher's only hits, and badged the rest as title matches, which was
-            // a false statement about a match on the wording.
-            static bool ReachedWording(JsonObject hit) =>
-                Reasons(hit).Any(reason => reason is "keyword" or "fuzzy" or "semantic");
-
-            // A real article row selected by its NUMBER rather than by its text, with an anchor
-            // and provision text of its own. It is neither a wording match nor a record match,
-            // and treating it as the latter was wrong twice over: a bare "Article 14" query
-            // produces only these, so every hit was suppressed and the page reported that nothing
-            // was presented, while the badge said it matched a title it had never looked at.
-            static bool MatchedArticleNumber(JsonObject hit) =>
-                Reasons(hit).Any(reason => reason is "article_intent");
-
-            // The identity lanes: the whole query IS the instrument's identifier, title or
-            // publisher short title, or contains one as a whole-word span. That is the reader
-            // naming the law they want, and answering it with "records that match only in
-            // metadata. They are not shown as text answers" is both unhelpful and untrue about a
-            // precise identification. They answer a different question from a wording query;
-            // they do not fail to answer.
-            //
-            // Listed explicitly rather than matched by prefix, because the vocabulary is closed
-            // and anything new should fall to the suppressed side. The ambiguous_ variants are
-            // deliberately absent: those are identity matches that resolved to more than one
-            // work, so presenting one as the instrument would be a guess. exact_alias and
-            // contained_alias are unreachable today, since work_names only stores identifier,
-            // title and publisher_short_title kinds; they are named so the set stays complete if
-            // that changes.
-            static bool IdentifiedTheInstrument(JsonObject hit) => Reasons(hit).Any(reason =>
-                reason is "exact_identifier" or "exact_title" or "exact_publisher_short_title"
-                or "exact_alias" or "contained_identifier" or "contained_title"
-                or "contained_publisher_short_title" or "contained_alias");
-
-            // The identifier/title fallback rows carry no match_reasons at all, so the reason
-            // test already excludes them and the old match=="work_identifier_or_title" clause was
-            // redundant. It is gone rather than kept: if such a row ever did arrive carrying a
-            // wording reason, that clause would have suppressed a real answer.
-            static bool IsAnswer(JsonObject hit) =>
-                ReachedWording(hit) || MatchedArticleNumber(hit) || IdentifiedTheInstrument(hit);
-
-            var shown = hits.OfType<JsonObject>().Where(IsAnswer).ToList();
-            var metadataOnly = hits.OfType<JsonObject>()
-                .Where(hit => !IsAnswer(hit)).ToList();
-            // A hit that becomes a link needs the version coordinate that makes one. Without it
-            // the page emitted an href with an empty segment: a destination that goes nowhere,
-            // presented to the reader as a citation. Only the rendered ones need it, because a
-            // record match is named on the card rather than linked to a version.
-            if (shown.Any(hit => TrustNotices.Text(hit["valid_from"]) is not { Length: > 0 }))
+            var rows = hits.OfType<JsonObject>().ToList();
+            if (rows.Any(hit => !HasUsableDestination(hit)))
             {
                 sb.Append(Heading(reader));
                 sb.Append(TrustNotices.UnreadableResults());
                 unreadable++;
                 continue;
             }
-            // Only when the noise would BE the answer. Alongside real text hits a record match is
-            // context, and it keeps its badge below them.
-            if (shown.Count == 0 && metadataOnly.Count > 0)
+
+            // One response-level notice covers every publisher, appended after the loop.
+            if (metadataOnly || rows.Count == 0) continue;
+
+            presented += rows.Count;
+            sb.Append(Heading(reader, $", {rows.Count} hit(s)"));
+            foreach (var hit in rows)
             {
-                var works = metadataOnly.Select(hit => TrustNotices.Text(hit["work"]) ?? "")
-                    .Where(work => work.Length > 0).ToList();
-                // The card renders only when there is a record to name, so the heading waits for
-                // it. A heading with nothing under it announced a publisher and then said nothing.
-                if (TrustNotices.MetadataOnly(reader, works) is { } card)
+                // The badge names the lane MatchLanes assigned, and says nothing when the lane is
+                // unknown beyond the fact that it is unknown. Asserting identity the classifier did
+                // not certify is the thing the lane table exists to prevent.
+                var badge = MatchLanes.Classify(MatchLanes.ReasonsOf(hit)) switch
                 {
-                    sb.Append(Heading(reader));
-                    sb.Append(card);
-                    presented += works.Count;
-                    continue;
-                }
-                // Records matched and not one of them could be named, so this publisher
-                // returned something and the page can show none of it. That is unreadable, not
-                // empty, and it may not close the page with a no-match sentence.
-                sb.Append(Heading(reader));
-                sb.Append(TrustNotices.UnreadableResults());
-                unreadable++;
-                continue;
-            }
-            presented += shown.Count;
-            sb.Append(Heading(reader, $", {shown.Count} hit(s)"));
-            foreach (var hit in shown.Concat(metadataOnly))
-            {
-                // Four states, not two. Each badge names what was actually matched, because
-                // "matched on title, not wording" was said about article numbers and about
-                // identifiers alike, and it was true of neither.
-                var badge = ReachedWording(hit)
-                    ? ""
-                    : MatchedArticleNumber(hit)
-                        ? " <span class=\"badge\">matched on article number, not wording</span>"
-                        : IdentifiedTheInstrument(hit)
-                            ? " <span class=\"badge\">matched the name of this law, not its wording</span>"
-                            : " <span class=\"badge\">matched on title, not wording</span>";
+                    MatchLanes.Text => "",
+                    MatchLanes.Identity =>
+                        " <span class=\"badge\">matched the name of this law, not its wording</span>",
+                    MatchLanes.Metadata =>
+                        " <span class=\"badge\">matched only in metadata</span>",
+                    _ => " <span class=\"badge\">match not classified</span>",
+                };
                 var work = TrustNotices.Text(hit["work"]) ?? "";
                 var validFrom = TrustNotices.Text(hit["valid_from"]) ?? "";
                 var validTo = TrustNotices.Text(hit["valid_to"]);
@@ -951,18 +865,37 @@ public static class CatalogueEndpoints
                 var provisionId = TrustNotices.Text(hit["provision_id"]) ?? work;
                 var provisionLabel = TrustNotices.Text(hit["provision_num"])
                     ?? TrustNotices.Text(hit["provision_heading"]) ?? anchor;
-                var href = $"/{H(publisherId)}/{H(work)}/{H(validFrom)}"
-                    + (anchor is null ? "" : $"#{H(anchor)}");
+                // Percent-encoded per component, not HTML-encoded. H() neutralises what breaks
+                // markup and leaves what breaks a URL, so a work carrying a slash or a hash used to
+                // rewrite the rest of the path.
+                var href = $"/{Uri.EscapeDataString(publisherId)}/{Uri.EscapeDataString(work)}"
+                    + $"/{Uri.EscapeDataString(validFrom)}"
+                    + (anchor is null ? "" : $"#{Uri.EscapeDataString(anchor)}");
                 sb.Append($"""
-                    <div class="card"><a href="{href}"><b>{H(title)}</b>{(provisionLabel is null ? "" : $",  {H(provisionLabel)}")}</a>
+                    <div class="card"><a href="{H(href)}"><b>{H(title)}</b>{(provisionLabel is null ? "" : $",  {H(provisionLabel)}")}</a>
                     <span class="badge">{H(sourceClass)}</span> <span class="badge mono">{H(validFrom)} → {H(validTo ?? "open")}</span>{badge}
                     <div class="snippet">{H(snippet)}</div>
                     <div class="mono sub">{H(provisionId)}</div></div>
                     """);
             }
         }
+
+        if (metadataOnly)
+        {
+            sb.Append(MatchLanes.NoticeHtml(
+                population.Select(item => item.Publisher).ToArray(),
+                population.Select(item => new MatchLanes.DisclosureRow(
+                    item.Publisher,
+                    TrustNotices.Text(item.Hit["work"]) ?? "",
+                    TrustNotices.Text(item.Hit["valid_from"]) ?? "",
+                    TrustNotices.Text(item.Hit["title"]) ?? "")).ToArray(),
+                MatchLanes.AnyRowSetTruncated(envelopes)));
+            // The notice names the records, so something WAS put in front of the reader.
+            presented += population.Count;
+        }
+
         // Once every publisher has answered or refused, the page may only state a corpus-wide
-        // absence if the corpus was actually searched and nothing was put in front of the reader.
+        // absence if the corpus was actually searched and nothing was presented.
         sb.Append(TrustNotices.SearchAbsence(ran, refused, presented, unreadable));
         return sb.ToString();
     }
