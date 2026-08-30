@@ -104,7 +104,7 @@ public sealed class AzureRawResponseSink : IRawResponseSink
         try
         {
             return await CaptureWithinDeadlineAsync(
-                request, response, body, token).ConfigureAwait(false);
+                request, body, token).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
             when (cancellationToken.IsCancellationRequested)
@@ -124,7 +124,6 @@ public sealed class AzureRawResponseSink : IRawResponseSink
 
     private async Task<AzureVerifiedEvidence> CaptureWithinDeadlineAsync(
         SourceRequestIdentity request,
-        BoundedResponseMetadata response,
         Stream body,
         CancellationToken token)
     {
@@ -179,7 +178,9 @@ public sealed class AzureRawResponseSink : IRawResponseSink
                 }
 
                 var retention = RetentionRequest(
-                    _retentionLane, response.FetchedAt, version.CreatedAt);
+                    _retentionLane,
+                    version.CreatedAt,
+                    _timeProvider.GetUtcNow());
                 var readback = await _store.ReadbackAsync(
                     blobName, version, token).ConfigureAwait(false);
                 Exception? verificationFailure = null;
@@ -368,7 +369,7 @@ public sealed class AzureRawResponseSink : IRawResponseSink
         return true;
     }
 
-    private static Exception SafeReadbackFailure(
+    internal static Exception SafeReadbackFailure(
         Exception error,
         CancellationToken cancellationToken) =>
         error is OperationCanceledException
@@ -434,18 +435,41 @@ public sealed class AzureRawResponseSink : IRawResponseSink
 
     private static AzureEvidenceRetentionRequest RetentionRequest(
         EvidenceRetentionLane lane,
-        DateTimeOffset fetchedAt,
-        DateTimeOffset versionCreatedAt) => lane switch
+        DateTimeOffset versionCreatedAt,
+        DateTimeOffset observedNow) => lane switch
         {
-            EvidenceRetentionLane.Nightly90Days => new(
-                lane,
-                CeilingToWholeUtcSecond(fetchedAt.AddDays(90)),
-                CeilingToWholeUtcSecond(
-                    versionCreatedAt.AddDays(90).Add(RetentionClockTolerance))),
+            EvidenceRetentionLane.Nightly90Days => NightlyRetentionRequest(
+                versionCreatedAt, observedNow),
             EvidenceRetentionLane.EvidenceReleaseIndefinite =>
                 new(lane, null, null),
             _ => throw new ArgumentOutOfRangeException(nameof(lane)),
         };
+
+    private static AzureEvidenceRetentionRequest NightlyRetentionRequest(
+        DateTimeOffset versionCreatedAt,
+        DateTimeOffset observedNow)
+    {
+        var maximumAnchor = versionCreatedAt < observedNow
+            ? versionCreatedAt
+            : observedNow;
+        try
+        {
+            var creationMinimum = versionCreatedAt.AddDays(90);
+            var minimum = creationMinimum > observedNow
+                ? creationMinimum
+                : observedNow;
+            return new AzureEvidenceRetentionRequest(
+                EvidenceRetentionLane.Nightly90Days,
+                CeilingToWholeUtcSecond(minimum),
+                CeilingToWholeUtcSecond(
+                    maximumAnchor.AddDays(90).Add(RetentionClockTolerance)));
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            throw new InvalidDataException(
+                "Azure returned an invalid evidence creation time.");
+        }
+    }
 
     private static DateTimeOffset CeilingToWholeUtcSecond(
         DateTimeOffset value)

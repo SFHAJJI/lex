@@ -459,6 +459,22 @@ public sealed class AzureRawResponseSinkTests
     }
 
     [Fact]
+    public void Deferred_readback_mapping_propagates_the_canceled_supplied_token()
+    {
+        const string secret = "hostile-read-cancellation-secret";
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        var error = AzureRawResponseSink.SafeReadbackFailure(
+            new OperationCanceledException(secret), cancellation.Token);
+
+        var safeCancellation = Assert.IsType<OperationCanceledException>(error);
+        Assert.Equal(cancellation.Token, safeCancellation.CancellationToken);
+        Assert.DoesNotContain(
+            secret, safeCancellation.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Canceled_deferred_CanRead_failure_is_sanitized()
     {
         const string secret = "hostile-can-read-cancellation-secret";
@@ -577,7 +593,11 @@ public sealed class AzureRawResponseSinkTests
     [Fact]
     public async Task Nightly_lane_requests_and_verifies_ninety_day_immutability()
     {
-        var store = new RecordingStore();
+        var store = new RecordingStore
+        {
+            VersionCreatedAt = new DateTimeOffset(
+                2026, 8, 30, 4, 0, 0, TimeSpan.Zero),
+        };
         var sink = new AzureRawResponseSink(
             store, EvidenceRetentionLane.Nightly90Days);
 
@@ -597,7 +617,7 @@ public sealed class AzureRawResponseSinkTests
     {
         var fetchedAt = new DateTimeOffset(
             2026, 8, 30, 4, 0, 0, TimeSpan.Zero).AddTicks(1);
-        var store = new RecordingStore();
+        var store = new RecordingStore { VersionCreatedAt = fetchedAt };
         var sink = new AzureRawResponseSink(
             store, EvidenceRetentionLane.Nightly90Days);
 
@@ -627,10 +647,133 @@ public sealed class AzureRawResponseSinkTests
             store,
             EvidenceRetentionLane.Nightly90Days,
             new FixedTimeProvider(
+                createdAt));
+
+        await sink.CaptureVerifiedAsync(
+            Request(), Response(), new MemoryStream([1]));
+    }
+
+    [Fact]
+    public async Task Nightly_lane_rejects_server_time_that_widens_the_local_ceiling()
+    {
+        var createdAt = new DateTimeOffset(
+            3000, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var store = new RecordingStore
+        {
+            VersionCreatedAt = createdAt,
+            RetentionFactsFactory = (version, _) => new(
+                version.VersionId,
+                createdAt.AddDays(90),
+                "Locked",
+                false),
+        };
+        var sink = new AzureRawResponseSink(
+            store,
+            EvidenceRetentionLane.Nightly90Days,
+            new FixedTimeProvider(
+                new DateTimeOffset(2026, 8, 30, 4, 0, 0, TimeSpan.Zero)));
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            sink.CaptureVerifiedAsync(
+                Request(), Response(), new MemoryStream([1])));
+    }
+
+    [Fact]
+    public async Task Nightly_lane_classifies_unbounded_server_creation_time()
+    {
+        var store = new RecordingStore
+        {
+            VersionCreatedAt = DateTimeOffset.MaxValue,
+        };
+        var sink = new AzureRawResponseSink(
+            store,
+            EvidenceRetentionLane.Nightly90Days,
+            new FixedTimeProvider(
+                new DateTimeOffset(2026, 8, 30, 4, 0, 0, TimeSpan.Zero)));
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            sink.CaptureVerifiedAsync(
+                Request(), Response(), new MemoryStream([1])));
+    }
+
+    [Fact]
+    public async Task Nightly_lane_accepts_one_second_of_server_clock_lag()
+    {
+        var createdAt = new DateTimeOffset(
+            2026, 8, 30, 3, 59, 59, TimeSpan.Zero);
+        var store = new RecordingStore
+        {
+            VersionCreatedAt = createdAt,
+            RetentionFactsFactory = (version, _) => new(
+                version.VersionId,
+                createdAt.AddDays(90),
+                "Locked",
+                false),
+        };
+        var sink = new AzureRawResponseSink(
+            store,
+            EvidenceRetentionLane.Nightly90Days,
+            new FixedTimeProvider(
                 new DateTimeOffset(2026, 8, 30, 4, 0, 0, TimeSpan.Zero)));
 
         await sink.CaptureVerifiedAsync(
             Request(), Response(), new MemoryStream([1]));
+    }
+
+    [Fact]
+    public async Task Existing_nightly_object_uses_its_original_creation_window()
+    {
+        var createdAt = new DateTimeOffset(
+            2026, 8, 29, 4, 0, 0, TimeSpan.Zero);
+        var store = new RecordingStore
+        {
+            VersionCreatedAt = createdAt,
+            RetentionFactsFactory = (version, _) => new(
+                version.VersionId,
+                createdAt.AddDays(90),
+                "Locked",
+                false),
+        };
+        store.CreateFailures.Enqueue(new AzureEvidenceStoreException(
+            AzureEvidenceStoreFailureKind.AlreadyExists));
+        var sink = new AzureRawResponseSink(
+            store,
+            EvidenceRetentionLane.Nightly90Days,
+            new FixedTimeProvider(
+                new DateTimeOffset(2026, 8, 30, 4, 0, 0, TimeSpan.Zero)));
+
+        await sink.CaptureVerifiedAsync(
+            Request(), Response(), new MemoryStream([1]));
+
+        Assert.Equal(1, store.CreateCount);
+        Assert.Equal(1, store.Calls.Count(call => call == "resolve"));
+    }
+
+    [Fact]
+    public async Task Expired_existing_nightly_object_fails_closed()
+    {
+        var observedNow = new DateTimeOffset(
+            2026, 8, 30, 4, 0, 0, TimeSpan.Zero);
+        var createdAt = observedNow.AddDays(-91);
+        var store = new RecordingStore
+        {
+            VersionCreatedAt = createdAt,
+            RetentionFactsFactory = (version, _) => new(
+                version.VersionId,
+                createdAt.AddDays(90),
+                "Locked",
+                false),
+        };
+        store.CreateFailures.Enqueue(new AzureEvidenceStoreException(
+            AzureEvidenceStoreFailureKind.AlreadyExists));
+        var sink = new AzureRawResponseSink(
+            store,
+            EvidenceRetentionLane.Nightly90Days,
+            new FixedTimeProvider(observedNow));
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            sink.CaptureVerifiedAsync(
+                Request(), Response(), new MemoryStream([1])));
     }
 
     [Theory]
