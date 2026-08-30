@@ -99,30 +99,6 @@ public static class MatchLanes
         System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     /// <summary>
-    /// Every hit of a multi-publisher search response paired with its envelope publisher.
-    /// Refused envelopes carry no hits array and simply contribute nothing, so a refusal
-    /// beside metadata hits neither blocks nor fakes the response-level state.
-    /// </summary>
-    /// <summary>
-    /// The only status under which a search envelope actually executed. Verified against the
-    /// producer: the search case emits ok, retrieval_mode_unavailable, unknown_work,
-    /// unknown_anchor and no_provision_history, and never no_result. Round 1 admitted
-    /// no_result, so a cross-operation envelope carrying metadata hits could authorize
-    /// suppression (B1+B2 round 2 review, O1).
-    /// </summary>
-    private static readonly HashSet<string> SearchSuccessStatuses = ["ok"];
-
-
-
-    /// <summary>
-    /// The server-page notice plus the subordinate disclosure list, for the ONE response-level
-    /// metadata_only state (Codex B2 review, O1: classification is never per publisher).
-    /// Rows are validated fail closed against the B1 coordinate grammar and links are rebuilt
-    /// from the parsed parts; invalid rows are omitted without suppressing the notice (O4).
-    /// One exact-host official action renders per represented collection. Byte-exact
-    /// boundaries and append-only insertion, per the B1 classifier finding.
-    /// </summary>
-    /// <summary>
     /// Whether these parts form a coordinate this notice can actually disclose.
     ///
     /// Exposed because the page must decide BEFORE it suppresses. Validating loosely up there
@@ -134,6 +110,14 @@ public static class MatchLanes
         && WorkGrammar.IsMatch(work)
         && DateGrammar.IsMatch(validFrom);
 
+    /// <summary>
+    /// The server-page notice plus the subordinate disclosure list, for the ONE response-level
+    /// metadata_only state (Codex B2 review, O1: classification is never per publisher).
+    /// Rows are validated fail closed against the B1 coordinate grammar and links are rebuilt
+    /// from the parsed parts; invalid rows are omitted without suppressing the notice (O4).
+    /// One exact-host official action renders per represented collection. Byte-exact
+    /// boundaries and append-only insertion, per the B1 classifier finding.
+    /// </summary>
     public static string NoticeHtml(
         IReadOnlyList<string> collections,
         IReadOnlyList<DisclosureRow> rows,
@@ -141,9 +125,7 @@ public static class MatchLanes
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var valid = rows.Where(row =>
-                PublisherGrammar.IsMatch(row.Publisher)
-                && WorkGrammar.IsMatch(row.Work)
-                && DateGrammar.IsMatch(row.ValidFrom)
+                IsDisclosable(row.Publisher, row.Work, row.ValidFrom)
                 && seen.Add($"{row.Publisher}:{row.Work}"))
             .ToArray();
         var items = string.Join("", valid.Take(10).Select(row =>
@@ -155,8 +137,7 @@ public static class MatchLanes
                 + " · matched in metadata</span></li>";
         }));
         // C3 ruling: N counts only valid, logically deduplicated suppressed matches present
-        // in this bounded response, minus the rows shown; never a corpus-wide claim. Search
-        // envelopes carry no truncation marker today, so the exact count always exists.
+        // in this bounded response, minus the rows shown; never a corpus-wide claim.
         // C3: an exact N is only honest when the response is complete. A truncated row set
         // holds no exact total, so the countersigned fallback sentence is used instead of
         // inventing one.

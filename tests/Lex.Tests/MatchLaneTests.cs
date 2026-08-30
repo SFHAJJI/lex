@@ -89,12 +89,6 @@ public sealed class MatchLaneTests : IDisposable
     /// vocabulary from the ranking sources read-only and fails when the table and the code
     /// disagree in either direction, so a new upstream reason forces a deliberate lane ruling.
     /// </summary>
-    /// <summary>
-    /// The Codex Q1 amendment: the canary must cover the COMPLETE reason vocabulary the
-    /// producer code emits, not merely reasons occurring in a fixture corpus. It derives that
-    /// vocabulary from the ranking sources read-only and fails when the table and the code
-    /// disagree in either direction, so a new upstream reason forces a deliberate lane ruling.
-    /// </summary>
     [Fact]
     public void Drift_canary_derives_the_complete_producer_vocabulary()
     {
