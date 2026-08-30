@@ -56,7 +56,9 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
         Assert.Contains("<desc id=\"desc\">", svg);
         Assert.Contains("id=\"reader-channels\"", svg);
         Assert.Contains("server-rendered + React", svg);
-        Assert.Contains("typed plan + evidence", svg);
+        Assert.Contains("Target V3 agent", svg);
+        Assert.Contains("currently contained", svg);
+        Assert.DoesNotContain(">Bounded agent<", svg);
         Assert.Contains("HTTP + stdio, read-only", svg);
         Assert.DoesNotContain("d=\"M1015 218v-7\"", svg);
         Assert.DoesNotContain("<script", svg, StringComparison.OrdinalIgnoreCase);
@@ -85,12 +87,14 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
     }
 
     [Fact]
-    public async Task Assistant_page_exposes_the_current_bounded_sequence_at_readable_size()
+    public async Task Assistant_page_labels_the_target_sequence_and_current_containment_at_readable_size()
     {
         var html = await _client.GetStringAsync("/built/assistant");
         var svg = await _client.GetStringAsync("/built/diagrams/assistant.svg");
         var css = await _client.GetStringAsync("/dossier.css");
 
+        Assert.Contains("temporarily unavailable", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Historical V2 architecture", html, StringComparison.Ordinal);
         Assert.Contains(
             "<div class=\"dossier-sequence\" tabindex=\"0\" role=\"region\" aria-label=\"Scrollable assistant sequence diagram\">",
             html);
