@@ -10,7 +10,7 @@ internal static class BoundedStreamReader
         ArgumentNullException.ThrowIfNull(stream);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumBytes);
 
-        var buffer = GC.AllocateUninitializedArray<byte>(maximumBytes + 1);
+        var buffer = GC.AllocateUninitializedArray<byte>(maximumBytes);
         var count = 0;
         while (count < buffer.Length)
         {
@@ -23,9 +23,18 @@ internal static class BoundedStreamReader
             count += read;
         }
 
-        return count > maximumBytes
-            ? BoundedReadResult.TooLarge()
-            : BoundedReadResult.FromBytes(buffer.AsMemory(0, count).ToArray());
+        if (count == maximumBytes)
+        {
+            var overflowProbe = new byte[1];
+            if (await stream.ReadAsync(overflowProbe, cancellationToken).ConfigureAwait(false) != 0)
+            {
+                return BoundedReadResult.TooLarge();
+            }
+
+            return BoundedReadResult.FromBytes(buffer);
+        }
+
+        return BoundedReadResult.FromBytes(buffer.AsMemory(0, count).ToArray());
     }
 }
 

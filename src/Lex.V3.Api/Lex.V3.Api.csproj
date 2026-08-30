@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <RootNamespace>Lex.V3.Api</RootNamespace>
+    <AssemblyName>Lex.V3.Api</AssemblyName>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RuntimeIdentifiers>linux-x64</RuntimeIdentifiers>
+    <ContainerBaseImage>mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled@sha256:0839314d08bb65da369135389a5d8291f75ace587fbb0488f469eb92c62eef68</ContainerBaseImage>
+    <ContainerGenerateLabelsImageCreated>false</ContainerGenerateLabelsImageCreated>
+    <ContainerImageFormat>OCI</ContainerImageFormat>
+    <ContainerRepository>lex-v3-s0-05</ContainerRepository>
+    <ContainerUser>1654</ContainerUser>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.11" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Lex.V3.Artifacts/Lex.V3.Artifacts.csproj" />
+    <ProjectReference Include="../Lex.V3.Contracts/Lex.V3.Contracts.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Remove="preview-graph/**/*" />
+    <None Remove="preview-trust/**/*" />
+    <Content Remove="preview-graph/**/*" />
+    <Content Remove="preview-trust/**/*" />
+    <Content Include="preview-graph/**/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="preview-trust/**/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

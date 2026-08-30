@@ -12,6 +12,9 @@ public static class V3SchemaIds
     public const string PreviewOperationCatalog = "lex-v3-preview-operation-catalog/1";
     public const string PreviewRefusalRegistry = "lex-v3-preview-refusal-registry/1";
     public const string PreviewArtifactSignature = "lex-v3-preview-artifact-signature/1";
+    public const string SyntheticSliceArtifact = "lex-v3-synthetic-slice-artifact/1";
+    public const string SyntheticSliceControl = "lex-v3-synthetic-slice-control/1";
+    public const string SyntheticResolveEnvelope = "lex-v3-synthetic-resolve-envelope/1";
 }
 
 public static class V3SchemaResourceIds
@@ -22,6 +25,9 @@ public static class V3SchemaResourceIds
     public const string PreviewObjectSet = "urn:uuid:87e642f4-501b-4a0f-a124-2906f8b4b831";
     public const string PreviewOperationCatalog = "urn:uuid:9771ad74-c254-4b4d-9bb3-c8fbc71befba";
     public const string PreviewRefusalRegistry = "urn:uuid:28beec07-21f2-4049-bd87-58fb6dacfb7a";
+    public const string SyntheticSliceArtifact = "urn:uuid:e7cc8592-e55e-4afb-b76b-e7ceddd25ec4";
+    public const string SyntheticSliceControl = "urn:uuid:d3e8909f-46a2-44d7-8728-463529b5f8a9";
+    public const string SyntheticResolveEnvelope = "urn:uuid:e957da31-81bf-4d88-8fb7-aea19d95413a";
 
     public static string ForWireSchema(string schema) => schema switch
     {
@@ -31,6 +37,9 @@ public static class V3SchemaResourceIds
         V3SchemaIds.PreviewObjectSet => PreviewObjectSet,
         V3SchemaIds.PreviewOperationCatalog => PreviewOperationCatalog,
         V3SchemaIds.PreviewRefusalRegistry => PreviewRefusalRegistry,
+        V3SchemaIds.SyntheticSliceArtifact => SyntheticSliceArtifact,
+        V3SchemaIds.SyntheticSliceControl => SyntheticSliceControl,
+        V3SchemaIds.SyntheticResolveEnvelope => SyntheticResolveEnvelope,
         _ => throw new ArgumentException("Unknown preview schema identity.", nameof(schema)),
     };
 }
