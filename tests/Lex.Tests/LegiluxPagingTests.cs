@@ -17,24 +17,56 @@ public sealed class LegiluxPagingTests : IDisposable
     public LegiluxPagingTests() => Directory.CreateDirectory(_root);
 
     [Fact]
-    public void Manifestation_query_projects_exact_identity_and_licence_terms()
+    public void Manifestation_and_licence_queries_do_not_multiply_the_global_rowset()
     {
         var query = LegiluxAdapter.ManifestationQuery(limit: 101, offset: 202);
+        var licenceQuery = LegiluxAdapter.ManifestationLicenceQuery(
+            ["http://data.legilux.public.lu/manifestation/1"]);
 
-        Assert.Contains("SELECT ?c ?expr ?m ?fmt ?file ?license", query,
+        Assert.Contains("SELECT ?c ?expr ?m ?fmt ?file", query,
             StringComparison.Ordinal);
-        Assert.Contains("OPTIONAL { ?m jolux:license ?license }", query,
-            StringComparison.Ordinal);
-        Assert.Contains("ORDER BY ?c ?expr ?m ?fmt ?file ?license", query,
+        Assert.DoesNotContain("?license", query, StringComparison.Ordinal);
+        Assert.Contains("ORDER BY ?c ?expr ?m ?fmt ?file", query,
             StringComparison.Ordinal);
         Assert.EndsWith("LIMIT 101 OFFSET 202", query, StringComparison.Ordinal);
+
+        Assert.Contains("SELECT ?m ?license", licenceQuery, StringComparison.Ordinal);
+        Assert.Contains("VALUES ?m", licenceQuery, StringComparison.Ordinal);
+        Assert.Contains("OPTIONAL { ?m jolux:license ?license }", licenceQuery,
+            StringComparison.Ordinal);
+        Assert.Contains("LIMIT 3", licenceQuery, StringComparison.Ordinal);
+        Assert.DoesNotContain("OFFSET", licenceQuery, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Licence_VALUES_batches_are_exactly_bounded_and_injection_safe()
+    {
+        var maximumBatch = Enumerable.Range(0, 32)
+            .Select(index =>
+                $"http://data.legilux.public.lu/manifestation/{index}")
+            .ToArray();
+
+        var query = LegiluxAdapter.ManifestationLicenceQuery(maximumBatch);
+
+        Assert.Contains("LIMIT 65", query, StringComparison.Ordinal);
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            LegiluxAdapter.ManifestationLicenceQuery(
+                maximumBatch.Append(
+                    "http://data.legilux.public.lu/manifestation/overflow")
+                    .ToArray()));
+        Assert.Throws<InvalidDataException>(() =>
+            LegiluxAdapter.ManifestationLicenceQuery(
+                [maximumBatch[0], maximumBatch[0]]));
+        Assert.Throws<InvalidDataException>(() =>
+            LegiluxAdapter.ManifestationLicenceQuery(
+                ["http://data.legilux.public.lu/manifestation/1> ?s ?p ?o"]));
     }
 
     [Fact]
     public void Duplicate_binding_names_fail_closed_instead_of_overwriting_evidence()
     {
         var response = Encoding.UTF8.GetBytes("""
-            {"results":{"bindings":[{"license":{"type":"uri","value":"first"},"license":{"type":"uri","value":"second"}}]}}
+            {"head":{"vars":["license"]},"results":{"bindings":[{"license":{"type":"uri","value":"first"},"license":{"type":"uri","value":"second"}}]}}
             """);
 
         var error = Assert.Throws<JsonException>(() =>
@@ -47,11 +79,40 @@ public sealed class LegiluxPagingTests : IDisposable
     public void Duplicate_properties_inside_a_binding_term_fail_closed()
     {
         var response = Encoding.UTF8.GetBytes("""
-            {"results":{"bindings":[{"license":{"type":"uri","value":"first","value":"second"}}]}}
+            {"head":{"vars":["license"]},"results":{"bindings":[{"license":{"type":"uri","value":"first","value":"second"}}]}}
             """);
 
         var error = Assert.Throws<JsonException>(() =>
             SparqlClient.ParseSelectResponse(response));
+
+        Assert.Contains("duplicate", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Bindings_not_declared_by_the_projection_fail_closed()
+    {
+        var response = Encoding.UTF8.GetBytes("""
+            {"head":{"vars":["m"]},"results":{"bindings":[{
+              "m":{"type":"uri","value":"http://data.legilux.public.lu/manifestation/1"},
+              "license":{"type":"uri","value":"https://example.test/licence"}
+            }]}}
+            """);
+
+        var error = Assert.Throws<JsonException>(() =>
+            SparqlClient.ParseSelectPage(response));
+
+        Assert.Contains("not declared", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Duplicate_projected_variables_fail_closed()
+    {
+        var response = Encoding.UTF8.GetBytes("""
+            {"head":{"vars":["m","m"]},"results":{"bindings":[]}}
+            """);
+
+        var error = Assert.Throws<JsonException>(() =>
+            SparqlClient.ParseSelectPage(response));
 
         Assert.Contains("duplicate", error.Message, StringComparison.OrdinalIgnoreCase);
     }
@@ -75,6 +136,151 @@ public sealed class LegiluxPagingTests : IDisposable
         Assert.Equal("enumeration_response_too_large", error.Issue.Code);
         Assert.Equal(HttpMethod.Post, observedMethod);
         Assert.False(content.SerializeCalled);
+    }
+
+    [Fact]
+    public async Task Response_body_has_its_own_deadline_after_headers_arrive()
+    {
+        using var http = new HttpClient(new StubHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StreamContent(new NeverEndingReadStream()),
+            }));
+        var client = new SparqlClient(http, TimeSpan.FromMilliseconds(25));
+
+        var error = await Assert.ThrowsAsync<SourceAcquisitionException>(() =>
+            client.SelectAsync("SELECT * WHERE { ?s ?p ?o } LIMIT 1", default));
+
+        Assert.Equal("enumeration_body_timeout", error.Issue.Code);
+    }
+
+    [Fact]
+    public async Task Caller_cancellation_is_not_relabelled_as_a_body_timeout()
+    {
+        using var http = new HttpClient(new StubHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StreamContent(new NeverEndingReadStream()),
+            }));
+        var client = new SparqlClient(http, TimeSpan.FromSeconds(5));
+        using var cancellation = new CancellationTokenSource(
+            TimeSpan.FromMilliseconds(25));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            client.SelectAsync(
+                "SELECT * WHERE { ?s ?p ?o } LIMIT 1",
+                cancellation.Token));
+    }
+
+    [Fact]
+    public void Missing_licence_projection_is_not_reported_as_absence()
+    {
+        const string manifestation =
+            "http://data.legilux.public.lu/manifestation/1";
+        var page = SparqlClient.ParseSelectPage(Encoding.UTF8.GetBytes($$$"""
+            {"head":{"vars":["m"]},"results":{"bindings":[
+              {"m":{"type":"uri","value":"{{{manifestation}}}"}}
+            ]}}
+            """));
+
+        var evidence = LegiluxAdapter.ParseManifestationLicenceBatch(
+            [manifestation], page);
+
+        Assert.Equal(LicenceChannelState.NotObserved, evidence[manifestation].State);
+    }
+
+    [Fact]
+    public void Completed_licence_batch_distinguishes_absent_invalid_and_unobserved()
+    {
+        const string absent =
+            "http://data.legilux.public.lu/manifestation/absent";
+        const string invalid =
+            "http://data.legilux.public.lu/manifestation/invalid";
+        const string unobserved =
+            "http://data.legilux.public.lu/manifestation/unobserved";
+        var page = new SparqlSelectPage(
+            new HashSet<string>(["m", "license"], StringComparer.Ordinal),
+            [
+                new(StringComparer.Ordinal)
+                {
+                    ["m"] = new SparqlTerm("uri", absent),
+                },
+                new(StringComparer.Ordinal)
+                {
+                    ["m"] = new SparqlTerm("uri", invalid),
+                },
+                new(StringComparer.Ordinal)
+                {
+                    ["m"] = new SparqlTerm("uri", invalid),
+                    ["license"] = new SparqlTerm(
+                        "uri", "https://example.test/licence"),
+                },
+            ]);
+
+        var evidence = LegiluxAdapter.ParseManifestationLicenceBatch(
+            [absent, invalid, unobserved], page);
+
+        Assert.Equal(LicenceChannelState.Absent, evidence[absent].State);
+        Assert.Equal(LicenceChannelState.Invalid, evidence[invalid].State);
+        Assert.Equal(LicenceChannelState.NotObserved, evidence[unobserved].State);
+    }
+
+    [Fact]
+    public void Licence_batch_rejects_a_manifestation_outside_its_VALUES_set()
+    {
+        const string requested =
+            "http://data.legilux.public.lu/manifestation/requested";
+        var page = new SparqlSelectPage(
+            new HashSet<string>(["m", "license"], StringComparer.Ordinal),
+            [
+                new(StringComparer.Ordinal)
+                {
+                    ["m"] = new SparqlTerm(
+                        "uri",
+                        "http://data.legilux.public.lu/manifestation/foreign"),
+                },
+            ]);
+
+        Assert.Throws<InvalidDataException>(() =>
+            LegiluxAdapter.ParseManifestationLicenceBatch([requested], page));
+    }
+
+    [Fact]
+    public void Valid_typed_manifestation_rows_reach_the_bound_licence_evidence()
+    {
+        const string consolidation =
+            "http://data.legilux.public.lu/eli/etat/leg/loi/2020/01/01/n1/consolidation/20200101";
+        const string expression = consolidation + "/fra";
+        const string manifestation = expression + "/xml";
+        const string file =
+            "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/2020/01/01/n1.xml";
+        var basePage = SparqlClient.ParseSelectPage(Encoding.UTF8.GetBytes($$$"""
+            {"head":{"vars":["c","expr","m","fmt","file"]},"results":{"bindings":[{
+              "c":{"type":"uri","value":"{{{consolidation}}}"},
+              "expr":{"type":"uri","value":"{{{expression}}}"},
+              "m":{"type":"uri","value":"{{{manifestation}}}"},
+              "fmt":{"type":"uri","value":"http://data.legilux.public.lu/resource/authority/user-format/xml"},
+              "file":{"type":"uri","value":"{{{file}}}"}
+            }]}}
+            """));
+        var licencePage = SparqlClient.ParseSelectPage(Encoding.UTF8.GetBytes($$$"""
+            {"head":{"vars":["m","license"]},"results":{"bindings":[{
+              "m":{"type":"uri","value":"{{{manifestation}}}"},
+              "license":{"type":"uri","value":"http://creativecommons.org/licenses/by/4.0/"}
+            }]}}
+            """));
+
+        var licences = LegiluxAdapter.ParseManifestationLicenceBatch(
+            [manifestation], licencePage);
+        var maps = LegiluxAdapter.BuildManifestationMaps(basePage.Rows, licences);
+
+        var bound = Assert.Single(maps.Xml).Value;
+        Assert.Equal(manifestation, bound.Identifier);
+        Assert.Equal(file, bound.FileIdentifier);
+        Assert.Equal(LicenceChannelState.Present, bound.SparqlLicence.State);
+        Assert.Equal("http://creativecommons.org/licenses/by/4.0/",
+            Assert.Single(bound.SparqlLicence.Claims).LicenceUri);
+        Assert.Empty(maps.Pdf);
     }
 
     [Fact]
@@ -190,7 +396,7 @@ public sealed class LegiluxPagingTests : IDisposable
                 var limit = QueryLimit(query);
                 return Task.FromResult(Enumerable.Range(0, limit)
                     .Select(_ => new Dictionary<string, string>(StringComparer.Ordinal)
-                        { ["work"] = work })
+                    { ["work"] = work })
                     .ToList());
             }
             Assert.Contains("SELECT ?c ?work", query, StringComparison.Ordinal);
@@ -268,6 +474,36 @@ public sealed class LegiluxPagingTests : IDisposable
             length = declaredLength;
             return true;
         }
+    }
+
+    private sealed class NeverEndingReadStream : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
+
+        public override async ValueTask<int> ReadAsync(
+            Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return 0;
+        }
+
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) =>
+            throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
     }
 
     public void Dispose()

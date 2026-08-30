@@ -18,16 +18,23 @@ internal static class LegiluxLicenceEvidence
     internal static LicenceChannelEvidence FromSparqlTerms(
         IEnumerable<SparqlTerm> terms)
     {
-        var claims = terms.Select(term => new LicenceClaim(
-            term.Type,
-            term.Value,
-            IsHttpUriTerm(term) ? term.Value : null)).ToArray();
+        var claims = SparqlClaims(terms);
         if (claims.Length == 0)
             return LicenceChannelEvidence.Absent;
         return claims.Any(claim => claim.LicenceUri is null)
             ? LicenceChannelEvidence.Invalid(claims)
             : LicenceChannelEvidence.Present(claims);
     }
+
+    internal static LicenceChannelEvidence InvalidFromSparqlTerms(
+        IEnumerable<SparqlTerm> terms) =>
+        LicenceChannelEvidence.Invalid(SparqlClaims(terms));
+
+    private static LicenceClaim[] SparqlClaims(IEnumerable<SparqlTerm> terms) =>
+        terms.Select(term => new LicenceClaim(
+            term.Type,
+            term.Value,
+            IsHttpUriTerm(term) ? term.Value : null)).ToArray();
 
     internal static LicenceChannelEvidence FromAkomaNtoso(
         byte[] bytes, string manifestationIdentifier)
