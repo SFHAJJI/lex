@@ -107,7 +107,6 @@ export default function Search(p: SearchProps) {
   const [metadataOnly, setMetadataOnly] = useState(false);
   const [metadataPopulation, setMetadataPopulation] =
     useState<MetadataPopulationRow[]>([]);
-  const [responseTruncated, setResponseTruncated] = useState(false);
   const { works, articles, error, modeUnavailable, expansions, limitations } = results;
   const allRefused = results.absence === "all_refused";
   const [busy, setBusy] = useState(false);
@@ -140,7 +139,6 @@ export default function Search(p: SearchProps) {
     setResults(clearedSearchResults);
     setMetadataOnly(false);
     setMetadataPopulation([]);
-    setResponseTruncated(false);
     setPopulations([]);
     setWithheld(undefined);
     p.onEnvelopes([]);
@@ -256,11 +254,14 @@ export default function Search(p: SearchProps) {
         // the whole-response authority, validates every row coordinate, publisher and date, and
         // yields the publisher:group the notice needs rather than the version lex_id it rejects.
         const claim = metadataPopulationOf(parsed);
-        setMetadataPopulation(claim.population);
-        setMetadataOnly(
-          claim.claimable && claim.population.length > 0
-          && metadataOnlyResponse(claim.population));
-        setResponseTruncated(partitionOf(parsed).moreBeyondPage);
+        const partition = partitionOf(parsed);
+        // metadata_only is a positive claim about the whole response. A truncated row or
+        // publisher set is only a page of that response, so unseen rows make the claim
+        // unreachable even when every row that arrived matched metadata only.
+        const metadataOnlyClaim = claim.claimable && !partition.moreBeyondPage
+          && claim.population.length > 0 && metadataOnlyResponse(claim.population);
+        setMetadataPopulation(metadataOnlyClaim ? claim.population : []);
+        setMetadataOnly(metadataOnlyClaim);
         setPopulations(answer.populations);
         // Typed causes, carried rather than merged: the sentence a reader is shown has to
         // be the one the parse established for that publisher (O3).
@@ -323,7 +324,6 @@ export default function Search(p: SearchProps) {
           setResults(searchResultsFromError("Search could not be reached. Try again."));
           setMetadataOnly(false);
           setMetadataPopulation([]);
-          setResponseTruncated(false);
         }
       })
       .finally(() => { if (live()) setBusy(false); });
@@ -507,7 +507,7 @@ export default function Search(p: SearchProps) {
             * it, because a record match rendered as a hit IS the claim this notice refuses.
             */}
           {metadataOnly
-            ? <MetadataOnlyNotice works={metadataPopulation} truncated={responseTruncated} />
+            ? <MetadataOnlyNotice works={metadataPopulation} />
             : null}
 
           {metadataOnly ? null : groupedResults.map((section) => (

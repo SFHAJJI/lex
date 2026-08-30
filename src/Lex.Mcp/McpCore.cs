@@ -24,7 +24,7 @@ public sealed class McpCore
     private const int MaximumProvenanceRows = 1000;
     private const int MaximumLegalTextChars = 250_000;
     private const int MaximumCitationRows = 100;
-    private const int MaximumPublisherRows = 8;
+    private const int MaximumPublisherRows = LegalOperationCatalog.MaximumPublisherRows;
     private const int MaximumCoverageFacetRows = 100;
     private const int MaximumBuildIssueRows = 100;
     private const int GlobalChangeMergePageSize = 128;
@@ -1500,7 +1500,9 @@ public sealed class McpCore
                 DateOnly? asOf = timeScope == "as_of" ? Date("as_of") : null;
                 var pub = Str("publisher");
                 var jurisdiction = Str("jurisdiction");
-                var limit = BoundedInt("limit", 10, 1, 50);
+                var limit = BoundedInt("limit", 10,
+                    LegalOperationCatalog.MinimumSearchRows,
+                    LegalOperationCatalog.MaximumSearchRows);
                 var requestedMode = Str("retrieval_mode") ?? "keyword";
                 if (requestedMode is not ("keyword" or "hybrid")) throw new ArgumentException("retrieval_mode must be keyword or hybrid");
                 var fuzzy = Str("fuzzy") ?? "auto";

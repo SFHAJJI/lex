@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json.Nodes;
 using Lex.Index;
+using Lex.Mcp;
 using static Lex.Web.PageShell;
 using static Lex.Web.Fragments;
 
@@ -770,6 +771,93 @@ public static class CatalogueEndpoints
             return hits.All(hit => hit is JsonObject);
         }
 
+        // These are the only search units McpCore can emit without running a query. Anything else
+        // is unreadable, not a new refusal this consumer may silently bless.
+        static bool IsProducerRefusal(JsonObject result) =>
+            TrustNotices.QueryRan(result) == false
+            && TrustNotices.EnvelopeStatus(result) is
+                "filter_not_supported_by_index" or "retrieval_mode_unavailable"
+            && result["hits"] is JsonArray { Count: 0 };
+
+        /// <summary>
+        /// Whether the whole search response proves that every selected publisher and returned row
+        /// is present. McpCore.MarkPublisherSet and McpCore.MarkResponseRows stamp these identical
+        /// global receipts on every search unit, including refusals. This consumer checks that
+        /// exact producer contract instead of treating one optional boolean as completeness.
+        /// </summary>
+        static bool HasCompleteSearchReceipts(JsonArray results)
+        {
+            static int? Integer(JsonObject value, string key) =>
+                value[key] is JsonValue item && item.TryGetValue<int>(out var number)
+                    ? number : null;
+            static bool? Boolean(JsonObject value, string key) =>
+                value[key] is JsonValue item && item.TryGetValue<bool>(out var fact)
+                    ? fact : null;
+            static (int Maximum, int Returned, bool Truncated)? Response(JsonNode? node)
+            {
+                if (node is not JsonObject receipt) return null;
+                var maximum = Integer(receipt, "maximum");
+                var returned = Integer(receipt, "returned");
+                var truncated = Boolean(receipt, "truncated");
+                return maximum is not null && returned is not null && truncated is not null
+                    ? (maximum.Value, returned.Value, truncated.Value) : null;
+            }
+            static (int Total, int Returned, int Maximum, bool Truncated)? Publisher(
+                JsonNode? node)
+            {
+                if (node is not JsonObject receipt) return null;
+                var total = Integer(receipt, "total");
+                var returned = Integer(receipt, "returned");
+                var maximum = Integer(receipt, "maximum");
+                var truncated = Boolean(receipt, "truncated");
+                return total is not null && returned is not null
+                    && maximum is not null && truncated is not null
+                    ? (total.Value, returned.Value, maximum.Value, truncated.Value) : null;
+            }
+
+            if (results.Count == 0) return false;
+            (int Maximum, int Returned, bool Truncated)? responseReceipt = null;
+            (int Total, int Returned, int Maximum, bool Truncated)? publisherReceipt = null;
+            var publishers = new HashSet<string>(StringComparer.Ordinal);
+            var actualRows = 0;
+            foreach (var node in results)
+            {
+                if (node is not JsonObject unit
+                    || unit["envelope"] is not JsonObject envelope
+                    || TrustNotices.Text(envelope["publisher"]) is not { Length: > 0 } publisherId
+                    || !publishers.Add(publisherId)
+                    || unit["hits"] is not JsonArray hits
+                    || hits.Any(hit => hit is not JsonObject))
+                    return false;
+
+                var currentResponse = Response(unit["response_row_set"]);
+                var currentPublisher = Publisher(unit["publisher_result_set"]);
+                if (currentResponse is null || currentPublisher is null) return false;
+                responseReceipt ??= currentResponse;
+                publisherReceipt ??= currentPublisher;
+                if (responseReceipt != currentResponse || publisherReceipt != currentPublisher)
+                    return false;
+                if (actualRows > int.MaxValue - hits.Count) return false;
+                actualRows += hits.Count;
+            }
+
+            return responseReceipt is { } response
+                && response.Maximum >= LegalOperationCatalog.MinimumSearchRows
+                && response.Maximum <= LegalOperationCatalog.MaximumSearchRows
+                && response.Returned >= 0
+                && response.Returned <= response.Maximum
+                && response.Returned == actualRows
+                && !response.Truncated
+                && publisherReceipt is { } publisher
+                && publisher.Total >= 0
+                && publisher.Maximum == LegalOperationCatalog.MaximumPublisherRows
+                && publisher.Returned == Math.Min(publisher.Total, publisher.Maximum)
+                && publisher.Truncated == (publisher.Total > publisher.Maximum)
+                && !publisher.Truncated
+                && publisher.Returned == results.Count
+                && publisher.Returned == publishers.Count;
+        }
+
         /// <summary>
         /// A hit is rendered as a link to a dated version, so it needs coordinates that make one.
         /// Length > 0 was not enough: a whitespace work and a malformed date both passed it and
@@ -809,14 +897,14 @@ public static class CatalogueEndpoints
                 complete = false;
                 continue;
             }
-            // A refusal contributes nothing and blocks nothing: it is not evidence either way.
-            if (!TrustNotices.Ran(result)) continue;
-            // The producer's own response-wide receipt. A truncated row set means the response is
-            // a page of the answer, and "everything that matched, matched only records" is not a
-            // claim a page of the answer can support.
-            if ((result["response_row_set"] as JsonObject)?["truncated"] is JsonValue marker
-                && marker.TryGetValue<bool>(out var truncated) && truncated)
-                complete = false;
+            // A producer refusal contributes nothing and blocks nothing. An unknown status, a
+            // contradictory execution receipt, or rows on a refusal is unreadable and blocks the
+            // response-wide claim instead of being silently treated as a known refusal.
+            if (!TrustNotices.Ran(result))
+            {
+                if (!IsProducerRefusal(result)) complete = false;
+                continue;
+            }
             if (!Classifiable(result, out var acceptedHits))
             {
                 complete = false;
@@ -835,6 +923,7 @@ public static class CatalogueEndpoints
         }
 
         var metadataOnly = complete
+            && HasCompleteSearchReceipts(envelopes)
             && population.Count > 0
             && MatchLanes.MetadataOnly(reasons);
 

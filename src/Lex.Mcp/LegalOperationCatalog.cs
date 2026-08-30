@@ -269,6 +269,9 @@ public static class LegalOperationCatalog
     public const int MaximumVersionKeyLength = 128;
     public const int MaximumPublisherMetadataIdentifierLength = 2_048;
     public const int MaximumListValues = 50;
+    public const int MinimumSearchRows = 1;
+    public const int MaximumSearchRows = 50;
+    public const int MaximumPublisherRows = 8;
     public const int MaximumOffset = 100_000;
     public const int MaximumSubjectReferenceLength = 64;
     public const string SubjectReferenceArgument = "subject_ref";

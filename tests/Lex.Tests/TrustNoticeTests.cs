@@ -677,7 +677,9 @@ public sealed class TrustNoticeTests : IDisposable
         var page = CatalogueEndpoints.RenderSearchResults(
             [(JsonObject)JsonNode.Parse(
                 "{\"envelope\":{\"publisher\":\"lu-legilux\",\"status\":\"ok\"},"
-                + "\"population\":{\"query_ran\":true},\"hits\":[{"
+                + "\"population\":{\"query_ran\":true},"
+                + "\"publisher_result_set\":{\"total\":1,\"returned\":1,\"maximum\":8,\"truncated\":false},"
+                + "\"response_row_set\":{\"maximum\":10,\"returned\":1,\"truncated\":false},\"hits\":[{"
                 + "\"work\":\"lu-legilux:loi-2006-07-31-n2\",\"anchor\":\"art_l_121-6\","
                 + "\"title\":\"Code du travail\",\"valid_from\":\"2024-08-04\","
                 + "\"snippet\":\"Le contrat est suspendu.\","
@@ -975,7 +977,9 @@ public sealed class TrustNoticeTests : IDisposable
         var page = CatalogueEndpoints.RenderSearchResults(
             [(JsonObject)JsonNode.Parse(
                 "{\"envelope\":{\"publisher\":\"lu-legilux\",\"status\":\"ok\"},"
-                + "\"population\":{\"query_ran\":true},\"hits\":[{"
+                + "\"population\":{\"query_ran\":true},"
+                + "\"publisher_result_set\":{\"total\":1,\"returned\":1,\"maximum\":8,\"truncated\":false},"
+                + "\"response_row_set\":{\"maximum\":10,\"returned\":1,\"truncated\":false},\"hits\":[{"
                 + "\"work\":\"lu-legilux:loi-2006-07-31-n2\",\"title\":\"Code du travail\","
                 + "\"valid_from\":\"2024-08-04\","
                 + "\"match_reasons\":[\"" + reason + "\"]}]}")!],
@@ -1023,7 +1027,9 @@ public sealed class TrustNoticeTests : IDisposable
         var page = CatalogueEndpoints.RenderSearchResults(
             [(JsonObject)JsonNode.Parse(
                 "{\"envelope\":{\"publisher\":\"lu-legilux\",\"status\":\"ok\"},"
-                + "\"population\":{\"query_ran\":true},\"hits\":[{"
+                + "\"population\":{\"query_ran\":true},"
+                + "\"publisher_result_set\":{\"total\":1,\"returned\":1,\"maximum\":8,\"truncated\":false},"
+                + "\"response_row_set\":{\"maximum\":10,\"returned\":1,\"truncated\":false},\"hits\":[{"
                 + "\"work\":\"loi-2006-07-31-n2\",\"lex_id\":\""
                 + lexId.Replace("HASH", HASH, StringComparison.Ordinal)
                 + "\",\"valid_from\":\"2024-08-04\","
@@ -1048,7 +1054,8 @@ public sealed class TrustNoticeTests : IDisposable
             [(JsonObject)JsonNode.Parse(
                 "{\"envelope\":{\"publisher\":\"lu-legilux\",\"status\":\"ok\"},"
                 + "\"population\":{\"query_ran\":true},"
-                + "\"response_row_set\":{\"truncated\":true},\"hits\":[{"
+                + "\"publisher_result_set\":{\"total\":1,\"returned\":1,\"maximum\":8,\"truncated\":false},"
+                + "\"response_row_set\":{\"maximum\":1,\"returned\":1,\"truncated\":true},\"hits\":[{"
                 + "\"work\":\"loi-2006-07-31-n2\",\"lex_id\":\"" + CANONICAL + "\","
                 + "\"valid_from\":\"2024-08-04\","
                 + "\"match_reasons\":[\"work_metadata\"]}]}")!],
@@ -1062,6 +1069,16 @@ public sealed class TrustNoticeTests : IDisposable
         "b23a72504925a2065967c3f3032ac905ae1ac921048419c5f8a1b54c1fec7ce5";
     private const string CANONICAL =
         "lu-legilux:loi-2006-07-31-n2:2024-08-04--b23a72504925a2065967c3f3032ac905ae1ac921048419c5f8a1b54c1fec7ce5";
+
+    private static JsonObject CompleteMetadataSearchResult() =>
+        (JsonObject)JsonNode.Parse("""
+            {"envelope":{"publisher":"lu-legilux","status":"ok"},
+             "population":{"query_ran":true},
+             "publisher_result_set":{"total":1,"returned":1,"maximum":8,"truncated":false},
+             "response_row_set":{"maximum":10,"returned":1,"truncated":false},
+             "hits":[{"work":"loi-2006-07-31-n2","lex_id":"lu-legilux:loi-2006-07-31-n2:2024-08-04--b23a72504925a2065967c3f3032ac905ae1ac921048419c5f8a1b54c1fec7ce5","valid_from":"2024-08-04",
+                      "title":"Code du travail","match_reasons":["work_metadata"]}]}
+            """)!;
 
     /// <summary>
     /// O7 amended. The population is the partition THIS PAGE accepted. A status filter is not that
@@ -1080,6 +1097,8 @@ public sealed class TrustNoticeTests : IDisposable
             [(JsonObject)JsonNode.Parse("""
                 {"envelope":{"publisher":"lu-legilux","status":"ok"},
                  "population":{"query_ran":false},
+                 "publisher_result_set":{"total":1,"returned":1,"maximum":8,"truncated":false},
+                 "response_row_set":{"maximum":10,"returned":1,"truncated":false},
                  "hits":[{"work":"loi-2006-07-31-n2","lex_id":"lu-legilux:loi-2006-07-31-n2:2024-08-04--b23a72504925a2065967c3f3032ac905ae1ac921048419c5f8a1b54c1fec7ce5","valid_from":"2024-08-04",
                           "title":"Code du travail","match_reasons":["work_metadata"]}]}
                 """)!],
@@ -1115,6 +1134,8 @@ public sealed class TrustNoticeTests : IDisposable
              (JsonObject)JsonNode.Parse("""
                 {"envelope":{"publisher":"lu-legilux","status":"ok"},
                  "population":{"query_ran":true},
+                 "publisher_result_set":{"total":1,"returned":1,"maximum":8,"truncated":false},
+                 "response_row_set":{"maximum":10,"returned":2,"truncated":false},
                  "hits":[{"work":"loi-2006-07-31-n2","lex_id":"lu-legilux:loi-2006-07-31-n2:2024-08-04--b23a72504925a2065967c3f3032ac905ae1ac921048419c5f8a1b54c1fec7ce5","valid_from":"2024-08-04",
                           "title":"Code du travail","match_reasons":["work_metadata"]}]}
                 """)!],
@@ -1176,6 +1197,8 @@ public sealed class TrustNoticeTests : IDisposable
             [(JsonObject)JsonNode.Parse("""
                 {"envelope":{"publisher":"lu-legilux","status":"ok"},
                  "population":{"query_ran":true},
+                 "publisher_result_set":{"total":1,"returned":1,"maximum":8,"truncated":false},
+                 "response_row_set":{"maximum":10,"returned":2,"truncated":false},
                  "hits":[{"work":"loi-2006-07-31-n2","lex_id":"lu-legilux:loi-2006-07-31-n2:2024-08-04--b23a72504925a2065967c3f3032ac905ae1ac921048419c5f8a1b54c1fec7ce5","valid_from":"2024-08-04",
                           "match_reasons":["work_metadata"]},
                          "lu-legilux:another"]}
@@ -1262,18 +1285,8 @@ public sealed class TrustNoticeTests : IDisposable
         using var reader = site.Reader();
         var readers = new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader };
 
-        var records = (JsonObject)JsonNode.Parse("""
-            {"envelope":{"publisher":"lu-legilux","status":"ok"},
-             "population":{"query_ran":true},
-             "hits":[{"work":"loi-2006-07-31-n2","lex_id":"lu-legilux:loi-2006-07-31-n2:2024-08-04--b23a72504925a2065967c3f3032ac905ae1ac921048419c5f8a1b54c1fec7ce5","valid_from":"2024-08-04",
-                      "title":"Code du travail","match_reasons":["work_metadata"]}]}
-            """)!;
-        var refusal = (JsonObject)JsonNode.Parse("""
-            {"envelope":{"publisher":"lu-legilux","status":"filter_not_supported_by_index"},
-             "population":{"query_ran":false}}
-            """)!;
-
-        var page = CatalogueEndpoints.RenderSearchResults([records, refusal], readers);
+        var page = CatalogueEndpoints.RenderSearchResults(
+            [CompleteMetadataSearchResult()], readers);
 
         Assert.Contains(MatchLanes.Heading, page, StringComparison.Ordinal);
         Assert.DoesNotContain("1 hit(s)", page, StringComparison.Ordinal);
@@ -1281,8 +1294,223 @@ public sealed class TrustNoticeTests : IDisposable
         Assert.DoesNotContain("No match was returned", page, StringComparison.Ordinal);
         Assert.DoesNotContain("No selected publisher ran this query", page,
             StringComparison.Ordinal);
-        // The refusal is still disclosed rather than swallowed.
+    }
+
+    /// <summary>
+    /// McpCore.MarkPublisherSet and McpCore.MarkResponseRows stamp complete, typed, identical
+    /// receipts on every search unit. A response-wide claim must reject every shape those producer
+    /// methods cannot create and every arithmetic contradiction inside an otherwise plausible one.
+    /// </summary>
+    [Theory]
+    [InlineData("missing_response")]
+    [InlineData("response_not_object")]
+    [InlineData("response_wrong_type")]
+    [InlineData("response_count_mismatch")]
+    [InlineData("response_maximum_too_small")]
+    [InlineData("response_maximum_above_bound")]
+    [InlineData("missing_publisher")]
+    [InlineData("publisher_not_object")]
+    [InlineData("publisher_wrong_type")]
+    [InlineData("publisher_truncated")]
+    [InlineData("publisher_count_mismatch")]
+    [InlineData("publisher_maximum_not_producer")]
+    public void An_unproven_result_set_receipt_authorises_no_metadata_claim(string mutation)
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "receipt-" + mutation), includeAct: false);
+        using var reader = site.Reader();
+        var readers = new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader };
+        var result = CompleteMetadataSearchResult();
+
+        switch (mutation)
+        {
+            case "missing_response":
+                result.Remove("response_row_set");
+                break;
+            case "response_not_object":
+                result["response_row_set"] = "complete";
+                break;
+            case "response_wrong_type":
+                result["response_row_set"]!["returned"] = "1";
+                break;
+            case "response_count_mismatch":
+                result["response_row_set"]!["returned"] = 0;
+                break;
+            case "response_maximum_too_small":
+                result["response_row_set"]!["maximum"] = 0;
+                break;
+            case "response_maximum_above_bound":
+                result["response_row_set"]!["maximum"] = 51;
+                break;
+            case "missing_publisher":
+                result.Remove("publisher_result_set");
+                break;
+            case "publisher_not_object":
+                result["publisher_result_set"] = false;
+                break;
+            case "publisher_wrong_type":
+                result["publisher_result_set"]!["total"] = "1";
+                break;
+            case "publisher_truncated":
+                result["publisher_result_set"]!["truncated"] = true;
+                break;
+            case "publisher_count_mismatch":
+                result["publisher_result_set"]!["total"] = 2;
+                break;
+            case "publisher_maximum_not_producer":
+                result["publisher_result_set"]!["maximum"] = 1;
+                break;
+            default:
+                throw new InvalidOperationException(mutation);
+        }
+
+        var page = CatalogueEndpoints.RenderSearchResults([result], readers);
+
+        Assert.DoesNotContain(MatchLanes.Heading, page, StringComparison.Ordinal);
+        Assert.Contains("1 hit(s)", page, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Divergent_global_receipts_authorise_no_metadata_claim()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "receipt-divergence"), includeAct: false);
+        using var reader = site.Reader();
+        var readers = new Dictionary<string, LexIndexReader>
+        {
+            ["lu-legilux"] = reader,
+            // The second unit is a refusal and contributes no disclosure row. The alias lets this
+            // unit exercise the multi-publisher wire shape without constructing a second index.
+            ["eu-eurlex"] = reader,
+        };
+        var records = CompleteMetadataSearchResult();
+        records["publisher_result_set"]!["total"] = 2;
+        records["publisher_result_set"]!["returned"] = 2;
+        var refusal = (JsonObject)JsonNode.Parse("""
+            {"envelope":{"publisher":"eu-eurlex","status":"filter_not_supported_by_index"},
+             "population":{"query_ran":false},"hits":[],
+             "publisher_result_set":{"total":2,"returned":2,"maximum":8,"truncated":false},
+             "response_row_set":{"maximum":11,"returned":1,"truncated":false}}
+            """)!;
+
+        var page = CatalogueEndpoints.RenderSearchResults([records, refusal], readers);
+
+        Assert.DoesNotContain(MatchLanes.Heading, page, StringComparison.Ordinal);
+        Assert.Contains("1 hit(s)", page, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_refusal_unit_must_share_the_global_receipts()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "receipt-refusal"), includeAct: false);
+        using var reader = site.Reader();
+        var readers = new Dictionary<string, LexIndexReader>
+        {
+            ["lu-legilux"] = reader,
+            ["eu-eurlex"] = reader,
+        };
+        var records = CompleteMetadataSearchResult();
+        records["publisher_result_set"]!["total"] = 2;
+        records["publisher_result_set"]!["returned"] = 2;
+        var refusal = (JsonObject)JsonNode.Parse("""
+            {"envelope":{"publisher":"eu-eurlex","status":"filter_not_supported_by_index"},
+             "population":{"query_ran":false},"hits":[],
+             "publisher_result_set":{"total":2,"returned":2,"maximum":8,"truncated":false},
+             "response_row_set":{"maximum":10,"returned":1,"truncated":false}}
+            """)!;
+
+        var page = CatalogueEndpoints.RenderSearchResults([records, refusal], readers);
+
+        Assert.Contains(MatchLanes.Heading, page, StringComparison.Ordinal);
+        Assert.DoesNotContain("1 hit(s)", page, StringComparison.Ordinal);
         Assert.Contains("filter_not_supported_by_index", page, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("a_state_this_page_has_never_seen", false, false)]
+    [InlineData("filter_not_supported_by_index", true, false)]
+    [InlineData("filter_not_supported_by_index", false, true)]
+    public void A_unit_the_search_producer_cannot_emit_blocks_the_metadata_claim(
+        string status, bool queryRan, bool includeHit)
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "receipt-status-" + status),
+            includeAct: false);
+        using var reader = site.Reader();
+        var readers = new Dictionary<string, LexIndexReader>
+        {
+            ["lu-legilux"] = reader,
+            ["eu-eurlex"] = reader,
+        };
+        var records = CompleteMetadataSearchResult();
+        records["publisher_result_set"]!["total"] = 2;
+        records["publisher_result_set"]!["returned"] = 2;
+        var unusable = new JsonObject
+        {
+            ["envelope"] = new JsonObject
+            {
+                ["publisher"] = "eu-eurlex", ["status"] = status,
+            },
+            ["population"] = new JsonObject { ["query_ran"] = queryRan },
+            ["hits"] = includeHit
+                ? new JsonArray(new JsonObject { ["work"] = "unusable" })
+                : new JsonArray(),
+            ["publisher_result_set"] = new JsonObject
+            {
+                ["total"] = 2, ["returned"] = 2, ["maximum"] = 8,
+                ["truncated"] = false,
+            },
+            ["response_row_set"] = new JsonObject
+            {
+                ["maximum"] = 10, ["returned"] = includeHit ? 2 : 1,
+                ["truncated"] = false,
+            },
+        };
+
+        var page = CatalogueEndpoints.RenderSearchResults([records, unusable], readers);
+
+        Assert.DoesNotContain(MatchLanes.Heading, page, StringComparison.Ordinal);
+        Assert.Contains("1 hit(s)", page, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_coherently_truncated_publisher_set_authorises_no_metadata_claim()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "receipt-publisher-page"), includeAct: false);
+        using var reader = site.Reader();
+        var readers = new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader };
+        var results = new JsonArray();
+        var records = CompleteMetadataSearchResult();
+        results.Add(records);
+        for (var index = 1; index < 8; index++)
+        {
+            var publisher = $"publisher-{index}";
+            readers[publisher] = reader;
+            results.Add(new JsonObject
+            {
+                ["envelope"] = new JsonObject
+                {
+                    ["publisher"] = publisher,
+                    ["status"] = "filter_not_supported_by_index",
+                },
+                ["population"] = new JsonObject { ["query_ran"] = false },
+                ["hits"] = new JsonArray(),
+            });
+        }
+        foreach (var unit in results.OfType<JsonObject>())
+        {
+            unit["publisher_result_set"] = new JsonObject
+            {
+                ["total"] = 9, ["returned"] = 8, ["maximum"] = 8,
+                ["truncated"] = true,
+            };
+            unit["response_row_set"] = new JsonObject
+            {
+                ["maximum"] = 10, ["returned"] = 1, ["truncated"] = false,
+            };
+        }
+
+        var page = CatalogueEndpoints.RenderSearchResults(results, readers);
+
+        Assert.DoesNotContain(MatchLanes.Heading, page, StringComparison.Ordinal);
+        Assert.Contains("1 hit(s)", page, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -1300,6 +1528,8 @@ public sealed class TrustNoticeTests : IDisposable
             [(JsonObject)JsonNode.Parse("""
                 {"envelope":{"publisher":"lu-legilux","status":"ok"},
                  "population":{"query_ran":true},
+                 "publisher_result_set":{"total":1,"returned":1,"maximum":8,"truncated":false},
+                 "response_row_set":{"maximum":10,"returned":2,"truncated":false},
                  "hits":[{"work":"loi-2006-07-31-n2","lex_id":"lu-legilux:loi-2006-07-31-n2:2024-08-04--b23a72504925a2065967c3f3032ac905ae1ac921048419c5f8a1b54c1fec7ce5","valid_from":"2024-08-04",
                           "match_reasons":["work_metadata"]},
                          {"work":"lu-legilux:loi-2006-07-31-n2","valid_from":"2024-07-01",
@@ -1320,7 +1550,9 @@ public sealed class TrustNoticeTests : IDisposable
         return CatalogueEndpoints.RenderSearchResults(
             [(JsonObject)JsonNode.Parse(
                 "{\"envelope\":{\"publisher\":\"lu-legilux\",\"status\":\"ok\"},"
-                + "\"population\":{\"query_ran\":true},\"hits\":[{"
+                + "\"population\":{\"query_ran\":true},"
+                + "\"publisher_result_set\":{\"total\":1,\"returned\":1,\"maximum\":8,\"truncated\":false},"
+                + "\"response_row_set\":{\"maximum\":10,\"returned\":1,\"truncated\":false},\"hits\":[{"
                 + "\"work\":\"lu-legilux:loi-2006-07-31-n2\",\"valid_from\":\"2024-08-04\","
                 + "\"title\":\"Code du travail\",\"snippet\":\"Le contrat est suspendu.\","
                 + "\"match_reasons\":[\"" + reason + "\"]}]}")!],

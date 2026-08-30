@@ -86,6 +86,14 @@ test("a clean accepted metadata-only response still suppresses", async ({ page }
   expect(body).toContain(HEADING);
 });
 
+test("a truncated page cannot authorise the response-wide metadata-only claim", async ({ page }) => {
+  const body = await search(page, [unit({
+    response_row_set: { maximum: 20, returned: 1, truncated: true },
+  })]);
+
+  expect(body).not.toContain(HEADING);
+});
+
 test("a false receipt cannot authorise suppression", async ({ page }) => {
   // status ok, and the producer's own receipt says the query never ran.
   const body = await search(page, [unit({
