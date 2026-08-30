@@ -350,7 +350,7 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
     }
 
     [Fact]
-    public async Task A_cancelled_capture_is_recovered_before_a_live_retry()
+    public async Task A_cancelled_capture_is_recovered_before_a_same_input_live_retry()
     {
         var request = Request(0);
         var plan = Plan(request);
@@ -367,7 +367,7 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         var recovered = Assert.IsType<RejectedStagedResponseEvidence>(
             await bundle.CaptureAsync(
                 attempt,
-                Response(bodyComplete: false),
+                Response(),
                 new ThrowOnReadStream()));
         Assert.Equal(StagedResponseRejectionReason.TransportInterrupted,
             recovered.Reason);
@@ -423,7 +423,7 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         await Assert.ThrowsAsync<InvalidDataException>(() =>
             bundle.CaptureAsync(
                 attempt,
-                Response(bodyComplete: false, statusCode: 201),
+                Response(statusCode: 201),
                 new ThrowOnReadStream()));
         var receipt = await bundle.SealAsync();
         Assert.Equal(200, Assert.Single(receipt.Records).Response.StatusCode);
@@ -727,6 +727,74 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
         Assert.True(reopened.IsSealed);
         Assert.Equal(PrivateEvidenceBundle.MaximumAttemptsPerBundle,
             reopened.Attempts.Count);
+    }
+
+    [Fact]
+    public void Reopen_rejects_a_directly_crafted_attempt_inventory_above_cap()
+    {
+        var plan = DynamicPlan();
+        var staging = EmptyDirectory("crafted-attempt-cap");
+        string predecessor;
+        using (var bundle = PrivateEvidenceBundle.Create(staging, plan))
+        {
+            for (var ordinal = 0;
+                 ordinal < PrivateEvidenceBundle.MaximumAttemptsPerBundle;
+                 ordinal++)
+            {
+                var attempt = bundle.BeginAttempt(Request(
+                    ordinal,
+                    physicalAttempt: ordinal %
+                        SourceRequestIdentity.MaximumPhysicalAttempt + 1));
+                bundle.RecordNoResponse(attempt);
+            }
+            predecessor = bundle.Attempts[^1].AttemptSha256;
+        }
+
+        var request = Request(PrivateEvidenceBundle.MaximumAttemptsPerBundle);
+        var requestDocument = new
+        {
+            request.RequestId,
+            request.Publisher,
+            request.Channel,
+            Method = request.Method.ToString().ToLowerInvariant(),
+            request.RequestUri,
+            request.RequestUriSha256,
+            request.RequestBodySha256,
+            request.Ordinal,
+            request.MaximumResponseBytes,
+            request.PhysicalAttempt,
+            request.RedirectHop,
+        };
+        var attemptSha256 = Convert.ToHexStringLower(SHA256.HashData(
+            TestJsonBytes(new
+            {
+                Schema = PrivateEvidenceBundle.AttemptChainSchema,
+                BundleId = plan.BundleId,
+                PredecessorAttemptSha256 = predecessor,
+                Request = requestDocument,
+            })));
+        File.WriteAllBytes(
+            Path.Combine(
+                staging,
+                PrivateEvidenceBundle.AttemptsDirectoryName,
+                $"{request.Ordinal:D6}-{request.RequestId}.start.json"),
+            TestJsonBytes(new
+            {
+                Schema = PrivateEvidenceBundle.AttemptStartSchema,
+                BundleId = plan.BundleId,
+                PredecessorAttemptSha256 = predecessor,
+                AttemptSha256 = attemptSha256,
+                Request = requestDocument,
+            }));
+
+        PrivateEvidenceBundle? unexpectedlyOpened = null;
+        var error = Record.Exception(() =>
+            unexpectedlyOpened = PrivateEvidenceBundle.Open(staging, plan));
+        unexpectedlyOpened?.Dispose();
+        Assert.Contains(
+            "exceeds its bundle cap",
+            Assert.IsType<InvalidDataException>(error).Message,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1056,12 +1124,17 @@ public sealed class PrivateEvidenceBundleTests : IDisposable
 
     private static void WriteTestJson(string path, object document)
     {
+        File.WriteAllBytes(path, TestJsonBytes(document));
+    }
+
+    private static byte[] TestJsonBytes(object document)
+    {
         var options = new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         };
         var bytes = JsonSerializer.SerializeToUtf8Bytes(document, options);
-        File.WriteAllBytes(path, [.. bytes, (byte)'\n']);
+        return [.. bytes, (byte)'\n'];
     }
 
     public void Dispose()

@@ -576,7 +576,10 @@ public sealed class PrivateEvidenceBundle : IDisposable
             RefreshRecoveredCaptures();
             if (_records.TryGetValue(request.RequestId, out var recovered))
             {
-                if (recovered.Response != response)
+                var comparableResponse = recovered.Evidence.BodyComplete
+                    ? response
+                    : response.MarkBodyIncomplete();
+                if (recovered.Response != comparableResponse)
                     throw new InvalidDataException(
                         "Recovered response metadata differs from the supplied response.");
                 PersistAttemptTerminal(
