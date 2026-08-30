@@ -4,9 +4,10 @@ import { createPortal } from "react-dom";
 import type { AskExecutionDetails, AskMessage, Step } from "./api";
 import {
   STARTER_PROMPTS,
+  assistantNavigationNeedsDestinationDismissal,
   assistantPanelStateAfterNavigation,
   initialAssistantPanelState,
-  serializedAssistantPanelPreference,
+  type AssistantNavigationKind,
 } from "./assistantShell";
 
 export interface AskPanelProps {
@@ -21,7 +22,8 @@ export interface AskPanelProps {
   onSubmit: (text: string) => void;
   onReset: () => void;
   onOpenStep: (step: Step) => void;
-  followUps?: { label: string; run: () => void; navigates?: boolean }[];
+  onOpenStepNavigation: AssistantNavigationKind;
+  followUps?: { label: string; run: () => void; navigation?: AssistantNavigationKind }[];
 }
 
 const compactJson = (value: unknown, maximum: number) => {
@@ -182,12 +184,11 @@ export default function AskPanel(p: AskPanelProps) {
     } catch { raw = null; }
     return {
       state: initialAssistantPanelState(raw, modalViewport(), dismissAfterNavigation),
-      transientNavigationDismissal: dismissAfterNavigation,
+      dismissAfterNavigation,
     };
   })()).current;
   const [open, setOpen] = useState(initial.state.open);
   const [minimized, setMinimized] = useState(initial.state.minimized);
-  const transientNavigationDismissal = useRef(initial.transientNavigationDismissal);
   const [closing, setClosing] = useState(false);
   const [entered, setEntered] = useState(false);
   const reducedMotion = useRef(prefersReducedMotion()).current;
@@ -200,12 +201,12 @@ export default function AskPanel(p: AskPanelProps) {
     || p.steps.length > 0 || !!p.said || p.busy;
 
   useEffect(() => {
-    if (!initial.transientNavigationDismissal) return;
+    if (!initial.dismissAfterNavigation) return;
     // Rendering may be restarted before commit. Consume the marker only after this instance
     // commits, so every render attempt sees the same one-shot navigation state.
     try { sessionStorage.removeItem(NAVIGATION_DISMISSAL_KEY); }
     catch { /* Tab-scoped state is optional in restricted browsing modes. */ }
-  }, [initial.transientNavigationDismissal]);
+  }, [initial.dismissAfterNavigation]);
 
   useEffect(() => {
     if (typeof matchMedia !== "function") return;
@@ -216,13 +217,6 @@ export default function AskPanel(p: AskPanelProps) {
   }, []);
 
   useEffect(() => {
-    const preference = serializedAssistantPanelPreference(
-      { open, minimized }, transientNavigationDismissal.current);
-    transientNavigationDismissal.current = false;
-    if (preference !== undefined) {
-      try { sessionStorage.setItem(PANEL_KEY, preference); }
-      catch { /* Tab-scoped state is optional in restricted browsing modes. */ }
-    }
     document.body.classList.toggle("assistant-open", open && !minimized && !modal);
     document.body.classList.toggle("assistant-modal", open && !minimized && modal);
     return () => document.body.classList.remove("assistant-open", "assistant-modal");
@@ -288,28 +282,52 @@ export default function AskPanel(p: AskPanelProps) {
     body.current?.scrollTo({ top: body.current.scrollHeight, behavior: "smooth" });
   }, [p.conversation.length, p.activeQuestion, p.steps.length, p.said]);
 
-  const show = () => { setOpen(true); setMinimized(false); };
-  const runNavigation = (run: () => void) => {
+  const persistPanelPreference = (state: { open: boolean; minimized: boolean }) => {
+    try { sessionStorage.setItem(PANEL_KEY, JSON.stringify(state)); }
+    catch { /* Tab-scoped state is optional in restricted browsing modes. */ }
+  };
+  const show = () => {
+    setOpen(true);
+    setMinimized(false);
+    persistPanelPreference({ open: true, minimized: false });
+  };
+  const runNavigation = (run: () => void, navigation: AssistantNavigationKind) => {
+    const markDestination = assistantNavigationNeedsDestinationDismissal(navigation, modal);
     if (modal) {
       const next = assistantPanelStateAfterNavigation({ open, minimized }, modal);
-      transientNavigationDismissal.current = true;
       setClosing(false);
       setOpen(next.open);
       setMinimized(next.minimized);
-      // location.assign can unload before the state effect runs. The one-shot marker closes the
-      // destination without overwriting the reader's durable open/minimized preference.
+    }
+    if (markDestination) {
+      // location.assign can unload immediately. The one-shot marker closes the newly mounted
+      // destination without overwriting the reader's durable open/minimized preference. Same-page
+      // workspace navigation must never arm it because this component survives that transition.
       try {
         sessionStorage.setItem(NAVIGATION_DISMISSAL_KEY, "1");
       }
       catch { /* Tab-scoped state is optional in restricted browsing modes. */ }
     }
-    run();
+    try {
+      run();
+    } catch (error) {
+      if (markDestination) {
+        try { sessionStorage.removeItem(NAVIGATION_DISMISSAL_KEY); }
+        catch { /* Tab-scoped state is optional in restricted browsing modes. */ }
+      }
+      if (modal) {
+        setOpen(open);
+        setMinimized(minimized);
+      }
+      throw error;
+    }
   };
   // The panel used to appear and vanish on the same frame it mounted and unmounted, so opening the
   // assistant read as a jump-cut. It now stays mounted for the length of its own exit transition and
   // enters from the closed state on the first frame, which is also what makes the default-open panel
   // animate in on arrival instead of being there already.
   const close = () => {
+    persistPanelPreference({ open: false, minimized: false });
     if (reducedMotion) {
       setOpen(false);
       setMinimized(false);
@@ -323,6 +341,12 @@ export default function AskPanel(p: AskPanelProps) {
       setMinimized(false);
       requestAnimationFrame(() => launcher.current?.focus());
     }, PANEL_MOTION_MS);
+  };
+
+  const toggleMinimized = () => {
+    const next = !minimized;
+    setMinimized(next);
+    persistPanelPreference({ open: true, minimized: next });
   };
 
   const rememberPanel = (element: HTMLElement | null) => { panel.current = element; };
@@ -342,7 +366,7 @@ export default function AskPanel(p: AskPanelProps) {
           <span className="ap-title"><span className="al-ic" aria-hidden="true">✦</span> Ask Lex</span>
           {started ? <button className="ap-reset" onClick={p.onReset}
             aria-label="New conversation">New</button> : null}
-          <button className="ap-x ap-min" onClick={() => setMinimized(!minimized)}
+          <button className="ap-x ap-min" onClick={toggleMinimized}
                   aria-label={minimized ? "Expand assistant" : "Minimise assistant"}>
             {minimized ? "▴" : "▾"}
           </button>
@@ -383,7 +407,8 @@ export default function AskPanel(p: AskPanelProps) {
               {p.steps.map((step, index) => <li key={index} className={step.kind}>
                 <span>{step.text}</span>
                 {step.work ? <button className="chipmini"
-                  onClick={() => runNavigation(() => p.onOpenStep(step))}>open →</button> : null}
+                  onClick={() => runNavigation(
+                    () => p.onOpenStep(step), p.onOpenStepNavigation)}>open →</button> : null}
               </li>)}
               {p.busy ? <li className="pending"><span>working…</span></li> : null}
             </ol> : null}
@@ -392,8 +417,8 @@ export default function AskPanel(p: AskPanelProps) {
             {p.said ? <ExecutionDetails value={p.execution} /> : null}
             {p.said && (p.followUps?.length ?? 0) > 0 ? <div className="ap-next">
               {p.followUps!.map((followUp) => <button key={followUp.label} className="ap-chip next"
-                onClick={() => followUp.navigates
-                  ? runNavigation(followUp.run)
+                onClick={() => followUp.navigation
+                  ? runNavigation(followUp.run, followUp.navigation)
                   : followUp.run()}>{followUp.label}</button>)}
             </div> : null}
           </div>

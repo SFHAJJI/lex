@@ -18,7 +18,11 @@ import {
   type Step,
 } from "./api";
 import AskPanel from "./AskPanel";
-import { assistantWorkspaceUrl, stepWorkspaceUrl } from "./assistantShell";
+import {
+  assistantWorkspaceUrl,
+  stepWorkspaceUrl,
+  type AssistantNavigationKind,
+} from "./assistantShell";
 
 const MAX_VISIBLE_MESSAGES = 12;
 
@@ -186,17 +190,22 @@ export default function AssistantController({
         ...unavailableActions.map((action) => ({
           label: action.label,
           run: () => location.assign(action.href),
-          navigates: true,
+          navigation: "document" as const,
         })),
         ...(resultUrl ? [{
           label: "Open the structured result",
           run: () => location.assign(resultUrl),
-          navigates: true,
+          navigation: "document" as const,
         }] : []),
         ...(allowContextualFollowUps
-          ? (contextualFollowUps ?? []).map((followUp) => ({ ...followUp, navigates: true }))
+          ? (contextualFollowUps ?? []).map((followUp) => ({
+              ...followUp,
+              navigation: "workspace" as const,
+            }))
           : []),
       ];
+
+  const openStepNavigation: AssistantNavigationKind = onOpenStep ? "workspace" : "document";
 
   return <AskPanel
     q={q}
@@ -210,6 +219,7 @@ export default function AssistantController({
     onSubmit={submit}
     onReset={resetConversation}
     followUps={followUps}
+    onOpenStepNavigation={openStepNavigation}
     onOpenStep={onOpenStep ?? ((step) => {
       const url = stepWorkspaceUrl(step);
       if (url) location.assign(url);
