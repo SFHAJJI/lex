@@ -20,8 +20,8 @@ npm run build
 ```
 
 Browser, evaluation and release commands are added and pinned by their owning increments before
-those increments may complete. Intended golden changes require `LEX_GOLDEN_UPDATE=1`, a reviewed
-per-family diff and a clean working directory after the test.
+those increments may complete. Intended golden changes can use `LEX_GOLDEN_UPDATE=1` and a reviewed
+per-family diff as advisory evidence, but golden output never gates increment completion.
 
 ## Dependency order
 
