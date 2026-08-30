@@ -624,7 +624,10 @@ public sealed class AzureRawResponseSinkTests
                 false),
         };
         var sink = new AzureRawResponseSink(
-            store, EvidenceRetentionLane.Nightly90Days);
+            store,
+            EvidenceRetentionLane.Nightly90Days,
+            new FixedTimeProvider(
+                new DateTimeOffset(2026, 8, 30, 4, 0, 0, TimeSpan.Zero)));
 
         await sink.CaptureVerifiedAsync(
             Request(), Response(), new MemoryStream([1]));
@@ -1014,6 +1017,11 @@ public sealed class AzureRawResponseSinkTests
             CancellationToken cancellationToken) =>
             ValueTask.FromException<AccessToken>(new InvalidOperationException(
                 "Credential must not be used by the constructor."));
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => utcNow;
     }
 
     private sealed class ThrowingReadStream(
