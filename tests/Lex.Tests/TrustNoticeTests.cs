@@ -696,6 +696,14 @@ public sealed class TrustNoticeTests : IDisposable
             scanned++;
             foreach (var wording in new[] { "CC-BY", "CC BY", "creativecommons", "creative commons" })
                 Assert.DoesNotContain(wording, content, StringComparison.OrdinalIgnoreCase);
+
+            // O6. A count in an image is a claim nobody can maintain: the card said 8 while the
+            // endpoint served ten, which is the developers-page bug in a surface the count-at-build
+            // rule cannot reach. The numeral goes rather than being corrected.
+            Assert.DoesNotMatch(
+                new System.Text.RegularExpressions.Regex(
+                    @"\d+\s*(MCP|tools)", System.Text.RegularExpressions.RegexOptions.IgnoreCase),
+                content);
         }
 
         // A guard that scanned nothing would pass forever.
@@ -705,14 +713,83 @@ public sealed class TrustNoticeTests : IDisposable
                 .Select(Path.GetFileName));
     }
 
+    /// <summary>
+    /// Whether this directory is a repository root.
+    ///
+    /// In a LINKED WORKTREE .git is a FILE containing a gitdir pointer, not a directory. Accepting
+    /// only the directory form made the search climb past every worktree to the volume root, so
+    /// this test passed in the primary checkout and failed everywhere the integration branch is
+    /// actually assembled.
+    /// </summary>
+    internal static bool IsRepositoryRoot(string directory)
+    {
+        var git = Path.Combine(directory, ".git");
+        return Directory.Exists(git) || File.Exists(git);
+    }
+
     /// <summary>The repository root, found from the test assembly rather than assumed.</summary>
     private static string RepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !Directory.Exists(Path.Combine(directory.FullName, ".git")))
+        while (directory is not null && !IsRepositoryRoot(directory.FullName))
             directory = directory.Parent;
         Assert.NotNull(directory);
         return directory!.FullName;
+    }
+
+    /// <summary>
+    /// O5. Both forms of a repository root, proven against a real linked worktree rather than a
+    /// hand-made file, so the test cannot drift from what git actually writes.
+    /// </summary>
+    [Fact]
+    public void A_repository_root_is_found_in_a_linked_worktree_too()
+    {
+        var scratch = Path.Combine(Path.GetTempPath(), "lex-worktree-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(scratch);
+        try
+        {
+            // The primary checkout, where .git is a directory.
+            Assert.True(IsRepositoryRoot(RepositoryRoot()));
+            Assert.True(Directory.Exists(Path.Combine(RepositoryRoot(), ".git")));
+
+            // A linked worktree, where git writes .git as a FILE.
+            var worktree = Path.Combine(scratch, "linked");
+            var git = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                "git", $"worktree add --detach \"{worktree}\"")
+            {
+                WorkingDirectory = RepositoryRoot(),
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            })!;
+            git.WaitForExit();
+            Assert.True(git.ExitCode == 0, git.StandardError.ReadToEnd());
+
+            try
+            {
+                Assert.True(File.Exists(Path.Combine(worktree, ".git")),
+                    "git no longer writes .git as a file in a linked worktree");
+                Assert.False(Directory.Exists(Path.Combine(worktree, ".git")));
+                Assert.True(IsRepositoryRoot(worktree));
+            }
+            finally
+            {
+                var remove = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                    "git", $"worktree remove --force \"{worktree}\"")
+                {
+                    WorkingDirectory = RepositoryRoot(),
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                })!;
+                remove.WaitForExit();
+            }
+
+            // And neither form present is not a root.
+            Assert.False(IsRepositoryRoot(scratch));
+        }
+        finally
+        {
+            try { Directory.Delete(scratch, true); } catch { }
+        }
     }
 
     /// <summary>
