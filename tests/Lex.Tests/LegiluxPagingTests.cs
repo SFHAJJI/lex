@@ -1,6 +1,10 @@
 using System.Globalization;
+using System.Net;
+using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Lex.Ingest;
+using Lex.Law;
 using Lex.Sources.Legilux;
 
 namespace Lex.Tests;
@@ -11,6 +15,80 @@ public sealed class LegiluxPagingTests : IDisposable
         Path.GetTempPath(), $"lex-legilux-paging-{Guid.NewGuid():N}");
 
     public LegiluxPagingTests() => Directory.CreateDirectory(_root);
+
+    [Fact]
+    public void Manifestation_query_projects_exact_identity_and_licence_terms()
+    {
+        var query = LegiluxAdapter.ManifestationQuery(limit: 101, offset: 202);
+
+        Assert.Contains("SELECT ?c ?expr ?m ?fmt ?file ?license", query,
+            StringComparison.Ordinal);
+        Assert.Contains("OPTIONAL { ?m jolux:license ?license }", query,
+            StringComparison.Ordinal);
+        Assert.Contains("ORDER BY ?c ?expr ?m ?fmt ?file ?license", query,
+            StringComparison.Ordinal);
+        Assert.EndsWith("LIMIT 101 OFFSET 202", query, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Duplicate_binding_names_fail_closed_instead_of_overwriting_evidence()
+    {
+        var response = Encoding.UTF8.GetBytes("""
+            {"results":{"bindings":[{"license":{"type":"uri","value":"first"},"license":{"type":"uri","value":"second"}}]}}
+            """);
+
+        var error = Assert.Throws<JsonException>(() =>
+            SparqlClient.ParseSelectResponse(response));
+
+        Assert.Contains("duplicate", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Duplicate_properties_inside_a_binding_term_fail_closed()
+    {
+        var response = Encoding.UTF8.GetBytes("""
+            {"results":{"bindings":[{"license":{"type":"uri","value":"first","value":"second"}}]}}
+            """);
+
+        var error = Assert.Throws<JsonException>(() =>
+            SparqlClient.ParseSelectResponse(response));
+
+        Assert.Contains("duplicate", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Declared_oversized_response_is_rejected_before_content_is_read_and_POST_is_preserved()
+    {
+        var content = new FailOnSerializationContent(
+            SparqlClient.ResponseMaximumBytes + 1L);
+        HttpMethod? observedMethod = null;
+        using var http = new HttpClient(new StubHandler(request =>
+        {
+            observedMethod = request.Method;
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = content };
+        }));
+        var client = new SparqlClient(http);
+
+        var error = await Assert.ThrowsAsync<SourceAcquisitionException>(() =>
+            client.SelectAsync("SELECT * WHERE { ?s ?p ?o } LIMIT 1", default));
+
+        Assert.Equal("enumeration_response_too_large", error.Issue.Code);
+        Assert.Equal(HttpMethod.Post, observedMethod);
+        Assert.False(content.SerializeCalled);
+    }
+
+    [Fact]
+    public async Task Unknown_length_response_reads_only_cap_plus_one_and_retains_only_the_cap()
+    {
+        await using var stream = new MemoryStream(new byte[17]);
+
+        var bounded = await SparqlClient.ReadBoundedResponseAsync(
+            stream, maximumBytes: 16, default);
+
+        Assert.True(bounded.LimitExceeded);
+        Assert.Equal(16, bounded.Bytes.Length);
+        Assert.Equal(17, stream.Position);
+    }
 
     [Fact]
     public async Task Repeated_full_pages_detect_cap_plus_one_without_growing_the_accumulator()
@@ -164,6 +242,32 @@ public sealed class LegiluxPagingTests : IDisposable
         var match = Regex.Match(query, @"LIMIT\s+(\d+)", RegexOptions.CultureInvariant);
         Assert.True(match.Success, $"Query has no LIMIT: {query}");
         return int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+    }
+
+    private sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> respond)
+        : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(respond(request));
+    }
+
+    private sealed class FailOnSerializationContent(long declaredLength) : HttpContent
+    {
+        internal bool SerializeCalled { get; private set; }
+
+        protected override Task SerializeToStreamAsync(
+            Stream stream, TransportContext? context)
+        {
+            SerializeCalled = true;
+            throw new InvalidOperationException("The oversized body must not be read.");
+        }
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = declaredLength;
+            return true;
+        }
     }
 
     public void Dispose()

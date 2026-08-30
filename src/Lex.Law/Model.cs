@@ -167,13 +167,15 @@ public sealed record SourceBodyFetch(
     byte[]? Bytes = null,
     SourceHttpEvidence? Http = null,
     string? Detail = null,
-    int Attempts = 1)
+    int Attempts = 1,
+    ManifestationLicenceEvidence? Licence = null)
 {
     public static SourceBodyFetch Retrieved(
         byte[] bytes,
         SourceHttpEvidence http,
-        int attempts = 1) =>
-        new(SourceBodyStatus.Retrieved, bytes, http, Attempts: attempts);
+        int attempts = 1,
+        ManifestationLicenceEvidence? licence = null) =>
+        new(SourceBodyStatus.Retrieved, bytes, http, Attempts: attempts, Licence: licence);
 
     public string IssueCode => Status switch
     {
@@ -202,10 +204,14 @@ public sealed record SourceManifestationFetch(
     SourceBodyStatus Status,
     ManifestationFetch? Value = null,
     string? Detail = null,
-    int Attempts = 1)
+    int Attempts = 1,
+    ManifestationLicenceEvidence? Licence = null)
 {
-    public static SourceManifestationFetch Retrieved(ManifestationFetch value, int attempts = 1) =>
-        new(SourceBodyStatus.Retrieved, value, Attempts: attempts);
+    public static SourceManifestationFetch Retrieved(
+        ManifestationFetch value,
+        int attempts = 1,
+        ManifestationLicenceEvidence? licence = null) =>
+        new(SourceBodyStatus.Retrieved, value, Attempts: attempts, Licence: licence);
 }
 
 /// <summary>
