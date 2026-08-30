@@ -5,6 +5,10 @@ namespace Lex.Sources.Legilux;
 
 internal sealed record SparqlTerm(string Type, string Value);
 
+internal sealed record SparqlSelectPage(
+    IReadOnlySet<string> Variables,
+    List<Dictionary<string, SparqlTerm>> Rows);
+
 /// <summary>
 /// Minimal SPARQL-protocol client. Sequential, paced, identifying UA (D14).
 /// The endpoint is the publisher's officially published open-data access channel.
@@ -17,6 +21,7 @@ public sealed class SparqlClient(string endpoint, TimeSpan? pause = null)
     private static readonly SourceRetryPolicy RetryPolicy = new(MaximumAttempts: 4);
     private readonly HttpClient _http = Http;
     private readonly TimeSpan _pause = pause ?? TimeSpan.FromMilliseconds(1500);
+    private readonly TimeSpan _responseBodyTimeout = TimeSpan.FromSeconds(120);
     private readonly Func<string, CancellationToken, Task<List<Dictionary<string, string>>>>? _selectOverride;
     private readonly Func<string, CancellationToken, Task<List<Dictionary<string, SparqlTerm>>>>? _selectTermsOverride;
     private DateTimeOffset _lastRequest = DateTimeOffset.MinValue;
@@ -29,17 +34,21 @@ public sealed class SparqlClient(string endpoint, TimeSpan? pause = null)
         Func<string, CancellationToken, Task<List<Dictionary<string, SparqlTerm>>>> select)
         : this("https://test.invalid", TimeSpan.Zero) => _selectTermsOverride = select;
 
-    internal SparqlClient(HttpClient http)
+    internal SparqlClient(HttpClient http, TimeSpan? responseBodyTimeout = null)
         : this("https://test.invalid", TimeSpan.Zero)
     {
         ArgumentNullException.ThrowIfNull(http);
+        if (responseBodyTimeout.HasValue
+            && responseBodyTimeout.Value <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(responseBodyTimeout));
         _http = http;
+        _responseBodyTimeout = responseBodyTimeout ?? TimeSpan.FromSeconds(120);
     }
 
     private static HttpClient CreateClient()
     {
         var c = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false })
-            { Timeout = TimeSpan.FromSeconds(120) };
+        { Timeout = TimeSpan.FromSeconds(120) };
         c.DefaultRequestHeaders.UserAgent.ParseAdd("Lex/0.1");
         c.DefaultRequestHeaders.UserAgent.ParseAdd("(+https://github.com/SFHAJJI/lex)");
         c.DefaultRequestHeaders.Accept.ParseAdd("application/sparql-results+json");
@@ -55,16 +64,25 @@ public sealed class SparqlClient(string endpoint, TimeSpan? pause = null)
     }
 
     internal async Task<List<Dictionary<string, SparqlTerm>>> SelectTermsAsync(
+        string query, CancellationToken ct) =>
+        (await SelectTermsPageAsync(query, ct)).Rows;
+
+    internal async Task<SparqlSelectPage> SelectTermsPageAsync(
         string query, CancellationToken ct)
     {
-        if (_selectTermsOverride is not null) return await _selectTermsOverride(query, ct);
+        if (_selectTermsOverride is not null)
+        {
+            var rows = await _selectTermsOverride(query, ct);
+            return PageWithInferredProjection(rows);
+        }
         if (_selectOverride is not null)
         {
             var rows = await _selectOverride(query, ct);
-            return rows.Select(row => row.ToDictionary(
+            var terms = rows.Select(row => row.ToDictionary(
                 entry => entry.Key,
                 entry => new SparqlTerm("untyped", entry.Value),
                 StringComparer.Ordinal)).ToList();
+            return PageWithInferredProjection(terms);
         }
         // Politeness: sequential with a pause between requests.
         var sinceLast = DateTimeOffset.UtcNow - _lastRequest;
@@ -87,14 +105,25 @@ public sealed class SparqlClient(string endpoint, TimeSpan? pause = null)
         if (resp.Content.Headers.ContentLength is > ResponseMaximumBytes)
             throw ResponseTooLarge(sent.Attempts);
 
+        using var bodyDeadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        bodyDeadline.CancelAfter(_responseBodyTimeout);
         try
         {
-            await using var stream = await resp.Content.ReadAsStreamAsync(ct);
+            await using var stream = await resp.Content.ReadAsStreamAsync(bodyDeadline.Token);
             var bounded = await ReadBoundedResponseAsync(
-                stream, ResponseMaximumBytes, ct);
+                stream, ResponseMaximumBytes, bodyDeadline.Token);
             if (bounded.LimitExceeded)
                 throw ResponseTooLarge(sent.Attempts);
-            return ParseSelectResponse(bounded.Bytes);
+            return ParseSelectPage(bounded.Bytes);
+        }
+        catch (OperationCanceledException) when (
+            !ct.IsCancellationRequested && bodyDeadline.IsCancellationRequested)
+        {
+            throw new SourceAcquisitionException(new SourceBuildIssue(
+                "enumeration_body_timeout",
+                "lu-legilux",
+                $"The official SPARQL response body exceeded the {_responseBodyTimeout.TotalSeconds:g} second deadline."),
+                sent.Attempts);
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException or KeyNotFoundException)
         {
@@ -102,6 +131,12 @@ public sealed class SparqlClient(string endpoint, TimeSpan? pause = null)
                 "enumeration_parser_failure", "lu-legilux", ex.Message), sent.Attempts);
         }
     }
+
+    private static SparqlSelectPage PageWithInferredProjection(
+        List<Dictionary<string, SparqlTerm>> rows) =>
+        new(rows.SelectMany(row => row.Keys)
+                .ToHashSet(StringComparer.Ordinal),
+            rows);
 
     private static SourceAcquisitionException ResponseTooLarge(int attempts) =>
         new(new SourceBuildIssue(
@@ -132,10 +167,39 @@ public sealed class SparqlClient(string endpoint, TimeSpan? pause = null)
     }
 
     internal static List<Dictionary<string, SparqlTerm>> ParseSelectResponse(
-        byte[] utf8Json)
+        byte[] utf8Json) => ParseSelectPage(utf8Json).Rows;
+
+    internal static SparqlSelectPage ParseSelectPage(byte[] utf8Json) =>
+        ParseSelectDocument(utf8Json);
+
+    private static SparqlSelectPage ParseSelectDocument(byte[] utf8Json)
     {
         using var doc = JsonDocument.Parse(utf8Json);
         RejectDuplicateProperties(doc.RootElement);
+        var variables = new HashSet<string>(StringComparer.Ordinal);
+        if (doc.RootElement.TryGetProperty("head", out var head)
+            && head.TryGetProperty("vars", out var vars))
+        {
+            if (vars.ValueKind != JsonValueKind.Array)
+                throw new JsonException("The SPARQL response head.vars value is not an array.");
+            foreach (var variable in vars.EnumerateArray())
+            {
+                var name = variable.ValueKind == JsonValueKind.String
+                    ? variable.GetString()
+                    : null;
+                if (string.IsNullOrWhiteSpace(name) || !variables.Add(name))
+                    throw new JsonException(
+                        "The SPARQL response has an empty or duplicate projected variable.");
+            }
+        }
+        else
+        {
+            throw new JsonException("The SPARQL response is missing head.vars.");
+        }
+        if (variables.Count == 0)
+            throw new JsonException(
+                "The SPARQL response projects no variables for a SELECT query.");
+
         var rows = new List<Dictionary<string, SparqlTerm>>();
         foreach (var binding in doc.RootElement.GetProperty("results")
                      .GetProperty("bindings").EnumerateArray())
@@ -143,6 +207,9 @@ public sealed class SparqlClient(string endpoint, TimeSpan? pause = null)
             var row = new Dictionary<string, SparqlTerm>(StringComparer.Ordinal);
             foreach (var property in binding.EnumerateObject())
             {
+                if (!variables.Contains(property.Name))
+                    throw new JsonException(
+                        $"A SPARQL result binding '{property.Name}' is not declared in head.vars.");
                 var type = property.Value.GetProperty("type").GetString()
                     ?? throw new JsonException("A SPARQL result term is missing its type.");
                 var value = property.Value.GetProperty("value").GetString()
@@ -153,7 +220,7 @@ public sealed class SparqlClient(string endpoint, TimeSpan? pause = null)
             }
             rows.Add(row);
         }
-        return rows;
+        return new SparqlSelectPage(variables, rows);
     }
 
     private static void RejectDuplicateProperties(JsonElement value)

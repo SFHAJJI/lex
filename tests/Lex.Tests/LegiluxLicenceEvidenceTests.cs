@@ -20,7 +20,7 @@ public sealed class LegiluxLicenceEvidenceTests
     public void Sparql_results_preserve_term_type_and_exact_decoded_value()
     {
         var json = Encoding.UTF8.GetBytes("""
-            {"results":{"bindings":[
+            {"head":{"vars":["license"]},"results":{"bindings":[
               {"license":{"type":"uri","value":"http://example.test/licence/%C3%A9"}},
               {"license":{"type":"literal","value":"licenceSCL é"}}
             ]}}

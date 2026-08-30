@@ -28,6 +28,8 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory,
     internal const int IdentityMaximumRows = 20_000;
     internal const int ManifestationMaximumRows = 50_000;
     internal const int HeldWorkMetadataBatchSize = 8;
+    internal const int ManifestationLicenceBatchSize = 32;
+    internal const int ManifestationLicenceClaimsMaximum = 2;
     internal const int SubjectRawRowsPerWorkMaximum = 1_024;
     internal const int IdentityRowsPerWorkMaximum = 512;
 
@@ -203,7 +205,7 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory,
     private static readonly HttpClient BodyHttp = CreateBodyClient();
     private static readonly SourceRetryPolicy RetryPolicy = new(MaximumAttempts: 4);
     private DateTimeOffset _lastBodyFetch = DateTimeOffset.MinValue;
-    private sealed record LegiluxManifestation(
+    internal sealed record LegiluxManifestation(
         string Identifier,
         string FileIdentifier,
         string FetchUri,
@@ -376,15 +378,27 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory,
     }
 
     internal static string ManifestationQuery(int limit, int offset) => J + $$"""
-        SELECT ?c ?expr ?m ?fmt ?file ?license WHERE {
+        SELECT ?c ?expr ?m ?fmt ?file WHERE {
           ?c a jolux:Consolidation ; jolux:isRealizedBy ?expr .
           ?expr jolux:isEmbodiedBy ?m .
           ?m jolux:userFormat ?fmt ; jolux:isExemplifiedBy ?file .
-          OPTIONAL { ?m jolux:license ?license }
           VALUES ?fmt { <http://data.legilux.public.lu/resource/authority/user-format/xml>
                         <http://data.legilux.public.lu/resource/authority/user-format/pdf> }
-        } ORDER BY ?c ?expr ?m ?fmt ?file ?license LIMIT {{limit}} OFFSET {{offset}}
+        } ORDER BY ?c ?expr ?m ?fmt ?file LIMIT {{limit}} OFFSET {{offset}}
         """;
+
+    internal static string ManifestationLicenceQuery(
+        IReadOnlyCollection<string> manifestations)
+    {
+        var values = ManifestationValues(manifestations);
+        var limit = checked(manifestations.Count * ManifestationLicenceClaimsMaximum + 1);
+        return J + $$"""
+            SELECT ?m ?license WHERE {
+              VALUES ?m { {{values}} }
+              OPTIONAL { ?m jolux:license ?license }
+            } ORDER BY ?m ?license LIMIT {{limit}}
+            """;
+    }
 
     private async Task EnsureLoadedAsync(CancellationToken ct)
     {
@@ -526,7 +540,9 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory,
             }
 
             // Manifestation map: the publisher's own dataset enumerates the official XML file
-            // per expression (isExemplifiedBy, userFormat, jolux:license). Fetch
+            // per expression (isExemplifiedBy and userFormat). Licence terms are read in
+            // separate bounded VALUES batches so OPTIONAL multiplicity cannot truncate this
+            // identity enumeration. Fetch
             // host is the site's own manifestation_prefix (robots-permitted main host).
             // Ask for the format too, rather than filtering to xml in the query. The publisher
             // offers XML for 2,892 of its consolidations and PDF only for 1,611 (D49), and the
@@ -536,34 +552,163 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory,
                 ManifestationQuery, pageSize: 5000,
                 maximumRows: ManifestationMaximumRows, ct: ct,
                 onPage: n => Console.Error.WriteLine($"  [legilux] manifestation rows {n}"));
-            var xmlFiles = new Dictionary<string, LegiluxManifestation>(StringComparer.Ordinal);
-            var pdfFiles = new Dictionary<string, LegiluxManifestation>(StringComparer.Ordinal);
-            foreach (var group in manifestationRows.GroupBy(
-                         row => RequiredUriTerm(row, "m").Value, StringComparer.Ordinal))
-            {
-                var consolidation = SingleUriTerm(group, "c");
-                var expression = SingleUriTerm(group, "expr");
-                var format = SingleUriTerm(group, "fmt");
-                var file = SingleUriTerm(group, "file");
-                var sparqlLicence = LegiluxLicenceEvidence.FromSparqlTerms(
-                    group.Where(row => row.ContainsKey("license"))
-                        .Select(row => row["license"]));
-                var transport = OfficialManifestationTransport(format, file);
-                var manifestation = new LegiluxManifestation(
-                    group.Key, file.Value, transport.FetchUri, sparqlLicence);
-                var key = $"{consolidation.Value}|{LangCode(LastSegment(expression.Value))}";
-                AddExactManifestation(
-                    transport.Format == "pdf" ? pdfFiles : xmlFiles,
-                    key, manifestation);
-            }
-            _xmlFiles = xmlFiles;
-            _pdfFiles = pdfFiles;
+            var manifestationIdentifiers = manifestationRows
+                .Select(row => RequiredUriTerm(row, "m").Value)
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+            var licences = await SelectManifestationLicencesAsync(
+                manifestationIdentifiers, ct);
+            var manifestationMaps = BuildManifestationMaps(
+                manifestationRows, licences);
+            _xmlFiles = manifestationMaps.Xml;
+            _pdfFiles = manifestationMaps.Pdf;
 
             _byWork = byWork;
             _works = works;
-            Console.Error.WriteLine($"  [legilux] {works.Count} works, {byWork.Values.Sum(v => v.Count)} versions, {xmlFiles.Count} xml manifestations");
+            Console.Error.WriteLine($"  [legilux] {works.Count} works, {byWork.Values.Sum(v => v.Count)} versions, {manifestationMaps.Xml.Count} xml manifestations");
         }
         finally { _initLock.Release(); }
+    }
+
+    private async Task<Dictionary<string, LicenceChannelEvidence>>
+        SelectManifestationLicencesAsync(
+            IReadOnlyCollection<string> manifestationIdentifiers,
+            CancellationToken ct)
+    {
+        var evidence = new Dictionary<string, LicenceChannelEvidence>(
+            StringComparer.Ordinal);
+        foreach (var batch in manifestationIdentifiers.Chunk(
+                     ManifestationLicenceBatchSize))
+        {
+            var page = await _sparql.SelectTermsPageAsync(
+                ManifestationLicenceQuery(batch), ct);
+            var limit = checked(
+                batch.Length * ManifestationLicenceClaimsMaximum + 1);
+            if (page.Rows.Count >= limit)
+                throw new InvalidDataException(
+                    $"Legilux licence evidence for {batch.Length} manifestations exceeds {limit - 1} rows.");
+            foreach (var item in ParseManifestationLicenceBatch(batch, page))
+                if (!evidence.TryAdd(item.Key, item.Value))
+                    throw new InvalidDataException(
+                        "A Legilux manifestation appeared in more than one licence batch.");
+        }
+        return evidence;
+    }
+
+    internal static Dictionary<string, LicenceChannelEvidence>
+        ParseManifestationLicenceBatch(
+            IReadOnlyCollection<string> requestedManifestations,
+            SparqlSelectPage page)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+        _ = ManifestationValues(requestedManifestations);
+        var requested = requestedManifestations.ToHashSet(StringComparer.Ordinal);
+        var evidence = requested.ToDictionary(
+            manifestation => manifestation,
+            _ => LicenceChannelEvidence.NotObserved,
+            StringComparer.Ordinal);
+        if (!page.Variables.Contains("m") || !page.Variables.Contains("license"))
+            return evidence;
+
+        var rowsByManifestation = new Dictionary<string,
+            List<Dictionary<string, SparqlTerm>>>(StringComparer.Ordinal);
+        foreach (var row in page.Rows)
+        {
+            var manifestation = RequiredUriTerm(row, "m").Value;
+            if (!requested.Contains(manifestation))
+                throw new InvalidDataException(
+                    "A Legilux licence row is outside the requested VALUES batch.");
+            if (!rowsByManifestation.TryGetValue(manifestation, out var rows))
+                rowsByManifestation[manifestation] = rows = [];
+            rows.Add(row);
+        }
+
+        foreach (var manifestation in requested)
+        {
+            if (!rowsByManifestation.TryGetValue(manifestation, out var rows))
+                continue;
+            var terms = rows.Where(row => row.ContainsKey("license"))
+                .Select(row => row["license"]).ToArray();
+            var unboundRows = rows.Count - terms.Length;
+            if (unboundRows == 1 && terms.Length == 0 && rows.Count == 1)
+            {
+                evidence[manifestation] = LicenceChannelEvidence.Absent;
+                continue;
+            }
+            if (unboundRows > 0
+                || terms.Length is < 1 or > ManifestationLicenceClaimsMaximum
+                || terms.Distinct().Count() != terms.Length)
+            {
+                evidence[manifestation] =
+                    LegiluxLicenceEvidence.InvalidFromSparqlTerms(terms);
+                continue;
+            }
+            evidence[manifestation] = LegiluxLicenceEvidence.FromSparqlTerms(terms);
+        }
+        return evidence;
+    }
+
+    private static string ManifestationValues(
+        IReadOnlyCollection<string> manifestations)
+    {
+        if (manifestations.Count is < 1 or > ManifestationLicenceBatchSize)
+            throw new ArgumentOutOfRangeException(nameof(manifestations));
+        if (manifestations.Distinct(StringComparer.Ordinal).Count()
+            != manifestations.Count)
+            throw new InvalidDataException(
+                "A Legilux licence VALUES batch contains duplicate manifestations.");
+        return string.Join(' ', manifestations.Select(manifestation =>
+        {
+            if (!Uri.TryCreate(manifestation, UriKind.Absolute, out var uri)
+                || uri.Scheme is not ("http" or "https")
+                || !string.Equals(uri.Host, "data.legilux.public.lu",
+                    StringComparison.OrdinalIgnoreCase)
+                || !uri.IsDefaultPort
+                || !string.IsNullOrEmpty(uri.UserInfo)
+                || !string.IsNullOrEmpty(uri.Query)
+                || !string.IsNullOrEmpty(uri.Fragment)
+                || !string.Equals(uri.AbsoluteUri, manifestation,
+                    StringComparison.Ordinal))
+                throw new InvalidDataException(
+                    "A Legilux manifestation has an invalid official URI.");
+            return $"<{manifestation}>";
+        }));
+    }
+
+    internal static (
+        Dictionary<string, LegiluxManifestation> Xml,
+        Dictionary<string, LegiluxManifestation> Pdf) BuildManifestationMaps(
+            IEnumerable<Dictionary<string, SparqlTerm>> manifestationRows,
+            IReadOnlyDictionary<string, LicenceChannelEvidence> licences)
+    {
+        var xmlFiles = new Dictionary<string, LegiluxManifestation>(
+            StringComparer.Ordinal);
+        var pdfFiles = new Dictionary<string, LegiluxManifestation>(
+            StringComparer.Ordinal);
+        foreach (var group in manifestationRows.GroupBy(
+                     row => RequiredUriTerm(row, "m").Value,
+                     StringComparer.Ordinal))
+        {
+            var consolidation = SingleUriTerm(group, "c");
+            var expression = SingleUriTerm(group, "expr");
+            var format = SingleUriTerm(group, "fmt");
+            var file = SingleUriTerm(group, "file");
+            var transport = OfficialManifestationTransport(format, file);
+            var manifestation = new LegiluxManifestation(
+                group.Key,
+                file.Value,
+                transport.FetchUri,
+                licences.GetValueOrDefault(
+                    group.Key, LicenceChannelEvidence.NotObserved));
+            var key =
+                $"{consolidation.Value}|{LangCode(LastSegment(expression.Value))}";
+            AddExactManifestation(
+                transport.Format == "pdf" ? pdfFiles : xmlFiles,
+                key,
+                manifestation);
+        }
+        return (xmlFiles, pdfFiles);
     }
 
     private static SparqlTerm RequiredUriTerm(
