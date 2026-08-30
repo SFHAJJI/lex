@@ -6,6 +6,16 @@ namespace Lex.Tests;
 public sealed class ReleaseWorkflowTests
 {
     [Fact]
+    public void Terraform_backend_pins_Entra_blob_authorization()
+    {
+        var versions = File.ReadAllText(Path.Combine(RepoRoot(), "infra", "versions.tf"));
+
+        Assert.Contains("use_azuread_auth = true", versions, StringComparison.Ordinal);
+        Assert.DoesNotContain("access_key", versions, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("sas_token", versions, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Terraform_uses_only_reviewed_AzureRM_types()
     {
         var approved = new[]
