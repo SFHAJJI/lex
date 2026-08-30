@@ -7,6 +7,7 @@ import {
   assistantTimelineRows,
   assistantPanelStateAfterNavigation,
   initialAssistantPanelState,
+  serializedAssistantPanelPreference,
   assistantWorkspaceState,
   assistantWorkspaceUrl,
   parseAssistantPanelState,
@@ -20,12 +21,18 @@ test("workspace navigation dismisses only a modal assistant", () => {
 });
 
 test("a modal navigation dismissal survives a reload race exactly once", () => {
-  assert.deepEqual(initialAssistantPanelState(
-    '{"open":true,"minimized":false}', true, true),
-  { open: false, minimized: false });
-  assert.deepEqual(initialAssistantPanelState(
-    '{"open":true,"minimized":false}', true, false),
-  { open: true, minimized: false });
+  const priorPreference = '{"open":true,"minimized":false}';
+  const transient = assistantPanelStateAfterNavigation(
+    { open: true, minimized: false }, true);
+  assert.equal(serializedAssistantPanelPreference(transient, true), undefined);
+  assert.deepEqual(initialAssistantPanelState(priorPreference, true, true),
+    { open: false, minimized: false });
+  // A render restart happens before the committed component consumes the marker. It must see
+  // the same transient state, not consume it during render and restore the modal.
+  assert.deepEqual(initialAssistantPanelState(priorPreference, true, true),
+    { open: false, minimized: false });
+  assert.deepEqual(initialAssistantPanelState(priorPreference, true, false),
+    { open: true, minimized: false });
   assert.deepEqual(initialAssistantPanelState(null, true, false),
     { open: false, minimized: false });
 });

@@ -20,6 +20,13 @@ export function assistantPanelStateAfterNavigation(
   return modal ? { open: false, minimized: false } : current;
 }
 
+export function serializedAssistantPanelPreference(
+  state: AssistantPanelState,
+  transientNavigationDismissal: boolean,
+): string | undefined {
+  return transientNavigationDismissal ? undefined : JSON.stringify(state);
+}
+
 /** Only an unbounded provision effect may seed the reader without a follow-up fetch. */
 export function assistantProvisionLoad(ui?: UiEffect) {
   const provision = ui?.provision;

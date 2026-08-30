@@ -6,6 +6,7 @@ import {
   STARTER_PROMPTS,
   assistantPanelStateAfterNavigation,
   initialAssistantPanelState,
+  serializedAssistantPanelPreference,
 } from "./assistantShell";
 
 export interface AskPanelProps {
@@ -178,12 +179,15 @@ export default function AskPanel(p: AskPanelProps) {
     try {
       raw = sessionStorage.getItem(PANEL_KEY);
       dismissAfterNavigation = sessionStorage.getItem(NAVIGATION_DISMISSAL_KEY) === "1";
-      sessionStorage.removeItem(NAVIGATION_DISMISSAL_KEY);
     } catch { raw = null; }
-    return initialAssistantPanelState(raw, modalViewport(), dismissAfterNavigation);
+    return {
+      state: initialAssistantPanelState(raw, modalViewport(), dismissAfterNavigation),
+      transientNavigationDismissal: dismissAfterNavigation,
+    };
   })()).current;
-  const [open, setOpen] = useState(initial.open);
-  const [minimized, setMinimized] = useState(initial.minimized);
+  const [open, setOpen] = useState(initial.state.open);
+  const [minimized, setMinimized] = useState(initial.state.minimized);
+  const transientNavigationDismissal = useRef(initial.transientNavigationDismissal);
   const [closing, setClosing] = useState(false);
   const [entered, setEntered] = useState(false);
   const reducedMotion = useRef(prefersReducedMotion()).current;
@@ -196,6 +200,14 @@ export default function AskPanel(p: AskPanelProps) {
     || p.steps.length > 0 || !!p.said || p.busy;
 
   useEffect(() => {
+    if (!initial.transientNavigationDismissal) return;
+    // Rendering may be restarted before commit. Consume the marker only after this instance
+    // commits, so every render attempt sees the same one-shot navigation state.
+    try { sessionStorage.removeItem(NAVIGATION_DISMISSAL_KEY); }
+    catch { /* Tab-scoped state is optional in restricted browsing modes. */ }
+  }, [initial.transientNavigationDismissal]);
+
+  useEffect(() => {
     if (typeof matchMedia !== "function") return;
     const media = matchMedia(MODAL_QUERY);
     const changed = () => setModal(media.matches);
@@ -204,8 +216,13 @@ export default function AskPanel(p: AskPanelProps) {
   }, []);
 
   useEffect(() => {
-    try { sessionStorage.setItem(PANEL_KEY, JSON.stringify({ open, minimized })); }
-    catch { /* Tab-scoped state is optional in restricted browsing modes. */ }
+    const preference = serializedAssistantPanelPreference(
+      { open, minimized }, transientNavigationDismissal.current);
+    transientNavigationDismissal.current = false;
+    if (preference !== undefined) {
+      try { sessionStorage.setItem(PANEL_KEY, preference); }
+      catch { /* Tab-scoped state is optional in restricted browsing modes. */ }
+    }
     document.body.classList.toggle("assistant-open", open && !minimized && !modal);
     document.body.classList.toggle("assistant-modal", open && !minimized && modal);
     return () => document.body.classList.remove("assistant-open", "assistant-modal");
@@ -275,13 +292,13 @@ export default function AskPanel(p: AskPanelProps) {
   const runNavigation = (run: () => void) => {
     if (modal) {
       const next = assistantPanelStateAfterNavigation({ open, minimized }, modal);
+      transientNavigationDismissal.current = true;
       setClosing(false);
       setOpen(next.open);
       setMinimized(next.minimized);
-      // location.assign can unload before the state effect runs. Persist synchronously so the
-      // destination does not restore the modal over the workspace the reader just requested.
+      // location.assign can unload before the state effect runs. The one-shot marker closes the
+      // destination without overwriting the reader's durable open/minimized preference.
       try {
-        sessionStorage.setItem(PANEL_KEY, JSON.stringify(next));
         sessionStorage.setItem(NAVIGATION_DISMISSAL_KEY, "1");
       }
       catch { /* Tab-scoped state is optional in restricted browsing modes. */ }
