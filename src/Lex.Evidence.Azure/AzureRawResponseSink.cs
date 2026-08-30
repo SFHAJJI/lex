@@ -419,15 +419,56 @@ public sealed class AzureRawResponseSink : IRawResponseSink
             || !value.IsAbsoluteUri
             || !string.Equals(value.Scheme, Uri.UriSchemeHttps,
                 StringComparison.OrdinalIgnoreCase)
-            || string.IsNullOrEmpty(value.Host)
+            || value.HostNameType != UriHostNameType.Dns
+            || !value.IsDefaultPort
             || !string.IsNullOrEmpty(value.UserInfo)
             || !string.IsNullOrEmpty(value.Query)
-            || !string.IsNullOrEmpty(value.Fragment))
+            || !string.IsNullOrEmpty(value.Fragment)
+            || !IsAzureBlobHost(value.DnsSafeHost)
+            || !IsContainerPath(value.AbsolutePath))
             throw new ArgumentException(
-                "The evidence container must be an absolute HTTPS URI without credentials, query, or fragment.",
+                "The evidence container must be a public Azure Blob HTTPS container URI.",
                 nameof(value));
         return value;
     }
+
+    private static bool IsAzureBlobHost(string host)
+    {
+        const string suffix = ".blob.core.windows.net";
+        if (!host.EndsWith(suffix, StringComparison.Ordinal))
+            return false;
+
+        var account = host[..^suffix.Length];
+        return account.Length is >= 3 and <= 24
+            && account.All(static value => value is >= 'a' and <= 'z'
+                or >= '0' and <= '9');
+    }
+
+    private static bool IsContainerPath(string path)
+    {
+        if (path.Length < 2 || path[0] != '/' || path.IndexOf('/', 1) >= 0)
+            return false;
+
+        var container = path.AsSpan(1);
+        if (container.Length is < 3 or > 63
+            || !IsLowerAsciiLetterOrDigit(container[0])
+            || !IsLowerAsciiLetterOrDigit(container[^1]))
+            return false;
+
+        for (var index = 1; index < container.Length - 1; index++)
+        {
+            var value = container[index];
+            if (!IsLowerAsciiLetterOrDigit(value) && value != '-')
+                return false;
+            if (value == '-' && container[index - 1] == '-')
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsLowerAsciiLetterOrDigit(char value) =>
+        value is >= 'a' and <= 'z' or >= '0' and <= '9';
 
     private static EvidenceRetentionLane RequireRetentionLane(
         EvidenceRetentionLane value) => value switch

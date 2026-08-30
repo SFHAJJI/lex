@@ -63,13 +63,35 @@ public sealed class AzureRawResponseSinkTests
     [InlineData("https://user:password@account.blob.core.windows.net/evidence")]
     [InlineData("https://account.blob.core.windows.net/evidence?sig=credential-secret")]
     [InlineData("https://account.blob.core.windows.net/evidence#fragment")]
-    public void Container_URI_rejects_non_https_credentials_queries_and_fragments(
+    [InlineData("https://attacker.example/evidence")]
+    [InlineData("https://127.0.0.1/evidence")]
+    [InlineData("https://[::1]/evidence")]
+    [InlineData("https://account.blob.core.windows.net.attacker.example/evidence")]
+    [InlineData("https://account.blob.core.windows.net:444/evidence")]
+    [InlineData("https://account.privatelink.blob.core.windows.net/evidence")]
+    [InlineData("https://account.blob.core.windows.net/evidence/extra")]
+    [InlineData("https://account.blob.core.windows.net/evidence/")]
+    [InlineData("https://account.blob.core.windows.net/ev")]
+    [InlineData("https://account.blob.core.windows.net/-evidence")]
+    [InlineData("https://account.blob.core.windows.net/evidence-")]
+    [InlineData("https://account.blob.core.windows.net/evidence--private")]
+    [InlineData("https://ab.blob.core.windows.net/evidence")]
+    public void Container_URI_rejects_untrusted_hosts_and_non_Azure_container_shapes(
         string uri)
     {
         Assert.Throws<ArgumentException>(() => new AzureRawResponseSink(
             new Uri(uri),
             new NeverCredential(),
             EvidenceRetentionLane.Nightly90Days));
+    }
+
+    [Fact]
+    public void Container_URI_accepts_one_exact_public_cloud_blob_container()
+    {
+        _ = new AzureRawResponseSink(
+            new Uri("https://account123.blob.core.windows.net/evidence-private"),
+            new NeverCredential(),
+            EvidenceRetentionLane.Nightly90Days);
     }
 
     [Fact]
