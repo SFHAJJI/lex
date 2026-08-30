@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { asOfResult, compoundOperationViews, first, provisionEmptyExplanation, provisionItemsOf, provisionResponseMeta, summedCount, summedPopulation, tool,
+import { asOfResult, compoundOperationViews, first, provisionGapPresentation, provisionItemsOf, provisionResponseMeta, summedCount, summedPopulation, tool,
   unionKnownExclusions,
   type AskReply,
   type OperationReply, type ProvisionItem, type UiEffect } from "./api";
@@ -443,12 +443,10 @@ export default function App() {
               bodySha256: doc?.body_sha256,
               ...meta }
           : undefined);
-        if (items.length === 0)
+        const gap = provisionGapPresentation(one, items, meta);
+        if (gap)
           setUi({ gap: {
-            status: meta.textCompleteness === "partial" || meta.textTruncated
-              ? "partial_response"
-              : one?.envelope?.status ?? "no_result",
-            explanation: provisionEmptyExplanation(meta),
+            ...gap,
             available: [],
             total_provisions: meta.totalProvisions,
             total_provision_gaps: meta.totalProvisionGaps,

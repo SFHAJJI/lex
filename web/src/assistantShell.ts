@@ -1,5 +1,7 @@
-import { provisionItemsOf, type UiEffect } from "./api.ts";
+import { provisionItemsOf, reportedTruncation, type UiEffect } from "./api.ts";
 import type { State } from "./state";
+
+export { reportedTruncation } from "./api.ts";
 
 export const STARTER_PROMPTS = [
   "Show Article 6 of the GDPR as it stood on 1 January 2021.",
@@ -9,11 +11,6 @@ export const STARTER_PROMPTS = [
 ];
 
 export interface AssistantPanelState { open: boolean; minimized: boolean }
-
-/** An untrusted boundary value licenses a completeness claim only when it is exactly false. */
-export function reportedTruncation(value: unknown): boolean | undefined {
-  return value === true ? true : value === false ? false : undefined;
-}
 
 /** Only an unbounded provision effect may seed the reader without a follow-up fetch. */
 export function assistantProvisionLoad(ui?: UiEffect) {

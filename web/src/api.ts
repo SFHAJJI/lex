@@ -548,8 +548,8 @@ export interface ProvisionItem { anchor: string; num?: string; heading?: string;
 export interface ProvisionResponseMeta {
   totalProvisions?: number;
   totalProvisionGaps?: number;
-  truncated: boolean;
-  textTruncated: boolean;
+  truncated?: boolean;
+  textTruncated?: boolean;
   textCompleteness?: "complete" | "partial" | "unavailable";
 }
 
@@ -559,16 +559,23 @@ function boundedCount(value: unknown): number | undefined {
     : undefined;
 }
 
+/** An untrusted boundary value licenses a completeness claim only when it is exactly boolean. */
+export function reportedTruncation(value: unknown): boolean | undefined {
+  return value === true ? true : value === false ? false : undefined;
+}
+
 /** Bounded response facts are authoritative metadata, not guesses from the returned row page. */
 export function provisionResponseMeta(result: any): ProvisionResponseMeta {
   const completeness = result?.text_completeness;
   const totalProvisions = boundedCount(result?.total_provisions);
   const totalProvisionGaps = boundedCount(result?.total_provision_gaps);
+  const truncated = reportedTruncation(result?.truncated);
+  const textTruncated = reportedTruncation(result?.text_truncated);
   return {
     ...(totalProvisions !== undefined ? { totalProvisions } : {}),
     ...(totalProvisionGaps !== undefined ? { totalProvisionGaps } : {}),
-    truncated: result?.truncated === true,
-    textTruncated: result?.text_truncated === true,
+    ...(truncated !== undefined ? { truncated } : {}),
+    ...(textTruncated !== undefined ? { textTruncated } : {}),
     ...(completeness === "complete" || completeness === "partial"
       || completeness === "unavailable"
       ? { textCompleteness: completeness }
@@ -596,14 +603,18 @@ export function provisionSourceUrl(item: ProvisionItem): string | undefined {
   return safeHttpsUrl(item.permalink, item.eli, item.source_uri, item.official_source);
 }
 
-export function provisionCountLabel(items: ProvisionItem[], totalProvisions?: number): string {
+export function provisionCountLabel(
+  items: ProvisionItem[], totalProvisions?: number, responseComplete?: boolean,
+): string {
   const shown = items.length;
   const total = boundedCount(totalProvisions);
   const coordinates = items.some(isTypedProvisionGap);
   const noun = coordinates ? "publisher coordinates" : `article${shown === 1 ? "" : "s"}`;
   return total !== undefined && total > shown
     ? `Showing ${shown.toLocaleString("en-US")} of ${total.toLocaleString("en-US")} ${noun}`
-    : `${shown.toLocaleString("en-US")} ${noun}`;
+    : responseComplete === true
+      ? `${shown.toLocaleString("en-US")} ${noun}`
+      : `Showing ${shown.toLocaleString("en-US")} ${noun} returned by this response`;
 }
 
 export function boundedPublisherTextLabel(
@@ -616,9 +627,63 @@ export function boundedPublisherTextLabel(
 }
 
 export function provisionEmptyExplanation(meta: ProvisionResponseMeta): string {
-  return meta.textCompleteness === "partial" || meta.textTruncated
-    ? "This bounded response did not include a publisher coordinate. Its partial-text metadata does not establish that publisher text is absent."
-    : "No text is held for this law on that date.";
+  if (meta.textCompleteness === "partial" || meta.truncated === true
+      || meta.textTruncated === true)
+    return "This bounded response did not include a publisher coordinate. Its partial-text metadata does not establish that publisher text is absent.";
+  if (meta.truncated !== false || meta.textTruncated !== false)
+    return "Response completeness was not reported. The returned evidence does not establish that publisher text is absent.";
+  return "No text is held for this law on that date.";
+}
+
+export function provisionGapPresentation(
+  result: any, items: ProvisionItem[], meta: ProvisionResponseMeta,
+): { status: string; explanation: string } | undefined {
+  if (items.length > 0) return undefined;
+  const status = typeof result?.envelope?.status === "string"
+    ? result.envelope.status
+    : "no_result";
+  const document = result?.document ?? result;
+  const versionResolved = typeof document?.valid_from === "string"
+    && document.valid_from.length > 0;
+  if (versionResolved) {
+    const incomplete = meta.textCompleteness === "partial"
+      || meta.truncated !== false || meta.textTruncated !== false;
+    return {
+      status: incomplete ? "partial_response" : status,
+      explanation: provisionEmptyExplanation(meta),
+    };
+  }
+  return {
+    status,
+    explanation: status === "unknown_work"
+      ? "Lex does not hold an instrument matching this identifier. This is not evidence that the instrument or law does not exist."
+      : status === "no_version_for_date"
+        ? "Lex holds this law, but no publisher version covers that date."
+        : "The publisher response did not resolve a version for this request.",
+  };
+}
+
+export function provisionCompletenessUnknown(meta: {
+  status?: unknown;
+  provision_gaps?: unknown;
+  total_provision_gaps?: unknown;
+  total_provisions?: unknown;
+  text_completeness?: unknown;
+  truncated?: unknown;
+  text_truncated?: unknown;
+}): boolean {
+  const completeness = meta.text_completeness;
+  const provisionRelevant = meta.status === "text_not_available"
+    || meta.status === "partial_response"
+    || (Array.isArray(meta.provision_gaps)
+      && meta.provision_gaps.length > 0)
+    || boundedCount(meta.total_provision_gaps) !== undefined
+    || boundedCount(meta.total_provisions) !== undefined
+    || completeness === "complete" || completeness === "partial"
+    || completeness === "unavailable";
+  return provisionRelevant
+    && (reportedTruncation(meta.truncated) === undefined
+      || reportedTruncation(meta.text_truncated) === undefined);
 }
 
 /** Merge canon/2 text rows and textless gap coordinates without changing legacy V3 order. */
@@ -755,8 +820,8 @@ export interface UiEffect {
   };
   gap?: { status: string; work?: string; date?: string; explanation: string; available: string[];
           evidence?: EvidenceContext[]; provision_gaps?: ProvisionItem[];
-          total_provision_gaps?: number; truncated?: boolean; total_provisions?: number;
-          text_truncated?: boolean; text_completeness?: string;
+          total_provision_gaps?: number; truncated?: boolean | null; total_provisions?: number;
+          text_truncated?: boolean | null; text_completeness?: string;
           comparison_from_date?: string; comparison_to_date?: string;
           comparison_limitations?: string[];
           comparison_limitations_malformed?: boolean };

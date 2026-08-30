@@ -6,7 +6,9 @@ import {
   isTypedProvisionGap,
   boundedPublisherTextLabel,
   provisionCountLabel,
+  provisionCompletenessUnknown,
   provisionEmptyExplanation,
+  provisionGapPresentation,
   provisionItemsOf,
   provisionResponseMeta,
   provisionSourceUrl,
@@ -152,10 +154,54 @@ test("malformed bounded metadata authorizes no count or completeness claim", () 
     truncated: 1,
     text_truncated: "true",
     text_completeness: "partial ",
-  }), {
-    truncated: false,
-    textTruncated: false,
-  });
+  }), {});
+  assert.match(provisionEmptyExplanation(provisionResponseMeta({})),
+    /completeness was not reported.*does not establish.*absent/);
+  const completeEmpty = provisionResponseMeta({ truncated: false, text_truncated: false });
+  assert.deepEqual(completeEmpty, { truncated: false, textTruncated: false });
+  assert.equal(provisionEmptyExplanation(completeEmpty),
+    "No text is held for this law on that date.");
+});
+
+test("unresolved reader gaps retain their own status and explanation", () => {
+  const unknown = provisionGapPresentation({ envelope: { status: "unknown_work" } }, [],
+    provisionResponseMeta({}));
+  assert.equal(unknown?.status, "unknown_work");
+  assert.match(unknown?.explanation ?? "", /does not hold.*not evidence.*does not exist/i);
+
+  const undated = provisionGapPresentation({ envelope: { status: "no_version_for_date" } }, [],
+    provisionResponseMeta({}));
+  assert.equal(undated?.status, "no_version_for_date");
+  assert.match(undated?.explanation ?? "", /no publisher version covers that date/i);
+
+  const resolvedUnknown = provisionGapPresentation({
+    envelope: { status: "text_not_available" },
+    document: { valid_from: "2026-01-01" },
+  }, [], provisionResponseMeta({}));
+  assert.equal(resolvedUnknown?.status, "partial_response");
+  assert.match(resolvedUnknown?.explanation ?? "", /completeness was not reported/i);
+});
+
+test("only substantive provision evidence can trigger an unknown-completeness notice", () => {
+  assert.equal(provisionCompletenessUnknown({ provision_gaps: [] }), false);
+  assert.equal(provisionCompletenessUnknown({ provision_gaps: null }), false);
+  assert.equal(provisionCompletenessUnknown({ status: "unknown_work" }), false);
+  assert.equal(provisionCompletenessUnknown({ status: "unknown_work", truncated: false }), false);
+  assert.equal(provisionCompletenessUnknown({
+    status: "no_version_for_date", truncated: false, text_truncated: false,
+  }), false);
+  assert.equal(provisionCompletenessUnknown({ status: "text_not_available" }), true);
+  assert.equal(provisionCompletenessUnknown({ status: "partial_response" }), true);
+  assert.equal(provisionCompletenessUnknown({
+    provision_gaps: [gap], truncated: undefined, text_truncated: undefined,
+  }), true);
+  assert.equal(provisionCompletenessUnknown({
+    truncated: false, text_truncated: false,
+  }), false);
+  const returned = [{ anchor: "art_1", text: "Publisher wording." }];
+  assert.equal(provisionCountLabel(returned, undefined, false),
+    "Showing 1 article returned by this response");
+  assert.equal(provisionCountLabel(returned, undefined, true), "1 article");
 });
 
 test("a gap-only publisher result remains selectable and loads as a typed workspace row", () => {

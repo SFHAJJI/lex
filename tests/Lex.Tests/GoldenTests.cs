@@ -80,6 +80,11 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         var res = await _site.Client.GetAsync(path);
         var body = await res.Content.ReadAsStringAsync();
         var renderedBody = body.Length == 0 ? "" : Golden.Normalise(body);
+        var expectedStatus = name is "work-unknown" or "work-baddate"
+            ? HttpStatusCode.NotFound
+            : HttpStatusCode.OK;
+        Assert.Equal(expectedStatus, res.StatusCode);
+        Assert.NotEmpty(renderedBody.Trim());
         Golden.Assert($"page-{name}", $"HTTP {(int)res.StatusCode}\n{renderedBody}");
     }
 
@@ -454,6 +459,7 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
                   + tool + "\",\"arguments\":" + args + "}}";
         var res = await _site.Client.PostAsync("/mcp",
             new StringContent(rpc, Encoding.UTF8, "application/json"));
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
         var body = await McpJson(res);
         // A malformed request returns an empty body, and an empty snapshot would happily become
         // the baseline and then "pass" forever. The first version of this file did exactly that.

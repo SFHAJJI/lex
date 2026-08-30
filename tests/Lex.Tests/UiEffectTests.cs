@@ -621,6 +621,8 @@ public class UiEffectTests
                 }),
                 ["evidence_scope"] =
                     "captured_cross_references_in_held_non_withdrawn_versions",
+                ["current_legal_effect_assessed"] = false,
+                ["relationship_type_assessed"] = false,
                 ["response_row_set"] = new JsonObject
                 {
                     ["maximum"] = 50, ["returned"] = 1, ["truncated"] = false,
@@ -733,6 +735,8 @@ public class UiEffectTests
                     ["anchor"] = "art_1",
                 }),
                 ["evidence_scope"] = CitedByResultPolicy.EvidenceScope,
+                ["current_legal_effect_assessed"] = false,
+                ["relationship_type_assessed"] = false,
                 ["publisher_result_set"] = new JsonObject
                 {
                     ["total"] = publisherCount, ["returned"] = publisherCount,

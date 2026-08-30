@@ -291,11 +291,17 @@ internal static class OperationAnswerPolicy
             var starts = history.States.Select(state => state.ValidFrom)
                 .Where(value => value.Length > 0)
                 .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+            var returnedStateCount = history.States.Count;
             var completeDates = starts.Length switch
             {
                 0 => "",
-                1 => fr ? $", daté du {starts[0]}" : $", dated {starts[0]}",
-                <= MaximumListedHistoryDates when starts.Length >= history.DistinctTexts => fr
+                1 when returnedStateCount == 1 => fr
+                    ? $", daté du {starts[0]}"
+                    : $", dated {starts[0]}",
+                1 => fr
+                    ? $", avec des états débutant le {starts[0]}"
+                    : $", with states beginning {starts[0]}",
+                <= MaximumListedHistoryDates when starts.Length == returnedStateCount => fr
                     ? $", avec des états débutant les {string.Join(", ", starts)}"
                     : $", with states beginning {string.Join(", ", starts)}",
                 _ => fr
@@ -305,9 +311,12 @@ internal static class OperationAnswerPolicy
             var returnedDates = starts.Length switch
             {
                 0 => "",
-                1 => fr
+                1 when returnedStateCount == 1 => fr
                     ? $", avec un état renvoyé daté du {starts[0]}"
                     : $", with one returned state dated {starts[0]}",
+                1 => fr
+                    ? $", avec {returnedStateCount:n0} états renvoyés débutant le {starts[0]}"
+                    : $", with {returnedStateCount:n0} returned states beginning {starts[0]}",
                 _ => fr
                     ? $", avec des états renvoyés du {starts[0]} au dernier état renvoyé commençant le {starts[^1]}"
                     : $", with returned states from {starts[0]} through the last returned state beginning {starts[^1]}",
@@ -332,13 +341,21 @@ internal static class OperationAnswerPolicy
             var expression = history.Subject.Language is { Length: > 0 } language
                 ? (fr ? $"l'expression {language} de " : $"the {language} expression of ")
                 : "";
+            // McpCore.article_history assigns ProvisionStateCount (COUNT(*)) to distinct_texts.
+            // This surface therefore names publisher states, not an unproved DISTINCT text count.
+            var reportedUnit = fr
+                ? history.DistinctTexts == 1 ? "état de l'éditeur" : "états de l'éditeur"
+                : history.DistinctTexts == 1 ? "publisher state" : "publisher states";
+            var returnedUnit = fr
+                ? returnedStateCount == 1 ? "état" : "états"
+                : returnedStateCount == 1 ? "state" : "states";
             var historyResult = history.Truncated == false
                 ? fr
-                    ? $"L'historique vérifié de {history.Anchor} dans {expression}{Name(history.Subject)} contient {history.DistinctTexts:n0} texte(s) distinct(s){completeDates}."
-                    : $"The verified history of {history.Anchor} in {expression}{Name(history.Subject)} contains {history.DistinctTexts:n0} distinct text(s){completeDates}."
+                    ? $"L'historique vérifié de {history.Anchor} dans {expression}{Name(history.Subject)} contient {history.DistinctTexts:n0} {reportedUnit}{completeDates}."
+                    : $"The verified history of {history.Anchor} in {expression}{Name(history.Subject)} contains {history.DistinctTexts:n0} {reportedUnit}{completeDates}."
                 : fr
-                    ? $"L'historique vérifié de {history.Anchor} dans {expression}{Name(history.Subject)} signale {history.DistinctTexts:n0} texte(s) distinct(s) et renvoie {history.States.Count:n0} état(s){returnedDates}."
-                    : $"The verified history of {history.Anchor} in {expression}{Name(history.Subject)} reports {history.DistinctTexts:n0} distinct text(s) and returns {history.States.Count:n0} state(s){returnedDates}.";
+                    ? $"L'historique vérifié de {history.Anchor} dans {expression}{Name(history.Subject)} signale {history.DistinctTexts:n0} {reportedUnit} et renvoie {returnedStateCount:n0} {returnedUnit}{returnedDates}."
+                    : $"The verified history of {history.Anchor} in {expression}{Name(history.Subject)} reports {history.DistinctTexts:n0} {reportedUnit} and returns {returnedStateCount:n0} {returnedUnit}{returnedDates}.";
             var historyCompleteness = history.Truncated switch
             {
                 true => fr ? " Cette réponse bornée est tronquée."

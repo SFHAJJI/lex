@@ -979,7 +979,8 @@ public sealed class AskTransportTests
     {
         var subject = new Subject(
             "lu-legilux:loi-example", "Example law", null, "art_1", "fr");
-        HistoryView View(bool? truncated) => new(subject, "art_1", DistinctTexts: 3,
+        HistoryView View(bool? truncated) => new(subject, "art_1",
+            DistinctTexts: truncated == false ? 2 : 3,
             States:
             [
                 new("2020-01-01", null, null, null),
@@ -993,9 +994,9 @@ public sealed class AskTransportTests
         var unknown = OperationAnswerPolicy.Describe(
             "en", new UiEffect(History: View(null)))!;
 
-        Assert.Contains("contains 3 distinct text(s)", complete);
-        Assert.Contains("latest state beginning 2021-01-01", complete);
-        Assert.Contains("reports 3 distinct text(s) and returns 2 state(s)", bounded);
+        Assert.Contains("contains 2 publisher states", complete);
+        Assert.Contains("states beginning 2020-01-01, 2021-01-01", complete);
+        Assert.Contains("reports 3 publisher states and returns 2 states", bounded);
         Assert.Contains("last returned state beginning 2021-01-01", bounded);
         Assert.Contains("This bounded response is truncated.", bounded);
         Assert.DoesNotContain("latest state", bounded);

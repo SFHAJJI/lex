@@ -43,8 +43,10 @@ jobs:
               sys.exit("CI test result has no execution counters")
           total = int(counters.attrib.get("total", "0"))
           executed = int(counters.attrib.get("executed", "0"))
-          if total < 300 or executed < 300:
-              sys.exit(f"CI executed only {executed} of {total} discovered tests; expected at least 300")
+          if total <= 0:
+              sys.exit("CI discovered no tests")
+          if executed != total:
+              sys.exit(f"CI executed {executed} of {total} discovered tests")
           print(f"verified {executed} executed tests ({total} discovered)")
           PY
       - name: golden baselines stay tracked and unchanged (diagnostic)

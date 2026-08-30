@@ -42,6 +42,9 @@ internal static class CitedByResultPolicy
             if (!string.Equals(Text(unit, "evidence_scope"), EvidenceScope,
                     StringComparison.Ordinal))
                 return false;
+            if (Boolean(unit, "current_legal_effect_assessed") != false
+                || Boolean(unit, "relationship_type_assessed") != false)
+                return false;
 
             if (unit["citations"] is not JsonArray citations
                 || citations.Any(item => item is not JsonObject))

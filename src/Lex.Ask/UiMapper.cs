@@ -164,15 +164,17 @@ public static class UiMapper
                 Available: GapChoices(tool, node),
                 ProvisionGaps: typedGaps,
                 TotalProvisionGaps: tool == "as_of"
-                    ? node["total_provision_gaps"]?.GetValue<int?>()
+                    ? I(node, "total_provision_gaps")
                     : null,
                 Truncated: tool == "as_of"
-                    && node["truncated"]?.GetValue<bool>() == true,
+                    ? B(node, "truncated")
+                    : null,
                 TotalProvisions: tool == "as_of"
-                    ? node["total_provisions"]?.GetValue<int?>()
+                    ? I(node, "total_provisions")
                     : null,
                 TextTruncated: tool == "as_of"
-                    && node["text_truncated"]?.GetValue<bool>() == true,
+                    ? B(node, "text_truncated")
+                    : null,
                 TextCompleteness: tool == "as_of"
                     ? S(node, "text_completeness")
                     : null,
@@ -555,7 +557,7 @@ public static class UiMapper
                 TextOmitted: p["text_omitted"]?.GetValue<bool>() == true,
                 TextOmittedReason: S(p, "text_omitted_reason"),
                 Permalink: S(p, "permalink"),
-                DocumentOrder: p["document_order"]?.GetValue<int?>())).Where(i => i.Text.Length > 0
+                DocumentOrder: I(p, "document_order"))).Where(i => i.Text.Length > 0
                     || i.Anchor.Length > 0 || !string.IsNullOrWhiteSpace(i.Heading)).ToList()
             ?? [];
         if (items.Count == 0 && S(doc, "text") is { Length: > 0 } documentText)
@@ -572,12 +574,12 @@ public static class UiMapper
             ValidTo: S(doc, "valid_to"),
             Provisions: items,
             Permalink: S(doc, "permalink"),
-            TotalProvisions: o["total_provisions"]?.GetValue<int?>(),
+            TotalProvisions: I(o, "total_provisions"),
             Truncated: B(o, "truncated"),
             TextTruncated: B(o, "text_truncated"),
             OutlineOnly: S(args, "mode") == "outline",
             ProvisionGaps: provisionGaps,
-            TotalProvisionGaps: o["total_provision_gaps"]?.GetValue<int?>(),
+            TotalProvisionGaps: I(o, "total_provision_gaps"),
             TextCompleteness: S(o, "text_completeness")));
     }
 
@@ -585,7 +587,7 @@ public static class UiMapper
         (result["provision_gaps"] as JsonArray)?.OfType<JsonObject>()
             .Select(gap => new ProvisionGapItem(
                 Anchor: S(gap, "anchor") ?? "",
-                DocumentOrder: gap["document_order"]?.GetValue<int>() ?? 0,
+                DocumentOrder: I(gap, "document_order") ?? 0,
                 Num: S(gap, "num"),
                 Heading: S(gap, "heading"),
                 Path: S(gap, "path"),
@@ -607,7 +609,7 @@ public static class UiMapper
             Subject: new Subject(CanonicalWork(o, args), null, null, S(o, "anchor"),
                 S(o, "language") ?? S(args, "language")),
             Anchor: S(o, "anchor") ?? "",
-            DistinctTexts: o["distinct_texts"]?.GetValue<int>() ?? states.Count,
+            DistinctTexts: I(o, "distinct_texts") ?? states.Count,
             States: states.OfType<JsonObject>().Select(s => new HistoryState(
                 S(s, "valid_from") ?? "", S(s, "valid_to"), S(s, "text_sha256"), S(s, "permalink"))).ToList(),
             Truncated: B(o, "truncated")));
@@ -631,7 +633,7 @@ public static class UiMapper
                 S(version, "language"),
                 S(version, "permalink"),
                 S(version, "record_sha256"))).ToList(),
-            TotalCount: o["total_count"]?.GetValue<int>() ?? rows.Count,
+            TotalCount: I(o, "total_count") ?? rows.Count,
             Truncated: B(o, "truncated")));
     }
 
@@ -749,7 +751,7 @@ public static class UiMapper
         if (o["citations"] is not JsonArray rows) return new UiEffect();
         return new UiEffect(CitedBy: new CitedByView(
             CitedWork: S(o, "cited_work") ?? "",
-            CitingArticles: o["citing_articles"]?.GetValue<int>() ?? rows.Count,
+            CitingArticles: I(o, "citing_articles") ?? rows.Count,
             Rows: rows.OfType<JsonObject>().Select(c => new CitedByRow(
                 Work: S(c, "work") ?? "", Title: S(c, "title"), ValidFrom: S(c, "valid_from") ?? "",
                 Anchor: S(c, "anchor") ?? "", Num: S(c, "num"), Permalink: S(c, "permalink"),
@@ -954,6 +956,10 @@ public static class UiMapper
     /// </summary>
     private static bool? B(JsonObject? o, string k)
         => o?[k] is JsonValue v && v.TryGetValue<bool>(out var b) ? b : null;
+
+    /// <summary>A non-negative JSON integer, or null for absent, malformed or hostile input.</summary>
+    private static int? I(JsonObject? o, string k)
+        => o?[k] is JsonValue v && v.TryGetValue<int>(out var i) && i >= 0 ? i : null;
 
     /// <summary>
     /// The usable JSON strings in an array. A present malformed field is reported separately,

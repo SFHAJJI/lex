@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   boundedPublisherTextLabel, changeCountLabels, isTypedProvisionGap, populationCoverageLabel,
-  populationScopeLabel, provisionCountLabel, provisionSourceUrl, safeHttpsUrl,
+  populationScopeLabel, provisionCompletenessUnknown, provisionCountLabel, provisionSourceUrl, safeHttpsUrl,
   signatureStatusLabel, typedProvisionGapLabel,
   type ProvisionItem, type RankingRow, type UiEffect,
 } from "./api";
@@ -69,6 +69,7 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
   const outlineOnly = availableItems.length > 0
     && availableItems.every((p) => !p.text && !p.text_omitted);
   const boundedText = boundedPublisherTextLabel(items, textTruncated);
+  const completenessUnknown = truncated === undefined || textTruncated === undefined;
   const nav = toc.length >= 6 || outlineOnly;
   const pageUrl = typeof window === "undefined" ? "" : window.location.href;
   const evidence = () => ({
@@ -95,7 +96,7 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
           <button className="tag act" onClick={onClear}>article {anchor} ✕</button>
         ) : (
           <span className="tag">{provisionCountLabel(items,
-            truncated || textTruncated ? totalProvisions : undefined)}</span>
+            totalProvisions, truncated === false && textTruncated === false)}</span>
         )}
         {fromPdf ? <span className="tag warn">read from the publisher's PDF</span> : null}
         {fromGazette ? <span className="tag warn">cut from a gazette issue</span> : null}
@@ -141,6 +142,11 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
             </p>
           ) : null}
         </div>
+      ) : null}
+      {completenessUnknown ? (
+        <p className="pdfnote" role="status">
+          Response completeness was not reported. The displayed publisher rows may be partial.
+        </p>
       ) : null}
       {outlineOnly ? (
         // A blank pane next to a table of contents is a dead end. Offer the thing a reader
@@ -775,15 +781,20 @@ export function Gap({ status, explanation, available, held, provision_gaps,
   held?: { text: number; total: number; official?: string; kind?: string };
   provision_gaps?: ProvisionItem[];
   total_provision_gaps?: number;
-  truncated?: boolean;
+  truncated?: boolean | null;
   total_provisions?: number;
-  text_truncated?: boolean;
+  text_truncated?: boolean | null;
   text_completeness?: string;
   comparison_limitations?: unknown;
   comparison_limitations_malformed?: unknown;
 }) {
   const whole = held && held.total > 0 && held.text === 0;
   const collection = whole && (held?.kind === "RECUEIL" || held?.kind === "CODE_RECUEIL");
+  const completenessUnknown = provisionCompletenessUnknown({
+    status,
+    provision_gaps, total_provision_gaps, total_provisions,
+    text_completeness, truncated, text_truncated,
+  });
   return (
     <div className="gap">
       {/* Client presentation states are not wire statuses and never wear the badge (O5);
@@ -792,6 +803,12 @@ export function Gap({ status, explanation, available, held, provision_gaps,
         : <div className="cnt"><span className="tag warn mono">{gapBadgeStatus(status)}</span></div>}
       <ComparisonLimitations limitations={comparison_limitations}
         malformed={comparison_limitations_malformed} />
+      {completenessUnknown ? (
+        <p className="pdfnote" role="status">
+          Response completeness was not reported. These returned coordinates do not establish
+          that publisher text is absent.
+        </p>
+      ) : null}
       {whole ? (
         <>
           {collection ? (

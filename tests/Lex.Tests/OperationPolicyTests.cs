@@ -282,6 +282,43 @@ public sealed class OperationPolicyTests
     }
 
     [Fact]
+    public void History_cardinality_and_date_prose_use_publisher_state_rows_consistently()
+    {
+        var history = new HistoryView(
+            new Subject("lu-legilux:synthetic", "Synthetic law", null, "art_1", "fr"),
+            "art_1", 5,
+            [
+                new HistoryState("2024-01-01", null, new string('a', 64), null),
+                new HistoryState("2024-01-01", null, new string('b', 64), null),
+            ],
+            Truncated: true);
+
+        var english = OperationAnswerPolicy.Describe("en", new UiEffect(History: history));
+        var french = OperationAnswerPolicy.Describe("fr", new UiEffect(History: history));
+
+        Assert.Contains(
+            "reports 5 publisher states and returns 2 states, with 2 returned states beginning 2024-01-01",
+            english, StringComparison.Ordinal);
+        Assert.DoesNotContain("distinct text", english, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("one returned state", english, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "signale 5 états de l'éditeur et renvoie 2 états, avec 2 états renvoyés débutant le 2024-01-01",
+            french, StringComparison.Ordinal);
+        Assert.DoesNotContain("texte(s) distinct", french, StringComparison.OrdinalIgnoreCase);
+
+        var undated = history with
+        {
+            DistinctTexts = 1,
+            States = [new HistoryState("", null, new string('c', 64), null)],
+        };
+        var undatedEnglish = OperationAnswerPolicy.Describe(
+            "en", new UiEffect(History: undated));
+        Assert.Contains("reports 1 publisher state and returns 1 state",
+            undatedEnglish, StringComparison.Ordinal);
+        Assert.DoesNotContain("dated", undatedEnglish, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Assistant_operation_bounds_are_a_subset_of_the_public_mcp_contract()
     {
         var fifty = string.Join(',', Enumerable.Range(1, 50).Select(index => $"a{index}"));
@@ -3051,6 +3088,8 @@ public sealed class OperationPolicyTests
                 ["anchor"] = "art_1",
             }),
             ["evidence_scope"] = scope,
+            ["current_legal_effect_assessed"] = false,
+            ["relationship_type_assessed"] = false,
             ["response_row_set"] = new JsonObject
             {
                 ["maximum"] = 50, ["returned"] = 1, ["truncated"] = false,
@@ -3099,6 +3138,8 @@ public sealed class OperationPolicyTests
                 ["anchor"] = "art_1",
             }),
             ["evidence_scope"] = scope,
+            ["current_legal_effect_assessed"] = false,
+            ["relationship_type_assessed"] = false,
             ["response_row_set"] = new JsonObject
             {
                 ["maximum"] = 50, ["returned"] = 1, ["truncated"] = false,
@@ -3119,6 +3160,59 @@ public sealed class OperationPolicyTests
             PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         });
         Assert.Contains("\"exact_complete\":false", serialized, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Cited_by_exactness_requires_both_explicit_unassessed_receipts()
+    {
+        static JsonObject ExactCandidate() => new()
+        {
+            ["envelope"] = new JsonObject
+            {
+                ["status"] = McpStatus.NoResult, ["publisher"] = "lu-legilux",
+            },
+            ["cited_work"] = "eu-eurlex:32016r0679",
+            ["citing_articles"] = 0,
+            ["citations"] = new JsonArray(),
+            ["evidence_scope"] =
+                "captured_cross_references_in_held_non_withdrawn_versions",
+            ["current_legal_effect_assessed"] = false,
+            ["relationship_type_assessed"] = false,
+            ["response_row_set"] = new JsonObject
+            {
+                ["maximum"] = 50, ["returned"] = 0, ["truncated"] = false,
+            },
+            ["publisher_result_set"] = new JsonObject
+            {
+                ["total"] = 1, ["returned"] = 1, ["maximum"] = 32,
+                ["truncated"] = false,
+            },
+        };
+
+        Assert.True(UiMapper.From("cited_by", new JsonObject(), ExactCandidate())
+            .CitedBy!.ExactComplete);
+
+        foreach (var key in new[]
+                 {
+                     "current_legal_effect_assessed", "relationship_type_assessed",
+                 })
+        {
+            var absent = ExactCandidate();
+            absent.Remove(key);
+            Assert.False(UiMapper.From("cited_by", new JsonObject(), absent)
+                .CitedBy!.ExactComplete);
+
+            foreach (var hostile in new JsonNode[]
+                     {
+                         true, "false", 0, new JsonArray(), new JsonObject(),
+                     })
+            {
+                var malformed = ExactCandidate();
+                malformed[key] = hostile.DeepClone();
+                Assert.False(UiMapper.From("cited_by", new JsonObject(), malformed)
+                    .CitedBy!.ExactComplete);
+            }
+        }
     }
 
     [Fact]
