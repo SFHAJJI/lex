@@ -20,6 +20,7 @@
  * primary view. Nothing here copies or logs query text; every sentence is fixed.
  */
 
+import { IDENTIFIER, PUBLISHER } from "./workCandidates.ts";
 import { publisherIdentity } from "./publisherIdentity.ts";
 // IMPORTED, not copied. The search coherence table is read from
 // tests/Lex.Tests/search-population-contract.json by exactly one validator, and a second
@@ -2007,6 +2008,112 @@ export interface GovernedPartition {
   anyRefused: boolean;
   /** Nothing ran and at least one envelope refused or lacked the retrieval mode. */
   allRefused: boolean;
+}
+
+
+/** One row of the metadata population, with a coordinate the notice can actually use. */
+export interface MetadataPopulationRow {
+  /** `publisher:group`, NOT the version lex_id. */
+  work: string;
+  title: string;
+  reasons: unknown;
+}
+
+/**
+ * The response-level metadata population, projected once from the governed parse.
+ *
+ * Three separate things went wrong when this decision was assembled from parts, and this function
+ * exists so they cannot come apart again.
+ *
+ * `complete` on the normalized answer means ATTRIBUTION completeness only. A clean metadata unit
+ * beside an unknown-status sibling leaves it true while the parse counted the sibling unusable, so
+ * a positive response-level claim was still reachable over a response one publisher of which was
+ * never read. `claimable` here is the whole-response authority instead: nothing unusable, nothing
+ * conflicted, no unreadable scope, nothing unattributed.
+ *
+ * The search row schema validates `lex_id` as nonempty text and nothing else, so a plausible string
+ * with an invalid `valid_from`, or a malformed coordinate, stayed in `ranUnits` and could suppress.
+ * Every row is validated here: the coordinate must be producer-minted, its publisher must agree
+ * with the unit that carried it, and the optional dates must be canonical. One invalid row makes
+ * the positive claim unreachable rather than shrinking the evidence quietly.
+ *
+ * And the notice needs `publisher:group`; it was being handed the full version lex_id, whose group
+ * segment then carried a colon, so it rejected every ordinary row and dropped the disclosure and
+ * the official link that are the point of the notice.
+ *
+ * Nothing here re-reads the raw response. The governed parse is the only authority.
+ */
+export function metadataPopulationOf(
+  parsed: GovernedResponse,
+): { population: MetadataPopulationRow[]; claimable: boolean } {
+  const population: MetadataPopulationRow[] = [];
+  // Whole-response authority. Any of these means some part of the response was not read, and a
+  // claim made ACROSS publishers may not be made over a part nobody read.
+  let claimable = parsed.unusable === 0
+    && parsed.conflicted.length === 0
+    && parsed.unreadable.length === 0
+    && parsed.unattributed === 0
+    // Arithmetic the producer's own receipts cannot support forbids an absence claim, and a
+    // positive metadata-only claim is an absence claim about wording.
+    && parsed.receipts.kind === "reconciled";
+
+  // A shape check plus Date.parse is not a date check. JavaScript NORMALISES: 2024-02-30 parses
+  // happily and becomes 2024-03-01, so a day that never existed would have passed and gone on to
+  // authorise a suppression. The round trip back to the same text is what rejects it, and year
+  // zero is excluded outright because it round-trips while naming no date a publisher can mint.
+  const canonicalDate = (value: unknown): boolean => {
+    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    if (value.startsWith("0000-")) return false;
+    const parsed = new Date(`${value}T00:00:00Z`);
+    return !Number.isNaN(parsed.getTime())
+      && parsed.toISOString().slice(0, 10) === value;
+  };
+
+  for (const unit of partitionOf(parsed).ranUnits) {
+    for (const row of unit.rows) {
+      const lexId = row.lex_id;
+      if (typeof lexId !== "string") { claimable = false; continue; }
+      const parts = lexId.split(":");
+      // A search hit's lex_id is DocJson's d.Key, and Lex.Temporal.VersionIdentity is the single
+      // source of truth for what that is: publisher:group:yyyy-MM-dd--<64 lowercase hex>, where
+      // the date is the version's valid_from and the hash is SHA-256 of the publisher's own
+      // version identifier. Accepting a two-segment work id, a short or uppercase hash, or a
+      // version date that disagrees with valid_from meant this client's idea of a coordinate was
+      // WIDER than anything the producer can mint, so rows that cannot exist were still able to
+      // authorise a suppression.
+      if (parts.length !== 3) { claimable = false; continue; }
+      const [publisher, group, version] = parts;
+      // The shared producer grammar for the first two segments, imported rather than copied, so
+      // this and the notice cannot drift into disagreeing about what a coordinate is.
+      if (!PUBLISHER.test(publisher) || !IDENTIFIER.test(group)) { claimable = false; continue; }
+      const canonicalVersion = /^(\d{4}-\d{2}-\d{2})--([0-9a-f]{64})$/.exec(version);
+      if (canonicalVersion === null) { claimable = false; continue; }
+      // The row must belong to the unit that carried it.
+      if (publisher !== unit.publisher) { claimable = false; continue; }
+      if (!canonicalDate(row.valid_from)) { claimable = false; continue; }
+      // The version key carries its own date, and it is the same fact as valid_from. Two spellings
+      // of one fact that disagree are not a coordinate; they are a response nobody can place.
+      if (canonicalVersion[1] !== row.valid_from) { claimable = false; continue; }
+      if (!canonicalDate(canonicalVersion[1])) { claimable = false; continue; }
+      if (row.valid_to !== undefined && row.valid_to !== null
+          && !canonicalDate(row.valid_to)) { claimable = false; continue; }
+      // Reasons may be absent, which is unknown and renders; present but not an array of strings
+      // is malformed evidence rather than absent evidence.
+      if (row.match_reasons !== undefined && row.match_reasons !== null
+          && (!Array.isArray(row.match_reasons)
+              || row.match_reasons.some((reason) => typeof reason !== "string"))) {
+        claimable = false;
+        continue;
+      }
+      population.push({
+        work: `${publisher}:${group}`,
+        title: typeof row.title === "string" ? row.title : "",
+        reasons: row.match_reasons,
+      });
+    }
+  }
+
+  return { population, claimable };
 }
 
 /**

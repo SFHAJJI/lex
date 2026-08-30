@@ -90,9 +90,9 @@ public static class DocumentEndpoints
             sb.Append($"""
                 <div class="card"><table class="kv">
                 <tr><td>on {da:yyyy-MM-dd}</td><td class="mono"><a href="/{H(publisher)}/{H(work)}/{H(VersionCoordinate(a))}">{H(a.Key)}</a> ({Interval(a)})
-                &middot; <a href="{H(a.SourceUri)}">official source &nearr;</a></td></tr>
+                &middot; {OfficialLink(a.SourceUri, "official source &nearr;")}</td></tr>
                 <tr><td>on {db2:yyyy-MM-dd}</td><td class="mono"><a href="/{H(publisher)}/{H(work)}/{H(VersionCoordinate(b))}">{H(b.Key)}</a> ({Interval(b)})
-                &middot; <a href="{H(b.SourceUri)}">official source &nearr;</a></td></tr>
+                &middot; {OfficialLink(b.SourceUri, "official source &nearr;")}</td></tr>
                 </table></div>
                 <p><a href="{workspaceUrl}"><b>Open the structured article comparison &rarr;</b></a>
                 <span class="sub">matched by provision anchor when continuity is sufficient; otherwise Lex refuses rather than inventing changes</span></p>
@@ -106,8 +106,8 @@ public static class DocumentEndpoints
                     (status <span class="mono">{ComparisonTextStatus(r, a, b)}</span>).
                     One or both selected versions contain a typed text gap, so Lex will not compare
                     a partial body as if it were complete. Compare at the official source:
-                    <a href="{H(a.SourceUri)}">version of {H(a.ValidFrom)}</a> vs
-                    <a href="{H(b.SourceUri)}">version of {H(b.ValidFrom)}</a>.</div>
+                    {OfficialLink(a.SourceUri, $"version of {H(a.ValidFrom)}")} vs
+                    {OfficialLink(b.SourceUri, $"version of {H(b.ValidFrom)}")}.</div>
                     """);
             else if (a.Key == b.Key)
                 sb.Append("<div class=\"notice\"><b>No change.</b> The same publisher version covers both selected dates.</div>");
@@ -120,8 +120,8 @@ public static class DocumentEndpoints
                     <div class="notice"><b>Different versions applied</b>, but a text diff is unavailable here
                     (status <span class="mono">{ComparisonTextStatus(r, a, b)}</span>).
                     Compare at the official source:
-                    <a href="{H(a.SourceUri)}">version of {H(a.ValidFrom)}</a> vs
-                    <a href="{H(b.SourceUri)}">version of {H(b.ValidFrom)}</a>.</div>
+                    {OfficialLink(a.SourceUri, $"version of {H(a.ValidFrom)}")} vs
+                    {OfficialLink(b.SourceUri, $"version of {H(b.ValidFrom)}")}.</div>
                     """);
             }
             sb.Append(EnvelopeCard(r, IsProvisional(r, db2)));
@@ -136,12 +136,16 @@ public static class DocumentEndpoints
             if (r is null) return Results.Content(Page("Unknown publisher", $"<p>No index mounted for <b>{H(publisher)}</b>. See <a href=\"/coverage\">coverage</a>.</p>"), "text/html", statusCode: 404);
             var rows = r.TimelineVersions(work).Select(version => version.Version).ToList();
             if (rows.Count == 0)
-                return Results.Content(Page("Unknown work", $"<p>status <span class=\"mono\">unknown_work</span>, no work <b>{H(work)}</b> in {H(publisher)}. Try <a href=\"/search\">search</a>.</p>"), "text/html", statusCode: 404);
+                // The refusal carries the nearest held records. Phase 0 frozen copy, Decision 41.
+                return Results.Content(
+                    Page("Instrument not found in held records",
+                         TrustNotices.UnknownWork(r, publisher, work)),
+                    "text/html", statusCode: 404);
 
             var t = DocTitle(rows[^1]);
             var publisherVersionDates = UsesPublisherVersionDates(r);
             var sb = new StringBuilder();
-            sb.Append($"<p><span class=\"badge\">{H(rows[^1].Kind)}</span> <span class=\"badge\">{rows.Select(v => v.Key).Distinct().Count()} version(s)</span> <a class=\"badge\" href=\"{H(rows[^1].SourceUri)}\">official text ↗</a></p>");
+            sb.Append($"<p><span class=\"badge\">{H(rows[^1].Kind)}</span> <span class=\"badge\">{rows.Select(v => v.Key).Distinct().Count()} version(s)</span> {OfficialLink(rows[^1].SourceUri, "official text ↗", "badge")}</p>");
             sb.Append(VersionRail(publisher, work, rows, null));
             var todayVersion = r.AsOf(work, ctx.Today, FilterSet.All);
             var latest = todayVersion ?? rows[^1];
@@ -202,7 +206,15 @@ public static class DocumentEndpoints
                 ["inLanguage"] = lang,
                 ["temporalCoverage"] = rows[^1].ValidTo is null
                     ? $"{rows[0].ValidFrom}/.." : $"{rows[0].ValidFrom}/{rows[^1].ValidTo}",
-                ["license"] = "https://creativecommons.org/licenses/by/4.0/",
+                // No license here. A Legislation node describes the PUBLISHER'S legal text, and
+                // this line asserted CC BY 4.0 for every work of every publisher, hardcoded, on
+                // the authority of nothing. Whether a publisher's text may be redistributed under
+                // a named licence is exactly what the licence evidence work exists to establish,
+                // and its own outcome set has three ways for the answer to be no. Machine-readable
+                // and on every page made it the largest unsupported claim on the site.
+                //
+                // It stays out until an evidence-backed admission can populate it per work rather
+                // than a constant asserting it for all of them.
                 ["isBasedOn"] = rows[^1].SourceUri,
             };
             // An open consolidation interval proves only that this is the latest wording EUR-Lex
@@ -295,7 +307,10 @@ public static class DocumentEndpoints
             if (doc is null)
             {
                 if (!r.WorkExists(work))
-                    return Results.Content(Page("Unknown work", $"<p>status <span class=\"mono\">unknown_work</span>, no work <b>{H(work)}</b>. Try <a href=\"/search\">search</a>.</p>"), "text/html", statusCode: 404);
+                    return Results.Content(
+                        Page("Instrument not found in held records",
+                             TrustNotices.UnknownWork(r, publisher, work)),
+                        "text/html", statusCode: 404);
                 var timeline = r.TimelineVersions(work).Select(version => version.Version).ToList();
                 var sb0 = new StringBuilder();
                 sb0.Append($"""
@@ -324,19 +339,19 @@ public static class DocumentEndpoints
                 ? $"""
                    <div class="notice" style="border-left-color:var(--ok)"><b>Official publisher wording state selected for {d:yyyy-MM-dd}.</b>
                    This is the consolidated version dated {H(doc.ValidFrom)}. Its interval on Lex's
-                   publisher-version axis is {H(IntervalLabel(r, doc))}; that is not a claim about
+                   publisher-version axis is {IntervalLabel(r, doc)}; that is not a claim about
                    entry into force or application.</div>
                    """
                 : next is not null
                 ? $"""
                    <div class="notice"><b>Point-in-time view as at {d:yyyy-MM-dd}.</b> This version has been
-                   <b>superseded</b>, it applied {H(Interval(doc))}. <a href="/{H(publisher)}/{H(work)}">Jump to the
+                   <b>superseded</b>, it applied {Interval(doc)}. <a href="/{H(publisher)}/{H(work)}">Jump to the
                    version in force today</a> or <a href="/{H(publisher)}/{H(work)}/diff/{H(VersionCoordinate(doc))}/{H(VersionCoordinate(next))}">see
                    exactly what changed next</a>.</div>
                    """
                 : $"""
                    <div class="notice" style="border-left-color:var(--ok)"><b>Point-in-time view as at {d:yyyy-MM-dd}.</b>
-                   This is the latest state the publisher has consolidated, valid {H(Interval(doc))}.</div>
+                   This is the latest state the publisher has consolidated, valid {Interval(doc)}.</div>
                    """);
             // Phase 0 trust notice (Decision 41): a consolidated state dated before the
             // publisher's application date must say so. It renders only when an indexed

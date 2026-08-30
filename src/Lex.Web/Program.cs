@@ -131,15 +131,15 @@ app.Logger.LogInformation("Assistant {State}; {Count} index(es) mounted from {Di
     ctx.Ask.Enabled ? "enabled" : "disabled (no AOAI endpoint, identity/key or deployment)",
     ctx.Registry.Count, options.IndexDir);
 
-// ---- routes ----------------------------------------------------------------------------
-// Grouped by the question each one answers, not by HTTP verb or by URL shape.
+// ---- routes: grouped by the question each answers, not by HTTP verb or URL shape --------
 app.MapMcp("/mcp");
 app.MapApi(ctx)          // the assistant, public metadata APIs, robots.txt and healthz
    .MapHome(ctx)         // the front page and the workspace mount
    .MapExplainers(ctx)   // how it works, how it was built, the decisions, how to verify
    .MapBuilt(ctx)        // the diagram-led architecture dossier and its owned SVGs
    .MapCatalogue(ctx)    // browse, search, in force on a date, what changed
-   .MapDocuments(ctx);   // one law: its timeline, its text on a date, a comparison
+   .MapDocuments(ctx)    // one law: its timeline, its text on a date, a comparison
+   .MapFallbackRoute(ctx);
 
 app.Run();
 

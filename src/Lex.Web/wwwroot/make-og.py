@@ -27,10 +27,20 @@ d.text((72, 92), "Lex", font=font(64, True), fill=FG)
 d.text((72, 186), "What did the rule say", font=font(58, True), fill=FG)
 d.text((72, 254), "on a given date?", font=font(58, True), fill=ACCENT)
 
-d.text((72, 356), "Point-in-time Luxembourg + EU law — grounded AI answers,", font=font(30), fill=MUTED)
+d.text((72, 356), "Point-in-time Luxembourg and EU law, grounded AI answers,", font=font(30), fill=MUTED)
 d.text((72, 398), "per-article history, and provenance you can verify yourself.", font=font(30), fill=MUTED)
 
-chips = ["signed indexes", "8 MCP tools", "open data (CC-BY)", "honest refusals"]
+# No licence chip here. One used to sit in this row asserting a redistribution licence over the
+# publishers' legal text, which is precisely what the licence admission policy exists to
+# establish and which has three ways of answering no. A social card is the worst place for such a
+# claim: it is published as an image, so no page test and no text search would ever have found
+# it. What replaced it is a claim about our own engine, which is ours to make, since the lex
+# repository is Apache-2.0 and says so on /developers.
+# No numeral on the tool chip either. The card said 8 while the endpoint served ten, which is the
+# same defect the developers page had when its lede said Eight and its heading said nine: a count
+# in copy is a claim, and a count baked into an image is a claim nobody can maintain. The
+# count-at-build rule cannot reach a PNG, so the number goes rather than being corrected.
+chips = ["signed indexes", "MCP tools", "open-source engine", "honest refusals"]
 x = 72
 for c in chips:
     w = d.textlength(c, font=font(24)) + 34

@@ -1,6 +1,10 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Text;
 using System.Text.Json.Nodes;
 using Lex.Index;
+using Lex.Mcp;
+using Lex.Temporal;
 using static Lex.Web.PageShell;
 using static Lex.Web.Fragments;
 
@@ -257,7 +261,7 @@ public static class CatalogueEndpoints
                   <button>As of date</button>
                 </form>
                 """);
-            // Dataset, because this is what Google Dataset Search indexes, and a CC-BY corpus of
+            // Dataset, because this is what Google Dataset Search indexes, and a machine-readable corpus of
             // consolidated national law with a stated temporal range is exactly what that index
             // is for. Built as a JsonObject: JSON is mostly quotes and braces, which is what a
             // C# raw literal reserves, and hand-quoting it ships malformed markup silently.
@@ -271,14 +275,22 @@ public static class CatalogueEndpoints
                     + "including every available official consolidation in the mounted scope, with explicit publisher timeline semantics, "
                     + "per-article history, explicit coverage gaps, and a SHA-256 chain to the publisher's own bytes.",
                 ["url"] = $"{ctx.PublicBase}/browse",
-                ["license"] = "https://creativecommons.org/licenses/by/4.0/",
+                // No license here either. This Dataset node is arguably Lex's own catalogue
+                // metadata rather than the publishers' text, so a claim about it would be ours to
+                // make. But the same literal sat in both places as though the distinction had
+                // never come up, and it named a licence for a dataset whose whole content is
+                // derived from publisher material under terms we have not established. Free to
+                // access is a fact about this site and stays; a redistribution licence is not.
                 ["isAccessibleForFree"] = true,
                 ["creator"] = new JsonObject
                 {
                     ["@type"] = "Person", ["name"] = "Soufien Hajji", ["url"] = "https://soufien.lu",
                 },
                 ["keywords"] = new JsonArray("legislation", "Luxembourg", "European Union",
-                    "consolidated law", "point-in-time", "legal data", "open data"),
+                    // No openness or reuse keyword. "open data" is a claim about how the
+                    // publishers' material may be reused, which is what admission establishes and
+                    // has three ways of answering no. Free to read is a fact about this site.
+                    "consolidated law", "point-in-time", "legal data", "free to read"),
                 ["temporalCoverage"] =
                     $"{span.Select(c => c.EarliestValidFrom).Min()}/{span.Select(c => c.LatestValidFrom).Max()}",
                 ["spatialCoverage"] = new JsonArray(
@@ -289,7 +301,10 @@ public static class CatalogueEndpoints
                     {
                         ["@type"] = "DataDownload", ["encodingFormat"] = "application/json",
                         ["contentUrl"] = "https://github.com/SFHAJJI/lex-articles",
-                        ["description"] = "Per-article JSON, JSONL and parquet, CC-BY.",
+                        // No licence in the description either. The claim survived here after
+                        // it was removed from the license property, which is the whole reason
+                        // a test that checks one spelling of one key is not a guard.
+                        ["description"] = "Per-article JSON, JSONL and parquet.",
                     },
                     new JsonObject
                     {
@@ -383,7 +398,7 @@ public static class CatalogueEndpoints
                     "LU" => """
                       The publisher only maintains consolidated (amendments-merged) editions for some laws,
                       the codes and frequently amended acts. Lex holds <b>all of those</b>. The other
-                      ≈24,579 Luxembourg acts never get a consolidated edition; they are <b>not here yet</b>
+                      Luxembourg acts never get a consolidated edition; they are <b>not here yet</b>
                       (and we won't guess dates for texts we haven't seen).
                       """,
                     "EU" => $" The mounted index contains {c.Groups:n0} EU acts and related legal materials from the reviewed scope. Expansion remains gated by the scope preview and corpus release.",
@@ -472,13 +487,25 @@ public static class CatalogueEndpoints
                     if (total > limit)
                     {
                         sb.Append("<p>");
-                        if (p > 0) sb.Append($"<a href=\"?date={d:yyyy-MM-dd}&publisher={H(publisher)}&kind={H(kind)}&page={p}\">← previous</a> &nbsp;");
-                        if ((p + 1) * limit < total) sb.Append($"<a href=\"?date={d:yyyy-MM-dd}&publisher={H(publisher)}&kind={H(kind)}&page={p + 2}\">next →</a>");
+                        // Query-string positions need percent-encoding, not the HTML encoder.
+                        // H() neutralises the characters that matter for markup and leaves the
+                        // ones that matter for a URL, so a publisher or kind containing an
+                        // ampersand or a hash silently rewrote the rest of the link. Every other
+                        // link builder on this page already used EscapeDataString.
+                        var scope = $"&amp;publisher={Uri.EscapeDataString(publisher ?? "")}"
+                            + $"&amp;kind={Uri.EscapeDataString(kind ?? "")}";
+                        if (p > 0) sb.Append($"<a href=\"?date={d:yyyy-MM-dd}{scope}&amp;page={p}\">← previous</a> &nbsp;");
+                        if ((p + 1) * limit < total) sb.Append($"<a href=\"?date={d:yyyy-MM-dd}{scope}&amp;page={p + 2}\">next →</a>");
                         sb.Append($" <span class=\"sub\">page {p + 1} of {(total + limit - 1) / limit}</span></p>");
                     }
                     var gap = r.Stamp.GetValueOrDefault("jurisdiction", "").ToUpperInvariant() switch
                     {
-                        "LU" => "Approximately 24,579 never-consolidated Luxembourg acts are not ingested (date coverage unmeasured).",
+                        // No count. The count-at-build rule forbids a population literal in copy,
+                        // and this one is measurably wrong: the gap matrix puts the
+                        // never-consolidated set at 23,370 of a 24,622 population, not 24,579. It
+                        // cannot be computed here either, because those acts are precisely the ones
+                        // not ingested, so the honest move is to state the class and not size it.
+                        "LU" => "Never-consolidated Luxembourg acts are not ingested (count and date coverage unmeasured).",
                         "EU" => "EU coverage is the reviewed configured scope, not the complete EUR-Lex universe.",
                         _ => "Coverage is limited to this publisher's configured and verified scope.",
                     };
@@ -526,7 +553,31 @@ public static class CatalogueEndpoints
                 JsonArray envelopes;
                 try
                 {
-                    envelopes = mcpCore.CallTool("search", searchArguments) as JsonArray ?? [];
+                    // CallTool returns a JsonNode. A per-publisher answer is an array, but a
+                    // WHOLE-CALL refusal is a bare object: unknown_publisher and
+                    // no_corpus_mounted both arrive that way. The old cast fell back to an
+                    // empty array, the loop never ran, and the page rendered the form and
+                    // nothing else. No count, no notice, no explanation: a reader who typed a
+                    // publisher that is not mounted was shown a blank result area and left to
+                    // conclude whatever they liked.
+                    var answer = mcpCore.CallTool("search", searchArguments);
+                    if (answer is JsonObject refusal)
+                    {
+                        sb.Append(TrustNotices.WholeCallRefusal(refusal));
+                        return Results.Content(Page("Search", sb.ToString(), extraHead: NoIndexFollow),
+                                               "text/html");
+                    }
+                    // Neither the per-publisher array nor the whole-call object. An answer of a
+                    // shape this page does not know became an empty array, the loop never ran, and
+                    // the reader got the form above nothing, which is the blank page this module
+                    // exists to prevent.
+                    if (answer is not JsonArray array)
+                    {
+                        sb.Append(TrustNotices.UnreadableResults());
+                        return Results.Content(Page("Search", sb.ToString(), extraHead: NoIndexFollow),
+                                               "text/html");
+                    }
+                    envelopes = array;
                 }
                 catch (ArgumentException error)
                 {
@@ -534,34 +585,7 @@ public static class CatalogueEndpoints
                         $"<div class=\"notice\">status <span class=\"mono\">invalid_request</span>, "
                         + $"{H(error.Message)}</div>", extraHead: NoIndexFollow), "text/html", statusCode: 400);
                 }
-                foreach (var result in envelopes.OfType<JsonObject>())
-                {
-                    var publisherId = result["envelope"]?["publisher"]?.GetValue<string>() ?? "";
-                    if (!readers.TryGetValue(publisherId, out var reader)) continue;
-                    var hits = result["hits"] as JsonArray ?? [];
-                    sb.Append($"<h2>{H(reader.Stamp.GetValueOrDefault("publisher_name"))} ({H(reader.Stamp.GetValueOrDefault("jurisdiction"))}), {hits.Count} hit(s)</h2>");
-                    foreach (var hit in hits.OfType<JsonObject>())
-                    {
-                        var work = hit["work"]?.GetValue<string>() ?? "";
-                        var validFrom = hit["valid_from"]?.GetValue<string>() ?? "";
-                        var validTo = hit["valid_to"]?.GetValue<string>();
-                        var anchor = hit["anchor"]?.GetValue<string>();
-                        var title = hit["title"]?.GetValue<string>() ?? work;
-                        var sourceClass = hit["document_type"]?.GetValue<string>();
-                        var snippet = hit["snippet"]?.GetValue<string>() ?? "";
-                        var provisionId = hit["provision_id"]?.GetValue<string>() ?? work;
-                        var provisionLabel = hit["provision_num"]?.GetValue<string>()
-                            ?? hit["provision_heading"]?.GetValue<string>() ?? anchor;
-                        var href = $"/{H(publisherId)}/{H(work)}/{H(validFrom)}"
-                            + (anchor is null ? "" : $"#{H(anchor)}");
-                        sb.Append($"""
-                            <div class="card"><a href="{href}"><b>{H(title)}</b>{(provisionLabel is null ? "" : $",  {H(provisionLabel)}")}</a>
-                            <span class="badge">{H(sourceClass)}</span> <span class="badge mono">{H(validFrom)} → {H(validTo ?? "open")}</span>
-                            <div class="snippet">{H(snippet)}</div>
-                            <div class="mono sub">{H(provisionId)}</div></div>
-                            """);
-                    }
-                }
+                sb.Append(RenderSearchResults(envelopes, readers));
             }
             return Results.Content(Page("Search", sb.ToString(), extraHead: NoIndexFollow), "text/html");
         });
@@ -600,10 +624,18 @@ public static class CatalogueEndpoints
                   <a href="/changed?from=2020-03-01&to=2021-07-01&order=by_churn">the pandemic, by churn</a></p>
                 """);
 
+            // One resolved set, then every number and every notice derives from it. Previously
+            // the filter accepted null only, so an absent publisher and an empty one selected
+            // different sets from the same form, and an unrecognised value such as LU selected
+            // no reader at all while still being handed to the caveat, which then reported a
+            // Luxembourg observation about a set that never ran.
+            var selected = readers.Values
+                .Where(x => string.IsNullOrEmpty(publisher) || x.Collection == publisher)
+                .OrderBy(x => x.Collection, StringComparer.Ordinal)
+                .ToList();
             var totalWorks = 0; var totalVersions = 0;
             var blocks = new StringBuilder();
-            foreach (var r in readers.Values.Where(x => publisher is null || x.Collection == publisher)
-                                     .OrderBy(x => x.Collection, StringComparer.Ordinal))
+            foreach (var r in selected)
             {
                 var (works, versions) = r.ChangeTotals(f, t, null);
                 totalWorks += works; totalVersions += versions;
@@ -630,11 +662,15 @@ public static class CatalogueEndpoints
 
             sb.Append($"""
                 <div class="card" style="border-color:var(--accent)">
-                  <b>{totalWorks:n0} law(s) changed</b> between {H(f)} and {H(t)},
-                  producing <b>{totalVersions:n0} new version(s)</b>.
-                  {(totalWorks == 0 ? "Nothing moved in this window, which is itself an answer." : "")}
+                  <b>{totalWorks:n0} held work(s) changed</b> between {H(f)} and {H(t)},
+                  producing <b>{totalVersions:n0} new held state(s)</b>.
+                  {(totalWorks == 0 ? "That is what Lex observed in held states, not a finding "
+                      + "that no law changed." : "")}
                 </div>
                 """);
+            // The fifth Phase 0 notice. It shipped in the browser bundle and never here, on the
+            // one page in this lane that states a change count.
+            sb.Append(TrustNotices.HistoricalDensity(f, selected));
             sb.Append(blocks);
             sb.Append($"""
                 <p class="sub">Same data, from your own code:
@@ -686,5 +722,436 @@ public static class CatalogueEndpoints
         });
 
         return app;
+    }
+
+    /// <summary>
+    /// The result area for one search: what each publisher contributed, and then whatever absence
+    /// the page may honestly state once they have all answered.
+    ///
+    /// Lane policy is NOT here. MatchLanes owns it, its normative case table binds this page and
+    /// the TypeScript reader to the same answers, and a second policy in this file is exactly what
+    /// produced a page that suppressed ambiguous identity and called an unknown reason metadata.
+    /// What stays here is the envelope handling: attribution, refusals, and answers this page
+    /// cannot read at all.
+    ///
+    /// Separated from the route so the mixed states can be constructed directly. The fixture mounts
+    /// one publisher and the executed search path always stamps ok with query_ran true, so no
+    /// page-level test can put a publisher that ran beside one that refused.
+    /// </summary>
+    public static string RenderSearchResults(
+        JsonArray envelopes, IReadOnlyDictionary<string, LexIndexReader> readers)
+    {
+        var sb = new StringBuilder();
+        var ran = 0;
+        var refused = 0;
+        // Everything the page put in front of the reader AS A MATCH, which is not the same as the
+        // hits it rendered as text. A count is a claim, and so is a zero.
+        var presented = 0;
+        // Answers this page could not read. Counted, never guessed at.
+        var unreadable = 0;
+
+
+        static string Heading(LexIndexReader reader, string suffix = "") =>
+            $"<h2>{H(reader.Stamp.GetValueOrDefault("publisher_name"))} "
+            + $"({H(reader.Stamp.GetValueOrDefault("jurisdiction"))}){suffix}</h2>";
+
+        /// <summary>
+        /// Whether this publisher's answer has a readable SHAPE. Lane semantics are not decided
+        /// here: a reason that is unknown, or not even a string, is an unknown reason to MatchLanes,
+        /// which renders it and asserts nothing about it. What this rejects is a response the page
+        /// cannot walk at all, because reading one of those as an empty result turns an answer
+        /// nobody parsed into a corpus-wide claim that nothing matched.
+        /// </summary>
+        static bool Classifiable(JsonObject result, out JsonArray hits)
+        {
+            hits = [];
+            if (result["hits"] is { } raw)
+            {
+                if (raw is not JsonArray array) return false;
+                hits = array;
+            }
+            return hits.All(hit => hit is JsonObject);
+        }
+
+        // These are the only search units McpCore can emit without running a query. Anything else
+        // is unreadable, not a new refusal this consumer may silently bless.
+        static bool IsProducerRefusal(JsonObject result) =>
+            TrustNotices.QueryRan(result) == false
+            && TrustNotices.EnvelopeStatus(result) is
+                "filter_not_supported_by_index" or "retrieval_mode_unavailable"
+            && result["hits"] is JsonArray { Count: 0 };
+
+        /// <summary>
+        /// Whether the whole search response proves that every selected publisher and returned row
+        /// is present. McpCore.MarkPublisherSet and McpCore.MarkResponseRows stamp these identical
+        /// global receipts on every search unit, including refusals. This consumer checks that
+        /// exact producer contract instead of treating one optional boolean as completeness.
+        /// </summary>
+        static bool HasCompleteSearchReceipts(JsonArray results)
+        {
+            static int? Integer(JsonObject value, string key) =>
+                value[key] is JsonValue item && item.TryGetValue<int>(out var number)
+                    ? number : null;
+            static bool? Boolean(JsonObject value, string key) =>
+                value[key] is JsonValue item && item.TryGetValue<bool>(out var fact)
+                    ? fact : null;
+            static (int Maximum, int Returned, bool Truncated)? Response(JsonNode? node)
+            {
+                if (node is not JsonObject receipt) return null;
+                var maximum = Integer(receipt, "maximum");
+                var returned = Integer(receipt, "returned");
+                var truncated = Boolean(receipt, "truncated");
+                return maximum is not null && returned is not null && truncated is not null
+                    ? (maximum.Value, returned.Value, truncated.Value) : null;
+            }
+            static (int Total, int Returned, int Maximum, bool Truncated)? Publisher(
+                JsonNode? node)
+            {
+                if (node is not JsonObject receipt) return null;
+                var total = Integer(receipt, "total");
+                var returned = Integer(receipt, "returned");
+                var maximum = Integer(receipt, "maximum");
+                var truncated = Boolean(receipt, "truncated");
+                return total is not null && returned is not null
+                    && maximum is not null && truncated is not null
+                    ? (total.Value, returned.Value, maximum.Value, truncated.Value) : null;
+            }
+
+            if (results.Count == 0) return false;
+            (int Maximum, int Returned, bool Truncated)? responseReceipt = null;
+            (int Total, int Returned, int Maximum, bool Truncated)? publisherReceipt = null;
+            var publishers = new HashSet<string>(StringComparer.Ordinal);
+            var actualRows = 0;
+            foreach (var node in results)
+            {
+                if (node is not JsonObject unit
+                    || unit["envelope"] is not JsonObject envelope
+                    || TrustNotices.Text(envelope["publisher"]) is not { Length: > 0 } publisherId
+                    || !publishers.Add(publisherId)
+                    || unit["hits"] is not JsonArray hits
+                    || hits.Any(hit => hit is not JsonObject))
+                    return false;
+
+                var currentResponse = Response(unit["response_row_set"]);
+                var currentPublisher = Publisher(unit["publisher_result_set"]);
+                if (currentResponse is null || currentPublisher is null) return false;
+                responseReceipt ??= currentResponse;
+                publisherReceipt ??= currentPublisher;
+                if (responseReceipt != currentResponse || publisherReceipt != currentPublisher)
+                    return false;
+                if (actualRows > int.MaxValue - hits.Count) return false;
+                actualRows += hits.Count;
+            }
+
+            return responseReceipt is { } response
+                && response.Maximum >= LegalOperationCatalog.MinimumSearchRows
+                && response.Maximum <= LegalOperationCatalog.MaximumSearchRows
+                && response.Returned >= 0
+                && response.Returned <= response.Maximum
+                && response.Returned == actualRows
+                && !response.Truncated
+                && publisherReceipt is { } publisher
+                && publisher.Total >= 0
+                && publisher.Maximum == LegalOperationCatalog.MaximumPublisherRows
+                && publisher.Returned == Math.Min(publisher.Total, publisher.Maximum)
+                && publisher.Truncated == (publisher.Total > publisher.Maximum)
+                && !publisher.Truncated
+                && publisher.Returned == results.Count
+                && publisher.Returned == publishers.Count;
+        }
+
+        /// <summary>
+        /// A rendered hit needs a usable dated destination. Canonical V3 coordinates are checked
+        /// by the same validator that authorizes metadata disclosure, so their explicit work field
+        /// cannot disagree with the group encoded in lex_id. Legacy V2 coordinates remain readable
+        /// until Rebuild 0 replaces the mounted indexes, but never authorize a V3 metadata claim.
+        /// </summary>
+        static bool HasUsableDestination(string publisherId, JsonObject hit)
+        {
+            if (TrustNotices.Text(hit["work"])?.Trim() is not { Length: > 0 } work
+                || TrustNotices.Text(hit["valid_from"]) is not { } validFrom
+                || !TryIsoDate(validFrom, out _)) return false;
+            var lexId = TrustNotices.Text(hit["lex_id"]);
+            if (lexId is null) return true;
+            var parts = lexId.Split(':');
+            if (parts.Length != 3) return false;
+            if (IsCanonicalVersion(parts[2]))
+                return DisclosureRowOf(publisherId, hit) is not null;
+            var normalizedWork = work.StartsWith(publisherId + ":", StringComparison.Ordinal)
+                ? work[(publisherId.Length + 1)..] : work;
+            return string.Equals(parts[0], publisherId, StringComparison.Ordinal)
+                && string.Equals(parts[1], normalizedWork, StringComparison.Ordinal)
+                && IsReadableLegacyVersion(parts[2], validFrom);
+        }
+
+        static bool IsCanonicalVersion(string version)
+        {
+            try
+            {
+                VersionIdentity.DateOf(version);
+                return true;
+            }
+            catch (InvalidDataException)
+            {
+                return false;
+            }
+        }
+
+        static bool IsReadableLegacyVersion(string version, string validFrom)
+        {
+            if (string.Equals(version, validFrom, StringComparison.Ordinal)) return true;
+            if (version.Length < 14
+                || !string.Equals(version[..10], validFrom, StringComparison.Ordinal)
+                || version[10..12] != "--") return false;
+            var suffix = version[12..];
+            return int.TryParse(suffix, NumberStyles.None, CultureInfo.InvariantCulture,
+                       out var ordinal)
+                && ordinal >= 2
+                && string.Equals(suffix,
+                    ordinal.ToString("00", CultureInfo.InvariantCulture),
+                    StringComparison.Ordinal);
+        }
+
+        // The population is the partition THIS PAGE accepted, and nothing else. A status filter
+        // is not that partition: status ok with query_ran false is a query nobody executed, and the
+        // render loop refuses it, so admitting its rows here let the page emit a positive
+        // metadata-only claim over an envelope it had already declined to show. The claim is made
+        // ACROSS answers, so it also falls whenever any contributor is unreadable: a wrong-shaped
+        // sibling, an unattributable publisher, a non-object hit, or a hit with no usable
+        // destination. The readable metadata rows then render visibly with their own badge, which
+        // says less and says it truthfully.
+        // ONE validated, attributed, receipt-reconciled disclosure population, projected before
+        // any suppression and then used for the notice itself. This page previously validated only
+        // a nonblank work and an ISO date before suppressing, while MatchLanes.NoticeHtml applies a
+        // stricter grammar afterwards, so a coordinate like a slashed group or a bare work id
+        // suppressed the cards and THEN lost its own disclosure: the reader got a notice with
+        // nothing in it, which is the worst of both answers.
+        //
+        // The coordinate rule is Lex.Temporal.VersionIdentity, which is the single source of truth
+        // for what a search hit's lex_id is: publisher:group:yyyy-MM-dd--<64 lowercase hex>, the
+        // date being the version's valid_from and the hash a SHA-256 of the publisher's own version
+        // identifier. Anything wider than that is a coordinate the producer cannot mint.
+        var population = new List<MatchLanes.DisclosureRow>();
+        var reasons = new List<IReadOnlyList<string?>>();
+        var complete = true;
+        foreach (var node in envelopes)
+        {
+            if (node is not JsonObject result
+                || !TryAttribute(result, readers, out var accepted))
+            {
+                complete = false;
+                continue;
+            }
+            // A producer refusal contributes nothing and blocks nothing. An unknown status, a
+            // contradictory execution receipt, or rows on a refusal is unreadable and blocks the
+            // response-wide claim instead of being silently treated as a known refusal.
+            if (!TrustNotices.Ran(result))
+            {
+                if (!IsProducerRefusal(result)) complete = false;
+                continue;
+            }
+            if (!Classifiable(result, out var acceptedHits))
+            {
+                complete = false;
+                continue;
+            }
+            foreach (var hit in acceptedHits.OfType<JsonObject>())
+            {
+                if (DisclosureRowOf(accepted.Collection, hit) is not { } row)
+                {
+                    complete = false;
+                    continue;
+                }
+                population.Add(row);
+                reasons.Add(MatchLanes.ReasonsOf(hit));
+            }
+        }
+
+        var metadataOnly = complete
+            && HasCompleteSearchReceipts(envelopes)
+            && population.Count > 0
+            && MatchLanes.MetadataOnly(reasons);
+
+        foreach (var node in envelopes)
+        {
+            // A sibling of the wrong shape was silently erased by OfType, and erasing it is how it
+            // became an absence: beside a refusal the page went on to say no selected publisher ran
+            // this query, about a response it had thrown away unread.
+            if (node is not JsonObject result)
+            {
+                sb.Append(TrustNotices.UnreadableResults());
+                unreadable++;
+                continue;
+            }
+
+            // Silently skipping an envelope makes a whole publisher's results vanish from a page
+            // that gives the reader no way to know it answered.
+            if (!TryAttribute(result, readers, out var reader))
+            {
+                sb.Append("<div class=\"notice\" role=\"note\">A publisher answered and its "
+                    + "results could not be attributed to a mounted index, so they are not "
+                    + "shown. This is not evidence that it found nothing.</div>");
+                // Disclosing it is not enough. It answered and this page cannot say what it
+                // answered, so an absence beside it is a claim about a response nobody read.
+                unreadable++;
+                continue;
+            }
+            var publisherId = reader.Collection;
+
+            // Classify before touching hits, and fail closed. Only an exact ok whose own receipt
+            // confirms it counts as a run; everything else states what is known and shows nothing.
+            var status = TrustNotices.EnvelopeStatus(result);
+            if (!TrustNotices.Ran(result))
+            {
+                sb.Append(Heading(reader));
+                sb.Append(TrustNotices.SearchEnvelopeRefusal(status ?? "unusable_result", result));
+                refused++;
+                continue;
+            }
+            ran++;
+
+            if (!Classifiable(result, out var hits))
+            {
+                sb.Append(Heading(reader));
+                sb.Append(TrustNotices.UnreadableResults());
+                unreadable++;
+                continue;
+            }
+            var rows = hits.OfType<JsonObject>().ToList();
+            if (rows.Any(hit => !HasUsableDestination(publisherId, hit)))
+            {
+                sb.Append(Heading(reader));
+                sb.Append(TrustNotices.UnreadableResults());
+                unreadable++;
+                continue;
+            }
+
+            // One response-level notice covers every publisher, appended after the loop.
+            if (metadataOnly || rows.Count == 0) continue;
+
+            presented += rows.Count;
+            sb.Append(Heading(reader, $", {rows.Count} hit(s)"));
+            foreach (var hit in rows)
+            {
+                // The badge names the lane MatchLanes assigned, and says nothing when the lane is
+                // unknown beyond the fact that it is unknown. Asserting identity the classifier did
+                // not certify is the thing the lane table exists to prevent.
+                var badge = MatchLanes.Classify(MatchLanes.ReasonsOf(hit)) switch
+                {
+                    MatchLanes.Text => "",
+                    MatchLanes.Identity =>
+                        " <span class=\"badge\">matched the name of this law, not its wording</span>",
+                    MatchLanes.Metadata =>
+                        " <span class=\"badge\">matched only in metadata</span>",
+                    _ => " <span class=\"badge\">match not classified</span>",
+                };
+                var work = TrustNotices.Text(hit["work"]) ?? "";
+                var validFrom = TrustNotices.Text(hit["valid_from"]) ?? "";
+                var validTo = TrustNotices.Text(hit["valid_to"]);
+                var anchor = TrustNotices.Text(hit["anchor"]);
+                var title = TrustNotices.Text(hit["title"]) ?? work;
+                var sourceClass = TrustNotices.Text(hit["document_type"]);
+                var snippet = TrustNotices.Text(hit["snippet"]) ?? "";
+                var provisionId = TrustNotices.Text(hit["provision_id"]) ?? work;
+                var provisionLabel = TrustNotices.Text(hit["provision_num"])
+                    ?? TrustNotices.Text(hit["provision_heading"]) ?? anchor;
+                // Percent-encoded per component, not HTML-encoded. H() neutralises what breaks
+                // markup and leaves what breaks a URL, so a work carrying a slash or a hash used to
+                // rewrite the rest of the path.
+                var href = $"/{Uri.EscapeDataString(publisherId)}/{Uri.EscapeDataString(work)}"
+                    + $"/{Uri.EscapeDataString(validFrom)}"
+                    + (anchor is null ? "" : $"#{Uri.EscapeDataString(anchor)}");
+                sb.Append($"""
+                    <div class="card"><a href="{H(href)}"><b>{H(title)}</b>{(provisionLabel is null ? "" : $",  {H(provisionLabel)}")}</a>
+                    <span class="badge">{H(sourceClass)}</span> <span class="badge mono">{H(validFrom)} → {H(validTo ?? "open")}</span>{badge}
+                    <div class="snippet">{H(snippet)}</div>
+                    <div class="mono sub">{H(provisionId)}</div></div>
+                    """);
+            }
+        }
+
+        if (metadataOnly)
+        {
+            // The rows were validated when the population was projected, and the truncation fact
+            // was reconciled there too, so the notice is handed evidence rather than raw fields.
+            sb.Append(MatchLanes.NoticeHtml(
+                population.Select(row => row.Publisher).Distinct(StringComparer.Ordinal).ToArray(),
+                population));
+            // The notice names the records, so something WAS put in front of the reader.
+            presented += population.Count;
+        }
+
+        // Once every publisher has answered or refused, the page may only state a corpus-wide
+        // absence if the corpus was actually searched and nothing was presented.
+        sb.Append(TrustNotices.SearchAbsence(ran, refused, presented, unreadable));
+        return sb.ToString();
+    }
+
+
+    /// <summary>
+    /// One disclosure row from one served hit, or null when the hit carries no coordinate the
+    /// producer could have minted.
+    ///
+    /// Lex.Temporal.VersionIdentity is the source of truth: a search hit's lex_id is DocJson's
+    /// d.Key, which is publisher:group:yyyy-MM-dd--<64 lowercase hex>, the date being the
+    /// version's valid_from and the hash a SHA-256 over the publisher's own version identifier.
+    /// The notice needs publisher:group, so the coordinate is split here rather than handed over
+    /// whole and rejected there.
+    /// </summary>
+    public static MatchLanes.DisclosureRow? DisclosureRowOf(string publisherId, JsonObject hit)
+    {
+        if (TrustNotices.Text(hit["lex_id"]) is not { } lexId) return null;
+        var parts = lexId.Split(':');
+        if (parts.Length != 3) return null;
+        var (publisher, group, version) = (parts[0], parts[1], parts[2]);
+        // The row must belong to the publisher whose envelope carried it.
+        if (!string.Equals(publisher, publisherId, StringComparison.Ordinal)) return null;
+        // The producer's explicit render destination and the group encoded in its canonical
+        // coordinate are one fact. Missing or contradictory spellings make the whole row
+        // unreadable; accepting either one alone allowed a refusal and a positive claim together.
+        if (TrustNotices.Text(hit["work"]) is not { } work
+            || !string.Equals(work, group, StringComparison.Ordinal)) return null;
+        var separator = version.IndexOf("--", StringComparison.Ordinal);
+        if (separator != 10) return null;
+        var versionDate = version[..separator];
+        var hash = version[(separator + 2)..];
+        if (hash.Length != 64 || !hash.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f'))
+            return null;
+        if (!TryIsoDate(versionDate, out _)) return null;
+        // The version key carries its own date and it is the same fact as valid_from. Two
+        // spellings of one fact that disagree are not a coordinate.
+        if (TrustNotices.Text(hit["valid_from"]) is not { } validFrom
+            || !string.Equals(validFrom, versionDate, StringComparison.Ordinal)
+            || !TryIsoDate(validFrom, out _)) return null;
+        // The notice's own grammar, asked here rather than discovered there. Validating loosely
+        // now and strictly at render time is what left a notice with nothing in it.
+        if (!MatchLanes.IsDisclosable(publisher, group, validFrom)) return null;
+        return new MatchLanes.DisclosureRow(
+            publisher, group, validFrom, TrustNotices.Text(hit["title"]) ?? "");
+    }
+
+    /// <summary>
+    /// The mounted reader a search envelope belongs to, or false when it belongs to none.
+    ///
+    /// Separated from the page so the hostile cases are testable: the envelope is MCP output and
+    /// therefore untrusted, and both failure directions were live here. A non-string publisher
+    /// threw out of GetValue and took the entire search page with it; an absent one became the
+    /// empty string, missed the registry, and dropped that publisher's hits with no trace on the
+    /// page at all. The second is the worse of the two: a reader cannot see results that were
+    /// never rendered, so a partial answer reads as a complete one.
+    /// </summary>
+    public static bool TryAttribute(
+        JsonObject result,
+        IReadOnlyDictionary<string, LexIndexReader> readers,
+        [NotNullWhen(true)] out LexIndexReader? reader)
+    {
+        reader = null;
+        // Every hop is checked, including that `envelope` is an object at all: indexing a
+        // JsonValue with a property name throws, which the hostile test found immediately.
+        return result["envelope"] is JsonObject envelope
+            && envelope["publisher"] is JsonValue value
+            && value.TryGetValue<string>(out var publisher)
+            && publisher.Length > 0
+            && readers.TryGetValue(publisher, out reader);
     }
 }

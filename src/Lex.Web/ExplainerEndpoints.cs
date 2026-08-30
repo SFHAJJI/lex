@@ -436,7 +436,7 @@ public static class ExplainerEndpoints
                 <div class="card">
                 <b><a href="https://law.soufien.lu">law.soufien.lu</a></b> &middot; this one
                 <p class="sub">Point-in-time Luxembourg and reviewed-scope EU law: {{works:n0}} works as
-                {{versions:n0}} dated versions, a public MCP server, open datasets, and a signed index
+                {{versions:n0}} dated versions, a public MCP server, published datasets, and a signed index
                 whose stamp commits to a digest of its own content. The hard part was never the AI; it was
                 that a law has no single text, only a text per date.
                 <a href="/built/decisions">The decision that shaped it, and what it cost →</a></p>
@@ -486,9 +486,12 @@ public static class ExplainerEndpoints
 
         // ---- /developers: everything an engineer needs — every tool, four ways to connect,
         // the datasets, the repos. /ai kept as an alias so older links survive.
-        app.MapGet("/developers", (HttpRequest req) =>
+        app.MapGet("/developers", () =>
         {
-            var baseUrl = BaseUrl(req);
+            // The configured public base, never the request. A connect command is an instruction
+            // to point a client at a server, so it must name this site and not whichever Host a
+            // request happened to carry.
+            var baseUrl = ctx.PublicBase;
             var cov = readers.Values.Select(r => r.Coverage()).ToList();
             // Counted from the advertised tool list, never written by hand. This page said "Eight" in its
             // lede and "nine" in its heading while the endpoint served ten, because three places had to be
@@ -603,7 +606,7 @@ public static class ExplainerEndpoints
                 <a href="https://github.com/SFHAJJI/lex/blob/main/docs/mcp-2-migration.md" rel="noopener">MCP 2.0 migration note</a>.</p>
 
                 <h2>Or skip the API, take the data</h2>
-                <p>Every provision of every version, one row each, licence and attribution inline.
+                <p>Every provision of every version, one row each, with its source URI and a SHA-256 chain to the publisher bytes.
                 {{cov.Sum(c => c.VersionsWithText):n0}} versions carry full text.</p>
                 <div class="card"><b>DuckDB, one line, no download:</b>
                 <pre class="mono" style="white-space:pre-wrap;margin:6px 0 0">SELECT * FROM read_parquet('https://github.com/SFHAJJI/lex-articles/releases/latest/download/eu-eurlex-provisions.parquet');</pre>
@@ -618,9 +621,9 @@ public static class ExplainerEndpoints
                 <tr><td><a href="https://github.com/SFHAJJI/lex" rel="noopener">lex</a></td>
                     <td>the engine: ingest, derive, index, MCP server, this site</td><td>Apache-2.0</td></tr>
                 <tr><td><a href="https://github.com/SFHAJJI/lex-articles" rel="noopener">lex-articles</a></td>
-                    <td>derived layer, one Markdown+JSON record per article per version</td><td>CC-BY-4.0</td></tr>
+                    <td>derived layer, one Markdown+JSON record per article per version</td><td>set by the publisher, not asserted here</td></tr>
                 <tr><td><a href="https://github.com/SFHAJJI/lex-corpus-lu-legilux" rel="noopener">lex-corpus-lu-legilux</a></td>
-                    <td>evidence layer, Legilux's own files, verbatim, plus integrity manifests bound to protected commits</td><td>CC-BY-4.0</td></tr>
+                    <td>evidence layer, Legilux's own files, verbatim, plus integrity manifests bound to protected commits</td><td>set by the publisher, not asserted here</td></tr>
                 <tr><td><a href="https://github.com/SFHAJJI/lex-corpus-eu-eurlex" rel="noopener">lex-corpus-eu-eurlex</a></td>
                     <td>evidence layer, EUR-Lex/Cellar files, verbatim</td><td>EU reuse</td></tr>
                 </table>
@@ -679,7 +682,7 @@ public static class ExplainerEndpoints
                 """;
             return Results.Content(Page("For developers", body, null, "dev",
                 canonicalPath: "/developers",
-                description: "Connect to the public read-only Lex MCP server, inspect typed tools, try requests and reuse the open legal datasets."), "text/html");
+                description: "Connect to the public read-only Lex MCP server, inspect typed tools, try requests and read the published legal datasets."), "text/html");
         });
 
         // ---- /how-it-works: plain-language product method. Coverage, artifact verification and

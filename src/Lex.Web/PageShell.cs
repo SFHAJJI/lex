@@ -274,6 +274,21 @@ public static class PageShell
           }
           @media (max-width:640px) {
             body.assistant-enabled { padding-bottom:76px }
+            /* The horizontal counterpart of the clearance above, and it is needed for the same
+               reason the vertical one is not sufficient: padding-bottom separates content from the
+               launcher only at the end of the document, while a fixed launcher passes over
+               mid-document content at every other scroll offset. A notice action is inline by
+               default, so at 320px it continued the prose line and ran its last words underneath
+               the button. Making it a block alone does not clear it; the line still reaches into
+               the button's column, so the column itself has to be reserved.
+
+               104px is the launcher's own footprint, 91px measured plus its 12px right offset,
+               plus one. It is a constant for the same reason 84 and 76 above are: the launcher is
+               sized by content in the workspace bundle, which this shell cannot measure. The
+               margin reset matters because .sub carries a bottom margin that is inert while it is
+               inline and appears the moment it becomes a block. */
+            body.assistant-enabled .notice .sub { display:block; margin-block-end:0;
+                                                  padding-inline-end:104px }
             main { padding:20px 14px 48px }
             table { display:block; overflow-x:auto }
             pre { overflow-x:auto }
@@ -349,14 +364,14 @@ public static class PageShell
                reusable on its own, and they were reachable only from /developers. -->
           <div><b>Build on it</b>
             <a href="/developers">Developers &amp; API</a>
-            <a href="https://github.com/SFHAJJI/lex-articles" rel="noopener">Dataset: law by article (CC-BY)</a>
+            <a href="https://github.com/SFHAJJI/lex-articles" rel="noopener">Dataset: law by article</a>
             <a href="https://github.com/SFHAJJI/lex-corpus-lu-legilux" rel="noopener">Corpus: Luxembourg, verbatim</a>
             <a href="https://github.com/SFHAJJI/lex-corpus-eu-eurlex" rel="noopener">Corpus: EU, verbatim</a></div>
         </nav>
           <b>Not legal advice, and not the official text.</b> Lex answers <i>what the rule was</i>, never what it
           means for your situation, no interpretation, no advice. Every answer shows the source it came from.
           LU data: Legilux, Ministère d'État, Service central de législation, Grand-Duché de Luxembourg
-          (CC-BY 4.0, metadata and content files; consolidated texts reproduced verbatim from the official filestore).
+          (consolidated texts reproduced verbatim from the official filestore).
           EU data: © European Union, reuse with attribution (Commission Decision 2011/833/EU);
           <b>consolidated texts have no legal effect</b>, only acts published in the Official Journal are authentic.
           · <a href="https://github.com/SFHAJJI/lex">source</a>

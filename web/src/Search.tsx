@@ -10,10 +10,13 @@ import {
 import { ScopeFilters } from "./ScopeFilters";
 import { envelopeStripRows, type EnvelopeStripRow } from "./envelopeStrip";
 import { normalizeSearchResponse, type PublisherPopulation } from "./searchPopulation";
+import { metadataOnlyResponse } from "./matchLanes";
+import { MetadataOnlyNotice } from "./metadataOnlyNotice";
 import { fuzzyModeFor, retainedForQuery } from "./api";
-import { clearedSearchResults, LIMITATION_EXPLANATION, parseGovernedResponse,
+import { clearedSearchResults, LIMITATION_EXPLANATION, parseGovernedResponse, partitionOf, metadataPopulationOf,
   projectSearchResponse, searchEmptyPresentation, searchResultsFromError,
   withholdingSentence,
+  type MetadataPopulationRow,
   type SearchResultsState, type WithheldClaims } from "./limitations";
 import { PartialResponseNotice, PopulationFooter, PublisherLimitations } from "./views";
 import type { State } from "./state";
@@ -97,6 +100,13 @@ export default function Search(p: SearchProps) {
   const [text, setText] = useState(p.state.q ?? "");
   const [results, setResults] =
     useState<SearchResultsState<WorkHit, ArticleHit>>(clearedSearchResults);
+  // The B2 response-level state, decided from the RAW envelopes before fusion, the display cap
+  // and the passage filter, so it describes the whole response rather than the visible slice.
+  // The server page reached this months ago; this lane rendered work_metadata-only hits as
+  // answers because matchLanes.ts was in the tree with no production import at all.
+  const [metadataOnly, setMetadataOnly] = useState(false);
+  const [metadataPopulation, setMetadataPopulation] =
+    useState<MetadataPopulationRow[]>([]);
   const { works, articles, error, modeUnavailable, expansions, limitations } = results;
   const allRefused = results.absence === "all_refused";
   const [busy, setBusy] = useState(false);
@@ -127,6 +137,8 @@ export default function Search(p: SearchProps) {
    */
   const clearResponseState = useCallback(() => {
     setResults(clearedSearchResults);
+    setMetadataOnly(false);
+    setMetadataPopulation([]);
     setPopulations([]);
     setWithheld(undefined);
     p.onEnvelopes([]);
@@ -238,6 +250,18 @@ export default function Search(p: SearchProps) {
         const parsed = parseGovernedResponse("search", res);
         p.onEnvelopes(envelopeStripRows(parsed));
         const answer = normalizeSearchResponse(parsed);
+        // One governed projector decides this, so the parts cannot come apart again. It carries
+        // the whole-response authority, validates every row coordinate, publisher and date, and
+        // yields the publisher:group the notice needs rather than the version lex_id it rejects.
+        const claim = metadataPopulationOf(parsed);
+        const partition = partitionOf(parsed);
+        // metadata_only is a positive claim about the whole response. A truncated row or
+        // publisher set is only a page of that response, so unseen rows make the claim
+        // unreachable even when every row that arrived matched metadata only.
+        const metadataOnlyClaim = claim.claimable && !partition.moreBeyondPage
+          && claim.population.length > 0 && metadataOnlyResponse(claim.population);
+        setMetadataPopulation(metadataOnlyClaim ? claim.population : []);
+        setMetadataOnly(metadataOnlyClaim);
         setPopulations(answer.populations);
         // Typed causes, carried rather than merged: the sentence a reader is shown has to
         // be the one the parse established for that publisher (O3).
@@ -296,7 +320,11 @@ export default function Search(p: SearchProps) {
         }));
       })
       .catch(() => {
-        if (live()) setResults(searchResultsFromError("Search could not be reached. Try again."));
+        if (live()) {
+          setResults(searchResultsFromError("Search could not be reached. Try again."));
+          setMetadataOnly(false);
+          setMetadataPopulation([]);
+        }
       })
       .finally(() => { if (live()) setBusy(false); });
   }, [q, requestAsOf, retrieval, jurisdiction, hierarchy, domain, sourceClass, actForm, bindingStatus,
@@ -471,7 +499,18 @@ export default function Search(p: SearchProps) {
 
           {error ? <div className="empty"><p>{error}</p></div> : null}
 
-          {groupedResults.map((section) => (
+          {/*
+            * The whole response matched only in metadata, so the records are disclosed and none
+            * of them is presented as an answer. Decided on the raw envelopes before fusion, the
+            * display cap and the passage filter, so it describes the response rather than what
+            * survived to the screen. The results below are suppressed rather than shown beneath
+            * it, because a record match rendered as a hit IS the claim this notice refuses.
+            */}
+          {metadataOnly
+            ? <MetadataOnlyNotice works={metadataPopulation} />
+            : null}
+
+          {metadataOnly ? null : groupedResults.map((section) => (
             <section className="res-jurisdiction" key={section.jurisdiction}>
               <h4 className="res-h">
                 {jurisdictionLabel(section.jurisdiction)}
