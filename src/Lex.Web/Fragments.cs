@@ -81,7 +81,7 @@ public static class Fragments
             return $"""
                 <div class="notice"><b>Text withheld.</b> Lex holds publisher text for this version, but a publication gate
                 prevents serving the wording (status <span class="mono">text_withheld</span>). Read the official text at
-                <a href="{H(d.SourceUri)}" rel="noopener">{H(d.SourceUri)}</a>.</div>
+                {OfficialLink(d.SourceUri)}.</div>
                 """;
 
         if (d.TextAvailable)
@@ -90,7 +90,7 @@ public static class Fragments
                 non-whitespace provision body was safely derived for this version (status
                 <span class="mono">text_not_available</span>). A heading alone is not presented as legal wording.
                 Read the official text at
-                <a href="{H(d.SourceUri)}" rel="noopener">{H(d.SourceUri)}</a>.</div>
+                {OfficialLink(d.SourceUri)}.</div>
                 """;
 
         if (d.Kind is "RECUEIL" or "CODE_RECUEIL")
@@ -98,7 +98,7 @@ public static class Fragments
                 <div class="notice"><b>Thematic collection, not one legal instrument.</b> This Legilux record groups
                 member acts. Lex does not present its compilation PDF as one law or manufacture provision boundaries
                 across those acts. Browse the official collection at
-                <a href="{H(d.SourceUri)}" rel="noopener">{H(d.SourceUri)}</a>.</div>
+                {OfficialLink(d.SourceUri)}.</div>
                 """;
 
         // Deliberately not a link. Publishers announce a consolidation before releasing any
@@ -185,6 +185,41 @@ public static class Fragments
         if (string.IsNullOrEmpty(t)) return t;
         return t.Length > 110 ? t[..110].TrimEnd() + "…" : t;
     }
+
+    /// <summary>
+    /// A publisher URL as a link target, or null when it is not an absolute https URL.
+    ///
+    /// H() does not make a destination safe to follow. Neither javascript: nor data: contains
+    /// a character HtmlEncode touches, so encoding a hostile URL yields a working hostile link.
+    /// The index-side scheme checks these sites lean on are both conditional: the builder skips
+    /// its check when the index has no provision-gap capability, and the reader gates its own on
+    /// the current schema while still opening two older ones. So the render site checks too.
+    /// </summary>
+    public static string? OfficialUri(string? sourceUri) =>
+        Uri.TryCreate(sourceUri, UriKind.Absolute, out var parsed)
+        && parsed.Scheme == Uri.UriSchemeHttps
+            ? sourceUri
+            : null;
+
+    /// <summary>
+    /// An official-source link, or the same label unlinked when the destination fails the
+    /// guard. A label that cannot be followed safely is still shown: dropping it would hide
+    /// that the index holds a source at all, which is its own small untruth.
+    /// </summary>
+    public static string OfficialLink(string? sourceUri, string labelHtml, string? cssClass = null)
+    {
+        // The class stays on the element the caller asked for, linked or not, so a guarded link
+        // keeps the appearance the page was built around instead of nesting a styled span inside
+        // an anchor and picking up the anchor's own colour and underline.
+        var css = cssClass is null ? "" : $" class=\"{H(cssClass)}\"";
+        return OfficialUri(sourceUri) is { } href
+            ? $"""<a{css} href="{H(href)}" rel="noopener">{labelHtml}</a>"""
+            : cssClass is null ? labelHtml : $"<span{css}>{labelHtml}</span>";
+    }
+
+    /// <summary>The URL shown as its own label, linked only when it is safe to follow.</summary>
+    public static string OfficialLink(string? sourceUri) =>
+        OfficialLink(sourceUri, H(sourceUri));
 
     // valid_from and valid_to are string columns, not DateOnly, and nothing guarantees their
     // shape at this point: CapabilityManifest filters withdrawn rows out BEFORE ParseDate, so a

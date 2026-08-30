@@ -473,8 +473,15 @@ public static class CatalogueEndpoints
                     if (total > limit)
                     {
                         sb.Append("<p>");
-                        if (p > 0) sb.Append($"<a href=\"?date={d:yyyy-MM-dd}&publisher={H(publisher)}&kind={H(kind)}&page={p}\">← previous</a> &nbsp;");
-                        if ((p + 1) * limit < total) sb.Append($"<a href=\"?date={d:yyyy-MM-dd}&publisher={H(publisher)}&kind={H(kind)}&page={p + 2}\">next →</a>");
+                        // Query-string positions need percent-encoding, not the HTML encoder.
+                        // H() neutralises the characters that matter for markup and leaves the
+                        // ones that matter for a URL, so a publisher or kind containing an
+                        // ampersand or a hash silently rewrote the rest of the link. Every other
+                        // link builder on this page already used EscapeDataString.
+                        var scope = $"&amp;publisher={Uri.EscapeDataString(publisher ?? "")}"
+                            + $"&amp;kind={Uri.EscapeDataString(kind ?? "")}";
+                        if (p > 0) sb.Append($"<a href=\"?date={d:yyyy-MM-dd}{scope}&amp;page={p}\">← previous</a> &nbsp;");
+                        if ((p + 1) * limit < total) sb.Append($"<a href=\"?date={d:yyyy-MM-dd}{scope}&amp;page={p + 2}\">next →</a>");
                         sb.Append($" <span class=\"sub\">page {p + 1} of {(total + limit - 1) / limit}</span></p>");
                     }
                     var gap = r.Stamp.GetValueOrDefault("jurisdiction", "").ToUpperInvariant() switch

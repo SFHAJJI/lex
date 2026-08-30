@@ -519,6 +519,58 @@ public sealed class TrustNoticeTests : IDisposable
     }
 
     /// <summary>
+    /// H() does not make a destination safe to follow. Neither javascript: nor data: contains a
+    /// character HtmlEncode touches, so ten href sites were encoding hostile URLs into working
+    /// hostile links. The index-side scheme checks they leaned on are both conditional: the
+    /// builder skips its own when the index has no provision-gap capability, and the reader gates
+    /// its own on the current schema while still opening two older ones.
+    /// </summary>
+    [Fact]
+    public void A_destination_is_linked_only_when_it_is_safe_to_follow()
+    {
+        foreach (var hostile in new[]
+        {
+            "javascript:alert(1)", "JaVaScRiPt:alert(1)", "data:text/html;base64,PHN2Zz4=",
+            "vbscript:msgbox(1)", "http://legilux.public.lu/x", "//legilux.public.lu/x",
+            "/relative/path", "not a uri", "", null,
+        })
+        {
+            Assert.Null(Fragments.OfficialUri(hostile));
+            // The label survives, because hiding it would deny that the index holds a source.
+            var rendered = Fragments.OfficialLink(hostile, "official source");
+            Assert.Equal("official source", rendered);
+            Assert.DoesNotContain("<a ", rendered, StringComparison.Ordinal);
+        }
+
+        const string Official = "https://legilux.public.lu/eli/etat/leg/loi/2006/07/31/n2/jo";
+        Assert.Equal(Official, Fragments.OfficialUri(Official));
+        var link = Fragments.OfficialLink(Official, "official source");
+        Assert.Contains($"href=\"{Official}\"", link, StringComparison.Ordinal);
+        Assert.Contains("rel=\"noopener\"", link, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The sitemap is XML, and the collection, group and version keys were interpolated into loc
+    /// elements raw. One ampersand in a slug makes the whole document non-well-formed, which costs
+    /// a crawler every URL in it, not just the malformed one.
+    /// </summary>
+    [Fact]
+    public async Task The_sitemap_is_well_formed_xml()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "sitemap"), includeAct: false);
+        var xml = await site.Client.GetStringAsync("/sitemap.xml");
+
+        var parsed = System.Xml.Linq.XDocument.Parse(xml);
+        var locations = parsed.Descendants()
+            .Where(e => e.Name.LocalName == "loc").Select(e => e.Value).ToList();
+        Assert.NotEmpty(locations);
+        // Every URL is absolute and lives under the configured base, never a request-shaped one.
+        Assert.All(locations, l => Assert.StartsWith("https://example.test/", l, StringComparison.Ordinal));
+        // Ordinary slugs are unchanged by the escaping, so this is a guard and not a rewrite.
+        Assert.Contains(locations, l => l.Contains("/lu-legilux/loi-2006-07-31-n2", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// The interval helpers carry docs.valid_from and valid_to, which are string columns and not
     /// DateOnly. A withdrawn row never passes ParseDate at build, and the read paths behind
     /// /provenance and the version rail do not exclude withdrawn rows, so their shape is not

@@ -90,9 +90,9 @@ public static class DocumentEndpoints
             sb.Append($"""
                 <div class="card"><table class="kv">
                 <tr><td>on {da:yyyy-MM-dd}</td><td class="mono"><a href="/{H(publisher)}/{H(work)}/{H(VersionCoordinate(a))}">{H(a.Key)}</a> ({Interval(a)})
-                &middot; <a href="{H(a.SourceUri)}">official source &nearr;</a></td></tr>
+                &middot; {OfficialLink(a.SourceUri, "official source &nearr;")}</td></tr>
                 <tr><td>on {db2:yyyy-MM-dd}</td><td class="mono"><a href="/{H(publisher)}/{H(work)}/{H(VersionCoordinate(b))}">{H(b.Key)}</a> ({Interval(b)})
-                &middot; <a href="{H(b.SourceUri)}">official source &nearr;</a></td></tr>
+                &middot; {OfficialLink(b.SourceUri, "official source &nearr;")}</td></tr>
                 </table></div>
                 <p><a href="{workspaceUrl}"><b>Open the structured article comparison &rarr;</b></a>
                 <span class="sub">matched by provision anchor when continuity is sufficient; otherwise Lex refuses rather than inventing changes</span></p>
@@ -106,8 +106,8 @@ public static class DocumentEndpoints
                     (status <span class="mono">{ComparisonTextStatus(r, a, b)}</span>).
                     One or both selected versions contain a typed text gap, so Lex will not compare
                     a partial body as if it were complete. Compare at the official source:
-                    <a href="{H(a.SourceUri)}">version of {H(a.ValidFrom)}</a> vs
-                    <a href="{H(b.SourceUri)}">version of {H(b.ValidFrom)}</a>.</div>
+                    {OfficialLink(a.SourceUri, $"version of {H(a.ValidFrom)}")} vs
+                    {OfficialLink(b.SourceUri, $"version of {H(b.ValidFrom)}")}.</div>
                     """);
             else if (a.Key == b.Key)
                 sb.Append("<div class=\"notice\"><b>No change.</b> The same publisher version covers both selected dates.</div>");
@@ -120,8 +120,8 @@ public static class DocumentEndpoints
                     <div class="notice"><b>Different versions applied</b>, but a text diff is unavailable here
                     (status <span class="mono">{ComparisonTextStatus(r, a, b)}</span>).
                     Compare at the official source:
-                    <a href="{H(a.SourceUri)}">version of {H(a.ValidFrom)}</a> vs
-                    <a href="{H(b.SourceUri)}">version of {H(b.ValidFrom)}</a>.</div>
+                    {OfficialLink(a.SourceUri, $"version of {H(a.ValidFrom)}")} vs
+                    {OfficialLink(b.SourceUri, $"version of {H(b.ValidFrom)}")}.</div>
                     """);
             }
             sb.Append(EnvelopeCard(r, IsProvisional(r, db2)));
@@ -145,7 +145,7 @@ public static class DocumentEndpoints
             var t = DocTitle(rows[^1]);
             var publisherVersionDates = UsesPublisherVersionDates(r);
             var sb = new StringBuilder();
-            sb.Append($"<p><span class=\"badge\">{H(rows[^1].Kind)}</span> <span class=\"badge\">{rows.Select(v => v.Key).Distinct().Count()} version(s)</span> <a class=\"badge\" href=\"{H(rows[^1].SourceUri)}\">official text ↗</a></p>");
+            sb.Append($"<p><span class=\"badge\">{H(rows[^1].Kind)}</span> <span class=\"badge\">{rows.Select(v => v.Key).Distinct().Count()} version(s)</span> {OfficialLink(rows[^1].SourceUri, "official text ↗", "badge")}</p>");
             sb.Append(VersionRail(publisher, work, rows, null));
             var todayVersion = r.AsOf(work, ctx.Today, FilterSet.All);
             var latest = todayVersion ?? rows[^1];

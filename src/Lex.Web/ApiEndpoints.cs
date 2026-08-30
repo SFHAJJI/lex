@@ -146,6 +146,13 @@ public static class ApiEndpoints
             // run actually touched from the ones that have not moved since the first ingest.
             // A row without it simply omits the tag, which is allowed, rather than guessing.
             var today = ctx.Today;
+            // A path segment inside an XML loc element. These were interpolated raw, so one
+            // ampersand in a collection or a group key made the whole sitemap non-well-formed
+            // and every URL in it unreadable by a crawler. Percent-encoding removes every
+            // character that would break either the URL or the XML, and leaves ordinary slugs
+            // byte for byte unchanged.
+            static string Segment(string value) => Uri.EscapeDataString(value);
+
             string Lastmod(string? observed) =>
                 observed is { Length: >= 10 } o && TryIsoDate(o[..10], out var d) && d <= today
                     ? $"<lastmod>{d:yyyy-MM-dd}</lastmod>" : "";
@@ -155,7 +162,7 @@ public static class ApiEndpoints
                 var (rows, _) = r.Catalogue(new FilterSet(null, null, null, null), null,
                                             CatalogueOrder.Name, 20000, 0);
                 foreach (var w in rows)
-                    sb.Append($"<url><loc>{ctx.PublicBase}/{w.Collection}/{w.GroupKey}</loc>"
+                    sb.Append($"<url><loc>{ctx.PublicBase}/{Segment(w.Collection)}/{Segment(w.GroupKey)}</loc>"
                               + Lastmod(w.LastObserved)
                               + "<changefreq>monthly</changefreq><priority>0.6</priority></url>");
 
@@ -170,7 +177,7 @@ public static class ApiEndpoints
                 // a reader searched for. Submitting the index and withholding the content is the
                 // wrong way round.
                 foreach (var (collection, groupKey, versionKey, observed) in r.VersionPaths())
-                    sb.Append($"<url><loc>{ctx.PublicBase}/{collection}/{groupKey}/{versionKey}</loc>"
+                    sb.Append($"<url><loc>{ctx.PublicBase}/{Segment(collection)}/{Segment(groupKey)}/{Segment(versionKey)}</loc>"
                               + Lastmod(observed)
                               + "<changefreq>yearly</changefreq><priority>0.5</priority></url>");
             }
@@ -629,7 +636,7 @@ public static class ApiEndpoints
                     <tr><td>lex_id</td><td class="mono">{H(d.Key)}</td></tr>
                     <tr><td>work identifier</td><td class="mono">{H(d.GroupIdentifier)}</td></tr>
                     <tr><td>record sha256</td><td class="mono">{H(d.RecordSha)}</td></tr>
-                    <tr><td>source</td><td><a href="{H(d.SourceUri)}">{H(d.SourceUri)}</a></td></tr>
+                    <tr><td>source</td><td>{OfficialLink(d.SourceUri)}</td></tr>
                     <tr><td>first observed</td><td class="mono">{H(d.ObservedFrom)}</td></tr>
                     <tr><td>valid (publisher-asserted)</td><td class="mono">{Interval(d)}</td></tr>
                     </table></div>
