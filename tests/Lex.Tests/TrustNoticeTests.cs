@@ -635,7 +635,8 @@ public sealed class TrustNoticeTests : IDisposable
             // O11. Openness and reuse are claims about how the publishers' material may be used,
             // which is exactly what per-artifact admission establishes and has three ways of
             // answering no. Neutral access wording until it exists.
-            foreach (var wording in new[] { "open data", "open datasets", "open legal" })
+            foreach (var wording in new[]
+                     { "open data", "open datasets", "open legal", "licence and attribution" })
                 Assert.DoesNotContain(wording, page, StringComparison.OrdinalIgnoreCase);
         }
 
@@ -647,6 +648,11 @@ public sealed class TrustNoticeTests : IDisposable
             StringComparison.Ordinal);
         // And the EU reuse basis, which cites the decision it rests on rather than asserting a
         // licence we chose. Flagged to the reviewer as a deliberate boundary, not an oversight.
+        // And the dataset row says what it can support: where each row came from and how it is
+        // chained to the publisher bytes, rather than what may be done with it.
+        var developers = await site.Client.GetStringAsync("/developers");
+        Assert.Contains("SHA-256 chain to the publisher bytes", developers,
+            StringComparison.Ordinal);
         Assert.Contains("2011/833/EU", await site.Client.GetStringAsync("/coverage"),
             StringComparison.Ordinal);
     }

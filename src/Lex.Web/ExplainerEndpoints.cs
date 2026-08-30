@@ -606,7 +606,7 @@ public static class ExplainerEndpoints
                 <a href="https://github.com/SFHAJJI/lex/blob/main/docs/mcp-2-migration.md" rel="noopener">MCP 2.0 migration note</a>.</p>
 
                 <h2>Or skip the API, take the data</h2>
-                <p>Every provision of every version, one row each, licence and attribution inline.
+                <p>Every provision of every version, one row each, with its source URI and a SHA-256 chain to the publisher bytes.
                 {{cov.Sum(c => c.VersionsWithText):n0}} versions carry full text.</p>
                 <div class="card"><b>DuckDB, one line, no download:</b>
                 <pre class="mono" style="white-space:pre-wrap;margin:6px 0 0">SELECT * FROM read_parquet('https://github.com/SFHAJJI/lex-articles/releases/latest/download/eu-eurlex-provisions.parquet');</pre>

@@ -10,11 +10,10 @@ import {
 import { ScopeFilters } from "./ScopeFilters";
 import { envelopeStripRows, type EnvelopeStripRow } from "./envelopeStrip";
 import { normalizeSearchResponse, type PublisherPopulation } from "./searchPopulation";
-import { anyRowSetTruncated, metadataOnlyFromResponse,
-  type PopulationEntry } from "./matchLanes";
+import { metadataOnlyResponse, type PopulationEntry } from "./matchLanes";
 import { MetadataOnlyNotice } from "./metadataOnlyNotice";
 import { fuzzyModeFor, retainedForQuery } from "./api";
-import { clearedSearchResults, LIMITATION_EXPLANATION, parseGovernedResponse,
+import { clearedSearchResults, LIMITATION_EXPLANATION, parseGovernedResponse, partitionOf,
   projectSearchResponse, searchEmptyPresentation, searchResultsFromError,
   withholdingSentence,
   type SearchResultsState, type WithheldClaims } from "./limitations";
@@ -250,13 +249,29 @@ export default function Search(p: SearchProps) {
         // There is nothing left to disagree with.
         const parsed = parseGovernedResponse("search", res);
         p.onEnvelopes(envelopeStripRows(parsed));
-        // Read off the raw response, deliberately: the decision needs the authoritative
-        // population, and everything below this line narrows it for display.
-        const decision = metadataOnlyFromResponse(res);
-        setMetadataOnly(decision.metadataOnly);
-        setMetadataPopulation(decision.population);
-        setResponseTruncated(anyRowSetTruncated(res));
         const answer = normalizeSearchResponse(parsed);
+        // The decision reads the GOVERNED partition, not the raw response. Walking the raw
+        // envelopes a second time was the browser copy of the defect just repaired on the server:
+        // that helper filters on status alone, so status ok with query_ran false, a numeric
+        // lex_id, or an unparseable valid_from all reached it as evidence and could suppress,
+        // behind a positive notice, rows the governed parser had already refused. One parse, one
+        // authority. Refusals contribute nothing and block nothing; an incomplete parse makes the
+        // positive claim unreachable, which is what `complete` already means here.
+        const partition = partitionOf(parsed);
+        const population: PopulationEntry[] = partition.ranUnits.flatMap((unit) =>
+          unit.rows.map((row) => ({
+            // lex_id, not work: the workspace derives every work identity from lex_id, which is
+            // also the field the governed row schema validates.
+            work: typeof row.lex_id === "string" ? row.lex_id : "",
+            title: typeof row.title === "string" ? row.title : "",
+            reasons: row.match_reasons,
+          })));
+        setMetadataPopulation(population);
+        setMetadataOnly(
+          answer.complete && population.length > 0 && metadataOnlyResponse(population));
+        // Truncation from the governed paging authority, which reads the declared total and the
+        // producer's receipts together, rather than from a second raw probe for one field name.
+        setResponseTruncated(partition.moreBeyondPage);
         setPopulations(answer.populations);
         // Typed causes, carried rather than merged: the sentence a reader is shown has to
         // be the one the parse established for that publisher (O3).
