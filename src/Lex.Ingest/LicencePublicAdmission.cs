@@ -4,9 +4,9 @@ namespace Lex.Ingest;
 
 public enum PublicTextAdmission
 {
+    LicenceUnresolved = 0,
     Admitted,
     LicenceConflict,
-    LicenceUnresolved,
     LicenceUnsupported,
 }
 
@@ -25,12 +25,19 @@ public static class LicencePublicAdmission
 
     public static LicenceAdmissionResult Assess(ManifestationLicenceEvidence? evidence)
     {
-        if (evidence is null
-            || evidence.Comparison == LicenceComparison.LicenceUnresolved)
+        if (evidence is null)
             return new(PublicTextAdmission.LicenceUnresolved, null);
 
-        if (evidence.Comparison == LicenceComparison.LicenceConflict)
-            return new(PublicTextAdmission.LicenceConflict, null);
+        switch (evidence.Comparison)
+        {
+            case LicenceComparison.Agreed:
+                break;
+            case LicenceComparison.LicenceConflict:
+                return new(PublicTextAdmission.LicenceConflict, null);
+            case LicenceComparison.LicenceUnresolved:
+            default:
+                return new(PublicTextAdmission.LicenceUnresolved, null);
+        }
 
         var uris = evidence.Sparql.Claims.Select(claim => claim.LicenceUri)
             .Concat(evidence.File.Claims.Select(claim => claim.LicenceUri))
