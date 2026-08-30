@@ -322,18 +322,37 @@ public sealed class CorpusLicenceAdmissionTests
     [InlineData("http://creativecommons.org/licenses/by/4.0")]
     [InlineData("https://creativecommons.org/licenses/by/4.0")]
     [InlineData("https://creativecommons.org/licenses/by/4.0/?source=other")]
-    [InlineData("http://creativecommons.org/licenses/by/3.0/")]
-    [InlineData("http://creativecommons.org/licenses/by-sa/4.0/")]
-    [InlineData("http://CREATIVECOMMONS.ORG/licenses/by/4.0/")]
-    public void Cc_by_uri_near_misses_are_unresolved(string licenceUri)
+    [InlineData("https://creativecommons.org/licenses/by/4.0/#terms")]
+    [InlineData("https://creativecommons.example/licenses/by/4.0/")]
+    [InlineData("https://creativecommons.org/license/by/4.0/")]
+    [InlineData("https://creativecommons.org/licenses/by/3.0/")]
+    public void Sparql_cc_by_near_misses_do_not_map(string licenceUri)
     {
-        var evidence = EvidenceWithComparison(
-            LicenceChannelEvidence.Present([UriClaim(licenceUri)]),
-            LicenceChannelEvidence.Present([
-                FileClaim("CC-BY-4.0", licenceUri),
-            ]),
-            LicenceComparison.Agreed);
+        Assert.Null(LegiluxLicenceContract.MapSparqlTerm("uri", licenceUri));
+    }
 
+    [Theory]
+    [InlineData("http://creativecommons.org/licenses/by/4.0")]
+    [InlineData("https://creativecommons.org/licenses/by/4.0")]
+    [InlineData("https://creativecommons.org/licenses/by/4.0/?source=other")]
+    [InlineData("https://creativecommons.org/licenses/by/4.0/#terms")]
+    [InlineData("https://creativecommons.example/licenses/by/4.0/")]
+    [InlineData("https://creativecommons.org/license/by/4.0/")]
+    [InlineData("https://creativecommons.org/licenses/by/3.0/")]
+    public void Sparql_cc_by_near_misses_are_unresolved_against_valid_file_channel(
+        string licenceUri)
+    {
+        var sparql = LegiluxLicenceEvidence.FromSparqlTerms([
+            new SparqlTerm("uri", licenceUri),
+        ]);
+        var evidence = Evidence(
+            sparql,
+            LicenceChannelEvidence.Present([
+                FileClaim("CC-BY-4.0", CreativeCommonsBy40),
+            ]));
+
+        Assert.Equal(LicenceChannelState.Invalid, sparql.State);
+        Assert.Equal(LicenceComparison.LicenceUnresolved, evidence.Comparison);
         AssertDenied(PublicTextAdmission.LicenceUnresolved,
             LicencePublicAdmission.Assess(evidence));
     }

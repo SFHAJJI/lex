@@ -62,15 +62,16 @@ public static class LegiluxLicenceContract
 
     internal static string? MapSparqlTerm(string termType, string value)
     {
-        if (!string.Equals(termType, "uri", StringComparison.Ordinal)
-            || !Uri.TryCreate(value, UriKind.Absolute, out var uri)
-            || uri.Scheme is not ("http" or "https")
-            || string.IsNullOrEmpty(uri.Host))
+        if (!string.Equals(termType, "uri", StringComparison.Ordinal))
             return null;
 
-        return string.Equals(value, CreativeCommonsBy40Https, StringComparison.Ordinal)
-            ? CreativeCommonsBy40
-            : value;
+        return value switch
+        {
+            CreativeCommonsBy40 => CreativeCommonsBy40,
+            CreativeCommonsBy40Https => CreativeCommonsBy40,
+            LicenceScl => LicenceScl,
+            _ => null,
+        };
     }
 
     private static string[]? ExactSparqlUris(LicenceChannelEvidence channel)
