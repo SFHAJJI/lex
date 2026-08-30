@@ -80,7 +80,6 @@ public sealed class LegiluxLicenceEvidenceTests
                   <scl:jolux scl:name="uriThis">{{Manifestation}}</scl:jolux>
                   <scl:jolux scl:name="license">licenceSCL</scl:jolux>
                   <scl:jolux scl:name="license">CC-BY-4.0</scl:jolux>
-                  <scl:jolux scl:name="license">licenceSCL</scl:jolux>
                 </scl:JOLUXManifestation>
                 """), Manifestation);
 
@@ -125,6 +124,111 @@ public sealed class LegiluxLicenceEvidenceTests
                   <scl:jolux scl:name="license">CC-BY-4.0</scl:jolux>
                 </scl:JOLUXManifestation>
                 """), Manifestation);
+
+        Assert.Equal(LicenceChannelState.Invalid, channel.State);
+    }
+
+    [Fact]
+    public void File_channel_rejects_an_unbound_Akoma_Ntoso_namespace()
+    {
+        var xml = Encoding.UTF8.GetBytes($$"""
+            <akomaNtoso xmlns="https://attacker.invalid/akn"
+                         xmlns:scl="http://www.scl.lu">
+              <act><meta><identification>
+                <FRBRManifestation><FRBRthis value="{{Manifestation}}" /></FRBRManifestation>
+                <scl:JOLUXManifestation>
+                  <scl:jolux scl:name="uriThis">{{Manifestation}}</scl:jolux>
+                  <scl:jolux scl:name="license">CC-BY-4.0</scl:jolux>
+                </scl:JOLUXManifestation>
+              </identification></meta></act>
+            </akomaNtoso>
+            """);
+
+        var channel = LegiluxLicenceEvidence.FromAkomaNtoso(xml, Manifestation);
+
+        Assert.Equal(LicenceChannelState.Invalid, channel.State);
+    }
+
+    [Fact]
+    public void File_channel_rejects_duplicate_FRBRthis_identity()
+    {
+        var xml = Encoding.UTF8.GetBytes($$"""
+            <akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13"
+                         xmlns:scl="http://www.scl.lu">
+              <act><meta><identification>
+                <FRBRManifestation>
+                  <FRBRthis value="{{Manifestation}}" />
+                  <FRBRthis value="{{Manifestation}}" />
+                </FRBRManifestation>
+                <scl:JOLUXManifestation>
+                  <scl:jolux scl:name="uriThis">{{Manifestation}}</scl:jolux>
+                  <scl:jolux scl:name="license">CC-BY-4.0</scl:jolux>
+                </scl:JOLUXManifestation>
+              </identification></meta></act>
+            </akomaNtoso>
+            """);
+
+        var channel = LegiluxLicenceEvidence.FromAkomaNtoso(xml, Manifestation);
+
+        Assert.Equal(LicenceChannelState.Invalid, channel.State);
+    }
+
+    [Fact]
+    public void File_channel_rejects_any_ambiguous_manifestation_block()
+    {
+        var channel = LegiluxLicenceEvidence.FromAkomaNtoso(
+            AkomaNtoso(Manifestation, $$"""
+                <scl:JOLUXManifestation>
+                  <scl:jolux scl:name="uriThis">{{Manifestation}}</scl:jolux>
+                  <scl:jolux scl:name="license">CC-BY-4.0</scl:jolux>
+                </scl:JOLUXManifestation>
+                <scl:JOLUXManifestation>
+                  <scl:jolux scl:name="uriThis">{{OtherManifestation}}</scl:jolux>
+                  <scl:jolux scl:name="uriThis">{{Manifestation}}</scl:jolux>
+                  <scl:jolux scl:name="license">CC-BY-4.0</scl:jolux>
+                </scl:JOLUXManifestation>
+                """), Manifestation);
+
+        Assert.Equal(LicenceChannelState.Invalid, channel.State);
+    }
+
+    [Fact]
+    public void File_channel_rejects_duplicate_licence_declarations()
+    {
+        var channel = LegiluxLicenceEvidence.FromAkomaNtoso(
+            AkomaNtoso(Manifestation, $$"""
+                <scl:JOLUXManifestation>
+                  <scl:jolux scl:name="uriThis">{{Manifestation}}</scl:jolux>
+                  <scl:jolux scl:name="license">CC-BY-4.0</scl:jolux>
+                  <scl:jolux scl:name="license">CC-BY-4.0</scl:jolux>
+                </scl:JOLUXManifestation>
+                """), Manifestation);
+
+        Assert.Equal(LicenceChannelState.Invalid, channel.State);
+    }
+
+    [Fact]
+    public void File_channel_rejects_manifestation_bindings_outside_identification()
+    {
+        var xml = Encoding.UTF8.GetBytes($$"""
+            <akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13"
+                         xmlns:scl="http://www.scl.lu">
+              <act><meta><identification>
+                <FRBRManifestation><FRBRthis value="{{Manifestation}}" /></FRBRManifestation>
+                <scl:JOLUXManifestation>
+                  <scl:jolux scl:name="uriThis">{{Manifestation}}</scl:jolux>
+                  <scl:jolux scl:name="license">CC-BY-4.0</scl:jolux>
+                </scl:JOLUXManifestation>
+              </identification></meta>
+              <body><scl:JOLUXManifestation>
+                <scl:jolux scl:name="uriThis">{{Manifestation}}</scl:jolux>
+                <scl:jolux scl:name="license">licenceSCL</scl:jolux>
+              </scl:JOLUXManifestation></body>
+              </act>
+            </akomaNtoso>
+            """);
+
+        var channel = LegiluxLicenceEvidence.FromAkomaNtoso(xml, Manifestation);
 
         Assert.Equal(LicenceChannelState.Invalid, channel.State);
     }
@@ -299,9 +403,49 @@ public sealed class LegiluxLicenceEvidenceTests
                 present));
     }
 
+    [Fact]
+    public void Manifestation_transport_accepts_only_bound_formats_and_official_files()
+    {
+        var xml = LegiluxAdapter.OfficialManifestationTransport(
+            new SparqlTerm("uri",
+                "http://data.legilux.public.lu/resource/authority/user-format/xml"),
+            new SparqlTerm("uri", ManifestationFile));
+
+        Assert.Equal("xml", xml.Format);
+        Assert.Equal(
+            "https://legilux.public.lu/filestore/eli/etat/leg/loi/2020/01/01/n1.xml",
+            xml.FetchUri);
+        Assert.Throws<InvalidDataException>(() =>
+            LegiluxAdapter.OfficialManifestationTransport(
+                new SparqlTerm("uri",
+                    "http://data.legilux.public.lu/resource/authority/user-format/svg"),
+                new SparqlTerm("uri", ManifestationFile)));
+        Assert.Throws<InvalidDataException>(() =>
+            LegiluxAdapter.OfficialManifestationTransport(
+                new SparqlTerm("uri",
+                    "http://data.legilux.public.lu/resource/authority/user-format/xml"),
+                new SparqlTerm("uri", "https://attacker.invalid/example.xml")));
+    }
+
+    [Fact]
+    public void Manifestation_response_must_match_the_exact_requested_file()
+    {
+        const string expected =
+            "https://legilux.public.lu/filestore/eli/etat/leg/loi/2020/01/01/n1.xml";
+
+        Assert.Equal(expected,
+            LegiluxAdapter.RequireOfficialResponseUri(expected, expected));
+        Assert.Throws<InvalidDataException>(() =>
+            LegiluxAdapter.RequireOfficialResponseUri(
+                "https://legilux.public.lu/filestore/other.xml", expected));
+        Assert.Throws<InvalidDataException>(() =>
+            LegiluxAdapter.RequireOfficialResponseUri(
+                "https://attacker.invalid/filestore/n1.xml", expected));
+    }
+
     private static byte[] AkomaNtoso(string frbrThis, string manifestationBlocks) =>
         Encoding.UTF8.GetBytes($$"""
-            <akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0"
+            <akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13"
                          xmlns:scl="http://www.scl.lu">
               <act><meta><identification>
                 <FRBRManifestation><FRBRthis value="{{frbrThis}}" /></FRBRManifestation>

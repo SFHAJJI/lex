@@ -3,6 +3,8 @@ using Lex.Law;
 
 namespace Lex.Sources.Legilux;
 
+internal sealed record ManifestationTransport(string Format, string FetchUri);
+
 /// <summary>
 /// Tier A metadata: the publisher supplies validity intervals (jolux:dateApplicability).
 /// D44 superseded the original metadata-only D42 design: official manifestation metadata
@@ -253,7 +255,7 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory,
                 Detail: sent.FailureDetail ?? "The official XML endpoint exhausted the retry policy.",
                 Attempts: sent.Attempts,
                 Licence: licence);
-        var effectiveSourceUri = RequireOfficialResponseUri(resp);
+        var effectiveSourceUri = RequireOfficialResponseUri(resp, url);
         if (!resp.IsSuccessStatusCode)
         {
             Console.Error.WriteLine($"  [legilux] body fetch failed ({(int)resp.StatusCode}): {url}");
@@ -330,15 +332,27 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory,
             bytes, http, sent.Attempts, licence.WithFile(fileLicence));
     }
 
-    private static string RequireOfficialResponseUri(HttpResponseMessage response)
+    private static string RequireOfficialResponseUri(
+        HttpResponseMessage response, string expectedSourceUri) =>
+        RequireOfficialResponseUri(
+            response.RequestMessage?.RequestUri?.AbsoluteUri, expectedSourceUri);
+
+    internal static string RequireOfficialResponseUri(
+        string? value, string expectedSourceUri)
     {
-        var value = response.RequestMessage?.RequestUri?.AbsoluteUri;
         if (!Uri.TryCreate(value, UriKind.Absolute, out var uri)
+            || !Uri.TryCreate(expectedSourceUri, UriKind.Absolute, out var expected)
             || !string.Equals(uri.Scheme, Uri.UriSchemeHttps,
                 StringComparison.OrdinalIgnoreCase)
-            || uri.Host is not ("legilux.public.lu" or "data.legilux.public.lu"))
+            || !string.Equals(uri.Host, "legilux.public.lu",
+                StringComparison.OrdinalIgnoreCase)
+            || !uri.IsDefaultPort
+            || !string.IsNullOrEmpty(uri.UserInfo)
+            || !string.IsNullOrEmpty(uri.Query)
+            || !string.IsNullOrEmpty(uri.Fragment)
+            || !uri.Equals(expected))
             throw new InvalidDataException(
-                "The publisher response URI is missing or outside the official Legilux host allowlist.");
+                "The publisher response URI does not match the requested official Legilux file.");
         return uri.AbsoluteUri;
     }
 
@@ -534,14 +548,12 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory,
                 var sparqlLicence = LegiluxLicenceEvidence.FromSparqlTerms(
                     group.Where(row => row.ContainsKey("license"))
                         .Select(row => row["license"]));
-                var fetchUri = file.Value
-                    .Replace("http://data.legilux.public.lu/filestore/", "https://legilux.public.lu/filestore/")
-                    .Replace("https://data.legilux.public.lu/filestore/", "https://legilux.public.lu/filestore/");
+                var transport = OfficialManifestationTransport(format, file);
                 var manifestation = new LegiluxManifestation(
-                    group.Key, file.Value, fetchUri, sparqlLicence);
+                    group.Key, file.Value, transport.FetchUri, sparqlLicence);
                 var key = $"{consolidation.Value}|{LangCode(LastSegment(expression.Value))}";
                 AddExactManifestation(
-                    LastSegment(format.Value) == "pdf" ? pdfFiles : xmlFiles,
+                    transport.Format == "pdf" ? pdfFiles : xmlFiles,
                     key, manifestation);
             }
             _xmlFiles = xmlFiles;
@@ -575,6 +587,39 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory,
             throw new InvalidDataException(
                 $"One Legilux manifestation is bound to multiple {name} values.");
         return terms[0];
+    }
+
+    internal static ManifestationTransport OfficialManifestationTransport(
+        SparqlTerm format, SparqlTerm file)
+    {
+        const string formatRoot =
+            "http://data.legilux.public.lu/resource/authority/user-format/";
+        var formatName = format.Type == "uri" ? format.Value switch
+        {
+            formatRoot + "xml" => "xml",
+            formatRoot + "pdf" => "pdf",
+            _ => null,
+        } : null;
+        if (formatName is null)
+            throw new InvalidDataException(
+                "Legilux manifestation row has an unsupported format URI.");
+
+        if (!string.Equals(file.Type, "uri", StringComparison.Ordinal)
+            || !Uri.TryCreate(file.Value, UriKind.Absolute, out var uri)
+            || uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps
+            || !string.Equals(uri.Host, "data.legilux.public.lu",
+                StringComparison.OrdinalIgnoreCase)
+            || !uri.IsDefaultPort
+            || !string.IsNullOrEmpty(uri.UserInfo)
+            || !string.IsNullOrEmpty(uri.Query)
+            || !string.IsNullOrEmpty(uri.Fragment)
+            || !uri.AbsolutePath.StartsWith("/filestore/", StringComparison.Ordinal)
+            || uri.AbsolutePath.Length == "/filestore/".Length)
+            throw new InvalidDataException(
+                "Legilux manifestation file is not an exact official filestore URI.");
+
+        return new ManifestationTransport(
+            formatName, "https://legilux.public.lu" + uri.AbsolutePath);
     }
 
     private static void AddExactManifestation(
@@ -731,7 +776,13 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory,
         var sent = await SourceHttp.SendAsync(BodyHttp,
             () => new HttpRequestMessage(HttpMethod.Get, url), RetryPolicy, ct);
         using var resp = sent.Response;
-        if (resp is null || sent.RetryExhausted)
+        if (resp is null)
+            return new(SourceBodyStatus.RetryExhausted,
+                Detail: sent.FailureDetail ?? "The official PDF endpoint exhausted the retry policy.",
+                Attempts: sent.Attempts,
+                Licence: licence);
+        RequireOfficialResponseUri(resp, url);
+        if (sent.RetryExhausted)
             return new(SourceBodyStatus.RetryExhausted,
                 Detail: sent.FailureDetail ?? "The official PDF endpoint exhausted the retry policy.",
                 Attempts: sent.Attempts,
@@ -765,10 +816,10 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory,
                 Attempts: sent.Attempts,
                 Licence: licence);
         }
-        using var ms = new MemoryStream();
-        await (await resp.Content.ReadAsStreamAsync(ct)).CopyToAsync(ms, ct);
-        var bytes = ms.ToArray();
-        if (bytes.LongLength > CapBytes)
+        await using var pdfStream = await resp.Content.ReadAsStreamAsync(ct);
+        var bounded = await ReadBoundedBody(pdfStream, checked((int)CapBytes), ct);
+        var bytes = bounded.Bytes;
+        if (bounded.LimitExceeded)
         {
             Console.Error.WriteLine($"  [legilux] pdf exceeds the cap once read; skipped: {url}");
             return new(SourceBodyStatus.Oversized,
