@@ -132,14 +132,30 @@ public static class TrustNotices
                 </div>
                 """;
 
+        // Only a status this page RECOGNISES as a non-execution may say the query did not run.
+        // The card used to say it for every status, including one that reads as success, so a
+        // producer answering ok in the bare-object shape had that announced to the reader, and to
+        // a screen reader, as a query nobody executed. An unrecognised status tells us the
+        // response was not usable and nothing whatever about whether it ran. The producer's own
+        // receipt still overrides, when it sends one.
+        var denied = status is "no_corpus_mounted" or "unknown_publisher"
+            || QueryRan(refusal) == false;
+        var lead = denied ? "This query did not run." : "No usable result.";
+        var label = denied ? "This query did not run" : "No usable result";
+        var tail = denied
+            ? "That is a statement about this request, not evidence that a law or record is absent."
+            : "That is a statement about this response, not evidence that a law or record is absent.";
+
         var body = status switch
         {
             "no_corpus_mounted" =>
                 "This server has no verified legal index mounted, so it holds no law and cannot "
                 + "answer legal questions. This is a deployment state, not a statement about the law.",
+            // The producer's own sentence when it wrote one, whatever the status means.
             _ => S(refusal, "detail")
-                 ?? "This query did not run. That is a statement about this request, not evidence "
-                    + "that a law or record is absent.",
+                 ?? (denied
+                     ? "This query did not run. " + tail
+                     : "Lex could not use this response. " + tail),
         };
 
         // The mounted alternatives, when the producer named them, so the refusal is answerable.
@@ -149,8 +165,8 @@ public static class TrustNotices
             : $"""<span class="sub">Mounted publishers: {H(string.Join(", ", mounted))}</span>""";
 
         return $"""
-            <div class="notice" role="note" aria-label="This query did not run">
-            <b>This query did not run.</b> <span class="mono">{H(status)}</span>
+            <div class="notice" role="note" aria-label="{H(label)}">
+            <b>{lead}</b> <span class="mono">{H(status)}</span>
             {H(body)}
             {choices}
             <span class="sub"><a href="/coverage">View coverage and known gaps</a></span>
@@ -216,11 +232,29 @@ public static class TrustNotices
     /// already refuses to say nothing matches when a publisher was unable to run, and this keeps
     /// the server lane from making the claim the browser declines to make.
     /// </summary>
-    public static string? SearchAbsence(int ran, int refused, int hits) =>
+    /// <summary>
+    /// A publisher whose answer this page could not classify. Its results are neither shown
+    /// nor counted, and saying so is the point: an unreadable result read as an empty one turns
+    /// a response nobody parsed into a claim that nothing matched.
+    /// </summary>
+    public static string UnreadableResults() =>
+        """
+        <div class="notice" role="note"><b>This publisher's results could not be read.</b>
+        It answered, and Lex could not interpret what it returned, so nothing is shown for it.
+        That is a statement about this response, not evidence that a law or record is absent.
+        <span class="sub"><a href="/coverage">View coverage and known gaps</a></span></div>
+        """;
+
+    public static string? SearchAbsence(int ran, int refused, int hits, int unreadable = 0) =>
         // A publisher that answered with hits makes any no-match sentence false, however many
         // others refused. Absence is stated only when something ran and everything that ran
         // returned nothing.
-        hits > 0 || refused == 0 ? null
+        //
+        // An answer this page could not classify blocks the sentence outright. Neither form
+        // below is knowable while some publisher returned something we failed to read: not
+        // that nobody ran, and not that nothing matched.
+        unreadable > 0 ? null
+        : hits > 0 || refused == 0 ? null
         : ran == 0
             ? """<div class="notice" role="note"><b>No selected publisher ran this query.</b></div>"""
             : """

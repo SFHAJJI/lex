@@ -80,7 +80,7 @@ public static class FallbackEndpoints
             // no such profile: agreeing to a request we cannot honour. IsSubsetOf compares
             // parameters, which is exactly what is wanted once q is gone, and q is the reason
             // it appeared not to work before.
-            var offered = WithoutQuality(range);
+            var offered = Narrowing(range);
             if (!representation.IsSubsetOf(offered)) continue;
 
             // Type precision first, then whether the range narrowed it further with media
@@ -94,12 +94,24 @@ public static class FallbackEndpoints
         return quality;
     }
 
-    /// <summary>The range with every q parameter removed, so only media parameters remain.</summary>
-    private static MediaTypeHeaderValue WithoutQuality(MediaTypeHeaderValue range)
+    /// <summary>
+    /// The range reduced to the parameters that actually narrow what is being asked for.
+    ///
+    /// q is a preference, not part of the representation. charset is a transport detail: these
+    /// bodies are UTF-8 whatever the range says, Accept-Charset is obsolete, and a client naming
+    /// it is asking for what this route already sends. Declining that was the mirror of the bug
+    /// that ignored parameters entirely, and it turned application/json;charset=utf-8, which is the
+    /// representation this route emits, into a request it claimed it could not satisfy.
+    ///
+    /// Every other media parameter does narrow the representation and is kept, so a range naming a
+    /// profile or a version this route cannot produce is still declined.
+    /// </summary>
+    private static MediaTypeHeaderValue Narrowing(MediaTypeHeaderValue range)
     {
         var offered = range.Copy();
-        while (NameValueHeaderValue.Find(offered.Parameters, "q") is { } q)
-            offered.Parameters.Remove(q);
+        foreach (var transport in (string[])["q", "charset"])
+            while (NameValueHeaderValue.Find(offered.Parameters, transport) is { } parameter)
+                offered.Parameters.Remove(parameter);
         return offered;
     }
 

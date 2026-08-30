@@ -274,6 +274,21 @@ public static class PageShell
           }
           @media (max-width:640px) {
             body.assistant-enabled { padding-bottom:76px }
+            /* The horizontal counterpart of the clearance above, and it is needed for the same
+               reason the vertical one is not sufficient: padding-bottom separates content from the
+               launcher only at the end of the document, while a fixed launcher passes over
+               mid-document content at every other scroll offset. A notice action is inline by
+               default, so at 320px it continued the prose line and ran its last words underneath
+               the button. Making it a block alone does not clear it; the line still reaches into
+               the button's column, so the column itself has to be reserved.
+
+               104px is the launcher's own footprint, 91px measured plus its 12px right offset,
+               plus one. It is a constant for the same reason 84 and 76 above are: the launcher is
+               sized by content in the workspace bundle, which this shell cannot measure. The
+               margin reset matters because .sub carries a bottom margin that is inert while it is
+               inline and appears the moment it becomes a block. */
+            body.assistant-enabled .notice .sub { display:block; margin-block-end:0;
+                                                  padding-inline-end:104px }
             main { padding:20px 14px 48px }
             table { display:block; overflow-x:auto }
             pre { overflow-x:auto }

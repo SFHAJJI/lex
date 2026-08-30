@@ -470,6 +470,57 @@ public sealed class TrustNoticeTests : IDisposable
     }
 
     /// <summary>
+    /// The representation the negotiator matches against must be the one it actually sends.
+    ///
+    /// Matching on a bare type name ignored media parameters, which was wrong. Matching on a bare
+    /// type VALUE is wrong in the other direction: a client that asks for exactly what this route
+    /// emits, charset and all, was told the route could not produce it and given the page instead.
+    ///
+    /// This asks each lane what it sends, then asks for precisely that and requires the same
+    /// answer back, so the two cannot drift apart again whatever the framework appends.
+    /// </summary>
+    [Fact]
+    public async Task The_representation_offered_is_the_one_emitted()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "offered"), includeAct: false);
+
+        async Task<HttpResponseMessage> Ask(string accept)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "/no-such-page");
+            request.Headers.TryAddWithoutValidation("Accept", accept);
+            return await site.Client.SendAsync(request);
+        }
+
+        foreach (var (asked, marker) in new[]
+        {
+            ("application/json", "unknown_route"),
+            ("text/html", "Page not found"),
+        })
+        {
+            var first = await Ask(asked);
+            var emitted = first.Content.Headers.ContentType?.ToString();
+            Assert.False(string.IsNullOrEmpty(emitted), asked);
+
+            var again = await Ask(emitted!);
+            Assert.Equal(HttpStatusCode.NotFound, again.StatusCode);
+            Assert.Contains(marker, await again.Content.ReadAsStringAsync(),
+                StringComparison.Ordinal);
+            Assert.Equal(emitted, again.Content.Headers.ContentType?.ToString());
+        }
+
+        // The case from the objection, written out rather than left implicit in the loop.
+        Assert.Contains("unknown_route",
+            await (await Ask("application/json;charset=utf-8")).Content.ReadAsStringAsync(),
+            StringComparison.Ordinal);
+
+        // A parameter this route does NOT emit is still declined, so the repair did not simply
+        // reopen the hole the parameter check closed.
+        Assert.Contains("Page not found",
+            await (await Ask("application/json;profile=\"x\"")).Content.ReadAsStringAsync(),
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// The body of this URL depends on the request headers, so it must say so. Without Vary a
     /// shared cache may reuse one client's negotiated representation for another: the JSON refusal
     /// served to a browser, or the page served to an MCP client.
@@ -516,6 +567,204 @@ public sealed class TrustNoticeTests : IDisposable
         Assert.Contains("https://example.test/mcp", page, StringComparison.Ordinal);
         Assert.DoesNotContain("evil.example", page, StringComparison.Ordinal);
         Assert.DoesNotContain("<svg onload=", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// O2. Every lane that reached the provision text is an answer. fuzzy is one: it is the same
+    /// provision search re-run over a token-expanded query, and both other consumers of these
+    /// values, the assistant at AskService.HasDirectProvisionEvidence and the React reader, group
+    /// it with keyword and semantic. Only this page dropped it, which hid real text answers and
+    /// badged the survivors as title matches.
+    /// </summary>
+    [Theory]
+    [InlineData("keyword")]
+    [InlineData("fuzzy")]
+    [InlineData("semantic")]
+    public void Every_lane_that_reached_the_provision_text_is_an_answer(string reason)
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "lane" + reason), includeAct: false);
+        using var reader = site.Reader();
+        var readers = new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader };
+
+        var page = CatalogueEndpoints.RenderSearchResults(
+            [(JsonObject)JsonNode.Parse(
+                "{\"envelope\":{\"publisher\":\"lu-legilux\",\"status\":\"ok\"},"
+                + "\"population\":{\"query_ran\":true},\"hits\":[{"
+                + "\"work\":\"lu-legilux:loi-2006-07-31-n2\",\"anchor\":\"art_l_121-6\","
+                + "\"title\":\"Code du travail\",\"valid_from\":\"2024-08-04\","
+                + "\"snippet\":\"Le contrat est suspendu.\","
+                + "\"match_reasons\":[\"" + reason + "\"]}]}")!],
+            readers);
+
+        // Presented as an answer, with its wording, and not demoted to a record match.
+        Assert.Contains("1 hit(s)", page, StringComparison.Ordinal);
+        Assert.Contains("Le contrat est suspendu.", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("matched on title, not wording", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("Lex found records that match only in metadata", page,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// An article-number match is a real article row selected by its number. It is neither a
+    /// wording match nor a record match, and calling it a title match named the wrong thing: a bare
+    /// "Article 14" produces only these, so the page suppressed every hit and then reported that
+    /// nothing had been presented.
+    /// </summary>
+    [Fact]
+    public void An_article_number_match_is_shown_and_labelled_for_what_it_matched()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "artnum"), includeAct: false);
+        using var reader = site.Reader();
+        var readers = new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader };
+
+        var page = CatalogueEndpoints.RenderSearchResults(
+            [(JsonObject)JsonNode.Parse("""
+                {"envelope":{"publisher":"lu-legilux","status":"ok"},
+                 "population":{"query_ran":true},
+                 "hits":[{"work":"lu-legilux:loi-2006-07-31-n2","anchor":"art_l_121-6",
+                          "title":"Code du travail","valid_from":"2024-08-04",
+                          "provision_num":"Art. L. 121-6",
+                          "match_reasons":["article_intent"]}]}
+                """)!],
+            readers);
+
+        Assert.Contains("1 hit(s)", page, StringComparison.Ordinal);
+        Assert.Contains("matched on article number, not wording", page, StringComparison.Ordinal);
+        // The label it never looked at.
+        Assert.DoesNotContain("matched on title, not wording", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The suppression still has to work, or the repair would have bought back attack 41: a record
+    /// match presented as though it answered the question.
+    /// </summary>
+    [Theory]
+    [InlineData("work_metadata")]
+    [InlineData("exact_title")]
+    [InlineData("semantic_work")]
+    [InlineData("semantic_concept")]
+    [InlineData("ambiguous_exact_identifier")]
+    public void A_record_lane_is_still_not_presented_as_an_answer(string reason)
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "rec" + reason), includeAct: false);
+        using var reader = site.Reader();
+        var readers = new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader };
+
+        var page = CatalogueEndpoints.RenderSearchResults(
+            [(JsonObject)JsonNode.Parse(
+                "{\"envelope\":{\"publisher\":\"lu-legilux\",\"status\":\"ok\"},"
+                + "\"population\":{\"query_ran\":true},\"hits\":[{"
+                + "\"work\":\"lu-legilux:loi-2006-07-31-n2\","
+                + "\"match_reasons\":[\"" + reason + "\"]}]}")!],
+            readers);
+
+        Assert.Contains("Lex found records that match only in metadata", page,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("1 hit(s)", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// O3. An answer this page cannot classify is not an empty answer, and the difference is a
+    /// corpus-wide claim. Hits that are present but not an array, an element that is not an
+    /// object, and match_reasons present but not an array all used to collapse into an empty
+    /// array, and an empty array here says nothing matched.
+    /// </summary>
+    [Theory]
+    [InlineData("\"everything\"", "hits is a string")]
+    [InlineData("7", "hits is a number")]
+    [InlineData("{\"0\":{}}", "hits is an object")]
+    [InlineData("[\"lu-legilux:x\"]", "a hit is not an object")]
+    [InlineData("[{\"work\":\"lu-legilux:x\",\"match_reasons\":\"keyword\"}]",
+                "match_reasons is a string")]
+    [InlineData("[{\"work\":\"lu-legilux:x\",\"match_reasons\":{\"0\":\"keyword\"}}]",
+                "match_reasons is an object")]
+    public void An_answer_that_cannot_be_classified_is_not_an_empty_answer(
+        string hits, string _)
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "unreadable"), includeAct: false);
+        using var reader = site.Reader();
+        var readers = new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader };
+
+        var malformed = (JsonObject)JsonNode.Parse(
+            "{\"envelope\":{\"publisher\":\"lu-legilux\",\"status\":\"ok\"},"
+            + "\"population\":{\"query_ran\":true},\"hits\":" + hits + "}")!;
+        var refusal = (JsonObject)JsonNode.Parse("""
+            {"envelope":{"publisher":"lu-legilux","status":"filter_not_supported_by_index"},
+             "population":{"query_ran":false}}
+            """)!;
+
+        var page = CatalogueEndpoints.RenderSearchResults([malformed, refusal], readers);
+
+        Assert.Contains("This publisher's results could not be read.", page,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("No match was returned", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("No selected publisher ran this query", page,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The other side of O3: absent hits is a REAL empty result and must keep saying so, or the
+    /// repair would have bought honesty about malformed answers by making the page mute about
+    /// genuine ones.
+    /// </summary>
+    [Fact]
+    public void An_absent_hits_field_is_still_an_empty_answer()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "reallyempty"), includeAct: false);
+        using var reader = site.Reader();
+        var readers = new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader };
+
+        var silent = (JsonObject)JsonNode.Parse("""
+            {"envelope":{"publisher":"lu-legilux","status":"ok"},
+             "population":{"query_ran":true}}
+            """)!;
+        var refusal = (JsonObject)JsonNode.Parse("""
+            {"envelope":{"publisher":"lu-legilux","status":"filter_not_supported_by_index"},
+             "population":{"query_ran":false}}
+            """)!;
+
+        var page = CatalogueEndpoints.RenderSearchResults([silent, refusal], readers);
+
+        Assert.Contains("No match was returned", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("could not be read", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// O5. A whole-call refusal used to announce that the query did not run whatever its status
+    /// said, including a status that reads as success. An unrecognised status tells the page the
+    /// response was unusable and nothing at all about whether it ran.
+    /// </summary>
+    [Fact]
+    public void Only_a_recognised_status_may_say_the_query_did_not_run()
+    {
+        foreach (var unknown in new[]
+        {
+            "{\"status\":\"ok\"}", "{\"status\":\"partial\"}",
+            "{\"status\":\"a_state_this_page_has_never_seen\"}",
+            "{\"status\":\"ok\",\"population\":{\"query_ran\":true}}",
+        })
+        {
+            var card = TrustNotices.WholeCallRefusal((JsonObject)JsonNode.Parse(unknown)!);
+            Assert.DoesNotContain("did not run", card, StringComparison.Ordinal);
+            Assert.Contains("No usable result.", card, StringComparison.Ordinal);
+            Assert.Contains("aria-label=\"No usable result\"", card, StringComparison.Ordinal);
+            // The status itself is still shown, so the reader is not left guessing what happened.
+            Assert.Contains("<span class=\"mono\">", card, StringComparison.Ordinal);
+        }
+
+        // The two this page does recognise as non-executions, and the producer receipt that
+        // overrides an unrecognised status.
+        foreach (var denied in new[]
+        {
+            "{\"status\":\"no_corpus_mounted\"}", "{\"status\":\"unknown_publisher\"}",
+            "{\"status\":\"ok\",\"population\":{\"query_ran\":false}}",
+        })
+        {
+            var card = TrustNotices.WholeCallRefusal((JsonObject)JsonNode.Parse(denied)!);
+            Assert.Contains("This query did not run.", card, StringComparison.Ordinal);
+            Assert.Contains("aria-label=\"This query did not run\"", card,
+                StringComparison.Ordinal);
+        }
     }
 
     /// <summary>
@@ -590,8 +839,12 @@ public sealed class TrustNoticeTests : IDisposable
     }
 
     /// <summary>
-    /// A record-only card with no nameable work presents nothing, so it announces nothing. The
-    /// heading used to be written before the card, which left a publisher heading above silence.
+    /// Records matched and not one of them could be named. That is an answer the page could not
+    /// read, not an empty one, and the difference decides what the page may say next.
+    ///
+    /// This test asserted the opposite until O3: it required the no-match sentence, which is a
+    /// corpus-wide claim made on the strength of a response nobody parsed. Hostile field types are
+    /// still read rather than thrown on; what changed is that unreadable no longer reads as empty.
     /// </summary>
     [Fact]
     public void A_record_card_with_no_nameable_work_announces_nothing()
@@ -616,13 +869,15 @@ public sealed class TrustNoticeTests : IDisposable
 
         Assert.DoesNotContain("Lex found records that match only in metadata", page,
             StringComparison.Ordinal);
-        // And no heading either. The heading used to be written before the card was known to
-        // exist, which announced a publisher and then said nothing about it. Exactly one heading
-        // belongs on this page, the refusal's.
-        Assert.Single(System.Text.RegularExpressions.Regex.Matches(page, "<h2")
-            .Cast<System.Text.RegularExpressions.Match>());
-        // Nothing was presented, so the absence sentence is honest here.
-        Assert.Contains("No match was returned", page, StringComparison.Ordinal);
+        // The publisher is named and its answer is disclosed rather than dropped, so no heading
+        // stands above silence.
+        Assert.Contains("This publisher's results could not be read.", page,
+            StringComparison.Ordinal);
+        // And no corpus-wide claim either way. Neither sentence is knowable while a publisher
+        // returned something the page failed to read.
+        Assert.DoesNotContain("No match was returned", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("No selected publisher ran this query", page,
+            StringComparison.Ordinal);
     }
 
     /// <summary>
