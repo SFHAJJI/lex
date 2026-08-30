@@ -619,7 +619,8 @@ public sealed class TrustNoticeTests : IDisposable
         // And no heading either. The heading used to be written before the card was known to
         // exist, which announced a publisher and then said nothing about it. Exactly one heading
         // belongs on this page, the refusal's.
-        Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(page, "<h2").Count);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(page, "<h2")
+            .Cast<System.Text.RegularExpressions.Match>());
         // Nothing was presented, so the absence sentence is honest here.
         Assert.Contains("No match was returned", page, StringComparison.Ordinal);
     }
