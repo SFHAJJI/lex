@@ -8,10 +8,6 @@ internal static class LegiluxLicenceEvidence
 {
     private const string AkomaNtosoNamespace =
         "http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13";
-    internal const string CreativeCommonsBy40 =
-        "http://creativecommons.org/licenses/by/4.0/";
-    internal const string LicenceScl =
-        "http://data.legilux.public.lu/resource/authority/license/licenceSCL";
 
     private static readonly XNamespace Scl = "http://www.scl.lu";
 
@@ -34,7 +30,7 @@ internal static class LegiluxLicenceEvidence
         terms.Select(term => new LicenceClaim(
             term.Type,
             term.Value,
-            IsHttpUriTerm(term) ? term.Value : null)).ToArray();
+            LegiluxLicenceContract.MapSparqlTerm(term.Type, term.Value))).ToArray();
 
     internal static LicenceChannelEvidence FromAkomaNtoso(
         byte[] bytes, string manifestationIdentifier)
@@ -100,7 +96,7 @@ internal static class LegiluxLicenceEvidence
                 return LicenceChannelEvidence.Absent;
 
             var claims = values.Select(value => new LicenceClaim(
-                "token", value, MapFileToken(value))).ToArray();
+                "token", value, LegiluxLicenceContract.MapFileToken(value))).ToArray();
             if (claims.Distinct().Count() != claims.Length)
                 return LicenceChannelEvidence.Invalid(claims);
             return claims.Any(claim => claim.LicenceUri is null)
@@ -170,15 +166,4 @@ internal static class LegiluxLicenceEvidence
         return true;
     }
 
-    private static bool IsHttpUriTerm(SparqlTerm term) =>
-        string.Equals(term.Type, "uri", StringComparison.Ordinal)
-        && Uri.TryCreate(term.Value, UriKind.Absolute, out var uri)
-        && uri.Scheme is "http" or "https";
-
-    private static string? MapFileToken(string value) => value switch
-    {
-        "CC-BY-4.0" => CreativeCommonsBy40,
-        "licenceSCL" => LicenceScl,
-        _ => null,
-    };
 }
