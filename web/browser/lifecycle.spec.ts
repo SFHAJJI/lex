@@ -81,8 +81,8 @@ const HOUR = 3_600_000;
 const WORK_ONE = "lu-legilux:loi-2020-07-17-a624";
 const WORK_TWO = "lu-legilux:loi-2019-03-01-b100";
 
-/** The workspace's own sentence for a law that holds no text on the date asked for. */
-const GAP_SENTENCE = "No text is held for this law on that date.";
+/** The workspace's own sentence when no publisher version covers the requested date. */
+const GAP_SENTENCE = "Lex holds this law, but no publisher version covers that date.";
 
 interface McpCall { name: string; args: Record<string, unknown> }
 
@@ -683,7 +683,7 @@ test("the previous day's gap is cleared before paint, not when the new day's ans
       const skeleton = page.locator(".sk-law");
       const articles = page.locator("article.art");
 
-      // The populated baseline is the gap itself: this law holds no text on day one.
+      // The populated baseline is the gap itself: no publisher version covers day one.
       await page.goto(`/?space=law&work=${WORK_ONE}&mode=read`, { waitUntil: "domcontentloaded" });
       await expect(gap).toHaveCount(1);
       await expect(gap).toContainText(GAP_SENTENCE);
