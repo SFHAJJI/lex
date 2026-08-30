@@ -18,7 +18,10 @@ export function reportedTruncation(value: unknown): boolean | undefined {
 /** Only an unbounded provision effect may seed the reader without a follow-up fetch. */
 export function assistantProvisionLoad(ui?: UiEffect) {
   const provision = ui?.provision;
-  if (!provision || provision.truncated || provision.text_truncated || provision.outline_only)
+  if (!provision
+      || reportedTruncation(provision.truncated) !== false
+      || reportedTruncation(provision.text_truncated) !== false
+      || provision.outline_only)
     return undefined;
   const evidence = provision.evidence?.[0];
   return {

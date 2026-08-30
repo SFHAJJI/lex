@@ -1023,6 +1023,46 @@ public class UiEffectTests
     }
 
     [Fact]
+    public void Provision_truncation_receipts_fail_closed_at_the_untrusted_boundary()
+    {
+        static ProvisionView Map(JsonNode? truncated, bool includeTruncated,
+            JsonNode? textTruncated, bool includeTextTruncated)
+        {
+            var response = new JsonObject
+            {
+                ["document"] = new JsonObject
+                {
+                    ["work"] = "eu-eurlex:32016r0679",
+                    ["valid_from"] = "2021-01-01",
+                },
+                ["provisions"] = new JsonArray(new JsonObject
+                {
+                    ["anchor"] = "art_6", ["text"] = "Lawful processing.",
+                }),
+            };
+            if (includeTruncated) response["truncated"] = truncated;
+            if (includeTextTruncated) response["text_truncated"] = textTruncated;
+            return Assert.IsType<ProvisionView>(UiMapper.From("as_of",
+                Args(("work", "eu-eurlex:32016r0679"), ("date", "2021-01-01")),
+                response).Provision);
+        }
+
+        var absent = Map(null, false, null, false);
+        Assert.Null(absent.Truncated);
+        Assert.Null(absent.TextTruncated);
+
+        foreach (var hostile in new[] { "\"false\"", "0", "[]", "{}" })
+        {
+            Assert.Null(Map(JsonNode.Parse(hostile), true, JsonValue.Create(false), true).Truncated);
+            Assert.Null(Map(JsonValue.Create(false), true, JsonNode.Parse(hostile), true).TextTruncated);
+        }
+
+        var exact = Map(JsonValue.Create(false), true, JsonValue.Create(false), true);
+        Assert.False(exact.Truncated);
+        Assert.False(exact.TextTruncated);
+    }
+
+    [Fact]
     public void A_half_resolved_diff_still_maps()
     {
         // A diff whose second side did not resolve used to throw inside the mapper, which loses

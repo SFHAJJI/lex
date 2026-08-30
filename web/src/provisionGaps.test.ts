@@ -28,6 +28,8 @@ const gap = {
 test("canon/2 rows preserve mixed publisher order and keep gaps textless", () => {
   const result = {
     text_completeness: "partial",
+    truncated: false,
+    text_truncated: false,
     provisions: [{
       document_order: 0,
       anchor: "art_1",
@@ -57,6 +59,8 @@ test("assistant text and typed gaps retain one publisher document order", () => 
     subject: { work: "t-pub:work" },
     valid_from: "2025-01-01",
     text_completeness: "partial",
+    truncated: false,
+    text_truncated: false,
     provisions: [
       { document_order: 0, anchor: "art_1", text: "One." },
       { document_order: 2, anchor: "art_3", text: "Three." },
@@ -119,6 +123,8 @@ test("HTTP ELI cannot mask a separate HTTPS publisher source", () => {
     provisions: [],
     provision_gaps: [sourceGap],
     text_completeness: "unavailable",
+    truncated: false,
+    text_truncated: false,
   } });
 
   assert.equal(direct.eli, sourceGap.eli);
@@ -172,6 +178,8 @@ test("a gap-only publisher result remains selectable and loads as a typed worksp
       provisions: [],
       provision_gaps: [gap],
       text_completeness: "unavailable",
+      truncated: false,
+      text_truncated: false,
     },
   });
   assert.equal(loaded?.items.length, 1);

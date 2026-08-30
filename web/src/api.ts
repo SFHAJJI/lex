@@ -677,8 +677,8 @@ export interface UiEffect {
    */
   conflicted_publishers?: string[];
   provision?: { subject: Subject; valid_from: string; valid_to?: string; provisions: ProvisionItem[]; permalink?: string;
-                evidence?: EvidenceContext[]; total_provisions?: number; truncated?: boolean;
-                text_truncated?: boolean; outline_only?: boolean;
+                 evidence?: EvidenceContext[]; total_provisions?: number; truncated?: boolean | null;
+                 text_truncated?: boolean | null; outline_only?: boolean;
                 provision_gaps?: ProvisionItem[]; total_provision_gaps?: number;
                 text_completeness?: string };
   diff?: { subject: Subject; from_date: string; to_date: string; note?: string; status?: string;

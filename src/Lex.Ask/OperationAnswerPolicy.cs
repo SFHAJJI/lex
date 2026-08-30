@@ -232,30 +232,30 @@ internal static class OperationAnswerPolicy
                     : $" It includes {gapTotal:n0} coordinate(s) without certified wording, marked as typed gaps.";
                 return fr
                     ? $"La table des matières publiée de {Name(provision.Subject)} au {provision.ValidFrom} est affichée ci-dessous"
-                      + (provision.Truncated ? "; cette vue bornée n'en montre qu'une partie." : ".")
+                      + (provision.Truncated == true ? "; cette vue bornée n'en montre qu'une partie." : ".")
                       + gapDisclosure + served
                     : $"The publisher table of contents for {Name(provision.Subject)} at {provision.ValidFrom} is open below"
-                      + (provision.Truncated ? "; this bounded view shows only part of it." : ".")
+                      + (provision.Truncated == true ? "; this bounded view shows only part of it." : ".")
                       + gapDisclosure + served;
             }
             if (provision.ProvisionGaps is { Count: > 0 } typedGaps)
             {
                 var totalGaps = provision.TotalProvisionGaps ?? typedGaps.Count;
-                var bounded = provision.Truncated || provision.TextTruncated
+                var bounded = provision.Truncated != false || provision.TextTruncated != false
                     || totalGaps > typedGaps.Count;
                 if (bounded)
                     return fr
                         ? $"Lex détient un état éditeur partiel de {Name(provision.Subject)} au {provision.ValidFrom} : {totalGaps:n0} coordonnée(s) publiée(s) n'ont pas de libellé certifié. Cette réponse bornée affiche {typedGaps.Count:n0} lacune(s) typée(s)"
-                          + (provision.TextTruncated ? " et omet une partie du texte éditeur détenu" : "")
+                          + (provision.TextTruncated == true ? " et omet une partie du texte éditeur détenu" : "")
                           + "; une source officielle accompagne chaque lacune affichée." + served
                         : $"Lex holds a partial publisher state for {Name(provision.Subject)} at {provision.ValidFrom}: {totalGaps:n0} published coordinate(s) have no certified wording. This bounded response shows {typedGaps.Count:n0} typed gap(s)"
-                          + (provision.TextTruncated ? " and omits some held publisher text" : "")
+                          + (provision.TextTruncated == true ? " and omits some held publisher text" : "")
                           + "; an official source accompanies each shown gap." + served;
                 return fr
                     ? $"Lex affiche le texte éditeur certifié disponible de {Name(provision.Subject)} au {provision.ValidFrom}, mais {typedGaps.Count:n0} coordonnée(s) publiée(s) n'ont pas de libellé certifié. Les lacunes typées et leurs sources officielles sont affichées ci-dessous." + served
                     : $"Lex shows the available certified publisher text for {Name(provision.Subject)} at {provision.ValidFrom}, but {typedGaps.Count:n0} published coordinate(s) have no certified wording. The typed gaps and their official sources are shown below." + served;
             }
-            if (provision.TextTruncated)
+            if (provision.TextTruncated == true)
                 return fr
                     ? $"Lex détient le texte publié de {Name(provision.Subject)} au {provision.ValidFrom}, mais cette réponse bornée n'en affiche qu'une partie. Les liens officiels sont disponibles ci-dessous." + served
                     : $"Lex holds the publisher text for {Name(provision.Subject)} at {provision.ValidFrom}, but this bounded response shows only part of it. The official links are available below." + served;

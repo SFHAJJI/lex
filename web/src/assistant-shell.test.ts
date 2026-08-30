@@ -17,6 +17,8 @@ test("navigating from an assistant reply never retains stale publisher text", ()
       valid_from: "2021-01-01",
       valid_to: "2021-12-31",
       provisions: [{ anchor: "art_6", text: "Lawful processing." }],
+      truncated: false,
+      text_truncated: false,
     },
   };
   assert.deepEqual(assistantProvisionLoad(full), {
@@ -33,6 +35,16 @@ test("navigating from an assistant reply never retains stale publisher text", ()
   assert.equal(assistantProvisionLoad({ provision: {
     ...full.provision, truncated: true,
   } }), undefined);
+  const { truncated: _truncated, ...withoutTruncation } = full.provision;
+  assert.equal(assistantProvisionLoad({ provision: withoutTruncation }), undefined);
+  const { text_truncated: _textTruncated, ...withoutTextTruncation } = full.provision;
+  assert.equal(assistantProvisionLoad({ provision: withoutTextTruncation }), undefined);
+  assert.equal(assistantProvisionLoad({ provision: {
+    ...full.provision, truncated: "false" as unknown as boolean,
+  } }), undefined);
+  assert.equal(assistantProvisionLoad({ provision: {
+    ...full.provision, text_truncated: 0 as unknown as boolean,
+  } }), undefined);
   assert.equal(assistantProvisionLoad({ diff: {
     subject: { work: "eu-eurlex:32013r0575" },
     from_date: "2020-01-01", to_date: "2024-12-31",
@@ -44,6 +56,8 @@ test("assistant-seeded legal text preserves its publisher source and extraction 
     subject: { work: "eu-eurlex:32016r0679", date: "2021-01-01" },
     valid_from: "2021-01-01",
     provisions: [{ anchor: "art_6", text: "Lawful processing." }],
+    truncated: false,
+    text_truncated: false,
     evidence: [{
       provisional: false,
       source_uri: "https://publisher.example/exact",
