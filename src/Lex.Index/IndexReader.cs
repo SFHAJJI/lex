@@ -138,7 +138,7 @@ public sealed class LexIndexReader : IDisposable
 
     public static LexIndexReader Open(string dbPath, ITextEncoder? encoder = null, string? vectorPath = null)
     {
-        var conn = new SqliteConnection($"Data Source={dbPath};Mode=ReadOnly");
+        var conn = new SqliteConnection($"Data Source={dbPath};Mode=ReadOnly;Pooling=False");
         SemanticVectorReader? vectors = null;
         SqliteConnection? integrityLease = null;
         try
@@ -570,7 +570,7 @@ public sealed class LexIndexReader : IDisposable
         IReadOnlyDictionary<string, string> expectedStamp)
     {
         var lease = new SqliteConnection(
-            $"Data Source={dbPath};Mode=ReadOnly;Default Timeout=0");
+            $"Data Source={dbPath};Mode=ReadOnly;Default Timeout=0;Pooling=False");
         try
         {
             lease.Open();

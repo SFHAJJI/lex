@@ -2430,7 +2430,7 @@ public sealed class AskOperationControllerTests : IDisposable
     public void Dispose()
     {
         _reader.Dispose();
-        try { File.Delete(_db); } catch { }
+        File.Delete(_db);
     }
 
     /// <summary>
