@@ -14,7 +14,7 @@ and a hashed provenance record, and an honest, machine-readable refusal when it
 cannot know.
 
 **[Live demo](https://law.soufien.lu)** ·
-**[Ask the AI](https://law.soufien.lu)** ·
+**[Search held law](https://law.soufien.lu)** ·
 **[MCP endpoint](https://law.soufien.lu/mcp)** ·
 **[Dataset (CC-BY)](https://github.com/SFHAJJI/lex-articles)** ·
 **[Examples](https://github.com/SFHAJJI/lex-articles/tree/main/examples)** ·
@@ -63,7 +63,9 @@ metadata to the official MCP Registry from GitHub Actions using OIDC. Lex
 intentionally does not publish an npm package: the command above is a
 compatibility bridge for older clients, not a second implementation.
 
-Or ask the [live site](https://law.soufien.lu). A real answer, verbatim:
+The following is a historical V2 example. The public assistant is temporarily
+unavailable while Lex installs its deterministic V3 answer path; search, direct
+law pages and MCP remain available. Historical answer, verbatim:
 
 > **Q: What did CRR Article 92 require as capital ratios on 1 March 2020, and has that text changed since?**
 >
@@ -79,8 +81,8 @@ Or ask the [live site](https://law.soufien.lu). A real answer, verbatim:
 > 2021-06-29 → 2022-12-31, 2023-01-01 → 2024-12-31 and 2025-01-01 onward, each
 > with its own permalink and sha256.
 
-Every claim in that answer came from a deterministic tool call (the trace is
-shown under each reply); the model never answers from its own memory.
+Every claim in that historical answer came from a deterministic tool call (the
+trace was shown under each reply); the model did not answer from its own memory.
 Do not take this file's word for it, the numbers above are checkable in one call,
 and if they ever drift from the live system, that is a bug worth reporting:
 
@@ -98,8 +100,8 @@ curl -s -X POST https://law.soufien.lu/mcp -H 'Content-Type: application/json' \
 - **A legal-tech developer** building RAG over law that must not hallucinate
   versions: per-article chunks with `valid_from`/`valid_to` to filter *before*
   similarity ([dataset](https://github.com/SFHAJJI/lex-articles)).
-- **An AI agent** using the MCP tools directly, the same tools the site's
-  own AI uses, at the same endpoint.
+- **An external AI agent** using the public MCP tools directly. The site's own
+  assistant is unavailable during the V3 answer-path replacement.
 - **A researcher** tracking how one article's text evolved across amendments
   (`article_history`: every distinct text state, dated).
 
@@ -108,13 +110,13 @@ curl -s -X POST https://law.soufien.lu/mcp -H 'Content-Type: application/json' \
 Lex answers *what the rule was*. It does not decide "were we compliant?", "does
 this apply to me?", or "what does this mean?", those are professional opinions.
 The evidence, index and MCP layers never generate or interpret legal text
-(fitness rule F10). The optional assistant may explain retrieved evidence, but
-it is visibly separate, carries the tool trace and is not part of the record.
+(fitness rule F10). The reviewed V3 assistant design may later explain retrieved
+evidence, but that path is currently contained and is not part of the record.
 
 ## Architecture (one screen)
 
 ```
-APPS        Lex.Ingest (CLI)   Lex.Mcp.Stdio (local host)   Lex.Web (site + HTTP MCP)   Lex.Ask (AI loop)
+APPS        Lex.Ingest (CLI)   Lex.Mcp.Stdio (local host)   Lex.Web (site + HTTP MCP)   Lex.Ask (V3 replacement, contained)
 PROTOCOL    Lex.Mcp (legal tools + official MCP SDK bridge; transport-neutral library)
 DERIVED     Lex.Derive, evidence -> provision Markdown+JSON (immutable profiles include akn-lu/1, akn-lu/2, akn-lu-identical-scl-duplicate/1, akn-lu-document/1, pdf-memorial-lu/2, fmx4-eu/1, xhtml-eu/1)
 ADAPTERS    Lex.Sources.Legilux (Tier A, SPARQL)   Lex.Sources.EurLex (Tier A, Cellar + Formex)
@@ -268,10 +270,10 @@ clarification. Official publisher subjects, EuroVoc relations, and directory
 coordinates support weak discovery but never become legal-text evidence or work
 identity. No manually curated legal aliases are loaded. Model-derived weak discovery is
 not active, and keyword remains the production default because the signed hybrid
-holdout gate has not passed. The optional assistant runs a bounded retrieval loop over
-the same tools, then uses Agent Framework for claim-typed composition and a conditional
-grounding judge. Application code retains work resolution, tool authorization, citation
-and gap authority. `coverage` exists to say what Lex does **not** have, because a system
+holdout gate has not passed. The reviewed target V3 assistant uses the same tools,
+claim-typed composition and a separately gated grounding step. It is not active until
+the complete answer-dossier path passes review and promotion. Application code retains
+work resolution, tool authorization, citation and gap authority. `coverage` exists to say what Lex does **not** have, because a system
 that cannot state its own gaps cannot be trusted with a completeness question.
 
 ## Contributing

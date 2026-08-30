@@ -1,21 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   actionableClarificationChoices,
+  assistantUnavailableActions,
   AssistantResponseError,
   askQuestionError,
   askStreaming,
   clarificationFollowUp,
   executionDetails,
   resetAskThread,
+  retainsAssistantConversation,
   shouldOfferContextualFollowUps,
   type AskMessage,
   type AskReply,
   type AskExecutionDetails,
+  type AssistantUnavailableAction,
   type ClarificationChoice,
   type Step,
 } from "./api";
 import AskPanel from "./AskPanel";
-import { assistantWorkspaceUrl, stepWorkspaceUrl } from "./assistantShell";
+import {
+  assistantWorkspaceUrl,
+  stepWorkspaceUrl,
+  type AssistantNavigationKind,
+} from "./assistantShell";
 
 const MAX_VISIBLE_MESSAGES = 12;
 
@@ -48,6 +55,7 @@ export default function AssistantController({
   const [conversation, setConversation] = useState<AskMessage[]>([]);
   const [activeQuestion, setActiveQuestion] = useState<string>();
   const [execution, setExecution] = useState<AskExecutionDetails>();
+  const [unavailableActions, setUnavailableActions] = useState<AssistantUnavailableAction[]>([]);
   const [clarification, setClarification] = useState<{
     context: string; choices: ClarificationChoice[];
   }>();
@@ -70,6 +78,7 @@ export default function AssistantController({
       setSteps([]);
       setClarification(undefined);
       setExecution(undefined);
+      setUnavailableActions([]);
       return;
     }
     setConversation(history.current);
@@ -81,6 +90,7 @@ export default function AssistantController({
     setSteps([]);
     setClarification(undefined);
     setExecution(undefined);
+    setUnavailableActions([]);
     abort.current?.abort();
     const controller = new AbortController();
     abort.current = controller;
@@ -111,6 +121,7 @@ export default function AssistantController({
       const details = executionDetails(reply);
       setSaid(reply.error ?? visibleReply);
       setExecution(details);
+      setUnavailableActions(assistantUnavailableActions(reply.ui));
       const choices = reply.clarification
         ? actionableClarificationChoices(reply.clarification)
         : undefined;
@@ -118,7 +129,11 @@ export default function AssistantController({
         ? { context: question, choices }
         : undefined);
       setAllowContextualFollowUps(shouldOfferContextualFollowUps(reply));
-      if (!reply.error) {
+      if (!retainsAssistantConversation(reply)) {
+        threadToken.current = undefined;
+        history.current = [];
+        setConversation([]);
+      } else if (!reply.error) {
         threadToken.current = reply.thread_token;
         history.current = boundedVisibleConversation([
           ...history.current,
@@ -139,6 +154,7 @@ export default function AssistantController({
         setSaid(error instanceof AssistantResponseError
           ? error.message : "The request failed, try again.");
         setExecution(undefined);
+        setUnavailableActions([]);
       }
     } finally {
       if (abort.current === controller) setBusy(false);
@@ -161,6 +177,7 @@ export default function AssistantController({
     setSteps([]);
     setClarification(undefined);
     setExecution(undefined);
+    setUnavailableActions([]);
     setBusy(false);
   }, []);
 
@@ -170,9 +187,25 @@ export default function AssistantController({
         run: () => submit(clarificationFollowUp(clarification.context, choice)),
       }))
     : [
-        ...(resultUrl ? [{ label: "Open the structured result", run: () => location.assign(resultUrl) }] : []),
-        ...(allowContextualFollowUps ? contextualFollowUps ?? [] : []),
+        ...unavailableActions.map((action) => ({
+          label: action.label,
+          run: () => location.assign(action.href),
+          navigation: "document" as const,
+        })),
+        ...(resultUrl ? [{
+          label: "Open the structured result",
+          run: () => location.assign(resultUrl),
+          navigation: "document" as const,
+        }] : []),
+        ...(allowContextualFollowUps
+          ? (contextualFollowUps ?? []).map((followUp) => ({
+              ...followUp,
+              navigation: "workspace" as const,
+            }))
+          : []),
       ];
+
+  const openStepNavigation: AssistantNavigationKind = onOpenStep ? "workspace" : "document";
 
   return <AskPanel
     q={q}
@@ -186,6 +219,7 @@ export default function AssistantController({
     onSubmit={submit}
     onReset={resetConversation}
     followUps={followUps}
+    onOpenStepNavigation={openStepNavigation}
     onOpenStep={onOpenStep ?? ((step) => {
       const url = stepWorkspaceUrl(step);
       if (url) location.assign(url);

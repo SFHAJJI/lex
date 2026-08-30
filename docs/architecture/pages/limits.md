@@ -3,14 +3,17 @@
 Scale decisions are tied to observable triggers. The system stays simple while the current
 bottleneck is bounded, and each next move names the capability it buys and the complexity it adds.
 
+The public assistant is currently unavailable. Assistant and agent limits below are dormant target
+V3 controls, not evidence of live model traffic.
+
 ![Current single-process Lex scales through measured triggers: narrow lock scope first, externalize ledgers before replicas, then move artifacts to local disk only when memory requires it.](/built/diagrams/scale.svg)
 
 [Open the scale diagram at full size](/built/diagrams/scale.svg)
 
 | Box | Responsibility | Owner |
 |---|---|---|
-| One process | Keep local indexes, thread state and admission ledgers authoritative | `Lex.Web` with in-process `Lex.Mcp` and `Lex.Ask` |
-| Narrow gates | Relieve measured encoder or vector contention before adding services | MCP and assistant admission controllers |
+| One process | Keep local indexes authoritative; keep dormant assistant state isolated until V3 activation | `Lex.Web` with in-process `Lex.Mcp` and contained `Lex.Ask` |
+| Narrow gates | Relieve measured encoder or vector contention before adding services | MCP and future assistant admission controllers |
 | Externalize state | Make quotas, idempotency and thread continuity replica-safe | deferred shared-state boundary |
 | Replicas or local disk | Add request capacity only after state is shared; move artifacts only after memory pressure | future runtime and deployment decision |
 
@@ -19,9 +22,9 @@ bottleneck is bounded, and each next move names the capability it buys and the c
 | Boundary | Current design | Consequence |
 |---|---|---|
 | Runtime | One always-on Container Apps replica with local immutable indexes | Fast in-process calls; process-local quotas and thread memory are authoritative |
-| Assistant | Defaults of four concurrent turns, 200 accepted turns per client address and 400 globally per day | Predictable public cost; NAT and rotating addresses are not identities |
+| Assistant, dormant | Target defaults of four concurrent turns, 200 accepted turns per client address and 400 globally per day | No public turns are admitted during V3 replacement; limits require fresh evidence before activation |
 | MCP | Eight executing, sixteen queued, a two-second queue deadline, two hybrid slots, and rolling 120 per client and 600 global calls per minute | Overload becomes a typed refusal rather than unbounded latency |
-| Agent | Eight frozen operations, 64 evidence items and 96,000 evidence characters | A large research request must be decomposed by the reader |
+| Agent, dormant | Target bounds of eight frozen operations, 64 evidence items and 96,000 evidence characters | These limits authorize nothing until the V3 assistant is promoted |
 | Retrieval | Keyword default; hybrid available only behind signed evidence gates | Conceptual recall improvements do not outrank measured precision |
 | Release | One current revision, one exact rollback, one transient candidate | No unlimited artifact or revision accumulation |
 
@@ -33,7 +36,7 @@ candidate promotion. Older figures are historical observations and are not prese
 | Observable trigger | Next move | Cost introduced |
 |---|---|---|
 | MCP queue-deadline refusals | Narrow the gate to encoder and vector work before adding infrastructure | More concurrency paths to test |
-| Global daily cap saturation or repeated Azure OpenAI 429s, observed manually today since no alert rule exists yet | Raise model quota and public budget together; consider provisioned throughput only after utilization proves it | Higher fixed or variable model cost |
+| After V3 activation, global daily cap saturation or repeated Azure OpenAI 429s | Add an alert, then raise model quota and public budget together; consider provisioned throughput only after utilization proves it | Higher fixed or variable model cost |
 | Sustained served p95 above the release threshold | Externalize quota, idempotency and thread state, then add replicas | A shared state dependency and distributed coordination |
 | Working set approaches the container memory gate | Move signed artifacts to verified VM-local disk under D55 | A second deployment path and OS operations |
 | Third publisher admitted | Make the required-publisher set one source and remeasure fan-out | More vocabulary and latency variance |

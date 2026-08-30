@@ -214,6 +214,13 @@ public static class ApiEndpoints
                 return Results.Json(
                     new { error = "Evaluation request was not authorized." },
                     statusCode: evaluationStatus);
+            if (askService.ContainLegacyAuthoritativeRequest() is { } containment)
+            {
+                res.Headers["X-Lex-Request-Id"] = Guid.NewGuid().ToString("N");
+                return Results.Content(
+                    containment.Body.ToJsonString(), "application/json",
+                    statusCode: containment.Status);
+            }
             // Last X-Forwarded-For element: appended by our ingress, not spoofable by the client
             // (the first element is client-controlled and would reset the per-IP cap).
             var ip = ClientAddress(req);
@@ -256,12 +263,13 @@ public static class ApiEndpoints
                         ? AskAdmissionLane.Public
                         : AskAdmissionLane.Evaluation);
                 var (status, bodyJson) = outcome;
-                var stored = status == 200 && bodyJson["error"] is null
+                var stored = outcome.RetainConversation
+                    && status == 200 && bodyJson["error"] is null
                     && AssistantReply(bodyJson) is { } assistant
                     && thread.Commit(
                         message, assistant, outcome.ConversationContext,
                         outcome.ContextDisposition);
-                if (stored || threadToken is not null)
+                if (outcome.RetainConversation && (stored || threadToken is not null))
                     bodyJson["thread_token"] = thread.Token;
                 var json = bodyJson.ToJsonString();
                 if (outcome.RetainForReplay)
@@ -331,6 +339,26 @@ public static class ApiEndpoints
                     out var evaluationStatus))
             {
                 await Reject(evaluationStatus, "Evaluation request was not authorized.");
+                return;
+            }
+            if (askService.ContainLegacyAuthoritativeRequest() is { } containment)
+            {
+                var containmentRequestId = Guid.NewGuid().ToString("N");
+                res.Headers.ContentType = "text/event-stream";
+                res.Headers["X-Accel-Buffering"] = "no";
+                res.Headers["X-Lex-Request-Id"] = containmentRequestId;
+                var envelope = new JsonObject
+                {
+                    ["version"] = "1",
+                    ["request_id"] = containmentRequestId,
+                    ["sequence"] = 1,
+                    ["server_elapsed_ms"] = streamWatch.Elapsed.TotalMilliseconds,
+                    ["payload"] = containment.Body,
+                };
+                await res.WriteAsync(
+                    $"event: done\ndata: {envelope.ToJsonString()}\n\n",
+                    req.HttpContext.RequestAborted);
+                await res.Body.FlushAsync(req.HttpContext.RequestAborted);
                 return;
             }
             var ip = ClientAddress(req);
@@ -555,12 +583,13 @@ public static class ApiEndpoints
                 {
                     ["operation_result_emitted_ms"] = firstOperationEmittedMilliseconds,
                 };
-            var stored = status == 200 && bodyJson["error"] is null
+            var stored = outcome.RetainConversation
+                && status == 200 && bodyJson["error"] is null
                 && AssistantReply(bodyJson) is { } assistant
                 && ownedThread.Commit(
                     message, assistant, outcome.ConversationContext,
                     outcome.ContextDisposition);
-            if (stored || threadToken is not null)
+            if (outcome.RetainConversation && (stored || threadToken is not null))
                 bodyJson["thread_token"] = ownedThread.Token;
             if (outcome.RetainForReplay)
                 ownedEvaluationUse?.Commit(stored ? ownedThread.Token : null);

@@ -365,7 +365,12 @@ public sealed record GapView(string Status, string? Work, string? Date, string E
     IReadOnlyList<string>? ComparisonLimitations = null,
     bool ComparisonLimitationsMalformed = false,
     string? ComparisonFromDate = null,
-    string? ComparisonToDate = null);
+    string? ComparisonToDate = null,
+    IReadOnlyList<string>? Actions = null,
+    string? RequestedLocale = null,
+    string? FallbackLocale = null,
+    IReadOnlyList<string>? AvailableLocales = null,
+    IReadOnlyDictionary<string, string>? LocalizedNotices = null);
 
 /// <summary>
 /// One publisher-specific capability refusal retained beside successful rows from another

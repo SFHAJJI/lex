@@ -28,6 +28,7 @@ public sealed class AskService
     // one branch the repair turn lives in.
     private readonly Func<JsonObject, CancellationToken, Task<JsonNode?>>? _plannerSend;
     private readonly CorpusVocabulary _vocabulary;
+    private readonly bool _legacyAuthoritativeAssistantContained;
 
     internal static readonly TimeSpan DefaultPlannerDeadline = TimeSpan.FromSeconds(12);
     internal static readonly TimeSpan DefaultFirstResultDeadline = TimeSpan.FromSeconds(25);
@@ -46,6 +47,7 @@ public sealed class AskService
         _firstResultDeadline = DefaultFirstResultDeadline;
         _synthesisDeadline = DefaultSynthesisDeadline;
         _legalTool = core.CallToolAsync;
+        _legacyAuthoritativeAssistantContained = true;
     }
 
     internal AskService(
@@ -57,7 +59,8 @@ public sealed class AskService
         TimeSpan? firstResultDeadline = null,
         TimeSpan? synthesisDeadline = null,
         Func<string, JsonObject, CancellationToken, ValueTask<JsonNode>>? legalTool = null,
-        Func<JsonObject, CancellationToken, Task<JsonNode?>>? plannerSend = null)
+        Func<JsonObject, CancellationToken, Task<JsonNode?>>? plannerSend = null,
+        bool containLegacyAuthoritativeAssistant = false)
     {
         this.core = core;
         _vocabulary = VocabularyOf(core);
@@ -69,6 +72,7 @@ public sealed class AskService
         _firstResultDeadline = firstResultDeadline ?? DefaultFirstResultDeadline;
         _synthesisDeadline = synthesisDeadline ?? DefaultSynthesisDeadline;
         _legalTool = legalTool ?? core.CallToolAsync;
+        _legacyAuthoritativeAssistantContained = containLegacyAuthoritativeAssistant;
         // Name the deadline that is actually wrong. Reporting plannerDeadline for every one of
         // the three sends whoever misconfigured a service to the wrong line.
         if (_plannerDeadline <= TimeSpan.Zero)
@@ -696,9 +700,10 @@ public sealed class AskService
     private readonly string _deployment = Environment.GetEnvironmentVariable("AOAI_CHAT_DEPLOYMENT") ?? "gpt-5-mini";
     private AgentAnswerFinalizer? _answerFinalizer;
 
-    public bool Enabled => _planner is not null || _plannerSend is not null
-                           || (!string.IsNullOrEmpty(_endpoint)
-                               && (_useManagedIdentity || !string.IsNullOrEmpty(_key)));
+    public bool Enabled => !_legacyAuthoritativeAssistantContained
+                           && (_planner is not null || _plannerSend is not null
+                               || (!string.IsNullOrEmpty(_endpoint)
+                                   && (_useManagedIdentity || !string.IsNullOrEmpty(_key))));
 
     private static int EnvInt(string name, int dflt)
         => int.TryParse(Environment.GetEnvironmentVariable(name), out var v) && v > 0 ? v : dflt;
@@ -2273,7 +2278,8 @@ public sealed class AskService
         bool RetainForReplay,
         AskConversationContext? ConversationContext = null,
         AskConversationContextDisposition ContextDisposition =
-            AskConversationContextDisposition.Preserve)
+            AskConversationContextDisposition.Preserve,
+        bool RetainConversation = true)
     {
         public void Deconstruct(out int status, out JsonObject body)
             => (status, body) = (Status, Body);
@@ -2587,6 +2593,8 @@ public sealed class AskService
         AskConversationContext? conversationContext = null,
         AskAdmissionLane admissionLane = AskAdmissionLane.Public)
     {
+        if (_legacyAuthoritativeAssistantContained)
+            return AssistantV3Unavailable();
         if (!Enabled)
             return new AskOutcome(503, new JsonObject
             {
@@ -2810,6 +2818,40 @@ public sealed class AskService
         }
     }
 
+    public AskOutcome? ContainLegacyAuthoritativeRequest() =>
+        _legacyAuthoritativeAssistantContained
+            ? AssistantV3Unavailable()
+            : null;
+
+    private static AskOutcome AssistantV3Unavailable()
+    {
+        const string english =
+            "The assistant is temporarily unavailable while Lex installs its deterministic V3 answer path, checkable against its sources. Search and held publisher text remain available.";
+        const string french =
+            "L'assistant est temporairement indisponible pendant que Lex met en place son parcours de réponse V3 déterministe et vérifiable par ses sources. La recherche et les textes publiés que Lex détient restent disponibles.";
+        const string localizationUnavailable =
+            "Lex cannot provide this assistant notice in the requested language yet. The assistant is unavailable during the V3 answer-path replacement. Search and held publisher text remain available.";
+        var effect = new UiEffect(Gap: new GapView(
+            "localization_unavailable", null, null, localizationUnavailable, [],
+            Actions: ["search", "browse"],
+            RequestedLocale: "undetermined",
+            FallbackLocale: "en",
+            AvailableLocales: ["en", "fr"],
+            LocalizedNotices: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["en"] = english,
+                ["fr"] = french,
+            }));
+        var body = Body(localizationUnavailable, "en", [], [effect]);
+        body["operations"] = new JsonArray();
+        body["narrated"] = false;
+        return new AskOutcome(
+            200, body, RetainForReplay: false,
+            ConversationContext: null,
+            ContextDisposition: AskConversationContextDisposition.Clear,
+            RetainConversation: false);
+    }
+
     private static AskOutcome SubjectClarificationOutcome(
         string requestId,
         string locale,
@@ -2870,6 +2912,13 @@ public sealed class AskService
         "give", "list", "find", "quote", "compare", "explain", "does", "do", "did", "is",
         "are", "was", "were", "must", "should", "shall", "can", "could", "will", "would",
         "need", "i", "my", "me", "you", "your", "under", "between", "whether",
+    };
+
+    // These spellings are ordinary English verbs and French frame words. Their presence cannot
+    // confidently select either reviewed catalogue, even when another function word is present.
+    private static readonly HashSet<string> SharedEnglishFrenchFrame = new(StringComparer.Ordinal)
+    {
+        "cite", "comment", "figure",
     };
 
     private static readonly HashSet<string> FrenchFunction = new(StringComparer.Ordinal)

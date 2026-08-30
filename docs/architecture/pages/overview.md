@@ -5,16 +5,21 @@ Luxembourg and EU publisher material into article-level research with an officia
 version and a verifiable evidence chain. It does not decide legal applicability or advise a reader
 what to do.
 
+The public assistant is temporarily unavailable while Lex replaces the V2 model-authored path.
+Assistant and agent references below describe the reviewed V3 target design, not a live capability.
+Direct search, law pages and MCP remain available.
+
 ![Three planes: a nightly data plane from publishers through an append-only corpus, gated derivation and index build to signed artifacts; a per-release plane from an immutable image through a zero-traffic candidate, gates and a signed evaluation to one promotion; a per-question runtime plane from reader through admission, subject preflight, planner, gate and freeze, executor and the legal core to a typed reply with an optional composer and judge.](/built/diagrams/three-planes.svg)
 
 [Open the three-plane diagram at full size](/built/diagrams/three-planes.svg)
 
-The whole system is three planes that meet at exactly two artifacts. The data plane runs nightly
+The target system is three planes that meet at exactly two artifacts. The data plane runs nightly
 and turns publisher bytes into an append-only corpus, deterministic derivations and a signed
 index. The release plane runs per release and turns code plus verified indexes into one immutable
 image that must pass its gates and a signed evaluation before a single promotion. The runtime
-plane runs per question and answers from the signed index alone, resolving identity before any
-model, freezing one typed plan, and returning typed, cited results. The planes never share state
+plane already serves deterministic UI and MCP requests from the signed index alone. Its V3
+assistant branch will resolve identity before any model, freeze one typed plan and return typed,
+cited results after promotion. The planes never share state
 except the two signed artifacts: the index manifest binds the data plane to the release plane,
 and the evaluation report binds the release plane to the exact revision that serves.
 
@@ -22,7 +27,7 @@ and the evaluation report binds the release plane to the exact revision that ser
 |---|---|---|---|
 | Data | Nightly, per publisher | Append-only corpus, derived articles, SQLite index | Signed artifact manifests |
 | Release | Per release | Immutable image, zero-traffic candidate, gates, signed evaluation | One promotion, rollback retained |
-| Runtime | Per question | Identity in code, one frozen plan, typed cited reply, optional judged prose | Nothing; it only reads the two signed artifacts |
+| Runtime | Per request | Deterministic UI and MCP results today; a frozen-plan assistant only after V3 promotion | Nothing; it only reads the two signed artifacts |
 
 ## Where each responsibility lives
 
@@ -32,7 +37,7 @@ and the evaluation report binds the release plane to the exact revision that ser
 | Evidence and derivation | Preserve publisher bytes, then extract articles or typed gaps reproducibly | `lex-corpus-*`, `Lex.Sources.*`, `Lex.Law` and `Lex.Derive` |
 | Signed index | Bind time, text, metadata, vectors and provenance into local immutable artifacts | `Lex.Index` and `Lex.Temporal` version identity, built by `Lex.Ingest` |
 | Legal core | Execute the same closed read-only operations for every channel | `Lex.Mcp` |
-| Bounded agent | Plan against closed schemas and optionally explain an accepted evidence ledger | `Lex.Ask` |
+| Target V3 agent, currently contained | Plan against closed schemas and optionally explain an accepted evidence ledger | `Lex.Ask` |
 | Reader channels | Render the workspace and expose HTTP or stdio MCP without duplicating legal logic | `Lex.Web` and `Lex.Mcp.Stdio` |
 
 ## The decision a reader can make
@@ -48,13 +53,13 @@ and the evaluation report binds the release plane to the exact revision that ser
 ## The architecture in one sentence
 
 Official publisher records become immutable evidence, deterministic derivations and signed local
-indexes; one typed legal core serves the UI, MCP and a bounded agent whose model may plan and
-explain but cannot choose legal identity, dates, evidence or actions.
+indexes; one typed legal core serves the UI and MCP today, and will serve the reviewed V3 agent
+only after promotion. A model can never choose legal identity, dates, evidence or actions.
 
 ## How to read this dossier
 
-The first four tabs explain the legal and retrieval product. **Assistant** shows where the agent is
-useful and where it has no authority. **Release** shows how evaluated code and data become one
+The first four tabs explain the legal and retrieval product. **Assistant** shows the reviewed target
+design, its current unavailability and where a future agent has no authority. **Release** shows how evaluated code and data become one
 rollback-safe revision. The final four tabs expose decisions, incidents, limits and the repository
 split instead of hiding them behind a feature list.
 
@@ -64,7 +69,8 @@ memory and promotion claims appear only when a signed report binds them to that 
 
 ## Why this is more than a naive RAG
 
-Lex is retrieval-augmented generation only when the reader asks for prose. Identity resolution,
+Lex becomes retrieval-augmented generation only when the reviewed V3 assistant is activated and a
+reader asks for prose. Identity resolution,
 point-in-time selection, retrieval, comparison, citations and direct result cards work without
-generation. The default result is deterministic. Optional prose receives an already bounded
-evidence ledger and must bind each claim back to that ledger.
+generation. The current result is deterministic. Any future optional prose receives an already
+bounded evidence ledger and must bind each claim back to that ledger.

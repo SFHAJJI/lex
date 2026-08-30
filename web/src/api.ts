@@ -824,7 +824,56 @@ export interface UiEffect {
           text_truncated?: boolean | null; text_completeness?: string;
           comparison_from_date?: string; comparison_to_date?: string;
           comparison_limitations?: string[];
-          comparison_limitations_malformed?: boolean };
+          comparison_limitations_malformed?: boolean;
+          actions?: unknown; requested_locale?: string; fallback_locale?: string;
+          available_locales?: string[]; localized_notices?: Record<string, string> };
+}
+
+export interface AssistantUnavailableAction {
+  token: "search" | "browse";
+  label: string;
+  href: "/?space=search" | "/browse";
+}
+
+function isAssistantUnavailableNotice(ui?: UiEffect): boolean {
+  const status = ui?.gap?.status;
+  return status === "assistant_v3_unavailable" || status === "localization_unavailable";
+}
+
+export function retainsAssistantConversation(reply: AskReply): boolean {
+  return !isAssistantUnavailableNotice(reply.ui);
+}
+
+/** A containment notice must never displace the held-law workspace already on screen. */
+export function assistantReplyCanReplaceWorkspace(reply: AskReply): boolean {
+  return !isAssistantUnavailableNotice(reply.ui);
+}
+
+/** Untrusted wire tokens can select only these two local, deterministic destinations. */
+export function assistantUnavailableActions(ui?: UiEffect): AssistantUnavailableAction[] {
+  const gap = ui?.gap;
+  if (!gap || !isAssistantUnavailableNotice(ui)) return [];
+  const french = gap.status === "assistant_v3_unavailable" && gap.requested_locale === "fr";
+  const catalogue = {
+    search: {
+      token: "search", label: french ? "Rechercher dans les textes détenus" : "Search held law",
+      href: "/?space=search",
+    },
+    browse: {
+      token: "browse", label: french ? "Parcourir les textes détenus" : "Browse held records",
+      href: "/browse",
+    },
+  } as const;
+  const seen = new Set<string>();
+  const tokens: unknown[] = Array.isArray(gap.actions) ? gap.actions : [];
+  const actions: AssistantUnavailableAction[] = [];
+  for (const token of tokens) {
+    if ((token !== "search" && token !== "browse") || seen.has(token)) continue;
+    seen.add(token);
+    actions.push(catalogue[token]);
+    if (actions.length === 2) break;
+  }
+  return actions;
 }
 export interface RankingRow {
   work: string; title?: string; versions_in_period: number; versions_total: number;

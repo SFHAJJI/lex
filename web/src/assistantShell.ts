@@ -11,6 +11,23 @@ export const STARTER_PROMPTS = [
 ];
 
 export interface AssistantPanelState { open: boolean; minimized: boolean }
+export type AssistantNavigationKind = "document" | "workspace";
+
+/** A modal must uncover the workspace that one of its actions navigates to. */
+export function assistantPanelStateAfterNavigation(
+  current: AssistantPanelState,
+  modal: boolean,
+): AssistantPanelState {
+  return modal ? { open: false, minimized: false } : current;
+}
+
+/** Only a new document needs to carry a one-shot modal dismissal across its mount boundary. */
+export function assistantNavigationNeedsDestinationDismissal(
+  navigation: AssistantNavigationKind,
+  modal: boolean,
+): boolean {
+  return modal && navigation === "document";
+}
 
 /** Only an unbounded provision effect may seed the reader without a follow-up fetch. */
 export function assistantProvisionLoad(ui?: UiEffect) {
@@ -69,6 +86,16 @@ export function parseAssistantPanelState(raw: string | null): AssistantPanelStat
   } catch {
     return { open: false, minimized: false };
   }
+}
+
+export function initialAssistantPanelState(
+  raw: string | null,
+  modal: boolean,
+  dismissAfterNavigation: boolean,
+): AssistantPanelState {
+  if (dismissAfterNavigation || (raw === null && modal))
+    return { open: false, minimized: false };
+  return parseAssistantPanelState(raw);
 }
 
 function workspaceUrl(values: Record<string, string | undefined>): string {
