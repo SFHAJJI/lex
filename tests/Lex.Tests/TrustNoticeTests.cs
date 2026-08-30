@@ -342,6 +342,62 @@ public sealed class TrustNoticeTests : IDisposable
             TrustNotices.SearchAbsence(ran: 1, refused: 1)!, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A dotted path is still a path. MapFallback's default pattern is {*path:nonfile}, which
+    /// excludes anything that looks like a file, so the first version of this fallback answered
+    /// nothing for a whole class of URLs and returned the zero-byte 404 it was written to remove.
+    /// </summary>
+    [Fact]
+    public async Task A_dotted_path_is_answered_like_any_other()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "dotted"), includeAct: false);
+
+        var page = await site.Client.GetAsync("/no-such.css");
+        var pageBody = await page.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.NotFound, page.StatusCode);
+        Assert.Contains("Page not found", pageBody, StringComparison.Ordinal);
+
+        foreach (var machine in new[] { "/api/no-such.json", "/mcp/no-such.json" })
+        {
+            var response = await site.Client.GetAsync(machine);
+            var body = await response.Content.ReadAsStringAsync();
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            Assert.Contains("unknown_route", body, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// Accept is a quality-ranked list, not a set of tokens. Treating any text/html mention as a
+    /// preference hands HTML to a client that wrote text/html;q=0, which is the explicit statement
+    /// that it will not take HTML.
+    /// </summary>
+    [Fact]
+    public async Task Accept_quality_decides_the_representation()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "accept"), includeAct: false);
+
+        async Task<string> Ask(string accept)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "/no-such-page");
+            request.Headers.TryAddWithoutValidation("Accept", accept);
+            var response = await site.Client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            return await response.Content.ReadAsStringAsync();
+        }
+
+        Assert.Contains("unknown_route", await Ask("application/json;q=1,text/html;q=0"),
+            StringComparison.Ordinal);
+        Assert.Contains("unknown_route", await Ask("application/json;q=0.9,text/html;q=0.1"),
+            StringComparison.Ordinal);
+        Assert.Contains("Page not found", await Ask("text/html;q=0.9,application/json;q=0.1"),
+            StringComparison.Ordinal);
+        // A browser's ordinary header, and the tie case: the human surface wins.
+        Assert.Contains("Page not found", await Ask("text/html,application/xhtml+xml,*/*;q=0.8"),
+            StringComparison.Ordinal);
+        Assert.Contains("Page not found", await Ask("application/json,text/html"),
+            StringComparison.Ordinal);
+    }
+
     private const string MetadataOnlyHeading = "No held text match";
 
     /// <summary>
