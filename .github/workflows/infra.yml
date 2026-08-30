@@ -21,6 +21,14 @@ jobs:
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
         with:
           terraform_version: 1.15.8
+      - name: Reject AzureRM data sources that export credentials into state
+        shell: bash
+        run: |
+          set -eu
+          if grep -R -n -E '^[[:space:]]*data[[:space:]]+"azurerm_(storage_account|cognitive_account|container_registry|application_insights)"' --include='*.tf' .; then
+            echo "::error::Construct the resource ID instead. These data sources persist live credentials in Terraform state."
+            exit 1
+          fi
       - run: terraform fmt -check -recursive
       - run: terraform init -backend=false
       - run: terraform validate

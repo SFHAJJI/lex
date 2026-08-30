@@ -4,29 +4,13 @@ data "azurerm_resource_group" "platform" {
   name = var.platform_resource_group
 }
 
-data "azurerm_container_registry" "shared" {
-  name                = var.shared_acr_name
-  resource_group_name = var.shared_acr_resource_group
-}
-
-data "azurerm_cognitive_account" "openai" {
-  name                = var.azure_openai_name
-  resource_group_name = var.azure_openai_resource_group
-}
-
-data "azurerm_cognitive_account" "assistant_grader" {
-  name                = var.assistant_grader_openai_name
-  resource_group_name = var.assistant_grader_openai_resource_group
-}
-
-data "azurerm_application_insights" "web" {
-  name                = var.application_insights_name
-  resource_group_name = data.azurerm_resource_group.platform.name
-}
-
 locals {
   container_app_id             = "${data.azurerm_resource_group.platform.id}/providers/Microsoft.App/containerApps/${var.container_app_name}"
   container_app_environment_id = "${data.azurerm_resource_group.platform.id}/providers/Microsoft.App/managedEnvironments/${var.container_app_environment_name}"
+  shared_acr_id                = "/subscriptions/${var.subscription_id}/resourceGroups/${var.shared_acr_resource_group}/providers/Microsoft.ContainerRegistry/registries/${var.shared_acr_name}"
+  openai_account_id            = "/subscriptions/${var.subscription_id}/resourceGroups/${var.azure_openai_resource_group}/providers/Microsoft.CognitiveServices/accounts/${var.azure_openai_name}"
+  assistant_grader_account_id  = "/subscriptions/${var.subscription_id}/resourceGroups/${var.assistant_grader_openai_resource_group}/providers/Microsoft.CognitiveServices/accounts/${var.assistant_grader_openai_name}"
+  application_insights_id      = "${data.azurerm_resource_group.platform.id}/providers/Microsoft.Insights/components/${var.application_insights_name}"
   telemetry_policy             = jsondecode(file("${path.module}/../deploy/telemetry-policy.json"))
   telemetry_container_apps_workspace = one([
     for workspace in local.telemetry_policy.workspaces : workspace
@@ -44,12 +28,9 @@ locals {
   }
 }
 
-check "telemetry_application_insights_workspace_pin" {
-  assert {
-    condition     = lower(data.azurerm_application_insights.web.workspace_id) == lower(local.telemetry_application_insights_workspace_id)
-    error_message = "Application Insights is not linked to the exact source-controlled workspace."
-  }
-}
+# The deployment preflight reads Application Insights WorkspaceResourceId and validates it against
+# telemetry-policy.json. Keeping that live read outside Terraform avoids persisting the component's
+# instrumentation key and connection string in state.
 
 resource "azurerm_user_assigned_identity" "runtime" {
   name                = "uami-lex-runtime"
@@ -89,25 +70,25 @@ resource "azurerm_federated_identity_credential" "publisher_github" {
 }
 
 resource "azurerm_role_assignment" "runtime_acr_pull" {
-  scope                = data.azurerm_container_registry.shared.id
+  scope                = local.shared_acr_id
   role_definition_name = "AcrPull"
   principal_id         = azurerm_user_assigned_identity.runtime.principal_id
 }
 
 resource "azurerm_role_assignment" "runtime_openai" {
-  scope                = data.azurerm_cognitive_account.openai.id
+  scope                = local.openai_account_id
   role_definition_name = "Cognitive Services OpenAI User"
   principal_id         = azurerm_user_assigned_identity.runtime.principal_id
 }
 
 resource "azurerm_role_assignment" "deploy_acr_tasks" {
-  scope                = data.azurerm_container_registry.shared.id
+  scope                = local.shared_acr_id
   role_definition_name = "Container Registry Tasks Contributor"
   principal_id         = azurerm_user_assigned_identity.deploy.principal_id
 }
 
 resource "azurerm_role_assignment" "deploy_acr_inventory_reader" {
-  scope                = data.azurerm_container_registry.shared.id
+  scope                = local.shared_acr_id
   role_definition_name = "AcrPull"
   principal_id         = azurerm_user_assigned_identity.deploy.principal_id
 }
@@ -158,7 +139,7 @@ resource "azurerm_role_definition" "deploy_application_insights_metadata_reader"
 }
 
 resource "azurerm_role_assignment" "deploy_application_insights_reader" {
-  scope              = data.azurerm_application_insights.web.id
+  scope              = local.application_insights_id
   role_definition_id = azurerm_role_definition.deploy_application_insights_metadata_reader.role_definition_resource_id
   principal_id       = azurerm_user_assigned_identity.deploy.principal_id
 }
@@ -215,7 +196,7 @@ resource "azurerm_role_assignment" "deploy_telemetry_container_app_reader" {
 }
 
 resource "azurerm_role_assignment" "deploy_telemetry_application_insights_reader" {
-  scope              = data.azurerm_application_insights.web.id
+  scope              = local.application_insights_id
   role_definition_id = azurerm_role_definition.deploy_telemetry_configuration_reader.role_definition_resource_id
   principal_id       = azurerm_user_assigned_identity.deploy.principal_id
 }
@@ -337,13 +318,13 @@ resource "azurerm_role_assignment" "publisher_revision_lifecycle" {
 }
 
 resource "azurerm_role_assignment" "publisher_candidate_model_reader" {
-  scope                = data.azurerm_cognitive_account.openai.id
+  scope                = local.openai_account_id
   role_definition_name = "Reader"
   principal_id         = azurerm_user_assigned_identity.publisher.principal_id
 }
 
 resource "azurerm_role_assignment" "publisher_grader_model_reader" {
-  scope                = data.azurerm_cognitive_account.assistant_grader.id
+  scope                = local.assistant_grader_account_id
   role_definition_name = "Reader"
   principal_id         = azurerm_user_assigned_identity.publisher.principal_id
 }
