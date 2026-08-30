@@ -316,8 +316,11 @@ public sealed class TrustNoticeTests : IDisposable
     [Fact]
     public void A_publisher_that_did_not_run_states_its_reason_and_no_count()
     {
+        // The receipt is part of the real shape: McpCore stamps query_ran false on exactly this
+        // status, so the fixture carries it too. Asserting the execution sentence against a
+        // fixture that omitted the receipt was asserting copy for a response nobody sends.
         var filtered = TrustNotices.SearchEnvelopeRefusal("filter_not_supported_by_index",
-            (JsonObject)JsonNode.Parse("{\"unsupported_filters\":[\"domain\",\"hierarchy\"]}")!);
+            (JsonObject)JsonNode.Parse("{\"unsupported_filters\":[\"domain\",\"hierarchy\"],\"population\":{\"query_ran\":false}}")!);
         Assert.Contains("did not run this query", filtered, StringComparison.Ordinal);
         Assert.Contains("not evidence that a law or record is absent", filtered, StringComparison.Ordinal);
         Assert.Contains("domain, hierarchy", filtered, StringComparison.Ordinal);
@@ -455,30 +458,92 @@ public sealed class TrustNoticeTests : IDisposable
     {
         var denied = (JsonObject)JsonNode.Parse("{\"population\":{\"query_ran\":false}}")!;
         Assert.False(TrustNotices.QueryRan(denied));
-        Assert.Contains("Did not run.", TrustNotices.SearchEnvelopeRefusal("ok", denied),
+        var refused = TrustNotices.SearchEnvelopeRefusal("ok", denied);
+        Assert.Contains("Did not run.", refused, StringComparison.Ordinal);
+        Assert.Contains("aria-label=\"This publisher did not run the query\"", refused,
             StringComparison.Ordinal);
 
         // Without a receipt the page states what it knows, not that execution was skipped.
-        foreach (var silent in new[] { "{}", "{\"population\":{}}", "{\"population\":{\"query_ran\":\"false\"}}" })
+        // EVERY execution statement is gated, not just the lead: the body and the aria-label
+        // both said the publisher did not run the query while the heading said only that no
+        // result was usable, so a screen reader was told a non-execution the receipt did not
+        // support. A malformed or absent receipt is not a receipt.
+        foreach (var silent in new[]
+        {
+            "{}", "{\"population\":{}}", "{\"population\":{\"query_ran\":\"false\"}}",
+            "{\"population\":{\"query_ran\":0}}", "{\"population\":{\"query_ran\":null}}",
+            "{\"population\":{\"query_ran\":true}}", "{\"population\":\"query_ran\"}",
+        })
         {
             var node = (JsonObject)JsonNode.Parse(silent)!;
-            Assert.Null(TrustNotices.QueryRan(node));
-            Assert.Contains("No usable result.",
-                TrustNotices.SearchEnvelopeRefusal("filter_not_supported_by_index", node),
+            var card = TrustNotices.SearchEnvelopeRefusal("filter_not_supported_by_index", node);
+            Assert.Contains("No usable result.", card, StringComparison.Ordinal);
+            Assert.DoesNotContain("did not run", card, StringComparison.Ordinal);
+            Assert.Contains("aria-label=\"This publisher returned no usable result\"", card,
                 StringComparison.Ordinal);
         }
     }
 
     /// <summary>
-    /// Fail closed on classification. Reading hits before the status let a missing or malformed
-    /// status, an ok carrying query_ran false, or a refusal arriving with rows, all render results
-    /// or a count for a query nobody executed.
+    /// O2. A whole-call refusal is a bare object, so the page must always render something for
+    /// it. Returning null for a missing, non-string or empty status made the caller append
+    /// nothing, and the reader was left with the search form above an empty page. A blank
+    /// result area is the worst answer available, because it is the one a reader fills in.
     /// </summary>
     [Fact]
-    public void Only_an_exact_ok_with_an_undenied_receipt_may_be_presented()
+    public void A_whole_call_refusal_never_renders_nothing()
     {
-        Assert.True(TrustNotices.Ran((JsonObject)JsonNode.Parse(
-            "{\"envelope\":{\"status\":\"ok\"}}")!));
+        foreach (var bare in new[]
+        {
+            "{}", "{\"status\":\"\"}", "{\"status\":7}", "{\"status\":null}",
+            "{\"status\":true}", "{\"status\":[\"unknown_publisher\"]}",
+            "{\"status\":{\"value\":\"unknown_publisher\"}}", "{\"detail\":\"orphan\"}",
+        })
+        {
+            var card = TrustNotices.WholeCallRefusal((JsonObject)JsonNode.Parse(bare)!);
+            Assert.False(string.IsNullOrWhiteSpace(card), bare);
+            Assert.Contains("No usable result.", card, StringComparison.Ordinal);
+            // Nothing is known about execution here, so nothing is claimed about it.
+            Assert.DoesNotContain("did not run", card, StringComparison.Ordinal);
+            Assert.Contains("View coverage and known gaps", card, StringComparison.Ordinal);
+        }
+
+        // A named status still gets its own copy and may state the execution.
+        var known = TrustNotices.WholeCallRefusal(
+            (JsonObject)JsonNode.Parse("{\"status\":\"no_corpus_mounted\"}")!);
+        Assert.Contains("This query did not run.", known, StringComparison.Ordinal);
+        Assert.Contains("no verified legal index mounted", known, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The strict reader that replaced GetValue&lt;string&gt; on untrusted hit fields. GetValue
+    /// THROWS on a number or a bool, so one malformed match or match_reasons element took the
+    /// entire search page down with a 500 rather than being ignored as the non-string it is.
+    /// </summary>
+    [Fact]
+    public void A_value_of_the_wrong_type_is_not_a_string_and_is_not_a_failure()
+    {
+        Assert.Equal("keyword", TrustNotices.Text(JsonNode.Parse("\"keyword\"")));
+        Assert.Equal("", TrustNotices.Text(JsonNode.Parse("\"\"")));
+        foreach (var hostile in new[] { "7", "true", "null", "[\"keyword\"]", "{\"a\":1}" })
+            Assert.Null(TrustNotices.Text(JsonNode.Parse(hostile)));
+        Assert.Null(TrustNotices.Text(null));
+    }
+
+    /// <summary>
+    /// Fail closed on classification, and require the receipt rather than merely the absence of
+    /// a denial. Reading hits before the status let a missing or malformed status, an ok
+    /// carrying query_ran false, or a refusal arriving with rows, all render results or a count
+    /// for a query nobody executed.
+    ///
+    /// An ok envelope with no readable query_ran used to pass, because the test was "not
+    /// false". Absence of a denial is not a receipt. This is safe to require here because the
+    /// only producer of this shape, SearchPopulation in McpCore, stamps query_ran on every
+    /// search response and sets it true only on the executed path.
+    /// </summary>
+    [Fact]
+    public void Only_an_exact_ok_with_an_exact_run_receipt_may_be_presented()
+    {
         Assert.True(TrustNotices.Ran((JsonObject)JsonNode.Parse(
             "{\"envelope\":{\"status\":\"ok\"},\"population\":{\"query_ran\":true}}")!));
 
@@ -486,6 +551,13 @@ public sealed class TrustNoticeTests : IDisposable
         {
             // ok, but the producer's own receipt denies execution
             "{\"envelope\":{\"status\":\"ok\"},\"population\":{\"query_ran\":false}}",
+            // ok with no receipt at all, or one that cannot be read as a bool
+            "{\"envelope\":{\"status\":\"ok\"}}",
+            "{\"envelope\":{\"status\":\"ok\"},\"population\":{}}",
+            "{\"envelope\":{\"status\":\"ok\"},\"population\":{\"query_ran\":\"true\"}}",
+            "{\"envelope\":{\"status\":\"ok\"},\"population\":{\"query_ran\":1}}",
+            "{\"envelope\":{\"status\":\"ok\"},\"population\":{\"query_ran\":null}}",
+            "{\"envelope\":{\"status\":\"ok\"},\"population\":[{\"query_ran\":true}]}",
             // a refusal that arrived carrying rows anyway
             "{\"envelope\":{\"status\":\"filter_not_supported_by_index\"},\"hits\":[{}]}",
             "{\"envelope\":{\"status\":\"retrieval_mode_unavailable\"}}",

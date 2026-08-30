@@ -540,9 +540,9 @@ public static class CatalogueEndpoints
                     // publisher that is not mounted was shown a blank result area and left to
                     // conclude whatever they liked.
                     var answer = mcpCore.CallTool("search", searchArguments);
-                    if (answer is JsonObject refusal && TrustNotices.WholeCallRefusal(refusal) is { } card)
+                    if (answer is JsonObject refusal)
                     {
-                        sb.Append(card);
+                        sb.Append(TrustNotices.WholeCallRefusal(refusal));
                         return Results.Content(Page("Search", sb.ToString(), extraHead: NoIndexFollow),
                                                "text/html");
                     }
@@ -595,26 +595,37 @@ public static class CatalogueEndpoints
                     // path arrives unlabelled, carrying work_metadata from the FTS over
                     // identifiers, aliases, titles and facets (WorkSearch). Keying on the
                     // label alone would miss exactly the hits attack 41 proved live.
+                    //
+                    // Read strictly. GetValue<string> THROWS on a number or a bool, so a
+                    // single malformed match or match_reasons element took the whole search
+                    // page down with a 500. A value of the wrong type is not a wording
+                    // reason, and it is not a page-level failure either.
                     static bool ReachedWording(JsonObject hit) =>
-                        hit["match"]?.GetValue<string>() != "work_identifier_or_title"
+                        TrustNotices.Text(hit["match"]) != "work_identifier_or_title"
                         && (hit["match_reasons"] as JsonArray ?? [])
-                            .Select(reason => reason?.GetValue<string>())
+                            .Select(TrustNotices.Text)
                             .Any(reason => reason is "keyword" or "semantic");
                     var shown = hits.OfType<JsonObject>().Where(ReachedWording).ToList();
                     var metadataOnly = hits.OfType<JsonObject>()
                         .Where(hit => !ReachedWording(hit)).ToList();
+                    // Count the run BEFORE the metadata branch, not after it. This publisher
+                    // executed the query whatever its hits turned out to be, and the branch
+                    // below returns early. Counting after it meant a publisher that ran and
+                    // found only record matches was never counted as having run, so a sibling
+                    // refusal made the page close with "No selected publisher ran this query"
+                    // directly underneath the records that publisher had just found.
+                    ranPublishers++;
+                    shownHits += shown.Count;
                     // Only when the noise would BE the answer. Alongside real text hits a
                     // record match is context, and it keeps its badge below them.
                     if (shown.Count == 0 && metadataOnly.Count > 0)
                     {
                         sb.Append($"<h2>{H(reader.Stamp.GetValueOrDefault("publisher_name"))} ({H(reader.Stamp.GetValueOrDefault("jurisdiction"))})</h2>");
                         sb.Append(TrustNotices.MetadataOnly(reader, metadataOnly
-                            .Select(hit => hit["work"]?.GetValue<string>() ?? "")
+                            .Select(hit => TrustNotices.Text(hit["work"]) ?? "")
                             .Where(work => work.Length > 0).ToList()));
                         continue;
                     }
-                    ranPublishers++;
-                    shownHits += shown.Count;
                     sb.Append($"<h2>{H(reader.Stamp.GetValueOrDefault("publisher_name"))} ({H(reader.Stamp.GetValueOrDefault("jurisdiction"))}), {shown.Count} hit(s)</h2>");
                     foreach (var hit in shown.Concat(metadataOnly))
                     {

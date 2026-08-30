@@ -69,6 +69,16 @@ public static class TrustNotices
     /// query_ran false. A page that reads only the status will print a count for a query nobody
     /// executed.
     /// </summary>
+    /// <summary>
+    /// A string value, or null when the node is absent or is not a string.
+    ///
+    /// GetValue&lt;string&gt; THROWS on a number or a bool rather than returning null, so reading
+    /// an untrusted node that way turns one malformed field into a 500 for the whole page.
+    /// A value of the wrong type is not the string, and it is not a page failure either.
+    /// </summary>
+    public static string? Text(JsonNode? node) =>
+        node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
+
     public static bool? QueryRan(JsonObject result) =>
         result["population"] is JsonObject population
         && population["query_ran"] is JsonValue value
@@ -85,7 +95,7 @@ public static class TrustNotices
     /// thing here, which is that nothing about this envelope may be rendered as an answer.
     /// </summary>
     public static bool Ran(JsonObject result) =>
-        EnvelopeStatus(result) == "ok" && QueryRan(result) != false;
+        EnvelopeStatus(result) == "ok" && QueryRan(result) == true;
 
     /// <summary>
     /// A refusal that applies to the WHOLE call rather than to one publisher, or null when the
@@ -100,12 +110,27 @@ public static class TrustNotices
     /// two surfaces cannot drift; unknown_publisher has no browser copy, so the producer's own
     /// detail is rendered rather than a sentence invented here.
     /// </summary>
-    public static string? WholeCallRefusal(JsonObject refusal)
+    public static string WholeCallRefusal(JsonObject refusal)
     {
+        // A bare object IS the whole-call refusal shape, so this must always render
+        // something. Returning null when status was missing, not a string, or empty made
+        // the caller append nothing at all, and the reader got the search form above an
+        // empty page. That is the one answer a reader fills in themselves.
+        //
+        // The generic card claims nothing about execution, because without a status there
+        // is no receipt saying the query did not run, only one saying the response cannot
+        // be used.
         if (refusal["status"] is not JsonValue statusValue
             || !statusValue.TryGetValue<string>(out var status)
             || status.Length == 0)
-            return null;
+            return """
+                <div class="notice" role="note" aria-label="No usable result">
+                <b>No usable result.</b>
+                Lex could not read this response, so nothing is shown for it. That is a
+                statement about this response, not evidence that a law or record is absent.
+                <span class="sub"><a href="/coverage">View coverage and known gaps</a></span>
+                </div>
+                """;
 
         var body = status switch
         {
@@ -142,20 +167,32 @@ public static class TrustNotices
     /// </summary>
     public static string SearchEnvelopeRefusal(string status, JsonObject result)
     {
-        // An execution claim needs the receipt that supports it. Without an explicit
-        // query_ran false this says only that no result is usable, which is what is known.
-        var lead = QueryRan(result) == false ? "Did not run." : "No usable result.";
+        // EVERY execution statement on this card needs the receipt that supports it, not
+        // just the lead. The heading said "No usable result" while the body and the
+        // aria-label underneath both still said the publisher did not run the query, so a
+        // response carrying query_ran true, or carrying no receipt at all, was announced to
+        // a screen reader as a non-execution. Saying "did not run" without the receipt is
+        // the same defect as printing "0 hit(s)" for a query nobody executed, pointed the
+        // other way.
+        var denied = QueryRan(result) == false;
+        var lead = denied ? "Did not run." : "No usable result.";
+        var label = denied
+            ? "This publisher did not run the query"
+            : "This publisher returned no usable result";
+        var tail = denied
+            ? "That is a statement about this request, not evidence that a law or record is absent."
+            : "That is a statement about this response, not evidence that a law or record is absent.";
         var body = status switch
         {
             "filter_not_supported_by_index" =>
                 "This publisher's index does not describe the requested filter for the requested "
-                + "scope, so it did not run this query. That is a statement about Lex's coverage, "
-                + "not evidence that a law or record is absent.",
+                + "scope" + (denied ? ", so it did not run this query. " : ". ") + tail,
             "retrieval_mode_unavailable" =>
                 "Words and meaning retrieval is unavailable here: its signed retrieval benchmark "
                 + "has not authorized it. Exact keyword matching remains available.",
-            _ => "This publisher did not run the query. That is a statement about this request, "
-                 + "not evidence that a law or record is absent.",
+            _ => (denied
+                    ? "This publisher did not run the query. "
+                    : "This publisher returned a result this page cannot use. ") + tail,
         };
 
         var filters = Strings(result, "unsupported_filters");
@@ -164,7 +201,7 @@ public static class TrustNotices
             : $"""<span class="sub mono">{H(string.Join(", ", filters))}</span>""";
 
         return $"""
-            <div class="notice" role="note" aria-label="This publisher did not run the query">
+            <div class="notice" role="note" aria-label="{H(label)}">
             <b>{lead}</b> <span class="mono">{H(status)}</span>
             {body}
             {named}
