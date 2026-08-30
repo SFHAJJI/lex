@@ -1318,7 +1318,7 @@ public sealed class ProvisionGapPipelineTests : IDisposable
         Assert.Equal(2001, result["total_provision_gaps"]!.GetValue<int>());
         Assert.Equal(2000, result["provision_gaps"]!.AsArray().Count);
         Assert.True(result["truncated"]!.GetValue<bool>());
-        Assert.Null(result["text_truncated"]);
+        Assert.False(result["text_truncated"]!.GetValue<bool>());
     }
 
     [Theory]

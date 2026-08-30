@@ -689,13 +689,16 @@ public sealed class McpCore
         var provisionTextOmitted = output["provisions"] is JsonArray provisions
             && provisions.OfType<JsonObject>()
                 .Any(provision => provision["text_omitted"]?.GetValue<bool>() == true);
-        if (!rowsOmitted && !documentTextOmitted && !provisionTextOmitted) return;
+        var textTruncated = rowsOmitted || documentTextOmitted || provisionTextOmitted;
+        output["text_truncated"] = textTruncated;
+        var alreadyTruncated = output["truncated"] is JsonValue value
+            && value.TryGetValue<bool>(out var bounded) && bounded;
+        output["truncated"] = alreadyTruncated || textTruncated;
+        if (!textTruncated) return;
 
         // This is a response-size fact, not a statement about corpus coverage. Keep the legal
         // status `ok`: the publisher text is held and the returned hashes/coordinates remain
         // authoritative, but callers must know that this bounded response is not the whole text.
-        output["text_truncated"] = true;
-        output["truncated"] = true;
     }
 
     private static void MarkBoundedCitations(

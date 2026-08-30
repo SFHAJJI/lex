@@ -1174,6 +1174,8 @@ public class McpContractTests : IDisposable
         var provisions = Assert.IsType<JsonArray>(o["provisions"]);
         Assert.NotEmpty(provisions);
         Assert.Equal("art_1", provisions[0]!["anchor"]!.GetValue<string>());
+        Assert.False(o["truncated"]!.GetValue<bool>());
+        Assert.False(o["text_truncated"]!.GetValue<bool>());
     }
 
     [Fact]
