@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace Lex.Tests;
@@ -9,19 +10,37 @@ public sealed class ReleaseWorkflowTests
     public void Terraform_backend_pins_Entra_blob_authorization()
     {
         var versions = File.ReadAllText(Path.Combine(RepoRoot(), "infra", "versions.tf"));
-        var backend = Regex.Match(
-            versions,
-            "(?ms)^[ \\t]*backend[ \\t]+\\\"azurerm\\\"[ \\t]*\\{(?<body>.*?)^[ \\t]*\\}");
-        Assert.True(backend.Success, "infra/versions.tf must contain an active azurerm backend block.");
-        var authorizationAssignments = Regex.Matches(
-            backend.Groups["body"].Value,
-            "(?m)^[ \\t]*use_azuread_auth[ \\t]*=[ \\t]*(?<value>[^#\\r\\n]+)")
-            .Select(match => match.Groups["value"].Value.Trim())
-            .ToArray();
+        var authorizationAssignments = TerraformBackendAuthorizationAssignments(versions);
 
         Assert.Equal(["true"], authorizationAssignments);
         Assert.DoesNotContain("access_key", versions, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("sas_token", versions, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("use_azuread_auth = true", true)]
+    [InlineData("# use_azuread_auth = true", false)]
+    [InlineData("// use_azuread_auth = true", false)]
+    [InlineData("/* use_azuread_auth = true */", false)]
+    [InlineData("/* note\nuse_azuread_auth = true\n*/", false)]
+    [InlineData("/* outer /* nested */\nuse_azuread_auth = true\n*/", false)]
+    [InlineData("use_azuread_auth = true # note", true)]
+    [InlineData("use_azuread_auth = true // note", true)]
+    [InlineData("use_azuread_auth = true /* note */", true)]
+    [InlineData("use_azuread_auth = tr/* note */ue", false)]
+    [InlineData("key = \"https://state.invalid/file\"\nuse_azuread_auth = true", true)]
+    [InlineData("key = \"/* literal */\"\nuse_azuread_auth = true", true)]
+    [InlineData("key = <<EOT\nuse_azuread_auth = true\nEOT", false)]
+    [InlineData("use_azuread_auth = false", false)]
+    [InlineData("use_azuread_auth = true\nuse_azuread_auth = true", false)]
+    public void Terraform_backend_auth_guard_requires_exactly_one_active_true_assignment(
+        string body, bool expected)
+    {
+        var versions = "terraform {\n  backend \"azurerm\" {\n"
+                       + body + "\n  }\n}\n";
+
+        Assert.Equal(expected,
+            TerraformBackendAuthorizationAssignments(versions).SequenceEqual(["true"]));
     }
 
     [Fact]
@@ -1970,6 +1989,82 @@ public sealed class ReleaseWorkflowTests
             directory = Directory.GetParent(directory)?.FullName
                         ?? throw new InvalidOperationException("Repository root not found.");
         return directory;
+    }
+
+    private static string[] TerraformBackendAuthorizationAssignments(string versions)
+    {
+        versions = StripTerraformComments(versions);
+        var backend = Regex.Match(
+            versions,
+            "(?ms)^[ \\t]*backend[ \\t]+\\\"azurerm\\\"[ \\t]*\\{(?<body>.*?)^[ \\t]*\\}");
+        Assert.True(backend.Success,
+            "infra/versions.tf must contain an active azurerm backend block.");
+        if (backend.Groups["body"].Value.Contains("<<", StringComparison.Ordinal))
+            return [];
+        return Regex.Matches(
+                backend.Groups["body"].Value,
+                "(?m)^[ \\t]*use_azuread_auth[ \\t]*=[ \\t]*(?<value>[^#\\r\\n]+)")
+            .Select(match => match.Groups["value"].Value.Trim())
+            .ToArray();
+    }
+
+    private static string StripTerraformComments(string terraform)
+    {
+        var active = new StringBuilder(terraform.Length);
+        var inString = false;
+        var escaped = false;
+        for (var index = 0; index < terraform.Length; index++)
+        {
+            var current = terraform[index];
+            var next = index + 1 < terraform.Length ? terraform[index + 1] : '\0';
+            if (inString)
+            {
+                active.Append(current);
+                if (escaped) escaped = false;
+                else if (current == '\\') escaped = true;
+                else if (current == '"') inString = false;
+                continue;
+            }
+            if (current == '"')
+            {
+                inString = true;
+                active.Append(current);
+                continue;
+            }
+            if (current == '#' || current == '/' && next == '/')
+            {
+                while (index < terraform.Length && terraform[index] is not '\r' and not '\n')
+                    index++;
+                index--;
+                continue;
+            }
+            if (current == '/' && next == '*')
+            {
+                active.Append(' ');
+                var depth = 1;
+                index += 2;
+                for (; index < terraform.Length && depth > 0; index++)
+                {
+                    current = terraform[index];
+                    next = index + 1 < terraform.Length ? terraform[index + 1] : '\0';
+                    if (current is '\r' or '\n') active.Append(current);
+                    if (current == '/' && next == '*')
+                    {
+                        depth++;
+                        index++;
+                    }
+                    else if (current == '*' && next == '/')
+                    {
+                        depth--;
+                        index++;
+                    }
+                }
+                index--;
+                continue;
+            }
+            active.Append(current);
+        }
+        return active.ToString();
     }
 
     private static string[] TerraformAzureRmTypes(string terraform)
