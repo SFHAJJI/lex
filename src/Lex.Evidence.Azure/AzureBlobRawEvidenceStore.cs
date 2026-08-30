@@ -1,0 +1,236 @@
+using Azure;
+using Azure.Core;
+using Azure.Storage;
+using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
+using Lex.Law;
+
+namespace Lex.Evidence.Azure;
+
+internal sealed class AzureBlobRawEvidenceStore : IAzureRawEvidenceStore
+{
+    private readonly BlobContainerClient _container;
+
+    public AzureBlobRawEvidenceStore(Uri containerUri, TokenCredential credential)
+        : this(new BlobContainerClient(
+            containerUri,
+            credential,
+            CreateClientOptions()))
+    {
+    }
+
+    internal AzureBlobRawEvidenceStore(BlobContainerClient container)
+    {
+        _container = container ?? throw new ArgumentNullException(nameof(container));
+    }
+
+    internal static BlobClientOptions CreateClientOptions()
+    {
+        var options = new BlobClientOptions
+        {
+            // No secondary is configured. Evidence readback must come from the primary.
+            // https://learn.microsoft.com/dotnet/api/azure.storage.blobs.blobclientoptions.georedundantsecondaryuri
+            GeoRedundantSecondaryUri = null,
+        };
+        options.Retry.MaxRetries = 0;
+        options.Retry.NetworkTimeout = TimeSpan.FromSeconds(30);
+        options.Diagnostics.IsLoggingContentEnabled = false;
+        options.Diagnostics.LoggedHeaderNames.Clear();
+        options.Diagnostics.LoggedQueryParameters.Clear();
+        return options;
+    }
+
+    public async Task<AzureEvidenceObjectVersion> CreateOnlyAsync(
+        string blobName,
+        Stream content,
+        IReadOnlyDictionary<string, string> metadata,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await _container.GetBlobClient(blobName).UploadAsync(
+                content,
+                CreateUploadOptions(metadata),
+                cancellationToken).ConfigureAwait(false);
+            return RequireVersion(
+                response.Value.VersionId, response.Value.ETag.ToString());
+        }
+        catch (Exception error)
+        {
+            throw MapFailure(error);
+        }
+    }
+
+    public async Task<AzureEvidenceObjectVersion> ResolveCurrentVersionAsync(
+        string blobName,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await _container.GetBlobClient(blobName)
+                .GetPropertiesAsync(
+                    conditions: null,
+                    cancellationToken).ConfigureAwait(false);
+            return RequireVersion(
+                response.Value.VersionId, response.Value.ETag.ToString());
+        }
+        catch (Exception error)
+        {
+            throw MapFailure(error, missingIsAmbiguous: true);
+        }
+    }
+
+    public async Task<AzureEvidenceReadback> ReadbackAsync(
+        string blobName,
+        AzureEvidenceObjectVersion version,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await VersionClient(blobName, version.VersionId)
+                .DownloadStreamingAsync(
+                    CreateDownloadOptions(version.ETag),
+                    cancellationToken).ConfigureAwait(false);
+            var download = response.Value;
+            return new AzureEvidenceReadback(
+                download.Content,
+                download.Details.ContentLength,
+                new Dictionary<string, string>(download.Details.Metadata),
+                RequireValue(download.Details.VersionId),
+                RequireValue(download.Details.ETag.ToString()));
+        }
+        catch (Exception error)
+        {
+            throw MapFailure(error);
+        }
+    }
+
+    public async Task<AzureEvidenceRetentionFacts> ApplyAndReadRetentionAsync(
+        string blobName,
+        AzureEvidenceObjectVersion version,
+        AzureEvidenceRetentionRequest retention,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var blob = VersionClient(blobName, version.VersionId);
+            if (retention.Lane == EvidenceRetentionLane.Nightly90Days)
+            {
+                if (retention.ImmutableUntil is null)
+                    throw new InvalidDataException(
+                        "The nightly retention request has no expiry.");
+                // Version-level immutability requires versioning and version-level
+                // immutability support on the account or container.
+                // https://learn.microsoft.com/azure/storage/blobs/immutable-policy-configure-version-scope
+                await blob.SetImmutabilityPolicyAsync(
+                    CreateImmutabilityPolicy(retention.ImmutableUntil.Value),
+                    conditions: null,
+                    cancellationToken).ConfigureAwait(false);
+            }
+            else if (retention.Lane
+                == EvidenceRetentionLane.EvidenceReleaseIndefinite)
+            {
+                await blob.SetLegalHoldAsync(
+                    hasLegalHold: true,
+                    cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                throw new InvalidDataException(
+                    "The evidence retention lane is not supported.");
+            }
+
+            var response = await blob.GetPropertiesAsync(
+                conditions: null,
+                cancellationToken).ConfigureAwait(false);
+            var properties = response.Value;
+            return new AzureEvidenceRetentionFacts(
+                RequireValue(properties.VersionId),
+                properties.ImmutabilityPolicy?.ExpiresOn,
+                properties.ImmutabilityPolicy?.PolicyMode?.ToString(),
+                properties.HasLegalHold);
+        }
+        catch (Exception error)
+        {
+            throw MapFailure(error);
+        }
+    }
+
+    private BlobClient VersionClient(string blobName, string versionId) =>
+        _container.GetBlobClient(blobName).WithVersion(versionId);
+
+    internal static BlobUploadOptions CreateUploadOptions(
+        IReadOnlyDictionary<string, string> metadata) => new()
+    {
+        Metadata = new Dictionary<string, string>(metadata),
+        TransferOptions = new StorageTransferOptions
+        {
+            InitialTransferSize = EvidenceRef.MaximumByteLength,
+            MaximumTransferSize = EvidenceRef.MaximumByteLength,
+            MaximumConcurrency = 1,
+        },
+        // Azure documents ETag.All as the wildcard for If-None-Match.
+        // https://learn.microsoft.com/dotnet/api/azure.storage.blobs.models.blobrequestconditions
+        Conditions = new BlobRequestConditions
+        {
+            IfNoneMatch = ETag.All,
+        },
+    };
+
+    internal static BlobDownloadOptions CreateDownloadOptions(string etag) =>
+        new()
+        {
+            Conditions = new BlobRequestConditions
+            {
+                IfMatch = new ETag(etag),
+            },
+        };
+
+    internal static BlobImmutabilityPolicy CreateImmutabilityPolicy(
+        DateTimeOffset immutableUntil) => new()
+    {
+        ExpiresOn = immutableUntil,
+        PolicyMode = BlobImmutabilityPolicyMode.Unlocked,
+    };
+
+    private static AzureEvidenceObjectVersion RequireVersion(
+        string? versionId, string? etag) =>
+        new(RequireValue(versionId), RequireValue(etag));
+
+    private static string RequireValue(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)
+            || value.Length > 512
+            || value.Any(character => character is < ' ' or > '~'))
+            throw new AzureEvidenceStoreException(
+                AzureEvidenceStoreFailureKind.Rejected);
+        return value;
+    }
+
+    internal static Exception MapFailure(
+        Exception error,
+        bool missingIsAmbiguous = false)
+    {
+        if (error is OperationCanceledException) return error;
+        if (error is AzureEvidenceStoreException) return error;
+        if (error is RequestFailedException failed)
+        {
+            if (failed.Status == 412)
+                return new AzureEvidenceStoreException(
+                    AzureEvidenceStoreFailureKind.AlreadyExists);
+            if (missingIsAmbiguous && failed.Status == 404)
+                return new AzureEvidenceStoreException(
+                    AzureEvidenceStoreFailureKind.Ambiguous);
+            if (failed.Status is 0 or 408 or 429 || failed.Status >= 500)
+                return new AzureEvidenceStoreException(
+                    AzureEvidenceStoreFailureKind.Ambiguous);
+            return new AzureEvidenceStoreException(
+                AzureEvidenceStoreFailureKind.Rejected);
+        }
+        if (error is IOException or TimeoutException)
+            return new AzureEvidenceStoreException(
+                AzureEvidenceStoreFailureKind.Ambiguous);
+        return new AzureEvidenceStoreException(
+            AzureEvidenceStoreFailureKind.Rejected);
+    }
+}
