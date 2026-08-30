@@ -669,10 +669,14 @@ public sealed class TrustNoticeTests : IDisposable
     /// <summary>
     /// The suppression still has to work, or the repair would have bought back attack 41: a record
     /// match presented as though it answered the question.
+    ///
+    /// These are the FUZZY record lanes: bm25 over identifiers, aliases, titles and facets, and
+    /// vector neighbours. They fire on partial overlap, which is how a speeding question returned
+    /// tachograph regulations. The exact_ and contained_ identity lanes are not here, because those
+    /// fire only when the query is, or wholly contains, the instrument's own name.
     /// </summary>
     [Theory]
     [InlineData("work_metadata")]
-    [InlineData("exact_title")]
     [InlineData("semantic_work")]
     [InlineData("semantic_concept")]
     [InlineData("ambiguous_exact_identifier")]
@@ -693,6 +697,131 @@ public sealed class TrustNoticeTests : IDisposable
         Assert.Contains("Lex found records that match only in metadata", page,
             StringComparison.Ordinal);
         Assert.DoesNotContain("1 hit(s)", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Round 2 O3. The identity lanes fire only when the query IS the instrument's identifier,
+    /// title or publisher short title, or wholly contains one. That is the reader naming the law
+    /// they want, so it answers a different question rather than failing to answer.
+    /// </summary>
+    [Theory]
+    [InlineData("exact_identifier")]
+    [InlineData("exact_title")]
+    [InlineData("exact_publisher_short_title")]
+    [InlineData("contained_identifier")]
+    [InlineData("contained_title")]
+    [InlineData("contained_publisher_short_title")]
+    public void Naming_the_instrument_is_answered_with_the_instrument(string reason)
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "id" + reason), includeAct: false);
+        using var reader = site.Reader();
+        var readers = new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader };
+
+        var page = CatalogueEndpoints.RenderSearchResults(
+            [(JsonObject)JsonNode.Parse(
+                "{\"envelope\":{\"publisher\":\"lu-legilux\",\"status\":\"ok\"},"
+                + "\"population\":{\"query_ran\":true},\"hits\":[{"
+                + "\"work\":\"lu-legilux:loi-2006-07-31-n2\",\"title\":\"Code du travail\","
+                + "\"valid_from\":\"2024-08-04\","
+                + "\"match_reasons\":[\"" + reason + "\"]}]}")!],
+            readers);
+
+        Assert.Contains("1 hit(s)", page, StringComparison.Ordinal);
+        Assert.Contains("matched the name of this law, not its wording", page,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("Lex found records that match only in metadata", page,
+            StringComparison.Ordinal);
+        // It matched a name, and the badge must not claim it matched the wording either.
+        Assert.DoesNotContain("matched on title, not wording", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// An identity match that resolved to more than one work is NOT an identification. Presenting
+    /// one of several as the instrument would be a guess, so the ambiguous_ variants stay
+    /// suppressed. This is the boundary of the test above rather than a restatement of it.
+    /// </summary>
+    [Theory]
+    [InlineData("ambiguous_exact_identifier")]
+    [InlineData("ambiguous_exact_title")]
+    [InlineData("ambiguous_contained_title")]
+    public void An_identity_match_resolving_to_several_works_is_not_an_identification(string reason)
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "amb" + reason), includeAct: false);
+        using var reader = site.Reader();
+        var readers = new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader };
+
+        var page = CatalogueEndpoints.RenderSearchResults(
+            [(JsonObject)JsonNode.Parse(
+                "{\"envelope\":{\"publisher\":\"lu-legilux\",\"status\":\"ok\"},"
+                + "\"population\":{\"query_ran\":true},\"hits\":[{"
+                + "\"work\":\"lu-legilux:loi-2006-07-31-n2\","
+                + "\"match_reasons\":[\"" + reason + "\"]}]}")!],
+            readers);
+
+        Assert.Contains("Lex found records that match only in metadata", page,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("1 hit(s)", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Round 2 O1. A sibling of the wrong shape was erased by OfType, and erasing it is how it
+    /// became an absence: beside a refusal the page went on to state a corpus-wide no-match about a
+    /// response it had thrown away unread.
+    /// </summary>
+    [Theory]
+    [InlineData("\"a publisher answered\"")]
+    [InlineData("7")]
+    [InlineData("null")]
+    [InlineData("[{\"envelope\":{}}]")]
+    public void A_sibling_of_the_wrong_shape_is_disclosed_not_erased(string sibling)
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "sib"), includeAct: false);
+        using var reader = site.Reader();
+        var readers = new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader };
+
+        var envelopes = (JsonArray)JsonNode.Parse("[" + sibling + "]")!;
+        envelopes.Add(JsonNode.Parse("""
+            {"envelope":{"publisher":"lu-legilux","status":"filter_not_supported_by_index"},
+             "population":{"query_ran":false}}
+            """));
+
+        var page = CatalogueEndpoints.RenderSearchResults(envelopes, readers);
+
+        Assert.Contains("could not be read", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("No selected publisher ran this query", page,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("No match was returned", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Round 2 O2. An array of the wrong things is not an array of reasons. Checking only the
+    /// container let a valid work through as "no wording reason", and the page then labelled it
+    /// matched on its title, which the response never said.
+    /// </summary>
+    [Theory]
+    [InlineData("[9,true]")]
+    [InlineData("[\"keyword\",9]")]
+    [InlineData("[null]")]
+    [InlineData("[[\"keyword\"]]")]
+    [InlineData("[{\"reason\":\"keyword\"}]")]
+    public void An_array_of_the_wrong_things_is_not_an_array_of_reasons(string reasons)
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "reasons"), includeAct: false);
+        using var reader = site.Reader();
+        var readers = new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader };
+
+        var page = CatalogueEndpoints.RenderSearchResults(
+            [(JsonObject)JsonNode.Parse(
+                "{\"envelope\":{\"publisher\":\"lu-legilux\",\"status\":\"ok\"},"
+                + "\"population\":{\"query_ran\":true},\"hits\":[{"
+                + "\"work\":\"lu-legilux:loi-2006-07-31-n2\","
+                + "\"match_reasons\":" + reasons + "}]}")!],
+            readers);
+
+        Assert.Contains("could not be read", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("matched on title, not wording", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("Lex found records that match only in metadata", page,
+            StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -1146,14 +1275,18 @@ public sealed class TrustNoticeTests : IDisposable
         // not do: it is in the wording of art. L. 121-6, so it is a genuine text hit.
         var page = await site.Client.GetStringAsync("/search?q=loi-2006-07-31-n2");
 
-        Assert.Contains(MetadataOnlyHeading, page, StringComparison.Ordinal);
-        Assert.Contains(
+        // This query IS the work's identifier, so it takes the exact_identifier lane
+        // (IndexReader.SearchWorksByIdentifierOrTitle). The reader named the law they want, and
+        // answering that with "records that match only in metadata, not shown as text answers"
+        // was both unhelpful and untrue about a precise identification.
+        Assert.Contains("1 hit(s)", page, StringComparison.Ordinal);
+        Assert.Contains("matched the name of this law, not its wording", page,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
             "Lex found records that match only in metadata. They are not shown as text answers.",
             page, StringComparison.Ordinal);
-        Assert.Contains("View coverage and known gaps", page, StringComparison.Ordinal);
-        // Suppressed means suppressed: no result card survives to be read as an answer.
-        Assert.DoesNotContain("<div class=\"card\"><a href=\"/lu-legilux/loi-2006-07-31-n2/",
-            page, StringComparison.Ordinal);
+        // What it must NOT claim is that the wording matched.
+        Assert.DoesNotContain("matched on title, not wording", page, StringComparison.Ordinal);
         // The count-at-build rule forbids a population literal in copy, and the specification's
         // own figure is wrong: the never-consolidated set is 23,370, not ~24,579.
         Assert.DoesNotContain("24,579", page, StringComparison.Ordinal);

@@ -758,7 +758,14 @@ public static class CatalogueEndpoints
             foreach (var hit in hits)
             {
                 if (hit is not JsonObject entry) return false;
-                if (entry["match_reasons"] is not null and not JsonArray) return false;
+                if (entry["match_reasons"] is not { } reasons) continue;
+                if (reasons is not JsonArray listed) return false;
+                // An array of the wrong things is not an array of reasons. Checking only the
+                // container let [9,true] through as "no wording reason", which is a reading of
+                // the response rather than a fact about it: the page then labelled a valid work
+                // as matched on its title, which the response never said.
+                foreach (var reason in listed)
+                    if (TrustNotices.Text(reason) is null) return false;
             }
             return true;
         }
@@ -767,8 +774,17 @@ public static class CatalogueEndpoints
             $"<h2>{H(reader.Stamp.GetValueOrDefault("publisher_name"))} "
             + $"({H(reader.Stamp.GetValueOrDefault("jurisdiction"))}){suffix}</h2>";
 
-        foreach (var result in envelopes.OfType<JsonObject>())
+        foreach (var node in envelopes)
         {
+            // A sibling of the wrong shape was silently erased by OfType, and erasing it is how
+            // it became an absence: beside a refusal the page went on to say no selected
+            // publisher ran this query, about a response it had thrown away unread.
+            if (node is not JsonObject result)
+            {
+                sb.Append(TrustNotices.UnreadableResults());
+                unreadable++;
+                continue;
+            }
             // Silently skipping an envelope makes a whole publisher's results vanish from a page
             // that gives the reader no way to know it answered. Absence is never implied here, so
             // an envelope this page cannot attribute is disclosed rather than dropped. The read is
@@ -838,12 +854,31 @@ public static class CatalogueEndpoints
             static bool MatchedArticleNumber(JsonObject hit) =>
                 Reasons(hit).Any(reason => reason is "article_intent");
 
+            // The identity lanes: the whole query IS the instrument's identifier, title or
+            // publisher short title, or contains one as a whole-word span. That is the reader
+            // naming the law they want, and answering it with "records that match only in
+            // metadata. They are not shown as text answers" is both unhelpful and untrue about a
+            // precise identification. They answer a different question from a wording query;
+            // they do not fail to answer.
+            //
+            // Listed explicitly rather than matched by prefix, because the vocabulary is closed
+            // and anything new should fall to the suppressed side. The ambiguous_ variants are
+            // deliberately absent: those are identity matches that resolved to more than one
+            // work, so presenting one as the instrument would be a guess. exact_alias and
+            // contained_alias are unreachable today, since work_names only stores identifier,
+            // title and publisher_short_title kinds; they are named so the set stays complete if
+            // that changes.
+            static bool IdentifiedTheInstrument(JsonObject hit) => Reasons(hit).Any(reason =>
+                reason is "exact_identifier" or "exact_title" or "exact_publisher_short_title"
+                or "exact_alias" or "contained_identifier" or "contained_title"
+                or "contained_publisher_short_title" or "contained_alias");
+
             // The identifier/title fallback rows carry no match_reasons at all, so the reason
             // test already excludes them and the old match=="work_identifier_or_title" clause was
             // redundant. It is gone rather than kept: if such a row ever did arrive carrying a
             // wording reason, that clause would have suppressed a real answer.
             static bool IsAnswer(JsonObject hit) =>
-                ReachedWording(hit) || MatchedArticleNumber(hit);
+                ReachedWording(hit) || MatchedArticleNumber(hit) || IdentifiedTheInstrument(hit);
 
             var shown = hits.OfType<JsonObject>().Where(IsAnswer).ToList();
             var metadataOnly = hits.OfType<JsonObject>()
@@ -875,13 +910,16 @@ public static class CatalogueEndpoints
             sb.Append(Heading(reader, $", {shown.Count} hit(s)"));
             foreach (var hit in shown.Concat(metadataOnly))
             {
-                // Three states, not two. Saying "matched on title, not wording" about an article
-                // number match names the wrong thing entirely.
+                // Four states, not two. Each badge names what was actually matched, because
+                // "matched on title, not wording" was said about article numbers and about
+                // identifiers alike, and it was true of neither.
                 var badge = ReachedWording(hit)
                     ? ""
                     : MatchedArticleNumber(hit)
                         ? " <span class=\"badge\">matched on article number, not wording</span>"
-                        : " <span class=\"badge\">matched on title, not wording</span>";
+                        : IdentifiedTheInstrument(hit)
+                            ? " <span class=\"badge\">matched the name of this law, not its wording</span>"
+                            : " <span class=\"badge\">matched on title, not wording</span>";
                 var work = TrustNotices.Text(hit["work"]) ?? "";
                 var validFrom = TrustNotices.Text(hit["valid_from"]) ?? "";
                 var validTo = TrustNotices.Text(hit["valid_to"]);
