@@ -518,6 +518,27 @@ public sealed class TrustNoticeTests : IDisposable
         Assert.Contains("Page not found",
             await (await Ask("application/json;profile=\"x\"")).Content.ReadAsStringAsync(),
             StringComparison.Ordinal);
+
+        // charset is ignored only when it is the one actually sent. Dropping the parameter
+        // wholesale promised any charset at all and then answered in UTF-8 regardless, which is a
+        // different lie in the same place: the client asked for something we cannot produce and
+        // was told we could.
+        foreach (var foreign in new[]
+        {
+            "application/json;charset=iso-8859-1", "application/json;charset=windows-1252",
+            "application/json;charset=us-ascii",
+        })
+            Assert.Contains("Page not found",
+                await (await Ask(foreign)).Content.ReadAsStringAsync(), StringComparison.Ordinal);
+
+        // And the one we do send, however it is spelled.
+        foreach (var ours in new[]
+        {
+            "application/json;charset=utf-8", "application/json;charset=UTF-8",
+            "application/json;charset=Utf-8",
+        })
+            Assert.Contains("unknown_route",
+                await (await Ask(ours)).Content.ReadAsStringAsync(), StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -583,10 +604,12 @@ public sealed class TrustNoticeTests : IDisposable
     {
         using var site = new NoticeSite(Path.Combine(_root, "licence"), includeAct: false);
 
+        // Every route that carries the shared footer, plus the two that carry a JSON-LD node
+        // and the page that tabulates the repositories.
         foreach (var route in new[]
         {
-            "/lu-legilux/loi-2006-07-31-n2", "/browse", "/coverage",
-            "/lu-legilux/loi-2006-07-31-n2/2024-08-04",
+            "/lu-legilux/loi-2006-07-31-n2", "/browse", "/coverage", "/developers", "/find",
+            "/lu-legilux/loi-2006-07-31-n2/2024-08-04", "/search?q=travail",
         })
         {
             var page = await site.Client.GetStringAsync(route);
@@ -594,10 +617,22 @@ public sealed class TrustNoticeTests : IDisposable
             Assert.DoesNotContain("creativecommons.org", page, StringComparison.OrdinalIgnoreCase);
             // The schema.org key itself, so a different licence URL cannot slip back in.
             Assert.DoesNotContain("\"license\"", page, StringComparison.Ordinal);
+            // And the WORDING, because that is how the claim survived the first removal: it moved
+            // into a DataDownload description and sat in the footer, where a test checking one URL
+            // and one key could not see it. A licence claim is a claim in any spelling.
+            foreach (var wording in new[] { "CC-BY", "CC BY", "creative commons" })
+                Assert.DoesNotContain(wording, page, StringComparison.OrdinalIgnoreCase);
         }
 
         // Free to access is a fact about this site and is not a redistribution claim, so it stays.
         Assert.Contains("isAccessibleForFree", await site.Client.GetStringAsync("/browse"),
+            StringComparison.Ordinal);
+        // So does the licence of Lex's own code, which is ours to state and independently true.
+        Assert.Contains("Apache-2.0", await site.Client.GetStringAsync("/developers"),
+            StringComparison.Ordinal);
+        // And the EU reuse basis, which cites the decision it rests on rather than asserting a
+        // licence we chose. Flagged to the reviewer as a deliberate boundary, not an oversight.
+        Assert.Contains("2011/833/EU", await site.Client.GetStringAsync("/coverage"),
             StringComparison.Ordinal);
     }
 
@@ -697,6 +732,91 @@ public sealed class TrustNoticeTests : IDisposable
         Assert.Contains("Lex found records that match only in metadata", page,
             StringComparison.Ordinal);
         Assert.DoesNotContain("1 hit(s)", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Addendum (a). Disclosing an unattributable publisher is not enough. It answered, and this
+    /// page cannot say what it answered, so a corpus-wide absence beside it would still be a claim
+    /// about a response nobody read.
+    /// </summary>
+    [Fact]
+    public void An_unattributable_publisher_also_blocks_the_absence_sentence()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "unattrib"), includeAct: false);
+        using var reader = site.Reader();
+        var readers = new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader };
+
+        var stranger = (JsonObject)JsonNode.Parse("""
+            {"envelope":{"publisher":"not-mounted","status":"ok"},
+             "population":{"query_ran":true},"hits":[]}
+            """)!;
+        var refusal = (JsonObject)JsonNode.Parse("""
+            {"envelope":{"publisher":"lu-legilux","status":"filter_not_supported_by_index"},
+             "population":{"query_ran":false}}
+            """)!;
+
+        var page = CatalogueEndpoints.RenderSearchResults([stranger, refusal], readers);
+
+        Assert.Contains("could not be attributed", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("No match was returned", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("No selected publisher ran this query", page,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Addendum (b). A hit is rendered as a link to a dated version, so it needs the coordinates
+    /// that make one. Without them the page emitted an href with empty segments, which is a
+    /// destination that goes nowhere presented to the reader as a citation.
+    /// </summary>
+    [Theory]
+    [InlineData("\"work\":\"\",\"valid_from\":\"2024-08-04\"")]
+    [InlineData("\"work\":7,\"valid_from\":\"2024-08-04\"")]
+    [InlineData("\"valid_from\":\"2024-08-04\"")]
+    [InlineData("\"work\":\"lu-legilux:loi-2006-07-31-n2\",\"valid_from\":\"\"")]
+    [InlineData("\"work\":\"lu-legilux:loi-2006-07-31-n2\",\"valid_from\":true")]
+    [InlineData("\"work\":\"lu-legilux:loi-2006-07-31-n2\"")]
+    public void A_hit_without_a_usable_destination_is_not_rendered_as_one(string coordinates)
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "dest"), includeAct: false);
+        using var reader = site.Reader();
+        var readers = new Dictionary<string, LexIndexReader> { ["lu-legilux"] = reader };
+
+        var page = CatalogueEndpoints.RenderSearchResults(
+            [(JsonObject)JsonNode.Parse(
+                "{\"envelope\":{\"publisher\":\"lu-legilux\",\"status\":\"ok\"},"
+                + "\"population\":{\"query_ran\":true},\"hits\":[{" + coordinates
+                + ",\"match_reasons\":[\"keyword\"]}]}")!],
+            readers);
+
+        Assert.Contains("could not be read", page, StringComparison.Ordinal);
+        // No half-built citation survives to be clicked.
+        Assert.DoesNotContain("href=\"/lu-legilux//", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("1 hit(s)", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Addendum (c). The receipt outranks the status name. A recognised non-execution status
+    /// arriving with query_ran true is a contradiction, and the page may not resolve it by picking
+    /// the half it recognises.
+    /// </summary>
+    [Fact]
+    public void A_recognised_status_that_says_it_ran_did_not_fail_to_run()
+    {
+        foreach (var contradictory in new[]
+        {
+            "{\"status\":\"no_corpus_mounted\",\"population\":{\"query_ran\":true}}",
+            "{\"status\":\"unknown_publisher\",\"population\":{\"query_ran\":true}}",
+        })
+        {
+            var card = TrustNotices.WholeCallRefusal((JsonObject)JsonNode.Parse(contradictory)!);
+            Assert.DoesNotContain("did not run", card, StringComparison.Ordinal);
+            Assert.Contains("No usable result.", card, StringComparison.Ordinal);
+        }
+
+        // Unchanged where there is no contradiction to resolve.
+        Assert.Contains("This query did not run.", TrustNotices.WholeCallRefusal(
+            (JsonObject)JsonNode.Parse("{\"status\":\"no_corpus_mounted\"}")!),
+            StringComparison.Ordinal);
     }
 
     /// <summary>

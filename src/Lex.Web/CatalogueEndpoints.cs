@@ -258,7 +258,7 @@ public static class CatalogueEndpoints
                   <button>As of date</button>
                 </form>
                 """);
-            // Dataset, because this is what Google Dataset Search indexes, and a CC-BY corpus of
+            // Dataset, because this is what Google Dataset Search indexes, and a machine-readable corpus of
             // consolidated national law with a stated temporal range is exactly what that index
             // is for. Built as a JsonObject: JSON is mostly quotes and braces, which is what a
             // C# raw literal reserves, and hand-quoting it ships malformed markup silently.
@@ -295,7 +295,10 @@ public static class CatalogueEndpoints
                     {
                         ["@type"] = "DataDownload", ["encodingFormat"] = "application/json",
                         ["contentUrl"] = "https://github.com/SFHAJJI/lex-articles",
-                        ["description"] = "Per-article JSON, JSONL and parquet, CC-BY.",
+                        // No licence in the description either. The claim survived here after
+                        // it was removed from the license property, which is the whole reason
+                        // a test that checks one spelling of one key is not a guard.
+                        ["description"] = "Per-article JSON, JSONL and parquet.",
                     },
                     new JsonObject
                     {
@@ -758,6 +761,9 @@ public static class CatalogueEndpoints
             foreach (var hit in hits)
             {
                 if (hit is not JsonObject entry) return false;
+                // Every hit names a work, whether it is rendered as a link or named on the
+                // record card, so a hit without one cannot be presented at all.
+                if (TrustNotices.Text(entry["work"]) is not { Length: > 0 }) return false;
                 if (entry["match_reasons"] is not { } reasons) continue;
                 if (reasons is not JsonArray listed) return false;
                 // An array of the wrong things is not an array of reasons. Checking only the
@@ -795,6 +801,10 @@ public static class CatalogueEndpoints
                 sb.Append("<div class=\"notice\" role=\"note\">A publisher answered and its "
                     + "results could not be attributed to a mounted index, so they are not "
                     + "shown. This is not evidence that it found nothing.</div>");
+                // Disclosing it is not enough. A publisher answered and this page cannot say
+                // what it answered, so a corpus-wide absence beside it would be a claim about
+                // a response nobody read.
+                unreadable++;
                 continue;
             }
             var publisherId = reader.Collection;
@@ -883,6 +893,17 @@ public static class CatalogueEndpoints
             var shown = hits.OfType<JsonObject>().Where(IsAnswer).ToList();
             var metadataOnly = hits.OfType<JsonObject>()
                 .Where(hit => !IsAnswer(hit)).ToList();
+            // A hit that becomes a link needs the version coordinate that makes one. Without it
+            // the page emitted an href with an empty segment: a destination that goes nowhere,
+            // presented to the reader as a citation. Only the rendered ones need it, because a
+            // record match is named on the card rather than linked to a version.
+            if (shown.Any(hit => TrustNotices.Text(hit["valid_from"]) is not { Length: > 0 }))
+            {
+                sb.Append(Heading(reader));
+                sb.Append(TrustNotices.UnreadableResults());
+                unreadable++;
+                continue;
+            }
             // Only when the noise would BE the answer. Alongside real text hits a record match is
             // context, and it keeps its badge below them.
             if (shown.Count == 0 && metadataOnly.Count > 0)

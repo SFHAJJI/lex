@@ -621,9 +621,9 @@ public static class ExplainerEndpoints
                 <tr><td><a href="https://github.com/SFHAJJI/lex" rel="noopener">lex</a></td>
                     <td>the engine: ingest, derive, index, MCP server, this site</td><td>Apache-2.0</td></tr>
                 <tr><td><a href="https://github.com/SFHAJJI/lex-articles" rel="noopener">lex-articles</a></td>
-                    <td>derived layer, one Markdown+JSON record per article per version</td><td>CC-BY-4.0</td></tr>
+                    <td>derived layer, one Markdown+JSON record per article per version</td><td>set by the publisher, not asserted here</td></tr>
                 <tr><td><a href="https://github.com/SFHAJJI/lex-corpus-lu-legilux" rel="noopener">lex-corpus-lu-legilux</a></td>
-                    <td>evidence layer, Legilux's own files, verbatim, plus integrity manifests bound to protected commits</td><td>CC-BY-4.0</td></tr>
+                    <td>evidence layer, Legilux's own files, verbatim, plus integrity manifests bound to protected commits</td><td>set by the publisher, not asserted here</td></tr>
                 <tr><td><a href="https://github.com/SFHAJJI/lex-corpus-eu-eurlex" rel="noopener">lex-corpus-eu-eurlex</a></td>
                     <td>evidence layer, EUR-Lex/Cellar files, verbatim</td><td>EU reuse</td></tr>
                 </table>

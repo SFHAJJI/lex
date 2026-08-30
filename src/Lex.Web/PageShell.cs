@@ -364,14 +364,14 @@ public static class PageShell
                reusable on its own, and they were reachable only from /developers. -->
           <div><b>Build on it</b>
             <a href="/developers">Developers &amp; API</a>
-            <a href="https://github.com/SFHAJJI/lex-articles" rel="noopener">Dataset: law by article (CC-BY)</a>
+            <a href="https://github.com/SFHAJJI/lex-articles" rel="noopener">Dataset: law by article</a>
             <a href="https://github.com/SFHAJJI/lex-corpus-lu-legilux" rel="noopener">Corpus: Luxembourg, verbatim</a>
             <a href="https://github.com/SFHAJJI/lex-corpus-eu-eurlex" rel="noopener">Corpus: EU, verbatim</a></div>
         </nav>
           <b>Not legal advice, and not the official text.</b> Lex answers <i>what the rule was</i>, never what it
           means for your situation, no interpretation, no advice. Every answer shows the source it came from.
           LU data: Legilux, Ministère d'État, Service central de législation, Grand-Duché de Luxembourg
-          (CC-BY 4.0, metadata and content files; consolidated texts reproduced verbatim from the official filestore).
+          (consolidated texts reproduced verbatim from the official filestore).
           EU data: © European Union, reuse with attribution (Commission Decision 2011/833/EU);
           <b>consolidated texts have no legal effect</b>, only acts published in the Official Journal are authentic.
           · <a href="https://github.com/SFHAJJI/lex">source</a>

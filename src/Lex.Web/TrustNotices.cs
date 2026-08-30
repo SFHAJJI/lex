@@ -138,8 +138,13 @@ public static class TrustNotices
         // a screen reader, as a query nobody executed. An unrecognised status tells us the
         // response was not usable and nothing whatever about whether it ran. The producer's own
         // receipt still overrides, when it sends one.
-        var denied = status is "no_corpus_mounted" or "unknown_publisher"
-            || QueryRan(refusal) == false;
+        // The receipt is authoritative and outranks the status name. A recognised
+        // non-execution status arriving with query_ran true is a contradiction, and the page
+        // may not resolve a contradiction by picking the half it recognises: it says only
+        // that the result is unusable.
+        var ran = QueryRan(refusal);
+        var denied = ran == false
+            || (ran is null && status is "no_corpus_mounted" or "unknown_publisher");
         var lead = denied ? "This query did not run." : "No usable result.";
         var label = denied ? "This query did not run" : "No usable result";
         var tail = denied

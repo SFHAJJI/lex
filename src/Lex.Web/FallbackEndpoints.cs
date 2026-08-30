@@ -97,21 +97,26 @@ public static class FallbackEndpoints
     /// <summary>
     /// The range reduced to the parameters that actually narrow what is being asked for.
     ///
-    /// q is a preference, not part of the representation. charset is a transport detail: these
-    /// bodies are UTF-8 whatever the range says, Accept-Charset is obsolete, and a client naming
-    /// it is asking for what this route already sends. Declining that was the mirror of the bug
-    /// that ignored parameters entirely, and it turned application/json;charset=utf-8, which is the
-    /// representation this route emits, into a request it claimed it could not satisfy.
+    /// q is a preference, not part of the representation, so it always goes.
     ///
-    /// Every other media parameter does narrow the representation and is kept, so a range naming a
-    /// profile or a version this route cannot produce is still declined.
+    /// charset goes only when it is the one this route actually sends. These bodies are UTF-8,
+    /// so a client naming utf-8 is asking for exactly what it would get and declining that was
+    /// the mirror of the bug that ignored parameters entirely. But dropping the parameter
+    /// wholesale promised any charset at all: application/json;charset=iso-8859-1 was accepted
+    /// and then answered in UTF-8, which is a different lie in the same place. An unmatched
+    /// charset stays on the range, so it narrows, so it is declined.
+    ///
+    /// Every other media parameter narrows and is kept, so a range naming a profile or a
+    /// version this route cannot produce is still declined.
     /// </summary>
     private static MediaTypeHeaderValue Narrowing(MediaTypeHeaderValue range)
     {
         var offered = range.Copy();
-        foreach (var transport in (string[])["q", "charset"])
-            while (NameValueHeaderValue.Find(offered.Parameters, transport) is { } parameter)
-                offered.Parameters.Remove(parameter);
+        while (NameValueHeaderValue.Find(offered.Parameters, "q") is { } quality)
+            offered.Parameters.Remove(quality);
+        while (NameValueHeaderValue.Find(offered.Parameters, "charset") is { } charset
+               && charset.Value.Equals("utf-8", StringComparison.OrdinalIgnoreCase))
+            offered.Parameters.Remove(charset);
         return offered;
     }
 
