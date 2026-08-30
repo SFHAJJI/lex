@@ -39,16 +39,31 @@ public static class LicencePublicAdmission
                 return new(PublicTextAdmission.LicenceUnresolved, null);
         }
 
-        var uris = evidence.Sparql.Claims.Select(claim => claim.LicenceUri)
-            .Concat(evidence.File.Claims.Select(claim => claim.LicenceUri))
-            .Where(uri => uri is not null)
-            .Cast<string>()
+        if (evidence.Sparql.State != LicenceChannelState.Present
+            || evidence.File.State != LicenceChannelState.Present)
+            return new(PublicTextAdmission.LicenceUnresolved, null);
+
+        var sparqlUris = ExactUris(evidence.Sparql);
+        var fileUris = ExactUris(evidence.File);
+        if (sparqlUris is null || fileUris is null)
+            return new(PublicTextAdmission.LicenceUnresolved, null);
+        if (!sparqlUris.SequenceEqual(fileUris, StringComparer.Ordinal))
+            return new(PublicTextAdmission.LicenceConflict, null);
+
+        return sparqlUris is [CreativeCommonsBy40]
+            ? new(PublicTextAdmission.Admitted, CreativeCommonsBy40)
+            : new(PublicTextAdmission.LicenceUnsupported, null);
+    }
+
+    private static string[]? ExactUris(LicenceChannelEvidence channel)
+    {
+        if (channel.Claims.Count == 0
+            || channel.Claims.Any(claim =>
+                string.IsNullOrWhiteSpace(claim.LicenceUri)))
+            return null;
+        return channel.Claims.Select(claim => claim.LicenceUri!)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToArray();
-
-        return uris is [CreativeCommonsBy40]
-            ? new(PublicTextAdmission.Admitted, CreativeCommonsBy40)
-            : new(PublicTextAdmission.LicenceUnsupported, null);
     }
 }

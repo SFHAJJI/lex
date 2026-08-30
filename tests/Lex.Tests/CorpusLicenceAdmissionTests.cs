@@ -25,30 +25,43 @@ public sealed class CorpusLicenceAdmissionTests
         var ccBy = LicenceChannelEvidence.Present([
             Claim("CC-BY-4.0", CreativeCommonsBy40),
         ]);
-        var constructor = typeof(ManifestationLicenceEvidence)
-            .GetConstructor(
-                System.Reflection.BindingFlags.Instance
-                    | System.Reflection.BindingFlags.NonPublic,
-                binder: null,
-                [
-                    typeof(string),
-                    typeof(string),
-                    typeof(LicenceChannelEvidence),
-                    typeof(LicenceChannelEvidence),
-                    typeof(LicenceComparison),
-                ],
-                modifiers: null);
-        Assert.NotNull(constructor);
-        var evidence = (ManifestationLicenceEvidence)constructor.Invoke([
-            "https://publisher.example/m",
-            "https://publisher.example/file",
-            ccBy,
-            ccBy,
-            (LicenceComparison)int.MaxValue,
-        ]);
+        var evidence = EvidenceWithComparison(
+            ccBy, ccBy, (LicenceComparison)int.MaxValue);
 
         Assert.Equal((LicenceComparison)int.MaxValue, evidence.Comparison);
         AssertDenied(PublicTextAdmission.LicenceUnresolved,
+            LicencePublicAdmission.Assess(evidence));
+    }
+
+    [Fact]
+    public void Agreed_marker_cannot_override_an_invalid_channel()
+    {
+        var invalid = LicenceChannelEvidence.Invalid([
+            new LicenceClaim("literal", "unknown", null),
+        ]);
+        var ccBy = LicenceChannelEvidence.Present([
+            Claim("CC-BY-4.0", CreativeCommonsBy40),
+        ]);
+        var evidence = EvidenceWithComparison(
+            invalid, ccBy, LicenceComparison.Agreed);
+
+        AssertDenied(PublicTextAdmission.LicenceUnresolved,
+            LicencePublicAdmission.Assess(evidence));
+    }
+
+    [Fact]
+    public void Agreed_marker_cannot_override_channel_disagreement()
+    {
+        var evidence = EvidenceWithComparison(
+            LicenceChannelEvidence.Present([
+                Claim("CC-BY-4.0", CreativeCommonsBy40),
+            ]),
+            LicenceChannelEvidence.Present([
+                Claim("licenceSCL", LicenceScl),
+            ]),
+            LicenceComparison.Agreed);
+
+        AssertDenied(PublicTextAdmission.LicenceConflict,
             LicencePublicAdmission.Assess(evidence));
     }
 
@@ -160,6 +173,34 @@ public sealed class CorpusLicenceAdmissionTests
         ManifestationLicenceEvidence.AwaitingFile(
                 "https://publisher.example/m", "https://publisher.example/file", sparql)
             .WithFile(file);
+
+    private static ManifestationLicenceEvidence EvidenceWithComparison(
+        LicenceChannelEvidence sparql,
+        LicenceChannelEvidence file,
+        LicenceComparison comparison)
+    {
+        var constructor = typeof(ManifestationLicenceEvidence)
+            .GetConstructor(
+                System.Reflection.BindingFlags.Instance
+                    | System.Reflection.BindingFlags.NonPublic,
+                binder: null,
+                [
+                    typeof(string),
+                    typeof(string),
+                    typeof(LicenceChannelEvidence),
+                    typeof(LicenceChannelEvidence),
+                    typeof(LicenceComparison),
+                ],
+                modifiers: null);
+        Assert.NotNull(constructor);
+        return (ManifestationLicenceEvidence)constructor.Invoke([
+            "https://publisher.example/m",
+            "https://publisher.example/file",
+            sparql,
+            file,
+            comparison,
+        ]);
+    }
 
     private static void AssertDenied(
         PublicTextAdmission expectedOutcome,
