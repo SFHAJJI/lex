@@ -177,7 +177,12 @@ public sealed class AssistantV3ContainmentTests
         var how = await client.GetStringAsync("/how-it-works");
         var stories = await client.GetStringAsync("/stories");
         var architecture = await client.GetStringAsync("/built/assistant");
+        var overview = await client.GetStringAsync("/built");
+        var retrieval = await client.GetStringAsync("/built/retrieval");
+        var limits = await client.GetStringAsync("/built/limits");
+        var systemDiagram = await client.GetStringAsync("/built/diagrams/system.svg");
         var find = await client.GetStringAsync("/find");
+        var readme = await File.ReadAllTextAsync(Path.Combine(RepoRoot(), "README.md"));
 
         Assert.Contains(EnglishNotice, how, StringComparison.Ordinal);
         Assert.DoesNotContain("may plan searches and explain retrieved evidence", how,
@@ -191,6 +196,24 @@ public sealed class AssistantV3ContainmentTests
             StringComparison.Ordinal);
         Assert.DoesNotContain("optional composition architecture of the Lex assistant", architecture,
             StringComparison.Ordinal);
+        Assert.Contains("Assistant and agent references below describe the reviewed V3 target design",
+            overview, StringComparison.Ordinal);
+        Assert.DoesNotContain("one typed legal core serves the UI, MCP and a bounded agent",
+            overview, StringComparison.Ordinal);
+        Assert.Contains("public assistant is currently unavailable",
+            retrieval, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("V3 target path", retrieval, StringComparison.Ordinal);
+        Assert.DoesNotContain("assistant planner's hybrid choice", retrieval,
+            StringComparison.Ordinal);
+        Assert.Contains("public assistant is currently unavailable",
+            limits, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("dormant target", limits, StringComparison.Ordinal);
+        Assert.DoesNotContain("observed manually today", limits, StringComparison.Ordinal);
+        Assert.Contains("Target V3 agent", systemDiagram, StringComparison.Ordinal);
+        Assert.DoesNotContain(">Bounded agent<", systemDiagram, StringComparison.Ordinal);
+        Assert.Contains("historical V2 example", readme, StringComparison.Ordinal);
+        Assert.DoesNotContain("Or ask the [live site]", readme, StringComparison.Ordinal);
+        Assert.DoesNotContain("site's own AI uses", readme, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -300,6 +323,16 @@ public sealed class AssistantV3ContainmentTests
             ["content"] = question,
         },
     ];
+
+    private static string RepoRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null
+               && !File.Exists(Path.Combine(directory.FullName, "Lex.slnx")))
+            directory = directory.Parent;
+        return directory?.FullName
+               ?? throw new InvalidOperationException("Repository root not found.");
+    }
 
     private static McpCore EmptyCore() =>
         new(new Dictionary<string, LexIndexReader>(StringComparer.Ordinal));

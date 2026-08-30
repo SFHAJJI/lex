@@ -57,9 +57,6 @@ public static class ExplainerEndpoints
         var retrievalCases = LoadRetrievalCases();
         var retrievalBaseline = LoadRetrievalBaseline();
 
-        static string StatusBadge(string status) =>
-            $"<span class=\"badge{(status == "shipped" ? " ok" : status == "gated" ? " warn" : "")}\">{H(status)}</span>";
-
         app.MapGet("/ai", () => Results.Redirect("/developers#assistant", permanent: true));
 
         app.MapGet("/architecture", () => Results.Redirect("/built", permanent: true));

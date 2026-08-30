@@ -3,6 +3,9 @@
 Most apparent RAG hallucinations begin before generation. Lex therefore treats legal identity as
 an authorization step and ranking as a later discovery step.
 
+The public assistant is currently unavailable. Assistant references below describe the reviewed
+V3 target path; direct UI and MCP retrieval remain active.
+
 ![A query passes through subject resolution, temporal and scope filters, keyword or gated hybrid retrieval, bounded top-k selection and typed evidence before any optional generation.](/built/diagrams/retrieval.svg)
 
 [Open the retrieval diagram at full size](/built/diagrams/retrieval.svg)
@@ -14,14 +17,14 @@ an authorization step and ranking as a later discovery step.
 | Exact coordinate | Return one known instrument, state or provision without similarity | shared `Lex.Mcp` legal operations |
 | Bounded discovery | Search FTS by default; add weak official metadata and only gated hybrid vectors | `Lex.Index/WorkSearch`, FTS5 and the pinned local encoder |
 | Result shaping | Deduplicate, enforce fairness and stop at the fixed evidence budget | `Lex.Index` query and response contracts |
-| Typed evidence | Return rows, hashes, permalinks and match reasons to MCP, UI or assistant | `Lex.Mcp` envelopes and `Lex.Ask` evidence ledger |
+| Typed evidence | Return rows, hashes, permalinks and match reasons to MCP and UI today, and to the V3 assistant after promotion | `Lex.Mcp` envelopes and `Lex.Ask` evidence ledger |
 
 ## Retrieval funnel
 
 1. Parse identifiers, article numbers and comparison intent; dates arrive as typed arguments
    guarded upstream.
-2. Resolve the named subject against official work identity before asking the planner.
-3. In the assistant, clarify zero or several credible subjects instead of letting rank silently
+2. Resolve the named subject against official work identity before any future assistant planner.
+3. In the target V3 assistant, clarify zero or several credible subjects instead of letting rank silently
    choose one; direct MCP callers receive ranked hits labeled ambiguous.
 4. Apply publisher, work, language and point-in-time scope.
 5. Serve an exactly named coordinate without similarity when the question names one.
@@ -49,7 +52,7 @@ population and failure behavior testable.
 The semantic encoder, local vectors and rank fusion exist, but activation is evidence-gated.
 Offline signed benchmarks authorize vector mounting during deployment and startup; benchmark logic never switches an individual query.
 An API caller explicitly chooses keyword or hybrid; the shipped surfaces default
-to keyword and the assistant planner's hybrid choice is quarantined until signed activation. An
+to keyword and the target V3 assistant planner remains unavailable until signed activation. An
 explicit hybrid request receives a typed unavailable result for any publisher whose exact signed
 candidate did not pass. A compatible signed report binds relevance, latency, memory and size to that
 candidate before its vectors may mount. Keyword remains the default. A measured rejection is a valid
