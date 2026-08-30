@@ -835,16 +835,24 @@ export interface AssistantUnavailableAction {
   href: "/?space=search" | "/browse";
 }
 
+function isAssistantUnavailableNotice(ui?: UiEffect): boolean {
+  const status = ui?.gap?.status;
+  return status === "assistant_v3_unavailable" || status === "localization_unavailable";
+}
+
 export function retainsAssistantConversation(reply: AskReply): boolean {
-  const status = reply.ui?.gap?.status;
-  return status !== "assistant_v3_unavailable" && status !== "localization_unavailable";
+  return !isAssistantUnavailableNotice(reply.ui);
+}
+
+/** A containment notice must never displace the held-law workspace already on screen. */
+export function assistantReplyCanReplaceWorkspace(reply: AskReply): boolean {
+  return !isAssistantUnavailableNotice(reply.ui);
 }
 
 /** Untrusted wire tokens can select only these two local, deterministic destinations. */
 export function assistantUnavailableActions(ui?: UiEffect): AssistantUnavailableAction[] {
   const gap = ui?.gap;
-  if (!gap || (gap.status !== "assistant_v3_unavailable"
-      && gap.status !== "localization_unavailable")) return [];
+  if (!gap || !isAssistantUnavailableNotice(ui)) return [];
   const french = gap.status === "assistant_v3_unavailable" && gap.requested_locale === "fr";
   const catalogue = {
     search: {

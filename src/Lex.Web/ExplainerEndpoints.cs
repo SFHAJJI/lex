@@ -695,12 +695,8 @@ public static class ExplainerEndpoints
 
                 <h2>What it will not do</h2>
                 <p>It will not guess. If you ask for a date Lex has no version for, it says so with a reason
-                code (<span class="mono">no_version_for_date</span>) instead of producing a plausible text.
-                The assistant on the front page may plan searches and explain retrieved evidence, but it cannot
-                authorize its own law choice or invent legal text. Deterministic guards resolve names, require
-                clarification when evidence is weak, validate citations and preserve publisher gaps. Every
-                factual answer shows the evidence underneath it so you can check the source without leaving the page.
-                <a href="/lu-legilux/rgd-1998-08-03-n4/1900-01-01">Watch it refuse →</a></p>
+                code (<span class="mono">no_version_for_date</span>) instead of producing a plausible text.</p>
+                <p>The assistant is temporarily unavailable while Lex installs its deterministic V3 answer path, checkable against its sources. Search and held publisher text remain available.</p>
 
                 <h2>What it holds today</h2>
                 <p><span class="badge">{cov.Sum(c => c.Groups):n0} works</span>
@@ -738,7 +734,7 @@ public static class ExplainerEndpoints
                 renders; every link lands on the evidence.</p>
                 """);
 
-            void Story(string publisher, string work, string headline, string lede, string askQuestion)
+            void Story(string publisher, string work, string headline, string lede)
             {
                 if (!readers.TryGetValue(publisher, out var r)) return;
                 // One version = one validity date. A bilingual work (DE+FR) carries two rows per
@@ -771,7 +767,6 @@ public static class ExplainerEndpoints
                          <a href="/{H(publisher)}/{H(work)}/{H(VersionCoordinate(first))}">the first text</a> ·
                          <a href="/{H(publisher)}/{H(work)}/diff/{H(VersionCoordinate(first))}/{H(VersionCoordinate(mid))}">what changed by {H(mid.ValidFrom)}</a> ·
                          <a href="/{H(publisher)}/{H(work)}/{H(VersionCoordinate(last))}">the text today</a></p>
-                      <p class="sub">Ask the assistant: <a href="/?q={Uri.EscapeDataString(askQuestion)}">{H(askQuestion)}</a></p>
                     </div>
                     """);
             }
@@ -779,26 +774,22 @@ public static class ExplainerEndpoints
             Story("lu-legilux", "loi-2020-07-17-a624",
                 "The law that could not sit still",
                 "Luxembourg's Covid-19 measures act. Rules on gatherings, masks and closures were rewritten again and again, "
-                + "which is exactly when \"what did the rule say <i>that week</i>?\" stops being an academic question.",
-                "How did the Luxembourg Covid-19 law change between July 2020 and July 2021?");
+                + "which is exactly when \"what did the rule say <i>that week</i>?\" stops being an academic question.");
 
             Story("lu-legilux", "constitution-1868-10-17-n1",
                 "A constitution, revised in public",
                 "The Luxembourg constitution, from the early twentieth century to the 2023 reform, the same document, "
-                + "re-consolidated after every revision, each state still retrievable.",
-                "What changed in the Luxembourg constitution in 2023?");
+                + "re-consolidated after every revision, each state still retrievable.");
 
             Story("eu-eurlex", "32013r0575",
                 "Banking rules in waves",
                 "The Capital Requirements Regulation, the rulebook a Luxembourg bank must apply. Its own Article 92 "
-                + "(the capital ratios) has more than one lifetime.",
-                "How has Article 92 of the CRR changed over its life?");
+                + "(the capital ratios) has more than one lifetime.");
 
             Story("lu-legilux", "loi-1879-06-18-n1",
                 "The criminal code is a moving target",
                 "Luxembourg's penal code has been re-consolidated repeatedly in the last decade. Point-in-time matters most "
-                + "where the question is what was punishable on the day of the act.",
-                "Que disait le Code pénal luxembourgeois au 1er janvier 2020 ?");
+                + "where the question is what was punishable on the day of the act.");
 
             // The same cross-index aggregate that changes_in_period exposes: one ranking over the
             // selected corpus, never a Luxembourg-only list with EU bolted on elsewhere. Keep the

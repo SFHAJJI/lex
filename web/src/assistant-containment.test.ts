@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   assistantUnavailableActions,
+  assistantReplyCanReplaceWorkspace,
   retainsAssistantConversation,
   type AskReply,
   type UiEffect,
@@ -67,5 +68,19 @@ test("assistant containment cannot enter client conversation history", () => {
   assert.equal(retainsAssistantConversation({
     reply: "ordinary typed result",
     ui: { gap: { status: "unknown_future_status", explanation: "typed", available: [] } },
+  }), true);
+});
+
+test("assistant containment is a notice and cannot replace held workspace law", () => {
+  for (const status of ["assistant_v3_unavailable", "localization_unavailable"]) {
+    assert.equal(assistantReplyCanReplaceWorkspace({
+      reply: "reviewed notice",
+      ui: { gap: { status, explanation: "reviewed notice", available: [] } },
+    }), false);
+  }
+
+  assert.equal(assistantReplyCanReplaceWorkspace({
+    reply: "ordinary typed result",
+    ui: { gap: { status: "no_result", explanation: "typed", available: [] } },
   }), true);
 });

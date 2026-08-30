@@ -1,5 +1,9 @@
 # Assistant
 
+The assistant is temporarily unavailable while Lex installs its deterministic V3 answer path, checkable against its sources. Search and held publisher text remain available.
+
+> **Historical V2 architecture, disabled.** Everything below records the contained V2 pipeline for audit only. It is not reachable request behavior and does not describe the V3 replacement.
+
 **Architectural decision: bounded plan -> validate and correct once -> guard dates -> freeze -> execute.**
 ReWOO-inspired reasoning without an observation loop, not adaptive ReAct. Identity resolves in
 code before any model runs; the planner proposes one typed plan over a closed catalog; code

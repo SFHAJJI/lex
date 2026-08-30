@@ -206,6 +206,13 @@ public static class ApiEndpoints
             if (!TryEvaluationToken(req.Headers, out var evaluationToken))
                 return Results.Json(
                     new { error = "Invalid X-Lex-Evaluation-Admission." }, statusCode: 400);
+            if (askService.ContainLegacyAuthoritativeRequest(message) is { } containment)
+            {
+                res.Headers["X-Lex-Request-Id"] = Guid.NewGuid().ToString("N");
+                return Results.Content(
+                    containment.Body.ToJsonString(), "application/json",
+                    statusCode: containment.Status);
+            }
             var requestBodySha256 = Convert.ToHexStringLower(SHA256.HashData(body));
             if (evaluationToken is not null
                 && !EvaluationInspectionAccepted(evaluationAdmissions.Inspect(
@@ -323,6 +330,26 @@ public static class ApiEndpoints
             if (!TryEvaluationToken(req.Headers, out var evaluationToken))
             {
                 await Reject(400, "Invalid X-Lex-Evaluation-Admission.");
+                return;
+            }
+            if (askService.ContainLegacyAuthoritativeRequest(message) is { } containment)
+            {
+                var containmentRequestId = Guid.NewGuid().ToString("N");
+                res.Headers.ContentType = "text/event-stream";
+                res.Headers["X-Accel-Buffering"] = "no";
+                res.Headers["X-Lex-Request-Id"] = containmentRequestId;
+                var envelope = new JsonObject
+                {
+                    ["version"] = "1",
+                    ["request_id"] = containmentRequestId,
+                    ["sequence"] = 1,
+                    ["server_elapsed_ms"] = streamWatch.Elapsed.TotalMilliseconds,
+                    ["payload"] = containment.Body,
+                };
+                await res.WriteAsync(
+                    $"event: done\ndata: {envelope.ToJsonString()}\n\n",
+                    req.HttpContext.RequestAborted);
+                await res.Body.FlushAsync(req.HttpContext.RequestAborted);
                 return;
             }
             var requestBodySha256 = Convert.ToHexStringLower(SHA256.HashData(body));

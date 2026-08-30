@@ -2594,7 +2594,7 @@ public sealed class AskService
         AskAdmissionLane admissionLane = AskAdmissionLane.Public)
     {
         if (_legacyAuthoritativeAssistantContained)
-            return AssistantV3Unavailable(history);
+            return AssistantV3Unavailable(CurrentRequest(history));
         if (!Enabled)
             return new AskOutcome(503, new JsonObject
             {
@@ -2818,7 +2818,12 @@ public sealed class AskService
         }
     }
 
-    private static AskOutcome AssistantV3Unavailable(JsonArray history)
+    public AskOutcome? ContainLegacyAuthoritativeRequest(string currentRequest) =>
+        _legacyAuthoritativeAssistantContained
+            ? AssistantV3Unavailable(currentRequest)
+            : null;
+
+    private static AskOutcome AssistantV3Unavailable(string currentRequest)
     {
         const string english =
             "The assistant is temporarily unavailable while Lex installs its deterministic V3 answer path, checkable against its sources. Search and held publisher text remain available.";
@@ -2826,7 +2831,7 @@ public sealed class AskService
             "L'assistant est temporairement indisponible pendant que Lex met en place son parcours de réponse V3 déterministe et vérifiable par ses sources. La recherche et les textes publiés que Lex détient restent disponibles.";
         const string localizationUnavailable =
             "Lex cannot provide this assistant notice in the requested language yet. The assistant is unavailable during the V3 answer-path replacement. Search and held publisher text remain available.";
-        var detected = DetectedLocale(history);
+        var detected = ConfidentContainmentLocale(currentRequest);
         var (status, reply, requested, rendered, fallback) = detected switch
         {
             "en" => ("assistant_v3_unavailable", english, "en", "en", (string?)null),
@@ -2850,20 +2855,30 @@ public sealed class AskService
             RetainConversation: false);
     }
 
-    private static string? DetectedLocale(JsonArray history)
+    private static string CurrentRequest(JsonArray history)
     {
-        for (var index = history.Count - 1; index >= 0; index--)
+        if (history.Count == 0 || history[^1] is not JsonObject message
+            || message["role"] is not JsonValue roleValue
+            || !roleValue.TryGetValue<string>(out var role)
+            || role != "user"
+            || message["content"] is not JsonValue contentValue
+            || !contentValue.TryGetValue<string>(out var content))
+            return "";
+        return content;
+    }
+
+    private static string? ConfidentContainmentLocale(string currentRequest)
+    {
+        var tokens = WordToken.Matches(currentRequest)
+            .Select(match => match.Value.ToLowerInvariant()).ToArray();
+        var french = tokens.Any(FrenchFrame.Contains);
+        var english = tokens.Any(EnglishFrame.Contains);
+        return (french, english) switch
         {
-            if (history[index] is not JsonObject message
-                || message["role"] is not JsonValue roleValue
-                || !roleValue.TryGetValue<string>(out var role)
-                || role != "user"
-                || message["content"] is not JsonValue contentValue
-                || !contentValue.TryGetValue<string>(out var content))
-                continue;
-            if (LocaleOf(content) is { } locale) return locale;
-        }
-        return null;
+            (true, false) => "fr",
+            (false, true) => "en",
+            _ => null,
+        };
     }
 
     private static AskOutcome SubjectClarificationOutcome(

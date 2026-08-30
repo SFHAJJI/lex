@@ -7,6 +7,7 @@ using Lex.Mcp;
 using Lex.Web;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Lex.Tests;
 
@@ -23,6 +24,7 @@ public sealed class AssistantV3ContainmentTests
     [InlineData("What does this law say?", "assistant_v3_unavailable", "en", null, EnglishNotice)]
     [InlineData("Que prévoit cette loi ?", "assistant_v3_unavailable", "fr", null, FrenchNotice)]
     [InlineData("32016R0679", "localization_unavailable", "undetermined", "en", LocalizationNotice)]
+    [InlineData("que dice esta ley", "localization_unavailable", "undetermined", "en", LocalizationNotice)]
     public async Task Contained_service_returns_the_reviewed_typed_result(
         string question,
         string expectedStatus,
@@ -73,6 +75,87 @@ public sealed class AssistantV3ContainmentTests
         Assert.DoesNotContain("href", outcome.Body.ToJsonString(), StringComparison.Ordinal);
         Assert.DoesNotContain("/?space=search", outcome.Body.ToJsonString(), StringComparison.Ordinal);
         Assert.DoesNotContain("/browse", outcome.Body.ToJsonString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Containment_locale_uses_only_the_current_request()
+    {
+        var service = ContainedService();
+        var history = new JsonArray
+        {
+            new JsonObject { ["role"] = "user", ["content"] = "What does this law say?" },
+            new JsonObject { ["role"] = "assistant", ["content"] = "Earlier answer" },
+            new JsonObject { ["role"] = "user", ["content"] = "32016R0679" },
+        };
+
+        var outcome = await service.AskAsync(
+            history, "test-client", "law.soufien.lu", CancellationToken.None);
+
+        var gap = outcome.Body["ui"]!["gap"]!.AsObject();
+        Assert.Equal("localization_unavailable", gap["status"]?.GetValue<string>());
+        Assert.Equal("undetermined", gap["requested_locale"]?.GetValue<string>());
+        Assert.Equal(LocalizationNotice, outcome.Body["reply"]?.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData("/api/ask", false)]
+    [InlineData("/api/ask/stream", true)]
+    public async Task Containment_precedes_thread_capacity_without_eviction(
+        string path, bool stream)
+    {
+        var threads = new AskThreadRegistry(TimeProvider.System, maximumThreads: 1);
+        var acquired = await threads.AcquireAsync(null);
+        var existing = acquired.Lease!;
+        var token = existing.Token;
+        Assert.True(existing.Commit("Earlier question", "Earlier answer", null));
+        await existing.DisposeAsync();
+        var originalHistory = await RetainedHistory(threads, token);
+        await using var factory = FactoryWith(threads);
+        using var client = factory.CreateClient();
+
+        using var response = await client.SendAsync(Request(path, null, stream));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("assistant_v3_unavailable",
+            (await Payload(response, stream))["ui"]!["gap"]!["status"]?.GetValue<string>());
+        Assert.Equal(1, threads.Count);
+        Assert.Equal(originalHistory, await RetainedHistory(threads, token));
+    }
+
+    [Theory]
+    [InlineData("/api/ask", false)]
+    [InlineData("/api/ask/stream", true)]
+    public async Task Containment_precedes_stale_thread_lookup(string path, bool stream)
+    {
+        var threads = new AskThreadRegistry(TimeProvider.System, maximumThreads: 1);
+        await using var factory = FactoryWith(threads);
+        using var client = factory.CreateClient();
+
+        using var response = await client.SendAsync(
+            Request(path, new string('A', AskThreadRegistry.TokenLength), stream));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("assistant_v3_unavailable",
+            (await Payload(response, stream))["ui"]!["gap"]!["status"]?.GetValue<string>());
+        Assert.Equal(0, threads.Count);
+    }
+
+    [Fact]
+    public async Task Public_pages_describe_the_contained_assistant()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+
+        var how = await client.GetStringAsync("/how-it-works");
+        var stories = await client.GetStringAsync("/stories");
+        var architecture = await client.GetStringAsync("/built/assistant");
+
+        Assert.Contains(EnglishNotice, how, StringComparison.Ordinal);
+        Assert.DoesNotContain("may plan searches and explain retrieved evidence", how,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("Ask the assistant", stories, StringComparison.Ordinal);
+        Assert.Contains(EnglishNotice, architecture, StringComparison.Ordinal);
+        Assert.Contains("Historical V2 architecture", architecture, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -144,6 +227,24 @@ public sealed class AssistantV3ContainmentTests
         return thread.History.ToJsonString();
     }
 
+    private static WebApplicationFactory<Program> FactoryWith(AskThreadRegistry threads) =>
+        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<AskThreadRegistry>();
+                services.AddSingleton(threads);
+            }));
+
+    private static async Task<JsonObject> Payload(HttpResponseMessage response, bool stream)
+    {
+        var body = await response.Content.ReadAsStringAsync();
+        if (!stream) return JsonNode.Parse(body)!.AsObject();
+        var data = Assert.Single(
+            body.Split('\n', StringSplitOptions.RemoveEmptyEntries),
+            line => line.StartsWith("data: ", StringComparison.Ordinal));
+        return JsonNode.Parse(data[6..])!["payload"]!.AsObject();
+    }
+
     private static HttpRequestMessage Request(string path, string? token, bool stream)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, path)
@@ -167,6 +268,11 @@ public sealed class AssistantV3ContainmentTests
 
     private static McpCore EmptyCore() =>
         new(new Dictionary<string, LexIndexReader>(StringComparer.Ordinal));
+
+    private static AskService ContainedService() =>
+        new(EmptyCore(), new ExplodingPlanner(), new ExplodingSynthesizer(),
+            new AskAdmissionController(TimeProvider.System, 1, 1, 1),
+            containLegacyAuthoritativeAssistant: true);
 
     private static string[] Strings(JsonNode? node) => node!.AsArray()
         .Select(item => item!.GetValue<string>()).ToArray();

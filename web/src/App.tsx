@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { asOfResult, compoundOperationViews, first, provisionGapPresentation, provisionItemsOf, provisionResponseMeta, summedCount, summedPopulation, tool,
+import { asOfResult, assistantReplyCanReplaceWorkspace, compoundOperationViews, first, provisionGapPresentation, provisionItemsOf, provisionResponseMeta, summedCount, summedPopulation, tool,
   unionKnownExclusions,
   type AskReply,
   type OperationReply, type ProvisionItem, type UiEffect } from "./api";
@@ -713,6 +713,7 @@ export default function App() {
   }, [s.work, s.anchor]);
 
   const applyAssistantReply = useCallback((r: AskReply) => {
+      if (!assistantReplyCanReplaceWorkspace(r)) return;
       // Operation ids as well as the view, so two identical questions stay distinguishable.
       // If the two payloads ever serialise differently this fails open to applying twice,
       // which is the behaviour it replaces rather than a new one.
