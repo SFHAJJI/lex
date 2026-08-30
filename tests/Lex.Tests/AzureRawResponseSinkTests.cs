@@ -201,8 +201,7 @@ public sealed class AzureRawResponseSinkTests
     public async Task Incomplete_response_is_rejected_before_any_Azure_call()
     {
         var store = new RecordingStore();
-        var sink = new AzureRawResponseSink(
-            store, EvidenceRetentionLane.Nightly90Days);
+        var sink = NightlySink(store);
         var request = Request();
         var response = Response(bodyComplete: false);
 
@@ -216,8 +215,7 @@ public sealed class AzureRawResponseSinkTests
     public async Task Oversized_response_is_rejected_before_any_Azure_call()
     {
         var store = new RecordingStore();
-        var sink = new AzureRawResponseSink(
-            store, EvidenceRetentionLane.Nightly90Days);
+        var sink = NightlySink(store);
 
         await Assert.ThrowsAsync<InvalidDataException>(() =>
             sink.CaptureVerifiedAsync(
@@ -232,8 +230,7 @@ public sealed class AzureRawResponseSinkTests
     public async Task Publisher_stream_errors_are_sanitized_before_any_Azure_call()
     {
         var store = new RecordingStore();
-        var sink = new AzureRawResponseSink(
-            store, EvidenceRetentionLane.Nightly90Days);
+        var sink = NightlySink(store);
         const string secret = "private=query-and-body-secret";
 
         var error = await Assert.ThrowsAsync<IOException>(() =>
@@ -252,8 +249,7 @@ public sealed class AzureRawResponseSinkTests
     {
         var bytes = Encoding.UTF8.GetBytes("raw-body-secret");
         var store = new RecordingStore();
-        var sink = new AzureRawResponseSink(
-            store, EvidenceRetentionLane.Nightly90Days);
+        var sink = NightlySink(store);
 
         var verified = await sink.CaptureVerifiedAsync(
             Request(), Response(entityTag: "\"publisher-header-secret\""),
@@ -291,9 +287,9 @@ public sealed class AzureRawResponseSinkTests
         var first = new RecordingStore();
         var second = new RecordingStore();
 
-        await new AzureRawResponseSink(first, EvidenceRetentionLane.Nightly90Days)
+        await NightlySink(first)
             .CaptureVerifiedAsync(Request(), Response(), new MemoryStream(bytes));
-        await new AzureRawResponseSink(second, EvidenceRetentionLane.Nightly90Days)
+        await NightlySink(second)
             .CaptureVerifiedAsync(Request(), Response(), new MemoryStream(bytes));
 
         Assert.Equal(first.BlobNames[0], second.BlobNames[0]);
@@ -308,8 +304,7 @@ public sealed class AzureRawResponseSinkTests
         var store = new RecordingStore();
         store.CreateFailures.Enqueue(new AzureEvidenceStoreException(
             (AzureEvidenceStoreFailureKind)kind));
-        var sink = new AzureRawResponseSink(
-            store, EvidenceRetentionLane.Nightly90Days);
+        var sink = NightlySink(store);
 
         await sink.CaptureVerifiedAsync(
             Request(), Response(), new MemoryStream([4, 5, 6]));
@@ -325,8 +320,7 @@ public sealed class AzureRawResponseSinkTests
         var store = new RecordingStore();
         store.PreflightFailures.Enqueue(new AzureEvidenceStoreException(
             AzureEvidenceStoreFailureKind.Ambiguous));
-        var sink = new AzureRawResponseSink(
-            store, EvidenceRetentionLane.Nightly90Days);
+        var sink = NightlySink(store);
 
         await sink.CaptureVerifiedAsync(
             Request(), Response(), new MemoryStream([4, 5, 6]));
@@ -342,8 +336,7 @@ public sealed class AzureRawResponseSinkTests
         var store = new RecordingStore();
         store.ReadbackFailures.Enqueue(new AzureEvidenceStoreException(
             AzureEvidenceStoreFailureKind.Ambiguous));
-        var sink = new AzureRawResponseSink(
-            store, EvidenceRetentionLane.Nightly90Days);
+        var sink = NightlySink(store);
 
         await sink.CaptureVerifiedAsync(
             Request(), Response(), new MemoryStream([4, 5, 6]));
@@ -362,8 +355,7 @@ public sealed class AzureRawResponseSinkTests
             AzureEvidenceStoreFailureKind.Ambiguous));
         store.ResolveFailures.Enqueue(new AzureEvidenceStoreException(
             AzureEvidenceStoreFailureKind.Ambiguous));
-        var sink = new AzureRawResponseSink(
-            store, EvidenceRetentionLane.Nightly90Days);
+        var sink = NightlySink(store);
 
         await sink.CaptureVerifiedAsync(
             Request(), Response(), new MemoryStream([4, 5, 6]));
@@ -384,8 +376,7 @@ public sealed class AzureRawResponseSinkTests
             ReadbackStreamFactory = () =>
                 new ThrowingReadStream(_ => new IOException(secret)),
         };
-        var sink = new AzureRawResponseSink(
-            store, EvidenceRetentionLane.Nightly90Days);
+        var sink = NightlySink(store);
 
         var error = await Assert.ThrowsAsync<IOException>(() =>
             sink.CaptureVerifiedAsync(
@@ -400,8 +391,7 @@ public sealed class AzureRawResponseSinkTests
     public async Task Hostile_publisher_cancellation_without_caller_cancellation_is_sanitized()
     {
         const string secret = "hostile-publisher-cancellation-secret";
-        var sink = new AzureRawResponseSink(
-            new RecordingStore(), EvidenceRetentionLane.Nightly90Days);
+        var sink = NightlySink(new RecordingStore());
 
         var error = await Assert.ThrowsAsync<IOException>(() =>
             sink.CaptureVerifiedAsync(
@@ -416,8 +406,7 @@ public sealed class AzureRawResponseSinkTests
     public async Task Hostile_publisher_CanRead_failure_is_sanitized()
     {
         const string secret = "hostile-publisher-can-read-secret";
-        var sink = new AzureRawResponseSink(
-            new RecordingStore(), EvidenceRetentionLane.Nightly90Days);
+        var sink = NightlySink(new RecordingStore());
 
         var error = await Assert.ThrowsAsync<IOException>(() =>
             sink.CaptureVerifiedAsync(
@@ -442,8 +431,7 @@ public sealed class AzureRawResponseSinkTests
                 ReadbackStreamFactory = () =>
                     new ThrowingReadStream(_ => exception),
             };
-            var sink = new AzureRawResponseSink(
-                store, EvidenceRetentionLane.Nightly90Days);
+            var sink = NightlySink(store);
 
             var error = await Assert.ThrowsAsync<IOException>(() =>
                 sink.CaptureVerifiedAsync(
@@ -468,8 +456,7 @@ public sealed class AzureRawResponseSinkTests
                     secret, innerException: null, token);
             }),
         };
-        var sink = new AzureRawResponseSink(
-            store, EvidenceRetentionLane.Nightly90Days);
+        var sink = NightlySink(store);
 
         var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             sink.CaptureVerifiedAsync(
@@ -509,8 +496,7 @@ public sealed class AzureRawResponseSinkTests
                 return new OperationCanceledException(secret);
             }),
         };
-        var sink = new AzureRawResponseSink(
-            store, EvidenceRetentionLane.Nightly90Days);
+        var sink = NightlySink(store);
 
         var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             sink.CaptureVerifiedAsync(
@@ -525,8 +511,7 @@ public sealed class AzureRawResponseSinkTests
     public async Task Remote_byte_digest_mismatch_fails_closed()
     {
         var store = new RecordingStore { RemoteBytes = [9, 9, 9] };
-        var sink = new AzureRawResponseSink(
-            store, EvidenceRetentionLane.Nightly90Days);
+        var sink = NightlySink(store);
 
         await Assert.ThrowsAsync<InvalidDataException>(() =>
             sink.CaptureVerifiedAsync(
@@ -543,8 +528,7 @@ public sealed class AzureRawResponseSinkTests
             RemoteBytes = [9, 9, 9],
             ReadbackStreamFactory = () => new ThrowingDisposeStream([9, 9, 9]),
         };
-        var sink = new AzureRawResponseSink(
-            store, EvidenceRetentionLane.Nightly90Days);
+        var sink = NightlySink(store);
 
         var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
             sink.CaptureVerifiedAsync(
@@ -559,8 +543,7 @@ public sealed class AzureRawResponseSinkTests
     public async Task Remote_length_mismatch_fails_closed()
     {
         var store = new RecordingStore { ReportedLength = 999 };
-        var sink = new AzureRawResponseSink(
-            store, EvidenceRetentionLane.Nightly90Days);
+        var sink = NightlySink(store);
 
         await Assert.ThrowsAsync<InvalidDataException>(() =>
             sink.CaptureVerifiedAsync(
@@ -580,8 +563,7 @@ public sealed class AzureRawResponseSinkTests
                 ["unexpected"] = "value",
             },
         };
-        var sink = new AzureRawResponseSink(
-            store, EvidenceRetentionLane.Nightly90Days);
+        var sink = NightlySink(store);
 
         await Assert.ThrowsAsync<InvalidDataException>(() =>
             sink.CaptureVerifiedAsync(
@@ -602,8 +584,7 @@ public sealed class AzureRawResponseSinkTests
             ReadbackVersionId = wrongVersion ? "version-other" : null,
             ReadbackETag = wrongEtag ? "\"etag-other\"" : null,
         };
-        var sink = new AzureRawResponseSink(
-            store, EvidenceRetentionLane.Nightly90Days);
+        var sink = NightlySink(store);
 
         await Assert.ThrowsAsync<InvalidDataException>(() =>
             sink.CaptureVerifiedAsync(
@@ -620,8 +601,7 @@ public sealed class AzureRawResponseSinkTests
             VersionCreatedAt = new DateTimeOffset(
                 2026, 8, 30, 4, 0, 0, TimeSpan.Zero),
         };
-        var sink = new AzureRawResponseSink(
-            store, EvidenceRetentionLane.Nightly90Days);
+        var sink = NightlySink(store);
 
         await sink.CaptureVerifiedAsync(
             Request(), Response(), new MemoryStream([1]));
@@ -640,8 +620,7 @@ public sealed class AzureRawResponseSinkTests
         var fetchedAt = new DateTimeOffset(
             2026, 8, 30, 4, 0, 0, TimeSpan.Zero).AddTicks(1);
         var store = new RecordingStore { VersionCreatedAt = fetchedAt };
-        var sink = new AzureRawResponseSink(
-            store, EvidenceRetentionLane.Nightly90Days);
+        var sink = NightlySink(store);
 
         await sink.CaptureVerifiedAsync(
             Request(), Response(fetchedAt: fetchedAt), new MemoryStream([1]));
@@ -834,8 +813,7 @@ public sealed class AzureRawResponseSinkTests
             RetentionFactsFactory = (version, request) => new(
                 version.VersionId, request.ImmutableUntil, mode, false),
         };
-        var sink = new AzureRawResponseSink(
-            store, EvidenceRetentionLane.Nightly90Days);
+        var sink = NightlySink(store);
 
         await Assert.ThrowsAsync<InvalidDataException>(() =>
             sink.CaptureVerifiedAsync(
@@ -850,8 +828,7 @@ public sealed class AzureRawResponseSinkTests
             RetentionFactsFactory = (version, _) => new(
                 version.VersionId, null, "Locked", false),
         };
-        var sink = new AzureRawResponseSink(
-            store, EvidenceRetentionLane.Nightly90Days);
+        var sink = NightlySink(store);
 
         await Assert.ThrowsAsync<InvalidDataException>(() =>
             sink.CaptureVerifiedAsync(
@@ -869,8 +846,7 @@ public sealed class AzureRawResponseSinkTests
                 "Locked",
                 false),
         };
-        var sink = new AzureRawResponseSink(
-            store, EvidenceRetentionLane.Nightly90Days);
+        var sink = NightlySink(store);
 
         await Assert.ThrowsAsync<InvalidDataException>(() =>
             sink.CaptureVerifiedAsync(
@@ -949,8 +925,7 @@ public sealed class AzureRawResponseSinkTests
             RetentionFactsFactory = (_, request) => new(
                 "version-other", request.ImmutableUntil, "Locked", false),
         };
-        var sink = new AzureRawResponseSink(
-            store, EvidenceRetentionLane.Nightly90Days);
+        var sink = NightlySink(store);
 
         await Assert.ThrowsAsync<InvalidDataException>(() =>
             sink.CaptureVerifiedAsync(
@@ -964,8 +939,7 @@ public sealed class AzureRawResponseSinkTests
         for (var count = 0; count < AzureRawResponseSink.MaximumAttempts; count++)
             store.ReadbackFailures.Enqueue(new AzureEvidenceStoreException(
                 AzureEvidenceStoreFailureKind.Ambiguous));
-        var sink = new AzureRawResponseSink(
-            store, EvidenceRetentionLane.Nightly90Days);
+        var sink = NightlySink(store);
 
         var error = await Assert.ThrowsAsync<IOException>(() =>
             sink.CaptureVerifiedAsync(
@@ -1004,8 +978,7 @@ public sealed class AzureRawResponseSinkTests
     {
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
-        var sink = new AzureRawResponseSink(
-            new RecordingStore(), EvidenceRetentionLane.Nightly90Days);
+        var sink = NightlySink(new RecordingStore());
 
         var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             sink.CaptureVerifiedAsync(
@@ -1021,8 +994,7 @@ public sealed class AzureRawResponseSinkTests
         var store = new RecordingStore();
         store.ReadbackFailures.Enqueue(new AzureEvidenceStoreException(
             AzureEvidenceStoreFailureKind.AlreadyExists));
-        var sink = new AzureRawResponseSink(
-            store, EvidenceRetentionLane.Nightly90Days);
+        var sink = NightlySink(store);
 
         var error = await Assert.ThrowsAsync<IOException>(() =>
             sink.CaptureVerifiedAsync(
@@ -1039,8 +1011,7 @@ public sealed class AzureRawResponseSinkTests
         var store = new RecordingStore();
         store.CreateFailures.Enqueue(new AzureEvidenceStoreException(
             AzureEvidenceStoreFailureKind.Rejected));
-        var sink = new AzureRawResponseSink(
-            store, EvidenceRetentionLane.Nightly90Days);
+        var sink = NightlySink(store);
         const string bodySecret = "raw-body-secret";
         const string headerSecret = "publisher-header-secret";
 
@@ -1059,6 +1030,13 @@ public sealed class AzureRawResponseSinkTests
         Assert.DoesNotContain(bodySecret, surfaced, StringComparison.Ordinal);
         Assert.DoesNotContain(headerSecret, surfaced, StringComparison.Ordinal);
     }
+
+    private static AzureRawResponseSink NightlySink(
+        IAzureRawEvidenceStore store) => new(
+            store,
+            EvidenceRetentionLane.Nightly90Days,
+            new FixedTimeProvider(
+                new DateTimeOffset(2026, 8, 30, 4, 0, 1, TimeSpan.Zero)));
 
     private static SourceRequestIdentity Request(long maximumBytes = 1024) =>
         SourceRequestIdentity.Create(
