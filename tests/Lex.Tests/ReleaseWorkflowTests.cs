@@ -40,6 +40,19 @@ public sealed class ReleaseWorkflowTests
         Assert.Equal(approved, actual);
     }
 
+    [Fact]
+    public void Terraform_JSON_configuration_is_rejected_fail_closed()
+    {
+        var infra = Path.Combine(RepoRoot(), "infra");
+        var terraformJson = Directory.EnumerateFiles(infra, "*", SearchOption.AllDirectories)
+            .Where(path => path.EndsWith(".tf.json", StringComparison.OrdinalIgnoreCase))
+            .Select(path => Path.GetRelativePath(infra, path))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Empty(terraformJson);
+    }
+
     [Theory]
     [InlineData("/* note */ data \"azurerm_storage_account\" \"x\" {}",
         "azurerm_storage_account")]
