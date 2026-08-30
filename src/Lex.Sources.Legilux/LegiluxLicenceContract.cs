@@ -10,9 +10,15 @@ public static class LegiluxLicenceContract
 {
     public const string CreativeCommonsBy40 =
         "http://creativecommons.org/licenses/by/4.0/";
+    private const string CreativeCommonsBy40Https =
+        "https://creativecommons.org/licenses/by/4.0/";
     private const string LicenceScl =
         "http://data.legilux.public.lu/resource/authority/license/licenceSCL";
 
+    /// <summary>
+    /// Validates and compares the two observed publisher channels. This result is evidence only;
+    /// it never authorizes public text. Use a publisher-specific admission policy for that.
+    /// </summary>
     public static LicenceComparison Compare(
         LicenceChannelEvidence sparql,
         LicenceChannelEvidence file,
@@ -27,13 +33,9 @@ public static class LegiluxLicenceContract
             case (LicenceChannelState.Absent, LicenceChannelState.Absent):
                 return LicenceComparison.LicenceUnresolved;
             case (LicenceChannelState.Absent, LicenceChannelState.Present):
-                return ExactFileUris(file) is null
-                    ? LicenceComparison.LicenceUnresolved
-                    : LicenceComparison.LicenceConflict;
+                return LicenceComparison.LicenceUnresolved;
             case (LicenceChannelState.Present, LicenceChannelState.Absent):
-                return ExactSparqlUris(sparql) is null
-                    ? LicenceComparison.LicenceUnresolved
-                    : LicenceComparison.LicenceConflict;
+                return LicenceComparison.LicenceUnresolved;
             case (LicenceChannelState.Present, LicenceChannelState.Present):
                 break;
             default:
@@ -58,13 +60,18 @@ public static class LegiluxLicenceContract
         _ => null,
     };
 
-    internal static string? MapSparqlTerm(string termType, string value) =>
-        string.Equals(termType, "uri", StringComparison.Ordinal)
-        && Uri.TryCreate(value, UriKind.Absolute, out var uri)
-        && uri.Scheme is "http" or "https"
-        && !string.IsNullOrEmpty(uri.Host)
-            ? value
-            : null;
+    internal static string? MapSparqlTerm(string termType, string value)
+    {
+        if (!string.Equals(termType, "uri", StringComparison.Ordinal)
+            || !Uri.TryCreate(value, UriKind.Absolute, out var uri)
+            || uri.Scheme is not ("http" or "https")
+            || string.IsNullOrEmpty(uri.Host))
+            return null;
+
+        return string.Equals(value, CreativeCommonsBy40Https, StringComparison.Ordinal)
+            ? CreativeCommonsBy40
+            : value;
+    }
 
     private static string[]? ExactSparqlUris(LicenceChannelEvidence channel)
     {

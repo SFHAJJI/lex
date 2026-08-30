@@ -174,6 +174,41 @@ public sealed class CorpusLicenceAdmissionTests
         Assert.Equal(CreativeCommonsBy40, result.BasisUri);
     }
 
+    [Theory]
+    [InlineData("http://creativecommons.org/licenses/by/4.0/")]
+    [InlineData("https://creativecommons.org/licenses/by/4.0/")]
+    public void Sparql_cc_by_forms_map_to_the_canonical_public_basis(string value)
+    {
+        Assert.Equal(CreativeCommonsBy40,
+            LegiluxLicenceContract.MapSparqlTerm("uri", value));
+    }
+
+    [Fact]
+    public void File_cc_by_token_maps_to_the_canonical_public_basis()
+    {
+        Assert.Equal(CreativeCommonsBy40,
+            LegiluxLicenceContract.MapFileToken("CC-BY-4.0"));
+    }
+
+    [Fact]
+    public void Https_sparql_uri_and_file_token_cc_by_are_admitted()
+    {
+        const string httpsCcBy =
+            "https://creativecommons.org/licenses/by/4.0/";
+        var evidence = Evidence(
+            LicenceChannelEvidence.Present([
+                new LicenceClaim("uri", httpsCcBy, CreativeCommonsBy40),
+            ]),
+            LicenceChannelEvidence.Present([
+                FileClaim("CC-BY-4.0", CreativeCommonsBy40),
+            ]));
+
+        var result = LicencePublicAdmission.Assess(evidence);
+
+        Assert.Equal(PublicTextAdmission.Admitted, result.Outcome);
+        Assert.Equal(CreativeCommonsBy40, result.BasisUri);
+    }
+
     [Fact]
     public void Channel_disagreement_is_a_conflict_and_has_no_basis()
     {
@@ -181,6 +216,7 @@ public sealed class CorpusLicenceAdmissionTests
             LicenceChannelEvidence.Present([UriClaim(CreativeCommonsBy40)]),
             LicenceChannelEvidence.Present([FileClaim("licenceSCL", LicenceScl)]));
 
+        Assert.Equal(LicenceComparison.LicenceConflict, evidence.Comparison);
         var result = LicencePublicAdmission.Assess(evidence);
 
         AssertDenied(PublicTextAdmission.LicenceConflict, result);
@@ -221,22 +257,41 @@ public sealed class CorpusLicenceAdmissionTests
     }
 
     [Fact]
-    public void Absent_channel_never_admits_public_text()
+    public void Both_absent_channels_are_unresolved()
     {
-        var sparqlCcBy = LicenceChannelEvidence.Present([
-            UriClaim(CreativeCommonsBy40),
-        ]);
+        AssertDenied(PublicTextAdmission.LicenceUnresolved,
+            LicencePublicAdmission.Assess(Evidence(
+                LicenceChannelEvidence.Absent, LicenceChannelEvidence.Absent)));
+    }
+
+    [Fact]
+    public void Missing_sparql_channel_is_unresolved_not_conflict()
+    {
         var fileCcBy = LicenceChannelEvidence.Present([
             FileClaim("CC-BY-4.0", CreativeCommonsBy40),
         ]);
 
+        Assert.Equal(LicenceComparison.LicenceUnresolved,
+            LegiluxLicenceContract.Compare(
+                LicenceChannelEvidence.Absent, fileCcBy, out var agreedUris));
+        Assert.Empty(agreedUris);
         AssertDenied(PublicTextAdmission.LicenceUnresolved,
             LicencePublicAdmission.Assess(Evidence(
-                LicenceChannelEvidence.Absent, LicenceChannelEvidence.Absent)));
-        AssertDenied(PublicTextAdmission.LicenceConflict,
-            LicencePublicAdmission.Assess(Evidence(
                 LicenceChannelEvidence.Absent, fileCcBy)));
-        AssertDenied(PublicTextAdmission.LicenceConflict,
+    }
+
+    [Fact]
+    public void Missing_file_channel_is_unresolved_not_conflict()
+    {
+        var sparqlCcBy = LicenceChannelEvidence.Present([
+            UriClaim(CreativeCommonsBy40),
+        ]);
+
+        Assert.Equal(LicenceComparison.LicenceUnresolved,
+            LegiluxLicenceContract.Compare(
+                sparqlCcBy, LicenceChannelEvidence.Absent, out var agreedUris));
+        Assert.Empty(agreedUris);
+        AssertDenied(PublicTextAdmission.LicenceUnresolved,
             LicencePublicAdmission.Assess(Evidence(
                 sparqlCcBy, LicenceChannelEvidence.Absent)));
     }
@@ -264,8 +319,9 @@ public sealed class CorpusLicenceAdmissionTests
     }
 
     [Theory]
-    [InlineData("https://creativecommons.org/licenses/by/4.0/")]
     [InlineData("http://creativecommons.org/licenses/by/4.0")]
+    [InlineData("https://creativecommons.org/licenses/by/4.0")]
+    [InlineData("https://creativecommons.org/licenses/by/4.0/?source=other")]
     [InlineData("http://creativecommons.org/licenses/by/3.0/")]
     [InlineData("http://creativecommons.org/licenses/by-sa/4.0/")]
     [InlineData("http://CREATIVECOMMONS.ORG/licenses/by/4.0/")]
