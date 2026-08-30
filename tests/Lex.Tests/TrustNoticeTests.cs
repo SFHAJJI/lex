@@ -672,6 +672,50 @@ public sealed class TrustNoticeTests : IDisposable
     }
 
     /// <summary>
+    /// The licence claim also lived where no page test could see it: the social-preview card is
+    /// generated as an IMAGE, so a chip reading open data (CC-BY) was published on every share of
+    /// every page and no HTML assertion or text search would ever have found it.
+    ///
+    /// This guards the generator, which is the source of truth for that image and is in-tree
+    /// precisely so the picture is reproducible rather than a mystery binary. Anything else served
+    /// from wwwroot as text is covered too, since that is the same blind spot one file over.
+    /// </summary>
+    [Fact]
+    public void No_published_asset_asserts_a_licence_for_the_publishers_text()
+    {
+        var wwwroot = Path.Combine(RepositoryRoot(), "src", "Lex.Web", "wwwroot");
+        Assert.True(Directory.Exists(wwwroot), wwwroot);
+
+        string[] textual = [".py", ".js", ".mjs", ".css", ".html", ".json", ".txt", ".svg", ".xml"];
+        var scanned = 0;
+        foreach (var file in Directory.EnumerateFiles(wwwroot, "*", SearchOption.AllDirectories)
+                     .Where(path => textual.Contains(Path.GetExtension(path),
+                                                     StringComparer.OrdinalIgnoreCase)))
+        {
+            var content = File.ReadAllText(file);
+            scanned++;
+            foreach (var wording in new[] { "CC-BY", "CC BY", "creativecommons", "creative commons" })
+                Assert.DoesNotContain(wording, content, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // A guard that scanned nothing would pass forever.
+        Assert.True(scanned > 0, "no textual asset was scanned");
+        Assert.Contains("make-og.py",
+            Directory.EnumerateFiles(wwwroot, "*.py", SearchOption.AllDirectories)
+                .Select(Path.GetFileName));
+    }
+
+    /// <summary>The repository root, found from the test assembly rather than assumed.</summary>
+    private static string RepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !Directory.Exists(Path.Combine(directory.FullName, ".git")))
+            directory = directory.Parent;
+        Assert.NotNull(directory);
+        return directory!.FullName;
+    }
+
+    /// <summary>
     /// Addendum (a). Disclosing an unattributable publisher is not enough. It answered, and this
     /// page cannot say what it answered, so a corpus-wide absence beside it would still be a claim
     /// about a response nobody read.
