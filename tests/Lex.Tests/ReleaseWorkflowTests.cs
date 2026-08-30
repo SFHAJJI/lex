@@ -75,7 +75,7 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("assignable_scopes = [data.azurerm_resource_group.platform.id]", config);
         Assert.Contains("scope              = local.container_app_environment_id", terraform);
         Assert.Contains("scope              = local.container_app_id", terraform);
-        Assert.Contains("scope              = data.azurerm_application_insights.web.id", terraform);
+        Assert.Contains("scope              = local.application_insights_id", terraform);
 
         var workspaces = TerraformResource(terraform, "azurerm_role_definition",
             "deploy_telemetry_workspace_reader");
@@ -90,7 +90,7 @@ public sealed class ReleaseWorkflowTests
             terraform);
         Assert.DoesNotContain("workspace.resource_id", terraform, StringComparison.Ordinal);
         Assert.Contains("workspace.resource_group_name", terraform, StringComparison.Ordinal);
-        Assert.Contains("data.azurerm_application_insights.web.workspace_id", terraform,
+        Assert.DoesNotContain("data.azurerm_application_insights", terraform,
             StringComparison.Ordinal);
 
         var combined = config + workspaces;
@@ -889,7 +889,7 @@ public sealed class ReleaseWorkflowTests
         }, actionEntries);
         Assert.Contains("scope       = data.azurerm_resource_group.platform.id", role);
         Assert.Contains("assignable_scopes = [data.azurerm_resource_group.platform.id]", role);
-        Assert.Contains("scope              = data.azurerm_application_insights.web.id", terraform[end..]);
+        Assert.Contains("scope              = local.application_insights_id", terraform[end..]);
 
         start = terraform.IndexOf(
             "resource \"azurerm_role_definition\" \"deploy_log_analytics_table_policy_reader\"",
@@ -914,10 +914,17 @@ public sealed class ReleaseWorkflowTests
         Assert.DoesNotContain("log_analytics_resource_group_id", terraform);
         Assert.Contains("scope              = local.telemetry_application_insights_workspace_id",
             terraform[end..]);
-        Assert.Contains("check \"telemetry_application_insights_workspace_pin\"", terraform);
+        Assert.DoesNotContain("data.azurerm_application_insights", terraform,
+            StringComparison.Ordinal);
+        var workflow = File.ReadAllText(Path.Combine(
+            RepoRoot(), ".github", "workflows", "deploy.yml"));
         Assert.Contains(
-            "lower(data.azurerm_application_insights.web.workspace_id) == lower(local.telemetry_application_insights_workspace_id)",
-            terraform);
+            "application_insights_workspace_id=$(telemetry_scalar", workflow,
+            StringComparison.Ordinal);
+        Assert.Contains("properties.WorkspaceResourceId", workflow, StringComparison.Ordinal);
+        Assert.Contains(
+            "python3 scripts/deploy/telemetry_policy.py \"$policy\" \"$telemetry_dir/readback.json\"",
+            workflow, StringComparison.Ordinal);
 
         var queryRole = TerraformResource(terraform, "azurerm_role_definition",
             "deploy_container_apps_privacy_query_reader");
