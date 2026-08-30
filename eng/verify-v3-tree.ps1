@@ -30,6 +30,7 @@ function Test-V3TrackedPath {
     return (
         $normalized -ceq '.github/workflows/v3-ci.yml' -or
         $normalized -cmatch '^eng/verify-v3-[a-z0-9-]+\.ps1$' -or
+        $normalized -cmatch '^schemas/v3-preview/[a-z0-9-]+\.schema\.json$' -or
         $normalized -cmatch '^src/Lex\.V3\.[A-Za-z0-9.]+/.+$' -or
         $normalized -cmatch '^tests/Lex\.V3\.[A-Za-z0-9.]+/.+$' -or
         $normalized -cmatch '^web/package(?:-lock)?\.json$' -or

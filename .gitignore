@@ -2,6 +2,8 @@
 **/obj/
 **/TestResults/
 artifacts/
+!tests/Lex.V3.Tests/Artifacts/
+!tests/Lex.V3.Tests/Artifacts/**
 web/dist/
 web/node_modules/
 .env
