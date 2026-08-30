@@ -1,0 +1,195 @@
+{
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string"
+    },
+    "evidence_class": {
+      "type": "string"
+    },
+    "synthetic": {
+      "type": "boolean"
+    },
+    "source_kind": {
+      "type": "string"
+    },
+    "environment": {
+      "type": "object",
+      "properties": {
+        "class": {
+          "type": "string"
+        },
+        "binding": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "class",
+        "binding"
+      ],
+      "additionalProperties": false
+    },
+    "issuer": {
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string"
+        },
+        "issuer_id": {
+          "type": "string"
+        },
+        "key_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "issuer_id",
+        "key_id"
+      ],
+      "additionalProperties": false
+    },
+    "contract_set": {
+      "type": "object",
+      "properties": {
+        "envelope": {
+          "type": "object",
+          "properties": {
+            "schema": {
+              "type": "string"
+            },
+            "sha256": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "schema",
+            "sha256"
+          ],
+          "additionalProperties": false
+        },
+        "object_set": {
+          "type": "object",
+          "properties": {
+            "schema": {
+              "type": "string"
+            },
+            "sha256": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "schema",
+            "sha256"
+          ],
+          "additionalProperties": false
+        },
+        "operation_catalog": {
+          "type": "object",
+          "properties": {
+            "schema": {
+              "type": "string"
+            },
+            "sha256": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "schema",
+            "sha256"
+          ],
+          "additionalProperties": false
+        },
+        "refusal_registry": {
+          "type": "object",
+          "properties": {
+            "schema": {
+              "type": "string"
+            },
+            "sha256": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "schema",
+            "sha256"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "envelope",
+        "object_set",
+        "operation_catalog",
+        "refusal_registry"
+      ],
+      "additionalProperties": false
+    },
+    "payload": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "bytes": {
+          "type": [
+            "string",
+            "integer"
+          ],
+          "pattern": "^-?(?:0|[1-9]\\d*)$"
+        },
+        "media_type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema",
+        "sha256",
+        "bytes",
+        "media_type"
+      ],
+      "additionalProperties": false
+    },
+    "attestation": {
+      "type": "object",
+      "properties": {
+        "purpose": {
+          "type": "string"
+        },
+        "algorithm": {
+          "type": "string"
+        },
+        "signature_format": {
+          "type": "string"
+        },
+        "signature": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "purpose",
+        "algorithm",
+        "signature_format",
+        "signature"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema",
+    "evidence_class",
+    "synthetic",
+    "source_kind",
+    "environment",
+    "issuer",
+    "contract_set",
+    "payload",
+    "attestation"
+  ],
+  "additionalProperties": false,
+  "$id": "lex-v3-preview-artifact/1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

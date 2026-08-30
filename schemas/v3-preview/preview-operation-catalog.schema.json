@@ -1,0 +1,101 @@
+{
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string"
+    },
+    "catalog_id": {
+      "type": "string"
+    },
+    "entries": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string"
+          },
+          "request": {
+            "type": "object",
+            "properties": {
+              "schema": {
+                "type": "string"
+              },
+              "sha256": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "schema",
+              "sha256"
+            ],
+            "additionalProperties": false
+          },
+          "success": {
+            "type": "object",
+            "properties": {
+              "schema": {
+                "type": "string"
+              },
+              "sha256": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "schema",
+              "sha256"
+            ],
+            "additionalProperties": false
+          },
+          "allowed_refusals": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "enum": [
+                "identifier_unknown"
+              ]
+            }
+          },
+          "deterministic_order": {
+            "type": "string"
+          },
+          "capability_requirement": {
+            "type": "string"
+          },
+          "rest_projection": {
+            "type": "string"
+          },
+          "mcp_projection": {
+            "type": "string"
+          },
+          "html_projection": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id",
+          "request",
+          "success",
+          "deterministic_order",
+          "capability_requirement",
+          "rest_projection",
+          "mcp_projection",
+          "html_projection"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "catalog_id"
+  ],
+  "additionalProperties": false,
+  "$id": "lex-v3-preview-operation-catalog/1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

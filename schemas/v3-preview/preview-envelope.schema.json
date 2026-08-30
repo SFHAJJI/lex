@@ -1,0 +1,423 @@
+{
+  "type": "object",
+  "required": [
+    "branch"
+  ],
+  "anyOf": [
+    {
+      "properties": {
+        "branch": {
+          "const": "success"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "object_set_id": {
+              "type": "string"
+            },
+            "object_set_sha256": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "object_set_id",
+            "object_set_sha256"
+          ],
+          "additionalProperties": false
+        },
+        "schema": {
+          "type": "string"
+        },
+        "object_type": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "context": {
+          "type": "object",
+          "properties": {
+            "request_ref": {
+              "type": "string"
+            },
+            "operation": {
+              "type": "object",
+              "properties": {
+                "operation_id": {
+                  "type": "string"
+                },
+                "catalog_id": {
+                  "type": "string"
+                },
+                "catalog_sha256": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "operation_id",
+                "catalog_id",
+                "catalog_sha256"
+              ],
+              "additionalProperties": false
+            },
+            "refusal_registry": {
+              "type": "object",
+              "properties": {
+                "schema": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "schema",
+                "sha256"
+              ],
+              "additionalProperties": false
+            },
+            "snapshot": {
+              "type": "object",
+              "properties": {
+                "snapshot_id": {
+                  "type": "string"
+                },
+                "snapshot_sha256": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "snapshot_id",
+                "snapshot_sha256"
+              ],
+              "additionalProperties": false
+            },
+            "artifact": {
+              "type": "object",
+              "properties": {
+                "artifact_id": {
+                  "type": "string"
+                },
+                "manifest_sha256": {
+                  "type": "string"
+                },
+                "payload_sha256": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "artifact_id",
+                "manifest_sha256",
+                "payload_sha256"
+              ],
+              "additionalProperties": false
+            },
+            "index_format": {
+              "type": "string"
+            },
+            "runtime": {
+              "type": "object",
+              "properties": {
+                "component_id": {
+                  "type": "string"
+                },
+                "source_sha256": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "component_id",
+                "source_sha256"
+              ],
+              "additionalProperties": false
+            },
+            "builder": {
+              "type": "object",
+              "properties": {
+                "component_id": {
+                  "type": "string"
+                },
+                "source_sha256": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "component_id",
+                "source_sha256"
+              ],
+              "additionalProperties": false
+            },
+            "capabilities": {
+              "enum": [
+                "preview_mechanics_only"
+              ]
+            },
+            "freshness": {
+              "type": "object",
+              "properties": {
+                "observed_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "upstream_health": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "observed_at"
+              ],
+              "additionalProperties": false
+            },
+            "jurisdiction": {
+              "type": "string"
+            },
+            "provisionality": {
+              "enum": [
+                "all"
+              ]
+            },
+            "source": {
+              "type": "object",
+              "properties": {
+                "source_kind": {
+                  "enum": [
+                    "synthetic_test"
+                  ]
+                }
+              },
+              "required": [
+                "source_kind"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "request_ref",
+            "operation",
+            "refusal_registry",
+            "snapshot",
+            "artifact",
+            "index_format",
+            "runtime",
+            "builder",
+            "capabilities",
+            "freshness",
+            "jurisdiction",
+            "provisionality",
+            "source"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "result",
+        "schema",
+        "object_type",
+        "status",
+        "context"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "properties": {
+        "branch": {
+          "const": "refusal"
+        },
+        "refusal": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "enum": [
+                "identifier_unknown"
+              ]
+            },
+            "checked_identifier_family": {
+              "enum": [
+                "eli",
+                "celex",
+                "memorial",
+                "historical_legal_id"
+              ]
+            },
+            "requested_coordinate": {
+              "type": "string"
+            },
+            "publisher_contexts_checked": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "lu-legilux",
+                  "eu-eurlex"
+                ]
+              }
+            },
+            "possible_held_records": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "identifier": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "publisher": {
+                    "enum": [
+                      "lu-legilux",
+                      "eu-eurlex"
+                    ]
+                  },
+                  "permalink": {
+                    "type": "string",
+                    "format": "uri"
+                  }
+                },
+                "required": [
+                  "identifier",
+                  "title",
+                  "publisher",
+                  "permalink"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "official_search_actions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "publisher": {
+                    "enum": [
+                      "lu-legilux",
+                      "eu-eurlex"
+                    ]
+                  },
+                  "uri": {
+                    "type": "string",
+                    "format": "uri"
+                  }
+                },
+                "required": [
+                  "publisher",
+                  "uri"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "what_would_answer": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "corrected_identifier",
+                  "new_official_observation",
+                  "expanded_official_scope"
+                ]
+              }
+            },
+            "asserts_absence_of_law": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "code",
+            "checked_identifier_family",
+            "requested_coordinate",
+            "publisher_contexts_checked",
+            "possible_held_records",
+            "official_search_actions",
+            "what_would_answer",
+            "asserts_absence_of_law"
+          ],
+          "additionalProperties": false
+        },
+        "schema": {
+          "type": "string"
+        },
+        "object_type": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "context": {
+          "type": "object",
+          "properties": {
+            "request_ref": {
+              "type": "string"
+            },
+            "operation": {
+              "$ref": "#/anyOf/0/properties/context/properties/operation"
+            },
+            "refusal_registry": {
+              "$ref": "#/anyOf/0/properties/context/properties/refusal_registry"
+            },
+            "snapshot": {
+              "$ref": "#/anyOf/0/properties/context/properties/snapshot"
+            },
+            "artifact": {
+              "$ref": "#/anyOf/0/properties/context/properties/artifact"
+            },
+            "index_format": {
+              "type": "string"
+            },
+            "runtime": {
+              "$ref": "#/anyOf/0/properties/context/properties/runtime"
+            },
+            "builder": {
+              "$ref": "#/anyOf/0/properties/context/properties/builder"
+            },
+            "capabilities": {
+              "enum": [
+                "preview_mechanics_only"
+              ]
+            },
+            "freshness": {
+              "$ref": "#/anyOf/0/properties/context/properties/freshness"
+            },
+            "jurisdiction": {
+              "type": "string"
+            },
+            "provisionality": {
+              "enum": [
+                "all"
+              ]
+            },
+            "source": {
+              "$ref": "#/anyOf/0/properties/context/properties/source"
+            }
+          },
+          "required": [
+            "request_ref",
+            "operation",
+            "refusal_registry",
+            "snapshot",
+            "artifact",
+            "index_format",
+            "runtime",
+            "builder",
+            "capabilities",
+            "freshness",
+            "jurisdiction",
+            "provisionality",
+            "source"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "refusal",
+        "schema",
+        "object_type",
+        "status",
+        "context"
+      ],
+      "additionalProperties": false
+    }
+  ],
+  "$id": "lex-v3-preview-envelope/1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

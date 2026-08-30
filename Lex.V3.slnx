@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Lex.V3.ContractTool/Lex.V3.ContractTool.csproj" />
     <Project Path="src/Lex.V3.Contracts/Lex.V3.Contracts.csproj" />
   </Folder>
   <Folder Name="/tests/">

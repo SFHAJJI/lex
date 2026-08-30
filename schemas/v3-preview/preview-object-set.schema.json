@@ -1,0 +1,82 @@
+{
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string"
+    },
+    "object_set_id": {
+      "type": "string"
+    },
+    "objects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "object_type"
+        ],
+        "anyOf": [
+          {
+            "properties": {
+              "object_type": {
+                "const": "preview_coordinate"
+              },
+              "synthetic": {
+                "type": "boolean"
+              },
+              "work_id": {
+                "type": "string"
+              },
+              "version_key": {
+                "type": "string"
+              },
+              "anchor": {
+                "type": "string"
+              },
+              "body_holding_state": {
+                "enum": [
+                  "held_public",
+                  "held_withheld",
+                  "not_held"
+                ]
+              },
+              "body": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "body_sha256": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "object_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "synthetic",
+              "work_id",
+              "version_key",
+              "anchor",
+              "body_holding_state",
+              "body",
+              "body_sha256",
+              "object_id"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "object_set_id",
+    "objects"
+  ],
+  "additionalProperties": false,
+  "$id": "lex-v3-preview-object-set/1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

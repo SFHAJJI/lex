@@ -1,0 +1,43 @@
+{
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string"
+    },
+    "registry_id": {
+      "type": "string"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "enum": [
+              "identifier_unknown"
+            ]
+          },
+          "mandatory_fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "code",
+          "mandatory_fields"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "registry_id",
+    "entries"
+  ],
+  "additionalProperties": false,
+  "$id": "lex-v3-preview-refusal-registry/1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}
