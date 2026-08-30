@@ -486,9 +486,12 @@ public static class ExplainerEndpoints
 
         // ---- /developers: everything an engineer needs — every tool, four ways to connect,
         // the datasets, the repos. /ai kept as an alias so older links survive.
-        app.MapGet("/developers", (HttpRequest req) =>
+        app.MapGet("/developers", () =>
         {
-            var baseUrl = BaseUrl(req);
+            // The configured public base, never the request. A connect command is an instruction
+            // to point a client at a server, so it must name this site and not whichever Host a
+            // request happened to carry.
+            var baseUrl = ctx.PublicBase;
             var cov = readers.Values.Select(r => r.Coverage()).ToList();
             // Counted from the advertised tool list, never written by hand. This page said "Eight" in its
             // lede and "nine" in its heading while the endpoint served ten, because three places had to be

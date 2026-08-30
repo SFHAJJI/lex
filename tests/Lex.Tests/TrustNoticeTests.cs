@@ -432,6 +432,121 @@ public sealed class TrustNoticeTests : IDisposable
         // returned 500, which is a worse refusal than the blank page this module replaced.
         foreach (var malformed in new[] { ";;;", ",,,", "=", "application/json;q=", "q=1", "" })
             Assert.Contains("Page not found", await Ask(malformed), StringComparison.Ordinal);
+
+        // A q outside the RFC 7231 grammar states no preference, however willing the framework
+        // parser is to read it. Quality accepts all of these and reports 1, which would let a
+        // value the client got wrong outrank every well-formed range in the header.
+        foreach (var loud in new[]
+        {
+            "text/html;q=0.4,application/json;q=1e0",     // exponent notation
+            "text/html;q=0.4,application/json;q=1.0000",  // four fraction digits
+            "text/html;q=0.4,application/json;q=1.001",   // above the maximum
+            "text/html;q=0.4,application/json;q=0.5;q=1", // two answers to one question
+            "text/html;q=0.4,application/json;q=\"1\"",     // quoted, and a qvalue is a token
+            "text/html;q=0.4,application/json;q=.9",
+            "text/html;q=0.4,application/json;q=+1",
+        })
+            Assert.Contains("Page not found", await Ask(loud), StringComparison.Ordinal);
+
+        // The grammar it does allow, so the rule rejects malformed values rather than fractions.
+        foreach (var valid in new[]
+        {
+            "text/html;q=0.4,application/json;q=1.000",
+            "text/html;q=0.4,application/json;q=0.500",
+            "text/html;q=0.4,application/json;q=1",
+        })
+            Assert.Contains("unknown_route", await Ask(valid), StringComparison.Ordinal);
+
+        // A range that narrows the type with media parameters is asking for a representation this
+        // route does not produce. Answering it with generic JSON is agreeing to a request we
+        // cannot honour, which MatchesMediaType did because it ignores parameters entirely.
+        foreach (var narrowed in new[]
+        {
+            "application/json;profile=\"x,y\";q=1",
+            "application/json;profile=\"x\";q=1,text/html;q=0.1",
+            "application/json;version=2;q=1,text/html;q=0.1",
+        })
+            Assert.Contains("Page not found", await Ask(narrowed), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The body of this URL depends on the request headers, so it must say so. Without Vary a
+    /// shared cache may reuse one client's negotiated representation for another: the JSON refusal
+    /// served to a browser, or the page served to an MCP client.
+    /// </summary>
+    [Fact]
+    public async Task A_negotiated_404_declares_that_it_varies_on_accept()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "vary"), includeAct: false);
+
+        foreach (var (path, accept) in new[]
+        {
+            ("/no-such-page", "text/html"),
+            ("/no-such-page", "application/json"),
+            ("/api/no-such.json", "application/json"),
+            ("/mcp/no-such", "text/html"),
+        })
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, path);
+            request.Headers.TryAddWithoutValidation("Accept", accept);
+            var response = await site.Client.SendAsync(request);
+
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            Assert.Contains("Accept", response.Headers.Vary, StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
+    /// <summary>
+    /// A connect command is an instruction to point a client at a server, so it must name this
+    /// site. It was built from X-Forwarded-Proto and the Host header, both requester-controlled,
+    /// so a request carrying Host: evil.example made /developers print a command telling the
+    /// reader to point their MCP client at evil.example. The header was also unencoded.
+    /// </summary>
+    [Fact]
+    public async Task The_printed_connect_command_names_this_site_not_the_request()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "connect"), includeAct: false);
+        var hostile = new HttpRequestMessage(HttpMethod.Get, "/developers");
+        hostile.Headers.Host = "evil.example";
+        hostile.Headers.TryAddWithoutValidation(
+            "X-Forwarded-Proto", "https,</pre><svg onload=alert(1)>");
+        var page = await (await site.Client.SendAsync(hostile)).Content.ReadAsStringAsync();
+
+        // The configured base, which NoticeSite sets to https://example.test.
+        Assert.Contains("https://example.test/mcp", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("evil.example", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("<svg onload=", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The interval helpers carry docs.valid_from and valid_to, which are string columns and not
+    /// DateOnly. A withdrawn row never passes ParseDate at build, and the read paths behind
+    /// /provenance and the version rail do not exclude withdrawn rows, so their shape is not
+    /// guaranteed here. Eleven render sites used these helpers and eight passed them through raw.
+    /// </summary>
+    [Fact]
+    public void The_interval_helpers_encode_the_index_text_they_carry()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "interval"), includeAct: false);
+        using var reader = site.Reader();
+        var row = reader.ByKey("lu-legilux:loi-2006-07-31-n2:2024-08-04")!;
+        const string Payload = "<script>alert(1)</script>";
+
+        foreach (var rendered in new[]
+        {
+            Fragments.Interval(row with { ValidFrom = Payload }),
+            Fragments.Interval(row with { ValidFrom = "2024-01-01", ValidTo = Payload }),
+            Fragments.IntervalLabel(reader, row with { ValidFrom = Payload }),
+            Fragments.IntervalLabel(reader, row with { ValidFrom = "2024-01-01", ValidTo = Payload }),
+        })
+        {
+            Assert.DoesNotContain(Payload, rendered, StringComparison.Ordinal);
+            Assert.Contains("&lt;script&gt;", rendered, StringComparison.Ordinal);
+        }
+
+        // An open interval still reads as open rather than as an encoded empty string.
+        Assert.Contains("open", Fragments.Interval(row with { ValidTo = null }),
+            StringComparison.Ordinal);
     }
 
     /// <summary>

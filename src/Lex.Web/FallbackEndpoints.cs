@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Net.Http.Headers;
 using static Lex.Web.PageShell;
 
@@ -39,13 +40,21 @@ public static class FallbackEndpoints
     /// range beats a wildcard even when the wildcard carries a higher q. On a tie the human surface
     /// wins, because a browser sending both is asking for a page.
     /// </summary>
+    // What this route can actually send. Negotiation compares the ranges against these exact
+    // representations rather than against a type name, because a range may name media
+    // parameters and a representation either carries them or does not.
+    private static readonly MediaTypeHeaderValue JsonRepresentation =
+        MediaTypeHeaderValue.Parse("application/json");
+    private static readonly MediaTypeHeaderValue HtmlRepresentation =
+        MediaTypeHeaderValue.Parse("text/html");
+
     private static bool PrefersJson(string accept)
     {
         if (!MediaTypeHeaderValue.TryParseList([accept], out var ranges) || ranges.Count == 0)
             return false;
 
-        var json = QualityFor(ranges, "application/json");
-        var html = QualityFor(ranges, "text/html");
+        var json = QualityFor(ranges, JsonRepresentation);
+        var html = QualityFor(ranges, HtmlRepresentation);
         // q=0 is a refusal, not a preference, and a tie is not a preference either.
         return json > 0 && json > html;
     }
@@ -54,26 +63,44 @@ public static class FallbackEndpoints
     /// The quality the client attached to one representation, taken from the MOST SPECIFIC range
     /// that covers it, or -1 when nothing covers it.
     /// </summary>
-    private static double QualityFor(IList<MediaTypeHeaderValue> ranges, string representation)
+    private static double QualityFor(
+        IList<MediaTypeHeaderValue> ranges, MediaTypeHeaderValue representation)
     {
-        // The framework owns both hard parts: tokenising quoted parameters and q, and deciding
-        // whether a range covers a representation. IsSubsetOf is the one that does NOT work
-        // here, because it compares parameters, so application/json is not a subset of
-        // */*;q=1 and a client accepting everything looked like one accepting nothing.
         var specificity = -1;
         var quality = -1d;
         foreach (var range in ranges)
         {
-            if (!range.MatchesMediaType(representation)) continue;
             // A range whose q cannot be read states nothing, so it neither wins nor blocks a
             // less specific range that did state something.
             if (QualityOf(range) is not { } stated) continue;
-            var precision = range.MatchesAllTypes ? 0 : range.MatchesAllSubTypes ? 1 : 2;
+
+            // Coverage is decided against the representation this route would really send,
+            // with only q removed. MatchesMediaType ignores media parameters, so a client
+            // asking for application/json;profile="x" was answered with generic JSON that has
+            // no such profile: agreeing to a request we cannot honour. IsSubsetOf compares
+            // parameters, which is exactly what is wanted once q is gone, and q is the reason
+            // it appeared not to work before.
+            var offered = WithoutQuality(range);
+            if (!representation.IsSubsetOf(offered)) continue;
+
+            // Type precision first, then whether the range narrowed it further with media
+            // parameters, so a parameterised range outranks the bare type it extends.
+            var precision = (range.MatchesAllTypes ? 0 : range.MatchesAllSubTypes ? 1 : 2) * 2
+                + (offered.Parameters.Count > 0 ? 1 : 0);
             if (precision <= specificity) continue;
             specificity = precision;
             quality = stated;
         }
         return quality;
+    }
+
+    /// <summary>The range with every q parameter removed, so only media parameters remain.</summary>
+    private static MediaTypeHeaderValue WithoutQuality(MediaTypeHeaderValue range)
+    {
+        var offered = range.Copy();
+        while (NameValueHeaderValue.Find(offered.Parameters, "q") is { } q)
+            offered.Parameters.Remove(q);
+        return offered;
     }
 
     /// <summary>
@@ -85,10 +112,41 @@ public static class FallbackEndpoints
     /// preference available. That is how application/*;q=1,text/html;q=.5 became a tie and
     /// served a page to a client that had asked for JSON.
     /// </summary>
-    private static double? QualityOf(MediaTypeHeaderValue range) =>
-        range.Quality is { } q
-            ? q is >= 0 and <= 1 ? q : null
-            : NameValueHeaderValue.Find(range.Parameters, "q") is null ? 1d : null;
+    private static double? QualityOf(MediaTypeHeaderValue range)
+    {
+        var stated = range.Parameters
+            .Where(p => p.Name.Equals("q", StringComparison.OrdinalIgnoreCase)).ToList();
+        // RFC 7231: a range with no q means q=1. Two q parameters are two answers to one
+        // question, which is not an answer, and the framework silently keeps the first.
+        if (stated.Count == 0) return 1d;
+        if (stated.Count > 1) return null;
+        return Qvalue(stated[0].Value.ToString());
+    }
+
+    /// <summary>
+    /// A qvalue by the RFC 7231 grammar, or null when the text is not one.
+    ///
+    /// MediaTypeHeaderValue.Quality is more permissive than the grammar: q=1e0 and q=1.0000
+    /// both arrive as 1, and a duplicate q silently keeps the first. Reading those as stated
+    /// lets a value the client got wrong assert the loudest preference in the header, which is
+    /// the same defect as reading an absent q as 1.
+    /// </summary>
+    private static double? Qvalue(string text)
+    {
+        // qvalue = ( "0" [ "." 0*3DIGIT ] ) / ( "1" [ "." 0*3("0") ] ). A token, never quoted.
+        if (text.Length is 0 or > 5 || text[0] is not ('0' or '1')) return null;
+        if (text.Length == 1) return text[0] - '0';
+        if (text[1] != '.') return null;
+        var fraction = text.AsSpan(2);
+        if (fraction.Length > 3) return null;
+        foreach (var digit in fraction)
+        {
+            if (digit is < '0' or > '9') return null;
+            // 1.001 is above the maximum, not a preference just under it.
+            if (text[0] == '1' && digit != '0') return null;
+        }
+        return double.Parse(text, CultureInfo.InvariantCulture);
+    }
 
     public static IEndpointRouteBuilder MapFallbackRoute(
         this IEndpointRouteBuilder app, WebContext ctx)
@@ -117,6 +175,11 @@ public static class FallbackEndpoints
             var machine = UnderLane(path, "/api")
                 || UnderLane(path, "/mcp")
                 || PrefersJson(accept);
+
+            // The body of this URL depends on the request headers, so a shared cache must not
+            // hand one client the representation negotiated for another. Without this a proxy
+            // could serve the JSON refusal to a browser, or the page to an MCP client.
+            http.Response.Headers.Vary = "Accept";
 
             if (machine)
                 // A local HTTP fallback token, deliberately not a McpStatus: that closed set

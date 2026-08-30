@@ -37,14 +37,19 @@ public static class Fragments
     private static readonly Regex UnparsedEmphasis = new(
         @"\*([^*\s<>\r\n](?:[^*<>\r\n]*?[^*\s<>\r\n])?)\*", RegexOptions.Compiled);
 
-    // The absolute URL to print in a copy-paste connect command.
+    // BaseUrl(HttpRequest) was deleted here. It built the printed connect command from the
+    // X-Forwarded-Proto header and the Host header, both of which the requester controls.
     //
-    // req.Scheme is "http" in production: Container Apps terminates TLS at the ingress and forwards
-    // over plain HTTP inside the environment. So every connect command on /ai and /developers handed
-    // out an insecure URL, which a strict MCP client refuses outright. The last X-Forwarded-Proto
-    // element is the one our own ingress appended, matching how X-Forwarded-For is read below.
-    public static string BaseUrl(HttpRequest req) =>
-        $"{req.Headers["X-Forwarded-Proto"].FirstOrDefault()?.Split(',')[^1].Trim() ?? req.Scheme}://{req.Host}";
+    // It was introduced for a real reason: req.Scheme is "http" in production, because Container
+    // Apps terminates TLS at the ingress and forwards plain HTTP inside the environment, so the
+    // page was handing out an insecure URL that a strict MCP client refuses. Reading the forwarded
+    // header fixed the scheme and created two worse problems. Neither header was encoded, so a
+    // hostile proxy or a smuggled request could put markup in the page. And a request carrying
+    // Host: evil.example made /developers print a connect command pointing at evil.example, which
+    // is Lex telling a reader to point their MCP client at somebody else's server.
+    //
+    // The configured public base answers the original question without asking the requester
+    // anything. See ExplainerEndpoints, which is its only caller.
 
     public static string EnvelopeCard(LexIndexReader r, bool provisional) => $"""
         <div class="card"><table class="kv">
@@ -181,7 +186,15 @@ public static class Fragments
         return t.Length > 110 ? t[..110].TrimEnd() + "…" : t;
     }
 
-    public static string Interval(DocRow d) => d.ValidTo is null ? $"{d.ValidFrom} → open" : $"{d.ValidFrom} → {d.ValidTo}";
+    // valid_from and valid_to are string columns, not DateOnly, and nothing guarantees their
+    // shape at this point: CapabilityManifest filters withdrawn rows out BEFORE ParseDate, so a
+    // withdrawn row's dates are never format-checked at build, and the ByKey and Timeline read
+    // paths behind /provenance and the version rail carry no withdrawn predicate. These helpers
+    // return HTML, like the rest of this module, so they encode here rather than relying on
+    // eleven call sites to remember. Eight of them did not.
+    public static string Interval(DocRow d) => d.ValidTo is null
+        ? $"{H(d.ValidFrom)} → open"
+        : $"{H(d.ValidFrom)} → {H(d.ValidTo)}";
 
     /// <summary>
     /// Which legal-time claim a publisher's version axis supports. New publishers declare this
@@ -195,9 +208,18 @@ public static class Fragments
         => stamp.GetValueOrDefault("timeline_semantics") == "official_consolidation_state"
            || (!stamp.ContainsKey("timeline_semantics") && collection == "eu-eurlex");
 
-    public static string IntervalLabel(LexIndexReader r, DocRow d) => UsesPublisherVersionDates(r)
-        ? $"publisher version {d.ValidFrom} → {d.ValidTo ?? "latest held"}"
-        : $"in force {d.ValidFrom} → {d.ValidTo ?? "open"}";
+    // One encode site, not one per branch. With the encoding duplicated across the two arms, a
+    // mutation that stripped it from the publisher-version arm alone stayed green: the fixture
+    // reader only ever takes the in-force arm, so half of this was untested. Sharing the encoding
+    // makes that untestable branch unable to differ from the tested one.
+    public static string IntervalLabel(LexIndexReader r, DocRow d)
+    {
+        var from = H(d.ValidFrom);
+        var to = d.ValidTo is null ? null : H(d.ValidTo);
+        return UsesPublisherVersionDates(r)
+            ? $"publisher version {from} → {to ?? "latest held"}"
+            : $"in force {from} → {to ?? "open"}";
+    }
 
     public static string RenderLegalMarkdown(string text)
     {

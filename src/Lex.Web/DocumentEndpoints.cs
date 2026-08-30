@@ -331,19 +331,19 @@ public static class DocumentEndpoints
                 ? $"""
                    <div class="notice" style="border-left-color:var(--ok)"><b>Official publisher wording state selected for {d:yyyy-MM-dd}.</b>
                    This is the consolidated version dated {H(doc.ValidFrom)}. Its interval on Lex's
-                   publisher-version axis is {H(IntervalLabel(r, doc))}; that is not a claim about
+                   publisher-version axis is {IntervalLabel(r, doc)}; that is not a claim about
                    entry into force or application.</div>
                    """
                 : next is not null
                 ? $"""
                    <div class="notice"><b>Point-in-time view as at {d:yyyy-MM-dd}.</b> This version has been
-                   <b>superseded</b>, it applied {H(Interval(doc))}. <a href="/{H(publisher)}/{H(work)}">Jump to the
+                   <b>superseded</b>, it applied {Interval(doc)}. <a href="/{H(publisher)}/{H(work)}">Jump to the
                    version in force today</a> or <a href="/{H(publisher)}/{H(work)}/diff/{H(VersionCoordinate(doc))}/{H(VersionCoordinate(next))}">see
                    exactly what changed next</a>.</div>
                    """
                 : $"""
                    <div class="notice" style="border-left-color:var(--ok)"><b>Point-in-time view as at {d:yyyy-MM-dd}.</b>
-                   This is the latest state the publisher has consolidated, valid {H(Interval(doc))}.</div>
+                   This is the latest state the publisher has consolidated, valid {Interval(doc)}.</div>
                    """);
             // Phase 0 trust notice (Decision 41): a consolidated state dated before the
             // publisher's application date must say so. It renders only when an indexed
