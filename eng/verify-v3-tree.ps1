@@ -29,10 +29,12 @@ function Test-V3TrackedPath {
 
     return (
         $normalized -ceq '.github/workflows/v3-ci.yml' -or
+        $normalized -ceq '.github/workflows/dual-review.yml' -or
+        $normalized -ceq '.github/scripts/dual_review.py' -or
+        $normalized -ceq '.github/scripts/test_dual_review.py' -or
         $normalized -cmatch '^eng/verify-v3-[a-z0-9-]+\.ps1$' -or
         $normalized -ceq 'eng/verify-s0-05-preview.ps1' -or
-        $normalized -cmatch '^schemas/v3-preview/[a-z0-9-]+\.schema\.json$' -or
-        $normalized -cmatch '^schemas/v3-synthetic-preview/[a-z0-9-]+\.schema\.json$' -or
+        $normalized -cmatch '^schemas/v3-[a-z0-9-]+/[a-z0-9-]+\.schema\.json$' -or
         $normalized -cmatch '^src/Lex\.V3\.[A-Za-z0-9.]+/.+$' -or
         $normalized -cmatch '^tests/Lex\.V3\.[A-Za-z0-9.]+/.+$' -or
         $normalized -cmatch '^web/package(?:-lock)?\.json$' -or
@@ -95,10 +97,37 @@ if ($violations.Count -gt 0) {
     throw "Paths outside the V3 structural allowlist remain:`n$($violations -join "`n")"
 }
 
+$requiredV3Paths = @(
+    '.github/scripts/dual_review.py',
+    '.github/scripts/test_dual_review.py',
+    '.github/workflows/dual-review.yml',
+    'schemas/v3-facts/facts-common.schema.json',
+    'schemas/v3-facts/publisher-relation.schema.json',
+    'schemas/v3-facts/derived-inverse-relation.schema.json',
+    'schemas/v3-facts/local-inbound-view.schema.json',
+    'schemas/v3-facts/relation-fact.schema.json',
+    'schemas/v3-facts/publisher-date.schema.json',
+    'schemas/v3-facts/publisher-date-fact.schema.json',
+    'schemas/v3-facts/vocabulary-drift.schema.json'
+)
+if ($requiredV3Paths.Where({ -not (Test-V3TrackedPath -Path $_) })) {
+    throw 'A required bounded V3 path was rejected by the structural allowlist.'
+}
+
 $pathMutations = @(
     'src/Lex.Ingest/Legacy.cs',
     'tests/Lex.Tests/LegacyTests.cs',
     '.github/workflows/deploy.yml',
+    '.github/workflows/dual-review-copy.yml',
+    '.github/scripts/dual-review.py',
+    '.github/scripts/nested/dual_review.py',
+    '.github/scripts/dual_review.ps1',
+    'schemas/v2-facts/facts-common.schema.json',
+    'schemas/v3-Facts/facts-common.schema.json',
+    'schemas/v3-facts/Nested.schema.json',
+    'schemas/v3-facts/nested/facts-common.schema.json',
+    'schemas/v3-facts/facts-common.json',
+    'schemas/v3-facts/facts-common.schema.json.bak',
     'web/src/App.tsx'
 )
 if ($pathMutations.Where({ Test-V3TrackedPath -Path $_ })) {
