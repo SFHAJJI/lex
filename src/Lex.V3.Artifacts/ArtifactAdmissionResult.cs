@@ -21,6 +21,15 @@ public enum ArtifactAdmissionFailureCode
     PayloadDigestMismatch,
     GraphSchemaUnsupported,
     GraphIncomplete,
+    ControlTooLarge,
+    ControlSizeMismatch,
+    ControlDigestMismatch,
+    BlobTooLarge,
+    BlobSizeMismatch,
+    BlobDigestMismatch,
+    CandidateReadBudgetExceeded,
+    SchemaReadBudgetExceeded,
+    DerivedContentMismatch,
 }
 
 public sealed class ArtifactAdmissionFailure

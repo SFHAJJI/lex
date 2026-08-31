@@ -1,0 +1,406 @@
+{
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "lex-v3-synthetic-slice-control/1"
+    },
+    "schema_resource": {
+      "type": "string",
+      "const": "urn:uuid:d3e8909f-46a2-44d7-8728-463529b5f8a9"
+    },
+    "resolve_request_contract": {
+      "type": "object",
+      "properties": {
+        "contract_id": {
+          "type": "string",
+          "const": "lex-v3-synthetic-resolve-request/1"
+        },
+        "method": {
+          "type": "string",
+          "const": "GET"
+        },
+        "maximum_application_raw_target_bytes": {
+          "type": "integer",
+          "const": 2048
+        },
+        "product_raw_targets": {
+          "type": "array",
+          "items": false,
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "const": "/api/v3-preview/resolve?family=eli\u0026coordinate=eli%2Fsynthetic-preview"
+            },
+            {
+              "const": "/api/v3-preview/resolve?family=historical_legal_id\u0026coordinate=historical_legal_id%3Asynthetic-preview"
+            }
+          ]
+        },
+        "readiness_method": {
+          "type": "string",
+          "const": "GET"
+        },
+        "readiness_target": {
+          "type": "string",
+          "const": "/health/ready"
+        },
+        "sha256": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[0-9a-f]{64}$",
+          "const": "6c666a05d0c32fbafa726490308e4c7dfa7adcbb8dddfa28cdf5dc9f345edb4d"
+        }
+      },
+      "required": [
+        "contract_id",
+        "method",
+        "maximum_application_raw_target_bytes",
+        "product_raw_targets",
+        "readiness_method",
+        "readiness_target",
+        "sha256"
+      ],
+      "additionalProperties": false,
+      "maxProperties": 64
+    },
+    "operation_catalog": {
+      "$ref": "urn:uuid:9771ad74-c254-4b4d-9bb3-c8fbc71befba"
+    },
+    "refusal_registry": {
+      "$ref": "urn:uuid:28beec07-21f2-4049-bd87-58fb6dacfb7a"
+    },
+    "object_set_schema": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "type": "string",
+          "const": "lex-v3-preview-object-set/1"
+        },
+        "schema_resource": {
+          "type": "string",
+          "const": "urn:uuid:87e642f4-501b-4a0f-a124-2906f8b4b831"
+        },
+        "sha256": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "bytes": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema",
+        "schema_resource",
+        "sha256",
+        "bytes"
+      ],
+      "additionalProperties": false,
+      "maxProperties": 64
+    },
+    "normalization_profile": {
+      "type": "object",
+      "properties": {
+        "profile_id": {
+          "type": "string",
+          "const": "synthetic-plain/1"
+        },
+        "descriptor": {
+          "type": "string",
+          "const": "strict_utf8_without_replacement\ncrlf_to_lf\nlone_cr_to_lf\nunicode_nfc\npreserve_other_scalars_and_whitespace\nrequire_visible_non_whitespace\nutf8_without_bom"
+        },
+        "sha256": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[0-9a-f]{64}$",
+          "const": "bbc52ffa29ded53c331eeec7ae03eb7d70467526b5a4531f2e11b12077cf67ea"
+        }
+      },
+      "required": [
+        "profile_id",
+        "descriptor",
+        "sha256"
+      ],
+      "additionalProperties": false,
+      "maxProperties": 64
+    },
+    "scope": {
+      "type": "object",
+      "properties": {
+        "publisher": {
+          "enum": [
+            "lu-legilux",
+            "eu-eurlex"
+          ],
+          "const": "lu-legilux"
+        },
+        "complete": {
+          "type": "boolean",
+          "const": true
+        },
+        "upstream_health": {
+          "enum": [
+            "not_applicable_synthetic"
+          ],
+          "const": "not_applicable_synthetic"
+        },
+        "enumerated_members": {
+          "type": "array",
+          "items": false,
+          "maxItems": 1,
+          "minItems": 1,
+          "prefixItems": [
+            {
+              "const": "eli/synthetic-preview"
+            }
+          ]
+        },
+        "sha256": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[0-9a-f]{64}$",
+          "const": "074d21a186d1f2978fe66c0042ec28d7befeff6e4eb9b4c7478119e47755c412"
+        }
+      },
+      "required": [
+        "publisher",
+        "complete",
+        "upstream_health",
+        "enumerated_members",
+        "sha256"
+      ],
+      "additionalProperties": false,
+      "maxProperties": 64
+    },
+    "snapshot": {
+      "type": "object",
+      "properties": {
+        "snapshot_id": {
+          "type": "string"
+        },
+        "snapshot_sha256": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "snapshot_id",
+        "snapshot_sha256"
+      ],
+      "additionalProperties": false,
+      "maxProperties": 64
+    },
+    "builder": {
+      "type": "object",
+      "properties": {
+        "component_id": {
+          "type": "string"
+        },
+        "source_sha256": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "component_id",
+        "source_sha256"
+      ],
+      "additionalProperties": false,
+      "maxProperties": 64
+    },
+    "index_stamp": {
+      "$ref": "#/$defs/index_stamp"
+    },
+    "blobs": {
+      "type": "array",
+      "items": false,
+      "maxItems": 3,
+      "minItems": 3,
+      "prefixItems": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "source_transport"
+            },
+            "sha256": {
+              "type": "string",
+              "minLength": 64,
+              "maxLength": 64,
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4096
+            },
+            "media_type": {
+              "const": "application/octet-stream"
+            }
+          },
+          "required": [
+            "kind",
+            "sha256",
+            "bytes",
+            "media_type"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "derived_text"
+            },
+            "sha256": {
+              "type": "string",
+              "minLength": 64,
+              "maxLength": 64,
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4096
+            },
+            "media_type": {
+              "const": "text/plain;charset=utf-8"
+            }
+          },
+          "required": [
+            "kind",
+            "sha256",
+            "bytes",
+            "media_type"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "sqlite_index"
+            },
+            "sha256": {
+              "type": "string",
+              "minLength": 64,
+              "maxLength": 64,
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1048576
+            },
+            "media_type": {
+              "const": "application/vnd.sqlite3"
+            }
+          },
+          "required": [
+            "kind",
+            "sha256",
+            "bytes",
+            "media_type"
+          ]
+        }
+      ]
+    }
+  },
+  "required": [
+    "schema",
+    "schema_resource",
+    "resolve_request_contract",
+    "operation_catalog",
+    "refusal_registry",
+    "object_set_schema",
+    "normalization_profile",
+    "scope",
+    "snapshot",
+    "builder",
+    "index_stamp",
+    "blobs"
+  ],
+  "additionalProperties": false,
+  "$id": "urn:uuid:d3e8909f-46a2-44d7-8728-463529b5f8a9",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "maxProperties": 64,
+  "x_max_stream_bytes": 131072,
+  "x_max_candidate_bytes": 1253376,
+  "x_max_tracked_schema_bytes": 1048576,
+  "x_runtime_invariants": [
+    "operation catalog and refusal registry equal the active embedded S0-05 instances",
+    "object-set schema digest equals the tracked reused schema",
+    "index scope digest equals the complete synthetic scope digest",
+    "blobs occur exactly once in source, derived, SQLite order"
+  ],
+  "$defs": {
+    "index_stamp": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "type": "string",
+          "const": "lex-v3-synthetic-sqlite/1"
+        },
+        "ddl_sha256": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "sqlite_version": {
+          "type": "string"
+        },
+        "sqlite_source_id": {
+          "type": "string"
+        },
+        "compile_options_sha256": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "logical_rows_sha256": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "scope_sha256": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "build_id": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "schema",
+        "ddl_sha256",
+        "sqlite_version",
+        "sqlite_source_id",
+        "compile_options_sha256",
+        "logical_rows_sha256",
+        "scope_sha256",
+        "build_id"
+      ],
+      "additionalProperties": false,
+      "maxProperties": 64
+    }
+  }
+}

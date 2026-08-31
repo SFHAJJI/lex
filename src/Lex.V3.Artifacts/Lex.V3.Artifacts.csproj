@@ -2,6 +2,7 @@
   <PropertyGroup>
     <RootNamespace>Lex.V3.Artifacts</RootNamespace>
     <AssemblyName>Lex.V3.Artifacts</AssemblyName>
+    <RuntimeIdentifiers>linux-x64</RuntimeIdentifiers>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Lex.V3.Contracts/Lex.V3.Contracts.csproj" />

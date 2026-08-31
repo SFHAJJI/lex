@@ -9,26 +9,412 @@ on:
 permissions:
   contents: read
 
+env:
+  CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
 jobs:
-  dotnet:
-    name: dotnet
-    runs-on: ubuntu-latest
+  canon-windows:
+    name: canon-windows
+    runs-on: windows-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+          ref: ${{ env.CANDIDATE_SHA }}
       - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
           global-json-file: global.json
-      - run: dotnet test Lex.V3.slnx --configuration Release
+      - name: Locked restore and canonical Windows build
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $checkedOutSha = (& git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $checkedOutSha -cne $env:CANDIDATE_SHA) { throw 'Windows runner did not check out the exact candidate SHA.' }
+          $sdkVersion = (& dotnet --version).Trim()
+          if ($LASTEXITCODE -ne 0 -or $sdkVersion -cne '10.0.400') { throw 'Windows runner did not select .NET SDK 10.0.400.' }
+          dotnet restore src/Lex.V3.Preview/Lex.V3.Preview.csproj --locked-mode
+          if ($LASTEXITCODE -ne 0) { throw 'Locked Windows restore failed.' }
+          dotnet build src/Lex.V3.Preview/Lex.V3.Preview.csproj --configuration Release --no-restore
+          if ($LASTEXITCODE -ne 0) { throw 'Windows preview build failed.' }
+          $artifactRoot = Join-Path $PWD 'artifacts/s0-05-windows'
+          $buildRoot = Join-Path $artifactRoot 'canonical-build'
+          New-Item -ItemType Directory -Path $artifactRoot | Out-Null
+          $sourceDigest = (& dotnet run --project src/Lex.V3.Preview/Lex.V3.Preview.csproj --configuration Release --no-build -- source-digest src/Lex.V3.Preview).Trim()
+          if ($LASTEXITCODE -ne 0 -or $sourceDigest -cnotmatch '^[0-9a-f]{64}$') { throw 'Windows source digest failed.' }
+          $rawBuild = @(& dotnet run --project src/Lex.V3.Preview/Lex.V3.Preview.csproj --configuration Release --no-build -- $buildRoot)
+          if ($LASTEXITCODE -ne 0 -or $rawBuild.Count -ne 1) { throw 'Windows canonical build did not emit one receipt.' }
+          $build = $rawBuild[0] | ConvertFrom-Json
+          if ($build.schema -cne 'lex-v3-synthetic-build-result/1') { throw 'Windows canonical build emitted the wrong receipt schema.' }
+          $receipt = [ordered]@{
+            schema = 'lex-v3-s0-05-windows-logical/1'
+            runner = 'windows-x64'
+            sdk = (& dotnet --version).Trim()
+            source_digest = $sourceDigest
+            build = $build
+          }
+          $receiptPath = Join-Path $artifactRoot 'windows-logical.json'
+          $json = ($receipt | ConvertTo-Json -Depth 8 -Compress) + "`n"
+          [IO.File]::WriteAllText($receiptPath, $json, [Text.UTF8Encoding]::new($false))
+          if ((Get-Item -LiteralPath $receiptPath).Length -gt 32768) { throw 'Windows logical receipt exceeds its byte ceiling.' }
+          Get-Content -Raw -LiteralPath $receiptPath | ConvertFrom-Json | Out-Null
+      - name: Upload Windows logical receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: s0-05-windows-logical
+          path: artifacts/s0-05-windows/windows-logical.json
+          if-no-files-found: error
+          retention-days: 14
+
+  dotnet:
+    name: dotnet
+    needs: canon-windows
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      BASE_IMAGE_DIGEST: sha256:0839314d08bb65da369135389a5d8291f75ace587fbb0488f469eb92c62eef68
+      CONTAINER_NAME: lex-v3-s0-05-ci
+      IMAGE_REFERENCE: lex-v3-s0-05:s0-05-ci
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ env.CANDIDATE_SHA }}
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: global.json
+      - name: Download Windows logical receipt
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: s0-05-windows-logical
+          path: artifacts/s0-05/windows
+      - name: Locked restore, build, full tests, and V3 tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain)"
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(dotnet --version)" = '10.0.400'
+          dotnet restore Lex.V3.slnx --locked-mode
+          dotnet build Lex.V3.slnx --configuration Release --no-restore
+          dotnet test Lex.V3.slnx --configuration Release --no-restore --no-build
+          pwsh -NoLogo -NoProfile -File ./eng/verify-v3-tree.ps1
+      - name: Tracked schemas and builder source digest are exact
+        shell: bash
+        run: |
+          set -euo pipefail
+          schema_root="$(mktemp -d)"
+          trap 'rm -rf -- "$schema_root"' EXIT
+          dotnet run --project src/Lex.V3.ContractTool/Lex.V3.ContractTool.csproj --configuration Release --no-build -- export-preview-schemas --output "$schema_root/preview"
+          dotnet run --project src/Lex.V3.ContractTool/Lex.V3.ContractTool.csproj --configuration Release --no-build -- export-synthetic-preview-schemas --output "$schema_root/synthetic"
+          diff --recursive --no-dereference schemas/v3-preview "$schema_root/preview"
+          diff --recursive --no-dereference schemas/v3-synthetic-preview "$schema_root/synthetic"
+          mkdir -p artifacts/s0-05
+          source_digest="$(dotnet run --project src/Lex.V3.Preview/Lex.V3.Preview.csproj --configuration Release --no-build -- source-digest src/Lex.V3.Preview)"
+          [[ "$source_digest" =~ ^[0-9a-f]{64}$ ]]
+          mapfile -t controls < <(find src/Lex.V3.Api/preview-graph -maxdepth 1 -type f -name 'control.*.json' -print)
+          test "${#controls[@]}" -eq 1
+          test "$(jq -er '.builder.source_sha256' "${controls[0]}")" = "$source_digest"
+          printf '%s\n' "$source_digest" > artifacts/s0-05/builder-source-sha256.txt
+      - name: Canonical Linux double build and Windows logical comparison
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_root="$(mktemp -d)"
+          trap 'rm -rf -- "$build_root"' EXIT
+          mkdir -p artifacts/s0-05/linux
+          dotnet run --project src/Lex.V3.Preview/Lex.V3.Preview.csproj --configuration Release --no-build -- "$build_root/one" > artifacts/s0-05/linux/build-one.json
+          dotnet run --project src/Lex.V3.Preview/Lex.V3.Preview.csproj --configuration Release --no-build -- "$build_root/two" > artifacts/s0-05/linux/build-two.json
+          diff --recursive --no-dereference "$build_root/one" "$build_root/two"
+          cmp artifacts/s0-05/linux/build-one.json artifacts/s0-05/linux/build-two.json
+          linux='artifacts/s0-05/linux/build-one.json'
+          windows='artifacts/s0-05/windows/windows-logical.json'
+          diagnostics='artifacts/s0-05/linux/cross-os-diagnostics.txt'
+          : > "$diagnostics"
+          build_receipt_shape='
+            keys == ["build_identity","ddl_sha256","derived","logical_rows_sha256","profile_identity","profile_sha256","schema","scope_sha256","source","sqlite"]
+            and .schema == "lex-v3-synthetic-build-result/1"
+            and (.source | keys == ["bytes","file","sha256"])
+            and (.source.file | type) == "string" and (.source.file | length) > 0
+            and (.source.sha256 | type) == "string" and (.source.sha256 | test("^[0-9a-f]{64}$"))
+            and (.source.bytes | type) == "number" and .source.bytes >= 0 and (.source.bytes | floor) == .source.bytes
+            and (.derived | keys == ["bytes","file","sha256"])
+            and (.derived.file | type) == "string" and (.derived.file | length) > 0
+            and (.derived.sha256 | type) == "string" and (.derived.sha256 | test("^[0-9a-f]{64}$"))
+            and (.derived.bytes | type) == "number" and .derived.bytes >= 0 and (.derived.bytes | floor) == .derived.bytes
+            and (.sqlite | keys == ["bytes","compile_options_sha256","file","sha256","source_id","version"])
+            and (.sqlite.file | type) == "string" and (.sqlite.file | length) > 0
+            and (.sqlite.sha256 | type) == "string" and (.sqlite.sha256 | test("^[0-9a-f]{64}$"))
+            and (.sqlite.bytes | type) == "number" and .sqlite.bytes >= 0 and (.sqlite.bytes | floor) == .sqlite.bytes
+            and (.sqlite.version | type) == "string" and (.sqlite.version | length) > 0
+            and (.sqlite.source_id | type) == "string" and (.sqlite.source_id | length) > 0
+            and (.sqlite.compile_options_sha256 | type) == "string" and (.sqlite.compile_options_sha256 | test("^[0-9a-f]{64}$"))
+            and (.profile_identity | type) == "string" and (.profile_identity | length) > 0
+            and (.profile_sha256 | type) == "string" and (.profile_sha256 | test("^[0-9a-f]{64}$"))
+            and (.ddl_sha256 | type) == "string" and (.ddl_sha256 | test("^[0-9a-f]{64}$"))
+            and (.scope_sha256 | type) == "string" and (.scope_sha256 | test("^[0-9a-f]{64}$"))
+            and (.logical_rows_sha256 | type) == "string" and (.logical_rows_sha256 | test("^[0-9a-f]{64}$"))
+            and (.build_identity | type) == "string" and (.build_identity | test("^[0-9a-f]{64}$"))
+          '
+          if ! jq -e "$build_receipt_shape" "$linux" >/dev/null; then
+            printf 'invalid canonical Linux build receipt shape\n' | tee -a "$diagnostics" >&2
+            exit 1
+          fi
+          if ! jq -e '
+            keys == ["build","runner","schema","sdk","source_digest"]
+            and .schema == "lex-v3-s0-05-windows-logical/1"
+            and .runner == "windows-x64"
+            and .sdk == "10.0.400"
+            and (.source_digest | type) == "string"
+            and (.source_digest | test("^[0-9a-f]{64}$"))
+          ' "$windows" >/dev/null ||
+            ! jq -e ".build | ($build_receipt_shape)" "$windows" >/dev/null; then
+            printf 'invalid Windows logical build receipt shape\n' | tee -a "$diagnostics" >&2
+            exit 1
+          fi
+          logical_identity_equal=true
+          compare_logical_field() {
+            local field="$1"
+            local linux_filter="$2"
+            local windows_filter="$3"
+            local linux_value
+            local windows_value
+            linux_value="$(jq -er "$linux_filter" "$linux")"
+            windows_value="$(jq -er "$windows_filter" "$windows")"
+            if [ "$linux_value" != "$windows_value" ]; then
+              logical_identity_equal=false
+              printf 'cross-os logical mismatch: field=%s linux=%s windows=%s\n' \
+                "$field" "$linux_value" "$windows_value" | tee -a "$diagnostics" >&2
+            fi
+          }
+          compare_logical_field source_sha256 '.source.sha256' '.build.source.sha256'
+          compare_logical_field source_bytes '.source.bytes' '.build.source.bytes'
+          compare_logical_field derived_sha256 '.derived.sha256' '.build.derived.sha256'
+          compare_logical_field derived_bytes '.derived.bytes' '.build.derived.bytes'
+          compare_logical_field profile_identity '.profile_identity' '.build.profile_identity'
+          compare_logical_field profile_sha256 '.profile_sha256' '.build.profile_sha256'
+          compare_logical_field ddl_sha256 '.ddl_sha256' '.build.ddl_sha256'
+          compare_logical_field scope_sha256 '.scope_sha256' '.build.scope_sha256'
+          compare_logical_field logical_rows_sha256 '.logical_rows_sha256' '.build.logical_rows_sha256'
+          builder_source="$(cat artifacts/s0-05/builder-source-sha256.txt)"
+          windows_builder_source="$(jq -er '.source_digest' "$windows")"
+          if [ "$builder_source" != "$windows_builder_source" ]; then
+            logical_identity_equal=false
+            printf 'cross-os logical mismatch: field=builder_source_sha256 linux=%s windows=%s\n' \
+              "$builder_source" "$windows_builder_source" | tee -a "$diagnostics" >&2
+          fi
+          if [ "$logical_identity_equal" = true ]; then
+            printf 'cross-os logical identity matched every required field\n' > "$diagnostics"
+          fi
+          jq -n \
+            --arg schema 'lex-v3-s0-05-cross-os-logical/2' \
+            --arg canonical_builder 'ubuntu-24.04-x64' \
+            --argjson logical_identity_equal "$logical_identity_equal" \
+            --arg linux_sqlite_sha256 "$(jq -er '.sqlite.sha256' "$linux")" \
+            --arg windows_sqlite_sha256 "$(jq -er '.build.sqlite.sha256' "$windows")" \
+            --arg linux_build_identity "$(jq -er '.build_identity' "$linux")" \
+            --arg windows_build_identity "$(jq -er '.build.build_identity' "$windows")" \
+            --arg linux_sqlite_version "$(jq -er '.sqlite.version' "$linux")" \
+            --arg windows_sqlite_version "$(jq -er '.build.sqlite.version' "$windows")" \
+            --arg linux_sqlite_source_id "$(jq -er '.sqlite.source_id' "$linux")" \
+            --arg windows_sqlite_source_id "$(jq -er '.build.sqlite.source_id' "$windows")" \
+            --arg linux_compile_options_sha256 "$(jq -er '.sqlite.compile_options_sha256' "$linux")" \
+            --arg windows_compile_options_sha256 "$(jq -er '.build.sqlite.compile_options_sha256' "$windows")" \
+            '{schema:$schema,canonical_builder:$canonical_builder,logical_identity_equal:$logical_identity_equal,sqlite_byte_equality_measured:true,sqlite_byte_equal:($linux_sqlite_sha256 == $windows_sqlite_sha256),linux_sqlite_sha256:$linux_sqlite_sha256,windows_sqlite_sha256:$windows_sqlite_sha256,build_identity_equality_measured:true,build_identity_equal:($linux_build_identity == $windows_build_identity),linux_build_identity:$linux_build_identity,windows_build_identity:$windows_build_identity,sqlite_version_equality_measured:true,sqlite_version_equal:($linux_sqlite_version == $windows_sqlite_version),linux_sqlite_version:$linux_sqlite_version,windows_sqlite_version:$windows_sqlite_version,sqlite_source_id_equality_measured:true,sqlite_source_id_equal:($linux_sqlite_source_id == $windows_sqlite_source_id),linux_sqlite_source_id:$linux_sqlite_source_id,windows_sqlite_source_id:$windows_sqlite_source_id,compile_options_equality_measured:true,compile_options_equal:($linux_compile_options_sha256 == $windows_compile_options_sha256),linux_compile_options_sha256:$linux_compile_options_sha256,windows_compile_options_sha256:$windows_compile_options_sha256}' > artifacts/s0-05/cross-os-logical.json
+          test "$logical_identity_equal" = true
+      - name: Upload Linux comparison evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: s0-05-linux-comparison
+          path: |
+            artifacts/s0-05/linux/build-one.json
+            artifacts/s0-05/linux/build-two.json
+            artifacts/s0-05/linux/cross-os-diagnostics.txt
+            artifacts/s0-05/cross-os-logical.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Rebuild committed unsigned public graph exactly
+        shell: bash
+        run: |
+          set -euo pipefail
+          rebuild_root="$(mktemp -d)"
+          trap 'rm -rf -- "$rebuild_root"' EXIT
+          dotnet run --project src/Lex.V3.Preview/Lex.V3.Preview.csproj --configuration Release --no-build -- verify-unsigned src/Lex.V3.Api/preview-graph "$rebuild_root/unsigned" "$(cat artifacts/s0-05/builder-source-sha256.txt)" > artifacts/s0-05/unsigned-rebuild.json
+          jq -e '.schema == "lex-v3-synthetic-unsigned-rebuild/1"' artifacts/s0-05/unsigned-rebuild.json >/dev/null
+      - name: Locked linux-x64 restore and actual OCI archive build
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore src/Lex.V3.Api/Lex.V3.Api.csproj --locked-mode --runtime linux-x64
+          dotnet publish src/Lex.V3.Api/Lex.V3.Api.csproj --configuration Release --no-restore --runtime linux-x64 --self-contained false /t:PublishContainer -p:ContainerImageTag=s0-05-ci -p:ContainerArchiveOutputPath="$PWD/artifacts/s0-05/lex-v3-s0-05.tar"
+          test -s artifacts/s0-05/lex-v3-s0-05.tar
+      - name: Fetch and bind pinned MCR base manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/s0-05/base
+          registry='https://mcr.microsoft.com/v2/dotnet/aspnet/manifests'
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json' "$registry/$BASE_IMAGE_DIGEST" -o artifacts/s0-05/base/index.json
+          test "sha256:$(sha256sum artifacts/s0-05/base/index.json | cut -d' ' -f1)" = "$BASE_IMAGE_DIGEST"
+          child_digest="$(jq -er '[.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64")] | if length == 1 then .[0].digest else error("expected one linux/amd64 base manifest") end' artifacts/s0-05/base/index.json)"
+          child_media_type="$(jq -er --arg digest "$child_digest" '.manifests[] | select(.digest == $digest) | .mediaType' artifacts/s0-05/base/index.json)"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location -H "Accept: $child_media_type" "$registry/$child_digest" -o artifacts/s0-05/base/manifest.json
+          test "sha256:$(sha256sum artifacts/s0-05/base/manifest.json | cut -d' ' -f1)" = "$child_digest"
+      - name: Verify OCI archive, layers, base, graph, and private-material absence
+        shell: pwsh
+        run: |
+          ./eng/verify-s0-05-preview.ps1 `
+            -ArchivePath artifacts/s0-05/lex-v3-s0-05.tar `
+            -PublicGraphRoot src/Lex.V3.Api/preview-graph `
+            -ExpectedBaseImageDigest $env:BASE_IMAGE_DIGEST `
+            -BaseIndexPath artifacts/s0-05/base/index.json `
+            -BaseManifestPath artifacts/s0-05/base/manifest.json `
+            -ResultPath artifacts/s0-05/oci-verification.json `
+            -DockerArchivePath artifacts/s0-05/lex-v3-s0-05-docker.tar `
+            -DockerImageReference $env:IMAGE_REFERENCE
+      - name: Load, bind, and start the restricted OCI image
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_archive_digest="$(jq -er '.docker_archive_sha256 | select(test("^[0-9a-f]{64}$"))' artifacts/s0-05/oci-verification.json)"
+          actual_archive_digest="$(sha256sum artifacts/s0-05/lex-v3-s0-05-docker.tar | cut -d ' ' -f 1)"
+          test "$actual_archive_digest" = "$expected_archive_digest"
+          docker load --input artifacts/s0-05/lex-v3-s0-05-docker.tar
+          expected_config_digest="$(jq -er '.config_digest | select(test("^sha256:[0-9a-f]{64}$"))' artifacts/s0-05/oci-verification.json)"
+          actual_image_id="$(docker image inspect --format '{{.Id}}' "$IMAGE_REFERENCE")"
+          test "$actual_image_id" = "$expected_config_digest"
+          docker run --detach --name "$CONTAINER_NAME" --read-only --cap-drop ALL --security-opt no-new-privileges:true --publish 127.0.0.1::8080 "$IMAGE_REFERENCE" >/dev/null
+          host_port="$(docker port "$CONTAINER_NAME" 8080/tcp | sed -n 's/^127\.0\.0\.1://p')"
+          [[ "$host_port" =~ ^[0-9]+$ ]]
+          printf '%s\n' "$host_port" > artifacts/s0-05/runtime-port.txt
+      - name: Inspect runtime controls and probe the real socket
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker inspect "$CONTAINER_NAME" > artifacts/s0-05/container-inspect.json
+          jq -e 'length == 1 and .[0].Config.User == "1654" and .[0].HostConfig.ReadonlyRootfs == true and ((.[0].HostConfig.CapDrop // []) | map(ascii_upcase) | index("ALL") != null) and ((.[0].HostConfig.SecurityOpt // []) | map(ascii_downcase) | any(startswith("no-new-privileges"))) and (.[0].Mounts | length) == 0 and ((.[0].HostConfig.Binds // []) | length) == 0' artifacts/s0-05/container-inspect.json >/dev/null
+          if jq -er '.[0].Config.Env[]?' artifacts/s0-05/container-inspect.json | cut -d= -f1 | grep -Eiq '(^|_)(SECRET|TOKEN|PASSWORD|PASSWD|PWD|API_?KEY|PRIVATE_?KEY|CREDENTIAL|CONNECTION_?STRING)(_|$)'; then
+            echo 'Secret-bearing environment name found.' >&2
+            exit 1
+          fi
+          port="$(cat artifacts/s0-05/runtime-port.txt)"
+          for attempt in $(seq 1 60); do
+            status="$(curl --silent --output /dev/null --write-out '%{http_code}' "http://127.0.0.1:$port/health/ready" || true)"
+            if [ "$status" = 204 ]; then break; fi
+            if [ "$attempt" = 60 ]; then docker logs "$CONTAINER_NAME" >&2 || true; exit 1; fi
+            sleep 1
+          done
+          python3 - "$port" artifacts/s0-05/runtime-probes.json <<'PY'
+          import hashlib, json, socket, sys
+          port, output = int(sys.argv[1]), sys.argv[2]
+          def request(method, target):
+              payload = method + b" " + target + b" HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"
+              with socket.create_connection(("127.0.0.1", port), timeout=5) as client:
+                  client.sendall(payload)
+                  chunks = []
+                  while True:
+                      chunk = client.recv(65536)
+                      if not chunk: break
+                      chunks.append(chunk)
+              head, separator, body = b"".join(chunks).partition(b"\r\n\r\n")
+              assert separator
+              lines, headers = head.split(b"\r\n"), {}
+              status = int(lines[0].split(b" ", 2)[1])
+              for line in lines[1:]:
+                  name, value = line.split(b":", 1)
+                  headers[name.decode("ascii").lower()] = value.strip().decode("latin-1")
+              return status, headers, body
+          def secure(response):
+              assert response[1].get("cache-control") == "no-store"
+              assert response[1].get("x-content-type-options") == "nosniff"
+          ready = request(b"GET", b"/health/ready")
+          assert ready[0] == 204 and ready[2] == b""; secure(ready)
+          held = request(b"GET", b"/api/v3-preview/resolve?family=eli&coordinate=eli%2Fsynthetic-preview")
+          assert held[0] == 200 and held[1].get("content-type") == "application/json;charset=utf-8"; secure(held)
+          held_json = json.loads(held[2]); assert held_json["branch"] == "success" and held_json["synthetic"] is True
+          assert "This text is synthetic and has no legal authority." in held_json["result"]["objects"][0]["body"]
+          refusal = request(b"GET", b"/api/v3-preview/resolve?family=historical_legal_id&coordinate=historical_legal_id%3Asynthetic-preview")
+          assert refusal[0] == 200 and refusal[1].get("content-type") == "application/json;charset=utf-8"; secure(refusal)
+          refusal_json = json.loads(refusal[2]); assert refusal_json["branch"] == "refusal" and refusal_json["status"] == "identifier_unknown"
+          assert refusal_json["refusal"]["asserts_absence_of_law"] is False
+          lower = request(b"get", b"/health/ready")
+          assert lower[0] == 405 and lower[1].get("allow") == "GET"; secure(lower)
+          assert json.loads(lower[2])["type"] == "urn:lex:v3:preview:method-not-allowed"
+          head = request(b"HEAD", b"/health/ready")
+          assert head[0] == 405 and head[2] == b"" and head[1].get("allow") == "GET"
+          assert head[1].get("content-type") == "application/problem+json" and int(head[1]["content-length"]) > 0; secure(head)
+          prefix = b"/api/v3-preview/resolve?"
+          app_target = prefix + b"a" * (2049 - len(prefix))
+          app_over = request(b"GET", app_target)
+          assert len(app_target) == 2049 and app_over[0] == 400; secure(app_over)
+          assert app_over[1].get("content-type") == "application/problem+json"
+          assert 0 < len(app_over[2]) <= 4096 and int(app_over[1]["content-length"]) == len(app_over[2])
+          app_over_json = json.loads(app_over[2])
+          assert app_over_json == {"type":"urn:lex:v3:preview:invalid-request","title":"Invalid preview request","status":400}
+          nul = request(b"GET", b"/api/v3-preview/resolve?x=a\x00b")
+          raw_space = request(b"GET", b"/api/v3-preview/resolve?x=a b")
+          kestrel_over = request(b"GET", b"/" + b"a" * 9000)
+          assert nul[0] == 400 and nul[2] == b""
+          assert raw_space[0] == 400 and raw_space[2] == b""
+          assert kestrel_over[0] == 414 and kestrel_over[2] == b""
+          assert all("server" not in response[1] for response in (nul, raw_space, kestrel_over))
+          result = {"schema":"lex-v3-s0-05-runtime-probes/1","readiness_status":ready[0],"success_status":held[0],"success_branch":held_json["branch"],"success_body_sha256":hashlib.sha256(held[2]).hexdigest(),"refusal_status":refusal[0],"refusal_branch":refusal_json["branch"],"lowercase_method_status":lower[0],"head_status":head[0],"head_body_bytes":len(head[2]),"application_2049_status":app_over[0],"kestrel_nul_status":nul[0],"kestrel_raw_space_status":raw_space[0],"kestrel_9000_status":kestrel_over[0]}
+          with open(output, "w", encoding="utf-8", newline="\n") as stream:
+              json.dump(result, stream, sort_keys=True, separators=(",", ":")); stream.write("\n")
+          PY
+          docker logs "$CONTAINER_NAME" > artifacts/s0-05/container.log 2>&1
+          test ! -s artifacts/s0-05/container.log
+      - name: Remove runtime container
+        if: always()
+        shell: bash
+        run: docker rm --force "$CONTAINER_NAME" >/dev/null 2>&1 || true
+      - name: Build bounded S0-05 CI receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          git ls-files '*packages.lock.json' | LC_ALL=C sort | while IFS= read -r file; do printf '%s  %s\n' "$(sha256sum "$file" | cut -d' ' -f1)" "$file"; done > artifacts/s0-05/package-locks.txt
+          package_graph_sha256="$(sha256sum artifacts/s0-05/package-locks.txt | cut -d' ' -f1)"
+          artifact_path='src/Lex.V3.Api/preview-graph/artifact.json'
+          schema_table_sha256="$(jq -cS '.schema_table' "$artifact_path" | sha256sum | cut -d' ' -f1)"
+          graph_members="$(find src/Lex.V3.Api/preview-graph -maxdepth 1 -type f -print | LC_ALL=C sort | while IFS= read -r file; do jq -n --arg file "${file#src/Lex.V3.Api/preview-graph/}" --arg sha256 "$(sha256sum "$file" | cut -d' ' -f1)" --argjson bytes "$(stat -c '%s' "$file")" '{file:$file,sha256:$sha256,bytes:$bytes}'; done | jq -s '.')"
+          public_key_sha256="$(sha256sum src/Lex.V3.Api/preview-trust/public-key.spki | cut -d' ' -f1)"
+          jq -n --arg schema 'lex-v3-s0-05-ci-receipt/1' --arg source_commit "$CANDIDATE_SHA" --arg sdk "$(dotnet --version)" --arg package_graph_sha256 "$package_graph_sha256" --arg public_key_sha256 "$public_key_sha256" --arg schema_table_sha256 "$schema_table_sha256" --argjson graph_members "$graph_members" --slurpfile windows artifacts/s0-05/windows/windows-logical.json --slurpfile linux_one artifacts/s0-05/linux/build-one.json --slurpfile linux_two artifacts/s0-05/linux/build-two.json --slurpfile cross_os artifacts/s0-05/cross-os-logical.json --slurpfile unsigned artifacts/s0-05/unsigned-rebuild.json --slurpfile oci artifacts/s0-05/oci-verification.json --slurpfile runtime artifacts/s0-05/runtime-probes.json '{schema:$schema,source_commit:$source_commit,source_tree_clean:true,sdk:$sdk,locked_package_graph_sha256:$package_graph_sha256,public_key_sha256:$public_key_sha256,schema_table_sha256:$schema_table_sha256,public_graph:$graph_members,windows_logical:$windows[0],linux_build_one:$linux_one[0],linux_build_two:$linux_two[0],cross_os:$cross_os[0],unsigned_rebuild:$unsigned[0],oci:$oci[0],runtime:$runtime[0],private_signing_material_present:false,promotable:false}' > artifacts/s0-05/receipt.json
+          jq -e '.schema == "lex-v3-s0-05-ci-receipt/1" and .promotable == false and .private_signing_material_present == false' artifacts/s0-05/receipt.json >/dev/null
+          test "$(stat -c '%s' artifacts/s0-05/receipt.json)" -le 65536
+      - name: Decision 54 golden diagnostics
+        continue-on-error: true
+        env:
+          DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git cat-file -e "$DIFF_BASE^{commit}" 2>/dev/null; then echo '::notice::Golden diagnostic has no available comparison base.'; exit 0; fi
+          if git diff --quiet "$DIFF_BASE" HEAD -- ':(glob)**/golden/**' ':(glob)**/*.golden.*'; then echo 'No golden-family paths changed.'; exit 0; fi
+          echo '::warning::Golden-family paths changed; this diagnostic is non-blocking under Decision 54.'
+          git diff --name-only "$DIFF_BASE" HEAD -- ':(glob)**/golden/**' ':(glob)**/*.golden.*'
+          exit 1
+      - name: Upload bounded S0-05 receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: s0-05-ci-receipt
+          path: artifacts/s0-05/receipt.json
+          if-no-files-found: error
+          retention-days: 14
 
   web:
     name: web
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+          ref: ${{ env.CANDIDATE_SHA }}
+      - name: Verify exact candidate checkout
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
@@ -40,13 +426,3 @@ jobs:
         working-directory: web
       - run: npm run build
         working-directory: web
-
-  canon-windows:
-    name: canon-windows
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          persist-credentials: false
-      - shell: pwsh
-        run: ./eng/verify-v3-tree.ps1

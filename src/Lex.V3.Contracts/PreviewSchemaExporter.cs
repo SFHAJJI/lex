@@ -32,8 +32,11 @@ public static class PreviewSchemaExporter
             [V3SchemaIds.PreviewRefusalRegistry] = "preview-refusal-registry.schema.json",
         });
 
-    public static byte[] ExportUtf8(string schemaId)
+    public static byte[] ExportUtf8(string schemaId) => ExportUtf8(schemaId, int.MaxValue);
+
+    internal static byte[] ExportUtf8(string schemaId, int maximumBytes)
     {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumBytes);
         var root = CreateHardenedSchemaNode(schemaId);
         if (string.Equals(schemaId, V3SchemaIds.PreviewPayload, StringComparison.Ordinal))
         {
@@ -46,7 +49,16 @@ public static class PreviewSchemaExporter
             WriteIndented = true,
         };
         var json = root.ToJsonString(outputOptions).Replace("\r\n", "\n", StringComparison.Ordinal);
-        return Encoding.UTF8.GetBytes(json.TrimEnd('\r', '\n') + "\n");
+        var normalized = json.TrimEnd('\r', '\n') + "\n";
+        var byteCount = Encoding.UTF8.GetByteCount(normalized);
+        if (byteCount > maximumBytes)
+        {
+            throw new InvalidDataException("The preview schema exceeds its remaining byte budget.");
+        }
+
+        var bytes = GC.AllocateUninitializedArray<byte>(byteCount);
+        Encoding.UTF8.GetBytes(normalized, bytes);
+        return bytes;
     }
 
     private static JsonObject CreateHardenedSchemaNode(string schemaId)
