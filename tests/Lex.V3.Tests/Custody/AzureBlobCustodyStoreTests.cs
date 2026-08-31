@@ -353,6 +353,41 @@ public sealed class AzureBlobCustodyStoreTests
     }
 
     [TestMethod]
+    public async Task PostPolicyEtagBracketDoesNotCompareIndependentServiceClocks()
+    {
+        var harness = new Harness();
+        harness.Policy.PolicyObservedAt = ObservedAt.AddSeconds(1);
+
+        var receipt = await harness.Store.CreateAsync(
+            Body, CustodyClass.NightlyFloor90d, CancellationToken.None);
+
+        Assert.AreEqual(harness.Policy.PolicyObservedAt, receipt.VerifiedAt);
+        Assert.AreEqual(ObservedAt, harness.Nightly.SingleBlob.ServerDate);
+        Assert.AreEqual(2, harness.Nightly.SingleBlob.PropertiesConditions.Count);
+    }
+
+    [TestMethod]
+    public async Task ReusedGenerationIsRevalidatedByEtagAfterPolicyObservation()
+    {
+        var harness = new Harness();
+        var digest = CustodyDigest.Of(Body);
+        var name = GenerationName(digest, '5');
+        harness.Nightly.AddExisting(name, Body, createdOn: ObservedAt);
+        harness.Nightly.Pages.Add([name]);
+        harness.Policy.AfterRead = _ => harness.Nightly.SingleBlob.ChangeEtag(
+            new ETag("\"changed-during-policy-read\""));
+
+        await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() =>
+            harness.Store.CreateAsync(Body, CustodyClass.NightlyFloor90d, CancellationToken.None));
+
+        Assert.AreEqual(0, harness.Staging.Blobs.Count);
+        Assert.AreEqual(2, harness.Nightly.SingleBlob.PropertiesConditions.Count);
+        Assert.AreEqual(
+            new ETag("\"initial\""),
+            harness.Nightly.SingleBlob.PropertiesConditions[1]!.IfMatch);
+    }
+
+    [TestMethod]
     public async Task AdequateExistingGenerationIsReusedWithoutStagingOrCredential()
     {
         var harness = new Harness();
@@ -594,6 +629,20 @@ public sealed class AzureBlobCustodyStoreTests
             callerCancellation.Store.CreateAsync(
                 Body, CustodyClass.NightlyFloor90d, cancellation.Token));
         Assert.IsFalse(callerCancellation.Events.Contains("nightly.list", StringComparer.Ordinal));
+    }
+
+    [TestMethod]
+    public async Task PolicyReaderTimeoutIsProviderUnavailability()
+    {
+        var harness = new Harness();
+        harness.Policy.Exception = new OperationCanceledException("ARM timeout");
+
+        var unavailable = await Assert.ThrowsExactlyAsync<CustodyRequiredException>(() =>
+            harness.Store.CreateAsync(
+                Body, CustodyClass.NightlyFloor90d, CancellationToken.None));
+
+        Assert.IsInstanceOfType<OperationCanceledException>(unavailable.InnerException);
+        Assert.AreEqual(0, harness.Staging.Blobs.Count);
     }
 
     [TestMethod]
@@ -1035,6 +1084,8 @@ public sealed class AzureBlobCustodyStoreTests
 
         public bool ActiveLegalHold { get; set; } = true;
 
+        public DateTimeOffset PolicyObservedAt { get; set; } = ObservedAt;
+
         public CustodyClass? ReturnedCustodyClass { get; set; }
 
         public Exception? Exception { get; set; }
@@ -1076,10 +1127,10 @@ public sealed class AzureBlobCustodyStoreTests
                 retentionDays,
                 activeLegalHold,
                 ConfigurationPolicyKeyOverride,
-                ConfigurationObservedAtOverride);
+                ConfigurationObservedAtOverride ?? PolicyObservedAt);
             return Task.FromResult(new AzureContainerPolicyObservation(
                 returnedClass,
-                ObservedAt,
+                PolicyObservedAt,
                 retentionDays,
                 activeLegalHold,
                 configurationReceipt));
@@ -1102,13 +1153,13 @@ public sealed class AzureBlobCustodyStoreTests
             int? retentionDays,
             bool activeLegalHold,
             Guid? policyKeyOverride,
-            DateTimeOffset? observedAtOverride) => new(
+            DateTimeOffset observedAt) => new(
                 AzureCustodySchemaIds.ConfigurationReceipt,
                 policyKeyOverride ?? (custodyClass == CustodyClass.NightlyFloor90d
                     ? NightlyPolicyKey
                     : LegalHoldPolicyKey),
                 custodyClass,
-                observedAtOverride ?? ObservedAt,
+                observedAt,
                 $"/subscriptions/{SubscriptionId:D}/resourceGroups/rg-lex-v3/providers/Microsoft.Storage/storageAccounts/stlexv3custody/blobServices/default/containers/"
                     + (custodyClass == CustodyClass.NightlyFloor90d ? "nightly" : "legal-hold"),
                 "2025-06-01",

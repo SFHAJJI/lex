@@ -184,7 +184,7 @@ public sealed class AzureBlobCustodyStore : ICustodyStore
         DurableBlobWriteReceipt? reusableReceipt = null;
         foreach (var observation in observations)
         {
-            await RevalidateExactGenerationAsync(observation, policy.ObservedAt, cancellationToken)
+            await RevalidateExactGenerationAsync(observation, cancellationToken)
                 .ConfigureAwait(false);
             if (TryCreateReceipt(reference, observation, policy, out var existingReceipt))
             {
@@ -257,7 +257,7 @@ public sealed class AzureBlobCustodyStore : ICustodyStore
             var finalPolicy = await _policyReader.ReadAsync(custodyClass, cancellationToken)
                 .ConfigureAwait(false);
             await RevalidateExactGenerationAsync(
-                    finalObservation, finalPolicy.ObservedAt, cancellationToken)
+                    finalObservation, cancellationToken)
                 .ConfigureAwait(false);
             if (!TryCreateReceipt(reference, finalObservation, finalPolicy, out var receipt))
             {
@@ -567,7 +567,6 @@ public sealed class AzureBlobCustodyStore : ICustodyStore
 
     private static async Task RevalidateExactGenerationAsync(
         RemoteObservation observation,
-        DateTimeOffset policyObservedAt,
         CancellationToken cancellationToken)
     {
         var originalETag = RequireETag(
@@ -579,13 +578,6 @@ public sealed class AzureBlobCustodyStore : ICustodyStore
                     new BlobRequestConditions { IfMatch = originalETag }, cancellationToken)
                 .ConfigureAwait(false);
             var current = response.Value;
-            var revalidatedAt = TryReadServerDate(response.GetRawResponse());
-            if (revalidatedAt is null || revalidatedAt.Value < policyObservedAt.ToUniversalTime())
-            {
-                throw new CustodyPolicyException(
-                    "The exact Azure object was not observed after its container policy.");
-            }
-
             if (current.BlobType != BlobType.Block
                 || !string.IsNullOrEmpty(current.VersionId)
                 || current.ContentLength != observation.Properties.ContentLength
@@ -670,21 +662,6 @@ public sealed class AzureBlobCustodyStore : ICustodyStore
         }
 
         return value;
-    }
-
-    private static DateTimeOffset? TryReadServerDate(Response response)
-    {
-        if (!response.Headers.TryGetValue("Date", out var value)
-            || !DateTimeOffset.TryParse(
-                value,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeUniversal,
-                out var parsed))
-        {
-            return null;
-        }
-
-        return parsed.ToUniversalTime();
     }
 
     private static bool IsGenerationName(string? name, string digest)
