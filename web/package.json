@@ -9,6 +9,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "test": "node --test test/*.test.mjs",
-    "evidence": "node scripts/browser-evidence.mjs"
+    "evidence": "node scripts/browser-evidence.mjs",
+    "evidence:mutations": "node scripts/evidence-mutations.mjs"
   }
 }

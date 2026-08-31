@@ -124,7 +124,11 @@ const capture = (file) => {
   const raw = loadCaptured(file);
   const { decoded, problems } = decodeEnvelope(ENVELOPE_SCHEMA, raw, REGISTRY);
   assert.deepEqual(problems, [], `${file} must decode cleanly`);
-  assert.deepEqual(validateEnvelope(ENVELOPE_SCHEMA, decoded), [], `${file} must validate`);
+  assert.deepEqual(
+    validateEnvelope(ENVELOPE_SCHEMA, decoded, REGISTRY),
+    [],
+    `${file} must validate`,
+  );
   return decoded;
 };
 

@@ -12,6 +12,7 @@
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
+import { resolve as resolvePath } from "node:path";
 import { extname, join as joinPath } from "node:path";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -147,7 +148,7 @@ const PROBE = `(() => {
     const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
     return (hi + 0.05) / (lo + 0.05);
   };
-  const contrast = [...document.querySelectorAll('h1,h2,h3,p,li,dt,dd,code,strong,summary,span')]
+  const contrast = [...document.querySelectorAll('h1,h2,h3,h4,h5,h6,p,li,dt,dd,code,strong,summary,span,a')]
     .filter((el) => el.textContent.trim().length > 0 && el.offsetParent !== null)
     .map((el) => {
       const style = getComputedStyle(el);
@@ -164,13 +165,16 @@ const PROBE = `(() => {
 
   const focusable = [...document.querySelectorAll(
     'a[href],button,input,select,textarea,summary,[tabindex]:not([tabindex="-1"])')];
-  const heads = [...document.querySelectorAll('h1,h2,h3')].map((h) => h.tagName + ':' + h.textContent.trim().slice(0, 40));
+  const headingEls = [...document.querySelectorAll('h1,h2,h3,h4,h5,h6')];
+  const heads = headingEls.map((h) => h.tagName + ':' + h.textContent.trim().slice(0, 40));
+  const headingLevels = headingEls.map((h) => Number(h.tagName.slice(1)));
   const body = getComputedStyle(document.body);
   return {
     lang: document.documentElement.lang,
     state: document.documentElement.dataset.previewState,
     title: document.title,
     headings: heads,
+    headingLevels,
     h1Count: document.querySelectorAll('h1').length,
     focusableCount: focusable.length,
     focusableWithVisibleText: focusable.filter((el) => el.textContent.trim().length > 0).length,
@@ -320,7 +324,14 @@ async function main() {
   const browser = await findBrowser();
   const port = 9222 + Math.floor(Math.random() * 500);
   const profile = await mkdtemp(join(tmpdir(), "lex-cdp-"));
-  const site = await serveDist(join(process.cwd(), "dist"));
+  // An induced mutation serves a deliberately broken copy so the gates can be shown red.
+  // A gate nobody has watched fail is a gate nobody should trust: the heading-order and
+  // link-contrast checks below both replace checks that were green on a page that
+  // violated them.
+  const root = process.env.LEX_EVIDENCE_ROOT
+    ? resolvePath(process.env.LEX_EVIDENCE_ROOT)
+    : join(process.cwd(), "dist");
+  const site = await serveDist(root);
   const child = spawn(
     browser,
     [
@@ -443,6 +454,24 @@ async function main() {
           );
         }
         if (observed.h1Count !== 1) failures.push(`${page} @${viewport.label}: ${observed.h1Count} h1 elements`);
+        // WCAG 1.3.1: a heading level may not be skipped on the way down. The harness
+        // collected headings but never looked at their levels, so a refusal page that
+        // went h1 then h3 stayed green across all 50 combinations.
+        const levels = observed.headingLevels ?? [];
+        if (levels.length === 0) {
+          failures.push(`${page} @${viewport.label}: no headings were found`);
+        }
+        if (levels.length > 0 && levels[0] !== 1) {
+          failures.push(`${page} @${viewport.label}: the first heading is h${levels[0]}, not h1`);
+        }
+        for (let index = 1; index < levels.length; index += 1) {
+          if (levels[index] > levels[index - 1] + 1) {
+            failures.push(
+              `${page} @${viewport.label}: heading level jumps from h${levels[index - 1]} ` +
+                `to h${levels[index]}`,
+            );
+          }
+        }
         if (!observed.syntheticBanner) failures.push(`${page} @${viewport.label}: synthetic banner missing`);
         if (observed.scriptCount !== 0) failures.push(`${page} @${viewport.label}: ${observed.scriptCount} script tags`);
         if (observed.state === undefined) failures.push(`${page} @${viewport.label}: no data-preview-state`);

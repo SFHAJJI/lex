@@ -293,7 +293,7 @@ function officialRoutes(actions) {
     })
     .join(String.fromCharCode(10));
   return `        <section class="payload">
-          <h3>Official search routes</h3>
+          <h2>Official search routes</h2>
           <ul>
 ${items}
           </ul>
@@ -322,7 +322,7 @@ export function renderRefusal({ envelope }) {
       .map((value) => `          <li>${escapeHtml(format ? format(value) : value)}</li>`)
       .join("\n");
     return `        <section class="payload">
-          <h3>${escapeHtml(label)}</h3>
+          <h2>${escapeHtml(label)}</h2>
           <ul>
 ${items}
           </ul>

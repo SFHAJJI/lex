@@ -73,7 +73,9 @@ for (const [name, file, render] of [
 ]) {
   const raw = loadCaptured(file);
   const { decoded, problems } = decodeEnvelope(envelopeSchema, raw, registry);
-  const invalid = problems.concat(decoded ? validateEnvelope(envelopeSchema, decoded) : []);
+  const invalid = problems.concat(
+    decoded ? validateEnvelope(envelopeSchema, decoded, registry) : [],
+  );
   if (invalid.length > 0) {
     throw new Error(`captured ${file} did not decode and validate: ${invalid.join("; ")}`);
   }

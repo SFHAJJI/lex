@@ -34,6 +34,11 @@ function materialise(node) {
   if (node.const !== undefined) return node.const;
   if (node.enum) return node.enum[0];
   if (node.type === "string") {
+    // A `format` is part of the contract just as much as a pattern is. Deriving "x" for
+    // a date-time field produced a fixture the published schema rejects, and the only
+    // reason it ever passed is that the validator did not check formats at all.
+    if (node.format === "date-time") return "2026-08-31T00:00:00Z";
+    if (node.format === "uri") return "https://example.invalid/derived";
     const length = Math.max(1, node.minLength ?? 1);
     // Honour the published pattern rather than guessing at a filler. A digest field
     // demands hexadecimal, and a fixture that ignores that is not derived from the

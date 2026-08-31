@@ -70,6 +70,119 @@ export function selectArm(schema, envelope) {
  * because an index resolving to the wrong member is a plausible wrong label, and that is
  * worse than a missing one.
  */
+/**
+ * Resolve a local `$ref` against the document that contains it.
+ *
+ * Only same-document pointers are resolvable. An external ref, a malformed pointer, an
+ * unresolvable path or a cycle all return null after recording a problem, so a `$ref`
+ * this reader cannot follow refuses the envelope instead of passing it. Codex proved the
+ * previous behaviour: a node carrying only `$ref` matched none of the keyword branches,
+ * so `check` fell through and returned clean, and three mutations across a real `$ref`
+ * boundary were reported as valid.
+ */
+export function resolveLocalRef(ref, doc, where, problems, seen, docs = []) {
+  if (typeof ref !== "string" || ref.length === 0) {
+    problems.push(`${where}: $ref ${JSON.stringify(ref)} is not a reference`);
+    return null;
+  }
+  if (seen.has(ref)) {
+    problems.push(`${where}: $ref ${ref} is cyclic`);
+    return null;
+  }
+
+  // A ref may name this document (`#/...`) or a schema supplied to this reader by its
+  // own `$id`. Anything else would have to be fetched, and a reader that fetches is a
+  // reader that can be pointed somewhere else, so it is refused.
+  let base = doc;
+  let pointer = ref;
+  if (!ref.startsWith("#")) {
+    const hash = ref.indexOf("#");
+    const id = hash === -1 ? ref : ref.slice(0, hash);
+    const known = docs.find((candidate) => candidate && candidate.$id === id);
+    if (!known) {
+      problems.push(
+        `${where}: $ref ${JSON.stringify(ref)} names no schema supplied to this reader, ` +
+          "so it cannot be checked",
+      );
+      return null;
+    }
+    base = known;
+    pointer = hash === -1 ? "#" : ref.slice(hash);
+  }
+
+  const path = pointer.slice(1);
+  if (path === "") {
+    return base;
+  }
+  if (!path.startsWith("/")) {
+    problems.push(`${where}: $ref ${ref} is not a JSON pointer`);
+    return null;
+  }
+  let node = base;
+  for (const raw of path.slice(1).split("/")) {
+    const token = raw.replace(/~1/g, "/").replace(/~0/g, "~");
+    if (node === null || typeof node !== "object" || !(token in node)) {
+      problems.push(`${where}: $ref ${ref} does not resolve in this document`);
+      return null;
+    }
+    node = node[token];
+  }
+  return node;
+}
+
+/**
+ * Assertion keywords this reader implements.
+ *
+ * Anything else is refused rather than ignored. Silently skipping an unimplemented
+ * keyword is the defect class behind O1: `prefixItems` and `$ref` were both absent, so
+ * every constraint they carried evaluated to "no problems found". A validator that does
+ * not understand a constraint must say so, not pass.
+ */
+const SUPPORTED_KEYWORDS = new Set([
+  "$ref", "$id", "$schema", "$defs", "$comment", "title", "description", "examples", "default",
+  "const", "enum", "type", "properties", "required", "additionalProperties",
+  "items", "prefixItems", "minItems", "maxItems",
+  "minProperties", "maxProperties", "uniqueItems",
+  "minLength", "maxLength", "pattern", "format",
+  "anyOf", "allOf", "if", "then", "else",
+]);
+
+/**
+ * Extension keywords that carry no assertion, listed one by one.
+ *
+ * Deliberately not matched by an `x_` prefix. A prefix rule would let a future
+ * `x_must_be_hex` be silently ignored, which is the same fail-open this reader was
+ * repaired to stop. Adding an annotation here is a decision someone has to make on
+ * purpose.
+ */
+const ANNOTATION_KEYWORDS = new Set(["x_runtime_invariants", "x_max_stream_bytes"]);
+
+/**
+ * The two `format` values these schemas actually use, both checked rather than treated
+ * as annotations.
+ *
+ * An unlisted format is refused by `check` below, so adding one to a schema without
+ * teaching this reader how to verify it fails loudly instead of passing silently.
+ */
+const FORMATS = new Map([
+  [
+    "uri",
+    (value) => {
+      try {
+        return Boolean(new URL(value));
+      } catch {
+        return false;
+      }
+    },
+  ],
+  [
+    "date-time",
+    (value) =>
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/u.test(value) &&
+      !Number.isNaN(Date.parse(value)),
+  ],
+]);
+
 export function decodeEnvelope(schema, envelope, registry = new Map()) {
   const { arm, problems } = selectArm(schema, envelope);
   if (!arm) {
@@ -138,9 +251,24 @@ export function decodeEnvelope(schema, envelope, registry = new Map()) {
     return matching[0];
   };
 
-  const decode = (rawNode, value, path) => {
+  // Every schema this reader was handed: the root plus each registered sub-schema. A
+  // `$ref` may name one of them by `$id`, and nothing outside this set is resolvable.
+  const knownDocs = [schema, ...registry.values()];
+
+  const decode = (rawNode, value, path, doc = schema, seen = new Set()) => {
     const where = path || "(root)";
-    const node = resolve(enter(rawNode, value, where), value, where);
+    // A `$ref` is followed before anything else, and against the document that contains
+    // it: a ref inside a registered sub-schema resolves within that sub-schema.
+    if (rawNode && typeof rawNode === "object" && rawNode.$ref !== undefined) {
+      const target = resolveLocalRef(rawNode.$ref, doc, where, problems, seen, knownDocs);
+      if (!target) {
+        return value;
+      }
+      return decode(target, value, path, doc, new Set([...seen, rawNode.$ref]));
+    }
+    const entered = enter(rawNode, value, where);
+    const nextDoc = entered === rawNode ? doc : entered;
+    const node = resolve(entered, value, where);
     if (!node) {
       return value;
     }
@@ -204,17 +332,23 @@ export function decodeEnvelope(schema, envelope, registry = new Map()) {
               problems.push(`${where}[${index}]: beyond the closed tuple, no schema describes it`);
               return item;
             }
-            return decode(node.items, item, `${where}[${index}]`);
+            return decode(node.items, item, `${where}[${index}]`, nextDoc, seen);
           }
-          return decode(prefix[index], item, `${where}[${index}]`);
+          return decode(prefix[index], item, `${where}[${index}]`, nextDoc, seen);
         });
       }
-      return value.map((item, index) => decode(node.items, item, `${where}[${index}]`));
+      return value.map((item, index) => decode(node.items, item, `${where}[${index}]`, nextDoc, seen));
     }
     if (value !== null && typeof value === "object") {
       const out = {};
       for (const [key, member] of Object.entries(value)) {
-        out[key] = decode(node.properties?.[key], member, path ? `${path}.${key}` : key);
+        out[key] = decode(
+          node.properties?.[key],
+          member,
+          path ? `${path}.${key}` : key,
+          nextDoc,
+          seen,
+        );
       }
       return out;
     }
@@ -224,17 +358,63 @@ export function decodeEnvelope(schema, envelope, registry = new Map()) {
   return { decoded: decode(arm, envelope, ""), problems };
 }
 
-export function validateEnvelope(schema, envelope) {
+export function validateEnvelope(schema, envelope, registry = new Map()) {
   const { arm, problems } = selectArm(schema, envelope);
   if (!arm) {
     return problems;
   }
-  check(arm, envelope, "", problems);
+  check(arm, envelope, "", problems, schema, new Set(), [schema, ...registry.values()]);
   return problems;
 }
 
-function check(node, value, path, problems) {
+function check(node, value, path, problems, doc, seen, docs = []) {
   const where = path || "(root)";
+
+  if (node === null || typeof node !== "object") {
+    problems.push(`${where}: no schema describes this position`);
+    return;
+  }
+
+  // Follow a local `$ref` before any other keyword, against its own document.
+  if (node.$ref !== undefined) {
+    const target = resolveLocalRef(node.$ref, doc, where, problems, seen, docs);
+    if (target) {
+      // A ref into a registered schema makes that schema the document for anything
+      // nested beneath it, so its own local pointers resolve where they were written.
+      const nextDoc = node.$ref.startsWith("#") ? doc : target;
+      check(target, value, path, problems, nextDoc, new Set([...seen, node.$ref]), docs);
+    }
+    return;
+  }
+
+  // Refuse what this reader cannot check, rather than reporting it clean.
+  for (const keyword of Object.keys(node)) {
+    if (!SUPPORTED_KEYWORDS.has(keyword) && !ANNOTATION_KEYWORDS.has(keyword)) {
+      problems.push(
+        `${where}: schema keyword ${JSON.stringify(keyword)} is not implemented by this ` +
+          "reader, so the position cannot be validated",
+      );
+      return;
+    }
+  }
+
+  // Every `allOf` arm applies, in addition to this node's own keywords. Skipping them,
+  // as this reader did, discarded whole constraint sets without a word.
+  for (const sub of node.allOf ?? []) {
+    check(sub, value, path, problems, doc, seen, docs);
+  }
+
+  // `if` selects between `then` and `else`. Its own failures are not problems: they are
+  // the question being asked. So it is evaluated against a scratch list that is thrown
+  // away, and only the selected branch reports.
+  if (node.if !== undefined) {
+    const scratch = [];
+    check(node.if, value, path, scratch, doc, seen, docs);
+    const branch = scratch.length === 0 ? node.then : node.else;
+    if (branch !== undefined) {
+      check(branch, value, path, problems, doc, seen, docs);
+    }
+  }
 
   if (node.const !== undefined && value !== node.const) {
     problems.push(`${where}: expected const ${JSON.stringify(node.const)}, got ${JSON.stringify(value)}`);
@@ -246,11 +426,15 @@ function check(node, value, path, problems) {
     return;
   }
 
-  if (node.type === "string") {
-    if (typeof value !== "string") {
-      problems.push(`${where}: expected string, got ${typeof value}`);
-      return;
-    }
+  if (node.type === "string" && typeof value !== "string") {
+    problems.push(`${where}: expected string, got ${typeof value}`);
+    return;
+  }
+
+  // String constraints apply to any string, not only where the same node also declares
+  // `type`. Gating them on `type` meant a composed arm carrying only `minLength` or only
+  // `pattern` asserted nothing at all.
+  if (typeof value === "string") {
     if (node.minLength !== undefined && value.length < node.minLength) {
       problems.push(`${where}: shorter than ${node.minLength}`);
     }
@@ -260,7 +444,23 @@ function check(node, value, path, problems) {
     if (node.pattern !== undefined && !new RegExp(node.pattern, "u").test(value)) {
       problems.push(`${where}: does not match the published pattern`);
     }
-    return;
+    if (node.format !== undefined) {
+      const verify = FORMATS.get(node.format);
+      if (!verify) {
+        problems.push(
+          `${where}: format ${JSON.stringify(node.format)} is not implemented by this ` +
+            "reader, so the position cannot be validated",
+        );
+      } else if (!verify(value)) {
+        problems.push(`${where}: is not a valid ${node.format}`);
+      }
+    }
+    // Only a node that declares `type: "string"` is finished here. Returning for every
+    // string value skipped the type checks below, so a node declaring `type: "boolean"`
+    // accepted a string.
+    if (node.type === "string") {
+      return;
+    }
   }
 
   if (node.type === "boolean" && typeof value !== "boolean") {
@@ -268,13 +468,53 @@ function check(node, value, path, problems) {
     return;
   }
 
-  if (node.type === "array") {
+  if (node.type === "array" || Array.isArray(node.prefixItems)) {
     if (!Array.isArray(value)) {
       problems.push(`${where}: expected array`);
       return;
     }
-    if (node.items) {
-      value.forEach((item, index) => check(node.items, item, `${where}[${index}]`, problems));
+    const prefix = Array.isArray(node.prefixItems) ? node.prefixItems : null;
+    if (node.minItems !== undefined && value.length < node.minItems) {
+      problems.push(`${where}: ${value.length} members, fewer than ${node.minItems}`);
+    }
+    if (node.maxItems !== undefined && value.length > node.maxItems) {
+      problems.push(`${where}: ${value.length} members, more than ${node.maxItems}`);
+    }
+    if (node.uniqueItems === true) {
+      const seenMembers = new Set(value.map((item) => JSON.stringify(item)));
+      if (seenMembers.size !== value.length) {
+        problems.push(`${where}: members must be unique`);
+      }
+    }
+    if (prefix) {
+      // Each declared position is checked against its own sub-schema. Reading only
+      // `items` left every tuple position unvalidated, which is how a tuple pinned to
+      // `const: "lu-legilux"` accepted ["not-a-publisher"].
+      if (value.length < prefix.length) {
+        problems.push(`${where}: ${value.length} members, but ${prefix.length} positions are declared`);
+      }
+      prefix.forEach((sub, index) => {
+        if (index < value.length) {
+          check(sub, value[index], `${where}[${index}]`, problems, doc, seen, docs);
+        }
+      });
+      if (node.items === false) {
+        if (value.length > prefix.length) {
+          problems.push(
+            `${where}: ${value.length} members, but the tuple closes after ${prefix.length}`,
+          );
+        }
+      } else if (node.items && node.items !== true) {
+        value.slice(prefix.length).forEach((item, offset) => {
+          check(node.items, item, `${where}[${prefix.length + offset}]`, problems, doc, seen, docs);
+        });
+      }
+      return;
+    }
+    if (node.items && node.items !== true) {
+      value.forEach((item, index) =>
+        check(node.items, item, `${where}[${index}]`, problems, doc, seen, docs),
+      );
     }
     return;
   }
@@ -283,6 +523,13 @@ function check(node, value, path, problems) {
     if (value === null || typeof value !== "object" || Array.isArray(value)) {
       problems.push(`${where}: expected object`);
       return;
+    }
+    const memberCount = Object.keys(value).length;
+    if (node.minProperties !== undefined && memberCount < node.minProperties) {
+      problems.push(`${where}: ${memberCount} members, fewer than ${node.minProperties}`);
+    }
+    if (node.maxProperties !== undefined && memberCount > node.maxProperties) {
+      problems.push(`${where}: ${memberCount} members, more than ${node.maxProperties}`);
     }
     for (const required of node.required ?? []) {
       if (!(required in value)) {
@@ -298,7 +545,7 @@ function check(node, value, path, problems) {
     }
     for (const [key, subSchema] of Object.entries(node.properties ?? {})) {
       if (key in value) {
-        check(subSchema, value[key], path ? `${path}.${key}` : key, problems);
+        check(subSchema, value[key], path ? `${path}.${key}` : key, problems, doc, seen, docs);
       }
     }
   }

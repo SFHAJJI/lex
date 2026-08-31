@@ -31,6 +31,19 @@ p {
   margin: 0;
 }
 
+/* Links were never styled, so they fell back to the user agent blue. That is 8.32:1 on
+   this light background but 1.93:1 on the dark one, a plain WCAG 1.4.3 failure that the
+   evidence run could not see because the contrast sweep measured the parent li and not
+   the anchor inside it. Both schemes now set the colour explicitly, and `a` is in the
+   measured set. */
+a {
+  color: #14556b;
+}
+
+a:visited {
+  color: #14556b;
+}
+
 h1 {
   font-family: Georgia, serif;
   font-size: clamp(3rem, 12vw, 7rem);
@@ -51,6 +64,11 @@ main > p:last-child {
 
   .eyebrow {
     color: #a5c9b0;
+  }
+
+  a,
+  a:visited {
+    color: #9ccfe0;
   }
 }
 
