@@ -165,12 +165,40 @@ public enum DateSemanticRole
     [JsonStringEnumMemberName("publication_date")]
     PublicationDate,
 
+    /// <summary>Signature of the act, which is distinct from its document date.</summary>
+    [JsonStringEnumMemberName("signature_date")]
+    SignatureDate,
+
+    /// <summary>
+    /// Entry into force. Distinct from <see cref="ApplicationDate"/>: EUR-Lex `fd_335` separates
+    /// EV from MA and the Work dossier renders them separately, so collapsing the two loses a
+    /// publisher fact the dossier is required to show.
+    /// </summary>
     [JsonStringEnumMemberName("entry_into_force")]
     EntryIntoForce,
+
+    /// <summary>Date of application, the MA half of the EV/MA pair.</summary>
+    [JsonStringEnumMemberName("application_date")]
+    ApplicationDate,
 
     [JsonStringEnumMemberName("end_of_validity")]
     EndOfValidity,
 
+    /// <summary>
+    /// A publisher deadline with no evidence tying it to transposition.
+    /// </summary>
+    /// <remarks>
+    /// The generic `resource_legal_date_deadline` is not necessarily a transposition deadline.
+    /// This is where such a date lands unless the promotion evidence below justifies the
+    /// stronger reading, so an ordinary deadline is never silently upgraded.
+    /// </remarks>
+    [JsonStringEnumMemberName("publisher_deadline")]
+    PublisherDeadline,
+
+    /// <summary>
+    /// A deadline shown to be a transposition deadline by directive-specific qualifier or NIM
+    /// evidence. Never assigned without that evidence.
+    /// </summary>
     [JsonStringEnumMemberName("transposition_deadline")]
     TranspositionDeadline,
 
@@ -183,6 +211,29 @@ public enum DateSemanticRole
     /// </summary>
     [JsonStringEnumMemberName("role_not_stated_by_publisher")]
     RoleNotStatedByPublisher,
+}
+
+/// <summary>
+/// What justifies reading a publisher deadline as a transposition deadline.
+/// </summary>
+/// <remarks>
+/// A deadline carries <see cref="DateSemanticRole.PublisherDeadline"/> unless one of these is
+/// present. Candidate 2 had no such rule, so every generic deadline either became a
+/// transposition deadline it might not be, or collapsed into "role not stated" and lost the fact.
+/// </remarks>
+public enum TranspositionEvidence
+{
+    /// <summary>No evidence. The date stays a publisher deadline.</summary>
+    [JsonStringEnumMemberName("none")]
+    None,
+
+    /// <summary>A directive-specific publisher qualifier naming transposition.</summary>
+    [JsonStringEnumMemberName("directive_qualifier")]
+    DirectiveQualifier,
+
+    /// <summary>A national implementing measure record tying the deadline to transposition.</summary>
+    [JsonStringEnumMemberName("nim_record")]
+    NimRecord,
 }
 
 /// <summary>
@@ -242,6 +293,9 @@ public enum VocabularyKind
     [JsonStringEnumMemberName("date_semantic_role")]
     DateSemanticRole,
 
+    [JsonStringEnumMemberName("transposition_evidence")]
+    TranspositionEvidence,
+
     [JsonStringEnumMemberName("date_precision")]
     DatePrecision,
 
@@ -269,6 +323,7 @@ public static class FactsVocabularies
             [typeof(EcliState)] = VocabularyKind.EcliState,
             [typeof(TargetBodyScope)] = VocabularyKind.TargetBodyScope,
             [typeof(DateSemanticRole)] = VocabularyKind.DateSemanticRole,
+            [typeof(TranspositionEvidence)] = VocabularyKind.TranspositionEvidence,
             [typeof(DatePrecision)] = VocabularyKind.DatePrecision,
             [typeof(DateOpenSentinel)] = VocabularyKind.DateOpenSentinel,
         });

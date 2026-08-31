@@ -34,6 +34,7 @@ public sealed record PublisherDateFact
         string? rawQualifier,
         string? publisherComment,
         DateSemanticRole semanticRole,
+        TranspositionEvidence transpositionEvidence,
         string parsedByAuthority,
         SourceObservationReference observation)
     {
@@ -43,6 +44,7 @@ public sealed record PublisherDateFact
         }
 
         FactsValidation.RequireDefined(semanticRole, nameof(semanticRole));
+        FactsValidation.RequireDefined(transpositionEvidence, nameof(transpositionEvidence));
 
         if (!FactsValidation.IsAbsoluteUri(sourcePredicateUri))
         {
@@ -51,13 +53,37 @@ public sealed record PublisherDateFact
                 nameof(sourcePredicateUri));
         }
 
-        // The parsing authority is an identity that has to be resolvable to a reader who wants
-        // to know who made the reading, so it is a URI rather than a free label.
-        if (!FactsValidation.IsAbsoluteUri(parsedByAuthority))
+        // The parsing authority must be resolvable by a reader who wants to know who made the
+        // reading, so the scheme is frozen to https rather than left to UriKind.Absolute, which
+        // also admits mailto:, urn: and file: and would let an authority be unresolvable, local
+        // to one machine, or not an address at all.
+        if (!FactsValidation.IsHttpsUri(parsedByAuthority))
         {
             throw new ArgumentException(
-                "A date fact must name the parsing authority as an absolute URI.",
+                "A date fact must name the parsing authority as an absolute https URI.",
                 nameof(parsedByAuthority));
+        }
+
+        // A generic publisher deadline is not a transposition deadline. It becomes one only on
+        // directive-specific qualifier or NIM evidence, and that evidence travels with the fact so
+        // a reader can see why the stronger reading was taken.
+        if (semanticRole == DateSemanticRole.TranspositionDeadline &&
+            transpositionEvidence == TranspositionEvidence.None)
+        {
+            throw new ArgumentException(
+                "A transposition deadline requires directive-qualifier or NIM evidence.",
+                nameof(transpositionEvidence));
+        }
+
+        // The converse: evidence that justifies transposition cannot sit on a date that is not a
+        // deadline at all, which would be evidence for a claim nobody made.
+        if (transpositionEvidence != TranspositionEvidence.None &&
+            semanticRole is not (DateSemanticRole.TranspositionDeadline or
+                DateSemanticRole.PublisherDeadline))
+        {
+            throw new ArgumentException(
+                $"Transposition evidence cannot accompany the {semanticRole} role.",
+                nameof(transpositionEvidence));
         }
 
         ArgumentNullException.ThrowIfNull(date);
@@ -82,6 +108,7 @@ public sealed record PublisherDateFact
         RawQualifier = rawQualifier;
         PublisherComment = publisherComment;
         SemanticRole = semanticRole;
+        TranspositionEvidence = transpositionEvidence;
         ParsedByAuthority = parsedByAuthority;
         Observation = observation ?? throw new ArgumentNullException(nameof(observation));
     }
@@ -103,6 +130,12 @@ public sealed record PublisherDateFact
     public string? PublisherComment { get; }
 
     public DateSemanticRole SemanticRole { get; }
+
+    /// <summary>
+    /// What justified reading a deadline as a transposition deadline, or
+    /// <see cref="TranspositionEvidence.None"/>.
+    /// </summary>
+    public TranspositionEvidence TranspositionEvidence { get; }
 
     /// <summary>Who produced the reading in <see cref="SemanticRole"/>.</summary>
     public string ParsedByAuthority { get; }

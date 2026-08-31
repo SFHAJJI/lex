@@ -20,9 +20,18 @@ internal static class FactsFixtures
     internal const string ConsolidatedByPredicate =
         "http://data.legilux.public.lu/resource/ontology/jolux#consolidatedBy";
 
-    internal const string InverseOfStatement = "http://www.w3.org/2002/07/owl#inverseOf";
+    internal const string JoluxOntology = "http://data.legilux.public.lu/resource/ontology/jolux";
+    internal const string OntologyVersion = "2026-06-01";
 
     internal const string Authority = "https://github.com/SFHAJJI/lex/authority/lu-date-reader/1";
+
+    /// <summary>The observed axiom that authorizes the consolidates/consolidatedBy inversion.</summary>
+    internal static ObservedInverseAxiom InverseAxiom() => new(
+        JoluxOntology,
+        OntologyVersion,
+        ConsolidatesPredicate,
+        ConsolidatedByPredicate,
+        Observation());
 
     internal static TransportByteReference TransportBytes() => new(TransportDigest, 48_112);
 
@@ -102,7 +111,7 @@ internal static class FactsFixtures
             forward.Source,
             ConsolidatedByPredicate,
             ConsolidatesPredicate,
-            InverseOfStatement,
+            InverseAxiom(),
             forward);
     }
 
@@ -173,7 +182,8 @@ internal static class FactsFixtures
         PublisherDate? date = null,
         DateSemanticRole role = DateSemanticRole.RoleNotStatedByPublisher,
         string? rawQualifier = null,
-        string? comment = null) => new(
+        string? comment = null,
+        TranspositionEvidence evidence = TranspositionEvidence.None) => new(
         FactsSchemaIds.PublisherDateFact,
         LuWork(),
         date ?? YearOnlyDate(),
@@ -182,15 +192,16 @@ internal static class FactsFixtures
         rawQualifier,
         comment,
         role,
+        evidence,
         Authority,
         Observation());
 
     internal static VocabularyDrift Drift() =>
         ClosedVocabulary.TryRead<DateSemanticRole>(
-            "signature_date",
+            "ratification_date",
             Observation(),
             out _,
             out var drift)
-            ? throw new InvalidOperationException("signature_date must be drift.")
+            ? throw new InvalidOperationException("ratification_date must be drift.")
             : drift!;
 }

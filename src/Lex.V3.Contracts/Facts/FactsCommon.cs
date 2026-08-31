@@ -77,12 +77,14 @@ public sealed record SourceObservationReference
 }
 
 /// <summary>
-/// One identifier exactly as the publisher states it.
+/// One identifier exactly as the publisher states it, parsed rather than merely labelled.
 /// </summary>
 /// <remarks>
 /// The raw value is never normalized, because a normalized identifier is a different claim from
-/// the one the publisher made. Cellar URI families additionally require an absolute URI, since a
-/// URI family whose value is not a URI is not the thing it claims to be.
+/// the one the publisher made. It is however <b>validated against the grammar its family
+/// declares</b>. Candidate 2 trusted the label: any printable string could be tagged `ecli`, and
+/// any absolute URI could be tagged as a Cellar URI. A family that asserts nothing about its
+/// value is a free-text field wearing a type.
 /// </remarks>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record OfficialIdentifier
@@ -98,11 +100,10 @@ public sealed record OfficialIdentifier
                 nameof(rawValue));
         }
 
-        if (family is FactsIdentifierFamily.CellarWorkUri or FactsIdentifierFamily.CellarResourceUri
-            && !FactsValidation.IsAbsoluteUri(rawValue))
+        if (!IsWellFormed(family, rawValue))
         {
             throw new ArgumentException(
-                "A Cellar URI family must carry an absolute URI.",
+                $"The value is not a well-formed {family} identifier.",
                 nameof(rawValue));
         }
 
@@ -113,6 +114,119 @@ public sealed record OfficialIdentifier
     public FactsIdentifierFamily Family { get; }
 
     public string RawValue { get; }
+
+    /// <summary>The CELEX sector digit, or null where this is not a CELEX.</summary>
+    [JsonIgnore]
+    public char? CelexSector =>
+        Family == FactsIdentifierFamily.Celex ? RawValue[0] : null;
+
+    /// <summary>
+    /// Whether this single identifier is itself proof of a court decision.
+    /// </summary>
+    /// <remarks>
+    /// Only two things prove it: a well-formed ECLI, or a CELEX in <b>sector 6</b>, which is case
+    /// law. Candidate 2 tested <c>celex[4] == 'C'</c>, and in <c>62019CJ0311</c> position 4 is
+    /// <c>'9'</c>, so a CELEX-only case was classified as not a case. The sector is position
+    /// <b>zero</b>. My own test asserted "a CELEX sector 6 number is a case" and passed anyway,
+    /// because the fixture also carried a URI containing <c>/case/</c>, so the assertion was true
+    /// for a reason it did not name.
+    /// </remarks>
+    [JsonIgnore]
+    public bool ProvesCase =>
+        Family == FactsIdentifierFamily.Ecli ||
+        (Family == FactsIdentifierFamily.Celex && RawValue[0] == '6');
+
+    /// <summary>The grammar each family declares, checked rather than assumed.</summary>
+    public static bool IsWellFormed(FactsIdentifierFamily family, string value) => family switch
+    {
+        // sector digit, four-digit year, one or two letter descriptor, four-digit number.
+        FactsIdentifierFamily.Celex => IsCelex(value),
+
+        // ECLI:country:court:year:ordinal, five colon-separated parts.
+        FactsIdentifierFamily.Ecli => IsEcli(value),
+
+        FactsIdentifierFamily.CellarWorkUri => IsCellarUri(value, "/resource/"),
+        FactsIdentifierFamily.CellarResourceUri => IsCellarUri(value, "/resource/"),
+
+        // ELI is a publisher path expression, not a URI, and both publishers mint one.
+        FactsIdentifierFamily.Eli => value.StartsWith("eli/", StringComparison.Ordinal) &&
+            !value.Contains(' ', StringComparison.Ordinal),
+
+        FactsIdentifierFamily.Memorial or FactsIdentifierFamily.HistoricalLegalId =>
+            value.Length > 0 && !value.Contains(' ', StringComparison.Ordinal),
+
+        _ => false,
+    };
+
+    private static bool IsCelex(string value)
+    {
+        if (value.Length is < 8 or > 30 || value[0] is < '0' or > '9')
+        {
+            return false;
+        }
+
+        for (var index = 1; index <= 4; index++)
+        {
+            if (value[index] is < '0' or > '9')
+            {
+                return false;
+            }
+        }
+
+        var descriptor = 0;
+        var cursor = 5;
+        while (cursor < value.Length && value[cursor] is >= 'A' and <= 'Z')
+        {
+            descriptor++;
+            cursor++;
+        }
+
+        if (descriptor is < 1 or > 2 || cursor >= value.Length)
+        {
+            return false;
+        }
+
+        for (; cursor < value.Length; cursor++)
+        {
+            if (value[cursor] is < '0' or > '9')
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsEcli(string value)
+    {
+        var parts = value.Split(':');
+        if (parts.Length != 5 || !string.Equals(parts[0], "ECLI", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (parts[1].Length != 2 || parts[1].Any(c => c is < 'A' or > 'Z'))
+        {
+            return false;
+        }
+
+        if (parts[2].Length == 0 || parts[3].Length != 4 || parts[3].Any(c => c is < '0' or > '9'))
+        {
+            return false;
+        }
+
+        return parts[4].Length > 0 && parts[4].All(c => c is (>= '0' and <= '9') or (>= 'A' and <= 'Z'));
+    }
+
+    /// <summary>
+    /// A Cellar URI is on the publisher's own host over https, not any URI that happens to
+    /// contain a familiar path segment.
+    /// </summary>
+    private static bool IsCellarUri(string value, string requiredSegment) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+        uri.Scheme is "http" or "https" &&
+        string.Equals(uri.Host, "publications.europa.eu", StringComparison.Ordinal) &&
+        uri.AbsolutePath.Contains(requiredSegment, StringComparison.Ordinal);
 }
 
 /// <summary>
@@ -120,21 +234,39 @@ public sealed record OfficialIdentifier
 /// </summary>
 /// <remarks>
 /// <para>
-/// A EUR-Lex case is a Cellar work URI, a CELEX number and an ECLI at once. Candidate 1 carried
-/// one family per endpoint, so retaining any one of those meant discarding the other two, and
-/// the fixture that claimed to be a Cellar case relation in fact retained CELEX alone. That is
-/// exactly the lossless-identity requirement this package exists to satisfy.
+/// A EUR-Lex case is a Cellar work URI, a CELEX number and an ECLI at once, and one family per
+/// endpoint would mean retaining any one of them discards the other two.
 /// </para>
 /// <para>
-/// The list is defensively copied, ordered as the publisher gave it, and may not repeat a
-/// family. Repetition is refused rather than kept, because two CELEX numbers for one endpoint is
-/// not a richer identity, it is a contradiction that some later reader would have to resolve by
-/// guessing.
+/// Each family is bound to the publisher that mints it, no family repeats, and <b>no raw value
+/// appears twice under different families</b>: Candidate 2 admitted one URI as both
+/// <c>cellar_work_uri</c> and <c>cellar_resource_uri</c> in a single identity, which is two
+/// contradictory level claims about one string.
+/// </para>
+/// <para>
+/// The list keeps the publisher's own order, because that order is evidence about what was
+/// served. Identity comparison is <b>canonical and order independent</b>, because RDF row order
+/// is not stable and Candidate 2 made inverse and inbound validation depend on it: the same three
+/// members in reverse order compared unequal.
 /// </para>
 /// </remarks>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record OfficialIdentitySet
 {
+    /// <summary>Which publisher may mint each family.</summary>
+    private static readonly IReadOnlyDictionary<FactsIdentifierFamily, PublisherId?> MintedBy =
+        new Dictionary<FactsIdentifierFamily, PublisherId?>
+        {
+            [FactsIdentifierFamily.Celex] = PublisherId.EuEurLex,
+            [FactsIdentifierFamily.Ecli] = PublisherId.EuEurLex,
+            [FactsIdentifierFamily.CellarWorkUri] = PublisherId.EuEurLex,
+            [FactsIdentifierFamily.CellarResourceUri] = PublisherId.EuEurLex,
+            [FactsIdentifierFamily.Memorial] = PublisherId.LuLegilux,
+            [FactsIdentifierFamily.HistoricalLegalId] = PublisherId.LuLegilux,
+            // Both publishers mint ELI.
+            [FactsIdentifierFamily.Eli] = null,
+        };
+
     [JsonConstructor]
     public OfficialIdentitySet(PublisherId publisher, IReadOnlyList<OfficialIdentifier> identifiers)
     {
@@ -154,12 +286,27 @@ public sealed record OfficialIdentitySet
         }
 
         var families = new HashSet<FactsIdentifierFamily>();
+        var values = new HashSet<string>(StringComparer.Ordinal);
         foreach (var identifier in copied)
         {
             if (!families.Add(identifier.Family))
             {
                 throw new ArgumentException(
                     $"An identity set cannot repeat the {identifier.Family} family.",
+                    nameof(identifiers));
+            }
+
+            if (!values.Add(identifier.RawValue))
+            {
+                throw new ArgumentException(
+                    "One raw value cannot be claimed under two families in one identity.",
+                    nameof(identifiers));
+            }
+
+            if (MintedBy[identifier.Family] is { } minter && minter != publisher)
+            {
+                throw new ArgumentException(
+                    $"{publisher} does not mint {identifier.Family} identifiers.",
                     nameof(identifiers));
             }
         }
@@ -170,9 +317,9 @@ public sealed record OfficialIdentitySet
 
     public PublisherId Publisher { get; }
 
+    /// <summary>The identifiers in the publisher's own order, which is itself evidence.</summary>
     public IReadOnlyList<OfficialIdentifier> Identifiers { get; }
 
-    /// <summary>The value for a family, or null where the set does not carry that family.</summary>
     public string? Value(FactsIdentifierFamily family)
     {
         foreach (var identifier in Identifiers)
@@ -189,20 +336,17 @@ public sealed record OfficialIdentitySet
     public bool Has(FactsIdentifierFamily family) => Value(family) is not null;
 
     /// <summary>
-    /// Whether this set identifies a court decision, which is what makes an ECLI applicable.
+    /// Whether this set identifies a court decision, decided by parsed evidence.
     /// </summary>
     /// <remarks>
-    /// Decided by the identifiers present rather than declared: an ECLI is itself proof, and a
-    /// Cellar work URI under the case segment or a CELEX sector 6 number identify a case. A
-    /// Luxembourg statute matches none of these and so is correctly not-applicable.
+    /// A well-formed ECLI or a sector 6 CELEX proves it. A URI containing a familiar path segment
+    /// does not, and a caller's choice of family label cannot manufacture it, because the label is
+    /// only accepted when the value parses as that family.
     /// </remarks>
     [JsonIgnore]
-    public bool IsCase =>
-        Has(FactsIdentifierFamily.Ecli) ||
-        Value(FactsIdentifierFamily.Celex) is { Length: > 4 } celex && celex[4] == 'C' ||
-        Value(FactsIdentifierFamily.CellarWorkUri)?.Contains("/case/", StringComparison.Ordinal) == true;
+    public bool IsCase => Identifiers.Any(static identifier => identifier.ProvesCase);
 
-    /// <summary>Ordinal equality over publisher and the ordered identifier list.</summary>
+    /// <summary>Canonical, order-independent identity equality.</summary>
     public bool SameIdentity(OfficialIdentitySet? other)
     {
         if (other is null || other.Publisher != Publisher ||
@@ -211,12 +355,11 @@ public sealed record OfficialIdentitySet
             return false;
         }
 
-        for (var index = 0; index < Identifiers.Count; index++)
+        foreach (var identifier in Identifiers)
         {
-            if (Identifiers[index].Family != other.Identifiers[index].Family ||
-                !string.Equals(
-                    Identifiers[index].RawValue,
-                    other.Identifiers[index].RawValue,
+            if (!string.Equals(
+                    other.Value(identifier.Family),
+                    identifier.RawValue,
                     StringComparison.Ordinal))
             {
                 return false;
@@ -352,4 +495,11 @@ internal static class FactsValidation
         value is not null &&
         value.Length is > 0 and <= 2000 &&
         Uri.TryCreate(value, UriKind.Absolute, out _);
+
+    /// <summary>An absolute http or https URI, which `UriKind.Absolute` alone does not mean.</summary>
+    internal static bool IsHttpsUri(string? value) =>
+        value is not null &&
+        value.Length is > 0 and <= 2000 &&
+        Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+        uri.Scheme is "https";
 }

@@ -87,14 +87,24 @@ public sealed record PublisherDate
                 nameof(rawLexicalValue));
         }
 
-        // Only the one documented sentinel value may claim the open-ended state. Without this a
-        // publisher date of 1970-01-01 could be labelled open-ended and read as "still in force".
-        if (openSentinel == DateOpenSentinel.OpenEnded &&
-            !(string.Equals(rawLexicalValue, OpenEndedLexicalValue, StringComparison.Ordinal) &&
-                string.Equals(datatypeUri, Date, StringComparison.Ordinal)))
+        // The sentinel binds in BOTH directions. Candidate 2 enforced only one: an arbitrary date
+        // could not claim the open end, but the open end could be declared an ordinary date, which
+        // silently turns "validity does not end" into "validity ended in the year 9999" and is the
+        // more damaging of the two readings.
+        var isSentinelValue =
+            string.Equals(DatePart(rawLexicalValue), OpenEndedLexicalValue, StringComparison.Ordinal) &&
+            string.Equals(datatypeUri, Date, StringComparison.Ordinal);
+        if (openSentinel == DateOpenSentinel.OpenEnded && !isSentinelValue)
         {
             throw new ArgumentException(
                 $"Only {OpenEndedLexicalValue} at {Date} is the open-end sentinel.",
+                nameof(openSentinel));
+        }
+
+        if (isSentinelValue && openSentinel != DateOpenSentinel.OpenEnded)
+        {
+            throw new ArgumentException(
+                $"{OpenEndedLexicalValue} at {Date} is the open-end sentinel and cannot be {openSentinel}.",
                 nameof(openSentinel));
         }
 
@@ -120,11 +130,85 @@ public sealed record PublisherDate
     public DateOpenSentinel OpenSentinel { get; }
 
     /// <summary>
+    /// The date part of a lexical value, with any XSD timezone suffix removed.
+    /// </summary>
+    /// <remarks>
+    /// `xsd:date`, `xsd:gYear` and `xsd:gYearMonth` all admit an optional trailing timezone: `Z`
+    /// or a signed `hh:mm` offset. Candidate 2 required exactly ten characters for a date, so it
+    /// refused `2020-02-29Z`, a value inside the lexical space of the very datatype it claimed to
+    /// carry. Refusing a publisher value the datatype admits is a loss dressed as strictness.
+    /// </remarks>
+    public static string DatePart(string value)
+    {
+        if (value is null or { Length: 0 })
+        {
+            return value ?? "";
+        }
+
+        if (value[^1] == 'Z')
+        {
+            return value[..^1];
+        }
+
+        // A signed offset is exactly six trailing characters, +hh:mm or -hh:mm.
+        if (value.Length >= 7 && value[^6] is '+' or '-' && value[^3] == ':')
+        {
+            return value[..^6];
+        }
+
+        return value;
+    }
+
+    /// <summary>Whether a trailing timezone, if present, is well formed.</summary>
+    private static bool HasValidTimezone(string value)
+    {
+        var date = DatePart(value);
+        if (date.Length == value.Length)
+        {
+            return true;
+        }
+
+        var zone = value[date.Length..];
+        if (zone == "Z")
+        {
+            return true;
+        }
+
+        if (zone.Length != 6 || zone[0] is not ('+' or '-') || zone[3] != ':')
+        {
+            return false;
+        }
+
+        for (var index = 1; index < 6; index++)
+        {
+            if (index == 3)
+            {
+                continue;
+            }
+
+            if (zone[index] is < '0' or > '9')
+            {
+                return false;
+            }
+        }
+
+        var hours = int.Parse(zone.Substring(1, 2));
+        var minutes = int.Parse(zone.Substring(4, 2));
+        return hours <= 14 && minutes <= 59 && (hours < 14 || minutes == 0);
+    }
+
+    /// <summary>
     /// Whether a lexical value is a real calendar date at exactly the given precision.
     /// </summary>
-    public static bool IsValidLexicalValue(string value, DatePrecision precision)
+    public static bool IsValidLexicalValue(string rawValue, DatePrecision precision)
     {
-        if (value is null)
+        if (rawValue is null || !HasValidTimezone(rawValue))
+        {
+            return false;
+        }
+
+        var value = DatePart(rawValue);
+        if (value.Length == 0)
         {
             return false;
         }

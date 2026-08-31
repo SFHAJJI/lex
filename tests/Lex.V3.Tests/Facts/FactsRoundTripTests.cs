@@ -89,7 +89,10 @@ public sealed class FactsRoundTripTests
         var restored = ContractJson.Deserialize<DerivedInverseRelation>(
             ContractJson.Serialize(original));
 
-        Assert.AreEqual(FactsFixtures.InverseOfStatement, restored.AuthorizingOntologyStatementUri);
+        Assert.AreEqual(FactsFixtures.JoluxOntology, restored.AuthorizingAxiom.OntologyUri);
+        Assert.AreEqual(FactsFixtures.OntologyVersion, restored.AuthorizingAxiom.OntologyVersion);
+        Assert.IsTrue(restored.AuthorizingAxiom.Authorizes(
+            restored.InverseOfPredicateUri, restored.PredicateUri));
         Assert.AreEqual(FactsFixtures.ConsolidatesPredicate, restored.InverseOfPredicateUri);
         Assert.AreEqual(FactsFixtures.ConsolidatedByPredicate, restored.PredicateUri);
         Assert.IsTrue(restored.Source.SameIdentity(restored.DerivedFrom.Target));
@@ -201,7 +204,7 @@ public sealed class FactsRoundTripTests
             ContractJson.Serialize(FactsFixtures.Drift()));
 
         Assert.AreEqual(VocabularyKind.DateSemanticRole, restored.Vocabulary);
-        Assert.AreEqual("signature_date", restored.ObservedTerm);
+        Assert.AreEqual("ratification_date", restored.ObservedTerm);
         CollectionAssert.AreEqual(
             ClosedVocabulary.WireNames<DateSemanticRole>(),
             restored.AdmittedTerms.ToArray());

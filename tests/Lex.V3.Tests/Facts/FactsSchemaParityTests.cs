@@ -45,6 +45,25 @@ public sealed class FactsSchemaParityTests
             root => root["schema"] = "lex-v3-publisher-relation/2",
             SchemaCanExpress: true),
         new Case(
+            "nested contract version constant",
+            FactsSchemaIds.RelationFact,
+            () => ContractJson.Serialize(FactsFixtures.AssertedFact()),
+            root => root["publisher_asserted"]!["schema"] = "lex-v3-publisher-relation/2",
+            SchemaCanExpress: true),
+        new Case(
+            "nested date datatype",
+            FactsSchemaIds.PublisherDateFact,
+            () => ContractJson.Serialize(FactsFixtures.DateFact()),
+            root => root["date"]!["datatype_uri"] = "http://www.w3.org/2001/XMLSchema#dateTime",
+            SchemaCanExpress: true),
+        new Case(
+            "nested transport digest grammar",
+            FactsSchemaIds.RelationFact,
+            () => ContractJson.Serialize(FactsFixtures.AssertedFact()),
+            root => root["publisher_asserted"]!["observation"]!["transport_bytes"]!["content_sha256"]
+                = "nothex",
+            SchemaCanExpress: true),
+        new Case(
             "transport digest grammar",
             FactsSchemaIds.PublisherRelation,
             () => ContractJson.Serialize(FactsFixtures.PublisherRelation()),
@@ -131,13 +150,13 @@ public sealed class FactsSchemaParityTests
             FactsSchemaIds.RelationFact,
             () => ContractJson.Serialize(FactsFixtures.AssertedFact()),
             root => root["kind"] = "local_inbound_view",
-            SchemaCanExpress: false),
+            SchemaCanExpress: true),
         new Case(
             "open sentinel is only the documented lexical value",
             FactsSchemaIds.PublisherDate,
             () => ContractJson.Serialize(FactsFixtures.OpenEndedDate()),
             root => root["raw_lexical_value"] = "1970-01-01",
-            SchemaCanExpress: false),
+            SchemaCanExpress: true),
         new Case(
             "lexical value is a real calendar date",
             FactsSchemaIds.PublisherDate,
@@ -153,13 +172,13 @@ public sealed class FactsSchemaParityTests
                 root["datatype_uri"] = PublisherDate.Date;
                 root["raw_lexical_value"] = "2019";
             },
-            SchemaCanExpress: false),
+            SchemaCanExpress: true),
         new Case(
             "drift admitted terms are exactly the named vocabulary",
             FactsSchemaIds.VocabularyDrift,
             () => ContractJson.Serialize(FactsFixtures.Drift()),
             root => root["vocabulary"] = "date_precision",
-            SchemaCanExpress: false),
+            SchemaCanExpress: true),
     ];
 
     [TestMethod]

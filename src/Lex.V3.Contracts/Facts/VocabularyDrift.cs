@@ -142,6 +142,7 @@ public static class ClosedVocabulary
         VocabularyKind.EcliState => WireNames<EcliState>(),
         VocabularyKind.TargetBodyScope => WireNames<TargetBodyScope>(),
         VocabularyKind.DateSemanticRole => WireNames<DateSemanticRole>(),
+        VocabularyKind.TranspositionEvidence => WireNames<TranspositionEvidence>(),
         VocabularyKind.DatePrecision => WireNames<DatePrecision>(),
         VocabularyKind.DateOpenSentinel => WireNames<DateOpenSentinel>(),
         _ => throw new ArgumentException("Unknown vocabulary kind.", nameof(kind)),

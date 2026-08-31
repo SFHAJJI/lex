@@ -40,7 +40,8 @@
             ],
             "additionalProperties": false
           },
-          "minItems": 1
+          "minItems": 1,
+          "uniqueItems": true
         }
       },
       "required": [
@@ -60,7 +61,8 @@
         },
         "identifiers": {
           "$ref": "#/properties/source/properties/identifiers",
-          "minItems": 1
+          "minItems": 1,
+          "uniqueItems": true
         }
       },
       "required": [
@@ -82,7 +84,8 @@
         },
         "observed_at": {
           "type": "string",
-          "format": "date-time"
+          "format": "date-time",
+          "pattern": "(Z|\\\u002B00:00)$"
         },
         "transport_bytes": {
           "type": "object",

@@ -40,7 +40,8 @@
             ],
             "additionalProperties": false
           },
-          "minItems": 1
+          "minItems": 1,
+          "uniqueItems": true
         }
       },
       "required": [
@@ -60,7 +61,8 @@
         },
         "identifiers": {
           "$ref": "#/properties/source/properties/identifiers",
-          "minItems": 1
+          "minItems": 1,
+          "uniqueItems": true
         }
       },
       "required": [
@@ -79,16 +81,80 @@
       "format": "uri",
       "minLength": 1
     },
-    "authorizing_ontology_statement_uri": {
-      "type": "string",
-      "format": "uri",
-      "minLength": 1
+    "authorizing_axiom": {
+      "type": "object",
+      "properties": {
+        "ontology_uri": {
+          "type": "string",
+          "format": "uri",
+          "minLength": 1
+        },
+        "ontology_version": {
+          "type": "string"
+        },
+        "subject_predicate_uri": {
+          "type": "string",
+          "format": "uri",
+          "minLength": 1
+        },
+        "object_predicate_uri": {
+          "type": "string",
+          "format": "uri",
+          "minLength": 1
+        },
+        "observation": {
+          "type": "object",
+          "properties": {
+            "observation_id": {
+              "type": "string"
+            },
+            "observed_at": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "(Z|\\\u002B00:00)$"
+            },
+            "transport_bytes": {
+              "type": "object",
+              "properties": {
+                "content_sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "byte_length": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "content_sha256",
+                "byte_length"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "observation_id",
+            "observed_at",
+            "transport_bytes"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "ontology_uri",
+        "ontology_version",
+        "subject_predicate_uri",
+        "object_predicate_uri",
+        "observation"
+      ],
+      "additionalProperties": false
     },
     "derived_from": {
       "type": "object",
       "properties": {
         "schema": {
-          "type": "string"
+          "type": "string",
+          "const": "lex-v3-publisher-relation/1"
         },
         "source": {
           "type": "object",
@@ -101,7 +167,8 @@
             },
             "identifiers": {
               "$ref": "#/properties/source/properties/identifiers",
-              "minItems": 1
+              "minItems": 1,
+              "uniqueItems": true
             }
           },
           "required": [
@@ -121,7 +188,8 @@
             },
             "identifiers": {
               "$ref": "#/properties/source/properties/identifiers",
-              "minItems": 1
+              "minItems": 1,
+              "uniqueItems": true
             }
           },
           "required": [
@@ -143,25 +211,11 @@
             },
             "observed_at": {
               "type": "string",
-              "format": "date-time"
+              "format": "date-time",
+              "pattern": "(Z|\\\u002B00:00)$"
             },
             "transport_bytes": {
-              "type": "object",
-              "properties": {
-                "content_sha256": {
-                  "type": "string",
-                  "pattern": "^[0-9a-f]{64}$"
-                },
-                "byte_length": {
-                  "type": "integer",
-                  "minimum": 0
-                }
-              },
-              "required": [
-                "content_sha256",
-                "byte_length"
-              ],
-              "additionalProperties": false
+              "$ref": "#/properties/authorizing_axiom/properties/observation/properties/transport_bytes"
             }
           },
           "required": [
@@ -226,7 +280,7 @@
     "target",
     "predicate_uri",
     "inverse_of_predicate_uri",
-    "authorizing_ontology_statement_uri",
+    "authorizing_axiom",
     "derived_from"
   ],
   "additionalProperties": false,

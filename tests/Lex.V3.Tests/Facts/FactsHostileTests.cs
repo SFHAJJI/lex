@@ -79,7 +79,7 @@ public sealed class FactsHostileTests
             forward.Source,
             FactsFixtures.ConsolidatedByPredicate,
             FactsFixtures.ConsolidatesPredicate,
-            FactsFixtures.InverseOfStatement,
+            FactsFixtures.InverseAxiom(),
             forward));
     }
 
@@ -94,7 +94,7 @@ public sealed class FactsHostileTests
             FactsFixtures.EuCaseWithEcli(),
             FactsFixtures.ConsolidatedByPredicate,
             FactsFixtures.ConsolidatesPredicate,
-            FactsFixtures.InverseOfStatement,
+            FactsFixtures.InverseAxiom(),
             forward));
     }
 
@@ -109,12 +109,12 @@ public sealed class FactsHostileTests
             forward.Source,
             FactsFixtures.ConsolidatedByPredicate,
             "http://example.invalid/unrelated",
-            FactsFixtures.InverseOfStatement,
+            FactsFixtures.InverseAxiom(),
             forward));
     }
 
     [TestMethod]
-    public void AnInverseWithoutAnAuthorizingOntologyStatementCannotBeBuilt()
+    public void AnInverseAuthorizedByAnAxiomForAnotherPredicatePairIsRefused()
     {
         var forward = FactsFixtures.PublisherRelation();
 
@@ -124,7 +124,12 @@ public sealed class FactsHostileTests
             forward.Source,
             FactsFixtures.ConsolidatedByPredicate,
             FactsFixtures.ConsolidatesPredicate,
-            "not-a-uri",
+            new ObservedInverseAxiom(
+                FactsFixtures.JoluxOntology,
+                FactsFixtures.OntologyVersion,
+                "http://example.invalid/unrelated-forward",
+                "http://example.invalid/unrelated-inverse",
+                FactsFixtures.Observation()),
             forward));
     }
 
@@ -346,6 +351,7 @@ public sealed class FactsHostileTests
             null,
             null,
             DateSemanticRole.RoleNotStatedByPublisher,
+            TranspositionEvidence.None,
             "lex-lu-date-reader/1",
             FactsFixtures.Observation()));
     }
@@ -378,7 +384,7 @@ public sealed class FactsHostileTests
     public void ADriftReportNamesTheVocabularyItActuallyConsulted()
     {
         var read = ClosedVocabulary.TryRead<DateSemanticRole>(
-            "signature_date",
+            "ratification_date",
             FactsFixtures.Observation(),
             out var value,
             out var drift);
@@ -398,7 +404,7 @@ public sealed class FactsHostileTests
         Assert.ThrowsExactly<ArgumentException>(() => new VocabularyDrift(
             FactsSchemaIds.VocabularyDrift,
             VocabularyKind.RelationAssertionKind,
-            "signature_date",
+            "ratification_date",
             ClosedVocabulary.WireNames<DateSemanticRole>(),
             FactsFixtures.Observation()));
     }
@@ -712,6 +718,218 @@ public sealed class FactsHostileTests
             var restored = ContractJson.Deserialize<RelationFact>(ContractJson.Serialize(fact));
             Assert.AreEqual(scope, restored.TargetBodyScope);
         }
+    }
+
+    // ---- round two: the six probes that got through ------------------------------------------
+
+    /// <summary>
+    /// MUTATION RECEIPT: a CELEX-only case. Candidate 2 tested position 4 for the letter C; in
+    /// 62019CJ0311 position 4 is the digit 9, so this returned false. My own test asserted "a
+    /// CELEX sector 6 number is a case" and passed anyway, because the fixture also carried a URI
+    /// containing /case/. The assertion was true for a reason it did not name.
+    /// </summary>
+    [TestMethod]
+    public void ACelexOnlyCaseIsRecognisedFromItsSectorAlone()
+    {
+        var celexOnly = new OfficialIdentitySet(
+            PublisherId.EuEurLex,
+            [new OfficialIdentifier(FactsIdentifierFamily.Celex, "62020CJ1042")]);
+
+        Assert.IsTrue(celexOnly.IsCase, "sector 6 is case law and sits at position zero");
+
+        var regulation = new OfficialIdentitySet(
+            PublisherId.EuEurLex,
+            [new OfficialIdentifier(FactsIdentifierFamily.Celex, "32016R0679")]);
+        Assert.IsFalse(regulation.IsCase, "sector 3 is secondary legislation");
+    }
+
+    /// <summary>
+    /// MUTATION RECEIPT: self-authenticating case authority. A URI on any host containing a
+    /// familiar path segment made an object a case, and any printable string could be tagged ECLI.
+    /// </summary>
+    [TestMethod]
+    public void CaseAuthorityCannotBeManufacturedByAUriPathOrAnEnumTag()
+    {
+        Assert.ThrowsExactly<ArgumentException>(
+            () => new OfficialIdentifier(
+                FactsIdentifierFamily.CellarWorkUri,
+                "https://example.invalid/resource/case/fake"),
+            "a Cellar URI must be on the publisher own host");
+
+        foreach (var malformed in new[]
+                 {
+                     "ECLI:EU:C:2020", "not-an-ecli", "ECLI:E:C:2020:1042",
+                     "ECLI:EU:C:20:1042", "ECLI:EU::2020:1042",
+                 })
+        {
+            Assert.ThrowsExactly<ArgumentException>(
+                () => new OfficialIdentifier(FactsIdentifierFamily.Ecli, malformed),
+                malformed);
+        }
+    }
+
+    [TestMethod]
+    public void AMalformedCelexIsRefused()
+    {
+        foreach (var bad in new[] { "62019", "X2019CJ0311", "62019cj0311", "62019CJKL", "6201CJ0311" })
+        {
+            Assert.ThrowsExactly<ArgumentException>(
+                () => new OfficialIdentifier(FactsIdentifierFamily.Celex, bad), bad);
+        }
+    }
+
+    /// <summary>
+    /// MUTATION RECEIPT: the open end turned into an ordinary date. Candidate 2 bound the sentinel
+    /// one way only, so the exact 9999-12-31 could be declared not_open, which reads as "validity
+    /// ended in the year 9999" rather than "validity does not end".
+    /// </summary>
+    [TestMethod]
+    public void TheOpenEndSentinelCannotBeDeclaredAnOrdinaryDate()
+    {
+        Assert.ThrowsExactly<ArgumentException>(() => new PublisherDate(
+            FactsSchemaIds.PublisherDate,
+            PublisherDate.OpenEndedLexicalValue,
+            PublisherDate.Date,
+            DatePrecision.YearMonthDay,
+            DateOpenSentinel.NotOpen));
+    }
+
+    /// <summary>
+    /// The XSD lexical space admits a trailing timezone. Refusing a value the declared datatype
+    /// permits is a loss dressed as strictness.
+    /// </summary>
+    [TestMethod]
+    public void AnXsdTimezoneSuffixIsAcceptedAndAMalformedOneIsNot()
+    {
+        foreach (var value in new[] { "2020-02-29Z", "2020-02-29+02:00", "2020-02-29-05:00" })
+        {
+            var date = new PublisherDate(
+                FactsSchemaIds.PublisherDate, value, PublisherDate.Date,
+                DatePrecision.YearMonthDay, DateOpenSentinel.NotOpen);
+            Assert.AreEqual(value, date.RawLexicalValue, value);
+        }
+
+        foreach (var bad in new[] { "2020-02-29X", "2020-02-29+2:00", "2020-02-29+15:00" })
+        {
+            Assert.ThrowsExactly<ArgumentException>(() => new PublisherDate(
+                FactsSchemaIds.PublisherDate, bad, PublisherDate.Date,
+                DatePrecision.YearMonthDay, DateOpenSentinel.NotOpen), bad);
+        }
+    }
+
+    /// <summary>
+    /// UriKind.Absolute also admits mailto, urn and file, none of which resolve to an authority a
+    /// reader can consult.
+    /// </summary>
+    [TestMethod]
+    public void AParsingAuthorityMustBeHttpsRatherThanMerelyAbsolute()
+    {
+        foreach (var bad in new[]
+                 {
+                     "mailto:someone@example.invalid",
+                     "urn:uuid:0a5d1c2e-4f3b-4d18-9c67-1a8f2b6d5e40",
+                     "file:///c:/authority",
+                     "http://example.invalid/authority",
+                 })
+        {
+            Assert.ThrowsExactly<ArgumentException>(() => new PublisherDateFact(
+                FactsSchemaIds.PublisherDateFact,
+                FactsFixtures.LuWork(),
+                FactsFixtures.YearOnlyDate(),
+                FactsFixtures.ConsolidatesPredicate,
+                FactsFixtures.MultimapAxioms()[0],
+                null,
+                null,
+                DateSemanticRole.RoleNotStatedByPublisher,
+                TranspositionEvidence.None,
+                bad,
+                FactsFixtures.Observation()), bad);
+        }
+    }
+
+    /// <summary>
+    /// MUTATION RECEIPT: a generic deadline silently promoted. The generic publisher deadline is
+    /// not necessarily a transposition deadline.
+    /// </summary>
+    [TestMethod]
+    public void ATranspositionDeadlineRequiresItsEvidenceAndEvidenceRequiresADeadline()
+    {
+        Assert.ThrowsExactly<ArgumentException>(() => FactsFixtures.DateFact(
+            FactsFixtures.DayDate(),
+            DateSemanticRole.TranspositionDeadline));
+
+        var justified = FactsFixtures.DateFact(
+            FactsFixtures.DayDate(),
+            DateSemanticRole.TranspositionDeadline,
+            evidence: TranspositionEvidence.NimRecord);
+        Assert.AreEqual(TranspositionEvidence.NimRecord, justified.TranspositionEvidence);
+
+        Assert.ThrowsExactly<ArgumentException>(() => FactsFixtures.DateFact(
+            FactsFixtures.DayDate(),
+            DateSemanticRole.PublicationDate,
+            evidence: TranspositionEvidence.DirectiveQualifier));
+    }
+
+    [TestMethod]
+    public void EntryIntoForceAndApplicationAreSeparateRoles()
+    {
+        var ev = FactsFixtures.DateFact(FactsFixtures.DayDate(), DateSemanticRole.EntryIntoForce);
+        var ma = FactsFixtures.DateFact(FactsFixtures.DayDate(), DateSemanticRole.ApplicationDate);
+
+        Assert.AreNotEqual(ev.SemanticRole, ma.SemanticRole);
+        Assert.IsTrue(ClosedVocabulary.WireNames<DateSemanticRole>().Contains("signature_date"));
+        Assert.IsTrue(ClosedVocabulary.WireNames<DateSemanticRole>().Contains("application_date"));
+        Assert.IsTrue(ClosedVocabulary.WireNames<DateSemanticRole>().Contains("publisher_deadline"));
+    }
+
+    /// <summary>
+    /// MUTATION RECEIPT: two level claims about one string. Candidate 2 admitted one URI as both
+    /// work-level and resource-level inside a single identity.
+    /// </summary>
+    [TestMethod]
+    public void OneRawValueCannotBeClaimedUnderTwoFamilies()
+    {
+        const string uri = "http://publications.europa.eu/resource/case/62019CJ0311";
+
+        Assert.ThrowsExactly<ArgumentException>(() => new OfficialIdentitySet(
+            PublisherId.EuEurLex,
+            [
+                new OfficialIdentifier(FactsIdentifierFamily.CellarWorkUri, uri),
+                new OfficialIdentifier(FactsIdentifierFamily.CellarResourceUri, uri),
+            ]));
+    }
+
+    /// <summary>
+    /// MUTATION RECEIPT: identity depending on RDF row order. The same three members in reverse
+    /// order compared unequal, so inverse and inbound validation depended on a serialization order
+    /// the publisher does not guarantee.
+    /// </summary>
+    [TestMethod]
+    public void IdentityComparisonIsOrderIndependent()
+    {
+        var forward = FactsFixtures.EuCaseWithEcli();
+        var reversed = new OfficialIdentitySet(
+            forward.Publisher,
+            forward.Identifiers.Reverse().ToArray());
+
+        Assert.IsTrue(forward.SameIdentity(reversed), "the same members in another order");
+        Assert.IsTrue(reversed.SameIdentity(forward), "and symmetrically");
+        Assert.AreNotEqual(
+            forward.Identifiers[0].Family,
+            reversed.Identifiers[0].Family,
+            "publisher order is still retained as evidence");
+    }
+
+    [TestMethod]
+    public void AFamilyMintedByAnotherPublisherIsRefused()
+    {
+        Assert.ThrowsExactly<ArgumentException>(() => new OfficialIdentitySet(
+            PublisherId.LuLegilux,
+            [new OfficialIdentifier(FactsIdentifierFamily.Celex, "32016R0679")]));
+
+        Assert.ThrowsExactly<ArgumentException>(() => new OfficialIdentitySet(
+            PublisherId.EuEurLex,
+            [new OfficialIdentifier(FactsIdentifierFamily.Memorial, "A512")]));
     }
 
     private static string Mutate(string json, Action<JsonObject> mutate)

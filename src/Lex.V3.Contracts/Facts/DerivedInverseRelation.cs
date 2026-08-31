@@ -3,6 +3,87 @@ using System.Text.Json.Serialization;
 namespace Lex.V3.Contracts.Facts;
 
 /// <summary>
+/// An inverse mapping actually observed in the publisher's pinned ontology.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Candidate 2 required only that an inverse name <i>some</i> absolute URI as its authorizing
+/// statement, and that URI was checked against nothing. A probe built
+/// <c>https://example.invalid/invented-inverse</c> authorized by
+/// <c>https://example.invalid/not-an-ontology-statement</c> and it was accepted. The fixture was
+/// no better: it passed <c>owl:inverseOf</c> itself as the alleged statement, which is the name
+/// of the relationship rather than an observation that the pair holds.
+/// </para>
+/// <para>
+/// This type carries the mapping as a fact: which predicate inverts to which, in which ontology,
+/// at which version, witnessed by which observation. An inverse can then be checked against the
+/// axiom instead of against a string that merely looks official.
+/// </para>
+/// </remarks>
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record ObservedInverseAxiom
+{
+    [JsonConstructor]
+    public ObservedInverseAxiom(
+        string ontologyUri,
+        string ontologyVersion,
+        string subjectPredicateUri,
+        string objectPredicateUri,
+        SourceObservationReference observation)
+    {
+        foreach (var (value, name) in new[]
+                 {
+                     (ontologyUri, nameof(ontologyUri)),
+                     (subjectPredicateUri, nameof(subjectPredicateUri)),
+                     (objectPredicateUri, nameof(objectPredicateUri)),
+                 })
+        {
+            if (!FactsValidation.IsAbsoluteUri(value))
+            {
+                throw new ArgumentException("An inverse axiom URI must be absolute.", name);
+            }
+        }
+
+        if (!FactsValidation.IsOpaqueIdentity(ontologyVersion))
+        {
+            throw new ArgumentException(
+                "An inverse axiom must name the ontology version it was observed at.",
+                nameof(ontologyVersion));
+        }
+
+        if (string.Equals(subjectPredicateUri, objectPredicateUri, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "A predicate is not the inverse of itself.",
+                nameof(objectPredicateUri));
+        }
+
+        OntologyUri = ontologyUri;
+        OntologyVersion = ontologyVersion;
+        SubjectPredicateUri = subjectPredicateUri;
+        ObjectPredicateUri = objectPredicateUri;
+        Observation = observation ?? throw new ArgumentNullException(nameof(observation));
+    }
+
+    public string OntologyUri { get; }
+
+    public string OntologyVersion { get; }
+
+    /// <summary>The predicate the publisher asserts.</summary>
+    public string SubjectPredicateUri { get; }
+
+    /// <summary>The predicate it inverts to.</summary>
+    public string ObjectPredicateUri { get; }
+
+    public SourceObservationReference Observation { get; }
+
+    /// <summary>Whether this axiom authorizes exactly the given inversion, in that direction.</summary>
+    public bool Authorizes(string forwardPredicateUri, string inversePredicateUri) =>
+        string.Equals(SubjectPredicateUri, forwardPredicateUri, StringComparison.Ordinal) &&
+        string.Equals(ObjectPredicateUri, inversePredicateUri, StringComparison.Ordinal);
+}
+
+/// <summary>
 /// The inverse of a publisher assertion, derived only where the publisher's own ontology
 /// authorizes that inverse.
 /// </summary>
@@ -32,7 +113,7 @@ public sealed record DerivedInverseRelation
         OfficialIdentitySet target,
         string predicateUri,
         string inverseOfPredicateUri,
-        string authorizingOntologyStatementUri,
+        ObservedInverseAxiom authorizingAxiom,
         PublisherRelation derivedFrom)
     {
         if (!string.Equals(schema, Identity, StringComparison.Ordinal))
@@ -54,11 +135,15 @@ public sealed record DerivedInverseRelation
                 nameof(inverseOfPredicateUri));
         }
 
-        if (!FactsValidation.IsAbsoluteUri(authorizingOntologyStatementUri))
+        ArgumentNullException.ThrowIfNull(authorizingAxiom);
+
+        // The axiom must authorize exactly this inversion, in this direction. Naming an axiom is
+        // not enough; an unrelated true axiom would otherwise authorize any invention.
+        if (!authorizingAxiom.Authorizes(inverseOfPredicateUri, predicateUri))
         {
             throw new ArgumentException(
-                "An inverse must name the absolute URI of the ontology statement that authorizes it.",
-                nameof(authorizingOntologyStatementUri));
+                "The observed axiom does not map this forward predicate to this inverse predicate.",
+                nameof(authorizingAxiom));
         }
 
         ArgumentNullException.ThrowIfNull(source);
@@ -91,7 +176,7 @@ public sealed record DerivedInverseRelation
         Target = target;
         PredicateUri = predicateUri;
         InverseOfPredicateUri = inverseOfPredicateUri;
-        AuthorizingOntologyStatementUri = authorizingOntologyStatementUri;
+        AuthorizingAxiom = authorizingAxiom;
         DerivedFrom = derivedFrom;
     }
 
@@ -106,10 +191,10 @@ public sealed record DerivedInverseRelation
     public string InverseOfPredicateUri { get; }
 
     /// <summary>
-    /// The publisher ontology statement that authorizes this inversion. Without it the edge
-    /// cannot be constructed at all.
+    /// The observed ontology axiom that authorizes this exact inversion. Without an axiom that
+    /// maps this forward predicate to this inverse predicate, the edge cannot be constructed.
     /// </summary>
-    public string AuthorizingOntologyStatementUri { get; }
+    public ObservedInverseAxiom AuthorizingAxiom { get; }
 
     public PublisherRelation DerivedFrom { get; }
 }

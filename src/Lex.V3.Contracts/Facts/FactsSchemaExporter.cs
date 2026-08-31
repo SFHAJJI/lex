@@ -162,60 +162,65 @@ internal static class FactsSchemaHardener
 {
     internal const string Sha256Pattern = "^[0-9a-f]{64}$";
 
-    /// <summary>Invariants that the reader enforces and the schema provably cannot.</summary>
+    /// <summary>
+    /// The only invariants left to the reader alone: equality between two distant instance
+    /// locations, which draft 2020-12 cannot express without extensions.
+    /// </summary>
+    /// <remarks>
+    /// Candidate 2 listed ten. Codex was right that half of them are expressible with
+    /// <c>if</c>/<c>then</c>, <c>oneOf</c> and <c>const</c>, and that a parity test asserting the
+    /// current schema accepts a violation proves only today's permissiveness, never that the
+    /// schema language could not reject it. Those five are now encoded below and removed from
+    /// this list.
+    /// </remarks>
     internal static IReadOnlyList<string> ReaderOnlyInvariants { get; } = Array.AsReadOnly(
         new[]
         {
             "derived inverse source equals the forward assertion target",
             "derived inverse target equals the forward assertion source",
             "derived inverse inverted predicate equals the forward assertion predicate",
+            "authorizing axiom maps this forward predicate to this inverse predicate",
             "inbound view contributors all target the view target",
-            "relation fact declared kind matches the carried payload",
             "ecli state agrees with the target identity set",
-            "open sentinel is only the exact 9999-12-31 lexical value",
-            "date lexical value is a real calendar date",
-            "date precision matches the declared datatype",
-            "drift admitted terms are exactly the named vocabulary",
+            "lexical value is a real calendar date at its declared precision",
         });
+
+    /// <summary>
+    /// Every contract recognised by the exact set of property names its shape carries.
+    /// </summary>
+    /// <remarks>
+    /// The generator inlines nested contracts, so a relation fact carries a whole publisher
+    /// relation inside it with no marker saying which contract it is. Keying the hardener on
+    /// property spelling alone left every nested contract version unpinned, so a document with a
+    /// wrong nested identity validated while the reader refused it. Matching the structural
+    /// signature pins the nested one exactly as the root.
+    /// </remarks>
+    private static readonly (string SchemaId, string[] Properties)[] ContractSignatures =
+    {
+        (FactsSchemaIds.PublisherRelation,
+            new[] { "schema", "source", "target", "predicate_uri", "observation", "qualified_axioms" }),
+        (FactsSchemaIds.DerivedInverseRelation,
+            new[] { "schema", "source", "target", "predicate_uri", "inverse_of_predicate_uri",
+                    "authorizing_axiom", "derived_from" }),
+        (FactsSchemaIds.LocalInboundView,
+            new[] { "schema", "target", "predicate_uri", "scope_is_complete",
+                    "scope_descriptor_sha256", "contributing_assertions" }),
+        (FactsSchemaIds.PublisherDate,
+            new[] { "schema", "raw_lexical_value", "datatype_uri", "precision", "open_sentinel" }),
+    };
 
     internal static void Apply(string schemaId, JsonObject root)
     {
-        // Every contract pins its own version. Without this the schema accepted any string,
-        // including another contract's identity.
         PinConst(root, "schema", schemaId);
-
-        // The generator inlines nested value objects rather than referencing them, so a
-        // transport digest appears inside every relation schema as its own copy. Hardening only
-        // the definitions document left every one of those copies unconstrained, which is how a
-        // non-hex digest still validated inside a publisher relation. The pass is therefore by
-        // property name over the whole tree.
         HardenTree(root);
-
-        switch (schemaId)
-        {
-            case FactsSchemaIds.RelationFact:
-                // Exactly one payload, which the generator renders as three nullable members.
-                root["oneOf"] = new JsonArray(
-                    RequireOnly("publisher_asserted", "ontology_authorized_inverse", "local_inbound_view"),
-                    RequireOnly("ontology_authorized_inverse", "publisher_asserted", "local_inbound_view"),
-                    RequireOnly("local_inbound_view", "publisher_asserted", "ontology_authorized_inverse"));
-                break;
-
-            case FactsSchemaIds.PublisherDate:
-                EnumOf(root, "datatype_uri", PublisherDate.PrecisionByDatatype.Keys);
-                break;
-
-            case FactsSchemaIds.VocabularyDrift:
-                MinItems(root, "admitted_terms", 1);
-                Unique(root, "admitted_terms");
-                break;
-        }
+        EncodeInvariants(schemaId, root);
     }
 
     internal static void HardenValueObject(string name, JsonObject node) => HardenTree(node);
 
     /// <summary>
-    /// Apply the grammar a property name implies, everywhere that name occurs.
+    /// Walk every node: apply the grammar a property name implies, and pin any nested contract
+    /// recognised by its structural signature.
     /// </summary>
     private static void HardenTree(JsonNode? node)
     {
@@ -239,6 +244,8 @@ internal static class FactsSchemaHardener
                             HardenProperty(name, property);
                         }
                     }
+
+                    PinNestedContract(o, properties);
                 }
 
                 foreach (var (_, value) in o)
@@ -250,6 +257,20 @@ internal static class FactsSchemaHardener
         }
     }
 
+    private static void PinNestedContract(JsonObject node, JsonObject properties)
+    {
+        var names = properties.Select(pair => pair.Key).ToHashSet(StringComparer.Ordinal);
+        foreach (var (schemaId, signature) in ContractSignatures)
+        {
+            if (names.Count == signature.Length && signature.All(names.Contains))
+            {
+                PinConst(node, "schema", schemaId);
+                EncodeInvariants(schemaId, node);
+                return;
+            }
+        }
+    }
+
     private static void HardenProperty(string name, JsonObject property)
     {
         if (name.EndsWith("_sha256", StringComparison.Ordinal))
@@ -258,16 +279,22 @@ internal static class FactsSchemaHardener
             return;
         }
 
-        // `datatype_uri` carries a closed enum instead, which is stricter than a format.
-        if (name.EndsWith("_uri", StringComparison.Ordinal) &&
-            !string.Equals(name, "datatype_uri", StringComparison.Ordinal))
+        // A Cellar URI family value must be a URI, which is what a probe smuggled past by
+        // tagging a non-URI string as `cellar_work_uri`.
+        if (string.Equals(name, "datatype_uri", StringComparison.Ordinal))
         {
-            property["format"] = "uri";
-            property["minLength"] = 1;
+            var array = new JsonArray();
+            foreach (var value in PublisherDate.PrecisionByDatatype.Keys)
+            {
+                array.Add(value);
+            }
+
+            property["enum"] = array;
             return;
         }
 
-        if (string.Equals(name, "parsed_by_authority", StringComparison.Ordinal))
+        if (name.EndsWith("_uri", StringComparison.Ordinal) ||
+            string.Equals(name, "parsed_by_authority", StringComparison.Ordinal))
         {
             property["format"] = "uri";
             property["minLength"] = 1;
@@ -283,7 +310,161 @@ internal static class FactsSchemaHardener
         if (string.Equals(name, "identifiers", StringComparison.Ordinal))
         {
             property["minItems"] = 1;
+            property["uniqueItems"] = true;
+            return;
         }
+
+        if (string.Equals(name, "observed_at", StringComparison.Ordinal))
+        {
+            // UTC only. The reader enforces a zero offset; the schema enforces the two lexical
+            // forms a zero offset actually takes. `System.Text.Json` writes `+00:00` rather than
+            // `Z` for `DateTimeOffset.Zero`, so a bare `Z$` pattern rejected every document this
+            // contract produces, which a valid-document parity case caught immediately.
+            property["format"] = "date-time";
+            property["pattern"] = @"(Z|\+00:00)$";
+        }
+    }
+
+    /// <summary>The conditional invariants, encoded rather than deferred to the reader.</summary>
+    private static void EncodeInvariants(string schemaId, JsonObject root)
+    {
+        var all = new JsonArray();
+
+        switch (schemaId)
+        {
+            case FactsSchemaIds.PublisherDate:
+                // datatype pins precision, in both directions, one arm per datatype.
+                foreach (var (datatype, precision) in PublisherDate.PrecisionByDatatype)
+                {
+                    var wire = ClosedVocabulary.WireNames<DatePrecision>()[(int)precision];
+                    all.Add(IfThen(
+                        Props(("datatype_uri", Const(datatype))),
+                        Props(("precision", Const(wire)))));
+                    all.Add(IfThen(
+                        Props(("precision", Const(wire))),
+                        Props(("datatype_uri", Const(datatype)))));
+                }
+
+                // the open-end sentinel binds to its exact lexical value, in both directions.
+                var sentinelShape = Props(
+                    ("raw_lexical_value", Const(PublisherDate.OpenEndedLexicalValue)),
+                    ("datatype_uri", Const(PublisherDate.Date)));
+                all.Add(IfThen(Props(("open_sentinel", Const("open_ended"))), sentinelShape));
+                all.Add(IfThen(sentinelShape, Props(("open_sentinel", Const("open_ended")))));
+                break;
+
+            case FactsSchemaIds.PublisherDateFact:
+                // an open end may only carry the two roles that can mean it.
+                all.Add(IfThen(
+                    Props(("date", Props(("open_sentinel", Const("open_ended"))))),
+                    Props(("semantic_role", Enum("end_of_validity", "role_not_stated_by_publisher")))));
+                // transposition evidence binds to the deadline roles, both ways.
+                all.Add(IfThen(
+                    Props(("semantic_role", Const("transposition_deadline"))),
+                    Props(("transposition_evidence",
+                        Enum("directive_qualifier", "nim_record")))));
+                all.Add(IfThen(
+                    Props(("transposition_evidence", Enum("directive_qualifier", "nim_record"))),
+                    Props(("semantic_role",
+                        Enum("transposition_deadline", "publisher_deadline")))));
+                break;
+
+            case FactsSchemaIds.RelationFact:
+                // exactly one payload, and the declared kind names which one.
+                root["oneOf"] = new JsonArray(
+                    RequireOnly("publisher_asserted", "ontology_authorized_inverse", "local_inbound_view"),
+                    RequireOnly("ontology_authorized_inverse", "publisher_asserted", "local_inbound_view"),
+                    RequireOnly("local_inbound_view", "publisher_asserted", "ontology_authorized_inverse"));
+                foreach (var (kind, payload) in new[]
+                         {
+                             ("publisher_asserted", "publisher_asserted"),
+                             ("ontology_authorized_inverse", "ontology_authorized_inverse"),
+                             ("local_inbound_view", "local_inbound_view"),
+                         })
+                {
+                    all.Add(IfThen(
+                        Props(("kind", Const(kind))),
+                        new JsonObject
+                        {
+                            ["required"] = new JsonArray(payload),
+                            ["properties"] = new JsonObject
+                            {
+                                [payload] = new JsonObject
+                                {
+                                    ["not"] = new JsonObject { ["type"] = "null" },
+                                },
+                            },
+                        }));
+                }
+
+                break;
+
+            case FactsSchemaIds.VocabularyDrift:
+                MinItems(root, "admitted_terms", 1);
+                Unique(root, "admitted_terms");
+                // each vocabulary pins its exact admitted array, in declaration order.
+                foreach (var kind in System.Enum.GetValues<VocabularyKind>())
+                {
+                    var wire = ClosedVocabulary.WireNames<VocabularyKind>()[(int)kind];
+                    var terms = new JsonArray();
+                    foreach (var term in ClosedVocabulary.AdmittedTermsFor(kind))
+                    {
+                        terms.Add(term);
+                    }
+
+                    all.Add(IfThen(
+                        Props(("vocabulary", Const(wire))),
+                        Props(("admitted_terms", new JsonObject { ["const"] = terms }))));
+                }
+
+                break;
+        }
+
+        if (all.Count > 0)
+        {
+            root["allOf"] = all;
+        }
+    }
+
+    /// <summary>
+    /// Build one conditional arm, cloning both halves.
+    /// </summary>
+    /// <remarks>
+    /// A `JsonNode` may have only one parent, so reusing a shape across two arms throws. The
+    /// sentinel shape is deliberately used twice, once per direction, which is exactly the case
+    /// that needs the clone.
+    /// </remarks>
+    private static JsonObject IfThen(JsonObject condition, JsonObject consequence) =>
+        new()
+        {
+            ["if"] = condition.DeepClone(),
+            ["then"] = consequence.DeepClone(),
+        };
+
+    private static JsonObject Props(params (string Name, JsonNode Shape)[] members)
+    {
+        var properties = new JsonObject();
+        var required = new JsonArray();
+        foreach (var (name, shape) in members)
+        {
+            properties[name] = shape;
+            required.Add(name);
+        }
+
+        return new JsonObject { ["properties"] = properties, ["required"] = required };
+    }
+
+    private static JsonObject Const(string value) => new() { ["const"] = value };
+
+    private static JsonObject Enum(params string[] values)
+    {
+        var array = new JsonArray();
+        foreach (var value in values)
+        {
+            array.Add(value);
+        }
+
+        return new JsonObject { ["enum"] = array };
     }
 
     private static JsonObject RequireOnly(string present, params string[] absent)
@@ -294,17 +475,12 @@ internal static class FactsSchemaHardener
             forbidden[name] = new JsonObject { ["type"] = "null" };
         }
 
+        forbidden[present] = new JsonObject { ["not"] = new JsonObject { ["type"] = "null" } };
         return new JsonObject
         {
             ["required"] = new JsonArray(present),
-            ["properties"] = MergeNotNull(present, forbidden),
+            ["properties"] = forbidden,
         };
-    }
-
-    private static JsonObject MergeNotNull(string present, JsonObject forbidden)
-    {
-        forbidden[present] = new JsonObject { ["not"] = new JsonObject { ["type"] = "null" } };
-        return forbidden;
     }
 
     private static JsonObject? Property(JsonObject root, string name) =>
@@ -317,31 +493,6 @@ internal static class FactsSchemaHardener
         if (Property(root, name) is { } property)
         {
             property["const"] = value;
-        }
-    }
-
-    private static void Pattern(JsonObject root, string name, string pattern)
-    {
-        if (Property(root, name) is { } property)
-        {
-            property["pattern"] = pattern;
-        }
-    }
-
-    private static void Uri(JsonObject root, string name)
-    {
-        if (Property(root, name) is { } property)
-        {
-            property["format"] = "uri";
-            property["minLength"] = 1;
-        }
-    }
-
-    private static void Minimum(JsonObject root, string name, int minimum)
-    {
-        if (Property(root, name) is { } property)
-        {
-            property["minimum"] = minimum;
         }
     }
 
@@ -358,20 +509,6 @@ internal static class FactsSchemaHardener
         if (Property(root, name) is { } property)
         {
             property["uniqueItems"] = true;
-        }
-    }
-
-    private static void EnumOf(JsonObject root, string name, IEnumerable<string> values)
-    {
-        if (Property(root, name) is { } property)
-        {
-            var array = new JsonArray();
-            foreach (var value in values)
-            {
-                array.Add(value);
-            }
-
-            property["enum"] = array;
         }
     }
 }
