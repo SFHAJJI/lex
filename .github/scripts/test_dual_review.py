@@ -375,6 +375,16 @@ REVIEWED_ACTIONS = frozenset(
 ALLOWED_REPOSITORIES = frozenset(spec.split("@", 1)[0] for spec in REVIEWED_ACTIONS)
 IMMUTABLE_PIN_RE = re.compile(r"\A[0-9a-f]{40}\Z")
 
+# The reviewed step list, in order. Data, not shape: the gate refuses any job whose
+# steps differ from this, so an added step cannot satisfy the checks by being
+# well-formed. `uses` steps carry no script; `run` steps carry exactly the named
+# command and no action.
+REVIEWED_STEPS = (
+    ("uses", "actions/checkout"),
+    ("run", "unittest"),
+    ("run", "dual_review.py"),
+)
+
 
 def _uncommented(text):
     """The workflow's lines with YAML comments removed.
@@ -398,6 +408,36 @@ def _uncommented(text):
                 break
         kept.append(line if cut is None else line[:cut])
     return kept
+
+
+def _job_steps(lines):
+    """The job's steps, each as its own list of lines.
+
+    A step starts at `      - ` and continues until the next one or until the block
+    dedents. Comment-stripped blank lines belong to whichever step they fall in and
+    are harmless; what matters is that an added step becomes its own entry here and
+    so changes the count that `REVIEWED_STEPS` pins.
+    """
+    steps = []
+    current = None
+    inside = False
+    for line in lines:
+        if re.match(r"^    steps:\s*$", line):
+            inside = True
+            continue
+        if not inside:
+            continue
+        if line.strip() and not line.startswith("      "):
+            break
+        if re.match(r"^      - ", line):
+            if current is not None:
+                steps.append(current)
+            current = [line]
+        elif current is not None:
+            current.append(line)
+    if current is not None:
+        steps.append(current)
+    return steps
 
 
 def false_green_defects(text):
@@ -571,6 +611,73 @@ def false_green_defects(text):
             "that a test failure fails the required context directly"
         )
 
+    # Claude O1 against ffe873d: pinning the action closed injected `uses:` steps and
+    # left injected `run:` steps wide open. Both keys give a step write access to the
+    # workspace before the gate executes, so `- run: cp /tmp/replacement.py
+    # .github/scripts/` replaces the gate's own code while every other check here still
+    # passes. The step list is therefore reviewed data, exactly like REVIEWED_ACTIONS,
+    # rather than a shape that additions can satisfy.
+    steps = _job_steps(lines)
+    if len(steps) != len(REVIEWED_STEPS):
+        defects.append(
+            f"the job must contain exactly {len(REVIEWED_STEPS)} reviewed steps, found "
+            f"{len(steps)}; an extra step of any kind runs with write access to the "
+            "workspace before the gate and can replace the gate's own code"
+        )
+    for index, (step, expected) in enumerate(zip(steps, REVIEWED_STEPS)):
+        kind, token = expected
+        runs = [line for line in step if re.match(r"^\s+run:", line)]
+        uses = [line for line in step if re.match(r"^\s+-?\s*uses:", line)]
+        if kind == "uses":
+            if not uses:
+                defects.append(f"reviewed step {index} must be the checkout action")
+            if runs:
+                defects.append(
+                    f"reviewed step {index} is the checkout action and must not also run "
+                    f"a script: {[line.strip() for line in runs]}"
+                )
+        else:
+            if uses:
+                defects.append(
+                    f"reviewed step {index} must not invoke an action: "
+                    f"{[line.strip() for line in uses]}"
+                )
+            if len(runs) != 1 or token not in runs[0]:
+                defects.append(
+                    f"reviewed step {index} must be exactly the {token!r} command, found "
+                    f"{[line.strip() for line in runs]}"
+                )
+
+    # An `env:` above step scope needs no new step at all. Two lines of ordinary-looking
+    # configuration, `PYTHONPATH: /tmp/shim`, change how every step's interpreter
+    # resolves imports, so the gate and its own tests can be shimmed while the diff
+    # reads as housekeeping. Only the receipt-evaluation step's own block may exist.
+    env_lines = [
+        (index, len(match.group(1)))
+        for index, line in enumerate(lines)
+        for match in [re.match(r"^(\s*)env:\s*$", line)]
+        if match
+    ]
+    gate_step_span = None
+    if len(steps) == len(REVIEWED_STEPS):
+        first_line = lines.index(steps[-1][0])
+        gate_step_span = range(first_line, first_line + len(steps[-1]))
+    for position, indent in env_lines:
+        if indent != 8:
+            defects.append(
+                f"env: at indentation {indent} is forbidden; a workflow-level or job-level "
+                "env applies to every step and can shim the interpreter without adding one"
+            )
+        elif gate_step_span is not None and position not in gate_step_span:
+            defects.append(
+                "the only permitted env: block belongs to the receipt-evaluation step"
+            )
+    if len(env_lines) != 1:
+        defects.append(
+            f"expected exactly one env: block, the receipt evaluation's own, found "
+            f"{len(env_lines)}"
+        )
+
     return defects
 
 
@@ -601,6 +708,56 @@ class RequiredContextCannotFalseGreen(unittest.TestCase):
         defects = "\n".join(false_green_defects(split))
         self.assertIn("needs:", defects)
         self.assertIn("exactly one job", defects)
+
+    def test_an_injected_run_step_is_caught(self):
+        """Claude O1 against ffe873d: pinning `uses:` left `run:` wide open.
+
+        A step needs no network and no action to defeat the gate. It runs before the
+        gate with write access to the workspace, so a single `cp` replaces
+        dual_review.py, the replaced tests pass, the replaced gate exits 0, and the
+        required context reports success with no receipt checked.
+        """
+        real = self._workflow()
+        anchor = "      - name: induced mutations for the gate itself"
+        mutated = real.replace(
+            anchor, "      - run: cp /tmp/replacement.py .github/scripts/\n" + anchor
+        )
+        self.assertNotEqual(mutated, real, "the mutation never applied; the proof is void")
+        self.assertIn("exactly 3 reviewed steps", "\n".join(false_green_defects(mutated)))
+
+    def test_a_job_level_env_is_caught(self):
+        """The subtler half: this adds no step at all.
+
+        `PYTHONPATH: /tmp/shim` changes how every step's interpreter resolves imports,
+        so the gate and its own tests can be shimmed. The diff is two lines that read
+        as ordinary configuration.
+        """
+        real = self._workflow()
+        mutated = real.replace(
+            "    runs-on: ubuntu-latest\n",
+            "    runs-on: ubuntu-latest\n    env:\n      PYTHONPATH: /tmp/shim\n",
+            1,
+        )
+        self.assertNotEqual(mutated, real, "the mutation never applied; the proof is void")
+        self.assertIn("indentation 4 is forbidden", "\n".join(false_green_defects(mutated)))
+
+    def test_a_workflow_level_env_is_caught(self):
+        real = self._workflow()
+        mutated = real.replace("jobs:\n", "env:\n  PYTHONPATH: /tmp/shim\n\njobs:\n", 1)
+        self.assertNotEqual(mutated, real, "the mutation never applied; the proof is void")
+        self.assertIn("indentation 0 is forbidden", "\n".join(false_green_defects(mutated)))
+
+    def test_a_second_env_block_on_another_step_is_caught(self):
+        """Step-scoped, so the indentation rule alone would pass it."""
+        real = self._workflow()
+        mutated = real.replace(
+            "        with:\n",
+            "        env:\n          PYTHONPATH: /tmp/shim\n        with:\n",
+            1,
+        )
+        self.assertNotEqual(mutated, real, "the mutation never applied; the proof is void")
+        defects = "\n".join(false_green_defects(mutated))
+        self.assertIn("belongs to the receipt-evaluation step", defects)
 
     def test_a_continue_on_error_step_is_caught(self):
         mutated = self._workflow().replace(
