@@ -1,0 +1,56 @@
+name: dual-review
+
+# Both machine co-owners authenticate as the same GitHub account, so GitHub's own
+# review mechanism cannot represent them: an account cannot approve its own pull
+# request, and requiring an approving review would deadlock the branch rather than
+# harden it. This check moves the gate into a status context, which is evaluated on
+# a result rather than on an actor identity.
+#
+# The pull request body declares its author agent. A verdict comment from the OTHER
+# agent, bound to the exact head commit, satisfies the gate. Pushing a new commit
+# invalidates the verdict, because the recorded SHA no longer matches the head.
+#
+# This defends against forgetting, not against forgery. A shared account means either
+# agent could write the other's marker; doing so would be a deliberate, timestamped,
+# public falsification rather than the silent omission this exists to prevent.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+    branches: [v3/integration]
+  issue_comment:
+    types: [created, edited]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  # The gate's own induced mutations. A gate that has never been shown red is a
+  # name, not a gate, so these run on every change to it.
+  dual-review-tests:
+    name: dual-review-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - run: python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v
+
+  dual-review:
+    name: dual-review
+    needs: dual-review-tests
+    runs-on: ubuntu-latest
+    # issue_comment fires for issues too; only run it for pull requests.
+    if: github.event_name != 'issue_comment' || github.event.issue.pull_request
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: verify a SHA-bound verdict from the non-author agent
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+        run: python3 .github/scripts/dual_review.py
