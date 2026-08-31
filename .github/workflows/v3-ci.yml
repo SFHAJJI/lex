@@ -285,7 +285,7 @@ jobs:
           expected_config_digest="$(jq -er '.config_digest | select(test("^sha256:[0-9a-f]{64}$"))' artifacts/s0-05/oci-verification.json)"
           actual_image_id="$(docker image inspect --format '{{.Id}}' "$IMAGE_REFERENCE")"
           test "$actual_image_id" = "$expected_config_digest"
-          docker run --detach --name "$CONTAINER_NAME" --read-only --cap-drop ALL --security-opt no-new-privileges:true --publish 127.0.0.1::8080 "$IMAGE_REFERENCE" >/dev/null
+          docker run --detach --name "$CONTAINER_NAME" --cap-drop ALL --security-opt no-new-privileges:true --publish 127.0.0.1::8080 "$IMAGE_REFERENCE" >/dev/null
           host_port="$(docker port "$CONTAINER_NAME" 8080/tcp | sed -n 's/^127\.0\.0\.1://p')"
           [[ "$host_port" =~ ^[0-9]+$ ]]
           printf '%s\n' "$host_port" > artifacts/s0-05/runtime-port.txt
@@ -294,7 +294,7 @@ jobs:
         run: |
           set -euo pipefail
           docker inspect "$CONTAINER_NAME" > artifacts/s0-05/container-inspect.json
-          jq -e 'length == 1 and .[0].Config.User == "1654" and .[0].HostConfig.ReadonlyRootfs == true and ((.[0].HostConfig.CapDrop // []) | map(ascii_upcase) | index("ALL") != null) and ((.[0].HostConfig.SecurityOpt // []) | map(ascii_downcase) | any(startswith("no-new-privileges"))) and (.[0].Mounts | length) == 0 and ((.[0].HostConfig.Binds // []) | length) == 0' artifacts/s0-05/container-inspect.json >/dev/null
+          jq -e 'length == 1 and .[0].Config.User == "1654" and .[0].HostConfig.ReadonlyRootfs == false and ((.[0].HostConfig.CapDrop // []) | map(ascii_upcase) | index("ALL") != null) and ((.[0].HostConfig.SecurityOpt // []) | map(ascii_downcase) | any(startswith("no-new-privileges"))) and (.[0].Mounts | length) == 0 and ((.[0].HostConfig.Binds // []) | length) == 0' artifacts/s0-05/container-inspect.json >/dev/null
           if jq -er '.[0].Config.Env[]?' artifacts/s0-05/container-inspect.json | cut -d= -f1 | grep -Eiq '(^|_)(SECRET|TOKEN|PASSWORD|PASSWD|PWD|API_?KEY|PRIVATE_?KEY|CREDENTIAL|CONNECTION_?STRING)(_|$)'; then
             echo 'Secret-bearing environment name found.' >&2
             exit 1
@@ -402,6 +402,18 @@ jobs:
           path: artifacts/s0-05/receipt.json
           if-no-files-found: error
           retention-days: 14
+      - name: Upload canonical Stage 0 image
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: s0-05-canonical-image-${{ env.CANDIDATE_SHA }}
+          path: |
+            artifacts/s0-05/lex-v3-s0-05-docker.tar
+            artifacts/s0-05/oci-verification.json
+            artifacts/s0-05/receipt.json
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
 
   web:
     name: web

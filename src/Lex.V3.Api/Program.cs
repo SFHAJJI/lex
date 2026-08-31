@@ -31,8 +31,9 @@ try
         new CryptographicRequestEntropySource(),
         app.Lifetime.ApplicationStopping);
 }
-catch
+catch (Exception exception)
 {
+    Console.Error.WriteLine(SyntheticBootstrapDiagnostic.Describe(exception));
     state = SyntheticApiState.Unavailable;
 }
 
