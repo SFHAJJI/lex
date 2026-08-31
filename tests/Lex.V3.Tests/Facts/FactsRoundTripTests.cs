@@ -44,9 +44,9 @@ public sealed class FactsRoundTripTests
             ContractJson.Serialize(FactsFixtures.CaseFactWithEcli()));
 
         var target = restored.CarriedTarget;
-        Assert.HasCount(3, target.Identifiers);
+        Assert.HasCount(4, target.Identifiers);
         Assert.AreEqual(
-            "http://publications.europa.eu/resource/case/62019CJ0311",
+            FactsFixtures.CellarWorkUri,
             target.Value(FactsIdentifierFamily.CellarWorkUri));
         Assert.AreEqual("62019CJ0311", target.Value(FactsIdentifierFamily.Celex));
         Assert.AreEqual("ECLI:EU:C:2020:1042", target.Value(FactsIdentifierFamily.Ecli));

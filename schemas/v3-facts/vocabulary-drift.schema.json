@@ -123,6 +123,7 @@
               "ecli",
               "cellar_work_uri",
               "cellar_resource_uri",
+              "cellar_psi_uri",
               "memorial",
               "historical_legal_id"
             ]

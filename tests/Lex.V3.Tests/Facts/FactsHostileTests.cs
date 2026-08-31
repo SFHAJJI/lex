@@ -891,7 +891,7 @@ public sealed class FactsHostileTests
     [TestMethod]
     public void OneRawValueCannotBeClaimedUnderTwoFamilies()
     {
-        const string uri = "http://publications.europa.eu/resource/case/62019CJ0311";
+        var uri = FactsFixtures.CellarWorkUri;
 
         Assert.ThrowsExactly<ArgumentException>(() => new OfficialIdentitySet(
             PublisherId.EuEurLex,
@@ -979,8 +979,8 @@ public sealed class FactsHostileTests
     [TestMethod]
     public void CellarWorkAndResourceLevelsAreDistinguishedByTheUriItself()
     {
-        const string work = "http://publications.europa.eu/resource/case/62019CJ0311";
-        const string resource = "http://publications.europa.eu/resource/case/62019CJ0311/DOC_1";
+        var work = FactsFixtures.CellarWorkUri;
+        var resource = FactsFixtures.CellarWorkUri + "/DOC_1";
 
         Assert.IsTrue(OfficialIdentifier.IsWellFormed(FactsIdentifierFamily.CellarWorkUri, work));
         Assert.IsFalse(
@@ -1162,6 +1162,94 @@ public sealed class FactsHostileTests
                  })
         {
             Assert.IsNull(OfficialIdentifier.ProfileOf(bad), bad);
+        }
+    }
+
+    // ---- round five: authority by shape, the alias, and the timezone ceiling -----------------
+
+    /// <summary>
+    /// MUTATION RECEIPT: authority still resting on the caller. Both publishers mint an ELI in
+    /// different lexical shapes, so binding the family to a publisher was not enough: an EU
+    /// identity could carry the Luxembourg relative path and a Luxembourg identity the EU URI.
+    /// </summary>
+    [TestMethod]
+    public void AnEliShapeBelongsToThePublisherThatMintsIt()
+    {
+        Assert.AreEqual(
+            PublisherId.LuLegilux,
+            OfficialIdentifier.EliMintedBy("eli/etat/leg/loi/2019/07/15/a512/jo"));
+        Assert.AreEqual(
+            PublisherId.EuEurLex,
+            OfficialIdentifier.EliMintedBy("http://data.europa.eu/eli/reg/2016/679/oj"));
+        Assert.IsNull(OfficialIdentifier.EliMintedBy("https://example.invalid/eli/x"));
+
+        // an EU identity carrying the Luxembourg shape
+        Assert.ThrowsExactly<ArgumentException>(() => new OfficialIdentitySet(
+            PublisherId.EuEurLex,
+            [new OfficialIdentifier(FactsIdentifierFamily.Eli, "eli/etat/leg/loi/2019/07/15/a512/jo")]));
+
+        // and a Luxembourg identity carrying the EU shape
+        Assert.ThrowsExactly<ArgumentException>(() => new OfficialIdentitySet(
+            PublisherId.LuLegilux,
+            [new OfficialIdentifier(FactsIdentifierFamily.Eli, "http://data.europa.eu/eli/reg/2016/679/oj")]));
+    }
+
+    /// <summary>
+    /// MUTATION RECEIPT: an alias relabelled as the thing itself. The CELEX persistent identifier
+    /// is tied to the work by owl:sameAs; the publisher's predicates live on the Cellar UUID work.
+    /// Candidate 4 admitted any three-segment resource path as a work, so the alias passed.
+    /// </summary>
+    [TestMethod]
+    public void TheCelexPersistentIdentifierIsNotTheCellarWork()
+    {
+        Assert.IsFalse(
+            OfficialIdentifier.IsWellFormed(FactsIdentifierFamily.CellarWorkUri, FactsFixtures.CellarPsiUri),
+            "the PSI alias is not the work");
+        Assert.IsTrue(
+            OfficialIdentifier.IsWellFormed(FactsIdentifierFamily.CellarPsiUri, FactsFixtures.CellarPsiUri),
+            "but it is a fact in its own right");
+        Assert.IsTrue(
+            OfficialIdentifier.IsWellFormed(FactsIdentifierFamily.CellarWorkUri, FactsFixtures.CellarWorkUri),
+            "and the UUID work is the work");
+        Assert.IsFalse(
+            OfficialIdentifier.IsWellFormed(FactsIdentifierFamily.CellarPsiUri, FactsFixtures.CellarWorkUri),
+            "the work is not an alias either");
+    }
+
+    /// <summary>
+    /// The XSD timezone ceiling is exactly 14:00, and the reader and the schema must agree on it.
+    /// </summary>
+    [TestMethod]
+    public void TheTimezoneCeilingIsExactlyFourteenHours()
+    {
+        foreach (var ok in new[] { "2019-07-15+14:00", "2019-07-15-14:00", "2019-07-15+13:59" })
+        {
+            var date = new PublisherDate(
+                FactsSchemaIds.PublisherDate, ok, PublisherDate.Date,
+                DatePrecision.YearMonthDay, DateOpenSentinel.NotOpen);
+            Assert.AreEqual(ok, date.RawLexicalValue, ok);
+        }
+
+        foreach (var bad in new[] { "2019-07-15+14:01", "2019-07-15+99:99", "2019-07-15+15:00" })
+        {
+            Assert.ThrowsExactly<ArgumentException>(() => new PublisherDate(
+                FactsSchemaIds.PublisherDate, bad, PublisherDate.Date,
+                DatePrecision.YearMonthDay, DateOpenSentinel.NotOpen), bad);
+        }
+    }
+
+    [TestMethod]
+    public void AControlCharacterInsideAnEcliIsRefused()
+    {
+        foreach (var bad in new[]
+                 {
+                     "ECLI:EU:C" + "\n" + ":2020:1042",  // a real newline, refused by the printable bound
+                     "ECLI:EU:C :2020:1042",    // a printable oddity, which the reader used to admit
+                     "ECLI:EU:c:2020:1042",
+                 })
+        {
+            Assert.ThrowsExactly<ArgumentException>(
+                () => new OfficialIdentifier(FactsIdentifierFamily.Ecli, bad), bad);
         }
     }
 

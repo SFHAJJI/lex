@@ -144,6 +144,13 @@ public sealed record OfficialIdentifier
     /// requires, including <c>12012E/TXT</c>, which is already in the accepted 82-seed plan. That
     /// is a no-loss violation produced by over-correcting: the previous candidate trusted any
     /// label, so this one refused anything it had not thought of. Both lose publisher facts.
+    ///
+    /// <b>A value outside every profile is refused, not reported as drift.</b> Candidate 4's
+    /// declaration said it was "reported as drift rather than silently refused", and no drift
+    /// carrier for identifier profiles exists anywhere in this package: <c>ProfileOf</c> returns
+    /// null and the constructor throws. The claim is narrowed to what the code does rather than a
+    /// carrier being invented to match a sentence. A typed identifier-profile drift observation
+    /// belongs where observations are processed and carry their own evidence, not here.
     /// </remarks>
     public static CelexProfile? ProfileOf(string value)
     {
@@ -287,9 +294,12 @@ public sealed record OfficialIdentifier
         FactsIdentifierFamily.CellarWorkUri => IsCellarUri(value, work: true),
         FactsIdentifierFamily.CellarResourceUri => IsCellarUri(value, work: false),
 
-        // ELI is minted by both publishers, and EUR-Lex mints it as an absolute URI while
-        // Legilux mints a path expression. Refusing either is refusing a publisher value.
-        FactsIdentifierFamily.Eli => IsEli(value),
+        // ELI is minted by both publishers in different lexical shapes, so the family alone is
+        // not the check. `EliMintedBy` decides which publisher a given shape belongs to, and the
+        // identity set requires that to be the publisher carrying it.
+        FactsIdentifierFamily.Eli => EliMintedBy(value) is not null,
+
+        FactsIdentifierFamily.CellarPsiUri => IsCellarPsi(value),
 
         FactsIdentifierFamily.Memorial or FactsIdentifierFamily.HistoricalLegalId =>
             value.Length > 0 && !value.Contains(' ', StringComparison.Ordinal),
@@ -297,35 +307,50 @@ public sealed record OfficialIdentifier
         _ => false,
     };
 
-    private static bool IsEli(string value)
+    /// <summary>
+    /// Which publisher mints an ELI of this exact shape, or null where no publisher does.
+    /// </summary>
+    /// <remarks>
+    /// Candidate 4 admitted both shapes for either publisher, so an EU identity could carry the
+    /// Luxembourg relative path and a Luxembourg identity could carry the EU absolute URI. The
+    /// host allowlist stopped an invented host and did nothing about a cross-publisher one, which
+    /// is authority still resting on the caller's choice of shape.
+    /// </remarks>
+    public static PublisherId? EliMintedBy(string value)
     {
-        if (value.Contains(' ', StringComparison.Ordinal))
+        if (value is null || value.Contains(' ', StringComparison.Ordinal))
         {
-            return false;
+            return null;
         }
 
+        // The relative path expression is Legilux's shape.
         if (value.StartsWith("eli/", StringComparison.Ordinal))
         {
-            return true;
+            return PublisherId.LuLegilux;
         }
 
         // An absolute ELI must be on a publisher host. Candidate 3 accepted any host whose path
         // contained /eli/, so https://example.invalid/eli/... was admissible as an official
         // identifier, which is the caller-shaped lookalike the contract says it never retains.
-        return Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
-            uri.Scheme is "http" or "https" &&
-            EliHosts.Contains(uri.Host) &&
-            uri.AbsolutePath.Contains("/eli/", StringComparison.Ordinal);
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
+            uri.Scheme is not ("http" or "https") ||
+            !uri.AbsolutePath.Contains("/eli/", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return EliHosts.TryGetValue(uri.Host, out var minter) ? minter : null;
     }
 
-    /// <summary>The hosts that mint an absolute ELI for the publishers in scope.</summary>
-    private static readonly HashSet<string> EliHosts = new(StringComparer.Ordinal)
-    {
-        "data.europa.eu",
-        "eur-lex.europa.eu",
-        "data.legilux.public.lu",
-        "legilux.public.lu",
-    };
+    /// <summary>Each host that mints an absolute ELI, and the publisher it belongs to.</summary>
+    private static readonly IReadOnlyDictionary<string, PublisherId> EliHosts =
+        new Dictionary<string, PublisherId>(StringComparer.Ordinal)
+        {
+            ["data.europa.eu"] = PublisherId.EuEurLex,
+            ["eur-lex.europa.eu"] = PublisherId.EuEurLex,
+            ["data.legilux.public.lu"] = PublisherId.LuLegilux,
+            ["legilux.public.lu"] = PublisherId.LuLegilux,
+        };
 
     private static bool IsEcli(string value)
     {
@@ -340,12 +365,18 @@ public sealed record OfficialIdentifier
             return false;
         }
 
-        if (parts[2].Length == 0 || parts[3].Length != 4 || parts[3].Any(c => c is < '0' or > '9'))
+        // The court segment had no character class at all, so it was looser than the schema
+        // pattern beside it. A control character is already stopped by the printable-ASCII bound,
+        // but a printable oddity was not, and reader and schema must admit the same set.
+        if (parts[2].Length == 0 ||
+            !parts[2].All(c => c is (>= 'A' and <= 'Z') or (>= '0' and <= '9')) ||
+            parts[3].Length != 4 || parts[3].Any(c => c is < '0' or > '9'))
         {
             return false;
         }
 
-        return parts[4].Length > 0 && parts[4].All(c => c is (>= '0' and <= '9') or (>= 'A' and <= 'Z'));
+        return parts[4].Length > 0 &&
+            parts[4].All(c => c is (>= '0' and <= '9') or (>= 'A' and <= 'Z') or '.');
     }
 
     /// <summary>
@@ -356,20 +387,54 @@ public sealed record OfficialIdentifier
     /// only claimed level distinction and one URI could be admitted as either. Cellar work URIs
     /// live under a work segment; a resource-level URI names a manifestation or item beneath one.
     /// </remarks>
+    /// <summary>
+    /// A Cellar URI at the level its family claims.
+    /// </summary>
+    /// <remarks>
+    /// The work is <c>/resource/cellar/&lt;uuid&gt;</c>, where the publisher's predicates actually
+    /// live. Candidate 4 admitted any three-segment <c>/resource/&lt;class&gt;/&lt;id&gt;</c>, so
+    /// <c>/resource/celex/32016R0679</c> passed as a work. That URI is a persistent-identifier
+    /// alias tied to the work by <c>owl:sameAs</c>; treating it as the work relabels an alias as
+    /// the thing itself, which is the loss this package exists to prevent one level up from where
+    /// I was looking.
+    /// </remarks>
     private static bool IsCellarUri(string value, bool work)
     {
         if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
             uri.Scheme is not ("http" or "https") ||
-            !string.Equals(uri.Host, "publications.europa.eu", StringComparison.Ordinal) ||
-            !uri.AbsolutePath.StartsWith("/resource/", StringComparison.Ordinal))
+            !string.Equals(uri.Host, "publications.europa.eu", StringComparison.Ordinal))
         {
             return false;
         }
 
-        // /resource/<class>/<id> is a work; anything deeper is a resource under it.
         var segments = uri.AbsolutePath.Trim('/').Split('/');
-        return work ? segments.Length == 3 : segments.Length > 3;
+        if (segments.Length < 3 ||
+            !string.Equals(segments[0], "resource", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (work)
+        {
+            return segments.Length == 3 &&
+                string.Equals(segments[1], "cellar", StringComparison.Ordinal) &&
+                Guid.TryParseExact(segments[2], "D", out _);
+        }
+
+        return segments.Length > 3 &&
+            string.Equals(segments[1], "cellar", StringComparison.Ordinal) &&
+            Guid.TryParseExact(segments[2], "D", out _);
     }
+
+    /// <summary>A persistent-identifier alias URI, which is a fact in its own right.</summary>
+    private static bool IsCellarPsi(string value) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+        uri.Scheme is "http" or "https" &&
+        string.Equals(uri.Host, "publications.europa.eu", StringComparison.Ordinal) &&
+        uri.AbsolutePath.Trim('/').Split('/') is { Length: 3 } segments &&
+        string.Equals(segments[0], "resource", StringComparison.Ordinal) &&
+        !string.Equals(segments[1], "cellar", StringComparison.Ordinal) &&
+        segments[2].Length > 0;
 }
 
 /// <summary>
@@ -430,6 +495,7 @@ public sealed record OfficialIdentitySet
             [FactsIdentifierFamily.Ecli] = PublisherId.EuEurLex,
             [FactsIdentifierFamily.CellarWorkUri] = PublisherId.EuEurLex,
             [FactsIdentifierFamily.CellarResourceUri] = PublisherId.EuEurLex,
+            [FactsIdentifierFamily.CellarPsiUri] = PublisherId.EuEurLex,
             [FactsIdentifierFamily.Memorial] = PublisherId.LuLegilux,
             [FactsIdentifierFamily.HistoricalLegalId] = PublisherId.LuLegilux,
             // Both publishers mint ELI.
@@ -489,6 +555,15 @@ public sealed record OfficialIdentitySet
             {
                 throw new ArgumentException(
                     $"{publisher} does not mint {identifier.Family} identifiers.",
+                    nameof(identifiers));
+            }
+
+            // ELI is minted by both publishers in different shapes, so the shape decides.
+            if (identifier.Family == FactsIdentifierFamily.Eli &&
+                OfficialIdentifier.EliMintedBy(identifier.RawValue) != publisher)
+            {
+                throw new ArgumentException(
+                    $"{publisher} does not mint an ELI of that shape.",
                     nameof(identifiers));
             }
         }

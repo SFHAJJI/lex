@@ -79,6 +79,13 @@ public enum FactsIdentifierFamily
     [JsonStringEnumMemberName("cellar_resource_uri")]
     CellarResourceUri,
 
+    /// <summary>
+    /// A Cellar persistent-identifier alias, such as the CELEX PSI, tied to the work by
+    /// <c>owl:sameAs</c> rather than being the work. Kept as its own fact instead of relabelled.
+    /// </summary>
+    [JsonStringEnumMemberName("cellar_psi_uri")]
+    CellarPsiUri,
+
     [JsonStringEnumMemberName("memorial")]
     Memorial,
 

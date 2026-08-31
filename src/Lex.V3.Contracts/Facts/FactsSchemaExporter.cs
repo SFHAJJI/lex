@@ -164,17 +164,34 @@ internal static class FactsSchemaHardener
 
     private const string CellarHost = @"^https?://publications\.europa\.eu/resource/";
 
-    /// <summary>A work is /resource/&lt;class&gt;/&lt;id&gt; and nothing deeper.</summary>
-    internal const string CellarWorkPattern = CellarHost + "[^/]+/[^/]+$";
+    private const string Uuid = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
 
-    /// <summary>A resource is anything strictly beneath a work.</summary>
-    internal const string CellarResourcePattern = CellarHost + "[^/]+/[^/]+/.+$";
+    /// <summary>The work is the Cellar UUID work, not a persistent-identifier alias.</summary>
+    internal const string CellarWorkPattern = CellarHost + "cellar/" + Uuid + "$";
 
-    internal const string EcliPattern = "^ECLI:[A-Z]{2}:[^:]+:[0-9]{4}:[0-9A-Z]+$";
+    /// <summary>A resource is anything strictly beneath that work.</summary>
+    internal const string CellarResourcePattern = CellarHost + "cellar/" + Uuid + "/.+$";
+
+    /// <summary>An alias such as the CELEX PSI, which is never the work.</summary>
+    internal const string CellarPsiPattern = CellarHost + "(?!cellar/)[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+$";
+
+    // `[^:]` matched a newline, so a control character inside a segment validated. Every segment
+    // is now an explicit class.
+    internal const string EcliPattern = "^ECLI:[A-Z]{2}:[A-Z0-9]+:[0-9]{4}:[0-9A-Z.]+$";
+
+    /// <summary>A calendar-plausible eight-digit date. Leap years stay with the reader.</summary>
+    private const string YyyyMmDd = "[0-9]{4}(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])";
 
     /// <summary>The five admitted CELEX profiles, anchored at both ends.</summary>
     internal const string CelexPattern =
-        @"^[0-9]{5}[A-Z]{1,3}([0-9]+(R\([0-9]+\))?(-[0-9]{8})?|/[A-Z0-9]+(/[A-Z0-9]+)*|[0-9]+[A-Z]{3}_[0-9A-Z]+)$";
+        @"^[0-9]{5}[A-Z]{1,3}([0-9]+(R\([0-9]+\))?(-" + YyyyMmDd + @")?|/[A-Z0-9]+(/[A-Z0-9]+)*|[0-9]+[A-Z]{3}_[0-9A-Z]+)$";
+
+    /// <summary>A valid XSD timezone, including the exact 14:00 ceiling.</summary>
+    internal const string TimezonePattern = @"(Z|[+-](0[0-9]|1[0-3]):[0-5][0-9]|[+-]14:00)?";
+
+    internal const string EuEliPattern = @"^https?://(data\.europa\.eu|eur-lex\.europa\.eu)/.*/eli/";
+
+    internal const string LuEliPattern = @"^(eli/|https?://(data\.legilux\.public\.lu|legilux\.public\.lu)/.*/eli/)";
 
     /// <summary>
     /// The only invariants left to the reader alone: equality between two distant instance
@@ -196,8 +213,8 @@ internal static class FactsSchemaHardener
             "authorizing axiom maps this forward predicate to this inverse predicate",
             "inbound view contributors all target the view target",
             "ecli state agrees with the target identity set",
-            "lexical value is a real calendar date at its declared precision",
-            "ecli_missing rests on a complete identifier enumeration",
+            "leap-year validity of a consolidation or lexical date",
+            "one raw value may not repeat under two families in one set",
         });
 
     /// <summary>
@@ -255,6 +272,9 @@ internal static class FactsSchemaHardener
                 Props(("family", Const("cellar_resource_uri"))),
                 Props(("raw_value", new JsonObject { ["pattern"] = CellarResourcePattern }))),
             IfThen(
+                Props(("family", Const("cellar_psi_uri"))),
+                Props(("raw_value", new JsonObject { ["pattern"] = CellarPsiPattern }))),
+            IfThen(
                 Props(("family", Const("ecli"))),
                 Props(("raw_value", new JsonObject { ["pattern"] = EcliPattern }))),
             // An unanchored CELEX prefix accepted any trailing suffix at all. This anchors the
@@ -308,6 +328,14 @@ internal static class FactsSchemaHardener
     private static void PinNestedContract(JsonObject node, JsonObject properties)
     {
         var names = properties.Select(pair => pair.Key).ToHashSet(StringComparer.Ordinal);
+
+        // An identity set: bind each publisher to the ELI shape it mints.
+        if (names.Count == 2 && names.Contains("publisher") && names.Contains("identifiers"))
+        {
+            node["allOf"] = new JsonArray(
+                EliShapeArm("eu-eurlex", EuEliPattern),
+                EliShapeArm("lu-legilux", LuEliPattern));
+        }
 
         // The identifier value object is inlined into every relation schema exactly as the
         // contracts are, so its per-family value shapes have to be applied by signature too. The
@@ -539,6 +567,23 @@ internal static class FactsSchemaHardener
     /// sentinel shape is deliberately used twice, once per direction, which is exactly the case
     /// that needs the clone.
     /// </remarks>
+    /// <summary>One publisher may carry only the ELI shape it mints.</summary>
+    private static JsonObject EliShapeArm(string publisher, string pattern) => IfThen(
+        Props(("publisher", Const(publisher))),
+        new JsonObject
+        {
+            ["properties"] = new JsonObject
+            {
+                ["identifiers"] = new JsonObject
+                {
+                    ["items"] = IfThen(
+                        Props(("family", Const("eli"))),
+                        Props(("raw_value", new JsonObject { ["pattern"] = pattern }))),
+                },
+            },
+            ["required"] = new JsonArray("identifiers"),
+        });
+
     private static JsonObject IfThen(JsonObject condition, JsonObject consequence) =>
         new()
         {

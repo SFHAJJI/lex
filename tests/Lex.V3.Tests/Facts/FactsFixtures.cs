@@ -53,12 +53,18 @@ internal static class FactsFixtures
     /// and an ECLI, all three at once. Retaining any one of them alone is the loss this package
     /// exists to prevent.
     /// </summary>
+    internal const string CellarWorkUri =
+        "http://publications.europa.eu/resource/cellar/1f8c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f";
+
+    /// <summary>The CELEX persistent identifier, an alias tied to the work rather than the work.</summary>
+    internal const string CellarPsiUri =
+        "http://publications.europa.eu/resource/celex/62019CJ0311";
+
     internal static OfficialIdentitySet EuCaseWithEcli() => new(
         PublisherId.EuEurLex,
         [
-            new OfficialIdentifier(
-                FactsIdentifierFamily.CellarWorkUri,
-                "http://publications.europa.eu/resource/case/62019CJ0311"),
+            new OfficialIdentifier(FactsIdentifierFamily.CellarWorkUri, CellarWorkUri),
+            new OfficialIdentifier(FactsIdentifierFamily.CellarPsiUri, CellarPsiUri),
             new OfficialIdentifier(FactsIdentifierFamily.Celex, "62019CJ0311"),
             new OfficialIdentifier(FactsIdentifierFamily.Ecli, "ECLI:EU:C:2020:1042"),
         ]);
@@ -67,9 +73,7 @@ internal static class FactsFixtures
     internal static OfficialIdentitySet EuCaseWithoutEcli() => new(
         PublisherId.EuEurLex,
         [
-            new OfficialIdentifier(
-                FactsIdentifierFamily.CellarWorkUri,
-                "http://publications.europa.eu/resource/case/62019CJ0311"),
+            new OfficialIdentifier(FactsIdentifierFamily.CellarWorkUri, CellarWorkUri),
             new OfficialIdentifier(FactsIdentifierFamily.Celex, "62019CJ0311"),
         ]);
 

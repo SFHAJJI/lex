@@ -187,7 +187,7 @@
       "then": {
         "properties": {
           "raw_lexical_value": {
-            "pattern": "^9999-12-31(Z|[\u002B-]\\d{2}:\\d{2})?$"
+            "pattern": "^9999-12-31(Z|[\u002B-](0[0-9]|1[0-3]):[0-5][0-9]|[\u002B-]14:00)?$"
           },
           "datatype_uri": {
             "const": "http://www.w3.org/2001/XMLSchema#date"
@@ -203,7 +203,7 @@
       "if": {
         "properties": {
           "raw_lexical_value": {
-            "pattern": "^9999-12-31(Z|[\u002B-]\\d{2}:\\d{2})?$"
+            "pattern": "^9999-12-31(Z|[\u002B-](0[0-9]|1[0-3]):[0-5][0-9]|[\u002B-]14:00)?$"
           },
           "datatype_uri": {
             "const": "http://www.w3.org/2001/XMLSchema#date"

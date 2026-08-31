@@ -45,12 +45,47 @@ public sealed class FactsSchemaParityTests
             root => root["schema"] = "lex-v3-publisher-relation/2",
             SchemaCanExpress: true),
         new Case(
+            "the CELEX persistent identifier tagged as a Cellar work",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(
+                FactsFixtures.PublisherRelation(target: FactsFixtures.EuCaseWithEcli())),
+            root => root["target"]!["identifiers"]![0]!["raw_value"] = FactsFixtures.CellarPsiUri,
+            SchemaCanExpress: true),
+        new Case(
+            "a control character inside an ECLI",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(
+                FactsFixtures.PublisherRelation(target: FactsFixtures.EuCaseWithEcli())),
+            root => root["target"]!["identifiers"]![3]!["raw_value"] = "ECLI:EU:C\n:2020:1042",
+            SchemaCanExpress: true),
+        new Case(
+            "an EU identity carrying the Luxembourg ELI shape",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(
+                FactsFixtures.PublisherRelation(target: FactsFixtures.EuCaseWithEcli())),
+            root => root["target"]!["identifiers"] = new JsonArray(
+                new JsonObject { ["family"] = "eli", ["raw_value"] = "eli/etat/leg/loi/2019/07/15/a512/jo" }),
+            SchemaCanExpress: true),
+        new Case(
+            "an impossible consolidation date",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(
+                FactsFixtures.PublisherRelation(target: FactsFixtures.EuCaseWithEcli())),
+            root => root["target"]!["identifiers"]![2]!["raw_value"] = "02016R0679-20161301",
+            SchemaCanExpress: true),
+        new Case(
+            "a timezone beyond the XSD ceiling on the open sentinel",
+            FactsSchemaIds.PublisherDate,
+            () => ContractJson.Serialize(FactsFixtures.OpenEndedDate()),
+            root => root["raw_lexical_value"] = "9999-12-31+99:99",
+            SchemaCanExpress: true),
+        new Case(
             "a resource-level Cellar URI tagged as a work",
             FactsSchemaIds.PublisherRelation,
             () => ContractJson.Serialize(
                 FactsFixtures.PublisherRelation(target: FactsFixtures.EuCaseWithEcli())),
             root => root["target"]!["identifiers"]![0]!["raw_value"] =
-                "http://publications.europa.eu/resource/case/62019CJ0311/DOC_1",
+                FactsFixtures.CellarWorkUri + "/DOC_1",
             SchemaCanExpress: true),
         new Case(
             "a CELEX with an invalid trailing suffix",

@@ -37,7 +37,7 @@ public sealed record PublisherDate
     public const string OpenEndedLexicalValue = "9999-12-31";
 
     /// <summary>The pattern matching every admitted lexical form of the sentinel.</summary>
-    public const string OpenEndedLexicalPattern = @"^9999-12-31(Z|[+-]\d{2}:\d{2})?$";
+    public const string OpenEndedLexicalPattern = @"^9999-12-31(Z|[+-](0[0-9]|1[0-3]):[0-5][0-9]|[+-]14:00)?$";
 
     public const string GYear = "http://www.w3.org/2001/XMLSchema#gYear";
     public const string GYearMonth = "http://www.w3.org/2001/XMLSchema#gYearMonth";
