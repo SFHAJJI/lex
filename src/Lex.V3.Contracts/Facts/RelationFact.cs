@@ -91,8 +91,21 @@ public sealed record RelationFact
 
     public RelationAssertionKind Kind { get; }
 
+    /// <summary>
+    /// The body scope of the <c>Target</c> of the edge carried here, whichever edge that is.
+    /// </summary>
+    /// <remarks>
+    /// Naming the referent matters because a derived inverse swaps the endpoints: its
+    /// <c>Target</c> is the original assertion's source. This field always follows the carried
+    /// edge's own <c>Target</c>, never the forward assertion underneath it. A local inbound view
+    /// has a single <c>Target</c> and there is no ambiguity there.
+    /// </remarks>
     public TargetBodyScope TargetBodyScope { get; }
 
+    /// <summary>
+    /// The ECLI state of the <c>Target</c> of the edge carried here, on the same rule as
+    /// <see cref="TargetBodyScope"/>.
+    /// </summary>
     public EcliState TargetEcliState { get; }
 
     public string? TargetEcli { get; }
