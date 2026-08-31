@@ -80,6 +80,44 @@ const PAGES = [
   "state-refusal.html",
 ];
 
+/**
+ * Ports WHATWG Fetch refuses to connect to, so a debugger listening on one is unreachable.
+ *
+ * The two harnesses drew from `9222 + random*500` and `9800 + random*300`, and the second range
+ * contains **10080**, which is on this list. Chrome launched fine and `fetch` was then forbidden
+ * from asking it anything, so the run waited twenty seconds and reported that the debugger never
+ * answered. Identical trees went green or red depending on a dice roll, which is the worst kind
+ * of failure: the evidence looked flaky and the cause was deterministic.
+ *
+ * Only the entries that can fall inside a debugger range are listed; the full WHATWG set is
+ * mostly low ports no allocator here would reach.
+ * https://fetch.spec.whatwg.org/#port-blocking
+ */
+export const FETCH_BLOCKED_PORTS = Object.freeze(new Set([
+  6000, 6566, 6665, 6666, 6667, 6668, 6669, 6697, 10080,
+]));
+
+/**
+ * A debugger port drawn from a range, with blocked ports excluded by construction.
+ *
+ * Rejecting after the draw would leave the bug reachable through an unlucky retry, so the range
+ * is filtered first and the draw is over what remains.
+ */
+export function allocateDebuggerPort(start, count, random = Math.random) {
+  const usable = [];
+  for (let port = start; port < start + count; port += 1) {
+    if (!FETCH_BLOCKED_PORTS.has(port)) {
+      usable.push(port);
+    }
+  }
+
+  if (usable.length === 0) {
+    throw new Error(`every port in ${start}..${start + count - 1} is blocked by Fetch`);
+  }
+
+  return usable[Math.min(usable.length - 1, Math.floor(random() * usable.length))];
+}
+
 export async function findBrowser(platform = process.platform) {
   const { access } = await import("node:fs/promises");
   const candidates = browserCandidates(platform);
@@ -368,7 +406,7 @@ async function killTree(pid) {
 
 async function main() {
   const browser = await findBrowser();
-  const port = 9222 + Math.floor(Math.random() * 500);
+  const port = allocateDebuggerPort(9222, 500);
   const profile = await mkdtemp(join(tmpdir(), "lex-cdp-"));
   // An induced mutation serves a deliberately broken copy so the gates can be shown red.
   // A gate nobody has watched fail is a gate nobody should trust: the heading-order and

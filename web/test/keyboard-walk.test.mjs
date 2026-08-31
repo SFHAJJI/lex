@@ -15,7 +15,7 @@ import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
-import { Session, findBrowser, keyboardWalk, waitForDebugger } from "../scripts/browser-evidence.mjs";
+import { Session, allocateDebuggerPort, findBrowser, keyboardWalk, waitForDebugger } from "../scripts/browser-evidence.mjs";
 
 const GOOD = `<!doctype html><html lang="en"><head><meta charset="utf-8"><style>
   a:focus-visible { outline: 3px solid #05f; outline-offset: 2px; }
@@ -29,7 +29,7 @@ const NO_RING = GOOD.replace("outline: 3px solid #05f; outline-offset: 2px;", "o
 
 async function main() {
   const browser = await findBrowser();
-  const port = 9800 + Math.floor(Math.random() * 300);
+  const port = allocateDebuggerPort(9800, 300);
   const profile = await mkdtemp(join(tmpdir(), "lex-cdp-selftest-"));
   const child = spawn(
     browser,
