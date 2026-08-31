@@ -30,14 +30,6 @@ const WIDTHS = [
 
 const PAGES = ["state-loading.html", "state-transport-failure.html", "state-invalid-envelope.html"];
 
-function existsSync(path) {
-  try {
-    return require("node:fs").existsSync(path);
-  } catch {
-    return false;
-  }
-}
-
 async function findBrowser() {
   const { access } = await import("node:fs/promises");
   for (const candidate of BROWSERS) {
@@ -122,6 +114,40 @@ class Session {
 // Read out of the live DOM. Focus order is collected by actually walking the document
 // rather than by counting elements that look focusable, because the two differ.
 const PROBE = `(() => {
+  // WCAG 2.2 relative luminance and contrast ratio, computed in the page against the
+  // effective background. The background is resolved by walking ancestors until a
+  // non-transparent colour is found, because an element that sets only a text colour
+  // inherits its contrast from whatever is painted behind it, and that is what a reader
+  // actually sees.
+  const channel = (v) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+  const parse = (value) => (value.match(/[\\d.]+/g) || []).map(Number);
+  const luminance = ([r, g, b]) => 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+  const opaqueBackground = (el) => {
+    for (let node = el; node; node = node.parentElement) {
+      const bg = parse(getComputedStyle(node).backgroundColor);
+      if (bg.length >= 3 && (bg.length < 4 || bg[3] > 0)) return bg;
+    }
+    return [255, 255, 255];
+  };
+  const ratio = (a, b) => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+  const contrast = [...document.querySelectorAll('h1,h2,h3,p,li,dt,dd,code,strong,summary,span')]
+    .filter((el) => el.textContent.trim().length > 0 && el.offsetParent !== null)
+    .map((el) => {
+      const style = getComputedStyle(el);
+      const size = parseFloat(style.fontSize);
+      const bold = Number(style.fontWeight) >= 700;
+      const large = size >= 24 || (size >= 18.66 && bold);
+      return {
+        tag: el.tagName.toLowerCase(),
+        ratio: Math.round(ratio(parse(style.color), opaqueBackground(el)) * 100) / 100,
+        required: large ? 3 : 4.5,
+      };
+    });
+  const worst = contrast.reduce((a, b) => (a === null || b.ratio - b.required < a.ratio - a.required ? b : a), null);
+
   const focusable = [...document.querySelectorAll(
     'a[href],button,input,select,textarea,summary,[tabindex]:not([tabindex="-1"])')];
   const heads = [...document.querySelectorAll('h1,h2,h3')].map((h) => h.tagName + ':' + h.textContent.trim().slice(0, 40));
@@ -142,6 +168,11 @@ const PROBE = `(() => {
     bodyColor: body.color,
     bodyBackground: body.backgroundColor,
     scriptCount: document.querySelectorAll('script').length,
+    contrastChecked: contrast.length,
+    worstContrast: worst ? worst.ratio : null,
+    worstContrastTag: worst ? worst.tag : null,
+    worstContrastRequired: worst ? worst.required : null,
+    contrastFailures: contrast.filter((c) => c.ratio < c.required).length,
   };
 })()`;
 
@@ -192,6 +223,12 @@ async function main() {
     for (const page of PAGES) {
       const url = pathToFileURL(join(process.cwd(), "dist", page)).href;
       for (const viewport of WIDTHS) {
+       for (const scheme of ["light", "dark"]) {
+        await session.send(
+          "Emulation.setEmulatedMedia",
+          { features: [{ name: "prefers-color-scheme", value: scheme }, { name: "prefers-reduced-motion", value: "reduce" }] },
+          sessionId,
+        );
         await session.send(
           "Emulation.setDeviceMetricsOverride",
           { width: viewport.width, height: viewport.height, deviceScaleFactor: 1, mobile: viewport.label === "narrow" },
@@ -206,7 +243,7 @@ async function main() {
           sessionId,
         );
         const observed = result.value;
-        const row = { page, viewport: viewport.label, console: logged.length, ...observed };
+        const row = { page, viewport: viewport.label, scheme, console: logged.length, ...observed };
         rows.push(row);
 
         if (logged.length > 0) failures.push(`${page} @${viewport.label}: console output ${JSON.stringify(logged)}`);
@@ -219,6 +256,16 @@ async function main() {
         if (!observed.syntheticBanner) failures.push(`${page} @${viewport.label}: synthetic banner missing`);
         if (observed.scriptCount !== 0) failures.push(`${page} @${viewport.label}: ${observed.scriptCount} script tags`);
         if (observed.state === undefined) failures.push(`${page} @${viewport.label}: no data-preview-state`);
+        if (observed.contrastChecked === 0) {
+          failures.push(`${page} @${viewport.label}/${scheme}: no text was contrast-checked`);
+        }
+        if (observed.contrastFailures > 0) {
+          failures.push(
+            `${page} @${viewport.label}/${scheme}: ${observed.contrastFailures} element(s) below required contrast, ` +
+              `worst ${observed.worstContrast} on <${observed.worstContrastTag}> needing ${observed.worstContrastRequired}`,
+          );
+        }
+       }
       }
     }
     session.close();
@@ -229,9 +276,9 @@ async function main() {
 
   for (const row of rows) {
     console.log(
-      `${row.page.padEnd(30)} ${row.viewport.padEnd(8)} console=${row.console} ` +
-        `state=${row.state} h1=${row.h1Count} focusable=${row.focusableCount} ` +
-        `landmarks=${row.landmarks} overflow=${row.horizontalOverflow} scripts=${row.scriptCount}`,
+      `${row.page.replace('state-','').replace('.html','').padEnd(18)} ${row.viewport.padEnd(8)} ${row.scheme.padEnd(6)} ` +
+        `console=${row.console} h1=${row.h1Count} overflow=${row.horizontalOverflow} scripts=${row.scriptCount} ` +
+        `contrast=${row.contrastChecked} worst=${row.worstContrast}`,
     );
   }
 
