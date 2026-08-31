@@ -96,3 +96,121 @@ test("problems are rendered from the argument, not from a template literal", () 
   assert.match(b, /second-problem/);
   assert.notEqual(a, b);
 });
+
+// The two data-bearing states.
+//
+// These are the states that can lie. The envelope-free pages above can only fail by
+// implying a fact they do not have; these can fail by rendering the wrong fact, or by
+// rendering a fact the envelope never carried.
+
+import { renderSuccess, renderRefusal } from "../scripts/render.mjs";
+
+const CONTEXT = (over = {}) => ({
+  jurisdiction: "synthetic",
+  capabilities: "preview_mechanics_only",
+  source: { source_kind: "synthetic_test" },
+  freshness: { observed_at: "2026-08-31T07:00:00Z", upstream_health: "not_applicable_synthetic" },
+  index_format: "lex-index/3",
+  snapshot: { snapshot_sha256: "a".repeat(64) },
+  artifact: { artifact_id: "art-1" },
+  runtime: { source_sha256: "b".repeat(64) },
+  builder: { source_sha256: "c".repeat(64) },
+  operation: { operation_id: "resolve", catalog_sha256: "d".repeat(64) },
+  refusal_registry: { sha256: "e".repeat(64) },
+  request_ref: "req_0123456789abcdef0123456789abcdef",
+  ...over,
+});
+
+const SUCCESS = (over = {}, context = CONTEXT()) =>
+  renderSuccess({
+    envelope: {
+      result: { object_set_id: "set-one", object_set_sha256: "1".repeat(64), ...over },
+      context,
+    },
+  });
+
+const REFUSAL = (over = {}) =>
+  renderRefusal({
+    envelope: {
+      refusal: {
+        code: "identifier_unknown",
+        requested_coordinate: "eli/synthetic-preview",
+        checked_identifier_family: "eli",
+        publisher_contexts_checked: ["lu-legilux"],
+        possible_held_records: [],
+        what_would_answer: ["a known ELI"],
+        official_search_actions: ["https://legilux.public.lu"],
+        asserts_absence_of_law: false,
+        ...over,
+      },
+      context: CONTEXT(),
+    },
+  });
+
+// Escaping is asserted on the function, not through a rendered page. Through the page
+// each character's assertion silently depended on a neighbouring escape still working:
+// removing only `<` left `&lt;script>alert(1)`, which does not contain `<script>alert`,
+// so the test passed while the hole was real. Testing the five characters one at a time
+// is the only form of this test that fails when it should.
+test("every HTML-significant character is escaped independently", () => {
+  for (const [raw, entity] of [
+    ["&", "&amp;"],
+    ["<", "&lt;"],
+    [">", "&gt;"],
+    ['"', "&quot;"],
+    ["'", "&#39;"],
+  ]) {
+    assert.equal(escapeHtml(raw), entity, `${raw} must escape to ${entity}`);
+  }
+});
+
+test("a refusal is rendered as an answer, never as an error", () => {
+  const html = REFUSAL();
+  assert.match(html, /data-preview-state="refusal"/);
+  assert.match(html, /class="code-chip">identifier_unknown</);
+  assert.doesNotMatch(html, /class="[^"]*(error|danger|red)/);
+});
+
+test("a refusal that asserts no absence says so explicitly", () => {
+  assert.match(REFUSAL(), /does <strong>not<\/strong> assert/);
+  assert.match(REFUSAL({ asserts_absence_of_law: true }), /asserts the absence of a law/);
+});
+
+test("empty payload lists are omitted rather than rendered empty", () => {
+  assert.doesNotMatch(REFUSAL(), /Records that may be held/);
+  assert.match(REFUSAL({ possible_held_records: ["one"] }), /Records that may be held/);
+});
+
+test("the success page derives its values and invents no legal time", () => {
+  const html = SUCCESS();
+  assert.match(html, /set-one/);
+  assert.match(html, /preview_mechanics_only/);
+  assert.doesNotMatch(html, /in force|valid_from|timeline_semantics/i);
+});
+
+// Presence-only rendering passes any single-fixture test. Two payloads that differ must
+// produce output that differs, and neither may carry the other's values.
+test("different envelopes produce different pages", () => {
+  const one = SUCCESS();
+  const two = SUCCESS(
+    { object_set_id: "set-two", object_set_sha256: "2".repeat(64) },
+    CONTEXT({ operation: { operation_id: "timeline", catalog_sha256: "9".repeat(64) } }),
+  );
+  assert.notEqual(one, two);
+  assert.match(one, /resolve/);
+  assert.doesNotMatch(one, /set-two/);
+  assert.match(two, /timeline/);
+  assert.doesNotMatch(two, /set-one/);
+
+  const single = REFUSAL();
+  const both = REFUSAL({ publisher_contexts_checked: ["eu-eurlex", "lu-legilux"] });
+  assert.notEqual(single, both);
+  assert.doesNotMatch(single, /eu-eurlex/);
+  assert.match(both, /eu-eurlex/);
+});
+
+test("a provenance row absent from the envelope is omitted, never defaulted", () => {
+  const html = SUCCESS({}, CONTEXT({ artifact: undefined }));
+  assert.doesNotMatch(html, /Artifact/);
+  assert.match(SUCCESS(), /Artifact/);
+});
