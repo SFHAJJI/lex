@@ -19,10 +19,46 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-const BROWSERS = [
-  "C:/Program Files/Google/Chrome/Application/chrome.exe",
-  "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
-];
+/**
+ * Where a real Chromium lives, per platform.
+ *
+ * This list was Windows-only, so `findBrowser` threw on the Ubuntu runner and the required
+ * `web` check failed after 63 tests passed. It looked for `C:/Program Files/...` on Linux,
+ * which is the shape of assuming your own machine is the only one: it passed locally for
+ * exactly as long as nobody ran it anywhere else.
+ *
+ * `LEX_BROWSER` wins when set, so a host with Chromium somewhere unusual is configurable
+ * rather than unsupported.
+ */
+const BROWSERS_BY_PLATFORM = {
+  win32: [
+    "C:/Program Files/Google/Chrome/Application/chrome.exe",
+    "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
+    "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+  ],
+  linux: [
+    "/usr/bin/google-chrome-stable",
+    "/usr/bin/google-chrome",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/chromium",
+    "/usr/bin/microsoft-edge-stable",
+    "/snap/bin/chromium",
+  ],
+  darwin: [
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+  ],
+};
+
+/** The candidates for a platform, most preferred first. Exported so a test can check them. */
+export function browserCandidates(platform = process.platform) {
+  const configured = process.env.LEX_BROWSER;
+  const known = BROWSERS_BY_PLATFORM[platform] ?? [];
+  return configured ? [configured, ...known] : known;
+}
+
+const BROWSERS = browserCandidates();
 
 // Narrow, tablet, desktop. The narrow width is a real small phone rather than a
 // convenient round number, because layouts tend to be tuned to round numbers.
@@ -45,9 +81,17 @@ const PAGES = [
   "state-refusal.html",
 ];
 
-export async function findBrowser() {
+export async function findBrowser(platform = process.platform) {
   const { access } = await import("node:fs/promises");
-  for (const candidate of BROWSERS) {
+  const candidates = browserCandidates(platform);
+  if (candidates.length === 0) {
+    throw new Error(
+      `no browser candidates are declared for platform ${platform}; ` +
+        "set LEX_BROWSER or add the platform to BROWSERS_BY_PLATFORM",
+    );
+  }
+
+  for (const candidate of candidates) {
     try {
       await access(candidate);
       return candidate;
@@ -55,7 +99,10 @@ export async function findBrowser() {
       // try the next one
     }
   }
-  throw new Error(`no browser found; looked for:\n  ${BROWSERS.join("\n  ")}`);
+
+  throw new Error(
+    `no browser found on ${platform}; looked for:\n  ${candidates.join("\n  ")}`,
+  );
 }
 
 export async function waitForDebugger(port, deadlineMs = 20000) {
