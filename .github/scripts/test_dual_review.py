@@ -385,6 +385,86 @@ REVIEWED_STEPS = (
     ("run", "dual_review.py"),
 )
 
+# Every key inside each reviewed step, in file order. A kind does not bound a step's
+# keys, and the keys are where the material lives: `working-directory: decoy` moves a
+# reviewed command into a directory the writer committed in the same pull request, so
+# a decoy `.github/scripts/` holding a green suite and a `dual_review.py` that exits 0
+# false-greens the required context in two lines, with no step, no env: and no change
+# to the pinned action. `with:` is the same argument for the checkout: pinning the
+# action while leaving its inputs open reviews the machinery and not the material.
+REVIEWED_STEP_KEYS = (
+    ("uses", "with", "ref", "fetch-depth", "persist-credentials"),
+    ("name", "run"),
+    ("name", "env", "GH_TOKEN", "REPO", "PR_NUMBER", "HEAD_SHA", "run"),
+)
+
+# What those keys are bound to. Pinning a key and not its value reviews the shape of
+# the input and not the input. The gate step's env block is the evaluator's entire
+# input: `PR_NUMBER: 261` reads a different pull request's body, `REPO:` reads a
+# repository the writer controls, and `HEAD_SHA:` evaluates a commit that is not the
+# head, which is the single property the receipt exists to bind. Each is one line
+# inside a key list that stays exactly as reviewed, so only the value can catch it.
+REVIEWED_BINDINGS = (
+    "          ref: ${{ github.event.pull_request.head.sha }}",
+    "          fetch-depth: 2",
+    "          persist-credentials: false",
+    "          GH_TOKEN: ${{ github.token }}",
+    "          REPO: ${{ github.repository }}",
+    "          PR_NUMBER: ${{ github.event.pull_request.number }}",
+    "          HEAD_SHA: ${{ github.event.pull_request.head.sha }}",
+)
+
+# The reviewed environment: the exact keys the workflow and the job may declare, in
+# order, and the exact runner. Claude O1 against 61eceae. My own env: rule there read
+# one spelling, `env:` alone on its own line, one round after I had written that a
+# scanner reading only its own preferred spelling never sees `- {uses: x}` or
+# `- "uses": x`. It lost to those same spellings. Worse, three keys shim the gate
+# without any `env:` and without any step: `container:` runs every step inside an
+# image of the writer's choosing, `runs-on:` moves the whole job onto a machine of
+# the writer's choosing, and `defaults.run.shell` is a template every command is
+# substituted into. Refusing keys one at a time loses to the next key. An exact
+# allowlist refuses all of them, including the ones nobody has thought of yet.
+REVIEWED_WORKFLOW_KEYS = ("name", "on", "permissions", "jobs")
+REVIEWED_JOB_KEYS = ("name", "runs-on", "steps")
+REVIEWED_RUNNER = "ubuntu-latest"
+
+# One reviewed key per line, in the one spelling this scanner can read. A quoted key
+# and a flow mapping are valid YAML that GitHub obeys and that a line-oriented rule
+# reading `key:` never sees, so both are refused outright. `${{ }}` expressions are
+# removed first: they are the only legitimate braces in the file.
+READABLE_KEY_RE = re.compile(r"^(\s*)(- )?([A-Za-z_][A-Za-z0-9_.-]*):(\s.*)?$")
+EXPRESSION_RE = re.compile(r"\$\{\{.*?\}\}")
+
+
+def _scoped_keys(lines):
+    """The workflow's top-level keys and its job's keys, plus unreadable lines.
+
+    Scope matters: `types:` and `branches:` sit at four spaces under `on:` exactly
+    like a job key does, so indentation alone would confuse a trigger option with the
+    environment the gate runs in.
+    """
+    workflow, job, unreadable = [], [], []
+    inside_jobs = inside_job = False
+    for line in lines:
+        if not line.strip():
+            continue
+        scrubbed = EXPRESSION_RE.sub("", line)
+        match = READABLE_KEY_RE.match(scrubbed)
+        if not match or "{" in scrubbed or "}" in scrubbed:
+            unreadable.append(line.strip())
+            continue
+        indent, dash, key = len(match.group(1)), match.group(2), match.group(3)
+        if dash:
+            continue
+        if indent == 0:
+            workflow.append(key)
+            inside_jobs, inside_job = key == "jobs", False
+        elif inside_jobs and indent == 2:
+            inside_job = True
+        elif inside_job and indent == 4:
+            job.append(key)
+    return workflow, job, unreadable
+
 
 def _uncommented(text):
     """The workflow's lines with YAML comments removed.
@@ -438,6 +518,22 @@ def _job_steps(lines):
     if current is not None:
         steps.append(current)
     return steps
+
+
+def _step_keys(step):
+    """Every key the step declares, in file order, including its nested inputs.
+
+    Unreadable lines are left to the readability rule, which refuses the whole file;
+    skipping them here keeps this function reporting keys rather than two things.
+    """
+    keys = []
+    for line in step:
+        if not line.strip():
+            continue
+        match = READABLE_KEY_RE.match(EXPRESSION_RE.sub("", line))
+        if match:
+            keys.append(match.group(3))
+    return keys
 
 
 def false_green_defects(text):
@@ -647,6 +743,14 @@ def false_green_defects(text):
                     f"reviewed step {index} must be exactly the {token!r} command, found "
                     f"{[line.strip() for line in runs]}"
                 )
+        found = _step_keys(step)
+        if tuple(found) != REVIEWED_STEP_KEYS[index]:
+            defects.append(
+                f"reviewed step {index}'s keys must be exactly "
+                f"{list(REVIEWED_STEP_KEYS[index])}, found {found}; working-directory:, "
+                "shell: and the checkout's own inputs each redirect a reviewed command "
+                "at material the writer chose, without adding a step"
+            )
 
     # An `env:` above step scope needs no new step at all. Two lines of ordinary-looking
     # configuration, `PYTHONPATH: /tmp/shim`, change how every step's interpreter
@@ -676,6 +780,47 @@ def false_green_defects(text):
         defects.append(
             f"expected exactly one env: block, the receipt evaluation's own, found "
             f"{len(env_lines)}"
+        )
+
+    # The environment as an exact allowlist rather than a list of refusals. Every rule
+    # above this one reads a line, so a line this scanner cannot read is refused before
+    # any of them get to report success on it.
+    workflow_keys, job_keys, unreadable_keys = _scoped_keys(lines)
+    if unreadable_keys:
+        defects.append(
+            "every line must be one reviewed key per line, unquoted, with no flow "
+            f"mapping; this is not readable as one reviewed key per line: "
+            f"{unreadable_keys}"
+        )
+    if tuple(workflow_keys) != REVIEWED_WORKFLOW_KEYS:
+        defects.append(
+            f"the workflow's top-level keys must be exactly "
+            f"{list(REVIEWED_WORKFLOW_KEYS)}, found {workflow_keys}; a top-level env: "
+            "or defaults: applies to every step and shims the gate with no step added"
+        )
+    if tuple(job_keys) != REVIEWED_JOB_KEYS:
+        defects.append(
+            f"the job's keys must be exactly {list(REVIEWED_JOB_KEYS)}, found "
+            f"{job_keys}; container:, defaults:, services: and env: each change what "
+            "the gate's own steps execute inside without adding a step"
+        )
+    stripped = [line.rstrip() for line in lines]
+    missing_bindings = [b for b in REVIEWED_BINDINGS if b not in stripped]
+    if missing_bindings:
+        defects.append(
+            f"missing reviewed binding: {missing_bindings}; the reviewed keys must be "
+            "bound to the reviewed values, or the evaluator reads a pull request, a "
+            "repository or a commit the writer chose instead of the one under review"
+        )
+
+    if not any(
+        re.match(rf"^    runs-on: {re.escape(REVIEWED_RUNNER)}\s*$", line)
+        for line in lines
+    ):
+        defects.append(
+            f"the job must run on the reviewed GitHub-hosted runner "
+            f"{REVIEWED_RUNNER!r}; a self-hosted or otherwise substituted runner "
+            "executes the gate on a machine the writer controls"
         )
 
     return defects
@@ -914,6 +1059,215 @@ class RequiredContextCannotFalseGreen(unittest.TestCase):
                 self.assertNotEqual(mutated, real, "the mutation never applied")
                 self.assertIn(
                     "not readable", "\n".join(false_green_defects(mutated))
+                )
+
+
+    def test_an_env_in_another_valid_yaml_spelling_is_caught(self):
+        """My own env: rule at 61eceae lost to exactly the trap I had just documented.
+
+        One round earlier I wrote that a scanner reading only its own preferred
+        spelling never sees `- {uses: x}` or `- "uses": x`, added a negative rule for
+        `uses`, and then wrote the env rule as `env:` alone on its own line. These four
+        are valid YAML that GitHub reads as an env block and that rule never saw.
+        """
+        real = self._workflow()
+        job = "    runs-on: ubuntu-latest\n"
+        for name, mutated in (
+            ("job, flow mapping", real.replace(
+                job, job + "    env: {PYTHONPATH: /tmp/shim}\n", 1)),
+            ("job, double-quoted key", real.replace(
+                job, job + '    "env":\n      PYTHONPATH: /tmp/shim\n', 1)),
+            ("job, single-quoted key", real.replace(
+                job, job + "    'env':\n      PYTHONPATH: /tmp/shim\n", 1)),
+            ("workflow, flow mapping", real.replace(
+                "jobs:\n", "env: {PYTHONPATH: /tmp/shim}\n\njobs:\n", 1)),
+            ("step, flow mapping", real.replace(
+                "        with:\n",
+                "        env: {PYTHONPATH: /tmp/shim}\n        with:\n", 1)),
+        ):
+            with self.subTest(spelling=name):
+                self.assertNotEqual(mutated, real, "the mutation never applied")
+                self.assertIn("PYTHONPATH", mutated, "the mutation never applied")
+                self.assertNotEqual(
+                    [], false_green_defects(mutated), "the shim survived"
+                )
+
+    def test_a_job_level_container_is_caught(self):
+        """This adds no step and no env: every step runs inside the named image.
+
+        The image supplies its own python3. It can exit 0 for both gate steps while
+        the required context reports success and no receipt is ever read.
+        """
+        real = self._workflow()
+        mutated = real.replace(
+            "    runs-on: ubuntu-latest\n",
+            "    runs-on: ubuntu-latest\n    container: attacker/image:latest\n",
+            1,
+        )
+        self.assertNotEqual(mutated, real, "the mutation never applied")
+        self.assertIn("job's keys must be exactly", "\n".join(false_green_defects(mutated)))
+
+    def test_a_self_hosted_runner_is_caught(self):
+        """One word, no new key: the whole job moves to a machine of the writer's choosing."""
+        real = self._workflow()
+        mutated = real.replace("    runs-on: ubuntu-latest", "    runs-on: self-hosted", 1)
+        self.assertNotEqual(mutated, real, "the mutation never applied")
+        self.assertIn(
+            "reviewed GitHub-hosted runner", "\n".join(false_green_defects(mutated))
+        )
+
+    def test_job_level_defaults_wrapping_every_command_is_caught(self):
+        """`defaults.run.shell` is a template GitHub substitutes the script into."""
+        real = self._workflow()
+        mutated = real.replace(
+            "    steps:\n",
+            "    defaults:\n      run:\n        shell: bash -e {0}\n    steps:\n",
+            1,
+        )
+        self.assertNotEqual(mutated, real, "the mutation never applied")
+        self.assertIn("job's keys must be exactly", "\n".join(false_green_defects(mutated)))
+
+    def test_an_unreviewed_job_key_is_caught(self):
+        """The allowlist is exact, so no key needs to be predicted to be refused."""
+        real = self._workflow()
+        job = "    runs-on: ubuntu-latest\n"
+        for injected in (
+            "    timeout-minutes: 1\n",
+            "    environment: production\n",
+            "    services:\n      shim:\n        image: attacker/image\n",
+            "    strategy:\n      matrix:\n        n: [1]\n",
+        ):
+            with self.subTest(key=injected.strip().split(":")[0]):
+                mutated = real.replace(job, job + injected, 1)
+                self.assertNotEqual(mutated, real, "the mutation never applied")
+                self.assertIn(
+                    "job's keys must be exactly", "\n".join(false_green_defects(mutated))
+                )
+
+    def test_an_unreviewed_workflow_key_is_caught(self):
+        real = self._workflow()
+        for injected in ("defaults:\n  run:\n    shell: sh\n", "env:\n  PYTHONPATH: /tmp/shim\n"):
+            with self.subTest(key=injected.split(":")[0]):
+                mutated = real.replace("jobs:\n", injected + "\njobs:\n", 1)
+                self.assertNotEqual(mutated, real, "the mutation never applied")
+                self.assertIn(
+                    "top-level keys must be exactly",
+                    "\n".join(false_green_defects(mutated)),
+                )
+
+    def test_dropping_a_reviewed_workflow_key_is_caught(self):
+        """The allowlist is a sequence, so it fires on removal as well as addition."""
+        real = self._workflow()
+        mutated = real.replace("permissions:\n  contents: read\n", "", 1)
+        self.assertNotEqual(mutated, real, "the mutation never applied")
+        self.assertIn(
+            "top-level keys must be exactly", "\n".join(false_green_defects(mutated))
+        )
+
+
+    def test_a_step_level_working_directory_is_caught(self):
+        """Two lines, no new step, no env:, no action change, and a complete false green.
+
+        `working-directory:` moves a reviewed command into a directory the writer
+        committed in the same pull request. A decoy `decoy/.github/scripts/` holding a
+        trivially green test suite and a `dual_review.py` that exits 0 makes both gate
+        steps pass on the writer's own code while the required context reports success.
+        """
+        real = self._workflow()
+        unittest_step = (
+            "        run: python3 -m unittest discover -s .github/scripts "
+            "-p 'test_*.py' -v\n"
+        )
+        self.assertIn(unittest_step, real, "the anchor moved; the proof would be void")
+        mutated = real.replace(
+            unittest_step, "        working-directory: decoy\n" + unittest_step, 1
+        )
+        self.assertNotEqual(mutated, real, "the mutation never applied")
+        self.assertIn("keys must be exactly", "\n".join(false_green_defects(mutated)))
+
+    def test_an_unreviewed_step_key_is_caught(self):
+        """The step list was a sequence of kinds; a kind does not bound a step's keys."""
+        real = self._workflow()
+        anchor = "        run: python3 .github/scripts/dual_review.py"
+        self.assertIn(anchor, real, "the anchor moved; the proof would be void")
+        for injected in (
+            "        shell: python\n",
+            "        timeout-minutes: 1\n",
+            "        id: gate\n",
+        ):
+            with self.subTest(key=injected.strip().split(":")[0]):
+                mutated = real.replace(anchor, injected + anchor, 1)
+                self.assertNotEqual(mutated, real, "the mutation never applied")
+                self.assertIn(
+                    "keys must be exactly", "\n".join(false_green_defects(mutated))
+                )
+
+    def test_an_unreviewed_checkout_input_is_caught(self):
+        """`with:` selects what code lands in the workspace, exactly as `ref:` does.
+
+        Pinning the action while leaving its inputs open reviews the machinery and not
+        the material it operates on.
+        """
+        real = self._workflow()
+        anchor = "        with:\n"
+        for injected in (
+            "          path: decoy\n",
+            "          repository: attacker/lex\n",
+            "          token: ${{ secrets.ELEVATED }}\n",
+        ):
+            with self.subTest(input=injected.strip().split(":")[0]):
+                mutated = real.replace(anchor, anchor + injected, 1)
+                self.assertNotEqual(mutated, real, "the mutation never applied")
+                self.assertIn(
+                    "keys must be exactly", "\n".join(false_green_defects(mutated))
+                )
+
+    def test_dropping_persist_credentials_is_caught(self):
+        """The step key list is a sequence, so it fires on removal as well as addition."""
+        real = self._workflow()
+        mutated = real.replace("          persist-credentials: false\n", "", 1)
+        self.assertNotEqual(mutated, real, "the mutation never applied")
+        self.assertIn("keys must be exactly", "\n".join(false_green_defects(mutated)))
+
+
+    def test_repointing_the_gate_environment_is_caught(self):
+        """Pinning the keys and not their values reviews the shape of the input only.
+
+        The gate step's env block *is* the evaluator's entire input. `PR_NUMBER: 261`
+        reads another pull request's body, `REPO:` reads a repository the writer
+        controls, and `HEAD_SHA:` evaluates a commit that is not the head, which is the
+        one property the receipt exists to bind. Each is one line, inside a key list
+        that stays exactly as reviewed.
+        """
+        real = self._workflow()
+        for original, replacement in (
+            (
+                "          PR_NUMBER: ${{ github.event.pull_request.number }}\n",
+                "          PR_NUMBER: 261\n",
+            ),
+            (
+                "          REPO: ${{ github.repository }}\n",
+                "          REPO: attacker/lex\n",
+            ),
+            (
+                "          HEAD_SHA: ${{ github.event.pull_request.head.sha }}\n",
+                "          HEAD_SHA: HEAD~1\n",
+            ),
+            (
+                "          GH_TOKEN: ${{ github.token }}\n",
+                "          GH_TOKEN: ${{ secrets.WRITER_PAT }}\n",
+            ),
+            (
+                "          persist-credentials: false\n",
+                "          persist-credentials: true\n",
+            ),
+        ):
+            with self.subTest(binding=original.strip().split(":")[0]):
+                self.assertIn(original, real, "the anchor moved; the proof would be void")
+                mutated = real.replace(original, replacement, 1)
+                self.assertNotEqual(mutated, real, "the mutation never applied")
+                self.assertIn(
+                    "reviewed binding", "\n".join(false_green_defects(mutated))
                 )
 
 
