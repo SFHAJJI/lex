@@ -136,21 +136,119 @@ public sealed record OfficialIdentifier
         Family == FactsIdentifierFamily.Ecli ||
         (Family == FactsIdentifierFamily.Celex && RawValue[0] == '6');
 
+    /// <summary>
+    /// The admitted profile a value matches, or <c>null</c> where it matches none.
+    /// </summary>
+    /// <remarks>
+    /// Candidate 3 wrote one narrow CELEX shape and refused four identities the accepted V3 scope
+    /// requires, including <c>12012E/TXT</c>, which is already in the accepted 82-seed plan. That
+    /// is a no-loss violation produced by over-correcting: the previous candidate trusted any
+    /// label, so this one refused anything it had not thought of. Both lose publisher facts.
+    /// </remarks>
+    public static CelexProfile? ProfileOf(string value)
+    {
+        if (value is null || value.Length < 7 || value[0] is < '0' or > '9')
+        {
+            return null;
+        }
+
+        for (var index = 1; index <= 4; index++)
+        {
+            if (value[index] is < '0' or > '9')
+            {
+                return null;
+            }
+        }
+
+        var cursor = 5;
+        var letters = 0;
+        while (cursor < value.Length && value[cursor] is >= 'A' and <= 'Z')
+        {
+            letters++;
+            cursor++;
+        }
+
+        if (letters is < 1 or > 3)
+        {
+            return null;
+        }
+
+        var rest = value[cursor..];
+
+        // Treaty parts: the number position is a slash-separated part name, as in 12012E/TXT.
+        if (rest.StartsWith('/'))
+        {
+            var parts = rest[1..].Split('/');
+            return parts.Length > 0 && parts.All(IsUpperAlphanumeric)
+                ? CelexProfile.TreatyPart
+                : null;
+        }
+
+        // A consolidated act carries the consolidation date after the number.
+        var consolidated = false;
+        var dash = rest.IndexOf('-');
+        if (dash >= 0)
+        {
+            var date = rest[(dash + 1)..];
+            if (date.Length != 8 || !date.All(char.IsAsciiDigit))
+            {
+                return null;
+            }
+
+            rest = rest[..dash];
+            consolidated = true;
+        }
+
+        // A corrigendum carries R(nn) after the number.
+        var corrigendum = false;
+        var open = rest.IndexOf('(');
+        if (open >= 0)
+        {
+            if (!rest.EndsWith(')') || open == 0 || rest[open - 1] != 'R')
+            {
+                return null;
+            }
+
+            var ordinal = rest[(open + 1)..^1];
+            if (ordinal.Length == 0 || !ordinal.All(char.IsAsciiDigit))
+            {
+                return null;
+            }
+
+            rest = rest[..(open - 1)];
+            corrigendum = true;
+        }
+
+        if (rest.Length == 0 || !rest.All(char.IsAsciiDigit))
+        {
+            return null;
+        }
+
+        return consolidated
+            ? CelexProfile.ConsolidatedAct
+            : corrigendum
+                ? CelexProfile.Corrigendum
+                : CelexProfile.BaseAct;
+    }
+
+    private static bool IsUpperAlphanumeric(string text) =>
+        text.Length > 0 && text.All(c => c is (>= 'A' and <= 'Z') or (>= '0' and <= '9'));
+
     /// <summary>The grammar each family declares, checked rather than assumed.</summary>
     public static bool IsWellFormed(FactsIdentifierFamily family, string value) => family switch
     {
-        // sector digit, four-digit year, one or two letter descriptor, four-digit number.
-        FactsIdentifierFamily.Celex => IsCelex(value),
+        FactsIdentifierFamily.Celex => ProfileOf(value) is not null,
 
         // ECLI:country:court:year:ordinal, five colon-separated parts.
         FactsIdentifierFamily.Ecli => IsEcli(value),
 
-        FactsIdentifierFamily.CellarWorkUri => IsCellarUri(value, "/resource/"),
-        FactsIdentifierFamily.CellarResourceUri => IsCellarUri(value, "/resource/"),
+        // The two Cellar families are distinguished by WEMI level, not by the caller's label.
+        FactsIdentifierFamily.CellarWorkUri => IsCellarUri(value, work: true),
+        FactsIdentifierFamily.CellarResourceUri => IsCellarUri(value, work: false),
 
-        // ELI is a publisher path expression, not a URI, and both publishers mint one.
-        FactsIdentifierFamily.Eli => value.StartsWith("eli/", StringComparison.Ordinal) &&
-            !value.Contains(' ', StringComparison.Ordinal),
+        // ELI is minted by both publishers, and EUR-Lex mints it as an absolute URI while
+        // Legilux mints a path expression. Refusing either is refusing a publisher value.
+        FactsIdentifierFamily.Eli => IsEli(value),
 
         FactsIdentifierFamily.Memorial or FactsIdentifierFamily.HistoricalLegalId =>
             value.Length > 0 && !value.Contains(' ', StringComparison.Ordinal),
@@ -158,43 +256,21 @@ public sealed record OfficialIdentifier
         _ => false,
     };
 
-    private static bool IsCelex(string value)
+    private static bool IsEli(string value)
     {
-        if (value.Length is < 8 or > 30 || value[0] is < '0' or > '9')
+        if (value.Contains(' ', StringComparison.Ordinal))
         {
             return false;
         }
 
-        for (var index = 1; index <= 4; index++)
+        if (value.StartsWith("eli/", StringComparison.Ordinal))
         {
-            if (value[index] is < '0' or > '9')
-            {
-                return false;
-            }
+            return true;
         }
 
-        var descriptor = 0;
-        var cursor = 5;
-        while (cursor < value.Length && value[cursor] is >= 'A' and <= 'Z')
-        {
-            descriptor++;
-            cursor++;
-        }
-
-        if (descriptor is < 1 or > 2 || cursor >= value.Length)
-        {
-            return false;
-        }
-
-        for (; cursor < value.Length; cursor++)
-        {
-            if (value[cursor] is < '0' or > '9')
-            {
-                return false;
-            }
-        }
-
-        return true;
+        return Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+            uri.Scheme is "http" or "https" &&
+            uri.AbsolutePath.Contains("/eli/", StringComparison.Ordinal);
     }
 
     private static bool IsEcli(string value)
@@ -219,14 +295,46 @@ public sealed record OfficialIdentifier
     }
 
     /// <summary>
-    /// A Cellar URI is on the publisher's own host over https, not any URI that happens to
-    /// contain a familiar path segment.
+    /// A Cellar URI on the publisher's own host, at the level its family claims.
     /// </summary>
-    private static bool IsCellarUri(string value, string requiredSegment) =>
-        Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
-        uri.Scheme is "http" or "https" &&
-        string.Equals(uri.Host, "publications.europa.eu", StringComparison.Ordinal) &&
-        uri.AbsolutePath.Contains(requiredSegment, StringComparison.Ordinal);
+    /// <remarks>
+    /// Candidate 3 called the identical check for both families, so the caller's enum tag was the
+    /// only claimed level distinction and one URI could be admitted as either. Cellar work URIs
+    /// live under a work segment; a resource-level URI names a manifestation or item beneath one.
+    /// </remarks>
+    private static bool IsCellarUri(string value, bool work)
+    {
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
+            uri.Scheme is not ("http" or "https") ||
+            !string.Equals(uri.Host, "publications.europa.eu", StringComparison.Ordinal) ||
+            !uri.AbsolutePath.StartsWith("/resource/", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        // /resource/<class>/<id> is a work; anything deeper is a resource under it.
+        var segments = uri.AbsolutePath.Trim('/').Split('/');
+        return work ? segments.Length == 3 : segments.Length > 3;
+    }
+}
+
+/// <summary>
+/// The CELEX shapes the accepted V3 scope requires. A value outside all of them is drift, and
+/// drift is reported rather than silently refused or silently accepted.
+/// </summary>
+public enum CelexProfile
+{
+    [System.Text.Json.Serialization.JsonStringEnumMemberName("base_act")]
+    BaseAct,
+
+    [System.Text.Json.Serialization.JsonStringEnumMemberName("consolidated_act")]
+    ConsolidatedAct,
+
+    [System.Text.Json.Serialization.JsonStringEnumMemberName("corrigendum")]
+    Corrigendum,
+
+    [System.Text.Json.Serialization.JsonStringEnumMemberName("treaty_part")]
+    TreatyPart,
 }
 
 /// <summary>
@@ -268,9 +376,32 @@ public sealed record OfficialIdentitySet
         };
 
     [JsonConstructor]
-    public OfficialIdentitySet(PublisherId publisher, IReadOnlyList<OfficialIdentifier> identifiers)
+    public OfficialIdentitySet(
+        PublisherId publisher,
+        IReadOnlyList<OfficialIdentifier> identifiers,
+        IdentifierEnumeration enumeration,
+        string? enumerationQuerySha256)
     {
         FactsValidation.RequireDefined(publisher, nameof(publisher));
+        FactsValidation.RequireDefined(enumeration, nameof(enumeration));
+
+        // A completeness claim is itself evidence, so it carries the digest of the query that
+        // produced it. Claiming complete without naming what was asked is the same shape as
+        // claiming an absence without proving it.
+        if (enumeration == IdentifierEnumeration.Complete &&
+            !FactsValidation.IsLowercaseSha256(enumerationQuerySha256))
+        {
+            throw new ArgumentException(
+                "A complete identifier enumeration must bind the digest of the query that produced it.",
+                nameof(enumerationQuerySha256));
+        }
+
+        if (enumeration == IdentifierEnumeration.Partial && enumerationQuerySha256 is not null)
+        {
+            throw new ArgumentException(
+                "A partial read cannot carry a completeness digest.",
+                nameof(enumerationQuerySha256));
+        }
         ArgumentNullException.ThrowIfNull(identifiers);
         var copied = identifiers.ToArray();
         if (copied.Length == 0)
@@ -313,9 +444,17 @@ public sealed record OfficialIdentitySet
 
         Publisher = publisher;
         Identifiers = Array.AsReadOnly(copied);
+        Enumeration = enumeration;
+        EnumerationQuerySha256 = enumerationQuerySha256;
     }
 
     public PublisherId Publisher { get; }
+
+    /// <summary>Whether this set is a complete enumeration or a partial read.</summary>
+    public IdentifierEnumeration Enumeration { get; }
+
+    /// <summary>The query that produced a complete enumeration, or null for a partial read.</summary>
+    public string? EnumerationQuerySha256 { get; }
 
     /// <summary>The identifiers in the publisher's own order, which is itself evidence.</summary>
     public IReadOnlyList<OfficialIdentifier> Identifiers { get; }
@@ -350,6 +489,7 @@ public sealed record OfficialIdentitySet
     public bool SameIdentity(OfficialIdentitySet? other)
     {
         if (other is null || other.Publisher != Publisher ||
+            other.Enumeration != Enumeration ||
             other.Identifiers.Count != Identifiers.Count)
         {
             return false;

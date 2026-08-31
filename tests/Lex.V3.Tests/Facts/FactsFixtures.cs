@@ -11,6 +11,10 @@ internal static class FactsFixtures
     internal const string TransportDigest =
         "9f2c4d6a8b0e1f3572849a6bcd0e2f4185a7c9db3e5f70819a2b4c6d8e0f1a23";
 
+    /// <summary>The query that enumerated every identifier the publisher holds for a subject.</summary>
+    internal const string EnumerationDigest =
+        "3c5d7e9fa1b3c5d7e9fa1b3c5d7e9fa1b3c5d7e9fa1b3c5d7e9fa1b3c5d7e9fa";
+
     internal const string ScopeDigest =
         "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f809";
 
@@ -42,11 +46,15 @@ internal static class FactsFixtures
 
     internal static OfficialIdentitySet LuWork() => new(
         PublisherId.LuLegilux,
-        [new OfficialIdentifier(FactsIdentifierFamily.Eli, "eli/etat/leg/loi/2019/07/15/a512/jo")]);
+        [new OfficialIdentifier(FactsIdentifierFamily.Eli, "eli/etat/leg/loi/2019/07/15/a512/jo")],
+        IdentifierEnumeration.Complete,
+        EnumerationDigest);
 
     internal static OfficialIdentitySet LuTarget() => new(
         PublisherId.LuLegilux,
-        [new OfficialIdentifier(FactsIdentifierFamily.Eli, "eli/etat/leg/loi/2004/03/22/n1/jo")]);
+        [new OfficialIdentifier(FactsIdentifierFamily.Eli, "eli/etat/leg/loi/2004/03/22/n1/jo")],
+        IdentifierEnumeration.Complete,
+        EnumerationDigest);
 
     /// <summary>
     /// A EUR-Lex case as the publisher actually identifies it: a Cellar work URI, a CELEX number
@@ -61,7 +69,9 @@ internal static class FactsFixtures
                 "http://publications.europa.eu/resource/case/62019CJ0311"),
             new OfficialIdentifier(FactsIdentifierFamily.Celex, "62019CJ0311"),
             new OfficialIdentifier(FactsIdentifierFamily.Ecli, "ECLI:EU:C:2020:1042"),
-        ]);
+        ],
+        IdentifierEnumeration.Complete,
+        EnumerationDigest);
 
     /// <summary>The same case, whose publisher record carries no ECLI.</summary>
     internal static OfficialIdentitySet EuCaseWithoutEcli() => new(
@@ -71,7 +81,16 @@ internal static class FactsFixtures
                 FactsIdentifierFamily.CellarWorkUri,
                 "http://publications.europa.eu/resource/case/62019CJ0311"),
             new OfficialIdentifier(FactsIdentifierFamily.Celex, "62019CJ0311"),
-        ]);
+        ],
+        IdentifierEnumeration.Complete,
+        EnumerationDigest);
+
+    /// <summary>A partial read of the same case: lossless about what it carries, silent otherwise.</summary>
+    internal static OfficialIdentitySet EuCasePartialRead() => new(
+        PublisherId.EuEurLex,
+        [new OfficialIdentifier(FactsIdentifierFamily.Celex, "62019CJ0311")],
+        IdentifierEnumeration.Partial,
+        null);
 
     /// <summary>
     /// Two axioms sharing one remote identifier, and one axiom carrying the same qualifier

@@ -75,11 +75,15 @@ public sealed record PublisherDateFact
                 nameof(transpositionEvidence));
         }
 
-        // The converse: evidence that justifies transposition cannot sit on a date that is not a
-        // deadline at all, which would be evidence for a claim nobody made.
+        // The converse, and Candidate 3 stopped one role short of it. Evidence present must mean
+        // the role IS a transposition deadline, not merely that it is some deadline: a
+        // publisher_deadline carrying directive-qualifier evidence is a date that says "here is
+        // the proof this is a transposition deadline" while declaring it is not one.
+        //
+        //   publisher_deadline      <=> evidence == none
+        //   transposition_deadline  <=> evidence in { directive_qualifier, nim_record }
         if (transpositionEvidence != TranspositionEvidence.None &&
-            semanticRole is not (DateSemanticRole.TranspositionDeadline or
-                DateSemanticRole.PublisherDeadline))
+            semanticRole != DateSemanticRole.TranspositionDeadline)
         {
             throw new ArgumentException(
                 $"Transposition evidence cannot accompany the {semanticRole} role.",

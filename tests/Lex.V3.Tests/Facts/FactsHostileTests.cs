@@ -22,7 +22,7 @@ public sealed class FactsHostileTests
     public void AnEmptyIdentitySetIsRefused()
     {
         Assert.ThrowsExactly<ArgumentException>(
-            () => new OfficialIdentitySet(PublisherId.EuEurLex, []));
+            () => new OfficialIdentitySet(PublisherId.EuEurLex, [], IdentifierEnumeration.Complete, FactsFixtures.EnumerationDigest));
     }
 
     [TestMethod]
@@ -33,7 +33,9 @@ public sealed class FactsHostileTests
             [
                 new OfficialIdentifier(FactsIdentifierFamily.Celex, "62019CJ0311"),
                 new OfficialIdentifier(FactsIdentifierFamily.Celex, "62019CJ0312"),
-            ]));
+            ],
+            IdentifierEnumeration.Complete,
+            FactsFixtures.EnumerationDigest));
     }
 
     [TestMethod]
@@ -54,7 +56,11 @@ public sealed class FactsHostileTests
         {
             new(FactsIdentifierFamily.Celex, "62019CJ0311"),
         };
-        var set = new OfficialIdentitySet(PublisherId.EuEurLex, identifiers);
+        var set = new OfficialIdentitySet(
+            PublisherId.EuEurLex,
+            identifiers,
+            IdentifierEnumeration.Complete,
+            FactsFixtures.EnumerationDigest);
 
         identifiers.Add(new OfficialIdentifier(FactsIdentifierFamily.Ecli, "ECLI:EU:C:2020:1042"));
 
@@ -733,13 +739,17 @@ public sealed class FactsHostileTests
     {
         var celexOnly = new OfficialIdentitySet(
             PublisherId.EuEurLex,
-            [new OfficialIdentifier(FactsIdentifierFamily.Celex, "62020CJ1042")]);
+            [new OfficialIdentifier(FactsIdentifierFamily.Celex, "62020CJ1042")],
+            IdentifierEnumeration.Complete,
+            FactsFixtures.EnumerationDigest);
 
         Assert.IsTrue(celexOnly.IsCase, "sector 6 is case law and sits at position zero");
 
         var regulation = new OfficialIdentitySet(
             PublisherId.EuEurLex,
-            [new OfficialIdentifier(FactsIdentifierFamily.Celex, "32016R0679")]);
+            [new OfficialIdentifier(FactsIdentifierFamily.Celex, "32016R0679")],
+            IdentifierEnumeration.Complete,
+            FactsFixtures.EnumerationDigest);
         Assert.IsFalse(regulation.IsCase, "sector 3 is secondary legislation");
     }
 
@@ -896,7 +906,9 @@ public sealed class FactsHostileTests
             [
                 new OfficialIdentifier(FactsIdentifierFamily.CellarWorkUri, uri),
                 new OfficialIdentifier(FactsIdentifierFamily.CellarResourceUri, uri),
-            ]));
+            ],
+            IdentifierEnumeration.Complete,
+            FactsFixtures.EnumerationDigest));
     }
 
     /// <summary>
@@ -910,7 +922,9 @@ public sealed class FactsHostileTests
         var forward = FactsFixtures.EuCaseWithEcli();
         var reversed = new OfficialIdentitySet(
             forward.Publisher,
-            forward.Identifiers.Reverse().ToArray());
+            forward.Identifiers.Reverse().ToArray(),
+            forward.Enumeration,
+            forward.EnumerationQuerySha256);
 
         Assert.IsTrue(forward.SameIdentity(reversed), "the same members in another order");
         Assert.IsTrue(reversed.SameIdentity(forward), "and symmetrically");
@@ -925,11 +939,159 @@ public sealed class FactsHostileTests
     {
         Assert.ThrowsExactly<ArgumentException>(() => new OfficialIdentitySet(
             PublisherId.LuLegilux,
-            [new OfficialIdentifier(FactsIdentifierFamily.Celex, "32016R0679")]));
+            [new OfficialIdentifier(FactsIdentifierFamily.Celex, "32016R0679")],
+            IdentifierEnumeration.Complete,
+            FactsFixtures.EnumerationDigest));
 
         Assert.ThrowsExactly<ArgumentException>(() => new OfficialIdentitySet(
             PublisherId.EuEurLex,
-            [new OfficialIdentifier(FactsIdentifierFamily.Memorial, "A512")]));
+            [new OfficialIdentifier(FactsIdentifierFamily.Memorial, "A512")],
+            IdentifierEnumeration.Complete,
+            FactsFixtures.EnumerationDigest));
+    }
+
+    // ---- round three: the accepted scope, the biconditional, and proved absence ---------------
+
+    /// <summary>
+    /// MUTATION RECEIPT: a no-loss violation. Candidate 3 refused four identities the accepted V3
+    /// scope requires, one of which is already a seed in the accepted 82-seed plan. Over-correcting
+    /// from "trusts any label" to "refuses anything I had not thought of" loses publisher facts
+    /// just as surely.
+    /// </summary>
+    [TestMethod]
+    public void EveryIdentityTheAcceptedScopeRequiresIsRepresentable()
+    {
+        foreach (var (family, value, why) in new[]
+                 {
+                     (FactsIdentifierFamily.Celex, "12012E/TXT", "treaty part, and a seed in the accepted plan"),
+                     (FactsIdentifierFamily.Celex, "02016R0679-20160504", "consolidated state"),
+                     (FactsIdentifierFamily.Celex, "32016R0679R(02)", "corrigendum"),
+                     (FactsIdentifierFamily.Celex, "32016R0679", "base act"),
+                     (FactsIdentifierFamily.Eli, "http://data.europa.eu/eli/reg/2016/679/oj", "EU absolute ELI"),
+                     (FactsIdentifierFamily.Eli, "eli/etat/leg/loi/2019/07/15/a512/jo", "LU relative ELI"),
+                 })
+        {
+            var identifier = new OfficialIdentifier(family, value);
+            Assert.AreEqual(value, identifier.RawValue, $"{value} ({why}) must be representable");
+        }
+    }
+
+    [TestMethod]
+    public void EachCelexProfileIsRecognisedAsWhatItIs()
+    {
+        Assert.AreEqual(CelexProfile.BaseAct, OfficialIdentifier.ProfileOf("32016R0679"));
+        Assert.AreEqual(CelexProfile.ConsolidatedAct, OfficialIdentifier.ProfileOf("02016R0679-20160504"));
+        Assert.AreEqual(CelexProfile.Corrigendum, OfficialIdentifier.ProfileOf("32016R0679R(02)"));
+        Assert.AreEqual(CelexProfile.TreatyPart, OfficialIdentifier.ProfileOf("12012E/TXT"));
+        Assert.IsNull(OfficialIdentifier.ProfileOf("not-a-celex"), "a shape outside the profiles");
+        Assert.IsNull(OfficialIdentifier.ProfileOf("32016R0679-2016"), "a malformed consolidation date");
+        Assert.IsNull(OfficialIdentifier.ProfileOf("32016R0679R(xx)"), "a malformed corrigendum ordinal");
+    }
+
+    /// <summary>
+    /// MUTATION RECEIPT: the level claim resting on the caller's tag. Both families called the
+    /// identical check, so one URI was admissible as either work or resource level.
+    /// </summary>
+    [TestMethod]
+    public void CellarWorkAndResourceLevelsAreDistinguishedByTheUriItself()
+    {
+        const string work = "http://publications.europa.eu/resource/case/62019CJ0311";
+        const string resource = "http://publications.europa.eu/resource/case/62019CJ0311/DOC_1";
+
+        Assert.IsTrue(OfficialIdentifier.IsWellFormed(FactsIdentifierFamily.CellarWorkUri, work));
+        Assert.IsFalse(
+            OfficialIdentifier.IsWellFormed(FactsIdentifierFamily.CellarResourceUri, work),
+            "a work URI is not a resource URI");
+
+        Assert.IsTrue(OfficialIdentifier.IsWellFormed(FactsIdentifierFamily.CellarResourceUri, resource));
+        Assert.IsFalse(
+            OfficialIdentifier.IsWellFormed(FactsIdentifierFamily.CellarWorkUri, resource),
+            "a resource URI is not a work URI");
+    }
+
+    /// <summary>
+    /// MUTATION RECEIPT: the deadline biconditional stopped one role short. Evidence saying "this
+    /// is a transposition deadline" cannot sit on a date declaring it is not one.
+    /// </summary>
+    [TestMethod]
+    public void APublisherDeadlineCannotCarryTranspositionEvidence()
+    {
+        Assert.ThrowsExactly<ArgumentException>(() => FactsFixtures.DateFact(
+            FactsFixtures.DayDate(),
+            DateSemanticRole.PublisherDeadline,
+            evidence: TranspositionEvidence.DirectiveQualifier));
+
+        var plain = FactsFixtures.DateFact(FactsFixtures.DayDate(), DateSemanticRole.PublisherDeadline);
+        Assert.AreEqual(TranspositionEvidence.None, plain.TranspositionEvidence);
+    }
+
+    /// <summary>
+    /// MUTATION RECEIPT: absence inferred from a partial read. `ecli_missing` says the publisher
+    /// published no ECLI, which a partial identifier read cannot establish.
+    /// </summary>
+    [TestMethod]
+    public void EcliMissingRequiresACompleteIdentifierEnumeration()
+    {
+        Assert.ThrowsExactly<ArgumentException>(() => new RelationFact(
+            FactsSchemaIds.RelationFact,
+            RelationAssertionKind.PublisherAsserted,
+            TargetBodyScope.BodyInScopeNotHeld,
+            EcliState.EcliMissing,
+            FactsFixtures.PublisherRelation(target: FactsFixtures.EuCasePartialRead()),
+            null,
+            null));
+
+        // The same verdict on a complete enumeration is fine.
+        var complete = FactsFixtures.CaseFactWithoutEcli();
+        Assert.AreEqual(EcliState.EcliMissing, complete.TargetEcliState);
+        Assert.AreEqual(IdentifierEnumeration.Complete, complete.CarriedTarget.Enumeration);
+    }
+
+    [TestMethod]
+    public void ACompletenessClaimMustBindTheQueryThatProducedIt()
+    {
+        Assert.ThrowsExactly<ArgumentException>(() => new OfficialIdentitySet(
+            PublisherId.EuEurLex,
+            [new OfficialIdentifier(FactsIdentifierFamily.Celex, "32016R0679")],
+            IdentifierEnumeration.Complete,
+            null));
+
+        Assert.ThrowsExactly<ArgumentException>(() => new OfficialIdentitySet(
+            PublisherId.EuEurLex,
+            [new OfficialIdentifier(FactsIdentifierFamily.Celex, "32016R0679")],
+            IdentifierEnumeration.Partial,
+            FactsFixtures.EnumerationDigest));
+    }
+
+    [TestMethod]
+    public void APartialReadIsStillLosslessAboutWhatItCarries()
+    {
+        var partial = FactsFixtures.EuCasePartialRead();
+
+        Assert.AreEqual("62019CJ0311", partial.Value(FactsIdentifierFamily.Celex));
+        Assert.IsTrue(partial.IsCase, "a sector 6 CELEX still proves a case");
+        Assert.AreEqual(IdentifierEnumeration.Partial, partial.Enumeration);
+        Assert.IsNull(partial.EnumerationQuerySha256);
+    }
+
+    /// <summary>
+    /// The sentinel is a date value in any lexical form its datatype admits, and the reader and
+    /// the schema now agree on that set rather than disagreeing about the zoned form.
+    /// </summary>
+    [TestMethod]
+    public void EveryAdmittedLexicalFormOfTheSentinelIsTheSentinel()
+    {
+        foreach (var value in new[] { "9999-12-31", "9999-12-31Z", "9999-12-31+02:00" })
+        {
+            var open = new PublisherDate(
+                FactsSchemaIds.PublisherDate, value, PublisherDate.Date,
+                DatePrecision.YearMonthDay, DateOpenSentinel.OpenEnded);
+            Assert.AreEqual(value, open.RawLexicalValue);
+
+            Assert.ThrowsExactly<ArgumentException>(() => new PublisherDate(
+                FactsSchemaIds.PublisherDate, value, PublisherDate.Date,
+                DatePrecision.YearMonthDay, DateOpenSentinel.NotOpen), value);
+        }
     }
 
     private static string Mutate(string json, Action<JsonObject> mutate)

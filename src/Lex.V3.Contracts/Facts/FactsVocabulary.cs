@@ -139,6 +139,33 @@ public enum EcliState
 }
 
 /// <summary>
+/// Whether the identifier set for a subject was enumerated completely, or only partially read.
+/// </summary>
+/// <remarks>
+/// An identity set is a read of the publisher's identifiers. Candidate 3 let a set of one CELEX
+/// support an <c>ecli_missing</c> verdict, which is an <b>absence claim</b>: it says the publisher
+/// published no ECLI. A partial read cannot support that. It cannot distinguish "the publisher
+/// returned no ECLI" from "this reader retained only the CELEX row", and V3 requires absence to be
+/// proved rather than implied.
+/// </remarks>
+public enum IdentifierEnumeration
+{
+    /// <summary>
+    /// Every identifier the publisher holds for this subject was enumerated, and the query that
+    /// did it is bound by digest. Only this state can support an absence claim.
+    /// </summary>
+    [JsonStringEnumMemberName("complete")]
+    Complete,
+
+    /// <summary>
+    /// Some identifiers were read. The set is still lossless about what it carries and says
+    /// nothing whatever about what it does not.
+    /// </summary>
+    [JsonStringEnumMemberName("partial")]
+    Partial,
+}
+
+/// <summary>
 /// Whether the body behind an officially identified target is held. A target with official
 /// identity and no held body is a first-class state, not an error and not an omission.
 /// </summary>
@@ -287,6 +314,9 @@ public enum VocabularyKind
     [JsonStringEnumMemberName("ecli_state")]
     EcliState,
 
+    [JsonStringEnumMemberName("identifier_enumeration")]
+    IdentifierEnumeration,
+
     [JsonStringEnumMemberName("target_body_scope")]
     TargetBodyScope,
 
@@ -321,6 +351,7 @@ public static class FactsVocabularies
             [typeof(RelationAssertionKind)] = VocabularyKind.RelationAssertionKind,
             [typeof(FactsIdentifierFamily)] = VocabularyKind.IdentifierFamily,
             [typeof(EcliState)] = VocabularyKind.EcliState,
+            [typeof(IdentifierEnumeration)] = VocabularyKind.IdentifierEnumeration,
             [typeof(TargetBodyScope)] = VocabularyKind.TargetBodyScope,
             [typeof(DateSemanticRole)] = VocabularyKind.DateSemanticRole,
             [typeof(TranspositionEvidence)] = VocabularyKind.TranspositionEvidence,

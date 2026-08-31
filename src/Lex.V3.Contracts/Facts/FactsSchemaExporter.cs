@@ -183,6 +183,7 @@ internal static class FactsSchemaHardener
             "inbound view contributors all target the view target",
             "ecli state agrees with the target identity set",
             "lexical value is a real calendar date at its declared precision",
+            "ecli_missing rests on a complete identifier enumeration",
         });
 
     /// <summary>
@@ -216,7 +217,41 @@ internal static class FactsSchemaHardener
         EncodeInvariants(schemaId, root);
     }
 
-    internal static void HardenValueObject(string name, JsonObject node) => HardenTree(node);
+    internal static void HardenValueObject(string name, JsonObject node)
+    {
+        HardenTree(node);
+        if (string.Equals(name, "official_identifier", StringComparison.Ordinal))
+        {
+            EncodeIdentifierFamilyShapes(node);
+        }
+    }
+
+    /// <summary>Each family constrains its own raw value, so the tag cannot stand alone.</summary>
+    private static void EncodeIdentifierFamilyShapes(JsonObject node)
+    {
+        var arms = new JsonArray
+        {
+            IfThen(
+                Props(("family", Const("cellar_work_uri"))),
+                Props(("raw_value", new JsonObject
+                {
+                    ["pattern"] = "^https?://publications\\.europa\\.eu/resource/",
+                }))),
+            IfThen(
+                Props(("family", Const("cellar_resource_uri"))),
+                Props(("raw_value", new JsonObject
+                {
+                    ["pattern"] = "^https?://publications\\.europa\\.eu/resource/",
+                }))),
+            IfThen(
+                Props(("family", Const("ecli"))),
+                Props(("raw_value", new JsonObject { ["pattern"] = "^ECLI:[A-Z]{2}:" }))),
+            IfThen(
+                Props(("family", Const("celex"))),
+                Props(("raw_value", new JsonObject { ["pattern"] = "^[0-9]{5}[A-Z]{1,3}" }))),
+        };
+        node["allOf"] = arms;
+    }
 
     /// <summary>
     /// Walk every node: apply the grammar a property name implies, and pin any nested contract
@@ -260,6 +295,17 @@ internal static class FactsSchemaHardener
     private static void PinNestedContract(JsonObject node, JsonObject properties)
     {
         var names = properties.Select(pair => pair.Key).ToHashSet(StringComparer.Ordinal);
+
+        // The identifier value object is inlined into every relation schema exactly as the
+        // contracts are, so its per-family value shapes have to be applied by signature too. The
+        // first version applied them only to the definitions document, and a non-URI tagged
+        // `cellar_work_uri` validated inside a publisher relation. Same inlining, same lesson.
+        if (names.Count == 2 && names.Contains("family") && names.Contains("raw_value"))
+        {
+            EncodeIdentifierFamilyShapes(node);
+            return;
+        }
+
         foreach (var (schemaId, signature) in ContractSignatures)
         {
             if (names.Count == signature.Length && signature.All(names.Contains))
@@ -310,7 +356,37 @@ internal static class FactsSchemaHardener
         if (string.Equals(name, "identifiers", StringComparison.Ordinal))
         {
             property["minItems"] = 1;
-            property["uniqueItems"] = true;
+
+            // `uniqueItems` compares whole objects, so it never stopped the same family appearing
+            // twice with different raw values, which is the contradiction the reader refuses. One
+            // `contains` arm per family, capped at one, expresses it exactly.
+            var caps = new JsonArray();
+            foreach (var family in System.Enum.GetValues<FactsIdentifierFamily>())
+            {
+                var wire = ClosedVocabulary.WireNames<FactsIdentifierFamily>()[(int)family];
+                caps.Add(new JsonObject
+                {
+                    ["contains"] = new JsonObject
+                    {
+                        ["properties"] = new JsonObject { ["family"] = Const(wire) },
+                        ["required"] = new JsonArray("family"),
+                    },
+                    // `contains` requires at least one match by default, so without this every
+                    // identity set failed the arm for every family it does not carry. The cap is
+                    // the assertion; the floor must be zero.
+                    ["minContains"] = 0,
+                    ["maxContains"] = 1,
+                });
+            }
+
+            property["allOf"] = caps;
+            return;
+        }
+
+        // A Cellar family value must be a Cellar URI. `raw_value` never ends in `_uri`, so the
+        // URI branch above never saw it and a non-URI tagged `cellar_work_uri` validated.
+        if (string.Equals(name, "family", StringComparison.Ordinal))
+        {
             return;
         }
 
@@ -346,9 +422,21 @@ internal static class FactsSchemaHardener
                 }
 
                 // the open-end sentinel binds to its exact lexical value, in both directions.
-                var sentinelShape = Props(
-                    ("raw_lexical_value", Const(PublisherDate.OpenEndedLexicalValue)),
-                    ("datatype_uri", Const(PublisherDate.Date)));
+                // The sentinel is a date VALUE in any lexical form its datatype admits, so the
+                // schema matches the same set the reader does. A const here made
+                // `9999-12-31Z` the sentinel to the reader and an ordinary date to the schema.
+                var sentinelShape = new JsonObject
+                {
+                    ["properties"] = new JsonObject
+                    {
+                        ["raw_lexical_value"] = new JsonObject
+                        {
+                            ["pattern"] = PublisherDate.OpenEndedLexicalPattern,
+                        },
+                        ["datatype_uri"] = Const(PublisherDate.Date),
+                    },
+                    ["required"] = new JsonArray("raw_lexical_value", "datatype_uri"),
+                };
                 all.Add(IfThen(Props(("open_sentinel", Const("open_ended"))), sentinelShape));
                 all.Add(IfThen(sentinelShape, Props(("open_sentinel", Const("open_ended")))));
                 break;
@@ -358,15 +446,19 @@ internal static class FactsSchemaHardener
                 all.Add(IfThen(
                     Props(("date", Props(("open_sentinel", Const("open_ended"))))),
                     Props(("semantic_role", Enum("end_of_validity", "role_not_stated_by_publisher")))));
-                // transposition evidence binds to the deadline roles, both ways.
+                // the deadline biconditional, both ways and exactly.
                 all.Add(IfThen(
                     Props(("semantic_role", Const("transposition_deadline"))),
                     Props(("transposition_evidence",
                         Enum("directive_qualifier", "nim_record")))));
                 all.Add(IfThen(
                     Props(("transposition_evidence", Enum("directive_qualifier", "nim_record"))),
-                    Props(("semantic_role",
-                        Enum("transposition_deadline", "publisher_deadline")))));
+                    Props(("semantic_role", Const("transposition_deadline")))));
+                all.Add(IfThen(
+                    Props(("semantic_role", Const("publisher_deadline"))),
+                    Props(("transposition_evidence", Const("none")))));
+                // the parsing authority scheme, which the reader requires and the schema did not.
+                Pattern(root, "parsed_by_authority", "^https://");
                 break;
 
             case FactsSchemaIds.RelationFact:
@@ -487,6 +579,14 @@ internal static class FactsSchemaHardener
         root["properties"] is JsonObject properties && properties[name] is JsonObject property
             ? property
             : null;
+
+    private static void Pattern(JsonObject root, string name, string pattern)
+    {
+        if (Property(root, name) is { } property)
+        {
+            property["pattern"] = pattern;
+        }
+    }
 
     private static void PinConst(JsonObject root, string name, string value)
     {

@@ -25,8 +25,19 @@ public sealed record PublisherDate
 {
     public const string Identity = FactsSchemaIds.PublisherDate;
 
-    /// <summary>The exact EUR-Lex open-end lexical value.</summary>
+    /// <summary>The EUR-Lex open-end date value.</summary>
+    /// <remarks>
+    /// The sentinel is this <b>date value</b> at <c>xsd:date</c>, in any lexical form the datatype
+    /// admits, which is the bare value or the value with a valid timezone. Candidate 3 said "the
+    /// exact lexical value" in its constant and its schema while the runtime compared the date
+    /// part, so `9999-12-31Z` was the sentinel to the reader and an ordinary date to the schema.
+    /// That mixed rule was neither of the two truths available, so this states the wider one and
+    /// the schema now matches it with a pattern rather than a const.
+    /// </remarks>
     public const string OpenEndedLexicalValue = "9999-12-31";
+
+    /// <summary>The pattern matching every admitted lexical form of the sentinel.</summary>
+    public const string OpenEndedLexicalPattern = @"^9999-12-31(Z|[+-]\d{2}:\d{2})?$";
 
     public const string GYear = "http://www.w3.org/2001/XMLSchema#gYear";
     public const string GYearMonth = "http://www.w3.org/2001/XMLSchema#gYearMonth";

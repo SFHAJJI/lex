@@ -84,6 +84,23 @@ public sealed record RelationFact
                     "An edge stating ecli_missing cannot carry an ECLI in the target identity set.",
                     nameof(targetEcliState));
 
+            // ecli_missing is an absence claim about the publisher, so it requires a complete
+            // enumeration. A partial read cannot tell "the publisher published no ECLI" from
+            // "this reader kept only the CELEX row", and the second is not a fact about the law.
+            case EcliState.EcliMissing
+                when carried.Enumeration != IdentifierEnumeration.Complete:
+                throw new ArgumentException(
+                    "ecli_missing claims the publisher has no ECLI, so it requires a complete "
+                        + "identifier enumeration rather than a partial read.",
+                    nameof(targetEcliState));
+
+            case EcliState.EcliNotApplicable
+                when carried.Enumeration != IdentifierEnumeration.Complete:
+                throw new ArgumentException(
+                    "ecli_not_applicable is also an absence claim and requires a complete "
+                        + "identifier enumeration.",
+                    nameof(targetEcliState));
+
             case EcliState.EcliMissing when !carried.IsCase:
                 throw new ArgumentException(
                     "ecli_missing states that a case has no published ECLI, so the target must be a case.",

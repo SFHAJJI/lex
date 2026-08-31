@@ -45,6 +45,44 @@ public sealed class FactsSchemaParityTests
             root => root["schema"] = "lex-v3-publisher-relation/2",
             SchemaCanExpress: true),
         new Case(
+            "one family cannot appear twice with different values",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(FactsFixtures.PublisherRelation()),
+            root => root["target"]!["identifiers"] = new JsonArray(
+                new JsonObject { ["family"] = "eli", ["raw_value"] = "eli/a/b/c" },
+                new JsonObject { ["family"] = "eli", ["raw_value"] = "eli/d/e/f" }),
+            SchemaCanExpress: true),
+        new Case(
+            "a non-URI value tagged as a Cellar URI",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(
+                FactsFixtures.PublisherRelation(target: FactsFixtures.EuCaseWithEcli())),
+            root => root["target"]!["identifiers"]![0]!["raw_value"] = "62019CJ0311",
+            SchemaCanExpress: true),
+        new Case(
+            "an http parsing authority where the reader requires https",
+            FactsSchemaIds.PublisherDateFact,
+            () => ContractJson.Serialize(FactsFixtures.DateFact()),
+            root => root["parsed_by_authority"] = "http://example.invalid/authority",
+            SchemaCanExpress: true),
+        new Case(
+            "a zoned sentinel marked not_open",
+            FactsSchemaIds.PublisherDate,
+            () => ContractJson.Serialize(FactsFixtures.OpenEndedDate()),
+            root =>
+            {
+                root["raw_lexical_value"] = "9999-12-31Z";
+                root["open_sentinel"] = "not_open";
+            },
+            SchemaCanExpress: true),
+        new Case(
+            "a publisher deadline carrying transposition evidence",
+            FactsSchemaIds.PublisherDateFact,
+            () => ContractJson.Serialize(
+                FactsFixtures.DateFact(FactsFixtures.DayDate(), DateSemanticRole.PublisherDeadline)),
+            root => root["transposition_evidence"] = "nim_record",
+            SchemaCanExpress: true),
+        new Case(
             "nested contract version constant",
             FactsSchemaIds.RelationFact,
             () => ContractJson.Serialize(FactsFixtures.AssertedFact()),
