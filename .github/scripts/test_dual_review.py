@@ -365,6 +365,16 @@ class ProductionLoaderBoundary(unittest.TestCase):
 WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "dual-review.yml"
 REQUIRED_CONTEXT = "dual-review"
 
+# The exact actions permitted to run inside the required job: owner/repository plus
+# the immutable commit that was actually reviewed. Changing a pin is a review event,
+# never an edit, so the reviewed value lives here as data the gate refuses to differ
+# from rather than as a convention the file merely happens to follow.
+REVIEWED_ACTIONS = frozenset(
+    {"actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803"}
+)
+ALLOWED_REPOSITORIES = frozenset(spec.split("@", 1)[0] for spec in REVIEWED_ACTIONS)
+IMMUTABLE_PIN_RE = re.compile(r"\A[0-9a-f]{40}\Z")
+
 
 def _uncommented(text):
     """The workflow's lines with YAML comments removed.
@@ -464,6 +474,66 @@ def false_green_defects(text):
     for pattern, why in required_inputs:
         if not any(re.match(pattern, line) for line in lines):
             defects.append(f"missing checkout input: {why}")
+
+    # Codex O3. The checkout is the first thing that runs in the required job, and it
+    # populates the very workspace the two later steps execute out of. A moving ref
+    # (`@main`, `@v6`) or a forked owner/repository is therefore a supply chain this
+    # gate cannot see: that action could rewrite `test_dual_review.py` and
+    # `dual_review.py` on disk before either runs, after which every check in this
+    # file and the receipt evaluation itself would report success on code no reviewer
+    # approved. Codex proved the hole by replacing the pin with `actions/checkout@main`
+    # and watching all 43 tests stay green. I reproduced it and found it wider: a
+    # wholly injected third-party step passed too.
+    #
+    # The rule is therefore positional and exact, and it is two rules rather than one.
+    # The positive rule reads an action in a single spelling: a step at six spaces,
+    # `- uses: `, one bare reference, allowlisted owner/repository, immutable 40-hex
+    # pin, and that pin the reviewed one. The negative rule exists because I attacked
+    # the positive one and beat it four times: `- {uses: x}`, `- "uses": x` and
+    # `- 'uses': x` are all valid YAML that GitHub runs and that a scanner reading
+    # only its own preferred spelling never sees, so a second action rode in beside an
+    # untouched, correctly pinned checkout. So the token `uses` may not appear in this
+    # file's YAML in any other form at all. Refusing an unreadable line is right even
+    # when the line is innocent: this scanner cannot tell the difference, and the
+    # whole point of it is to not report success on something it did not check.
+    action = re.compile(r"^      - uses: (\S+)\s*$")
+    uses_lines = [line for line in lines if action.match(line)]
+    unreadable = [
+        line.strip() for line in lines if "uses" in line and not action.match(line)
+    ]
+    if unreadable:
+        defects.append(
+            "an action must be written as a step at exactly six spaces of indentation, "
+            f"`- uses: <owner>/<repository>@<40-hex>`; this is not readable: {unreadable}"
+        )
+    if len(uses_lines) != 1:
+        defects.append(
+            f"expected exactly one uses: in this workflow, the reviewed checkout, found "
+            f"{len(uses_lines)}; any other action runs inside the required job and can "
+            "replace the tests and the evaluator before either of them runs"
+        )
+    for line in uses_lines:
+        spec = action.match(line).group(1)
+        if spec in REVIEWED_ACTIONS:
+            continue
+        repository, _, ref = spec.partition("@")
+        if repository not in ALLOWED_REPOSITORIES:
+            defects.append(
+                f"uses: {spec!r} does not name an allowlisted "
+                f"{sorted(ALLOWED_REPOSITORIES)}; a forked, renamed or transferred "
+                "owner/repository is a different action under different control"
+            )
+        elif not IMMUTABLE_PIN_RE.match(ref):
+            defects.append(
+                f"uses: {spec!r} is not pinned to an immutable 40-hex commit; a branch, "
+                "tag or abbreviated ref can change what runs in the required job "
+                "without any change to this repository"
+            )
+        else:
+            defects.append(
+                f"uses: {spec!r} is pinned immutably but to an unreviewed commit; only "
+                "the reviewed pin may run in the required job"
+            )
 
     types = next((line for line in lines if re.match(r"^\s*types:\s*\[", line)), None)
     if types is None:
@@ -591,6 +661,103 @@ class RequiredContextCannotFalseGreen(unittest.TestCase):
         self.assertNotEqual(mutated, self._workflow(), "the mutation never applied")
         self.assertIn("edited", "\n".join(false_green_defects(mutated)))
 
+    # Codex O3, the two mutations he named plus the neighbours they imply. Every one
+    # of these leaves a workflow that is valid YAML, runs the same two commands in the
+    # same order, and satisfies every other check in false_green_defects. Before this
+    # repair each returned no defects at all and the whole suite stayed green.
+
+    def test_a_moving_checkout_ref_is_caught(self):
+        """`@main` is whatever that branch holds at the moment the job starts."""
+        real = self._workflow()
+        mutated = real.replace(
+            "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+            "actions/checkout@main",
+        )
+        self.assertNotEqual(mutated, real, "the mutation never applied; proof is void")
+        self.assertIn("immutable 40-hex", "\n".join(false_green_defects(mutated)))
+
+    def test_a_forked_checkout_repository_is_caught(self):
+        """The reviewed pin under an owner nobody reviewed is a different action."""
+        real = self._workflow()
+        mutated = real.replace(
+            "uses: actions/checkout@", "uses: hostile-fork/checkout@"
+        )
+        self.assertNotEqual(mutated, real, "the mutation never applied; proof is void")
+        defects = "\n".join(false_green_defects(mutated))
+        self.assertIn("allowlisted", defects)
+        self.assertIn("hostile-fork/checkout", defects)
+
+    def test_a_release_tag_pin_is_caught(self):
+        """A tag is a pointer its owner can move onto any commit at any time."""
+        real = self._workflow()
+        mutated = real.replace(
+            "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+            "actions/checkout@v6",
+        )
+        self.assertNotEqual(mutated, real, "the mutation never applied; proof is void")
+        self.assertIn("immutable 40-hex", "\n".join(false_green_defects(mutated)))
+
+    def test_an_unreviewed_immutable_pin_is_caught(self):
+        """Immutability is not review. This pin is well formed and never seen."""
+        real = self._workflow()
+        mutated = real.replace(
+            "d23441a48e516b6c34aea4fa41551a30e30af803",
+            "0000000000000000000000000000000000000bad",
+        )
+        self.assertNotEqual(mutated, real, "the mutation never applied; proof is void")
+        self.assertIn("unreviewed commit", "\n".join(false_green_defects(mutated)))
+
+    def test_an_additional_action_before_the_gate_is_caught(self):
+        """Codex named the checkout; any step ahead of the gate has the same reach."""
+        real = self._workflow()
+        mutated = real.replace(
+            "      - name: induced mutations for the gate itself\n",
+            "      - uses: hostile/inject@1111111111111111111111111111111111111111\n"
+            "      - name: induced mutations for the gate itself\n",
+        )
+        self.assertNotEqual(mutated, real, "the mutation never applied; proof is void")
+        defects = "\n".join(false_green_defects(mutated))
+        self.assertIn("exactly one uses:", defects)
+        self.assertIn("hostile/inject", defects)
+
+    def test_dropping_the_checkout_entirely_is_caught(self):
+        """`unittest discover` over an unpopulated workspace finds nothing, exits 0."""
+        real = self._workflow()
+        mutated = "\n".join(
+            line for line in real.split("\n") if not line.lstrip().startswith("- uses:")
+        )
+        self.assertNotEqual(mutated, real, "the mutation never applied; proof is void")
+        self.assertIn("exactly one uses:", "\n".join(false_green_defects(mutated)))
+
+    def test_hiding_the_checkout_at_the_wrong_indentation_is_caught(self):
+        """The requirement is positional: a uses: this cannot place is refused."""
+        real = self._workflow()
+        mutated = real.replace(
+            "      - uses: actions/checkout@", "        uses: actions/checkout@"
+        )
+        self.assertNotEqual(mutated, real, "the mutation never applied; proof is void")
+        self.assertIn("six spaces", "\n".join(false_green_defects(mutated)))
+
+    def test_an_action_in_another_valid_yaml_spelling_is_caught(self):
+        """My own positive rule lost to these four before the negative rule existed.
+
+        Each smuggles a second action in beside an untouched, correctly pinned
+        checkout, so every other check in this function is satisfied.
+        """
+        real = self._workflow()
+        step = "      - name: induced mutations for the gate itself\n"
+        for spelling in (
+            "      - {uses: hostile/inject@main}",
+            '      - "uses": hostile/inject@main',
+            "      - 'uses': hostile/inject@main",
+            "      -  uses: hostile/inject@main",
+        ):
+            with self.subTest(spelling=spelling):
+                mutated = real.replace(step, spelling + "\n" + step)
+                self.assertNotEqual(mutated, real, "the mutation never applied")
+                self.assertIn(
+                    "not readable", "\n".join(false_green_defects(mutated))
+                )
 
 
 def competing_context_defects(directory):
