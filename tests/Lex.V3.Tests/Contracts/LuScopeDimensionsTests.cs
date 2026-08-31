@@ -90,9 +90,9 @@ public sealed class LuScopeDimensionsTests
     }
 
     [TestMethod]
-    public void DispositionPreservesStrictEvidenceOrderWithoutInventingContentRules()
+    public void DispositionPreservesStrictNonblankEvidenceOrder()
     {
-        var evidence = new List<string> { "", "evidence-2", "évidence-3" };
+        var evidence = new List<string> { "evidence-1", "evidence-2", "évidence-3" };
         var disposition = Disposition(
             LuScopeTerminalState.AcceptedMetadata,
             "accepted_bounded_metadata",
@@ -101,7 +101,7 @@ public sealed class LuScopeDimensionsTests
         evidence[0] = "changed-after-construction";
 
         CollectionAssert.AreEqual(
-            new[] { "", "evidence-2", "évidence-3" },
+            new[] { "evidence-1", "evidence-2", "évidence-3" },
             disposition.EvidenceIds.ToArray());
         Assert.HasCount(0, Disposition(
             LuScopeTerminalState.Point,
@@ -118,6 +118,10 @@ public sealed class LuScopeDimensionsTests
             LuScopeTerminalState.AcceptedMetadata,
             "accepted_bounded_metadata",
             new string[] { null! }));
+        Assert.ThrowsExactly<ArgumentException>(() => Disposition(
+            LuScopeTerminalState.AcceptedMetadata,
+            "accepted_bounded_metadata",
+            new[] { " " }));
     }
 
     [TestMethod]
@@ -133,12 +137,31 @@ public sealed class LuScopeDimensionsTests
             "accepted_bounded_metadata",
             string.Empty,
             Array.Empty<string>()));
+        Assert.ThrowsExactly<ArgumentException>(() => new LuScopeDimensionDisposition(
+            LuScopeTerminalState.AcceptedMetadata,
+            "\t",
+            "record-1",
+            Array.Empty<string>()));
+        Assert.ThrowsExactly<ArgumentException>(() => new LuScopeDimensionDisposition(
+            LuScopeTerminalState.AcceptedMetadata,
+            "accepted_bounded_metadata",
+            " ",
+            Array.Empty<string>()));
         Assert.ThrowsExactly<ArgumentException>(() => Disposition(
             LuScopeTerminalState.NotApplicable,
             "missing_assertion"));
         Assert.ThrowsExactly<ArgumentException>(() => Disposition(
             LuScopeTerminalState.NotApplicable,
             "not_applicable_"));
+        Assert.ThrowsExactly<ArgumentException>(() => Disposition(
+            LuScopeTerminalState.NotApplicable,
+            "not_applicable_ "));
+        Assert.ThrowsExactly<ArgumentException>(() => Disposition(
+            LuScopeTerminalState.NotApplicable,
+            "not_applicable_\t"));
+        Assert.ThrowsExactly<ArgumentException>(() => Disposition(
+            LuScopeTerminalState.AcceptedMetadata,
+            "not_applicable_out_of_scope"));
 
         var notApplicable = Disposition(
             LuScopeTerminalState.NotApplicable,

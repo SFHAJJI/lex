@@ -44,19 +44,29 @@ public sealed record LuScopeDimensionDisposition
 
         if (state == LuScopeTerminalState.NotApplicable &&
             (!reasonCode.StartsWith(NotApplicableReasonPrefix, StringComparison.Ordinal) ||
-             reasonCode.Length == NotApplicableReasonPrefix.Length))
+             string.IsNullOrWhiteSpace(reasonCode[NotApplicableReasonPrefix.Length..])))
         {
             throw new ArgumentException(
                 "A not-applicable disposition requires an explicit not_applicable_* reason.",
                 nameof(reasonCode));
         }
 
+        if (state != LuScopeTerminalState.NotApplicable &&
+            reasonCode.StartsWith(NotApplicableReasonPrefix, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "A not_applicable_* reason is valid only for a not-applicable disposition.",
+                nameof(reasonCode));
+        }
+
         var copy = (evidenceIds ?? throw new ArgumentNullException(nameof(evidenceIds))).ToArray();
         for (var index = 0; index < copy.Length; index++)
         {
-            if (copy[index] is null)
+            if (string.IsNullOrWhiteSpace(copy[index]))
             {
-                throw new ArgumentException("Evidence identifiers cannot contain null.", nameof(evidenceIds));
+                throw new ArgumentException(
+                    "Evidence identifiers cannot be null, empty, or whitespace.",
+                    nameof(evidenceIds));
             }
 
             if (index > 0 && StringComparer.Ordinal.Compare(copy[index - 1], copy[index]) >= 0)
@@ -81,9 +91,11 @@ public sealed record LuScopeDimensionDisposition
     private static string RequireCode(string value, string parameterName)
     {
         ArgumentNullException.ThrowIfNull(value, parameterName);
-        if (value.Length == 0)
+        if (string.IsNullOrWhiteSpace(value))
         {
-            throw new ArgumentException("Disposition codes cannot be empty.", parameterName);
+            throw new ArgumentException(
+                "Disposition codes cannot be empty or whitespace.",
+                parameterName);
         }
 
         return value;
