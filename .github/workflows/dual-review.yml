@@ -3,25 +3,24 @@ name: dual-review
 # Both machine co-owners authenticate as the same GitHub account, so GitHub's own
 # review mechanism cannot represent them: an account cannot approve its own pull
 # request, and requiring an approving review would deadlock the branch rather than
-# harden it. This check moves the gate into a status context, which is evaluated on
-# a result rather than on an actor identity.
+# harden it.
 #
-# Truth lives in the tracking issue. The pull request body names its issue; that
-# issue's owner:* and reviewer:* labels decide who must review. A verdict comment
-# from the reviewer, bound to the exact head commit, satisfies the gate.
+# An earlier design read the verdict from pull request comments. Two holes closed it:
+# arbitrary `owner:*` / `reviewer:*` label pairs false-passed, and comment truth is
+# mutable without re-triggering a head workflow, so an edited or superseded verdict
+# could stay green indefinitely.
 #
-# There is deliberately no issue_comment trigger. Those workflows run from the
-# default branch, which here is the frozen V2 fallback, and an issue_comment run is
-# not a check on the pull request head in any case. The reviewer instead toggles the
-# recheck label after posting a verdict, which re-runs this workflow against the head.
+# The verdict is now an immutable empty `lex-review/1` receipt commit at the pull
+# request head, created by the non-writer after review. Its parent is the reviewed
+# candidate, its tree must equal that parent's, and its message binds issue, writer,
+# reviewer, candidate commit, candidate tree and verdict. Any later product commit
+# makes the head cease to be a receipt and fails the gate until a fresh review.
 #
-# This defends against forgetting, not against forgery. A shared account means either
-# agent could write the other's marker; doing so would be a deliberate, timestamped,
-# public falsification rather than the silent omission this exists to prevent.
+# No comment is parsed for gate state. Comments remain public evidence only.
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+    types: [opened, synchronize, reopened, edited]
     branches: [v3/integration]
 
 permissions:
@@ -30,8 +29,8 @@ permissions:
   issues: read
 
 jobs:
-  # The gate's own induced mutations. A gate that has never been shown red is a
-  # name, not a gate, so these run on every change to it.
+  # The gate's own induced mutations, including real temporary Git repositories. A
+  # receipt gate tested only against hand-built tuples has not been tested against Git.
   dual-review-tests:
     name: dual-review-tests
     runs-on: ubuntu-latest
@@ -46,13 +45,19 @@ jobs:
     needs: dual-review-tests
     runs-on: ubuntu-latest
     steps:
+      # The pull request head explicitly, never the synthetic merge commit: the receipt
+      # is a property of the head, and validating a merge would check a commit no
+      # reviewer ever saw. Depth 2 so the parent is present for tree comparison.
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 2
           persist-credentials: false
 
-      - name: verify a SHA-bound verdict from the declared reviewer
+      - name: verify the immutable lex-review/1 receipt at the head
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: python3 .github/scripts/dual_review.py

@@ -1,199 +1,272 @@
-"""Induced mutations for the dual-review gate.
+"""Induced mutations for the immutable receipt gate.
 
-A gate that has never been shown red is a name, not a gate. Each test breaks one
-property on purpose and asserts the check refuses; the passing cases exist so the
-suite cannot be satisfied by a check that simply always fails.
+Two kinds of test here, deliberately.
 
-Every case Codex demonstrated against the first implementation is here as a named
-regression: a marker quoted inside prose, a marker from a stranger, two author
-declarations, a malformed marker beside a valid one, and OBJECTION followed by READY
-on the same commit.
+The pure cases exercise `evaluate` directly and are fast. The integration cases build
+**real temporary Git repositories** and run the parser against actual commits, because
+the previous design's fatal defect was exactly this: thirteen tests exercised a pure
+function while the real path crashed on its first call. A receipt gate that has only
+been tested against hand-built tuples has not been tested against Git.
+
+Both of Codex's blocking findings against the comment-based design have named
+regressions here: an arbitrary role pair must fail, and a product commit landing after
+a receipt must turn the gate red again.
 """
 
-import json
 import subprocess
+import tempfile
 import unittest
-from unittest import mock
+from pathlib import Path
 
-from dual_review import evaluate, parse_verdicts, roles_from_labels, _gh_json
+from dual_review import evaluate, parse_receipt
 
-HEAD = "a" * 40
-OLD = "b" * 40
-OWNER = "SFHAJJI"
-
-CLAUDE_WRITES = ["v3", "owner:claude", "reviewer:codex"]
-CODEX_WRITES = ["v3", "owner:codex", "reviewer:claude"]
-
-BODY = "<!-- lex-item issue=333 -->"
+CANDIDATE = "a" * 40
+TREE = "b" * 40
+OTHER = "c" * 40
 
 
-def marker(agent: str, sha: str, v: str = "READY") -> str:
-    return f"<!-- lex-verdict agent={agent} sha={sha} verdict={v} -->"
-
-
-def comment(body: str, login: str = OWNER) -> dict:
-    return {"body": body, "user": {"login": login}}
+def receipt(
+    issue="333", writer="claude", reviewer="codex",
+    commit=CANDIDATE, tree=TREE, verdict="READY",
+):
+    return (
+        "lex-review/1\n"
+        f"issue: {issue}\n"
+        f"writer: {writer}\n"
+        f"reviewer: {reviewer}\n"
+        f"candidate-commit: {commit}\n"
+        f"candidate-tree: {tree}\n"
+        f"verdict: {verdict}\n"
+    )
 
 
 def labels(mapping):
     return lambda n: mapping.get(n)
 
 
-class Passing(unittest.TestCase):
-    def test_reviewer_ready_on_this_exact_head(self):
-        ok, msg = evaluate(
-            HEAD, BODY, [comment(marker("codex", HEAD))], OWNER, labels({333: CLAUDE_WRITES})
-        )
+GOOD_LABELS = labels({333: ["v3", "owner:claude", "reviewer:codex"]})
+BODY = "<!-- lex-item issue=333 -->"
+
+
+def check(message=None, head_tree=TREE, parents=None, body=BODY, lab=GOOD_LABELS):
+    return evaluate(
+        "d" * 40,
+        head_tree,
+        parents if parents is not None else [(CANDIDATE, TREE)],
+        message if message is not None else receipt(),
+        body,
+        lab,
+    )
+
+
+class Accepts(unittest.TestCase):
+    def test_an_exact_receipt_is_accepted(self):
+        ok, msg = check()
         self.assertTrue(ok, msg)
 
     def test_roles_are_symmetric(self):
-        ok, msg = evaluate(
-            HEAD, BODY, [comment(marker("claude", HEAD))], OWNER, labels({333: CODEX_WRITES})
+        ok, msg = check(
+            message=receipt(writer="codex", reviewer="claude"),
+            lab=labels({333: ["owner:codex", "reviewer:claude"]}),
         )
         self.assertTrue(ok, msg)
 
-    def test_unrelated_owner_comments_do_not_interfere(self):
-        cs = [comment("Looks good to me."), comment(marker("codex", HEAD)), comment("thanks")]
-        ok, msg = evaluate(HEAD, BODY, cs, OWNER, labels({333: CLAUDE_WRITES}))
-        self.assertTrue(ok, msg)
 
-    def test_marker_case_and_whitespace_do_not_defeat_the_gate(self):
-        m = f"<!--   lex-verdict   agent=CODEX   sha={HEAD.upper()}   verdict=ready   -->"
-        ok, msg = evaluate(HEAD, BODY, [comment(m)], OWNER, labels({333: CLAUDE_WRITES}))
-        self.assertTrue(ok, msg)
+class CodexBlockingFindings(unittest.TestCase):
+    """The two defects that killed the comment-based design."""
 
-
-class PublicRepositoryAttacks(unittest.TestCase):
-    """The repository is public, so anyone may comment."""
-
-    def test_a_stranger_cannot_forge_a_ready(self):
-        cs = [comment(marker("codex", HEAD), login="a-passer-by")]
-        ok, msg = evaluate(HEAD, BODY, cs, OWNER, labels({333: CLAUDE_WRITES}))
+    def test_an_arbitrary_role_pair_is_refused(self):
+        # O1: owner:not-a-co-owner + reviewer:codex false-passed before.
+        ok, msg = check(message=receipt(writer="not-a-co-owner"))
         self.assertFalse(ok)
-        self.assertIn("no verdict", msg)
+        self.assertIn("exactly the pair", msg)
 
-    def test_a_stranger_cannot_hold_the_gate_red(self):
-        # An unknown-agent marker from a stranger must be IGNORED, not rejected:
-        # rejecting it would be a denial of service on a public repository.
-        cs = [
-            comment(marker("nobody", HEAD), login="a-passer-by"),
-            comment(marker("codex", HEAD)),
-        ]
-        ok, msg = evaluate(HEAD, BODY, cs, OWNER, labels({333: CLAUDE_WRITES}))
-        self.assertTrue(ok, msg)
-
-    def test_a_marker_quoted_inside_prose_does_not_count(self):
-        body = f"Codex said:\n\n> {marker('codex', HEAD)}\n\nso we are fine."
-        ok, msg = evaluate(HEAD, BODY, [comment(body)], OWNER, labels({333: CLAUDE_WRITES}))
+    def test_a_product_commit_after_a_receipt_turns_the_gate_red(self):
+        # O2: stale-green. A later push means HEAD is no longer a receipt.
+        ok, msg = check(message="feat: an ordinary product change\n")
         self.assertFalse(ok)
-        self.assertIn("no verdict", msg)
+        self.assertIn("exactly 7 lines", msg)
 
-    def test_a_malformed_marker_beside_a_valid_one_does_not_pass(self):
-        cs = [comment(f"{marker('codex', HEAD)} plus trailing prose")]
-        ok, msg = evaluate(HEAD, BODY, cs, OWNER, labels({333: CLAUDE_WRITES}))
+
+class RefusesStructurally(unittest.TestCase):
+    def test_a_receipt_that_changes_content_is_refused(self):
+        ok, msg = check(head_tree=OTHER)
+        self.assertFalse(ok)
+        self.assertIn("must add nothing", msg)
+
+    def test_a_merge_head_is_refused(self):
+        ok, msg = check(parents=[(CANDIDATE, TREE), (OTHER, TREE)])
+        self.assertFalse(ok)
+        self.assertIn("exactly one parent", msg)
+
+    def test_a_root_commit_is_refused(self):
+        ok, msg = check(parents=[])
+        self.assertFalse(ok)
+        self.assertIn("exactly one parent", msg)
+
+    def test_a_receipt_naming_a_different_candidate_is_refused(self):
+        ok, msg = check(message=receipt(commit=OTHER))
+        self.assertFalse(ok)
+        self.assertIn("is not the parent", msg)
+
+    def test_a_receipt_naming_a_stale_tree_is_refused(self):
+        ok, msg = check(message=receipt(tree=OTHER))
+        self.assertFalse(ok)
+        self.assertIn("does not match the reviewed tree", msg)
+
+
+class RefusesMalformed(unittest.TestCase):
+    def test_reordered_fields_are_refused(self):
+        lines = receipt().split("\n")
+        lines[2], lines[3] = lines[3], lines[2]
+        ok, msg = check(message="\n".join(lines))
+        self.assertFalse(ok)
+        self.assertIn("ordered", msg)
+
+    def test_a_duplicate_field_is_refused(self):
+        ok, msg = check(message=receipt() + "verdict: READY\n")
+        self.assertFalse(ok)
+        self.assertIn("exactly", msg)
+
+    def test_trailing_prose_is_refused(self):
+        ok, msg = check(message=receipt() + "\nlooks good to me\n")
         self.assertFalse(ok)
 
+    def test_wrong_case_is_refused(self):
+        ok, msg = check(message=receipt().replace("verdict: READY", "verdict: Ready"))
+        self.assertFalse(ok)
+        self.assertIn("only READY", msg)
 
-class TrackingIssueIsTheTruth(unittest.TestCase):
-    def test_rejects_when_no_tracking_issue_is_declared(self):
-        ok, msg = evaluate(HEAD, "no marker", [comment(marker("codex", HEAD))], OWNER, labels({}))
+    def test_non_ascii_is_refused(self):
+        ok, msg = check(message=receipt().replace("claude", "claudé"))
+        self.assertFalse(ok)
+        self.assertIn("non-ASCII", msg)
+
+    def test_ambiguous_whitespace_is_refused(self):
+        ok, msg = check(message=receipt().replace("issue: 333", "issue:  333"))
+        self.assertFalse(ok)
+
+    def test_a_short_sha_is_refused(self):
+        ok, msg = check(message=receipt(commit="abc123"))
+        self.assertFalse(ok)
+        self.assertIn("40 lowercase hex", msg)
+
+    def test_an_uppercase_sha_is_refused(self):
+        ok, msg = check(message=receipt(commit=CANDIDATE.upper()))
+        self.assertFalse(ok)
+
+    def test_a_non_ready_verdict_is_refused(self):
+        ok, msg = check(message=receipt(verdict="OBJECTION"))
+        self.assertFalse(ok)
+        self.assertIn("only READY", msg)
+
+
+class RefusesAssignmentMismatch(unittest.TestCase):
+    def test_a_missing_tracking_issue_is_refused(self):
+        ok, msg = check(body="no marker")
         self.assertFalse(ok)
         self.assertIn("0 tracking issues", msg)
 
-    def test_rejects_two_tracking_issue_declarations(self):
-        body = "<!-- lex-item issue=333 --> and <!-- lex-item issue=330 -->"
-        ok, msg = evaluate(HEAD, body, [comment(marker("codex", HEAD))], OWNER, labels({}))
+    def test_a_body_naming_a_different_issue_is_refused(self):
+        ok, msg = check(body="<!-- lex-item issue=999 -->")
         self.assertFalse(ok)
-        self.assertIn("2 tracking issues", msg)
+        self.assertIn("but the body declares", msg)
 
-    def test_rejects_an_unreadable_tracking_issue(self):
-        ok, msg = evaluate(HEAD, BODY, [comment(marker("codex", HEAD))], OWNER, labels({}))
+    def test_labels_contradicting_the_receipt_are_refused(self):
+        ok, msg = check(lab=labels({333: ["owner:codex", "reviewer:claude"]}))
+        self.assertFalse(ok)
+        self.assertIn("owner labels", msg)
+
+    def test_an_unreadable_tracking_issue_is_refused(self):
+        ok, msg = check(lab=labels({}))
         self.assertFalse(ok)
         self.assertIn("could not be read", msg)
 
-    def test_rejects_two_owner_labels(self):
-        bad = ["owner:claude", "owner:codex", "reviewer:codex"]
-        ok, msg = evaluate(HEAD, BODY, [comment(marker("codex", HEAD))], OWNER, labels({333: bad}))
-        self.assertFalse(ok)
-        self.assertIn("owner:* labels", msg)
 
-    def test_rejects_a_missing_reviewer_label(self):
-        bad = ["v3", "owner:claude"]
-        ok, msg = evaluate(HEAD, BODY, [comment(marker("codex", HEAD))], OWNER, labels({333: bad}))
-        self.assertFalse(ok)
-        self.assertIn("reviewer:* labels", msg)
+class RealGitRepositories(unittest.TestCase):
+    """Against actual commits, because a pure test proves nothing about Git."""
 
-    def test_rejects_owner_and_reviewer_being_the_same_agent(self):
-        bad = ["owner:claude", "reviewer:claude"]
-        ok, msg = evaluate(HEAD, BODY, [comment(marker("claude", HEAD))], OWNER, labels({333: bad}))
-        self.assertFalse(ok)
-        self.assertIn("both owner and reviewer", msg)
+    @staticmethod
+    def _git(repo, *args):
+        return subprocess.run(
+            ["git", "-C", str(repo), *args],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
 
-    def test_a_verdict_from_the_writer_is_not_review(self):
-        cs = [comment(marker("claude", HEAD))]
-        ok, msg = evaluate(HEAD, BODY, cs, OWNER, labels({333: CLAUDE_WRITES}))
-        self.assertFalse(ok)
-        self.assertIn("no verdict from the declared reviewer", msg)
+    def _repo(self, base):
+        path = Path(base)
+        self._git(path, "init", "-q", "-b", "main")
+        self._git(path, "config", "user.email", "t@example.invalid")
+        self._git(path, "config", "user.name", "t")
+        (path / "file.txt").write_text("candidate content\n", encoding="utf-8")
+        self._git(path, "add", "file.txt")
+        self._git(path, "commit", "-q", "-m", "feat: the reviewed candidate")
+        return path
 
+    def _state(self, path, head="HEAD"):
+        sha = self._git(path, "rev-parse", head)
+        tree = self._git(path, "rev-parse", f"{head}^{{tree}}")
+        parent_shas = self._git(path, "rev-list", "--parents", "-n", "1", head).split()[1:]
+        parents = [(p, self._git(path, "rev-parse", f"{p}^{{tree}}")) for p in parent_shas]
+        message = self._git(path, "log", "-1", "--format=%B", head)
+        return sha, tree, parents, message
 
-class ShaBinding(unittest.TestCase):
-    def test_rejects_a_verdict_bound_to_a_superseded_commit(self):
-        ok, msg = evaluate(
-            HEAD, BODY, [comment(marker("codex", OLD))], OWNER, labels({333: CLAUDE_WRITES})
-        )
-        self.assertFalse(ok)
-        self.assertIn("head is now", msg)
+    def test_a_real_empty_receipt_commit_is_accepted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._repo(tmp)
+            candidate = self._git(path, "rev-parse", "HEAD")
+            tree = self._git(path, "rev-parse", "HEAD^{tree}")
+            self._git(
+                path, "commit", "-q", "--allow-empty", "-m",
+                receipt(commit=candidate, tree=tree),
+            )
+            sha, head_tree, parents, message = self._state(path)
+            ok, msg = evaluate(sha, head_tree, parents, message, BODY, GOOD_LABELS)
+            self.assertTrue(ok, msg)
 
-    def test_rejects_an_objection_on_the_current_head(self):
-        cs = [comment(marker("codex", HEAD, "OBJECTION"))]
-        ok, msg = evaluate(HEAD, BODY, cs, OWNER, labels({333: CLAUDE_WRITES}))
-        self.assertFalse(ok)
-        self.assertIn("OBJECTION", msg)
+    def test_a_real_nonempty_receipt_commit_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._repo(tmp)
+            candidate = self._git(path, "rev-parse", "HEAD")
+            tree = self._git(path, "rev-parse", "HEAD^{tree}")
+            (path / "smuggled.txt").write_text("extra\n", encoding="utf-8")
+            self._git(path, "add", "smuggled.txt")
+            self._git(path, "commit", "-q", "-m", receipt(commit=candidate, tree=tree))
+            sha, head_tree, parents, message = self._state(path)
+            ok, msg = evaluate(sha, head_tree, parents, message, BODY, GOOD_LABELS)
+            self.assertFalse(ok, "a receipt carrying content must be refused")
 
-    def test_rejects_conflicting_verdicts_on_the_same_head(self):
-        # Order must not decide. Codex demonstrated OBJECTION-then-READY passing.
-        cs = [comment(marker("codex", HEAD, "OBJECTION")), comment(marker("codex", HEAD))]
-        ok, msg = evaluate(HEAD, BODY, cs, OWNER, labels({333: CLAUDE_WRITES}))
-        self.assertFalse(ok)
-        self.assertIn("conflicting", msg)
+    def test_a_real_product_commit_after_a_receipt_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._repo(tmp)
+            candidate = self._git(path, "rev-parse", "HEAD")
+            tree = self._git(path, "rev-parse", "HEAD^{tree}")
+            self._git(
+                path, "commit", "-q", "--allow-empty", "-m",
+                receipt(commit=candidate, tree=tree),
+            )
+            (path / "file.txt").write_text("changed after review\n", encoding="utf-8")
+            self._git(path, "add", "file.txt")
+            self._git(path, "commit", "-q", "-m", "feat: a later product change")
+            sha, head_tree, parents, message = self._state(path)
+            ok, msg = evaluate(sha, head_tree, parents, message, BODY, GOOD_LABELS)
+            self.assertFalse(ok, "a push after a receipt must invalidate the gate")
 
-    def test_rejects_conflicting_verdicts_in_the_other_order_too(self):
-        cs = [comment(marker("codex", HEAD)), comment(marker("codex", HEAD, "OBJECTION"))]
-        ok, msg = evaluate(HEAD, BODY, cs, OWNER, labels({333: CLAUDE_WRITES}))
-        self.assertFalse(ok)
-        self.assertIn("conflicting", msg)
-
-
-class ApiParsing(unittest.TestCase):
-    """The first implementation regex-scanned the API text and crashed on real data."""
-
-    def _run(self, stdout):
-        with mock.patch("subprocess.run") as r:
-            r.return_value = mock.Mock(stdout=stdout)
-            return _gh_json("repos/x/y/issues/1/comments")
-
-    def test_parses_a_multi_page_slurped_array(self):
-        pages = [[{"body": "one"}, {"body": "two"}], [{"body": "three"}]]
-        self.assertEqual(len(self._run(json.dumps(pages))), 3)
-
-    def test_parses_a_single_object_response(self):
-        self.assertEqual(self._run(json.dumps([{"number": 7}]))["number"], 7)
-
-    def test_survives_bodies_containing_braces_and_brackets(self):
-        # The exact shape that broke the regex parser: JSON punctuation inside prose.
-        tricky = [[{"body": "see {a: [1,2]} and \"quoted\"\nmultiline", "user": {"login": "x"}}]]
-        self.assertEqual(len(self._run(json.dumps(tricky))), 1)
-
-
-class Helpers(unittest.TestCase):
-    def test_parse_verdicts_ignores_non_owner_authors(self):
-        cs = [comment(marker("codex", HEAD), login="stranger")]
-        self.assertEqual(parse_verdicts(cs, OWNER), [])
-
-    def test_roles_from_labels_reads_a_clean_pair(self):
-        owner, reviewer, err = roles_from_labels(CLAUDE_WRITES)
-        self.assertIsNone(err)
-        self.assertEqual((owner, reviewer), ("claude", "codex"))
+    def test_a_real_merge_head_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._repo(tmp)
+            self._git(path, "checkout", "-q", "-b", "side")
+            (path / "side.txt").write_text("side\n", encoding="utf-8")
+            self._git(path, "add", "side.txt")
+            self._git(path, "commit", "-q", "-m", "feat: side")
+            self._git(path, "checkout", "-q", "main")
+            (path / "main.txt").write_text("main\n", encoding="utf-8")
+            self._git(path, "add", "main.txt")
+            self._git(path, "commit", "-q", "-m", "feat: main")
+            self._git(path, "merge", "-q", "--no-ff", "side", "-m", "merge")
+            sha, head_tree, parents, message = self._state(path)
+            ok, msg = evaluate(sha, head_tree, parents, message, BODY, GOOD_LABELS)
+            self.assertFalse(ok, "a merge head is not a receipt")
 
 
 if __name__ == "__main__":

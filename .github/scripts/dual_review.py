@@ -1,31 +1,27 @@
-"""Verify that a pull request carries a SHA-bound verdict from the opposite co-owner.
+"""Verify an immutable lex-review/1 receipt commit at a pull request head.
 
 Both machine co-owners authenticate as one GitHub account, so actor identity cannot
 distinguish them and GitHub's own review mechanism would deadlock: an account cannot
-approve its own pull request. The gate therefore lives in a status check, which is
-evaluated on a result rather than on an actor.
+approve its own pull request. An earlier design read a verdict from pull request
+comments. Two holes closed that approach:
 
-Truth lives in the tracking issue, not in the pull request body. The body names its
-issue; the issue's `owner:*` and `reviewer:*` labels decide who must review. This
-keeps GitHub issues as the single backlog rather than creating a second role registry
-in free-form prose.
+  * arbitrary distinct `owner:*` / `reviewer:*` labels false-passed, so a hostile
+    `owner:not-a-co-owner` plus `reviewer:codex` pair satisfied the gate;
+  * comment truth is mutable and does not re-trigger a head workflow, so an edited,
+    deleted or superseded verdict could remain green indefinitely.
 
-The repository is public, so anyone may comment. Only comments authored by the
-repository owner are considered, and a verdict comment's entire trimmed body must be
-one canonical marker. A marker quoted inside prose is ignored: on a public repository
-counting it would let a stranger forge a READY, and rejecting it would let a stranger
-hold the gate red forever.
+The receipt is a commit instead. That makes the attestation immutable and self
+invalidating: it names the exact candidate commit and tree, it must add no content,
+and any later product commit makes HEAD cease to be a receipt, failing the gate until
+the non-writer reviews again and creates a fresh one. No comment is parsed for gate
+state; comments remain public evidence only.
 
-A verdict binds to the exact head commit. A push invalidates it, because the recorded
-SHA no longer matches.
+This is honest about its limit. A shared account means either agent could author a
+receipt naming the other as reviewer. That is a deliberate, immutable, published
+falsification rather than the silent omission this exists to prevent, and it becomes
+cryptographic attribution once the Decision 41 identity migration lands.
 
-This defends against forgetting, not against forgery. Under a shared account either
-agent could write the other's marker, but that is a deliberate, timestamped, public
-falsification rather than the silent omission this exists to prevent. After the
-Decision 41 identity migration the owner-login rule is replaced by the distinct
-reviewer identity.
-
-`evaluate` is pure, so every failure mode is exercised without touching GitHub.
+`evaluate` is pure so every failure mode is exercised without touching GitHub.
 Exit 0 to pass, 1 to fail.
 """
 
@@ -37,132 +33,143 @@ import re
 import subprocess
 import sys
 
-ITEM_RE = re.compile(r"<!--\s*lex-item\s+issue=(?P<issue>\d+)\s*-->", re.IGNORECASE)
-
-# A verdict comment's whole trimmed body must be exactly this. Nothing else.
-VERDICT_FULL_RE = re.compile(
-    r"\A<!--\s*lex-verdict\s+agent=(?P<agent>[A-Za-z][A-Za-z0-9_-]*)\s+"
-    r"sha=(?P<sha>[0-9a-fA-F]{40})\s+"
-    r"verdict=(?P<verdict>READY|OBJECTION)\s*-->\Z",
-    re.IGNORECASE,
-)
-
-OWNER_LABEL_RE = re.compile(r"\Aowner:(?P<agent>[a-z][a-z0-9_-]*)\Z")
-REVIEWER_LABEL_RE = re.compile(r"\Areviewer:(?P<agent>[a-z][a-z0-9_-]*)\Z")
+AGENTS = ("claude", "codex")
+HEADER = "lex-review/1"
+FIELDS = ("issue", "writer", "reviewer", "candidate-commit", "candidate-tree", "verdict")
+SHA_RE = re.compile(r"\A[0-9a-f]{40}\Z")
+ISSUE_RE = re.compile(r"\A[1-9][0-9]*\Z")
+ITEM_RE = re.compile(r"<!--\s*lex-item\s+issue=(\d+)\s*-->", re.IGNORECASE)
 
 
-def parse_verdicts(comments, owner_login: str):
-    """Canonical verdicts from the repository owner only, in chronological order.
+def parse_receipt(message: str):
+    """Parse a canonical receipt message, or return (None, reason).
 
-    `comments` is a sequence of mappings with `body` and `user.login`. Anything from
-    another author, or whose body is not exactly one marker, is ignored rather than
-    rejected: on a public repository, rejecting would be a denial of service.
+    Fail-closed on duplicate fields, reordered fields, extra text, wrong case,
+    whitespace ambiguity and non-ASCII. The message is an attestation, so a message
+    that is merely *close* to canonical is refused rather than repaired.
     """
-    found = []
-    for c in comments:
-        login = ((c.get("user") or {}).get("login") or "").lower()
-        if login != owner_login.lower():
-            continue
-        m = VERDICT_FULL_RE.match((c.get("body") or "").strip())
-        if not m:
-            continue
-        found.append(
-            {
-                "agent": m.group("agent").lower(),
-                "sha": m.group("sha").lower(),
-                "verdict": m.group("verdict").upper(),
-            }
+    if not isinstance(message, str) or not message:
+        return None, "the head commit has no message"
+    if not message.isascii():
+        return None, "the receipt message contains non-ASCII characters"
+    if "\t" in message or "\r" in message:
+        return None, "the receipt message contains tab or carriage-return whitespace"
+
+    lines = message.rstrip("\n").split("\n")
+    if len(lines) != len(FIELDS) + 1:
+        return None, (
+            f"the receipt must be exactly {len(FIELDS) + 1} lines, found {len(lines)}; "
+            "extra prose is not permitted in an attestation"
         )
-    return found
+    if lines[0] != HEADER:
+        return None, f"the first line must be exactly {HEADER!r}, found {lines[0]!r}"
 
+    values = {}
+    for index, name in enumerate(FIELDS, start=1):
+        line = lines[index]
+        prefix = f"{name}: "
+        if not line.startswith(prefix):
+            return None, (
+                f"line {index + 1} must begin {prefix!r}; fields are ordered and named "
+                f"exactly, found {line!r}"
+            )
+        value = line[len(prefix):]
+        if value != value.strip() or "  " in value:
+            return None, f"{name}: value has ambiguous whitespace"
+        if not value:
+            return None, f"{name}: value is empty"
+        values[name] = value
 
-def roles_from_labels(label_names):
-    """The (owner, reviewer) pair a tracking issue declares, or an error string."""
-    owners = sorted({m.group("agent") for n in label_names if (m := OWNER_LABEL_RE.match(n))})
-    reviewers = sorted(
-        {m.group("agent") for n in label_names if (m := REVIEWER_LABEL_RE.match(n))}
-    )
-    if len(owners) != 1:
-        return None, None, (
-            f"the tracking issue carries {len(owners)} owner:* labels; exactly one is "
-            "required so the writer is unambiguous."
+    if not ISSUE_RE.match(values["issue"]):
+        return None, f"issue: {values['issue']!r} is not a decimal issue number"
+    for name in ("candidate-commit", "candidate-tree"):
+        if not SHA_RE.match(values[name]):
+            return None, f"{name}: {values[name]!r} is not 40 lowercase hex characters"
+    if values["verdict"] != "READY":
+        return None, f"verdict: only READY is accepted, found {values['verdict']!r}"
+
+    writer, reviewer = values["writer"], values["reviewer"]
+    if {writer, reviewer} != set(AGENTS):
+        return None, (
+            f"writer/reviewer must be exactly the pair {AGENTS}, found "
+            f"({writer!r}, {reviewer!r}); an arbitrary role name is not a co-owner"
         )
-    if len(reviewers) != 1:
-        return None, None, (
-            f"the tracking issue carries {len(reviewers)} reviewer:* labels; exactly "
-            "one is required so the reviewer is unambiguous."
+    if writer == reviewer:
+        return None, "writer and reviewer must be opposite agents"
+
+    return values, None
+
+
+def evaluate(head_sha, head_tree, parents, message, pr_body, issue_labels_for):
+    """Decide whether the head is a valid receipt. Pure: no IO, no environment."""
+    receipt, reason = parse_receipt(message)
+    if receipt is None:
+        return False, reason
+
+    if len(parents) != 1:
+        return False, (
+            f"the receipt must have exactly one parent, found {len(parents)}; "
+            "a merge or root commit cannot attest a candidate"
         )
-    if owners[0] == reviewers[0]:
-        return None, None, (
-            f"the tracking issue names {owners[0]!r} as both owner and reviewer; "
-            "dual review requires two distinct agents."
+    parent_sha, parent_tree = parents[0]
+
+    if head_tree != parent_tree:
+        return False, (
+            "the receipt changes content: its tree differs from its parent's. A review "
+            "attestation must add nothing."
         )
-    return owners[0], reviewers[0], None
-
-
-def evaluate(head: str, pr_body: str, comments, owner_login: str, issue_labels_for):
-    """Decide whether dual review is satisfied. Pure: no IO, no environment.
-
-    `issue_labels_for(number)` returns that issue's label names, or None if unknown.
-    """
-    head = (head or "").lower()
+    if receipt["candidate-commit"] != parent_sha:
+        return False, (
+            f"candidate-commit {receipt['candidate-commit'][:8]} is not the parent "
+            f"{parent_sha[:8]}; the receipt does not attest the commit beneath it"
+        )
+    if receipt["candidate-tree"] != parent_tree or receipt["candidate-tree"] != head_tree:
+        return False, (
+            f"candidate-tree {receipt['candidate-tree'][:8]} does not match the reviewed "
+            f"tree {parent_tree[:8]}"
+        )
 
     items = ITEM_RE.findall(pr_body or "")
     if len(items) != 1:
         return False, (
             f"the pull request body declares {len(items)} tracking issues; exactly one "
-            "is required. Add <!-- lex-item issue=<number> --> naming the backlog item, "
-            "whose owner:* and reviewer:* labels decide who must review."
+            "<!-- lex-item issue=N --> is required"
         )
-    issue_number = int(items[0])
+    if items[0] != receipt["issue"]:
+        return False, (
+            f"the receipt attests issue {receipt['issue']} but the body declares "
+            f"{items[0]}"
+        )
 
-    labels = issue_labels_for(issue_number)
+    labels = issue_labels_for(int(receipt["issue"]))
     if labels is None:
-        return False, f"tracking issue #{issue_number} could not be read."
-
-    owner, reviewer, err = roles_from_labels(labels)
-    if err:
-        return False, f"issue #{issue_number}: {err}"
-
-    verdicts = parse_verdicts(comments, owner_login)
-    mine = [v for v in verdicts if v["agent"] == reviewer]
-    if not mine:
+        return False, f"tracking issue #{receipt['issue']} could not be read"
+    owners = sorted(n.split(":", 1)[1] for n in labels if n.startswith("owner:"))
+    reviewers = sorted(n.split(":", 1)[1] for n in labels if n.startswith("reviewer:"))
+    if owners != [receipt["writer"]]:
         return False, (
-            f"no verdict from the declared reviewer {reviewer!r} on issue "
-            f"#{issue_number}. Post a comment whose entire body is "
-            f"<!-- lex-verdict agent={reviewer} sha={head} verdict=READY -->."
+            f"issue #{receipt['issue']} carries owner labels {owners}, but the receipt "
+            f"names writer {receipt['writer']!r}"
         )
-
-    at_head = [v for v in mine if v["sha"] == head]
-    if not at_head:
-        stale = ", ".join(sorted({v["sha"][:8] for v in mine}))
+    if reviewers != [receipt["reviewer"]]:
         return False, (
-            f"{reviewer} reviewed {stale} but the head is now {head[:8]}. A verdict is "
-            "bound to the exact commit it reviewed; a push invalidates it."
+            f"issue #{receipt['issue']} carries reviewer labels {reviewers}, but the "
+            f"receipt names reviewer {receipt['reviewer']!r}"
         )
-
-    outcomes = {v["verdict"] for v in at_head}
-    if len(outcomes) > 1:
-        return False, (
-            f"{reviewer} recorded conflicting verdicts on {head[:8]}: "
-            f"{sorted(outcomes)}. Resolve by pushing a new commit, or by deleting the "
-            "superseded comment so exactly one verdict stands."
-        )
-    if outcomes != {"READY"}:
-        return False, f"{reviewer} recorded {sorted(outcomes)[0]} on the current head."
 
     return True, (
-        f"dual review satisfied: issue #{issue_number}, owner={owner}, "
-        f"reviewer={reviewer}, head={head[:8]}"
+        f"receipt valid: issue #{receipt['issue']}, {receipt['writer']} wrote, "
+        f"{receipt['reviewer']} reviewed {parent_sha[:8]}"
     )
 
 
-def _gh_json(path: str):
-    """One parsed JSON value from the GitHub API.
+def _git(*args):
+    return subprocess.run(
+        ["git", *args], capture_output=True, text=True, check=True
+    ).stdout.strip()
 
-    `--slurp` makes --paginate emit a single well-formed array of pages instead of
-    concatenated documents, so this is a real parse rather than a regex over text.
-    """
+
+def _gh_json(path: str):
     out = subprocess.run(
         ["gh", "api", path, "--paginate", "--slurp"],
         capture_output=True,
@@ -170,8 +177,6 @@ def _gh_json(path: str):
         check=True,
     ).stdout
     pages = json.loads(out)
-    if isinstance(pages, list) and pages and all(isinstance(p, list) for p in pages):
-        return [item for page in pages for item in page]
     if isinstance(pages, list) and len(pages) == 1:
         return pages[0]
     return pages
@@ -180,10 +185,14 @@ def _gh_json(path: str):
 def main() -> None:
     repo = os.environ["REPO"]
     number = os.environ["PR_NUMBER"]
-    owner_login = repo.split("/")[0]
+    head = os.environ["HEAD_SHA"]
+
+    head_tree = _git("rev-parse", f"{head}^{{tree}}")
+    parent_shas = _git("rev-list", "--parents", "-n", "1", head).split()[1:]
+    parents = [(p, _git("rev-parse", f"{p}^{{tree}}")) for p in parent_shas]
+    message = _git("log", "-1", "--format=%B", head)
 
     pr = _gh_json(f"repos/{repo}/pulls/{number}")
-    comments = _gh_json(f"repos/{repo}/issues/{number}/comments")
 
     def issue_labels_for(n: int):
         try:
@@ -192,13 +201,13 @@ def main() -> None:
             return None
         return [lbl["name"] for lbl in issue.get("labels", [])]
 
-    ok, message = evaluate(
-        pr["head"]["sha"], pr.get("body") or "", comments, owner_login, issue_labels_for
+    ok, message_out = evaluate(
+        head, head_tree, parents, message, pr.get("body") or "", issue_labels_for
     )
     if not ok:
-        print(f"::error::{message}")
+        print(f"::error::{message_out}")
         sys.exit(1)
-    print(message)
+    print(message_out)
 
 
 if __name__ == "__main__":
