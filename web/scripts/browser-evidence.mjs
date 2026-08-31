@@ -246,6 +246,31 @@ export async function keyboardWalk(session, sessionId, expected) {
   return seen;
 }
 
+/** Kill a process and everything it spawned, then wait for the handles to drop. */
+async function killTree(pid) {
+  if (!pid) return;
+  if (process.platform === "win32") {
+    await new Promise((resolve) => {
+      const killer = spawn("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore" });
+      killer.on("exit", resolve);
+      killer.on("error", resolve);
+    });
+  } else {
+    try {
+      process.kill(-pid, "SIGKILL");
+    } catch {
+      try {
+        process.kill(pid, "SIGKILL");
+      } catch {
+        // already gone
+      }
+    }
+  }
+  // The handles are released asynchronously, so a build immediately afterwards can still
+  // meet a locked directory without this.
+  await new Promise((resolve) => setTimeout(resolve, 400));
+}
+
 async function main() {
   const browser = await findBrowser();
   const port = 9222 + Math.floor(Math.random() * 500);
@@ -406,7 +431,10 @@ async function main() {
     }
     session.close();
   } finally {
-    child.kill();
+    // Chrome spawns a process tree, and killing only the process we launched leaves the
+    // renderers and the GPU process behind. Repeated runs left 51 of them alive, holding
+    // handles on dist/ so the next build failed with EBUSY. Kill the tree, not the parent.
+    await killTree(child.pid);
     await rm(profile, { force: true, recursive: true }).catch(() => {});
   }
 

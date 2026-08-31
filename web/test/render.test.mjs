@@ -183,15 +183,54 @@ test("empty payload lists are omitted rather than rendered empty", () => {
   assert.ok(REFUSAL().includes("Records that may be held"));
 });
 
-// Only https becomes a link. A scheme this surface has not vetted must not become
-// something a reader can activate from a page that is otherwise inert.
-test("official routes link only over https", () => {
-  assert.ok(REFUSAL().includes('<a href="https://legilux.public.lu/search"'));
-  const other = REFUSAL({
-    official_search_actions: [{ kind: "publisher_search", publisher: "lu-legilux", uri: "http://example.invalid/x" }],
+// A prefix check on "https://" is not enough, and I shipped one. These are the shapes
+// that got through it, kept as tests so the parse-based guard cannot regress to a
+// pattern match: userinfo that displays a trustworthy host and navigates elsewhere, an
+// arbitrary host, an explicit port, a cross-publisher host, and an unknown publisher.
+test("a route is linked only when its host belongs to the named publisher", () => {
+  const route = (uri, publisher = "lu-legilux") =>
+    REFUSAL({ official_search_actions: [{ kind: "publisher_search", publisher, uri }] });
+  const linked = (html) => /<a href="([^"]*)"/.exec(html)?.[1] ?? null;
+
+  assert.equal(
+    linked(route("https://legilux.public.lu/search")),
+    "https://legilux.public.lu/search",
+    "the official route must be linked",
+  );
+
+  for (const [label, uri, publisher] of [
+    ["userinfo pointing elsewhere", "https://legilux.public.lu@evil.invalid/x", "lu-legilux"],
+    // Userinfo on an *allowed* host, so the allowlist cannot be what rejects it. Without
+    // this case, deleting the userinfo check left the suite green.
+    ["userinfo on an allowed host", "https://user:pass@legilux.public.lu/search", "lu-legilux"],
+    ["an arbitrary host", "https://evil.invalid/#legilux.public.lu", "lu-legilux"],
+    ["an explicit port", "https://legilux.public.lu:8443/search", "lu-legilux"],
+    ["a non-https scheme", "http://legilux.public.lu/search", "lu-legilux"],
+    ["a scheme that executes", "javascript:alert(1)", "lu-legilux"],
+    ["a host belonging to another publisher", "https://legilux.public.lu/search", "eu-eurlex"],
+    ["a publisher with no declared hosts", "https://legilux.public.lu/search", "unknown-publisher"],
+    ["an unparseable value", "not a url at all", "lu-legilux"],
+  ]) {
+    const html = route(uri, publisher);
+    assert.equal(linked(html), null, `${label} must not be linked`);
+    assert.ok(html.includes("not an official host"), `${label} must say why`);
+  }
+
+  assert.ok(
+    linked(route("https://eur-lex.europa.eu/search", "eu-eurlex")),
+    "each publisher's own hosts are allowed",
+  );
+});
+
+// The href emitted is the parsed URL, not the raw string, so there is no gap between
+// what was validated and what the browser will follow.
+test("the linked href is the normalised url, never the raw input", () => {
+  const html = REFUSAL({
+    official_search_actions: [
+      { kind: "publisher_search", publisher: "lu-legilux", uri: "https:///legilux.public.lu/search" },
+    ],
   });
-  assert.ok(!other.includes("<a href="), "a non-https route must not be linked");
-  assert.ok(other.includes("scheme not vetted"));
+  assert.equal(/<a href="([^"]*)"/.exec(html)?.[1], "https://legilux.public.lu/search");
 });
 
 test("the success page renders the object body and invents no legal time", () => {
