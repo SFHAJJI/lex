@@ -3,43 +3,174 @@ using Lex.V3.Contracts.Custody;
 namespace Lex.V3.Artifacts;
 
 /// <summary>
-/// A create-only content-addressed custody store on a local filesystem, which enforces no
-/// retention floor and says so in every receipt it issues.
+/// A create-only content-addressed local store that explicitly proves no retention enforcement.
 /// </summary>
 /// <remarks>
-/// <para>
-/// This is the store a source build uses. It is not a stand-in for the durable provider: it holds
-/// the same contract, so the ordering property and its tests are exercised by the code that ships
-/// rather than by a mock written to agree with them.
-/// </para>
-/// <para>
-/// Create-only is enforced by <see cref="FileMode.CreateNew"/> rather than by checking existence
-/// first, because a check followed by a create is two operations and the interval between them is
-/// where a substitution goes.
-/// </para>
-/// <para>
-/// <b>It proves no retention.</b> A directory named <c>evidence-indefinite</c> is a name, not a
-/// floor, and this store sets <c>retention_enforced</c> to false on every receipt so that a
-/// consumer needing a proven floor refuses it structurally rather than by reading a comment. I had
-/// put that limitation in an issue comment, which is exactly where a limitation goes to be
-/// forgotten. When the address already exists the stored bytes are read back and
-/// their digest recomputed, so an address holding the wrong bytes is a detected fault rather than
-/// a silent success.
-/// </para>
+/// This adapter exercises the production ordering contract in source builds. It is not production
+/// retention evidence. A complete, flushed temporary file is atomically published before the
+/// content address is read back. An existing address is accepted only after exact-byte readback.
 /// </remarks>
 public sealed class FileSystemCustodyStore : ICustodyStore
 {
     private readonly string _root;
     private readonly TimeProvider _time;
+    private readonly Action? _beforePublish;
 
     public FileSystemCustodyStore(string root, TimeProvider? time = null)
+        : this(root, time, beforePublish: null)
+    {
+    }
+
+    internal FileSystemCustodyStore(
+        string root,
+        TimeProvider? time,
+        Action? beforePublish)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(root);
         _root = Path.GetFullPath(root);
         _time = time ?? TimeProvider.System;
+        _beforePublish = beforePublish;
     }
 
-    public DurableBlobWriteReceipt Create(ReadOnlyMemory<byte> bytes, CustodyClass custodyClass)
+    public async Task<DurableBlobWriteReceipt> CreateAsync(
+        ReadOnlyMemory<byte> bytes,
+        CustodyClass custodyClass,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ValidateCreate(bytes, custodyClass);
+
+        // Direct callers can still own and mutate the backing array while an asynchronous write is
+        // suspended. The store therefore publishes only this bounded private copy.
+        var frozen = bytes.ToArray();
+        var digest = CustodyDigest.Of(frozen, cancellationToken);
+        var reference = new DurableBlobRef(
+            CustodySchemaIds.DurableBlobRef, digest, frozen.LongLength, custodyClass);
+        var directory = Path.Combine(_root, ClassSegment(custodyClass));
+        EnsureLaneDirectory(directory, create: true);
+        var path = Path.Combine(directory, digest);
+        RejectOccupiedNonFileOrReparsePoint(path);
+        var pending = Path.Combine(directory, $"{digest}.{Guid.NewGuid():N}.partial");
+
+        try
+        {
+            await using (var stream = new FileStream(
+                             pending,
+                             FileMode.CreateNew,
+                             FileAccess.Write,
+                             FileShare.None,
+                             bufferSize: 64 * 1024,
+                             FileOptions.Asynchronous | FileOptions.WriteThrough))
+            {
+                await stream.WriteAsync(frozen, cancellationToken).ConfigureAwait(false);
+                await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+                stream.Flush(flushToDisk: true);
+            }
+
+            _beforePublish?.Invoke();
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                File.Move(pending, path);
+            }
+            catch (IOException) when (File.Exists(path))
+            {
+                // A concurrent or prior exact create won. The single verified read below decides
+                // whether that object is an idempotent success or an integrity incident.
+            }
+        }
+        finally
+        {
+            if (File.Exists(pending))
+            {
+                File.Delete(pending);
+            }
+        }
+
+        _ = await ReadAsync(reference, cancellationToken).ConfigureAwait(false);
+        var observedAt = _time.GetUtcNow().ToUniversalTime();
+        var policy = new CustodyPolicyEvidence(
+            CustodySchemaIds.CustodyPolicyEvidence,
+            reference,
+            CustodyVerificationProfile.FileSystemUnenforced1,
+            null,
+            CustodyProtection.NotEnforced,
+            observedAt,
+            null);
+
+        return new DurableBlobWriteReceipt(
+            CustodySchemaIds.DurableBlobWriteReceipt,
+            reference,
+            policy);
+    }
+
+    public async Task<ReadOnlyMemory<byte>> ReadAsync(
+        DurableBlobRef reference,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(reference);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var path = Path.Combine(
+            _root,
+            ClassSegment(reference.CustodyClass),
+            reference.ContentSha256);
+
+        try
+        {
+            EnsureLaneDirectory(Path.GetDirectoryName(path)!, create: false);
+            RejectOccupiedNonFileOrReparsePoint(path);
+            await using var stream = new FileStream(
+                path,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                bufferSize: 64 * 1024,
+                FileOptions.Asynchronous | FileOptions.SequentialScan);
+
+            if (stream.Length != reference.ByteLength)
+            {
+                throw new CustodyIntegrityException(
+                    "The retained object length differs from its durable reference.");
+            }
+
+            var bytes = GC.AllocateUninitializedArray<byte>(checked((int)reference.ByteLength));
+            await stream.ReadExactlyAsync(bytes, cancellationToken).ConfigureAwait(false);
+            if (await HasAnotherByteAsync(stream, cancellationToken).ConfigureAwait(false)
+                || !string.Equals(
+                    CustodyDigest.Of(bytes, cancellationToken),
+                    reference.ContentSha256,
+                    StringComparison.Ordinal))
+            {
+                throw new CustodyIntegrityException(
+                    "The retained object bytes differ from their durable reference.");
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            return bytes;
+        }
+        catch (Exception exception)
+            when (exception is FileNotFoundException or DirectoryNotFoundException)
+        {
+            throw new CustodyIntegrityException(
+                "A promised retained object is missing.", exception);
+        }
+        catch (EndOfStreamException exception)
+        {
+            throw new CustodyIntegrityException(
+                "The retained object ended before its promised length.", exception);
+        }
+    }
+
+    private static async Task<bool> HasAnotherByteAsync(
+        Stream stream,
+        CancellationToken cancellationToken)
+    {
+        var sentinel = new byte[1];
+        return await stream.ReadAsync(sentinel, cancellationToken).ConfigureAwait(false) != 0;
+    }
+
+    private static void ValidateCreate(ReadOnlyMemory<byte> bytes, CustodyClass custodyClass)
     {
         if (bytes.Length > CustodyBounds.MaxObjectBytes)
         {
@@ -48,68 +179,97 @@ public sealed class FileSystemCustodyStore : ICustodyStore
                 "A body above the admitted bound is refused before the filesystem is touched.");
         }
 
-        var digest = CustodyDigest.Of(bytes.Span);
-        var directory = Path.Combine(_root, ClassSegment(custodyClass));
-        Directory.CreateDirectory(directory);
-        var path = Path.Combine(directory, digest);
-
-        // A content address is published atomically or not at all. Writing straight to the final
-        // path meant a crash or a full disk left a permanently truncated object at that address,
-        // which every later create could only report as corruption, forever, with no way to
-        // distinguish it from a substitution. The temporary file carries the partial state, and
-        // only a complete, flushed file is ever given the digest as its name.
-        var pending = Path.Combine(directory, $"{digest}.{Guid.NewGuid():N}.partial");
-        try
+        if (!Enum.IsDefined(custodyClass))
         {
-            using (var stream = new FileStream(
-                       pending, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-            {
-                stream.Write(bytes.Span);
-                stream.Flush(flushToDisk: true);
-            }
+            throw new ArgumentOutOfRangeException(
+                nameof(custodyClass), custodyClass, "Unknown custody class.");
+        }
+    }
 
+    private void EnsureLaneDirectory(string directory, bool create)
+    {
+        if (create)
+        {
+            Directory.CreateDirectory(_root);
+        }
+
+        RejectReparseComponents(_root);
+        if (create)
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        RejectReparseComponents(directory);
+    }
+
+    private static void RejectReparseComponents(string path)
+    {
+        var fullPath = Path.GetFullPath(path);
+        var root = Path.GetPathRoot(fullPath)
+            ?? throw new CustodyIntegrityException("The custody path has no filesystem root.");
+        var relative = Path.GetRelativePath(root, fullPath);
+        var current = root;
+        foreach (var segment in relative.Split(
+                     [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+                     StringSplitOptions.RemoveEmptyEntries))
+        {
+            current = Path.Combine(current, segment);
+            FileAttributes attributes;
             try
             {
-                File.Move(pending, path);
+                attributes = File.GetAttributes(current);
             }
-            catch (IOException) when (File.Exists(path))
+            catch (Exception exception)
+                when (exception is FileNotFoundException or DirectoryNotFoundException)
             {
-                // The address is already held, which content addressing makes idempotent. Whether
-                // the held bytes really are these bytes is decided by the single verification
-                // below: two verification points mean removing either leaves the other, and a
-                // mutation that deletes a check nothing else duplicates is the only one a test can
-                // catch. This branch therefore falls through deliberately.
+                throw new CustodyIntegrityException(
+                    "A custody path component is missing.", exception);
+            }
+
+            if ((attributes & FileAttributes.ReparsePoint) != 0)
+            {
+                throw new CustodyIntegrityException(
+                    "A custody path traverses a symbolic link or reparse point.");
+            }
+
+            if ((attributes & FileAttributes.Directory) == 0)
+            {
+                throw new CustodyIntegrityException(
+                    "A non-directory object occupies a custody path component.");
             }
         }
-        finally
+    }
+
+    private static void RejectOccupiedNonFileOrReparsePoint(string path)
+    {
+        FileAttributes attributes;
+        try
         {
-            // An interrupted create leaves an ignorable `.partial`, never a named content address.
-            if (File.Exists(pending))
-            {
-                File.Delete(pending);
-            }
+            attributes = File.GetAttributes(path);
+        }
+        catch (Exception exception)
+            when (exception is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return;
         }
 
-        var readBack = File.ReadAllBytes(path);
-        if (!string.Equals(CustodyDigest.Of(readBack), digest, StringComparison.Ordinal)
-            || readBack.LongLength != bytes.Length)
+        if ((attributes & FileAttributes.Directory) != 0)
         {
             throw new CustodyIntegrityException(
-                $"The object read back from content address {digest} is not the object written.");
+                "A directory occupies a durable content address.");
         }
 
-        return new DurableBlobWriteReceipt(
-            CustodySchemaIds.DurableBlobWriteReceipt,
-            new DurableBlobRef(
-                CustodySchemaIds.DurableBlobRef, digest, bytes.Length, custodyClass),
-            _time.GetUtcNow().ToUniversalTime(),
-            retentionEnforced: false);
+        if ((attributes & FileAttributes.ReparsePoint) != 0)
+        {
+            throw new CustodyIntegrityException(
+                "A symbolic link or reparse point occupies a durable content address.");
+        }
     }
 
     private static string ClassSegment(CustodyClass custodyClass) => custodyClass switch
     {
         CustodyClass.NightlyFloor90d => "nightly-floor-90d",
-        CustodyClass.EvidenceIndefinite => "evidence-indefinite",
+        CustodyClass.LegalHoldEvidence => "legal-hold-evidence",
         _ => throw new ArgumentOutOfRangeException(
             nameof(custodyClass), custodyClass, "Unknown custody class."),
     };

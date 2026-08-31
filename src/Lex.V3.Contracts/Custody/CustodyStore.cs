@@ -17,8 +17,21 @@ public interface ICustodyStore
     /// Holds the exact bytes and returns evidence. Creating an address that already holds the
     /// identical bytes is idempotent; creating one that holds different bytes is impossible for a
     /// correct store and must raise <see cref="CustodyIntegrityException"/> if observed.
+    /// Cancellation may be observed after a remote create committed. No receipt is issued in that
+    /// call; a retry must read back the bytes and protection before reporting idempotent success.
     /// </summary>
-    DurableBlobWriteReceipt Create(ReadOnlyMemory<byte> bytes, CustodyClass custodyClass);
+    Task<DurableBlobWriteReceipt> CreateAsync(
+        ReadOnlyMemory<byte> bytes,
+        CustodyClass custodyClass,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Restores the exact bytes named by a durable reference. No bytes are returned until the
+    /// implementation has verified both the declared length and content digest.
+    /// </summary>
+    Task<ReadOnlyMemory<byte>> ReadAsync(
+        DurableBlobRef reference,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -34,6 +47,76 @@ public static class CustodyDigest
 {
     public static string Of(ReadOnlySpan<byte> bytes) =>
         Convert.ToHexStringLower(SHA256.HashData(bytes));
+
+    public static string Of(ReadOnlySpan<byte> bytes, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        const int chunkSize = 64 * 1024;
+        for (var offset = 0; offset < bytes.Length; offset += chunkSize)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            hash.AppendData(bytes.Slice(offset, Math.Min(chunkSize, bytes.Length - offset)));
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
+    }
+}
+
+/// <summary>Canonical verification for every object restored from a custody adapter.</summary>
+public static class CustodyRestore
+{
+    public static async Task<ReadOnlyMemory<byte>> ReadCheckedAsync(
+        ICustodyStore store,
+        DurableBlobRef reference,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(reference);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        ReadOnlyMemory<byte> returned;
+        try
+        {
+            returned = await store.ReadAsync(reference, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+            when (exception is not (CustodyRequiredException
+                or CustodyIntegrityException
+                or CustodyPolicyException))
+        {
+            throw new CustodyRequiredException(
+                "The retained object could not be restored.", exception);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (returned.Length != reference.ByteLength)
+        {
+            throw new CustodyIntegrityException(
+                "The restored length does not match its durable reference.");
+        }
+
+        // A store may return memory backed by a mutable provider buffer. Freeze once, then verify
+        // and return only that exact copy so callers cannot observe bytes other than those hashed.
+        var verified = returned.ToArray();
+        if (!string.Equals(
+                CustodyDigest.Of(verified, cancellationToken),
+                reference.ContentSha256,
+                StringComparison.Ordinal))
+        {
+            throw new CustodyIntegrityException(
+                "The restored bytes do not match their durable reference.");
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return verified;
+    }
 }
 
 /// <summary>
@@ -58,12 +141,13 @@ public static class BytesBeforeDecode
     /// parameter so the refusal can be exercised without allocating a quarter of a gigabyte, which
     /// is the difference between a bound that is tested and one that is merely written down.
     /// </param>
-    public static CustodiedDecode<T> Decode<T>(
+    public static async Task<CustodiedDecode<T>> DecodeAsync<T>(
         ReadOnlyMemory<byte> transportBytes,
         CustodyClass custodyClass,
         ICustodyStore store,
         Func<ReadOnlyMemory<byte>, T> decode,
-        long maxObjectBytes = CustodyBounds.MaxObjectBytes)
+        long maxObjectBytes = CustodyBounds.MaxObjectBytes,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(decode);
@@ -89,6 +173,8 @@ public static class BytesBeforeDecode
                 $"A transport body above {maxObjectBytes} bytes is refused before any store is touched.");
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
+
         // The caller may still own the backing array. Everything below verifies a digest and then
         // hands the same memory to an untrusted callback, so without a copy the bytes that were
         // held, the bytes that were hashed and the bytes that were decoded are three claims about
@@ -98,24 +184,31 @@ public static class BytesBeforeDecode
         DurableBlobWriteReceipt receipt;
         try
         {
-            receipt = store.Create(frozen, custodyClass);
+            receipt = await store.CreateAsync(frozen, custodyClass, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception exception)
             when (exception is not (CustodyRequiredException
                 or CustodyIntegrityException
-                or OperationCanceledException))
+                or CustodyPolicyException))
         {
-            // Three kinds of failure need three answers. Cancellation is a withdrawn caller, not a
-            // refusing store. An integrity exception is a detected substitution, which is a
-            // security incident and must not be reported as unavailability; I fixed the
-            // cancellation case an hour before noticing the same wrapper swallowed this one, which
-            // is the repair-the-instance habit inside my own repair. Everything else does mean the
-            // bytes may not be held, so it fails closed and carries its cause.
+            // Only a signalled caller token proves withdrawal. A provider timeout may also throw
+            // OperationCanceledException while that token remains live, and is unavailability.
+            // Integrity and policy contradictions retain their distinct incident types.
             throw new CustodyRequiredException(
                 "The transport bytes were not held, so nothing may decode them.", exception);
         }
 
-        var expected = CustodyDigest.Of(frozen.Span);
+        if (receipt is null)
+        {
+            throw new CustodyIntegrityException("The custody store returned no write receipt.");
+        }
+
+        var expected = CustodyDigest.Of(frozen.Span, cancellationToken);
         if (!string.Equals(receipt.Reference.ContentSha256, expected, StringComparison.Ordinal)
             || receipt.Reference.ByteLength != frozen.Length)
         {
@@ -129,6 +222,7 @@ public static class BytesBeforeDecode
                 "The receipt holds the bytes under a different custody class than was requested.");
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         return new CustodiedDecode<T>(receipt, decode(frozen));
     }
 }
