@@ -30,7 +30,7 @@ const WIDTHS = [
 
 const PAGES = ["state-loading.html", "state-transport-failure.html", "state-invalid-envelope.html"];
 
-async function findBrowser() {
+export async function findBrowser() {
   const { access } = await import("node:fs/promises");
   for (const candidate of BROWSERS) {
     try {
@@ -43,7 +43,7 @@ async function findBrowser() {
   throw new Error(`no browser found; looked for:\n  ${BROWSERS.join("\n  ")}`);
 }
 
-async function waitForDebugger(port, deadlineMs = 20000) {
+export async function waitForDebugger(port, deadlineMs = 20000) {
   const started = Date.now();
   let lastError;
   while (Date.now() - started < deadlineMs) {
@@ -61,7 +61,7 @@ async function waitForDebugger(port, deadlineMs = 20000) {
 }
 
 /** A minimal CDP client: send a command, await its reply, observe events. */
-class Session {
+export class Session {
   #socket;
   #next = 1;
   #pending = new Map();
@@ -176,6 +176,48 @@ const PROBE = `(() => {
   };
 })()`;
 
+/**
+ * Walk the page with real Tab presses and report what actually receives focus.
+ *
+ * Counting focusable elements is not a keyboard test: it says nothing about order,
+ * nothing about whether focus is visible, and nothing about whether a control can be
+ * reached at all. This presses Tab and records where focus lands.
+ */
+export async function keyboardWalk(session, sessionId, expected) {
+  const seen = [];
+  for (let step = 0; step < expected + 1; step++) {
+    for (const type of ["rawKeyDown", "keyUp"]) {
+      await session.send(
+        "Input.dispatchKeyEvent",
+        { type, key: "Tab", code: "Tab", windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9 },
+        sessionId,
+      );
+    }
+    const { result } = await session.send(
+      "Runtime.evaluate",
+      {
+        expression: `(() => {
+          const el = document.activeElement;
+          if (!el || el === document.body) return null;
+          const style = getComputedStyle(el);
+          const ring = parseFloat(style.outlineWidth) > 0 && style.outlineStyle !== 'none';
+          const shadow = style.boxShadow !== 'none' && style.boxShadow !== '';
+          return {
+            tag: el.tagName.toLowerCase(),
+            text: (el.textContent || '').trim().slice(0, 30),
+            focusVisible: ring || shadow,
+          };
+        })()`,
+        returnByValue: true,
+      },
+      sessionId,
+    );
+    if (result.value === null) break;
+    seen.push(result.value);
+  }
+  return seen;
+}
+
 async function main() {
   const browser = await findBrowser();
   const port = 9222 + Math.floor(Math.random() * 500);
@@ -259,6 +301,23 @@ async function main() {
         if (observed.contrastChecked === 0) {
           failures.push(`${page} @${viewport.label}/${scheme}: no text was contrast-checked`);
         }
+        if (observed.focusableCount > 0) {
+          const walk = await keyboardWalk(session, sessionId, observed.focusableCount);
+          row.tabStops = walk.length;
+          if (walk.length !== observed.focusableCount) {
+            failures.push(
+              `${page} @${viewport.label}/${scheme}: ${observed.focusableCount} focusable elements but ` +
+                `${walk.length} reachable by Tab`,
+            );
+          }
+          const invisible = walk.filter((stop) => !stop.focusVisible);
+          if (invisible.length > 0) {
+            failures.push(
+              `${page} @${viewport.label}/${scheme}: ${invisible.length} focus stop(s) with no visible focus ` +
+                `indicator: ${invisible.map((s) => s.tag).join(', ')}`,
+            );
+          }
+        }
         if (observed.contrastFailures > 0) {
           failures.push(
             `${page} @${viewport.label}/${scheme}: ${observed.contrastFailures} element(s) below required contrast, ` +
@@ -291,4 +350,8 @@ async function main() {
   console.log(`\nall ${rows.length} page/viewport combinations clean`);
 }
 
-await main();
+// Only run when invoked directly, so the keyboard walk can be imported and proven by
+// the self-test without launching the whole evidence run.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  await main();
+}
