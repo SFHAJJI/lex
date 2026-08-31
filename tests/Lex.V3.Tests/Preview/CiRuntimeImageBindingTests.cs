@@ -6,6 +6,33 @@ namespace Lex.V3.Tests.Preview;
 public sealed class CiRuntimeImageBindingTests
 {
     [TestMethod]
+    public void CanonicalImageUsesAzureParityCustodyAndHasARegistrySupplier()
+    {
+        var project = File.ReadAllText(
+            FindRepositoryFile("src", "Lex.V3.Api", "Lex.V3.Api.csproj"));
+        var workflow = File.ReadAllText(
+            FindRepositoryFile(".github", "workflows", "v3-ci.yml"));
+
+        Assert.IsFalse(
+            project.Contains("<ContainerUser>", StringComparison.Ordinal),
+            "The Microsoft base image must select its non-root runtime user without stamping that UID onto /app.");
+        StringAssert.Contains(workflow, "if: github.event_name == 'push'");
+        StringAssert.Contains(workflow, "name: s0-05-canonical-image-${{ env.CANDIDATE_SHA }}");
+        StringAssert.Contains(workflow, "artifacts/s0-05/lex-v3-s0-05-docker.tar");
+        StringAssert.Contains(workflow, "artifacts/s0-05/oci-verification.json");
+        StringAssert.Contains(workflow, "artifacts/s0-05/receipt.json");
+        StringAssert.Contains(workflow, "retention-days: 1");
+        StringAssert.Contains(workflow, "compression-level: 0");
+        StringAssert.Contains(workflow, ".Config.User == \"1654\"");
+        StringAssert.Contains(workflow, ".HostConfig.ReadonlyRootfs == false");
+        Assert.IsFalse(
+            workflow.Contains(
+                "docker run --detach --name \"$CONTAINER_NAME\" --read-only",
+                StringComparison.Ordinal),
+            "The runtime proof must exercise Azure's writable-root behavior instead of masking it.");
+    }
+
+    [TestMethod]
     public void RuntimeImageUsesVerifierProducedDockerArchiveAndBoundConfig()
     {
         var workflowPath = FindRepositoryFile(".github", "workflows", "v3-ci.yml");

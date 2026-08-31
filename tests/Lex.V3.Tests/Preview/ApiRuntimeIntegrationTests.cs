@@ -215,7 +215,7 @@ public sealed class ApiRuntimeIntegrationTests
         var build = SyntheticPreviewBuilder.BuildCanonical(root.Path);
         var before = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(build.SqlitePath)));
 
-        var exception = Assert.ThrowsExactly<InvalidDataException>(() =>
+        var exception = Assert.ThrowsExactly<SyntheticImmutableCustodyException>(() =>
             SyntheticImmutableCustody.AssertReadOnly(root.Path, build.SqlitePath));
 
         StringAssert.Contains(exception.Message, "writable by the runtime user");

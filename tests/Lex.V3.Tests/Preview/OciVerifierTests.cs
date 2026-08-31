@@ -64,6 +64,38 @@ public sealed class OciVerifierTests
     }
 
     [TestMethod]
+    public void RuntimeOwnedApplicationLayerFailsClosed()
+    {
+        using var root = CreateRootWithGraph(out var graphRoot);
+        var archivePath = Path.Combine(root.Path, "runtime-owned.tar");
+        WriteOciArchive(archivePath, CreateRuntimeOwnedLayer());
+
+        var result = RunVerifier(
+            archivePath,
+            graphRoot,
+            Path.Combine(root.Path, "runtime-owned-result.json"));
+
+        Assert.AreNotEqual(0, result.ExitCode);
+        StringAssert.Contains(result.Output, "owned by root");
+    }
+
+    [TestMethod]
+    public void NonOwnerWritableApplicationLayerFailsClosed()
+    {
+        using var root = CreateRootWithGraph(out var graphRoot);
+        var archivePath = Path.Combine(root.Path, "non-owner-writable.tar");
+        WriteOciArchive(archivePath, CreateNonOwnerWritableLayer());
+
+        var result = RunVerifier(
+            archivePath,
+            graphRoot,
+            Path.Combine(root.Path, "non-owner-writable-result.json"));
+
+        Assert.AreNotEqual(0, result.ExitCode);
+        StringAssert.Contains(result.Output, "cannot be group- or world-writable");
+    }
+
+    [TestMethod]
     public void GzipLayerIsExpandedHashedAndScanned()
     {
         using var root = CreateRootWithGraph(out var graphRoot);
@@ -571,6 +603,41 @@ public sealed class OciVerifierTests
                     DataStream = new MemoryStream(entry.Bytes, writable: false),
                 });
             }
+        }
+
+        return output.ToArray();
+    }
+
+    private static byte[] CreateRuntimeOwnedLayer()
+    {
+        using var output = new MemoryStream();
+        using (var writer = new TarWriter(output, TarEntryFormat.Pax, leaveOpen: true))
+        {
+            var entry = new PaxTarEntry(TarEntryType.RegularFile, "app/preview-graph/artifact.json")
+            {
+                DataStream = new MemoryStream(GraphArtifactBytes, writable: false),
+                Uid = 1654,
+                Gid = 1654,
+            };
+            writer.WriteEntry(entry);
+        }
+
+        return output.ToArray();
+    }
+
+    private static byte[] CreateNonOwnerWritableLayer()
+    {
+        using var output = new MemoryStream();
+        using (var writer = new TarWriter(output, TarEntryFormat.Pax, leaveOpen: true))
+        {
+            var entry = new PaxTarEntry(TarEntryType.RegularFile, "app/preview-graph/artifact.json")
+            {
+                DataStream = new MemoryStream(GraphArtifactBytes, writable: false),
+                Uid = 0,
+                Gid = 0,
+                Mode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.OtherWrite,
+            };
+            writer.WriteEntry(entry);
         }
 
         return output.ToArray();

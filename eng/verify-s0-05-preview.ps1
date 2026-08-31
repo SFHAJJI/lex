@@ -565,6 +565,7 @@ function Scan-LayerTar {
     [int]$entryCount = 0
     [int]$fileCount = 0
     [long]$bytes = 0
+    $nonOwnerWriteMask = [int][IO.UnixFileMode]::GroupWrite -bor [int][IO.UnixFileMode]::OtherWrite
     $input = [IO.FileStream]::new($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read, 65536, [IO.FileOptions]::SequentialScan)
     $reader = [System.Formats.Tar.TarReader]::new($input, $false)
     try {
@@ -574,6 +575,10 @@ function Scan-LayerTar {
             $isDirectory = $entry.EntryType -eq [System.Formats.Tar.TarEntryType]::Directory
             $normalized = Get-SafeArchivePath -Path $entry.Name -IsDirectory $isDirectory
             Assert-True ($seen.Add($normalized)) 'OCI layer contains a duplicate normalized path.'
+            if ($IsApplicationLayer) {
+                Assert-True ($entry.Uid -eq 0 -and $entry.Gid -eq 0) 'OCI application layer entries must be owned by root.'
+                Assert-True (([int]$entry.Mode -band $nonOwnerWriteMask) -eq 0) 'OCI application layer entries cannot be group- or world-writable.'
+            }
             $isWhiteout = [IO.Path]::GetFileName($normalized).StartsWith('.wh.', [StringComparison]::Ordinal)
             if ($isWhiteout) {
                 Assert-True ($AllowBaseWhiteout -and -not $IsApplicationLayer) 'OCI application layer contains an unexpected whiteout.'

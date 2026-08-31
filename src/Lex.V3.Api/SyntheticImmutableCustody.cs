@@ -19,14 +19,16 @@ internal static class SyntheticImmutableCustody
 
         if (CanOpenForWrite(index))
         {
-            throw new InvalidDataException("The admitted SQLite member is writable by the runtime user.");
+            throw new SyntheticImmutableCustodyException(
+                "The admitted SQLite member is writable by the runtime user.");
         }
 
         var probe = Path.Combine(root, $".custody-probe-{Guid.NewGuid():N}");
         if (CanCreate(probe))
         {
             File.Delete(probe);
-            throw new InvalidDataException("The synthetic graph directory is writable by the runtime user.");
+            throw new SyntheticImmutableCustodyException(
+                "The synthetic graph directory is writable by the runtime user.");
         }
     }
 
@@ -62,3 +64,5 @@ internal static class SyntheticImmutableCustody
         }
     }
 }
+
+internal sealed class SyntheticImmutableCustodyException(string message) : Exception(message);
