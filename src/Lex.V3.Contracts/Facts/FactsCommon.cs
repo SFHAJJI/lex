@@ -274,6 +274,22 @@ public sealed record OfficialIdentifier
         value.Length > 0 && value.All(c => c is > ' ' and <= '~');
 
     /// <summary>
+    /// The raw value begins with the exact Cellar authority, checked ordinally before any parser
+    /// sees it.
+    /// </summary>
+    /// <remarks>
+    /// <c>System.Uri</c> lowercases the scheme and host, drops an explicit default port, and moves
+    /// userinfo out of <c>Host</c>, so <c>HTTPS://PUBLICATIONS.EUROPA.EU/...</c>,
+    /// <c>...europa.eu:443/...</c> and <c>...//user@publications.europa.eu/...</c> all reached the
+    /// same accepted parse while the anchored schema pattern refused every one of them. Checking
+    /// the parsed authority can only ever compare what the parser decided to keep; checking the
+    /// raw prefix compares what the publisher actually wrote, which is the thing being recorded.
+    /// </remarks>
+    private static bool HasExactCellarAuthority(string value) =>
+        value.StartsWith("http://publications.europa.eu/resource/", StringComparison.Ordinal) ||
+        value.StartsWith("https://publications.europa.eu/resource/", StringComparison.Ordinal);
+
+    /// <summary>
     /// Which publisher mints an ELI of this exact shape, or null where no publisher does.
     /// </summary>
     /// <remarks>
@@ -367,6 +383,7 @@ public sealed record OfficialIdentifier
     private static bool IsCellarUri(string value, bool work)
     {
         if (!IsExactUriSpelling(value) ||
+            !HasExactCellarAuthority(value) ||
             !Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
             uri.Scheme is not ("http" or "https") ||
             !string.Equals(uri.Host, "publications.europa.eu", StringComparison.Ordinal) ||
@@ -409,6 +426,7 @@ public sealed record OfficialIdentifier
     /// </summary>
     private static bool IsCellarPsi(string value) =>
         IsExactUriSpelling(value) &&
+        HasExactCellarAuthority(value) &&
         Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
         uri.Scheme is "http" or "https" &&
         string.Equals(uri.Host, "publications.europa.eu", StringComparison.Ordinal) &&

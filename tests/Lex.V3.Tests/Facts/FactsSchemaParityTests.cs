@@ -115,6 +115,41 @@ public sealed class FactsSchemaParityTests
             root => root["qualified_axioms"]![0]!["remote_axiom_id"] = new string('a', 201),
             SchemaCanExpress: true),
         new Case(
+            "a Cellar persistent identifier whose authority is uppercase",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(
+                FactsFixtures.PublisherRelation(target: FactsFixtures.EuCaseWithEcli())),
+            root => root["target"]!["identifiers"]![1]!["raw_value"] =
+                "HTTP://PUBLICATIONS.EUROPA.EU/resource/celex/62019CJ0311",
+            SchemaCanExpress: true),
+        new Case(
+            "a Cellar authority in uppercase",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(
+                FactsFixtures.PublisherRelation(target: FactsFixtures.EuResource())),
+            root => root["target"]!["identifiers"]![0]!["raw_value"] =
+                "HTTP://PUBLICATIONS.EUROPA.EU/resource/cellar/"
+                + "1f8c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f/DOC_1",
+            SchemaCanExpress: true),
+        new Case(
+            "a Cellar authority carrying an explicit default port",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(
+                FactsFixtures.PublisherRelation(target: FactsFixtures.EuResource())),
+            root => root["target"]!["identifiers"]![0]!["raw_value"] =
+                "http://publications.europa.eu:80/resource/cellar/"
+                + "1f8c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f/DOC_1",
+            SchemaCanExpress: true),
+        new Case(
+            "a Cellar authority carrying userinfo",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(
+                FactsFixtures.PublisherRelation(target: FactsFixtures.EuResource())),
+            root => root["target"]!["identifiers"]![0]!["raw_value"] =
+                "http://user@publications.europa.eu/resource/cellar/"
+                + "1f8c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f/DOC_1",
+            SchemaCanExpress: true),
+        new Case(
             "a Cellar resource URI carrying a query string",
             FactsSchemaIds.PublisherRelation,
             () => ContractJson.Serialize(
