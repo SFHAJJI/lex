@@ -1,0 +1,76 @@
+name: dual-review
+
+# Both machine co-owners authenticate as the same GitHub account, so GitHub's own
+# review mechanism cannot represent them: an account cannot approve its own pull
+# request, and requiring an approving review would deadlock the branch rather than
+# harden it.
+#
+# The verdict is an immutable empty `lex-review/1` receipt commit at the pull request
+# head, created by the non-writer after review. Its parent is the reviewed candidate,
+# its tree must equal that parent's, and its canonical message binds issue, writer,
+# reviewer, candidate commit, candidate tree and verdict. Any later product commit
+# makes the head cease to be a receipt. No comment is parsed for gate state.
+#
+# ADVISORY BY DESIGN, AND THAT IS NOT A GAP. Decisions 54 and 56 close the required
+# context set for this repository at exactly `dotnet`, `web` and `canon-windows`.
+# `dual-review` is deliberately NOT among them and must never be added: a fourth
+# required context is a failure, not completion.
+#
+# The hardening in the accompanying tests is therefore not protecting a merge block.
+# It protects something stricter. A blocking gate that lies is caught when the merge
+# it should have stopped goes through; an advisory one that lies is simply believed,
+# because a human reads its result before integrating and has no second signal. The
+# specification is that it must run honestly, not that it must run decisively.
+#
+# `required_approving_review_count` is 0 on the protected branch. That is the premise
+# of this design, not an oversight: both co-owners authenticate as one account, so
+# GitHub's approval count cannot represent two reviewers and the receipt commit
+# carries the verdict instead. Raising it would deadlock the branch without adding a
+# reviewer.
+#
+# ONE JOB, DELIBERATELY. An earlier shape ran the gate's own tests in a separate job
+# and made this one `needs:` it. GitHub SKIPS a dependent job when its dependency
+# fails, and a skipped check reports SUCCESS - so breaking the test suite would have
+# false-greened the very gate those tests protect. That matters here even though this
+# check blocks nothing, because a green advisory result is read as a verdict. Running
+# the tests and the evaluation sequentially in one job means a test failure fails this
+# check directly. Do not split these again.
+# https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks#handling-skipped-but-required-checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+    branches: [v3/integration]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+
+jobs:
+  dual-review:
+    name: dual-review
+    runs-on: ubuntu-latest
+    steps:
+      # The pull request head explicitly, never the synthetic merge commit: the receipt
+      # is a property of the head, and validating a merge would check a commit no
+      # reviewer ever saw. Depth 2 so the parent is present for tree comparison.
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+
+      # The gate's own induced mutations, including real temporary Git repositories.
+      # In this job, so a failure here fails this advisory check rather than skipping
+      # it into a reported success.
+      - name: induced mutations for the gate itself
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v
+
+      - name: verify the immutable lex-review/1 receipt at the head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 .github/scripts/dual_review.py
