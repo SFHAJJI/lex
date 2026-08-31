@@ -9,6 +9,9 @@ on:
 permissions:
   contents: read
 
+env:
+  CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
 jobs:
   canon-windows:
     name: canon-windows
@@ -18,6 +21,7 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+          ref: ${{ env.CANDIDATE_SHA }}
       - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
           global-json-file: global.json
@@ -25,6 +29,10 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          $checkedOutSha = (& git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $checkedOutSha -cne $env:CANDIDATE_SHA) { throw 'Windows runner did not check out the exact candidate SHA.' }
+          $sdkVersion = (& dotnet --version).Trim()
+          if ($LASTEXITCODE -ne 0 -or $sdkVersion -cne '10.0.400') { throw 'Windows runner did not select .NET SDK 10.0.400.' }
           dotnet restore src/Lex.V3.Preview/Lex.V3.Preview.csproj --locked-mode
           if ($LASTEXITCODE -ne 0) { throw 'Locked Windows restore failed.' }
           dotnet build src/Lex.V3.Preview/Lex.V3.Preview.csproj --configuration Release --no-restore
@@ -61,7 +69,7 @@ jobs:
   dotnet:
     name: dotnet
     needs: canon-windows
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
       BASE_IMAGE_DIGEST: sha256:0839314d08bb65da369135389a5d8291f75ace587fbb0488f469eb92c62eef68
@@ -72,6 +80,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+          ref: ${{ env.CANDIDATE_SHA }}
       - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
           global-json-file: global.json
@@ -85,6 +94,8 @@ jobs:
         run: |
           set -euo pipefail
           test -z "$(git status --porcelain)"
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(dotnet --version)" = '10.0.400'
           dotnet restore Lex.V3.slnx --locked-mode
           dotnet build Lex.V3.slnx --configuration Release --no-restore
           dotnet test Lex.V3.slnx --configuration Release --no-restore --no-build
@@ -117,28 +128,113 @@ jobs:
           dotnet run --project src/Lex.V3.Preview/Lex.V3.Preview.csproj --configuration Release --no-build -- "$build_root/two" > artifacts/s0-05/linux/build-two.json
           diff --recursive --no-dereference "$build_root/one" "$build_root/two"
           cmp artifacts/s0-05/linux/build-one.json artifacts/s0-05/linux/build-two.json
-          jq -e '.schema == "lex-v3-s0-05-windows-logical/1" and .runner == "windows-x64"' artifacts/s0-05/windows/windows-logical.json >/dev/null
           linux='artifacts/s0-05/linux/build-one.json'
           windows='artifacts/s0-05/windows/windows-logical.json'
-          test "$(jq -r '.source.sha256' "$linux")" = "$(jq -r '.build.source.sha256' "$windows")"
-          test "$(jq -r '.source.bytes' "$linux")" = "$(jq -r '.build.source.bytes' "$windows")"
-          test "$(jq -r '.derived.sha256' "$linux")" = "$(jq -r '.build.derived.sha256' "$windows")"
-          test "$(jq -r '.derived.bytes' "$linux")" = "$(jq -r '.build.derived.bytes' "$windows")"
-          # Build identity binds SQLite provenance, including platform-specific compile options.
-          # Require logical equality across OSes and measure physical/provenance equality below.
-          for field in profile_identity profile_sha256 ddl_sha256 scope_sha256 logical_rows_sha256; do
-            test "$(jq -r --arg field "$field" '.[$field]' "$linux")" = "$(jq -r --arg field "$field" '.build[$field]' "$windows")"
-          done
-          test "$(cat artifacts/s0-05/builder-source-sha256.txt)" = "$(jq -r '.source_digest' "$windows")"
+          diagnostics='artifacts/s0-05/linux/cross-os-diagnostics.txt'
+          : > "$diagnostics"
+          build_receipt_shape='
+            keys == ["build_identity","ddl_sha256","derived","logical_rows_sha256","profile_identity","profile_sha256","schema","scope_sha256","source","sqlite"]
+            and .schema == "lex-v3-synthetic-build-result/1"
+            and (.source | keys == ["bytes","file","sha256"])
+            and (.source.file | type) == "string" and (.source.file | length) > 0
+            and (.source.sha256 | type) == "string" and (.source.sha256 | test("^[0-9a-f]{64}$"))
+            and (.source.bytes | type) == "number" and .source.bytes >= 0 and (.source.bytes | floor) == .source.bytes
+            and (.derived | keys == ["bytes","file","sha256"])
+            and (.derived.file | type) == "string" and (.derived.file | length) > 0
+            and (.derived.sha256 | type) == "string" and (.derived.sha256 | test("^[0-9a-f]{64}$"))
+            and (.derived.bytes | type) == "number" and .derived.bytes >= 0 and (.derived.bytes | floor) == .derived.bytes
+            and (.sqlite | keys == ["bytes","compile_options_sha256","file","sha256","source_id","version"])
+            and (.sqlite.file | type) == "string" and (.sqlite.file | length) > 0
+            and (.sqlite.sha256 | type) == "string" and (.sqlite.sha256 | test("^[0-9a-f]{64}$"))
+            and (.sqlite.bytes | type) == "number" and .sqlite.bytes >= 0 and (.sqlite.bytes | floor) == .sqlite.bytes
+            and (.sqlite.version | type) == "string" and (.sqlite.version | length) > 0
+            and (.sqlite.source_id | type) == "string" and (.sqlite.source_id | length) > 0
+            and (.sqlite.compile_options_sha256 | type) == "string" and (.sqlite.compile_options_sha256 | test("^[0-9a-f]{64}$"))
+            and (.profile_identity | type) == "string" and (.profile_identity | length) > 0
+            and (.profile_sha256 | type) == "string" and (.profile_sha256 | test("^[0-9a-f]{64}$"))
+            and (.ddl_sha256 | type) == "string" and (.ddl_sha256 | test("^[0-9a-f]{64}$"))
+            and (.scope_sha256 | type) == "string" and (.scope_sha256 | test("^[0-9a-f]{64}$"))
+            and (.logical_rows_sha256 | type) == "string" and (.logical_rows_sha256 | test("^[0-9a-f]{64}$"))
+            and (.build_identity | type) == "string" and (.build_identity | test("^[0-9a-f]{64}$"))
+          '
+          if ! jq -e "$build_receipt_shape" "$linux" >/dev/null; then
+            printf 'invalid canonical Linux build receipt shape\n' | tee -a "$diagnostics" >&2
+            exit 1
+          fi
+          if ! jq -e '
+            keys == ["build","runner","schema","sdk","source_digest"]
+            and .schema == "lex-v3-s0-05-windows-logical/1"
+            and .runner == "windows-x64"
+            and .sdk == "10.0.400"
+            and (.source_digest | type) == "string"
+            and (.source_digest | test("^[0-9a-f]{64}$"))
+          ' "$windows" >/dev/null ||
+            ! jq -e ".build | ($build_receipt_shape)" "$windows" >/dev/null; then
+            printf 'invalid Windows logical build receipt shape\n' | tee -a "$diagnostics" >&2
+            exit 1
+          fi
+          logical_identity_equal=true
+          compare_logical_field() {
+            local field="$1"
+            local linux_filter="$2"
+            local windows_filter="$3"
+            local linux_value
+            local windows_value
+            linux_value="$(jq -er "$linux_filter" "$linux")"
+            windows_value="$(jq -er "$windows_filter" "$windows")"
+            if [ "$linux_value" != "$windows_value" ]; then
+              logical_identity_equal=false
+              printf 'cross-os logical mismatch: field=%s linux=%s windows=%s\n' \
+                "$field" "$linux_value" "$windows_value" | tee -a "$diagnostics" >&2
+            fi
+          }
+          compare_logical_field source_sha256 '.source.sha256' '.build.source.sha256'
+          compare_logical_field source_bytes '.source.bytes' '.build.source.bytes'
+          compare_logical_field derived_sha256 '.derived.sha256' '.build.derived.sha256'
+          compare_logical_field derived_bytes '.derived.bytes' '.build.derived.bytes'
+          compare_logical_field profile_identity '.profile_identity' '.build.profile_identity'
+          compare_logical_field profile_sha256 '.profile_sha256' '.build.profile_sha256'
+          compare_logical_field ddl_sha256 '.ddl_sha256' '.build.ddl_sha256'
+          compare_logical_field scope_sha256 '.scope_sha256' '.build.scope_sha256'
+          compare_logical_field logical_rows_sha256 '.logical_rows_sha256' '.build.logical_rows_sha256'
+          builder_source="$(cat artifacts/s0-05/builder-source-sha256.txt)"
+          windows_builder_source="$(jq -er '.source_digest' "$windows")"
+          if [ "$builder_source" != "$windows_builder_source" ]; then
+            logical_identity_equal=false
+            printf 'cross-os logical mismatch: field=builder_source_sha256 linux=%s windows=%s\n' \
+              "$builder_source" "$windows_builder_source" | tee -a "$diagnostics" >&2
+          fi
+          if [ "$logical_identity_equal" = true ]; then
+            printf 'cross-os logical identity matched every required field\n' > "$diagnostics"
+          fi
           jq -n \
-            --arg schema 'lex-v3-s0-05-cross-os-logical/1' \
-            --arg linux_sqlite_sha256 "$(jq -r '.sqlite.sha256' "$linux")" \
-            --arg windows_sqlite_sha256 "$(jq -r '.build.sqlite.sha256' "$windows")" \
-            --arg linux_build_identity "$(jq -r '.build_identity' "$linux")" \
-            --arg windows_build_identity "$(jq -r '.build.build_identity' "$windows")" \
-            --arg linux_compile_options_sha256 "$(jq -r '.sqlite.compile_options_sha256' "$linux")" \
-            --arg windows_compile_options_sha256 "$(jq -r '.build.sqlite.compile_options_sha256' "$windows")" \
-            '{schema:$schema,logical_identity_equal:true,sqlite_byte_equality_measured:true,sqlite_byte_equal:($linux_sqlite_sha256 == $windows_sqlite_sha256),linux_sqlite_sha256:$linux_sqlite_sha256,windows_sqlite_sha256:$windows_sqlite_sha256,build_identity_equality_measured:true,build_identity_equal:($linux_build_identity == $windows_build_identity),linux_build_identity:$linux_build_identity,windows_build_identity:$windows_build_identity,compile_options_equality_measured:true,compile_options_equal:($linux_compile_options_sha256 == $windows_compile_options_sha256),linux_compile_options_sha256:$linux_compile_options_sha256,windows_compile_options_sha256:$windows_compile_options_sha256}' > artifacts/s0-05/cross-os-logical.json
+            --arg schema 'lex-v3-s0-05-cross-os-logical/2' \
+            --arg canonical_builder 'ubuntu-24.04-x64' \
+            --argjson logical_identity_equal "$logical_identity_equal" \
+            --arg linux_sqlite_sha256 "$(jq -er '.sqlite.sha256' "$linux")" \
+            --arg windows_sqlite_sha256 "$(jq -er '.build.sqlite.sha256' "$windows")" \
+            --arg linux_build_identity "$(jq -er '.build_identity' "$linux")" \
+            --arg windows_build_identity "$(jq -er '.build.build_identity' "$windows")" \
+            --arg linux_sqlite_version "$(jq -er '.sqlite.version' "$linux")" \
+            --arg windows_sqlite_version "$(jq -er '.build.sqlite.version' "$windows")" \
+            --arg linux_sqlite_source_id "$(jq -er '.sqlite.source_id' "$linux")" \
+            --arg windows_sqlite_source_id "$(jq -er '.build.sqlite.source_id' "$windows")" \
+            --arg linux_compile_options_sha256 "$(jq -er '.sqlite.compile_options_sha256' "$linux")" \
+            --arg windows_compile_options_sha256 "$(jq -er '.build.sqlite.compile_options_sha256' "$windows")" \
+            '{schema:$schema,canonical_builder:$canonical_builder,logical_identity_equal:$logical_identity_equal,sqlite_byte_equality_measured:true,sqlite_byte_equal:($linux_sqlite_sha256 == $windows_sqlite_sha256),linux_sqlite_sha256:$linux_sqlite_sha256,windows_sqlite_sha256:$windows_sqlite_sha256,build_identity_equality_measured:true,build_identity_equal:($linux_build_identity == $windows_build_identity),linux_build_identity:$linux_build_identity,windows_build_identity:$windows_build_identity,sqlite_version_equality_measured:true,sqlite_version_equal:($linux_sqlite_version == $windows_sqlite_version),linux_sqlite_version:$linux_sqlite_version,windows_sqlite_version:$windows_sqlite_version,sqlite_source_id_equality_measured:true,sqlite_source_id_equal:($linux_sqlite_source_id == $windows_sqlite_source_id),linux_sqlite_source_id:$linux_sqlite_source_id,windows_sqlite_source_id:$windows_sqlite_source_id,compile_options_equality_measured:true,compile_options_equal:($linux_compile_options_sha256 == $windows_compile_options_sha256),linux_compile_options_sha256:$linux_compile_options_sha256,windows_compile_options_sha256:$windows_compile_options_sha256}' > artifacts/s0-05/cross-os-logical.json
+          test "$logical_identity_equal" = true
+      - name: Upload Linux comparison evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: s0-05-linux-comparison
+          path: |
+            artifacts/s0-05/linux/build-one.json
+            artifacts/s0-05/linux/build-two.json
+            artifacts/s0-05/linux/cross-os-diagnostics.txt
+            artifacts/s0-05/cross-os-logical.json
+          if-no-files-found: warn
+          retention-days: 14
       - name: Rebuild committed unsigned public graph exactly
         shell: bash
         run: |
@@ -277,7 +373,7 @@ jobs:
           schema_table_sha256="$(jq -cS '.schema_table' "$artifact_path" | sha256sum | cut -d' ' -f1)"
           graph_members="$(find src/Lex.V3.Api/preview-graph -maxdepth 1 -type f -print | LC_ALL=C sort | while IFS= read -r file; do jq -n --arg file "${file#src/Lex.V3.Api/preview-graph/}" --arg sha256 "$(sha256sum "$file" | cut -d' ' -f1)" --argjson bytes "$(stat -c '%s' "$file")" '{file:$file,sha256:$sha256,bytes:$bytes}'; done | jq -s '.')"
           public_key_sha256="$(sha256sum src/Lex.V3.Api/preview-trust/public-key.spki | cut -d' ' -f1)"
-          jq -n --arg schema 'lex-v3-s0-05-ci-receipt/1' --arg source_commit "$GITHUB_SHA" --arg sdk "$(dotnet --version)" --arg package_graph_sha256 "$package_graph_sha256" --arg public_key_sha256 "$public_key_sha256" --arg schema_table_sha256 "$schema_table_sha256" --argjson graph_members "$graph_members" --slurpfile windows artifacts/s0-05/windows/windows-logical.json --slurpfile linux_one artifacts/s0-05/linux/build-one.json --slurpfile linux_two artifacts/s0-05/linux/build-two.json --slurpfile cross_os artifacts/s0-05/cross-os-logical.json --slurpfile unsigned artifacts/s0-05/unsigned-rebuild.json --slurpfile oci artifacts/s0-05/oci-verification.json --slurpfile runtime artifacts/s0-05/runtime-probes.json '{schema:$schema,source_commit:$source_commit,source_tree_clean:true,sdk:$sdk,locked_package_graph_sha256:$package_graph_sha256,public_key_sha256:$public_key_sha256,schema_table_sha256:$schema_table_sha256,public_graph:$graph_members,windows_logical:$windows[0],linux_build_one:$linux_one[0],linux_build_two:$linux_two[0],cross_os:$cross_os[0],unsigned_rebuild:$unsigned[0],oci:$oci[0],runtime:$runtime[0],private_signing_material_present:false,promotable:false}' > artifacts/s0-05/receipt.json
+          jq -n --arg schema 'lex-v3-s0-05-ci-receipt/1' --arg source_commit "$CANDIDATE_SHA" --arg sdk "$(dotnet --version)" --arg package_graph_sha256 "$package_graph_sha256" --arg public_key_sha256 "$public_key_sha256" --arg schema_table_sha256 "$schema_table_sha256" --argjson graph_members "$graph_members" --slurpfile windows artifacts/s0-05/windows/windows-logical.json --slurpfile linux_one artifacts/s0-05/linux/build-one.json --slurpfile linux_two artifacts/s0-05/linux/build-two.json --slurpfile cross_os artifacts/s0-05/cross-os-logical.json --slurpfile unsigned artifacts/s0-05/unsigned-rebuild.json --slurpfile oci artifacts/s0-05/oci-verification.json --slurpfile runtime artifacts/s0-05/runtime-probes.json '{schema:$schema,source_commit:$source_commit,source_tree_clean:true,sdk:$sdk,locked_package_graph_sha256:$package_graph_sha256,public_key_sha256:$public_key_sha256,schema_table_sha256:$schema_table_sha256,public_graph:$graph_members,windows_logical:$windows[0],linux_build_one:$linux_one[0],linux_build_two:$linux_two[0],cross_os:$cross_os[0],unsigned_rebuild:$unsigned[0],oci:$oci[0],runtime:$runtime[0],private_signing_material_present:false,promotable:false}' > artifacts/s0-05/receipt.json
           jq -e '.schema == "lex-v3-s0-05-ci-receipt/1" and .promotable == false and .private_signing_material_present == false' artifacts/s0-05/receipt.json >/dev/null
           test "$(stat -c '%s' artifacts/s0-05/receipt.json)" -le 65536
       - name: Decision 54 golden diagnostics
@@ -308,6 +404,10 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+          ref: ${{ env.CANDIDATE_SHA }}
+      - name: Verify exact candidate checkout
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
