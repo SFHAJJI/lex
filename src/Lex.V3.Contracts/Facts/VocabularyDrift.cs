@@ -34,7 +34,7 @@ public sealed record VocabularyDrift
         VocabularyKind vocabulary,
         string observedTerm,
         IReadOnlyList<string> admittedTerms,
-        SourceObservationReference observation)
+        string sourceObservationId)
     {
         if (!string.Equals(schema, Identity, StringComparison.Ordinal))
         {
@@ -78,7 +78,8 @@ public sealed record VocabularyDrift
         Vocabulary = vocabulary;
         ObservedTerm = observedTerm;
         AdmittedTerms = Array.AsReadOnly(admitted);
-        Observation = observation ?? throw new ArgumentNullException(nameof(observation));
+        SourceObservationId = SourceObservation.Require(
+            sourceObservationId, nameof(sourceObservationId));
     }
 
     public string Schema { get; }
@@ -90,7 +91,7 @@ public sealed record VocabularyDrift
     /// <summary>The closed set the term was measured against.</summary>
     public IReadOnlyList<string> AdmittedTerms { get; }
 
-    public SourceObservationReference Observation { get; }
+    public string SourceObservationId { get; }
 }
 
 /// <summary>
@@ -106,13 +107,13 @@ public static class ClosedVocabulary
 {
     public static bool TryRead<TEnum>(
         string observedTerm,
-        SourceObservationReference observation,
+        string sourceObservationId,
         [NotNullWhen(true)] out TEnum? value,
         [NotNullWhen(false)] out VocabularyDrift? drift)
         where TEnum : struct, Enum
     {
         ArgumentNullException.ThrowIfNull(observedTerm);
-        ArgumentNullException.ThrowIfNull(observation);
+        ArgumentNullException.ThrowIfNull(sourceObservationId);
 
         var kind = FactsVocabularies.KindFor<TEnum>();
         var admitted = WireNames<TEnum>();
@@ -130,7 +131,7 @@ public static class ClosedVocabulary
             kind,
             observedTerm,
             admitted,
-            observation);
+            sourceObservationId);
         return false;
     }
 

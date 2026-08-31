@@ -46,7 +46,6 @@ public static class FactsSchemaExporter
     private static readonly ReadOnlyDictionary<string, Type> CommonDefinitionTypes =
         new(new Dictionary<string, Type>(StringComparer.Ordinal)
         {
-            ["source_observation_reference"] = typeof(SourceObservationReference),
             ["official_identifier"] = typeof(OfficialIdentifier),
             ["official_identity_set"] = typeof(OfficialIdentitySet),
             ["axiom_qualifier"] = typeof(AxiomQualifier),
@@ -159,7 +158,10 @@ public static class FactsSchemaExporter
 /// </remarks>
 internal static class FactsSchemaHardener
 {
-    internal const string Sha256Pattern = "^[0-9a-f]{64}$";
+    // `$` also matches before a final newline, so this admitted a digest with one appended. The
+    // End-anchor sweep in round six replaced every `$` it could see and missed this one, because
+    // it is a constant beside the others rather than inside a pattern that reads like a grammar.
+    internal const string Sha256Pattern = "^[0-9a-f]{64}" + End;
 
     private const string CellarHost = @"^https?://publications\.europa\.eu/resource/";
 
@@ -174,7 +176,8 @@ internal static class FactsSchemaHardener
     /// <summary>An alias such as the CELEX PSI, which is never the work.</summary>
     // Narrowed to the one alias class the accepted scope actually proves. An arbitrary resource
     // class is not authority merely because a caller labelled it a persistent identifier.
-    internal const string CellarPsiPattern = CellarHost + "celex/[A-Za-z0-9_.-]+" + End;
+    internal const string CellarPsiPattern =
+        CellarHost + "celex/" + CelexBody + End;
 
     // `[^:]` matched a newline, so a control character inside a segment validated. Every segment
     // is now an explicit class.
@@ -205,9 +208,12 @@ internal static class FactsSchemaHardener
         "|" + LeapYear + "0229)";
 
     /// <summary>The five admitted CELEX profiles, anchored at both ends.</summary>
-    internal const string CelexPattern =
-        @"^([0-9]{5}[A-Z]{1,3}([0-9]+(R\([0-9]+\))?(-" + YyyyMmDd + @")?|/[A-Z0-9]+(/[A-Z0-9]+)*)" +
-        @"|7[0-9]{4}[A-Z]{1,3}[0-9]+[A-Z]{3}_[0-9A-Z]+)" + End;
+    /// <summary>The CELEX grammar without its anchors, so one definition serves both users.</summary>
+    internal const string CelexBody =
+        @"([0-9]{5}[A-Z]{1,3}([0-9]+(R\([0-9]+\))?(-" + YyyyMmDd + @")?|/[A-Z0-9]+(/[A-Z0-9]+)*)" +
+        @"|7[0-9]{4}[A-Z]{1,3}[0-9]+[A-Z]{3}_[0-9A-Z]+)";
+
+    internal const string CelexPattern = "^" + CelexBody + End;
 
     /// <summary>A valid XSD timezone, including the exact 14:00 ceiling.</summary>
     internal const string TimezonePattern = @"(Z|[+-](0[0-9]|1[0-3]):[0-5][0-9]|[+-]14:00)?";
@@ -276,7 +282,8 @@ internal static class FactsSchemaHardener
     private static readonly (string SchemaId, string[] Properties)[] ContractSignatures =
     {
         (FactsSchemaIds.PublisherRelation,
-            new[] { "schema", "source", "target", "predicate_uri", "observation", "qualified_axioms" }),
+            new[] { "schema", "source", "target", "predicate_uri", "source_observation_id",
+                    "qualified_axioms" }),
         (FactsSchemaIds.DerivedInverseRelation,
             new[] { "schema", "source", "target", "predicate_uri", "inverse_of_predicate_uri",
                     "authorizing_axiom", "derived_from" }),
@@ -317,6 +324,12 @@ internal static class FactsSchemaHardener
             IfThen(
                 Props(("family", Const("cellar_resource_uri"))),
                 Props(("raw_value", new JsonObject { ["pattern"] = CellarResourcePattern }))),
+            IfThen(
+                Props(("family", Const("memorial"))),
+                Props(("raw_value", new JsonObject { ["pattern"] = "^[!-~]+" + End }))),
+            IfThen(
+                Props(("family", Const("historical_legal_id"))),
+                Props(("raw_value", new JsonObject { ["pattern"] = "^[!-~]+" + End }))),
             IfThen(
                 Props(("family", Const("cellar_psi_uri"))),
                 Props(("raw_value", new JsonObject { ["pattern"] = CellarPsiPattern }))),
@@ -406,6 +419,16 @@ internal static class FactsSchemaHardener
 
     private static void HardenProperty(string name, JsonObject property)
     {
+        if (string.Equals(name, "source_observation_id", StringComparison.Ordinal))
+        {
+            // 1 to 200 printable ASCII with no surrounding space, exactly as the reader requires.
+            // The schema admitted the empty string, so a Fact with no provenance at all validated.
+            property["type"] = "string";
+            property["pattern"] = "^[!-~]([ -~]*[!-~])?" + End;
+            property["minLength"] = 1;
+            property["maxLength"] = 200;
+        }
+
         if (name.EndsWith("_sha256", StringComparison.Ordinal))
         {
             property["pattern"] = Sha256Pattern;
@@ -512,6 +535,21 @@ internal static class FactsSchemaHardener
                 // The sentinel is a date VALUE in any lexical form its datatype admits, so the
                 // schema matches the same set the reader does. A const here made
                 // `9999-12-31Z` the sentinel to the reader and an ordinary date to the schema.
+                // `gYear` and `gYearMonth` carried no lexical grammar at all, so `xsd:gYear`
+                // with a value of `not-a-year` validated. Each datatype now binds its own.
+                all.Add(IfThen(
+                    Props(("datatype_uri", Const(PublisherDate.GYear))),
+                    Props(("raw_lexical_value", new JsonObject
+                    {
+                        ["pattern"] = "^-?[0-9]{4}" + TimezonePattern + End,
+                    }))));
+                all.Add(IfThen(
+                    Props(("datatype_uri", Const(PublisherDate.GYearMonth))),
+                    Props(("raw_lexical_value", new JsonObject
+                    {
+                        ["pattern"] = "^-?[0-9]{4}-(0[1-9]|1[0-2])" + TimezonePattern + End,
+                    }))));
+
                 // Ordinary dates carried no lexical pattern at all, so the reader's timezone
                 // ceiling applied only to the open sentinel. `2019-07-15+99:99` was schema-valid.
                 all.Add(IfThen(

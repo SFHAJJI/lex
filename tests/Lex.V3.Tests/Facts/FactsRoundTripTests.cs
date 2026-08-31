@@ -21,8 +21,7 @@ public sealed class FactsRoundTripTests
         Assert.AreEqual(original.PredicateUri, restored.PredicateUri);
         Assert.IsTrue(restored.Source.SameIdentity(original.Source));
         Assert.IsTrue(restored.Target.SameIdentity(original.Target));
-        Assert.AreEqual(original.Observation.ObservationId, restored.Observation.ObservationId);
-        Assert.AreEqual(original.Observation.ObservedAt, restored.Observation.ObservedAt);
+        Assert.AreEqual(original.SourceObservationId, restored.SourceObservationId);
 
         AssertAxiomsAreIdentical(original.QualifiedAxioms, restored.QualifiedAxioms);
     }
@@ -222,15 +221,15 @@ public sealed class FactsRoundTripTests
 
         foreach (var name in new[]
                  {
-                     "schema", "source", "target", "predicate_uri", "observation", "qualified_axioms",
+                     "schema", "source", "target", "predicate_uri", "source_observation_id", "qualified_axioms",
                  })
         {
             Assert.IsTrue(root.TryGetProperty(name, out _), $"missing {name}");
         }
 
-        var observation = root.GetProperty("observation");
-        Assert.IsTrue(observation.TryGetProperty("observation_id", out _));
-        Assert.IsTrue(observation.TryGetProperty("observed_at", out _));
+        Assert.AreEqual(
+            JsonValueKind.String, root.GetProperty("source_observation_id").ValueKind,
+            "provenance is one opaque identity, not a nested projection");
 
         var target = root.GetProperty("target");
         Assert.IsTrue(target.TryGetProperty("publisher", out _));

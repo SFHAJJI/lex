@@ -29,7 +29,7 @@ public sealed record ObservedInverseAxiom
         string ontologyVersion,
         string subjectPredicateUri,
         string objectPredicateUri,
-        SourceObservationReference observation)
+        string sourceObservationId)
     {
         foreach (var (value, name) in new[]
                  {
@@ -62,7 +62,8 @@ public sealed record ObservedInverseAxiom
         OntologyVersion = ontologyVersion;
         SubjectPredicateUri = subjectPredicateUri;
         ObjectPredicateUri = objectPredicateUri;
-        Observation = observation ?? throw new ArgumentNullException(nameof(observation));
+        SourceObservationId = SourceObservation.Require(
+            sourceObservationId, nameof(sourceObservationId));
     }
 
     public string OntologyUri { get; }
@@ -75,7 +76,7 @@ public sealed record ObservedInverseAxiom
     /// <summary>The predicate it inverts to.</summary>
     public string ObjectPredicateUri { get; }
 
-    public SourceObservationReference Observation { get; }
+    public string SourceObservationId { get; }
 
     /// <summary>Whether this axiom authorizes exactly the given inversion, in that direction.</summary>
     public bool Authorizes(string forwardPredicateUri, string inversePredicateUri) =>

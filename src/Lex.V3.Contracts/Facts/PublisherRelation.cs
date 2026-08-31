@@ -21,7 +21,7 @@ public sealed record PublisherRelation
         OfficialIdentitySet source,
         OfficialIdentitySet target,
         string predicateUri,
-        SourceObservationReference observation,
+        string sourceObservationId,
         IReadOnlyList<QualifiedAxiom> qualifiedAxioms)
     {
         if (!string.Equals(schema, Identity, StringComparison.Ordinal))
@@ -47,7 +47,8 @@ public sealed record PublisherRelation
         Source = source ?? throw new ArgumentNullException(nameof(source));
         Target = target ?? throw new ArgumentNullException(nameof(target));
         PredicateUri = predicateUri;
-        Observation = observation ?? throw new ArgumentNullException(nameof(observation));
+        SourceObservationId = SourceObservation.Require(
+            sourceObservationId, nameof(sourceObservationId));
         QualifiedAxioms = Array.AsReadOnly(axioms);
     }
 
@@ -59,7 +60,7 @@ public sealed record PublisherRelation
 
     public string PredicateUri { get; }
 
-    public SourceObservationReference Observation { get; }
+    public string SourceObservationId { get; }
 
     /// <summary>
     /// Every axiom the publisher attached, in order, including repeated remote axiom identities.

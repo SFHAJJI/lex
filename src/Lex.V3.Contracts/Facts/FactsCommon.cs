@@ -3,45 +3,30 @@ using System.Text.Json.Serialization;
 namespace Lex.V3.Contracts.Facts;
 
 /// <summary>
-/// A reference to the source observation that witnessed a fact.
+/// The single custody coordinate a Fact carries.
 /// </summary>
 /// <remarks>
-/// One custody coordinate and no second one. An earlier candidate embedded a
-/// <c>TransportByteReference</c> here, so the durable bytes were addressed twice: once by
-/// <c>http_observation/1</c>, which owns them, and once by Facts. Facts reach the bytes
-/// transitively through this unique observation, and fail closed when it cannot be resolved.
-/// The declaration that this had already been removed was wrong, and no test named the rule,
-/// which is why nothing caught it. <c>NoFactMemberNamesAStorageCoordinate</c> now does.
+/// Candidate rounds three through seven carried a <c>SourceObservationReference</c> holding an
+/// identity and an <c>observed_at</c>. The accepted ruling is that Facts carry exactly
+/// <c>source_observation_id</c>, and the timestamp was a second projection of a record this
+/// package does not own: <c>http_observation/1</c> holds the authoritative instant, so a Fact
+/// repeating it can contradict it, and nothing here could detect the contradiction. Removing the
+/// byte reference and keeping the timestamp closed half the hole and left the half that can
+/// disagree with the publisher record.
 /// </remarks>
-[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record SourceObservationReference
+public static class SourceObservation
 {
-    [JsonConstructor]
-    public SourceObservationReference(
-        string observationId,
-        DateTimeOffset observedAt)
+    public static string Require(string? sourceObservationId, string parameterName)
     {
-        if (!FactsValidation.IsOpaqueIdentity(observationId))
+        if (!FactsValidation.IsOpaqueIdentity(sourceObservationId))
         {
             throw new ArgumentException(
                 "An observation identity must be 1 to 200 printable ASCII characters.",
-                nameof(observationId));
+                parameterName);
         }
 
-        if (observedAt.Offset != TimeSpan.Zero)
-        {
-            throw new ArgumentException(
-                "An observation timestamp must be expressed in UTC.",
-                nameof(observedAt));
-        }
-
-        ObservationId = observationId;
-        ObservedAt = observedAt;
+        return sourceObservationId!;
     }
-
-    public string ObservationId { get; }
-
-    public DateTimeOffset ObservedAt { get; }
 }
 
 /// <summary>
@@ -370,8 +355,15 @@ public sealed record OfficialIdentifier
     {
         if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
             uri.Scheme is not ("http" or "https") ||
-            !string.Equals(uri.Host, "publications.europa.eu", StringComparison.Ordinal))
+            !string.Equals(uri.Host, "publications.europa.eu", StringComparison.Ordinal) ||
+            uri.Query.Length != 0 ||
+            uri.Fragment.Length != 0)
         {
+            // Round six fixed this on the persistent identifier and left it on the work and the
+            // resource, which is the repair-the-instance habit inside the round that named it.
+            // `AbsolutePath` discards a query and a fragment, so `.../cellar/<uuid>?view=1` was a
+            // different string naming the same parsed path, and two spellings of one identity are
+            // two rows to every store and one thing to a reader.
             return false;
         }
 
@@ -410,7 +402,10 @@ public sealed record OfficialIdentifier
         uri.AbsolutePath.Trim('/').Split('/') is { Length: 3 } segments &&
         string.Equals(segments[0], "resource", StringComparison.Ordinal) &&
         string.Equals(segments[1], "celex", StringComparison.Ordinal) &&
-        segments[2].Length > 0;
+        // The terminal segment is a CELEX number, so it is held to the CELEX grammar rather than
+        // to "nonempty". Candidate round six admitted any terminal, including a percent-encoded
+        // slash, which made a two-segment path spell itself as a one-segment one.
+        ProfileOf(segments[2]) is not null;
 }
 
 /// <summary>
@@ -715,6 +710,15 @@ internal static class FactsValidation
     internal static bool IsOpaqueIdentity(string? value)
     {
         if (value is null || value.Length is 0 or > 200)
+        {
+            return false;
+        }
+
+        // An identity that is only spaces, or that carries them at either end, is not an identity
+        // a publisher stated. Two spellings that differ only in surrounding whitespace are two
+        // keys everywhere they are used and one value to a reader, which is the shape that lets a
+        // duplicate hide.
+        if (value.Trim().Length != value.Length || value.Trim().Length == 0)
         {
             return false;
         }

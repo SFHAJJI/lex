@@ -28,23 +28,11 @@
       "minItems": 1,
       "uniqueItems": true
     },
-    "observation": {
-      "type": "object",
-      "properties": {
-        "observation_id": {
-          "type": "string"
-        },
-        "observed_at": {
-          "type": "string",
-          "format": "date-time",
-          "pattern": "(Z|\\\u002B00:00)$"
-        }
-      },
-      "required": [
-        "observation_id",
-        "observed_at"
-      ],
-      "additionalProperties": false
+    "source_observation_id": {
+      "type": "string",
+      "pattern": "^[!-~]([ -~]*[!-~])?(?![\\s\\S])",
+      "minLength": 1,
+      "maxLength": 200
     }
   },
   "required": [
@@ -52,7 +40,7 @@
     "vocabulary",
     "observed_term",
     "admitted_terms",
-    "observation"
+    "source_observation_id"
   ],
   "additionalProperties": false,
   "$id": "urn:uuid:71c48395-b0a2-4e8f-e3d6-81f592d4b5b7",

@@ -131,7 +131,7 @@ public sealed class FactsHostileTests
                 FactsFixtures.OntologyVersion,
                 "http://example.invalid/unrelated-forward",
                 "http://example.invalid/unrelated-inverse",
-                FactsFixtures.Observation()),
+                FactsFixtures.ObservationId),
             forward));
     }
 
@@ -355,7 +355,7 @@ public sealed class FactsHostileTests
             DateSemanticRole.RoleNotStatedByPublisher,
             TranspositionEvidence.None,
             "lex-lu-date-reader/1",
-            FactsFixtures.Observation()));
+            FactsFixtures.ObservationId));
     }
 
     /// <summary>
@@ -387,7 +387,7 @@ public sealed class FactsHostileTests
     {
         var read = ClosedVocabulary.TryRead<DateSemanticRole>(
             "ratification_date",
-            FactsFixtures.Observation(),
+            FactsFixtures.ObservationId,
             out var value,
             out var drift);
 
@@ -408,7 +408,7 @@ public sealed class FactsHostileTests
             VocabularyKind.RelationAssertionKind,
             "ratification_date",
             ClosedVocabulary.WireNames<DateSemanticRole>(),
-            FactsFixtures.Observation()));
+            FactsFixtures.ObservationId));
     }
 
     [TestMethod]
@@ -422,7 +422,7 @@ public sealed class FactsHostileTests
             VocabularyKind.DatePrecision,
             "century",
             duplicated,
-            FactsFixtures.Observation()));
+            FactsFixtures.ObservationId));
     }
 
     [TestMethod]
@@ -433,7 +433,7 @@ public sealed class FactsHostileTests
             VocabularyKind.DatePrecision,
             "year",
             ClosedVocabulary.WireNames<DatePrecision>(),
-            FactsFixtures.Observation()));
+            FactsFixtures.ObservationId));
     }
 
     [TestMethod]
@@ -441,7 +441,7 @@ public sealed class FactsHostileTests
     {
         Assert.ThrowsExactly<ArgumentException>(() => ClosedVocabulary.TryRead<DayOfWeek>(
             "Monday",
-            FactsFixtures.Observation(),
+            FactsFixtures.ObservationId,
             out _,
             out _));
     }
@@ -466,7 +466,7 @@ public sealed class FactsHostileTests
     {
         var read = ClosedVocabulary.TryRead<DateSemanticRole>(
             "entry_into_force",
-            FactsFixtures.Observation(),
+            FactsFixtures.ObservationId,
             out var value,
             out var drift);
 
@@ -589,7 +589,7 @@ public sealed class FactsHostileTests
             FactsFixtures.LuWork(),
             FactsFixtures.LuTarget(),
             FactsFixtures.ConsolidatesPredicate,
-            FactsFixtures.Observation(),
+            FactsFixtures.ObservationId,
             FactsFixtures.MultimapAxioms()));
 
         Assert.ThrowsExactly<ArgumentException>(() => new PublisherDate(
@@ -640,17 +640,24 @@ public sealed class FactsHostileTests
     {
         var document = Mutate(
             ContractJson.Serialize(FactsFixtures.PublisherRelation()),
-            root => root.Remove("observation"));
+            root => root.Remove("source_observation_id"));
         Assert.ThrowsExactly<JsonException>(
             () => ContractJson.Deserialize<PublisherRelation>(document));
     }
 
+    /// <summary>
+    /// The observation identity is opaque and required. There is no timestamp to validate here
+    /// any more, because a Fact no longer carries one: http_observation/1 owns the instant, and a
+    /// second copy in a Fact could disagree with it.
+    /// </summary>
     [TestMethod]
-    public void AnObservationTimestampOutsideUtcIsRefused()
+    public void AnEmptyOrOversizeObservationIdentityIsRefused()
     {
-        Assert.ThrowsExactly<ArgumentException>(() => new SourceObservationReference(
-            "obs-1",
-            new DateTimeOffset(2026, 8, 31, 9, 0, 0, TimeSpan.FromHours(2))));
+        foreach (var bad in new[] { "", "   ", new string('o', 201), "obsid" })
+        {
+            Assert.ThrowsExactly<ArgumentException>(
+                () => FactsFixtures.PublisherRelation(sourceObservationId: bad), bad);
+        }
     }
 
     /// <summary>MUTATION RECEIPT: collapsing a multimap.</summary>
@@ -678,7 +685,7 @@ public sealed class FactsHostileTests
             FactsFixtures.LuWork(),
             FactsFixtures.LuTarget(),
             "consolidates",
-            FactsFixtures.Observation(),
+            FactsFixtures.ObservationId,
             FactsFixtures.MultimapAxioms()));
     }
 
@@ -824,7 +831,7 @@ public sealed class FactsHostileTests
                 DateSemanticRole.RoleNotStatedByPublisher,
                 TranspositionEvidence.None,
                 bad,
-                FactsFixtures.Observation()), bad);
+                FactsFixtures.ObservationId), bad);
         }
     }
 

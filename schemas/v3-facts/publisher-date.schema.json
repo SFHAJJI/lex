@@ -177,6 +177,50 @@
       "if": {
         "properties": {
           "datatype_uri": {
+            "const": "http://www.w3.org/2001/XMLSchema#gYear"
+          }
+        },
+        "required": [
+          "datatype_uri"
+        ]
+      },
+      "then": {
+        "properties": {
+          "raw_lexical_value": {
+            "pattern": "^-?[0-9]{4}(Z|[\u002B-](0[0-9]|1[0-3]):[0-5][0-9]|[\u002B-]14:00)?(?![\\s\\S])"
+          }
+        },
+        "required": [
+          "raw_lexical_value"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "datatype_uri": {
+            "const": "http://www.w3.org/2001/XMLSchema#gYearMonth"
+          }
+        },
+        "required": [
+          "datatype_uri"
+        ]
+      },
+      "then": {
+        "properties": {
+          "raw_lexical_value": {
+            "pattern": "^-?[0-9]{4}-(0[1-9]|1[0-2])(Z|[\u002B-](0[0-9]|1[0-3]):[0-5][0-9]|[\u002B-]14:00)?(?![\\s\\S])"
+          }
+        },
+        "required": [
+          "raw_lexical_value"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "datatype_uri": {
             "const": "http://www.w3.org/2001/XMLSchema#date"
           }
         },

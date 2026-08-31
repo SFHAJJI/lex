@@ -45,7 +45,7 @@ public sealed class FactsSchemaExecutionTests
         var node = System.Text.Json.Nodes.JsonNode
             .Parse(ContractJson.Serialize(FactsFixtures.PublisherRelation()))!
             .AsObject();
-        node.Remove("observation");
+        node.Remove("source_observation_id");
 
         var result = schema.Evaluate(ToElement(node.ToJsonString()), Options());
 
@@ -94,7 +94,6 @@ public sealed class FactsSchemaExecutionTests
 
         foreach (var name in new[]
                  {
-                     "source_observation_reference",
                      "official_identifier",
                      "official_identity_set",
                      "axiom_qualifier",

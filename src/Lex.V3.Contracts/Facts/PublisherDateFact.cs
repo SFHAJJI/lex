@@ -36,7 +36,7 @@ public sealed record PublisherDateFact
         DateSemanticRole semanticRole,
         TranspositionEvidence transpositionEvidence,
         string parsedByAuthority,
-        SourceObservationReference observation)
+        string sourceObservationId)
     {
         if (!string.Equals(schema, Identity, StringComparison.Ordinal))
         {
@@ -114,7 +114,8 @@ public sealed record PublisherDateFact
         SemanticRole = semanticRole;
         TranspositionEvidence = transpositionEvidence;
         ParsedByAuthority = parsedByAuthority;
-        Observation = observation ?? throw new ArgumentNullException(nameof(observation));
+        SourceObservationId = SourceObservation.Require(
+            sourceObservationId, nameof(sourceObservationId));
     }
 
     public string Schema { get; }
@@ -144,5 +145,5 @@ public sealed record PublisherDateFact
     /// <summary>Who produced the reading in <see cref="SemanticRole"/>.</summary>
     public string ParsedByAuthority { get; }
 
-    public SourceObservationReference Observation { get; }
+    public string SourceObservationId { get; }
 }

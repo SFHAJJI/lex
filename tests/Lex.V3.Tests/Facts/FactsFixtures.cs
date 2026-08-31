@@ -28,11 +28,13 @@ internal static class FactsFixtures
         OntologyVersion,
         ConsolidatesPredicate,
         ConsolidatedByPredicate,
-        Observation());
+        ObservationId);
 
-    internal static SourceObservationReference Observation() => new(
-        "obs-2026-08-31T09:14:02Z-lu-legilux-0001",
-        new DateTimeOffset(2026, 8, 31, 9, 14, 2, TimeSpan.Zero));
+    /// <summary>
+    /// The one custody coordinate a Fact carries. It is opaque: this package resolves it through
+    /// the unique http_observation record and does not restate anything that record owns.
+    /// </summary>
+    internal const string ObservationId = "obs-2026-08-31T09:14:02Z-lu-legilux-0001";
 
     internal static OfficialIdentitySet LuWork() => new(
         PublisherId.LuLegilux,
@@ -92,12 +94,13 @@ internal static class FactsFixtures
     internal static PublisherRelation PublisherRelation(
         OfficialIdentitySet? source = null,
         OfficialIdentitySet? target = null,
-        string? predicate = null) => new(
+        string? predicate = null,
+        string? sourceObservationId = null) => new(
         FactsSchemaIds.PublisherRelation,
         source ?? LuWork(),
         target ?? LuTarget(),
         predicate ?? ConsolidatesPredicate,
-        Observation(),
+        sourceObservationId ?? ObservationId,
         MultimapAxioms());
 
     internal static DerivedInverseRelation DerivedInverse()
@@ -192,12 +195,12 @@ internal static class FactsFixtures
         role,
         evidence,
         Authority,
-        Observation());
+        ObservationId);
 
     internal static VocabularyDrift Drift() =>
         ClosedVocabulary.TryRead<DateSemanticRole>(
             "ratification_date",
-            Observation(),
+            ObservationId,
             out _,
             out var drift)
             ? throw new InvalidOperationException("ratification_date must be drift.")

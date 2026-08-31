@@ -45,6 +45,65 @@ public sealed class FactsSchemaParityTests
             root => root["schema"] = "lex-v3-publisher-relation/2",
             SchemaCanExpress: true),
         new Case(
+            "a gYear lexical that is not a year",
+            FactsSchemaIds.PublisherDate,
+            () => ContractJson.Serialize(FactsFixtures.YearOnlyDate()),
+            root => root["raw_lexical_value"] = "not-a-year",
+            SchemaCanExpress: true),
+        new Case(
+            "a gYearMonth lexical carrying a day",
+            FactsSchemaIds.PublisherDate,
+            () => ContractJson.Serialize(FactsFixtures.YearOnlyDate()),
+            root =>
+            {
+                root["datatype_uri"] = PublisherDate.GYearMonth;
+                root["precision"] = "year_month";
+                root["raw_lexical_value"] = "2019-07-15";
+            },
+            SchemaCanExpress: true),
+        new Case(
+            "an empty provenance identity",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(FactsFixtures.PublisherRelation()),
+            root => root["source_observation_id"] = "",
+            SchemaCanExpress: true),
+        new Case(
+            "a provenance identity padded with spaces",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(FactsFixtures.PublisherRelation()),
+            root => root["source_observation_id"] = " obs-1 ",
+            SchemaCanExpress: true),
+        new Case(
+            "a Memorial identifier carrying a space",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(FactsFixtures.PublisherRelation()),
+            root => root["target"]!["identifiers"] = new JsonArray(
+                new JsonObject { ["family"] = "memorial", ["raw_value"] = "A 512" }),
+            SchemaCanExpress: true),
+        new Case(
+            "a digest carrying a trailing newline",
+            FactsSchemaIds.LocalInboundView,
+            () => ContractJson.Serialize(FactsFixtures.InboundView()),
+            root => root["scope_descriptor_sha256"] =
+                FactsFixtures.ScopeDigest + "\n",
+            SchemaCanExpress: true),
+        new Case(
+            "a Cellar work URI carrying a query string",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(
+                FactsFixtures.PublisherRelation(target: FactsFixtures.EuCaseWithEcli())),
+            root => root["target"]!["identifiers"]![0]!["raw_value"]
+                = FactsFixtures.CellarWorkUri + "?view=1",
+            SchemaCanExpress: true),
+        new Case(
+            "a Cellar persistent identifier whose terminal is not a CELEX number",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(
+                FactsFixtures.PublisherRelation(target: FactsFixtures.EuCaseWithEcli())),
+            root => root["target"]!["identifiers"]![1]!["raw_value"]
+                = "http://publications.europa.eu/resource/celex/not-a-celex",
+            SchemaCanExpress: true),
+        new Case(
             "a Luxembourg identity carrying an EU CELEX",
             FactsSchemaIds.PublisherRelation,
             () => ContractJson.Serialize(FactsFixtures.PublisherRelation()),
