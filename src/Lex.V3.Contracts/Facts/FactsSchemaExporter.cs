@@ -46,7 +46,6 @@ public static class FactsSchemaExporter
     private static readonly ReadOnlyDictionary<string, Type> CommonDefinitionTypes =
         new(new Dictionary<string, Type>(StringComparer.Ordinal)
         {
-            ["transport_byte_reference"] = typeof(TransportByteReference),
             ["source_observation_reference"] = typeof(SourceObservationReference),
             ["official_identifier"] = typeof(OfficialIdentifier),
             ["official_identity_set"] = typeof(OfficialIdentitySet),
@@ -167,31 +166,65 @@ internal static class FactsSchemaHardener
     private const string Uuid = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
 
     /// <summary>The work is the Cellar UUID work, not a persistent-identifier alias.</summary>
-    internal const string CellarWorkPattern = CellarHost + "cellar/" + Uuid + "$";
+    internal const string CellarWorkPattern = CellarHost + "cellar/" + Uuid + End;
 
     /// <summary>A resource is anything strictly beneath that work.</summary>
-    internal const string CellarResourcePattern = CellarHost + "cellar/" + Uuid + "/.+$";
+    internal const string CellarResourcePattern = CellarHost + "cellar/" + Uuid + "/" + Printable + "+" + End;
 
     /// <summary>An alias such as the CELEX PSI, which is never the work.</summary>
-    internal const string CellarPsiPattern = CellarHost + "(?!cellar/)[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+$";
+    // Narrowed to the one alias class the accepted scope actually proves. An arbitrary resource
+    // class is not authority merely because a caller labelled it a persistent identifier.
+    internal const string CellarPsiPattern = CellarHost + "celex/[A-Za-z0-9_.-]+" + End;
 
     // `[^:]` matched a newline, so a control character inside a segment validated. Every segment
     // is now an explicit class.
-    internal const string EcliPattern = "^ECLI:[A-Z]{2}:[A-Z0-9]+:[0-9]{4}:[0-9A-Z.]+$";
+    internal const string EcliPattern = "^ECLI:[A-Z]{2}:[A-Z0-9]+:[0-9]{4}:[0-9A-Z.]+" + End;
 
-    /// <summary>A calendar-plausible eight-digit date. Leap years stay with the reader.</summary>
-    private const string YyyyMmDd = "[0-9]{4}(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])";
+    /// <summary>
+    /// A calendar-plausible eight-digit date: month length is bound, so 31 February cannot pass.
+    /// Only leap-year correctness stays with the reader, because 29 February is a real date in
+    /// some years and a regex cannot know which.
+    /// </summary>
+    private const string YyyyMmDd =
+        "[0-9]{4}((0[13578]|1[02])(0[1-9]|[12][0-9]|3[01])" +
+        "|(0[469]|11)(0[1-9]|[12][0-9]|30)" +
+        "|02(0[1-9]|1[0-9]|2[0-9]))";
 
     /// <summary>The five admitted CELEX profiles, anchored at both ends.</summary>
     internal const string CelexPattern =
-        @"^[0-9]{5}[A-Z]{1,3}([0-9]+(R\([0-9]+\))?(-" + YyyyMmDd + @")?|/[A-Z0-9]+(/[A-Z0-9]+)*|[0-9]+[A-Z]{3}_[0-9A-Z]+)$";
+        @"^([0-9]{5}[A-Z]{1,3}([0-9]+(R\([0-9]+\))?(-" + YyyyMmDd + @")?|/[A-Z0-9]+(/[A-Z0-9]+)*)" +
+        @"|7[0-9]{4}[A-Z]{1,3}[0-9]+[A-Z]{3}_[0-9A-Z]+)" + End;
 
     /// <summary>A valid XSD timezone, including the exact 14:00 ceiling.</summary>
     internal const string TimezonePattern = @"(Z|[+-](0[0-9]|1[0-3]):[0-5][0-9]|[+-]14:00)?";
 
-    internal const string EuEliPattern = @"^https?://(data\.europa\.eu|eur-lex\.europa\.eu)/.*/eli/";
+    /// <summary>Printable ASCII, so a newline or control character cannot ride inside a URI.</summary>
+    private const string Printable = "[!-~]";
 
-    internal const string LuEliPattern = @"^(eli/|https?://(data\.legilux\.public\.lu|legilux\.public\.lu)/.*/eli/)";
+    /// <summary>
+    /// True end of input. <c>$</c> is not an end anchor: in .NET, and in any engine following the
+    /// same convention, it also matches immediately before a final newline. Every pattern here
+    /// therefore admitted a trailing newline while reading as anchored. Adding <c>$</c> was the
+    /// repair I first made for the ELI shapes, and it did not close the hole.
+    /// </summary>
+    private const string End = @"(?![\s\S])";
+
+    // Both were unanchored, so any suffix rode along, including a trailing newline. `.*` also
+    // matched characters no URI may carry.
+    internal const string EuEliPattern =
+        @"^https?://(data\.europa\.eu|eur-lex\.europa\.eu)(/" + Printable + @"*)?/eli/" +
+        Printable + "*" + End;
+
+    internal const string LuEliPattern =
+        @"^(eli/" + Printable + @"*|https?://(data\.legilux\.public\.lu|legilux\.public\.lu)(/" +
+        Printable + @"*)?/eli/" + Printable + "*)" + End;
+
+    /// <summary>Families only the EU publisher mints.</summary>
+    private static readonly string[] EuOnlyFamilies =
+        ["celex", "cellar_work_uri", "cellar_resource_uri", "cellar_psi_uri"];
+
+    /// <summary>Families only the Luxembourg publisher mints.</summary>
+    private static readonly string[] LuOnlyFamilies = ["memorial", "historical_legal_id"];
 
     /// <summary>
     /// The only invariants left to the reader alone: equality between two distant instance
@@ -333,8 +366,8 @@ internal static class FactsSchemaHardener
         if (names.Count == 2 && names.Contains("publisher") && names.Contains("identifiers"))
         {
             node["allOf"] = new JsonArray(
-                EliShapeArm("eu-eurlex", EuEliPattern),
-                EliShapeArm("lu-legilux", LuEliPattern));
+                PublisherShapeArm("eu-eurlex", EuEliPattern, LuOnlyFamilies),
+                PublisherShapeArm("lu-legilux", LuEliPattern, EuOnlyFamilies));
         }
 
         // The identifier value object is inlined into every relation schema exactly as the
@@ -466,6 +499,16 @@ internal static class FactsSchemaHardener
                 // The sentinel is a date VALUE in any lexical form its datatype admits, so the
                 // schema matches the same set the reader does. A const here made
                 // `9999-12-31Z` the sentinel to the reader and an ordinary date to the schema.
+                // Ordinary dates carried no lexical pattern at all, so the reader's timezone
+                // ceiling applied only to the open sentinel. `2019-07-15+99:99` was schema-valid.
+                all.Add(IfThen(
+                    Props(("datatype_uri", Const(PublisherDate.Date))),
+                    Props(("raw_lexical_value", new JsonObject
+                    {
+                        ["pattern"] = "^-?[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])"
+                            + TimezonePattern + End,
+                    }))));
+
                 var sentinelShape = new JsonObject
                 {
                     ["properties"] = new JsonObject
@@ -567,8 +610,14 @@ internal static class FactsSchemaHardener
     /// sentinel shape is deliberately used twice, once per direction, which is exactly the case
     /// that needs the clone.
     /// </remarks>
-    /// <summary>One publisher may carry only the ELI shape it mints.</summary>
-    private static JsonObject EliShapeArm(string publisher, string pattern) => IfThen(
+    /// <summary>
+    /// One publisher carries only the ELI shape it mints, and only the families it mints at all.
+    /// Binding the ELI shape alone left a Luxembourg identity free to carry an EU CELEX or a
+    /// Cellar persistent identifier, which is the same "authority rests on the caller" defect one
+    /// level up.
+    /// </summary>
+    private static JsonObject PublisherShapeArm(
+        string publisher, string eliPattern, string[] foreignFamilies) => IfThen(
         Props(("publisher", Const(publisher))),
         new JsonObject
         {
@@ -576,9 +625,30 @@ internal static class FactsSchemaHardener
             {
                 ["identifiers"] = new JsonObject
                 {
-                    ["items"] = IfThen(
-                        Props(("family", Const("eli"))),
-                        Props(("raw_value", new JsonObject { ["pattern"] = pattern }))),
+                    ["items"] = new JsonObject
+                    {
+                        ["allOf"] = new JsonArray(
+                            IfThen(
+                                Props(("family", Const("eli"))),
+                                Props(("raw_value",
+                                    new JsonObject { ["pattern"] = eliPattern }))),
+                            new JsonObject
+                            {
+                                ["properties"] = new JsonObject
+                                {
+                                    ["family"] = new JsonObject
+                                    {
+                                        ["not"] = new JsonObject
+                                        {
+                                            ["enum"] = new JsonArray(
+                                                foreignFamilies
+                                                    .Select(family => (JsonNode)family!)
+                                                    .ToArray()),
+                                        },
+                                    },
+                                },
+                            }),
+                    },
                 },
             },
             ["required"] = new JsonArray("identifiers"),

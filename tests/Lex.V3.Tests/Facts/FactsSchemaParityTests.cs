@@ -45,6 +45,74 @@ public sealed class FactsSchemaParityTests
             root => root["schema"] = "lex-v3-publisher-relation/2",
             SchemaCanExpress: true),
         new Case(
+            "a Luxembourg identity carrying an EU CELEX",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(FactsFixtures.PublisherRelation()),
+            root => root["target"]!["identifiers"] = new JsonArray(
+                new JsonObject { ["family"] = "celex", ["raw_value"] = "62019CJ0311" }),
+            SchemaCanExpress: true),
+        new Case(
+            "a Luxembourg identity carrying a Cellar persistent identifier",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(FactsFixtures.PublisherRelation()),
+            root => root["target"]!["identifiers"] = new JsonArray(
+                new JsonObject
+                {
+                    ["family"] = "cellar_psi_uri",
+                    ["raw_value"] = FactsFixtures.CellarPsiUri,
+                }),
+            SchemaCanExpress: true),
+        new Case(
+            "a NIM-shaped CELEX outside sector 7",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(
+                FactsFixtures.PublisherRelation(target: FactsFixtures.EuCaseWithEcli())),
+            root => root["target"]!["identifiers"]![2]!["raw_value"] = "62019L1937LUX_202303892",
+            SchemaCanExpress: true),
+        new Case(
+            "a consolidation CELEX naming the 31st of February",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(
+                FactsFixtures.PublisherRelation(target: FactsFixtures.EuCaseWithEcli())),
+            root => root["target"]!["identifiers"]![2]!["raw_value"] = "02016R0679-20160231",
+            SchemaCanExpress: true),
+        new Case(
+            "an EU ELI with a trailing newline",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(
+                FactsFixtures.PublisherRelation(target: FactsFixtures.EuCaseWithEcli())),
+            root => root["target"]!["identifiers"] = new JsonArray(
+                new JsonObject
+                {
+                    ["family"] = "eli",
+                    ["raw_value"] = "http://data.europa.eu/eli/reg/2016/679/oj\n",
+                }),
+            SchemaCanExpress: true),
+        new Case(
+            // Draft 2020-12 has `uniqueItems` for whole items and nothing for uniqueness by a
+            // sub-property, so this one is genuinely beyond the schema rather than merely unwritten.
+            "one raw value may not repeat under two families in one set",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(FactsFixtures.PublisherRelation()),
+            root => root["target"]!["identifiers"] = new JsonArray(
+                new JsonObject { ["family"] = "memorial", ["raw_value"] = "A512" },
+                new JsonObject { ["family"] = "historical_legal_id", ["raw_value"] = "A512" }),
+            SchemaCanExpress: false),
+        new Case(
+            "an ordinary date with a timezone beyond the XSD ceiling",
+            FactsSchemaIds.PublisherDate,
+            () => ContractJson.Serialize(FactsFixtures.DayDate()),
+            root => root["raw_lexical_value"] = "2019-07-15+99:99",
+            SchemaCanExpress: true),
+        new Case(
+            "a Cellar persistent identifier carrying a query string",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(
+                FactsFixtures.PublisherRelation(target: FactsFixtures.EuCaseWithEcli())),
+            root => root["target"]!["identifiers"]![1]!["raw_value"]
+                = FactsFixtures.CellarPsiUri + "?view=1",
+            SchemaCanExpress: true),
+        new Case(
             "the CELEX persistent identifier tagged as a Cellar work",
             FactsSchemaIds.PublisherRelation,
             () => ContractJson.Serialize(
@@ -145,25 +213,6 @@ public sealed class FactsSchemaParityTests
             root => root["date"]!["datatype_uri"] = "http://www.w3.org/2001/XMLSchema#dateTime",
             SchemaCanExpress: true),
         new Case(
-            "nested transport digest grammar",
-            FactsSchemaIds.RelationFact,
-            () => ContractJson.Serialize(FactsFixtures.AssertedFact()),
-            root => root["publisher_asserted"]!["observation"]!["transport_bytes"]!["content_sha256"]
-                = "nothex",
-            SchemaCanExpress: true),
-        new Case(
-            "transport digest grammar",
-            FactsSchemaIds.PublisherRelation,
-            () => ContractJson.Serialize(FactsFixtures.PublisherRelation()),
-            root => root["observation"]!["transport_bytes"]!["content_sha256"] = "nothex",
-            SchemaCanExpress: true),
-        new Case(
-            "negative transport length",
-            FactsSchemaIds.PublisherRelation,
-            () => ContractJson.Serialize(FactsFixtures.PublisherRelation()),
-            root => root["observation"]!["transport_bytes"]!["byte_length"] = -1,
-            SchemaCanExpress: true),
-        new Case(
             "predicate is an absolute URI",
             FactsSchemaIds.PublisherRelation,
             () => ContractJson.Serialize(FactsFixtures.PublisherRelation()),
@@ -209,18 +258,32 @@ public sealed class FactsSchemaParityTests
         // Cross-field equalities. Draft 2020-12 has no way to compare one instance location
         // against another, so these are enforced by the reader alone and asserted as divergent.
         new Case(
-            "derived inverse endpoints match the forward assertion",
+            "derived inverse source equals the forward assertion target",
             FactsSchemaIds.DerivedInverseRelation,
             () => ContractJson.Serialize(FactsFixtures.DerivedInverse()),
-            root =>
-            {
-                var source = root["source"]!.DeepClone();
-                root["source"] = root["target"]!.DeepClone();
-                root["target"] = source;
-            },
+            root => root["source"] = root["derived_from"]!["source"]!.DeepClone(),
             SchemaCanExpress: false),
         new Case(
-            "inbound view contributors target the view target",
+            "derived inverse target equals the forward assertion source",
+            FactsSchemaIds.DerivedInverseRelation,
+            () => ContractJson.Serialize(FactsFixtures.DerivedInverse()),
+            root => root["target"] = root["derived_from"]!["target"]!.DeepClone(),
+            SchemaCanExpress: false),
+        new Case(
+            "derived inverse inverted predicate equals the forward assertion predicate",
+            FactsSchemaIds.DerivedInverseRelation,
+            () => ContractJson.Serialize(FactsFixtures.DerivedInverse()),
+            root => root["predicate_uri"] = root["derived_from"]!["predicate_uri"]!.DeepClone(),
+            SchemaCanExpress: false),
+        new Case(
+            "authorizing axiom maps this forward predicate to this inverse predicate",
+            FactsSchemaIds.DerivedInverseRelation,
+            () => ContractJson.Serialize(FactsFixtures.DerivedInverse()),
+            root => root["authorizing_axiom"]!["object_predicate_uri"]
+                = "http://data.legilux.public.lu/resource/ontology/jolux#amends",
+            SchemaCanExpress: false),
+        new Case(
+            "inbound view contributors all target the view target",
             FactsSchemaIds.LocalInboundView,
             () => ContractJson.Serialize(FactsFixtures.InboundView()),
             root => root["contributing_assertions"] = new JsonArray(
@@ -246,10 +309,13 @@ public sealed class FactsSchemaParityTests
             root => root["raw_lexical_value"] = "1970-01-01",
             SchemaCanExpress: true),
         new Case(
-            "lexical value is a real calendar date",
+            // 30 February is now schema-refused, because month length is expressible. 29 February
+            // in a common year is not: a regex cannot know which years are leap years, so this is
+            // the residue that genuinely stays with the reader.
+            "leap-year validity of a consolidation or lexical date",
             FactsSchemaIds.PublisherDate,
             () => ContractJson.Serialize(FactsFixtures.DayDate()),
-            root => root["raw_lexical_value"] = "2019-02-30",
+            root => root["raw_lexical_value"] = "2019-02-29",
             SchemaCanExpress: false),
         new Case(
             "precision matches the declared datatype",
@@ -314,7 +380,17 @@ public sealed class FactsSchemaParityTests
     [TestMethod]
     public void EveryReaderOnlyInvariantIsGenuinelyBeyondTheSchema()
     {
-        foreach (var testCase in Cases().Where(c => !c.SchemaCanExpress))
+        // This iterated the cases, so its name promised the registry and it proved only the
+        // subset somebody had written a case for. Four of the eight registry entries had none,
+        // and raw-value duplication escaped a green suite entirely.
+        var readerOnly = Cases().Where(testCase => !testCase.SchemaCanExpress).ToArray();
+
+        CollectionAssert.AreEquivalent(
+            FactsSchemaHardener.ReaderOnlyInvariants.OrderBy(n => n, StringComparer.Ordinal).ToArray(),
+            readerOnly.Select(c => c.Invariant).OrderBy(n => n, StringComparer.Ordinal).ToArray(),
+            "the reader-only registry and the executable reader-only cases must be one set");
+
+        foreach (var testCase in readerOnly)
         {
             Assert.IsTrue(
                 Evaluate(testCase.SchemaId, Break(testCase)),

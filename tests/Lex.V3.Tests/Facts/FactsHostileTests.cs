@@ -636,33 +636,13 @@ public sealed class FactsHostileTests
 
     /// <summary>MUTATION RECEIPT: dropping provenance.</summary>
     [TestMethod]
-    public void AFactWithItsObservationOrTransportBytesRemovedIsRefused()
+    public void AFactWithItsObservationRemovedIsRefused()
     {
-        foreach (var mutate in new Action<JsonObject>[]
-                 {
-                     root => root.Remove("observation"),
-                     root => root["observation"]!.AsObject().Remove("transport_bytes"),
-                 })
-        {
-            var document = Mutate(ContractJson.Serialize(FactsFixtures.PublisherRelation()), mutate);
-            Assert.ThrowsExactly<JsonException>(
-                () => ContractJson.Deserialize<PublisherRelation>(document));
-        }
-    }
-
-    [TestMethod]
-    public void ATransportDigestThatIsNotALowercaseSha256IsRefused()
-    {
-        Assert.ThrowsExactly<ArgumentException>(
-            () => new TransportByteReference(FactsFixtures.TransportDigest.ToUpperInvariant(), 1));
-        Assert.ThrowsExactly<ArgumentException>(() => new TransportByteReference("abc", 1));
-    }
-
-    [TestMethod]
-    public void ANegativeTransportLengthIsRefused()
-    {
-        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
-            () => new TransportByteReference(FactsFixtures.TransportDigest, -1));
+        var document = Mutate(
+            ContractJson.Serialize(FactsFixtures.PublisherRelation()),
+            root => root.Remove("observation"));
+        Assert.ThrowsExactly<JsonException>(
+            () => ContractJson.Deserialize<PublisherRelation>(document));
     }
 
     [TestMethod]
@@ -670,8 +650,7 @@ public sealed class FactsHostileTests
     {
         Assert.ThrowsExactly<ArgumentException>(() => new SourceObservationReference(
             "obs-1",
-            new DateTimeOffset(2026, 8, 31, 9, 0, 0, TimeSpan.FromHours(2)),
-            FactsFixtures.TransportBytes()));
+            new DateTimeOffset(2026, 8, 31, 9, 0, 0, TimeSpan.FromHours(2))));
     }
 
     /// <summary>MUTATION RECEIPT: collapsing a multimap.</summary>

@@ -23,12 +23,6 @@ public sealed class FactsRoundTripTests
         Assert.IsTrue(restored.Target.SameIdentity(original.Target));
         Assert.AreEqual(original.Observation.ObservationId, restored.Observation.ObservationId);
         Assert.AreEqual(original.Observation.ObservedAt, restored.Observation.ObservedAt);
-        Assert.AreEqual(
-            original.Observation.TransportBytes.ContentSha256,
-            restored.Observation.TransportBytes.ContentSha256);
-        Assert.AreEqual(
-            original.Observation.TransportBytes.ByteLength,
-            restored.Observation.TransportBytes.ByteLength);
 
         AssertAxiomsAreIdentical(original.QualifiedAxioms, restored.QualifiedAxioms);
     }
@@ -50,6 +44,15 @@ public sealed class FactsRoundTripTests
             target.Value(FactsIdentifierFamily.CellarWorkUri));
         Assert.AreEqual("62019CJ0311", target.Value(FactsIdentifierFamily.Celex));
         Assert.AreEqual("ECLI:EU:C:2020:1042", target.Value(FactsIdentifierFamily.Ecli));
+
+        // A count plus three values let the fourth family survive as a number. The alias is a
+        // distinct publisher fact, so the round trip has to name it and carry its exact value.
+        Assert.AreEqual(
+            FactsFixtures.CellarPsiUri,
+            target.Value(FactsIdentifierFamily.CellarPsiUri));
+        Assert.AreNotEqual(
+            target.Value(FactsIdentifierFamily.CellarWorkUri),
+            target.Value(FactsIdentifierFamily.CellarPsiUri));
         Assert.AreEqual(EcliState.EcliPresent, restored.TargetEcliState);
         Assert.AreEqual("ECLI:EU:C:2020:1042", restored.TargetEcli);
     }
@@ -228,9 +231,6 @@ public sealed class FactsRoundTripTests
         var observation = root.GetProperty("observation");
         Assert.IsTrue(observation.TryGetProperty("observation_id", out _));
         Assert.IsTrue(observation.TryGetProperty("observed_at", out _));
-        Assert.IsTrue(observation.TryGetProperty("transport_bytes", out var transport));
-        Assert.IsTrue(transport.TryGetProperty("content_sha256", out _));
-        Assert.IsTrue(transport.TryGetProperty("byte_length", out _));
 
         var target = root.GetProperty("target");
         Assert.IsTrue(target.TryGetProperty("publisher", out _));
@@ -267,14 +267,65 @@ public sealed class FactsRoundTripTests
         }
     }
 
+    /// <summary>
+    /// Facts carry exactly one custody coordinate, <c>source_observation_id</c>, and reach the
+    /// durable bytes transitively through it. An earlier candidate embedded a second byte
+    /// reference here and my declaration said it had been removed when it had not. No test named
+    /// the rule, so 106 green tests said nothing about it. This one names it.
+    /// </summary>
     [TestMethod]
-    public void TheTransportReferenceHasNowhereToPutAProviderLocator()
+    public void NoFactMemberNamesAStorageCoordinate()
     {
-        using var document = JsonDocument.Parse(
-            ContractJson.Serialize(FactsFixtures.TransportBytes()));
-        var names = document.RootElement.EnumerateObject().Select(p => p.Name).OrderBy(n => n);
+        string[] forbidden =
+        [
+            "transport_bytes", "content_sha256", "byte_length", "blob_ref", "blob_id",
+            "container", "storage_account", "account", "bucket", "region", "endpoint",
+            "locator", "url", "file_path", "path",
+        ];
 
-        CollectionAssert.AreEqual(new[] { "byte_length", "content_sha256" }, names.ToArray());
+        string[] documents =
+        [
+            ContractJson.Serialize(FactsFixtures.PublisherRelation()),
+            ContractJson.Serialize(FactsFixtures.DerivedInverse()),
+            ContractJson.Serialize(FactsFixtures.InboundView()),
+            ContractJson.Serialize(FactsFixtures.AssertedFact()),
+            ContractJson.Serialize(FactsFixtures.CaseFactWithEcli()),
+            ContractJson.Serialize(FactsFixtures.Drift()),
+            ContractJson.Serialize(FactsFixtures.OpenEndedDate()),
+        ];
+
+        foreach (var text in documents)
+        {
+            using var document = JsonDocument.Parse(text);
+            foreach (var name in MemberNames(document.RootElement))
+            {
+                Assert.IsFalse(
+                    forbidden.Contains(name, StringComparer.Ordinal),
+                    $"a fact member is named {name}, which is a storage coordinate");
+            }
+        }
+    }
+
+    private static IEnumerable<string> MemberNames(JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                foreach (var property in element.EnumerateObject())
+                {
+                    yield return property.Name;
+                    foreach (var nested in MemberNames(property.Value))
+                        yield return nested;
+                }
+
+                break;
+            case JsonValueKind.Array:
+                foreach (var item in element.EnumerateArray())
+                    foreach (var nested in MemberNames(item))
+                        yield return nested;
+
+                break;
+        }
     }
 
     private static void AssertAxiomsAreIdentical(

@@ -38,30 +38,11 @@
           "type": "string",
           "format": "date-time",
           "pattern": "(Z|\\\u002B00:00)$"
-        },
-        "transport_bytes": {
-          "type": "object",
-          "properties": {
-            "content_sha256": {
-              "type": "string",
-              "pattern": "^[0-9a-f]{64}$"
-            },
-            "byte_length": {
-              "type": "integer",
-              "minimum": 0
-            }
-          },
-          "required": [
-            "content_sha256",
-            "byte_length"
-          ],
-          "additionalProperties": false
         }
       },
       "required": [
         "observation_id",
-        "observed_at",
-        "transport_bytes"
+        "observed_at"
       ],
       "additionalProperties": false
     }

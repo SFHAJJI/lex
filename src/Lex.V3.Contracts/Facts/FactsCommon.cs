@@ -3,52 +3,23 @@ using System.Text.Json.Serialization;
 namespace Lex.V3.Contracts.Facts;
 
 /// <summary>
-/// A reference to durable transport bytes, addressed by content and nothing else.
-/// </summary>
-/// <remarks>
-/// There is deliberately no account, container, bucket, region, URL or path field here. A
-/// physical storage provider cannot be hard-coded into a contract that has nowhere to put one.
-/// </remarks>
-[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record TransportByteReference
-{
-    [JsonConstructor]
-    public TransportByteReference(string contentSha256, long byteLength)
-    {
-        if (!FactsValidation.IsLowercaseSha256(contentSha256))
-        {
-            throw new ArgumentException(
-                "Transport bytes must be referenced by a lowercase 64 character SHA-256.",
-                nameof(contentSha256));
-        }
-
-        if (byteLength < 0)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(byteLength),
-                "Transport byte length cannot be negative.");
-        }
-
-        ContentSha256 = contentSha256;
-        ByteLength = byteLength;
-    }
-
-    public string ContentSha256 { get; }
-
-    public long ByteLength { get; }
-}
-
-/// <summary>
 /// A reference to the source observation that witnessed a fact.
 /// </summary>
+/// <remarks>
+/// One custody coordinate and no second one. An earlier candidate embedded a
+/// <c>TransportByteReference</c> here, so the durable bytes were addressed twice: once by
+/// <c>http_observation/1</c>, which owns them, and once by Facts. Facts reach the bytes
+/// transitively through this unique observation, and fail closed when it cannot be resolved.
+/// The declaration that this had already been removed was wrong, and no test named the rule,
+/// which is why nothing caught it. <c>NoFactMemberNamesAStorageCoordinate</c> now does.
+/// </remarks>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record SourceObservationReference
 {
     [JsonConstructor]
     public SourceObservationReference(
         string observationId,
-        DateTimeOffset observedAt,
-        TransportByteReference transportBytes)
+        DateTimeOffset observedAt)
     {
         if (!FactsValidation.IsOpaqueIdentity(observationId))
         {
@@ -66,14 +37,11 @@ public sealed record SourceObservationReference
 
         ObservationId = observationId;
         ObservedAt = observedAt;
-        TransportBytes = transportBytes ?? throw new ArgumentNullException(nameof(transportBytes));
     }
 
     public string ObservationId { get; }
 
     public DateTimeOffset ObservedAt { get; }
-
-    public TransportByteReference TransportBytes { get; }
 }
 
 /// <summary>
@@ -427,20 +395,34 @@ public sealed record OfficialIdentifier
     }
 
     /// <summary>A persistent-identifier alias URI, which is a fact in its own right.</summary>
+    /// <summary>
+    /// The CELEX persistent identifier, exactly. <c>AbsolutePath</c> discards a query and a
+    /// fragment, so <c>.../celex/62019CJ0311?view=1</c> was reader-accepted and schema-refused.
+    /// The class is also narrowed to <c>celex</c>: an arbitrary resource class is not authority
+    /// merely because the caller labelled it a persistent identifier.
+    /// </summary>
     private static bool IsCellarPsi(string value) =>
         Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
         uri.Scheme is "http" or "https" &&
         string.Equals(uri.Host, "publications.europa.eu", StringComparison.Ordinal) &&
+        uri.Query.Length == 0 &&
+        uri.Fragment.Length == 0 &&
         uri.AbsolutePath.Trim('/').Split('/') is { Length: 3 } segments &&
         string.Equals(segments[0], "resource", StringComparison.Ordinal) &&
-        !string.Equals(segments[1], "cellar", StringComparison.Ordinal) &&
+        string.Equals(segments[1], "celex", StringComparison.Ordinal) &&
         segments[2].Length > 0;
 }
 
 /// <summary>
-/// The CELEX shapes the accepted V3 scope requires. A value outside all of them is drift, and
-/// drift is reported rather than silently refused or silently accepted.
+/// The CELEX shapes the accepted V3 scope requires. A value outside all of them is refused:
+/// <see cref="OfficialIdentifier.ProfileOf"/> returns null and the constructor throws.
 /// </summary>
+/// <remarks>
+/// This sentence previously said such a value "is drift, and drift is reported". No
+/// identifier-profile drift carrier exists in this package, so that was the same overclaim the
+/// remarks on <see cref="OfficialIdentifier.ProfileOf"/> already retract. Narrowing one site and
+/// leaving the other is how a retracted claim survives a review round.
+/// </remarks>
 public enum CelexProfile
 {
     [System.Text.Json.Serialization.JsonStringEnumMemberName("base_act")]

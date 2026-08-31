@@ -94,7 +94,6 @@ public sealed class FactsSchemaExecutionTests
 
         foreach (var name in new[]
                  {
-                     "transport_byte_reference",
                      "source_observation_reference",
                      "official_identifier",
                      "official_identity_set",
@@ -108,24 +107,6 @@ public sealed class FactsSchemaExecutionTests
                     properties.EnumerateObject().Any(),
                 $"{name} declares no properties");
         }
-    }
-
-    /// <summary>
-    /// A transport reference has nowhere to put a provider locator. The definition is checked
-    /// directly so the guarantee is a property of the schema, not only of the fixtures.
-    /// </summary>
-    [TestMethod]
-    public void TheTransportReferenceDefinitionAdmitsOnlyADigestAndALength()
-    {
-        using var document = JsonDocument.Parse(
-            FactsSchemaExporter.ExportUtf8(FactsSchemaIds.FactsCommon));
-        var properties = document.RootElement
-            .GetProperty("$defs")
-            .GetProperty("transport_byte_reference")
-            .GetProperty("properties");
-
-        var names = properties.EnumerateObject().Select(p => p.Name).OrderBy(n => n).ToArray();
-        CollectionAssert.AreEqual(new[] { "byte_length", "content_sha256" }, names);
     }
 
     private static void AssertValid<T>(string schemaId, T value)

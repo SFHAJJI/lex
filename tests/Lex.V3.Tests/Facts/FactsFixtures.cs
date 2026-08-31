@@ -8,9 +8,6 @@ namespace Lex.V3.Tests.Facts;
 /// </summary>
 internal static class FactsFixtures
 {
-    internal const string TransportDigest =
-        "9f2c4d6a8b0e1f3572849a6bcd0e2f4185a7c9db3e5f70819a2b4c6d8e0f1a23";
-
     internal const string ScopeDigest =
         "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f809";
 
@@ -33,12 +30,9 @@ internal static class FactsFixtures
         ConsolidatedByPredicate,
         Observation());
 
-    internal static TransportByteReference TransportBytes() => new(TransportDigest, 48_112);
-
     internal static SourceObservationReference Observation() => new(
         "obs-2026-08-31T09:14:02Z-lu-legilux-0001",
-        new DateTimeOffset(2026, 8, 31, 9, 14, 2, TimeSpan.Zero),
-        TransportBytes());
+        new DateTimeOffset(2026, 8, 31, 9, 14, 2, TimeSpan.Zero));
 
     internal static OfficialIdentitySet LuWork() => new(
         PublisherId.LuLegilux,
