@@ -7,8 +7,8 @@ namespace Lex.V3.Contracts.Facts;
 /// </summary>
 /// <remarks>
 /// The predicate is carried as the publisher's own absolute URI and is never mapped onto a local
-/// name. Relabelling a predicate loses the distinction between two publisher predicates that a
-/// local vocabulary happens to render with one word, and that loss is unrecoverable downstream.
+/// name. Relabelling loses the distinction between two publisher predicates that a local
+/// vocabulary happens to render with one word, and that loss is unrecoverable downstream.
 /// </remarks>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record PublisherRelation
@@ -18,8 +18,8 @@ public sealed record PublisherRelation
     [JsonConstructor]
     public PublisherRelation(
         string schema,
-        OfficialIdentity source,
-        OfficialIdentity target,
+        OfficialIdentitySet source,
+        OfficialIdentitySet target,
         string predicateUri,
         SourceObservationReference observation,
         IReadOnlyList<QualifiedAxiom> qualifiedAxioms)
@@ -53,9 +53,9 @@ public sealed record PublisherRelation
 
     public string Schema { get; }
 
-    public OfficialIdentity Source { get; }
+    public OfficialIdentitySet Source { get; }
 
-    public OfficialIdentity Target { get; }
+    public OfficialIdentitySet Target { get; }
 
     public string PredicateUri { get; }
 

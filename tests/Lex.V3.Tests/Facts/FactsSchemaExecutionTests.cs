@@ -26,7 +26,9 @@ public sealed class FactsSchemaExecutionTests
         AssertValid(FactsSchemaIds.DerivedInverseRelation, FactsFixtures.DerivedInverse());
         AssertValid(FactsSchemaIds.LocalInboundView, FactsFixtures.InboundView());
         AssertValid(FactsSchemaIds.RelationFact, FactsFixtures.AssertedFact());
+        AssertValid(FactsSchemaIds.RelationFact, FactsFixtures.CaseFactWithEcli());
         AssertValid(FactsSchemaIds.RelationFact, FactsFixtures.CaseFactWithoutEcli());
+        AssertValid(FactsSchemaIds.VocabularyDrift, FactsFixtures.Drift());
         AssertValid(FactsSchemaIds.PublisherDate, FactsFixtures.YearOnlyDate());
         AssertValid(FactsSchemaIds.PublisherDate, FactsFixtures.OpenEndedDate());
         AssertValid(FactsSchemaIds.PublisherDateFact, FactsFixtures.DateFact());
@@ -94,7 +96,8 @@ public sealed class FactsSchemaExecutionTests
                  {
                      "transport_byte_reference",
                      "source_observation_reference",
-                     "official_identity",
+                     "official_identifier",
+                     "official_identity_set",
                      "axiom_qualifier",
                      "qualified_axiom",
                  })
@@ -136,24 +139,9 @@ public sealed class FactsSchemaExecutionTests
             $"{schemaId} rejects a document its own contract produced");
     }
 
-    /// <summary>
-    /// Each schema is built once. <c>JsonSchema.FromText</c> registers the document by its
-    /// <c>$id</c> in a process-wide registry that refuses to overwrite, so rebuilding the same
-    /// schema in a second test throws rather than returning a fresh instance.
-    /// </summary>
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, JsonSchema>
-        BuiltSchemas = new(StringComparer.Ordinal);
+    private static JsonSchema BuildSchema(string schemaId) => FactsSchemas.For(schemaId);
 
-    private static JsonSchema BuildSchema(string schemaId) => BuiltSchemas.GetOrAdd(
-        schemaId,
-        static id => JsonSchema.FromText(
-            System.Text.Encoding.UTF8.GetString(FactsSchemaExporter.ExportUtf8(id))));
-
-    private static EvaluationOptions Options() => new()
-    {
-        OutputFormat = OutputFormat.List,
-        RequireFormatValidation = true,
-    };
+    private static EvaluationOptions Options() => FactsSchemas.Options();
 
     private static JsonElement ToElement(string json)
     {

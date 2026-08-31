@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Text.Json.Serialization;
 
 namespace Lex.V3.Contracts.Facts;
@@ -48,12 +49,49 @@ public static class FactsSchemaResourceIds
 }
 
 /// <summary>
+/// The identifier families a publisher fact may carry, declared here rather than reused from
+/// the shared catalog.
+/// </summary>
+/// <remarks>
+/// The shared <c>IdentifierFamily</c> has ELI, CELEX, memorial and historical legal id only. A
+/// EUR-Lex case is identified by a Cellar work URI, a CELEX number and an ECLI at the same time,
+/// and a single shared family cannot hold that set: choosing one discards the others, which is
+/// the loss this package exists to prevent. This family set is Facts-local and additive, and the
+/// shared catalog is untouched.
+/// </remarks>
+public enum FactsIdentifierFamily
+{
+    [JsonStringEnumMemberName("eli")]
+    Eli,
+
+    [JsonStringEnumMemberName("celex")]
+    Celex,
+
+    /// <summary>The ECLI of a case. A member of the identity set, never a loose string.</summary>
+    [JsonStringEnumMemberName("ecli")]
+    Ecli,
+
+    /// <summary>A Cellar work-level URI.</summary>
+    [JsonStringEnumMemberName("cellar_work_uri")]
+    CellarWorkUri,
+
+    /// <summary>A Cellar resource-level URI.</summary>
+    [JsonStringEnumMemberName("cellar_resource_uri")]
+    CellarResourceUri,
+
+    [JsonStringEnumMemberName("memorial")]
+    Memorial,
+
+    [JsonStringEnumMemberName("historical_legal_id")]
+    HistoricalLegalId,
+}
+
+/// <summary>
 /// How a relation edge came to exist. This is never inferred from context: every edge states
 /// which of the three it is, so a locally derived view can never be read as a publisher claim.
 /// </summary>
 public enum RelationAssertionKind
 {
-    /// <summary>The publisher asserted this edge directly, in the direction it was asserted.</summary>
     [JsonStringEnumMemberName("publisher_asserted")]
     PublisherAsserted,
 
@@ -73,20 +111,31 @@ public enum RelationAssertionKind
 }
 
 /// <summary>
-/// Whether the ECLI of a relation target is held, absent at the publisher, or absent locally.
-/// There is deliberately no value meaning "we made one up".
+/// Whether the target of an edge carries an ECLI, does not, or is not the sort of thing that
+/// has one.
 /// </summary>
+/// <remarks>
+/// The three states are decided against the target's own identity set rather than declared
+/// freely, and there is deliberately no value meaning "we made one up". Candidate 1 conflated
+/// the second and third: a Luxembourg statute has no ECLI and never will, which is not the same
+/// condition as a court decision whose publisher record omits one.
+/// </remarks>
 public enum EcliState
 {
+    /// <summary>The target identity set carries exactly one ECLI.</summary>
     [JsonStringEnumMemberName("ecli_present")]
     EcliPresent,
 
     /// <summary>
-    /// The publisher's own record carries no ECLI for this case. The edge is kept and typed,
-    /// never dropped and never filled with a constructed identifier.
+    /// The target is a case and the publisher's record carries no ECLI for it. The edge is kept
+    /// and typed, never dropped and never filled with a constructed identifier.
     /// </summary>
     [JsonStringEnumMemberName("ecli_missing")]
     EcliMissing,
+
+    /// <summary>The target is not a case, so an ECLI does not apply to it.</summary>
+    [JsonStringEnumMemberName("ecli_not_applicable")]
+    EcliNotApplicable,
 }
 
 /// <summary>
@@ -137,8 +186,7 @@ public enum DateSemanticRole
 }
 
 /// <summary>
-/// The precision actually present in the publisher's lexical value. A day-precision reading of a
-/// year-precision literal is a fabrication, so precision is carried rather than assumed.
+/// The precision actually present in the publisher's lexical value.
 /// </summary>
 public enum DatePrecision
 {
@@ -153,20 +201,25 @@ public enum DatePrecision
 }
 
 /// <summary>
-/// Open-ended date sentinels as the publishers actually express them.
+/// Whether a date is the publishers' open-end sentinel.
 /// </summary>
+/// <remarks>
+/// Candidate 1 also declared <c>not_yet_determined</c>. It is removed rather than kept, because
+/// no lexical form could be bound to it: "the publisher has not decided" is not a date, and a
+/// record that requires a lexical date value is the wrong carrier for it. Keeping an unbindable
+/// member would have meant any date at all could be labelled with it.
+/// </remarks>
 public enum DateOpenSentinel
 {
     [JsonStringEnumMemberName("not_open")]
     NotOpen,
 
-    /// <summary>An explicitly open end, such as EUR-Lex 9999-12-31.</summary>
+    /// <summary>
+    /// The EUR-Lex open end, which is exactly <c>9999-12-31</c> at <c>xsd:date</c>. Any other
+    /// lexical value carrying this state is refused.
+    /// </summary>
     [JsonStringEnumMemberName("open_ended")]
     OpenEnded,
-
-    /// <summary>The publisher states the value is not yet determined.</summary>
-    [JsonStringEnumMemberName("not_yet_determined")]
-    NotYetDetermined,
 }
 
 /// <summary>
@@ -174,18 +227,64 @@ public enum DateOpenSentinel
 /// </summary>
 public enum VocabularyKind
 {
-    [JsonStringEnumMemberName("relation_predicate")]
-    RelationPredicate,
+    [JsonStringEnumMemberName("relation_assertion_kind")]
+    RelationAssertionKind,
+
+    [JsonStringEnumMemberName("identifier_family")]
+    IdentifierFamily,
+
+    [JsonStringEnumMemberName("ecli_state")]
+    EcliState,
+
+    [JsonStringEnumMemberName("target_body_scope")]
+    TargetBodyScope,
 
     [JsonStringEnumMemberName("date_semantic_role")]
     DateSemanticRole,
 
+    [JsonStringEnumMemberName("date_precision")]
+    DatePrecision,
+
     [JsonStringEnumMemberName("date_open_sentinel")]
     DateOpenSentinel,
+}
 
-    [JsonStringEnumMemberName("date_datatype")]
-    DateDatatype,
+/// <summary>
+/// The exact one-to-one binding between a closed enum and the vocabulary kind that names it.
+/// </summary>
+/// <remarks>
+/// Without this, a drift report could read a term through one vocabulary and label it with
+/// another: Codex read <c>DateSemanticRole.DocumentDate</c> while the report claimed the
+/// vocabulary was <c>relation_predicate</c>, and nothing objected. A drift report whose label
+/// does not match the set it was measured against is worse than no report, because it sends the
+/// reader to the wrong contract.
+/// </remarks>
+public static class FactsVocabularies
+{
+    private static readonly ReadOnlyDictionary<Type, VocabularyKind> KindsByType =
+        new(new Dictionary<Type, VocabularyKind>
+        {
+            [typeof(RelationAssertionKind)] = VocabularyKind.RelationAssertionKind,
+            [typeof(FactsIdentifierFamily)] = VocabularyKind.IdentifierFamily,
+            [typeof(EcliState)] = VocabularyKind.EcliState,
+            [typeof(TargetBodyScope)] = VocabularyKind.TargetBodyScope,
+            [typeof(DateSemanticRole)] = VocabularyKind.DateSemanticRole,
+            [typeof(DatePrecision)] = VocabularyKind.DatePrecision,
+            [typeof(DateOpenSentinel)] = VocabularyKind.DateOpenSentinel,
+        });
 
-    [JsonStringEnumMemberName("axiom_qualifier")]
-    AxiomQualifier,
+    /// <summary>The kind naming this enum, or a throw if the enum is not a Facts vocabulary.</summary>
+    public static VocabularyKind KindFor<TEnum>()
+        where TEnum : struct, Enum =>
+        KindsByType.TryGetValue(typeof(TEnum), out var kind)
+            ? kind
+            : throw new ArgumentException(
+                $"{typeof(TEnum).Name} is not a closed Facts vocabulary.",
+                nameof(TEnum));
+
+    public static bool IsFactsVocabulary(Type type) => KindsByType.ContainsKey(type);
+
+    /// <summary>Every kind, so a test can prove the registry covers the whole enum.</summary>
+    public static IReadOnlyCollection<VocabularyKind> AllKinds { get; } =
+        Array.AsReadOnly(KindsByType.Values.ToArray());
 }

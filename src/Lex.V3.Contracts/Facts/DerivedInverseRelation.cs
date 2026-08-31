@@ -8,14 +8,16 @@ namespace Lex.V3.Contracts.Facts;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <see cref="AuthorizingOntologyStatementUri"/> and <see cref="InverseOfPredicateUri"/> are both
-/// required and there is no constructor that omits them. That is what makes an invented inverse
-/// unrepresentable rather than merely discouraged: to state an inverse you must name the
-/// publisher statement that permits it, and to fabricate one you would have to fabricate that too.
+/// Three bindings make an invented inverse unrepresentable rather than merely discouraged. The
+/// authorizing ontology statement must be named. The inverted predicate must equal the forward
+/// assertion's predicate. And **the endpoints must be the forward assertion's endpoints,
+/// swapped**.
 /// </para>
 /// <para>
-/// The forward assertion this was derived from travels with it, so a reader can always get back
-/// to the edge the publisher actually served.
+/// Candidate 1 checked only the predicate, so an inverse could name any two identities at all
+/// while pointing at an unrelated forward fact as its justification. Codex built exactly that
+/// and it was accepted. An inverse whose endpoints are not the forward edge's endpoints is not
+/// an inverse of anything.
 /// </para>
 /// </remarks>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -26,8 +28,8 @@ public sealed record DerivedInverseRelation
     [JsonConstructor]
     public DerivedInverseRelation(
         string schema,
-        OfficialIdentity source,
-        OfficialIdentity target,
+        OfficialIdentitySet source,
+        OfficialIdentitySet target,
         string predicateUri,
         string inverseOfPredicateUri,
         string authorizingOntologyStatementUri,
@@ -59,7 +61,10 @@ public sealed record DerivedInverseRelation
                 nameof(authorizingOntologyStatementUri));
         }
 
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(derivedFrom);
+
         if (!string.Equals(inverseOfPredicateUri, derivedFrom.PredicateUri, StringComparison.Ordinal))
         {
             throw new ArgumentException(
@@ -67,9 +72,23 @@ public sealed record DerivedInverseRelation
                 nameof(inverseOfPredicateUri));
         }
 
+        if (!source.SameIdentity(derivedFrom.Target))
+        {
+            throw new ArgumentException(
+                "An inverse must start at the target of the assertion it was derived from.",
+                nameof(source));
+        }
+
+        if (!target.SameIdentity(derivedFrom.Source))
+        {
+            throw new ArgumentException(
+                "An inverse must end at the source of the assertion it was derived from.",
+                nameof(target));
+        }
+
         Schema = schema;
-        Source = source ?? throw new ArgumentNullException(nameof(source));
-        Target = target ?? throw new ArgumentNullException(nameof(target));
+        Source = source;
+        Target = target;
         PredicateUri = predicateUri;
         InverseOfPredicateUri = inverseOfPredicateUri;
         AuthorizingOntologyStatementUri = authorizingOntologyStatementUri;
@@ -78,9 +97,9 @@ public sealed record DerivedInverseRelation
 
     public string Schema { get; }
 
-    public OfficialIdentity Source { get; }
+    public OfficialIdentitySet Source { get; }
 
-    public OfficialIdentity Target { get; }
+    public OfficialIdentitySet Target { get; }
 
     public string PredicateUri { get; }
 

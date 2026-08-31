@@ -19,9 +19,8 @@ public sealed class FactsRoundTripTests
         var restored = ContractJson.Deserialize<PublisherRelation>(ContractJson.Serialize(original));
 
         Assert.AreEqual(original.PredicateUri, restored.PredicateUri);
-        Assert.AreEqual(original.Source.RawValue, restored.Source.RawValue);
-        Assert.AreEqual(original.Target.RawValue, restored.Target.RawValue);
-        Assert.AreEqual(original.Source.Publisher, restored.Source.Publisher);
+        Assert.IsTrue(restored.Source.SameIdentity(original.Source));
+        Assert.IsTrue(restored.Target.SameIdentity(original.Target));
         Assert.AreEqual(original.Observation.ObservationId, restored.Observation.ObservationId);
         Assert.AreEqual(original.Observation.ObservedAt, restored.Observation.ObservedAt);
         Assert.AreEqual(
@@ -35,9 +34,26 @@ public sealed class FactsRoundTripTests
     }
 
     /// <summary>
-    /// The multimap is the field most likely to be quietly collapsed, so it is asserted member by
-    /// member rather than by count.
+    /// The whole point of the identity set: a case keeps its Cellar URI, its CELEX number and
+    /// its ECLI together, in order, rather than losing two of the three.
     /// </summary>
+    [TestMethod]
+    public void ACaseKeepsItsCellarUriCelexAndEcliTogether()
+    {
+        var restored = ContractJson.Deserialize<RelationFact>(
+            ContractJson.Serialize(FactsFixtures.CaseFactWithEcli()));
+
+        var target = restored.CarriedTarget;
+        Assert.HasCount(3, target.Identifiers);
+        Assert.AreEqual(
+            "http://publications.europa.eu/resource/case/62019CJ0311",
+            target.Value(FactsIdentifierFamily.CellarWorkUri));
+        Assert.AreEqual("62019CJ0311", target.Value(FactsIdentifierFamily.Celex));
+        Assert.AreEqual("ECLI:EU:C:2020:1042", target.Value(FactsIdentifierFamily.Ecli));
+        Assert.AreEqual(EcliState.EcliPresent, restored.TargetEcliState);
+        Assert.AreEqual("ECLI:EU:C:2020:1042", restored.TargetEcli);
+    }
+
     [TestMethod]
     public void TwoAxiomsSharingOneRemoteIdentifierBothSurvive()
     {
@@ -66,7 +82,7 @@ public sealed class FactsRoundTripTests
     }
 
     [TestMethod]
-    public void DerivedInverseKeepsItsAuthorizationAndItsForwardAssertion()
+    public void DerivedInverseKeepsItsAuthorizationEndpointsAndForwardAssertion()
     {
         var original = FactsFixtures.DerivedInverse();
 
@@ -76,9 +92,8 @@ public sealed class FactsRoundTripTests
         Assert.AreEqual(FactsFixtures.InverseOfStatement, restored.AuthorizingOntologyStatementUri);
         Assert.AreEqual(FactsFixtures.ConsolidatesPredicate, restored.InverseOfPredicateUri);
         Assert.AreEqual(FactsFixtures.ConsolidatedByPredicate, restored.PredicateUri);
-        Assert.AreEqual(
-            original.DerivedFrom.Observation.TransportBytes.ContentSha256,
-            restored.DerivedFrom.Observation.TransportBytes.ContentSha256);
+        Assert.IsTrue(restored.Source.SameIdentity(restored.DerivedFrom.Target));
+        Assert.IsTrue(restored.Target.SameIdentity(restored.DerivedFrom.Source));
         AssertAxiomsAreIdentical(
             original.DerivedFrom.QualifiedAxioms,
             restored.DerivedFrom.QualifiedAxioms);
@@ -93,9 +108,7 @@ public sealed class FactsRoundTripTests
         Assert.IsFalse(restored.ScopeIsComplete);
         Assert.AreEqual(FactsFixtures.ScopeDigest, restored.ScopeDescriptorSha256);
         Assert.HasCount(1, restored.ContributingAssertions);
-        Assert.AreEqual(
-            FactsFixtures.ConsolidatesPredicate,
-            restored.ContributingAssertions[0].PredicateUri);
+        Assert.IsTrue(restored.ContributingAssertions[0].Target.SameIdentity(restored.Target));
     }
 
     [TestMethod]
@@ -106,15 +119,15 @@ public sealed class FactsRoundTripTests
 
         Assert.AreEqual(RelationAssertionKind.PublisherAsserted, restored.Kind);
         Assert.AreEqual(TargetBodyScope.BodyInScopeHeld, restored.TargetBodyScope);
-        Assert.AreEqual(EcliState.EcliPresent, restored.TargetEcliState);
-        Assert.AreEqual("ECLI:EU:C:2020:1042", restored.TargetEcli);
+        Assert.AreEqual(EcliState.EcliNotApplicable, restored.TargetEcliState);
+        Assert.IsNull(restored.TargetEcli);
         Assert.IsNotNull(restored.PublisherAsserted);
         Assert.IsNull(restored.OntologyAuthorizedInverse);
         Assert.IsNull(restored.LocalInboundView);
     }
 
     /// <summary>
-    /// The edge is kept, the missing ECLI is typed, and no identifier is invented. All three at
+    /// The edge is kept, the missing ECLI is typed, and no identifier is invented, all three at
     /// once, because any one of them alone is satisfiable by dropping the edge.
     /// </summary>
     [TestMethod]
@@ -126,8 +139,8 @@ public sealed class FactsRoundTripTests
         Assert.AreEqual(EcliState.EcliMissing, restored.TargetEcliState);
         Assert.IsNull(restored.TargetEcli);
         Assert.IsNotNull(restored.PublisherAsserted);
-        Assert.AreEqual("62019CJ0311", restored.PublisherAsserted.Target.RawValue);
-        Assert.AreEqual(IdentifierFamily.Celex, restored.PublisherAsserted.Target.Family);
+        Assert.AreEqual("62019CJ0311", restored.CarriedTarget.Value(FactsIdentifierFamily.Celex));
+        Assert.IsTrue(restored.CarriedTarget.IsCase);
         Assert.AreEqual(TargetBodyScope.BodyInScopeNotHeld, restored.TargetBodyScope);
     }
 
@@ -138,7 +151,7 @@ public sealed class FactsRoundTripTests
             ContractJson.Serialize(FactsFixtures.YearOnlyDate()));
 
         Assert.AreEqual("2019", restored.RawLexicalValue);
-        Assert.AreEqual("http://www.w3.org/2001/XMLSchema#gYear", restored.DatatypeUri);
+        Assert.AreEqual(PublisherDate.GYear, restored.DatatypeUri);
         Assert.AreEqual(DatePrecision.Year, restored.Precision);
         Assert.AreEqual(DateOpenSentinel.NotOpen, restored.OpenSentinel);
     }
@@ -165,7 +178,7 @@ public sealed class FactsRoundTripTests
         Assert.AreEqual("applicable sous reserve de l'article 4", restored.RawQualifier);
         Assert.AreEqual("publisher note retained verbatim", restored.PublisherComment);
         Assert.AreEqual(DateSemanticRole.RoleNotStatedByPublisher, restored.SemanticRole);
-        Assert.AreEqual("lex-lu-date-reader/1", restored.ParsedByAuthority);
+        Assert.AreEqual(FactsFixtures.Authority, restored.ParsedByAuthority);
         Assert.AreEqual(FactsFixtures.ConsolidatesPredicate, restored.SourcePredicateUri);
         Assert.AreEqual("axiom-7731", restored.Axiom.RemoteAxiomId);
         Assert.HasCount(2, restored.Axiom.Qualifiers);
@@ -181,10 +194,19 @@ public sealed class FactsRoundTripTests
         Assert.IsNull(restored.PublisherComment);
     }
 
-    /// <summary>
-    /// Serialization emits every declared property. A field silently dropped on the wire would
-    /// still round-trip if the reader defaulted it, so the JSON itself is inspected.
-    /// </summary>
+    [TestMethod]
+    public void ADriftReportSurvivesWithItsVocabularyAndAdmittedSet()
+    {
+        var restored = ContractJson.Deserialize<VocabularyDrift>(
+            ContractJson.Serialize(FactsFixtures.Drift()));
+
+        Assert.AreEqual(VocabularyKind.DateSemanticRole, restored.Vocabulary);
+        Assert.AreEqual("signature_date", restored.ObservedTerm);
+        CollectionAssert.AreEqual(
+            ClosedVocabulary.WireNames<DateSemanticRole>(),
+            restored.AdmittedTerms.ToArray());
+    }
+
     [TestMethod]
     public void ThePublisherRelationWireDocumentCarriesEveryDeclaredMember()
     {
@@ -206,11 +228,16 @@ public sealed class FactsRoundTripTests
         Assert.IsTrue(observation.TryGetProperty("transport_bytes", out var transport));
         Assert.IsTrue(transport.TryGetProperty("content_sha256", out _));
         Assert.IsTrue(transport.TryGetProperty("byte_length", out _));
+
+        var target = root.GetProperty("target");
+        Assert.IsTrue(target.TryGetProperty("publisher", out _));
+        Assert.IsTrue(target.TryGetProperty("identifiers", out _));
     }
 
     /// <summary>
-    /// No contract may hard-code a physical storage provider. The wire document is searched for
-    /// the shapes a provider locator would take.
+    /// No contract may hard-code a physical storage provider. Cellar identifiers are publisher
+    /// URIs, which is the one legitimate reason a document carries an https scheme, so the check
+    /// searches the provider-locator shapes and treats publisher URIs separately.
     /// </summary>
     [TestMethod]
     public void NoFactsDocumentCarriesAPhysicalStorageLocator()
@@ -219,14 +246,15 @@ public sealed class FactsRoundTripTests
                  {
                      ContractJson.Serialize(FactsFixtures.PublisherRelation()),
                      ContractJson.Serialize(FactsFixtures.AssertedFact()),
+                     ContractJson.Serialize(FactsFixtures.CaseFactWithEcli()),
                      ContractJson.Serialize(FactsFixtures.DateFact()),
                      ContractJson.Serialize(FactsFixtures.InboundView()),
                  })
         {
             foreach (var forbidden in new[]
                      {
-                         "blob.core.windows.net", "s3://", "https://", "container", "account_name",
-                         "bucket", "connection_string", "file://",
+                         "blob.core.windows.net", "s3://", "container", "account_name",
+                         "bucket", "connection_string", "file://", "azure",
                      })
             {
                 Assert.IsFalse(
@@ -234,6 +262,16 @@ public sealed class FactsRoundTripTests
                     $"a facts document carries the provider locator shape {forbidden}");
             }
         }
+    }
+
+    [TestMethod]
+    public void TheTransportReferenceHasNowhereToPutAProviderLocator()
+    {
+        using var document = JsonDocument.Parse(
+            ContractJson.Serialize(FactsFixtures.TransportBytes()));
+        var names = document.RootElement.EnumerateObject().Select(p => p.Name).OrderBy(n => n);
+
+        CollectionAssert.AreEqual(new[] { "byte_length", "content_sha256" }, names.ToArray());
     }
 
     private static void AssertAxiomsAreIdentical(

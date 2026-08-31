@@ -12,10 +12,15 @@ namespace Lex.V3.Contracts.Facts;
 /// within the scope actually observed, these edges were seen pointing inward.
 /// </para>
 /// <para>
-/// <see cref="ScopeIsComplete"/> is required and unforgiving on purpose. An inbound view computed
-/// over a partial corpus is a different claim from one computed over a complete scope, and a
-/// reader that cannot tell them apart will read absence as evidence. Every contributing edge is
-/// named so the view can be recomputed and checked rather than trusted.
+/// Every contributor must carry the view's predicate **and point at the view's target**.
+/// Candidate 1 checked only the predicate, so a view could claim inbound edges from assertions
+/// that pointed somewhere else entirely, which is a fabricated inbound count wearing real
+/// evidence. Codex built that case and it was accepted.
+/// </para>
+/// <para>
+/// <see cref="ScopeIsComplete"/> is required because an inbound view over a partial corpus is a
+/// different claim from one over a complete scope, and a reader that cannot tell them apart will
+/// read absence as evidence.
 /// </para>
 /// </remarks>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -26,7 +31,7 @@ public sealed record LocalInboundView
     [JsonConstructor]
     public LocalInboundView(
         string schema,
-        OfficialIdentity target,
+        OfficialIdentitySet target,
         string predicateUri,
         bool scopeIsComplete,
         string scopeDescriptorSha256,
@@ -51,6 +56,7 @@ public sealed record LocalInboundView
                 nameof(scopeDescriptorSha256));
         }
 
+        ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(contributingAssertions);
         var contributing = contributingAssertions.ToArray();
         if (Array.IndexOf(contributing, null) >= 0)
@@ -68,10 +74,17 @@ public sealed record LocalInboundView
                     "Every contributing assertion must carry the predicate of the view.",
                     nameof(contributingAssertions));
             }
+
+            if (!assertion.Target.SameIdentity(target))
+            {
+                throw new ArgumentException(
+                    "Every contributing assertion must point at the target of the view.",
+                    nameof(contributingAssertions));
+            }
         }
 
         Schema = schema;
-        Target = target ?? throw new ArgumentNullException(nameof(target));
+        Target = target;
         PredicateUri = predicateUri;
         ScopeIsComplete = scopeIsComplete;
         ScopeDescriptorSha256 = scopeDescriptorSha256;
@@ -80,7 +93,7 @@ public sealed record LocalInboundView
 
     public string Schema { get; }
 
-    public OfficialIdentity Target { get; }
+    public OfficialIdentitySet Target { get; }
 
     public string PredicateUri { get; }
 

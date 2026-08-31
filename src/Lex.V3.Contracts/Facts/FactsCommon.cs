@@ -8,7 +8,6 @@ namespace Lex.V3.Contracts.Facts;
 /// <remarks>
 /// There is deliberately no account, container, bucket, region, URL or path field here. A
 /// physical storage provider cannot be hard-coded into a contract that has nowhere to put one.
-/// Resolving a digest to bytes is a provider concern that lives outside these contracts.
 /// </remarks>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record TransportByteReference
@@ -42,11 +41,6 @@ public sealed record TransportByteReference
 /// <summary>
 /// A reference to the source observation that witnessed a fact.
 /// </summary>
-/// <remarks>
-/// Provider-neutral in the same way as <see cref="TransportByteReference"/>: an opaque
-/// observation identity plus the transport bytes that observation captured. Dropping either one
-/// severs a fact from its evidence, which is the mutation the round-trip tests exist to catch.
-/// </remarks>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record SourceObservationReference
 {
@@ -83,15 +77,20 @@ public sealed record SourceObservationReference
 }
 
 /// <summary>
-/// An identity exactly as the publisher states it. The raw value is never normalized, because a
-/// normalized identifier is a different claim from the one the publisher made.
+/// One identifier exactly as the publisher states it.
 /// </summary>
+/// <remarks>
+/// The raw value is never normalized, because a normalized identifier is a different claim from
+/// the one the publisher made. Cellar URI families additionally require an absolute URI, since a
+/// URI family whose value is not a URI is not the thing it claims to be.
+/// </remarks>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record OfficialIdentity
+public sealed record OfficialIdentifier
 {
     [JsonConstructor]
-    public OfficialIdentity(PublisherId publisher, IdentifierFamily family, string rawValue)
+    public OfficialIdentifier(FactsIdentifierFamily family, string rawValue)
     {
+        FactsValidation.RequireDefined(family, nameof(family));
         if (!FactsValidation.IsOpaqueIdentity(rawValue))
         {
             throw new ArgumentException(
@@ -99,16 +98,133 @@ public sealed record OfficialIdentity
                 nameof(rawValue));
         }
 
-        Publisher = publisher;
+        if (family is FactsIdentifierFamily.CellarWorkUri or FactsIdentifierFamily.CellarResourceUri
+            && !FactsValidation.IsAbsoluteUri(rawValue))
+        {
+            throw new ArgumentException(
+                "A Cellar URI family must carry an absolute URI.",
+                nameof(rawValue));
+        }
+
         Family = family;
         RawValue = rawValue;
     }
 
-    public PublisherId Publisher { get; }
-
-    public IdentifierFamily Family { get; }
+    public FactsIdentifierFamily Family { get; }
 
     public string RawValue { get; }
+}
+
+/// <summary>
+/// Everything one publisher says identifies a single thing, kept together.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A EUR-Lex case is a Cellar work URI, a CELEX number and an ECLI at once. Candidate 1 carried
+/// one family per endpoint, so retaining any one of those meant discarding the other two, and
+/// the fixture that claimed to be a Cellar case relation in fact retained CELEX alone. That is
+/// exactly the lossless-identity requirement this package exists to satisfy.
+/// </para>
+/// <para>
+/// The list is defensively copied, ordered as the publisher gave it, and may not repeat a
+/// family. Repetition is refused rather than kept, because two CELEX numbers for one endpoint is
+/// not a richer identity, it is a contradiction that some later reader would have to resolve by
+/// guessing.
+/// </para>
+/// </remarks>
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record OfficialIdentitySet
+{
+    [JsonConstructor]
+    public OfficialIdentitySet(PublisherId publisher, IReadOnlyList<OfficialIdentifier> identifiers)
+    {
+        FactsValidation.RequireDefined(publisher, nameof(publisher));
+        ArgumentNullException.ThrowIfNull(identifiers);
+        var copied = identifiers.ToArray();
+        if (copied.Length == 0)
+        {
+            throw new ArgumentException(
+                "An identity set must carry at least one identifier.",
+                nameof(identifiers));
+        }
+
+        if (Array.IndexOf(copied, null) >= 0)
+        {
+            throw new ArgumentException("An identifier cannot be null.", nameof(identifiers));
+        }
+
+        var families = new HashSet<FactsIdentifierFamily>();
+        foreach (var identifier in copied)
+        {
+            if (!families.Add(identifier.Family))
+            {
+                throw new ArgumentException(
+                    $"An identity set cannot repeat the {identifier.Family} family.",
+                    nameof(identifiers));
+            }
+        }
+
+        Publisher = publisher;
+        Identifiers = Array.AsReadOnly(copied);
+    }
+
+    public PublisherId Publisher { get; }
+
+    public IReadOnlyList<OfficialIdentifier> Identifiers { get; }
+
+    /// <summary>The value for a family, or null where the set does not carry that family.</summary>
+    public string? Value(FactsIdentifierFamily family)
+    {
+        foreach (var identifier in Identifiers)
+        {
+            if (identifier.Family == family)
+            {
+                return identifier.RawValue;
+            }
+        }
+
+        return null;
+    }
+
+    public bool Has(FactsIdentifierFamily family) => Value(family) is not null;
+
+    /// <summary>
+    /// Whether this set identifies a court decision, which is what makes an ECLI applicable.
+    /// </summary>
+    /// <remarks>
+    /// Decided by the identifiers present rather than declared: an ECLI is itself proof, and a
+    /// Cellar work URI under the case segment or a CELEX sector 6 number identify a case. A
+    /// Luxembourg statute matches none of these and so is correctly not-applicable.
+    /// </remarks>
+    [JsonIgnore]
+    public bool IsCase =>
+        Has(FactsIdentifierFamily.Ecli) ||
+        Value(FactsIdentifierFamily.Celex) is { Length: > 4 } celex && celex[4] == 'C' ||
+        Value(FactsIdentifierFamily.CellarWorkUri)?.Contains("/case/", StringComparison.Ordinal) == true;
+
+    /// <summary>Ordinal equality over publisher and the ordered identifier list.</summary>
+    public bool SameIdentity(OfficialIdentitySet? other)
+    {
+        if (other is null || other.Publisher != Publisher ||
+            other.Identifiers.Count != Identifiers.Count)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < Identifiers.Count; index++)
+        {
+            if (Identifiers[index].Family != other.Identifiers[index].Family ||
+                !string.Equals(
+                    Identifiers[index].RawValue,
+                    other.Identifiers[index].RawValue,
+                    StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 }
 
 /// <summary>
@@ -141,16 +257,10 @@ public sealed record AxiomQualifier
 /// One qualified axiom, with the complete ordered list of qualifiers the publisher attached.
 /// </summary>
 /// <remarks>
-/// <para>
 /// <see cref="Qualifiers"/> is a list and not a dictionary, and that is the whole point. A
 /// publisher may attach the same qualifier predicate more than once with different values, and a
-/// dictionary keyed by predicate silently keeps one of them. Order is preserved for the same
-/// reason: it is evidence about what was served, not a presentation choice.
-/// </para>
-/// <para>
-/// Two axioms may also share a <see cref="RemoteAxiomId"/>. That is a real publisher condition,
-/// so axiom lists are never keyed or deduplicated by remote id either.
-/// </para>
+/// dictionary keyed by predicate silently keeps one of them. Two axioms may also share a
+/// <see cref="RemoteAxiomId"/>, so axiom lists are never keyed or deduplicated either.
 /// </remarks>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record QualifiedAxiom
@@ -183,6 +293,25 @@ public sealed record QualifiedAxiom
 
 internal static class FactsValidation
 {
+    /// <summary>
+    /// Refuse an enum value outside its declared members.
+    /// </summary>
+    /// <remarks>
+    /// The JSON reader already refuses an unknown wire term, but nothing stopped direct
+    /// construction with <c>(EcliState)42</c>, so a caller inside the process could build a fact
+    /// carrying a state no schema declares.
+    /// </remarks>
+    internal static void RequireDefined<TEnum>(TEnum value, string parameterName)
+        where TEnum : struct, Enum
+    {
+        if (!Enum.IsDefined(value))
+        {
+            throw new ArgumentException(
+                $"{value} is not a declared {typeof(TEnum).Name} member.",
+                parameterName);
+        }
+    }
+
     internal static bool IsLowercaseSha256(string? value)
     {
         if (value is not { Length: 64 })

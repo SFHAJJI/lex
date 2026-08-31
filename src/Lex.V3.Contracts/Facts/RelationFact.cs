@@ -4,19 +4,17 @@ namespace Lex.V3.Contracts.Facts;
 
 /// <summary>
 /// One relation edge together with everything needed to read it honestly: how it came to exist,
-/// whether its target's body is held, and whether the target carries an ECLI.
+/// whether its target's body is held, and how the target stands with respect to ECLI.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Exactly one of the three edge shapes is present, and <see cref="Kind"/> must agree with which
-/// one. Carrying the discriminator and the payload separately, then checking them against each
-/// other, means a document claiming <c>publisher_asserted</c> while holding a locally derived
-/// view fails to deserialize instead of being read as a publisher claim.
+/// one, so a document claiming <c>publisher_asserted</c> while holding a locally derived view
+/// fails to deserialize instead of being read as a publisher claim.
 /// </para>
 /// <para>
-/// A target with official identity and no held body is an ordinary state here, not an error.
-/// Edges are never dropped because the thing they point at is outside the held corpus: the
-/// publisher asserted the edge, so the edge is a fact regardless of what we hold.
+/// A target with official identity and no held body is an ordinary state, not an error. Edges
+/// are never dropped because the thing they point at is outside the held corpus.
 /// </para>
 /// </remarks>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -30,7 +28,6 @@ public sealed record RelationFact
         RelationAssertionKind kind,
         TargetBodyScope targetBodyScope,
         EcliState targetEcliState,
-        string? targetEcli,
         PublisherRelation? publisherAsserted,
         DerivedInverseRelation? ontologyAuthorizedInverse,
         LocalInboundView? localInboundView)
@@ -39,6 +36,10 @@ public sealed record RelationFact
         {
             throw new ArgumentException("The relation fact schema must be version 1.", nameof(schema));
         }
+
+        FactsValidation.RequireDefined(kind, nameof(kind));
+        FactsValidation.RequireDefined(targetBodyScope, nameof(targetBodyScope));
+        FactsValidation.RequireDefined(targetEcliState, nameof(targetEcliState));
 
         var present = (publisherAsserted is null ? 0 : 1) +
             (ontologyAuthorizedInverse is null ? 0 : 1) +
@@ -62,26 +63,47 @@ public sealed record RelationFact
                 nameof(kind));
         }
 
+        var carried = publisherAsserted?.Target
+            ?? ontologyAuthorizedInverse?.Target
+            ?? localInboundView!.Target;
+
+        // The ECLI state is checked against the target's own identity set rather than taken on
+        // trust. Candidate 1 carried a loose `target_ecli` string that belonged to nothing: an
+        // ECLI from an unrelated case could be attached to a Luxembourg statute and nothing
+        // objected, and there was no way to say "this thing does not have ECLIs" at all.
+        var declaredEcli = carried.Value(FactsIdentifierFamily.Ecli);
         switch (targetEcliState)
         {
-            case EcliState.EcliPresent when !FactsValidation.IsOpaqueIdentity(targetEcli):
+            case EcliState.EcliPresent when declaredEcli is null:
                 throw new ArgumentException(
-                    "An edge stating ecli_present must carry the ECLI.",
-                    nameof(targetEcli));
+                    "An edge stating ecli_present must carry the ECLI in the target identity set.",
+                    nameof(targetEcliState));
 
-            // ecli_missing means the publisher served no ECLI. Carrying one anyway would be an
-            // invented identifier wearing a state that says it does not exist.
-            case EcliState.EcliMissing when targetEcli is not null:
+            case EcliState.EcliMissing when declaredEcli is not null:
                 throw new ArgumentException(
-                    "An edge stating ecli_missing cannot carry an ECLI.",
-                    nameof(targetEcli));
+                    "An edge stating ecli_missing cannot carry an ECLI in the target identity set.",
+                    nameof(targetEcliState));
+
+            case EcliState.EcliMissing when !carried.IsCase:
+                throw new ArgumentException(
+                    "ecli_missing states that a case has no published ECLI, so the target must be a case.",
+                    nameof(targetEcliState));
+
+            case EcliState.EcliNotApplicable when declaredEcli is not null:
+                throw new ArgumentException(
+                    "An edge stating ecli_not_applicable cannot carry an ECLI.",
+                    nameof(targetEcliState));
+
+            case EcliState.EcliNotApplicable when carried.IsCase:
+                throw new ArgumentException(
+                    "The target is a case, so ECLI applies to it and the state cannot be not_applicable.",
+                    nameof(targetEcliState));
         }
 
         Schema = schema;
         Kind = kind;
         TargetBodyScope = targetBodyScope;
         TargetEcliState = targetEcliState;
-        TargetEcli = targetEcli;
         PublisherAsserted = publisherAsserted;
         OntologyAuthorizedInverse = ontologyAuthorizedInverse;
         LocalInboundView = localInboundView;
@@ -97,22 +119,28 @@ public sealed record RelationFact
     /// <remarks>
     /// Naming the referent matters because a derived inverse swaps the endpoints: its
     /// <c>Target</c> is the original assertion's source. This field always follows the carried
-    /// edge's own <c>Target</c>, never the forward assertion underneath it. A local inbound view
-    /// has a single <c>Target</c> and there is no ambiguity there.
+    /// edge's own <c>Target</c>, never the forward assertion underneath it.
     /// </remarks>
     public TargetBodyScope TargetBodyScope { get; }
 
     /// <summary>
-    /// The ECLI state of the <c>Target</c> of the edge carried here, on the same rule as
-    /// <see cref="TargetBodyScope"/>.
+    /// How the carried edge's target stands with respect to ECLI, checked against that target's
+    /// identity set rather than declared freely.
     /// </summary>
     public EcliState TargetEcliState { get; }
-
-    public string? TargetEcli { get; }
 
     public PublisherRelation? PublisherAsserted { get; }
 
     public DerivedInverseRelation? OntologyAuthorizedInverse { get; }
 
     public LocalInboundView? LocalInboundView { get; }
+
+    /// <summary>The target of whichever edge this fact carries.</summary>
+    [JsonIgnore]
+    public OfficialIdentitySet CarriedTarget =>
+        PublisherAsserted?.Target ?? OntologyAuthorizedInverse?.Target ?? LocalInboundView!.Target;
+
+    /// <summary>The target's ECLI, which exists only inside its identity set.</summary>
+    [JsonIgnore]
+    public string? TargetEcli => CarriedTarget.Value(FactsIdentifierFamily.Ecli);
 }

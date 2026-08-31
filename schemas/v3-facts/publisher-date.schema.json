@@ -2,13 +2,19 @@
   "type": "object",
   "properties": {
     "schema": {
-      "type": "string"
+      "type": "string",
+      "const": "lex-v3-publisher-date/1"
     },
     "raw_lexical_value": {
       "type": "string"
     },
     "datatype_uri": {
-      "type": "string"
+      "type": "string",
+      "enum": [
+        "http://www.w3.org/2001/XMLSchema#gYear",
+        "http://www.w3.org/2001/XMLSchema#gYearMonth",
+        "http://www.w3.org/2001/XMLSchema#date"
+      ]
     },
     "precision": {
       "enum": [
@@ -20,8 +26,7 @@
     "open_sentinel": {
       "enum": [
         "not_open",
-        "open_ended",
-        "not_yet_determined"
+        "open_ended"
       ]
     }
   },

@@ -2,7 +2,8 @@
   "type": "object",
   "properties": {
     "schema": {
-      "type": "string"
+      "type": "string",
+      "const": "lex-v3-relation-fact/1"
     },
     "kind": {
       "enum": [
@@ -21,13 +22,8 @@
     "target_ecli_state": {
       "enum": [
         "ecli_present",
-        "ecli_missing"
-      ]
-    },
-    "target_ecli": {
-      "type": [
-        "string",
-        "null"
+        "ecli_missing",
+        "ecli_not_applicable"
       ]
     },
     "publisher_asserted": {
@@ -48,22 +44,38 @@
                 "eu-eurlex"
               ]
             },
-            "family": {
-              "enum": [
-                "eli",
-                "celex",
-                "memorial",
-                "historical_legal_id"
-              ]
-            },
-            "raw_value": {
-              "type": "string"
+            "identifiers": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "family": {
+                    "enum": [
+                      "eli",
+                      "celex",
+                      "ecli",
+                      "cellar_work_uri",
+                      "cellar_resource_uri",
+                      "memorial",
+                      "historical_legal_id"
+                    ]
+                  },
+                  "raw_value": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "family",
+                  "raw_value"
+                ],
+                "additionalProperties": false
+              },
+              "minItems": 1
             }
           },
           "required": [
             "publisher",
-            "family",
-            "raw_value"
+            "identifiers"
           ],
           "additionalProperties": false
         },
@@ -76,27 +88,21 @@
                 "eu-eurlex"
               ]
             },
-            "family": {
-              "enum": [
-                "eli",
-                "celex",
-                "memorial",
-                "historical_legal_id"
-              ]
-            },
-            "raw_value": {
-              "type": "string"
+            "identifiers": {
+              "$ref": "#/properties/publisher_asserted/properties/source/properties/identifiers",
+              "minItems": 1
             }
           },
           "required": [
             "publisher",
-            "family",
-            "raw_value"
+            "identifiers"
           ],
           "additionalProperties": false
         },
         "predicate_uri": {
-          "type": "string"
+          "type": "string",
+          "format": "uri",
+          "minLength": 1
         },
         "observation": {
           "type": "object",
@@ -112,10 +118,12 @@
               "type": "object",
               "properties": {
                 "content_sha256": {
-                  "type": "string"
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
                 },
                 "byte_length": {
-                  "type": "integer"
+                  "type": "integer",
+                  "minimum": 0
                 }
               },
               "required": [
@@ -146,7 +154,9 @@
                   "type": "object",
                   "properties": {
                     "predicate_uri": {
-                      "type": "string"
+                      "type": "string",
+                      "format": "uri",
+                      "minLength": 1
                     },
                     "raw_value": {
                       "type": "string"
@@ -196,22 +206,14 @@
                 "eu-eurlex"
               ]
             },
-            "family": {
-              "enum": [
-                "eli",
-                "celex",
-                "memorial",
-                "historical_legal_id"
-              ]
-            },
-            "raw_value": {
-              "type": "string"
+            "identifiers": {
+              "$ref": "#/properties/publisher_asserted/properties/source/properties/identifiers",
+              "minItems": 1
             }
           },
           "required": [
             "publisher",
-            "family",
-            "raw_value"
+            "identifiers"
           ],
           "additionalProperties": false
         },
@@ -224,33 +226,31 @@
                 "eu-eurlex"
               ]
             },
-            "family": {
-              "enum": [
-                "eli",
-                "celex",
-                "memorial",
-                "historical_legal_id"
-              ]
-            },
-            "raw_value": {
-              "type": "string"
+            "identifiers": {
+              "$ref": "#/properties/publisher_asserted/properties/source/properties/identifiers",
+              "minItems": 1
             }
           },
           "required": [
             "publisher",
-            "family",
-            "raw_value"
+            "identifiers"
           ],
           "additionalProperties": false
         },
         "predicate_uri": {
-          "type": "string"
+          "type": "string",
+          "format": "uri",
+          "minLength": 1
         },
         "inverse_of_predicate_uri": {
-          "type": "string"
+          "type": "string",
+          "format": "uri",
+          "minLength": 1
         },
         "authorizing_ontology_statement_uri": {
-          "type": "string"
+          "type": "string",
+          "format": "uri",
+          "minLength": 1
         },
         "derived_from": {
           "type": "object",
@@ -265,7 +265,9 @@
               "$ref": "#/properties/publisher_asserted/properties/target"
             },
             "predicate_uri": {
-              "type": "string"
+              "type": "string",
+              "format": "uri",
+              "minLength": 1
             },
             "observation": {
               "$ref": "#/properties/publisher_asserted/properties/observation"
@@ -314,33 +316,28 @@
                 "eu-eurlex"
               ]
             },
-            "family": {
-              "enum": [
-                "eli",
-                "celex",
-                "memorial",
-                "historical_legal_id"
-              ]
-            },
-            "raw_value": {
-              "type": "string"
+            "identifiers": {
+              "$ref": "#/properties/publisher_asserted/properties/source/properties/identifiers",
+              "minItems": 1
             }
           },
           "required": [
             "publisher",
-            "family",
-            "raw_value"
+            "identifiers"
           ],
           "additionalProperties": false
         },
         "predicate_uri": {
-          "type": "string"
+          "type": "string",
+          "format": "uri",
+          "minLength": 1
         },
         "scope_is_complete": {
           "type": "boolean"
         },
         "scope_descriptor_sha256": {
-          "type": "string"
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
         },
         "contributing_assertions": {
           "type": "array",
@@ -357,7 +354,9 @@
                 "$ref": "#/properties/publisher_asserted/properties/target"
               },
               "predicate_uri": {
-                "type": "string"
+                "type": "string",
+                "format": "uri",
+                "minLength": 1
               },
               "observation": {
                 "$ref": "#/properties/publisher_asserted/properties/observation"
@@ -394,12 +393,67 @@
     "kind",
     "target_body_scope",
     "target_ecli_state",
-    "target_ecli",
     "publisher_asserted",
     "ontology_authorized_inverse",
     "local_inbound_view"
   ],
   "additionalProperties": false,
   "$id": "urn:uuid:4e915062-8d7f-4b5c-b0a3-5ec26fa18284",
-  "$schema": "https://json-schema.org/draft/2020-12/schema"
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "required": [
+        "publisher_asserted"
+      ],
+      "properties": {
+        "ontology_authorized_inverse": {
+          "type": "null"
+        },
+        "local_inbound_view": {
+          "type": "null"
+        },
+        "publisher_asserted": {
+          "not": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "required": [
+        "ontology_authorized_inverse"
+      ],
+      "properties": {
+        "publisher_asserted": {
+          "type": "null"
+        },
+        "local_inbound_view": {
+          "type": "null"
+        },
+        "ontology_authorized_inverse": {
+          "not": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "required": [
+        "local_inbound_view"
+      ],
+      "properties": {
+        "publisher_asserted": {
+          "type": "null"
+        },
+        "ontology_authorized_inverse": {
+          "type": "null"
+        },
+        "local_inbound_view": {
+          "not": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ]
 }

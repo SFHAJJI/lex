@@ -27,7 +27,7 @@ public sealed record PublisherDateFact
     [JsonConstructor]
     public PublisherDateFact(
         string schema,
-        OfficialIdentity subject,
+        OfficialIdentitySet subject,
         PublisherDate date,
         string sourcePredicateUri,
         QualifiedAxiom axiom,
@@ -42,6 +42,8 @@ public sealed record PublisherDateFact
             throw new ArgumentException("The publisher date fact schema must be version 1.", nameof(schema));
         }
 
+        FactsValidation.RequireDefined(semanticRole, nameof(semanticRole));
+
         if (!FactsValidation.IsAbsoluteUri(sourcePredicateUri))
         {
             throw new ArgumentException(
@@ -49,16 +51,32 @@ public sealed record PublisherDateFact
                 nameof(sourcePredicateUri));
         }
 
-        if (!FactsValidation.IsOpaqueIdentity(parsedByAuthority))
+        // The parsing authority is an identity that has to be resolvable to a reader who wants
+        // to know who made the reading, so it is a URI rather than a free label.
+        if (!FactsValidation.IsAbsoluteUri(parsedByAuthority))
         {
             throw new ArgumentException(
-                "A date fact must name the authority that produced its parsed reading.",
+                "A date fact must name the parsing authority as an absolute URI.",
                 nameof(parsedByAuthority));
+        }
+
+        ArgumentNullException.ThrowIfNull(date);
+
+        // An open end is a statement that validity has no end. Attaching it to a document date
+        // or a publication date would be a claim the publisher never made and that no calendar
+        // could satisfy.
+        if (date.OpenSentinel == DateOpenSentinel.OpenEnded &&
+            semanticRole is not (DateSemanticRole.EndOfValidity or
+                DateSemanticRole.RoleNotStatedByPublisher))
+        {
+            throw new ArgumentException(
+                $"The open-end sentinel cannot carry the {semanticRole} role.",
+                nameof(semanticRole));
         }
 
         Schema = schema;
         Subject = subject ?? throw new ArgumentNullException(nameof(subject));
-        Date = date ?? throw new ArgumentNullException(nameof(date));
+        Date = date;
         SourcePredicateUri = sourcePredicateUri;
         Axiom = axiom ?? throw new ArgumentNullException(nameof(axiom));
         RawQualifier = rawQualifier;
@@ -70,7 +88,7 @@ public sealed record PublisherDateFact
 
     public string Schema { get; }
 
-    public OfficialIdentity Subject { get; }
+    public OfficialIdentitySet Subject { get; }
 
     public PublisherDate Date { get; }
 

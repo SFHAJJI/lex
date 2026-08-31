@@ -22,6 +22,8 @@ internal static class FactsFixtures
 
     internal const string InverseOfStatement = "http://www.w3.org/2002/07/owl#inverseOf";
 
+    internal const string Authority = "https://github.com/SFHAJJI/lex/authority/lu-date-reader/1";
+
     internal static TransportByteReference TransportBytes() => new(TransportDigest, 48_112);
 
     internal static SourceObservationReference Observation() => new(
@@ -29,20 +31,38 @@ internal static class FactsFixtures
         new DateTimeOffset(2026, 8, 31, 9, 14, 2, TimeSpan.Zero),
         TransportBytes());
 
-    internal static OfficialIdentity LuWork() => new(
+    internal static OfficialIdentitySet LuWork() => new(
         PublisherId.LuLegilux,
-        IdentifierFamily.Eli,
-        "eli/etat/leg/loi/2019/07/15/a512/jo");
+        [new OfficialIdentifier(FactsIdentifierFamily.Eli, "eli/etat/leg/loi/2019/07/15/a512/jo")]);
 
-    internal static OfficialIdentity LuTarget() => new(
+    internal static OfficialIdentitySet LuTarget() => new(
         PublisherId.LuLegilux,
-        IdentifierFamily.Eli,
-        "eli/etat/leg/loi/2004/03/22/n1/jo");
+        [new OfficialIdentifier(FactsIdentifierFamily.Eli, "eli/etat/leg/loi/2004/03/22/n1/jo")]);
 
-    internal static OfficialIdentity EuCase() => new(
+    /// <summary>
+    /// A EUR-Lex case as the publisher actually identifies it: a Cellar work URI, a CELEX number
+    /// and an ECLI, all three at once. Retaining any one of them alone is the loss this package
+    /// exists to prevent.
+    /// </summary>
+    internal static OfficialIdentitySet EuCaseWithEcli() => new(
         PublisherId.EuEurLex,
-        IdentifierFamily.Celex,
-        "62019CJ0311");
+        [
+            new OfficialIdentifier(
+                FactsIdentifierFamily.CellarWorkUri,
+                "http://publications.europa.eu/resource/case/62019CJ0311"),
+            new OfficialIdentifier(FactsIdentifierFamily.Celex, "62019CJ0311"),
+            new OfficialIdentifier(FactsIdentifierFamily.Ecli, "ECLI:EU:C:2020:1042"),
+        ]);
+
+    /// <summary>The same case, whose publisher record carries no ECLI.</summary>
+    internal static OfficialIdentitySet EuCaseWithoutEcli() => new(
+        PublisherId.EuEurLex,
+        [
+            new OfficialIdentifier(
+                FactsIdentifierFamily.CellarWorkUri,
+                "http://publications.europa.eu/resource/case/62019CJ0311"),
+            new OfficialIdentifier(FactsIdentifierFamily.Celex, "62019CJ0311"),
+        ]);
 
     /// <summary>
     /// Two axioms sharing one remote identifier, and one axiom carrying the same qualifier
@@ -62,69 +82,90 @@ internal static class FactsFixtures
             [new AxiomQualifier(ConsolidatedByPredicate, "third")]),
     ];
 
-    internal static PublisherRelation PublisherRelation() => new(
+    internal static PublisherRelation PublisherRelation(
+        OfficialIdentitySet? source = null,
+        OfficialIdentitySet? target = null,
+        string? predicate = null) => new(
         FactsSchemaIds.PublisherRelation,
-        LuWork(),
-        LuTarget(),
-        ConsolidatesPredicate,
+        source ?? LuWork(),
+        target ?? LuTarget(),
+        predicate ?? ConsolidatesPredicate,
         Observation(),
         MultimapAxioms());
 
-    internal static DerivedInverseRelation DerivedInverse() => new(
-        FactsSchemaIds.DerivedInverseRelation,
-        LuTarget(),
-        LuWork(),
-        ConsolidatedByPredicate,
-        ConsolidatesPredicate,
-        InverseOfStatement,
-        PublisherRelation());
+    internal static DerivedInverseRelation DerivedInverse()
+    {
+        var forward = PublisherRelation();
+        return new DerivedInverseRelation(
+            FactsSchemaIds.DerivedInverseRelation,
+            forward.Target,
+            forward.Source,
+            ConsolidatedByPredicate,
+            ConsolidatesPredicate,
+            InverseOfStatement,
+            forward);
+    }
 
-    internal static LocalInboundView InboundView(bool scopeIsComplete = false) => new(
-        FactsSchemaIds.LocalInboundView,
-        LuTarget(),
-        ConsolidatesPredicate,
-        scopeIsComplete,
-        ScopeDigest,
-        [PublisherRelation()]);
+    internal static LocalInboundView InboundView(bool scopeIsComplete = false)
+    {
+        var contributor = PublisherRelation();
+        return new LocalInboundView(
+            FactsSchemaIds.LocalInboundView,
+            contributor.Target,
+            ConsolidatesPredicate,
+            scopeIsComplete,
+            ScopeDigest,
+            [contributor]);
+    }
 
+    /// <summary>A LU statute target, to which ECLI does not apply at all.</summary>
     internal static RelationFact AssertedFact() => new(
         FactsSchemaIds.RelationFact,
         RelationAssertionKind.PublisherAsserted,
         TargetBodyScope.BodyInScopeHeld,
-        EcliState.EcliPresent,
-        "ECLI:EU:C:2020:1042",
+        EcliState.EcliNotApplicable,
         PublisherRelation(),
         null,
         null);
 
-    /// <summary>A Cellar case relation whose publisher record carries no ECLI.</summary>
+    /// <summary>A case target carrying its ECLI inside its identity set.</summary>
+    internal static RelationFact CaseFactWithEcli() => new(
+        FactsSchemaIds.RelationFact,
+        RelationAssertionKind.PublisherAsserted,
+        TargetBodyScope.BodyInScopeNotHeld,
+        EcliState.EcliPresent,
+        PublisherRelation(target: EuCaseWithEcli()),
+        null,
+        null);
+
+    /// <summary>A case target whose publisher record carries no ECLI.</summary>
     internal static RelationFact CaseFactWithoutEcli() => new(
         FactsSchemaIds.RelationFact,
         RelationAssertionKind.PublisherAsserted,
         TargetBodyScope.BodyInScopeNotHeld,
         EcliState.EcliMissing,
-        null,
-        new PublisherRelation(
-            FactsSchemaIds.PublisherRelation,
-            LuWork(),
-            EuCase(),
-            ConsolidatesPredicate,
-            Observation(),
-            MultimapAxioms()),
+        PublisherRelation(target: EuCaseWithoutEcli()),
         null,
         null);
 
     internal static PublisherDate YearOnlyDate() => new(
         FactsSchemaIds.PublisherDate,
         "2019",
-        "http://www.w3.org/2001/XMLSchema#gYear",
+        PublisherDate.GYear,
         DatePrecision.Year,
+        DateOpenSentinel.NotOpen);
+
+    internal static PublisherDate DayDate() => new(
+        FactsSchemaIds.PublisherDate,
+        "2019-07-15",
+        PublisherDate.Date,
+        DatePrecision.YearMonthDay,
         DateOpenSentinel.NotOpen);
 
     internal static PublisherDate OpenEndedDate() => new(
         FactsSchemaIds.PublisherDate,
-        "9999-12-31",
-        "http://www.w3.org/2001/XMLSchema#date",
+        PublisherDate.OpenEndedLexicalValue,
+        PublisherDate.Date,
         DatePrecision.YearMonthDay,
         DateOpenSentinel.OpenEnded);
 
@@ -141,6 +182,15 @@ internal static class FactsFixtures
         rawQualifier,
         comment,
         role,
-        "lex-lu-date-reader/1",
+        Authority,
         Observation());
+
+    internal static VocabularyDrift Drift() =>
+        ClosedVocabulary.TryRead<DateSemanticRole>(
+            "signature_date",
+            Observation(),
+            out _,
+            out var drift)
+            ? throw new InvalidOperationException("signature_date must be drift.")
+            : drift!;
 }

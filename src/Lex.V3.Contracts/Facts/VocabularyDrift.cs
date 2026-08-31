@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using System.Text.Json.Serialization;
 
 namespace Lex.V3.Contracts.Facts;
@@ -14,9 +15,12 @@ namespace Lex.V3.Contracts.Facts;
 /// moment it should stop the pipeline.
 /// </para>
 /// <para>
-/// Everything needed to act on the drift travels with it: which vocabulary, the raw term as
-/// served, the closed set that was admitted at the time, and the observation that saw it. That
-/// makes the report reproducible rather than a log line.
+/// <see cref="AdmittedTerms"/> must be **exactly** the wire names of the vocabulary
+/// <see cref="Vocabulary"/> names, in declaration order. Candidate 1 accepted any list at all,
+/// so a report could read a term through one vocabulary and label it with another: Codex read a
+/// date role while the report claimed the vocabulary was relation predicates, and nothing
+/// objected. A report whose label does not match the set it was measured against sends the
+/// reader to the wrong contract, which is worse than no report.
 /// </para>
 /// </remarks>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -37,6 +41,8 @@ public sealed record VocabularyDrift
             throw new ArgumentException("The vocabulary drift schema must be version 1.", nameof(schema));
         }
 
+        FactsValidation.RequireDefined(vocabulary, nameof(vocabulary));
+
         if (!FactsValidation.IsOpaqueIdentity(observedTerm))
         {
             throw new ArgumentException(
@@ -46,10 +52,18 @@ public sealed record VocabularyDrift
 
         ArgumentNullException.ThrowIfNull(admittedTerms);
         var admitted = admittedTerms.ToArray();
-        if (admitted.Length == 0 || Array.IndexOf(admitted, null) >= 0)
+        if (admitted.Distinct(StringComparer.Ordinal).Count() != admitted.Length)
         {
             throw new ArgumentException(
-                "A drift must record the nonempty closed set it was measured against.",
+                "The admitted set cannot repeat a term.",
+                nameof(admittedTerms));
+        }
+
+        var expected = ClosedVocabulary.AdmittedTermsFor(vocabulary);
+        if (!admitted.SequenceEqual(expected, StringComparer.Ordinal))
+        {
+            throw new ArgumentException(
+                $"The admitted set must be exactly the {vocabulary} vocabulary, in declaration order.",
                 nameof(admittedTerms));
         }
 
@@ -73,7 +87,7 @@ public sealed record VocabularyDrift
 
     public string ObservedTerm { get; }
 
-    /// <summary>The closed set admitted when the drift was observed.</summary>
+    /// <summary>The closed set the term was measured against.</summary>
     public IReadOnlyList<string> AdmittedTerms { get; }
 
     public SourceObservationReference Observation { get; }
@@ -83,14 +97,15 @@ public sealed record VocabularyDrift
 /// Reads a publisher term against a closed vocabulary, returning either the value or a drift.
 /// </summary>
 /// <remarks>
-/// There is no overload that returns a default on failure, and none that takes a fallback. The
-/// only way to get a value out is to supply a term the closed set admits.
+/// There is no overload that returns a default on failure, none that takes a fallback, and
+/// **none that lets the caller choose the vocabulary label**. The kind is derived from the enum
+/// through <see cref="FactsVocabularies.KindFor{TEnum}"/>, so a report can only ever name the
+/// vocabulary it actually consulted.
 /// </remarks>
 public static class ClosedVocabulary
 {
     public static bool TryRead<TEnum>(
         string observedTerm,
-        VocabularyKind vocabulary,
         SourceObservationReference observation,
         [NotNullWhen(true)] out TEnum? value,
         [NotNullWhen(false)] out VocabularyDrift? drift)
@@ -99,6 +114,7 @@ public static class ClosedVocabulary
         ArgumentNullException.ThrowIfNull(observedTerm);
         ArgumentNullException.ThrowIfNull(observation);
 
+        var kind = FactsVocabularies.KindFor<TEnum>();
         var admitted = WireNames<TEnum>();
         var index = Array.IndexOf(admitted, observedTerm);
         if (index >= 0)
@@ -111,16 +127,27 @@ public static class ClosedVocabulary
         value = null;
         drift = new VocabularyDrift(
             FactsSchemaIds.VocabularyDrift,
-            vocabulary,
+            kind,
             observedTerm,
             admitted,
             observation);
         return false;
     }
 
-    /// <summary>
-    /// The wire names of a closed enum, in declaration order.
-    /// </summary>
+    /// <summary>The wire names of the vocabulary a kind names, in declaration order.</summary>
+    public static string[] AdmittedTermsFor(VocabularyKind kind) => kind switch
+    {
+        VocabularyKind.RelationAssertionKind => WireNames<RelationAssertionKind>(),
+        VocabularyKind.IdentifierFamily => WireNames<FactsIdentifierFamily>(),
+        VocabularyKind.EcliState => WireNames<EcliState>(),
+        VocabularyKind.TargetBodyScope => WireNames<TargetBodyScope>(),
+        VocabularyKind.DateSemanticRole => WireNames<DateSemanticRole>(),
+        VocabularyKind.DatePrecision => WireNames<DatePrecision>(),
+        VocabularyKind.DateOpenSentinel => WireNames<DateOpenSentinel>(),
+        _ => throw new ArgumentException("Unknown vocabulary kind.", nameof(kind)),
+    };
+
+    /// <summary>The wire names of a closed enum, in declaration order.</summary>
     public static string[] WireNames<TEnum>()
         where TEnum : struct, Enum
     {
@@ -130,13 +157,10 @@ public static class ClosedVocabulary
         {
             var name = Enum.GetName(values[index])
                 ?? throw new InvalidOperationException("A declared enum value has no name.");
-            var field = typeof(TEnum).GetField(name,
-                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+            var field = typeof(TEnum).GetField(name, BindingFlags.Public | BindingFlags.Static)
                 ?? throw new InvalidOperationException("A declared enum field is missing.");
             names[index] = field
-                .GetCustomAttributes(typeof(JsonStringEnumMemberNameAttribute), inherit: false)
-                .OfType<JsonStringEnumMemberNameAttribute>()
-                .FirstOrDefault()?.Name ?? name;
+                .GetCustomAttribute<JsonStringEnumMemberNameAttribute>()?.Name ?? name;
         }
 
         return names;

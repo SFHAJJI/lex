@@ -2,15 +2,18 @@
   "type": "object",
   "properties": {
     "schema": {
-      "type": "string"
+      "type": "string",
+      "const": "lex-v3-vocabulary-drift/1"
     },
     "vocabulary": {
       "enum": [
-        "relation_predicate",
+        "relation_assertion_kind",
+        "identifier_family",
+        "ecli_state",
+        "target_body_scope",
         "date_semantic_role",
-        "date_open_sentinel",
-        "date_datatype",
-        "axiom_qualifier"
+        "date_precision",
+        "date_open_sentinel"
       ]
     },
     "observed_term": {
@@ -20,7 +23,9 @@
       "type": "array",
       "items": {
         "type": "string"
-      }
+      },
+      "minItems": 1,
+      "uniqueItems": true
     },
     "observation": {
       "type": "object",
@@ -36,10 +41,12 @@
           "type": "object",
           "properties": {
             "content_sha256": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
             },
             "byte_length": {
-              "type": "integer"
+              "type": "integer",
+              "minimum": 0
             }
           },
           "required": [

@@ -2,7 +2,8 @@
   "type": "object",
   "properties": {
     "schema": {
-      "type": "string"
+      "type": "string",
+      "const": "lex-v3-derived-inverse-relation/1"
     },
     "source": {
       "type": "object",
@@ -13,22 +14,38 @@
             "eu-eurlex"
           ]
         },
-        "family": {
-          "enum": [
-            "eli",
-            "celex",
-            "memorial",
-            "historical_legal_id"
-          ]
-        },
-        "raw_value": {
-          "type": "string"
+        "identifiers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "family": {
+                "enum": [
+                  "eli",
+                  "celex",
+                  "ecli",
+                  "cellar_work_uri",
+                  "cellar_resource_uri",
+                  "memorial",
+                  "historical_legal_id"
+                ]
+              },
+              "raw_value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "family",
+              "raw_value"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
         }
       },
       "required": [
         "publisher",
-        "family",
-        "raw_value"
+        "identifiers"
       ],
       "additionalProperties": false
     },
@@ -41,33 +58,31 @@
             "eu-eurlex"
           ]
         },
-        "family": {
-          "enum": [
-            "eli",
-            "celex",
-            "memorial",
-            "historical_legal_id"
-          ]
-        },
-        "raw_value": {
-          "type": "string"
+        "identifiers": {
+          "$ref": "#/properties/source/properties/identifiers",
+          "minItems": 1
         }
       },
       "required": [
         "publisher",
-        "family",
-        "raw_value"
+        "identifiers"
       ],
       "additionalProperties": false
     },
     "predicate_uri": {
-      "type": "string"
+      "type": "string",
+      "format": "uri",
+      "minLength": 1
     },
     "inverse_of_predicate_uri": {
-      "type": "string"
+      "type": "string",
+      "format": "uri",
+      "minLength": 1
     },
     "authorizing_ontology_statement_uri": {
-      "type": "string"
+      "type": "string",
+      "format": "uri",
+      "minLength": 1
     },
     "derived_from": {
       "type": "object",
@@ -84,22 +99,14 @@
                 "eu-eurlex"
               ]
             },
-            "family": {
-              "enum": [
-                "eli",
-                "celex",
-                "memorial",
-                "historical_legal_id"
-              ]
-            },
-            "raw_value": {
-              "type": "string"
+            "identifiers": {
+              "$ref": "#/properties/source/properties/identifiers",
+              "minItems": 1
             }
           },
           "required": [
             "publisher",
-            "family",
-            "raw_value"
+            "identifiers"
           ],
           "additionalProperties": false
         },
@@ -112,27 +119,21 @@
                 "eu-eurlex"
               ]
             },
-            "family": {
-              "enum": [
-                "eli",
-                "celex",
-                "memorial",
-                "historical_legal_id"
-              ]
-            },
-            "raw_value": {
-              "type": "string"
+            "identifiers": {
+              "$ref": "#/properties/source/properties/identifiers",
+              "minItems": 1
             }
           },
           "required": [
             "publisher",
-            "family",
-            "raw_value"
+            "identifiers"
           ],
           "additionalProperties": false
         },
         "predicate_uri": {
-          "type": "string"
+          "type": "string",
+          "format": "uri",
+          "minLength": 1
         },
         "observation": {
           "type": "object",
@@ -148,10 +149,12 @@
               "type": "object",
               "properties": {
                 "content_sha256": {
-                  "type": "string"
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
                 },
                 "byte_length": {
-                  "type": "integer"
+                  "type": "integer",
+                  "minimum": 0
                 }
               },
               "required": [
@@ -182,7 +185,9 @@
                   "type": "object",
                   "properties": {
                     "predicate_uri": {
-                      "type": "string"
+                      "type": "string",
+                      "format": "uri",
+                      "minLength": 1
                     },
                     "raw_value": {
                       "type": "string"
