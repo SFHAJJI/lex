@@ -162,6 +162,20 @@ internal static class FactsSchemaHardener
 {
     internal const string Sha256Pattern = "^[0-9a-f]{64}$";
 
+    private const string CellarHost = @"^https?://publications\.europa\.eu/resource/";
+
+    /// <summary>A work is /resource/&lt;class&gt;/&lt;id&gt; and nothing deeper.</summary>
+    internal const string CellarWorkPattern = CellarHost + "[^/]+/[^/]+$";
+
+    /// <summary>A resource is anything strictly beneath a work.</summary>
+    internal const string CellarResourcePattern = CellarHost + "[^/]+/[^/]+/.+$";
+
+    internal const string EcliPattern = "^ECLI:[A-Z]{2}:[^:]+:[0-9]{4}:[0-9A-Z]+$";
+
+    /// <summary>The five admitted CELEX profiles, anchored at both ends.</summary>
+    internal const string CelexPattern =
+        @"^[0-9]{5}[A-Z]{1,3}([0-9]+(R\([0-9]+\))?(-[0-9]{8})?|/[A-Z0-9]+(/[A-Z0-9]+)*|[0-9]+[A-Z]{3}_[0-9A-Z]+)$";
+
     /// <summary>
     /// The only invariants left to the reader alone: equality between two distant instance
     /// locations, which draft 2020-12 cannot express without extensions.
@@ -231,24 +245,23 @@ internal static class FactsSchemaHardener
     {
         var arms = new JsonArray
         {
+            // Both Cellar arms used the same unanchored prefix, so the schema could not tell the
+            // two WEMI levels apart and a resource URI validated as a work. They are now anchored
+            // at both ends and differ by depth, exactly as the reader does.
             IfThen(
                 Props(("family", Const("cellar_work_uri"))),
-                Props(("raw_value", new JsonObject
-                {
-                    ["pattern"] = "^https?://publications\\.europa\\.eu/resource/",
-                }))),
+                Props(("raw_value", new JsonObject { ["pattern"] = CellarWorkPattern }))),
             IfThen(
                 Props(("family", Const("cellar_resource_uri"))),
-                Props(("raw_value", new JsonObject
-                {
-                    ["pattern"] = "^https?://publications\\.europa\\.eu/resource/",
-                }))),
+                Props(("raw_value", new JsonObject { ["pattern"] = CellarResourcePattern }))),
             IfThen(
                 Props(("family", Const("ecli"))),
-                Props(("raw_value", new JsonObject { ["pattern"] = "^ECLI:[A-Z]{2}:" }))),
+                Props(("raw_value", new JsonObject { ["pattern"] = EcliPattern }))),
+            // An unanchored CELEX prefix accepted any trailing suffix at all. This anchors the
+            // whole value across the five admitted profiles.
             IfThen(
                 Props(("family", Const("celex"))),
-                Props(("raw_value", new JsonObject { ["pattern"] = "^[0-9]{5}[A-Z]{1,3}" }))),
+                Props(("raw_value", new JsonObject { ["pattern"] = CelexPattern }))),
         };
         node["allOf"] = arms;
     }

@@ -127,42 +127,26 @@ public enum EcliState
     EcliPresent,
 
     /// <summary>
-    /// The target is a case and the publisher's record carries no ECLI for it. The edge is kept
-    /// and typed, never dropped and never filled with a constructed identifier.
+    /// The target is a case and <b>this identity set carries no ECLI</b>. The edge is kept and
+    /// typed, never dropped and never filled with a constructed identifier.
     /// </summary>
-    [JsonStringEnumMemberName("ecli_missing")]
-    EcliMissing,
+    /// <remarks>
+    /// Candidate 3 called this <c>ecli_missing</c>, which claims the publisher published none.
+    /// That is an absence claim, and this contract cannot support one: it holds a set of
+    /// identifiers with no proof that the set is everything the publisher has. Codex was right
+    /// that a caller-selected enum plus any 64-hex string is not that proof, and the fixture's
+    /// hand-written digest was the tell.
+    ///
+    /// So the name says exactly what is provable. Whether the publisher has an ECLI at all is a
+    /// verdict for a later type carrying the D1 cut and observation evidence, and stating the
+    /// weaker true property is worth more than a stronger one nothing here can establish.
+    /// </remarks>
+    [JsonStringEnumMemberName("ecli_not_in_this_set")]
+    EcliNotInThisSet,
 
     /// <summary>The target is not a case, so an ECLI does not apply to it.</summary>
     [JsonStringEnumMemberName("ecli_not_applicable")]
     EcliNotApplicable,
-}
-
-/// <summary>
-/// Whether the identifier set for a subject was enumerated completely, or only partially read.
-/// </summary>
-/// <remarks>
-/// An identity set is a read of the publisher's identifiers. Candidate 3 let a set of one CELEX
-/// support an <c>ecli_missing</c> verdict, which is an <b>absence claim</b>: it says the publisher
-/// published no ECLI. A partial read cannot support that. It cannot distinguish "the publisher
-/// returned no ECLI" from "this reader retained only the CELEX row", and V3 requires absence to be
-/// proved rather than implied.
-/// </remarks>
-public enum IdentifierEnumeration
-{
-    /// <summary>
-    /// Every identifier the publisher holds for this subject was enumerated, and the query that
-    /// did it is bound by digest. Only this state can support an absence claim.
-    /// </summary>
-    [JsonStringEnumMemberName("complete")]
-    Complete,
-
-    /// <summary>
-    /// Some identifiers were read. The set is still lossless about what it carries and says
-    /// nothing whatever about what it does not.
-    /// </summary>
-    [JsonStringEnumMemberName("partial")]
-    Partial,
 }
 
 /// <summary>
@@ -314,8 +298,6 @@ public enum VocabularyKind
     [JsonStringEnumMemberName("ecli_state")]
     EcliState,
 
-    [JsonStringEnumMemberName("identifier_enumeration")]
-    IdentifierEnumeration,
 
     [JsonStringEnumMemberName("target_body_scope")]
     TargetBodyScope,
@@ -351,7 +333,6 @@ public static class FactsVocabularies
             [typeof(RelationAssertionKind)] = VocabularyKind.RelationAssertionKind,
             [typeof(FactsIdentifierFamily)] = VocabularyKind.IdentifierFamily,
             [typeof(EcliState)] = VocabularyKind.EcliState,
-            [typeof(IdentifierEnumeration)] = VocabularyKind.IdentifierEnumeration,
             [typeof(TargetBodyScope)] = VocabularyKind.TargetBodyScope,
             [typeof(DateSemanticRole)] = VocabularyKind.DateSemanticRole,
             [typeof(TranspositionEvidence)] = VocabularyKind.TranspositionEvidence,

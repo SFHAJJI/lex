@@ -139,7 +139,7 @@ public sealed class FactsRoundTripTests
         var restored = ContractJson.Deserialize<RelationFact>(
             ContractJson.Serialize(FactsFixtures.CaseFactWithoutEcli()));
 
-        Assert.AreEqual(EcliState.EcliMissing, restored.TargetEcliState);
+        Assert.AreEqual(EcliState.EcliNotInThisSet, restored.TargetEcliState);
         Assert.IsNull(restored.TargetEcli);
         Assert.IsNotNull(restored.PublisherAsserted);
         Assert.AreEqual("62019CJ0311", restored.CarriedTarget.Value(FactsIdentifierFamily.Celex));

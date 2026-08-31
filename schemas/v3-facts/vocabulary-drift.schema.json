@@ -10,7 +10,6 @@
         "relation_assertion_kind",
         "identifier_family",
         "ecli_state",
-        "identifier_enumeration",
         "target_body_scope",
         "date_semantic_role",
         "transposition_evidence",
@@ -150,33 +149,8 @@
           "admitted_terms": {
             "const": [
               "ecli_present",
-              "ecli_missing",
+              "ecli_not_in_this_set",
               "ecli_not_applicable"
-            ]
-          }
-        },
-        "required": [
-          "admitted_terms"
-        ]
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "vocabulary": {
-            "const": "identifier_enumeration"
-          }
-        },
-        "required": [
-          "vocabulary"
-        ]
-      },
-      "then": {
-        "properties": {
-          "admitted_terms": {
-            "const": [
-              "complete",
-              "partial"
             ]
           }
         },

@@ -140,7 +140,6 @@ public static class ClosedVocabulary
         VocabularyKind.RelationAssertionKind => WireNames<RelationAssertionKind>(),
         VocabularyKind.IdentifierFamily => WireNames<FactsIdentifierFamily>(),
         VocabularyKind.EcliState => WireNames<EcliState>(),
-        VocabularyKind.IdentifierEnumeration => WireNames<IdentifierEnumeration>(),
         VocabularyKind.TargetBodyScope => WireNames<TargetBodyScope>(),
         VocabularyKind.DateSemanticRole => WireNames<DateSemanticRole>(),
         VocabularyKind.TranspositionEvidence => WireNames<TranspositionEvidence>(),

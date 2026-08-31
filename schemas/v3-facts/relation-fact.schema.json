@@ -22,7 +22,7 @@
     "target_ecli_state": {
       "enum": [
         "ecli_present",
-        "ecli_missing",
+        "ecli_not_in_this_set",
         "ecli_not_applicable"
       ]
     },
@@ -44,19 +44,6 @@
                 "lu-legilux",
                 "eu-eurlex"
               ]
-            },
-            "enumeration": {
-              "enum": [
-                "complete",
-                "partial"
-              ]
-            },
-            "enumeration_query_sha256": {
-              "type": [
-                "string",
-                "null"
-              ],
-              "pattern": "^[0-9a-f]{64}$"
             },
             "identifiers": {
               "type": "array",
@@ -98,7 +85,7 @@
                     "then": {
                       "properties": {
                         "raw_value": {
-                          "pattern": "^https?://publications\\.europa\\.eu/resource/"
+                          "pattern": "^https?://publications\\.europa\\.eu/resource/[^/]\u002B/[^/]\u002B$"
                         }
                       },
                       "required": [
@@ -120,7 +107,7 @@
                     "then": {
                       "properties": {
                         "raw_value": {
-                          "pattern": "^https?://publications\\.europa\\.eu/resource/"
+                          "pattern": "^https?://publications\\.europa\\.eu/resource/[^/]\u002B/[^/]\u002B/.\u002B$"
                         }
                       },
                       "required": [
@@ -142,7 +129,7 @@
                     "then": {
                       "properties": {
                         "raw_value": {
-                          "pattern": "^ECLI:[A-Z]{2}:"
+                          "pattern": "^ECLI:[A-Z]{2}:[^:]\u002B:[0-9]{4}:[0-9A-Z]\u002B$"
                         }
                       },
                       "required": [
@@ -164,7 +151,7 @@
                     "then": {
                       "properties": {
                         "raw_value": {
-                          "pattern": "^[0-9]{5}[A-Z]{1,3}"
+                          "pattern": "^[0-9]{5}[A-Z]{1,3}([0-9]\u002B(R\\([0-9]\u002B\\))?(-[0-9]{8})?|/[A-Z0-9]\u002B(/[A-Z0-9]\u002B)*|[0-9]\u002B[A-Z]{3}_[0-9A-Z]\u002B)$"
                         }
                       },
                       "required": [
@@ -279,8 +266,6 @@
           },
           "required": [
             "publisher",
-            "enumeration",
-            "enumeration_query_sha256",
             "identifiers"
           ],
           "additionalProperties": false
@@ -293,19 +278,6 @@
                 "lu-legilux",
                 "eu-eurlex"
               ]
-            },
-            "enumeration": {
-              "enum": [
-                "complete",
-                "partial"
-              ]
-            },
-            "enumeration_query_sha256": {
-              "type": [
-                "string",
-                "null"
-              ],
-              "pattern": "^[0-9a-f]{64}$"
             },
             "identifiers": {
               "$ref": "#/properties/publisher_asserted/properties/source/properties/identifiers",
@@ -414,8 +386,6 @@
           },
           "required": [
             "publisher",
-            "enumeration",
-            "enumeration_query_sha256",
             "identifiers"
           ],
           "additionalProperties": false
@@ -529,19 +499,6 @@
                 "eu-eurlex"
               ]
             },
-            "enumeration": {
-              "enum": [
-                "complete",
-                "partial"
-              ]
-            },
-            "enumeration_query_sha256": {
-              "type": [
-                "string",
-                "null"
-              ],
-              "pattern": "^[0-9a-f]{64}$"
-            },
             "identifiers": {
               "$ref": "#/properties/publisher_asserted/properties/source/properties/identifiers",
               "minItems": 1,
@@ -649,8 +606,6 @@
           },
           "required": [
             "publisher",
-            "enumeration",
-            "enumeration_query_sha256",
             "identifiers"
           ],
           "additionalProperties": false
@@ -664,19 +619,6 @@
                 "eu-eurlex"
               ]
             },
-            "enumeration": {
-              "enum": [
-                "complete",
-                "partial"
-              ]
-            },
-            "enumeration_query_sha256": {
-              "type": [
-                "string",
-                "null"
-              ],
-              "pattern": "^[0-9a-f]{64}$"
-            },
             "identifiers": {
               "$ref": "#/properties/publisher_asserted/properties/source/properties/identifiers",
               "minItems": 1,
@@ -784,8 +726,6 @@
           },
           "required": [
             "publisher",
-            "enumeration",
-            "enumeration_query_sha256",
             "identifiers"
           ],
           "additionalProperties": false
@@ -919,19 +859,6 @@
                 "eu-eurlex"
               ]
             },
-            "enumeration": {
-              "enum": [
-                "complete",
-                "partial"
-              ]
-            },
-            "enumeration_query_sha256": {
-              "type": [
-                "string",
-                "null"
-              ],
-              "pattern": "^[0-9a-f]{64}$"
-            },
             "identifiers": {
               "$ref": "#/properties/publisher_asserted/properties/source/properties/identifiers",
               "minItems": 1,
@@ -1039,8 +966,6 @@
           },
           "required": [
             "publisher",
-            "enumeration",
-            "enumeration_query_sha256",
             "identifiers"
           ],
           "additionalProperties": false

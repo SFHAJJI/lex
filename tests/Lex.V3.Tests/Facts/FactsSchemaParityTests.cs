@@ -45,6 +45,21 @@ public sealed class FactsSchemaParityTests
             root => root["schema"] = "lex-v3-publisher-relation/2",
             SchemaCanExpress: true),
         new Case(
+            "a resource-level Cellar URI tagged as a work",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(
+                FactsFixtures.PublisherRelation(target: FactsFixtures.EuCaseWithEcli())),
+            root => root["target"]!["identifiers"]![0]!["raw_value"] =
+                "http://publications.europa.eu/resource/case/62019CJ0311/DOC_1",
+            SchemaCanExpress: true),
+        new Case(
+            "a CELEX with an invalid trailing suffix",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(
+                FactsFixtures.PublisherRelation(target: FactsFixtures.EuCaseWithEcli())),
+            root => root["target"]!["identifiers"]![1]!["raw_value"] = "62019CJ0311XX",
+            SchemaCanExpress: true),
+        new Case(
             "one family cannot appear twice with different values",
             FactsSchemaIds.PublisherRelation,
             () => ContractJson.Serialize(FactsFixtures.PublisherRelation()),
@@ -181,7 +196,7 @@ public sealed class FactsSchemaParityTests
             "ecli state agrees with the target identity set",
             FactsSchemaIds.RelationFact,
             () => ContractJson.Serialize(FactsFixtures.CaseFactWithEcli()),
-            root => root["target_ecli_state"] = "ecli_missing",
+            root => root["target_ecli_state"] = "ecli_not_in_this_set",
             SchemaCanExpress: false),
         new Case(
             "declared kind matches the carried payload",

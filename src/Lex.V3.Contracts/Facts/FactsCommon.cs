@@ -189,8 +189,11 @@ public sealed record OfficialIdentifier
         var dash = rest.IndexOf('-');
         if (dash >= 0)
         {
-            var date = rest[(dash + 1)..];
-            if (date.Length != 8 || !date.All(char.IsAsciiDigit))
+            // A real calendar date, not eight digits. Candidate 3 checked only the shape and my
+            // declaration claimed the date was "parsed and checked", so 02016R0679-20160231
+            // was accepted while I said it could not be. The claim was the defect as much as
+            // the code: a review that repeats an author's description verifies nothing.
+            if (!IsCalendarDate(rest[(dash + 1)..]))
             {
                 return null;
             }
@@ -219,6 +222,29 @@ public sealed record OfficialIdentifier
             corrigendum = true;
         }
 
+        // Sector 7 national implementing measures carry a country code and a national reference
+        // after the act number, as in 72019L1937LUX_202303892. The relation and transposition
+        // spine needs them, so refusing the tail refuses a required V3 fact.
+        var underscore = rest.IndexOf('_');
+        if (underscore >= 0)
+        {
+            if (value[0] != '7' || consolidated || corrigendum)
+            {
+                return null;
+            }
+
+            var head = rest[..underscore];
+            var reference = rest[(underscore + 1)..];
+            var digits = head.TakeWhile(char.IsAsciiDigit).Count();
+            var country = head[digits..];
+            return digits > 0 &&
+                country.Length == 3 && country.All(c => c is >= 'A' and <= 'Z') &&
+                reference.Length > 0 &&
+                reference.All(c => c is (>= '0' and <= '9') or (>= 'A' and <= 'Z'))
+                    ? CelexProfile.NationalImplementingMeasure
+                    : null;
+        }
+
         if (rest.Length == 0 || !rest.All(char.IsAsciiDigit))
         {
             return null;
@@ -229,6 +255,21 @@ public sealed record OfficialIdentifier
             : corrigendum
                 ? CelexProfile.Corrigendum
                 : CelexProfile.BaseAct;
+    }
+
+    /// <summary>Eight digits that name a day that exists.</summary>
+    private static bool IsCalendarDate(string value)
+    {
+        if (value.Length != 8 || !value.All(char.IsAsciiDigit))
+        {
+            return false;
+        }
+
+        var year = int.Parse(value[..4]);
+        var month = int.Parse(value.Substring(4, 2));
+        var day = int.Parse(value.Substring(6, 2));
+        return year >= 1 && month is >= 1 and <= 12 &&
+            day >= 1 && day <= DateTime.DaysInMonth(year, month);
     }
 
     private static bool IsUpperAlphanumeric(string text) =>
@@ -268,10 +309,23 @@ public sealed record OfficialIdentifier
             return true;
         }
 
+        // An absolute ELI must be on a publisher host. Candidate 3 accepted any host whose path
+        // contained /eli/, so https://example.invalid/eli/... was admissible as an official
+        // identifier, which is the caller-shaped lookalike the contract says it never retains.
         return Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
             uri.Scheme is "http" or "https" &&
+            EliHosts.Contains(uri.Host) &&
             uri.AbsolutePath.Contains("/eli/", StringComparison.Ordinal);
     }
+
+    /// <summary>The hosts that mint an absolute ELI for the publishers in scope.</summary>
+    private static readonly HashSet<string> EliHosts = new(StringComparer.Ordinal)
+    {
+        "data.europa.eu",
+        "eur-lex.europa.eu",
+        "data.legilux.public.lu",
+        "legilux.public.lu",
+    };
 
     private static bool IsEcli(string value)
     {
@@ -335,6 +389,13 @@ public enum CelexProfile
 
     [System.Text.Json.Serialization.JsonStringEnumMemberName("treaty_part")]
     TreatyPart,
+
+    /// <summary>
+    /// A sector 7 national implementing measure, carrying a country code and national reference
+    /// after the act number. Part of the relation and transposition spine, not a future family.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonStringEnumMemberName("national_implementing_measure")]
+    NationalImplementingMeasure,
 }
 
 /// <summary>
@@ -375,33 +436,23 @@ public sealed record OfficialIdentitySet
             [FactsIdentifierFamily.Eli] = null,
         };
 
+    /// <remarks>
+    /// Candidate 3 carried an <c>IdentifierEnumeration</c> state and a query digest, and let a
+    /// caller declare a set complete by passing an enum member and any 64-hex string. A query
+    /// digest names which query text was identified. It does not prove the query ran, completed,
+    /// exhausted its continuations, returned the whole identifier family, or corresponds to the
+    /// set beside it. The fixture's digest was a hand-written constant, which is the tell.
+    ///
+    /// So the state and the digest are removed rather than decorated. This type carries what it
+    /// can prove: the identifiers it holds. A completeness claim needs the D1 cut and observation
+    /// evidence, which lives in a later type, and this contract no longer pretends to it.
+    /// </remarks>
     [JsonConstructor]
     public OfficialIdentitySet(
         PublisherId publisher,
-        IReadOnlyList<OfficialIdentifier> identifiers,
-        IdentifierEnumeration enumeration,
-        string? enumerationQuerySha256)
+        IReadOnlyList<OfficialIdentifier> identifiers)
     {
         FactsValidation.RequireDefined(publisher, nameof(publisher));
-        FactsValidation.RequireDefined(enumeration, nameof(enumeration));
-
-        // A completeness claim is itself evidence, so it carries the digest of the query that
-        // produced it. Claiming complete without naming what was asked is the same shape as
-        // claiming an absence without proving it.
-        if (enumeration == IdentifierEnumeration.Complete &&
-            !FactsValidation.IsLowercaseSha256(enumerationQuerySha256))
-        {
-            throw new ArgumentException(
-                "A complete identifier enumeration must bind the digest of the query that produced it.",
-                nameof(enumerationQuerySha256));
-        }
-
-        if (enumeration == IdentifierEnumeration.Partial && enumerationQuerySha256 is not null)
-        {
-            throw new ArgumentException(
-                "A partial read cannot carry a completeness digest.",
-                nameof(enumerationQuerySha256));
-        }
         ArgumentNullException.ThrowIfNull(identifiers);
         var copied = identifiers.ToArray();
         if (copied.Length == 0)
@@ -444,17 +495,9 @@ public sealed record OfficialIdentitySet
 
         Publisher = publisher;
         Identifiers = Array.AsReadOnly(copied);
-        Enumeration = enumeration;
-        EnumerationQuerySha256 = enumerationQuerySha256;
     }
 
     public PublisherId Publisher { get; }
-
-    /// <summary>Whether this set is a complete enumeration or a partial read.</summary>
-    public IdentifierEnumeration Enumeration { get; }
-
-    /// <summary>The query that produced a complete enumeration, or null for a partial read.</summary>
-    public string? EnumerationQuerySha256 { get; }
 
     /// <summary>The identifiers in the publisher's own order, which is itself evidence.</summary>
     public IReadOnlyList<OfficialIdentifier> Identifiers { get; }
@@ -489,7 +532,6 @@ public sealed record OfficialIdentitySet
     public bool SameIdentity(OfficialIdentitySet? other)
     {
         if (other is null || other.Publisher != Publisher ||
-            other.Enumeration != Enumeration ||
             other.Identifiers.Count != Identifiers.Count)
         {
             return false;
