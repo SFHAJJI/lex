@@ -412,6 +412,14 @@ REVIEWED_BINDINGS = (
     "          REPO: ${{ github.repository }}",
     "          PR_NUMBER: ${{ github.event.pull_request.number }}",
     "          HEAD_SHA: ${{ github.event.pull_request.head.sha }}",
+    # The two commands themselves. Codex O1 against 7f035e9, and I had returned READY on
+    # that commit without testing them. Every other value in this workflow was pinned by
+    # value while the two lines that actually run the tests and the gate were matched by
+    # substring, so `run: echo unittest` and `run: echo dual_review.py` both satisfied
+    # the step checks and greened the required context while executing nothing. The most
+    # important value in a file is the one nobody thinks of as a value.
+    "        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v",
+    "        run: python3 .github/scripts/dual_review.py",
 )
 
 # The reviewed environment: the exact keys the workflow and the job may declare, in
@@ -853,6 +861,35 @@ class RequiredContextCannotFalseGreen(unittest.TestCase):
         defects = "\n".join(false_green_defects(split))
         self.assertIn("needs:", defects)
         self.assertIn("exactly one job", defects)
+
+    def test_replacing_a_reviewed_command_with_a_no_op_is_caught(self):
+        """Codex O1 against ffe873d's successor, and I had returned READY on it.
+
+        Every other value in this workflow was pinned by value while the two lines that
+        actually run the tests and the gate were matched by substring, so `echo unittest`
+        satisfied "the unittest command" and greened the required context while executing
+        nothing. The most important value in a file is the one nobody thinks of as a
+        value.
+        """
+        real = self._workflow()
+        for original, replacement in (
+            (
+                "        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v",
+                "        run: echo unittest",
+            ),
+            (
+                "        run: python3 .github/scripts/dual_review.py",
+                "        run: echo dual_review.py",
+            ),
+        ):
+            self.assertIn(original, real, "the reviewed command must be present to replace")
+            mutated = real.replace(original, replacement, 1)
+            self.assertNotEqual(mutated, real, "the mutation never applied; the proof is void")
+            self.assertIn(
+                "missing reviewed binding",
+                "\n".join(false_green_defects(mutated)),
+                f"replacing {original.strip()!r} with a no-op must be caught",
+            )
 
     def test_an_injected_run_step_is_caught(self):
         """Claude O1 against ffe873d: pinning `uses:` left `run:` wide open.
