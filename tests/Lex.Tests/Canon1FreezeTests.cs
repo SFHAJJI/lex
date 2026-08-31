@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -68,12 +69,7 @@ public sealed class Canon1FreezeTests
             Assert.Single(buildProperties.Descendants("RestorePackagesWithLockFile")).Value);
         Assert.Equal("true", Assert.Single(buildProperties.Descendants("RestoreLockedMode")).Value);
 
-        var projectFiles = Directory.EnumerateFiles(
-                Golden.RepositoryRoot(), "*.csproj", SearchOption.AllDirectories)
-            .Where(path => !path.Split(Path.DirectorySeparatorChar).Contains("obj"))
-            .Order(StringComparer.Ordinal)
-            .ToArray();
-        Assert.NotEmpty(projectFiles);
+        var projectFiles = TrackedProjectFiles(Golden.RepositoryRoot());
         Assert.All(projectFiles, project =>
             Assert.True(File.Exists(Path.Combine(Path.GetDirectoryName(project)!, "packages.lock.json")),
                 $"Missing packages.lock.json for {Path.GetRelativePath(Golden.RepositoryRoot(), project)}"));
@@ -110,11 +106,7 @@ public sealed class Canon1FreezeTests
         Assert.Equal("$(MSBuildProjectDirectory)/packages.directml.lock.json",
             directMlLockPath.Value);
 
-        var projectFiles = Directory.EnumerateFiles(
-                repository, "*.csproj", SearchOption.AllDirectories)
-            .Where(path => !path.Split(Path.DirectorySeparatorChar).Contains("obj"))
-            .Order(StringComparer.Ordinal)
-            .ToArray();
+        var projectFiles = TrackedProjectFiles(repository);
         Assert.All(projectFiles, project =>
             Assert.True(File.Exists(Path.Combine(
                     Path.GetDirectoryName(project)!, "packages.directml.lock.json")),
@@ -478,6 +470,36 @@ public sealed class Canon1FreezeTests
 
     private static JsonObject LockedDependencies(string path) =>
         JsonNode.Parse(File.ReadAllBytes(path))!["dependencies"]!["net10.0"]!.AsObject();
+
+    /// <summary>
+    /// The projects the repository contains, asked of Git rather than of the filesystem.
+    /// Enumerating every directory swept in nested worktrees under <c>.claude/worktrees</c>, so the
+    /// verdict depended on what happened to be on one developer's disk instead of on the frozen
+    /// contract. It fails closed: if Git cannot answer, the test fails rather than scanning.
+    /// </summary>
+    private static string[] TrackedProjectFiles(string repository)
+    {
+        using var process = Process.Start(new ProcessStartInfo("git")
+        {
+            WorkingDirectory = repository,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            ArgumentList = { "ls-files", "-z", "--", "*.csproj" },
+        });
+        Assert.NotNull(process);
+        var listing = process!.StandardOutput.ReadToEnd();
+        process.WaitForExit();
+        Assert.Equal(0, process.ExitCode);
+
+        var projects = listing.Split('\0', StringSplitOptions.RemoveEmptyEntries)
+            .Select(relative => Path.Combine(
+                repository, relative.Replace('/', Path.DirectorySeparatorChar)))
+            .Where(path => !path.Split(Path.DirectorySeparatorChar).Contains("obj"))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        Assert.NotEmpty(projects);
+        return projects;
+    }
 
     private static void AssertLockedPackage(
         JsonObject dependencies, string name, string requested, string resolved)
