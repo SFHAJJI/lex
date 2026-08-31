@@ -1,0 +1,1233 @@
+{
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "lex-v3-publisher-date-fact/1"
+    },
+    "subject": {
+      "type": "object",
+      "properties": {
+        "publisher": {
+          "enum": [
+            "lu-legilux",
+            "eu-eurlex"
+          ]
+        },
+        "identifiers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "family": {
+                "enum": [
+                  "eli",
+                  "celex",
+                  "ecli",
+                  "cellar_work_uri",
+                  "cellar_resource_uri",
+                  "cellar_psi_uri",
+                  "memorial",
+                  "historical_legal_id"
+                ]
+              },
+              "raw_value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "family",
+              "raw_value"
+            ],
+            "additionalProperties": false,
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "family": {
+                      "const": "cellar_work_uri"
+                    }
+                  },
+                  "required": [
+                    "family"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "raw_value": {
+                      "pattern": "^https?://publications\\.europa\\.eu/resource/cellar/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}(?![\\s\\S])"
+                    }
+                  },
+                  "required": [
+                    "raw_value"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "family": {
+                      "const": "cellar_resource_uri"
+                    }
+                  },
+                  "required": [
+                    "family"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "raw_value": {
+                      "pattern": "^https?://publications\\.europa\\.eu/resource/cellar/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/(?:(?![?#])[!-~])\u002B(?![\\s\\S])"
+                    }
+                  },
+                  "required": [
+                    "raw_value"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "family": {
+                      "const": "memorial"
+                    }
+                  },
+                  "required": [
+                    "family"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "raw_value": {
+                      "pattern": "^[!-~]\u002B(?![\\s\\S])"
+                    }
+                  },
+                  "required": [
+                    "raw_value"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "family": {
+                      "const": "historical_legal_id"
+                    }
+                  },
+                  "required": [
+                    "family"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "raw_value": {
+                      "pattern": "^[!-~]\u002B(?![\\s\\S])"
+                    }
+                  },
+                  "required": [
+                    "raw_value"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "family": {
+                      "const": "cellar_psi_uri"
+                    }
+                  },
+                  "required": [
+                    "family"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "raw_value": {
+                      "pattern": "^https?://publications\\.europa\\.eu/resource/celex/([0-9]{5}[A-Z]{1,3}([0-9]\u002B(R\\([0-9]\u002B\\))?(-([0-9]{4}((0[13578]|1[02])(0[1-9]|[12][0-9]|3[01])|(0[469]|11)(0[1-9]|[12][0-9]|30)|02(0[1-9]|1[0-9]|2[0-8]))|([0-9]{2}(0[48]|[2468][048]|[13579][26])|(0[48]|[2468][048]|[13579][26])00)0229))?|/[A-Z0-9]\u002B(/[A-Z0-9]\u002B)*)|7[0-9]{4}[A-Z]{1,3}[0-9]\u002B[A-Z]{3}_[0-9A-Z]\u002B)(?![\\s\\S])"
+                    }
+                  },
+                  "required": [
+                    "raw_value"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "family": {
+                      "const": "ecli"
+                    }
+                  },
+                  "required": [
+                    "family"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "raw_value": {
+                      "pattern": "^ECLI:[A-Z]{2}:[A-Z0-9]\u002B:[0-9]{4}:[0-9A-Z.]\u002B(?![\\s\\S])"
+                    }
+                  },
+                  "required": [
+                    "raw_value"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "family": {
+                      "const": "celex"
+                    }
+                  },
+                  "required": [
+                    "family"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "raw_value": {
+                      "pattern": "^([0-9]{5}[A-Z]{1,3}([0-9]\u002B(R\\([0-9]\u002B\\))?(-([0-9]{4}((0[13578]|1[02])(0[1-9]|[12][0-9]|3[01])|(0[469]|11)(0[1-9]|[12][0-9]|30)|02(0[1-9]|1[0-9]|2[0-8]))|([0-9]{2}(0[48]|[2468][048]|[13579][26])|(0[48]|[2468][048]|[13579][26])00)0229))?|/[A-Z0-9]\u002B(/[A-Z0-9]\u002B)*)|7[0-9]{4}[A-Z]{1,3}[0-9]\u002B[A-Z]{3}_[0-9A-Z]\u002B)(?![\\s\\S])"
+                    }
+                  },
+                  "required": [
+                    "raw_value"
+                  ]
+                }
+              }
+            ]
+          },
+          "minItems": 1,
+          "allOf": [
+            {
+              "contains": {
+                "properties": {
+                  "family": {
+                    "const": "eli"
+                  }
+                },
+                "required": [
+                  "family"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "family": {
+                    "const": "celex"
+                  }
+                },
+                "required": [
+                  "family"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "family": {
+                    "const": "ecli"
+                  }
+                },
+                "required": [
+                  "family"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "family": {
+                    "const": "cellar_work_uri"
+                  }
+                },
+                "required": [
+                  "family"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "family": {
+                    "const": "cellar_resource_uri"
+                  }
+                },
+                "required": [
+                  "family"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "family": {
+                    "const": "cellar_psi_uri"
+                  }
+                },
+                "required": [
+                  "family"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "family": {
+                    "const": "memorial"
+                  }
+                },
+                "required": [
+                  "family"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "family": {
+                    "const": "historical_legal_id"
+                  }
+                },
+                "required": [
+                  "family"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            }
+          ]
+        }
+      },
+      "required": [
+        "publisher",
+        "identifiers"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "publisher": {
+                "const": "eu-eurlex"
+              }
+            },
+            "required": [
+              "publisher"
+            ]
+          },
+          "then": {
+            "properties": {
+              "identifiers": {
+                "items": {
+                  "allOf": [
+                    {
+                      "if": {
+                        "properties": {
+                          "family": {
+                            "const": "eli"
+                          }
+                        },
+                        "required": [
+                          "family"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "raw_value": {
+                            "pattern": "^https?://(data\\.europa\\.eu|eur-lex\\.europa\\.eu)(/[!-~]*)?/eli/[!-~]*(?![\\s\\S])"
+                          }
+                        },
+                        "required": [
+                          "raw_value"
+                        ]
+                      }
+                    },
+                    {
+                      "properties": {
+                        "family": {
+                          "not": {
+                            "enum": [
+                              "memorial",
+                              "historical_legal_id"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                "minItems": 1,
+                "allOf": [
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "eli"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "celex"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "ecli"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "cellar_work_uri"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "cellar_resource_uri"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "cellar_psi_uri"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "memorial"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "historical_legal_id"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  }
+                ]
+              }
+            },
+            "required": [
+              "identifiers"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "publisher": {
+                "const": "lu-legilux"
+              }
+            },
+            "required": [
+              "publisher"
+            ]
+          },
+          "then": {
+            "properties": {
+              "identifiers": {
+                "items": {
+                  "allOf": [
+                    {
+                      "if": {
+                        "properties": {
+                          "family": {
+                            "const": "eli"
+                          }
+                        },
+                        "required": [
+                          "family"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "raw_value": {
+                            "pattern": "^(eli/[!-~]*|https?://(data\\.legilux\\.public\\.lu|legilux\\.public\\.lu)(/[!-~]*)?/eli/[!-~]*)(?![\\s\\S])"
+                          }
+                        },
+                        "required": [
+                          "raw_value"
+                        ]
+                      }
+                    },
+                    {
+                      "properties": {
+                        "family": {
+                          "not": {
+                            "enum": [
+                              "celex",
+                              "cellar_work_uri",
+                              "cellar_resource_uri",
+                              "cellar_psi_uri"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                "minItems": 1,
+                "allOf": [
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "eli"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "celex"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "ecli"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "cellar_work_uri"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "cellar_resource_uri"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "cellar_psi_uri"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "memorial"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "historical_legal_id"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  }
+                ]
+              }
+            },
+            "required": [
+              "identifiers"
+            ]
+          }
+        }
+      ]
+    },
+    "date": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "type": "string",
+          "const": "lex-v3-publisher-date/1"
+        },
+        "raw_lexical_value": {
+          "type": "string"
+        },
+        "datatype_uri": {
+          "type": "string",
+          "enum": [
+            "http://www.w3.org/2001/XMLSchema#gYear",
+            "http://www.w3.org/2001/XMLSchema#gYearMonth",
+            "http://www.w3.org/2001/XMLSchema#date"
+          ]
+        },
+        "precision": {
+          "enum": [
+            "year",
+            "year_month",
+            "year_month_day"
+          ]
+        },
+        "open_sentinel": {
+          "enum": [
+            "not_open",
+            "open_ended"
+          ]
+        }
+      },
+      "required": [
+        "schema",
+        "raw_lexical_value",
+        "datatype_uri",
+        "precision",
+        "open_sentinel"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "datatype_uri": {
+                "const": "http://www.w3.org/2001/XMLSchema#gYear",
+                "enum": [
+                  "http://www.w3.org/2001/XMLSchema#gYear",
+                  "http://www.w3.org/2001/XMLSchema#gYearMonth",
+                  "http://www.w3.org/2001/XMLSchema#date"
+                ]
+              }
+            },
+            "required": [
+              "datatype_uri"
+            ]
+          },
+          "then": {
+            "properties": {
+              "precision": {
+                "const": "year"
+              }
+            },
+            "required": [
+              "precision"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "precision": {
+                "const": "year"
+              }
+            },
+            "required": [
+              "precision"
+            ]
+          },
+          "then": {
+            "properties": {
+              "datatype_uri": {
+                "const": "http://www.w3.org/2001/XMLSchema#gYear",
+                "enum": [
+                  "http://www.w3.org/2001/XMLSchema#gYear",
+                  "http://www.w3.org/2001/XMLSchema#gYearMonth",
+                  "http://www.w3.org/2001/XMLSchema#date"
+                ]
+              }
+            },
+            "required": [
+              "datatype_uri"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "datatype_uri": {
+                "const": "http://www.w3.org/2001/XMLSchema#gYearMonth",
+                "enum": [
+                  "http://www.w3.org/2001/XMLSchema#gYear",
+                  "http://www.w3.org/2001/XMLSchema#gYearMonth",
+                  "http://www.w3.org/2001/XMLSchema#date"
+                ]
+              }
+            },
+            "required": [
+              "datatype_uri"
+            ]
+          },
+          "then": {
+            "properties": {
+              "precision": {
+                "const": "year_month"
+              }
+            },
+            "required": [
+              "precision"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "precision": {
+                "const": "year_month"
+              }
+            },
+            "required": [
+              "precision"
+            ]
+          },
+          "then": {
+            "properties": {
+              "datatype_uri": {
+                "const": "http://www.w3.org/2001/XMLSchema#gYearMonth",
+                "enum": [
+                  "http://www.w3.org/2001/XMLSchema#gYear",
+                  "http://www.w3.org/2001/XMLSchema#gYearMonth",
+                  "http://www.w3.org/2001/XMLSchema#date"
+                ]
+              }
+            },
+            "required": [
+              "datatype_uri"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "datatype_uri": {
+                "const": "http://www.w3.org/2001/XMLSchema#date",
+                "enum": [
+                  "http://www.w3.org/2001/XMLSchema#gYear",
+                  "http://www.w3.org/2001/XMLSchema#gYearMonth",
+                  "http://www.w3.org/2001/XMLSchema#date"
+                ]
+              }
+            },
+            "required": [
+              "datatype_uri"
+            ]
+          },
+          "then": {
+            "properties": {
+              "precision": {
+                "const": "year_month_day"
+              }
+            },
+            "required": [
+              "precision"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "precision": {
+                "const": "year_month_day"
+              }
+            },
+            "required": [
+              "precision"
+            ]
+          },
+          "then": {
+            "properties": {
+              "datatype_uri": {
+                "const": "http://www.w3.org/2001/XMLSchema#date",
+                "enum": [
+                  "http://www.w3.org/2001/XMLSchema#gYear",
+                  "http://www.w3.org/2001/XMLSchema#gYearMonth",
+                  "http://www.w3.org/2001/XMLSchema#date"
+                ]
+              }
+            },
+            "required": [
+              "datatype_uri"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "datatype_uri": {
+                "const": "http://www.w3.org/2001/XMLSchema#gYear",
+                "enum": [
+                  "http://www.w3.org/2001/XMLSchema#gYear",
+                  "http://www.w3.org/2001/XMLSchema#gYearMonth",
+                  "http://www.w3.org/2001/XMLSchema#date"
+                ]
+              }
+            },
+            "required": [
+              "datatype_uri"
+            ]
+          },
+          "then": {
+            "properties": {
+              "raw_lexical_value": {
+                "pattern": "^(?!0000)[0-9]{4}(Z|[\u002B-](0[0-9]|1[0-3]):[0-5][0-9]|[\u002B-]14:00)?(?![\\s\\S])"
+              }
+            },
+            "required": [
+              "raw_lexical_value"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "datatype_uri": {
+                "const": "http://www.w3.org/2001/XMLSchema#gYearMonth",
+                "enum": [
+                  "http://www.w3.org/2001/XMLSchema#gYear",
+                  "http://www.w3.org/2001/XMLSchema#gYearMonth",
+                  "http://www.w3.org/2001/XMLSchema#date"
+                ]
+              }
+            },
+            "required": [
+              "datatype_uri"
+            ]
+          },
+          "then": {
+            "properties": {
+              "raw_lexical_value": {
+                "pattern": "^(?!0000)[0-9]{4}-(0[1-9]|1[0-2])(Z|[\u002B-](0[0-9]|1[0-3]):[0-5][0-9]|[\u002B-]14:00)?(?![\\s\\S])"
+              }
+            },
+            "required": [
+              "raw_lexical_value"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "datatype_uri": {
+                "const": "http://www.w3.org/2001/XMLSchema#date",
+                "enum": [
+                  "http://www.w3.org/2001/XMLSchema#gYear",
+                  "http://www.w3.org/2001/XMLSchema#gYearMonth",
+                  "http://www.w3.org/2001/XMLSchema#date"
+                ]
+              }
+            },
+            "required": [
+              "datatype_uri"
+            ]
+          },
+          "then": {
+            "properties": {
+              "raw_lexical_value": {
+                "pattern": "^((?!0000)[0-9]{4}-((0[13578]|1[02])-(0[1-9]|[12][0-9]|3[01])|(0[469]|11)-(0[1-9]|[12][0-9]|30)|02-(0[1-9]|1[0-9]|2[0-8]))|([0-9]{2}(0[48]|[2468][048]|[13579][26])|(0[48]|[2468][048]|[13579][26])00)-02-29)(Z|[\u002B-](0[0-9]|1[0-3]):[0-5][0-9]|[\u002B-]14:00)?(?![\\s\\S])"
+              }
+            },
+            "required": [
+              "raw_lexical_value"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "open_sentinel": {
+                "const": "open_ended"
+              }
+            },
+            "required": [
+              "open_sentinel"
+            ]
+          },
+          "then": {
+            "properties": {
+              "raw_lexical_value": {
+                "pattern": "^9999-12-31(Z|[\u002B-](0[0-9]|1[0-3]):[0-5][0-9]|[\u002B-]14:00)?(?![\\s\\S])"
+              },
+              "datatype_uri": {
+                "const": "http://www.w3.org/2001/XMLSchema#date",
+                "enum": [
+                  "http://www.w3.org/2001/XMLSchema#gYear",
+                  "http://www.w3.org/2001/XMLSchema#gYearMonth",
+                  "http://www.w3.org/2001/XMLSchema#date"
+                ]
+              }
+            },
+            "required": [
+              "raw_lexical_value",
+              "datatype_uri"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "raw_lexical_value": {
+                "pattern": "^9999-12-31(Z|[\u002B-](0[0-9]|1[0-3]):[0-5][0-9]|[\u002B-]14:00)?(?![\\s\\S])"
+              },
+              "datatype_uri": {
+                "const": "http://www.w3.org/2001/XMLSchema#date",
+                "enum": [
+                  "http://www.w3.org/2001/XMLSchema#gYear",
+                  "http://www.w3.org/2001/XMLSchema#gYearMonth",
+                  "http://www.w3.org/2001/XMLSchema#date"
+                ]
+              }
+            },
+            "required": [
+              "raw_lexical_value",
+              "datatype_uri"
+            ]
+          },
+          "then": {
+            "properties": {
+              "open_sentinel": {
+                "const": "open_ended"
+              }
+            },
+            "required": [
+              "open_sentinel"
+            ]
+          }
+        }
+      ]
+    },
+    "source_predicate_uri": {
+      "type": "string",
+      "format": "uri",
+      "minLength": 1
+    },
+    "axiom": {
+      "type": "object",
+      "properties": {
+        "remote_axiom_id": {
+          "type": "string",
+          "pattern": "^[!-~]([ -~]*[!-~])?(?![\\s\\S])",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "qualifiers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "predicate_uri": {
+                "type": "string",
+                "format": "uri",
+                "minLength": 1
+              },
+              "raw_value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "predicate_uri",
+              "raw_value"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "remote_axiom_id",
+        "qualifiers"
+      ],
+      "additionalProperties": false
+    },
+    "raw_qualifier": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "publisher_comment": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "semantic_role": {
+      "enum": [
+        "document_date",
+        "publication_date",
+        "signature_date",
+        "entry_into_force",
+        "application_date",
+        "end_of_validity",
+        "publisher_deadline",
+        "transposition_deadline",
+        "notification_date",
+        "role_not_stated_by_publisher"
+      ]
+    },
+    "transposition_evidence": {
+      "enum": [
+        "none",
+        "directive_qualifier",
+        "nim_record"
+      ]
+    },
+    "parsed_by_authority": {
+      "type": "string",
+      "format": "uri",
+      "minLength": 1,
+      "pattern": "^https://"
+    },
+    "source_observation_id": {
+      "type": "string",
+      "pattern": "^[!-~]([ -~]*[!-~])?(?![\\s\\S])",
+      "minLength": 1,
+      "maxLength": 200
+    }
+  },
+  "required": [
+    "schema",
+    "subject",
+    "date",
+    "source_predicate_uri",
+    "axiom",
+    "raw_qualifier",
+    "publisher_comment",
+    "semantic_role",
+    "transposition_evidence",
+    "parsed_by_authority",
+    "source_observation_id"
+  ],
+  "additionalProperties": false,
+  "$id": "urn:uuid:60b37284-af91-4d7e-d2c5-70e481c3a4a6",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "date": {
+            "properties": {
+              "open_sentinel": {
+                "const": "open_ended"
+              }
+            },
+            "required": [
+              "open_sentinel"
+            ]
+          }
+        },
+        "required": [
+          "date"
+        ]
+      },
+      "then": {
+        "properties": {
+          "semantic_role": {
+            "enum": [
+              "end_of_validity",
+              "role_not_stated_by_publisher"
+            ]
+          }
+        },
+        "required": [
+          "semantic_role"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "semantic_role": {
+            "const": "transposition_deadline"
+          }
+        },
+        "required": [
+          "semantic_role"
+        ]
+      },
+      "then": {
+        "properties": {
+          "transposition_evidence": {
+            "enum": [
+              "directive_qualifier",
+              "nim_record"
+            ]
+          }
+        },
+        "required": [
+          "transposition_evidence"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "transposition_evidence": {
+            "enum": [
+              "directive_qualifier",
+              "nim_record"
+            ]
+          }
+        },
+        "required": [
+          "transposition_evidence"
+        ]
+      },
+      "then": {
+        "properties": {
+          "semantic_role": {
+            "const": "transposition_deadline"
+          }
+        },
+        "required": [
+          "semantic_role"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "semantic_role": {
+            "const": "publisher_deadline"
+          }
+        },
+        "required": [
+          "semantic_role"
+        ]
+      },
+      "then": {
+        "properties": {
+          "transposition_evidence": {
+            "const": "none"
+          }
+        },
+        "required": [
+          "transposition_evidence"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,295 @@
+{
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "lex-v3-publisher-date/1"
+    },
+    "raw_lexical_value": {
+      "type": "string"
+    },
+    "datatype_uri": {
+      "type": "string",
+      "enum": [
+        "http://www.w3.org/2001/XMLSchema#gYear",
+        "http://www.w3.org/2001/XMLSchema#gYearMonth",
+        "http://www.w3.org/2001/XMLSchema#date"
+      ]
+    },
+    "precision": {
+      "enum": [
+        "year",
+        "year_month",
+        "year_month_day"
+      ]
+    },
+    "open_sentinel": {
+      "enum": [
+        "not_open",
+        "open_ended"
+      ]
+    }
+  },
+  "required": [
+    "schema",
+    "raw_lexical_value",
+    "datatype_uri",
+    "precision",
+    "open_sentinel"
+  ],
+  "additionalProperties": false,
+  "$id": "urn:uuid:5fa26173-9e80-4c6d-c1b4-6fd370b29395",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "datatype_uri": {
+            "const": "http://www.w3.org/2001/XMLSchema#gYear"
+          }
+        },
+        "required": [
+          "datatype_uri"
+        ]
+      },
+      "then": {
+        "properties": {
+          "precision": {
+            "const": "year"
+          }
+        },
+        "required": [
+          "precision"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "precision": {
+            "const": "year"
+          }
+        },
+        "required": [
+          "precision"
+        ]
+      },
+      "then": {
+        "properties": {
+          "datatype_uri": {
+            "const": "http://www.w3.org/2001/XMLSchema#gYear"
+          }
+        },
+        "required": [
+          "datatype_uri"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "datatype_uri": {
+            "const": "http://www.w3.org/2001/XMLSchema#gYearMonth"
+          }
+        },
+        "required": [
+          "datatype_uri"
+        ]
+      },
+      "then": {
+        "properties": {
+          "precision": {
+            "const": "year_month"
+          }
+        },
+        "required": [
+          "precision"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "precision": {
+            "const": "year_month"
+          }
+        },
+        "required": [
+          "precision"
+        ]
+      },
+      "then": {
+        "properties": {
+          "datatype_uri": {
+            "const": "http://www.w3.org/2001/XMLSchema#gYearMonth"
+          }
+        },
+        "required": [
+          "datatype_uri"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "datatype_uri": {
+            "const": "http://www.w3.org/2001/XMLSchema#date"
+          }
+        },
+        "required": [
+          "datatype_uri"
+        ]
+      },
+      "then": {
+        "properties": {
+          "precision": {
+            "const": "year_month_day"
+          }
+        },
+        "required": [
+          "precision"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "precision": {
+            "const": "year_month_day"
+          }
+        },
+        "required": [
+          "precision"
+        ]
+      },
+      "then": {
+        "properties": {
+          "datatype_uri": {
+            "const": "http://www.w3.org/2001/XMLSchema#date"
+          }
+        },
+        "required": [
+          "datatype_uri"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "datatype_uri": {
+            "const": "http://www.w3.org/2001/XMLSchema#gYear"
+          }
+        },
+        "required": [
+          "datatype_uri"
+        ]
+      },
+      "then": {
+        "properties": {
+          "raw_lexical_value": {
+            "pattern": "^(?!0000)[0-9]{4}(Z|[\u002B-](0[0-9]|1[0-3]):[0-5][0-9]|[\u002B-]14:00)?(?![\\s\\S])"
+          }
+        },
+        "required": [
+          "raw_lexical_value"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "datatype_uri": {
+            "const": "http://www.w3.org/2001/XMLSchema#gYearMonth"
+          }
+        },
+        "required": [
+          "datatype_uri"
+        ]
+      },
+      "then": {
+        "properties": {
+          "raw_lexical_value": {
+            "pattern": "^(?!0000)[0-9]{4}-(0[1-9]|1[0-2])(Z|[\u002B-](0[0-9]|1[0-3]):[0-5][0-9]|[\u002B-]14:00)?(?![\\s\\S])"
+          }
+        },
+        "required": [
+          "raw_lexical_value"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "datatype_uri": {
+            "const": "http://www.w3.org/2001/XMLSchema#date"
+          }
+        },
+        "required": [
+          "datatype_uri"
+        ]
+      },
+      "then": {
+        "properties": {
+          "raw_lexical_value": {
+            "pattern": "^((?!0000)[0-9]{4}-((0[13578]|1[02])-(0[1-9]|[12][0-9]|3[01])|(0[469]|11)-(0[1-9]|[12][0-9]|30)|02-(0[1-9]|1[0-9]|2[0-8]))|([0-9]{2}(0[48]|[2468][048]|[13579][26])|(0[48]|[2468][048]|[13579][26])00)-02-29)(Z|[\u002B-](0[0-9]|1[0-3]):[0-5][0-9]|[\u002B-]14:00)?(?![\\s\\S])"
+          }
+        },
+        "required": [
+          "raw_lexical_value"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "open_sentinel": {
+            "const": "open_ended"
+          }
+        },
+        "required": [
+          "open_sentinel"
+        ]
+      },
+      "then": {
+        "properties": {
+          "raw_lexical_value": {
+            "pattern": "^9999-12-31(Z|[\u002B-](0[0-9]|1[0-3]):[0-5][0-9]|[\u002B-]14:00)?(?![\\s\\S])"
+          },
+          "datatype_uri": {
+            "const": "http://www.w3.org/2001/XMLSchema#date"
+          }
+        },
+        "required": [
+          "raw_lexical_value",
+          "datatype_uri"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "raw_lexical_value": {
+            "pattern": "^9999-12-31(Z|[\u002B-](0[0-9]|1[0-3]):[0-5][0-9]|[\u002B-]14:00)?(?![\\s\\S])"
+          },
+          "datatype_uri": {
+            "const": "http://www.w3.org/2001/XMLSchema#date"
+          }
+        },
+        "required": [
+          "raw_lexical_value",
+          "datatype_uri"
+        ]
+      },
+      "then": {
+        "properties": {
+          "open_sentinel": {
+            "const": "open_ended"
+          }
+        },
+        "required": [
+          "open_sentinel"
+        ]
+      }
+    }
+  ]
+}

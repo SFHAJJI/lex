@@ -1,0 +1,1743 @@
+{
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "lex-v3-local-inbound-view/1"
+    },
+    "target": {
+      "type": "object",
+      "properties": {
+        "publisher": {
+          "enum": [
+            "lu-legilux",
+            "eu-eurlex"
+          ]
+        },
+        "identifiers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "family": {
+                "enum": [
+                  "eli",
+                  "celex",
+                  "ecli",
+                  "cellar_work_uri",
+                  "cellar_resource_uri",
+                  "cellar_psi_uri",
+                  "memorial",
+                  "historical_legal_id"
+                ]
+              },
+              "raw_value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "family",
+              "raw_value"
+            ],
+            "additionalProperties": false,
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "family": {
+                      "const": "cellar_work_uri"
+                    }
+                  },
+                  "required": [
+                    "family"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "raw_value": {
+                      "pattern": "^https?://publications\\.europa\\.eu/resource/cellar/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}(?![\\s\\S])"
+                    }
+                  },
+                  "required": [
+                    "raw_value"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "family": {
+                      "const": "cellar_resource_uri"
+                    }
+                  },
+                  "required": [
+                    "family"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "raw_value": {
+                      "pattern": "^https?://publications\\.europa\\.eu/resource/cellar/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/(?:(?![?#])[!-~])\u002B(?![\\s\\S])"
+                    }
+                  },
+                  "required": [
+                    "raw_value"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "family": {
+                      "const": "memorial"
+                    }
+                  },
+                  "required": [
+                    "family"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "raw_value": {
+                      "pattern": "^[!-~]\u002B(?![\\s\\S])"
+                    }
+                  },
+                  "required": [
+                    "raw_value"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "family": {
+                      "const": "historical_legal_id"
+                    }
+                  },
+                  "required": [
+                    "family"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "raw_value": {
+                      "pattern": "^[!-~]\u002B(?![\\s\\S])"
+                    }
+                  },
+                  "required": [
+                    "raw_value"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "family": {
+                      "const": "cellar_psi_uri"
+                    }
+                  },
+                  "required": [
+                    "family"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "raw_value": {
+                      "pattern": "^https?://publications\\.europa\\.eu/resource/celex/([0-9]{5}[A-Z]{1,3}([0-9]\u002B(R\\([0-9]\u002B\\))?(-([0-9]{4}((0[13578]|1[02])(0[1-9]|[12][0-9]|3[01])|(0[469]|11)(0[1-9]|[12][0-9]|30)|02(0[1-9]|1[0-9]|2[0-8]))|([0-9]{2}(0[48]|[2468][048]|[13579][26])|(0[48]|[2468][048]|[13579][26])00)0229))?|/[A-Z0-9]\u002B(/[A-Z0-9]\u002B)*)|7[0-9]{4}[A-Z]{1,3}[0-9]\u002B[A-Z]{3}_[0-9A-Z]\u002B)(?![\\s\\S])"
+                    }
+                  },
+                  "required": [
+                    "raw_value"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "family": {
+                      "const": "ecli"
+                    }
+                  },
+                  "required": [
+                    "family"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "raw_value": {
+                      "pattern": "^ECLI:[A-Z]{2}:[A-Z0-9]\u002B:[0-9]{4}:[0-9A-Z.]\u002B(?![\\s\\S])"
+                    }
+                  },
+                  "required": [
+                    "raw_value"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "family": {
+                      "const": "celex"
+                    }
+                  },
+                  "required": [
+                    "family"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "raw_value": {
+                      "pattern": "^([0-9]{5}[A-Z]{1,3}([0-9]\u002B(R\\([0-9]\u002B\\))?(-([0-9]{4}((0[13578]|1[02])(0[1-9]|[12][0-9]|3[01])|(0[469]|11)(0[1-9]|[12][0-9]|30)|02(0[1-9]|1[0-9]|2[0-8]))|([0-9]{2}(0[48]|[2468][048]|[13579][26])|(0[48]|[2468][048]|[13579][26])00)0229))?|/[A-Z0-9]\u002B(/[A-Z0-9]\u002B)*)|7[0-9]{4}[A-Z]{1,3}[0-9]\u002B[A-Z]{3}_[0-9A-Z]\u002B)(?![\\s\\S])"
+                    }
+                  },
+                  "required": [
+                    "raw_value"
+                  ]
+                }
+              }
+            ]
+          },
+          "minItems": 1,
+          "allOf": [
+            {
+              "contains": {
+                "properties": {
+                  "family": {
+                    "const": "eli"
+                  }
+                },
+                "required": [
+                  "family"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "family": {
+                    "const": "celex"
+                  }
+                },
+                "required": [
+                  "family"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "family": {
+                    "const": "ecli"
+                  }
+                },
+                "required": [
+                  "family"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "family": {
+                    "const": "cellar_work_uri"
+                  }
+                },
+                "required": [
+                  "family"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "family": {
+                    "const": "cellar_resource_uri"
+                  }
+                },
+                "required": [
+                  "family"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "family": {
+                    "const": "cellar_psi_uri"
+                  }
+                },
+                "required": [
+                  "family"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "family": {
+                    "const": "memorial"
+                  }
+                },
+                "required": [
+                  "family"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "family": {
+                    "const": "historical_legal_id"
+                  }
+                },
+                "required": [
+                  "family"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            }
+          ]
+        }
+      },
+      "required": [
+        "publisher",
+        "identifiers"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "publisher": {
+                "const": "eu-eurlex"
+              }
+            },
+            "required": [
+              "publisher"
+            ]
+          },
+          "then": {
+            "properties": {
+              "identifiers": {
+                "items": {
+                  "allOf": [
+                    {
+                      "if": {
+                        "properties": {
+                          "family": {
+                            "const": "eli"
+                          }
+                        },
+                        "required": [
+                          "family"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "raw_value": {
+                            "pattern": "^https?://(data\\.europa\\.eu|eur-lex\\.europa\\.eu)(/[!-~]*)?/eli/[!-~]*(?![\\s\\S])"
+                          }
+                        },
+                        "required": [
+                          "raw_value"
+                        ]
+                      }
+                    },
+                    {
+                      "properties": {
+                        "family": {
+                          "not": {
+                            "enum": [
+                              "memorial",
+                              "historical_legal_id"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                "minItems": 1,
+                "allOf": [
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "eli"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "celex"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "ecli"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "cellar_work_uri"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "cellar_resource_uri"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "cellar_psi_uri"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "memorial"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "historical_legal_id"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  }
+                ]
+              }
+            },
+            "required": [
+              "identifiers"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "publisher": {
+                "const": "lu-legilux"
+              }
+            },
+            "required": [
+              "publisher"
+            ]
+          },
+          "then": {
+            "properties": {
+              "identifiers": {
+                "items": {
+                  "allOf": [
+                    {
+                      "if": {
+                        "properties": {
+                          "family": {
+                            "const": "eli"
+                          }
+                        },
+                        "required": [
+                          "family"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "raw_value": {
+                            "pattern": "^(eli/[!-~]*|https?://(data\\.legilux\\.public\\.lu|legilux\\.public\\.lu)(/[!-~]*)?/eli/[!-~]*)(?![\\s\\S])"
+                          }
+                        },
+                        "required": [
+                          "raw_value"
+                        ]
+                      }
+                    },
+                    {
+                      "properties": {
+                        "family": {
+                          "not": {
+                            "enum": [
+                              "celex",
+                              "cellar_work_uri",
+                              "cellar_resource_uri",
+                              "cellar_psi_uri"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                "minItems": 1,
+                "allOf": [
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "eli"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "celex"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "ecli"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "cellar_work_uri"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "cellar_resource_uri"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "cellar_psi_uri"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "memorial"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "historical_legal_id"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  }
+                ]
+              }
+            },
+            "required": [
+              "identifiers"
+            ]
+          }
+        }
+      ]
+    },
+    "predicate_uri": {
+      "type": "string",
+      "format": "uri",
+      "minLength": 1
+    },
+    "scope_is_complete": {
+      "type": "boolean"
+    },
+    "scope_descriptor_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+    },
+    "contributing_assertions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "schema": {
+            "type": "string",
+            "const": "lex-v3-publisher-relation/1"
+          },
+          "source": {
+            "type": "object",
+            "properties": {
+              "publisher": {
+                "enum": [
+                  "lu-legilux",
+                  "eu-eurlex"
+                ]
+              },
+              "identifiers": {
+                "$ref": "#/properties/target/properties/identifiers",
+                "minItems": 1,
+                "allOf": [
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "eli"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "celex"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "ecli"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "cellar_work_uri"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "cellar_resource_uri"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "cellar_psi_uri"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "memorial"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "historical_legal_id"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  }
+                ]
+              }
+            },
+            "required": [
+              "publisher",
+              "identifiers"
+            ],
+            "additionalProperties": false,
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "publisher": {
+                      "const": "eu-eurlex"
+                    }
+                  },
+                  "required": [
+                    "publisher"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "identifiers": {
+                      "items": {
+                        "allOf": [
+                          {
+                            "if": {
+                              "properties": {
+                                "family": {
+                                  "const": "eli"
+                                }
+                              },
+                              "required": [
+                                "family"
+                              ]
+                            },
+                            "then": {
+                              "properties": {
+                                "raw_value": {
+                                  "pattern": "^https?://(data\\.europa\\.eu|eur-lex\\.europa\\.eu)(/[!-~]*)?/eli/[!-~]*(?![\\s\\S])"
+                                }
+                              },
+                              "required": [
+                                "raw_value"
+                              ]
+                            }
+                          },
+                          {
+                            "properties": {
+                              "family": {
+                                "not": {
+                                  "enum": [
+                                    "memorial",
+                                    "historical_legal_id"
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      "minItems": 1,
+                      "allOf": [
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "eli"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        },
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "celex"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        },
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "ecli"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        },
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "cellar_work_uri"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        },
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "cellar_resource_uri"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        },
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "cellar_psi_uri"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        },
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "memorial"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        },
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "historical_legal_id"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "identifiers"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "publisher": {
+                      "const": "lu-legilux"
+                    }
+                  },
+                  "required": [
+                    "publisher"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "identifiers": {
+                      "items": {
+                        "allOf": [
+                          {
+                            "if": {
+                              "properties": {
+                                "family": {
+                                  "const": "eli"
+                                }
+                              },
+                              "required": [
+                                "family"
+                              ]
+                            },
+                            "then": {
+                              "properties": {
+                                "raw_value": {
+                                  "pattern": "^(eli/[!-~]*|https?://(data\\.legilux\\.public\\.lu|legilux\\.public\\.lu)(/[!-~]*)?/eli/[!-~]*)(?![\\s\\S])"
+                                }
+                              },
+                              "required": [
+                                "raw_value"
+                              ]
+                            }
+                          },
+                          {
+                            "properties": {
+                              "family": {
+                                "not": {
+                                  "enum": [
+                                    "celex",
+                                    "cellar_work_uri",
+                                    "cellar_resource_uri",
+                                    "cellar_psi_uri"
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      "minItems": 1,
+                      "allOf": [
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "eli"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        },
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "celex"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        },
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "ecli"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        },
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "cellar_work_uri"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        },
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "cellar_resource_uri"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        },
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "cellar_psi_uri"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        },
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "memorial"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        },
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "historical_legal_id"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "identifiers"
+                  ]
+                }
+              }
+            ]
+          },
+          "target": {
+            "type": "object",
+            "properties": {
+              "publisher": {
+                "enum": [
+                  "lu-legilux",
+                  "eu-eurlex"
+                ]
+              },
+              "identifiers": {
+                "$ref": "#/properties/target/properties/identifiers",
+                "minItems": 1,
+                "allOf": [
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "eli"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "celex"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "ecli"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "cellar_work_uri"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "cellar_resource_uri"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "cellar_psi_uri"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "memorial"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "family": {
+                          "const": "historical_legal_id"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ]
+                    },
+                    "minContains": 0,
+                    "maxContains": 1
+                  }
+                ]
+              }
+            },
+            "required": [
+              "publisher",
+              "identifiers"
+            ],
+            "additionalProperties": false,
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "publisher": {
+                      "const": "eu-eurlex"
+                    }
+                  },
+                  "required": [
+                    "publisher"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "identifiers": {
+                      "items": {
+                        "allOf": [
+                          {
+                            "if": {
+                              "properties": {
+                                "family": {
+                                  "const": "eli"
+                                }
+                              },
+                              "required": [
+                                "family"
+                              ]
+                            },
+                            "then": {
+                              "properties": {
+                                "raw_value": {
+                                  "pattern": "^https?://(data\\.europa\\.eu|eur-lex\\.europa\\.eu)(/[!-~]*)?/eli/[!-~]*(?![\\s\\S])"
+                                }
+                              },
+                              "required": [
+                                "raw_value"
+                              ]
+                            }
+                          },
+                          {
+                            "properties": {
+                              "family": {
+                                "not": {
+                                  "enum": [
+                                    "memorial",
+                                    "historical_legal_id"
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      "minItems": 1,
+                      "allOf": [
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "eli"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        },
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "celex"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        },
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "ecli"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        },
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "cellar_work_uri"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        },
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "cellar_resource_uri"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        },
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "cellar_psi_uri"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        },
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "memorial"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        },
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "historical_legal_id"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "identifiers"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "publisher": {
+                      "const": "lu-legilux"
+                    }
+                  },
+                  "required": [
+                    "publisher"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "identifiers": {
+                      "items": {
+                        "allOf": [
+                          {
+                            "if": {
+                              "properties": {
+                                "family": {
+                                  "const": "eli"
+                                }
+                              },
+                              "required": [
+                                "family"
+                              ]
+                            },
+                            "then": {
+                              "properties": {
+                                "raw_value": {
+                                  "pattern": "^(eli/[!-~]*|https?://(data\\.legilux\\.public\\.lu|legilux\\.public\\.lu)(/[!-~]*)?/eli/[!-~]*)(?![\\s\\S])"
+                                }
+                              },
+                              "required": [
+                                "raw_value"
+                              ]
+                            }
+                          },
+                          {
+                            "properties": {
+                              "family": {
+                                "not": {
+                                  "enum": [
+                                    "celex",
+                                    "cellar_work_uri",
+                                    "cellar_resource_uri",
+                                    "cellar_psi_uri"
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      "minItems": 1,
+                      "allOf": [
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "eli"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        },
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "celex"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        },
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "ecli"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        },
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "cellar_work_uri"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        },
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "cellar_resource_uri"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        },
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "cellar_psi_uri"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        },
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "memorial"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        },
+                        {
+                          "contains": {
+                            "properties": {
+                              "family": {
+                                "const": "historical_legal_id"
+                              }
+                            },
+                            "required": [
+                              "family"
+                            ]
+                          },
+                          "minContains": 0,
+                          "maxContains": 1
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "identifiers"
+                  ]
+                }
+              }
+            ]
+          },
+          "predicate_uri": {
+            "type": "string",
+            "format": "uri",
+            "minLength": 1
+          },
+          "source_observation_id": {
+            "type": "string",
+            "pattern": "^[!-~]([ -~]*[!-~])?(?![\\s\\S])",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "qualified_axioms": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "remote_axiom_id": {
+                  "type": "string",
+                  "pattern": "^[!-~]([ -~]*[!-~])?(?![\\s\\S])",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "qualifiers": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "predicate_uri": {
+                        "type": "string",
+                        "format": "uri",
+                        "minLength": 1
+                      },
+                      "raw_value": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "predicate_uri",
+                      "raw_value"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "remote_axiom_id",
+                "qualifiers"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "schema",
+          "source",
+          "target",
+          "predicate_uri",
+          "source_observation_id",
+          "qualified_axioms"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "target",
+    "predicate_uri",
+    "scope_is_complete",
+    "scope_descriptor_sha256",
+    "contributing_assertions"
+  ],
+  "additionalProperties": false,
+  "$id": "urn:uuid:3d804f51-7c6e-4a4b-af92-4db15e907173",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}
