@@ -1,0 +1,204 @@
+{
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string"
+    },
+    "target": {
+      "type": "object",
+      "properties": {
+        "publisher": {
+          "enum": [
+            "lu-legilux",
+            "eu-eurlex"
+          ]
+        },
+        "family": {
+          "enum": [
+            "eli",
+            "celex",
+            "memorial",
+            "historical_legal_id"
+          ]
+        },
+        "raw_value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "publisher",
+        "family",
+        "raw_value"
+      ],
+      "additionalProperties": false
+    },
+    "predicate_uri": {
+      "type": "string"
+    },
+    "scope_is_complete": {
+      "type": "boolean"
+    },
+    "scope_descriptor_sha256": {
+      "type": "string"
+    },
+    "contributing_assertions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "schema": {
+            "type": "string"
+          },
+          "source": {
+            "type": "object",
+            "properties": {
+              "publisher": {
+                "enum": [
+                  "lu-legilux",
+                  "eu-eurlex"
+                ]
+              },
+              "family": {
+                "enum": [
+                  "eli",
+                  "celex",
+                  "memorial",
+                  "historical_legal_id"
+                ]
+              },
+              "raw_value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "publisher",
+              "family",
+              "raw_value"
+            ],
+            "additionalProperties": false
+          },
+          "target": {
+            "type": "object",
+            "properties": {
+              "publisher": {
+                "enum": [
+                  "lu-legilux",
+                  "eu-eurlex"
+                ]
+              },
+              "family": {
+                "enum": [
+                  "eli",
+                  "celex",
+                  "memorial",
+                  "historical_legal_id"
+                ]
+              },
+              "raw_value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "publisher",
+              "family",
+              "raw_value"
+            ],
+            "additionalProperties": false
+          },
+          "predicate_uri": {
+            "type": "string"
+          },
+          "observation": {
+            "type": "object",
+            "properties": {
+              "observation_id": {
+                "type": "string"
+              },
+              "observed_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "transport_bytes": {
+                "type": "object",
+                "properties": {
+                  "content_sha256": {
+                    "type": "string"
+                  },
+                  "byte_length": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "content_sha256",
+                  "byte_length"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "observation_id",
+              "observed_at",
+              "transport_bytes"
+            ],
+            "additionalProperties": false
+          },
+          "qualified_axioms": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "remote_axiom_id": {
+                  "type": "string"
+                },
+                "qualifiers": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "predicate_uri": {
+                        "type": "string"
+                      },
+                      "raw_value": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "predicate_uri",
+                      "raw_value"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "remote_axiom_id",
+                "qualifiers"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "schema",
+          "source",
+          "target",
+          "predicate_uri",
+          "observation",
+          "qualified_axioms"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "target",
+    "predicate_uri",
+    "scope_is_complete",
+    "scope_descriptor_sha256",
+    "contributing_assertions"
+  ],
+  "additionalProperties": false,
+  "$id": "urn:uuid:3d804f51-7c6e-4a4b-af92-4db15e907173",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

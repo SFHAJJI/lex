@@ -1,0 +1,70 @@
+{
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string"
+    },
+    "vocabulary": {
+      "enum": [
+        "relation_predicate",
+        "date_semantic_role",
+        "date_open_sentinel",
+        "date_datatype",
+        "axiom_qualifier"
+      ]
+    },
+    "observed_term": {
+      "type": "string"
+    },
+    "admitted_terms": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "observation": {
+      "type": "object",
+      "properties": {
+        "observation_id": {
+          "type": "string"
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "transport_bytes": {
+          "type": "object",
+          "properties": {
+            "content_sha256": {
+              "type": "string"
+            },
+            "byte_length": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "content_sha256",
+            "byte_length"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "observation_id",
+        "observed_at",
+        "transport_bytes"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema",
+    "vocabulary",
+    "observed_term",
+    "admitted_terms",
+    "observation"
+  ],
+  "additionalProperties": false,
+  "$id": "urn:uuid:71c48395-b0a2-4e8f-e3d6-81f592d4b5b7",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

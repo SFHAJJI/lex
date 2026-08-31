@@ -1,0 +1,38 @@
+{
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string"
+    },
+    "raw_lexical_value": {
+      "type": "string"
+    },
+    "datatype_uri": {
+      "type": "string"
+    },
+    "precision": {
+      "enum": [
+        "year",
+        "year_month",
+        "year_month_day"
+      ]
+    },
+    "open_sentinel": {
+      "enum": [
+        "not_open",
+        "open_ended",
+        "not_yet_determined"
+      ]
+    }
+  },
+  "required": [
+    "schema",
+    "raw_lexical_value",
+    "datatype_uri",
+    "precision",
+    "open_sentinel"
+  ],
+  "additionalProperties": false,
+  "$id": "urn:uuid:5fa26173-9e80-4c6d-c1b4-6fd370b29395",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}
