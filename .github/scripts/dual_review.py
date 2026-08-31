@@ -166,18 +166,6 @@ def evaluate(head_sha, head_tree, parents, message, pr_body, issue_labels_for):
     )
 
 
-def _git(*args):
-    """Text git output with surrounding whitespace stripped.
-
-    Safe for identities like a SHA. NEVER use it for the receipt message: stripping is
-    exactly the normalisation that would repair a malformed attestation before the
-    parser could refuse it. Use `read_commit_message` for that.
-    """
-    return subprocess.run(
-        ["git", *args], capture_output=True, text=True, check=True
-    ).stdout.strip()
-
-
 def read_commit_message(sha, cwd=None):
     """The commit object's message bytes, exactly, or (None, reason).
 

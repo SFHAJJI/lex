@@ -13,6 +13,7 @@ regressions here: an arbitrary role pair must fail, and a product commit landing
 a receipt must turn the gate red again.
 """
 
+import re
 import subprocess
 import tempfile
 import unittest
@@ -359,6 +360,274 @@ class ProductionLoaderBoundary(unittest.TestCase):
             path = self._repo_with_message(tmp, bad)
             ok, reason = self._via_production_path(path)
             self.assertFalse(ok, "a carriage return must reach the parser")
+
+
+WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "dual-review.yml"
+REQUIRED_CONTEXT = "dual-review"
+
+
+def _uncommented(text):
+    """The workflow's lines with YAML comments removed.
+
+    Needed because this workflow's own prose contains the word `needs:` while
+    explaining why it must never appear. A scanner that read comments would either
+    trip on the explanation or, worse, be quietly relaxed until it stopped tripping.
+    """
+    kept = []
+    for line in text.split("\n"):
+        quote = None
+        cut = None
+        for index, char in enumerate(line):
+            if quote is not None:
+                if char == quote:
+                    quote = None
+            elif char in "'\"":
+                quote = char
+            elif char == "#" and (index == 0 or line[index - 1] in " \t"):
+                cut = index
+                break
+        kept.append(line if cut is None else line[:cut])
+    return kept
+
+
+def false_green_defects(text):
+    """Every way this workflow could report success without the receipt being checked.
+
+    GitHub reports a SKIPPED job as success, and a skipped required check does not
+    block merging. Codex's O1 was exactly that: the gate's own tests ran in a separate
+    job that the required one declared with `needs:`, so a failing test suite skipped
+    the required context into a reported success.
+
+    The repair for that was a workflow comment saying not to split the jobs again. A
+    comment is not a control, and it cannot fail. This function is the control: the
+    same split shape, a `continue-on-error` step, a conditional step, a dropped test
+    step, a path filter and a renamed required context are all mechanically refused.
+    """
+    lines = _uncommented(text)
+    defects = []
+
+    jobs = []
+    inside = False
+    for line in lines:
+        if line.rstrip() == "jobs:":
+            inside = True
+            continue
+        if inside:
+            if line.strip() and not line.startswith(" "):
+                inside = False
+                continue
+            match = re.match(r"^  ([A-Za-z0-9_.-]+):\s*$", line)
+            if match:
+                jobs.append(match.group(1))
+    if jobs != [REQUIRED_CONTEXT]:
+        defects.append(
+            f"expected exactly one job, {REQUIRED_CONTEXT!r}, found {jobs}; a second "
+            "job is only reachable through needs:, and a skipped needs: dependant "
+            "reports success"
+        )
+
+    for key in ("needs", "continue-on-error", "if"):
+        found = [line.strip() for line in lines if re.match(rf"^\s*{key}:", line)]
+        if found:
+            defects.append(
+                f"{key}: is forbidden in this workflow, found {found}; it can skip or "
+                "excuse work while the required context still reports success"
+            )
+
+    for key in ("paths", "paths-ignore"):
+        if any(re.match(rf"^\s*{key}:", line) for line in lines):
+            defects.append(f"{key}: would let the gate not run on some pull requests")
+
+    # Anchored to the job's own indentation. An earlier version of this check
+    # matched the workflow-level `name:` instead, so a renamed job passed it: the
+    # assertion was true of the file and false of the required context.
+    if not any(re.match(rf"^    name: {REQUIRED_CONTEXT}\s*$", line) for line in lines):
+        defects.append(
+            f"the job itself must be named {REQUIRED_CONTEXT!r}; branch protection "
+            "matches the required context by name, so a rename silently orphans it"
+        )
+
+    # Anchored as the checkout's own inputs, not merely present somewhere in the
+    # file: the same expression also appears as the HEAD_SHA env value, so a
+    # substring search stayed green after the `ref:` line was deleted.
+    required_inputs = (
+        (
+            r"^          ref: \$\{\{ github\.event\.pull_request\.head\.sha \}\}\s*$",
+            "the checkout must name head.sha explicitly, never the synthetic merge "
+            "commit",
+        ),
+        (
+            r"^          fetch-depth: 2\s*$",
+            "the parent must be fetched so the receipt's tree can be compared to it",
+        ),
+    )
+    for pattern, why in required_inputs:
+        if not any(re.match(pattern, line) for line in lines):
+            defects.append(f"missing checkout input: {why}")
+
+    types = next((line for line in lines if re.match(r"^\s*types:\s*\[", line)), None)
+    if types is None:
+        defects.append("the trigger declares no event types")
+    else:
+        declared = {t.strip() for t in types.split("[", 1)[1].rstrip("] ").split(",")}
+        missing = sorted({"opened", "synchronize", "reopened", "edited"} - declared)
+        if missing:
+            defects.append(f"the trigger must re-evaluate on {missing}")
+
+    # A step may not swallow its own failure. `run: python3 -m unittest ... || true`
+    # exits zero and greens the required context exactly like the skipped job did,
+    # and a block scalar would hide a whole script from these single-line checks.
+    for line in lines:
+        if re.match(r"^\s*run:\s*[|>]", line):
+            defects.append(
+                "run: block scalars are forbidden here; a multi-line script hides "
+                "its own failure handling from this check"
+            )
+        if ("unittest" in line or "dual_review.py" in line) and set("|;&") & set(line):
+            defects.append(
+                f"shell chaining in a gate command can discard its exit status: "
+                f"{line.strip()!r}"
+            )
+
+    tests_at = next((i for i, line in enumerate(lines) if "unittest" in line), None)
+    gate_at = next((i for i, line in enumerate(lines) if "dual_review.py" in line), None)
+    if tests_at is None:
+        defects.append("the gate's own induced mutations are not run at all")
+    if gate_at is None:
+        defects.append("the receipt evaluation is not run at all")
+    if tests_at is not None and gate_at is not None and tests_at > gate_at:
+        defects.append(
+            "the induced mutations must run before the evaluation, in the same job, so "
+            "that a test failure fails the required context directly"
+        )
+
+    return defects
+
+
+class RequiredContextCannotFalseGreen(unittest.TestCase):
+    """Codex O1: a failed test stage must fail the required context, not skip it.
+
+    These read the shipped workflow file. Without them the entire O1 repair is a
+    comment, and I verified that: re-splitting the jobs left all other tests green.
+    """
+
+    def _workflow(self):
+        return WORKFLOW.read_text(encoding="utf-8")
+
+    def test_the_shipped_workflow_has_no_false_green_shape(self):
+        self.assertEqual(false_green_defects(self._workflow()), [])
+
+    def test_a_skipped_prerequisite_is_caught_in_the_shipped_file(self):
+        """The induced proof: Codex's exact objection, applied to the real file."""
+        real = self._workflow()
+        split = real.replace(
+            "  dual-review:\n    name: dual-review\n    runs-on: ubuntu-latest\n",
+            "  dual-review-tests:\n    name: dual-review-tests\n"
+            "    runs-on: ubuntu-latest\n    steps:\n      - run: python3 -m unittest\n"
+            "\n  dual-review:\n    name: dual-review\n"
+            "    needs: dual-review-tests\n    runs-on: ubuntu-latest\n",
+        )
+        self.assertNotEqual(split, real, "the mutation never applied; the proof is void")
+        defects = "\n".join(false_green_defects(split))
+        self.assertIn("needs:", defects)
+        self.assertIn("exactly one job", defects)
+
+    def test_a_continue_on_error_step_is_caught(self):
+        mutated = self._workflow().replace(
+            "      - name: induced mutations for the gate itself\n",
+            "      - name: induced mutations for the gate itself\n"
+            "        continue-on-error: true\n",
+        )
+        self.assertNotEqual(mutated, self._workflow(), "the mutation never applied")
+        self.assertIn("continue-on-error:", "\n".join(false_green_defects(mutated)))
+
+    def test_a_conditional_step_is_caught(self):
+        mutated = self._workflow().replace(
+            "      - name: verify the immutable lex-review/1 receipt at the head\n",
+            "      - name: verify the immutable lex-review/1 receipt at the head\n"
+            "        if: false\n",
+        )
+        self.assertNotEqual(mutated, self._workflow(), "the mutation never applied")
+        self.assertIn("if:", "\n".join(false_green_defects(mutated)))
+
+    def test_dropping_the_gate_tests_is_caught(self):
+        without = "\n".join(
+            line for line in self._workflow().split("\n") if "unittest" not in line
+        )
+        self.assertNotEqual(without, self._workflow(), "the mutation never applied")
+        self.assertIn("induced mutations", "\n".join(false_green_defects(without)))
+
+    def test_running_the_gate_before_its_own_tests_is_caught(self):
+        lines = self._workflow().split("\n")
+        tests_at = next(i for i, line in enumerate(lines) if "unittest" in line)
+        gate_at = next(i for i, line in enumerate(lines) if "dual_review.py" in line)
+        lines[tests_at], lines[gate_at] = lines[gate_at], lines[tests_at]
+        self.assertIn("must run before", "\n".join(false_green_defects("\n".join(lines))))
+
+    def test_renaming_the_required_context_is_caught(self):
+        mutated = self._workflow().replace(
+            "    name: dual-review\n", "    name: dual-review-v2\n"
+        )
+        self.assertNotEqual(mutated, self._workflow(), "the mutation never applied")
+        self.assertTrue(false_green_defects(mutated))
+
+    def test_a_path_filter_is_caught(self):
+        mutated = self._workflow().replace(
+            "    branches: [v3/integration]\n",
+            "    branches: [v3/integration]\n    paths: ['src/**']\n",
+        )
+        self.assertNotEqual(mutated, self._workflow(), "the mutation never applied")
+        self.assertIn("paths:", "\n".join(false_green_defects(mutated)))
+
+    def test_dropping_the_explicit_head_checkout_is_caught(self):
+        mutated = self._workflow().replace(
+            "          ref: ${{ github.event.pull_request.head.sha }}\n", ""
+        )
+        self.assertNotEqual(mutated, self._workflow(), "the mutation never applied")
+        self.assertIn("checkout input", "\n".join(false_green_defects(mutated)))
+
+    def test_dropping_a_trigger_type_is_caught(self):
+        mutated = self._workflow().replace(", edited]", "]")
+        self.assertNotEqual(mutated, self._workflow(), "the mutation never applied")
+        self.assertIn("edited", "\n".join(false_green_defects(mutated)))
+
+
+
+def competing_context_defects(directory):
+    """Another workflow declaring a job named `dual-review` would report the same
+    required context. GitHub keeps the latest check run of a given name, so a second,
+    always-green producer of this context would overwrite the real verdict.
+    """
+    defects = []
+    for path in sorted(directory.iterdir()):
+        if path.suffix not in (".yml", ".yaml") or path.name == WORKFLOW.name:
+            continue
+        lines = _uncommented(path.read_text(encoding="utf-8"))
+        for line in lines:
+            if re.match(rf"^  {REQUIRED_CONTEXT}:\s*$", line) or re.match(
+                rf"^    name: {REQUIRED_CONTEXT}\s*$", line
+            ):
+                defects.append(
+                    f"{path.name} also produces the {REQUIRED_CONTEXT!r} context; the "
+                    "latest run of a name wins, so it could overwrite the real verdict"
+                )
+    return defects
+
+
+class NoCompetingProducerOfTheRequiredContext(unittest.TestCase):
+    def test_no_other_workflow_produces_this_context(self):
+        self.assertEqual(competing_context_defects(WORKFLOW.parent), [])
+
+    def test_a_second_producer_would_be_caught(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            (directory / WORKFLOW.name).write_text("name: real\n", encoding="utf-8")
+            (directory / "impostor.yml").write_text(
+                "jobs:\n  dual-review:\n    runs-on: ubuntu-latest\n"
+                "    steps:\n      - run: exit 0\n",
+                encoding="utf-8",
+            )
+            self.assertTrue(competing_context_defects(directory))
 
 
 if __name__ == "__main__":
