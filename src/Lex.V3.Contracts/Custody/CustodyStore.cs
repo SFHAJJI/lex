@@ -87,8 +87,13 @@ public static class BytesBeforeDecode
         {
             receipt = store.Create(transportBytes, custodyClass);
         }
-        catch (Exception exception) when (exception is not CustodyRequiredException)
+        catch (Exception exception)
+            when (exception is not (CustodyRequiredException or OperationCanceledException))
         {
+            // Cancellation is not a custody failure. Wrapping it would tell an operator the store
+            // refused when the caller withdrew, and the two need different responses: one is an
+            // incident and the other is a shutdown. Every other exception does mean the bytes may
+            // not be held, so it fails closed and carries its cause.
             throw new CustodyRequiredException(
                 "The transport bytes were not held, so nothing may decode them.", exception);
         }

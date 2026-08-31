@@ -72,6 +72,23 @@ public sealed class CustodyTests
         Assert.AreEqual(1, store.Calls);
     }
 
+    /// <summary>
+    /// A withdrawn caller and a refusing store need different answers. Wrapping cancellation as a
+    /// custody failure would report an incident every time the process shut down mid-write.
+    /// </summary>
+    [TestMethod]
+    public void CancellationIsNotReportedAsACustodyFailure()
+    {
+        var store = new RecordingStore(refusal: new OperationCanceledException());
+        var decoderRan = false;
+
+        Assert.ThrowsExactly<OperationCanceledException>(() => BytesBeforeDecode.Decode(
+            Body, CustodyClass.NightlyFloor90d, store,
+            _ => { decoderRan = true; return 0; }));
+
+        Assert.IsFalse(decoderRan, "the decoder ran after a cancelled custody write");
+    }
+
     [TestMethod]
     public void TheStoreIsWrittenBeforeTheDecoderRuns()
     {
