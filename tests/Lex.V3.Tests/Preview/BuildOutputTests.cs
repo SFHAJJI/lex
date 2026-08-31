@@ -9,7 +9,7 @@ namespace Lex.V3.Tests.Preview;
 public sealed class BuildOutputTests
 {
     [TestMethod]
-    public void SourceSetDigestBindsOrdinalNamesLengthsAndBytes()
+    public void SourceSetDigestBindsOrdinalNamesLengthsAndCanonicalText()
     {
         using var root = new BuildTestDirectory();
         Directory.CreateDirectory(root.Path);
@@ -30,6 +30,26 @@ public sealed class BuildOutputTests
         File.Move(Path.Combine(root.Path, "Z.cs"), Path.Combine(root.Path, "A.cs"));
         File.AppendAllText(Path.Combine(root.Path, "A.cs"), "// changed\n", new UTF8Encoding(false));
         Assert.AreNotEqual(initial, SyntheticPreviewSourceDigest.Compute(root.Path));
+    }
+
+    [TestMethod]
+    public void SourceSetDigestTreatsCheckoutLineEndingsAsTheSameRepositoryText()
+    {
+        using var root = new BuildTestDirectory();
+        Directory.CreateDirectory(root.Path);
+        var sourcePath = Path.Combine(root.Path, "A.cs");
+        var projectPath = Path.Combine(root.Path, "Lex.V3.Preview.csproj");
+        var lockPath = Path.Combine(root.Path, "packages.lock.json");
+        File.WriteAllText(sourcePath, "class A {}\n", new UTF8Encoding(false));
+        File.WriteAllText(projectPath, "<Project Sdk=\"Microsoft.NET.Sdk\" />\n", new UTF8Encoding(false));
+        File.WriteAllText(lockPath, "{}\n", new UTF8Encoding(false));
+        var lfDigest = SyntheticPreviewSourceDigest.Compute(root.Path);
+
+        File.WriteAllText(sourcePath, "class A {}\r\n", new UTF8Encoding(false));
+        File.WriteAllText(projectPath, "<Project Sdk=\"Microsoft.NET.Sdk\" />\r\n", new UTF8Encoding(false));
+        File.WriteAllText(lockPath, "{}\r\n", new UTF8Encoding(false));
+
+        Assert.AreEqual(lfDigest, SyntheticPreviewSourceDigest.Compute(root.Path));
     }
 
     [TestMethod]

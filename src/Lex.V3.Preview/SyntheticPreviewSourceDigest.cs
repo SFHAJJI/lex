@@ -55,20 +55,10 @@ public static class SyntheticPreviewSourceDigest
             var nameBytes = StrictUtf8.GetBytes(member.Name);
             AppendLength(hash, nameBytes.LongLength);
             hash.AppendData(nameBytes);
-            using var stream = new FileStream(
-                member.Path,
-                FileMode.Open,
-                FileAccess.Read,
-                FileShare.Read,
-                bufferSize: 81920,
-                FileOptions.SequentialScan);
-            AppendLength(hash, stream.Length);
-            var buffer = new byte[81920];
-            int read;
-            while ((read = stream.Read(buffer, 0, buffer.Length)) != 0)
-            {
-                hash.AppendData(buffer.AsSpan(0, read));
-            }
+            var text = StrictUtf8.GetString(File.ReadAllBytes(member.Path));
+            var canonicalBytes = StrictUtf8.GetBytes(text.Replace("\r\n", "\n", StringComparison.Ordinal));
+            AppendLength(hash, canonicalBytes.LongLength);
+            hash.AppendData(canonicalBytes);
         }
 
         return Convert.ToHexStringLower(hash.GetHashAndReset());
