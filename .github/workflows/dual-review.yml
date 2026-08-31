@@ -11,12 +11,30 @@ name: dual-review
 # reviewer, candidate commit, candidate tree and verdict. Any later product commit
 # makes the head cease to be a receipt. No comment is parsed for gate state.
 #
+# ADVISORY BY DESIGN, AND THAT IS NOT A GAP. Decisions 54 and 56 close the required
+# context set for this repository at exactly `dotnet`, `web` and `canon-windows`.
+# `dual-review` is deliberately NOT among them and must never be added: a fourth
+# required context is a failure, not completion.
+#
+# The hardening in the accompanying tests is therefore not protecting a merge block.
+# It protects something stricter. A blocking gate that lies is caught when the merge
+# it should have stopped goes through; an advisory one that lies is simply believed,
+# because a human reads its result before integrating and has no second signal. The
+# specification is that it must run honestly, not that it must run decisively.
+#
+# `required_approving_review_count` is 0 on the protected branch. That is the premise
+# of this design, not an oversight: both co-owners authenticate as one account, so
+# GitHub's approval count cannot represent two reviewers and the receipt commit
+# carries the verdict instead. Raising it would deadlock the branch without adding a
+# reviewer.
+#
 # ONE JOB, DELIBERATELY. An earlier shape ran the gate's own tests in a separate job
 # and made this one `needs:` it. GitHub SKIPS a dependent job when its dependency
-# fails, and a skipped required check reports SUCCESS - so breaking the test suite
-# would have false-greened the very gate those tests protect. Running the tests and
-# the evaluation sequentially in the single required job means a test failure fails
-# the required check directly. Do not split these again.
+# fails, and a skipped check reports SUCCESS - so breaking the test suite would have
+# false-greened the very gate those tests protect. That matters here even though this
+# check blocks nothing, because a green advisory result is read as a verdict. Running
+# the tests and the evaluation sequentially in one job means a test failure fails this
+# check directly. Do not split these again.
 # https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks#handling-skipped-but-required-checks
 
 on:
