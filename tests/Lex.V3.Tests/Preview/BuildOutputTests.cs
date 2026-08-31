@@ -53,6 +53,80 @@ public sealed class BuildOutputTests
     }
 
     [TestMethod]
+    public void SourceSetDigestCanonicalizesCrLfSplitAcrossReadBuffers()
+    {
+        using var root = new BuildTestDirectory();
+        Directory.CreateDirectory(root.Path);
+        var sourcePath = Path.Combine(root.Path, "A.cs");
+        File.WriteAllText(
+            Path.Combine(root.Path, "Lex.V3.Preview.csproj"),
+            "<Project Sdk=\"Microsoft.NET.Sdk\" />\n",
+            new UTF8Encoding(false));
+        File.WriteAllText(Path.Combine(root.Path, "packages.lock.json"), "{}\n", new UTF8Encoding(false));
+        var prefix = new string('a', 81_919);
+        File.WriteAllText(sourcePath, prefix + "\nx\n", new UTF8Encoding(false));
+        var lfDigest = SyntheticPreviewSourceDigest.Compute(root.Path);
+
+        File.WriteAllText(sourcePath, prefix + "\r\nx\n", new UTF8Encoding(false));
+
+        Assert.AreEqual(lfDigest, SyntheticPreviewSourceDigest.Compute(root.Path));
+    }
+
+    [TestMethod]
+    public void SourceSetDigestCanonicalizesOnlyCrLfAndPreservesLoneCarriageReturns()
+    {
+        using var root = new BuildTestDirectory();
+        Directory.CreateDirectory(root.Path);
+        var sourcePath = Path.Combine(root.Path, "A.cs");
+        File.WriteAllText(
+            Path.Combine(root.Path, "Lex.V3.Preview.csproj"),
+            "<Project Sdk=\"Microsoft.NET.Sdk\" />\n",
+            new UTF8Encoding(false));
+        File.WriteAllText(Path.Combine(root.Path, "packages.lock.json"), "{}\n", new UTF8Encoding(false));
+        File.WriteAllText(sourcePath, "a\nb\nc\n", new UTF8Encoding(false));
+        var lfDigest = SyntheticPreviewSourceDigest.Compute(root.Path);
+
+        File.WriteAllText(sourcePath, "a\r\nb\nc\r\n", new UTF8Encoding(false));
+        Assert.AreEqual(lfDigest, SyntheticPreviewSourceDigest.Compute(root.Path));
+
+        File.WriteAllText(sourcePath, "a\rb\nc\n", new UTF8Encoding(false));
+        Assert.AreNotEqual(lfDigest, SyntheticPreviewSourceDigest.Compute(root.Path));
+    }
+
+    [TestMethod]
+    public void SourceSetDigestRejectsInvalidUtf8()
+    {
+        using var root = new BuildTestDirectory();
+        Directory.CreateDirectory(root.Path);
+        File.WriteAllText(
+            Path.Combine(root.Path, "Lex.V3.Preview.csproj"),
+            "<Project Sdk=\"Microsoft.NET.Sdk\" />\n",
+            new UTF8Encoding(false));
+        File.WriteAllText(Path.Combine(root.Path, "packages.lock.json"), "{}\n", new UTF8Encoding(false));
+        File.WriteAllBytes(Path.Combine(root.Path, "A.cs"), [0x61, 0xff, 0x62]);
+
+        Assert.ThrowsExactly<DecoderFallbackException>(() => SyntheticPreviewSourceDigest.Compute(root.Path));
+    }
+
+    [TestMethod]
+    public void SourceSetDigestRejectsAnOversizedMemberBeforeReadingIt()
+    {
+        using var root = new BuildTestDirectory();
+        Directory.CreateDirectory(root.Path);
+        File.WriteAllText(
+            Path.Combine(root.Path, "Lex.V3.Preview.csproj"),
+            "<Project Sdk=\"Microsoft.NET.Sdk\" />\n",
+            new UTF8Encoding(false));
+        File.WriteAllText(Path.Combine(root.Path, "packages.lock.json"), "{}\n", new UTF8Encoding(false));
+        using (var oversized = File.Create(Path.Combine(root.Path, "A.cs")))
+        {
+            oversized.SetLength(1_048_577);
+        }
+
+        Assert.ThrowsExactly<InvalidDataException>(() => SyntheticPreviewSourceDigest.Compute(root.Path));
+    }
+
+    [TestMethod]
     public void CanonicalBuildPublishesOnlyContentAddressedSuccessfulOutputs()
     {
         using var root = new BuildTestDirectory();

@@ -394,6 +394,10 @@ public sealed class ApiRuntimeIntegrationTests
             "preview-trust",
             "public-key.spki");
 
+        Assert.AreEqual(
+            SyntheticPreviewTrustConfiguration.KeyId,
+            $"s0-05-key-{SyntheticPreviewTrustConfiguration.PublicKeySha256[..16]}");
+
         using var state = await SyntheticApiBootstrap.OpenAsync(
             graphRoot,
             publicKeyPath,

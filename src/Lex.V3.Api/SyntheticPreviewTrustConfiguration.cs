@@ -4,7 +4,7 @@ internal static class SyntheticPreviewTrustConfiguration
 {
     public const string EnvironmentBinding = "s0-05-preview";
     public const string IssuerId = "s0-05-issuer";
-    public const string KeyId = "s0-05-key";
+    public const string KeyId = "s0-05-key-1feaa27189a602d4";
     public const string PublicKeySha256 =
-        "a144ab6f8632ba8e8fca0c33baa01b9e129278fc35a7fa9e174dc3700f757fff";
+        "1feaa27189a602d460115919ccfd9cbde31637778369c9aa15f8fba05a32437f";
 }
