@@ -101,10 +101,19 @@ public sealed class EuSeedResolutionPlanTests
 
         Assert.AreEqual("plain_literal", probe.QueryFormLabel);
         Assert.AreEqual("32016R0679", probe.RequestedCelex);
-        Assert.AreEqual(200, probe.BaselineHttpStatus);
-        Assert.AreEqual(0L, probe.BaselineRowCount);
-        Assert.AreEqual(new DateOnly(2026, 8, 31), probe.BaselineDate);
+        Assert.AreEqual(
+            "SELECT (COUNT(*) AS ?n) WHERE { ?work <http://publications.europa.eu/ontology/cdm#resource_legal_id_celex> \"32016R0679\" }",
+            probe.CanonicalSparql);
         Assert.AreNotEqual(EuSeedResolutionPlan.PositiveControlCelex, probe.RequestedCelex);
+
+        var propertyNames = typeof(EuPlainLiteralDriftProbePlan)
+            .GetProperties()
+            .Select(static property => property.Name)
+            .OrderBy(static name => name, StringComparer.Ordinal)
+            .ToArray();
+        CollectionAssert.AreEqual(
+            new[] { "CanonicalSparql", "QueryFormLabel", "RequestedCelex" },
+            propertyNames);
 
         var typedSeedRow = EuSeedResolutionPlan.Batches
             .SelectMany(static batch => batch.Rows)
@@ -112,6 +121,45 @@ public sealed class EuSeedResolutionPlanTests
                 !row.IsControl &&
                 string.Equals(row.RequestedCelex, probe.RequestedCelex, StringComparison.Ordinal));
         Assert.AreEqual(EuSeedResolutionPlan.XsdStringDatatypeIri, typedSeedRow.DatatypeIri);
+    }
+
+    [TestMethod]
+    public void DriftProbePlanRefusesAnythingButTheFrozenStableRecipe()
+    {
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            new EuPlainLiteralDriftProbePlan(
+                "typed_literal",
+                "32016R0679",
+                EuSeedResolutionPlan.PlainLiteralDriftProbeSparql));
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            new EuPlainLiteralDriftProbePlan(
+                "plain_literal",
+                "",
+                EuSeedResolutionPlan.PlainLiteralDriftProbeSparql));
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            new EuPlainLiteralDriftProbePlan(
+                "plain_literal",
+                "32000L0031",
+                EuSeedResolutionPlan.PlainLiteralDriftProbeSparql));
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            new EuPlainLiteralDriftProbePlan(
+                "plain_literal",
+                "32016R0679",
+                "SELECT (COUNT(*) AS ?n) WHERE { ?work ?predicate \"32016R0679\" }"));
+    }
+
+    [TestMethod]
+    public void BatchReportsInvalidExpectedControlCardinalityPrecisely()
+    {
+        var control = new EuSeedResolutionRow(
+            EuSeedResolutionPlan.PositiveControlCelex,
+            EuSeedResolutionPlan.XsdStringDatatypeIri,
+            isControl: true);
+
+        var exception = Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            new EuSeedResolutionBatch(1, new[] { control }, expectedControlCardinality: 0));
+
+        Assert.AreEqual("expectedControlCardinality", exception.ParamName);
     }
 
     [TestMethod]

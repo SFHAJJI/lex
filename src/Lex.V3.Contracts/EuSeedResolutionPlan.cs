@@ -35,15 +35,24 @@ public sealed record EuSeedResolutionBatch
     {
         ArgumentNullException.ThrowIfNull(rows);
         var copy = rows.ToArray();
-        if (ordinal < 1 || copy.Length > 50 || copy.Length == 0)
+        if (ordinal < 1)
         {
             throw new ArgumentOutOfRangeException(nameof(ordinal));
         }
 
+        if (copy.Length is 0 or > 50)
+        {
+            throw new ArgumentOutOfRangeException(nameof(rows));
+        }
+
+        if (expectedControlCardinality != 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(expectedControlCardinality));
+        }
+
         if (copy.Any(static row => row is null) ||
             !copy[0].IsControl ||
-            copy.Count(static row => row.IsControl) != 1 ||
-            expectedControlCardinality != 1)
+            copy.Count(static row => row.IsControl) != 1)
         {
             throw new ArgumentException("Each resolution batch must carry its one expected positive control.", nameof(rows));
         }
@@ -67,32 +76,54 @@ public sealed record EuPlainLiteralDriftProbePlan
     internal EuPlainLiteralDriftProbePlan(
         string queryFormLabel,
         string requestedCelex,
-        int baselineHttpStatus,
-        long baselineRowCount,
-        DateOnly baselineDate)
+        string canonicalSparql)
     {
+        if (!string.Equals(queryFormLabel, "plain_literal", StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "The drift probe must use the exact plain-literal query form.",
+                nameof(queryFormLabel));
+        }
+
+        if (!string.Equals(
+                requestedCelex,
+                EuSeedResolutionPlan.PlainLiteralDriftProbeCelex,
+                StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "The drift probe must carry the frozen CELEX identity.",
+                nameof(requestedCelex));
+        }
+
+        if (!string.Equals(
+                canonicalSparql,
+                EuSeedResolutionPlan.PlainLiteralDriftProbeSparql,
+                StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "The drift probe must use the exact direct-triple COUNT(*) recipe with an untyped literal.",
+                nameof(canonicalSparql));
+        }
+
         QueryFormLabel = queryFormLabel;
         RequestedCelex = requestedCelex;
-        BaselineHttpStatus = baselineHttpStatus;
-        BaselineRowCount = baselineRowCount;
-        BaselineDate = baselineDate;
+        CanonicalSparql = canonicalSparql;
     }
 
     public string QueryFormLabel { get; }
 
     public string RequestedCelex { get; }
 
-    public int BaselineHttpStatus { get; }
-
-    public long BaselineRowCount { get; }
-
-    public DateOnly BaselineDate { get; }
+    public string CanonicalSparql { get; }
 }
 
 public static class EuSeedResolutionPlan
 {
     public const string SeedListSha256 =
         "ea1b4f276406a8bede5223459b92d7a94321de5b9a38de63397f2e22688d50c0";
+    public const string PlainLiteralDriftProbeCelex = "32016R0679";
+    public const string PlainLiteralDriftProbeSparql =
+        "SELECT (COUNT(*) AS ?n) WHERE { ?work <http://publications.europa.eu/ontology/cdm#resource_legal_id_celex> \"32016R0679\" }";
     public static string XsdStringDatatypeIri { get; } = "http://www.w3.org/2001/XMLSchema#string";
     public static string PositiveControlCelex { get; } = "32000L0031";
 
@@ -195,10 +226,8 @@ public static class EuSeedResolutionPlan
         });
         PlainLiteralDriftProbe = new EuPlainLiteralDriftProbePlan(
             "plain_literal",
-            "32016R0679",
-            200,
-            0,
-            new DateOnly(2026, 8, 31));
+            PlainLiteralDriftProbeCelex,
+            PlainLiteralDriftProbeSparql);
     }
 
     public static IReadOnlyList<string> Seeds { get; }
