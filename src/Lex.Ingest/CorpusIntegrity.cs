@@ -385,24 +385,39 @@ public static class CorpusIntegrity
                         ? entry.ObservedFrom : firstMissedAt;
                     var completedAtIsValid = TryCanonicalUtc(entry.ObservedFrom,
                         out var completedAt);
-                    var invalidPending = state == "withdrawn_from_source"
-                        || expectedRuns is < 1 or > 2
-                        || string.IsNullOrWhiteSpace(entry.FirstMissedAt)
-                        || entry.RunsMissed != expectedRuns
-                        || !TryRunIdentity(entry.RunIdentity)
-                        || !runIdentities.Add(entry.RunIdentity!)
-                        || !string.Equals(entry.FirstMissedAt,
+                    // The condition order is load-bearing: runIdentities.Add mutates, so it must
+                    // stay behind the same guards it sat behind as a short-circuiting disjunction.
+                    var pendingReason =
+                        state == "withdrawn_from_source"
+                            ? "a withdrawn work cannot return to unconfirmed absence"
+                        : expectedRuns is < 1 or > 2
+                            ? $"runs_missed would reach {expectedRuns}, past the two-run bound"
+                        : string.IsNullOrWhiteSpace(entry.FirstMissedAt)
+                            ? "first_missed_at is empty"
+                        : entry.RunsMissed != expectedRuns
+                            ? $"runs_missed={Show(entry.RunsMissed)}, expected {expectedRuns}"
+                        : !TryRunIdentity(entry.RunIdentity)
+                            ? $"run_identity {Show(entry.RunIdentity)} is not a well-formed run identity"
+                        : !runIdentities.Add(entry.RunIdentity!)
+                            ? $"run_identity {entry.RunIdentity} repeats inside one version"
+                        : !string.Equals(entry.FirstMissedAt,
                             expectedFirstMissedAt, StringComparison.Ordinal)
-                        || historicalAuditRequired
-                           && !HistoricalWithdrawalAuditValidation.IsAuditCorrection(entry)
-                        || historicalAuditRequired
-                           && historicalLegacyObservedAt is not null
-                           && completedAt <= historicalLegacyObservedAt.Value
-                        || !completedAtIsValid
-                        || (priorCompletedAt is not null
-                            && completedAt <= priorCompletedAt.Value);
-                    if (invalidPending)
-                        errors.Add($"{relativeVersion}/meta.json absence lifecycle is invalid");
+                            ? $"first_missed_at={Show(entry.FirstMissedAt)}, expected {Show(expectedFirstMissedAt)}"
+                        : historicalAuditRequired
+                          && !HistoricalWithdrawalAuditValidation.IsAuditCorrection(entry)
+                            ? "a historical withdrawal is open and this entry is not its audit correction"
+                        : historicalAuditRequired
+                          && historicalLegacyObservedAt is not null
+                          && completedAt <= historicalLegacyObservedAt.Value
+                            ? $"observed_from={Show(entry.ObservedFrom)} does not follow the legacy withdrawal at {Show(historicalLegacyObservedAt)}"
+                        : !completedAtIsValid
+                            ? $"observed_from={Show(entry.ObservedFrom)} is not a canonical UTC instant"
+                        : priorCompletedAt is not null
+                          && completedAt <= priorCompletedAt.Value
+                            ? $"observed_from={Show(entry.ObservedFrom)} does not advance past the prior run at {Show(priorCompletedAt)}"
+                        : null;
+                    if (pendingReason is not null)
+                        errors.Add($"{relativeVersion}/meta.json absence lifecycle is invalid: absent_unconfirmed, {pendingReason}");
                     else if (!completedRuns.TryGetValue(
                                  entry.RunIdentity!, out var pendingCompletedAt))
                         errors.Add($"{relativeVersion}/meta.json run identity is absent from the completed-run ledger");
@@ -420,12 +435,14 @@ public static class CorpusIntegrity
                         && entry.RunIdentity is null;
                     if (legacyFields)
                     {
-                        if (!explicitMigration || historicalAuditRequired)
-                            errors.Add($"{relativeVersion}/meta.json absence lifecycle is invalid");
+                        if (!explicitMigration)
+                            errors.Add($"{relativeVersion}/meta.json absence lifecycle is invalid: withdrawn_from_source carries legacy fields without an explicit migration");
+                        else if (historicalAuditRequired)
+                            errors.Add($"{relativeVersion}/meta.json absence lifecycle is invalid: a second legacy withdrawal while an earlier one is still awaiting its audit correction");
                         historicalAuditRequired = true;
                         if (!TryCanonicalUtc(entry.ObservedFrom,
                                 out var legacyObservedAt))
-                            errors.Add($"{relativeVersion}/meta.json absence lifecycle is invalid");
+                            errors.Add($"{relativeVersion}/meta.json absence lifecycle is invalid: legacy withdrawn_from_source observed_from={Show(entry.ObservedFrom)} is not a canonical UTC instant");
                         else
                             historicalLegacyObservedAt = legacyObservedAt;
                         state = null;
@@ -437,21 +454,34 @@ public static class CorpusIntegrity
 
                     var withdrawalAtIsValid = TryCanonicalUtc(entry.ObservedFrom,
                         out var withdrawalAt);
-                    var invalidWithdrawal = state != "absent_unconfirmed"
-                            || runsMissed != 2
-                            || entry.RunsMissed != 3
-                            || string.IsNullOrWhiteSpace(entry.FirstMissedAt)
-                            || !TryRunIdentity(entry.RunIdentity)
-                            || !runIdentities.Add(entry.RunIdentity!)
-                            || !string.Equals(entry.FirstMissedAt,
-                                firstMissedAt, StringComparison.Ordinal)
-                            || historicalAuditRequired
-                               && !HistoricalWithdrawalAuditValidation.IsAuditCorrection(entry)
-                            || !withdrawalAtIsValid
-                            || priorCompletedAt is null
-                            || withdrawalAt <= priorCompletedAt.Value;
-                    if (invalidWithdrawal)
-                        errors.Add($"{relativeVersion}/meta.json absence lifecycle is invalid");
+                    var withdrawalReason =
+                        state != "absent_unconfirmed"
+                            ? $"withdrawal from state {Show(state)}, which must be absent_unconfirmed"
+                        : runsMissed != 2
+                            ? $"the prior entry recorded runs_missed={runsMissed}, and withdrawal requires two"
+                        : entry.RunsMissed != 3
+                            ? $"runs_missed={Show(entry.RunsMissed)}, and withdrawal requires three"
+                        : string.IsNullOrWhiteSpace(entry.FirstMissedAt)
+                            ? "first_missed_at is empty"
+                        : !TryRunIdentity(entry.RunIdentity)
+                            ? $"run_identity {Show(entry.RunIdentity)} is not a well-formed run identity"
+                        : !runIdentities.Add(entry.RunIdentity!)
+                            ? $"run_identity {entry.RunIdentity} repeats inside one version"
+                        : !string.Equals(entry.FirstMissedAt,
+                            firstMissedAt, StringComparison.Ordinal)
+                            ? $"first_missed_at={Show(entry.FirstMissedAt)}, expected {Show(firstMissedAt)}"
+                        : historicalAuditRequired
+                          && !HistoricalWithdrawalAuditValidation.IsAuditCorrection(entry)
+                            ? "a historical withdrawal is open and this entry is not its audit correction"
+                        : !withdrawalAtIsValid
+                            ? $"observed_from={Show(entry.ObservedFrom)} is not a canonical UTC instant"
+                        : priorCompletedAt is null
+                            ? "no prior completed run to withdraw against"
+                        : withdrawalAt <= priorCompletedAt.Value
+                            ? $"observed_from={Show(entry.ObservedFrom)} does not advance past the prior run at {Show(priorCompletedAt)}"
+                        : null;
+                    if (withdrawalReason is not null)
+                        errors.Add($"{relativeVersion}/meta.json absence lifecycle is invalid: withdrawn_from_source, {withdrawalReason}");
                     else if (!completedRuns.TryGetValue(
                                  entry.RunIdentity!, out var withdrawalCompletedAt))
                         errors.Add($"{relativeVersion}/meta.json run identity is absent from the completed-run ledger");
@@ -471,13 +501,21 @@ public static class CorpusIntegrity
                 case "resighted":
                     var resightedAtIsValid = TryCanonicalUtc(
                         entry.ObservedFrom, out var resightedAt);
-                    if (state is not ("absent_unconfirmed" or "withdrawn_from_source")
-                        || !TryRunIdentity(entry.RunIdentity)
-                        || !runIdentities.Add(entry.RunIdentity!)
-                        || !resightedAtIsValid
-                        || priorCompletedAt is not null
-                           && resightedAt <= priorCompletedAt.Value)
-                        errors.Add($"{relativeVersion}/meta.json absence lifecycle is invalid");
+                    var resightedReason =
+                        state is not ("absent_unconfirmed" or "withdrawn_from_source")
+                            ? $"resighting from state {Show(state)}, which must be absent_unconfirmed or withdrawn_from_source"
+                        : !TryRunIdentity(entry.RunIdentity)
+                            ? $"run_identity {Show(entry.RunIdentity)} is not a well-formed run identity"
+                        : !runIdentities.Add(entry.RunIdentity!)
+                            ? $"run_identity {entry.RunIdentity} repeats inside one version"
+                        : !resightedAtIsValid
+                            ? $"observed_from={Show(entry.ObservedFrom)} is not a canonical UTC instant"
+                        : priorCompletedAt is not null
+                          && resightedAt <= priorCompletedAt.Value
+                            ? $"observed_from={Show(entry.ObservedFrom)} does not advance past the prior run at {Show(priorCompletedAt)}"
+                        : null;
+                    if (resightedReason is not null)
+                        errors.Add($"{relativeVersion}/meta.json absence lifecycle is invalid: resighted, {resightedReason}");
                     else if (!completedRuns.TryGetValue(
                                  entry.RunIdentity!, out var resightedCompletedAt))
                         errors.Add($"{relativeVersion}/meta.json run identity is absent from the completed-run ledger");
@@ -492,7 +530,16 @@ public static class CorpusIntegrity
             }
         }
         if (historicalAuditRequired)
-            errors.Add($"{relativeVersion}/meta.json absence lifecycle is invalid");
+            errors.Add($"{relativeVersion}/meta.json absence lifecycle is invalid: a legacy withdrawal is still open at the end of the event list, with no audit correction");
+
+        // Renders a value for an operator, without turning null into an empty string.
+        static string Show(object? value) => value switch
+        {
+            null => "(absent)",
+            string text when string.IsNullOrWhiteSpace(text) => "(blank)",
+            DateTimeOffset instant => instant.ToString("o", CultureInfo.InvariantCulture),
+            _ => value.ToString() ?? "(absent)",
+        };
 
         static bool TryRunIdentity(string? value)
         {

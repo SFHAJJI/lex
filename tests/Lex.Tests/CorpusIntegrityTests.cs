@@ -522,6 +522,57 @@ public sealed class CorpusIntegrityTests : IDisposable
     }
 
     [Fact]
+    public async Task Each_absence_lifecycle_violation_names_its_own_condition()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-06T00:00:00Z"), CodeCommit)
+            .WriteAsync(new TextAdapter(), default);
+        var metaPath = Path.Combine(VersionDirectory, "meta.json");
+        var pristine = await File.ReadAllTextAsync(metaPath);
+
+        // Four violations across three switch arms. While the guard printed one string for every
+        // condition, a red pipeline could name twelve works and not one cause, so the corpus stayed
+        // frozen for want of a diagnosis rather than for want of a fix.
+        var violations = new EventEntry[]
+        {
+            new() { Event = "absent_unconfirmed", ObservedFrom = "2026-08-07T00:00:00Z",
+                    Scope = "version", FirstMissedAt = null, RunsMissed = 1,
+                    RunIdentity = "run-1" },
+            new() { Event = "absent_unconfirmed", ObservedFrom = "2026-08-07T00:00:00Z",
+                    Scope = "version", FirstMissedAt = "2026-08-07T00:00:00Z", RunsMissed = 7,
+                    RunIdentity = "run-1" },
+            new() { Event = "resighted", ObservedFrom = "2026-08-07T00:00:00Z",
+                    Scope = "version", RunIdentity = "run-1" },
+            new() { Event = "withdrawn_from_source", ObservedFrom = "2026-08-07T00:00:00Z",
+                    Scope = "version", FirstMissedAt = "2026-08-07T00:00:00Z", RunsMissed = 3,
+                    RunIdentity = "run-1" },
+        };
+
+        const string marker = "absence lifecycle is invalid: ";
+        var reasons = new List<string>();
+        foreach (var violation in violations)
+        {
+            var meta = JsonSerializer.Deserialize<VersionMeta>(pristine, CorpusJson.Options)!;
+            meta.Events.Add(violation);
+            meta.RecordSha256 = null;
+            meta.RecordSha256 = Convert.ToHexStringLower(
+                System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(
+                    JsonSerializer.Serialize(meta, CorpusJson.Options))));
+            await File.WriteAllTextAsync(metaPath,
+                JsonSerializer.Serialize(meta, CorpusJson.Options) + "\n");
+
+            var error = Assert.Single(CorpusIntegrity.Verify(_dir).Errors,
+                e => e.Contains("absence lifecycle is invalid", StringComparison.Ordinal));
+            var at = error.IndexOf(marker, StringComparison.Ordinal);
+            Assert.True(at >= 0, error);
+            var reason = error[(at + marker.Length)..];
+            Assert.NotEmpty(reason);
+            reasons.Add(reason);
+        }
+
+        Assert.Equal(reasons.Count, reasons.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
     public async Task Migration_marker_cannot_relabel_fresh_run_evidence_as_a_historical_audit()
     {
         await new CorpusWriter(_dir,
