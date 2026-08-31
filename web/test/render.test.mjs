@@ -106,6 +106,7 @@ test("problems are rendered from the argument, not from a template literal", () 
 import { renderSuccess, renderRefusal } from "../scripts/render.mjs";
 
 import { readFileSync } from "node:fs";
+import { loadCaptured } from "../scripts/captured-envelopes.mjs";
 import { decodeEnvelope, validateEnvelope } from "../scripts/envelope.mjs";
 
 const json = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8"));
@@ -120,7 +121,7 @@ const REGISTRY = new Map([
 // version of this suite was written against the wrong schema entirely, and every test
 // passed.
 const capture = (file) => {
-  const raw = json(`../fixtures/captured/${file}`);
+  const raw = loadCaptured(file);
   const { decoded, problems } = decodeEnvelope(ENVELOPE_SCHEMA, raw, REGISTRY);
   assert.deepEqual(problems, [], `${file} must decode cleanly`);
   assert.deepEqual(validateEnvelope(ENVELOPE_SCHEMA, decoded), [], `${file} must validate`);
@@ -148,10 +149,72 @@ test("every HTML-significant character is escaped independently", () => {
 // The wire format encodes closed vocabularies as integer indices. Rendering one raw puts
 // a bare number where a reader expects a machine code, and that is an answer-shaped
 // thing that says nothing.
-test("no vocabulary index reaches the page as a number", () => {
-  for (const html of [SUCCESS(), REFUSAL()]) {
-    assert.ok(!/<code>-?[0-9]+<\/code>/.test(html), "a raw index was rendered");
+// This assertion used to look only inside <code> elements, and the page leaked
+// `<li>0</li>` straight past it. Codex found it in the built HTML. The check is now over
+// every text node in the body: no element's entire text may be a bare integer, because
+// on these pages there is no legitimate one. That is the assertion that would have
+// caught the tuple-schema gap, and the narrower one is why it did not.
+test("no element renders a bare integer, so no vocabulary index leaks", () => {
+  for (const [name, html] of [["success", SUCCESS()], ["refusal", REFUSAL()]]) {
+    const body = html.slice(html.indexOf("<main"));
+    const bare = [...body.matchAll(/>\s*(-?[0-9]+)\s*</g)].map((m) => m[1]);
+    assert.deepEqual(bare, [], `${name} rendered ${bare.length} bare integer(s): ${bare.join(", ")}`);
   }
+});
+
+// The tuple positions specifically. `publisher_contexts_checked` is a prefixItems tuple
+// closed with `items: false`, and a decoder that reads only `items` skips it entirely.
+test("a prefixItems tuple decodes through its declared vocabulary", () => {
+  const html = REFUSAL();
+  assert.ok(html.includes("<li>lu-legilux</li>"), "the tuple member must render as its name");
+
+  const envelope = capture("refusal.json");
+  assert.equal(envelope.refusal.publisher_contexts_checked[0], "lu-legilux");
+
+  // The tail is closed, so an extra member has no schema and must be refused rather
+  // than passed through undecoded.
+  const extra = loadCaptured("refusal.json");
+  extra.refusal.publisher_contexts_checked = [0, 0];
+  const { problems } = decodeEnvelope(ENVELOPE_SCHEMA, extra, REGISTRY);
+  assert.ok(problems.length > 0, "an over-length closed tuple must be refused");
+});
+
+// The closed tail on its own. In the real schema `maxItems` and `items: false` are
+// coextensive, so the length check alone rejects an extra member and the tail branch is
+// unreachable there. Deleting that branch left the suite green, which is the same shape
+// as every other weak assertion found today: one guard exercised only through a case a
+// second guard also rejects. This schema exists to isolate it.
+test("a closed tail refuses a member no schema describes", () => {
+  const closedTail = {
+    anyOf: [
+      {
+        properties: {
+          branch: { const: "refusal" },
+          refusal: {
+            type: "object",
+            properties: {
+              families: {
+                type: "array",
+                items: false,
+                prefixItems: [{ enum: ["eli", "celex"] }],
+              },
+            },
+          },
+        },
+      },
+    ],
+  };
+  const envelope = (families) => ({ branch: "refusal", refusal: { families } });
+
+  const good = decodeEnvelope(closedTail, envelope([1]), new Map());
+  assert.deepEqual(good.problems, [], "a member the tuple describes decodes cleanly");
+  assert.deepEqual(good.decoded.refusal.families, ["celex"]);
+
+  const extra = decodeEnvelope(closedTail, envelope([1, 0]), new Map());
+  assert.ok(
+    extra.problems.some((p) => p.includes("beyond the closed tuple")),
+    "a member past the closed tail must be refused by the tail rule itself",
+  );
 });
 
 test("vocabulary indices are resolved to their declared members", () => {
@@ -252,7 +315,7 @@ test("a provenance row absent from the envelope is omitted, never defaulted", ()
 // clamped or passed through. Without these, disabling the range check leaves the whole
 // suite green, which is how it was found.
 test("a vocabulary index outside its declared members is refused", () => {
-  const base = () => json("../fixtures/captured/refusal.json");
+  const base = () => loadCaptured("refusal.json");
   const cases = [
     ["code past the only entry", (e) => { e.refusal.code = 1; }],
     ["family index equal to the member count", (e) => { e.refusal.checked_identifier_family = 4; }],

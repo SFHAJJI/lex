@@ -9,7 +9,6 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "test": "node --test test/*.test.mjs",
-    "evidence": "node scripts/browser-evidence.mjs",
-    "evidence:selftest": "node test/keyboard-walk.selftest.mjs"
+    "evidence": "node scripts/browser-evidence.mjs"
   }
 }

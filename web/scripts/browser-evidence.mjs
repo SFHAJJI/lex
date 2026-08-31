@@ -10,6 +10,9 @@
 // read out of a running browser, and a page that logs anything to the console fails.
 
 import { spawn } from "node:child_process";
+import { createServer } from "node:http";
+import { readFile } from "node:fs/promises";
+import { extname, join as joinPath } from "node:path";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -246,6 +249,48 @@ export async function keyboardWalk(session, sessionId, expected) {
   return seen;
 }
 
+
+const CONTENT_TYPES = new Map([
+  [".html", "text/html; charset=utf-8"],
+  [".css", "text/css; charset=utf-8"],
+  [".svg", "image/svg+xml"],
+]);
+
+/**
+ * Serve dist/ over HTTP.
+ *
+ * The harness used file:// and reported console=0 while the pages were missing an icon
+ * link. Over file:// a browser makes no favicon request at all, so the 404 that a real
+ * visitor sees could not appear. The acceptance criteria ask for the actual network
+ * shape, and file:// is not it: no status codes, no default document requests, no
+ * content types. This is 30 lines and removes a whole class of thing the harness could
+ * not see.
+ */
+async function serveDist(root) {
+  const server = createServer((request, response) => {
+    const path = decodeURIComponent(new URL(request.url, "http://127.0.0.1").pathname);
+    const file = joinPath(root, path === "/" ? "/index.html" : path);
+    readFile(file).then(
+      (body) => {
+        response.writeHead(200, {
+          "content-type": CONTENT_TYPES.get(extname(file)) ?? "application/octet-stream",
+        });
+        response.end(body);
+      },
+      () => {
+        response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+        response.end("not found");
+      },
+    );
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  return {
+    origin: `http://127.0.0.1:${port}`,
+    close: () => new Promise((resolve) => server.close(resolve)),
+  };
+}
+
 /** Kill a process and everything it spawned, then wait for the handles to drop. */
 async function killTree(pid) {
   if (!pid) return;
@@ -275,6 +320,7 @@ async function main() {
   const browser = await findBrowser();
   const port = 9222 + Math.floor(Math.random() * 500);
   const profile = await mkdtemp(join(tmpdir(), "lex-cdp-"));
+  const site = await serveDist(join(process.cwd(), "dist"));
   const child = spawn(
     browser,
     [
@@ -317,7 +363,7 @@ async function main() {
     await session.send("Page.enable", {}, sessionId);
 
     for (const page of PAGES) {
-      const url = pathToFileURL(join(process.cwd(), "dist", page)).href;
+      const url = `${site.origin}/${page}`;
       for (const viewport of WIDTHS) {
        for (const scheme of ["light", "dark"]) {
         await session.send(
@@ -435,6 +481,7 @@ async function main() {
     // renderers and the GPU process behind. Repeated runs left 51 of them alive, holding
     // handles on dist/ so the next build failed with EBUSY. Kill the tree, not the parent.
     await killTree(child.pid);
+    await site.close();
     await rm(profile, { force: true, recursive: true }).catch(() => {});
   }
 

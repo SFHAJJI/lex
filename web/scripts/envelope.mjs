@@ -76,6 +76,29 @@ export function decodeEnvelope(schema, envelope, registry = new Map()) {
     return { decoded: null, problems };
   }
 
+  // Every closed vocabulary the schema and its registered sub-schemas declare, collected
+  // once. These are the only index spaces a value is allowed to be decoded through.
+  const vocabularies = [];
+  const collect = (node, seen) => {
+    if (!node || typeof node !== "object" || seen.has(node)) return;
+    seen.add(node);
+    if (Array.isArray(node.enum) && node.enum.every((m) => typeof m === "string")) {
+      vocabularies.push(node.enum);
+    }
+    for (const child of Object.values(node)) {
+      if (Array.isArray(child)) {
+        child.forEach((member) => collect(member, seen));
+      } else {
+        collect(child, seen);
+      }
+    }
+  };
+  const seen = new Set();
+  collect(schema, seen);
+  for (const sub of registry.values()) {
+    collect(sub, seen);
+  }
+
   // A sub-document may declare its own schema identity: `result.schema` is
   // `lex-v3-preview-object-set/1`, and the vocabularies for `body_holding_state` and
   // `body_holding_disposition` live there rather than in the envelope schema. Following
@@ -131,7 +154,61 @@ export function decodeEnvelope(schema, envelope, registry = new Map()) {
       }
       return node.enum[value];
     }
+
+    // A position pinned only by `const` still arrives as an index, and the const names
+    // the expected member without naming the vocabulary it indexes. Rather than guess,
+    // find the schema's own vocabularies that place this const at exactly this index.
+    // One match decodes; zero or several refuse, because decoding through the wrong
+    // vocabulary produces a confident wrong label.
+    if (typeof node.const === "string" && typeof value === "number") {
+      // Deduplicated by content: the publisher vocabulary is declared identically in
+      // several places, and the same list declared twice is one vocabulary, not two
+      // candidates. Only genuinely different member orders are ambiguous.
+      const candidates = [
+        ...new Set(
+          vocabularies
+            .filter((members) => Number.isInteger(value) && members[value] === node.const)
+            .map((members) => JSON.stringify(members)),
+        ),
+      ];
+      if (candidates.length === 1) {
+        return node.const;
+      }
+      problems.push(
+        `${where}: index ${JSON.stringify(value)} is pinned to ${JSON.stringify(node.const)} ` +
+          `but ${candidates.length} declared vocabularies place it there, so the ` +
+          "vocabulary to decode against is ambiguous",
+      );
+      return value;
+    }
     if (Array.isArray(value)) {
+      // A tuple schema describes each position separately with `prefixItems`, and closes
+      // the tail with `items: false`. Reading only `items` skipped those positions
+      // entirely, so `publisher_contexts_checked: [0]` reached the page as a literal 0
+      // where a reader expects `lu-legilux`. The length is enforced here rather than
+      // left to validation, because an extra element would otherwise decode against no
+      // schema at all and pass through raw.
+      const prefix = Array.isArray(node.prefixItems) ? node.prefixItems : null;
+      if (prefix) {
+        const max = node.maxItems ?? (node.items === false ? prefix.length : Infinity);
+        const min = node.minItems ?? 0;
+        if (value.length > max || value.length < min) {
+          problems.push(
+            `${where}: ${value.length} members, but the schema admits ` +
+              `${min === max ? min : `${min} to ${max}`}`,
+          );
+        }
+        return value.map((item, index) => {
+          if (index >= prefix.length) {
+            if (node.items === false) {
+              problems.push(`${where}[${index}]: beyond the closed tuple, no schema describes it`);
+              return item;
+            }
+            return decode(node.items, item, `${where}[${index}]`);
+          }
+          return decode(prefix[index], item, `${where}[${index}]`);
+        });
+      }
       return value.map((item, index) => decode(node.items, item, `${where}[${index}]`));
     }
     if (value !== null && typeof value === "object") {
