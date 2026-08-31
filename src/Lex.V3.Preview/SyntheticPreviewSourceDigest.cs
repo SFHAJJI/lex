@@ -24,7 +24,7 @@ public static class SyntheticPreviewSourceDigest
             throw new InvalidDataException("Preview source root must be a real directory.");
         }
 
-        var paths = new List<string>();
+        var paths = new List<string>(MaximumMembers);
         foreach (var path in Directory.EnumerateFiles(root, "*", SearchOption.TopDirectoryOnly))
         {
             var extension = Path.GetExtension(path);
@@ -33,6 +33,11 @@ public static class SyntheticPreviewSourceDigest
                 if (!string.Equals(extension, ".cs", StringComparison.Ordinal))
                 {
                     throw new InvalidDataException("Preview C# source extensions must use canonical casing.");
+                }
+
+                if (paths.Count >= MaximumMembers - 2)
+                {
+                    throw new InvalidDataException("Preview source set contains too many members.");
                 }
 
                 paths.Add(path);
@@ -49,11 +54,6 @@ public static class SyntheticPreviewSourceDigest
         {
             throw new InvalidDataException("Preview source set contains a duplicate canonical name.");
         }
-        if (members.Length > MaximumMembers)
-        {
-            throw new InvalidDataException("Preview source set contains too many members.");
-        }
-
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         hash.AppendData(Encoding.ASCII.GetBytes(Domain));
         hash.AppendData(stackalloc byte[] { 0 });
@@ -71,121 +71,87 @@ public static class SyntheticPreviewSourceDigest
                 FileShare.Read,
                 BufferBytes,
                 FileOptions.SequentialScan);
-            if (stream.Length > MaximumMemberBytes ||
-                sourceSetBytes > MaximumSourceSetBytes - stream.Length)
-            {
-                throw new InvalidDataException("Preview source bytes exceed their bound.");
-            }
-
-            sourceSetBytes += stream.Length;
-            var canonicalLength = MeasureCanonicalLengthAndValidateUtf8(stream);
+            var bytes = CaptureBoundedMember(stream, MaximumSourceSetBytes - sourceSetBytes);
+            sourceSetBytes += bytes.LongLength;
+            var canonicalLength = MeasureCanonicalLengthAndValidateUtf8(bytes);
             AppendLength(hash, canonicalLength);
-            stream.Position = 0;
-            AppendCanonicalBytes(hash, stream);
+            AppendCanonicalBytes(hash, bytes);
         }
 
         return Convert.ToHexStringLower(hash.GetHashAndReset());
     }
 
-    private static long MeasureCanonicalLengthAndValidateUtf8(Stream stream)
+    private static byte[] CaptureBoundedMember(FileStream stream, long remainingSourceSetBytes)
     {
-        var decoder = StrictUtf8.GetDecoder();
-        var bytes = new byte[BufferBytes];
-        var characters = new char[BufferBytes];
+        var length = stream.Length;
+        if (length > MaximumMemberBytes || length > remainingSourceSetBytes)
+        {
+            throw new InvalidDataException("Preview source bytes exceed their bound.");
+        }
+
+        var bytes = new byte[checked((int)length)];
+        var offset = 0;
+        while (offset < bytes.Length)
+        {
+            var read = stream.Read(bytes, offset, bytes.Length - offset);
+            if (read == 0)
+            {
+                throw new InvalidDataException("Preview source changed while it was captured.");
+            }
+
+            offset += read;
+        }
+
+        if (stream.ReadByte() != -1)
+        {
+            throw new InvalidDataException("Preview source changed while it was captured.");
+        }
+
+        return bytes;
+    }
+
+    private static long MeasureCanonicalLengthAndValidateUtf8(ReadOnlySpan<byte> bytes)
+    {
+        _ = StrictUtf8.GetCharCount(bytes);
         long canonicalLength = 0;
-        var pendingCarriageReturn = false;
-        int read;
-        while ((read = stream.Read(bytes, 0, bytes.Length)) != 0)
-        {
-            var offset = 0;
-            while (offset < read)
-            {
-                decoder.Convert(
-                    bytes.AsSpan(offset, read - offset),
-                    characters,
-                    flush: false,
-                    out var bytesUsed,
-                    out _,
-                    out _);
-                offset += bytesUsed;
-            }
-
-            for (var index = 0; index < read; index++)
-            {
-                var value = bytes[index];
-                if (pendingCarriageReturn)
-                {
-                    canonicalLength++;
-                    pendingCarriageReturn = false;
-                    if (value == (byte)'\n')
-                    {
-                        continue;
-                    }
-                }
-
-                if (value == (byte)'\r')
-                {
-                    pendingCarriageReturn = true;
-                }
-                else
-                {
-                    canonicalLength++;
-                }
-            }
-        }
-
-        decoder.Convert([], characters, flush: true, out _, out _, out var completed);
-        if (!completed)
-        {
-            throw new InvalidDataException("Preview source UTF-8 validation did not complete.");
-        }
-        if (pendingCarriageReturn)
+        for (var index = 0; index < bytes.Length; index++)
         {
             canonicalLength++;
+            if (bytes[index] == (byte)'\r' &&
+                index + 1 < bytes.Length &&
+                bytes[index + 1] == (byte)'\n')
+            {
+                index++;
+            }
         }
 
         return canonicalLength;
     }
 
-    private static void AppendCanonicalBytes(IncrementalHash hash, Stream stream)
+    private static void AppendCanonicalBytes(IncrementalHash hash, ReadOnlySpan<byte> bytes)
     {
-        var input = new byte[BufferBytes];
-        var output = new byte[BufferBytes + 1];
-        var pendingCarriageReturn = false;
-        int read;
-        while ((read = stream.Read(input, 0, input.Length)) != 0)
+        var output = new byte[BufferBytes];
+        var written = 0;
+        for (var index = 0; index < bytes.Length; index++)
         {
-            var written = 0;
-            for (var index = 0; index < read; index++)
+            var value = bytes[index];
+            if (value == (byte)'\r' &&
+                index + 1 < bytes.Length &&
+                bytes[index + 1] == (byte)'\n')
             {
-                var value = input[index];
-                if (pendingCarriageReturn)
-                {
-                    pendingCarriageReturn = false;
-                    output[written++] = value == (byte)'\n' ? (byte)'\n' : (byte)'\r';
-                    if (value == (byte)'\n')
-                    {
-                        continue;
-                    }
-                }
-
-                if (value == (byte)'\r')
-                {
-                    pendingCarriageReturn = true;
-                }
-                else
-                {
-                    output[written++] = value;
-                }
+                value = (byte)'\n';
+                index++;
             }
 
-            hash.AppendData(output.AsSpan(0, written));
+            output[written++] = value;
+            if (written == output.Length)
+            {
+                hash.AppendData(output);
+                written = 0;
+            }
         }
 
-        if (pendingCarriageReturn)
-        {
-            hash.AppendData(stackalloc byte[] { (byte)'\r' });
-        }
+        hash.AppendData(output.AsSpan(0, written));
     }
 
     private static string ValidateFile(string path)

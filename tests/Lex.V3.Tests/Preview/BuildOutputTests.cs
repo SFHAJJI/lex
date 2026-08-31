@@ -127,6 +127,50 @@ public sealed class BuildOutputTests
     }
 
     [TestMethod]
+    public void SourceSetDigestRejectsTooManyMembers()
+    {
+        using var root = new BuildTestDirectory();
+        Directory.CreateDirectory(root.Path);
+        File.WriteAllText(
+            Path.Combine(root.Path, "Lex.V3.Preview.csproj"),
+            "<Project Sdk=\"Microsoft.NET.Sdk\" />\n",
+            new UTF8Encoding(false));
+        File.WriteAllText(Path.Combine(root.Path, "packages.lock.json"), "{}\n", new UTF8Encoding(false));
+        for (var index = 0; index < 255; index++)
+        {
+            File.WriteAllText(
+                Path.Combine(root.Path, $"Source{index:D3}.cs"),
+                "// bounded\n",
+                new UTF8Encoding(false));
+        }
+
+        var exception = Assert.ThrowsExactly<InvalidDataException>(
+            () => SyntheticPreviewSourceDigest.Compute(root.Path));
+        Assert.AreEqual("Preview source set contains too many members.", exception.Message);
+    }
+
+    [TestMethod]
+    public void SourceSetDigestRejectsAnOversizedAggregate()
+    {
+        using var root = new BuildTestDirectory();
+        Directory.CreateDirectory(root.Path);
+        File.WriteAllText(
+            Path.Combine(root.Path, "Lex.V3.Preview.csproj"),
+            "<Project Sdk=\"Microsoft.NET.Sdk\" />\n",
+            new UTF8Encoding(false));
+        File.WriteAllText(Path.Combine(root.Path, "packages.lock.json"), "{}\n", new UTF8Encoding(false));
+        for (var index = 0; index < 9; index++)
+        {
+            using var source = File.Create(Path.Combine(root.Path, $"Source{index:D2}.cs"));
+            source.SetLength(1_000_000);
+        }
+
+        var exception = Assert.ThrowsExactly<InvalidDataException>(
+            () => SyntheticPreviewSourceDigest.Compute(root.Path));
+        Assert.AreEqual("Preview source bytes exceed their bound.", exception.Message);
+    }
+
+    [TestMethod]
     public void CanonicalBuildPublishesOnlyContentAddressedSuccessfulOutputs()
     {
         using var root = new BuildTestDirectory();
