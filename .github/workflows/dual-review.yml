@@ -5,18 +5,19 @@ name: dual-review
 # request, and requiring an approving review would deadlock the branch rather than
 # harden it.
 #
-# An earlier design read the verdict from pull request comments. Two holes closed it:
-# arbitrary `owner:*` / `reviewer:*` label pairs false-passed, and comment truth is
-# mutable without re-triggering a head workflow, so an edited or superseded verdict
-# could stay green indefinitely.
-#
-# The verdict is now an immutable empty `lex-review/1` receipt commit at the pull
-# request head, created by the non-writer after review. Its parent is the reviewed
-# candidate, its tree must equal that parent's, and its message binds issue, writer,
+# The verdict is an immutable empty `lex-review/1` receipt commit at the pull request
+# head, created by the non-writer after review. Its parent is the reviewed candidate,
+# its tree must equal that parent's, and its canonical message binds issue, writer,
 # reviewer, candidate commit, candidate tree and verdict. Any later product commit
-# makes the head cease to be a receipt and fails the gate until a fresh review.
+# makes the head cease to be a receipt. No comment is parsed for gate state.
 #
-# No comment is parsed for gate state. Comments remain public evidence only.
+# ONE JOB, DELIBERATELY. An earlier shape ran the gate's own tests in a separate job
+# and made this one `needs:` it. GitHub SKIPS a dependent job when its dependency
+# fails, and a skipped required check reports SUCCESS - so breaking the test suite
+# would have false-greened the very gate those tests protect. Running the tests and
+# the evaluation sequentially in the single required job means a test failure fails
+# the required check directly. Do not split these again.
+# https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks#handling-skipped-but-required-checks
 
 on:
   pull_request:
@@ -29,20 +30,8 @@ permissions:
   issues: read
 
 jobs:
-  # The gate's own induced mutations, including real temporary Git repositories. A
-  # receipt gate tested only against hand-built tuples has not been tested against Git.
-  dual-review-tests:
-    name: dual-review-tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          persist-credentials: false
-      - run: python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v
-
   dual-review:
     name: dual-review
-    needs: dual-review-tests
     runs-on: ubuntu-latest
     steps:
       # The pull request head explicitly, never the synthetic merge commit: the receipt
@@ -53,6 +42,12 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 2
           persist-credentials: false
+
+      # The gate's own induced mutations, including real temporary Git repositories.
+      # In this job, so a failure here fails the required context rather than skipping
+      # it into a reported success.
+      - name: induced mutations for the gate itself
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v
 
       - name: verify the immutable lex-review/1 receipt at the head
         env:

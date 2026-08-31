@@ -18,7 +18,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from dual_review import evaluate, parse_receipt
+from dual_review import evaluate, evaluate_head, parse_receipt, read_commit_message
 
 CANDIDATE = "a" * 40
 TREE = "b" * 40
@@ -29,6 +29,12 @@ def receipt(
     issue="333", writer="claude", reviewer="codex",
     commit=CANDIDATE, tree=TREE, verdict="READY",
 ):
+    """A canonical receipt exactly as `read_commit_message` hands it over.
+
+    No trailing newline. The loader's contract is the commit message's exact bytes
+    minus exactly one terminal newline, so a pure test that appends one is testing a
+    string the parser will never receive.
+    """
     return (
         "lex-review/1\n"
         f"issue: {issue}\n"
@@ -36,7 +42,7 @@ def receipt(
         f"reviewer: {reviewer}\n"
         f"candidate-commit: {commit}\n"
         f"candidate-tree: {tree}\n"
-        f"verdict: {verdict}\n"
+        f"verdict: {verdict}"
     )
 
 
@@ -267,6 +273,92 @@ class RealGitRepositories(unittest.TestCase):
             sha, head_tree, parents, message = self._state(path)
             ok, msg = evaluate(sha, head_tree, parents, message, BODY, GOOD_LABELS)
             self.assertFalse(ok, "a merge head is not a receipt")
+
+
+class ProductionLoaderBoundary(unittest.TestCase):
+    """Codex O2: the loader must not canonicalise a malformed attestation.
+
+    An earlier loader used a whitespace-stripping helper, so forbidden leading blank
+    lines, trailing tabs, carriage returns and extra blank lines were normalised into a
+    well-formed seven-line message before the parser saw them. The fail-closed rule was
+    true of the parser and false of the program.
+
+    These run through the PRODUCTION reader against real commit objects, written with
+    `--cleanup=verbatim` so the bytes survive exactly. A pure `parse_receipt` test
+    cannot reach this boundary, which is precisely why the defect lived.
+    """
+
+    @staticmethod
+    def _git(repo, *args):
+        return subprocess.run(
+            ["git", "-C", str(repo), *args], capture_output=True, text=True, check=True
+        ).stdout.strip()
+
+    def _repo_with_message(self, base, raw_message):
+        path = Path(base)
+        self._git(path, "init", "-q", "-b", "main")
+        self._git(path, "config", "user.email", "t@example.invalid")
+        self._git(path, "config", "user.name", "t")
+        (path / "file.txt").write_text("candidate\n", encoding="utf-8")
+        self._git(path, "add", "file.txt")
+        self._git(path, "commit", "-q", "-m", "feat: the reviewed candidate")
+        candidate = self._git(path, "rev-parse", "HEAD")
+        tree = self._git(path, "rev-parse", "HEAD^{tree}")
+        message = raw_message.replace("__COMMIT__", candidate).replace("__TREE__", tree)
+        msg_file = path / "msg.txt"
+        msg_file.write_bytes(message.encode("utf-8"))
+        self._git(
+            path, "commit", "-q", "--allow-empty", "--cleanup=verbatim",
+            "-F", str(msg_file),
+        )
+        return path
+
+    def _via_production_path(self, path):
+        """Through evaluate_head, the one route from a commit to a verdict."""
+        head = self._git(path, "rev-parse", "HEAD")
+        return evaluate_head(head, BODY, GOOD_LABELS, cwd=path)
+
+    GOOD = (
+        "lex-review/1\n"
+        "issue: 333\n"
+        "writer: claude\n"
+        "reviewer: codex\n"
+        "candidate-commit: __COMMIT__\n"
+        "candidate-tree: __TREE__\n"
+        "verdict: READY\n"
+    )
+
+    def test_an_exact_receipt_survives_the_production_loader(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._repo_with_message(tmp, self.GOOD)
+            ok, reason = self._via_production_path(path)
+            self.assertTrue(ok, reason)
+
+    def test_a_leading_blank_line_is_refused_through_the_real_loader(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._repo_with_message(tmp, "\n" + self.GOOD)
+            ok, reason = self._via_production_path(path)
+            self.assertFalse(ok, "a leading blank line must not be normalised away")
+
+    def test_extra_trailing_blank_lines_are_refused_through_the_real_loader(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._repo_with_message(tmp, self.GOOD + "\n\n")
+            ok, reason = self._via_production_path(path)
+            self.assertFalse(ok, "extra trailing blank lines must not be stripped")
+
+    def test_a_trailing_tab_is_refused_through_the_real_loader(self):
+        bad = self.GOOD.replace("verdict: READY\n", "verdict: READY\t\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._repo_with_message(tmp, bad)
+            ok, reason = self._via_production_path(path)
+            self.assertFalse(ok, "a trailing tab must reach the parser")
+
+    def test_a_carriage_return_is_refused_through_the_real_loader(self):
+        bad = self.GOOD.replace("issue: 333\n", "issue: 333\r\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._repo_with_message(tmp, bad)
+            ok, reason = self._via_production_path(path)
+            self.assertFalse(ok, "a carriage return must reach the parser")
 
 
 if __name__ == "__main__":
