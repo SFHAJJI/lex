@@ -58,7 +58,6 @@ export function browserCandidates(platform = process.platform) {
   return configured ? [configured, ...known] : known;
 }
 
-const BROWSERS = browserCandidates();
 
 // Narrow, tablet, desktop. The narrow width is a real small phone rather than a
 // convenient round number, because layouts tend to be tuned to round numbers.
