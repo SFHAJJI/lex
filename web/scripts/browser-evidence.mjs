@@ -26,6 +26,11 @@ const WIDTHS = [
   { label: "narrow", width: 320, height: 640 },
   { label: "tablet", width: 768, height: 1024 },
   { label: "desktop", width: 1440, height: 900 },
+  // Browser zoom shrinks the CSS viewport rather than scaling pixels, so 200% zoom at a
+  // 1440 window is a 720 CSS viewport and WCAG 1.4.10's 400% at 1280 is 320. Naming them
+  // as zoom levels keeps the evidence honest about what was actually exercised.
+  { label: "zoom200", width: 720, height: 450 },
+  { label: "zoom400", width: 320, height: 256 },
 ];
 
 const PAGES = [
@@ -281,6 +286,7 @@ async function main() {
       }
     });
 
+    await session.send("Accessibility.enable", {}, sessionId);
     await session.send("Log.enable", {}, sessionId);
     await session.send("Runtime.enable", {}, sessionId);
     await session.send("Page.enable", {}, sessionId);
@@ -308,6 +314,54 @@ async function main() {
           sessionId,
         );
         const observed = result.value;
+
+        // The accessibility tree is what a screen reader actually receives. Reading the
+        // DOM and asserting it "should" expose a name is a different claim.
+        const { nodes } = await session.send("Accessibility.getFullAXTree", {}, sessionId);
+        const named = (node) => (node.name?.value ?? "").trim().length > 0;
+        const ignored = (node) => node.ignored === true;
+        const axNodes = nodes.filter((node) => !ignored(node));
+        const roles = axNodes.map((node) => node.role?.value).filter(Boolean);
+        const interactive = axNodes.filter((node) =>
+          ["link", "button", "textbox", "checkbox", "combobox", "disclosure triangle"].includes(
+            node.role?.value,
+          ),
+        );
+        const unnamedInteractive = interactive.filter((node) => !named(node));
+        const headings = axNodes.filter((node) => node.role?.value === "heading");
+        const unnamedHeadings = headings.filter((node) => !named(node));
+        observed.axNodes = axNodes.length;
+        observed.axInteractive = interactive.length;
+        observed.axHeadings = headings.length;
+        observed.axLandmarks = roles.filter((role) => ["main", "note", "group", "complementary"].includes(role)).length;
+
+        if (axNodes.length === 0) {
+          failures.push(`${page} @${viewport.label}/${scheme}: the accessibility tree is empty`);
+        }
+        if (unnamedInteractive.length > 0) {
+          failures.push(
+            `${page} @${viewport.label}/${scheme}: ${unnamedInteractive.length} interactive node(s) ` +
+              `with no accessible name: ${unnamedInteractive.map((n) => n.role?.value).join(", ")}`,
+          );
+        }
+        if (unnamedHeadings.length > 0) {
+          failures.push(
+            `${page} @${viewport.label}/${scheme}: ${unnamedHeadings.length} heading(s) with no accessible name`,
+          );
+        }
+        // Counting landmarks was too weak: replacing <main> with a <div> still left the
+        // banner's note and the provenance aside, so the count stayed nonzero and the
+        // mutation passed. The main landmark is the one a screen-reader user jumps to,
+        // so it is required by role and by count.
+        observed.axMain = roles.filter((role) => role === "main").length;
+        if (observed.axMain !== 1) {
+          failures.push(
+            `${page} @${viewport.label}/${scheme}: expected exactly one main landmark, found ${observed.axMain}`,
+          );
+        }
+        if (observed.axLandmarks === 0) {
+          failures.push(`${page} @${viewport.label}/${scheme}: no landmark role in the accessibility tree`);
+        }
         const row = { page, viewport: viewport.label, scheme, console: logged.length, ...observed };
         rows.push(row);
 
@@ -360,7 +414,8 @@ async function main() {
     console.log(
       `${row.page.replace('state-','').replace('.html','').padEnd(18)} ${row.viewport.padEnd(8)} ${row.scheme.padEnd(6)} ` +
         `console=${row.console} h1=${row.h1Count} overflow=${row.horizontalOverflow} scripts=${row.scriptCount} ` +
-        `contrast=${row.contrastChecked} worst=${row.worstContrast}`,
+        `contrast=${row.contrastChecked} worst=${row.worstContrast} ` +
+        `ax=${row.axNodes} named-interactive=${row.axInteractive} landmarks=${row.axLandmarks} main=${row.axMain}`,
     );
   }
 
