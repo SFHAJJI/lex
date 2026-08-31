@@ -124,11 +124,21 @@ jobs:
           test "$(jq -r '.source.bytes' "$linux")" = "$(jq -r '.build.source.bytes' "$windows")"
           test "$(jq -r '.derived.sha256' "$linux")" = "$(jq -r '.build.derived.sha256' "$windows")"
           test "$(jq -r '.derived.bytes' "$linux")" = "$(jq -r '.build.derived.bytes' "$windows")"
-          for field in profile_identity profile_sha256 ddl_sha256 scope_sha256 logical_rows_sha256 build_identity; do
+          # Build identity binds SQLite provenance, including platform-specific compile options.
+          # Require logical equality across OSes and measure physical/provenance equality below.
+          for field in profile_identity profile_sha256 ddl_sha256 scope_sha256 logical_rows_sha256; do
             test "$(jq -r --arg field "$field" '.[$field]' "$linux")" = "$(jq -r --arg field "$field" '.build[$field]' "$windows")"
           done
           test "$(cat artifacts/s0-05/builder-source-sha256.txt)" = "$(jq -r '.source_digest' "$windows")"
-          jq -n --arg schema 'lex-v3-s0-05-cross-os-logical/1' --arg linux_sqlite_sha256 "$(jq -r '.sqlite.sha256' "$linux")" --arg windows_sqlite_sha256 "$(jq -r '.build.sqlite.sha256' "$windows")" '{schema:$schema,logical_identity_equal:true,sqlite_byte_equality_measured:true,sqlite_byte_equal:($linux_sqlite_sha256 == $windows_sqlite_sha256),linux_sqlite_sha256:$linux_sqlite_sha256,windows_sqlite_sha256:$windows_sqlite_sha256}' > artifacts/s0-05/cross-os-logical.json
+          jq -n \
+            --arg schema 'lex-v3-s0-05-cross-os-logical/1' \
+            --arg linux_sqlite_sha256 "$(jq -r '.sqlite.sha256' "$linux")" \
+            --arg windows_sqlite_sha256 "$(jq -r '.build.sqlite.sha256' "$windows")" \
+            --arg linux_build_identity "$(jq -r '.build_identity' "$linux")" \
+            --arg windows_build_identity "$(jq -r '.build.build_identity' "$windows")" \
+            --arg linux_compile_options_sha256 "$(jq -r '.sqlite.compile_options_sha256' "$linux")" \
+            --arg windows_compile_options_sha256 "$(jq -r '.build.sqlite.compile_options_sha256' "$windows")" \
+            '{schema:$schema,logical_identity_equal:true,sqlite_byte_equality_measured:true,sqlite_byte_equal:($linux_sqlite_sha256 == $windows_sqlite_sha256),linux_sqlite_sha256:$linux_sqlite_sha256,windows_sqlite_sha256:$windows_sqlite_sha256,build_identity_equality_measured:true,build_identity_equal:($linux_build_identity == $windows_build_identity),linux_build_identity:$linux_build_identity,windows_build_identity:$windows_build_identity,compile_options_equality_measured:true,compile_options_equal:($linux_compile_options_sha256 == $windows_compile_options_sha256),linux_compile_options_sha256:$linux_compile_options_sha256,windows_compile_options_sha256:$windows_compile_options_sha256}' > artifacts/s0-05/cross-os-logical.json
       - name: Rebuild committed unsigned public graph exactly
         shell: bash
         run: |
