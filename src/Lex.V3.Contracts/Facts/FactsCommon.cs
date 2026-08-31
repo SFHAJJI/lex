@@ -261,6 +261,19 @@ public sealed record OfficialIdentifier
     };
 
     /// <summary>
+    /// The raw value is a URI spelled exactly, with no character a URI may not carry literally.
+    /// </summary>
+    /// <remarks>
+    /// .NET percent-encodes a literal space before <c>AbsolutePath</c> is read, so
+    /// <c>.../cellar/&lt;uuid&gt;/DOC 1</c> parsed to a clean path and the reader accepted a
+    /// spelling the schema refuses. Parsing normalises; a publisher identifier is not a thing to
+    /// normalise, it is a thing to record as stated or refuse. The check is on the raw string,
+    /// before any parser has a chance to be helpful.
+    /// </remarks>
+    private static bool IsExactUriSpelling(string value) =>
+        value.Length > 0 && value.All(c => c is > ' ' and <= '~');
+
+    /// <summary>
     /// Which publisher mints an ELI of this exact shape, or null where no publisher does.
     /// </summary>
     /// <remarks>
@@ -353,7 +366,8 @@ public sealed record OfficialIdentifier
     /// </remarks>
     private static bool IsCellarUri(string value, bool work)
     {
-        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
+        if (!IsExactUriSpelling(value) ||
+            !Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
             uri.Scheme is not ("http" or "https") ||
             !string.Equals(uri.Host, "publications.europa.eu", StringComparison.Ordinal) ||
             uri.Query.Length != 0 ||
@@ -394,6 +408,7 @@ public sealed record OfficialIdentifier
     /// merely because the caller labelled it a persistent identifier.
     /// </summary>
     private static bool IsCellarPsi(string value) =>
+        IsExactUriSpelling(value) &&
         Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
         uri.Scheme is "http" or "https" &&
         string.Equals(uri.Host, "publications.europa.eu", StringComparison.Ordinal) &&

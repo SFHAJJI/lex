@@ -45,6 +45,100 @@ public sealed class FactsSchemaParityTests
             root => root["schema"] = "lex-v3-publisher-relation/2",
             SchemaCanExpress: true),
         new Case(
+            "a gYear of year zero",
+            FactsSchemaIds.PublisherDate,
+            () => ContractJson.Serialize(FactsFixtures.YearOnlyDate()),
+            root => root["raw_lexical_value"] = "0000",
+            SchemaCanExpress: true),
+        new Case(
+            "a negative gYear",
+            FactsSchemaIds.PublisherDate,
+            () => ContractJson.Serialize(FactsFixtures.YearOnlyDate()),
+            root => root["raw_lexical_value"] = "-2019",
+            SchemaCanExpress: true),
+        new Case(
+            "a gYearMonth of year zero",
+            FactsSchemaIds.PublisherDate,
+            () => ContractJson.Serialize(FactsFixtures.YearOnlyDate()),
+            root =>
+            {
+                root["datatype_uri"] = PublisherDate.GYearMonth;
+                root["precision"] = "year_month";
+                root["raw_lexical_value"] = "0000-01";
+            },
+            SchemaCanExpress: true),
+        new Case(
+            "a negative gYearMonth",
+            FactsSchemaIds.PublisherDate,
+            () => ContractJson.Serialize(FactsFixtures.YearOnlyDate()),
+            root =>
+            {
+                root["datatype_uri"] = PublisherDate.GYearMonth;
+                root["precision"] = "year_month";
+                root["raw_lexical_value"] = "-2019-07";
+            },
+            SchemaCanExpress: true),
+        new Case(
+            "a date of year zero",
+            FactsSchemaIds.PublisherDate,
+            () => ContractJson.Serialize(FactsFixtures.DayDate()),
+            root => root["raw_lexical_value"] = "0000-01-01",
+            SchemaCanExpress: true),
+        new Case(
+            "a negative date",
+            FactsSchemaIds.PublisherDate,
+            () => ContractJson.Serialize(FactsFixtures.DayDate()),
+            root => root["raw_lexical_value"] = "-2019-07-15",
+            SchemaCanExpress: true),
+        new Case(
+            "an empty remote axiom identity",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(FactsFixtures.PublisherRelation()),
+            root => root["qualified_axioms"]![0]!["remote_axiom_id"] = "",
+            SchemaCanExpress: true),
+        new Case(
+            "a remote axiom identity padded with spaces",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(FactsFixtures.PublisherRelation()),
+            root => root["qualified_axioms"]![0]!["remote_axiom_id"] = " axiom-1 ",
+            SchemaCanExpress: true),
+        new Case(
+            "a remote axiom identity carrying a control character",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(FactsFixtures.PublisherRelation()),
+            root => root["qualified_axioms"]![0]!["remote_axiom_id"] = "axiom\u0001id",
+            SchemaCanExpress: true),
+        new Case(
+            "a remote axiom identity above two hundred characters",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(FactsFixtures.PublisherRelation()),
+            root => root["qualified_axioms"]![0]!["remote_axiom_id"] = new string('a', 201),
+            SchemaCanExpress: true),
+        new Case(
+            "a Cellar resource URI carrying a query string",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(
+                FactsFixtures.PublisherRelation(target: FactsFixtures.EuResource())),
+            root => root["target"]!["identifiers"]![0]!["raw_value"]
+                = FactsFixtures.CellarWorkUri + "/DOC_1?view=1",
+            SchemaCanExpress: true),
+        new Case(
+            "a Cellar resource URI carrying a fragment",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(
+                FactsFixtures.PublisherRelation(target: FactsFixtures.EuResource())),
+            root => root["target"]!["identifiers"]![0]!["raw_value"]
+                = FactsFixtures.CellarWorkUri + "/DOC_1#page",
+            SchemaCanExpress: true),
+        new Case(
+            "a Cellar resource URI carrying a literal space",
+            FactsSchemaIds.PublisherRelation,
+            () => ContractJson.Serialize(
+                FactsFixtures.PublisherRelation(target: FactsFixtures.EuResource())),
+            root => root["target"]!["identifiers"]![0]!["raw_value"]
+                = FactsFixtures.CellarWorkUri + "/DOC 1",
+            SchemaCanExpress: true),
+        new Case(
             "a gYear lexical that is not a year",
             FactsSchemaIds.PublisherDate,
             () => ContractJson.Serialize(FactsFixtures.YearOnlyDate()),

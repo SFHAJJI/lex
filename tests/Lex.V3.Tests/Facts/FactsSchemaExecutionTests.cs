@@ -135,6 +135,44 @@ public sealed class FactsSchemaExecutionTests
         }
     }
 
+    /// <summary>
+    /// The admitted half of the year grammar. A pattern that refuses year zero and also refuses
+    /// 1804 would pass every refusal case in this suite and be wrong.
+    /// </summary>
+    [TestMethod]
+    public void RealYearsAreAdmittedByBothSides()
+    {
+        foreach (var year in new[] { "1804", "0001", "2026", "9999" })
+        {
+            AssertValid(
+                FactsSchemaIds.PublisherDate,
+                new PublisherDate(
+                    FactsSchemaIds.PublisherDate, year, PublisherDate.GYear,
+                    DatePrecision.Year, DateOpenSentinel.NotOpen));
+        }
+
+        AssertValid(
+            FactsSchemaIds.PublisherDate,
+            new PublisherDate(
+                FactsSchemaIds.PublisherDate, "1804-03", PublisherDate.GYearMonth,
+                DatePrecision.YearMonth, DateOpenSentinel.NotOpen));
+
+        AssertValid(
+            FactsSchemaIds.PublisherDate,
+            new PublisherDate(
+                FactsSchemaIds.PublisherDate, "1804-03-21", PublisherDate.Date,
+                DatePrecision.YearMonthDay, DateOpenSentinel.NotOpen));
+    }
+
+    /// <summary>An exact Cellar resource is still admitted after the query and fragment repair.</summary>
+    [TestMethod]
+    public void AnExactCellarResourceIsAdmittedByBothSides()
+    {
+        AssertValid(
+            FactsSchemaIds.PublisherRelation,
+            FactsFixtures.PublisherRelation(target: FactsFixtures.EuResource()));
+    }
+
     private static void AssertValid<T>(string schemaId, T value)
     {
         var result = BuildSchema(schemaId).Evaluate(

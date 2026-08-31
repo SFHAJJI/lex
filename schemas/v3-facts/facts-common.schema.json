@@ -63,7 +63,7 @@
           "then": {
             "properties": {
               "raw_value": {
-                "pattern": "^https?://publications\\.europa\\.eu/resource/cellar/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/[!-~]\u002B(?![\\s\\S])"
+                "pattern": "^https?://publications\\.europa\\.eu/resource/cellar/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/(?:(?![?#])[!-~])\u002B(?![\\s\\S])"
               }
             },
             "required": [
@@ -255,7 +255,7 @@
                 "then": {
                   "properties": {
                     "raw_value": {
-                      "pattern": "^https?://publications\\.europa\\.eu/resource/cellar/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/[!-~]\u002B(?![\\s\\S])"
+                      "pattern": "^https?://publications\\.europa\\.eu/resource/cellar/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/(?:(?![?#])[!-~])\u002B(?![\\s\\S])"
                     }
                   },
                   "required": [
@@ -872,7 +872,10 @@
       "type": "object",
       "properties": {
         "remote_axiom_id": {
-          "type": "string"
+          "type": "string",
+          "pattern": "^[!-~]([ -~]*[!-~])?(?![\\s\\S])",
+          "minLength": 1,
+          "maxLength": 200
         },
         "qualifiers": {
           "type": "array",

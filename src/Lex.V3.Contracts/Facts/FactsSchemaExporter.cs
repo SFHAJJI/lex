@@ -171,7 +171,11 @@ internal static class FactsSchemaHardener
     internal const string CellarWorkPattern = CellarHost + "cellar/" + Uuid + End;
 
     /// <summary>A resource is anything strictly beneath that work.</summary>
-    internal const string CellarResourcePattern = CellarHost + "cellar/" + Uuid + "/" + Printable + "+" + End;
+    // `[!-~]+` includes `?` and `#`, so the schema matched `.../DOC_1?view=1` and `.../DOC_1#page`
+    // while the reader refused both. The work and the persistent identifier were repaired at the
+    // reader and the resource grammar was not.
+    internal const string CellarResourcePattern =
+        CellarHost + "cellar/" + Uuid + "/" + PathPrintable + "+" + End;
 
     /// <summary>An alias such as the CELEX PSI, which is never the work.</summary>
     // Narrowed to the one alias class the accepted scope actually proves. An arbitrary resource
@@ -220,6 +224,20 @@ internal static class FactsSchemaHardener
 
     /// <summary>Printable ASCII, so a newline or control character cannot ride inside a URI.</summary>
     private const string Printable = "[!-~]";
+
+    /// <summary>
+    /// A four-digit year the reader will accept: no sign, and not year zero.
+    /// </summary>
+    /// <remarks>
+    /// Every date pattern here began <c>^-?[0-9]{4}</c>, which admits <c>0000</c> and a negative
+    /// year while <c>PublisherDate.IsValidLexicalValue</c> refuses both. I wrote the minus in
+    /// because XSD allows it, without checking whether this package's reader does. The schema is
+    /// the weaker of the two whenever it copies a specification instead of the code beside it.
+    /// </remarks>
+    private const string Year4 = "(?!0000)[0-9]{4}";
+
+    /// <summary>A Cellar path segment: printable, and never a query or fragment delimiter.</summary>
+    private const string PathPrintable = "(?:(?![?#])[!-~])";
 
     /// <summary>
     /// True end of input. <c>$</c> is not an end anchor: in .NET, and in any engine following the
@@ -419,10 +437,12 @@ internal static class FactsSchemaHardener
 
     private static void HardenProperty(string name, JsonObject property)
     {
-        if (string.Equals(name, "source_observation_id", StringComparison.Ordinal))
+        if (name is "source_observation_id" or "remote_axiom_id")
         {
             // 1 to 200 printable ASCII with no surrounding space, exactly as the reader requires.
             // The schema admitted the empty string, so a Fact with no provenance at all validated.
+            // `remote_axiom_id` runs through the same `IsOpaqueIdentity` in `QualifiedAxiom` and was
+            // left unconstrained here, which is the same rule bound at one of its two sites.
             property["type"] = "string";
             property["pattern"] = "^[!-~]([ -~]*[!-~])?" + End;
             property["minLength"] = 1;
@@ -541,13 +561,13 @@ internal static class FactsSchemaHardener
                     Props(("datatype_uri", Const(PublisherDate.GYear))),
                     Props(("raw_lexical_value", new JsonObject
                     {
-                        ["pattern"] = "^-?[0-9]{4}" + TimezonePattern + End,
+                        ["pattern"] = "^" + Year4 + TimezonePattern + End,
                     }))));
                 all.Add(IfThen(
                     Props(("datatype_uri", Const(PublisherDate.GYearMonth))),
                     Props(("raw_lexical_value", new JsonObject
                     {
-                        ["pattern"] = "^-?[0-9]{4}-(0[1-9]|1[0-2])" + TimezonePattern + End,
+                        ["pattern"] = "^" + Year4 + "-(0[1-9]|1[0-2])" + TimezonePattern + End,
                     }))));
 
                 // Ordinary dates carried no lexical pattern at all, so the reader's timezone
@@ -560,7 +580,7 @@ internal static class FactsSchemaHardener
                         // the reader refused it. My round-six declaration said 30 February had
                         // moved to schema-refused; that was true of the CELEX consolidation
                         // suffix and false of the ordinary date it was describing.
-                        ["pattern"] = "^-?([0-9]{4}-((0[13578]|1[02])-(0[1-9]|[12][0-9]|3[01])"
+                        ["pattern"] = "^(" + Year4 + "-((0[13578]|1[02])-(0[1-9]|[12][0-9]|3[01])"
                             + "|(0[469]|11)-(0[1-9]|[12][0-9]|30)"
                             + "|02-(0[1-9]|1[0-9]|2[0-8]))"
                             + "|" + LeapYear + "-02-29)"

@@ -65,6 +65,14 @@ internal static class FactsFixtures
             new OfficialIdentifier(FactsIdentifierFamily.Ecli, "ECLI:EU:C:2020:1042"),
         ]);
 
+    /// <summary>An EU identity whose only identifier is a resource beneath the work.</summary>
+    internal static OfficialIdentitySet EuResource() => new(
+        PublisherId.EuEurLex,
+        [
+            new OfficialIdentifier(
+                FactsIdentifierFamily.CellarResourceUri, CellarWorkUri + "/DOC_1"),
+        ]);
+
     /// <summary>The same case, whose publisher record carries no ECLI.</summary>
     internal static OfficialIdentitySet EuCaseWithoutEcli() => new(
         PublisherId.EuEurLex,
