@@ -181,14 +181,28 @@ internal static class FactsSchemaHardener
     internal const string EcliPattern = "^ECLI:[A-Z]{2}:[A-Z0-9]+:[0-9]{4}:[0-9A-Z.]+" + End;
 
     /// <summary>
-    /// A calendar-plausible eight-digit date: month length is bound, so 31 February cannot pass.
-    /// Only leap-year correctness stays with the reader, because 29 February is a real date in
-    /// some years and a regex cannot know which.
+    /// A four-digit leap year: divisible by four, except centuries not divisible by four hundred.
+    /// </summary>
+    /// <remarks>
+    /// Candidate round six left leap-year validity in the reader-only registry with the reason
+    /// "a regex cannot know which years are leap years". That is false. Divisibility by four is a
+    /// property of the last two digits, and the century rule is a property of the first two, so
+    /// both are finite alternations. I wrote a limit into the registry that was a limit of the
+    /// pattern I had bothered to write, which is exactly the kind of claim this package exists to
+    /// stop making about publisher data.
+    /// </remarks>
+    private const string LeapYear =
+        "([0-9]{2}(0[48]|[2468][048]|[13579][26])|(0[48]|[2468][048]|[13579][26])00)";
+
+    /// <summary>
+    /// A real eight-digit calendar date. Month length is bound and 29 February is admitted only in
+    /// a leap year, so the schema decides every date this package can encounter.
     /// </summary>
     private const string YyyyMmDd =
-        "[0-9]{4}((0[13578]|1[02])(0[1-9]|[12][0-9]|3[01])" +
+        "([0-9]{4}((0[13578]|1[02])(0[1-9]|[12][0-9]|3[01])" +
         "|(0[469]|11)(0[1-9]|[12][0-9]|30)" +
-        "|02(0[1-9]|1[0-9]|2[0-9]))";
+        "|02(0[1-9]|1[0-9]|2[0-8]))" +
+        "|" + LeapYear + "0229)";
 
     /// <summary>The five admitted CELEX profiles, anchored at both ends.</summary>
     internal const string CelexPattern =
@@ -246,7 +260,6 @@ internal static class FactsSchemaHardener
             "authorizing axiom maps this forward predicate to this inverse predicate",
             "inbound view contributors all target the view target",
             "ecli state agrees with the target identity set",
-            "leap-year validity of a consolidation or lexical date",
             "one raw value may not repeat under two families in one set",
         });
 
@@ -505,7 +518,14 @@ internal static class FactsSchemaHardener
                     Props(("datatype_uri", Const(PublisherDate.Date))),
                     Props(("raw_lexical_value", new JsonObject
                     {
-                        ["pattern"] = "^-?[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])"
+                        // This bound only the field shapes, so 2019-02-30 was schema-valid while
+                        // the reader refused it. My round-six declaration said 30 February had
+                        // moved to schema-refused; that was true of the CELEX consolidation
+                        // suffix and false of the ordinary date it was describing.
+                        ["pattern"] = "^-?([0-9]{4}-((0[13578]|1[02])-(0[1-9]|[12][0-9]|3[01])"
+                            + "|(0[469]|11)-(0[1-9]|[12][0-9]|30)"
+                            + "|02-(0[1-9]|1[0-9]|2[0-8]))"
+                            + "|" + LeapYear + "-02-29)"
                             + TimezonePattern + End,
                     }))));
 

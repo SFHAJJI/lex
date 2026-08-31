@@ -109,6 +109,33 @@ public sealed class FactsSchemaExecutionTests
         }
     }
 
+    /// <summary>
+    /// The positive half of the leap-year rule. A pattern that refuses 2019-02-29 and also
+    /// refuses 2020-02-29 would pass every refusal test in this suite and be wrong, so the real
+    /// leap day is asserted against both the reader and the generated schema.
+    /// </summary>
+    [TestMethod]
+    public void ARealLeapDayIsAdmittedByBothSides()
+    {
+        foreach (var admitted in new[] { "2020-02-29", "2000-02-29", "2024-02-29", "2019-02-28" })
+        {
+            AssertValid(
+                FactsSchemaIds.PublisherDate,
+                new PublisherDate(
+                    FactsSchemaIds.PublisherDate, admitted, PublisherDate.Date,
+                    DatePrecision.YearMonthDay, DateOpenSentinel.NotOpen));
+        }
+
+        foreach (var refused in new[] { "2019-02-29", "1900-02-29", "2019-02-30", "2019-04-31" })
+        {
+            Assert.ThrowsExactly<ArgumentException>(
+                () => new PublisherDate(
+                    FactsSchemaIds.PublisherDate, refused, PublisherDate.Date,
+                    DatePrecision.YearMonthDay, DateOpenSentinel.NotOpen),
+                refused);
+        }
+    }
+
     private static void AssertValid<T>(string schemaId, T value)
     {
         var result = BuildSchema(schemaId).Evaluate(

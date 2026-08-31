@@ -309,14 +309,20 @@ public sealed class FactsSchemaParityTests
             root => root["raw_lexical_value"] = "1970-01-01",
             SchemaCanExpress: true),
         new Case(
-            // 30 February is now schema-refused, because month length is expressible. 29 February
-            // in a common year is not: a regex cannot know which years are leap years, so this is
-            // the residue that genuinely stays with the reader.
-            "leap-year validity of a consolidation or lexical date",
+            // Both halves are expressible after all. A leap year is a finite alternation over the
+            // last two digits plus a century rule over the first two, so the schema decides
+            // 2019-02-29 as well as 2019-02-30, and neither stays with the reader.
+            "a common year has no 29 February",
             FactsSchemaIds.PublisherDate,
             () => ContractJson.Serialize(FactsFixtures.DayDate()),
             root => root["raw_lexical_value"] = "2019-02-29",
-            SchemaCanExpress: false),
+            SchemaCanExpress: true),
+        new Case(
+            "no month has a 30 February",
+            FactsSchemaIds.PublisherDate,
+            () => ContractJson.Serialize(FactsFixtures.DayDate()),
+            root => root["raw_lexical_value"] = "2019-02-30",
+            SchemaCanExpress: true),
         new Case(
             "precision matches the declared datatype",
             FactsSchemaIds.PublisherDate,
