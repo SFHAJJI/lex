@@ -404,22 +404,27 @@ REVIEWED_STEP_KEYS = (
 # repository the writer controls, and `HEAD_SHA:` evaluates a commit that is not the
 # head, which is the single property the receipt exists to bind. Each is one line
 # inside a key list that stays exactly as reviewed, so only the value can catch it.
+REAL_HEAD_SHA_BINDING = "          HEAD_SHA: ${{ github.event.pull_request.head.sha }}"
+SPOOFED_HEAD_SHA_BINDING = "          HEAD_SHA: ${{ github.event.pull_request.base.sha }}"
+
+# Each binding with the index of the reviewed step that must carry it. The index is the
+# repair for Codex O2: a binding found anywhere else in the file is a decoy.
 REVIEWED_BINDINGS = (
-    "          ref: ${{ github.event.pull_request.head.sha }}",
-    "          fetch-depth: 2",
-    "          persist-credentials: false",
-    "          GH_TOKEN: ${{ github.token }}",
-    "          REPO: ${{ github.repository }}",
-    "          PR_NUMBER: ${{ github.event.pull_request.number }}",
-    "          HEAD_SHA: ${{ github.event.pull_request.head.sha }}",
+    (0, "          ref: ${{ github.event.pull_request.head.sha }}"),
+    (0, "          fetch-depth: 2"),
+    (0, "          persist-credentials: false"),
+    (2, "          GH_TOKEN: ${{ github.token }}"),
+    (2, "          REPO: ${{ github.repository }}"),
+    (2, "          PR_NUMBER: ${{ github.event.pull_request.number }}"),
+    (2, "          HEAD_SHA: ${{ github.event.pull_request.head.sha }}"),
     # The two commands themselves. Codex O1 against 7f035e9, and I had returned READY on
     # that commit without testing them. Every other value in this workflow was pinned by
     # value while the two lines that actually run the tests and the gate were matched by
     # substring, so `run: echo unittest` and `run: echo dual_review.py` both satisfied
     # the step checks and greened the required context while executing nothing. The most
     # important value in a file is the one nobody thinks of as a value.
-    "        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v",
-    "        run: python3 .github/scripts/dual_review.py",
+    (1, "        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v"),
+    (2, "        run: python3 .github/scripts/dual_review.py"),
 )
 
 # The reviewed environment: the exact keys the workflow and the job may declare, in
@@ -812,14 +817,45 @@ def false_green_defects(text):
             f"{job_keys}; container:, defaults:, services: and env: each change what "
             "the gate's own steps execute inside without adding a step"
         )
+    # Codex O2 against 665cdda. Checking a binding anywhere in the file lets a YAML
+    # scalar carry the reviewed text as data while the real key binds something else.
+    # The surviving shape was the workflow-level `name:` as a folded scalar:
+    #
+    #     name: >
+    #               HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    #
+    # with the gate's own env binding HEAD_SHA to base.sha. The continuation line is a
+    # value, not a key, so no key check sees it, and a whole-file membership test is
+    # satisfied by the decoy. Each binding is therefore checked inside the step that must
+    # carry it, so a copy anywhere else proves nothing.
     stripped = [line.rstrip() for line in lines]
-    missing_bindings = [b for b in REVIEWED_BINDINGS if b not in stripped]
+    steps_for_bindings = _job_steps(lines)
+    missing_bindings = []
+    for index, binding in REVIEWED_BINDINGS:
+        if index >= len(steps_for_bindings):
+            missing_bindings.append(binding)
+            continue
+        if binding not in [line.rstrip() for line in steps_for_bindings[index]]:
+            missing_bindings.append(binding)
     if missing_bindings:
         defects.append(
             f"missing reviewed binding: {missing_bindings}; the reviewed keys must be "
-            "bound to the reviewed values, or the evaluator reads a pull request, a "
-            "repository or a commit the writer chose instead of the one under review"
+            "bound to the reviewed values inside their own reviewed step, or the "
+            "evaluator reads a pull request, a repository or a commit the writer chose "
+            "instead of the one under review"
         )
+
+    # Defence in depth for the same class. A block scalar has no legitimate use in this
+    # workflow and is the only construct that can put an arbitrary line into the file as
+    # data. The earlier rule covered `run:` alone, which is how the `name:` variant
+    # survived.
+    for line in lines:
+        if re.match(r"^\s*[A-Za-z0-9_.-]+:\s*[|>][-+0-9]*\s*$", line):
+            defects.append(
+                f"block scalar is forbidden anywhere in this workflow: {line.strip()!r}; "
+                "it can carry an arbitrary line, including a copy of a reviewed binding, "
+                "as data that no key check inspects"
+            )
 
     if not any(
         re.match(rf"^    runs-on: {re.escape(REVIEWED_RUNNER)}\s*$", line)
@@ -861,6 +897,46 @@ class RequiredContextCannotFalseGreen(unittest.TestCase):
         defects = "\n".join(false_green_defects(split))
         self.assertIn("needs:", defects)
         self.assertIn("exactly one job", defects)
+
+    def test_a_scalar_decoy_cannot_satisfy_a_reviewed_binding(self):
+        """Codex O2 against 665cdda.
+
+        A whole-file membership test is satisfied by a copy of the binding anywhere. The
+        surviving shape put it in the workflow-level `name:` as a folded scalar, where
+        the continuation line is a value rather than a key, so no key check inspects it,
+        while the gate's own env bound HEAD_SHA to the base commit instead of the head.
+        The binding is now checked inside the step that must carry it.
+        """
+        original = self._workflow()
+        for scalar in (">", "|"):
+            mutated = original.replace(REAL_HEAD_SHA_BINDING, SPOOFED_HEAD_SHA_BINDING, 1)
+            mutated = mutated.replace(
+                "name: dual-review", "name: " + scalar + "NEWLINE" + REAL_HEAD_SHA_BINDING, 1
+            ).replace("NEWLINE", chr(10))
+            self.assertNotEqual(mutated, original, "the mutation never applied")
+            defects = "NEWLINE".join(false_green_defects(mutated)).replace("NEWLINE", chr(10))
+            self.assertIn(
+                "missing reviewed binding",
+                defects,
+                f"a {scalar} scalar decoy must not satisfy the binding",
+            )
+
+    def test_a_block_scalar_is_refused_on_any_key(self):
+        """Defence in depth for the same class.
+
+        The earlier rule covered `run:` alone, which is exactly how the `name:` variant
+        survived. A block scalar is the only construct that can put an arbitrary line
+        into this file as data, and it has no legitimate use here.
+        """
+        original = self._workflow()
+        mutated = original.replace(
+            "name: dual-review", "name: >NEWLINE  dual-review", 1
+        ).replace("NEWLINE", chr(10))
+        self.assertNotEqual(mutated, original, "the mutation never applied")
+        self.assertIn(
+            "block scalar is forbidden",
+            "NEWLINE".join(false_green_defects(mutated)).replace("NEWLINE", chr(10)),
+        )
 
     def test_replacing_a_reviewed_command_with_a_no_op_is_caught(self):
         """Codex O1 against ffe873d's successor, and I had returned READY on it.
