@@ -375,16 +375,48 @@ function check(node, value, path, problems, doc, seen, docs = []) {
     return;
   }
 
-  // Follow a local `$ref` before any other keyword, against its own document.
+  // Follow a local `$ref`, then keep going. In draft 2020-12 `$ref` is an ordinary
+  // keyword and its siblings apply alongside the target, so returning here skipped every
+  // assertion written next to a reference: `{ $ref: "#/$defs/base", minLength: 5 }`
+  // asserted only the base and the length was never checked.
   if (node.$ref !== undefined) {
     const target = resolveLocalRef(node.$ref, doc, where, problems, seen, docs);
-    if (target) {
-      // A ref into a registered schema makes that schema the document for anything
-      // nested beneath it, so its own local pointers resolve where they were written.
-      const nextDoc = node.$ref.startsWith("#") ? doc : target;
-      check(target, value, path, problems, nextDoc, new Set([...seen, node.$ref]), docs);
+    if (!target) {
+      return;
     }
-    return;
+
+    // A ref into a registered schema makes that schema the document for anything nested
+    // beneath it, so its own local pointers resolve where they were written.
+    const nextDoc = node.$ref.startsWith("#") ? doc : target;
+    check(target, value, path, problems, nextDoc, new Set([...seen, node.$ref]), docs);
+  }
+
+  // `anyOf` anywhere, not only at the root. It was in the supported list and evaluated
+  // only by `selectArm` on the outermost schema, so a nested arm asserted nothing at all:
+  // the shipped object-set puts nearly its whole contract inside `objects.items.anyOf`,
+  // and an object with an invalid id and a smuggled member came back clean. Listing a
+  // keyword as supported without implementing it is worse than refusing it, because the
+  // list is what tells a reader the constraint was checked.
+  //
+  // Exactly one arm must match. Zero is a refusal, and so is more than one: an ambiguous
+  // arm means the vocabulary to validate against is undecided, which is the same rule the
+  // decoder already applies.
+  if (Array.isArray(node.anyOf)) {
+    const matched = [];
+    node.anyOf.forEach((arm, index) => {
+      const scratch = [];
+      check(arm, value, path, scratch, doc, seen, docs);
+      if (scratch.length === 0) {
+        matched.push(index);
+      }
+    });
+    if (matched.length !== 1) {
+      problems.push(
+        `${where}: ${matched.length} of ${node.anyOf.length} schema arms match, so the ` +
+          "constraint to validate against is ambiguous",
+      );
+      return;
+    }
   }
 
   // Refuse what this reader cannot check, rather than reporting it clean.

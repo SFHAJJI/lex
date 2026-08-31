@@ -22,7 +22,7 @@ const registry = new Map([
 /** The build's own gate: decode, then validate what decoded. */
 function inspect(envelope) {
   const { decoded, problems } = decodeEnvelope(schema, envelope, registry);
-  return problems.concat(decoded ? validateEnvelope(schema, decoded) : []);
+  return problems.concat(decoded ? validateEnvelope(schema, decoded, registry) : []);
 }
 
 /**
@@ -206,4 +206,110 @@ test("a closed tuple refuses an extra position and a wrong const", () => {
 
   const tooShort = validateEnvelope(tupleSchema, { branch: "success", pair: ["lu-legilux"] });
   assert.ok(tooShort.length > 0, "a short tuple passed");
+});
+
+// ---- $ref siblings, and nested anyOf --------------------------------------------------
+
+test("an assertion written beside a $ref is applied, not skipped", () => {
+  const schema = {
+    $defs: { base: { type: "string" } },
+    anyOf: [
+      {
+        properties: {
+          branch: { const: "success" },
+          x: { $ref: "#/$defs/base", minLength: 5 },
+        },
+      },
+    ],
+  };
+
+  assert.deepEqual(validateEnvelope(schema, { branch: "success", x: "abcde" }), []);
+  assert.ok(
+    validateEnvelope(schema, { branch: "success", x: "a" }).length > 0,
+    "a sibling minLength beside a $ref was skipped",
+  );
+  assert.ok(
+    validateEnvelope(schema, { branch: "success", x: 5 }).length > 0,
+    "the $ref target itself was skipped",
+  );
+});
+
+/**
+ * The shipped object-set puts nearly its whole contract inside `objects.items.anyOf`, so a
+ * nested arm that asserts nothing leaves every object unchecked. These mutate the exact
+ * captured success objects rather than a schema of my own.
+ */
+for (const [name, mutate] of [
+  ["an invalid work_id pattern", (o) => { o.work_id = "evil"; }],
+  ["an unknown member", (o) => { o.smuggled = true; }],
+  ["a removed required member", (o) => { delete o.object_id; }],
+  ["an out-of-range vocabulary index", (o) => { o.body_holding_state = 99; }],
+  ["a corrupted digest", (o) => { o.body_sha256 = "nothex"; }],
+]) {
+  test(`refused inside a nested anyOf: ${name}`, () => {
+    const envelope = loadCaptured("success.json");
+    mutate(envelope.result.objects[0]);
+
+    assert.ok(
+      inspect(envelope).length > 0,
+      `${name} was reported clean by both the validator and the decoder`,
+    );
+  });
+}
+
+/**
+ * A declared member name in place of its index is accepted, and that is not a hole. Both
+ * forms name the same closed member, and a name outside the vocabulary is still refused by
+ * the enum check, so nothing can be smuggled through either spelling. Recorded as a test
+ * rather than left as an assumption, because I first wrote it as a hostile case and it was
+ * my expectation that was wrong, not the reader.
+ */
+test("a declared member name is accepted where its index would be, and an undeclared one is not", () => {
+  const named = loadCaptured("success.json");
+  named.result.objects[0].body_holding_state = "held_public";
+  assert.deepEqual(inspect(named), []);
+
+  const invented = loadCaptured("success.json");
+  invented.result.objects[0].body_holding_state = "held_somewhere_else";
+  assert.ok(inspect(invented).length > 0, "an undeclared member name passed");
+});
+
+test("the captured success envelope is clean before any mutation", () => {
+  assert.deepEqual(inspect(loadCaptured("success.json")), []);
+});
+
+test("a nested anyOf matching no arm or several arms is refused", () => {
+  const schema = {
+    anyOf: [
+      {
+        properties: {
+          branch: { const: "success" },
+          nested: {
+            anyOf: [{ properties: { k: { const: "a" } } }, { properties: { k: { const: "b" } } }],
+          },
+        },
+      },
+    ],
+  };
+
+  assert.deepEqual(validateEnvelope(schema, { branch: "success", nested: { k: "a" } }), []);
+  assert.ok(
+    validateEnvelope(schema, { branch: "success", nested: { k: "c" } }).length > 0,
+    "a nested anyOf matching no arm passed",
+  );
+
+  const ambiguous = {
+    anyOf: [
+      {
+        properties: {
+          branch: { const: "success" },
+          nested: { anyOf: [{ type: "object" }, { type: "object" }] },
+        },
+      },
+    ],
+  };
+  assert.ok(
+    validateEnvelope(ambiguous, { branch: "success", nested: {} }).length > 0,
+    "a nested anyOf matching two arms passed",
+  );
 });
