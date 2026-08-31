@@ -53,3 +53,49 @@ main > p:last-child {
     color: #a5c9b0;
   }
 }
+
+/* State pages.
+   Digests, coordinates and URIs are long unbreakable tokens. Left alone they set the
+   page's minimum width and force horizontal scrolling on a narrow viewport, which also
+   makes the scroll container itself a keyboard tab stop. Both were caught by the browser
+   evidence run at 320px. */
+code,
+.body {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.body {
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+.result div,
+.strip-row {
+  display: grid;
+  grid-template-columns: minmax(0, 12rem) minmax(0, 1fr);
+  gap: 0.25rem 1rem;
+  align-items: baseline;
+}
+
+@media (max-width: 34rem) {
+  .result div,
+  .strip-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+dl {
+  margin: 0;
+}
+
+dd {
+  margin: 0;
+  min-inline-size: 0;
+}
+
+.refusal-card,
+.object,
+.envelope-strip {
+  min-inline-size: 0;
+}

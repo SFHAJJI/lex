@@ -28,7 +28,13 @@ const WIDTHS = [
   { label: "desktop", width: 1440, height: 900 },
 ];
 
-const PAGES = ["state-loading.html", "state-transport-failure.html", "state-invalid-envelope.html"];
+const PAGES = [
+  "state-loading.html",
+  "state-transport-failure.html",
+  "state-invalid-envelope.html",
+  "state-success.html",
+  "state-refusal.html",
+];
 
 export async function findBrowser() {
   const { access } = await import("node:fs/promises");
@@ -184,6 +190,14 @@ const PROBE = `(() => {
  * reached at all. This presses Tab and records where focus lands.
  */
 export async function keyboardWalk(session, sessionId, expected) {
+  // Start from a known place. Focus survives a navigation in a reused target, so without
+  // this the first Tab can land mid-document and the walk measures the wrong sequence.
+  await session.send(
+    "Runtime.evaluate",
+    { expression: "document.activeElement && document.activeElement.blur(); window.scrollTo(0, 0);" },
+    sessionId,
+  );
+
   const seen = [];
   for (let step = 0; step < expected + 1; step++) {
     for (const type of ["rawKeyDown", "keyUp"]) {
@@ -202,7 +216,12 @@ export async function keyboardWalk(session, sessionId, expected) {
           const style = getComputedStyle(el);
           const ring = parseFloat(style.outlineWidth) > 0 && style.outlineStyle !== 'none';
           const shadow = style.boxShadow !== 'none' && style.boxShadow !== '';
+          const path = [];
+          for (let node = el; node && node.parentElement; node = node.parentElement) {
+            path.push(node.tagName + ':' + [...node.parentElement.children].indexOf(node));
+          }
           return {
+            path: path.join('/'),
             tag: el.tagName.toLowerCase(),
             text: (el.textContent || '').trim().slice(0, 30),
             focusVisible: ring || shadow,
@@ -213,6 +232,10 @@ export async function keyboardWalk(session, sessionId, expected) {
       sessionId,
     );
     if (result.value === null) break;
+    // Tab cycles: past the last control the browser returns to the first. Without this
+    // the walk counts the wrap as an extra stop, which reads as a phantom focusable
+    // element and fails a page that is actually correct.
+    if (seen.some((stop) => stop.path === result.value.path)) break;
     seen.push(result.value);
   }
   return seen;

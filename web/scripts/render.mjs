@@ -113,28 +113,31 @@ ${items}
  * The provenance strip, pinned to every envelope-bearing page.
  *
  * 35-ideal-ux.md section 1 requires a collapsed one-liner that never scrolls away,
- * expanding to the exact identities. Every value here is read from `context`; there
- * is no default and no computed fallback, because a strip that invents a digest is
- * worse than no strip at all.
+ * expanding to the exact identities. Every row is read from `context`; a row whose value
+ * is absent is omitted rather than defaulted, because a strip that invents a digest is
+ * worse than no strip.
  *
- * Note what is deliberately absent: the two-clocks convention. This envelope declares
- * `capabilities: preview_mechanics_only` and carries no legal time, no valid_from and
- * no timeline_semantics. Rendering a legal clock here would mean inventing one.
+ * Note what is deliberately absent: the two-clocks convention. This envelope is a
+ * synthetic preview-mechanics response. It carries no legal time, no valid_from and no
+ * timeline_semantics, so rendering a legal clock would mean inventing one.
  */
 function envelopeStrip(context) {
   const rows = [
-    ["Jurisdiction", context.jurisdiction],
-    ["Capabilities", context.capabilities],
-    ["Source kind", context.source?.source_kind],
-    ["Observed at", context.freshness?.observed_at],
-    ["Upstream health", context.freshness?.upstream_health],
-    ["Index format", context.index_format],
-    ["Snapshot", context.snapshot?.snapshot_sha256],
-    ["Artifact", context.artifact?.artifact_id],
+    ["Operation", context.operation?.operation_id],
+    ["Operation catalog", context.operation?.catalog_id],
+    ["Catalog digest", context.operation?.catalog_sha256],
+    ["Refusal registry", context.refusal_registry?.registry_id],
+    ["Registry digest", context.refusal_registry?.sha256],
+    ["Snapshot", context.snapshot?.snapshot_id],
+    ["Snapshot digest", context.snapshot?.snapshot_sha256],
+    ["Artifact digest", context.artifact?.sha256],
+    ["Index schema", context.index?.schema],
+    ["Index digest", context.index?.sha256],
+    ["Index build", context.index?.build_id],
+    ["Runtime", context.runtime?.component_id],
     ["Runtime source", context.runtime?.source_sha256],
+    ["Builder", context.builder?.component_id],
     ["Builder source", context.builder?.source_sha256],
-    ["Operation catalog", context.operation?.catalog_sha256],
-    ["Refusal registry", context.refusal_registry?.sha256],
     ["Request", context.request_ref],
   ].filter(([, value]) => value !== undefined && value !== null);
 
@@ -151,8 +154,8 @@ function envelopeStrip(context) {
           <summary>
             <span class="icon" aria-hidden="true">&#9635;</span>
             <span class="label">Provenance</span>
-            <span class="summary-value">${escapeHtml(context.jurisdiction ?? "")} /
-              ${escapeHtml(context.freshness?.observed_at ?? "")}</span>
+            <span class="summary-value">${escapeHtml(context.operation?.operation_id ?? "")} /
+              ${escapeHtml(context.snapshot?.snapshot_id ?? "")}</span>
           </summary>
           <dl class="strip">
 ${items}
@@ -161,31 +164,99 @@ ${items}
       </aside>`;
 }
 
+function definition(label, value) {
+  if (value === undefined || value === null || value === "") {
+    return "";
+  }
+  return `          <div><dt>${escapeHtml(label)}</dt><dd><code>${escapeHtml(value)}</code></dd></div>`;
+}
+
 /**
- * A successful envelope. It names an object set and its digest, and nothing else is
- * claimed: this envelope's capability is `preview_mechanics_only`, so the page
- * describes the mechanics it proves and makes no statement about any law.
+ * A successful envelope.
+ *
+ * Every vocabulary value here has already been resolved from its wire index by
+ * `decodeEnvelope`. The renderer never sees an integer where a reader expects a name,
+ * and never carries a lookup table of its own.
  */
 export function renderSuccess({ envelope }) {
   const { result, context } = envelope;
+  const objects = (result?.objects ?? [])
+    .map(
+      (object) => `        <article class="object">
+          <h2>${escapeHtml(object.object_id ?? "")}</h2>
+          <dl class="result">
+${[
+  definition("Work", object.work_id),
+  definition("Version", object.version_key),
+  definition("Anchor", object.anchor),
+  definition("Holding state", object.body_holding_state),
+  definition("Holding disposition", object.body_holding_disposition),
+  definition("Body digest", object.body_sha256),
+]
+  .filter(Boolean)
+  .join("\n")}
+          </dl>
+${
+  object.body === undefined
+    ? ""
+    : `          <pre class="body" aria-label="Synthetic body text">${escapeHtml(object.body)}</pre>`
+}
+        </article>`,
+    )
+    .join("\n");
+
   return page({
     state: "success",
     title: "Preview object set",
     main: `      <h1>
         <span class="icon" aria-hidden="true">&#10003;</span>
-        <span class="label">Object set resolved</span>
+        <span class="label">Coordinate resolved</span>
       </h1>
-      <p class="state">The request returned an envelope for operation
-        <code>${escapeHtml(context.operation?.operation_id ?? "")}</code>.</p>
       <dl class="result">
-        <div><dt>Object set</dt><dd><code>${escapeHtml(result.object_set_id)}</code></dd></div>
-        <div><dt>Digest</dt><dd><code>${escapeHtml(result.object_set_sha256)}</code></dd></div>
+${[
+  definition("Matched coordinate", envelope.matched_coordinate),
+  definition("Identifier family", envelope.matched_identifier_family),
+  definition("Object set", result?.object_set_id),
+  definition("Object set schema", result?.schema),
+]
+  .filter(Boolean)
+  .join("\n")}
       </dl>
-      <p class="boundary">This envelope declares
-        <code>${escapeHtml(context.capabilities ?? "")}</code>. It carries no legal
-        time, no publisher wording and no applicability, so this page states none.</p>
+${objects}
+      <p class="boundary">Every value above is synthetic. The body text carries no legal
+        authority, and this page makes no statement about any law.</p>
 ${envelopeStrip(context)}`,
   });
+}
+
+/**
+ * The official routes, as real links.
+ *
+ * These are the handoff the pack requires: a refusal that names where to look next is an
+ * answer, and one that names it as unclickable text is a smaller answer. Only https is
+ * emitted; anything else is rendered as inert text rather than linked, because a scheme
+ * this surface has not vetted must not become something a reader can activate.
+ */
+function officialRoutes(actions) {
+  if (!Array.isArray(actions) || actions.length === 0) {
+    return "";
+  }
+  const items = actions
+    .map((action) => {
+      const label = `${action.publisher}: ${action.uri}`;
+      const safe = typeof action.uri === "string" && action.uri.startsWith("https://");
+      const inner = safe
+        ? `<a href="${escapeHtml(action.uri)}" rel="noreferrer noopener">${escapeHtml(label)}</a>`
+        : `${escapeHtml(label)} <span class="note">(not linked: scheme not vetted)</span>`;
+      return `          <li>${inner}</li>`;
+    })
+    .join(String.fromCharCode(10));
+  return `        <section class="payload">
+          <h3>Official search routes</h3>
+          <ul>
+${items}
+          </ul>
+        </section>`;
 }
 
 /**
@@ -196,18 +267,18 @@ ${envelopeStrip(context)}`,
  * sentence, the helpful payload is the body, and the official routes are the footer.
  *
  * `asserts_absence_of_law` is rendered explicitly rather than assumed. A refusal that
- * silently left it out would read as an absence claim, which is the single most
- * damaging thing this surface could imply.
+ * silently left it out would read as an absence claim, which is the single most damaging
+ * thing this surface could imply.
  */
 export function renderRefusal({ envelope }) {
   const { refusal, context } = envelope;
 
-  const list = (label, values) => {
+  const list = (label, values, format) => {
     if (!Array.isArray(values) || values.length === 0) {
       return "";
     }
     const items = values
-      .map((value) => `          <li>${escapeHtml(value)}</li>`)
+      .map((value) => `          <li>${escapeHtml(format ? format(value) : value)}</li>`)
       .join("\n");
     return `        <section class="payload">
           <h3>${escapeHtml(label)}</h3>
@@ -229,15 +300,21 @@ ${items}
           <span class="label">The requested identifier was not recognised.</span>
         </h1>
         <dl class="result">
-          <div><dt>Requested coordinate</dt>
-            <dd><code>${escapeHtml(refusal.requested_coordinate)}</code></dd></div>
-          <div><dt>Identifier family checked</dt>
-            <dd><code>${escapeHtml(refusal.checked_identifier_family)}</code></dd></div>
+${[
+  definition("Requested coordinate", refusal.requested_coordinate),
+  definition("Identifier family checked", refusal.checked_identifier_family),
+]
+  .filter(Boolean)
+  .join("\n")}
         </dl>
 ${list("Publisher contexts checked", refusal.publisher_contexts_checked)}
-${list("Records that may be held", refusal.possible_held_records)}
+${list(
+  "Records that may be held",
+  refusal.possible_held_records,
+  (record) => `${record.coordinate} (${record.identifier_family}, ${record.publisher})`,
+)}
 ${list("What would answer this", refusal.what_would_answer)}
-${list("Official search routes", refusal.official_search_actions)}
+${officialRoutes(refusal.official_search_actions)}
         <p class="boundary">${
           absence
             ? "This response asserts the absence of a law."

@@ -105,53 +105,34 @@ test("problems are rendered from the argument, not from a template literal", () 
 
 import { renderSuccess, renderRefusal } from "../scripts/render.mjs";
 
-const CONTEXT = (over = {}) => ({
-  jurisdiction: "synthetic",
-  capabilities: "preview_mechanics_only",
-  source: { source_kind: "synthetic_test" },
-  freshness: { observed_at: "2026-08-31T07:00:00Z", upstream_health: "not_applicable_synthetic" },
-  index_format: "lex-index/3",
-  snapshot: { snapshot_sha256: "a".repeat(64) },
-  artifact: { artifact_id: "art-1" },
-  runtime: { source_sha256: "b".repeat(64) },
-  builder: { source_sha256: "c".repeat(64) },
-  operation: { operation_id: "resolve", catalog_sha256: "d".repeat(64) },
-  refusal_registry: { sha256: "e".repeat(64) },
-  request_ref: "req_0123456789abcdef0123456789abcdef",
-  ...over,
-});
+import { readFileSync } from "node:fs";
+import { decodeEnvelope, validateEnvelope } from "../scripts/envelope.mjs";
 
-const SUCCESS = (over = {}, context = CONTEXT()) =>
-  renderSuccess({
-    envelope: {
-      result: { object_set_id: "set-one", object_set_sha256: "1".repeat(64), ...over },
-      context,
-    },
-  });
+const json = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8"));
+const ENVELOPE_SCHEMA = json("../../schemas/v3-synthetic-preview/synthetic-resolve-envelope.schema.json");
+const REGISTRY = new Map([
+  ["lex-v3-preview-object-set/1", json("../../schemas/v3-preview/preview-object-set.schema.json")],
+]);
 
-const REFUSAL = (over = {}) =>
-  renderRefusal({
-    envelope: {
-      refusal: {
-        code: "identifier_unknown",
-        requested_coordinate: "eli/synthetic-preview",
-        checked_identifier_family: "eli",
-        publisher_contexts_checked: ["lu-legilux"],
-        possible_held_records: [],
-        what_would_answer: ["a known ELI"],
-        official_search_actions: ["https://legilux.public.lu"],
-        asserts_absence_of_law: false,
-        ...over,
-      },
-      context: CONTEXT(),
-    },
-  });
+// The fixtures are the envelopes the merged C# production path actually produced. Tests
+// that built their own envelope would only ever prove the renderer agrees with my idea
+// of the contract, which is exactly the mistake these tests exist to catch: the first
+// version of this suite was written against the wrong schema entirely, and every test
+// passed.
+const capture = (file) => {
+  const raw = json(`../fixtures/captured/${file}`);
+  const { decoded, problems } = decodeEnvelope(ENVELOPE_SCHEMA, raw, REGISTRY);
+  assert.deepEqual(problems, [], `${file} must decode cleanly`);
+  assert.deepEqual(validateEnvelope(ENVELOPE_SCHEMA, decoded), [], `${file} must validate`);
+  return decoded;
+};
 
-// Escaping is asserted on the function, not through a rendered page. Through the page
-// each character's assertion silently depended on a neighbouring escape still working:
-// removing only `<` left `&lt;script>alert(1)`, which does not contain `<script>alert`,
-// so the test passed while the hole was real. Testing the five characters one at a time
-// is the only form of this test that fails when it should.
+const SUCCESS = () => renderSuccess({ envelope: capture("success.json") });
+const REFUSAL = (over = {}) => {
+  const envelope = capture("refusal.json");
+  return renderRefusal({ envelope: { ...envelope, refusal: { ...envelope.refusal, ...over } } });
+};
+
 test("every HTML-significant character is escaped independently", () => {
   for (const [raw, entity] of [
     ["&", "&amp;"],
@@ -164,53 +145,91 @@ test("every HTML-significant character is escaped independently", () => {
   }
 });
 
+// The wire format encodes closed vocabularies as integer indices. Rendering one raw puts
+// a bare number where a reader expects a machine code, and that is an answer-shaped
+// thing that says nothing.
+test("no vocabulary index reaches the page as a number", () => {
+  for (const html of [SUCCESS(), REFUSAL()]) {
+    assert.ok(!/<code>-?[0-9]+<\/code>/.test(html), "a raw index was rendered");
+  }
+});
+
+test("vocabulary indices are resolved to their declared members", () => {
+  const refusal = REFUSAL();
+  assert.ok(refusal.includes(">identifier_unknown<"), "refusal.code must render as its name");
+  assert.ok(refusal.includes("historical_legal_id"), "checked_identifier_family must resolve");
+  assert.ok(refusal.includes("corrected_identifier"), "what_would_answer must resolve");
+
+  const success = SUCCESS();
+  assert.ok(success.includes("held_public"), "body_holding_state resolves via the nested schema");
+  assert.ok(success.includes("synthetic_fixture"), "body_holding_disposition resolves too");
+  assert.ok(success.includes("eli"), "matched_identifier_family must resolve");
+});
+
 test("a refusal is rendered as an answer, never as an error", () => {
   const html = REFUSAL();
-  assert.match(html, /data-preview-state="refusal"/);
-  assert.match(html, /class="code-chip">identifier_unknown</);
-  assert.doesNotMatch(html, /class="[^"]*(error|danger|red)/);
+  assert.ok(html.includes('data-preview-state="refusal"'));
+  assert.ok(html.includes('class="code-chip">identifier_unknown<'));
+  assert.ok(!/class="[^"]*(error|danger|red)/.test(html));
 });
 
 test("a refusal that asserts no absence says so explicitly", () => {
-  assert.match(REFUSAL(), /does <strong>not<\/strong> assert/);
-  assert.match(REFUSAL({ asserts_absence_of_law: true }), /asserts the absence of a law/);
+  assert.ok(REFUSAL().includes("does <strong>not</strong> assert"));
+  assert.ok(REFUSAL({ asserts_absence_of_law: true }).includes("asserts the absence of a law"));
 });
 
 test("empty payload lists are omitted rather than rendered empty", () => {
-  assert.doesNotMatch(REFUSAL(), /Records that may be held/);
-  assert.match(REFUSAL({ possible_held_records: ["one"] }), /Records that may be held/);
+  assert.ok(!REFUSAL({ possible_held_records: [] }).includes("Records that may be held"));
+  assert.ok(REFUSAL().includes("Records that may be held"));
 });
 
-test("the success page derives its values and invents no legal time", () => {
+// Only https becomes a link. A scheme this surface has not vetted must not become
+// something a reader can activate from a page that is otherwise inert.
+test("official routes link only over https", () => {
+  assert.ok(REFUSAL().includes('<a href="https://legilux.public.lu/search"'));
+  const other = REFUSAL({
+    official_search_actions: [{ kind: "publisher_search", publisher: "lu-legilux", uri: "http://example.invalid/x" }],
+  });
+  assert.ok(!other.includes("<a href="), "a non-https route must not be linked");
+  assert.ok(other.includes("scheme not vetted"));
+});
+
+test("the success page renders the object body and invents no legal time", () => {
   const html = SUCCESS();
-  assert.match(html, /set-one/);
-  assert.match(html, /preview_mechanics_only/);
-  assert.doesNotMatch(html, /in force|valid_from|timeline_semantics/i);
-});
-
-// Presence-only rendering passes any single-fixture test. Two payloads that differ must
-// produce output that differs, and neither may carry the other's values.
-test("different envelopes produce different pages", () => {
-  const one = SUCCESS();
-  const two = SUCCESS(
-    { object_set_id: "set-two", object_set_sha256: "2".repeat(64) },
-    CONTEXT({ operation: { operation_id: "timeline", catalog_sha256: "9".repeat(64) } }),
-  );
-  assert.notEqual(one, two);
-  assert.match(one, /resolve/);
-  assert.doesNotMatch(one, /set-two/);
-  assert.match(two, /timeline/);
-  assert.doesNotMatch(two, /set-one/);
-
-  const single = REFUSAL();
-  const both = REFUSAL({ publisher_contexts_checked: ["eu-eurlex", "lu-legilux"] });
-  assert.notEqual(single, both);
-  assert.doesNotMatch(single, /eu-eurlex/);
-  assert.match(both, /eu-eurlex/);
+  assert.ok(html.includes("s0-05-sql-object-set"));
+  assert.ok(html.includes("SYNTHETIC PREVIEW"), "the object body is rendered");
+  assert.ok(!/in force|valid_from|timeline_semantics/i.test(html));
 });
 
 test("a provenance row absent from the envelope is omitted, never defaulted", () => {
-  const html = SUCCESS({}, CONTEXT({ artifact: undefined }));
-  assert.doesNotMatch(html, /Artifact/);
-  assert.match(SUCCESS(), /Artifact/);
+  const envelope = capture("success.json");
+  const without = { ...envelope, context: { ...envelope.context, artifact: undefined } };
+  assert.ok(!renderSuccess({ envelope: without }).includes("Artifact digest"));
+  assert.ok(SUCCESS().includes("Artifact digest"));
+});
+
+// The fail-closed guarantee. An index that resolves to the wrong member is a confident
+// wrong label, so anything outside the declared vocabulary is refused rather than
+// clamped or passed through. Without these, disabling the range check leaves the whole
+// suite green, which is how it was found.
+test("a vocabulary index outside its declared members is refused", () => {
+  const base = () => json("../fixtures/captured/refusal.json");
+  const cases = [
+    ["code past the only entry", (e) => { e.refusal.code = 1; }],
+    ["family index equal to the member count", (e) => { e.refusal.checked_identifier_family = 4; }],
+    ["negative index", (e) => { e.refusal.checked_identifier_family = -1; }],
+    ["non-integer index", (e) => { e.refusal.checked_identifier_family = 1.5; }],
+    ["index inside an array", (e) => { e.refusal.what_would_answer = [0, 9]; }],
+    ["index nested in an object in an array", (e) => { e.refusal.possible_held_records[0].publisher = 2; }],
+  ];
+  for (const [label, mutate] of cases) {
+    const envelope = base();
+    mutate(envelope);
+    const { problems } = decodeEnvelope(ENVELOPE_SCHEMA, envelope, REGISTRY);
+    assert.ok(problems.length > 0, `${label} must be refused`);
+    assert.ok(problems[0].includes("outside the"), `${label} must say why`);
+  }
+
+  const { problems } = decodeEnvelope(ENVELOPE_SCHEMA, base(), REGISTRY);
+  assert.deepEqual(problems, [], "the unmutated capture must still decode cleanly");
 });

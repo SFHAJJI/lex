@@ -35,17 +35,15 @@ export async function loadEnvelopeSchema() {
  * not a general JSON Schema engine, and it fails closed: an unknown keyword combination
  * it cannot evaluate is reported as unvalidatable rather than silently passing.
  */
-export function validateEnvelope(schema, envelope) {
-  const problems = [];
+/** The schema arm for this envelope's branch, or a problem describing why there is none. */
+export function selectArm(schema, envelope) {
   if (envelope === null || typeof envelope !== "object" || Array.isArray(envelope)) {
-    return ["envelope is not an object"];
+    return { problems: ["envelope is not an object"] };
   }
-
   const branch = envelope.branch;
   if (typeof branch !== "string") {
-    return ["envelope has no string branch member"];
+    return { problems: ["envelope has no string branch member"] };
   }
-
   const arm = (schema.anyOf ?? []).find(
     (candidate) => candidate?.properties?.branch?.const === branch,
   );
@@ -53,9 +51,107 @@ export function validateEnvelope(schema, envelope) {
     const known = (schema.anyOf ?? [])
       .map((candidate) => candidate?.properties?.branch?.const)
       .filter(Boolean);
-    return [`branch ${JSON.stringify(branch)} is not one of ${JSON.stringify(known)}`];
+    return { problems: [`branch ${JSON.stringify(branch)} is not one of ${JSON.stringify(known)}`] };
+  }
+  return { arm, problems: [] };
+}
+
+/**
+ * Resolve the envelope's integer vocabulary indices into their schema-declared members.
+ *
+ * The wire format encodes every closed vocabulary as an index. `refusal.code` arrives as
+ * `0`, not `"identifier_unknown"`; `checked_identifier_family` as `3`, not
+ * `"historical_legal_id"`. Rendering the integer would put a bare number where a reader
+ * expects a machine code, and a hardcoded lookup table would be a second copy of a
+ * vocabulary that already exists and free to drift from it silently.
+ *
+ * So the schema is the authority: wherever it declares an `enum`, an integer is an index
+ * into that enum. Anything out of range is refused rather than clamped or passed through,
+ * because an index resolving to the wrong member is a plausible wrong label, and that is
+ * worse than a missing one.
+ */
+export function decodeEnvelope(schema, envelope, registry = new Map()) {
+  const { arm, problems } = selectArm(schema, envelope);
+  if (!arm) {
+    return { decoded: null, problems };
   }
 
+  // A sub-document may declare its own schema identity: `result.schema` is
+  // `lex-v3-preview-object-set/1`, and the vocabularies for `body_holding_state` and
+  // `body_holding_disposition` live there rather than in the envelope schema. Following
+  // the declared identity keeps one vocabulary in one place; copying those members into
+  // the envelope schema would be a second copy free to drift.
+  const enter = (node, value, where) => {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+      return node;
+    }
+    const id = value.schema;
+    if (typeof id !== "string" || !registry.has(id) || registry.get(id) === node) {
+      return node;
+    }
+    return registry.get(id);
+  };
+
+  // `anyOf` is resolved by its const discriminators, and only when exactly one arm
+  // matches. Zero or several is refused rather than guessed, because decoding against
+  // the wrong arm resolves indices through the wrong vocabulary and produces a
+  // confident wrong label.
+  const resolve = (node, value, where) => {
+    if (!node || !Array.isArray(node.anyOf)) {
+      return node;
+    }
+    const matching = node.anyOf.filter((candidate) =>
+      Object.entries(candidate.properties ?? {}).every(
+        ([key, sub]) => sub.const === undefined || value?.[key] === sub.const,
+      ),
+    );
+    if (matching.length !== 1) {
+      problems.push(
+        `${where}: ${matching.length} of ${node.anyOf.length} schema arms match, so the ` +
+          "vocabulary to decode against is ambiguous",
+      );
+      return null;
+    }
+    return matching[0];
+  };
+
+  const decode = (rawNode, value, path) => {
+    const where = path || "(root)";
+    const node = resolve(enter(rawNode, value, where), value, where);
+    if (!node) {
+      return value;
+    }
+    if (Array.isArray(node.enum) && typeof value === "number") {
+      if (!Number.isInteger(value) || value < 0 || value >= node.enum.length) {
+        problems.push(
+          `${where}: vocabulary index ${JSON.stringify(value)} is outside the ` +
+            `${node.enum.length} declared members`,
+        );
+        return value;
+      }
+      return node.enum[value];
+    }
+    if (Array.isArray(value)) {
+      return value.map((item, index) => decode(node.items, item, `${where}[${index}]`));
+    }
+    if (value !== null && typeof value === "object") {
+      const out = {};
+      for (const [key, member] of Object.entries(value)) {
+        out[key] = decode(node.properties?.[key], member, path ? `${path}.${key}` : key);
+      }
+      return out;
+    }
+    return value;
+  };
+
+  return { decoded: decode(arm, envelope, ""), problems };
+}
+
+export function validateEnvelope(schema, envelope) {
+  const { arm, problems } = selectArm(schema, envelope);
+  if (!arm) {
+    return problems;
+  }
   check(arm, envelope, "", problems);
   return problems;
 }

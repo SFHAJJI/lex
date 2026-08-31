@@ -1,0 +1,16 @@
+{
+  "note": "Captured from the merged S0-05 production C# path by Codex; see issue #325. Digests are verified at build time.",
+  "source_commit": "246ad5377bb382321fd42b57ec5f4dbdf9caa819",
+  "merge_commit": "6d299e2f39f1a3806126987c917d1f25b47efc14",
+  "api_assembly_sha256": "9dfe24b39b2e2d4d40f712d3234fb67e81238280794940d7e0d3ef46681a7f30",
+  "files": {
+    "success.json": {
+      "sha256": "dedbcbe0f53f5e2b41fd98551d5913b0ed56525ec35f7b26a6c0fa9eaad4ba3c",
+      "bytes": 1824
+    },
+    "refusal.json": {
+      "sha256": "cfc9fe90f4f020e99f8da43c8d9e5f74c570eced2ad5d303c6dee7b485eb0212",
+      "bytes": 1630
+    }
+  }
+}
