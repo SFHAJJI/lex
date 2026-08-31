@@ -6,6 +6,8 @@ param(
     [Parameter(Mandatory)][string]$BaseIndexPath,
     [Parameter(Mandatory)][string]$BaseManifestPath,
     [Parameter(Mandatory)][string]$ResultPath,
+    [string]$DockerArchivePath,
+    [ValidatePattern('^[a-z0-9][a-z0-9._/-]*:[A-Za-z0-9_][A-Za-z0-9._-]*$')][string]$DockerImageReference,
     [ValidatePattern('^[0-9a-fA-F]{64}$')][string]$ExpectedPrivateKeyCanarySha256
 )
 
@@ -13,6 +15,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $MaxArchiveBytes = 1GB
+$MaxDockerArchiveBytes = 2GB
 $MaxOuterEntries = 4096
 $MaxOuterMemberBytes = 1GB
 $MaxMetadataBytes = 1MB
@@ -664,11 +667,84 @@ function Scan-PublicGraph {
     return [pscustomobject]@{ Entries = $entries; Files = $files; Bytes = $bytes; GraphFiles = $graphFiles }
 }
 
+function Add-DockerArchiveFile {
+    param(
+        [Parameter(Mandatory)][System.Formats.Tar.TarWriter]$Writer,
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][string]$Path
+    )
+
+    $entry = [System.Formats.Tar.UstarTarEntry]::new([System.Formats.Tar.TarEntryType]::RegularFile, $Name)
+    $stream = [IO.FileStream]::new($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read, 65536, [IO.FileOptions]::SequentialScan)
+    try {
+        $entry.DataStream = $stream
+        $entry.ModificationTime = [DateTimeOffset]::UnixEpoch
+        $entry.Uid = 0
+        $entry.Gid = 0
+        $entry.UserName = ''
+        $entry.GroupName = ''
+        $Writer.WriteEntry($entry)
+    }
+    finally { $stream.Dispose() }
+}
+
+function Write-DockerArchive {
+    param(
+        [Parameter(Mandatory)][string]$DestinationPath,
+        [Parameter(Mandatory)][string]$ImageReference,
+        [Parameter(Mandatory)][object]$ConfigDescriptor,
+        [Parameter(Mandatory)][Collections.Generic.List[object]]$ExpandedLayers,
+        [Parameter(Mandatory)][string]$SpoolRoot
+    )
+
+    $configName = $ConfigDescriptor.Digest.Substring(7) + '.json'
+    $layerNames = @($ExpandedLayers | ForEach-Object { $_.Name })
+    $manifestObject = [ordered]@{
+        Config = $configName
+        RepoTags = @($ImageReference)
+        Layers = $layerNames
+    }
+    $manifestBytes = [Text.UTF8Encoding]::new($false).GetBytes('[' + ($manifestObject | ConvertTo-Json -Depth 4 -Compress) + ']')
+    $manifestPath = Join-Path $SpoolRoot 'docker-manifest.json'
+    [IO.File]::WriteAllBytes($manifestPath, $manifestBytes)
+
+    $partialPath = $DestinationPath + '.partial.' + [Guid]::NewGuid().ToString('N')
+    try {
+        $output = [IO.FileStream]::new($partialPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+        $writer = [System.Formats.Tar.TarWriter]::new($output, [System.Formats.Tar.TarEntryFormat]::Ustar, $true)
+        try {
+            Add-DockerArchiveFile -Writer $writer -Name $configName -Path $ConfigDescriptor.File.Path
+            foreach ($layer in $ExpandedLayers) {
+                Add-DockerArchiveFile -Writer $writer -Name $layer.Name -Path $layer.Path
+            }
+            Add-DockerArchiveFile -Writer $writer -Name 'manifest.json' -Path $manifestPath
+        }
+        finally {
+            $writer.Dispose()
+            $output.Flush($true)
+            $output.Dispose()
+        }
+
+        $archiveInfo = Get-Item -LiteralPath $partialPath
+        Assert-True ($archiveInfo.Length -gt 0 -and $archiveInfo.Length -le $MaxDockerArchiveBytes) 'Docker runtime archive is outside its byte bound.'
+        $hashStream = [IO.File]::OpenRead($partialPath)
+        try { $digest = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($hashStream)).ToLowerInvariant() }
+        finally { $hashStream.Dispose() }
+        [IO.File]::Move($partialPath, $DestinationPath, $false)
+        return [pscustomobject]@{ Sha256 = $digest; Bytes = $archiveInfo.Length }
+    }
+    finally {
+        if ([IO.File]::Exists($partialPath)) { [IO.File]::Delete($partialPath) }
+    }
+}
+
 $resolvedArchive = (Resolve-Path -LiteralPath $ArchivePath).Path
 $archiveInfo = Get-Item -LiteralPath $resolvedArchive
 Assert-True (-not $archiveInfo.PSIsContainer) 'OCI archive path is not a file.'
 Assert-True ($archiveInfo.Length -gt 0 -and $archiveInfo.Length -le $MaxArchiveBytes) 'OCI archive is outside its byte bound.'
 $resolvedGraph = (Resolve-Path -LiteralPath $PublicGraphRoot).Path
+$resolvedBaseIndex = (Resolve-Path -LiteralPath $BaseIndexPath).Path
+$resolvedBaseManifest = (Resolve-Path -LiteralPath $BaseManifestPath).Path
 $resolvedResult = [IO.Path]::GetFullPath($ResultPath)
 Assert-True (-not [string]::Equals($resolvedArchive, $resolvedResult, [StringComparison]::OrdinalIgnoreCase)) 'Result path aliases the OCI archive.'
 $graphPrefix = $resolvedGraph.TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
@@ -676,6 +752,19 @@ Assert-True (-not $resolvedResult.StartsWith($graphPrefix, [StringComparison]::O
 if ([IO.File]::Exists($resolvedResult)) { [IO.File]::Delete($resolvedResult) }
 $resultDirectory = [IO.Path]::GetDirectoryName($resolvedResult)
 Assert-True ([IO.Directory]::Exists($resultDirectory)) 'Result directory does not exist.'
+$writeDockerArchive = -not [string]::IsNullOrWhiteSpace($DockerArchivePath)
+Assert-True ($writeDockerArchive -eq (-not [string]::IsNullOrWhiteSpace($DockerImageReference))) 'Docker archive path and image reference must be supplied together.'
+$resolvedDockerArchive = $null
+if ($writeDockerArchive) {
+    $resolvedDockerArchive = [IO.Path]::GetFullPath($DockerArchivePath)
+    Assert-True (-not [string]::Equals($resolvedDockerArchive, $resolvedArchive, [StringComparison]::OrdinalIgnoreCase)) 'Docker runtime archive aliases the OCI archive.'
+    Assert-True (-not [string]::Equals($resolvedDockerArchive, $resolvedBaseIndex, [StringComparison]::OrdinalIgnoreCase)) 'Docker runtime archive aliases the trusted base index.'
+    Assert-True (-not [string]::Equals($resolvedDockerArchive, $resolvedBaseManifest, [StringComparison]::OrdinalIgnoreCase)) 'Docker runtime archive aliases the trusted base manifest.'
+    Assert-True (-not [string]::Equals($resolvedDockerArchive, $resolvedResult, [StringComparison]::OrdinalIgnoreCase)) 'Docker runtime archive aliases the result.'
+    Assert-True (-not $resolvedDockerArchive.StartsWith($graphPrefix, [StringComparison]::OrdinalIgnoreCase)) 'Docker runtime archive must remain outside the public graph.'
+    Assert-True ([IO.Directory]::Exists([IO.Path]::GetDirectoryName($resolvedDockerArchive))) 'Docker runtime archive directory does not exist.'
+    if ([IO.File]::Exists($resolvedDockerArchive)) { [IO.File]::Delete($resolvedDockerArchive) }
+}
 
 $spoolRoot = Join-Path ([IO.Path]::GetTempPath()) ('lex-v3-s0-05-oci-' + [Guid]::NewGuid().ToString('N'))
 [IO.Directory]::CreateDirectory($spoolRoot) | Out-Null
@@ -809,10 +898,12 @@ try {
         [long]$expandedBytes = 0
         [long]$layerContentBytes = 0
         [int]$layerFileCount = 0
+        $expandedLayers = [Collections.Generic.List[object]]::new()
         $foundGraphFiles = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
         for ($index = 0; $index -lt $layers.Count; $index++) {
             $layerSpool = Join-Path $spoolRoot ('layer-' + $index.ToString('D3') + '.tar')
             $expanded = Expand-LayerToPrivateSpool -Layer $layers[$index] -DestinationPath $layerSpool -ForbiddenNeedles $forbiddenNeedles
+            $expandedLayers.Add([pscustomobject]@{ Name = $layers[$index].Digest.Substring(7) + '/layer.tar'; Path = $layerSpool })
             Assert-True ($expandedBytes -le $MaxExpandedImageBytes - $expanded.Bytes) 'Expanded OCI image exceeds its byte ceiling.'
             $expandedBytes += $expanded.Bytes
             $diffId = $diffIds[$index]
@@ -824,6 +915,11 @@ try {
         Assert-True ($foundGraphFiles.Count -eq $publicGraph.GraphFiles.Count) 'OCI application layer is missing reviewed public graph files.'
     }
     finally { $configDocument.Dispose() }
+
+    $dockerArchive = $null
+    if ($writeDockerArchive) {
+        $dockerArchive = Write-DockerArchive -DestinationPath $resolvedDockerArchive -ImageReference $DockerImageReference -ConfigDescriptor $configDescriptor -ExpandedLayers $expandedLayers -SpoolRoot $spoolRoot
+    }
 
     $archiveDigest = $archiveCopy.Sha256
     [long]$scannedBytes = $outer.Bytes + $expandedBytes + $layerContentBytes + $publicGraph.Bytes
@@ -853,6 +949,7 @@ try {
             legacy_and_production_canaries_absent = $true
         }
     }
+    if ($writeDockerArchive) { $result['docker_archive_sha256'] = $dockerArchive.Sha256 }
     $json = ($result | ConvertTo-Json -Depth 5 -Compress) + "`n"
     $partialResult = $resolvedResult + '.partial.' + [Guid]::NewGuid().ToString('N')
     try {

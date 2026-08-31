@@ -26,8 +26,9 @@ public sealed class OciVerifierTests
         var archivePath = Path.Combine(root.Path, "preview.tar");
         WriteOciArchive(archivePath, CreateLayer(("app/Lex.V3.Api.dll", Encoding.ASCII.GetBytes("clean-api"))));
         var resultPath = Path.Combine(root.Path, "verification.json");
+        var dockerArchivePath = Path.Combine(root.Path, "runtime-docker.tar");
 
-        var result = RunVerifier(archivePath, graphRoot, resultPath);
+        var result = RunVerifier(archivePath, graphRoot, resultPath, dockerArchivePath: dockerArchivePath);
 
         Assert.AreEqual(0, result.ExitCode, result.Output);
         using var document = JsonDocument.Parse(File.ReadAllBytes(resultPath));
@@ -37,10 +38,29 @@ public sealed class OciVerifierTests
         Assert.AreEqual(2, rootElement.GetProperty("layer_count").GetInt32());
         Assert.IsTrue(rootElement.GetProperty("checks").EnumerateObject().All(property => property.Value.GetBoolean()));
 
+        var dockerFiles = ReadTarFiles(dockerArchivePath);
+        var configName = rootElement.GetProperty("config_digest").GetString()!["sha256:".Length..] + ".json";
+        Assert.AreEqual(4, dockerFiles.Count);
+        Assert.IsTrue(dockerFiles.ContainsKey(configName));
+        Assert.AreEqual(configName[..^".json".Length], Sha256(dockerFiles[configName]));
+        using var dockerManifest = JsonDocument.Parse(dockerFiles["manifest.json"]);
+        var dockerImage = dockerManifest.RootElement[0];
+        Assert.AreEqual(configName, dockerImage.GetProperty("Config").GetString());
+        CollectionAssert.AreEqual(
+            new[] { "lex-v3-s0-05:test" },
+            dockerImage.GetProperty("RepoTags").EnumerateArray().Select(value => value.GetString()).ToArray());
+        Assert.AreEqual(2, dockerImage.GetProperty("Layers").GetArrayLength());
+        Assert.IsTrue(
+            dockerImage.GetProperty("Layers").EnumerateArray().All(
+                value => value.GetString() is { } path && path.EndsWith("/layer.tar", StringComparison.Ordinal) && dockerFiles.ContainsKey(path)));
+        Assert.AreEqual(Sha256(File.ReadAllBytes(dockerArchivePath)), rootElement.GetProperty("docker_archive_sha256").GetString());
+
         var secondResultPath = Path.Combine(root.Path, "verification-second.json");
-        var secondResult = RunVerifier(archivePath, graphRoot, secondResultPath);
+        var secondDockerArchivePath = Path.Combine(root.Path, "runtime-docker-second.tar");
+        var secondResult = RunVerifier(archivePath, graphRoot, secondResultPath, dockerArchivePath: secondDockerArchivePath);
         Assert.AreEqual(0, secondResult.ExitCode, secondResult.Output);
         CollectionAssert.AreEqual(File.ReadAllBytes(resultPath), File.ReadAllBytes(secondResultPath));
+        CollectionAssert.AreEqual(File.ReadAllBytes(dockerArchivePath), File.ReadAllBytes(secondDockerArchivePath));
     }
 
     [TestMethod]
@@ -88,10 +108,16 @@ public sealed class OciVerifierTests
         using var root = CreateRootWithGraph(out var graphRoot);
         var archivePath = Path.Combine(root.Path, "preview.tar");
         WriteOciArchive(archivePath, CreateLayer((path, Encoding.ASCII.GetBytes("payload"))));
+        var dockerArchivePath = Path.Combine(root.Path, "runtime-docker.tar");
 
-        var result = RunVerifier(archivePath, graphRoot, Path.Combine(root.Path, "verification.json"));
+        var result = RunVerifier(
+            archivePath,
+            graphRoot,
+            Path.Combine(root.Path, "verification.json"),
+            dockerArchivePath: dockerArchivePath);
 
         Assert.AreNotEqual(0, result.ExitCode);
+        Assert.IsFalse(File.Exists(dockerArchivePath));
     }
 
     [TestMethod]
@@ -299,6 +325,26 @@ public sealed class OciVerifierTests
     }
 
     [TestMethod]
+    public void DockerArchiveCannotAliasTrustedBaseInputs()
+    {
+        using var root = CreateRootWithGraph(out var graphRoot);
+        var archivePath = Path.Combine(root.Path, "preview.tar");
+        WriteOciArchive(archivePath, CreateLayer(("app/Lex.V3.Api.dll", Encoding.ASCII.GetBytes("clean-api"))));
+        var baseIndexPath = BaseIndexPathFor(archivePath);
+        var baseIndexBytes = File.ReadAllBytes(baseIndexPath);
+
+        var result = RunVerifier(
+            archivePath,
+            graphRoot,
+            Path.Combine(root.Path, "verification.json"),
+            dockerArchivePath: baseIndexPath);
+
+        Assert.AreNotEqual(0, result.ExitCode);
+        StringAssert.Contains(result.Output, "Docker runtime archive aliases the trusted base index.");
+        CollectionAssert.AreEqual(baseIndexBytes, File.ReadAllBytes(baseIndexPath));
+    }
+
+    [TestMethod]
     public void TrustedBaseIndexSubstitutionFailsClosed()
     {
         using var root = CreateRootWithGraph(out var graphRoot);
@@ -411,7 +457,8 @@ public sealed class OciVerifierTests
         string graphRoot,
         string resultPath,
         string? canaryDigest = null,
-        string? expectedBaseDigest = null)
+        string? expectedBaseDigest = null,
+        string? dockerArchivePath = null)
     {
         var repositoryRoot = FindRepositoryRoot();
         var startInfo = new ProcessStartInfo
@@ -438,6 +485,13 @@ public sealed class OciVerifierTests
         startInfo.ArgumentList.Add(BaseManifestPathFor(archivePath));
         startInfo.ArgumentList.Add("-ResultPath");
         startInfo.ArgumentList.Add(resultPath);
+        if (dockerArchivePath is not null)
+        {
+            startInfo.ArgumentList.Add("-DockerArchivePath");
+            startInfo.ArgumentList.Add(dockerArchivePath);
+            startInfo.ArgumentList.Add("-DockerImageReference");
+            startInfo.ArgumentList.Add("lex-v3-s0-05:test");
+        }
         if (canaryDigest is not null)
         {
             startInfo.ArgumentList.Add("-ExpectedPrivateKeyCanarySha256");
@@ -450,6 +504,22 @@ public sealed class OciVerifierTests
         process.WaitForExit();
         Task.WaitAll(standardOutput, standardError);
         return new ProcessResult(process.ExitCode, standardOutput.Result + standardError.Result);
+    }
+
+    private static Dictionary<string, byte[]> ReadTarFiles(string path)
+    {
+        var files = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+        using var stream = File.OpenRead(path);
+        using var reader = new TarReader(stream);
+        while (reader.GetNextEntry() is { } entry)
+        {
+            Assert.AreEqual(TarEntryType.RegularFile, entry.EntryType);
+            using var content = new MemoryStream();
+            entry.DataStream!.CopyTo(content);
+            files.Add(entry.Name, content.ToArray());
+        }
+
+        return files;
     }
 
     private static string FindRepositoryRoot()

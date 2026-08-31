@@ -271,13 +271,20 @@ jobs:
             -ExpectedBaseImageDigest $env:BASE_IMAGE_DIGEST `
             -BaseIndexPath artifacts/s0-05/base/index.json `
             -BaseManifestPath artifacts/s0-05/base/manifest.json `
-            -ResultPath artifacts/s0-05/oci-verification.json
-      - name: Load and start the restricted OCI image
+            -ResultPath artifacts/s0-05/oci-verification.json `
+            -DockerArchivePath artifacts/s0-05/lex-v3-s0-05-docker.tar `
+            -DockerImageReference $env:IMAGE_REFERENCE
+      - name: Load, bind, and start the restricted OCI image
         shell: bash
         run: |
           set -euo pipefail
-          docker load --input artifacts/s0-05/lex-v3-s0-05.tar
-          docker image inspect "$IMAGE_REFERENCE" >/dev/null
+          expected_archive_digest="$(jq -er '.docker_archive_sha256 | select(test("^[0-9a-f]{64}$"))' artifacts/s0-05/oci-verification.json)"
+          actual_archive_digest="$(sha256sum artifacts/s0-05/lex-v3-s0-05-docker.tar | cut -d ' ' -f 1)"
+          test "$actual_archive_digest" = "$expected_archive_digest"
+          docker load --input artifacts/s0-05/lex-v3-s0-05-docker.tar
+          expected_config_digest="$(jq -er '.config_digest | select(test("^sha256:[0-9a-f]{64}$"))' artifacts/s0-05/oci-verification.json)"
+          actual_image_id="$(docker image inspect --format '{{.Id}}' "$IMAGE_REFERENCE")"
+          test "$actual_image_id" = "$expected_config_digest"
           docker run --detach --name "$CONTAINER_NAME" --read-only --cap-drop ALL --security-opt no-new-privileges:true --publish 127.0.0.1::8080 "$IMAGE_REFERENCE" >/dev/null
           host_port="$(docker port "$CONTAINER_NAME" 8080/tcp | sed -n 's/^127\.0\.0\.1://p')"
           [[ "$host_port" =~ ^[0-9]+$ ]]
