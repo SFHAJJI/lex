@@ -54,7 +54,8 @@ public sealed class CustodyTests
                     CustodyDigest.Of(bytes.Span),
                     bytes.Length,
                     custodyClass),
-                new DateTimeOffset(2026, 8, 31, 12, 0, 0, TimeSpan.Zero));
+                new DateTimeOffset(2026, 8, 31, 12, 0, 0, TimeSpan.Zero),
+                retentionEnforced: false);
         }
     }
 
@@ -172,7 +173,8 @@ public sealed class CustodyTests
                 CustodyDigest.Of("other bytes entirely"u8),
                 Body.Length,
                 custodyClass),
-            new DateTimeOffset(2026, 8, 31, 12, 0, 0, TimeSpan.Zero)));
+            new DateTimeOffset(2026, 8, 31, 12, 0, 0, TimeSpan.Zero),
+            retentionEnforced: false));
         var decoderRan = false;
 
         Assert.ThrowsExactly<CustodyIntegrityException>(() => BytesBeforeDecode.Decode(
@@ -192,7 +194,8 @@ public sealed class CustodyTests
                 CustodyDigest.Of(bytes.Span),
                 bytes.Length,
                 CustodyClass.EvidenceIndefinite),
-            new DateTimeOffset(2026, 8, 31, 12, 0, 0, TimeSpan.Zero)));
+            new DateTimeOffset(2026, 8, 31, 12, 0, 0, TimeSpan.Zero),
+            retentionEnforced: false));
 
         Assert.ThrowsExactly<CustodyIntegrityException>(() => BytesBeforeDecode.Decode(
             Body, CustodyClass.NightlyFloor90d, store, _ => 0));
@@ -230,11 +233,13 @@ public sealed class CustodyTests
 
         Assert.ThrowsExactly<ArgumentException>(() => new DurableBlobWriteReceipt(
             "lex-v3-durable-blob-write-receipt/2", reference,
-            new DateTimeOffset(2026, 8, 31, 12, 0, 0, TimeSpan.Zero)));
+            new DateTimeOffset(2026, 8, 31, 12, 0, 0, TimeSpan.Zero),
+            retentionEnforced: false));
 
         Assert.ThrowsExactly<ArgumentException>(() => new DurableBlobWriteReceipt(
             CustodySchemaIds.DurableBlobWriteReceipt, reference,
-            new DateTimeOffset(2026, 8, 31, 12, 0, 0, TimeSpan.FromHours(2))));
+            new DateTimeOffset(2026, 8, 31, 12, 0, 0, TimeSpan.FromHours(2)),
+            retentionEnforced: false));
     }
 
     /// <summary>
@@ -255,7 +260,8 @@ public sealed class CustodyTests
             new DurableBlobRef(
                 CustodySchemaIds.DurableBlobRef, BodyDigest, Body.Length,
                 CustodyClass.EvidenceIndefinite),
-            new DateTimeOffset(2026, 8, 31, 12, 0, 0, TimeSpan.Zero));
+            new DateTimeOffset(2026, 8, 31, 12, 0, 0, TimeSpan.Zero),
+            retentionEnforced: false);
 
         using var document = JsonDocument.Parse(ContractJson.Serialize(receipt));
         foreach (var name in MemberNames(document.RootElement))
@@ -274,7 +280,8 @@ public sealed class CustodyTests
             new DurableBlobRef(
                 CustodySchemaIds.DurableBlobRef, BodyDigest, Body.Length,
                 CustodyClass.EvidenceIndefinite),
-            new DateTimeOffset(2026, 8, 31, 12, 0, 0, TimeSpan.Zero));
+            new DateTimeOffset(2026, 8, 31, 12, 0, 0, TimeSpan.Zero),
+            retentionEnforced: false);
 
         var restored = ContractJson.Deserialize<DurableBlobWriteReceipt>(
             ContractJson.Serialize(receipt));
@@ -369,6 +376,144 @@ public sealed class CustodyTests
 
             Assert.IsTrue(File.Exists(Path.Combine(root.FullName, "nightly-floor-90d", BodyDigest)));
             Assert.IsTrue(File.Exists(Path.Combine(root.FullName, "evidence-indefinite", BodyDigest)));
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// A C# enum admits any integer of its underlying type, so a closed vocabulary is closed only
+    /// if something checks. Before this, <c>(CustodyClass)47</c> reached a store and a decoder.
+    /// </summary>
+    [TestMethod]
+    public void AnUndefinedCustodyClassIsRefusedBeforeAnythingIsReached()
+    {
+        var undefined = (CustodyClass)47;
+
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new DurableBlobRef(
+            CustodySchemaIds.DurableBlobRef, BodyDigest, Body.Length, undefined));
+
+        var store = new OversizeClaimingStore();
+        var decoderRan = false;
+
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => BytesBeforeDecode.Decode(
+            Body, undefined, store, _ => { decoderRan = true; return 0; }));
+
+        Assert.IsFalse(decoderRan);
+        Assert.AreEqual(0, store.Calls, "an undefined class reached the store");
+    }
+
+    /// <summary>
+    /// A detected substitution is a security incident, not unavailability. I fixed the
+    /// cancellation case an hour before noticing the same wrapper swallowed this one.
+    /// </summary>
+    [TestMethod]
+    public void AnIntegrityFailureIsNotReportedAsUnavailability()
+    {
+        var store = new RecordingStore(
+            refusal: new CustodyIntegrityException("the held object is not what it claims"));
+        var decoderRan = false;
+
+        Assert.ThrowsExactly<CustodyIntegrityException>(() => BytesBeforeDecode.Decode(
+            Body, CustodyClass.NightlyFloor90d, store,
+            _ => { decoderRan = true; return 0; }));
+
+        Assert.IsFalse(decoderRan, "the decoder ran after a detected substitution");
+    }
+
+    /// <summary>
+    /// The caller may still own the backing array. Without a copy at entry, the bytes that were
+    /// held, hashed and decoded are three claims about memory somebody else can still write to.
+    /// </summary>
+    [TestMethod]
+    public void TheInputIsFrozenAgainstACallerThatKeepsWriting()
+    {
+        var caller = (byte[])Body.Clone();
+        var expected = CustodyDigest.Of(caller);
+
+        // A store that mutates the caller's array mid-flight, which is what a concurrent caller
+        // looks like from in here.
+        var store = new RecordingStore(lie: (bytes, custodyClass) =>
+        {
+            caller[0] = (byte)'X';
+            return new DurableBlobWriteReceipt(
+                CustodySchemaIds.DurableBlobWriteReceipt,
+                new DurableBlobRef(
+                    CustodySchemaIds.DurableBlobRef,
+                    CustodyDigest.Of(bytes.Span),
+                    bytes.Length,
+                    custodyClass),
+                new DateTimeOffset(2026, 8, 31, 12, 0, 0, TimeSpan.Zero),
+                retentionEnforced: false);
+        });
+
+        var result = BytesBeforeDecode.Decode(
+            caller, CustodyClass.NightlyFloor90d, store, bytes => CustodyDigest.Of(bytes.Span));
+
+        Assert.AreEqual(expected, result.Receipt.Reference.ContentSha256);
+        Assert.AreEqual(expected, result.Value, "the decoder saw bytes the caller changed");
+        Assert.AreEqual((byte)'X', caller[0], "the test did not actually mutate the caller array");
+    }
+
+    /// <summary>
+    /// An interrupted create must leave an ignorable temporary, never a truncated object holding a
+    /// content address that every later create can only report as corruption.
+    /// </summary>
+    [TestMethod]
+    public void AnInterruptedCreateNeverPublishesATruncatedAddress()
+    {
+        var root = Directory.CreateTempSubdirectory("lex-custody-");
+        try
+        {
+            var directory = Path.Combine(root.FullName, "nightly-floor-90d");
+            Directory.CreateDirectory(directory);
+
+            // Exactly what an interrupted create leaves behind under the repaired store.
+            File.WriteAllBytes(
+                Path.Combine(directory, $"{BodyDigest}.0123456789abcdef.partial"),
+                Encoding.UTF8.GetBytes("<akn>half a bo"));
+
+            var store = new FileSystemCustodyStore(root.FullName);
+            var receipt = store.Create(Body, CustodyClass.NightlyFloor90d);
+
+            Assert.AreEqual(BodyDigest, receipt.Reference.ContentSha256);
+            CollectionAssert.AreEqual(
+                Body, File.ReadAllBytes(Path.Combine(directory, BodyDigest)));
+            // The planted temporary survives, and that is correct: it belongs to an earlier
+            // interrupted attempt, possibly another process still writing it, and sweeping it
+            // would be the store deciding it knows better. What matters is that it neither
+            // blocked this create nor became the content address. This create leaves none of its
+            // own, so exactly the one planted file remains.
+            Assert.HasCount(
+                1, Directory.GetFiles(directory, "*.partial"),
+                "a completed create left its own temporary behind");
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// This store enforces no floor, so it may never issue a receipt that says it does.
+    /// </summary>
+    [TestMethod]
+    public void TheFilesystemStoreNeverClaimsRetentionItDoesNotEnforce()
+    {
+        var root = Directory.CreateTempSubdirectory("lex-custody-");
+        try
+        {
+            var store = new FileSystemCustodyStore(root.FullName);
+
+            foreach (var custodyClass in Enum.GetValues<CustodyClass>())
+            {
+                var receipt = store.Create(Body, custodyClass);
+                Assert.IsFalse(
+                    receipt.RetentionEnforced,
+                    $"the store claimed an enforced floor for {custodyClass}");
+            }
         }
         finally
         {

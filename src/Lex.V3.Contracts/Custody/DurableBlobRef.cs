@@ -41,6 +41,15 @@ public sealed record DurableBlobRef
                 nameof(byteLength), "A held object cannot have a negative length.");
         }
 
+        // A C# enum admits any integer of its underlying type, so a closed vocabulary is only
+        // closed if something checks. `(CustodyClass)47` deserialised and flowed to a store and a
+        // decoder as though it named a lane.
+        if (!Enum.IsDefined(custodyClass))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(custodyClass), custodyClass, "That is not an admitted custody class.");
+        }
+
         Schema = schema;
         ContentSha256 = contentSha256;
         ByteLength = byteLength;
@@ -70,7 +79,11 @@ public sealed record DurableBlobRef
 public sealed record DurableBlobWriteReceipt
 {
     [JsonConstructor]
-    public DurableBlobWriteReceipt(string schema, DurableBlobRef reference, DateTimeOffset writtenAt)
+    public DurableBlobWriteReceipt(
+        string schema,
+        DurableBlobRef reference,
+        DateTimeOffset writtenAt,
+        bool retentionEnforced)
     {
         if (!string.Equals(schema, CustodySchemaIds.DurableBlobWriteReceipt, StringComparison.Ordinal))
         {
@@ -90,6 +103,7 @@ public sealed record DurableBlobWriteReceipt
         Schema = schema;
         Reference = reference;
         WrittenAt = writtenAt;
+        RetentionEnforced = retentionEnforced;
     }
 
     public string Schema { get; }
@@ -97,4 +111,18 @@ public sealed record DurableBlobWriteReceipt
     public DurableBlobRef Reference { get; }
 
     public DateTimeOffset WrittenAt { get; }
+
+    /// <summary>
+    /// Whether the store that produced this receipt actually enforces the reference's retention
+    /// floor, as opposed to merely recording which lane was asked for.
+    /// </summary>
+    /// <remarks>
+    /// The custody class was being asserted by a store that enforces no floor at all, so a receipt
+    /// said <c>evidence_indefinite</c> about bytes on a disk with no immutability policy. Naming
+    /// the limitation in prose does not stop a consumer reading the class as a guarantee, and I
+    /// had put that limitation only in an issue comment. This field is the structural version:
+    /// a consumer that needs a proven floor refuses a receipt where it is false, and no store can
+    /// claim a floor it does not hold without setting it true in code somebody reviews.
+    /// </remarks>
+    public bool RetentionEnforced { get; }
 }

@@ -75,6 +75,13 @@ public static class BytesBeforeDecode
                 "A caller may lower the admitted bound for a lane, never raise it.");
         }
 
+        if (!Enum.IsDefined(custodyClass))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(custodyClass), custodyClass,
+                "An undefined custody class is refused before any store or decoder is reached.");
+        }
+
         if (transportBytes.Length > maxObjectBytes)
         {
             throw new ArgumentOutOfRangeException(
@@ -82,25 +89,35 @@ public static class BytesBeforeDecode
                 $"A transport body above {maxObjectBytes} bytes is refused before any store is touched.");
         }
 
+        // The caller may still own the backing array. Everything below verifies a digest and then
+        // hands the same memory to an untrusted callback, so without a copy the bytes that were
+        // held, the bytes that were hashed and the bytes that were decoded are three claims about
+        // memory somebody else can still write to. One bounded copy makes them one claim.
+        var frozen = new ReadOnlyMemory<byte>(transportBytes.ToArray());
+
         DurableBlobWriteReceipt receipt;
         try
         {
-            receipt = store.Create(transportBytes, custodyClass);
+            receipt = store.Create(frozen, custodyClass);
         }
         catch (Exception exception)
-            when (exception is not (CustodyRequiredException or OperationCanceledException))
+            when (exception is not (CustodyRequiredException
+                or CustodyIntegrityException
+                or OperationCanceledException))
         {
-            // Cancellation is not a custody failure. Wrapping it would tell an operator the store
-            // refused when the caller withdrew, and the two need different responses: one is an
-            // incident and the other is a shutdown. Every other exception does mean the bytes may
-            // not be held, so it fails closed and carries its cause.
+            // Three kinds of failure need three answers. Cancellation is a withdrawn caller, not a
+            // refusing store. An integrity exception is a detected substitution, which is a
+            // security incident and must not be reported as unavailability; I fixed the
+            // cancellation case an hour before noticing the same wrapper swallowed this one, which
+            // is the repair-the-instance habit inside my own repair. Everything else does mean the
+            // bytes may not be held, so it fails closed and carries its cause.
             throw new CustodyRequiredException(
                 "The transport bytes were not held, so nothing may decode them.", exception);
         }
 
-        var expected = CustodyDigest.Of(transportBytes.Span);
+        var expected = CustodyDigest.Of(frozen.Span);
         if (!string.Equals(receipt.Reference.ContentSha256, expected, StringComparison.Ordinal)
-            || receipt.Reference.ByteLength != transportBytes.Length)
+            || receipt.Reference.ByteLength != frozen.Length)
         {
             throw new CustodyIntegrityException(
                 "The receipt does not describe the bytes that were presented.");
@@ -112,7 +129,7 @@ public static class BytesBeforeDecode
                 "The receipt holds the bytes under a different custody class than was requested.");
         }
 
-        return new CustodiedDecode<T>(receipt, decode(transportBytes));
+        return new CustodiedDecode<T>(receipt, decode(frozen));
     }
 }
 
