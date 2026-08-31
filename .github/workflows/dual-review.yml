@@ -62,7 +62,7 @@ jobs:
           persist-credentials: false
 
       # The gate's own induced mutations, including real temporary Git repositories.
-      # In this job, so a failure here fails the required context rather than skipping
+      # In this job, so a failure here fails this advisory check rather than skipping
       # it into a reported success.
       - name: induced mutations for the gate itself
         run: python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v
