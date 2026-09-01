@@ -168,10 +168,12 @@ test('no language row may count more than the whole it is drawn from', () => {
   };
   assert.throws(() => react(tooManyWorks), /the language breakdown row 3 counts 41 works against a total of 40/);
 
-  // The string renderer on this branch has no facet reconciliation at all, so it renders the
-  // impossible table. Recorded rather than left to be discovered: this is why the two renderers
-  // are compared on inputs that reconcile and only the React port is asked about ones that do not.
-  assert.ok(string(tooManyVersions).includes('<td>9999</td>'));
+  // Both renderers refuse it. When this test was written the string renderer had no facet
+  // reconciliation and rendered the impossible table, so this line recorded the divergence. The
+  // string renderer gained the same rule while this port was in flight, which is the outcome
+  // worth having: one rule, two surfaces, and no divergence for a later reader to discover.
+  assert.throws(() => string(tooManyVersions), /a part cannot be larger than the whole/);
+  assert.throws(() => string(tooManyWorks), /a part cannot be larger than the whole/);
 });
 
 test('a complete document type table must account for every state exactly once', () => {
@@ -241,9 +243,11 @@ test('a row the publisher gave no code for is labelled, never blank and never dr
   };
   assert.ok(react(uncoded).includes(`<td>${UNCODED_LANGUAGE_LABEL}</td>`));
   assert.ok(!react(uncoded).includes('<td></td>'), 'a language cell rendered blank');
-  // Recorded: the string renderer interpolates the missing code raw, so it prints the literal
-  // word `undefined` into a column of language codes.
-  assert.ok(string(uncoded).includes('<td>undefined</td>'));
+  // The same, on both surfaces. This line recorded the string renderer interpolating the missing
+  // code raw and printing the literal word `undefined` into a column of language codes. It does
+  // not any more, so the assertion is that it agrees rather than that it differs.
+  assert.ok(string(uncoded).includes(`<td>${UNCODED_LANGUAGE_LABEL}</td>`));
+  assert.ok(!string(uncoded).includes('<td>undefined</td>'), 'undefined reached a language column');
 });
 
 test('a build that did not finish shows no counts at all', () => {
@@ -274,7 +278,8 @@ test('every guard refuses the same input in both renderers', () => {
     [{ ...COMPLETE, known_gaps: [] }, /is a claim of completeness/],
     [{ ...COMPLETE, known_gaps: ['ok', '  '] }, /every known gap is a sentence/],
     [{ ...COMPLETE, document_types: [] }, /lists the document types it holds/],
-    [{ ...COMPLETE, document_types_total: null }, /how many document types there are in total/],
+    [{ ...COMPLETE, document_types_total: null }, /document_types_total is null rather than a count/],
+    [{ ...COMPLETE, document_types_total: -7, facets_truncated: true }, /rather than a count/],
     [{ ...COMPLETE, document_types_total: 9 }, /reads as a complete one/],
     [{ ...COMPLETE, scope_expected_works: 41 }, /the build expected 41 works and holds 40/],
     [

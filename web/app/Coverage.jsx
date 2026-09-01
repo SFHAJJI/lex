@@ -235,8 +235,12 @@ export function Coverage({ coverage }) {
   if (!Array.isArray(types) || types.length === 0) {
     throw new Error('coverage lists the document types it holds');
   }
-  if (!Number.isInteger(coverage.document_types_total)) {
-    throw new Error('coverage says how many document types there are in total');
+  if (!Number.isInteger(coverage.document_types_total) || coverage.document_types_total < 0) {
+    throw new Error(
+      `document_types_total is ${JSON.stringify(coverage.document_types_total)} rather than a ` +
+        'count; this page has no defaults, because a figure the renderer supplies is a figure ' +
+        'nobody measured',
+    );
   }
   const truncatedTypes =
     coverage.facets_truncated === true || types.length !== coverage.document_types_total;

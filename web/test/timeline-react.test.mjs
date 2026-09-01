@@ -58,7 +58,7 @@ const GOOD = {
 };
 
 const react = (props) => renderToStaticMarkup(h(Timeline, props));
-const string = (props) => renderTimeline({ semantics: 'publisher_applicability', ...props });
+const string = (props) => renderTimeline(props);
 
 /**
  * Compare two renderings of the same records.
@@ -263,16 +263,23 @@ test('the legend is the one divergence from the string renderer, and it is the s
       extraction_profile: 'xhtml-eu/1',
     })),
   };
-  const fromString = normalise(string({ ...union, semantics: 'official_consolidation_state' }));
+  // This test used to record a divergence: the string renderer had one hardcoded Luxembourg
+  // legend and printed it over a Union work, which is an applicability claim about a publisher
+  // that makes none. Its own failure message said to delete it once that was fixed. It has been,
+  // so the assertion is now the stronger one: no divergence at all, legend included.
+  const fromString = normalise(string(union));
   assert.ok(
-    fromString.includes(LEGENDS.publisher_applicability),
-    'the string renderer no longer prints the Luxembourg legend over a Union work; delete this ' +
-      'test and the note in Timeline.jsx',
+    fromString.includes(LEGENDS.official_consolidation_state),
+    'the string renderer lost the Union legend',
+  );
+  assert.ok(
+    !fromString.includes(LEGENDS.publisher_applicability),
+    'the Luxembourg legend is back over a Union work',
   );
   assert.equal(
     normalise(react(union)),
-    fromString.replace(LEGENDS.publisher_applicability, LEGENDS.official_consolidation_state),
-    'the React port and the string renderer differ by more than the legend',
+    fromString,
+    'the React port and the string renderer no longer agree on a Union work',
   );
 });
 
