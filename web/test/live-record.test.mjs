@@ -93,7 +93,7 @@ test('a real timeline shows both clocks, four years apart', () => {
   assert.equal(html.includes('2024-11-11'), true);
   assert.equal(html.includes('Applicable from 2020-09-25'), true);
   // Contiguous states leave no gap, and the screen must not invent one.
-  assert.equal(html.includes('No publisher state covers'), false, 'a gap was invented between contiguous states');
+  assert.equal(html.includes('This corpus holds no state covering'), false, 'a gap was invented between contiguous states');
 });
 
 test("the publisher's reused title is flagged against the state it does not cover", () => {

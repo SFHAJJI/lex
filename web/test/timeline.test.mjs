@@ -126,7 +126,7 @@ test('a gap is rendered where the gap is, in full, and says it is derived', () =
   const html = renderTimeline(gapped);
 
   assert.ok(html.includes('GAP 2004-01-01 to 2024-12-28'));
-  assert.ok(html.includes('No publisher state covers 2004-01-01 to 2024-12-28'));
+  assert.ok(html.includes('This corpus holds no state covering 2004-01-01 to 2024-12-28'));
   assert.ok(html.includes('Absence of a held state is not evidence the law was unchanged'));
   assert.ok(html.includes('not asserted by the publisher'), 'the gap is derived and must say so');
 
@@ -482,11 +482,11 @@ test('O4: a truncated timeline claims no gaps, because it cannot know', () => {
     state({ valid_from: '2010-01-01', valid_to: null, hash: HASH_B }),
   ];
   const whole = renderTimeline({ ...GOOD, states, totalCount: 2 });
-  assert.equal(whole.includes('No publisher state covers'), true, 'a complete timeline hid its gap');
+  assert.equal(whole.includes('This corpus holds no state covering'), true, 'a complete timeline hid its gap');
 
   const partial = renderTimeline({ ...GOOD, states, totalCount: 9 });
   assert.equal(
-    partial.includes('No publisher state covers'),
+    partial.includes('This corpus holds no state covering'),
     false,
     'a truncated timeline asserted that no state covers a span it did not enumerate',
   );
