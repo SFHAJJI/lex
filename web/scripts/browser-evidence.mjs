@@ -12,6 +12,7 @@
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { readdir, readFile, realpath } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { resolve as resolvePath } from "node:path";
 import { extname, join as joinPath, sep as pathSep } from "node:path";
 import { CSP_DIRECTIVES, FORBIDDEN_SOURCES, cspValue } from "./csp.mjs";
@@ -434,6 +435,21 @@ const PROBE = `(() => {
     // result also covers a wrong Content-Type header and a byte-order mark, which reading the
     // attribute back out of the DOM would not.
     characterSet: document.characterSet,
+    // Statutory type, as rendered rather than as declared. The UX spec fixes serif at
+    // 17px/1.65 on desktop, 16px/1.6 on mobile, and a 72ch maximum measure. A stylesheet
+    // saying so is a comment: a font that fails to load, a rule overridden downstream, or a
+    // measure that never applies all leave the declaration intact and the page wrong. This
+    // is the type a reader actually gets for the law itself, which is the one run of text
+    // on the site that is not ours.
+    statutoryType: [...document.querySelectorAll('blockquote.law, .reading-text')].map((el) => {
+      const style = getComputedStyle(el);
+      return {
+        fontSize: Number.parseFloat(style.fontSize),
+        lineHeight: Number.parseFloat(style.lineHeight) / Number.parseFloat(style.fontSize),
+        family: style.fontFamily,
+        width: el.getBoundingClientRect().width,
+      };
+    }),
     // Hydration, as the client reports it. Set only after the first pass completes, and set
     // to recovered when React had to redraw because the server markup and the client tree
     // disagreed. React recovers from that quietly, so a page that hydrated by re-rendering
@@ -546,6 +562,7 @@ async function waitForSettled(session, sessionId, deadlineMs = 10000) {
 }
 
 const CONTENT_TYPES = new Map([
+  [".woff2", "font/woff2"],
   [".html", "text/html; charset=utf-8"],
   [".css", "text/css; charset=utf-8"],
   [".svg", "image/svg+xml"],
@@ -619,7 +636,14 @@ export async function serveDist(root) {
       return;
     }
 
-    const routed = routeSchemePath(path);
+    // A real file wins over a synthetic route. The object-URL grammar accepts any two safe
+    // segments as a dossier, so /fonts/inter-400-latin.woff2 was routed to the stand-in
+    // destination page and the browser received <!doctype where it expected wOF2. The
+    // console reported an OTS parsing error, which is a long way from the cause.
+    // Plain path join, not a file URL: fileURLToPath refuses encoded separators, and a
+    // double-encoded payload still carries one after the first decode.
+    const onDisk = existsSync(joinPath(root, path));
+    const routed = onDisk ? null : routeSchemePath(path);
     const file = joinPath(root, routed ?? (path === "/" ? "/index.html" : path));
     // Belt and braces: whatever the two checks above let through, the resolved file still has
     // to sit inside the distribution root.
@@ -933,6 +957,60 @@ async function main() {
             failures.push(
               `${page} @${viewport.label}: hydrated as ${observed.hydrated}` +
                 `${observed.hydrationRecovered ? `, ${observed.hydrationRecovered}` : ''}`,
+            );
+          }
+        }
+        // The UX spec fixes statutory type at 17px/1.65 desktop and 16px/1.6 mobile, with a
+        // 72ch maximum measure. Asserted on what rendered, because the law is the one run
+        // of text on this site that is not ours to reflow at will.
+        for (const [index, type] of (observed.statutoryType ?? []).entries()) {
+          const narrow = viewport.width <= 480;
+          const wantSize = narrow ? 16 : 17;
+          const wantLead = narrow ? 1.6 : 1.65;
+          const where = `${page} @${viewport.label}: statutory block ${index + 1}`;
+          if (Math.abs(type.fontSize - wantSize) > 0.5) {
+            failures.push(`${where} renders at ${type.fontSize}px, not ${wantSize}px`);
+          }
+          if (Math.abs(type.lineHeight - wantLead) > 0.05) {
+            failures.push(
+              `${where} has a line height of ${type.lineHeight.toFixed(2)}, not ${wantLead}`,
+            );
+          }
+          if (!/serif/i.test(type.family)) {
+            failures.push(`${where} is set in ${type.family}, which is not a serif`);
+          }
+          // 72ch is a maximum, and a ch at this size is roughly half the font size, so a
+          // block wider than 72 times that is a measure the spec refuses.
+          if (type.width > 72 * type.fontSize * 0.6) {
+            failures.push(
+              `${where} is ${Math.round(type.width)}px wide, past the 72ch maximum measure`,
+            );
+          }
+        }
+        // The UX spec fixes statutory type at 17px/1.65 desktop and 16px/1.6 mobile with a
+        // 72ch maximum measure. Asserted on what rendered, because a stylesheet saying so
+        // is a comment: a font that fails to load, a rule overridden downstream, or a
+        // measure that never applies all leave the declaration intact and the page wrong.
+        // The law is the one run of text on this site that is not ours to reflow at will.
+        for (const [index, type] of (observed.statutoryType ?? []).entries()) {
+          const narrow = viewport.width <= 480;
+          const wantSize = narrow ? 16 : 17;
+          const wantLead = narrow ? 1.6 : 1.65;
+          const where = `${page} @${viewport.label}: statutory block ${index + 1}`;
+          if (Math.abs(type.fontSize - wantSize) > 0.5) {
+            failures.push(`${where} renders at ${type.fontSize}px, not ${wantSize}px`);
+          }
+          if (Math.abs(type.lineHeight - wantLead) > 0.05) {
+            failures.push(
+              `${where} leads at ${type.lineHeight.toFixed(2)}, not ${wantLead}`,
+            );
+          }
+          if (!/Source Serif 4/.test(type.family)) {
+            failures.push(`${where} is set in ${type.family}, not the specified serif`);
+          }
+          if (type.width > 72 * type.fontSize * 0.62) {
+            failures.push(
+              `${where} is ${Math.round(type.width)}px wide, past the 72ch maximum measure`,
             );
           }
         }
