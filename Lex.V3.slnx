@@ -4,6 +4,7 @@
     <Project Path="src/Lex.V3.Artifacts/Lex.V3.Artifacts.csproj" />
     <Project Path="src/Lex.V3.ContractTool/Lex.V3.ContractTool.csproj" />
     <Project Path="src/Lex.V3.Contracts/Lex.V3.Contracts.csproj" />
+    <Project Path="src/Lex.V3.Custody.Azure/Lex.V3.Custody.Azure.csproj" />
     <Project Path="src/Lex.V3.Preview/Lex.V3.Preview.csproj" />
   </Folder>
   <Folder Name="/tests/">
