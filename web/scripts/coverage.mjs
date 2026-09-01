@@ -22,6 +22,68 @@ import { isCalendarDate, isUtcInstant } from './temporal.mjs';
 export const UNTYPED_LABEL = 'untyped (publisher code absent)';
 
 /**
+ * The same, for a language the publisher did not record.
+ *
+ * A row is still a row. Without this the code was interpolated raw, so a payload carrying no
+ * language code printed the word `undefined` into a table of counts, which a reader reads as a
+ * language rather than as this service failing to say.
+ */
+export const UNCODED_LANGUAGE_LABEL = 'language not recorded by the publisher';
+
+/**
+ * A facet table is a breakdown of a headline number, and it has to add up to one.
+ *
+ * The page rendered a document type claiming 99 held states beside a headline of 30, and a
+ * language claiming 9,999 of the same 30. Every individual figure passed, because every check
+ * here tested one field at a time and nothing tested the relationships between them. A set of
+ * numbers that cannot all be true is worse on this page than anywhere else in the product: it is
+ * the page whose entire job is to be the thing a reader checks the others against.
+ *
+ * There are two kinds of breakdown and they reconcile differently, which is why one rule would
+ * not have worked:
+ *
+ * - A **partition** assigns each thing to exactly one row. The publisher gives a state at most
+ *   one document type, and the untyped row catches the rest, so the rows account for every state
+ *   exactly once and a complete table must sum to the headline exactly.
+ * - An **overlapping** breakdown lets one thing appear in several rows. A dated state exists as
+ *   an expression in each language it was published in, so 24 language rows over 30 states can
+ *   legitimately sum far past 30. Summing them and demanding the headline would be inventing a
+ *   constraint the record does not have. What still holds is that no single row can count more
+ *   than the whole it is drawn from.
+ *
+ * Truncation weakens the partition rule and only that rule: a table showing some of its rows
+ * cannot be expected to sum to the whole, but it still cannot exceed it.
+ *
+ * @param {object} input
+ * @param {Array}   input.rows      the facet rows served
+ * @param {string}  input.field     which count on each row is being reconciled
+ * @param {number}  input.headline  the total this facet is a breakdown of
+ * @param {string}  input.kind      'partition' or 'overlapping'
+ * @param {boolean} input.truncated whether rows were left out
+ * @param {string}  input.what      what to name in the error
+ */
+function reconcileFacets({ rows, field, headline, kind, truncated, what }) {
+  for (const [index, row] of rows.entries()) {
+    if (row[field] > headline) {
+      throw new Error(
+        `${what} row ${index + 1} counts ${row[field]} ${field} against a total of ${headline}; ` +
+          'a part cannot be larger than the whole it is drawn from, so one of those two figures ' +
+          'is wrong and this page must not choose which',
+      );
+    }
+  }
+  if (kind !== 'partition' || truncated) return;
+  const served = rows.reduce((sum, row) => sum + row[field], 0);
+  if (served !== headline) {
+    throw new Error(
+      `${what} accounts for ${served} ${field} against a total of ${headline}, and every row is ` +
+        'shown; a complete breakdown that does not add up to its own headline means one of the ' +
+        'two was measured against something else',
+    );
+  }
+}
+
+/**
  * Fixed by Decision 41, exactly these words.
  *
  * It is the sentence that stops a reader taking a short observation history for a short legal
@@ -129,6 +191,17 @@ export function renderCoverage({ coverage }) {
       throw new Error(`coverage ${field} is not a calendar date`);
     }
   }
+  // Ordered. Both fields only had to be calendar dates, so a payload could report states running
+  // from 2030 to 1849 and the page printed it as a range. Named earliest and latest, they are
+  // not two independent dates; they are the ends of one interval, and an interval that runs
+  // backwards is not a smaller range, it is a wrong one.
+  if (coverage.valid_from_earliest > coverage.valid_from_latest) {
+    throw new Error(
+      `coverage reports states running from ${coverage.valid_from_earliest} to ` +
+        `${coverage.valid_from_latest}, which ends before it begins; earliest and latest are the ` +
+        'ends of one interval rather than two independent dates',
+    );
+  }
 
   // The gap strings are this service's own statement of its limits. Reproduced exactly.
   const gaps = coverage.known_gaps;
@@ -146,9 +219,10 @@ export function renderCoverage({ coverage }) {
   if (!Array.isArray(types) || types.length === 0) {
     throw new Error('coverage lists the document types it holds');
   }
-  if (!Number.isInteger(coverage.document_types_total)) {
-    throw new Error('coverage says how many document types there are in total');
-  }
+  // A count, not merely an integer. Guarded on `Number.isInteger` alone, a total of -7 was a
+  // valid document-type count, and the only thing that caught it downstream was a truncation
+  // check that a payload declaring itself truncated turned off.
+  requireCount(coverage.document_types_total, 'document_types_total');
   const truncatedTypes =
     coverage.facets_truncated === true || types.length !== coverage.document_types_total;
   if (truncatedTypes && coverage.facets_truncated !== true) {
@@ -240,11 +314,45 @@ export function renderCoverage({ coverage }) {
     .map((row, index) => {
       requireCount(row?.works, `language row ${index + 1} works`);
       requireCount(row?.versions, `language row ${index + 1} versions`);
-      return (
-        `<tr><td>${escapeHtml(row.code)}</td><td>${row.works}</td><td>${row.versions}</td></tr>`
-      );
+      // Labelled, not interpolated. A missing code printed the literal word `undefined` into a
+      // column of language codes, where it reads as a language this corpus holds.
+      const code =
+        row.code === null || row.code === undefined ? UNCODED_LANGUAGE_LABEL : row.code;
+      return `<tr><td>${escapeHtml(code)}</td><td>${row.works}</td><td>${row.versions}</td></tr>`;
     })
     .join('');
+
+  // Last, after every row has validated itself, so a malformed row reports itself in its own
+  // terms rather than as an arithmetic disagreement.
+  //
+  // The publisher gives a state at most one document type and the untyped row takes the rest, so
+  // that table is a partition and a complete one must sum exactly. A state exists as an
+  // expression in each language it was published in, so the language table overlaps and only the
+  // per-row bound holds.
+  reconcileFacets({
+    rows: types,
+    field: 'versions',
+    headline: coverage.versions,
+    kind: 'partition',
+    truncated: truncatedTypes,
+    what: 'the document type breakdown',
+  });
+  reconcileFacets({
+    rows: coverage.languages,
+    field: 'versions',
+    headline: coverage.versions,
+    kind: 'overlapping',
+    truncated: false,
+    what: 'the language breakdown',
+  });
+  reconcileFacets({
+    rows: coverage.languages,
+    field: 'works',
+    headline: coverage.works,
+    kind: 'overlapping',
+    truncated: false,
+    what: 'the language breakdown',
+  });
 
   return (
     '<section class="coverage">' +

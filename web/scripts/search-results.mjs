@@ -30,7 +30,7 @@ import {
 import { isCalendarDate } from './temporal.mjs';
 import { escapeHtml } from './render.mjs';
 import { renderNoHitCard } from './no-hit-card.mjs';
-import { renderRelaxationDisclosures } from './relaxation.mjs';
+import { requireRelaxationAccount, renderRelaxationDisclosures } from './relaxation.mjs';
 
 /**
  * Why a row is here, from the live enum rather than the prose in the specs.
@@ -45,6 +45,20 @@ export const MATCH_REASONS = Object.freeze([
   'interpreted',
   'semantic',
 ]);
+
+/**
+ * Which relaxation a match reason is evidence of.
+ *
+ * `exact_title` and `keyword` are the reader's own words and imply nothing. The other two are
+ * this service having gone beyond them: `interpreted` is the editorial crosswalk, `semantic` is
+ * semantic retrieval. A row carrying one of those is standing evidence that the relaxation ran,
+ * which is why the account below has to agree with it.
+ *
+ * Null-prototype, so a reason nobody classified cannot be answered by an inherited member.
+ */
+const REASON_EVIDENCES = Object.freeze(
+  Object.assign(Object.create(null), { interpreted: 'crosswalk', semantic: 'semantic' }),
+);
 
 const MATCH_LABEL = new Map([
   ['exact_title', 'matched on title, not wording'],
@@ -261,7 +275,7 @@ export function renderSearchResults({
   rowSet,
   population,
   governing = null,
-  relaxations = [],
+  relaxations,
   searchPath,
   layers,
   expansions = [],
@@ -344,6 +358,13 @@ export function renderSearchResults({
     throw new Error('the row set returned more rows than it holds');
   }
 
+  // The account is required, and closed. It defaulted to `[]`, which is not an account of
+  // three relaxations but the absence of one, and every check below was written over
+  // `Object.keys(relaxations)`, so omitting it did not fail the disclosure contract, it skipped
+  // the contract entirely. A screen that discloses only when handed something to disclose
+  // cannot be told apart from a screen that never discloses.
+  requireRelaxationAccount(relaxations);
+
   // A relaxation that ran without its disclosure is the screen answering a question the reader
   // did not ask. The expansions are the evidence that one ran, so they cannot be silent.
   const applied = Object.values(relaxations).filter((one) => one?.applied === true);
@@ -353,10 +374,9 @@ export function renderSearchResults({
         'as applied; a reader who asked one thing and was answered another has to be told',
     );
   }
-  const disclosures =
-    Object.keys(relaxations).length > 0
-      ? renderRelaxationDisclosures({ searchPath, relaxations })
-      : '';
+  // Unconditional. Guarded on the account being nonempty, an omitted account rendered no
+  // disclosures at all rather than failing, which is the same defect one layer down.
+  const disclosures = renderRelaxationDisclosures({ searchPath, relaxations });
 
   // One resolved instrument, or none. Two would be two answers to one question.
   let governingHtml = '';
@@ -396,6 +416,28 @@ export function renderSearchResults({
   // unclassified publisher instead of a missing identifier, and four row guards became
   // unreachable from the suite in one edit.
   hits.forEach(requireHit);
+
+  // Every badge that is evidence of a relaxation must be matched by that relaxation declaring
+  // itself applied. The expansions check catches a rewritten query with no relaxation declared;
+  // this catches the same failure from the other end, a row badged "semantic match" inside a
+  // result set whose account says semantic retrieval never ran. One of those two is false, and
+  // the reader is looking at the badge.
+  //
+  // After requireHit, and for the reason written directly above it: placed earlier, this
+  // iterated match_reasons before anything had checked that match_reasons was a list, so a row
+  // that never said why it matched failed here as a type error instead of saying so.
+  for (const [index, hit] of hits.entries()) {
+    for (const reason of hit.match_reasons) {
+      const evidenced = REASON_EVIDENCES[reason];
+      if (evidenced !== undefined && relaxations[evidenced].applied !== true) {
+        throw new Error(
+          `hit ${index + 1} is badged ${JSON.stringify(reason)}, which is evidence that the ` +
+            `${evidenced} relaxation ran, while this result set declares ${evidenced} as not ` +
+            'applied; the badge and the account cannot both be true',
+        );
+      }
+    }
+  }
 
   // Null when the rows disagree, which a multi-publisher result set routinely does.
   const scope = sharedSemantics(

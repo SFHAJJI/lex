@@ -198,9 +198,21 @@ test('every row says why it matched, from the closed set', () => {
   });
   assert.ok(html.includes('matched on title, not wording'));
 
+  // The badge is evidence that the editorial crosswalk ran, so the account has to say it ran.
+  // This fixture used to render the badge over an account declaring crosswalk not applied,
+  // which is the defect stated from the row's end rather than the query's.
   const interpreted = renderSearchResults({
     ...GOOD,
     hits: [hit({ match_reasons: ['interpreted'] })],
+    relaxations: {
+      ...RELAXATIONS,
+      crosswalk: {
+        applied: true,
+        understood_as: 'residential lease deposit',
+        version: 'crosswalk/4',
+        reviewed_on: '2026-08-15',
+      },
+    },
   });
   assert.ok(interpreted.includes('interpreted (editorial layer, versioned, non-official)'));
 
@@ -504,4 +516,76 @@ test('O1-R2: an explicit default port is refused, not normalised away', () => {
       }),
     /canonical same-origin state URL/,
   );
+});
+
+test('O3: the relaxation account is required, and an omitted one is not an empty one', () => {
+  // It defaulted to `[]`, and every check below was written over `Object.keys(relaxations)`, so
+  // omitting the account did not fail the disclosure contract, it skipped the contract. A screen
+  // that discloses only when handed something to disclose cannot be told apart from one that
+  // never discloses.
+  const { relaxations: _omitted, ...withoutAccount } = GOOD;
+  assert.throws(
+    () => renderSearchResults(withoutAccount),
+    /must declare whether it was applied/,
+    'a result set with no relaxation account at all was rendered',
+  );
+
+  // Partial is the same failure. Two of three declared is still a relaxation nobody spoke for.
+  assert.throws(
+    () =>
+      renderSearchResults({
+        ...GOOD,
+        relaxations: { fuzzy: { applied: false }, crosswalk: { applied: false } },
+      }),
+    /semantic must declare whether it was applied/,
+    'a partial account was accepted',
+  );
+});
+
+test('O3: a match badge and the relaxation account cannot contradict each other', () => {
+  // Codex's O3, seen from the row rather than the query. A row badged "semantic match" inside a
+  // result set whose account says semantic retrieval never ran: one of those two is false, and
+  // the reader is looking at the badge.
+  assert.throws(
+    () =>
+      renderSearchResults({
+        ...GOOD,
+        hits: [hit({ match_reasons: ['semantic'] })],
+        relaxations: RELAXATIONS,
+      }),
+    /badged "semantic", which is evidence that the semantic relaxation ran/,
+    'a semantic badge rendered over an account declaring semantic not applied',
+  );
+
+  assert.throws(
+    () =>
+      renderSearchResults({
+        ...GOOD,
+        hits: [hit({ match_reasons: ['interpreted'] })],
+        relaxations: RELAXATIONS,
+      }),
+    /badged "interpreted", which is evidence that the crosswalk relaxation ran/,
+    'an interpreted badge rendered over an account declaring crosswalk not applied',
+  );
+
+  // And the badge still renders when the account agrees with it, which is the half that is easy
+  // to lose: a cross-check that refuses the true case as well as the false one is not a check.
+  const honest = renderSearchResults({
+    ...GOOD,
+    hits: [hit({ match_reasons: ['semantic'] })],
+    relaxations: {
+      ...RELAXATIONS,
+      semantic: { applied: true, encoder: 'bge-m3', benchmark: 'lex-retrieval/3' },
+    },
+  });
+  assert.ok(honest.includes('semantic match'));
+
+  // The reader's own words imply no relaxation, so they are never cross-checked away.
+  for (const reason of ['keyword', 'exact_title']) {
+    assert.equal(
+      typeof renderSearchResults({ ...GOOD, hits: [hit({ match_reasons: [reason] })] }),
+      'string',
+      `${reason} was treated as evidence of a relaxation`,
+    );
+  }
 });

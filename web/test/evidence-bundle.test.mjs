@@ -22,6 +22,9 @@ const ITEM = {
   record_sha256: DIGEST,
   licence: 'cc-by-4.0',
   attribution: 'Synthetic preview publisher, CC BY 4.0',
+  // D38's gate, carried by the record. The synthetic preview publisher's text has no legal
+  // authority and is cleared for display.
+  text_public: true,
   publisher: 'preview-synthetic',
   official_uri: 'https://preview.invalid/synthetic-preview-work/2001-01-01',
   text: 'LEX V3 SYNTHETIC PREVIEW. Article 1. This text has no legal authority.',
@@ -39,9 +42,16 @@ const GOOD = {
   items: [ITEM],
   columns: COLUMNS,
   verification: VERIFICATION,
-  // The publisher's own vocabulary. Without it every item's dates were labelled
-  // "applicable", so an EU consolidation state was exported as an applicability claim.
-  semantics: 'publisher_applicability',
+};
+
+/** The same item as a Union record, for the cases that need two publishers in one bundle. */
+const EU_ITEM = {
+  ...ITEM,
+  citation: 'Regulation 2016/679, article 1, consolidated wording state from 2001-01-01',
+  identifier: 'eu-eurlex:32016R0679:2001-01-01',
+  publisher: 'eu-eurlex',
+  official_uri: 'https://eur-lex.europa.eu/eli/reg/2016/679/oj',
+  attribution: 'European Union, CC BY 4.0',
 };
 
 test('a derived or unofficial item cannot enter a bundle', () => {
@@ -77,9 +87,25 @@ test('rights are applied at compose time, not left to the caller', () => {
   assert.ok(embedded.includes('no legal authority'));
   assert.ok(embedded.includes('CC BY 4.0'));
 
-  // cc0 needs no attribution line, and does not get one.
-  const cc0 = renderEvidenceBundle({ ...GOOD, items: [{ ...ITEM, licence: 'cc0' }] });
-  assert.ok(!cc0.includes('bundle-attribution'));
+  // cc0 waives the licence obligation, and a bundle still may not export a body without saying
+  // whose it is. The licence table decides obligations; provenance is not one of its clauses,
+  // and this artefact exists to be checked against the source it came from.
+  assert.throws(
+    () =>
+      renderEvidenceBundle({
+        ...GOOD,
+        items: [{ ...ITEM, licence: 'cc0', attribution: undefined }],
+      }),
+    /exports the publisher's text and names no attribution/,
+    'a body travelled with no source named',
+  );
+
+  // With no body travelling there is nothing to attribute, and no line appears.
+  const noBody = renderEvidenceBundle({
+    ...GOOD,
+    items: [{ ...ITEM, licence: 'cc0', attribution: undefined, text_public: false }],
+  });
+  assert.ok(!noBody.includes('bundle-attribution'));
 
   assert.throws(
     () => renderEvidenceBundle({ ...GOOD, items: [{ ...ITEM, licence: 'ask-me' }] }),
@@ -191,30 +217,85 @@ test('values are escaped rather than trusted', () => {
   assert.ok(html.includes('&lt;img'));
 });
 
-test('O5: the interval label is the publisher vocabulary, not this screen assuming one', () => {
+test('O5: each item is labelled from its own publisher, in one bundle', () => {
   // An EU consolidation state exported under the word "applicable" is an applicability claim
-  // the publisher never made, inside the artefact a reader keeps and cites.
-  const lu = renderEvidenceBundle({ ...GOOD, semantics: 'publisher_applicability' });
+  // the publisher never made, inside the artefact a reader keeps and cites. One bundle-wide
+  // vocabulary could not prevent that, because a bundle may carry both publishers at once and
+  // any single value is then wrong about half of it.
+  const lu = renderEvidenceBundle(GOOD);
   assert.equal(lu.includes('<dt>applicable</dt>'), true);
   assert.equal(lu.includes('<dt>consolidated wording</dt>'), false);
 
-  const eu = renderEvidenceBundle({ ...GOOD, semantics: 'official_consolidation_state' });
+  const eu = renderEvidenceBundle({ ...GOOD, items: [EU_ITEM] });
   assert.equal(eu.includes('<dt>consolidated wording</dt>'), true);
   assert.equal(
     eu.includes('<dt>applicable</dt>'),
     false,
     'a consolidation state was exported as applicability',
   );
+
+  // Both together, which is the case no single parameter could ever have described.
+  const mixed = renderEvidenceBundle({ ...GOOD, items: [ITEM, EU_ITEM] });
+  assert.ok(mixed.includes('<dt>applicable</dt>'), 'the LU item lost its own vocabulary');
+  assert.ok(mixed.includes('<dt>consolidated wording</dt>'), 'the EU item lost its own');
 });
 
-test('O5: a bundle without a declared vocabulary is refused', () => {
-  for (const semantics of [undefined, null, '', 'in_force', 'publisher_applicability_v2']) {
+test('O5: a bundle does not take a vocabulary at all', () => {
+  // Refused rather than ignored, including the two real values: being right by luck is still
+  // not the contract, and a caller who thinks they are choosing has misunderstood it.
+  for (const semantics of [
+    'publisher_applicability',
+    'official_consolidation_state',
+    null,
+    '',
+    'in_force',
+  ]) {
     assert.throws(
       () => renderEvidenceBundle({ ...GOOD, semantics }),
-      /renders in the publisher's own vocabulary/,
+      /does not take a date vocabulary/,
       `${JSON.stringify(semantics)} was accepted as a date vocabulary`,
     );
   }
+});
+
+test('D38: the publisher text gate decides whether a body travels, not a licence label', () => {
+  // Codex's O2a. A caller wrote cc0 over a Legilux item and the composer exported the
+  // publisher's text on the strength of that label. The licence is a term of the grant;
+  // text_public is whether the grant was established at all, with recorded evidence (C2), and
+  // only the second can unlock a body. Every public surface honours it, and a bundle is one.
+  assert.throws(
+    () => renderEvidenceBundle({ ...GOOD, items: [{ ...ITEM, text_public: undefined }] }),
+    /does not carry text_public/,
+    'an item that never stated the gate was composed anyway',
+  );
+
+  const closed = renderEvidenceBundle({ ...GOOD, items: [{ ...ITEM, text_public: false }] });
+  assert.ok(!closed.includes('no legal authority'), 'the body travelled through a closed gate');
+  assert.ok(closed.includes('text gate has not cleared'));
+  assert.ok(closed.includes(DIGEST), 'the digest must still travel');
+
+  // The two withholding reasons stay distinct, which is D38's own insistence. One of them may
+  // change tomorrow and the other will not, so a reader is told which they are looking at.
+  const byLicence = renderEvidenceBundle({
+    ...GOOD,
+    items: [{ ...ITEM, licence: 'licence-scl' }],
+  });
+  assert.ok(byLicence.includes('Text withheld by licence'));
+  assert.ok(!byLicence.includes('text gate has not cleared'));
+});
+
+test('an item cannot declare a publisher its own identifier contradicts', () => {
+  // The official-source host check runs against the declared publisher, so a disagreement here
+  // decides whose official hosts this item is allowed to link to.
+  assert.throws(
+    () =>
+      renderEvidenceBundle({
+        ...GOOD,
+        items: [{ ...ITEM, publisher: 'eu-eurlex' }],
+      }),
+    /while its identifier names/,
+    'a declared publisher overrode the identifier',
+  );
 });
 
 test('O7: a licence requiring attribution refuses an item that carries none', () => {
@@ -236,11 +317,13 @@ test('O7: a licence requiring attribution refuses an item that carries none', ()
       `${licence} was bundled with blank attribution`,
     );
   }
-  // cc0 requires none, so it must still be renderable without one.
+  // cc0 waives the licence obligation, so an item carrying no body renders without a credit
+  // line. What it does not waive is provenance: the check that fires when a body travels is a
+  // different rule with a different reason, and it is asserted where that rule is tested.
   assert.equal(
     typeof renderEvidenceBundle({
       ...GOOD,
-      items: [{ ...ITEM, licence: 'cc0', attribution: undefined }],
+      items: [{ ...ITEM, licence: 'cc0', attribution: undefined, text_public: false }],
     }),
     'string',
   );

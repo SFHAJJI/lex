@@ -67,7 +67,7 @@ export function renderSearchPreview({ locale = 'en' } = {}) {
   const resolved = renderSearchResults({
     query: 'synthetic preview work article 1',
     asOf: AS_OF,
-    hits: [hit(), hit({ provision_num: 'Art. 2', match_reasons: ['keyword', 'semantic'] })],
+    hits: [hit(), hit({ provision_num: 'Art. 2', match_reasons: ['keyword'] })],
     rowSet: { returned: 2, total: 2 },
     population: POPULATION,
     relaxations: OFF,
@@ -112,6 +112,12 @@ export function renderSearchPreview({ locale = 'en' } = {}) {
     relaxations: {
       ...OFF,
       fuzzy: { applied: true, expansions: ['many -> mady', 'many -> man'] },
+      crosswalk: {
+        applied: true,
+        understood_as: 'residential lease security deposit',
+        version: 'crosswalk/4',
+        reviewed_on: '2026-08-15',
+      },
     },
     searchPath: '/ask/search',
   });

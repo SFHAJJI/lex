@@ -82,7 +82,6 @@ test('the live record still looks like the record this file was captured from', 
 
 test('a real timeline shows both clocks, four years apart', () => {
   const html = renderTimeline({
-    semantics: 'publisher_applicability',
     states: [EARLIER, LATER],
     asOf: '2026-09-01',
     totalCount: 2,
@@ -103,7 +102,6 @@ test("the publisher's reused title is flagged against the state it does not cove
   // does not cover, and the screen used to call that agreement because the string matched
   // valid_to.
   const html = renderTimeline({
-    semantics: 'publisher_applicability',
     states: [EARLIER, LATER],
     asOf: '2026-09-01',
     totalCount: 2,
@@ -145,7 +143,14 @@ test('a real search row is described in its own publisher terms', () => {
         { what: 'never-consolidated LU acts', count: 23370, counted_at: '2026-08-15' },
       ],
     },
-    relaxations: {},
+    // The account is complete and closed even when nothing was relaxed. An empty object is not
+    // "nothing ran", it is a caller who did not say, and this row matched on the reader's own
+    // words, which is a fact worth stating rather than leaving to inference.
+    relaxations: {
+      fuzzy: { applied: false },
+      crosswalk: { applied: false },
+      semantic: { applied: false },
+    },
     searchPath: '/ask/search',
     layers: [],
     routes: [],

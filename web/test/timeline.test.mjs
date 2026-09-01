@@ -14,9 +14,12 @@ const HASH_A = 'a'.repeat(64);
 const HASH_B = 'b'.repeat(64);
 const HASH_C = 'c'.repeat(64);
 
-function state(overrides) {
+const LU_WORK = 'preview-synthetic:synthetic-preview-work';
+const EU_WORK = 'eu-eurlex:32016R0679';
+
+function state({ work = LU_WORK, ...overrides }) {
   return {
-    lex_id: `preview-synthetic:synthetic-preview-work:${overrides.valid_from}`,
+    lex_id: `${work}:${overrides.valid_from}`,
     valid_from: '2001-01-01',
     valid_to: '2004-01-01',
     publication_date: '2000-12-01',
@@ -38,7 +41,6 @@ const B = state({
 });
 
 const GOOD = {
-  semantics: 'publisher_applicability',
   states: [A, B],
   asOf: '2026-09-01',
   population: 'within the 1,402 consolidated LU works held by this corpus',
@@ -48,27 +50,91 @@ const GOOD = {
 /** Interval helper for the two exported set functions. */
 const span = (from, to) => ({ valid_from: from, valid_to: to, lex_id: `w:${from}` });
 
-test('the legal-time vocabulary comes from the envelope and has no default', () => {
+test('the legal-time vocabulary is derived from the work, and cannot be supplied', () => {
   assert.deepEqual(Object.keys(TIMELINE_SEMANTICS), [
     'publisher_applicability',
     'official_consolidation_state',
   ]);
 
+  // Each publisher's own words, chosen by the record rather than by the caller.
   const lu = renderTimeline(GOOD);
   assert.ok(lu.includes('Applicable from 2001-01-01 to 2004-01-01 (publisher)'));
   assert.ok(!lu.includes('Consolidated wording state'), 'the EU vocabulary leaked onto a LU work');
 
-  const eu = renderTimeline({ ...GOOD, semantics: 'official_consolidation_state' });
+  const eu = renderTimeline({
+    ...GOOD,
+    states: [
+      state({ work: EU_WORK, valid_from: '2001-01-01', valid_to: '2004-01-01', hash: HASH_A }),
+      state({ work: EU_WORK, valid_from: '2004-01-01', valid_to: null, hash: HASH_B }),
+    ],
+  });
   assert.ok(eu.includes('Consolidated wording state from 2001-01-01 to 2004-01-01'));
   assert.ok(!eu.includes('(publisher)'), 'the LU vocabulary leaked onto an EU work');
 
-  // Including a key that exists on every object. A prototype lookup would have rendered
-  // [object Object] as the legal-time claim.
-  for (const bad of [undefined, '', 'in_force', 'applicability', 'toString', 'constructor']) {
+  // Refused rather than ignored. A caller who believes they are choosing the vocabulary has
+  // misunderstood the contract, and accepting the argument silently leaves them believing it
+  // worked. The two real values are refused too: being right by luck is still not the contract.
+  for (const bad of [
+    'publisher_applicability',
+    'official_consolidation_state',
+    '',
+    'in_force',
+    'toString',
+    'constructor',
+  ]) {
     assert.throws(
       () => renderTimeline({ ...GOOD, semantics: bad }),
-      /not one of publisher_applicability/,
-      `${String(bad)} was accepted as a vocabulary`,
+      /does not take a date vocabulary/,
+      `${String(bad)} was accepted as a caller-chosen vocabulary`,
+    );
+  }
+});
+
+test('a timeline is one work, so gaps and overlaps mean something', () => {
+  // Codex's O1 payload. Two unrelated instruments whose intervals overlap in arithmetic and
+  // in nothing else. The renderer used to accept them and emit "The publisher ranks neither",
+  // attributing to a publisher a contradiction it never made about records it does not share.
+  assert.throws(
+    () =>
+      renderTimeline({
+        ...GOOD,
+        states: [
+          state({ valid_from: '2001-01-01', valid_to: '2005-01-01', hash: HASH_A }),
+          state({ work: EU_WORK, valid_from: '2003-01-01', valid_to: '2007-01-01', hash: HASH_B }),
+        ],
+      }),
+    /mixes 2 works/,
+    'two unrelated works were drawn as one history',
+  );
+
+  // And the true claim survives, which is the half that is easy to lose. Two genuinely
+  // overlapping states of one work still report the overlap.
+  const real = renderTimeline({
+    ...GOOD,
+    states: [
+      state({ valid_from: '2001-01-01', valid_to: '2005-01-01', hash: HASH_A }),
+      state({ valid_from: '2003-01-01', valid_to: '2007-01-01', hash: HASH_B }),
+    ],
+  });
+  assert.ok(real.includes('ranks neither'), 'a real overlap stopped being reported');
+});
+
+test('a publisher this interface has not classified cannot be drawn', () => {
+  // Including keys that exist on every object. The publisher table was an object literal, so
+  // it answered `constructor` with the Object constructor, which is not undefined and therefore
+  // passed the check whose entire purpose is to refuse an unclassified publisher.
+  for (const publisher of ['toString', 'constructor', '__proto__', 'hasOwnProperty', 'nobody']) {
+    assert.throws(
+      () =>
+        renderTimeline({
+          ...GOOD,
+          states: [
+            state({ work: `${publisher}:some-work`, valid_from: '2001-01-01', valid_to: null, hash: HASH_A }),
+          ],
+          totalCount: 1,
+        }),
+      /is not a publisher this interface has classified|does not name a publisher/,
+      `${publisher} was accepted as a publisher`,
     );
   }
 });
@@ -421,7 +487,7 @@ test('the population is stated and an empty timeline is refused', () => {
 
 test('the legend is the component words and the chart is decoration', () => {
   const html = renderTimeline(GOOD);
-  assert.ok(html.includes(LEGENDS[GOOD.semantics]));
+  assert.ok(html.includes(LEGENDS.publisher_applicability));
   // Both pinned to literals, so neither can drift into asserting the other publisher's
   // claim. The EU sentence is the one that matters: the Union dates a consolidation's
   // wording and makes no applicability claim at all.
@@ -520,7 +586,13 @@ test('O5-R1: the legend does not assert applicability over a consolidation timel
   // The rows were repaired and the legend above them kept asserting what the rows had stopped
   // saying, which is worse than the original: the legend is what teaches a reader how to read
   // the column beneath it.
-  const eu = renderTimeline({ ...GOOD, semantics: 'official_consolidation_state' });
+  const eu = renderTimeline({
+    ...GOOD,
+    states: GOOD.states.map((one) => ({
+      ...one,
+      lex_id: one.lex_id.replace(LU_WORK, EU_WORK),
+    })),
+  });
   assert.equal(eu.includes('the wording state the publisher consolidated'), true);
   assert.equal(
     eu.includes('when the publisher says the state applied'),
@@ -529,7 +601,7 @@ test('O5-R1: the legend does not assert applicability over a consolidation timel
   );
   assert.equal(eu.includes('Applicable from'), false, 'an EU timeline asserted applicability in a row');
 
-  const lu = renderTimeline({ ...GOOD, semantics: 'publisher_applicability' });
+  const lu = renderTimeline(GOOD);
   assert.equal(lu.includes('when the publisher says the state applied'), true);
   assert.equal(lu.includes('the wording state the publisher consolidated'), false);
 });

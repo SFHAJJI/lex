@@ -185,8 +185,8 @@ export function renderTrustSurface() {
     )}</section>`,
 
     `<section class="surface-block"><h2>What leaves the building</h2>${renderEvidenceBundle({
-      // This preview shows a Luxembourg item, whose publisher dates applicability.
-      semantics: 'publisher_applicability',
+      // No vocabulary is passed. Each item is labelled from its own publisher, which is the only
+      // thing that works for a bundle, since a bundle may carry items from more than one.
       items: [
         {
           kind: 'publisher_text',
@@ -198,6 +198,9 @@ export function renderTrustSurface() {
           observed_from: '2026-01-01T00:00:00Z',
           record_sha256: DIGEST,
           licence: 'cc-by-4.0',
+          // D38's gate, stated by the record rather than assumed by the composer. The synthetic
+          // preview publisher's text carries no legal authority and is cleared for display.
+          text_public: true,
           attribution: 'Synthetic preview publisher, CC BY 4.0',
           publisher: PUBLISHER,
           official_uri: 'https://preview.invalid/synthetic-preview-work/2001-01-01',
@@ -213,6 +216,10 @@ export function renderTrustSurface() {
           observed_from: '2026-01-01T00:00:00Z',
           record_sha256: CANDIDATE_A,
           licence: 'licence-scl',
+          // Declared true so this preview shows the licence withholding a body, rather than the
+          // rights gate withholding it. The two reasons are different and the page demonstrates
+          // the licence one.
+          text_public: true,
           attribution: 'Synthetic preview publisher, licence restricts redistribution',
           publisher: PUBLISHER,
           official_uri: 'https://preview.invalid/synthetic-preview-work/2003-01-01',

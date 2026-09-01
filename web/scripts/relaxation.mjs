@@ -166,13 +166,16 @@ const DISCLOSURE = new Map([
 ]);
 
 /**
- * Every relaxation, declared, and a disclosure for each one that ran.
+ * The account, complete and closed, or a refusal naming what is missing.
  *
- * @param {object} input
- * @param {string} input.searchPath   the current search path, which the reverts are built from
- * @param {object} input.relaxations  one entry per member of RELAXATIONS, each with `applied`
+ * Separated from the disclosure renderer because a caller can need the contract without needing
+ * the markup. The search screen has to know the account is whole before it can cross-check its
+ * badges against it, and re-implementing the same three checks there is how two versions of one
+ * contract start to disagree.
+ *
+ * @param {object} relaxations  one entry per member of RELAXATIONS, each with `applied`
  */
-export function renderRelaxationDisclosures({ searchPath, relaxations }) {
+export function requireRelaxationAccount(relaxations) {
   for (const relaxation of RELAXATIONS) {
     const state = relaxations?.[relaxation];
     if (typeof state?.applied !== 'boolean') {
@@ -190,6 +193,18 @@ export function renderRelaxationDisclosures({ searchPath, relaxations }) {
         'retrieval path without adding it here is how a silent relaxation ships',
     );
   }
+  return relaxations;
+}
+
+/**
+ * Every relaxation, declared, and a disclosure for each one that ran.
+ *
+ * @param {object} input
+ * @param {string} input.searchPath   the current search path, which the reverts are built from
+ * @param {object} input.relaxations  one entry per member of RELAXATIONS, each with `applied`
+ */
+export function renderRelaxationDisclosures({ searchPath, relaxations }) {
+  requireRelaxationAccount(relaxations);
 
   const applied = RELAXATIONS.filter((relaxation) => relaxations[relaxation].applied);
   if (applied.length === 0) return '';

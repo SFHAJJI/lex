@@ -27,6 +27,7 @@
 import { isCalendarDate, isUtcInstant } from './temporal.mjs';
 import { escapeHtml } from './render.mjs';
 import { INTERVAL_SENTENCE, LEGENDS, semanticsOf } from './publisher-vocabulary.mjs';
+import { oneWorkAcross } from './record-identity.mjs';
 
 // The vocabulary lives in one module now, keyed by publisher, so no screen can pass the
 // wrong one. Re-exported here because callers of this screen already import these names.
@@ -322,12 +323,23 @@ function renderHoleRow(hole) {
  * @param {boolean} input.truncated
  * @param {string} input.population     what this list was drawn from
  */
-export function renderTimeline({ semantics, states, asOf, totalCount, truncated, population }) {
-  if (!Object.hasOwn(TIMELINE_SEMANTICS, semantics ?? '')) {
+export function renderTimeline({
+  semantics: declaredSemantics,
+  states,
+  asOf,
+  totalCount,
+  truncated,
+  population,
+}) {
+  // There is no semantics parameter. A timeline is one work's history, so the vocabulary is a
+  // property of that work's publisher and is derived below from the records themselves. Passing
+  // one is refused rather than ignored: a caller who believes they are choosing the vocabulary
+  // has misunderstood the contract, and silently overriding them leaves them believing it worked.
+  if (declaredSemantics !== undefined) {
     throw new Error(
-      `a timeline renders in the publisher's own vocabulary and ${JSON.stringify(semantics)} is ` +
-        `not one of ${Object.keys(TIMELINE_SEMANTICS).join(', ')}; the two publishers make ` +
-        'different claims and this product does not choose between them',
+      'a timeline does not take a date vocabulary; it is a property of the publisher of the ' +
+        'work being drawn and is derived from the records, so a caller cannot pass one that ' +
+        'disagrees with them',
     );
   }
   // The clock is a parameter, so the same index and the same URL render the same page tomorrow.
@@ -373,6 +385,18 @@ export function renderTimeline({ semantics, states, asOf, totalCount, truncated,
   }
 
   states.forEach(requireState);
+
+  // A timeline is the history of one work, and this is where that becomes enforced rather than
+  // assumed. Derived after every row has validated itself, so a malformed row is reported in its
+  // own terms instead of as a mixed-work refusal.
+  //
+  // Everything below depends on it. The gaps and the overlapping pairs are computed by comparing
+  // intervals, and across two unrelated instruments those comparisons still produce sentences:
+  // "both cover part of the same period", "the publisher ranks neither state". Both are false,
+  // and false in the direction that does the most damage, because they report a contradiction
+  // the publisher never made. One work is what makes them mean anything.
+  const identity = oneWorkAcross(states, 'a timeline');
+  const semantics = semanticsOf(identity.publisher, 'a timeline');
   // A total ordering. The old comparator never returned 0, so states sharing a valid_from kept
   // the caller's order, which is exactly the ambiguous_version shape and exactly where "the
   // record places the row" has to mean something.

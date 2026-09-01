@@ -13,6 +13,11 @@ import { renderTimeline } from './timeline.mjs';
 import { skinFor } from './shells.mjs';
 
 const WORK = 'preview-synthetic:synthetic-preview-work';
+// A real Union work, because the consolidation-vocabulary case has to be a Union record to be
+// that case at all. It used to be the synthetic Luxembourg work with the EU vocabulary passed
+// in beside it, which is precisely the defect this preview exists to demonstrate the absence of:
+// the page asserted a consolidation state over a record whose publisher dates applicability.
+const EU_WORK = 'eu-eurlex:32016R0679';
 const AS_OF = '2026-09-01';
 const POPULATION =
   'Drawn from the states this corpus holds for this work, not from the states the publisher ' +
@@ -22,9 +27,9 @@ function digest(seed) {
   return seed.repeat(64).slice(0, 64);
 }
 
-function state(overrides) {
+function state({ work = WORK, ...overrides }) {
   return {
-    lex_id: `${WORK}:${overrides.valid_from}`,
+    lex_id: `${work}:${overrides.valid_from}`,
     publication_date: '2000-12-01',
     observed_from: '2026-01-01T00:00:00Z',
     extraction_profile: 'akn-lu/1',
@@ -44,7 +49,6 @@ function section(heading, note, html) {
 /** The timeline preview, in the Workbench shell: its reader is reading a history. */
 export function renderTimelinePreview({ locale = 'en' } = {}) {
   const ordinary = renderTimeline({
-    semantics: 'publisher_applicability',
     asOf: AS_OF,
     population: POPULATION,
     totalCount: 2,
@@ -60,7 +64,6 @@ export function renderTimelinePreview({ locale = 'en' } = {}) {
   });
 
   const gapped = renderTimeline({
-    semantics: 'publisher_applicability',
     asOf: AS_OF,
     population: POPULATION,
     totalCount: 12,
@@ -77,7 +80,6 @@ export function renderTimelinePreview({ locale = 'en' } = {}) {
   });
 
   const conflicted = renderTimeline({
-    semantics: 'publisher_applicability',
     asOf: AS_OF,
     population: POPULATION,
     totalCount: 3,
@@ -107,13 +109,19 @@ export function renderTimelinePreview({ locale = 'en' } = {}) {
   });
 
   const scheduled = renderTimeline({
-    semantics: 'official_consolidation_state',
     asOf: AS_OF,
     population: POPULATION,
     totalCount: 2,
     states: [
-      state({ valid_from: '2016-04-27', valid_to: '2016-05-03', hash: digest('2'), extraction_profile: 'xhtml-eu/1' }),
       state({
+        work: EU_WORK,
+        valid_from: '2016-04-27',
+        valid_to: '2016-05-03',
+        hash: digest('2'),
+        extraction_profile: 'xhtml-eu/1',
+      }),
+      state({
+        work: EU_WORK,
         valid_from: '2029-03-29',
         valid_to: null,
         hash: digest('3'),
@@ -124,7 +132,6 @@ export function renderTimelinePreview({ locale = 'en' } = {}) {
   });
 
   const withdrawn = renderTimeline({
-    semantics: 'publisher_applicability',
     asOf: AS_OF,
     population: POPULATION,
     totalCount: 2,
