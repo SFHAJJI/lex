@@ -20,6 +20,7 @@
 // than a worry. Two governing cards would be two answers to one question, so there is at most
 // one and it is refused rather than truncated.
 
+import { canonicalStateUrl } from './routes.mjs';
 import { isCalendarDate } from './temporal.mjs';
 import { escapeHtml } from './render.mjs';
 import { renderNoHitCard } from './no-hit-card.mjs';
@@ -116,10 +117,26 @@ function requireHit(hit, index) {
         'that has it, and this corpus holds 1,493 versions that do not',
     );
   }
-  if (typeof hit.permalink !== 'string' || !hit.permalink.includes('--')) {
+  // Through the shared same-origin route policy, not a substring test. Containing "--" was
+  // the entire guard, so `javascript:alert(1)--x` satisfied it and was rendered as a working
+  // href a few lines below. `parseObjectUrl` refuses anything that does not start with "/",
+  // refuses unsafe segments and anchors, and requires the version key to carry a calendar date
+  // and a digest, which is the property the old check was reaching for.
+  const permalink = canonicalStateUrl(hit.permalink);
+  if (permalink === null) {
     throw new Error(
-      `${where} needs its hash-carrying permalink; a link without the digest silently follows ` +
-        'the publisher when the file behind it is replaced',
+      `${where} needs its hash-carrying permalink as a canonical same-origin state URL; ` +
+        `${JSON.stringify(hit.permalink)} is not one, and a link without the digest silently ` +
+        'follows the publisher when the file behind it is replaced',
+    );
+  }
+  // Bound to the row, not merely well formed. A permalink naming a different state than the
+  // row describes sends a reader to text the row never summarised, and every field above would
+  // still be true of the row.
+  if (permalink.validFrom !== hit.valid_from) {
+    throw new Error(
+      `${where} links to a state applicable from ${permalink.validFrom} while the row says ` +
+        `${hit.valid_from}; the link and the row must name one state`,
     );
   }
 

@@ -24,6 +24,8 @@
 // has hostname `evil.example`, and a reader scanning the start of a link sees the publisher.
 
 /** Hosts each publisher actually serves from. Closed, and checked per publisher. */
+import { parseObjectUrl } from './urls.mjs';
+
 export const PUBLISHER_HOSTS = Object.freeze({
   'lu-legilux': Object.freeze(['legilux.public.lu', 'data.legilux.public.lu']),
   'eu-eurlex': Object.freeze(['eur-lex.europa.eu', 'publications.europa.eu', 'op.europa.eu']),
@@ -149,4 +151,83 @@ export function tryPublisherSourceUri(publisher, uri) {
   } catch {
     return null;
   }
+}
+
+/**
+ * The one host this product serves its own object URLs from.
+ *
+ * Declared here because it did not exist anywhere: it was a literal inside a single preview
+ * fixture, so nothing could check that a link claiming to be one of ours actually was.
+ */
+export const CANONICAL_HOST = 'law.soufien.lu';
+
+/**
+ * A state permalink, validated rather than pattern-matched.
+ *
+ * The guard this replaces was `permalink.includes('--')`, which `javascript:alert(1)--x`
+ * satisfies, and the value was then rendered as an href. Containing a digest separator is not
+ * evidence of anything; being a canonical same-origin state URL is.
+ *
+ * Accepts the absolute form on this product's own host, which is what the service emits, and
+ * the root-relative form. Everything else is refused: another host, another scheme,
+ * protocol-relative, userinfo, a port, a backslash, or a path the object-URL grammar rejects.
+ *
+ * @param {unknown} value
+ * @returns {{path: string, publisher: string, work: string, validFrom: string, hash: string,
+ *   anchor: string|null}|null} the parsed state, or null
+ */
+export function canonicalStateUrl(value) {
+  if (typeof value !== 'string' || value.length === 0) return null;
+  // A backslash is a separator to some parsers and not to others, so it never reaches one here.
+  // Written as a code point because a backslash literal in a shell heredoc has been
+  // mangled twice on this project already, once silently into a backspace byte.
+  if (value.includes(String.fromCharCode(92))) return null;
+
+  let path = value;
+  if (!value.startsWith('/')) {
+    let parsed;
+    try {
+      parsed = new URL(value);
+    } catch {
+      return null;
+    }
+    if (parsed.protocol !== 'https:') return null;
+    if (parsed.hostname !== CANONICAL_HOST) return null;
+    // Userinfo and an explicit port are both ways to make a hostile URL read as a familiar one.
+    if (parsed.username !== '' || parsed.password !== '' || parsed.port !== '') return null;
+    if (parsed.search !== '') return null;
+    path = `${parsed.pathname}${parsed.hash}`;
+  } else if (value.startsWith('//')) {
+    // Protocol-relative: `//evil.example/x` is off-site and starts with a slash.
+    return null;
+  }
+
+  const object = parseObjectUrl(path);
+  if (object === null || object.kind !== 'reading') return null;
+  return { path, ...object };
+}
+
+/**
+ * A same-origin search path, validated rather than assumed from a leading slash.
+ *
+ * `startsWith('/')` was the entire guard, and `//evil.example/x` satisfies it: a
+ * protocol-relative URL is off-site and begins with a slash. The revert control then rendered
+ * it as an href, so one relaxation disclosure offered a one-tap trip to another origin.
+ *
+ * Returns the path and its query, or null. The shell prefix is closed to the three this
+ * interface serves, because a search path nobody routes is a link that 404s under a label
+ * promising the reader their exact words back.
+ */
+export function canonicalSearchPath(value) {
+  if (typeof value !== 'string' || !value.startsWith('/')) return null;
+  if (value.startsWith('//')) return null;
+  if (value.includes(String.fromCharCode(92))) return null;
+  if (value.includes('#')) return null;
+  // A control character or whitespace inside a path is a parser disagreement waiting to happen.
+  if (/[\u0000-\u0020\u007f]/.test(value)) return null;
+
+  const [path, ...rest] = value.split('?');
+  if (rest.length > 1) return null;
+  if (!/^\/(ask|w|dev)\/search$/.test(path)) return null;
+  return { path, query: rest[0] ?? '' };
 }

@@ -154,8 +154,42 @@ test('each revert turns off exactly its own relaxation and leaves the rest alone
 
 test('a revert needs a real search path and a real relaxation', () => {
   assert.throws(() => revertPath(SEARCH, 'stemming'), /is not a relaxation/);
-  assert.throws(() => revertPath('search?q=x', 'fuzzy'), /needs the current search path/);
-  assert.throws(() => revertPath('/ask/search?q=x#art_1', 'fuzzy'), /carries no fragment/);
+  assert.throws(
+    () => revertPath('search?q=x', 'fuzzy'),
+    /needs the current same-origin search path/,
+  );
+
+  // O2. Every one of these begins with a slash or reads as a path, and the old guard was
+  // exactly `startsWith('/')`. A protocol-relative URL is off-site and starts with a
+  // slash, so the revert control offered a one-tap trip to another origin under a label
+  // promising the reader their own words back.
+  for (const hostile of [
+    '//evil.example/ask/search?q=x',
+    '/ask/search?q=x#fragment',
+    '/evil/search?q=x',
+    '/ask/search/extra?q=x',
+    '/ask/search?q=x?y=z',
+    'https://evil.example/ask/search?q=x',
+    'javascript:alert(1)',
+  ]) {
+    assert.throws(
+      () => revertPath(hostile, 'fuzzy'),
+      /needs the current same-origin search path/,
+      `${hostile} was accepted as a revert target`,
+    );
+  }
+
+  // And the backslash form, written as a code point so no shell or editor can eat it.
+  assert.throws(
+    () => revertPath('/ask' + String.fromCharCode(92) + 'search?q=x', 'fuzzy'),
+    /needs the current same-origin search path/,
+  );
+  // A fragment is refused by the same policy now, so the message is the policy's, not a
+  // separate guard's. One rule, one place.
+  assert.throws(
+    () => revertPath('/ask/search?q=x#art_1', 'fuzzy'),
+    /needs the current same-origin search path/,
+  );
 });
 
 test('values are escaped rather than trusted', () => {

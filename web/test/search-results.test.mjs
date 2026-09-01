@@ -356,3 +356,48 @@ test('the row set is validated even when no rows came back', () => {
     );
   }
 });
+
+test('O1: a permalink is validated by the shared route policy, not by containing a separator', () => {
+  // The guard was `permalink.includes('--')`. Every string below satisfies that and was
+  // rendered as a working href a few lines later.
+  const hostile = [
+    'javascript:alert(1)--x',
+    'JavaScript:alert(1)--' + 'a'.repeat(64),
+    'data:text/html,<script>1</script>--' + 'a'.repeat(64),
+    '//evil.example/preview-synthetic/w/2001-01-01--' + 'a'.repeat(64),
+    'https://evil.example/preview-synthetic/w/2001-01-01--' + 'a'.repeat(64),
+    'http://law.soufien.lu/preview-synthetic/w/2001-01-01--' + 'a'.repeat(64),
+    'https://user:pw@law.soufien.lu/preview-synthetic/w/2001-01-01--' + 'a'.repeat(64),
+    'https://law.soufien.lu:8443/preview-synthetic/w/2001-01-01--' + 'a'.repeat(64),
+    'https://law.soufien.lu/preview-synthetic/w/2001-01-01--short',
+    'https://law.soufien.lu/preview-synthetic/w/not-a-date--' + 'a'.repeat(64),
+    'https://law.soufien.lu/preview-synthetic/w/2001-01-01--' + 'A'.repeat(64),
+    '--' + 'a'.repeat(64),
+  ];
+  for (const permalink of hostile) {
+    assert.throws(
+      () => renderSearchResults({ ...GOOD, hits: [hit({ permalink })] }),
+      /canonical same-origin state URL/,
+      `${permalink} was accepted as a state permalink`,
+    );
+  }
+});
+
+test('O1: a permalink must name the state its own row describes', () => {
+  // Well formed and pointing somewhere else. Every other field on the row stays true, so
+  // nothing but this check notices that the link and the row disagree.
+  assert.throws(
+    () =>
+      renderSearchResults({
+        ...GOOD,
+        hits: [
+          hit({
+            permalink:
+              'https://law.soufien.lu/preview-synthetic/synthetic-preview-work/1999-01-01--' +
+              'a'.repeat(64),
+          }),
+        ],
+      }),
+    /links to a state applicable from 1999-01-01 while the row says/,
+  );
+});
