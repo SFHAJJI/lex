@@ -47,7 +47,7 @@ export function renderTimelinePreview({ locale = 'en' } = {}) {
     semantics: 'publisher_applicability',
     asOf: AS_OF,
     population: POPULATION,
-    truncated: false,
+    totalCount: 2,
     states: [
       state({ valid_from: '2001-01-01', valid_to: '2004-01-01', hash: digest('a') }),
       state({
@@ -63,7 +63,6 @@ export function renderTimelinePreview({ locale = 'en' } = {}) {
     semantics: 'publisher_applicability',
     asOf: AS_OF,
     population: POPULATION,
-    truncated: true,
     totalCount: 12,
     states: [
       state({ valid_from: '1993-04-05', valid_to: '2004-04-02', hash: digest('c') }),
@@ -81,7 +80,7 @@ export function renderTimelinePreview({ locale = 'en' } = {}) {
     semantics: 'publisher_applicability',
     asOf: AS_OF,
     population: POPULATION,
-    truncated: false,
+    totalCount: 3,
     states: [
       state({
         valid_from: '2020-03-14',
@@ -111,7 +110,7 @@ export function renderTimelinePreview({ locale = 'en' } = {}) {
     semantics: 'official_consolidation_state',
     asOf: AS_OF,
     population: POPULATION,
-    truncated: false,
+    totalCount: 2,
     states: [
       state({ valid_from: '2016-04-27', valid_to: '2016-05-03', hash: digest('2'), extraction_profile: 'xhtml-eu/1' }),
       state({
@@ -128,7 +127,7 @@ export function renderTimelinePreview({ locale = 'en' } = {}) {
     semantics: 'publisher_applicability',
     asOf: AS_OF,
     population: POPULATION,
-    truncated: false,
+    totalCount: 2,
     states: [
       state({ valid_from: '2001-01-01', valid_to: '2004-01-01', hash: digest('4') }),
       state({

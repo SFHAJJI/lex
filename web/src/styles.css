@@ -657,7 +657,7 @@ summary {
   font-weight: 600;
 }
 
-.timeline-row[data-withdrawn="true"] .timeline-title {
+.timeline-row[data-withdrawn="true"] .timeline-interval {
   text-decoration: line-through;
 }
 

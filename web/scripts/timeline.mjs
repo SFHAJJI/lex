@@ -25,6 +25,7 @@
 // intact.
 
 import { isCalendarDate, isUtcInstant } from './temporal.mjs';
+import { escapeHtml } from './render.mjs';
 
 /** The two vocabularies, and there is no third and no default. */
 export const TIMELINE_SEMANTICS = Object.freeze({
@@ -50,17 +51,19 @@ const DERIVED_OVERLAP =
   'derived from the held intervals, not asserted by the publisher. The publisher ranks neither ' +
   'state, and neither does this.';
 
-// dd/mm/yyyy and yyyy-mm-dd, which is mechanical extraction rather than reading the title.
-const TITLE_DATE = /(\d{2})\/(\d{2})\/(\d{4})|(\d{4})-(\d{2})-(\d{2})/g;
+const DERIVED_TITLE =
+  'these dates were read out of the title mechanically, by this service and not by the ' +
+  'publisher, and the reading can be wrong.';
 
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-}
+// dd/mm/yyyy and yyyy-mm-dd, bounded so a date is a date and not a slice of a longer number.
+//
+// Unanchored, this cut 2345-06-30 out of "Acte n. 12345-06-30", read 2024-03-20 out of the
+// five-digit year in "20/03/20245", and pulled the date half out of an observation instant.
+// Each printed a date this service had invented, under a sentence attributing it to the
+// publisher, which is worse than not reading the title at all. The day is one digit or two,
+// because a single-digit day was being missed entirely.
+const TITLE_DATE =
+  /(?<![\d/])(\d{1,2})\/(\d{1,2})\/(\d{4})(?![\d/])|(?<![\d-])(\d{4})-(\d{2})-(\d{2})(?![\dT-])/g;
 
 function requireState(state, index) {
   const where = `state ${index + 1}`;
@@ -77,8 +80,11 @@ function requireState(state, index) {
         'filling it with today would close an interval the publisher left open',
     );
   }
-  if (state.valid_to !== null && state.valid_to < state.valid_from) {
-    throw new Error(`${where} ends before it begins`);
+  if (state.valid_to !== null && state.valid_to <= state.valid_from) {
+    throw new Error(
+      `${where} ends on or before the day it begins, so it covers no day at all; such a state ` +
+        'sitting at the edge of a gap made the gap disappear',
+    );
   }
   if (!isCalendarDate(state.publication_date)) {
     throw new Error(`${where} publication_date is not a calendar date`);
@@ -113,11 +119,31 @@ function requireState(state, index) {
     );
   }
 
-  // A withdrawn state is struck, and a strike with no date is a rumour.
-  if (state.withdrawn === true && !isCalendarDate(state.withdrawn_from_source)) {
+  // A withdrawn state is struck, and a strike with no date is a rumour. Two predicates used
+  // to guard this, one strict here and one truthy in the renderer, and they agreed only on
+  // the single value the tests passed; withdrawn: 'yes' struck the row and dated it undefined.
+  if (typeof state.withdrawn !== 'boolean') {
     throw new Error(
-      `${where} is withdrawn and does not say when the publisher withdrew it`,
+      `${where} does not say whether the publisher withdrew it; ${JSON.stringify(state.withdrawn)} ` +
+        'is neither withdrawn nor held',
     );
+  }
+  if (state.withdrawn && !isCalendarDate(state.withdrawn_from_source)) {
+    throw new Error(`${where} is withdrawn and does not say when the publisher withdrew it`);
+  }
+
+  // A title travels with the language it is written in. Defaulting to French labelled every
+  // English EU title as French, and lang is about the text, not about the corpus it came from.
+  if (Object.hasOwn(state, 'title')) {
+    if (typeof state.title !== 'string' || state.title.trim().length === 0) {
+      throw new Error(`${where} carries a title that is not a string`);
+    }
+    if (typeof state.title_language !== 'string' || !/^[a-z]{2}$/.test(state.title_language)) {
+      throw new Error(
+        `${where} carries a title and does not say what language it is in; a default would ` +
+          'label every title of one publisher as the language of the other',
+      );
+    }
   }
   return state;
 }
@@ -134,11 +160,23 @@ function titleDisagreement(state) {
   if (typeof state.title !== 'string') return null;
   const claimed = [];
   for (const match of state.title.matchAll(TITLE_DATE)) {
-    const iso = match[4] ? `${match[4]}-${match[5]}-${match[6]}` : `${match[3]}-${match[2]}-${match[1]}`;
+    // Padded, because the publisher writes "au 1/08/2024" and an unpadded day failed the
+    // calendar check and was dropped in silence, which reads exactly like agreement.
+    const iso = match[4]
+      ? `${match[4]}-${match[5]}-${match[6]}`
+      : `${match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`;
     if (isCalendarDate(iso)) claimed.push(iso);
   }
-  const disagreeing = claimed.filter((one) => one !== state.valid_from && one !== state.valid_to);
+  // Deduplicated: one date written twice in a title is one claim, not two.
+  const disagreeing = [
+    ...new Set(claimed.filter((one) => one !== state.valid_from && one !== state.valid_to)),
+  ];
   return disagreeing.length > 0 ? disagreeing : null;
+}
+
+function compare(a, b) {
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
 }
 
 /**
@@ -148,17 +186,33 @@ function titleDisagreement(state) {
  * history, and a continuous history is the false picture this whole screen exists to avoid.
  */
 export function holesBetween(states) {
-  const closed = states
-    .filter((state) => state.valid_to !== null)
-    .sort((a, b) => (a.valid_from < b.valid_from ? -1 : 1));
-  const holes = [];
-  for (const state of closed) {
-    const next = states
-      .filter((other) => other.valid_from >= state.valid_to)
-      .sort((a, b) => (a.valid_from < b.valid_from ? -1 : 1))[0];
-    if (next && next.valid_from > state.valid_to) {
-      holes.push({ from: state.valid_to, to: next.valid_from });
+  // Merge what is covered, then read the spaces. The first version walked each closed state to
+  // the next state beginning at or after it, which never asked whether anything already covered
+  // the space between; a state nested inside a longer one produced a hole over an interval the
+  // corpus holds, and a state at a gap's edge could consume the gap. Both are the false picture
+  // this function exists to prevent, one inventing an absence and one hiding it.
+  //
+  // Taking the union instead makes duplicates, nesting, overlap and input order stop mattering,
+  // because a covered day is covered however many records say so.
+  const OPEN = '9999-12-31';
+  const spans = states
+    .map((state) => ({ from: state.valid_from, to: state.valid_to ?? OPEN }))
+    .filter((span) => span.to > span.from)
+    .sort((a, b) => (a.from === b.from ? (a.to < b.to ? -1 : 1) : a.from < b.from ? -1 : 1));
+
+  const merged = [];
+  for (const span of spans) {
+    const last = merged[merged.length - 1];
+    if (last && span.from <= last.to) {
+      if (span.to > last.to) last.to = span.to;
+    } else {
+      merged.push({ ...span });
     }
+  }
+
+  const holes = [];
+  for (let i = 0; i + 1 < merged.length; i += 1) {
+    holes.push({ from: merged[i].to, to: merged[i + 1].from });
   }
   return holes;
 }
@@ -198,10 +252,11 @@ function renderRow(state, { semantics, asOf }) {
     : '';
   const disagreeing = titleDisagreement(state);
   const distrust = disagreeing
-    ? '<p class="timeline-title-distrust">The publisher\'s title says ' +
+    ? '<p class="timeline-title-distrust">The publisher\'s title contains ' +
       `${escapeHtml(disagreeing.join(', '))}; this record is dated ` +
       `${escapeHtml(state.valid_from)} to ${escapeHtml(state.valid_to ?? 'no end recorded')}. ` +
-      'Both are the publisher\'s. The record\'s dates place this row; the title never does.</p>'
+      'Both strings are the publisher\'s. The record\'s dates place this row; the title never ' +
+      `does. <span class="timeline-derived">${escapeHtml(DERIVED_TITLE)}</span></p>`
     : '';
   const title =
     typeof state.title === 'string' && state.title.length > 0
@@ -212,7 +267,7 @@ function renderRow(state, { semantics, asOf }) {
   return (
     `<tr class="timeline-row"${state.withdrawn ? ' data-withdrawn="true"' : ''}>` +
     `<td><code>${escapeHtml(state.lex_id)}</code></td>` +
-    `<td>${escapeHtml(legalTime)}${provisional}${withdrawn}` +
+    `<td><span class="timeline-interval">${escapeHtml(legalTime)}</span>${provisional}${withdrawn}` +
     `<p class="timeline-record-time">Published ${escapeHtml(state.publication_date)} / ` +
     `First observed ${escapeHtml(state.observed_from)}</p>${title}${distrust}</td>` +
     `<td>${state.text_available ? 'text held' : 'no text held'}</td>` +
@@ -271,20 +326,49 @@ export function renderTimeline({ semantics, states, asOf, totalCount, truncated,
         'the number of states the law has had rather than the number this corpus holds',
     );
   }
-  if (truncated === true && !Number.isInteger(totalCount)) {
+  if (!Number.isInteger(totalCount) || totalCount < 1) {
     throw new Error(
-      'a truncated timeline names its total; a list that simply stops reads as a complete one',
+      'a timeline says how many states the publisher history holds; without it a list that ' +
+        'simply stops reads as a complete one, and there is nothing to compare these rows to',
+    );
+  }
+  if (totalCount < states.length) {
+    throw new Error(
+      `${states.length} states were given against a total of ${totalCount}; one of those two ` +
+        'numbers is wrong and this screen must not choose which',
+    );
+  }
+  // Derived, so a caller cannot say complete and be believed. The caller may still declare it,
+  // and a declaration that disagrees with the records is refused rather than preferred.
+  const isTruncated = totalCount > states.length;
+  if (truncated !== undefined && truncated !== isTruncated) {
+    throw new Error(
+      `this timeline declares truncated ${JSON.stringify(truncated)} while holding ` +
+        `${states.length} of ${totalCount} states`,
     );
   }
 
   states.forEach(requireState);
-  const ordered = [...states].sort((a, b) => (a.valid_from < b.valid_from ? -1 : 1));
+  // A total ordering. The old comparator never returned 0, so states sharing a valid_from kept
+  // the caller's order, which is exactly the ambiguous_version shape and exactly where "the
+  // record places the row" has to mean something.
+  const ordered = [...states].sort(
+    (a, b) =>
+      compare(a.valid_from, b.valid_from) ||
+      compare(a.valid_to ?? '9999-12-31', b.valid_to ?? '9999-12-31') ||
+      compare(a.lex_id, b.lex_id),
+  );
 
   const holes = holesBetween(ordered);
   const overlaps = overlapsIn(ordered);
 
-  const rows = ordered.map((state) => renderRow(state, { semantics, asOf })).join('');
-  const holeRows = holes.map(renderHoleRow).join('');
+  const rows = [
+    ...ordered.map((state) => ({ at: state.valid_from, second: 0, html: renderRow(state, { semantics, asOf }) })),
+    ...holes.map((hole) => ({ at: hole.from, second: 1, html: renderHoleRow(hole) })),
+  ]
+    .sort((a, b) => compare(a.at, b.at) || a.second - b.second)
+    .map((entry) => entry.html)
+    .join('');
 
   const overlapSection =
     overlaps.length > 0
@@ -301,12 +385,12 @@ export function renderTimeline({ semantics, states, asOf, totalCount, truncated,
         '</ul></section>'
       : '';
 
-  const pager = truncated
+  const pager = isTruncated
     ? `<p class="timeline-pager">Showing ${ordered.length} of ${totalCount} states.</p>`
     : '';
 
   const single =
-    ordered.length === 1 && !truncated
+    ordered.length === 1 && !isTruncated
       ? `<p class="timeline-single">One held state; publisher history begins ` +
         `${escapeHtml(ordered[0].valid_from)}.</p>`
       : '';
@@ -327,7 +411,7 @@ export function renderTimeline({ semantics, states, asOf, totalCount, truncated,
     '<table class="timeline-table"><thead><tr>' +
     '<th scope="col">state</th><th scope="col">both clocks</th><th scope="col">text</th>' +
     '<th scope="col">extraction profile</th><th scope="col">digest</th>' +
-    `</tr></thead><tbody>${rows}${holeRows}</tbody></table></div>` +
+    `</tr></thead><tbody>${rows}</tbody></table></div>` +
     overlapSection +
     pager +
     `<p class="timeline-population">${escapeHtml(population)}</p>` +
