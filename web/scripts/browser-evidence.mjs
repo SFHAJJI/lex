@@ -78,6 +78,10 @@ const PAGES = [
   "state-invalid-envelope.html",
   "state-success.html",
   "state-refusal.html",
+  // The trust surface. Added because the run reported "all combinations clean" while this
+  // page existed and was not in the list, which is evidence about five pages presented as
+  // evidence about six.
+  "trust-surface.html",
 ];
 
 /**

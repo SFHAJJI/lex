@@ -37,7 +37,10 @@ function syntheticBanner() {
     </aside>`;
 }
 
-function page({ state, title, main }) {
+// Exported so every page in this line goes through one shell. The shell is what carries the
+// synthetic banner and data-preview-state, and a page that builds its own head forgets them:
+// the trust surface did exactly that and the browser run caught it.
+export function page({ state, title, main }) {
   return `<!doctype html>
 <html lang="en" data-product-line="lex-v3" data-preview-state="${escapeHtml(state)}">
   <head>

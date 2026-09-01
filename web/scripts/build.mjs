@@ -15,6 +15,7 @@ import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 
 import { loadCaptured } from "./captured-envelopes.mjs";
 import { tokenCss } from "./design-tokens.mjs";
+import { renderTrustSurface } from "./trust-surface.mjs";
 import { decodeEnvelope, validateEnvelope } from "./envelope.mjs";
 import {
   renderLoading,
@@ -94,6 +95,11 @@ for (const [name, file, render] of [
   }
   pages.push([name, render({ envelope: decoded })]);
 }
+
+// The trust surface: the four components every screen composes, rendered together so the
+// browser evidence run exercises their contrast, focus order and reflow at 320 CSS pixels
+// before there are twelve screens carrying copies of the same defect.
+pages.push(["trust-surface.html", renderTrustSurface()]);
 
 for (const [name, html] of pages) {
   await writeFile(new URL(name, destination), html, "utf8");
