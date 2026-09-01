@@ -100,7 +100,7 @@ public abstract class HttpResponseObservation : HttpObservation
         HttpResponseMetadata responseMetadata)
         : base(schema, observationId, request)
     {
-        EffectiveUri = SourceCoreValidation.RequirePublisherUri(effectiveUri, nameof(effectiveUri));
+        EffectiveUri = HttpRequestEvidence.RequireCanonicalRequestUri(effectiveUri, nameof(effectiveUri));
         var parsed = new Uri(EffectiveUri, UriKind.Absolute);
         _ = new HttpOrigin(parsed.Scheme, parsed.Host, parsed.Port);
         ResponseMetadata = responseMetadata
@@ -314,7 +314,7 @@ public sealed class Revalidation304Observation : HttpResponseObservation
             throw new ArgumentException("A revalidation observation must be exact HTTP 304.", nameof(statusCode));
         }
 
-        if (!string.Equals(request.Method.MemberKey, "GET", StringComparison.Ordinal))
+        if (request.Method != HttpRequestMethod.Get)
         {
             throw new ArgumentException("A 304 predecessor reference is admitted only for GET.", nameof(request));
         }

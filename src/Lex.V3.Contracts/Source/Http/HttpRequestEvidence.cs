@@ -1,8 +1,30 @@
+using System.Globalization;
 using System.Net;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Source.Core;
 
 namespace Lex.V3.Contracts.Source.Http;
+
+public enum HttpRequestMethod
+{
+    [JsonStringEnumMemberName("GET")]
+    Get = 1,
+
+    [JsonStringEnumMemberName("POST")]
+    Post = 2,
+}
+
+public enum HttpObservationTimestampPrecision
+{
+    [JsonStringEnumMemberName("millisecond")]
+    Millisecond = 1,
+}
+
+public enum HttpObservationClockSource
+{
+    [JsonStringEnumMemberName("system_utc")]
+    SystemUtc = 1,
+}
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record HttpOrigin
@@ -55,7 +77,6 @@ public sealed record OutboundCrawlerIdentityEvidence
     [JsonConstructor]
     public OutboundCrawlerIdentityEvidence(
         string schema,
-        SourceArtifactRef identityRef,
         string token)
     {
         if (!string.Equals(schema, OutboundCrawlerIdentity.Schema, StringComparison.Ordinal))
@@ -73,13 +94,10 @@ public sealed record OutboundCrawlerIdentityEvidence
         }
 
         Schema = schema;
-        IdentityRef = identityRef ?? throw new ArgumentNullException(nameof(identityRef));
         Token = token;
     }
 
     public string Schema { get; }
-
-    public SourceArtifactRef IdentityRef { get; }
 
     public string Token { get; }
 }
@@ -90,10 +108,10 @@ public sealed record HttpRequestEvidence
     [JsonConstructor]
     public HttpRequestEvidence(
         string requestedUri,
-        SourceRegistryMemberRef method,
-        DateTimeOffset observedAtUtc,
-        SourceRegistryMemberRef timestampPrecision,
-        SourceRegistryMemberRef clockSource,
+        HttpRequestMethod method,
+        string observedAtUtc,
+        HttpObservationTimestampPrecision timestampPrecision,
+        HttpObservationClockSource clockSource,
         SourceArtifactRef runIdentity,
         SourceArtifactRef adapterIdentity,
         SourceArtifactRef requestPolicyIdentity,
@@ -101,17 +119,30 @@ public sealed record HttpRequestEvidence
         HttpOrigin origin,
         SourceArtifactRef queryPlanIdentity)
     {
-        RequestedUri = SourceCoreValidation.RequirePublisherUri(requestedUri, nameof(requestedUri));
-        Method = method ?? throw new ArgumentNullException(nameof(method));
-        if (observedAtUtc.Offset != TimeSpan.Zero)
+        RequestedUri = RequireCanonicalRequestUri(requestedUri, nameof(requestedUri));
+        Method = SourceCoreValidation.RequireDefined(method, nameof(method));
+        ArgumentException.ThrowIfNullOrWhiteSpace(observedAtUtc);
+        if (!DateTimeOffset.TryParseExact(
+                observedAtUtc,
+                "yyyy-MM-dd'T'HH:mm:ss.fff'Z'",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var parsedTimestamp) ||
+            !string.Equals(
+                observedAtUtc,
+                parsedTimestamp.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture),
+                StringComparison.Ordinal))
         {
-            throw new ArgumentException("An HTTP observation timestamp must be UTC.", nameof(observedAtUtc));
+            throw new ArgumentException(
+                "An HTTP observation timestamp must use the exact millisecond UTC Z form.",
+                nameof(observedAtUtc));
         }
 
         ObservedAtUtc = observedAtUtc;
-        TimestampPrecision = timestampPrecision
-            ?? throw new ArgumentNullException(nameof(timestampPrecision));
-        ClockSource = clockSource ?? throw new ArgumentNullException(nameof(clockSource));
+        TimestampPrecision = SourceCoreValidation.RequireDefined(
+            timestampPrecision,
+            nameof(timestampPrecision));
+        ClockSource = SourceCoreValidation.RequireDefined(clockSource, nameof(clockSource));
         RunIdentity = runIdentity ?? throw new ArgumentNullException(nameof(runIdentity));
         AdapterIdentity = adapterIdentity ?? throw new ArgumentNullException(nameof(adapterIdentity));
         RequestPolicyIdentity = requestPolicyIdentity
@@ -135,13 +166,13 @@ public sealed record HttpRequestEvidence
 
     public string RequestedUri { get; }
 
-    public SourceRegistryMemberRef Method { get; }
+    public HttpRequestMethod Method { get; }
 
-    public DateTimeOffset ObservedAtUtc { get; }
+    public string ObservedAtUtc { get; }
 
-    public SourceRegistryMemberRef TimestampPrecision { get; }
+    public HttpObservationTimestampPrecision TimestampPrecision { get; }
 
-    public SourceRegistryMemberRef ClockSource { get; }
+    public HttpObservationClockSource ClockSource { get; }
 
     public SourceArtifactRef RunIdentity { get; }
 
@@ -154,4 +185,27 @@ public sealed record HttpRequestEvidence
     public HttpOrigin Origin { get; }
 
     public SourceArtifactRef QueryPlanIdentity { get; }
+
+    internal static string RequireCanonicalRequestUri(string value, string parameterName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
+        if (value.Length > 4096 ||
+            value.Any(static character => character is < '!' or > '~') ||
+            !(value.StartsWith("http://", StringComparison.Ordinal) ||
+              value.StartsWith("https://", StringComparison.Ordinal)) ||
+            !Uri.TryCreate(value, UriKind.Absolute, out var parsed) ||
+            string.IsNullOrEmpty(parsed.Host) ||
+            !string.IsNullOrEmpty(parsed.UserInfo) ||
+            !string.IsNullOrEmpty(parsed.Fragment) ||
+            parsed.Query is not ("" or "?locale=en") ||
+            !string.Equals(value, parsed.AbsoluteUri, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "A request URI must be the exact canonical HTTP target and carry no unrestricted query.",
+                parameterName);
+        }
+
+        _ = new HttpOrigin(parsed.Scheme, parsed.Host, parsed.Port);
+        return value;
+    }
 }

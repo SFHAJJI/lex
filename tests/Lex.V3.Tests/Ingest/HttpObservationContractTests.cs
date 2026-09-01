@@ -272,6 +272,11 @@ public sealed class HttpObservationContractTests
         Assert.AreEqual(request, roundTrip);
         Assert.AreEqual(OutboundCrawlerIdentity.Schema, request.OutboundCrawlerIdentity.Schema);
         Assert.AreEqual(OutboundCrawlerIdentity.Token, request.OutboundCrawlerIdentity.Token);
+        using var crawlerDocument = JsonDocument.Parse(
+            ContractJson.Serialize(request.OutboundCrawlerIdentity));
+        CollectionAssert.AreEquivalent(
+            new[] { "schema", "token" },
+            crawlerDocument.RootElement.EnumerateObject().Select(static property => property.Name).ToArray());
     }
 
     [TestMethod]
@@ -279,20 +284,75 @@ public sealed class HttpObservationContractTests
     {
         var valid = RequestEvidence();
         Assert.IsNotNull(valid);
+        Assert.AreEqual(HttpRequestMethod.Get, valid.Method);
+        Assert.AreEqual(HttpObservationTimestampPrecision.Millisecond, valid.TimestampPrecision);
+        Assert.AreEqual(HttpObservationClockSource.SystemUtc, valid.ClockSource);
+        Assert.AreEqual("2026-09-01T00:00:00.000Z", valid.ObservedAtUtc);
+
+        var legalNotice = RequestEvidence(
+            requestedUri: "https://eur-lex.europa.eu/content/legal-notice/legal-notice.html?locale=en",
+            origin: new HttpOrigin("https", "eur-lex.europa.eu", 443));
+        Assert.AreEqual(
+            "https://eur-lex.europa.eu/content/legal-notice/legal-notice.html?locale=en",
+            legalNotice.RequestedUri);
+
         Assert.ThrowsExactly<ArgumentException>(() => RequestEvidence(
-            observedAtUtc: new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.FromHours(1))));
+            observedAtUtc: "2026-09-01T00:00:00.000-00:00"));
+        Assert.ThrowsExactly<ArgumentException>(() => RequestEvidence(
+            observedAtUtc: "2026-09-01T00:00:00Z"));
         Assert.ThrowsExactly<ArgumentException>(() => RequestEvidence(
             origin: new HttpOrigin("https", "op.europa.eu", 443)));
         Assert.ThrowsExactly<ArgumentException>(() => RequestEvidence(
-            requestedUri: "https://publications.europa.eu:443/sparql?query=secret"));
+            requestedUri: "https://publications.europa.eu/sparql?query=secret"));
         Assert.ThrowsExactly<ArgumentException>(() => new OutboundCrawlerIdentityEvidence(
             "outbound_crawler_identity/2",
-            Artifact("urn:uuid:77777777-7777-4777-8777-777777777777", '7'),
             OutboundCrawlerIdentity.Token));
         Assert.ThrowsExactly<ArgumentException>(() => new OutboundCrawlerIdentityEvidence(
             OutboundCrawlerIdentity.Schema,
-            Artifact("urn:uuid:77777777-7777-4777-8777-777777777777", '7'),
             "caller override"));
+
+        foreach (var alias in new[]
+        {
+            "https://publications.europa.eu:443/resource/cellar",
+            "https://publications.europa.eu:0443/resource/cellar",
+            "https://PUBLICATIONS.EUROPA.EU/resource/cellar",
+            "https://publications.europa.eu/a/../resource/cellar",
+            "https://publications.europa.eu/a/%2e%2e/resource/cellar",
+            "https://publications.europa.eu\\resource\\cellar",
+        })
+        {
+            Assert.ThrowsExactly<ArgumentException>(() => RequestEvidence(requestedUri: alias), alias);
+        }
+
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => RequestEvidence(
+            method: (HttpRequestMethod)0));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => RequestEvidence(
+            timestampPrecision: (HttpObservationTimestampPrecision)0));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => RequestEvidence(
+            clockSource: (HttpObservationClockSource)0));
+
+        var hostile = JsonNode.Parse(ContractJson.Serialize(valid))!.AsObject();
+        foreach (var (propertyName, value) in new[]
+        {
+            ("method", "can_i_be_fired_while_sick"),
+            ("timestamp_precision", "arbitrary_precision"),
+            ("clock_source", "caller_clock"),
+        })
+        {
+            var mutated = JsonNode.Parse(hostile.ToJsonString())!.AsObject();
+            mutated[propertyName] = value;
+            Assert.ThrowsExactly<JsonException>(
+                () => ContractJson.Deserialize<HttpRequestEvidence>(mutated.ToJsonString()),
+                propertyName);
+        }
+
+        var crawlerWithForgedIdentity = JsonNode.Parse(
+            ContractJson.Serialize(valid.OutboundCrawlerIdentity))!.AsObject();
+        crawlerWithForgedIdentity["identity_ref"] = JsonNode.Parse(
+            ContractJson.Serialize(Artifact("urn:uuid:77777777-7777-4777-8777-777777777777", '7')));
+        Assert.ThrowsExactly<JsonException>(() =>
+            ContractJson.Deserialize<OutboundCrawlerIdentityEvidence>(
+                crawlerWithForgedIdentity.ToJsonString()));
     }
 
     [TestMethod]
@@ -312,6 +372,34 @@ public sealed class HttpObservationContractTests
         extra["headers"] = new JsonObject();
         Assert.ThrowsExactly<JsonException>(
             () => ContractJson.Deserialize<HttpRequestEvidence>(extra.ToJsonString()));
+    }
+
+    [TestMethod]
+    public void RequestSemanticVocabulariesAreClosedAndStringEncoded()
+    {
+        CollectionAssert.AreEqual(
+            new[] { 1, 2 },
+            Enum.GetValues<HttpRequestMethod>().Select(static value => (int)value).ToArray());
+        Assert.AreEqual("\"GET\"", ContractJson.Serialize(HttpRequestMethod.Get));
+        Assert.AreEqual("\"POST\"", ContractJson.Serialize(HttpRequestMethod.Post));
+        Assert.ThrowsExactly<JsonException>(() => ContractJson.Deserialize<HttpRequestMethod>("0"));
+        Assert.ThrowsExactly<JsonException>(() => ContractJson.Deserialize<HttpRequestMethod>("\"HEAD\""));
+
+        CollectionAssert.AreEqual(
+            new[] { 1 },
+            Enum.GetValues<HttpObservationTimestampPrecision>()
+                .Select(static value => (int)value)
+                .ToArray());
+        Assert.AreEqual(
+            "\"millisecond\"",
+            ContractJson.Serialize(HttpObservationTimestampPrecision.Millisecond));
+
+        CollectionAssert.AreEqual(
+            new[] { 1 },
+            Enum.GetValues<HttpObservationClockSource>().Select(static value => (int)value).ToArray());
+        Assert.AreEqual(
+            "\"system_utc\"",
+            ContractJson.Serialize(HttpObservationClockSource.SystemUtc));
     }
 
     [TestMethod]
@@ -341,21 +429,23 @@ public sealed class HttpObservationContractTests
     }
 
     private static HttpRequestEvidence RequestEvidence(
-        string requestedUri = "https://publications.europa.eu:443/resource/cellar",
-        DateTimeOffset? observedAtUtc = null,
-        HttpOrigin? origin = null) =>
+        string requestedUri = "https://publications.europa.eu/resource/cellar",
+        string observedAtUtc = "2026-09-01T00:00:00.000Z",
+        HttpOrigin? origin = null,
+        HttpRequestMethod method = HttpRequestMethod.Get,
+        HttpObservationTimestampPrecision timestampPrecision = HttpObservationTimestampPrecision.Millisecond,
+        HttpObservationClockSource clockSource = HttpObservationClockSource.SystemUtc) =>
         new(
             requestedUri: requestedUri,
-            method: RegistryMember("GET"),
-            observedAtUtc: observedAtUtc ?? new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero),
-            timestampPrecision: RegistryMember("millisecond"),
-            clockSource: RegistryMember("system_utc"),
+            method: method,
+            observedAtUtc: observedAtUtc,
+            timestampPrecision: timestampPrecision,
+            clockSource: clockSource,
             runIdentity: Artifact("urn:uuid:11111111-1111-4111-8111-111111111111", '1'),
             adapterIdentity: Artifact("urn:uuid:22222222-2222-4222-8222-222222222222", '2'),
             requestPolicyIdentity: Artifact("urn:uuid:33333333-3333-4333-8333-333333333333", '3'),
             outboundCrawlerIdentity: new OutboundCrawlerIdentityEvidence(
                 OutboundCrawlerIdentity.Schema,
-                Artifact("urn:uuid:44444444-4444-4444-8444-444444444444", '4'),
                 OutboundCrawlerIdentity.Token),
             origin: origin ?? new HttpOrigin("https", "publications.europa.eu", 443),
             queryPlanIdentity: Artifact("urn:uuid:55555555-5555-4555-8555-555555555555", '5'));

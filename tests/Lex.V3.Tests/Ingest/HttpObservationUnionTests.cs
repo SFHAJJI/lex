@@ -170,6 +170,8 @@ public sealed class HttpObservationUnionTests
         Assert.ThrowsExactly<ArgumentException>(() => Complete(
             statusDisposition: HttpStatusDisposition.DerivableStatus,
             metadata: Metadata(contentLength: 1, contentRange: "bytes 0-0/1")));
+        Assert.ThrowsExactly<ArgumentException>(() => Complete(
+            effectiveUri: "https://PUBLICATIONS.EUROPA.EU/resource/cellar"));
     }
 
     [TestMethod]
@@ -188,7 +190,7 @@ public sealed class HttpObservationUnionTests
 
         Assert.ThrowsExactly<ArgumentException>(() => Revalidation(statusCode: 200));
         Assert.ThrowsExactly<ArgumentException>(() => Revalidation(
-            request: Request(method: RegistryMember("POST"))));
+            request: Request(method: HttpRequestMethod.Post)));
         Assert.ThrowsExactly<ArgumentException>(() => Revalidation(
             predecessorValidator: Validator("If-None-Match", "ETag", "different")));
         Assert.ThrowsExactly<ArgumentException>(() => Revalidation(
@@ -274,12 +276,13 @@ public sealed class HttpObservationUnionTests
         DurableBlobRef? blob = null,
         int statusCode = 200,
         HttpStatusDisposition statusDisposition = HttpStatusDisposition.DerivableStatus,
-        HttpResponseMetadata? metadata = null) =>
+        HttpResponseMetadata? metadata = null,
+        string effectiveUri = "https://publications.europa.eu/resource/cellar") =>
         new(
             HttpObservationSchemaIds.HttpObservation,
             "urn:uuid:11111111-1111-4111-8111-111111111111",
             Request(),
-            "https://publications.europa.eu:443/resource/cellar",
+            effectiveUri,
             statusCode,
             statusDisposition,
             metadata ?? Metadata(contentLength: 1),
@@ -298,7 +301,7 @@ public sealed class HttpObservationUnionTests
             HttpObservationSchemaIds.HttpObservation,
             "urn:uuid:22222222-2222-4222-8222-222222222222",
             Request(),
-            "https://publications.europa.eu:443/resource/cellar",
+            "https://publications.europa.eu/resource/cellar",
             200,
             HttpStatusDisposition.DerivableStatus,
             metadata ?? Metadata(),
@@ -319,7 +322,7 @@ public sealed class HttpObservationUnionTests
             HttpObservationSchemaIds.HttpObservation,
             "urn:uuid:33333333-3333-4333-8333-333333333333",
             request ?? Request(),
-            "https://publications.europa.eu:443/resource/cellar",
+            "https://publications.europa.eu/resource/cellar",
             statusCode,
             HttpStatusDisposition.RevalidationReferenceOnly,
             metadata ?? Metadata(),
@@ -339,7 +342,7 @@ public sealed class HttpObservationUnionTests
             HttpObservationSchemaIds.HttpObservation,
             "urn:uuid:44444444-4444-4444-8444-444444444444",
             Request(),
-            "https://publications.europa.eu:443/resource/cellar",
+            "https://publications.europa.eu/resource/cellar",
             statusCode,
             statusDisposition,
             metadata ?? Metadata(contentLength: 0),
@@ -369,19 +372,18 @@ public sealed class HttpObservationUnionTests
         string value) =>
         new(RegistryMember("etag"), requestHeaderName, responseHeaderName, value);
 
-    private static HttpRequestEvidence Request(SourceRegistryMemberRef? method = null) =>
+    private static HttpRequestEvidence Request(HttpRequestMethod method = HttpRequestMethod.Get) =>
         new(
-            "https://publications.europa.eu:443/resource/cellar",
-            method ?? RegistryMember("GET"),
-            new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero),
-            RegistryMember("millisecond"),
-            RegistryMember("system_utc"),
+            "https://publications.europa.eu/resource/cellar",
+            method,
+            "2026-09-01T00:00:00.000Z",
+            HttpObservationTimestampPrecision.Millisecond,
+            HttpObservationClockSource.SystemUtc,
             Artifact("urn:uuid:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", 'b'),
             Artifact("urn:uuid:cccccccc-cccc-4ccc-8ccc-cccccccccccc", 'c'),
             Artifact("urn:uuid:dddddddd-dddd-4ddd-8ddd-dddddddddddd", 'd'),
             new OutboundCrawlerIdentityEvidence(
                 OutboundCrawlerIdentity.Schema,
-                Artifact("urn:uuid:eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", 'e'),
                 OutboundCrawlerIdentity.Token),
             new HttpOrigin("https", "publications.europa.eu", 443),
             Artifact("urn:uuid:ffffffff-ffff-4fff-8fff-ffffffffffff", 'f'));
