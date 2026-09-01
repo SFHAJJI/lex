@@ -115,6 +115,7 @@ public sealed record HttpRequestEvidence
         SourceArtifactRef runIdentity,
         SourceArtifactRef adapterIdentity,
         SourceArtifactRef requestPolicyIdentity,
+        SourceArtifactRef representationRequestKeyIdentity,
         OutboundCrawlerIdentityEvidence outboundCrawlerIdentity,
         HttpOrigin origin,
         SourceArtifactRef queryPlanIdentity)
@@ -147,6 +148,8 @@ public sealed record HttpRequestEvidence
         AdapterIdentity = adapterIdentity ?? throw new ArgumentNullException(nameof(adapterIdentity));
         RequestPolicyIdentity = requestPolicyIdentity
             ?? throw new ArgumentNullException(nameof(requestPolicyIdentity));
+        RepresentationRequestKeyIdentity = representationRequestKeyIdentity
+            ?? throw new ArgumentNullException(nameof(representationRequestKeyIdentity));
         OutboundCrawlerIdentity = outboundCrawlerIdentity
             ?? throw new ArgumentNullException(nameof(outboundCrawlerIdentity));
         Origin = origin ?? throw new ArgumentNullException(nameof(origin));
@@ -180,6 +183,8 @@ public sealed record HttpRequestEvidence
 
     public SourceArtifactRef RequestPolicyIdentity { get; }
 
+    public SourceArtifactRef RepresentationRequestKeyIdentity { get; }
+
     public OutboundCrawlerIdentityEvidence OutboundCrawlerIdentity { get; }
 
     public HttpOrigin Origin { get; }
@@ -193,6 +198,8 @@ public sealed record HttpRequestEvidence
             value.Any(static character => character is < '!' or > '~') ||
             !(value.StartsWith("http://", StringComparison.Ordinal) ||
               value.StartsWith("https://", StringComparison.Ordinal)) ||
+            HasAuthorityUserInfoMarker(value) ||
+            HasUnsafePathAlias(value) ||
             !Uri.TryCreate(value, UriKind.Absolute, out var parsed) ||
             string.IsNullOrEmpty(parsed.Host) ||
             !string.IsNullOrEmpty(parsed.UserInfo) ||
@@ -207,5 +214,66 @@ public sealed record HttpRequestEvidence
 
         _ = new HttpOrigin(parsed.Scheme, parsed.Host, parsed.Port);
         return value;
+    }
+
+    private static bool HasAuthorityUserInfoMarker(string value)
+    {
+        var authorityStart = value.IndexOf("://", StringComparison.Ordinal) + 3;
+        var authorityEnd = value.IndexOfAny(['/', '?', '#'], authorityStart);
+        if (authorityEnd < 0)
+        {
+            authorityEnd = value.Length;
+        }
+
+        return value.AsSpan(authorityStart, authorityEnd - authorityStart).Contains('@');
+    }
+
+    private static bool HasUnsafePathAlias(string value)
+    {
+        var authorityStart = value.IndexOf("://", StringComparison.Ordinal) + 3;
+        var pathStart = value.IndexOf('/', authorityStart);
+        if (pathStart < 0)
+        {
+            return false;
+        }
+
+        var queryStart = value.IndexOfAny(['?', '#'], pathStart);
+        var path = queryStart < 0
+            ? value[pathStart..]
+            : value[pathStart..queryStart];
+        return path.Contains('\\') || HasEncodedPathAlias(path);
+    }
+
+    private static bool HasEncodedPathAlias(string path)
+    {
+        for (var index = 0; index < path.Length; index++)
+        {
+            if (path[index] != '%')
+            {
+                continue;
+            }
+
+            var tokenStart = index + 1;
+            while (tokenStart + 1 < path.Length &&
+                   path[tokenStart] == '2' &&
+                   path[tokenStart + 1] == '5')
+            {
+                tokenStart += 2;
+            }
+
+            if (tokenStart + 1 >= path.Length)
+            {
+                continue;
+            }
+
+            var first = char.ToLowerInvariant(path[tokenStart]);
+            var second = char.ToLowerInvariant(path[tokenStart + 1]);
+            if ((first, second) is ('2', 'e') or ('2', 'f') or ('5', 'c'))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

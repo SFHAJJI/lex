@@ -1,4 +1,7 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json.Serialization;
+using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 
@@ -139,10 +142,8 @@ public sealed class ResponseCompleteBodyObservation : HttpResponseObservation
         int statusCode,
         HttpStatusDisposition statusDisposition,
         HttpResponseMetadata responseMetadata,
-        bool transferComplete,
-        long receivedEncodedEntityByteCount,
-        string transportByteSha256,
-        DurableBlobRef durableBlobRef)
+        TransferCompletionEvidence transferCompletionEvidence,
+        DurableBlobWriteReceipt durableWriteReceipt)
         : base(
             schema,
             observationId,
@@ -152,26 +153,35 @@ public sealed class ResponseCompleteBodyObservation : HttpResponseObservation
             statusDisposition,
             responseMetadata)
     {
-        if (!transferComplete)
-        {
-            throw new ArgumentException("A complete-body observation must declare transfer_complete true.", nameof(transferComplete));
-        }
-
-        if (receivedEncodedEntityByteCount <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(receivedEncodedEntityByteCount));
-        }
-
-        ArgumentNullException.ThrowIfNull(durableBlobRef);
-        var digest = SourceCoreValidation.RequireSha256(transportByteSha256, nameof(transportByteSha256));
-        RequireTransportBlob(durableBlobRef, receivedEncodedEntityByteCount, digest, nameof(durableBlobRef));
-        if (responseMetadata.ContentLength is not AbsentHttpHeader &&
-            (!responseMetadata.TryGetSingleContentLength(out var declaredLength) ||
-             declaredLength != receivedEncodedEntityByteCount))
+        TransferCompletionEvidence = transferCompletionEvidence
+            ?? throw new ArgumentNullException(nameof(transferCompletionEvidence));
+        DurableWriteReceipt = durableWriteReceipt
+            ?? throw new ArgumentNullException(nameof(durableWriteReceipt));
+        var durableBlobRef = DurableWriteReceipt.Reference;
+        RequireTransportBlob(
+            durableBlobRef,
+            TransferCompletionEvidence.TransportByteLength,
+            TransferCompletionEvidence.TransportByteSha256,
+            nameof(durableWriteReceipt));
+        if (TransferCompletionEvidence.AdapterExecutionIdentity != request.AdapterIdentity ||
+            !string.Equals(
+                TransferCompletionEvidence.ResponseObservationId,
+                observationId,
+                StringComparison.Ordinal))
         {
             throw new ArgumentException(
-                "A declared Content-Length mismatch is partial transport evidence, not a complete body.",
-                nameof(responseMetadata));
+                "Transfer completion must bind this exact adapter execution and response.",
+                nameof(transferCompletionEvidence));
+        }
+
+        if (TransferCompletionEvidence is DeclaredContentLengthCompleteEvidence &&
+            (statusCode == 206 ||
+             !responseMetadata.TryGetSingleContentLength(out var declaredLength) ||
+             declaredLength != TransferCompletionEvidence.TransportByteLength))
+        {
+            throw new ArgumentException(
+                "Declared-length completion requires one matching Content-Length on a non-206 response.",
+                nameof(transferCompletionEvidence));
         }
 
         if (statusCode is 204 or 205 or 304)
@@ -181,19 +191,20 @@ public sealed class ResponseCompleteBodyObservation : HttpResponseObservation
                 nameof(statusCode));
         }
 
-        TransferComplete = transferComplete;
-        ReceivedEncodedEntityByteCount = receivedEncodedEntityByteCount;
-        TransportByteSha256 = digest;
-        DurableBlobRef = durableBlobRef;
     }
 
-    public bool TransferComplete { get; }
+    public TransferCompletionEvidence TransferCompletionEvidence { get; }
 
-    public long ReceivedEncodedEntityByteCount { get; }
+    public DurableBlobWriteReceipt DurableWriteReceipt { get; }
 
-    public string TransportByteSha256 { get; }
+    [JsonIgnore]
+    public long ReceivedEncodedEntityByteCount => DurableWriteReceipt.Reference.ByteLength;
 
-    public DurableBlobRef DurableBlobRef { get; }
+    [JsonIgnore]
+    public string TransportByteSha256 => DurableWriteReceipt.Reference.ContentSha256;
+
+    [JsonIgnore]
+    public DurableBlobRef DurableBlobRef => DurableWriteReceipt.Reference;
 
     internal static void RequireTransportBlob(
         DurableBlobRef blob,
@@ -226,8 +237,7 @@ public sealed class ResponsePartialBodyObservation : HttpResponseObservation
         HttpResponseMetadata responseMetadata,
         long receivedEncodedEntityByteCount,
         SourceRegistryMemberRef terminalFailureReason,
-        string? transportByteSha256,
-        DurableBlobRef? durableBlobRef)
+        DurableBlobWriteReceipt? durableWriteReceipt)
         : base(
             schema,
             observationId,
@@ -246,42 +256,44 @@ public sealed class ResponsePartialBodyObservation : HttpResponseObservation
             ?? throw new ArgumentNullException(nameof(terminalFailureReason));
         if (receivedEncodedEntityByteCount == 0)
         {
-            if (transportByteSha256 is not null || durableBlobRef is not null)
+            if (durableWriteReceipt is not null)
             {
                 throw new ArgumentException(
-                    "A zero-octet partial transfer carries neither digest nor blob.",
-                    nameof(transportByteSha256));
+                    "A zero-octet partial transfer carries no durable write receipt.",
+                    nameof(durableWriteReceipt));
             }
         }
         else
         {
-            if (transportByteSha256 is null || durableBlobRef is null)
+            if (durableWriteReceipt is null)
             {
                 throw new ArgumentException(
-                    "A positive partial transfer must retain its exact digest and durable blob.",
-                    nameof(transportByteSha256));
+                    "A positive partial transfer must retain its durable write receipt.",
+                    nameof(durableWriteReceipt));
             }
 
-            var digest = SourceCoreValidation.RequireSha256(transportByteSha256, nameof(transportByteSha256));
             ResponseCompleteBodyObservation.RequireTransportBlob(
-                durableBlobRef,
+                durableWriteReceipt.Reference,
                 receivedEncodedEntityByteCount,
-                digest,
-                nameof(durableBlobRef));
+                durableWriteReceipt.Reference.ContentSha256,
+                nameof(durableWriteReceipt));
         }
 
         ReceivedEncodedEntityByteCount = receivedEncodedEntityByteCount;
-        TransportByteSha256 = transportByteSha256;
-        DurableBlobRef = durableBlobRef;
+        DurableWriteReceipt = durableWriteReceipt;
     }
 
     public long ReceivedEncodedEntityByteCount { get; }
 
     public SourceRegistryMemberRef TerminalFailureReason { get; }
 
-    public string? TransportByteSha256 { get; }
+    public DurableBlobWriteReceipt? DurableWriteReceipt { get; }
 
-    public DurableBlobRef? DurableBlobRef { get; }
+    [JsonIgnore]
+    public string? TransportByteSha256 => DurableWriteReceipt?.Reference.ContentSha256;
+
+    [JsonIgnore]
+    public DurableBlobRef? DurableBlobRef => DurableWriteReceipt?.Reference;
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -339,6 +351,13 @@ public sealed class Revalidation304Observation : HttpResponseObservation
             ?? throw new ArgumentNullException(nameof(predecessorObservationRef));
         RepresentationRequestKeyRef = representationRequestKeyRef
             ?? throw new ArgumentNullException(nameof(representationRequestKeyRef));
+        if (RepresentationRequestKeyRef != request.RepresentationRequestKeyIdentity)
+        {
+            throw new ArgumentException(
+                "The 304 representation key must equal the current request key.",
+                nameof(representationRequestKeyRef));
+        }
+
         PredecessorBlobRef = predecessorBlobRef
             ?? throw new ArgumentNullException(nameof(predecessorBlobRef));
         if (PredecessorBlobRef.ByteLength <= 0 ||
@@ -359,6 +378,71 @@ public sealed class Revalidation304Observation : HttpResponseObservation
     public SourceArtifactRef RepresentationRequestKeyRef { get; }
 
     public DurableBlobRef PredecessorBlobRef { get; }
+
+    public AdmittedRevalidation304Observation AdmitAgainst(
+        ResponseCompleteBodyObservation predecessor)
+    {
+        ArgumentNullException.ThrowIfNull(predecessor);
+        if (predecessor.Request.Method != HttpRequestMethod.Get ||
+            predecessor.Request.RepresentationRequestKeyIdentity != RepresentationRequestKeyRef ||
+            !string.Equals(predecessor.EffectiveUri, EffectiveUri, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "The predecessor must be the same GET representation and effective resource.",
+                nameof(predecessor));
+        }
+
+        var predecessorHeader = PredecessorValidator.ValidatorKind.MemberKey switch
+        {
+            "etag" => predecessor.ResponseMetadata.Etag,
+            "last_modified" => predecessor.ResponseMetadata.LastModified,
+            _ => throw new ArgumentException(
+                "The predecessor validator kind is not admitted.",
+                nameof(predecessor)),
+        };
+        if (predecessorHeader is not SingleHttpHeader singleHeader ||
+            !string.Equals(singleHeader.Value, PredecessorValidator.Value, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "The predecessor response must retain the exact single validator that was sent.",
+                nameof(predecessor));
+        }
+
+        var serialized = ContractJson.Serialize<HttpObservation>(predecessor);
+        var expectedDigest = Convert.ToHexStringLower(
+            SHA256.HashData(Encoding.UTF8.GetBytes(serialized)));
+        if (!string.Equals(
+                PredecessorObservationRef.ResourceId,
+                predecessor.ObservationId,
+                StringComparison.Ordinal) ||
+            !string.Equals(
+                PredecessorObservationRef.Sha256,
+                expectedDigest,
+                StringComparison.Ordinal) ||
+            PredecessorBlobRef != predecessor.DurableBlobRef)
+        {
+            throw new ArgumentException(
+                "The predecessor reference and blob must name the exact checked complete observation.",
+                nameof(predecessor));
+        }
+
+        return new AdmittedRevalidation304Observation(this);
+    }
+}
+
+/// <summary>
+/// A 304 observation that has been checked against the exact complete predecessor it references.
+/// Raw deserialization yields only <see cref="Revalidation304Observation"/> and cannot construct
+/// this admission token.
+/// </summary>
+public sealed class AdmittedRevalidation304Observation
+{
+    internal AdmittedRevalidation304Observation(Revalidation304Observation observation)
+    {
+        Observation = observation;
+    }
+
+    public Revalidation304Observation Observation { get; }
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]

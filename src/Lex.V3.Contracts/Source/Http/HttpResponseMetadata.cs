@@ -13,8 +13,6 @@ public abstract class HttpHeaderField
     private protected HttpHeaderField()
     {
     }
-
-    internal abstract IReadOnlyList<string> RetainedValues { get; }
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -24,7 +22,6 @@ public sealed class AbsentHttpHeader : HttpHeaderField
     {
     }
 
-    internal override IReadOnlyList<string> RetainedValues => [];
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -38,7 +35,6 @@ public sealed class SingleHttpHeader : HttpHeaderField
 
     public string Value { get; }
 
-    internal override IReadOnlyList<string> RetainedValues => [Value];
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -62,7 +58,6 @@ public sealed class MultipleHttpHeader : HttpHeaderField
 
     public IReadOnlyList<string> Values { get; }
 
-    internal override IReadOnlyList<string> RetainedValues => Values;
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -105,15 +100,6 @@ public sealed record HttpResponseMetadata
     public HttpHeaderField LastModified { get; }
 
     internal bool HasContentRange => ContentRange is not AbsentHttpHeader;
-
-    internal bool HasMultipleField =>
-        ContentType is MultipleHttpHeader ||
-        DeclaredCharset is MultipleHttpHeader ||
-        ContentLength is MultipleHttpHeader ||
-        ContentEncoding is MultipleHttpHeader ||
-        ContentRange is MultipleHttpHeader ||
-        Etag is MultipleHttpHeader ||
-        LastModified is MultipleHttpHeader;
 
     internal bool TryGetSingleContentLength(out long length)
     {

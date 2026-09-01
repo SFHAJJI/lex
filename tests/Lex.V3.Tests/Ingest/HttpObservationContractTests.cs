@@ -282,6 +282,7 @@ public sealed class HttpObservationContractTests
                 "run_identity",
                 "adapter_identity",
                 "request_policy_identity",
+                "representation_request_key_identity",
                 "outbound_crawler_identity",
                 "origin",
                 "query_plan_identity",
@@ -350,6 +351,10 @@ public sealed class HttpObservationContractTests
             "https://publications.europa.eu/a/../resource/cellar",
             "https://publications.europa.eu/a/%2e%2e/resource/cellar",
             "https://publications.europa.eu\\resource\\cellar",
+            "https://@publications.europa.eu/resource/cellar",
+            "https://publications.europa.eu/a/%2f..%2f/b",
+            "https://publications.europa.eu/a/%5c..%5c/b",
+            "https://publications.europa.eu/a/%252e%252e/b",
         })
         {
             Assert.ThrowsExactly<ArgumentException>(() => RequestEvidence(requestedUri: alias), alias);
@@ -475,6 +480,8 @@ public sealed class HttpObservationContractTests
             runIdentity: Artifact("urn:uuid:11111111-1111-4111-8111-111111111111", '1'),
             adapterIdentity: Artifact("urn:uuid:22222222-2222-4222-8222-222222222222", '2'),
             requestPolicyIdentity: Artifact("urn:uuid:33333333-3333-4333-8333-333333333333", '3'),
+            representationRequestKeyIdentity: Artifact(
+                "urn:uuid:44444444-4444-4444-8444-444444444444", '4'),
             outboundCrawlerIdentity: new OutboundCrawlerIdentityEvidence(
                 OutboundCrawlerIdentity.Schema,
                 OutboundCrawlerIdentity.Token),

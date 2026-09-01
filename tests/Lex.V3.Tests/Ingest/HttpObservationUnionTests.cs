@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Security.Cryptography;
+using System.Text;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
@@ -49,6 +51,17 @@ public sealed class HttpObservationUnionTests
     }
 
     [TestMethod]
+    public void ConcreteHttpLeafSerializationCannotBypassTheDiscriminator()
+    {
+        AssertConcretePath(Complete(), "response_complete_body");
+        AssertConcretePath(Partial(), "response_partial_body");
+        AssertConcretePath(Revalidation(), "revalidation_304");
+        AssertConcretePath(WithoutBody(), "response_without_body");
+        AssertConcretePath(Failure(), "transport_failure_before_body");
+        AssertConcretePath(Rejection(), "policy_rejection");
+    }
+
+    [TestMethod]
     public void NoBodyReasonsAreExactlyTheTwoR2Members()
     {
         (HttpNoBodyReason Value, int Number, string Wire)[] expected =
@@ -94,13 +107,23 @@ public sealed class HttpObservationUnionTests
     [TestMethod]
     public void CompleteBodyBindsExactNonemptyTransportBytes()
     {
-        Assert.ThrowsExactly<ArgumentException>(() => Complete(transferComplete: false));
+        CollectionAssert.DoesNotContain(
+            typeof(ResponseCompleteBodyObservation).GetProperties()
+                .Select(static property => property.Name).ToArray(),
+            "TransferComplete");
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => Complete(byteCount: 0));
         Assert.ThrowsExactly<ArgumentException>(() => Complete(
             byteCount: 2,
-            blob: Blob(1, 'a')));
+            writeReceipt: WriteReceipt(1, 'a')));
         Assert.ThrowsExactly<ArgumentException>(() => Complete(
-            transportSha256: new string('b', 64)));
+            completionEvidence: CompletionEvidence(digestCharacter: 'b')));
+        Assert.ThrowsExactly<ArgumentException>(() => Complete(
+            completionEvidence: CompletionEvidence(
+                adapterExecutionIdentity: Artifact(
+                    "urn:uuid:abababab-abab-4bab-8bab-abababababab", 'a'))));
+        Assert.ThrowsExactly<ArgumentException>(() => Complete(
+            completionEvidence: CompletionEvidence(
+                responseObservationId: "urn:uuid:abababab-abab-4bab-8bab-abababababab")));
         Assert.ThrowsExactly<ArgumentException>(() => Complete(
             metadata: Metadata(contentLength: 2)));
         Assert.ThrowsExactly<ArgumentException>(() => Complete(statusCode: 204));
@@ -108,32 +131,99 @@ public sealed class HttpObservationUnionTests
         var rangeEvidence = Complete(
             statusCode: 206,
             statusDisposition: HttpStatusDisposition.RangeNotApproved,
+            completionEvidence: new Http2EndStreamCompleteEvidence(
+                TransferCompletionSchemaIds.TransferCompletionEvidence,
+                Artifact("urn:uuid:cccccccc-cccc-4ccc-8ccc-cccccccccccc", 'c'),
+                "urn:uuid:11111111-1111-4111-8111-111111111111",
+                new string('a', 64),
+                1,
+                Artifact("urn:uuid:14141414-1414-4414-8414-141414141414", '1')),
             metadata: Metadata(contentLength: 1, contentRange: "bytes 0-0/1"));
         Assert.AreEqual(HttpStatusDisposition.RangeNotApproved, rangeEvidence.StatusDisposition);
+
+        var duplicateHeaderEvidence = Complete(metadata: new HttpResponseMetadata(
+            new SingleHttpHeader("application/xml"),
+            new SingleHttpHeader("utf-8"),
+            new SingleHttpHeader("1"),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new MultipleHttpHeader(["\"one\"", "\"two\""]),
+            new AbsentHttpHeader()));
+        Assert.IsInstanceOfType<MultipleHttpHeader>(duplicateHeaderEvidence.ResponseMetadata.Etag);
     }
 
     [TestMethod]
     public void PartialBodyKeepsZeroAndPositiveEvidenceDistinct()
     {
-        Assert.IsNull(Partial(byteCount: 0, transportSha256: null, blob: null).DurableBlobRef);
+        Assert.IsNull(Partial(byteCount: 0, writeReceipt: null).DurableWriteReceipt);
         Assert.ThrowsExactly<ArgumentException>(() => Partial(
             byteCount: 0,
-            transportSha256: new string('a', 64),
-            blob: null));
+            writeReceipt: WriteReceipt(1, 'a')));
         Assert.ThrowsExactly<ArgumentException>(() => Partial(
             byteCount: 1,
             omitEvidence: true));
         Assert.ThrowsExactly<ArgumentException>(() => Partial(
             byteCount: 2,
-            transportSha256: new string('a', 64),
-            blob: Blob(1, 'a')));
+            writeReceipt: WriteReceipt(1, 'a')));
 
         var declaredLengthMismatch = Partial(
             byteCount: 1,
-            transportSha256: new string('a', 64),
-            blob: Blob(1, 'a'),
+            writeReceipt: WriteReceipt(1, 'a'),
             metadata: Metadata(contentLength: 2));
         Assert.AreEqual(1, declaredLengthMismatch.ReceivedEncodedEntityByteCount);
+    }
+
+    [TestMethod]
+    public void TransferCompletionEvidenceIsExactlyTheFourPositiveProtocolLeaves()
+    {
+        TransferCompletionEvidence[] evidence =
+        [
+            CompletionEvidence(),
+            new Http1TerminalChunkCompleteEvidence(
+                TransferCompletionSchemaIds.TransferCompletionEvidence,
+                Artifact("urn:uuid:cccccccc-cccc-4ccc-8ccc-cccccccccccc", 'c'),
+                "urn:uuid:11111111-1111-4111-8111-111111111111",
+                new string('a', 64),
+                1,
+                Artifact("urn:uuid:13131313-1313-4313-8313-131313131313", '1')),
+            new Http2EndStreamCompleteEvidence(
+                TransferCompletionSchemaIds.TransferCompletionEvidence,
+                Artifact("urn:uuid:cccccccc-cccc-4ccc-8ccc-cccccccccccc", 'c'),
+                "urn:uuid:11111111-1111-4111-8111-111111111111",
+                new string('a', 64),
+                1,
+                Artifact("urn:uuid:14141414-1414-4414-8414-141414141414", '1')),
+            new Http3FinCompleteEvidence(
+                TransferCompletionSchemaIds.TransferCompletionEvidence,
+                Artifact("urn:uuid:cccccccc-cccc-4ccc-8ccc-cccccccccccc", 'c'),
+                "urn:uuid:11111111-1111-4111-8111-111111111111",
+                new string('a', 64),
+                1,
+                Artifact("urn:uuid:15151515-1515-4515-8515-151515151515", '1')),
+        ];
+
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "declared_content_length_complete",
+                "http1_terminal_chunk_complete",
+                "http2_end_stream_complete",
+                "http3_fin_complete",
+            },
+            evidence.Select(item =>
+            {
+                using var document = JsonDocument.Parse(
+                    ContractJson.Serialize<TransferCompletionEvidence>(item));
+                return document.RootElement.GetProperty("kind").GetString();
+            }).ToArray());
+
+        foreach (var item in evidence)
+        {
+            Assert.AreEqual(
+                item.GetType(),
+                ContractJson.Deserialize<TransferCompletionEvidence>(
+                    ContractJson.Serialize<TransferCompletionEvidence>(item)).GetType());
+        }
     }
 
     [TestMethod]
@@ -172,14 +262,22 @@ public sealed class HttpObservationUnionTests
             metadata: Metadata(contentLength: 1, contentRange: "bytes 0-0/1")));
         Assert.ThrowsExactly<ArgumentException>(() => Complete(
             effectiveUri: "https://PUBLICATIONS.EUROPA.EU/resource/cellar"));
+        Assert.ThrowsExactly<ArgumentException>(() => Complete(
+            effectiveUri: "https://@publications.europa.eu/resource/cellar"));
+        Assert.ThrowsExactly<ArgumentException>(() => Complete(
+            effectiveUri: "https://publications.europa.eu/a/%2f..%2f/b"));
+        Assert.ThrowsExactly<ArgumentException>(() => Complete(
+            effectiveUri: "https://publications.europa.eu/a/%252e%252e/b"));
     }
 
     [TestMethod]
     public void RevalidationIsAnExactReferenceAndCarriesNoNewBytes()
     {
-        var observation = Revalidation();
+        var predecessor = Predecessor();
+        var observation = Revalidation(predecessor: predecessor);
         Assert.AreEqual(304, observation.StatusCode);
         Assert.AreEqual(observation.SentValidator, observation.PredecessorValidator);
+        Assert.AreSame(observation, observation.AdmitAgainst(predecessor).Observation);
 
         var properties = typeof(Revalidation304Observation)
             .GetProperties()
@@ -197,6 +295,35 @@ public sealed class HttpObservationUnionTests
             metadata: Metadata(contentRange: "bytes 0-0/1")));
         Assert.ThrowsExactly<ArgumentException>(() => Revalidation(
             predecessorBlobRef: Blob(0, '0')));
+
+        var retainedLength = Revalidation(
+            predecessor: predecessor,
+            metadata: Metadata(contentLength: 123));
+        Assert.AreEqual(
+            "123",
+            Assert.IsInstanceOfType<SingleHttpHeader>(
+                retainedLength.ResponseMetadata.ContentLength).Value);
+        Assert.AreSame(
+            retainedLength,
+            retainedLength.AdmitAgainst(predecessor).Observation);
+
+        var wrongObservationRef = Revalidation(
+            predecessor: predecessor,
+            predecessorObservationRef: Artifact(
+                predecessor.ObservationId,
+                '9'));
+        Assert.ThrowsExactly<ArgumentException>(() => wrongObservationRef.AdmitAgainst(predecessor));
+
+        var wrongBlob = Revalidation(
+            predecessor: predecessor,
+            predecessorBlobRef: Blob(1, 'b'));
+        Assert.ThrowsExactly<ArgumentException>(() => wrongBlob.AdmitAgainst(predecessor));
+
+        var otherKeyPredecessor = Predecessor(request: Request(
+            representationRequestKeyIdentity: Artifact(
+                "urn:uuid:17171717-1717-4717-8717-171717171717", '1')));
+        Assert.ThrowsExactly<ArgumentException>(
+            () => observation.AdmitAgainst(otherKeyPredecessor));
     }
 
     [TestMethod]
@@ -206,6 +333,7 @@ public sealed class HttpObservationUnionTests
         [
             "EffectiveUri", "StatusCode", "StatusDisposition", "ResponseMetadata",
             "ReceivedEncodedEntityByteCount", "TransportByteSha256", "DurableBlobRef",
+            "DurableWriteReceipt", "TransferCompletionEvidence",
         ];
 
         foreach (var type in new[]
@@ -270,31 +398,28 @@ public sealed class HttpObservationUnionTests
     }
 
     private static ResponseCompleteBodyObservation Complete(
-        bool transferComplete = true,
         long byteCount = 1,
-        string? transportSha256 = null,
-        DurableBlobRef? blob = null,
+        TransferCompletionEvidence? completionEvidence = null,
+        DurableBlobWriteReceipt? writeReceipt = null,
         int statusCode = 200,
         HttpStatusDisposition statusDisposition = HttpStatusDisposition.DerivableStatus,
         HttpResponseMetadata? metadata = null,
+        HttpRequestEvidence? request = null,
         string effectiveUri = "https://publications.europa.eu/resource/cellar") =>
         new(
             HttpObservationSchemaIds.HttpObservation,
             "urn:uuid:11111111-1111-4111-8111-111111111111",
-            Request(),
+            request ?? Request(),
             effectiveUri,
             statusCode,
             statusDisposition,
             metadata ?? Metadata(contentLength: 1),
-            transferComplete,
-            byteCount,
-            transportSha256 ?? new string('a', 64),
-            blob ?? Blob(byteCount, 'a'));
+            completionEvidence ?? CompletionEvidence(byteCount: byteCount),
+            writeReceipt ?? WriteReceipt(byteCount, 'a'));
 
     private static ResponsePartialBodyObservation Partial(
         long byteCount = 1,
-        string? transportSha256 = null,
-        DurableBlobRef? blob = null,
+        DurableBlobWriteReceipt? writeReceipt = null,
         HttpResponseMetadata? metadata = null,
         bool omitEvidence = false) =>
         new(
@@ -307,16 +432,18 @@ public sealed class HttpObservationUnionTests
             metadata ?? Metadata(),
             byteCount,
             RegistryMember("abrupt_eof"),
-            omitEvidence ? null : transportSha256 ?? (byteCount > 0 ? new string('a', 64) : null),
-            omitEvidence ? null : blob ?? (byteCount > 0 ? Blob(byteCount, 'a') : null));
+            omitEvidence ? null : writeReceipt ?? (byteCount > 0 ? WriteReceipt(byteCount, 'a') : null));
 
     private static Revalidation304Observation Revalidation(
         int statusCode = 304,
         HttpRequestEvidence? request = null,
         HttpResponseMetadata? metadata = null,
         HttpValidatorEvidence? predecessorValidator = null,
-        DurableBlobRef? predecessorBlobRef = null)
+        DurableBlobRef? predecessorBlobRef = null,
+        ResponseCompleteBodyObservation? predecessor = null,
+        SourceArtifactRef? predecessorObservationRef = null)
     {
+        predecessor ??= Predecessor();
         var validator = Validator("If-None-Match", "ETag", "\"opaque\"");
         return new(
             HttpObservationSchemaIds.HttpObservation,
@@ -328,10 +455,15 @@ public sealed class HttpObservationUnionTests
             metadata ?? Metadata(),
             validator,
             predecessorValidator ?? validator,
-            Artifact("urn:uuid:77777777-7777-4777-8777-777777777777", '7'),
-            Artifact("urn:uuid:88888888-8888-4888-8888-888888888888", '8'),
-            predecessorBlobRef ?? Blob(1, 'a'));
+            predecessorObservationRef ?? ObservationRef(predecessor),
+            (request ?? Request()).RepresentationRequestKeyIdentity,
+            predecessorBlobRef ?? predecessor.DurableBlobRef);
     }
+
+    private static ResponseCompleteBodyObservation Predecessor(HttpRequestEvidence? request = null) =>
+        Complete(
+            request: request,
+            metadata: Metadata(contentLength: 1, etag: "\"opaque\""));
 
     private static ResponseWithoutBodyObservation WithoutBody(
         int statusCode = 204,
@@ -372,7 +504,9 @@ public sealed class HttpObservationUnionTests
         string value) =>
         new(RegistryMember("etag"), requestHeaderName, responseHeaderName, value);
 
-    private static HttpRequestEvidence Request(HttpRequestMethod method = HttpRequestMethod.Get) =>
+    private static HttpRequestEvidence Request(
+        HttpRequestMethod method = HttpRequestMethod.Get,
+        SourceArtifactRef? representationRequestKeyIdentity = null) =>
         new(
             "https://publications.europa.eu/resource/cellar",
             method,
@@ -382,6 +516,8 @@ public sealed class HttpObservationUnionTests
             Artifact("urn:uuid:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", 'b'),
             Artifact("urn:uuid:cccccccc-cccc-4ccc-8ccc-cccccccccccc", 'c'),
             Artifact("urn:uuid:dddddddd-dddd-4ddd-8ddd-dddddddddddd", 'd'),
+            representationRequestKeyIdentity ?? Artifact(
+                "urn:uuid:eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", 'e'),
             new OutboundCrawlerIdentityEvidence(
                 OutboundCrawlerIdentity.Schema,
                 OutboundCrawlerIdentity.Token),
@@ -390,7 +526,8 @@ public sealed class HttpObservationUnionTests
 
     private static HttpResponseMetadata Metadata(
         long? contentLength = null,
-        string? contentRange = null) =>
+        string? contentRange = null,
+        string? etag = null) =>
         new(
             new SingleHttpHeader("application/xml"),
             new SingleHttpHeader("utf-8"),
@@ -401,7 +538,9 @@ public sealed class HttpObservationUnionTests
             contentRange is null
                 ? new AbsentHttpHeader()
                 : new SingleHttpHeader(contentRange),
-            new AbsentHttpHeader(),
+            etag is null
+                ? new AbsentHttpHeader()
+                : new SingleHttpHeader(etag),
             new AbsentHttpHeader());
 
     private static DurableBlobRef Blob(long byteLength, char digestCharacter) =>
@@ -411,25 +550,81 @@ public sealed class HttpObservationUnionTests
             byteLength,
             CustodyClass.NightlyFloor90d);
 
+    private static DurableBlobWriteReceipt WriteReceipt(long byteLength, char digestCharacter)
+    {
+        var reference = Blob(byteLength, digestCharacter);
+        var observedAt = new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero);
+        return new DurableBlobWriteReceipt(
+            CustodySchemaIds.DurableBlobWriteReceipt,
+            reference,
+            new CustodyPolicyEvidence(
+                CustodySchemaIds.CustodyPolicyEvidence,
+                reference,
+                CustodyVerificationProfile.ImmutableObject1,
+                Guid.Parse("16161616-1616-4616-8616-161616161616"),
+                CustodyProtection.LockedTime,
+                observedAt,
+                observedAt.AddDays(91)));
+    }
+
+    private static TransferCompletionEvidence CompletionEvidence(
+        long byteCount = 1,
+        char digestCharacter = 'a',
+        SourceArtifactRef? adapterExecutionIdentity = null,
+        string responseObservationId = "urn:uuid:11111111-1111-4111-8111-111111111111") =>
+        new DeclaredContentLengthCompleteEvidence(
+            TransferCompletionSchemaIds.TransferCompletionEvidence,
+            adapterExecutionIdentity ?? Artifact(
+                "urn:uuid:cccccccc-cccc-4ccc-8ccc-cccccccccccc", 'c'),
+            responseObservationId,
+            new string(digestCharacter, 64),
+            byteCount);
+
     private static SourceRegistryMemberRef RegistryMember(string memberKey) =>
         new(Artifact("urn:uuid:12121212-1212-4212-8212-121212121212", '1'), memberKey);
 
     private static SourceArtifactRef Artifact(string resourceId, char digestCharacter) =>
         new(resourceId, new string(digestCharacter, 64));
 
+    private static SourceArtifactRef ObservationRef(HttpObservation observation) =>
+        new(
+            observation.ObservationId,
+            Convert.ToHexStringLower(SHA256.HashData(
+                Encoding.UTF8.GetBytes(ContractJson.Serialize<HttpObservation>(observation)))));
+
+    private static void AssertConcretePath<TObservation>(TObservation observation, string kind)
+        where TObservation : HttpObservation
+    {
+        var inferred = ContractJson.Serialize(observation);
+        var explicitConcrete = ContractJson.Serialize<TObservation>(observation);
+        foreach (var json in new[] { inferred, explicitConcrete })
+        {
+            using var document = JsonDocument.Parse(json);
+            Assert.AreEqual(kind, document.RootElement.GetProperty("kind").GetString());
+            Assert.AreEqual(
+                typeof(TObservation),
+                ContractJson.Deserialize<TObservation>(json).GetType());
+
+            var missingKind = JsonNode.Parse(json)!.AsObject();
+            Assert.IsTrue(missingKind.Remove("kind"));
+            Assert.ThrowsExactly<NotSupportedException>(
+                () => ContractJson.Deserialize<TObservation>(missingKind.ToJsonString()));
+        }
+    }
+
     private static string[] ExpectedProperties(string kind) => kind switch
     {
         "response_complete_body" =>
         [
             "kind", "schema", "observation_id", "request", "effective_uri", "status_code",
-            "status_disposition", "response_metadata", "transfer_complete",
-            "received_encoded_entity_byte_count", "transport_byte_sha256", "durable_blob_ref",
+            "status_disposition", "response_metadata", "transfer_completion_evidence",
+            "durable_write_receipt",
         ],
         "response_partial_body" =>
         [
             "kind", "schema", "observation_id", "request", "effective_uri", "status_code",
             "status_disposition", "response_metadata", "received_encoded_entity_byte_count",
-            "terminal_failure_reason", "transport_byte_sha256", "durable_blob_ref",
+            "terminal_failure_reason", "durable_write_receipt",
         ],
         "revalidation_304" =>
         [

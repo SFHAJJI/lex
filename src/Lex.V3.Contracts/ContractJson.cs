@@ -12,15 +12,23 @@ public static class ContractJson
     public static string Serialize<T>(T value)
     {
         ArgumentNullException.ThrowIfNull(value);
-        return JsonSerializer.Serialize(value, Options);
+        var runtimeType = value.GetType();
+        var contractType = FindRegisteredPolymorphicContract(runtimeType) ?? typeof(T);
+        return JsonSerializer.Serialize(value, contractType, Options);
     }
 
     public static T Deserialize<T>(string json)
     {
         try
         {
-            return JsonSerializer.Deserialize<T>(json, Options)
+            var requestedType = typeof(T);
+            var contractType = FindRegisteredPolymorphicContract(requestedType) ?? requestedType;
+            var value = JsonSerializer.Deserialize(json, contractType, Options)
                 ?? throw new JsonException("The contract document cannot be null.");
+            return value is T typed
+                ? typed
+                : throw new JsonException(
+                    $"The contract discriminator does not name {requestedType.Name}.");
         }
         catch (ArgumentException exception)
         {
@@ -29,6 +37,26 @@ public static class ContractJson
     }
 
     public static JsonSerializerOptions CreateSchemaOptions() => CreateOptions(exactEnums: false);
+
+    private static Type? FindRegisteredPolymorphicContract(Type type)
+    {
+        for (var candidate = type; candidate is not null; candidate = candidate.BaseType)
+        {
+            if (candidate.GetCustomAttribute<JsonPolymorphicAttribute>() is null)
+            {
+                continue;
+            }
+
+            if (candidate == type || candidate
+                .GetCustomAttributes<JsonDerivedTypeAttribute>()
+                .Any(attribute => attribute.DerivedType == type))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
 
     private static JsonSerializerOptions CreateOptions(bool exactEnums)
     {
