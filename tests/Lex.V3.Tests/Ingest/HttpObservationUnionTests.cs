@@ -834,6 +834,79 @@ public sealed class HttpObservationUnionTests
             () => ContractJson.Deserialize<HttpObservation>(complete.ToJsonString()));
     }
 
+    [TestMethod]
+    public void MachineRequestBundleBindsPlanReceiptObservationAndEvidenceWithoutACycle()
+    {
+        var (plan, planRef, receipt, observation) = MachineBoundObservation();
+        var sentRequest = new BoundMachineRequest(
+            observation.Request.RequestedUri,
+            [],
+            receipt);
+
+        var evidence = MachineRequestEvidenceBundle.Create(
+            plan,
+            planRef,
+            sentRequest,
+            MachineQueryRenderReceiptIdentity.Create(
+                "urn:uuid:78787878-7878-4787-8787-787878787878",
+                receipt),
+            observation);
+
+        MachineRequestEvidenceBundle.ValidateRetained(
+            plan,
+            planRef,
+            receipt,
+            evidence.RerenderReceiptRef,
+            observation,
+            evidence);
+        Assert.AreEqual(HttpObservationIdentity.Create(observation), evidence.HttpObservationRef);
+
+        var wrongObservationJson = JsonNode.Parse(ContractJson.Serialize(evidence))!.AsObject();
+        wrongObservationJson["http_observation_ref"] = JsonNode.Parse(ContractJson.Serialize(
+            Artifact("urn:uuid:79797979-7979-4797-8797-797979797979", '7')));
+        var wrongObservation = ContractJson.Deserialize<MachineRequestEvidence>(
+            wrongObservationJson.ToJsonString());
+        var mismatch = Assert.ThrowsExactly<MachineRequestBundleException>(() =>
+            MachineRequestEvidenceBundle.ValidateRetained(
+                plan,
+                planRef,
+                receipt,
+                evidence.RerenderReceiptRef,
+                observation,
+                wrongObservation));
+        Assert.AreEqual(
+            MachineRequestBundleFailureReason.BoundArtifactMismatch,
+            mismatch.Reason);
+    }
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public void RetainedBundleRejectsPlanTargetLengthOrDigestDrift(bool mutateLength)
+    {
+        var (plan, planRef, receipt, observation) = MachineBoundObservation(
+            expectedTargetLengthAdjustment: mutateLength ? 1 : 0,
+            expectedTargetSha256: mutateLength ? null : new string('0', 64));
+        var sentRequest = new BoundMachineRequest(
+            observation.Request.RequestedUri,
+            [],
+            receipt);
+
+        var mismatch = Assert.ThrowsExactly<MachineRequestBundleException>(() =>
+            MachineRequestEvidenceBundle.Create(
+                plan,
+                planRef,
+                sentRequest,
+                MachineQueryRenderReceiptIdentity.Create(
+                    "urn:uuid:78787878-7878-4787-8787-787878787878",
+                    receipt),
+                observation));
+
+        Assert.AreEqual(
+            MachineRequestBundleFailureReason.BoundArtifactMismatch,
+            mismatch.Reason);
+    }
+
     private static ResponseCompleteBodyObservation Complete(
         long byteCount = 1,
         TransferCompletionEvidence? completionEvidence = null,
@@ -936,11 +1009,12 @@ public sealed class HttpObservationUnionTests
         HttpNoBodyReason reason = HttpNoBodyReason.FramingForbidsBody,
         HttpResponseMetadata? metadata = null,
         ZeroOctetTransferCompletionEvidence? zeroOctetCompletionEvidence = null,
-        bool omitCompletionEvidence = false) =>
+        bool omitCompletionEvidence = false,
+        HttpRequestEvidence? request = null) =>
         new(
             HttpObservationSchemaIds.HttpObservation,
             "urn:uuid:44444444-4444-4444-8444-444444444444",
-            Request(),
+            request ?? Request(),
             "https://publications.europa.eu/resource/cellar",
             statusCode,
             statusDisposition,
@@ -969,6 +1043,76 @@ public sealed class HttpObservationUnionTests
             RegistryMember("initial_request"),
             Artifact("urn:uuid:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", 'a'));
 
+    private static (
+        MachineQueryPlan Plan,
+        SourceArtifactRef PlanRef,
+        MachineQueryRenderReceipt Receipt,
+        HttpObservation Observation) MachineBoundObservation(
+            int expectedTargetLengthAdjustment = 0,
+            string? expectedTargetSha256 = null)
+    {
+        const string requestedUri = "https://publications.europa.eu/resource/cellar";
+        var inputRef = Artifact("urn:uuid:31313131-3131-4313-8313-313131313131", '3');
+        var plan = new MachineQueryPlan(
+            MachineQueryPlan.SchemaId,
+            new SourceRegistryMemberRef(
+                Artifact("urn:uuid:32323232-3232-4323-8323-323232323232", '2'),
+                "cellar-resource-fetch"),
+            Artifact("urn:uuid:33333333-3333-4333-8333-333333333333", '3'),
+            Artifact("urn:uuid:34343434-3434-4343-8343-343434343434", '4'),
+            HttpRequestMethod.Get,
+            requestedUri,
+            "/resource/cellar".Length + expectedTargetLengthAdjustment,
+            expectedTargetSha256 ?? Convert.ToHexString(SHA256.HashData(
+                Encoding.ASCII.GetBytes("/resource/cellar"))).ToLowerInvariant(),
+            new MachineResponseCardinality(
+                MachineResponseCardinalityKind.OpaqueBody,
+                rowLimit: null,
+                expectedPartitionRowCount: null,
+                expectedPartitionRowCountEvidenceRef: null),
+            contentType: null,
+            charset: null,
+            MachineQueryInputMode.RendererInputs,
+            inputRef,
+            new SourceRegistryMemberRef(inputRef, "whole-resource"),
+            expectedRequestBodyLength: null,
+            expectedRequestBodySha256: null);
+        var planRef = MachineQueryPlanIdentity.Create(
+            "urn:uuid:35353535-3535-4353-8353-353535353535",
+            plan);
+        var targetBytes = Encoding.ASCII.GetBytes(new Uri(requestedUri).PathAndQuery);
+        var receipt = new MachineQueryRenderReceipt(
+            MachineQueryRenderReceipt.SchemaId,
+            planRef,
+            MachineQueryPlan.SchemaId,
+            plan.RendererProfileRef,
+            plan.RendererSourceRef,
+            plan.OrderedParameterSet,
+            plan.ContentType,
+            plan.Charset,
+            plan.InputMode,
+            plan.Method,
+            targetBytes.LongLength,
+            Convert.ToHexString(SHA256.HashData(targetBytes)).ToLowerInvariant(),
+            requestBodyLength: null,
+            requestBodySha256: null);
+        var request = HttpRequestEvidence.CreateAtSend(
+            new HttpRequestTemplate(
+            requestedUri,
+            HttpRequestMethod.Get,
+            Artifact("urn:uuid:36363636-3636-4363-8363-363636363636", '6'),
+            Artifact("urn:uuid:37373737-3737-4373-8373-373737373737", '7'),
+            Artifact("urn:uuid:38383838-3838-4383-8383-383838383838", '8'),
+            Artifact("urn:uuid:39393939-3939-4393-8393-393939393939", '9'),
+            new OutboundCrawlerIdentityEvidence(
+                OutboundCrawlerIdentity.Schema,
+                OutboundCrawlerIdentity.Token),
+            new HttpOrigin("https", "publications.europa.eu", 443),
+            receipt),
+            new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero));
+        return (plan, planRef, receipt, WithoutBody(request: request));
+    }
+
     private static HttpValidatorEvidence Validator(
         string requestHeaderName,
         string responseHeaderName,
@@ -979,12 +1123,10 @@ public sealed class HttpObservationUnionTests
         HttpRequestMethod method = HttpRequestMethod.Get,
         SourceArtifactRef? representationRequestKeyIdentity = null,
         string requestedUri = "https://publications.europa.eu/resource/cellar") =>
-        new(
+        HttpRequestEvidence.CreateAtSend(
+            new HttpRequestTemplate(
             requestedUri,
             method,
-            "2026-09-01T00:00:00.000Z",
-            HttpObservationTimestampPrecision.Millisecond,
-            HttpObservationClockSource.SystemUtc,
             Artifact("urn:uuid:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", 'b'),
             Artifact("urn:uuid:cccccccc-cccc-4ccc-8ccc-cccccccccccc", 'c'),
             Artifact("urn:uuid:dddddddd-dddd-4ddd-8ddd-dddddddddddd", 'd'),
@@ -994,7 +1136,37 @@ public sealed class HttpObservationUnionTests
                 OutboundCrawlerIdentity.Schema,
                 OutboundCrawlerIdentity.Token),
             new HttpOrigin("https", "publications.europa.eu", 443),
-            Artifact("urn:uuid:ffffffff-ffff-4fff-8fff-ffffffffffff", 'f'));
+            RenderReceipt(method, requestedUri)),
+            new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero));
+
+    private static MachineQueryRenderReceipt RenderReceipt(
+        HttpRequestMethod method,
+        string requestedUri)
+    {
+        var requestTargetBytes = Encoding.ASCII.GetBytes(new Uri(requestedUri).PathAndQuery);
+        var bodyBytes = method == HttpRequestMethod.Post
+            ? Encoding.UTF8.GetBytes("query=ASK%20%7B%7D")
+            : null;
+        return new MachineQueryRenderReceipt(
+            MachineQueryRenderReceipt.SchemaId,
+            Artifact("urn:uuid:ffffffff-ffff-4fff-8fff-ffffffffffff", 'f'),
+            MachineQueryPlan.SchemaId,
+            Artifact("urn:uuid:12121212-1212-4212-8212-121212121212", '1'),
+            Artifact("urn:uuid:22222222-2222-4222-8222-222222222222", '2'),
+            Artifact("urn:uuid:13131313-1313-4313-8313-131313131313", '3'),
+            method == HttpRequestMethod.Post
+                ? RegistryMember("application/x-www-form-urlencoded")
+                : null,
+            method == HttpRequestMethod.Post ? MachineQueryCharset.Utf8 : null,
+            MachineQueryInputMode.RendererInputs,
+            method,
+            requestTargetBytes.LongLength,
+            Convert.ToHexString(SHA256.HashData(requestTargetBytes)).ToLowerInvariant(),
+            bodyBytes?.LongLength,
+            bodyBytes is null
+                ? null
+                : Convert.ToHexString(SHA256.HashData(bodyBytes)).ToLowerInvariant());
+    }
 
     private static HttpResponseMetadata Metadata(
         long? contentLength = null,
@@ -1075,10 +1247,7 @@ public sealed class HttpObservationUnionTests
         new(resourceId, new string(digestCharacter, 64));
 
     private static SourceArtifactRef ObservationRef(HttpObservation observation) =>
-        new(
-            observation.ObservationId,
-            Convert.ToHexStringLower(SHA256.HashData(
-                Encoding.UTF8.GetBytes(ContractJson.Serialize<HttpObservation>(observation)))));
+        HttpObservationIdentity.Create(observation);
 
     private static void AssertConcretePath<TObservation>(TObservation observation, string kind)
         where TObservation : HttpObservation

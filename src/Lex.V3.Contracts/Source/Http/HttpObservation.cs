@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
@@ -650,17 +648,7 @@ public sealed class Revalidation304Observation : HttpResponseObservation
                 nameof(predecessor));
         }
 
-        var serialized = ContractJson.Serialize<HttpObservation>(predecessor);
-        var expectedDigest = Convert.ToHexStringLower(
-            SHA256.HashData(Encoding.UTF8.GetBytes(serialized)));
-        if (!string.Equals(
-                PredecessorObservationRef.ResourceId,
-                predecessor.ObservationId,
-                StringComparison.Ordinal) ||
-            !string.Equals(
-                PredecessorObservationRef.Sha256,
-                expectedDigest,
-                StringComparison.Ordinal) ||
+        if (PredecessorObservationRef != HttpObservationIdentity.Create(predecessor) ||
             PredecessorBlobRef != predecessor.DurableBlobRef)
         {
             throw new ArgumentException(

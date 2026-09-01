@@ -704,7 +704,8 @@ public sealed class BoundedHttpObservationPartialTests
             custody,
             maximumResponseBytes,
             headersTimeout ?? TimeSpan.FromSeconds(5),
-            bodyTimeout ?? TimeSpan.FromSeconds(5));
+            bodyTimeout ?? TimeSpan.FromSeconds(5),
+            MachineQueryEvidenceFixture.Clock());
 
     private static HttpResponseMessage Response(
         Stream stream,
@@ -738,25 +739,8 @@ public sealed class BoundedHttpObservationPartialTests
         return response;
     }
 
-    private static HttpRequestEvidence RequestEvidence() => new(
-        requestedUri: "https://data.legilux.public.lu/example.xml",
-        HttpRequestMethod.Get,
-        observedAtUtc: "2026-09-01T10:00:00.000Z",
-        timestampPrecision: HttpObservationTimestampPrecision.Millisecond,
-        clockSource: HttpObservationClockSource.SystemUtc,
-        runIdentity: Artifact(1),
-        adapterIdentity: Artifact(2),
-        requestPolicyIdentity: Artifact(3),
-        representationRequestKeyIdentity: Artifact(4),
-        outboundCrawlerIdentity: new OutboundCrawlerIdentityEvidence(
-            OutboundCrawlerIdentity.Schema,
-            OutboundCrawlerIdentity.Token),
-        origin: new HttpOrigin("https", "data.legilux.public.lu", 443),
-        queryPlanIdentity: Artifact(5));
-
-    private static SourceArtifactRef Artifact(int suffix) => new(
-        $"urn:uuid:00000000-0000-0000-0000-{suffix:D12}",
-        new string('a', 64));
+    private static HttpRequestTemplate RequestEvidence() =>
+        MachineQueryEvidenceFixture.Template();
 
     private sealed class RecordingHandler(HttpResponseMessage response) : HttpMessageHandler
     {

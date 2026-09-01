@@ -20,6 +20,7 @@ internal sealed class BoundedHttpObservationAcquirer : IDisposable
     private readonly long _maximumResponseBytes;
     private readonly TimeSpan _headersTimeout;
     private readonly TimeSpan _bodyTimeout;
+    private readonly TimeProvider _timeProvider;
 
     internal BoundedHttpObservationAcquirer(
         ICustodyStore custodyStore,
@@ -30,7 +31,8 @@ internal sealed class BoundedHttpObservationAcquirer : IDisposable
             custodyStore,
             maximumResponseBytes,
             requestTimeout,
-            requestTimeout)
+            requestTimeout,
+            TimeProvider.System)
     {
     }
 
@@ -39,10 +41,12 @@ internal sealed class BoundedHttpObservationAcquirer : IDisposable
         ICustodyStore custodyStore,
         long maximumResponseBytes,
         TimeSpan headersTimeout,
-        TimeSpan bodyTimeout)
+        TimeSpan bodyTimeout,
+        TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(handler);
         ArgumentNullException.ThrowIfNull(custodyStore);
+        ArgumentNullException.ThrowIfNull(timeProvider);
         if (maximumResponseBytes is <= 0 or > CustodyBounds.MaxObjectBytes)
         {
             throw new ArgumentOutOfRangeException(nameof(maximumResponseBytes));
@@ -54,6 +58,7 @@ internal sealed class BoundedHttpObservationAcquirer : IDisposable
         _maximumResponseBytes = maximumResponseBytes;
         _headersTimeout = headersTimeout;
         _bodyTimeout = bodyTimeout;
+        _timeProvider = timeProvider;
         _client = new HttpClient(handler, disposeHandler: true)
         {
             Timeout = Timeout.InfiniteTimeSpan,
@@ -71,22 +76,48 @@ internal sealed class BoundedHttpObservationAcquirer : IDisposable
     };
 
     public async Task<HttpObservation> AcquireAsync(
-        HttpRequestEvidence request,
+        BoundMachineRequest boundRequest,
+        HttpRequestTemplate requestTemplate,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(boundRequest);
+        ArgumentNullException.ThrowIfNull(requestTemplate);
         cancellationToken.ThrowIfCancellationRequested();
-        if (request.Method != HttpRequestMethod.Get)
+        if (requestTemplate.RenderReceipt != boundRequest.RenderReceipt ||
+            !string.Equals(
+                requestTemplate.RequestedUri,
+                boundRequest.RequestedUri,
+                StringComparison.Ordinal))
         {
-            throw new NotSupportedException(
-                "This acquisition boundary currently admits only evidence-bound GET requests.");
+            throw new ArgumentException(
+                "The HTTP request template must describe the exact bound machine request.",
+                nameof(requestTemplate));
         }
 
-        using var outbound = new HttpRequestMessage(HttpMethod.Get, request.RequestedUri)
+        var requestBody = boundRequest.CopyVerifiedRequestBody();
+
+        var method = requestTemplate.Method == HttpRequestMethod.Get
+            ? HttpMethod.Get
+            : HttpMethod.Post;
+        using var outbound = new HttpRequestMessage(method, requestTemplate.RequestedUri)
         {
             Version = HttpVersion.Version11,
             VersionPolicy = HttpVersionPolicy.RequestVersionExact,
         };
+        if (requestTemplate.Method == HttpRequestMethod.Post)
+        {
+            var contentType = requestTemplate.RenderReceipt.ContentType
+                ?? throw new ArgumentException(
+                    "A POST render receipt requires a content type.",
+                    nameof(requestTemplate));
+            outbound.Content = new ByteArrayContent(requestBody);
+            outbound.Content.Headers.ContentType = new MediaTypeHeaderValue(contentType.MemberKey);
+            if (requestTemplate.RenderReceipt.Charset is not null)
+            {
+                outbound.Content.Headers.ContentType.CharSet = "utf-8";
+            }
+        }
+
         outbound.Headers.UserAgent.ParseAdd(OutboundCrawlerIdentity.Token);
 
         var observationId = $"urn:uuid:{Guid.NewGuid():D}";
@@ -94,6 +125,9 @@ internal sealed class BoundedHttpObservationAcquirer : IDisposable
         var sendCancellation = new CancellationTokenSource();
         var sendCancellationOwnershipTransferred = false;
         HttpResponseMessage response;
+        var request = HttpRequestEvidence.CreateAtSend(
+            requestTemplate,
+            _timeProvider);
         var sendTask = _client.SendAsync(
             outbound,
             HttpCompletionOption.ResponseHeadersRead,

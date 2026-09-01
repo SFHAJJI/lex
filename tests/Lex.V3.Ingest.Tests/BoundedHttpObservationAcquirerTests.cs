@@ -1,7 +1,9 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.Json;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
@@ -53,9 +55,10 @@ public sealed class BoundedHttpObservationAcquirerTests
             custody,
             maximumResponseBytes: 1024,
             headersTimeout: TimeSpan.FromSeconds(5),
-            bodyTimeout: TimeSpan.FromSeconds(5));
+            bodyTimeout: TimeSpan.FromSeconds(5),
+            timeProvider: MachineQueryEvidenceFixture.Clock());
 
-        var result = await acquirer.AcquireAsync(RequestEvidence(), CancellationToken.None);
+        var result = await acquirer.AcquireAsync(RequestTemplate(), CancellationToken.None);
 
         var observation = result as ResponseCompleteBodyObservation;
         Assert.IsNotNull(observation);
@@ -108,9 +111,10 @@ public sealed class BoundedHttpObservationAcquirerTests
             custody,
             maximumResponseBytes: 1024,
             headersTimeout: TimeSpan.FromSeconds(5),
-            bodyTimeout: TimeSpan.FromSeconds(5));
+            bodyTimeout: TimeSpan.FromSeconds(5),
+            timeProvider: MachineQueryEvidenceFixture.Clock());
 
-        var result = await acquirer.AcquireAsync(RequestEvidence(), CancellationToken.None);
+        var result = await acquirer.AcquireAsync(RequestTemplate(), CancellationToken.None);
 
         var observation = result as ResponseWithoutBodyObservation;
         Assert.IsNotNull(observation);
@@ -147,9 +151,10 @@ public sealed class BoundedHttpObservationAcquirerTests
             custody,
             maximumResponseBytes: 1024,
             headersTimeout: TimeSpan.FromSeconds(5),
-            bodyTimeout: TimeSpan.FromSeconds(5));
+            bodyTimeout: TimeSpan.FromSeconds(5),
+            timeProvider: MachineQueryEvidenceFixture.Clock());
 
-        var result = await acquirer.AcquireAsync(RequestEvidence(), CancellationToken.None);
+        var result = await acquirer.AcquireAsync(RequestTemplate(), CancellationToken.None);
 
         var observation = result as ResponseWithoutBodyObservation;
         Assert.IsNotNull(observation);
@@ -178,7 +183,7 @@ public sealed class BoundedHttpObservationAcquirerTests
         var custody = new RecordingCustodyStore();
         using var acquirer = Acquirer(transport, custody);
 
-        var result = await acquirer.AcquireAsync(RequestEvidence(), CancellationToken.None);
+        var result = await acquirer.AcquireAsync(RequestTemplate(), CancellationToken.None);
 
         var withoutBody = result as ResponseWithoutBodyObservation;
         Assert.IsNotNull(withoutBody);
@@ -215,9 +220,10 @@ public sealed class BoundedHttpObservationAcquirerTests
             custody,
             maximumResponseBytes: 1024,
             headersTimeout: TimeSpan.FromSeconds(5),
-            bodyTimeout: TimeSpan.FromSeconds(5));
+            bodyTimeout: TimeSpan.FromSeconds(5),
+            timeProvider: MachineQueryEvidenceFixture.Clock());
 
-        var result = await acquirer.AcquireAsync(RequestEvidence(), CancellationToken.None);
+        var result = await acquirer.AcquireAsync(RequestTemplate(), CancellationToken.None);
 
         var observation = result as ResponseCompleteBodyObservation;
         Assert.IsNotNull(observation);
@@ -249,9 +255,10 @@ public sealed class BoundedHttpObservationAcquirerTests
             custody,
             maximumResponseBytes: 1024,
             headersTimeout: TimeSpan.FromSeconds(5),
-            bodyTimeout: TimeSpan.FromSeconds(5));
+            bodyTimeout: TimeSpan.FromSeconds(5),
+            timeProvider: MachineQueryEvidenceFixture.Clock());
 
-        var result = await acquirer.AcquireAsync(RequestEvidence(), CancellationToken.None);
+        var result = await acquirer.AcquireAsync(RequestTemplate(), CancellationToken.None);
 
         var observation = result as ResponseCompleteBodyObservation;
         Assert.IsNotNull(observation);
@@ -279,7 +286,7 @@ public sealed class BoundedHttpObservationAcquirerTests
         var custody = new RecordingCustodyStore();
         using var acquirer = Acquirer(transport, custody);
 
-        var result = await acquirer.AcquireAsync(RequestEvidence(), CancellationToken.None);
+        var result = await acquirer.AcquireAsync(RequestTemplate(), CancellationToken.None);
 
         var observation = result as ResponseCompleteBodyObservation;
         Assert.IsNotNull(observation);
@@ -310,7 +317,7 @@ public sealed class BoundedHttpObservationAcquirerTests
         });
         using var acquirer = Acquirer(transport, new RecordingCustodyStore());
 
-        var result = await acquirer.AcquireAsync(RequestEvidence(), CancellationToken.None);
+        var result = await acquirer.AcquireAsync(RequestTemplate(), CancellationToken.None);
 
         var observation = result as ResponseCompleteBodyObservation;
         Assert.IsNotNull(observation);
@@ -341,7 +348,7 @@ public sealed class BoundedHttpObservationAcquirerTests
         });
         using var acquirer = Acquirer(transport, new RecordingCustodyStore());
 
-        var result = await acquirer.AcquireAsync(RequestEvidence(), CancellationToken.None);
+        var result = await acquirer.AcquireAsync(RequestTemplate(), CancellationToken.None);
 
         var serialized = ContractJson.Serialize(result);
         Assert.IsFalse(serialized.Contains(secret, StringComparison.Ordinal));
@@ -370,7 +377,7 @@ public sealed class BoundedHttpObservationAcquirerTests
             using var acquirer = Acquirer(new RecordingHandler(responseFactory), custody);
 
             await Assert.ThrowsExactlyAsync<ArgumentException>(() =>
-                acquirer.AcquireAsync(RequestEvidence(), CancellationToken.None));
+                acquirer.AcquireAsync(RequestTemplate(), CancellationToken.None));
 
             Assert.AreEqual(0, custody.CreateCount);
             Assert.AreEqual(0, custody.ReadCount);
@@ -378,22 +385,134 @@ public sealed class BoundedHttpObservationAcquirerTests
     }
 
     [TestMethod]
-    public async Task PostEvidenceFailsBeforeNetworkOrCustody()
+    public async Task PostSendsTheExactBoundBodyAndTypedContent()
     {
-        var transport = new RecordingHandler(_ =>
-            throw new AssertFailedException("POST evidence reached the network."));
+        byte[]? observedBody = null;
+        string? observedContentType = null;
+        string? observedCharset = null;
+        var transport = new RecordingHandler(request =>
+        {
+            observedBody = request.Content?.ReadAsByteArrayAsync().GetAwaiter().GetResult();
+            observedContentType = request.Content?.Headers.ContentType?.MediaType;
+            observedCharset = request.Content?.Headers.ContentType?.CharSet;
+            return new HttpResponseMessage(HttpStatusCode.NoContent)
+            {
+                RequestMessage = request,
+            };
+        });
         var custody = new RecordingCustodyStore();
         using var acquirer = new BoundedHttpObservationAcquirer(
             transport,
             custody,
             maximumResponseBytes: 1024,
             headersTimeout: TimeSpan.FromSeconds(5),
-            bodyTimeout: TimeSpan.FromSeconds(5));
+            bodyTimeout: TimeSpan.FromSeconds(5),
+            timeProvider: MachineQueryEvidenceFixture.Clock());
 
-        await Assert.ThrowsExactlyAsync<NotSupportedException>(() =>
-            acquirer.AcquireAsync(
-                RequestEvidence(HttpRequestMethod.Post),
-                CancellationToken.None));
+        var requestBody = Encoding.UTF8.GetBytes("machine request bytes");
+        var request = RequestTemplate(HttpRequestMethod.Post, requestBody: requestBody);
+        var bound = MachineQueryEvidenceFixture.Bind(request, requestBody);
+        var result = await acquirer.AcquireAsync(bound, request, CancellationToken.None);
+
+        Assert.IsInstanceOfType<ResponseWithoutBodyObservation>(result);
+        Assert.AreEqual(1, transport.SendCount);
+        Assert.AreEqual(HttpMethod.Post, transport.LastMethod);
+        CollectionAssert.AreEqual(requestBody, observedBody);
+        Assert.AreEqual("application/sparql-query", observedContentType);
+        Assert.AreEqual("utf-8", observedCharset);
+        Assert.AreEqual(0, custody.CreateCount);
+    }
+
+    [TestMethod]
+    [DataRow("2020-01-01T00:00:00.000Z", DisplayName = "caller backdate is rejected")]
+    [DataRow("2030-01-01T00:00:00.000Z", DisplayName = "caller future date is rejected")]
+    public void RequestTemplateRejectsCallerOwnedObservationTime(string injectedTimestamp)
+    {
+        var json = JsonSerializer.Serialize(RequestTemplate());
+        var mutated = string.Concat(
+            json.AsSpan(0, json.Length - 1),
+            ",\"observedAtUtc\":\"",
+            injectedTimestamp,
+            "\"}");
+
+        Assert.ThrowsExactly<JsonException>(() =>
+            JsonSerializer.Deserialize<HttpRequestTemplate>(mutated));
+    }
+
+    [TestMethod]
+    [DataRow("2020-01-01T00:00:00.000Z", DisplayName = "clock moves backward during send")]
+    [DataRow("2030-01-01T00:00:00.000Z", DisplayName = "clock moves forward during send")]
+    public async Task AcquirerStampsExactMillisecondUtcImmediatelyBeforeSend(
+        string timeAfterSendStarts)
+    {
+        var sendInstant = DateTimeOffset.Parse(
+            "2026-09-01T10:00:00.1234567Z",
+            CultureInfo.InvariantCulture);
+        var clock = new MutableTimeProvider(sendInstant);
+        var transport = new RecordingHandler(request =>
+        {
+            clock.SetUtcNow(DateTimeOffset.Parse(timeAfterSendStarts, CultureInfo.InvariantCulture));
+            return new HttpResponseMessage(HttpStatusCode.NoContent)
+            {
+                RequestMessage = request,
+            };
+        });
+        var custody = new RecordingCustodyStore();
+        using var acquirer = new BoundedHttpObservationAcquirer(
+            transport,
+            custody,
+            maximumResponseBytes: 1024,
+            headersTimeout: TimeSpan.FromSeconds(5),
+            bodyTimeout: TimeSpan.FromSeconds(5),
+            timeProvider: clock);
+
+        var observation = await acquirer.AcquireAsync(
+            RequestTemplate(),
+            CancellationToken.None);
+
+        Assert.AreEqual("2026-09-01T10:00:00.123Z", observation.Request.ObservedAtUtc);
+        Assert.AreEqual(
+            HttpObservationTimestampPrecision.Millisecond,
+            observation.Request.TimestampPrecision);
+        Assert.AreEqual(HttpObservationClockSource.SystemUtc, observation.Request.ClockSource);
+        Assert.AreEqual(1, transport.SendCount);
+    }
+
+    [TestMethod]
+    public async Task BoundRequestMismatchFailsBeforeNetworkOrCustody()
+    {
+        var transport = new RecordingHandler(_ =>
+            throw new AssertFailedException("A mismatched bound request reached the network."));
+        var custody = new RecordingCustodyStore();
+        using var acquirer = Acquirer(transport, custody);
+        var boundTemplate = RequestTemplate();
+        var mismatchedTemplate = RequestTemplate(
+            requestedUri: "https://data.legilux.public.lu/different.xml");
+        var bound = MachineQueryEvidenceFixture.Bind(boundTemplate);
+
+        await Assert.ThrowsExactlyAsync<ArgumentException>(() =>
+            acquirer.AcquireAsync(bound, mismatchedTemplate, CancellationToken.None));
+
+        Assert.AreEqual(0, transport.SendCount);
+        Assert.AreEqual(0, custody.CreateCount);
+    }
+
+    [TestMethod]
+    public async Task ForgedBoundRequestBodyFailsBeforeNetworkOrCustody()
+    {
+        var transport = new RecordingHandler(_ =>
+            throw new AssertFailedException("Unbound request bytes reached the network."));
+        var custody = new RecordingCustodyStore();
+        using var acquirer = Acquirer(transport, custody);
+        var expectedBody = Encoding.UTF8.GetBytes("expected machine request");
+        var template = RequestTemplate(HttpRequestMethod.Post, requestBody: expectedBody);
+        var forged = new BoundMachineRequest(
+            template.RequestedUri,
+            Encoding.UTF8.GetBytes("different machine request"),
+            template.RenderReceipt);
+
+        await Assert.ThrowsExactlyAsync<ArgumentException>(() =>
+            acquirer.AcquireAsync(forged, template, CancellationToken.None));
 
         Assert.AreEqual(0, transport.SendCount);
         Assert.AreEqual(0, custody.CreateCount);
@@ -410,7 +529,7 @@ public sealed class BoundedHttpObservationAcquirerTests
         using var acquirer = Acquirer(transport, custody);
 
         await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() =>
-            acquirer.AcquireAsync(RequestEvidence(), CancellationToken.None));
+            acquirer.AcquireAsync(RequestTemplate(), CancellationToken.None));
 
         Assert.AreEqual(1, custody.CreateCount);
         Assert.AreEqual(0, custody.ReadCount);
@@ -427,7 +546,7 @@ public sealed class BoundedHttpObservationAcquirerTests
         using var acquirer = Acquirer(transport, custody);
 
         await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() =>
-            acquirer.AcquireAsync(RequestEvidence(), CancellationToken.None));
+            acquirer.AcquireAsync(RequestTemplate(), CancellationToken.None));
 
         Assert.AreEqual(1, custody.CreateCount);
         Assert.AreEqual(1, custody.ReadCount);
@@ -444,7 +563,7 @@ public sealed class BoundedHttpObservationAcquirerTests
         using var acquirer = Acquirer(transport, custody);
 
         await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() =>
-            acquirer.AcquireAsync(RequestEvidence(), CancellationToken.None));
+            acquirer.AcquireAsync(RequestTemplate(), CancellationToken.None));
 
         Assert.AreEqual(1, custody.CreateCount);
         Assert.AreEqual(0, custody.ReadCount);
@@ -457,7 +576,8 @@ public sealed class BoundedHttpObservationAcquirerTests
             custody,
             maximumResponseBytes: 1024,
             headersTimeout: TimeSpan.FromSeconds(5),
-            bodyTimeout: TimeSpan.FromSeconds(5));
+            bodyTimeout: TimeSpan.FromSeconds(5),
+            timeProvider: MachineQueryEvidenceFixture.Clock());
 
     private static RecordingHandler CompleteResponseHandler() => new(request =>
     {
@@ -494,26 +614,11 @@ public sealed class BoundedHttpObservationAcquirerTests
         return response;
     }
 
-    private static HttpRequestEvidence RequestEvidence(
-        HttpRequestMethod method = HttpRequestMethod.Get) => new(
-        requestedUri: "https://data.legilux.public.lu/example.xml",
-        method,
-        observedAtUtc: "2026-09-01T10:00:00.000Z",
-        timestampPrecision: HttpObservationTimestampPrecision.Millisecond,
-        clockSource: HttpObservationClockSource.SystemUtc,
-        runIdentity: Artifact(1),
-        adapterIdentity: Artifact(2),
-        requestPolicyIdentity: Artifact(3),
-        representationRequestKeyIdentity: Artifact(4),
-        outboundCrawlerIdentity: new OutboundCrawlerIdentityEvidence(
-            OutboundCrawlerIdentity.Schema,
-            OutboundCrawlerIdentity.Token),
-        origin: new HttpOrigin("https", "data.legilux.public.lu", 443),
-        queryPlanIdentity: Artifact(5));
-
-    private static SourceArtifactRef Artifact(int suffix) => new(
-        $"urn:uuid:00000000-0000-0000-0000-{suffix:D12}",
-        new string('a', 64));
+    private static HttpRequestTemplate RequestTemplate(
+        HttpRequestMethod method = HttpRequestMethod.Get,
+        byte[]? requestBody = null,
+        string requestedUri = "https://data.legilux.public.lu/example.xml") =>
+        MachineQueryEvidenceFixture.Template(requestedUri, method, requestBody);
 
     private sealed class RecordingHandler(
         Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
@@ -608,4 +713,117 @@ public sealed class BoundedHttpObservationAcquirerTests
                 (ReadBytesOverride ?? CreatedBytes).ToArray());
         }
     }
+}
+
+internal static class MachineQueryEvidenceFixture
+{
+    private static readonly DateTimeOffset ObservationInstant = new(
+        2026,
+        9,
+        1,
+        10,
+        0,
+        0,
+        TimeSpan.Zero);
+
+    public static TimeProvider Clock() => new MutableTimeProvider(ObservationInstant);
+
+    public static HttpRequestTemplate Template(
+        string requestedUri = "https://data.legilux.public.lu/example.xml",
+        HttpRequestMethod method = HttpRequestMethod.Get,
+        byte[]? requestBody = null)
+    {
+        var body = requestBody ?? [];
+        var receipt = Receipt(requestedUri, method, body);
+        var uri = new Uri(requestedUri);
+        return new HttpRequestTemplate(
+            requestedUri,
+            method,
+            runIdentity: Artifact(1),
+            adapterIdentity: Artifact(2),
+            requestPolicyIdentity: Artifact(3),
+            representationRequestKeyIdentity: Artifact(4),
+            outboundCrawlerIdentity: new OutboundCrawlerIdentityEvidence(
+                OutboundCrawlerIdentity.Schema,
+                OutboundCrawlerIdentity.Token),
+            origin: new HttpOrigin(uri.Scheme, uri.Host, uri.Port),
+            renderReceipt: receipt);
+    }
+
+    public static HttpRequestEvidence Evidence(
+        string requestedUri = "https://data.legilux.public.lu/example.xml",
+        HttpRequestMethod method = HttpRequestMethod.Get,
+        byte[]? requestBody = null) => HttpRequestEvidence.CreateAtSend(
+            Template(requestedUri, method, requestBody),
+            ObservationInstant);
+
+    public static BoundMachineRequest Bind(
+        HttpRequestTemplate request,
+        byte[]? requestBody = null) =>
+        new(request.RequestedUri, requestBody ?? [], request.RenderReceipt);
+
+    private static MachineQueryRenderReceipt Receipt(
+        string requestedUri,
+        HttpRequestMethod method,
+        byte[] requestBody)
+    {
+        var targetBytes = Encoding.ASCII.GetBytes(new Uri(requestedUri).PathAndQuery);
+        var isPost = method == HttpRequestMethod.Post;
+        var bodyLength = isPost ? requestBody.LongLength : (long?)null;
+        var bodySha256 = isPost ? Sha256(requestBody) : null;
+        return new MachineQueryRenderReceipt(
+            MachineQueryRenderReceipt.SchemaId,
+            Artifact(5),
+            MachineQueryPlan.SchemaId,
+            Artifact(6),
+            Artifact(9),
+            Artifact(7),
+            isPost
+                ? new SourceRegistryMemberRef(Artifact(8), "application/sparql-query")
+                : null,
+            isPost ? MachineQueryCharset.Utf8 : null,
+            MachineQueryInputMode.RendererInputs,
+            method,
+            targetBytes.LongLength,
+            Sha256(targetBytes),
+            bodyLength,
+            bodySha256);
+    }
+
+    private static SourceArtifactRef Artifact(int suffix) => new(
+        $"urn:uuid:00000000-0000-0000-0000-{suffix:D12}",
+        new string('a', 64));
+
+    private static string Sha256(ReadOnlySpan<byte> bytes) =>
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)).ToLowerInvariant();
+}
+
+internal static class BoundMachineRequestTestExtensions
+{
+    public static Task<HttpObservation> AcquireAsync(
+        this BoundedHttpObservationAcquirer acquirer,
+        HttpRequestTemplate request,
+        CancellationToken cancellationToken)
+    {
+        if (request.Method != HttpRequestMethod.Get)
+        {
+            throw new ArgumentException(
+                "The convenience overload is only valid for bodyless GET fixtures.",
+                nameof(request));
+        }
+
+        return acquirer.AcquireAsync(
+            MachineQueryEvidenceFixture.Bind(request),
+            request,
+            cancellationToken);
+    }
+}
+
+internal sealed class MutableTimeProvider(DateTimeOffset utcNow) : TimeProvider
+{
+    private DateTimeOffset _utcNow = utcNow.ToUniversalTime();
+
+    public override DateTimeOffset GetUtcNow() => _utcNow;
+
+    public void SetUtcNow(DateTimeOffset value) => _utcNow = value.ToUniversalTime();
 }
