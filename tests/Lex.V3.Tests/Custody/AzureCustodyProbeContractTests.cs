@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using Lex.V3.Contracts;
@@ -41,7 +42,7 @@ public sealed class AzureCustodyProbeContractTests
     [TestMethod]
     public async Task ReadAcceptsOnlyAReceiptRestoresCheckedBytesAndWritesNothing()
     {
-        var body = "retained synthetic probe"u8.ToArray();
+        var body = new byte[32];
         var receipt = ReceiptFor(body, CustodyClass.LegalHoldEvidence);
         var store = new ProbeStore(body);
         var output = new StringWriter();
@@ -86,9 +87,49 @@ public sealed class AzureCustodyProbeContractTests
     }
 
     [TestMethod]
+    public async Task OnlyTheModernAzureHostManagedIdentityEndpointIsAdmitted()
+    {
+        var invalidEnvironments = new (string Name, Action<Dictionary<string, string?>> Mutate)[]
+        {
+            ("missing endpoint", environment => environment.Remove("IDENTITY_ENDPOINT")),
+            ("missing header", environment => environment.Remove("IDENTITY_HEADER")),
+            ("blank header", environment => environment["IDENTITY_HEADER"] = "  "),
+            ("external endpoint", environment =>
+                environment["IDENTITY_ENDPOINT"] = "http://identity.example.invalid/token"),
+            ("legacy endpoint", environment => environment["MSI_ENDPOINT"] = "http://127.0.0.1/token"),
+            ("legacy secret", environment => environment["MSI_SECRET"] = "platform-secret"),
+            ("arc selector", environment => environment["IMDS_ENDPOINT"] = "http://127.0.0.1/token"),
+            ("service fabric selector", environment =>
+                environment["IDENTITY_SERVER_THUMBPRINT"] = "00"),
+        };
+
+        foreach (var (name, mutate) in invalidEnvironments)
+        {
+            var environment = ValidEnvironment();
+            mutate(environment);
+            var storeCreated = false;
+
+            await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
+                CustodyProbeApplication.RunAsync(
+                    ["write", "nightly_floor_90d"],
+                    TextReader.Null,
+                    TextWriter.Null,
+                    environment,
+                    _ =>
+                    {
+                        storeCreated = true;
+                        return new ProbeStore();
+                    },
+                    CancellationToken.None));
+
+            Assert.IsFalse(storeCreated, name);
+        }
+    }
+
+    [TestMethod]
     public async Task ReadRefusesWrongOrUnenforcedPolicyBeforeAStoreExists()
     {
-        var body = "retained synthetic probe"u8.ToArray();
+        var body = new byte[32];
         var reference = ReferenceFor(body, CustodyClass.LegalHoldEvidence);
         var wrongPolicy = ReceiptFor(
             body,
@@ -122,6 +163,32 @@ public sealed class AzureCustodyProbeContractTests
                     },
                     CancellationToken.None));
             Assert.IsFalse(storeCreated);
+        }
+    }
+
+    [TestMethod]
+    public async Task ReadAcceptsOnlyTheExactSyntheticProbeByteCount()
+    {
+        foreach (var byteCount in new[] { 31, 33 })
+        {
+            var body = new byte[byteCount];
+            var receipt = ReceiptFor(body, CustodyClass.NightlyFloor90d);
+            var storeCreated = false;
+
+            await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
+                CustodyProbeApplication.RunAsync(
+                    ["read"],
+                    new StringReader(ContractJson.Serialize(receipt)),
+                    TextWriter.Null,
+                    ValidEnvironment(),
+                    _ =>
+                    {
+                        storeCreated = true;
+                        return new ProbeStore(body);
+                    },
+                    CancellationToken.None));
+
+            Assert.IsFalse(storeCreated, byteCount.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
     }
 
@@ -210,6 +277,94 @@ public sealed class AzureCustodyProbeContractTests
     }
 
     [TestMethod]
+    public async Task PreCancelledProcessReturnsTheFixedCancellationExitCode()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        var exitCode = await Lex.V3.Custody.Probe.Program.RunProcessAsync(
+            ["read"],
+            cancellation.Token);
+
+        Assert.AreEqual(130, exitCode);
+    }
+
+    [TestMethod]
+    public async Task LinuxSigtermCancelsWithoutReturningOutput()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var assembly = Path.Combine(AppContext.BaseDirectory, "Lex.V3.Custody.Probe.dll");
+        Assert.IsTrue(File.Exists(assembly), assembly);
+        var dotnet = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH");
+        if (string.IsNullOrEmpty(dotnet))
+        {
+            dotnet = "dotnet";
+        }
+
+        var startInfo = new ProcessStartInfo(dotnet)
+        {
+            CreateNoWindow = true,
+            RedirectStandardError = true,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+        };
+        startInfo.ArgumentList.Add(assembly);
+        startInfo.ArgumentList.Add("read");
+        foreach (var name in new[]
+                 {
+                     "AZURE_CLIENT_SECRET",
+                     "AZURE_STORAGE_ACCOUNT_KEY",
+                     "AZURE_STORAGE_CONNECTION_STRING",
+                     "AZURE_STORAGE_KEY",
+                     "LEX_V3_CUSTODY_ACCOUNT_KEY",
+                     "LEX_V3_CUSTODY_CLIENT_SECRET",
+                     "LEX_V3_CUSTODY_CONNECTION_STRING",
+                     "MSI_ENDPOINT",
+                     "MSI_SECRET",
+                     "IMDS_ENDPOINT",
+                     "IDENTITY_SERVER_THUMBPRINT",
+                 })
+        {
+            startInfo.Environment.Remove(name);
+        }
+
+        foreach (var entry in ValidEnvironment())
+        {
+            startInfo.Environment[entry.Key] = entry.Value;
+        }
+
+        using var process = new Process { StartInfo = startInfo };
+        Assert.IsTrue(process.Start());
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+        await Task.Delay(TimeSpan.FromMilliseconds(250));
+        Assert.IsFalse(process.HasExited);
+        Assert.AreEqual(0, Kill(process.Id, 15));
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+
+        Assert.AreEqual(string.Empty, await stdoutTask);
+        Assert.AreEqual(string.Empty, await stderrTask);
+        Assert.AreEqual(130, process.ExitCode);
+    }
+
+    [TestMethod]
     public async Task MalformedOrOversizedReceiptFailsBeforeAzureIsReached()
     {
         var malformedStoreCreated = false;
@@ -244,6 +399,9 @@ public sealed class AzureCustodyProbeContractTests
     private static readonly Guid TestClientId =
         Guid.Parse("66ba38aa-74fa-42c4-ab19-e4e41b9ae01b");
 
+    [DllImport("libc", EntryPoint = "kill", SetLastError = true)]
+    private static extern int Kill(int processId, int signal);
+
     private static readonly Guid NightlyPolicyKey =
         Guid.Parse("ff52fe20-4b11-4ca2-9542-22249d5c4c06");
 
@@ -261,6 +419,8 @@ public sealed class AzureCustodyProbeContractTests
         ["LEX_V3_CUSTODY_LEGAL_HOLD_POLICY_KEY"] = LegalHoldPolicyKey.ToString("D"),
         ["LEX_V3_CUSTODY_SUBSCRIPTION_ID"] = "37000e0e-4444-4f9a-95f9-3a786b4ddd30",
         ["LEX_V3_CUSTODY_RESOURCE_GROUP"] = "resource-group",
+        ["IDENTITY_ENDPOINT"] = "http://127.0.0.1:42356/msi/token",
+        ["IDENTITY_HEADER"] = "platform-rotated-header",
     };
 
     private static DurableBlobWriteReceipt ReceiptFor(

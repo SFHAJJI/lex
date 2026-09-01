@@ -1,4 +1,6 @@
+using System.Net;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
@@ -10,8 +12,52 @@ namespace Lex.V3.Custody.Probe;
 
 internal static class Program
 {
-    public static Task<int> Main(string[] arguments) =>
-        CustodyProbeApplication.RunConsoleAsync(arguments, CancellationToken.None);
+    public static async Task<int> Main(string[] arguments)
+    {
+        using var cancellation = new CancellationTokenSource();
+        ConsoleCancelEventHandler cancelHandler = (_, eventArguments) =>
+        {
+            eventArguments.Cancel = true;
+            cancellation.Cancel();
+        };
+        Console.CancelKeyPress += cancelHandler;
+        PosixSignalRegistration? termination = null;
+        try
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                termination = PosixSignalRegistration.Create(
+                    PosixSignal.SIGTERM,
+                    context =>
+                    {
+                        context.Cancel = true;
+                        cancellation.Cancel();
+                    });
+            }
+
+            return await RunProcessAsync(arguments, cancellation.Token).ConfigureAwait(false);
+        }
+        finally
+        {
+            termination?.Dispose();
+            Console.CancelKeyPress -= cancelHandler;
+        }
+    }
+
+    internal static async Task<int> RunProcessAsync(
+        string[] arguments,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await CustodyProbeApplication.RunConsoleAsync(arguments, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return 130;
+        }
+    }
 }
 
 internal static class CustodyProbeApplication
@@ -30,12 +76,21 @@ internal static class CustodyProbeApplication
         "LEX_V3_CUSTODY_CONNECTION_STRING",
     ];
 
+    private static readonly string[] AlternateManagedIdentitySourceVariables =
+    [
+        "MSI_ENDPOINT",
+        "MSI_SECRET",
+        "IMDS_ENDPOINT",
+        "IDENTITY_SERVER_THUMBPRINT",
+    ];
+
     internal static async Task<int> RunConsoleAsync(
         string[] arguments,
         CancellationToken cancellationToken)
     {
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var environment = Environment.GetEnvironmentVariables()
                 .Cast<System.Collections.DictionaryEntry>()
                 .ToDictionary(
@@ -162,6 +217,8 @@ internal static class CustodyProbeApplication
             }
         }
 
+        ValidateManagedIdentitySource(environment);
+
         return new AzureBlobCustodyOptions(
             new Uri(Required(environment, "LEX_V3_CUSTODY_SERVICE_URI"), UriKind.Absolute),
             Required(environment, "LEX_V3_CUSTODY_STAGING_CONTAINER"),
@@ -178,6 +235,12 @@ internal static class CustodyProbeApplication
         DurableBlobWriteReceipt receipt,
         AzureBlobCustodyOptions options)
     {
+        if (receipt.Reference.ByteLength != SyntheticByteCount)
+        {
+            throw new InvalidOperationException(
+                "The custody receipt is not for the exact synthetic probe size.");
+        }
+
         var expectedPolicyKey = receipt.Reference.CustodyClass switch
         {
             CustodyClass.NightlyFloor90d => options.NightlyPolicyKey,
@@ -192,6 +255,54 @@ internal static class CustodyProbeApplication
             throw new InvalidOperationException(
                 "The custody receipt does not bind the configured immutable policy lane.");
         }
+    }
+
+    private static void ValidateManagedIdentitySource(
+        IReadOnlyDictionary<string, string?> environment)
+    {
+        foreach (var name in AlternateManagedIdentitySourceVariables)
+        {
+            if (environment.TryGetValue(name, out var value) && value is not null)
+            {
+                throw new InvalidOperationException(
+                    $"Managed identity source selector {name} is forbidden.");
+            }
+        }
+
+        var endpointText = Required(environment, "IDENTITY_ENDPOINT");
+        var identityHeader = Required(environment, "IDENTITY_HEADER");
+        if (!Uri.TryCreate(endpointText, UriKind.Absolute, out var endpoint)
+            || !string.Equals(endpoint.Scheme, Uri.UriSchemeHttp, StringComparison.Ordinal)
+            || !string.IsNullOrEmpty(endpoint.UserInfo)
+            || !string.IsNullOrEmpty(endpoint.Query)
+            || !string.IsNullOrEmpty(endpoint.Fragment)
+            || !IsLocalIdentityHost(endpoint)
+            || string.IsNullOrWhiteSpace(identityHeader))
+        {
+            throw new InvalidOperationException(
+                "IDENTITY_ENDPOINT is not an admitted Azure-host local endpoint.");
+        }
+    }
+
+    private static bool IsLocalIdentityHost(Uri endpoint)
+    {
+        if (endpoint.IsLoopback)
+        {
+            return true;
+        }
+
+        if (!IPAddress.TryParse(endpoint.Host, out var address))
+        {
+            return false;
+        }
+
+        if (address.IsIPv6LinkLocal)
+        {
+            return true;
+        }
+
+        var bytes = address.GetAddressBytes();
+        return bytes.Length == 4 && bytes[0] == 169 && bytes[1] == 254;
     }
 
     private static string Required(
