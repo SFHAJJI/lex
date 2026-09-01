@@ -295,6 +295,32 @@ public sealed class AzureCustodyProbeContractTests
     }
 
     [TestMethod]
+    public async Task ReadCancellationDoesNotDependOnTheReaderCooperating()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var input = new CancellationIgnoringReader();
+        var storeCreated = false;
+        var run = CustodyProbeApplication.RunAsync(
+            ["read"],
+            input,
+            TextWriter.Null,
+            ValidEnvironment(),
+            _ =>
+            {
+                storeCreated = true;
+                return new ProbeStore();
+            },
+            cancellation.Token);
+
+        await input.ReadStarted.WaitAsync(TimeSpan.FromSeconds(1));
+        cancellation.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => run.WaitAsync(TimeSpan.FromSeconds(1)));
+        Assert.IsFalse(storeCreated);
+    }
+
+    [TestMethod]
     public async Task LinuxSigtermCancelsWithoutReturningOutput()
     {
         if (OperatingSystem.IsWindows())
@@ -513,5 +539,23 @@ public sealed class AzureCustodyProbeContractTests
             DurableBlobRef reference,
             CancellationToken cancellationToken) =>
             throw new NotSupportedException();
+    }
+
+    private sealed class CancellationIgnoringReader : TextReader
+    {
+        private readonly TaskCompletionSource readStarted = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<int> neverCompletes = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task ReadStarted => readStarted.Task;
+
+        public override ValueTask<int> ReadAsync(
+            Memory<char> buffer,
+            CancellationToken cancellationToken = default)
+        {
+            readStarted.TrySetResult();
+            return new ValueTask<int>(neverCompletes.Task);
+        }
     }
 }

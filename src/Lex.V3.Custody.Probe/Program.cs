@@ -339,7 +339,10 @@ internal static class CustodyProbeApplication
         var receipt = new System.Text.StringBuilder();
         while (true)
         {
-            var read = await input.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+            var read = await input.ReadAsync(buffer, cancellationToken)
+                .AsTask()
+                .WaitAsync(cancellationToken)
+                .ConfigureAwait(false);
             if (read == 0)
             {
                 return receipt.ToString();
