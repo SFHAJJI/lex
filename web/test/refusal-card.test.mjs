@@ -1078,3 +1078,66 @@ test('the absence fields cannot be inherited either', () => {
     'an inherited asserts_absence_of_law satisfied the contract',
   );
 });
+
+test('an EU ambiguity offers candidates in the Union publisher terms', () => {
+  // "applicable from" was hardcoded on both halves of the ambiguity split, so an ambiguous EU
+  // regulation offered two states described as applicable from a date. The Union publishes
+  // consolidated wording states and makes no applicability claim. The refusal card is the last
+  // place that should overstate: a reader is here precisely because the service would not answer.
+  const html = renderRefusalCard({
+    code: 'ambiguous_version',
+    sentence: 'Two consolidations of this regulation cover that date.',
+    payload: {
+      publisher: 'eu-eurlex',
+      work: 'reg-2016-679',
+      candidates: [
+        {
+          valid_from: '2016-05-04',
+          hash: 'a'.repeat(64),
+          publication_date: '2016-05-04',
+          href: '/eu-eurlex/reg-2016-679/2016-05-04--' + 'a'.repeat(64),
+          withdrawn: false,
+        },
+        {
+          valid_from: '2018-05-25',
+          hash: 'b'.repeat(64),
+          publication_date: '2018-05-25',
+          href: '/eu-eurlex/reg-2016-679/2018-05-25--' + 'b'.repeat(64),
+          withdrawn: false,
+        },
+      ],
+    },
+  });
+  assert.equal(html.includes('a consolidated wording state from'), true);
+  assert.equal(
+    html.includes('applicable from'),
+    false,
+    'an EU candidate was offered as applicable from a date',
+  );
+});
+
+test('a superseded EU state is described in the Union publisher terms', () => {
+  const html = renderSupersededState({
+    publisher: 'eu-eurlex',
+    work: 'reg-2016-679',
+    live: {
+      valid_from: '2018-05-25',
+      publication_date: '2018-05-25',
+      hash: 'b'.repeat(64),
+      href: '/eu-eurlex/reg-2016-679/2018-05-25--' + 'b'.repeat(64),
+      withdrawn: false,
+    },
+    // A list: the disclosure exists to name every withdrawn sibling, not one.
+    withdrawn: [
+      {
+        valid_from: '2016-05-04',
+        publication_date: '2016-05-04',
+        hash: 'a'.repeat(64),
+        href: '/eu-eurlex/reg-2016-679/2016-05-04--' + 'a'.repeat(64),
+        withdrawn: true,
+      },
+    ],
+  });
+  assert.equal(html.includes('a consolidated wording state from'), true);
+  assert.equal(html.includes('applicable from'), false);
+});

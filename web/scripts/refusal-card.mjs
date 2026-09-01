@@ -27,6 +27,7 @@
 import { mark } from './design-tokens.mjs';
 import { quotedLaw } from './localization.mjs';
 import { handoffUri } from './routes.mjs';
+import { STATE_PHRASE, semanticsOf } from './publisher-vocabulary.mjs';
 import { parseObjectUrl } from './urls.mjs';
 import { isCalendarDate, requireCalendarDate } from './temporal.mjs';
 
@@ -589,12 +590,17 @@ function requirePayload(code, payload) {
   if (code === 'profiles_differ') requireProfiles(own(payload, 'profiles'));
 }
 
-function renderCandidates(candidates) {
+// The publisher's own vocabulary, derived from the payload rather than hardcoded. This said
+// "applicable from" for every candidate, so an ambiguous EU regulation offered two states
+// described as applicable from a date, attributing to the Union an applicability claim it does
+// not make. The refusal card is the last place that should overstate: a reader is here
+// precisely because the service would not answer.
+function renderCandidates(candidates, publisher) {
   const items = candidates
     .map(
       (candidate) =>
         '<li class="refusal-candidate">' +
-        `<a href="${escapeHtml(candidate.href)}">applicable from ` +
+        `<a href="${escapeHtml(candidate.href)}">${escapeHtml(STATE_PHRASE[semanticsOf(publisher, 'an ambiguous-version candidate')])} ` +
         `${escapeHtml(candidate.valid_from)}, hash ` +
         `<code>${escapeHtml(candidate.hash.slice(0, 8))}</code>, published ` +
         `${escapeHtml(candidate.publication_date)}</a></li>`,
@@ -625,7 +631,7 @@ function renderPayload(code, payload) {
 
   for (const [key, value] of entries) {
     if (code === 'ambiguous_version' && key === 'candidates') {
-      structured.push(renderCandidates(value));
+      structured.push(renderCandidates(value, own(payload, 'publisher')));
     } else if (key === 'nearest_anchors' && Array.isArray(value)) {
       structured.push(renderChips('refusal-anchors', value));
     } else if (value === null) {
@@ -807,7 +813,9 @@ export function renderSupersededState({ publisher, work, live, withdrawn }) {
   const siblings = withdrawn
     .map(
       (one) =>
-        `<li><a href="${escapeHtml(one.href)}">applicable from ${escapeHtml(one.valid_from)}, ` +
+        `<li><a href="${escapeHtml(one.href)}">` +
+        `${escapeHtml(STATE_PHRASE[semanticsOf(publisher, 'a withdrawn sibling')])} ` +
+        `${escapeHtml(one.valid_from)}, ` +
         `hash <code>${escapeHtml(one.hash.slice(0, 8))}</code>, published ` +
         `${escapeHtml(one.publication_date)}</a></li>`,
     )
@@ -816,7 +824,8 @@ export function renderSupersededState({ publisher, work, live, withdrawn }) {
   return (
     '<section class="superseded-state">' +
     `<p class="superseded-live"><a href="${escapeHtml(live.href)}">The state the publisher ` +
-    `holds, applicable from ${escapeHtml(live.valid_from)}, hash ` +
+    `holds, ${escapeHtml(STATE_PHRASE[semanticsOf(publisher, 'a superseded-state disclosure')])} ` +
+    `${escapeHtml(live.valid_from)}, hash ` +
     `<code>${escapeHtml(live.hash.slice(0, 8))}</code></a></p>` +
     '<p class="superseded-note">The publisher withdrew the state below and replaced it. This ' +
     'is the publisher ranking them, not this interface choosing, so no choice is asked of ' +
