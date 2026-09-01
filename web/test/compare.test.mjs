@@ -35,6 +35,8 @@ const RIGHT = {
 
 const CHANGED = {
   changed: true,
+  // The live diff carries this and says whether the two states can be aligned at all.
+  provision_level_comparable: true,
   blocks: [{ anchor_label: 'Art. 1', removed: 'the old wording', added: 'the new wording' }],
   renumbering: [{ from: 'art_1', to: 'art_1bis' }],
 };
@@ -247,7 +249,7 @@ test('a change block carries text or nothing, never a shape', () => {
       () =>
         renderCompare({
           ...GOOD,
-          result: { changed: true, blocks: [{ anchor_label: 'Art. 1', added: value }] },
+          result: { changed: true, provision_level_comparable: true, blocks: [{ anchor_label: 'Art. 1', added: value }] },
         }),
       /is blank, which renders as a change that is not there|reached the page as/,
       `${JSON.stringify(value)} rendered as a change`,
@@ -272,7 +274,7 @@ test('a result with no verdict, or a changed result with no changes, is refused'
     /must say whether it changed/,
   );
   assert.throws(
-    () => renderCompare({ ...GOOD, result: { changed: true, blocks: [] } }),
+    () => renderCompare({ ...GOOD, result: { changed: true, provision_level_comparable: true, blocks: [] } }),
     /would render two empty panes/,
   );
   assert.throws(
@@ -281,7 +283,7 @@ test('a result with no verdict, or a changed result with no changes, is refused'
         ...GOOD,
         // Both absent, which is the case this guard is for; a blank string is refused
         // earlier, by the rule about shapes that render as a change.
-        result: { changed: true, blocks: [{ anchor_label: 'Art. 1' }] },
+        result: { changed: true, provision_level_comparable: true, blocks: [{ anchor_label: 'Art. 1' }] },
       }),
     /neither a removal nor an addition/,
   );
@@ -289,7 +291,7 @@ test('a result with no verdict, or a changed result with no changes, is refused'
     () =>
       renderCompare({
         ...GOOD,
-        result: { changed: true, blocks: [{ removed: 'x', added: 'y' }] },
+        result: { changed: true, provision_level_comparable: true, blocks: [{ removed: 'x', added: 'y' }] },
       }),
     /does not say which provision/,
   );
@@ -353,10 +355,35 @@ test('values are escaped rather than trusted', () => {
     ...GOOD,
     result: {
       changed: true,
+      provision_level_comparable: true,
       blocks: [{ anchor_label: '<img src=x onerror=alert(1)>', added: 'x' }],
       renumbering: [],
     },
   });
   assert.ok(!html.includes('<img'));
   assert.ok(html.includes('&lt;img'));
+});
+
+test('aligned blocks need the service to say the states can be aligned', () => {
+  // Found by putting a real payload through this renderer: the live diff carries
+  // provision_level_comparable and this screen ignored it. Rendering aligned blocks when the
+  // service says alignment is not possible invents the alignment, which is the same defect as
+  // inventing the diff, one level down.
+  for (const value of [undefined, false, null, 'true']) {
+    assert.throws(
+      () =>
+        renderCompare({
+          ...GOOD,
+          result: { ...CHANGED, provision_level_comparable: value },
+        }),
+      /an alignment this screen invented rather than one the service found/,
+      `provision_level_comparable=${JSON.stringify(value)} still produced aligned blocks`,
+    );
+  }
+
+  // And an unchanged result needs no alignment answer, because it renders no blocks.
+  const same = { ...GOOD, right: { ...LEFT } };
+  assert.ok(
+    renderCompare({ ...same, result: { changed: false, note: 'x' } }).includes('changed: false'),
+  );
 });

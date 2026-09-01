@@ -399,6 +399,19 @@ export function renderCompare({ mode, left, right, result }) {
     );
   }
 
+  // Whether the two states can be aligned provision by provision is the service's answer, not
+  // this screen's assumption. The live diff carries `provision_level_comparable` and this
+  // renderer ignored it until a real payload was put through: rendering aligned blocks when the
+  // service says they cannot be aligned is inventing the alignment, which is the same defect as
+  // inventing the diff, one level down.
+  if (result?.changed === true && result.provision_level_comparable !== true) {
+    throw new Error(
+      'this result says the states changed but does not say they can be compared provision by ' +
+        'provision; aligned blocks would be an alignment this screen invented rather than one ' +
+        'the service found',
+    );
+  }
+
   if (result?.changed !== true) {
     throw new Error(
       'a comparison result must say whether it changed; an absent verdict rendered as empty ' +
