@@ -381,7 +381,7 @@ public sealed class VerifiedLuxembourgSourceProfile
 
         Add(values, LuxembourgVocabularyKind.UserFormat, UserFormatPrefix,
             "xml", "xml-akomantoso", "pdfa", "pdf", "html", "docx", "doc", "jpeg", "jpg",
-            "xls", "xlsx", "xml-lux", "zip", "svg");
+            "xls", "xlsx", "xml-lux", "zip");
 
         Add(values, LuxembourgVocabularyKind.Language, LanguageAuthorityPrefix,
             "DEU", "ENG", "FRA", "LTZ");

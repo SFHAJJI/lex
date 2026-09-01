@@ -31,12 +31,40 @@ public sealed class LuxembourgSourceProfileAdversarialProofTests
     }
 
     [TestMethod]
+    public void CompleteAuthorityVocabularyWithoutUnmintedSvgStillOpens()
+    {
+        var authorityVocabulary = ExpectedVocabulary()
+            .Select(static value => new LuxembourgIriVocabularyValue(value.Kind, value.Iri))
+            .ToArray();
+
+        Assert.IsFalse(authorityVocabulary.Any(value =>
+            value.Kind == LuxembourgVocabularyKind.UserFormat &&
+            value.FullIri == UserFormatPrefix + "svg"));
+        CollectionAssert.IsSubsetOf(
+            new[] { "jpeg", "jpg", "xls", "xlsx", "xml-lux", "zip" }
+                .Select(value => UserFormatPrefix + value)
+                .ToArray(),
+            authorityVocabulary
+                .Where(static value => value.Kind == LuxembourgVocabularyKind.UserFormat)
+                .Select(static value => value.FullIri)
+                .ToArray());
+
+        var profile = VerifiedLuxembourgSourceProfile.Open(new LuxembourgVocabularySnapshot(
+            ObservationRef,
+            CompleteEnumerationRef,
+            authorityVocabulary,
+            []));
+
+        Assert.HasCount(authorityVocabulary.Length, profile.ObservedIriVocabulary);
+    }
+
+    [TestMethod]
     public void ProfileAndSelectorTableDigestsArePinnedIndependently()
     {
         var profile = ExpectedProfile();
 
         Assert.AreEqual(
-            "b610262eb45672d20402cbc72bf7f138ceacfee98bab5858d4a5e37daa6839c3",
+            "0d887cb768a0ebc5d98e9e2f2ca156aa1468da7f121a0a44d1d7a0a72a8fbb3d",
             profile.ScopeBinding.SourceProfileRef.Sha256);
         Assert.AreEqual(
             "c25b96ade3fe55ebc81ee4135859954abc46c04026124336d7a2ab493809fb3e",
@@ -497,7 +525,6 @@ public sealed class LuxembourgSourceProfileAdversarialProofTests
         (LuxembourgVocabularyKind.UserFormat, UserFormatPrefix + "jpg"),
         (LuxembourgVocabularyKind.UserFormat, UserFormatPrefix + "pdf"),
         (LuxembourgVocabularyKind.UserFormat, UserFormatPrefix + "pdfa"),
-        (LuxembourgVocabularyKind.UserFormat, UserFormatPrefix + "svg"),
         (LuxembourgVocabularyKind.UserFormat, UserFormatPrefix + "xls"),
         (LuxembourgVocabularyKind.UserFormat, UserFormatPrefix + "xlsx"),
         (LuxembourgVocabularyKind.UserFormat, UserFormatPrefix + "xml"),
