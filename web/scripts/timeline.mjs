@@ -132,16 +132,23 @@ function requireState(state, index) {
     throw new Error(`${where} is withdrawn and does not say when the publisher withdrew it`);
   }
 
-  // A title travels with the language it is written in. Defaulting to French labelled every
-  // English EU title as French, and lang is about the text, not about the corpus it came from.
+  // A title travels with the language it is written in, and the record already says what that
+  // is. Defaulting to a constant `'fr'` labelled every English Union title as French, which is
+  // the defect this guard was written for; falling back to this state's own `language` is a
+  // different thing, because it reads the expression's own claim rather than guessing. A title
+  // is published as part of the expression it belongs to.
+  //
+  // An explicit `title_language` still wins, for a publisher that serves an expression in one
+  // language under a title it publishes only in another. Neither present stays refused.
   if (Object.hasOwn(state, 'title')) {
     if (typeof state.title !== 'string' || state.title.trim().length === 0) {
       throw new Error(`${where} carries a title that is not a string`);
     }
-    if (typeof state.title_language !== 'string' || !/^[a-z]{2}$/.test(state.title_language)) {
+    const declared = state.title_language ?? state.language;
+    if (typeof declared !== 'string' || !/^[a-z]{2}$/.test(declared)) {
       throw new Error(
-        `${where} carries a title and does not say what language it is in; a default would ` +
-          'label every title of one publisher as the language of the other',
+        `${where} carries a title and neither it nor the record says what language it is in; ` +
+          'a constant default would label every title of one publisher as the other',
       );
     }
   }
@@ -260,7 +267,7 @@ function renderRow(state, { semantics, asOf }) {
     : '';
   const title =
     typeof state.title === 'string' && state.title.length > 0
-      ? `<p class="timeline-title" lang="${escapeHtml(state.title_language ?? 'fr')}">` +
+      ? `<p class="timeline-title" lang="${escapeHtml(state.title_language ?? state.language)}">` +
         `${escapeHtml(state.title)}</p>`
       : '';
 
