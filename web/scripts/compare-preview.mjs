@@ -53,6 +53,7 @@ export function renderComparePreview({ locale = 'en' } = {}) {
     right: RIGHT,
     result: {
       changed: true,
+      provision_level_comparable: true,
       blocks: [
         {
           anchor_label: 'Art. 1',
@@ -107,6 +108,7 @@ export function renderComparePreview({ locale = 'en' } = {}) {
     right: { ...LEFT, language: 'fr', profile: 'xhtml-eu/1', body_sha256: DIGEST_C },
     result: {
       changed: true,
+      provision_level_comparable: true,
       blocks: [
         {
           anchor_label: 'Art. 1',
