@@ -893,10 +893,13 @@ async function main() {
        }
       }
     }
-    session.close();
-    // Every same-origin destination the pages offer has to resolve. A visible action leading
-    // to a missing page is a promise the page cannot keep, and nothing else in this run looks
-    // past the page it is on.
+    // Every same-origin destination the pages offer has to resolve, and a reader following one
+    // has to land somewhere coherent. This used to be a fetch and a status code, which proves a
+    // file exists and nothing about what a reader arrives at: a 200 can be a blank body, a page
+    // that never says what it is, or one that throws in the browser and renders half of itself.
+    // So each destination is now navigated to in the same browser the rest of this run uses,
+    // and the landing page has to declare its own state, carry exactly one first-level heading,
+    // and log nothing.
     const destinations = new Map();
     for (const row of rows) {
       for (const href of row.sameOrigin ?? []) {
@@ -915,8 +918,51 @@ async function main() {
         failures.push(
           `${fromPage}: ${href} answers ${status}; a visible action must not lead to a missing page`,
         );
+        continue;
+      }
+
+      // Follow it the way a reader would. `logged` is the same per-page buffer the main loop
+      // fills from the CDP listener, so clearing it here scopes it to this one navigation.
+      logged = [];
+      await session.send("Page.navigate", { url: `${site.origin}${href}` }, sessionId);
+      await waitForSettled(session, sessionId);
+      const { result } = await session.send(
+        "Runtime.evaluate",
+        {
+          expression: `(() => ({
+             state: document.documentElement.getAttribute('data-preview-state'),
+             headings: document.querySelectorAll('h1').length,
+             text: document.body.innerText.trim().length,
+           }))()`,
+          returnByValue: true,
+          awaitPromise: true,
+        },
+        sessionId,
+      );
+      const landed = result.value;
+      if (!landed?.state) {
+        failures.push(
+          `${fromPage}: following ${href} lands on a page that does not declare what it is; a ` +
+            "reader who followed an action needs the destination to say where they arrived",
+        );
+      }
+      if (landed && landed.headings !== 1) {
+        failures.push(
+          `${fromPage}: following ${href} lands on a page with ${landed.headings} first-level ` +
+            "headings, so it does not name itself once",
+        );
+      }
+      if (landed && landed.text < 40) {
+        failures.push(
+          `${fromPage}: following ${href} lands on ${landed.text} characters of text; a ` +
+            "destination that says almost nothing is a dead end that answered 200",
+        );
+      }
+      if (logged.length > 0) {
+        failures.push(`${fromPage}: following ${href} logged ${logged.join(", ")}`);
       }
     }
+    session.close();
   } finally {
     // Chrome spawns a process tree, and killing only the process we launched leaves the
     // renderers and the GPU process behind. Repeated runs left 51 of them alive, holding

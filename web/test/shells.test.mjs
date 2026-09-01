@@ -116,7 +116,9 @@ test('an entry screen links to the other shells and to no shell-prefixed object 
     const html = renderShellEntry({ shell });
     assert.ok(html.includes(`data-shell="${shell}"`));
 
-    const hrefs = [...html.matchAll(/href="([^"]+)"/g)].map((match) => match[1]);
+    // Anchors only. A stylesheet is not somewhere a reader can go, and scanning every href
+    // made the asset links in the page head answer a question asked about navigation.
+    const hrefs = [...html.matchAll(/<a [^>]*?href="([^"]+)"/g)].map((match) => match[1]);
     const internal = hrefs.filter((href) => href.startsWith('/'));
     assert.ok(internal.length >= 2, `${shell} lost its shell switcher`);
 
