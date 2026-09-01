@@ -11,8 +11,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { FilterChips } from '../.react-build/app.mjs';
 
 const FILTERS = [
-  { key: 'loi', label: 'LOI', active: true, hides: 20 },
-  { key: 'rgd', label: 'RGD', active: false, hides: 0 },
+  { key: 'loi', label: 'LOI', active: true },
+  { key: 'rgd', label: 'RGD', active: false },
 ];
 
 const render = (props = {}) =>
@@ -49,9 +49,13 @@ test('an unfiltered page says so rather than staying silent', () => {
 });
 
 test('a count that cannot be true is refused', () => {
-  // More shown than held is a page describing a corpus it does not have.
+  // More shown than held is a page describing a corpus it does not have. A negative count is the
+  // same failure with the sign flipped: it reports the group hiding more rows than it ever held,
+  // and only `shown > total` was checked, so it passed.
   assert.throws(() => render({ total: 10, shown: 12 }), /count before and after/);
   assert.throws(() => render({ total: undefined }), /count before and after/);
+  assert.throws(() => render({ total: 10, shown: -1 }), /count before and after/);
+  assert.throws(() => render({ total: -1, shown: -1 }), /count before and after/);
 });
 
 test('an empty filter group is refused', () => {

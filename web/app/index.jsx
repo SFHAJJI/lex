@@ -15,7 +15,7 @@ export { renderHydratableDocument } from './render-document.mjs';
 export { AmbiguousVersion } from './AmbiguousVersion.jsx';
 export { ResultList } from './ResultList.jsx';
 export { FilterChips } from './FilterChips.jsx';
-export { CompareArming, armingRefusal, useCompareSelection } from './CompareArming.jsx';
+export { CompareArming, armedBy, armingRefusal, compareIfArmed, useCompareSelection } from './CompareArming.jsx';
 export { DateField, parseAsOf, resolutionSentence } from './DateField.jsx';
 export { StateBanner } from './StateBanner.jsx';
 export { Hole, Provisional, ValidityConflict } from './StateQualifiers.jsx';
@@ -28,3 +28,13 @@ export {
   renderCoverageReactPage,
 } from './timeline-coverage-preview.jsx';
 export { Provenance } from './Provenance.jsx';
+export { SearchScreen } from './SearchScreen.jsx';
+export { NoHitCard, Population, requirePopulation } from './NoHitCard.jsx';
+export {
+  RelaxationDisclosures,
+  interpretationOf,
+  requireRelaxationAccount,
+  requireSameOriginSearchPath,
+} from './RelaxationDisclosures.jsx';
+export { BADGE_LABELS, Interpretation, REASON_EVIDENCES } from './ResultList.jsx';
+export { renderSearchScreenPage } from './search-screen-preview.jsx';

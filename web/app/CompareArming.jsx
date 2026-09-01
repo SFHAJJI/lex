@@ -13,12 +13,28 @@
 // reader learns why the pair cannot be compared while both rows are still in front of them,
 // which is the moment the information is useful.
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useId, useMemo, useState } from 'react';
 
-/** The publisher and work halves of a state identifier. */
+import { identityOf } from '../scripts/record-identity.mjs';
+
+/**
+ * The work half of a state identifier, or null when the row does not name one.
+ *
+ * Through the shared strict reading rather than a local split. Counting the colons was the whole
+ * check, so `:::` named the work `:` and two rows of nothing armed a comparison of nothing.
+ * `compare.mjs` learned that the hard way and fixed it locally, which is why `record-identity.mjs`
+ * exists: a screen cannot be more permissive about what a work is than the URL space it links
+ * into.
+ *
+ * A refusal to parse becomes null rather than an exception, because the reader picked this row
+ * and is owed a sentence about it while it is still in front of them.
+ */
 function workOf(lexId) {
-  const parts = String(lexId).split(':');
-  return parts.length < 3 ? null : `${parts[0]}:${parts[1]}`;
+  try {
+    return identityOf(lexId, 'a selected row').workKey;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -52,14 +68,40 @@ export function armingRefusal(selected) {
  * @param {Array} props.selected  the rows the reader has selected, in selection order
  * @param {Function} props.onCompare called when the reader asks for the comparison
  */
+/** Whether this selection may arm the control at all. */
+export function armedBy(selected) {
+  return selected.length === 2 && armingRefusal(selected) === null;
+}
+
+/**
+ * Compare, or refuse, and say which happened.
+ *
+ * The rule refuses, not the attribute. `aria-disabled` announces unavailability and does not
+ * stop a click the way `disabled` does, which is the price of keeping the control in the tab
+ * order; so the guard that actually holds is this one. Exported because it is the guard, and a
+ * guard that can only be reached through a click nothing in this package can dispatch is a
+ * guard nothing proves.
+ *
+ * @returns {boolean} whether the comparison was asked for
+ */
+export function compareIfArmed(selected, onCompare) {
+  if (!armedBy(selected)) return false;
+  onCompare(selected);
+  return true;
+}
+
 export function CompareArming({ selected, onCompare }) {
   const refusal = useMemo(() => armingRefusal(selected), [selected]);
-  const armed = selected.length === 2 && refusal === null;
-  const compare = useCallback(() => onCompare(selected), [onCompare, selected]);
+  const armed = armedBy(selected);
+  const stateId = useId();
+  const compare = useCallback(
+    () => compareIfArmed(selected, onCompare),
+    [onCompare, selected],
+  );
 
   return (
     <div className="compare-arming">
-      <p className="compare-arming-state" aria-live="polite">
+      <p className="compare-arming-state" id={stateId} aria-live="polite">
         {selected.length === 0
           ? 'Select two states to compare them.'
           : selected.length === 1
@@ -68,7 +110,21 @@ export function CompareArming({ selected, onCompare }) {
               ? 'Two states of one work selected.'
               : refusal}
       </p>
-      <button type="button" disabled={!armed} onClick={compare}>
+      {/* aria-disabled, never the `disabled` attribute. A disabled button is removed from the
+          tab order entirely, so a reader moving by keyboard never arrives at it, is never told
+          that comparison exists, and never hears why this pair cannot be compared. The browser
+          run measured exactly that on the composed screen: fifteen focusable elements and
+          fourteen reachable by Tab, the missing one being this button.
+          Saying why the control is unavailable is the whole point of arming early, and a
+          control the reader cannot reach cannot say anything. So it stays reachable, states its
+          own unavailability, points at the sentence that explains it, and `compareIfArmed`
+          refuses the action. */}
+      <button
+        type="button"
+        aria-disabled={!armed}
+        aria-describedby={stateId}
+        onClick={compare}
+      >
         Compare the two selected states
       </button>
     </div>
