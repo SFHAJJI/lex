@@ -394,3 +394,20 @@ test('O3: a comparison binds both sides to one canonical work, on either axis', 
     );
   }
 });
+
+test('O7-R1: a language comparison does not certify both texts', () => {
+  // "Both texts are authentic" was printed on the strength of being asked to compare them.
+  // Decision 58 binds authenticity to the exact resource and nothing here carries that.
+  const html = renderCompare({
+    mode: 'language',
+    left: { ...LEFT, language: 'fr' },
+    right: { ...LEFT, language: 'de', body_sha256: RIGHT_DIGEST },
+    result: CHANGED,
+  });
+  assert.equal(html.includes('Language comparison, same state'), true);
+  assert.equal(
+    html.toLowerCase().includes('authentic'),
+    false,
+    'the comparison certified two texts it holds no authenticity evidence for',
+  );
+});

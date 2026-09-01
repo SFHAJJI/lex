@@ -160,7 +160,10 @@ test('the watermark is the component words, on every bundle', () => {
   const html = renderEvidenceBundle(GOOD);
   assert.ok(
     html.includes(
-      'Documentation. Consolidations have no legal effect. Authentic sources cited per item.',
+      // The authenticity clause was removed: no item carries an authenticity binding, so
+      // the artefact a reader keeps was certifying its own contents. Pinned as a literal
+      // so the sentence cannot quietly grow a claim back.
+      'Documentation. Consolidations have no legal effect.',
     ),
   );
 });
@@ -241,4 +244,11 @@ test('O7: a licence requiring attribution refuses an item that carries none', ()
     }),
     'string',
   );
+});
+
+test('O7-R1: no bundle asserts authenticity it cannot show', () => {
+  // Suppressed rather than substituted. Until a shared exact-resource authenticity object
+  // exists, a bundle that says its sources are authentic is certifying its own contents.
+  const html = renderEvidenceBundle(GOOD);
+  assert.equal(html.toLowerCase().includes('authentic'), false, 'a bundle claimed authenticity');
 });

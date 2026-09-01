@@ -193,8 +193,13 @@ export function canonicalStateUrl(value) {
     }
     if (parsed.protocol !== 'https:') return null;
     if (parsed.hostname !== CANONICAL_HOST) return null;
-    // Userinfo and an explicit port are both ways to make a hostile URL read as a familiar one.
-    if (parsed.username !== '' || parsed.password !== '' || parsed.port !== '') return null;
+    // Userinfo and an explicit port are both ways to make a hostile URL read as a familiar
+    // one. `URL` normalizes the default port away, so `parsed.port` is empty for both
+    // https://host/ and https://host:443/, and checking it alone made the claim that
+    // explicit ports are refused false. The raw authority is inspected instead.
+    if (parsed.username !== '' || parsed.password !== '') return null;
+    const authority = value.slice('https://'.length).split('/')[0];
+    if (authority !== CANONICAL_HOST) return null;
     if (parsed.search !== '') return null;
     path = `${parsed.pathname}${parsed.hash}`;
   } else if (value.startsWith('//')) {

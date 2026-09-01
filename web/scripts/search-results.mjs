@@ -130,12 +130,26 @@ function requireHit(hit, index) {
         'follows the publisher when the file behind it is replaced',
     );
   }
-  // Bound to the row, not merely well formed. A permalink naming a different state than the
-  // row describes sends a reader to text the row never summarised, and every field above would
-  // still be true of the row.
-  if (permalink.validFrom !== hit.valid_from) {
+  // Bound to the row on every coordinate, not merely on the date. Comparing valid_from alone
+  // accepted a link to work-b on a row describing work-a whenever the two shared a start
+  // date, which is the common case for consolidations published together. A reader would
+  // arrive at a different instrument with every field above still true of the row.
+  const coordinate = String(hit.lex_id).split(':');
+  if (coordinate.length < 3) {
     throw new Error(
-      `${where} links to a state applicable from ${permalink.validFrom} while the row says ` +
+      `${where} has lex_id ${JSON.stringify(hit.lex_id)}, which does not name a publisher, ` +
+        'a work and a state, so its link cannot be bound to it',
+    );
+  }
+  const [publisher, work] = coordinate;
+  if (
+    permalink.publisher !== publisher ||
+    permalink.work !== work ||
+    permalink.validFrom !== hit.valid_from
+  ) {
+    throw new Error(
+      `${where} links to ${permalink.publisher}:${permalink.work} applicable from ` +
+        `${permalink.validFrom} while the row is ${publisher}:${work} from ` +
         `${hit.valid_from}; the link and the row must name one state`,
     );
   }

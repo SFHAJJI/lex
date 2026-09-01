@@ -492,3 +492,21 @@ test('O4: the open interval is null, never the sorting sentinel', () => {
     /an open interval is null/,
   );
 });
+
+test('O5-R1: the legend does not assert applicability over a consolidation timeline', () => {
+  // The rows were repaired and the legend above them kept asserting what the rows had stopped
+  // saying, which is worse than the original: the legend is what teaches a reader how to read
+  // the column beneath it.
+  const eu = renderTimeline({ ...GOOD, semantics: 'official_consolidation_state' });
+  assert.equal(eu.includes('the wording state the publisher consolidated'), true);
+  assert.equal(
+    eu.includes('when the publisher says the state applied'),
+    false,
+    'an EU timeline asserted applicability in its legend',
+  );
+  assert.equal(eu.includes('Applicable from'), false, 'an EU timeline asserted applicability in a row');
+
+  const lu = renderTimeline({ ...GOOD, semantics: 'publisher_applicability' });
+  assert.equal(lu.includes('when the publisher says the state applied'), true);
+  assert.equal(lu.includes('the wording state the publisher consolidated'), false);
+});

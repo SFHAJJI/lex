@@ -166,7 +166,21 @@ export function renderCoverage({ coverage }) {
   // said what complete means. Any leg missing renders the limitation instead of counts.
   const signed = coverage?.envelope?.freshness?.stamp_signature_valid === true;
   const declaresScope = Number.isInteger(coverage.scope_expected_works);
-  if (coverage.build_complete !== true || !signed || !declaresScope) {
+  // A build can report itself complete while its own inventory says otherwise, and it can
+  // report a complete inventory while carrying recorded issues that say which parts are
+  // missing. Both were outside the gate, so a payload with build_complete true, a valid
+  // signature, a matching scope, a partial inventory status and "source missing" in its
+  // issues rendered headline counts as a complete account of the corpus.
+  const inventoryComplete = coverage.build_inventory_status === 'complete';
+  const issues = Array.isArray(coverage.build_issues) ? coverage.build_issues : null;
+  const noIssues = issues !== null && issues.length === 0 && coverage.build_issues_truncated !== true;
+  if (
+    coverage.build_complete !== true ||
+    !signed ||
+    !declaresScope ||
+    !inventoryComplete ||
+    !noIssues
+  ) {
     const issues = Array.isArray(coverage.build_issues) ? coverage.build_issues.length : 0;
     return (
       '<section class="coverage coverage-incomplete">' +
@@ -178,6 +192,10 @@ export function renderCoverage({ coverage }) {
           coverage.build_complete === true ? null : 'the build did not complete',
           signed ? null : 'the build stamp is not signed',
           declaresScope ? null : 'the build does not declare the scope it was measured against',
+          inventoryComplete
+            ? null
+            : `the build inventory reports ${String(coverage.build_inventory_status ?? 'nothing')}`,
+          noIssues ? null : 'the build recorded issues',
         ]
           .filter((one) => one !== null)
           .join('; '),

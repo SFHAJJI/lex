@@ -398,6 +398,62 @@ test('O1: a permalink must name the state its own row describes', () => {
           }),
         ],
       }),
-    /links to a state applicable from 1999-01-01 while the row says/,
+    /links to preview-synthetic:synthetic-preview-work applicable from 1999-01-01/,
+  );
+});
+
+test('O1-R2: a permalink is bound to the row work, not only to its date', () => {
+  // Codex's probe: same start date, different work. Consolidations published together share a
+  // start date routinely, so comparing valid_from alone sent a reader to a different instrument
+  // with every field on the row still true of the row.
+  assert.throws(
+    () =>
+      renderSearchResults({
+        ...GOOD,
+        hits: [
+          hit({
+            permalink:
+              'https://law.soufien.lu/preview-synthetic/a-different-work/2001-01-01--' +
+              'a'.repeat(64),
+          }),
+        ],
+      }),
+    /links to preview-synthetic:a-different-work/,
+    'a link to another work was accepted because the dates agreed',
+  );
+
+  // And a different publisher, same work name and date.
+  assert.throws(
+    () =>
+      renderSearchResults({
+        ...GOOD,
+        hits: [
+          hit({
+            permalink:
+              'https://law.soufien.lu/eu-eurlex/synthetic-preview-work/2001-01-01--' +
+              'a'.repeat(64),
+          }),
+        ],
+      }),
+    /links to eu-eurlex:synthetic-preview-work/,
+  );
+});
+
+test('O1-R2: an explicit default port is refused, not normalised away', () => {
+  // URL reports an empty port for https://host:443/, so checking parsed.port made the claim
+  // that explicit ports are refused simply false.
+  assert.throws(
+    () =>
+      renderSearchResults({
+        ...GOOD,
+        hits: [
+          hit({
+            permalink:
+              'https://law.soufien.lu:443/preview-synthetic/synthetic-preview-work/2001-01-01--' +
+              'a'.repeat(64),
+          }),
+        ],
+      }),
+    /canonical same-origin state URL/,
   );
 });

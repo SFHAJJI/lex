@@ -370,8 +370,14 @@ export function renderCompare({ mode, left, right, result }) {
 
   const banner =
     mode === 'language'
-      ? '<p class="compare-axis">Language comparison, same state. Both texts are authentic. ' +
-        'Nothing here is a change over time.</p>'
+      // "Both texts are authentic" was printed without consuming any exact-resource
+      // authenticity evidence, so the screen certified two documents on the strength of
+      // being asked to compare them. Decision 58 binds authenticity to the exact resource,
+      // and no shared object carrying that exists in this candidate. Suppressed rather
+      // than substituted: inventing a local authenticity contract to keep the sentence
+      // would be the same defect with more machinery behind it.
+      ? '<p class="compare-axis">Language comparison, same state. Nothing here is a ' +
+        'change over time.</p>'
       : '<p class="compare-axis">Comparison over time, one language. The diff is legal time ' +
         'only.</p>';
 

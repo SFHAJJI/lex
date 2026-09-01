@@ -72,9 +72,28 @@ export function requireSemantics(semantics, where) {
 }
 
 /** Fixed by the spec, three sentences, because the screen is the two clocks. */
-export const LEGEND =
-  'Top: when the publisher says the state applied. Bottom: when the publisher published it. ' +
-  'These routinely differ.';
+/**
+ * The legend, per publisher vocabulary.
+ *
+ * One fixed sentence said "when the publisher says the state applied" over every timeline,
+ * including EU ones, which is an applicability assertion the Union publisher does not make: it
+ * dates the wording state of a consolidation. The row vocabulary was repaired and the legend
+ * above the rows kept asserting the thing the rows had stopped saying, which is worse than the
+ * original, because the legend is what teaches a reader how to read the column.
+ *
+ * Both sentences keep the second clause, because the two clocks are the screen.
+ */
+export const LEGENDS = Object.freeze({
+  publisher_applicability:
+    'Top: when the publisher says the state applied. Bottom: when the publisher published it. ' +
+    'These routinely differ.',
+  official_consolidation_state:
+    'Top: the wording state the publisher consolidated. Bottom: when the publisher published ' +
+    'it. These routinely differ.',
+});
+
+/** @deprecated Use LEGENDS, keyed by the publisher vocabulary. Kept so the LU value has a name. */
+export const LEGEND = LEGENDS.publisher_applicability;
 
 /** Fixed by the spec. Never colour alone. */
 export const PROVISIONAL_MARK = 'PROVISIONAL, publisher-scheduled';
@@ -452,7 +471,7 @@ export function renderTimeline({ semantics, states, asOf, totalCount, truncated,
   return (
     '<section class="timeline">' +
     `<p class="timeline-as-of">Drawn as of ${escapeHtml(asOf)}.</p>` +
-    `<p class="timeline-legend">${escapeHtml(LEGEND)}</p>` +
+    `<p class="timeline-legend">${escapeHtml(LEGENDS[semantics])}</p>` +
     // Decoration, and it says so. The table below is the structure, which is both the
     // accessibility rule and the only version of this screen that survives without a client.
     '<div class="timeline-chart" aria-hidden="true"></div>' +

@@ -252,3 +252,33 @@ test('O6: an absent language list is refused, not rendered as an empty table', (
     );
   }
 });
+
+test('O6-R1: a partial inventory or a recorded issue suppresses the counts', () => {
+  // Codex's probe: build_complete true, valid signature, matching scope, and the build's own
+  // inventory saying partial with "source missing" among its issues. The headline counts
+  // rendered as a complete account of the corpus.
+  const cases = [
+    ['the build inventory reports partial', { build_inventory_status: 'partial' }],
+    ['the build inventory reports nothing', { build_inventory_status: undefined }],
+    ['the build recorded issues', { build_issues: ['source missing'] }],
+    ['the build recorded issues', { build_issues: undefined }],
+    ['the build recorded issues', { build_issues: [], build_issues_truncated: true }],
+  ];
+  for (const [expected, override] of cases) {
+    const html = renderCoverage({ coverage: payload(override) });
+    assert.equal(
+      html.includes('coverage-incomplete'),
+      true,
+      `${JSON.stringify(override)}: counts rendered as a complete account`,
+    );
+    assert.equal(html.includes('<table'), false);
+    assert.equal(html.includes(expected), true, `${JSON.stringify(override)}: the limitation did not say why`);
+  }
+});
+
+test('O6-R1: the whole tuple present still renders counts', () => {
+  // The counterpart, so the repair cannot be satisfied by suppressing everything.
+  const html = renderCoverage({ coverage: payload() });
+  assert.equal(html.includes('coverage-incomplete'), false);
+  assert.equal(html.includes('<table'), true);
+});

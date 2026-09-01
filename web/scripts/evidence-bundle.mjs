@@ -61,8 +61,12 @@ const FORBIDDEN_COLUMNS = new Map([
 
 const SHA256 = /^[0-9a-f]{64}$/;
 
-const WATERMARK =
-  'Documentation. Consolidations have no legal effect. Authentic sources cited per item.';
+// "Authentic sources cited per item" was printed on every bundle although no item carries
+// an authenticity binding, so the artefact a reader keeps and cites certified its own
+// contents. The rights and authenticity objects that would support it are not in this
+// candidate, and inventing a local substitute is the defect with more machinery behind it.
+// The two clauses that remain are true of every bundle without further evidence.
+const WATERMARK = 'Documentation. Consolidations have no legal effect.';
 
 function escapeHtml(value) {
   return String(value)
