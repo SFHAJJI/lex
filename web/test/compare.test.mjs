@@ -314,13 +314,22 @@ test('a result with no verdict, or a changed result with no changes, is refused'
   );
 });
 
-test('renumbering says it was detected mechanically', () => {
+test('renumbering says whose it is, and does not certify how it was found', () => {
   const html = renderCompare(GOOD);
   assert.ok(html.includes(RENUMBER_LABEL));
-  assert.equal(
-    RENUMBER_LABEL,
-    'renumbering detected mechanically by identical text hash, not publisher-asserted',
-  );
+  assert.equal(RENUMBER_LABEL, 'renumbering derived by this service, not publisher-asserted');
+
+  // The label used to read "detected mechanically by identical text hash", which certifies a
+  // method this screen never observes: a renumber row carries a from anchor and a to anchor and
+  // nothing about how the pairing was found. Naming a method is a claim about the pipeline, and
+  // the only thing the screen can witness is that the publisher did not assert the renumbering.
+  for (const method of ['hash', 'text hash', 'mechanically', 'similarity', 'heuristic', 'model']) {
+    assert.ok(
+      !RENUMBER_LABEL.includes(method),
+      `the renumber label certifies a method it cannot observe: ${method}`,
+    );
+  }
+  assert.ok(RENUMBER_LABEL.includes('not publisher-asserted'), 'the label lost its provenance');
   assert.ok(html.includes('art_1bis'));
 
   // No renumbering, no section, and no label claiming there was.

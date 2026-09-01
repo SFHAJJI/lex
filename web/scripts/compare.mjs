@@ -30,9 +30,16 @@ import { identityOf } from './record-identity.mjs';
 /** The two axes a comparison can run along. They are never mixed. */
 export const COMPARE_MODES = Object.freeze(['temporal', 'language']);
 
-/** The fixed label on a renumber row. Mechanical, and it says so. */
-export const RENUMBER_LABEL =
-  'renumbering detected mechanically by identical text hash, not publisher-asserted';
+/**
+ * The fixed label on a renumber row.
+ *
+ * It says the renumbering is this service's and not the publisher's, and it stops there. It used
+ * to say "detected mechanically by identical text hash", which certifies a method this screen
+ * never observed: a renumber row carries a from anchor and a to anchor, and nothing about how the
+ * pairing was found. A label that names the method is evidence about the pipeline, and the only
+ * evidence here is that the publisher did not assert it.
+ */
+export const RENUMBER_LABEL = 'renumbering derived by this service, not publisher-asserted';
 
 const SHA256 = /^[0-9a-f]{64}$/;
 
