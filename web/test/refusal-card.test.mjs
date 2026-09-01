@@ -1038,3 +1038,43 @@ test('a nearest state that does not exist is declared, not omitted and not inven
     /if a history begins, some held state lies on one side/,
   );
 });
+
+test('the absence fields cannot be inherited either', () => {
+  // The half of the own-property repair that was missed. The renderer reads own properties and
+  // this validator read through the prototype chain, so a payload owning only its declared key
+  // while inheriting both absence fields validated here and rendered without them: an absence
+  // with no route out, which is the dead end the contract exists to prevent.
+  const inherited = {
+    what_would_answer: ['corrected_identifier'],
+    asserts_absence_of_law: false,
+  };
+  const payload = Object.assign(Object.create(inherited), {
+    population_disclosure: 'within the 1,402 consolidated LU works held by this corpus',
+  });
+
+  assert.throws(
+    () =>
+      renderRefusalCard({
+        code: 'identifier_unknown',
+        sentence: 'That identifier does not resolve.',
+        payload,
+      }),
+    /must say what would answer it/,
+    'an inherited what_would_answer satisfied the absence contract',
+  );
+
+  // And the other field on its own, so the two are proved separately rather than together.
+  assert.throws(
+    () =>
+      renderRefusalCard({
+        code: 'identifier_unknown',
+        sentence: 'That identifier does not resolve.',
+        payload: Object.assign(Object.create({ asserts_absence_of_law: false }), {
+          population_disclosure: 'within the 1,402 consolidated LU works held by this corpus',
+          what_would_answer: ['corrected_identifier'],
+        }),
+      }),
+    /absence of a record is never absence of law|asserts_absence_of_law/,
+    'an inherited asserts_absence_of_law satisfied the contract',
+  );
+});
