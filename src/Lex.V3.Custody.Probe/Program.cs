@@ -28,11 +28,7 @@ internal static class Program
             {
                 termination = PosixSignalRegistration.Create(
                     PosixSignal.SIGTERM,
-                    context =>
-                    {
-                        context.Cancel = true;
-                        cancellation.Cancel();
-                    });
+                    static _ => Environment.Exit(130));
             }
 
             return await RunProcessAsync(arguments, cancellation.Token).ConfigureAwait(false);
