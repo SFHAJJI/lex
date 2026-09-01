@@ -11,5 +11,10 @@
     "test": "node --test test/*.test.mjs",
     "evidence": "npm run build && node scripts/browser-evidence.mjs",
     "evidence:mutations": "node scripts/evidence-mutations.mjs"
+  },
+  "dependencies": {
+    "esbuild": "^0.24.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   }
 }

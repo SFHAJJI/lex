@@ -415,6 +415,13 @@ const PROBE = `(() => {
     bodyColor: body.color,
     bodyBackground: body.backgroundColor,
     scriptCount: document.querySelectorAll('script').length,
+    // What the browser actually decoded the bytes as, not what the head claims. React writes
+    // this attribute as charSet, which HTML matches case-insensitively, and the fixture is
+    // ASCII enough that a wrong encoding would not surface until real French statute renders,
+    // by which point every accented character in the corpus is wrong. Asserting the decoded
+    // result also covers a wrong Content-Type header and a byte-order mark, which reading the
+    // attribute back out of the DOM would not.
+    characterSet: document.characterSet,
     shell: document.documentElement.dataset.shell ?? null,
     density: document.documentElement.dataset.density ?? null,
     mainLineHeight: mainStyle ? mainStyle.lineHeight : null,
@@ -864,6 +871,12 @@ async function main() {
         if (!observed.syntheticBanner) failures.push(`${page} @${viewport.label}: synthetic banner missing`);
         if (observed.scriptCount !== 0) failures.push(`${page} @${viewport.label}: ${observed.scriptCount} script tags`);
         if (observed.state === undefined) failures.push(`${page} @${viewport.label}: no data-preview-state`);
+        if (observed.characterSet !== "UTF-8") {
+          failures.push(
+            `${page} @${viewport.label}: decoded as ${observed.characterSet}, not UTF-8; every ` +
+              "accented character in French, German and Luxembourgish statute would be wrong",
+          );
+        }
         if (observed.contrastChecked === 0) {
           failures.push(`${page} @${viewport.label}/${scheme}: no text was contrast-checked`);
         }
