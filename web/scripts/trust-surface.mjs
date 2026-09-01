@@ -228,11 +228,21 @@ export function renderTrustSurface() {
       },
     })}</section>`,
 
+    // The figure that was here, 39.8 percent of Luxembourg provision states, was a
+    // hand-transcribed literal on a page that mounts no index and reads no envelope,
+    // presented as a current measured property of the real corpus with no denominator, no
+    // build stamp and no as-of. Decision 27 puts counts at index build and forbids typing
+    // them, and this is the page that argues the product is checkable, so a number nobody
+    // can check is the worst sentence available on it.
+    //
+    // The explanation lives here rather than in an HTML comment because a comment inside
+    // this template is served to the browser, so the first version of this repair shipped
+    // the figure it had just removed. My own test caught that.
     `<section class="surface-block"><h2>What the record does not say</h2>
       <p>Three qualifications, each common rather than exotic. Two publisher dates on one
-        wording is 39.8 percent of Luxembourg provision states; a scheduled state that has
-        not begun reads as current law without a mark; and a gap closed by inference is this
-        product's inference, not the publisher's assertion.</p>
+        wording is ordinary rather than rare; a scheduled state that has not begun reads as
+        current law without a mark; and a gap closed by inference is this product's
+        inference, not the publisher's assertion.</p>
       ${renderValidityConflict({ stateValidFrom: '2003-01-01', wordingValidFrom: '2001-01-01', semantics: 'publisher_applicability' })}
       ${renderProvisional({ validFrom: '2030-09-15', asOf: '2026-09-01', semantics: 'publisher_applicability' })}
       ${renderHole({ kind: 'no_state_held', from: '2002-01-02', to: '2002-12-31' })}

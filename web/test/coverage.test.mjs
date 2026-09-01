@@ -282,3 +282,50 @@ test('O6-R1: the whole tuple present still renders counts', () => {
   assert.equal(html.includes('coverage-incomplete'), false);
   assert.equal(html.includes('<table'), true);
 });
+
+test('a latest state already in force is not described as publisher-scheduled', () => {
+  // The sentence asserted the latest date had not taken effect, and nothing compared it to
+  // anything: both dates only had to be calendar dates. On a corpus whose latest state began
+  // years ago it is false in the direction that matters, telling a reader that current law is
+  // a future plan.
+  const past = renderCoverage({
+    coverage: payload({ valid_from_earliest: '1849-03-14', valid_from_latest: '2020-01-01' }),
+  });
+  assert.equal(past.includes('States run from 1849-03-14 to 2020-01-01'), true);
+  assert.equal(
+    past.includes('publisher-scheduled'),
+    false,
+    'a state in force for years was described as scheduled',
+  );
+
+  // And the real case it was written for: LU genuinely holds forward-dated states.
+  const future = renderCoverage({
+    coverage: payload({ valid_from_earliest: '1849-03-14', valid_from_latest: '2030-09-15' }),
+  });
+  assert.equal(future.includes('publisher-scheduled rather than current'), true);
+});
+
+test('the limitation does not report zero issues for a build that supplied no list', () => {
+  // "0 recorded issues" is a claim that the build recorded none. An absent list is a build that
+  // did not say, and a truncated one said only part. Reporting zero for either turns a silence
+  // into a clean bill of health, on the very paragraph that exists because the counts cannot be
+  // trusted.
+  const absent = renderCoverage({ coverage: payload({ build_issues: undefined }) });
+  assert.equal(absent.includes('coverage-incomplete'), true);
+  assert.equal(absent.includes('no issue list supplied'), true);
+  assert.equal(
+    absent.includes('0 recorded issues'),
+    false,
+    'an absent issue list was reported as zero issues',
+  );
+
+  const truncated = renderCoverage({
+    coverage: payload({ build_issues: ['source missing'], build_issues_truncated: true }),
+  });
+  assert.equal(truncated.includes('at least 1 recorded issues, list truncated'), true);
+
+  // And a genuinely empty list still reports zero, so the repair does not make the honest case
+  // unsayable.
+  const empty = renderCoverage({ coverage: payload({ build_complete: false, build_issues: [] }) });
+  assert.equal(empty.includes('0 recorded issues'), true);
+});

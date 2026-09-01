@@ -201,7 +201,17 @@ export function renderCoverage({ coverage }) {
           .join('; '),
       )}. ` +
       `Build status: ${escapeHtml(String(coverage.build_inventory_status ?? 'unknown'))}, ` +
-      `${issues} recorded issue${issues === 1 ? '' : 's'}, measured ` +
+      // "0 recorded issues" is a claim that the build recorded none. An absent or
+      // truncated issue list is not that: it is a build that did not say, or said only
+      // part. Reporting zero for either turns a silence into a clean bill of health on
+      // the very paragraph that exists because the counts cannot be trusted.
+      `${
+        !Array.isArray(coverage.build_issues)
+          ? 'no issue list supplied'
+          : coverage.build_issues_truncated === true
+            ? `at least ${coverage.build_issues.length} recorded issues, list truncated`
+            : `${issues} recorded issue${issues === 1 ? '' : 's'}`
+      }, measured ` +
       `${escapeHtml(builtAt)}.</p>` +
       '</section>'
     );
@@ -242,9 +252,18 @@ export function renderCoverage({ coverage }) {
     `<p class="coverage-held">${coverage.works} works, ${coverage.versions} dated states. ` +
     `Text is held for ${coverage.text.versions_with_text_served} of them and not for ` +
     `${coverage.text.versions_without_text}.</p>` +
+    // "the later date being publisher-scheduled rather than current" asserted that the
+    // latest date has not taken effect. Nothing here compares it to anything: both dates
+    // only had to be calendar dates. On a corpus whose latest state began years ago the
+    // sentence is simply false, and it is false in the direction that matters, telling a
+    // reader that current law is a future plan. The comparison is available, so it is made
+    // rather than assumed, against the build instant this page already prints.
     `<p class="coverage-range">States run from ${escapeHtml(coverage.valid_from_earliest)} to ` +
-    `${escapeHtml(coverage.valid_from_latest)}, the later date being publisher-scheduled ` +
-    'rather than current.</p>' +
+    `${escapeHtml(coverage.valid_from_latest)}${
+      coverage.valid_from_latest > builtAt.slice(0, 10)
+        ? ', the later date being publisher-scheduled rather than current'
+        : ''
+    }.</p>` +
     `<p class="coverage-as-of">Counts as of index build ${escapeHtml(builtAt)}.</p>` +
     `<p class="coverage-retention">${escapeHtml(RETENTION_SENTENCE)}</p>` +
     '<h3>What this corpus does not hold</h3>' +

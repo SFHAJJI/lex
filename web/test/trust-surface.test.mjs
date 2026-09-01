@@ -74,3 +74,17 @@ test('the page still exercises every component it claims to', () => {
   assert.ok(html.includes('Applicable from'));
   assert.ok(html.includes('Consolidated wording state from'));
 });
+
+test('the trust page states no measured figure it cannot compute', () => {
+  // This page mounts no index and reads no envelope, so any percentage on it is a literal
+  // somebody typed. Decision 27 puts counts at index build precisely so they cannot go stale in
+  // a template, and this is the page that argues the product is checkable: a number nobody can
+  // check is the worst sentence available here.
+  const html = renderTrustSurface();
+  assert.equal(html.includes('39.8'), false, 'a hand-typed corpus statistic returned');
+  assert.equal(
+    /\d+(\.\d+)?\s*percent/.test(html),
+    false,
+    'the trust page states a percentage it cannot derive',
+  );
+});
