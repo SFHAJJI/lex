@@ -457,3 +457,41 @@ test('identical text on both sides of a block is not a change', () => {
     /identical bytes shown as a removal and an addition/,
   );
 });
+
+test('a work is a work the URL space can address, not any two strings that match', () => {
+  // Splitting on ':' and taking the first two parts made any two strings comparable, so
+  // `garbage` and `garbage` named the same work and a diff between them was legal. The control
+  // comes first: a refusal that also refuses the true case is not a check.
+  assert.equal(typeof renderCompare(GOOD), 'string', 'a legitimate pair was refused');
+
+  for (const [lexId, why] of [
+    ['garbage', 'a string with no separator at all'],
+    ['preview-synthetic:synthetic-preview-work', 'a work with no state'],
+    ['preview-synthetic:synthetic-preview-work:', 'an empty state segment'],
+    ['..:secret:2001-01-01', 'a publisher segment that walks out of its own path'],
+    ['preview-synthetic:..:2001-01-01', 'a work segment that walks out of its own path'],
+  ]) {
+    assert.throws(
+      () =>
+        renderCompare({
+          ...GOOD,
+          left: { ...GOOD.left, lex_id: lexId },
+          right: { ...GOOD.right, lex_id: lexId },
+        }),
+      /does not name a publisher, a work and a state/,
+      `${why} was compared against itself: ${JSON.stringify(lexId)}`,
+    );
+  }
+
+  // An absent identifier keeps its own earlier, more specific refusal: the resolution header
+  // names the states being compared, and there is nothing to name.
+  assert.throws(
+    () =>
+      renderCompare({
+        ...GOOD,
+        left: { ...GOOD.left, lex_id: '' },
+        right: { ...GOOD.right, lex_id: '' },
+      }),
+    /has no lex_id/,
+  );
+});

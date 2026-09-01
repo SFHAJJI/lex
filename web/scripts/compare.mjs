@@ -25,6 +25,7 @@
 
 import { isCalendarDate, isUtcInstant } from './temporal.mjs';
 import { renderRefusalCard } from './refusal-card.mjs';
+import { identityOf } from './record-identity.mjs';
 
 /** The two axes a comparison can run along. They are never mixed. */
 export const COMPARE_MODES = Object.freeze(['temporal', 'language']);
@@ -45,18 +46,25 @@ function escapeHtml(value) {
 }
 
 /**
+ * The work half of a lex_id, validated rather than sliced.
+ *
+ * Splitting and taking the first two parts made any two strings comparable, so `garbage` and
+ * `garbage` named the same work and a diff between them was legal, as was `..:secret:1` against
+ * `..:secret:2`. The shared module holds the strict reading, checked against the same segment
+ * rule the object-URL builders use, so this screen's notion of a work is the one a permalink can
+ * address. A screen cannot be more permissive than the URL space it links into.
+ */
+function workOf(lexId, which) {
+  return identityOf(lexId, `the ${which} side`).workKey;
+}
+
+/**
  * One side of the comparison, fully resolved.
  *
  * Every field here appears on the card, and the card is what makes the comparison checkable.
  * A side that cannot produce all of them has not been resolved, and an unresolved side cannot
  * be compared to anything.
  */
-/** The work half of a lex_id: publisher and work key, without the state. */
-function workOf(lexId) {
-  const parts = String(lexId).split(':');
-  return parts.slice(0, 2).join(':');
-}
-
 function requireSide(side, which) {
   const where = `the ${which} side`;
 
@@ -339,10 +347,12 @@ export function renderCompare({ mode, left, right, result }) {
   // Both axes compare one work. This check lived only in the language branch, so a temporal
   // comparison of two unrelated instruments rendered a diff, and the difference between one
   // law and another read as one law being amended into the other.
-  if (workOf(left.lex_id) !== workOf(right.lex_id)) {
+  const leftWork = workOf(left.lex_id, 'left');
+  const rightWork = workOf(right.lex_id, 'right');
+  if (leftWork !== rightWork) {
     throw new Error(
-      `these are two different works, ${workOf(left.lex_id)} and ${workOf(right.lex_id)}; the ` +
-        'difference between two instruments is not a change to either of them',
+      `these are two different works, ${leftWork} and ${rightWork}; the difference between two ` +
+        'instruments is not a change to either of them',
     );
   }
 

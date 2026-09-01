@@ -2,13 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
-  LEGEND,
   PROVISIONAL_MARK,
-  TIMELINE_SEMANTICS,
   holesBetween,
   overlapsIn,
   renderTimeline,
 } from '../scripts/timeline.mjs';
+import { INTERVAL_SENTENCE, LEGENDS } from '../scripts/publisher-vocabulary.mjs';
 
 const HASH_A = 'a'.repeat(64);
 const HASH_B = 'b'.repeat(64);
@@ -38,18 +37,22 @@ const B = state({
 });
 
 const GOOD = {
-  semantics: 'publisher_applicability',
   states: [A, B],
   asOf: '2026-09-01',
   population: 'within the 1,402 consolidated LU works held by this corpus',
   totalCount: 2,
 };
 
+/** The same two states, on a Union work, so the other vocabulary is a record and not a flag. */
+const EU_WORK = 'eu-eurlex:32016R0679';
+const onEuWork = (one) => ({ ...one, lex_id: `${EU_WORK}:${one.valid_from}` });
+const EU = { ...GOOD, states: GOOD.states.map(onEuWork) };
+
 /** Interval helper for the two exported set functions. */
 const span = (from, to) => ({ valid_from: from, valid_to: to, lex_id: `w:${from}` });
 
-test('the legal-time vocabulary comes from the envelope and has no default', () => {
-  assert.deepEqual(Object.keys(TIMELINE_SEMANTICS), [
+test('the legal-time vocabulary is derived from the work, not handed to the screen', () => {
+  assert.deepEqual(Object.keys(INTERVAL_SENTENCE), [
     'publisher_applicability',
     'official_consolidation_state',
   ]);
@@ -58,17 +61,67 @@ test('the legal-time vocabulary comes from the envelope and has no default', () 
   assert.ok(lu.includes('Applicable from 2001-01-01 to 2004-01-01 (publisher)'));
   assert.ok(!lu.includes('Consolidated wording state'), 'the EU vocabulary leaked onto a LU work');
 
-  const eu = renderTimeline({ ...GOOD, semantics: 'official_consolidation_state' });
+  // The same call, the same fields, a Union work: the words change because the record did.
+  const eu = renderTimeline(EU);
   assert.ok(eu.includes('Consolidated wording state from 2001-01-01 to 2004-01-01'));
   assert.ok(!eu.includes('(publisher)'), 'the LU vocabulary leaked onto an EU work');
 
-  // Including a key that exists on every object. A prototype lookup would have rendered
-  // [object Object] as the legal-time claim.
-  for (const bad of [undefined, '', 'in_force', 'applicability', 'toString', 'constructor']) {
+  // Including the two values a caller would once have passed. The parameter is refused rather
+  // than ignored: silently overriding a caller leaves them believing they chose the vocabulary.
+  for (const declared of [
+    'publisher_applicability',
+    'official_consolidation_state',
+    'in_force',
+    'toString',
+    'constructor',
+    null,
+  ]) {
     assert.throws(
-      () => renderTimeline({ ...GOOD, semantics: bad }),
-      /not one of publisher_applicability/,
-      `${String(bad)} was accepted as a vocabulary`,
+      () => renderTimeline({ ...GOOD, semantics: declared }),
+      /does not take a date vocabulary/,
+      `${String(declared)} was accepted as a vocabulary`,
+    );
+  }
+});
+
+test('a timeline is one work, so two works are refused rather than compared', () => {
+  // The gaps and the overlapping pairs are derived by comparing intervals. Across two unrelated
+  // instruments those comparisons still produce sentences, and every one of them attributes to a
+  // publisher a contradiction it never made.
+  assert.throws(
+    () => renderTimeline({ ...GOOD, states: [A, onEuWork(B)] }),
+    /mixes 2 works/,
+    'two unrelated works were drawn as one history',
+  );
+  assert.throws(
+    () => renderTimeline({
+      ...GOOD,
+      states: [A, { ...B, lex_id: 'preview-synthetic:another-preview-work:2004-01-01' }],
+    }),
+    /mixes 2 works/,
+    'two works of one publisher were drawn as one history',
+  );
+  // And the real overlap claim still fires where it is true, on one work.
+  const overlapping = renderTimeline({
+    ...GOOD,
+    states: [A, state({ valid_from: '2003-01-01', valid_to: '2005-01-01', hash: HASH_C })],
+  });
+  assert.ok(overlapping.includes('both cover part of the same period'));
+});
+
+test('a publisher this interface has not classified is refused, not given a neighbour words', () => {
+  for (const publisher of ['xx-unknown', 'constructor', 'toString', '']) {
+    assert.throws(
+      () =>
+        renderTimeline({
+          ...GOOD,
+          states: GOOD.states.map((one) => ({
+            ...one,
+            lex_id: `${publisher}:some-work:${one.valid_from}`,
+          })),
+        }),
+      publisher === '' ? /does not name a publisher/ : /is not a publisher this interface has classified|does not name a publisher/,
+      `${JSON.stringify(publisher)} was given a vocabulary`,
     );
   }
 });
@@ -411,11 +464,19 @@ test('the population is stated and an empty timeline is refused', () => {
 
 test('the legend is the component words and the chart is decoration', () => {
   const html = renderTimeline(GOOD);
-  assert.ok(html.includes(LEGEND));
+  assert.ok(html.includes(LEGENDS.publisher_applicability));
   assert.equal(
-    LEGEND,
+    LEGENDS.publisher_applicability,
     'Top: when the publisher says the state applied. Bottom: when the publisher published it. ' +
       'These routinely differ.',
+  );
+  // The legend is the publisher's too. It used to be one fixed Luxembourg sentence printed over
+  // both publishers, contradicting the rows one line beneath it.
+  const eu = renderTimeline(EU);
+  assert.ok(eu.includes(LEGENDS.official_consolidation_state));
+  assert.ok(
+    !eu.includes(LEGENDS.publisher_applicability),
+    'the Luxembourg legend was printed over a Union history',
   );
   assert.ok(html.includes('<div class="timeline-chart" aria-hidden="true">'));
   assert.ok(html.includes('<table class="timeline-table">'), 'the table is the structure');

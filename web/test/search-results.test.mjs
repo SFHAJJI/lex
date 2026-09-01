@@ -7,26 +7,42 @@ import {
   TIME_SCOPES,
   renderSearchResults,
 } from '../scripts/search-results.mjs';
+import { canonicalStateHref } from '../scripts/routes.mjs';
 
-const PERMALINK =
-  'https://law.soufien.lu/preview-synthetic/synthetic-preview-work/2001-01-01--' + 'a'.repeat(64);
+const HASH = 'a'.repeat(64);
 
-function hit(overrides = {}) {
+// Minted through the builder the route policy checks against, so the fixture cannot assert a
+// grammar the policy has stopped producing.
+const permalinkFor = ({ publisher, work, validFrom }) =>
+  canonicalStateHref({ publisher, work, validFrom, hash: HASH });
+
+const PERMALINK = permalinkFor({
+  publisher: 'preview-synthetic',
+  work: 'synthetic-preview-work',
+  validFrom: '2001-01-01',
+});
+
+function hit({ publisher = 'preview-synthetic', work = 'synthetic-preview-work', ...overrides } = {}) {
+  const validFrom = overrides.valid_from ?? '2001-01-01';
   return {
-    lex_id: 'preview-synthetic:synthetic-preview-work:2001-01-01',
+    lex_id: `${publisher}:${work}:${validFrom}`,
     // Covers the operative date the heading claims. It did not, and every fixture in this file
     // was therefore a row listed as applicable on a date it does not cover.
-    valid_from: '2001-01-01',
+    valid_from: validFrom,
     valid_to: null,
     publication_date: '2000-12-01',
     text_available: true,
-    permalink: PERMALINK,
+    permalink: permalinkFor({ publisher, work, validFrom }),
     match_reasons: ['keyword'],
     provision_num: 'Art. 1',
     chapter_path: 'Title I, Chapter 2',
     ...overrides,
   };
 }
+
+/** A Union row, so the other vocabulary is a record rather than a flag. */
+const euHit = (overrides = {}) =>
+  hit({ publisher: 'eu-eurlex', work: '32016R0679', ...overrides });
 
 const POPULATION = {
   searchable_works: [
@@ -51,7 +67,6 @@ const RELAXATIONS = {
 const GOOD = {
   query: 'security deposit how many months landlord',
   timeScope: 'as_of',
-  semantics: 'publisher_applicability',
   asOf: '2026-09-01',
   hits: [hit()],
   rowSet: { returned: 1, total: 1 },
@@ -70,12 +85,19 @@ test('results are scoped to an explicit date in the publisher vocabulary', () =>
   assert.ok(lu.includes('Provisions as applicable on 2026-09-01'));
   assert.ok(!lu.includes('Wording states covering'), 'the EU vocabulary leaked onto a LU search');
 
-  const eu = renderSearchResults({ ...GOOD, semantics: 'official_consolidation_state' });
+  // The same call over Union rows: the words change because the records did, not because a
+  // caller said so.
+  const eu = renderSearchResults({ ...GOOD, hits: [euHit()] });
   assert.ok(eu.includes('Wording states covering 2026-09-01'));
   assert.ok(!eu.includes('Provisions as applicable'), 'the LU vocabulary leaked onto an EU search');
 
-  for (const bad of [undefined, '', 'in_force', 'toString']) {
-    assert.throws(() => renderSearchResults({ ...GOOD, semantics: bad }), /is not one of/);
+  // Passing one is refused rather than ignored, including the value that used to be correct.
+  for (const declared of ['publisher_applicability', 'official_consolidation_state', 'toString', null]) {
+    assert.throws(
+      () => renderSearchResults({ ...GOOD, semantics: declared }),
+      /do not take a date vocabulary/,
+      `${String(declared)} was accepted as a vocabulary`,
+    );
   }
 
   // The date is explicit even when it is today, because today is the date nobody checks.
@@ -84,6 +106,44 @@ test('results are scoped to an explicit date in the publisher vocabulary', () =>
       () => renderSearchResults({ ...GOOD, asOf: bad }),
       /explicitly, even when it is today/,
       `asOf=${JSON.stringify(bad)} was rendered`,
+    );
+  }
+});
+
+test('a mixed list gets neutral wording rather than one publisher words', () => {
+  // A list drawn from two publishers has no single vocabulary, and a heading that picks one
+  // states a claim about the rows it does not describe. Every row still keeps its own words.
+  const mixed = renderSearchResults({
+    ...GOOD,
+    hits: [hit(), euHit()],
+    rowSet: { returned: 2, total: 2 },
+  });
+  assert.ok(mixed.includes("States covering 2026-09-01, each in its own publisher&#39;s terms"));
+  assert.ok(!mixed.includes('Provisions as applicable on'), 'one publisher words over both');
+  assert.ok(!mixed.includes('Wording states covering 2026'), 'one publisher words over both');
+  assert.ok(mixed.includes('Applicable from 2001-01-01'), 'the LU row lost its own words');
+  assert.ok(mixed.includes('Consolidated wording state from 2001-01-01'), 'the EU row lost its own words');
+
+  const mixedAll = renderSearchResults({
+    ...GOOD,
+    timeScope: 'all_versions',
+    hits: [hit(), euHit()],
+    rowSet: { returned: 2, total: 2 },
+  });
+  assert.ok(mixedAll.includes('not narrowed to one date'));
+  assert.ok(mixedAll.includes("each in its own publisher&#39;s terms"));
+});
+
+test('a publisher this interface has not classified is refused rather than given words', () => {
+  for (const publisher of ['xx-unknown', 'constructor', 'toString']) {
+    assert.throws(
+      () =>
+        renderSearchResults({
+          ...GOOD,
+          hits: [hit({ publisher, work: 'some-work' })],
+        }),
+      /is not a publisher this interface has classified/,
+      `${JSON.stringify(publisher)} was given a vocabulary`,
     );
   }
 });
@@ -283,6 +343,84 @@ test('a row carries its hash-carrying permalink and whether its text is held', (
   );
 });
 
+test('a permalink is a canonical same-origin state URL, bound to the row it sits on', () => {
+  // The control. A refusal that also refuses the true case is not a check, so the legitimate
+  // link is asserted to render before anything hostile is asserted to be refused.
+  const control = renderSearchResults(GOOD);
+  assert.ok(control.includes(PERMALINK), 'the real permalink was refused');
+  assert.ok(control.includes('Read this state'));
+
+  // Containing the digest separator was the entire guard, so any host carrying "--" passed and
+  // was rendered as a working href. Every one of these describes the row correctly on every
+  // visible field while the link goes somewhere else.
+  const hostile = [
+    ['another host', `https://evil.example/preview-synthetic/synthetic-preview-work/2001-01-01--${HASH}`],
+    ['a scheme that is not https', `http://law.soufien.lu/preview-synthetic/synthetic-preview-work/2001-01-01--${HASH}`],
+    ['protocol-relative', `//evil.example/preview-synthetic/synthetic-preview-work/2001-01-01--${HASH}`],
+    ['a javascript URL carrying the separator', 'javascript:alert(1)--x'],
+    // `URL` normalises the default port away, so `parsed.port` is empty here and a check on it
+    // alone would pass this. The raw authority is what says the host is evil.example.
+    ['userinfo dressed as this host', `https://law.soufien.lu:443@evil.example/preview-synthetic/synthetic-preview-work/2001-01-01--${HASH}`],
+    ['userinfo with no port', `https://law.soufien.lu@evil.example/preview-synthetic/synthetic-preview-work/2001-01-01--${HASH}`],
+    ['a query string', `https://law.soufien.lu/preview-synthetic/synthetic-preview-work/2001-01-01--${HASH}?next=https://evil.example`],
+    ['a backslash', `https://law.soufien.lu/preview-synthetic\\synthetic-preview-work/2001-01-01--${HASH}`],
+    ['no digest', 'https://law.soufien.lu/preview-synthetic/synthetic-preview-work/2001-01-01'],
+  ];
+  for (const [what, permalink] of hostile) {
+    assert.throws(
+      () => renderSearchResults({ ...GOOD, hits: [hit({ permalink })] }),
+      /canonical same-origin state URL/,
+      `${what} was rendered as a permalink`,
+    );
+  }
+
+  // Bound on every coordinate, not the date alone. Consolidations published together routinely
+  // share a start date, so the same-date-different-work case is the common one.
+  const bound = [
+    [
+      'a different work, same host and same date',
+      permalinkFor({ publisher: 'preview-synthetic', work: 'another-preview-work', validFrom: '2001-01-01' }),
+    ],
+    [
+      'a different publisher on a Luxembourg row',
+      permalinkFor({ publisher: 'eu-eurlex', work: 'synthetic-preview-work', validFrom: '2001-01-01' }),
+    ],
+    [
+      'a different state of the same work',
+      permalinkFor({ publisher: 'preview-synthetic', work: 'synthetic-preview-work', validFrom: '2004-01-01' }),
+    ],
+  ];
+  for (const [what, permalink] of bound) {
+    assert.throws(
+      () => renderSearchResults({ ...GOOD, hits: [hit({ permalink })] }),
+      /the link and the row must name one state/,
+      `${what} was linked from a row describing something else`,
+    );
+  }
+
+  // A row whose identifier cannot be read cannot have its link bound to it at all.
+  for (const lex_id of ['garbage', 'preview-synthetic:work', 'a:b:']) {
+    assert.throws(
+      () => renderSearchResults({ ...GOOD, hits: [hit({ lex_id })] }),
+      /does not name a publisher, a work and a state/,
+      `lex_id=${JSON.stringify(lex_id)} was listed`,
+    );
+  }
+
+  // The publisher's own anchor survives, because a permalink to a provision is the useful one.
+  const anchored = canonicalStateHref({
+    publisher: 'preview-synthetic',
+    work: 'synthetic-preview-work',
+    validFrom: '2001-01-01',
+    hash: HASH,
+    anchor: 'art_2',
+  });
+  assert.ok(
+    renderSearchResults({ ...GOOD, hits: [hit({ permalink: anchored })] }).includes('#art_2'),
+    'the anchor was dropped from a legitimate permalink',
+  );
+});
+
 test('a row title carries the language it is written in', () => {
   const html = renderSearchResults({
     ...GOOD,
@@ -455,7 +593,7 @@ test('a row cannot claim a layer this screen says did not run', () => {
   for (const [reason, needs] of [['semantic', 'semantic'], ['interpreted', 'crosswalk']]) {
     assert.throws(
       () => renderSearchResults({ ...GOOD, hits: [hit({ match_reasons: [reason] })] }),
-      new RegExp(`carries the ${reason} badge while ${needs} is not declared as applied`),
+      new RegExp(`badged "${reason}", which is evidence that the ${needs} relaxation ran`),
       `${reason} was claimed on a screen that says it did not run`,
     );
     // Declared applied, the same row renders.
@@ -486,6 +624,37 @@ test('an absent relaxation set is a caller who did not say, not none applied', (
       () => renderSearchResults({ ...GOOD, relaxations: bad }),
       /an absent set is not "none ran"/,
       `relaxations=${JSON.stringify(bad)} was read as none applied`,
+    );
+  }
+  // Complete, not merely present: a relaxation missing from the account is a relaxation this
+  // screen cannot disclose, and the disclosure block is where that is decided for both.
+  assert.throws(
+    () =>
+      renderSearchResults({
+        ...GOOD,
+        relaxations: { fuzzy: { applied: false }, crosswalk: { applied: false } },
+      }),
+    /must declare whether it was applied/,
+  );
+  assert.throws(
+    () => renderSearchResults({ ...GOOD, relaxations: { ...RELAXATIONS, rerank: { applied: false } } }),
+    /is not a relaxation this interface can disclose/,
+  );
+
+  // And it is refused before anything reads it, not merely by the disclosure block at the end.
+  // The badge cross-check indexes the account directly, so on a row that carries a badge an
+  // unvalidated account fails there instead: a TypeError about undefined, published in place of
+  // the honest sentence, on the one screen whose job is to say what it does not know.
+  for (const bad of [[], 'off', null]) {
+    assert.throws(
+      () =>
+        renderSearchResults({
+          ...GOOD,
+          relaxations: bad,
+          hits: [hit({ match_reasons: ['semantic'] })],
+        }),
+      /an absent set is not "none ran"/,
+      `relaxations=${JSON.stringify(bad)} was read before it was checked`,
     );
   }
 });

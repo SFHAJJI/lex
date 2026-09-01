@@ -23,7 +23,19 @@
 import { isCalendarDate } from './temporal.mjs';
 import { escapeHtml } from './render.mjs';
 import { renderNoHitCard } from './no-hit-card.mjs';
-import { renderRelaxationDisclosures } from './relaxation.mjs';
+import { requireRelaxationAccount, renderRelaxationDisclosures } from './relaxation.mjs';
+import {
+  DATE_SCOPE,
+  INTERVAL_SENTENCE,
+  semanticsOf,
+  sharedSemantics,
+} from './publisher-vocabulary.mjs';
+import { identityOf, publisherOf } from './record-identity.mjs';
+import { canonicalStateUrl } from './routes.mjs';
+
+// The date-scoped heading is vocabulary, so it lives with the rest of it, keyed by publisher.
+// Re-exported because this screen's own tests already read it from here.
+export { DATE_SCOPE };
 
 /**
  * Why a row is here, from the live enum rather than the prose in the specs.
@@ -46,12 +58,6 @@ const MATCH_LABEL = new Map([
   ['semantic', 'semantic match'],
 ]);
 
-/** The header sentence, in the publisher's own vocabulary. There is no third and no default. */
-export const DATE_SCOPE = Object.freeze({
-  publisher_applicability: (date) => `Provisions as applicable on ${date}`,
-  official_consolidation_state: (date) => `Wording states covering ${date}`,
-});
-
 /**
  * Whether these rows were narrowed to a date at all.
  *
@@ -62,10 +68,26 @@ export const DATE_SCOPE = Object.freeze({
  */
 export const TIME_SCOPES = Object.freeze(['as_of', 'all_versions']);
 
-const SCOPE_HEADING = Object.freeze({
-  publisher_applicability: 'Every state held for these provisions, not narrowed to one date',
-  official_consolidation_state: 'Every wording state held, not narrowed to one date',
-});
+// A Map rather than an object literal, like MATCH_LABEL above it and for the same reason: an
+// object literal inherits from Object.prototype, so a table meant to hold two vocabularies also
+// answers for `constructor` and `toString`. A Map holds only what it was given.
+const SCOPE_HEADING = new Map([
+  ['publisher_applicability', 'Every state held for these provisions, not narrowed to one date'],
+  ['official_consolidation_state', 'Every wording state held, not narrowed to one date'],
+]);
+
+/**
+ * Which relaxation a match reason is evidence of.
+ *
+ * `exact_title` and `keyword` are the reader's own words and imply nothing. The other two are
+ * this service having gone beyond them: `interpreted` is the editorial crosswalk, `semantic` is
+ * semantic retrieval. A row carrying one of those is standing evidence that the relaxation ran,
+ * which is why the account has to agree with it.
+ */
+const REASON_EVIDENCES = new Map([
+  ['interpreted', 'crosswalk'],
+  ['semantic', 'semantic'],
+]);
 
 /** Half-open, the same reading the resolver uses: a state covers [valid_from, valid_to). */
 function covers(hit, date) {
@@ -136,10 +158,35 @@ function requireHit(hit, index) {
         'that has it, and this corpus holds 1,493 versions that do not',
     );
   }
-  if (typeof hit.permalink !== 'string' || !hit.permalink.includes('--')) {
+  // Through the shared same-origin route policy, not a substring test. Containing "--" was the
+  // entire guard, so `javascript:alert(1)--x` satisfied it and was rendered as a working href a
+  // few lines below, as did any URL on any host that happened to carry the digest separator.
+  // `canonicalStateUrl` requires this product's own host, read from the raw authority so an
+  // explicit port or userinfo cannot dress another host as this one, and then requires the path
+  // to be a state URL the object-URL builders could have minted.
+  const permalink = canonicalStateUrl(hit.permalink);
+  if (permalink === null) {
     throw new Error(
-      `${where} needs its hash-carrying permalink; a link without the digest silently follows ` +
-        'the publisher when the file behind it is replaced',
+      `${where} needs its hash-carrying permalink as a canonical same-origin state URL; ` +
+        `${JSON.stringify(hit.permalink)} is not one, and a link without the digest silently ` +
+        'follows the publisher when the file behind it is replaced',
+    );
+  }
+  // Bound to the row on every coordinate, not merely on the date. Comparing valid_from alone
+  // accepted a link to work-b on a row describing work-a whenever the two shared a start date,
+  // which is the common case for consolidations published together rather than an exotic one.
+  // A reader would arrive at a different instrument with every field above still true of the
+  // row, which is the worst shape this failure can take: nothing on the screen is wrong.
+  const identity = identityOf(hit.lex_id, where);
+  if (
+    permalink.publisher !== identity.publisher ||
+    permalink.work !== identity.work ||
+    permalink.validFrom !== hit.valid_from
+  ) {
+    throw new Error(
+      `${where} links to ${permalink.publisher}:${permalink.work} applicable from ` +
+        `${permalink.validFrom} while the row is ${identity.workKey} from ${hit.valid_from}; ` +
+        'the link and the row must name one state',
     );
   }
 
@@ -192,12 +239,19 @@ function requireHit(hit, index) {
   return hit;
 }
 
-function renderHit(hit, index, semantics) {
-  requireHit(hit, index);
-  const legal =
-    semantics === 'publisher_applicability'
-      ? `Applicable from ${hit.valid_from} to ${hit.valid_to ?? 'no end recorded'} (publisher)`
-      : `Consolidated wording state from ${hit.valid_from} to ${hit.valid_to ?? 'no end recorded'}`;
+function renderHit(hit, index) {
+  // The row's own publisher decides which clock its dates are on. This used to take the
+  // envelope's single vocabulary, so every row in a multi-publisher list was described in one
+  // publisher's words: an EUR-Lex row rendered "Applicable from ... (publisher)" and attributed
+  // to the Union an applicability claim it does not make. There is no parameter to get wrong
+  // now, because the record carries the answer.
+  //
+  // The row is not re-validated here. `renderSearchResults` requires every row once, before
+  // anything is derived from them, and a second guard in this function was a guard a test could
+  // delete without failing.
+  const where = `hit ${index + 1}`;
+  const semantics = semanticsOf(publisherOf(hit.lex_id, where), where);
+  const legal = INTERVAL_SENTENCE[semantics](hit.valid_from, hit.valid_to);
 
   const badges = hit.match_reasons
     .map((reason) => `<li class="hit-badge">${escapeHtml(MATCH_LABEL.get(reason))}</li>`)
@@ -228,7 +282,6 @@ function renderHit(hit, index, semantics) {
  *
  * @param {object}  input
  * @param {string}  input.query          what was asked, verbatim
- * @param {string}  input.semantics      the envelope's timeline_semantics, no default
  * @param {string}  input.asOf           the operative date, always explicit even when today
  * @param {string}  input.timeScope      as_of or all_versions; the service's own answer
  * @param {Array}   input.hits
@@ -243,7 +296,7 @@ function renderHit(hit, index, semantics) {
  */
 export function renderSearchResults({
   query,
-  semantics,
+  semantics: declaredSemantics,
   asOf,
   timeScope,
   hits,
@@ -256,10 +309,14 @@ export function renderSearchResults({
   expansions = [],
   routes,
 }) {
-  if (!Object.hasOwn(DATE_SCOPE, semantics ?? '')) {
+  // There is no semantics parameter. The vocabulary is a property of each record's publisher
+  // and is derived below, so a caller cannot pass one that disagrees with the data. Passing one
+  // is refused rather than ignored: a caller who believes they are choosing the vocabulary has
+  // misunderstood the contract, and silently overriding them leaves them believing it worked.
+  if (declaredSemantics !== undefined) {
     throw new Error(
-      `results are scoped in the publisher's own vocabulary and ${JSON.stringify(semantics)} ` +
-        `is not one of ${Object.keys(DATE_SCOPE).join(', ')}`,
+      'results do not take a date vocabulary; each row is described in its own ' +
+        "publisher's terms, derived from the record, so there is nothing to choose",
     );
   }
   // Never a silent default. The pack's rule is that the operative date is explicit even when
@@ -277,15 +334,10 @@ export function renderSearchResults({
   if (typeof query !== 'string' || query.trim().length === 0) {
     throw new Error('results echo the query they answer');
   }
-  // An absent relaxation set is not "none applied", it is a caller who did not say. The whole
-  // disclosure rule was reachable only through a gate an omission walked straight past, and the
-  // default was an array, so it had no keys to gate on either.
-  if (relaxations === null || typeof relaxations !== 'object' || Array.isArray(relaxations)) {
-    throw new Error(
-      'results declare every relaxation and whether it applied; an absent set is not "none ' +
-        'ran", it is a caller who did not say, and a screen that does not know cannot disclose',
-    );
-  }
+  // The account is required, and closed: one entry per relaxation, none missing and none
+  // invented. The contract is the disclosure module's, checked here rather than restated, so
+  // this screen and the disclosures it renders cannot come to disagree about what an account is.
+  requireRelaxationAccount(relaxations);
   if (!TIME_SCOPES.includes(timeScope)) {
     throw new Error(
       `results say whether they were narrowed to a date; ${JSON.stringify(timeScope)} is not ` +
@@ -343,12 +395,17 @@ export function renderSearchResults({
     throw new Error('the row set returned more rows than it holds');
   }
 
+  // Every row validated once, here, before anything is derived from any of them. It used to
+  // happen inside the as_of branch and again inside renderHit, so an all_versions list reached
+  // the badge cross-check below with rows nothing had checked, and a row that never said why it
+  // matched failed there as a type error instead of saying so.
+  hits.forEach(requireHit);
+
   // A row under a date-scoped heading must satisfy that scope. Nothing compared the two, so a
   // long-superseded state could be listed among the provisions applicable on a date it does not
   // cover, under a heading asserting exactly that.
   if (timeScope === 'as_of') {
     hits.forEach((hit, index) => {
-      requireHit(hit, index);
       if (!covers(hit, asOf)) {
         throw new Error(
           `hit ${index + 1} is applicable from ${hit.valid_from} to ` +
@@ -371,21 +428,19 @@ export function renderSearchResults({
         'them, or the reader is answered on words nobody says were used',
     );
   }
-  // A row cannot claim a layer this same screen declares did not run. A badge saying "semantic
-  // match" beside a disclosure saying semantic retrieval was off is the page contradicting
-  // itself, and the badge is the half a reader believes.
-  const BADGE_NEEDS = new Map([
-    ['semantic', 'semantic'],
-    ['interpreted', 'crosswalk'],
-  ]);
+  // Every badge that is evidence of a relaxation must be matched by that relaxation declaring
+  // itself applied. The expansions check above catches a rewritten query with no relaxation
+  // declared; this catches the same failure from the other end, a row badged "semantic match"
+  // inside a result set whose account says semantic retrieval never ran. One of those two is
+  // false, and the reader is looking at the badge.
   hits.forEach((hit, index) => {
-    for (const reason of hit.match_reasons ?? []) {
-      const needs = BADGE_NEEDS.get(reason);
-      if (needs && relaxations[needs]?.applied !== true) {
+    for (const reason of hit.match_reasons) {
+      const evidenced = REASON_EVIDENCES.get(reason);
+      if (evidenced !== undefined && relaxations[evidenced].applied !== true) {
         throw new Error(
-          `hit ${index + 1} carries the ${reason} badge while ${needs} is not declared as ` +
-            'applied on this screen; a row cannot have been produced by a layer the same page ' +
-            'says did not run',
+          `hit ${index + 1} is badged ${JSON.stringify(reason)}, which is evidence that the ` +
+            `${evidenced} relaxation ran, while this result set declares ${evidenced} as not ` +
+            'applied; the badge and the account cannot both be true',
         );
       }
     }
@@ -426,11 +481,28 @@ export function renderSearchResults({
         'passages.</p>'
       : '';
 
+  // Null when the rows disagree, which a multi-publisher result set routinely does. The heading
+  // may use one publisher's words only when every row shares that publisher's clock; over a
+  // mixed list, picking one states a claim about the rows it does not describe. The neutral
+  // wording is not a hedge, it is the only true sentence available over rows that make
+  // different kinds of assertion.
+  const scope = sharedSemantics(
+    hits.map((hit, index) => publisherOf(hit.lex_id, `hit ${index + 1}`)),
+    'the result heading',
+  );
+  const heading =
+    timeScope === 'as_of'
+      ? scope === null
+        ? `States covering ${asOf}, each in its own publisher's terms`
+        : DATE_SCOPE[scope](asOf)
+      : scope === null
+        ? "Every state held for these provisions, each in its own publisher's terms, not " +
+          'narrowed to one date'
+        : SCOPE_HEADING.get(scope);
+
   return (
     '<section class="results">' +
-    `<h2 class="results-scope">${escapeHtml(
-      timeScope === 'as_of' ? DATE_SCOPE[semantics](asOf) : SCOPE_HEADING[semantics],
-    )}</h2>` +
+    `<h2 class="results-scope">${escapeHtml(heading)}</h2>` +
     `<p class="results-operative-date">Operative date: ${escapeHtml(asOf)}.` +
     (timeScope === 'as_of'
       ? ''
@@ -439,7 +511,7 @@ export function renderSearchResults({
     `<p class="results-query">You asked: ${escapeHtml(query)}</p>` +
     disclosures +
     governingHtml +
-    `<ol class="hits">${hits.map((hit, i) => renderHit(hit, i, semantics)).join('')}</ol>` +
+    `<ol class="hits">${hits.map((hit, i) => renderHit(hit, i)).join('')}</ol>` +
     pager +
     renderPopulation(population) +
     '</section>'

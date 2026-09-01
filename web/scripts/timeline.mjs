@@ -11,8 +11,11 @@
 // gets a continuous history, which is exactly the false picture. Being derived, they say so.
 //
 // The vocabulary is the publisher's. Luxembourg says a state was applicable; the Union says a
-// consolidated wording state ran from one date to another. They are different claims and this
-// file will not choose one, so the semantics arrive from the envelope and there is no default.
+// consolidated wording state ran from one date to another. They are different claims, this file
+// will not choose one, and it does not let a caller choose either. A timeline is one work's
+// history, so the publisher is already in the records and the words come from there. The legend
+// above the rows used to be a single fixed Luxembourg sentence printed over both publishers,
+// which is the same defect one line above the rows it contradicted.
 //
 // "In force" appears nowhere. A held EU state that predates entry into force already carries
 // the publisher's own in_force flag, so printing that flag on a state row would put a date on
@@ -26,19 +29,8 @@
 
 import { isCalendarDate, isUtcInstant } from './temporal.mjs';
 import { escapeHtml } from './render.mjs';
-
-/** The two vocabularies, and there is no third and no default. */
-export const TIMELINE_SEMANTICS = Object.freeze({
-  publisher_applicability: (from, to) =>
-    `Applicable from ${from} to ${to === null ? 'no end recorded' : to} (publisher)`,
-  official_consolidation_state: (from, to) =>
-    `Consolidated wording state from ${from} to ${to === null ? 'no end recorded' : to}`,
-});
-
-/** Fixed by the spec, three sentences, because the screen is the two clocks. */
-export const LEGEND =
-  'Top: when the publisher says the state applied. Bottom: when the publisher published it. ' +
-  'These routinely differ.';
+import { INTERVAL_SENTENCE, LEGENDS, semanticsOf } from './publisher-vocabulary.mjs';
+import { oneWorkAcross } from './record-identity.mjs';
 
 /** Fixed by the spec. Never colour alone. */
 export const PROVISIONAL_MARK = 'PROVISIONAL, publisher-scheduled';
@@ -252,7 +244,7 @@ export function overlapsIn(states) {
 }
 
 function renderRow(state, { semantics, asOf }) {
-  const legalTime = TIMELINE_SEMANTICS[semantics](state.valid_from, state.valid_to);
+  const legalTime = INTERVAL_SENTENCE[semantics](state.valid_from, state.valid_to);
   const provisional =
     state.valid_from > asOf
       ? `<p class="timeline-provisional">${escapeHtml(PROVISIONAL_MARK)}</p>`
@@ -302,19 +294,29 @@ function renderHoleRow(hole) {
  * The timeline.
  *
  * @param {object} input
- * @param {string} input.semantics      the envelope's timeline_semantics, no default
- * @param {Array}  input.states         held states, any order; this sorts them
+ * @param {Array}  input.states         held states of one work, any order; this sorts them
  * @param {string} input.asOf           the date "provisional" is measured against, a parameter
  * @param {number} input.totalCount     how many states the publisher's history holds
  * @param {boolean} input.truncated
  * @param {string} input.population     what this list was drawn from
  */
-export function renderTimeline({ semantics, states, asOf, totalCount, truncated, population }) {
-  if (!Object.hasOwn(TIMELINE_SEMANTICS, semantics ?? '')) {
+export function renderTimeline({
+  semantics: declaredSemantics,
+  states,
+  asOf,
+  totalCount,
+  truncated,
+  population,
+}) {
+  // There is no semantics parameter. A timeline is one work's history, so the vocabulary is a
+  // property of that work's publisher and is derived below from the records themselves. Passing
+  // one is refused rather than ignored: a caller who believes they are choosing the vocabulary
+  // has misunderstood the contract, and silently overriding them leaves them believing it worked.
+  if (declaredSemantics !== undefined) {
     throw new Error(
-      `a timeline renders in the publisher's own vocabulary and ${JSON.stringify(semantics)} is ` +
-        `not one of ${Object.keys(TIMELINE_SEMANTICS).join(', ')}; the two publishers make ` +
-        'different claims and this product does not choose between them',
+      'a timeline does not take a date vocabulary; it is a property of the publisher of the ' +
+        'work being drawn and is derived from the records, so a caller cannot pass one that ' +
+        'disagrees with them',
     );
   }
   // The clock is a parameter, so the same index and the same URL render the same page tomorrow.
@@ -360,6 +362,19 @@ export function renderTimeline({ semantics, states, asOf, totalCount, truncated,
   }
 
   states.forEach(requireState);
+
+  // A timeline is the history of one work, and this is where that becomes enforced rather than
+  // assumed. Derived after every row has validated itself, so a malformed row is reported in its
+  // own terms instead of as a mixed-work refusal.
+  //
+  // Everything below depends on it. The gaps and the overlapping pairs are computed by comparing
+  // intervals, and across two unrelated instruments those comparisons still produce sentences:
+  // "both cover part of the same period", "the publisher ranks neither state". Both are false,
+  // and false in the direction that does the most damage, because they report a contradiction
+  // the publisher never made. One work is what makes them mean anything.
+  const identity = oneWorkAcross(states, 'a timeline');
+  const semantics = semanticsOf(identity.publisher, 'a timeline');
+
   // A total ordering. The old comparator never returned 0, so states sharing a valid_from kept
   // the caller's order, which is exactly the ambiguous_version shape and exactly where "the
   // record places the row" has to mean something.
@@ -416,7 +431,7 @@ export function renderTimeline({ semantics, states, asOf, totalCount, truncated,
   return (
     '<section class="timeline">' +
     `<p class="timeline-as-of">Drawn as of ${escapeHtml(asOf)}.</p>` +
-    `<p class="timeline-legend">${escapeHtml(LEGEND)}</p>` +
+    `<p class="timeline-legend">${escapeHtml(LEGENDS[semantics])}</p>` +
     // Decoration, and it says so. The table below is the structure, which is both the
     // accessibility rule and the only version of this screen that survives without a client.
     '<div class="timeline-chart" aria-hidden="true"></div>' +

@@ -23,6 +23,8 @@
 // Both policies reject userinfo and an explicit port. `https://legilux.public.lu@evil.example/`
 // has hostname `evil.example`, and a reader scanning the start of a link sees the publisher.
 
+import { parseObjectUrl, readingUrl } from './urls.mjs';
+
 /** Hosts each publisher actually serves from. Closed, and checked per publisher. */
 export const PUBLISHER_HOSTS = Object.freeze({
   'lu-legilux': Object.freeze(['legilux.public.lu', 'data.legilux.public.lu']),
@@ -213,4 +215,92 @@ export function tryPublisherSourceUri(publisher, uri) {
   } catch {
     return null;
   }
+}
+
+/**
+ * The one host this product serves its own object URLs from.
+ *
+ * Declared here because it did not exist anywhere: it was a literal inside a single preview
+ * fixture, so nothing could check that a link claiming to be one of ours actually was.
+ */
+export const CANONICAL_HOST = 'law.soufien.lu';
+
+/**
+ * A state permalink, validated rather than pattern-matched.
+ *
+ * The guard this replaces was `permalink.includes('--')`, which `javascript:alert(1)--x`
+ * satisfies, and the value was then rendered as an href. Containing a digest separator is not
+ * evidence of anything; being a canonical same-origin state URL is.
+ *
+ * Accepts the absolute form on this product's own host, which is what the service emits, and
+ * the root-relative form. Everything else is refused: another host, another scheme,
+ * protocol-relative, userinfo, a port, a backslash, or a path the object-URL grammar rejects.
+ *
+ * @param {unknown} value
+ * @returns {{path: string, publisher: string, work: string, validFrom: string, hash: string,
+ *   anchor: string|null}|null} the parsed state, or null
+ */
+export function canonicalStateUrl(value) {
+  if (typeof value !== 'string' || value.length === 0) return null;
+  // A backslash is a separator to some parsers and not to others, so it never reaches one here.
+  // Written as a code point because a backslash literal in a shell heredoc has been mangled
+  // twice on this project already, once silently into a backspace byte.
+  if (value.includes(String.fromCharCode(92))) return null;
+
+  let path = value;
+  if (!value.startsWith('/')) {
+    let parsed;
+    try {
+      parsed = new URL(value);
+    } catch {
+      return null;
+    }
+    if (parsed.protocol !== 'https:') return null;
+    // One equality, on the authority as written, is the whole host policy.
+    //
+    // `URL` normalizes before it reports, and every normalization it performs is a way to make
+    // a hostile URL read as a familiar one. It lowercases `LAW.SOUFIEN.LU`, drops the default
+    // port so `parsed.port` is empty for both `host/` and `host:443/`, and reports
+    // `law.soufien.lu` as the hostname of `https://law.soufien.lu@evil.example/`, where the
+    // familiar name is userinfo and the host is not. A reader sees the raw string, so the raw
+    // string is what has to be well formed.
+    //
+    // Written as one check rather than as separate host, userinfo and port checks, because the
+    // separate ones are all strictly weaker than this and each other's shadow: with this line
+    // present, none of them can fail on any input, so a test cannot hold them and deleting one
+    // turns nothing red. This equality refuses another host, any userinfo, any port, a
+    // different case and a trailing label separator, and it refuses them for the same reason.
+    const authority = value.slice('https://'.length).split('/')[0];
+    if (authority !== CANONICAL_HOST) return null;
+    if (parsed.search !== '') return null;
+    path = `${parsed.pathname}${parsed.hash}`;
+  } else if (value.startsWith('//')) {
+    // Protocol-relative: `//evil.example/x` is off-site and starts with a slash.
+    //
+    // Kept although `parseObjectUrl` also refuses it today, and this is a deliberate exception
+    // to the rule stated above. That refusal is a side effect of its empty-segment rule, in
+    // another module, and its own comment records that an earlier version dropped empty
+    // segments instead. If that rule ever relaxes again, this is the line that keeps an
+    // off-origin link from being published as a permalink. A guard that survives a mutation is
+    // worth keeping when the thing shadowing it lives behind a different module's contract.
+    return null;
+  }
+
+  const object = parseObjectUrl(path);
+  if (object === null || object.kind !== 'reading') return null;
+  return { path, ...object };
+}
+
+/**
+ * The absolute permalink for one state, minted rather than written out.
+ *
+ * The parser above is only worth having if nothing hand-writes what it is meant to check. The
+ * preview fixture used to interpolate the host and the version key itself, so the one place
+ * that demonstrated the policy was also the one place that bypassed it, and a change to the
+ * grammar would have left the fixture asserting the old one.
+ *
+ * @param {object} input  the same coordinates `readingUrl` takes
+ */
+export function canonicalStateHref(input) {
+  return `https://${CANONICAL_HOST}${readingUrl(input)}`;
 }

@@ -149,13 +149,27 @@ const DISCLOSURE = new Map([
 ]);
 
 /**
- * Every relaxation, declared, and a disclosure for each one that ran.
+ * The account, complete and closed, or a refusal naming what is missing.
  *
- * @param {object} input
- * @param {string} input.searchPath   the current search path, which the reverts are built from
- * @param {object} input.relaxations  one entry per member of RELAXATIONS, each with `applied`
+ * Separated from the disclosure renderer because a caller can need the contract without needing
+ * the markup. The search screen has to know the account is whole before it can cross-check its
+ * badges against it, and re-implementing the same three checks there is how two versions of one
+ * contract start to disagree.
+ *
+ * @param {object} relaxations  one entry per member of RELAXATIONS, each with `applied`
  */
-export function renderRelaxationDisclosures({ searchPath, relaxations }) {
+export function requireRelaxationAccount(relaxations) {
+  // An account is an object with one entry per relaxation. An array has no entries to read, and
+  // an absent account is not "none ran", it is a caller who did not say. This check lived in the
+  // search screen, one layer above the three checks below it, so the contract was in two files
+  // and only one of them was reachable from a caller that used the disclosures directly.
+  if (relaxations === null || typeof relaxations !== 'object' || Array.isArray(relaxations)) {
+    throw new Error(
+      'a relaxation account declares every relaxation and whether it applied; an absent set is ' +
+        'not "none ran", it is a caller who did not say, and a screen that does not know ' +
+        'cannot disclose',
+    );
+  }
   for (const relaxation of RELAXATIONS) {
     const state = relaxations?.[relaxation];
     if (typeof state?.applied !== 'boolean') {
@@ -173,6 +187,18 @@ export function renderRelaxationDisclosures({ searchPath, relaxations }) {
         'retrieval path without adding it here is how a silent relaxation ships',
     );
   }
+  return relaxations;
+}
+
+/**
+ * Every relaxation, declared, and a disclosure for each one that ran.
+ *
+ * @param {object} input
+ * @param {string} input.searchPath   the current search path, which the reverts are built from
+ * @param {object} input.relaxations  one entry per member of RELAXATIONS, each with `applied`
+ */
+export function renderRelaxationDisclosures({ searchPath, relaxations }) {
+  requireRelaxationAccount(relaxations);
 
   const applied = RELAXATIONS.filter((relaxation) => relaxations[relaxation].applied);
   if (applied.length === 0) return '';

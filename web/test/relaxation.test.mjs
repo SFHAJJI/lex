@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   RELAXATIONS,
   renderRelaxationDisclosures,
+  requireRelaxationAccount,
   revertPath,
 } from '../scripts/relaxation.mjs';
 
@@ -173,4 +174,49 @@ test('values are escaped rather than trusted', () => {
   });
   assert.ok(!html.includes('<img'));
   assert.ok(html.includes('&lt;img'));
+});
+
+test('the account is a contract a caller can check without rendering anything', () => {
+  // The search screen has to know the account is whole before it can cross-check its badges
+  // against it. Re-implementing the same checks there is how two versions of one contract start
+  // to disagree, and the type check had already drifted into being the screen's alone.
+  assert.equal(requireRelaxationAccount(NONE), NONE);
+
+  // An account is an object with one entry per relaxation. An array has no entries to read.
+  for (const bad of [undefined, null, [], 'off', 0, NONE.fuzzy.applied]) {
+    assert.throws(
+      () => requireRelaxationAccount(bad),
+      /an absent set is not "none ran"/,
+      `${JSON.stringify(bad)} was read as an account`,
+    );
+  }
+
+  // Complete: a relaxation the caller did not mention is a relaxation this screen cannot
+  // disclose, which is a different fact from one that did not run.
+  for (const relaxation of RELAXATIONS) {
+    const partial = { ...NONE };
+    delete partial[relaxation];
+    assert.throws(
+      () => requireRelaxationAccount(partial),
+      new RegExp(`${relaxation} must declare whether it was applied`),
+      `${relaxation} could go missing`,
+    );
+  }
+
+  // Closed: adding one to the retrieval path without adding it here is how a silent relaxation
+  // ships. Including the keys every object answers for, which a prototype lookup would accept.
+  for (const extra of ['rerank', 'constructor', 'toString']) {
+    assert.throws(
+      () => requireRelaxationAccount({ ...NONE, [extra]: { applied: false } }),
+      /is not a relaxation this interface can disclose/,
+      `${extra} was accepted as a relaxation`,
+    );
+  }
+
+  // And the renderer holds the same contract, because it asks this function rather than
+  // repeating it.
+  assert.throws(
+    () => renderRelaxationDisclosures({ searchPath: SEARCH, relaxations: [] }),
+    /an absent set is not "none ran"/,
+  );
 });

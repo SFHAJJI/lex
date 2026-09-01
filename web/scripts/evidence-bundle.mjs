@@ -10,9 +10,11 @@
 // "excluded structurally", and the reason is that a labelled convenience which quietly
 // enters a bundle stops being labelled at the exact moment it matters.
 //
-// Rights are applied at compose time, not at read time. An item whose licence does not
-// permit serving the text is included as hash and link only, and the composer strips the
-// text rather than trusting a caller to have withheld it.
+// Rights are applied at compose time, not at read time, and by two gates rather than one. A
+// bundle is a public surface, so D38's `text_public` decides whether a body may travel at all;
+// the licence's own terms then decide whether this grant lets it. The composer strips the text
+// rather than trusting a caller to have withheld it, and it refuses an item that never stated
+// the gate, because a closed gate and an unstated one are different facts.
 //
 // The register has a closed column set, and three names are refused by name: impact, owner
 // action, and compliant. Those are the columns that turn a record of what the publisher
@@ -24,6 +26,8 @@
 
 import { isCalendarDate, isUtcInstant } from './temporal.mjs';
 import { publisherSourceUri } from './routes.mjs';
+import { INTERVAL_TERM, semanticsOf } from './publisher-vocabulary.mjs';
+import { identityOf } from './record-identity.mjs';
 
 /** What an item is. Only the first may enter a bundle. */
 export const ITEM_KINDS = Object.freeze(['publisher_text', 'derived', 'unofficial']);
@@ -128,6 +132,39 @@ function requireItem(item, index) {
         `at compose time and can only do that for a licence it knows: ${Object.keys(LICENCES).join(', ')}`,
     );
   }
+
+  // The publisher is not a second, independent fact the caller supplies. It is the first
+  // segment of the item's own identifier, and an item whose declared publisher disagrees with
+  // its identifier has one of those two wrong. The official-source host check runs against the
+  // declared value, so a disagreement here decides whose official hosts this item may link to.
+  const identity = identityOf(item.identifier, where);
+  if (item.publisher !== identity.publisher) {
+    throw new Error(
+      `${where} declares publisher ${JSON.stringify(item.publisher)} while its identifier names ` +
+        `${JSON.stringify(identity.publisher)}; one of those is wrong, and the composer must not ` +
+        'choose which, because that choice decides whose official hosts this item may link to',
+    );
+  }
+
+  // D38, honoured here because an evidence bundle is a public surface and the decision says
+  // every public surface honours the gate. It was not honoured at all: the composer asked the
+  // caller-supplied licence label whether the text could travel, so a caller who wrote `cc0`
+  // over a Legilux item exported the publisher's text on the strength of their own label. The
+  // licence is a term of the grant. `text_public` is whether the grant was established, with
+  // recorded evidence (C2). Only the second can unlock a body.
+  //
+  // Absence is refused rather than read as false. C2 says the flag starts false, so false is the
+  // safe reading, but "the publisher's gate is closed" and "this payload never said" are
+  // different facts, and D38 exists to keep withholding reasons distinct. Treating a missing
+  // field as a closed gate hides a payload defect behind a correct-looking refusal.
+  if (typeof item.text_public !== 'boolean') {
+    throw new Error(
+      `${where} does not carry text_public; an evidence bundle is a public surface, D38 says ` +
+        'every public surface honours that gate, and an item that never states it cannot be ' +
+        'composed either way',
+    );
+  }
+
   return publisherSourceUri({ publisher: item.publisher, uri: item.official_uri });
 }
 
@@ -140,32 +177,65 @@ function isCalendarDateOrThrow(value, what) {
 function renderItem(item, index) {
   const official = requireItem(item, index);
   const licence = LICENCES[item.licence];
+  // Per item, not per bundle. A bundle may carry Luxembourg and Union items together, and one
+  // vocabulary spread over both prints an applicability claim onto a consolidation that the
+  // Union never said applied to anything.
+  const semantics = semanticsOf(item.publisher, `item ${index + 1}`);
 
-  // Rights at compose time. A licence that does not embed text loses the text here, whatever
-  // the caller passed, so a bundle cannot carry text the publisher did not license.
-  // A licence that embeds text and an item with none is an empty quotation under a citation, a
-  // digest and an official link: the shape of a bundle carrying text it does not have.
-  if (licence.embedsText && (typeof item.text !== 'string' || item.text.trim().length === 0)) {
+  // Rights at compose time, through two gates that refuse for different reasons and therefore
+  // say so separately. `text_public` is whether the publisher's rights position was established
+  // with recorded evidence (C2, D38); the licence's own terms are whether that grant lets the
+  // body itself travel. A reader told only "withheld" cannot tell which, and one of the two may
+  // change tomorrow while the other will not.
+  const carriesBody = item.text_public && licence.embedsText;
+
+  // A bundle that may carry a body and has none is an empty quotation under a citation, a
+  // digest and an official link: the shape of a bundle carrying text it does not have. Asked of
+  // the licence alone, this also demanded text from an item whose gate is closed, where there
+  // is no body to carry and nothing to be empty.
+  if (carriesBody && (typeof item.text !== 'string' || item.text.trim().length === 0)) {
     throw new Error(
-      `${'item ' + (index + 1)} is under a licence that embeds its text and carries none; an ` +
-        'empty quotation beneath a citation and a digest reads as text this bundle holds',
+      `${'item ' + (index + 1)} may carry its text and carries none; an empty quotation ` +
+        'beneath a citation and a digest reads as text this bundle holds',
     );
   }
 
-  const body = licence.embedsText
-    ? `<blockquote class="bundle-text">${escapeHtml(item.text ?? '')}</blockquote>`
-    : '<p class="bundle-withheld">Text withheld by licence. This item travels as its digest ' +
-      'and its official link, which are enough to fetch and verify it at the publisher.</p>';
+  // Attribution travels with any body, whatever the licence says. A licence that waives
+  // attribution waives an obligation; it does not make it acceptable to leave the source
+  // unnamed. This artefact exists to be checked against the publisher, and a body with no
+  // publisher named cannot be checked against anything. The licence table decides obligations,
+  // not provenance.
+  if (
+    carriesBody &&
+    (typeof item.attribution !== 'string' || item.attribution.trim().length === 0)
+  ) {
+    throw new Error(
+      `item ${index + 1} exports the publisher's text and names no attribution; the licence ` +
+        'may waive that obligation, but a bundle carrying a body without saying whose it is ' +
+        'cannot be checked against the source it came from',
+    );
+  }
 
-  const attribution = licence.attribution
-    ? `<p class="bundle-attribution">${escapeHtml(item.attribution ?? '')}</p>`
-    : '';
+  const body = !item.text_public
+    ? '<p class="bundle-withheld">Text withheld: the publisher\'s text gate has not cleared, ' +
+      'so no public surface of this service carries the body. The digest and the official link ' +
+      'are enough to fetch and verify it at the publisher.</p>'
+    : licence.embedsText
+      ? `<blockquote class="bundle-text">${escapeHtml(item.text ?? '')}</blockquote>`
+      : '<p class="bundle-withheld">Text withheld by licence. This item travels as its digest ' +
+        'and its official link, which are enough to fetch and verify it at the publisher.</p>';
+
+  const attribution =
+    licence.attribution || carriesBody
+      ? `<p class="bundle-attribution">${escapeHtml(item.attribution ?? '')}</p>`
+      : '';
 
   return (
     `<li class="bundle-item" data-kind="${escapeHtml(item.kind)}">` +
     `<p class="bundle-citation">${escapeHtml(item.citation)}</p>` +
     '<dl class="bundle-dates">' +
-    `<div class="strip-row"><dt>applicable</dt><dd>${escapeHtml(item.valid_from)} to ` +
+    `<div class="strip-row"><dt>${escapeHtml(INTERVAL_TERM[semantics])}</dt>` +
+    `<dd>${escapeHtml(item.valid_from)} to ` +
     `${escapeHtml(item.valid_to ?? 'no end recorded')}</dd></div>` +
     `<div class="strip-row"><dt>published</dt><dd>${escapeHtml(item.publication_date)}</dd></div>` +
     `<div class="strip-row"><dt>observed</dt><dd>${escapeHtml(item.observed_from)}</dd></div>` +
@@ -235,7 +305,12 @@ export function renderRegister({ items, columns }) {
  * @param {Array}  input.columns
  * @param {object} input.verification  the recipe, the signing key and the fetch note
  */
-export function renderEvidenceBundle({ items, columns, verification }) {
+export function renderEvidenceBundle({
+  items,
+  columns,
+  verification,
+  semantics: declaredSemantics,
+}) {
   if (!Array.isArray(items) || items.length === 0) {
     throw new Error('an evidence bundle with no items is a cover sheet');
   }
@@ -247,6 +322,21 @@ export function renderEvidenceBundle({ items, columns, verification }) {
           'to be trusted, and this product is built so that it does not have to be',
       );
     }
+  }
+
+  // Last, after every item and the annex, so this check shadows none of them.
+  //
+  // There is no bundle-wide vocabulary, and one could never have been right: a bundle may carry
+  // Luxembourg and Union items side by side, so a single value describes at most half of them.
+  // Each item is labelled from its own publisher. Passing one is refused rather than ignored,
+  // because a caller who believes they are choosing it has misunderstood the contract and
+  // silently overriding them leaves them believing it worked.
+  if (declaredSemantics !== undefined) {
+    throw new Error(
+      'an evidence bundle does not take a date vocabulary; it is a property of the publisher ' +
+        'of each item, and a bundle may span publishers, so no single value can describe every ' +
+        'item',
+    );
   }
 
   return (

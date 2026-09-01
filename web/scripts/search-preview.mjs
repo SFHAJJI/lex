@@ -13,9 +13,12 @@
 
 import { page } from './render.mjs';
 import { renderSearchResults } from './search-results.mjs';
+import { canonicalStateHref } from './routes.mjs';
 import { skinFor } from './shells.mjs';
 
-const WORK = 'preview-synthetic:synthetic-preview-work';
+const PUBLISHER = 'preview-synthetic';
+const WORK_KEY = 'synthetic-preview-work';
+const WORK = `${PUBLISHER}:${WORK_KEY}`;
 const AS_OF = '2026-09-01';
 
 const POPULATION = {
@@ -40,14 +43,22 @@ const OFF = {
   semantic: { applied: false },
 };
 
-function hit(overrides = {}) {
+// Minted through the canonical builder rather than written out. A preview that hand-writes the
+// exact shape the route policy exists to produce is the one page that bypasses the policy while
+// appearing to demonstrate it, and it would keep asserting the old grammar after a change.
+function hit({ validFrom = '2001-01-01', ...overrides } = {}) {
   return {
-    lex_id: `${WORK}:2001-01-01`,
-    valid_from: '2001-01-01',
+    lex_id: `${WORK}:${validFrom}`,
+    valid_from: validFrom,
     valid_to: null,
     publication_date: '2000-12-01',
     text_available: true,
-    permalink: `https://law.soufien.lu/preview-synthetic/synthetic-preview-work/2001-01-01--${'a'.repeat(64)}`,
+    permalink: canonicalStateHref({
+      publisher: PUBLISHER,
+      work: WORK_KEY,
+      validFrom,
+      hash: 'a'.repeat(64),
+    }),
     match_reasons: ['keyword'],
     provision_num: 'Art. 1',
     chapter_path: 'Title I, Chapter 2',
@@ -66,7 +77,6 @@ function section(heading, note, html) {
 export function renderSearchPreview({ locale = 'en' } = {}) {
   const resolved = renderSearchResults({
     query: 'synthetic preview work article 1',
-    semantics: 'publisher_applicability',
     asOf: AS_OF,
     timeScope: 'as_of',
     hits: [hit(), hit({ provision_num: 'Art. 2', match_reasons: ['keyword'] })],
@@ -82,12 +92,11 @@ export function renderSearchPreview({ locale = 'en' } = {}) {
 
   const cut = renderSearchResults({
     query: 'synthetic preview provision',
-    semantics: 'official_consolidation_state',
     asOf: AS_OF,
     timeScope: 'all_versions',
     hits: [
       hit({ provision_num: 'Art. 3', match_reasons: ['exact_title'] }),
-      hit({ provision_num: 'Art. 3', valid_from: '2001-01-01', valid_to: '2004-01-01' }),
+      hit({ provision_num: 'Art. 3', valid_to: '2004-01-01' }),
     ],
     rowSet: { returned: 2, total: 47 },
     population: POPULATION,
@@ -97,7 +106,6 @@ export function renderSearchPreview({ locale = 'en' } = {}) {
 
   const relaxed = renderSearchResults({
     query: 'how many months deposit',
-    semantics: 'publisher_applicability',
     asOf: AS_OF,
     timeScope: 'as_of',
     hits: [hit({ provision_num: 'Art. 5', match_reasons: ['interpreted'] })],
@@ -119,7 +127,6 @@ export function renderSearchPreview({ locale = 'en' } = {}) {
 
   const nothing = renderSearchResults({
     query: 'security deposit how many months landlord',
-    semantics: 'publisher_applicability',
     asOf: AS_OF,
     timeScope: 'as_of',
     // Declared even here, and especially here: the zero-hit screen is the one most likely to be

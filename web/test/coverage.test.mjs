@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { RETENTION_SENTENCE, UNTYPED_LABEL, renderCoverage } from '../scripts/coverage.mjs';
+import {
+  RETENTION_SENTENCE,
+  UNCODED_LANGUAGE_LABEL,
+  UNTYPED_LABEL,
+  renderCoverage,
+} from '../scripts/coverage.mjs';
 
 // The shape of the live payload, with the numbers reduced so the fixture is readable. The
 // proportions that matter are kept: one type where almost every state has text, one where
@@ -200,4 +205,120 @@ test('values are escaped rather than trusted', () => {
   });
   assert.ok(!html.includes('<img'));
   assert.ok(html.includes('&lt;img'));
+});
+
+test('O4: a facet cannot be larger than the whole it is drawn from', () => {
+  // The exact head rendered a document type claiming 99 held states beside a headline of 30,
+  // and a language claiming 9,999 of the same 30. Every figure passed on its own, because every
+  // check tested one field and nothing tested the relationships between them.
+  assert.throws(
+    () =>
+      renderCoverage({
+        coverage: payload({
+          document_types: [{ code: 'LOI', versions: 99, versions_with_text: 14 }],
+          document_types_total: 1,
+        }),
+      }),
+    /a part cannot be larger than the whole/,
+    'a type facet exceeded the corpus',
+  );
+  assert.throws(
+    () => renderCoverage({ coverage: payload({ languages: [{ code: 'fr', works: 10, versions: 9999 }] }) }),
+    /a part cannot be larger than the whole/,
+    'a language facet exceeded the corpus',
+  );
+  assert.throws(
+    () => renderCoverage({ coverage: payload({ languages: [{ code: 'fr', works: 9999, versions: 30 }] }) }),
+    /a part cannot be larger than the whole/,
+    'a language facet claimed more works than exist',
+  );
+});
+
+test('O4: a complete document-type breakdown adds up, and an overlapping one need not', () => {
+  // The publisher gives a state at most one document type and the untyped row takes the rest,
+  // so a complete table is a partition and must sum exactly.
+  assert.throws(
+    () =>
+      renderCoverage({
+        coverage: payload({
+          document_types: [{ code: 'LOI', versions: 12, versions_with_text: 12 }],
+          document_types_total: 1,
+        }),
+      }),
+    /does not add up to its own headline/,
+    'a complete type breakdown accounted for less than the corpus',
+  );
+
+  // Truncated, the sum rule cannot apply: the rows that would complete it are the ones not
+  // shown. The per-row bound still holds.
+  assert.equal(
+    typeof renderCoverage({
+      coverage: payload({
+        document_types: [{ code: 'LOI', versions: 12, versions_with_text: 12 }],
+        document_types_total: 3,
+        facets_truncated: true,
+      }),
+    }),
+    'string',
+  );
+
+  // A state exists as an expression in each language it was published in, so language rows
+  // overlap and 24 of them over 30 states may legitimately sum far past 30. Demanding the
+  // headline there would invent a constraint the record does not have.
+  assert.equal(
+    typeof renderCoverage({
+      coverage: payload({
+        languages: [
+          { code: 'fr', works: 10, versions: 30 },
+          { code: 'de', works: 10, versions: 30 },
+        ],
+      }),
+    }),
+    'string',
+  );
+});
+
+test('O4: earliest and latest are the ends of one interval, not two dates', () => {
+  assert.throws(
+    () =>
+      renderCoverage({
+        coverage: payload({ valid_from_earliest: '2030-09-15', valid_from_latest: '1849-03-14' }),
+      }),
+    /ends before it begins/,
+    'a range that runs backwards was rendered as a range',
+  );
+});
+
+test('O4: a document-type total is a count, and a missing language code is labelled', () => {
+  // Guarded on Number.isInteger alone, -7 was a valid total, and the only thing downstream that
+  // caught it was a truncation check a payload could switch off by declaring itself truncated.
+  assert.throws(
+    () =>
+      renderCoverage({
+        coverage: payload({ document_types_total: -7, facets_truncated: true }),
+      }),
+    /rather than a count/,
+    'a negative document-type total was accepted',
+  );
+
+  // A missing code was interpolated raw, so the literal word `undefined` was printed into a
+  // column of language codes, where a reader reads it as a language this corpus holds.
+  const html = renderCoverage({
+    coverage: payload({ languages: [{ code: undefined, works: 10, versions: 30 }] }),
+  });
+  assert.ok(!html.includes('undefined'), 'undefined was printed as a language');
+  assert.ok(html.includes(UNCODED_LANGUAGE_LABEL));
+});
+
+test('an absent language list is a payload that did not say, not a corpus with no language', () => {
+  // It defaulted to an empty array, so a payload naming no languages rendered an empty table
+  // under the heading "By language", which reads as a corpus holding none. It also left the
+  // reconciliation above nothing to check.
+  for (const languages of [undefined, null, [], 'fr']) {
+    assert.throws(
+      () => renderCoverage({ coverage: payload({ languages }) }),
+      /coverage lists the languages it holds/,
+      `languages=${JSON.stringify(languages)} rendered an empty table`,
+    );
+  }
 });
