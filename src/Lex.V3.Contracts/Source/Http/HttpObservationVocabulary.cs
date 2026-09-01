@@ -62,12 +62,33 @@ public static class HttpTransferClassifier
 
         if (facts.PolicyRejected)
         {
+            if (facts.HeadersComplete || facts.TransferComplete ||
+                facts.StatusCode is not null || facts.ReceivedByteCount != 0)
+            {
+                throw new ArgumentException(
+                    "A pre-request policy rejection cannot carry transport or response evidence.",
+                    nameof(facts));
+            }
+
             return HttpObservationKind.PolicyRejection;
         }
 
         if (!facts.HeadersComplete)
         {
+            if (facts.TransferComplete || facts.StatusCode is not null || facts.ReceivedByteCount != 0)
+            {
+                throw new ArgumentException(
+                    "Failure before complete headers cannot carry response or entity evidence.",
+                    nameof(facts));
+            }
+
             return HttpObservationKind.TransportFailureBeforeBody;
+        }
+
+        if (facts.StatusCode is null or < 100 or > 599)
+        {
+            throw new ArgumentException(
+                "Complete response headers must carry one valid HTTP status.", nameof(facts));
         }
 
         if (!facts.TransferComplete)
@@ -75,10 +96,11 @@ public static class HttpTransferClassifier
             return HttpObservationKind.ResponsePartialBody;
         }
 
-        if (facts.StatusCode is null)
+        if (facts.StatusCode is 204 or 205 or 304 && facts.ReceivedByteCount != 0)
         {
             throw new ArgumentException(
-                "A completed response must carry an HTTP status.", nameof(facts));
+                "A completed semantic no-body or 304 response cannot carry entity octets.",
+                nameof(facts));
         }
 
         if (facts.StatusCode == 304)
@@ -97,14 +119,18 @@ public static class HttpTransferClassifier
 
 public static class HttpStatusClassifier
 {
-    public static HttpStatusDisposition Classify(int statusCode, bool hasContentRange)
+    public static HttpStatusDisposition Classify(
+        int statusCode,
+        HttpResponseMetadata responseMetadata)
     {
+        ArgumentNullException.ThrowIfNull(responseMetadata);
+
         if (statusCode is < 100 or > 599)
         {
             throw new ArgumentOutOfRangeException(nameof(statusCode));
         }
 
-        if (statusCode == 206 || hasContentRange)
+        if (statusCode == 206 || responseMetadata.ContentRange is not null)
         {
             return HttpStatusDisposition.RangeNotApproved;
         }
@@ -122,6 +148,8 @@ public static class HttpStatusClassifier
 
 public static class OutboundCrawlerIdentity
 {
+    public static string Schema { get; } = "outbound_crawler_identity/1";
+
     public static string Token { get; } =
         "Lex/0.1 (+https://github.com/SFHAJJI/lex)";
 }
