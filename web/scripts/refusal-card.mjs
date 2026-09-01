@@ -33,10 +33,20 @@ import { isCalendarDate, requireCalendarDate } from './temporal.mjs';
 /**
  * The closed registry, product spec section 4.9.
  *
- * The UX spec's prose names two of these informally, `unknown_anchor` and `unknown_work`,
- * where the product spec and the live service use `anchor_not_in_version` and
- * `identifier_unknown`. The product spec is the versioned registry, so it governs here, and
- * the discrepancy is raised rather than silently resolved.
+ * One line of this comment used to say that the live service uses `identifier_unknown` where the
+ * UX spec's prose says `unknown_work`. That was wrong about the service. Measured, not inferred:
+ * `provenance` for `eu-eurlex:32016R0679:2018-05-25` against production returns
+ * `{"status": "unknown_work"}`.
+ *
+ * The registry stays closed at these nineteen, because the product spec is the versioned registry
+ * and a wire status is not a product code. `unknown_work` is translated where it arrives, by a
+ * closed table in `provenance.mjs`, and that translation deliberately does not let the sentence
+ * claim more than the status supports: the service returns `unknown_work` both for an identifier
+ * no work matches and for a work held at other dates but not the one asked for, so the reader is
+ * told that rather than told the work does not exist.
+ *
+ * `unknown_anchor` remains the UX spec's informal name for `anchor_not_in_version`, which the
+ * product spec governs and which the service has not contradicted.
  */
 export const REFUSAL_CODES = Object.freeze([
   'identifier_unknown',
