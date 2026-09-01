@@ -22,6 +22,8 @@ import { renderComparePreview } from "./compare-preview.mjs";
 import { renderTimelinePreview } from "./timeline-preview.mjs";
 import { renderCoveragePreview } from "./coverage-preview.mjs";
 import { renderSearchPreview } from "./search-preview.mjs";
+import { renderLocaleUnavailable, REVIEWED_CHROME_LOCALES } from "./locale-unavailable.mjs";
+import { CHROME_LOCALES } from "./localization.mjs";
 import { page } from "./render.mjs";
 import { SHELLS } from "./urls.mjs";
 import { decodeEnvelope, validateEnvelope } from "./envelope.mjs";
@@ -139,6 +141,13 @@ pages.push(["coverage.html", renderCoveragePreview()]);
 // Discovery, in the four results read as something they are not, including the zero-hit
 // case that is read as the law being silent.
 pages.push(["search.html", renderSearchPreview()]);
+
+// One page per chrome locale this build has no reviewed copy in. They are built rather than
+// described, because the browser run measures what is built, and until now every measurement
+// in this package was made against English only.
+for (const locale of CHROME_LOCALES.filter((one) => !REVIEWED_CHROME_LOCALES.includes(one))) {
+  pages.push([`locale-unavailable-${locale}.html`, renderLocaleUnavailable({ requested: locale })]);
+}
 
 // The destination every scheme-valid link in the preview resolves to. A visible action that
 // leads to a missing page is a promise the page cannot keep, and three of them shipped: the
