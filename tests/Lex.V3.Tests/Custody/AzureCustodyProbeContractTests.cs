@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Lex.V3.Contracts;
@@ -163,6 +164,49 @@ public sealed class AzureCustodyProbeContractTests
                     _ => new ProbeStore(),
                     CancellationToken.None));
         }
+    }
+
+    [TestMethod]
+    public async Task ConsoleBoundaryReturnsOnlyTheFixedFailureSignal()
+    {
+        var assembly = Path.Combine(AppContext.BaseDirectory, "Lex.V3.Custody.Probe.dll");
+        Assert.IsTrue(File.Exists(assembly), assembly);
+        var dotnet = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH");
+        if (string.IsNullOrEmpty(dotnet))
+        {
+            dotnet = OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet";
+        }
+
+        var startInfo = new ProcessStartInfo(dotnet)
+        {
+            CreateNoWindow = true,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+        };
+        startInfo.ArgumentList.Add(assembly);
+        startInfo.ArgumentList.Add("invalid-mode");
+
+        using var process = new Process { StartInfo = startInfo };
+        Assert.IsTrue(process.Start());
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+
+        Assert.AreEqual(string.Empty, await stdoutTask);
+        Assert.AreEqual($"custody_probe_failed{Environment.NewLine}", await stderrTask);
+        Assert.AreEqual(1, process.ExitCode);
     }
 
     [TestMethod]
