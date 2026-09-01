@@ -130,6 +130,70 @@ export function publisherSourceUri({ publisher, uri }) {
   return checkedUri(uri, PUBLISHER_HOSTS[publisher], `the ${publisher} source URI`);
 }
 
+/**
+ * A publisher's own name for a work, as opposed to a link to it.
+ *
+ * An ELI or a CELEX is an identifier that happens to be spelled as an HTTP URI. It is a name:
+ * it is printed, cited and compared, and it is not somewhere a reader is sent. Putting it
+ * through the outbound-link policy was a category error, and it had a consequence rather than
+ * being merely untidy: both identifiers the pack cites as live are `http://`, so the dossier
+ * could not render a single real work. The only escape was rewriting the scheme, which mints an
+ * identifier the publisher never issued and prints it as the work's own name.
+ *
+ * The live data shows how different the two are. Legilux names a work
+ * `http://data.legilux.public.lu/eli/...` and serves its file from
+ * `https://legilux.public.lu/eli/...`: different scheme, different host, same work.
+ *
+ * So this keeps the publisher's host allowlist, because a name on somebody else's namespace is
+ * not that publisher's name for anything, and keeps the refusal of userinfo, ports and
+ * malformed escapes. It permits the scheme the publisher actually issues. It returns a string
+ * for display, and nothing here is an href.
+ *
+ * @param {object} input
+ * @param {string} input.publisher  the publisher whose namespace this name must be in
+ * @param {string} input.uri        the identifier as the publisher issues it
+ */
+export function publisherIdentifier({ publisher, uri }) {
+  if (!Object.hasOwn(PUBLISHER_HOSTS, publisher ?? '')) {
+    throw new Error(
+      `${JSON.stringify(publisher)} is not a publisher this build serves; the publisher set ` +
+        `is closed at ${Object.keys(PUBLISHER_HOSTS).join(', ')}`,
+    );
+  }
+  const what = `the ${publisher} work identifier`;
+  if (typeof uri !== 'string' || uri.length === 0) {
+    throw new Error(`${what} requires a value`);
+  }
+  const scheme = uri.startsWith('https://') ? 'https://' : uri.startsWith('http://') ? 'http://' : null;
+  if (scheme === null) {
+    throw new Error(
+      `${what} must be an http or https identifier, spelled exactly; ` +
+        `${JSON.stringify(uri)} is neither`,
+    );
+  }
+  if (/[\s\<>"']/.test(uri)) {
+    throw new Error(`${what} contains whitespace or a delimiter: ${JSON.stringify(uri)}`);
+  }
+  const authority = uri.slice(scheme.length).split(/[/?#]/, 1)[0];
+  if (authority.includes('@')) {
+    throw new Error(`${what} carries userinfo: ${JSON.stringify(uri)}`);
+  }
+  if (authority.includes(':')) {
+    throw new Error(`${what} carries an explicit port: ${JSON.stringify(uri)}`);
+  }
+  if (!HOST.test(authority)) {
+    throw new Error(`${what} does not carry a plain host: ${JSON.stringify(uri)}`);
+  }
+  if (!PUBLISHER_HOSTS[publisher].includes(authority)) {
+    throw new Error(
+      `${what} is on ${authority}, which is not one of ` +
+        `${PUBLISHER_HOSTS[publisher].join(', ')}; a name in somebody else's namespace is not ` +
+        "this publisher's name for anything",
+    );
+  }
+  return uri;
+}
+
 /** A human counter a refusal hands off to. */
 export function handoffUri(uri) {
   return checkedUri(uri, HANDOFF_HOSTS, 'a handoff');

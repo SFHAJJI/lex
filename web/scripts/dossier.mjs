@@ -15,9 +15,9 @@
 // disclosure on a list: a number with no denominator and a field with no explanation are the
 // same omission wearing different clothes.
 
-import { isCalendarDate, isUtcInstant } from './temporal.mjs';
+import { isCalendarDate, isOrderedInterval, isUtcInstant } from './temporal.mjs';
 import { escapeHtml } from './render.mjs';
-import { publisherSourceUri } from './routes.mjs';
+import { publisherIdentifier } from './routes.mjs';
 
 /**
  * The caption the status chip cannot appear without.
@@ -86,10 +86,17 @@ function renderDateRow(row, index) {
     );
   }
 
-  if (!isCalendarDate(row.date)) {
-    if (!isUtcInstant(row.date)) {
-      throw new Error(`${where} carries ${JSON.stringify(row.date)}, which is not a date`);
-    }
+  // The clock a role belongs to decides its shape. Accepting either lost the UTC instant the
+  // record clock requires and gave the legal clock a time of day the publisher never stated.
+  const wantsInstant = row.role === 'observed_from';
+  const ok = wantsInstant ? isUtcInstant(row.date) : isCalendarDate(row.date);
+  if (!ok) {
+    throw new Error(
+      `${where} carries ${JSON.stringify(row.date)}; ${ROLE_LABEL.get(row.role)} is ` +
+        (wantsInstant
+          ? 'the record clock and is a UTC instant, verbatim'
+          : 'the legal clock and is a calendar date, with no time of day the publisher did not state'),
+    );
   }
   return (
     `<tr class="dossier-date"><td>${escapeHtml(ROLE_LABEL.get(row.role))}</td>` +
@@ -100,11 +107,29 @@ function renderDateRow(row, index) {
 /**
  * The status strip: the publisher's flag, and the sentence that makes it readable.
  */
+/**
+ * Publisher flag values this screen will print.
+ *
+ * The value used to be any non-empty string, so "REPEALED (lex derived)" rendered in monospace
+ * beneath a caption certifying it as the publisher's own flag. A derived value presented as a
+ * publisher assertion is the one thing the caption exists to prevent. The grammar below is not
+ * the publisher's vocabulary and does not pretend to be: the closed set belongs in the contract
+ * both sides read, and until it exists this refuses anything that is not a bare publisher token.
+ */
+const PUBLISHER_FLAG = /^[a-z][a-z0-9_]*$/;
+
 function renderStatusStrip(status) {
   if (typeof status?.binding_status !== 'string' || status.binding_status.length === 0) {
     throw new Error(
       'the status strip carries the publisher flag verbatim; this is the one screen where it ' +
         'belongs, and a strip with no flag is a caption about nothing',
+    );
+  }
+  if (!PUBLISHER_FLAG.test(status.binding_status)) {
+    throw new Error(
+      `${JSON.stringify(status.binding_status)} is not a bare publisher flag token; a value ` +
+        "this service derived, printed under a caption calling it the publisher's, is the " +
+        'assertion that caption exists to prevent',
     );
   }
   return (
@@ -134,6 +159,18 @@ function renderCoverageStrip(coverage) {
     );
   }
 
+  // "No gap" is a claim about a record that exists. With nothing held there is no record to be
+  // continuous, and a reader told a work has no gaps concludes the corpus has its whole history.
+  if (coverage.states_held === 0) {
+    return (
+      '<section class="dossier-coverage">' +
+      '<p class="dossier-coverage-counts">No state of this work is held by this corpus.</p>' +
+      '<p class="dossier-holes">Nothing here says whether the publisher has states for it. ' +
+      'Absence from this corpus is not absence from the record, and it is not absence of ' +
+      'law.</p></section>'
+    );
+  }
+
   const holes =
     coverage.holes.length === 0
       ? '<p class="dossier-holes">No gap between the states held.</p>'
@@ -142,6 +179,15 @@ function renderCoverageStrip(coverage) {
           .map((hole) => {
             if (!isCalendarDate(hole?.from) || !isCalendarDate(hole?.to)) {
               throw new Error('a coverage hole names two calendar dates');
+            }
+            // Strictly ordered, which is narrower than the shared helper on purpose: that one
+            // permits a zero-length interval, which is a legitimate shape for a state and is
+            // not one for a gap. A gap covering no day is not a gap in the record.
+            if (!isOrderedInterval(hole.from, hole.to) || hole.from === hole.to) {
+              throw new Error(
+                `a coverage hole runs from ${hole.from} to ${hole.to}, which is backwards or ` +
+                  'empty; a gap that ends before it begins is not a gap in the record',
+              );
             }
             return (
               `<li>No publisher state covers ${escapeHtml(hole.from)} to ` +
@@ -181,7 +227,9 @@ export function renderDossier({ identity, dates, status, coverage, slots = [] })
         'and the title is not translated',
     );
   }
-  const workIdentifier = publisherSourceUri({
+  // A name, not a link. Both identifiers the pack cites as live are http, and routing them
+  // through the outbound-link policy meant this screen could not render a single real work.
+  const workIdentifier = publisherIdentifier({
     publisher: identity.publisher,
     uri: identity.work_identifier,
   });

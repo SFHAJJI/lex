@@ -65,7 +65,8 @@ test('an absent date is declared with what it is waiting for, never omitted', ()
     ],
   });
   assert.ok(html.includes('entry into force'));
-  assert.ok(html.includes(NOT_INGESTED));
+  assert.equal(NOT_INGESTED, 'not yet ingested');
+  assert.ok(html.includes('not yet ingested'));
   assert.ok(html.includes('the Cellar fd_335 entry-into-force axiom'));
 
   assert.throws(
@@ -146,7 +147,8 @@ test('a slot this corpus cannot fill says what it is and where the publisher kee
     ],
   });
   assert.ok(html.includes('responsible ministry'));
-  assert.ok(html.includes(NOT_INGESTED));
+  assert.equal(NOT_INGESTED, 'not yet ingested');
+  assert.ok(html.includes('not yet ingested'));
   // Escaped, as any supplied string is.
   assert.ok(html.includes('available on the publisher&#39;s open channel'));
 
@@ -181,14 +183,99 @@ test('the published title keeps its own language and its own words', () => {
   );
 });
 
-test('the work identifier goes through the one route policy', () => {
-  for (const uri of ['https://evil.example/x', 'http://preview.invalid/x', 'not a url']) {
+test('the work identifier is a name in the publisher namespace, not a link', () => {
+  // An ELI or CELEX is an identifier spelled as an HTTP URI. It is printed and cited, never
+  // followed. Routing it through the outbound-link policy demanded https, and both identifiers
+  // the pack cites as live are http, so this screen could not render a single real work.
+  for (const [publisher, uri] of [
+    ['lu-legilux', 'http://data.legilux.public.lu/eli/etat/leg/loi/2006/07/31/n2'],
+    ['eu-eurlex', 'http://publications.europa.eu/resource/celex/32016R0679'],
+  ]) {
+    const html = renderDossier({
+      ...GOOD,
+      identity: { ...IDENTITY, publisher, work_identifier: uri },
+    });
+    assert.ok(html.includes(uri), `${uri} could not be rendered as the work's own name`);
+    // And it is not offered as somewhere to go.
+    assert.ok(!html.includes(`href="${uri}"`), 'an identifier was rendered as a link');
+  }
+
+  // The publisher's namespace still bounds it: a name on somebody else's host is not that
+  // publisher's name for anything.
+  for (const uri of [
+    'http://evil.example/eli/x',
+    'ftp://data.legilux.public.lu/x',
+    'http://data.legilux.public.lu:8080/x',
+    'http://data.legilux.public.lu@evil.example/x',
+    'not a url',
+  ]) {
     assert.throws(
-      () => renderDossier({ ...GOOD, identity: { ...IDENTITY, work_identifier: uri } }),
-      /source URI/,
+      () =>
+        renderDossier({
+          ...GOOD,
+          identity: { ...IDENTITY, publisher: 'lu-legilux', work_identifier: uri },
+        }),
+      /work identifier/,
       `${uri} was rendered as the work identifier`,
     );
   }
+});
+
+test('a work this corpus holds no state of is not reported as complete', () => {
+  // "No gap" is a claim about a record that exists. With nothing held there is no record to be
+  // continuous, and a reader told a work has no gaps concludes the corpus holds its history.
+  const html = renderDossier({
+    ...GOOD,
+    coverage: { states_held: 0, states_with_text: 0, holes: [] },
+  });
+  assert.ok(html.includes('No state of this work is held by this corpus'));
+  assert.ok(!html.includes('No gap between the states held'), 'an empty record claimed no gaps');
+  assert.ok(html.includes('Absence from this corpus is not absence from the record'));
+});
+
+test('a coverage gap runs forwards, or it is not a gap', () => {
+  for (const hole of [
+    { from: '2024-12-28', to: '2004-04-02' },
+    { from: '2004-04-02', to: '2004-04-02' },
+  ]) {
+    assert.throws(
+      () => renderDossier({ ...GOOD, coverage: { ...COVERAGE, holes: [hole] } }),
+      /backwards or empty; a gap that ends before it begins/,
+      `${JSON.stringify(hole)} was stated as a gap in the record`,
+    );
+  }
+});
+
+test('each date role carries the clock it belongs to', () => {
+  // Accepting either shape lost the UTC instant the record clock requires and gave the legal
+  // clock a time of day the publisher never stated.
+  assert.throws(
+    () =>
+      renderDossier({
+        ...GOOD,
+        dates: [{ role: 'observed_from', date: '2026-08-14', source: 'this corpus' }],
+      }),
+    /the record clock and is a UTC instant, verbatim/,
+  );
+  assert.throws(
+    () =>
+      renderDossier({
+        ...GOOD,
+        dates: [{ role: 'applicable_from', date: '2021-01-26T13:45:09Z', source: 'p' }],
+      }),
+    /no time of day the publisher did not state/,
+  );
+});
+
+test('the publisher flag is the publisher word, not one this service derived', () => {
+  for (const bad of ['REPEALED (lex derived)', 'In Force', 'in force', 'derived:repealed', '1']) {
+    assert.throws(
+      () => renderDossier({ ...GOOD, status: { binding_status: bad } }),
+      /is not a bare publisher flag token/,
+      `${JSON.stringify(bad)} was printed as the publisher's own flag`,
+    );
+  }
+  assert.ok(renderDossier(GOOD).includes('<code>in_force</code>'));
 });
 
 test('values are escaped rather than trusted', () => {

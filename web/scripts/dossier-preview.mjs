@@ -96,8 +96,11 @@ export function renderDossierPreview({ locale = 'en' } = {}) {
   return page({
     state: 'dossier',
     title: 'Dossier',
-    locale,
-    copyLocale: locale,
+    locale: 'en',
+    // Every label in the dossier is a hardcoded English literal, so this page is English
+    // whatever locale is asked for. Passing the requested locale here satisfied the guard by
+    // asserting something untrue, which is the defect that guard exists to catch.
+    copyLocale: 'en',
     shell: 'w',
     density: skinFor('w').density,
     main:
