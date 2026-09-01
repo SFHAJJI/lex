@@ -66,13 +66,24 @@ function required(value, field) {
 }
 
 /**
+ * The two sentences a state banner says, with every date checked before it is printed.
+ *
+ * The rules live here and the markup lives in the renderers, so the string renderer and the
+ * React component apply one implementation rather than two that can drift apart. What comes
+ * back is claims; which token carries them is the renderer's business.
+ *
+ * The vocabulary is a parameter rather than something derived here, because a bare state does
+ * not name its publisher and this function is given states that carry nothing but dates. A
+ * caller that holds a `lex_id` derives the vocabulary from it with
+ * `semanticsOf(publisherOf(lex_id))` rather than choosing one, which is what the reading view
+ * does.
+ *
  * @param {object} input
- * @param {{ timeline_semantics?: string }} input.envelope
+ * @param {string} input.semantics  the publisher's vocabulary, read off a record
  * @param {{ valid_from: string, valid_to?: string|null,
  *           publication_date?: string|null, observed_from: string }} input.state
  */
-export function renderStateBanner({ envelope, state }) {
-  const semantics = envelope?.timeline_semantics;
+export function stateBannerSentences({ semantics, state }) {
   const phrase = LEGAL_TIME_PHRASING.get(semantics);
   if (phrase === undefined) {
     throw new Error(
@@ -106,6 +117,21 @@ export function renderStateBanner({ envelope, state }) {
   const record = publicationDate
     ? `Published ${publicationDate} / First observed ${observedFrom}`
     : `Publication date not recorded by the publisher / First observed ${observedFrom}`;
+
+  return Object.freeze({ legal, record });
+}
+
+/**
+ * @param {object} input
+ * @param {{ timeline_semantics?: string }} input.envelope
+ * @param {{ valid_from: string, valid_to?: string|null,
+ *           publication_date?: string|null, observed_from: string }} input.state
+ */
+export function renderStateBanner({ envelope, state }) {
+  const { legal, record } = stateBannerSentences({
+    semantics: envelope?.timeline_semantics,
+    state,
+  });
 
   return (
     '<div class="state-banner">' +

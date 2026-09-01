@@ -90,6 +90,30 @@ const NOT_AVAILABLE = {
   gazette_chain: 'Memorial A 2021 no 42',
 };
 
+// The same shapes under the other publisher, so the vocabulary can be shown to follow the
+// record rather than a field beside it. `eur-lex.europa.eu` is a host the route policy admits
+// for eu-eurlex, and every value here is synthetic.
+const UNION_AUTHENTICITY = {
+  ...AUTHENTICITY,
+  resource_id: 'eu-eurlex:synthetic-eu-work/2021-01-26/fr',
+  publisher: 'eu-eurlex',
+  official_uri: 'https://eur-lex.europa.eu/synthetic/2021-01-26/fr',
+};
+
+const UNION = {
+  work: { publisher: 'eu-eurlex', work: 'synthetic-eu-work' },
+  state: {
+    ...STATE,
+    lex_id: 'eu-eurlex:synthetic-eu-work:2021-01-26',
+    source_uri: 'https://eur-lex.europa.eu/synthetic/2021-01-26/fr',
+  },
+  expression: {
+    resource_id: UNION_AUTHENTICITY.resource_id,
+    language: 'fr',
+    authenticity: UNION_AUTHENTICITY,
+  },
+};
+
 /** The whole input, so a test can vary exactly one thing and nothing else. */
 function reading(overrides = {}) {
   return {
@@ -202,13 +226,40 @@ test('the state shows its own two clocks and no row says in force', () => {
   assert.ok(html.includes('Published 2021-01-26 / First observed 2026-08-14T23:05:14Z'));
   assert.ok(!html.includes('in force'), 'the words "in force" reached a state row');
 
-  // The other publisher's vocabulary, from the envelope rather than from this file.
-  const union = renderReading(
-    reading({ envelope: { timeline_semantics: 'official_consolidation_state' } }),
-  );
+  // The other publisher's vocabulary, from the record rather than from this file or from a
+  // field beside it. Luxembourg publishes applicability and the Union publishes consolidated
+  // wording states, and which of the two a page speaks is decided by whose record it shows.
+  const eu = reading(UNION);
+  delete eu.envelope;
+  const union = renderReading(eu);
   assert.ok(union.includes('Consolidated wording state from 2021-01-26 to 2021-04-23'));
-  assert.ok(!union.includes('Applicable from'), 'the LU vocabulary survived an EU envelope');
+  assert.ok(!union.includes('Applicable from'), 'the LU vocabulary survived an EU record');
   assert.ok(!union.includes('in force'));
+});
+
+test('a vocabulary stated beside the record is refused when the record contradicts it', () => {
+  // This defect is invisible on the page: both sentences read, and the wrong one attributes
+  // to a publisher a claim that publisher does not make. It is the one repaired five times in
+  // one day across five screens, which is why the vocabulary is derived and not passed.
+  assert.throws(
+    () =>
+      renderReading(
+        reading({ envelope: { timeline_semantics: 'official_consolidation_state' } }),
+      ),
+    /which clock a publisher's dates are on is a property of the publisher/,
+  );
+  assert.throws(
+    () =>
+      renderReading(
+        reading({ ...UNION, envelope: { timeline_semantics: 'publisher_applicability' } }),
+      ),
+    /which clock a publisher's dates are on is a property of the publisher/,
+  );
+
+  // Absent is not wrong. A caller that states nothing is told nothing, and the record decides.
+  const silent = reading();
+  delete silent.envelope;
+  assert.ok(renderReading(silent).includes('Applicable from 2021-01-26 to 2021-04-23 (publisher)'));
 });
 
 test('a state row carrying the publisher status flag is refused, not merely ignored', () => {
@@ -252,6 +303,32 @@ test('every provision carries the hash-carrying permalink built from the state',
   const other = renderReading(reading({ state: { ...STATE, hash: hex('f') } }));
   assert.ok(other.includes(`2021-01-26--${hex('f')}#art_l_121-6`));
   assert.ok(!other.includes(STATE_HASH), 'the old state hash survived into the new links');
+});
+
+test('the work a page mints permalinks for is the work its own state names', () => {
+  // Both halves of a lex_id are already on the page. Taken a second time beside it they can
+  // disagree, and nothing shows it: every permalink resolves, and Provenance resolves too,
+  // to a different work.
+  for (const bad of [
+    { publisher: 'preview-synthetic', work: 'another-work' },
+    { publisher: 'lu-legilux', work: 'synthetic-work' },
+  ]) {
+    assert.throws(
+      () => renderReading(reading({ work: bad })),
+      /mints permalinks for a work this page is not showing/,
+      `work=${JSON.stringify(bad)} was accepted beside the state that names another`,
+    );
+  }
+
+  // And a state whose identifier does not name a publisher, a work and a state has no work
+  // for this page to be about at all.
+  for (const bad of ['preview-synthetic:synthetic-work', 'garbage', '', ':::']) {
+    assert.throws(
+      () => renderReading(reading({ state: { ...STATE, lex_id: bad } })),
+      /does not name a publisher, a work and a state/,
+      `lex_id=${JSON.stringify(bad)} was read as a work`,
+    );
+  }
 });
 
 test('a permalink the caller brought is refused rather than preferred', () => {

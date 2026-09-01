@@ -39,6 +39,73 @@ export function Mark({ name, children }) {
   );
 }
 
+/**
+ * What this service holds and does not hold, and what would answer the question.
+ *
+ * The note is the product's oldest invariant said out loud, and it comes from the shared
+ * module rather than from a literal here: a card that showed the routes without the note
+ * would let a reader read "no state held" as "no such law".
+ */
+function AbsenceEvidence({ absence }) {
+  if (absence === null) return null;
+  return (
+    <div className="refusal-absence">
+      <p className="refusal-absence-note">{absence.note}</p>
+      <h3>{absence.heading}</h3>
+      <ul>
+        {absence.routes.map((label) => (
+          <li key={label}>{label}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * The mandatory helpful payload: the candidates, the anchors this version does contain, and
+ * the labelled rows.
+ *
+ * A refusal without it is the sterile refusal `validateRefusal` already forbids, and a
+ * renderer that dropped it would produce one anyway.
+ */
+function Payload({ parts }) {
+  if (parts.structured.length === 0 && parts.rows.length === 0) return null;
+  return (
+    <>
+      {parts.structured.map((item) => (item.kind === 'candidates' ? (
+        <ul className="refusal-candidates" key={item.key}>
+          {item.values.map((candidate) => (
+            <li className="refusal-candidate" key={candidate.href}>
+              <a href={candidate.href}>
+                applicable from {candidate.valid_from}, hash{' '}
+                <code>{candidate.hash.slice(0, 8)}</code>, published {candidate.publication_date}
+              </a>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <ul className={item.className} key={item.key}>
+          {item.values.map((value) => (
+            <li key={value}>
+              <code>{value}</code>
+            </li>
+          ))}
+        </ul>
+      )))}
+      {parts.rows.length === 0 ? null : (
+        <dl className="refusal-payload">
+          {parts.rows.map((row) => (
+            <div className="strip-row" key={row.key}>
+              <dt>{row.key}</dt>
+              <dd>{row.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </>
+  );
+}
+
 /** The publisher's own next step, one validated link per entry. */
 // The route policy is imported, never injected. Taking the validator as a prop let a caller
 // supply a permissive one, and a hostile javascript: href walked straight through the port
@@ -67,6 +134,19 @@ function Handoff({ handoffs }) {
  */
 export function RefusalCard({ code, sentence, payload, governingText, handoff }) {
   const card = validateRefusal({ code, sentence, payload, governingText, handoff });
+
+  // Refused rather than dropped. `advice_boundary` exists to refuse the question and still
+  // hand over the text the reader may have, so a card that silently omitted the co-delivered
+  // provisions would keep the refusal and lose the half that makes it acceptable. This
+  // runtime does not render a quotation inside a card yet, and saying so is the honest
+  // failure; rendering three quarters of the contract is not.
+  if (card.governingText !== null) {
+    throw new Error(
+      'this runtime does not render co-delivered governing text yet, and a card that dropped '
+        + 'it would refuse the question while withholding the text the reader may still have',
+    );
+  }
+
   return (
     <section className="refusal-card">
       <p className="refusal-head">
@@ -75,6 +155,8 @@ export function RefusalCard({ code, sentence, payload, governingText, handoff })
       </p>
       {card.retryable ? <p className="refusal-retry">{RETRY_SENTENCE}</p> : null}
       {card.note ? <p className="refusal-note">{card.note}</p> : null}
+      <AbsenceEvidence absence={card.absence} />
+      <Payload parts={card.payloadParts} />
       <Handoff handoffs={card.handoffs} />
     </section>
   );

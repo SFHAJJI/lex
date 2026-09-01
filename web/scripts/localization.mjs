@@ -323,8 +323,11 @@ export function requireResourceAuthenticity(evidence) {
 }
 
 /**
- * A quoted statutory span, carrying its own language and, where the resource's own evidence
- * says so, the authenticity note.
+ * Everything a quoted statutory span asserts, checked: its own language, its text, and the
+ * authenticity note the resource's own evidence calls for.
+ *
+ * The rules live here and the markup lives in the renderers, so the string renderer and the
+ * React component apply one implementation rather than two that can drift apart.
  *
  * The note is not a caller's option and not a publisher's property. It appears when the
  * resource has exactly one authentic language, because then a reader is looking at either
@@ -341,7 +344,7 @@ export function requireResourceAuthenticity(evidence) {
  * @param {string} input.text          the publisher's text
  * @param {string} [input.noteLocale]  the locale to render the authenticity note in
  */
-export function quotedLaw({ resourceId, authenticity, language, text, noteLocale = 'en' }) {
+export function quotedLawParts({ resourceId, authenticity, language, text, noteLocale = 'en' }) {
   const evidence = requireResourceAuthenticity(authenticity);
 
   // The evidence names a resource and the quotation names a resource, and until they were
@@ -377,19 +380,39 @@ export function quotedLaw({ resourceId, authenticity, language, text, noteLocale
     );
   }
 
-  const quote =
-    `<blockquote class="law" lang="${escapeHtml(language)}">${escapeHtml(text)}</blockquote>`;
-  if (evidence.authentic_languages.length !== 1) return quote;
+  // The note is a rule about the resource, not a rendering choice: it exists where exactly one
+  // language is authentic and it is absent where every held expression is equally so, because
+  // there it would be false. Null means "no note is due", which is not the same as a note that
+  // could not be served in the chrome locale.
+  const note =
+    evidence.authentic_languages.length === 1
+      ? servableText('law.sole_authentic_note', noteLocale, {
+        language: evidence.authentic_languages[0],
+        basis: evidence.basis,
+      })
+      : null;
 
-  const note = servableText('law.sole_authentic_note', noteLocale, {
-    language: escapeHtml(evidence.authentic_languages[0]),
-    basis: escapeHtml(evidence.basis),
-  });
+  return Object.freeze({ language, text, note });
+}
+
+/**
+ * A quoted statutory span, carrying its own language and, where the resource's own evidence
+ * says so, the authenticity note.
+ *
+ * @see quotedLawParts, which holds every rule this renders.
+ */
+export function quotedLaw({ resourceId, authenticity, language, text, noteLocale = 'en' }) {
+  const quoted = quotedLawParts({ resourceId, authenticity, language, text, noteLocale });
+  const quote =
+    `<blockquote class="law" lang="${escapeHtml(quoted.language)}">` +
+    `${escapeHtml(quoted.text)}</blockquote>`;
+  if (quoted.note === null) return quote;
   return (
     quote +
-    (note.status === 'ok'
-      ? `<p class="law-authenticity" lang="${escapeHtml(note.locale)}">${note.text}</p>`
-      : renderLocalizationUnavailable(note))
+    (quoted.note.status === 'ok'
+      ? `<p class="law-authenticity" lang="${escapeHtml(quoted.note.locale)}">` +
+        `${escapeHtml(quoted.note.text)}</p>`
+      : renderLocalizationUnavailable(quoted.note))
   );
 }
 
@@ -398,18 +421,34 @@ export function quotedLaw({ resourceId, authenticity, language, text, noteLocale
  * the string exists in, and that nothing was substituted, because a reader who sees English
  * where they asked for Luxembourgish deserves to know it was not a translation.
  */
-export function renderLocalizationUnavailable({ locale, key, servable_in: servableIn = [] }) {
+export function localizationUnavailableParts({ locale, key, servable_in: servableIn = [] }) {
   const available =
     servableIn.length > 0
-      ? `Available in: ${servableIn.map((one) => escapeHtml(one)).join(', ')}.`
+      ? `Available in: ${servableIn.join(', ')}.`
       : 'It is not available in any language yet.';
+  return Object.freeze({
+    code: LOCALIZATION_UNAVAILABLE,
+    locale,
+    key,
+    sentence: `This text is not available in ${locale}, and nothing was substituted for it.`,
+    available,
+  });
+}
+
+/**
+ * The state a missing string renders as.
+ *
+ * @see localizationUnavailableParts, which composes the sentences both renderers show.
+ */
+export function renderLocalizationUnavailable({ locale, key, servable_in: servableIn = [] }) {
+  const parts = localizationUnavailableParts({ locale, key, servable_in: servableIn });
   return (
     '<p class="localization-unavailable" ' +
-    `data-code="${LOCALIZATION_UNAVAILABLE}" data-locale="${escapeHtml(locale)}">` +
-    `<code>${LOCALIZATION_UNAVAILABLE}</code> ` +
-    `This text is not available in ${escapeHtml(locale)}, and nothing was substituted for it. ` +
-    `${available} ` +
-    `<span class="localization-key">${escapeHtml(key)}</span></p>`
+    `data-code="${parts.code}" data-locale="${escapeHtml(parts.locale)}">` +
+    `<code>${parts.code}</code> ` +
+    `${escapeHtml(parts.sentence)} ` +
+    `${escapeHtml(parts.available)} ` +
+    `<span class="localization-key">${escapeHtml(parts.key)}</span></p>`
   );
 }
 
@@ -429,7 +468,7 @@ export function renderLocalizationUnavailable({ locale, key, servable_in: servab
  * evidence exports, because a labelled convenience that quietly enters a bundle stops being
  * labelled at the moment it matters.
  */
-export function renderUnofficialRendering({
+export function unofficialRenderingParts({
   resourceId,
   authenticity,
   language,
@@ -478,15 +517,49 @@ export function renderUnofficialRendering({
   }
   const official = publisherSourceUri({ publisher: evidence.publisher, uri: evidence.official_uri });
 
+  return Object.freeze({
+    language,
+    text,
+    heading: `Rendering in ${language}`,
+    // Which resource this is not, in which languages it is authentic, and on whose ground. A
+    // label saying only "unofficial" would leave a reader with no route to the text that
+    // counts, which is the failure this component exists to avoid.
+    note:
+      `This is not the authentic text. ${evidence.resource_id} is authentic in ` +
+      `${evidence.authentic_languages.join(', ')} (${evidence.basis}). This rendering is ` +
+      'excluded from evidence exports.',
+    official,
+  });
+}
+
+/**
+ * A body that is not the authentic text, labelled as one and routed to the text that counts.
+ *
+ * @see unofficialRenderingParts, which holds every rule this renders.
+ */
+export function renderUnofficialRendering({
+  resourceId,
+  authenticity,
+  language,
+  text,
+  publisher,
+  officialUri,
+}) {
+  const rendering = unofficialRenderingParts({
+    resourceId,
+    authenticity,
+    language,
+    text,
+    publisher,
+    officialUri,
+  });
   return (
     '<section class="unofficial-rendering">' +
-    `<p class="unofficial-head">${mark('--unofficial', `Rendering in ${language}`)}</p>` +
-    `<blockquote class="body" lang="${escapeHtml(language)}">${escapeHtml(text)}</blockquote>` +
-    '<p class="unofficial-note">This is not the authentic text. ' +
-    `${escapeHtml(evidence.resource_id)} is authentic in ` +
-    `${escapeHtml(evidence.authentic_languages.join(', '))} ` +
-    `(${escapeHtml(evidence.basis)}). This rendering is excluded from evidence exports.</p>` +
-    `<p class="unofficial-official"><a href="${escapeHtml(official)}" rel="external">` +
+    `<p class="unofficial-head">${mark('--unofficial', rendering.heading)}</p>` +
+    `<blockquote class="body" lang="${escapeHtml(rendering.language)}">` +
+    `${escapeHtml(rendering.text)}</blockquote>` +
+    `<p class="unofficial-note">${escapeHtml(rendering.note)}</p>` +
+    `<p class="unofficial-official"><a href="${escapeHtml(rendering.official)}" rel="external">` +
     'The authentic text, at the publisher</a></p>' +
     '</section>'
   );

@@ -144,16 +144,43 @@ function requireAbsenceEvidence(code, payload) {
   }
 }
 
+/**
+ * The sentence an absence refusal cannot appear without.
+ *
+ * Named, because it is the product's oldest invariant said out loud, and a sentence written
+ * as a literal in two renderers is a sentence that gets corrected in one of them.
+ */
+export const ABSENCE_NOTE =
+  'This is what this service holds, and does not hold. It is not evidence that the instrument '
+  + 'or the law does not exist.';
+
+/** The heading over the routes that would answer an absence. */
+export const ABSENCE_HEADING = 'What would answer this';
+
+/**
+ * What an absence refusal discloses, as claims rather than markup, or null when the code is
+ * not an absence. Both renderers call this, so neither can drop the note that makes the
+ * absence readable.
+ */
+export function absenceEvidenceParts(code, payload) {
+  if (!ABSENCES.has(code)) return null;
+  return Object.freeze({
+    note: ABSENCE_NOTE,
+    heading: ABSENCE_HEADING,
+    routes: Object.freeze(
+      payload.what_would_answer.map((route) => WHAT_WOULD_ANSWER_LABEL.get(route)),
+    ),
+  });
+}
+
 function renderAbsenceEvidence(code, payload) {
-  if (!ABSENCES.has(code)) return '';
-  const items = payload.what_would_answer
-    .map((route) => `<li>${escapeHtml(WHAT_WOULD_ANSWER_LABEL.get(route))}</li>`)
-    .join('');
+  const absence = absenceEvidenceParts(code, payload);
+  if (absence === null) return '';
+  const items = absence.routes.map((label) => `<li>${escapeHtml(label)}</li>`).join('');
   return (
     '<div class="refusal-absence">' +
-    '<p class="refusal-absence-note">This is what this service holds, and does not hold. It ' +
-    'is not evidence that the instrument or the law does not exist.</p>' +
-    `<h3>What would answer this</h3><ul>${items}</ul></div>`
+    `<p class="refusal-absence-note">${escapeHtml(absence.note)}</p>` +
+    `<h3>${escapeHtml(absence.heading)}</h3><ul>${items}</ul></div>`
   );
 }
 
@@ -650,7 +677,15 @@ function renderChips(className, values) {
   return `<ul class="${className}">${items}</ul>`;
 }
 
-function renderPayload(code, payload) {
+/**
+ * The payload as the things it shows rather than as markup: the candidate list, the anchor
+ * chips, and the labelled rows.
+ *
+ * Which keys appear and what a declared null says are rules, so they live here and both
+ * renderers call them. A row dropped in one renderer and kept in the other is a refusal that
+ * hands two readers different amounts of help.
+ */
+export function payloadParts(code, payload) {
   const nullable = NULLABLE_KEYS.get(code) ?? new Set();
   // A declared null renders as its sentence rather than being filtered away. Dropping the row
   // would put the reader back where the missing key left them.
@@ -660,31 +695,53 @@ function renderPayload(code, payload) {
   const entries = Object.entries(payload ?? {}).filter(
     ([key, value]) => isPresent(value) || declaredNull.includes(key),
   );
-  if (entries.length === 0) return '';
 
   const structured = [];
   const rows = [];
 
   for (const [key, value] of entries) {
     if (code === 'ambiguous_version' && key === 'candidates') {
-      structured.push(renderCandidates(value));
+      structured.push({ kind: 'candidates', key, values: value });
     } else if (key === 'nearest_anchors' && Array.isArray(value)) {
-      structured.push(renderChips('refusal-anchors', value));
+      structured.push({ kind: 'chips', key, className: 'refusal-anchors', values: value });
     } else if (value === null) {
-      rows.push(
-        `<div class="strip-row"><dt>${escapeHtml(key)}</dt>` +
-          `<dd>${escapeHtml(NULL_SENTENCE.get(key))}</dd></div>`,
-      );
+      rows.push({ key, value: NULL_SENTENCE.get(key) });
     } else {
-      rows.push(
-        `<div class="strip-row"><dt>${escapeHtml(key)}</dt>` +
-          `<dd>${escapeHtml(Array.isArray(value) ? value.join(', ') : value)}</dd></div>`,
-      );
+      // Text, not the raw value. `asserts_absence_of_law: false` is the one payload field
+      // whose whole job is to be read, and a component tree renders a boolean `false` as
+      // nothing at all: the row survived with an empty cell, which reads as a field the
+      // service declined to answer. The string surface stringified it on the way out and so
+      // never showed the defect, which is exactly why the conversion belongs here.
+      rows.push({ key, value: Array.isArray(value) ? value.join(', ') : String(value) });
     }
   }
 
-  const list = rows.length > 0 ? `<dl class="refusal-payload">${rows.join('')}</dl>` : '';
-  return structured.join('') + list;
+  return Object.freeze({ structured: Object.freeze(structured), rows: Object.freeze(rows) });
+}
+
+function renderPayload(code, payload) {
+  const parts = payloadParts(code, payload);
+  if (parts.structured.length === 0 && parts.rows.length === 0) return '';
+
+  const structured = parts.structured
+    .map((item) => (item.kind === 'candidates'
+      ? renderCandidates(item.values)
+      : renderChips(item.className, item.values)))
+    .join('');
+
+  const list = parts.rows.length > 0
+    ? '<dl class="refusal-payload">' +
+      parts.rows
+        .map(
+          ({ key, value }) =>
+            `<div class="strip-row"><dt>${escapeHtml(key)}</dt>` +
+            `<dd>${escapeHtml(value)}</dd></div>`,
+        )
+        .join('') +
+      '</dl>'
+    : '';
+
+  return structured + list;
 }
 
 const COVERAGE = new Map([
@@ -781,6 +838,11 @@ export function validateRefusal({ code, sentence, payload, governingText, handof
     sentence,
     payload,
     payloadHtml,
+    // The same payload and absence disclosure, as claims a renderer can lay out itself. The
+    // HTML form above is what the string surface emits and what the sterility check counts;
+    // these two are what a component tree renders, from the same decisions.
+    payloadParts: payloadParts(code, payload),
+    absence: absenceEvidenceParts(code, payload),
     governingText: hasGoverningText ? governingText : null,
     handoffs,
     retryable: RETRYABLE.has(code),
@@ -855,7 +917,26 @@ export function renderRefusalCard({ code, sentence, payload, governingText, hand
  * followed an old link needs to know their state exists and was superseded rather than
  * finding it silently gone.
  */
-export function renderSupersededState({ publisher, work, live, withdrawn }) {
+
+/**
+ * The sentence a superseded-state disclosure cannot appear without.
+ *
+ * Fixed, and named, because it is what makes the two links readable: the publisher ranked
+ * these states, so nothing is being asked of the reader, and the withdrawn one stays
+ * addressable because a link somebody already holds should not lead nowhere.
+ */
+export const SUPERSEDED_NOTE =
+  'The publisher withdrew the state below and replaced it. This is the publisher ranking '
+  + 'them, not this interface choosing, so no choice is asked of you. The withdrawn state is '
+  + 'still addressable, because a link to it should not lead nowhere.';
+
+/**
+ * The two coordinates a superseded-state disclosure shows, both checked against the work.
+ *
+ * The rules live here so the string renderer and the React component apply one implementation
+ * rather than two that can drift apart.
+ */
+export function validateSupersededState({ publisher, work, live, withdrawn }) {
   // A state cannot have superseded itself. The live one was checked for not being withdrawn and
   // the siblings for being withdrawn, and nothing checked they were different states, so one
   // record passed as both would render as its own replacement.
@@ -885,24 +966,36 @@ export function renderSupersededState({ publisher, work, live, withdrawn }) {
     requireStateCoordinate(candidate, publisher, work, 'a state');
   }
 
-  const siblings = withdrawn
+  // Eight characters are what a reader can hold in their eye, so the display truncation is
+  // computed once here and carried beside the whole hash rather than sliced at each mention.
+  // The identity is the whole hash, which is why it was checked above and is not this.
+  const shown = (one) => Object.freeze({ ...one, short_hash: one.hash.slice(0, 8) });
+  return Object.freeze({ live: shown(live), withdrawn: Object.freeze(withdrawn.map(shown)) });
+}
+
+/**
+ * The disclosure a withdrawn state cannot be read without.
+ *
+ * @see validateSupersededState, which holds every rule this renders.
+ */
+export function renderSupersededState({ publisher, work, live, withdrawn }) {
+  const pair = validateSupersededState({ publisher, work, live, withdrawn });
+
+  const siblings = pair.withdrawn
     .map(
       (one) =>
         `<li><a href="${escapeHtml(one.href)}">applicable from ${escapeHtml(one.valid_from)}, ` +
-        `hash <code>${escapeHtml(one.hash.slice(0, 8))}</code>, published ` +
+        `hash <code>${escapeHtml(one.short_hash)}</code>, published ` +
         `${escapeHtml(one.publication_date)}</a></li>`,
     )
     .join('');
 
   return (
     '<section class="superseded-state">' +
-    `<p class="superseded-live"><a href="${escapeHtml(live.href)}">The state the publisher ` +
-    `holds, applicable from ${escapeHtml(live.valid_from)}, hash ` +
-    `<code>${escapeHtml(live.hash.slice(0, 8))}</code></a></p>` +
-    '<p class="superseded-note">The publisher withdrew the state below and replaced it. This ' +
-    'is the publisher ranking them, not this interface choosing, so no choice is asked of ' +
-    'you. The withdrawn state is still addressable, because a link to it should not lead ' +
-    'nowhere.</p>' +
+    `<p class="superseded-live"><a href="${escapeHtml(pair.live.href)}">The state the publisher ` +
+    `holds, applicable from ${escapeHtml(pair.live.valid_from)}, hash ` +
+    `<code>${escapeHtml(pair.live.short_hash)}</code></a></p>` +
+    `<p class="superseded-note">${escapeHtml(SUPERSEDED_NOTE)}</p>` +
     `<ul class="superseded-siblings">${siblings}</ul>` +
     '</section>'
   );
