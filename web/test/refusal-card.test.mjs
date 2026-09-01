@@ -231,7 +231,7 @@ test('the ambiguous_version interstitial never defaults and never mislabels a ca
           candidates: [{ ...CANDIDATES[0], href: CANDIDATES[1].href }, CANDIDATES[1]],
         },
       }),
-    /resolves to a different object than the candidate names/,
+    /resolves to a different object than the state names/,
   );
 
   // Eight characters are what the reader sees; they are not what identifies the state.
@@ -502,7 +502,7 @@ test('a candidate link is bound to the whole coordinate, not to a date and a has
           candidates: [{ ...CANDIDATES[0], href: elsewhere }, CANDIDATES[1]],
         },
       }),
-    /resolves to a different object than the candidate names/,
+    /resolves to a different object than the state names/,
   );
 
   // Only the publisher differs, so nothing but the publisher comparison can catch it.
@@ -523,7 +523,7 @@ test('a candidate link is bound to the whole coordinate, not to a date and a has
           candidates: [{ ...CANDIDATES[0], href: otherPublisher }, CANDIDATES[1]],
         },
       }),
-    /resolves to a different object than the candidate names/,
+    /resolves to a different object than the state names/,
   );
 
   assert.throws(
@@ -683,6 +683,8 @@ test('a withdrawn-superseded pair is not a live ambiguity', () => {
           work: 'synthetic-preview-work',
           // Two live states, so the live-count rule passes and only the declaration rule
           // can catch the third.
+          // Two live and one whose withdrawal is undeclared, so the all-live rule passes
+          // and only the declaration rule can catch the third.
           candidates: [
             CANDIDATES[0],
             CANDIDATES[1],
@@ -845,7 +847,7 @@ test('a candidate link carries no anchor, because the choice is between states',
           candidates: [{ ...CANDIDATES[0], href: withAnchor }, CANDIDATES[1]],
         },
       }),
-    /resolves to a different object than the candidate names/,
+    /resolves to a different object than the state names/,
   );
 });
 
@@ -885,4 +887,61 @@ test('a declared payload contract is an allowlist, not a minimum', () => {
       payload: { licence: 'synthetic-licence', anything_else: 'still allowed' },
     }).includes('still allowed'),
   );
+});
+
+test('every candidate in the interstitial is live, not merely two of them', () => {
+  // Counting live candidates and then rendering all of them let a withdrawn state be offered
+  // as a selectable choice inside a set that happened to contain two live ones, which is the
+  // conflation the split exists to remove, reintroduced by the split itself.
+  const withdrawn = candidate('2004-01-01', HASH_A, '2003-12-20', true);
+  assert.throws(
+    () =>
+      renderRefusalCard({
+        code: 'ambiguous_version',
+        sentence: 'Two states cover that date.',
+        payload: {
+          publisher: 'preview-synthetic',
+          work: 'synthetic-preview-work',
+          candidates: [CANDIDATES[0], CANDIDATES[1], withdrawn],
+        },
+      }),
+    /every state in it must be one the publisher still holds/,
+  );
+
+  // Two live and nothing else still renders.
+  assert.ok(
+    renderRefusalCard({ code: 'ambiguous_version', ...EXAMPLES.ambiguous_version }).includes(
+      'refusal-candidates',
+    ),
+  );
+});
+
+test('the superseded renderer checks the whole coordinate too', () => {
+  // The comparison existed twice and the second copy was written without the anchor, so the
+  // defect came back in the component added to fix it. One check now, used by both.
+  const superseded = candidate('2004-01-01', HASH_B, '2003-12-15', true);
+  for (const [live, sibling, why] of [
+    [
+      { ...CANDIDATES[0], href: `${CANDIDATES[0].href}#art_1` },
+      superseded,
+      'an anchored live link',
+    ],
+    [
+      CANDIDATES[0],
+      { ...superseded, href: `${superseded.href}#art_1` },
+      'an anchored withdrawn link',
+    ],
+  ]) {
+    assert.throws(
+      () =>
+        renderSupersededState({
+          publisher: 'preview-synthetic',
+          work: 'synthetic-preview-work',
+          live,
+          withdrawn: [sibling],
+        }),
+      /resolves to a different object than the state names/,
+      `${why} was accepted`,
+    );
+  }
 });
