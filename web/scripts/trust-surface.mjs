@@ -28,7 +28,6 @@ import { renderStateBanner } from './state-banner.mjs';
 import { renderEnvelopeStrip, renderVerifyCluster } from './verify-cluster.mjs';
 import { readingUrl } from './urls.mjs';
 import { renderNoHitCard } from './no-hit-card.mjs';
-import { renderAnswerDossier } from './answer-dossier.mjs';
 import { renderEvidenceBundle } from './evidence-bundle.mjs';
 import {
   renderHole,
@@ -244,39 +243,17 @@ export function renderTrustSurface() {
       ${renderHole({ kind: 'no_state_held', from: '2002-01-02', to: '2002-12-31' })}
       ${renderHole({ kind: 'continuity_inferred', from: '2004-01-02', to: '2026-01-01' })}</section>`,
 
-    `<section class="surface-block"><h2>Every sentence binds to something</h2>${renderAnswerDossier(
-      {
-        claims: [
-          {
-            sentence: 'The synthetic state applicable on 2001-06-01 begins on 2001-01-01.',
-            kind: 'publisher_asserted',
-            bindings: [{ call_id: 'call-1', fact: 'valid_from 2001-01-01' }],
-          },
-          {
-            sentence: 'That state is the second of the two this fixture holds.',
-            kind: 'derived',
-            bindings: [{ call_id: 'call-2', fact: 'two states' }],
-          },
-        ],
-        operations: [
-          {
-            call_id: 'call-1',
-            operation_id: 'as_of',
-            parameters: { work: `${PUBLISHER}:${WORK}`, date: '2001-06-01' },
-            result_identity: DIGEST,
-            called_at: '2026-01-01T00:00:00Z',
-          },
-          {
-            call_id: 'call-2',
-            operation_id: 'timeline',
-            parameters: { work: `${PUBLISHER}:${WORK}` },
-            result_identity: CANDIDATE_A,
-            called_at: '2026-01-01T00:00:01Z',
-          },
-        ],
-      },
-    )}</section>`,
-
+    // The answer-dossier block is removed. It rendered a claim sentence bound only to a call id,
+    // and a call-id chip is not evidence for the sentence above it. Probed on this branch: an
+    // invented proposition, "Employers must grant ninety days of parental leave in all cases",
+    // marked publisher_asserted and bound to an operation whose parameters name an entirely
+    // different work, rendered as a bound claim. The heading over it read "Every sentence binds
+    // to something", which is the worst place in the product for that to be untrue.
+    //
+    // answer_dossier/1 is the contract that would settle it and it is not frozen, so the honest
+    // state of this surface is absent rather than approved by a validator that cannot check it.
+    // The sibling branch removed it for the same reason and the removal was never carried across.
+    // #348.
     `<section class="surface-block"><h2>Nothing runs without its banner</h2>${renderRelaxationDisclosures(
       {
         searchPath: '/ask/search?q=a+synthetic+query&scope=preview',
