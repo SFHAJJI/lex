@@ -1,0 +1,207 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using Json.Schema;
+using Lex.V3.Contracts;
+using Lex.V3.Contracts.Source.Core;
+
+namespace Lex.V3.Tests.Contracts.Source.Core;
+
+[TestClass]
+public sealed class SourceSchemaTests
+{
+    private const string Digest =
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    private static readonly string CanonicalKeyDigest = Sha256("cellar:work:example");
+
+    [TestMethod]
+    public void ExporterPublishesExactlyThreeDeterministicDraft202012Schemas()
+    {
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                SourceCoreSchemaIds.Common,
+                SourceCoreSchemaIds.SourceObjectRef,
+                SourceCoreSchemaIds.SourceProfileTopology,
+            },
+            SourceCoreSchemaExporter.AllSchemaIds.ToArray());
+
+        var resourceIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var schemaId in SourceCoreSchemaExporter.AllSchemaIds)
+        {
+            var first = SourceCoreSchemaExporter.ExportUtf8(schemaId);
+            var second = SourceCoreSchemaExporter.ExportUtf8(schemaId);
+            CollectionAssert.AreEqual(first, second, schemaId);
+            Assert.IsGreaterThan(0, first.Length, schemaId);
+            Assert.AreNotEqual((byte)0xef, first[0], $"{schemaId} must not carry a BOM.");
+            Assert.AreEqual((byte)'\n', first[^1], $"{schemaId} must end in one LF.");
+            Assert.IsFalse(first.AsSpan().Contains((byte)'\r'), $"{schemaId} must use LF only.");
+
+            using var document = JsonDocument.Parse(first, StrictDocumentOptions());
+            Assert.AreEqual(
+                "https://json-schema.org/draft/2020-12/schema",
+                document.RootElement.GetProperty("$schema").GetString());
+            var resourceId = document.RootElement.GetProperty("$id").GetString();
+            Assert.IsNotNull(resourceId);
+            Assert.AreEqual(SourceCoreSchemaResourceIds.ForWireSchema(schemaId), resourceId);
+            Assert.IsTrue(resourceIds.Add(resourceId), $"Duplicate schema resource ID {resourceId}.");
+        }
+
+        Assert.AreEqual("source-common.schema.json", SourceCoreSchemaExporter.FileNameFor(SourceCoreSchemaIds.Common));
+        Assert.AreEqual("source-object-ref.schema.json", SourceCoreSchemaExporter.FileNameFor(SourceCoreSchemaIds.SourceObjectRef));
+        Assert.AreEqual("source-profile-topology.schema.json", SourceCoreSchemaExporter.FileNameFor(SourceCoreSchemaIds.SourceProfileTopology));
+        Assert.ThrowsExactly<ArgumentException>(() => SourceCoreSchemaExporter.FileNameFor("unknown/1"));
+        Assert.ThrowsExactly<ArgumentException>(() => SourceCoreSchemaExporter.ExportUtf8("unknown/1"));
+    }
+
+    [TestMethod]
+    public void CommonSchemaDefinesTheThreeSharedClosedShapes()
+    {
+        using var document = JsonDocument.Parse(
+            SourceCoreSchemaExporter.ExportUtf8(SourceCoreSchemaIds.Common),
+            StrictDocumentOptions());
+        var definitions = document.RootElement.GetProperty("$defs");
+
+        CollectionAssert.AreEquivalent(
+            new[] { "source_artifact_ref", "source_registry_member_ref", "source_object_key_ref" },
+            definitions.EnumerateObject().Select(static property => property.Name).ToArray());
+    }
+
+    [TestMethod]
+    public void ContractJsonDocumentsValidateAgainstTheirGeneratedSchemas()
+    {
+        var registry = RegistryWithCommon();
+        var objectRef = CreateObjectRef();
+        var topology = new SourceProfileTopology(
+            SourceCoreSchemaIds.SourceProfileTopology,
+            Artifact("8f47a9ed-8d4b-450c-b814-42d0398cc8eb"),
+            new SourceRegistryMemberRef(
+                Artifact("bb86e4c4-775d-45ac-90e8-f0f6b39c47cb"),
+                "single_publisher_store"));
+
+        Assert.IsTrue(Evaluate(SourceCoreSchemaIds.SourceObjectRef, objectRef, registry).IsValid);
+        Assert.IsTrue(Evaluate(SourceCoreSchemaIds.SourceProfileTopology, topology, registry).IsValid);
+    }
+
+    [TestMethod]
+    public void ObjectSchemaRejectsMissingUnknownAndDriftedBoundaryValues()
+    {
+        var valid = JsonNode.Parse(ContractJson.Serialize(CreateObjectRef()))!.AsObject();
+        foreach (var mutation in new Action<JsonObject>[]
+                 {
+                     root => root.Remove("canonical_key"),
+                     root => root["unknown_member"] = true,
+                     root => root["authority"] = "eurlex",
+                     root => root["schema"] = "lex-v3-source-object-ref/2",
+                     root => root["publisher_uri"] = "not-a-uri",
+                     root => root["publisher_uri"] = "https://publisher.example/café",
+                     root => root["publisher_uri"] = "https://publisher.example/%ZZ",
+                     root => root["publisher_uri"] = "https://publisher.example/%",
+                     root => root["publisher_uri"] = "https://publisher.example/%2",
+                     root => root["canonical_key_sha256"] = "ABC",
+                     root => root["identity_profile_ref"]!["resource_id"] = "urn:uuid:not-a-uuid",
+                     root => root["identity_profile_ref"]!["sha256"] = Digest + "0",
+                 })
+        {
+            var candidate = valid.DeepClone().AsObject();
+            mutation(candidate);
+            var registry = RegistryWithCommon();
+            Assert.IsFalse(
+                Evaluate(SourceCoreSchemaIds.SourceObjectRef, candidate, registry).IsValid,
+                candidate.ToJsonString());
+        }
+    }
+
+    [TestMethod]
+    public void CheckedSchemaFilesAreExactExporterBytes()
+    {
+        foreach (var schemaId in SourceCoreSchemaExporter.AllSchemaIds)
+        {
+            var path = Path.Combine(
+                RepositoryRoot(),
+                "schemas",
+                "v3-source",
+                "core",
+                SourceCoreSchemaExporter.FileNameFor(schemaId));
+            CollectionAssert.AreEqual(
+                SourceCoreSchemaExporter.ExportUtf8(schemaId),
+                File.ReadAllBytes(path),
+                schemaId);
+        }
+    }
+
+    private static SourceObjectRef CreateObjectRef()
+    {
+        var registry = Artifact("9d38da80-ad24-4e93-ad14-0214ca37ac40");
+        return new SourceObjectRef(
+            SourceCoreSchemaIds.SourceObjectRef,
+            SourceAuthority.Cellar,
+            new SourceRegistryMemberRef(registry, "work"),
+            "http://publications.europa.eu/resource/cellar/11111111-1111-1111-1111-111111111111",
+            "cellar:work:example",
+            CanonicalKeyDigest,
+            Artifact("8f47a9ed-8d4b-450c-b814-42d0398cc8eb"),
+            new SourceObjectKeyRef(
+                new SourceRegistryMemberRef(registry, "collection"),
+                "http://publications.europa.eu/resource/cellar",
+                "cellar:collection",
+                Sha256("cellar:collection")));
+    }
+
+    private static SourceArtifactRef Artifact(string id) => new($"urn:uuid:{id}", Digest);
+
+    private static string Sha256(string value) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
+
+    private static SchemaRegistry RegistryWithCommon()
+    {
+        var registry = new SchemaRegistry();
+        registry.Register(ParseSchema(SourceCoreSchemaIds.Common, registry));
+        return registry;
+    }
+
+    private static JsonSchema ParseSchema(string schemaId, SchemaRegistry registry) =>
+        JsonSchema.FromText(
+            Encoding.UTF8.GetString(SourceCoreSchemaExporter.ExportUtf8(schemaId)),
+            new BuildOptions { Dialect = Dialect.Draft202012, SchemaRegistry = registry });
+
+    private static EvaluationResults Evaluate(
+        string schemaId,
+        object value,
+        SchemaRegistry registry)
+    {
+        var json = value is JsonNode node ? node.ToJsonString() : ContractJson.Serialize(value);
+        using var document = JsonDocument.Parse(json);
+        return ParseSchema(schemaId, registry).Evaluate(
+            document.RootElement,
+            new EvaluationOptions
+            {
+                OutputFormat = OutputFormat.List,
+                RequireFormatValidation = true,
+            });
+    }
+
+    private static JsonDocumentOptions StrictDocumentOptions() => new()
+    {
+        AllowDuplicateProperties = false,
+        AllowTrailingCommas = false,
+        CommentHandling = JsonCommentHandling.Disallow,
+        MaxDepth = 64,
+    };
+
+    private static string RepositoryRoot()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "Lex.V3.slnx")))
+            {
+                return directory.FullName;
+            }
+        }
+
+        throw new AssertFailedException("Unable to find the V3 repository root.");
+    }
+}
