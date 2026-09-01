@@ -128,3 +128,38 @@ dd {
     gap: 0.75rem;
   }
 }
+
+/* Statutory quotation. UX spec section 1 sets serif at 17px/1.65 with a 72ch measure; the
+   measure is a maximum, so the block still reflows to a 320 CSS px viewport. */
+blockquote.law {
+  margin: 0;
+  min-inline-size: 0;
+  max-inline-size: 72ch;
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  border-inline-start: 3px solid currentColor;
+  padding-inline-start: 0.75rem;
+}
+
+/* The lines that qualify something rather than assert it: the authenticity note, the
+   contract notes the refusal card owes the reader, and the missing-translation state.
+   They inherit the body colour rather than being greyed, because a qualification nobody
+   can read is a qualification nobody made. */
+.law-authenticity,
+.localization-unavailable,
+.refusal-note {
+  min-inline-size: 0;
+  margin: 0.5rem 0 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.refusal-candidates,
+.refusal-anchors {
+  min-inline-size: 0;
+  margin: 0.5rem 0 0;
+  padding-inline-start: 1.25rem;
+  display: grid;
+  gap: 0.35rem;
+}

@@ -10,6 +10,8 @@
 // failure this surface exists to prevent, so each renders its own state and nothing
 // about the law.
 
+import { CHROME_LOCALES } from "./localization.mjs";
+
 /** Escape for HTML text and quoted attribute contexts. */
 export function escapeHtml(value) {
   return String(value)
@@ -40,9 +42,16 @@ function syntheticBanner() {
 // Exported so every page in this line goes through one shell. The shell is what carries the
 // synthetic banner and data-preview-state, and a page that builds its own head forgets them:
 // the trust surface did exactly that and the browser run caught it.
-export function page({ state, title, main }) {
+export function page({ state, title, main, locale = "en" }) {
+  // `lang` is the page's own language, never the subject's. A work page is English chrome
+  // about a French law and stays `en`; a page of French statute is `fr`. The locale is
+  // checked against the reviewed four, because a tag nobody reviewed the chrome in tells a
+  // screen reader to use a voice for text that was never written in that language.
+  if (!CHROME_LOCALES.includes(locale)) {
+    throw new Error(`${JSON.stringify(locale)} is not one of the four chrome locales`);
+  }
   return `<!doctype html>
-<html lang="en" data-product-line="lex-v3" data-preview-state="${escapeHtml(state)}">
+<html lang="${escapeHtml(locale)}" data-product-line="lex-v3" data-preview-state="${escapeHtml(state)}">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">

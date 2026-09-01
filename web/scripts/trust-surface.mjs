@@ -15,6 +15,11 @@ import { renderRefusalCard } from './refusal-card.mjs';
 import { renderStateBanner } from './state-banner.mjs';
 import { renderEnvelopeStrip, renderVerifyCluster } from './verify-cluster.mjs';
 import { readingUrl } from './urls.mjs';
+import {
+  quotedLaw,
+  renderLocalizationUnavailable,
+  reviewedText,
+} from './localization.mjs';
 
 const DIGEST = '99b621c38dec11dcd362c0db35d9e9c090e62613cc5c20b0727c0b30fd39ce66';
 
@@ -83,6 +88,10 @@ const GOVERNING =
   'est obligé, le jour même de l’empêchement, d’en avertir personnellement ou par personne ' +
   'interposée l’employeur ou le représentant de celui-ci.';
 
+const EU_PROVISION =
+  'Article 5. Personal data shall be processed lawfully, fairly and in a transparent manner ' +
+  'in relation to the data subject.';
+
 export function renderTrustSurface() {
   const sections = [
     `<section class="surface-block"><h2>Legal time, Luxembourg</h2>${renderStateBanner({
@@ -128,6 +137,15 @@ export function renderTrustSurface() {
         payload: { candidates: AMBIGUOUS_CANDIDATES },
       },
     )}</section>`,
+
+    `<section class="surface-block"><h2>Authenticity, and what is not translated</h2>
+      <p>Luxembourg statute is quoted in French and says so. The same quotation in an EU
+        expression carries no such note, because every language expression there is equally
+        authentic.</p>
+      ${quotedLaw({ publisher: 'lu-legilux', language: 'fr', text: GOVERNING, noteLocale: 'en' })}
+      ${quotedLaw({ publisher: 'eu-eurlex', language: 'en', text: EU_PROVISION })}
+      <p>Asked for in Luxembourgish, the note is missing rather than substituted:</p>
+      ${renderLocalizationUnavailable(reviewedText('law.lu.authenticity_note', 'lb'))}</section>`,
 
     `<section class="surface-block"><h2>Freshness and identity</h2>${renderEnvelopeStrip({
       envelope: LU_ENVELOPE,
