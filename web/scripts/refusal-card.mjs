@@ -161,6 +161,14 @@ function renderAbsenceEvidence(code, payload) {
 export const RETRYABLE = Object.freeze(new Set(['upstream_unreachable', 'rate_limited']));
 
 /**
+ * What a retryable refusal says.
+ *
+ * Exported so the two renderers cannot drift on it. A sentence duplicated as a literal in two
+ * files is a sentence that gets corrected in one of them.
+ */
+export const RETRY_SENTENCE = 'This one is worth retrying.';
+
+/**
  * The payload each code must carry, and where the requirement comes from.
  *
  * Only codes the architect pack actually pins down appear here. `basis` is quoted closely
@@ -712,7 +720,17 @@ function renderGoverningText(governing) {
  *        the resource identity, its authenticity evidence and the expression's own language
  * @param {{label: string, href: string}} [input.handoff]
  */
-export function renderRefusalCard({ code, sentence, payload, governingText, handoff }) {
+/**
+ * Every rule a refusal card must satisfy, decided once and shared.
+ *
+ * Split out so the React runtime cannot become a second place where a legal rule lives. The
+ * component calls this and renders what it returns; it re-derives nothing. If a rule is wrong it
+ * is wrong in one file, and a fix cannot land in the string renderer while the React one keeps
+ * the defect, which is the failure mode a parallel implementation invites.
+ *
+ * Returns the normalised inputs a renderer needs. Throws on anything a card must not display.
+ */
+export function validateRefusal({ code, sentence, payload, governingText, handoff }) {
   if (!CODES.has(code)) {
     throw new Error(
       `unknown refusal code ${JSON.stringify(code)}; the registry is closed and a code ` +
@@ -733,9 +751,8 @@ export function renderRefusalCard({ code, sentence, payload, governingText, hand
   const handoffs = (Array.isArray(handoff) ? handoff : handoff ? [handoff] : []).filter(
     (one) => one?.label && one?.href,
   );
-  const hasHandoff = handoffs.length > 0;
 
-  if (!payloadHtml && !hasGoverningText && !hasHandoff) {
+  if (!payloadHtml && !hasGoverningText && handoffs.length === 0) {
     throw new Error(
       `refusal ${code} carries no payload, no governing text and no handoff; a sterile ` +
         'refusal teaches a reader that honesty equals uselessness',
@@ -749,11 +766,9 @@ export function renderRefusalCard({ code, sentence, payload, governingText, hand
     );
   }
 
-  // Decision 41 settles this boundary and settles its ending: "Who can advise you on your
-  // case: the Chambre des salariés, the ITM, the Service d'accueil et d'information
-  // juridique, or a lawyer." That is a referral list, not one counter, and a citizen handed
-  // a single name has been handed the one that happens to be nearest to whoever wrote the
-  // caller. Two or more, each reachable.
+  // Decision 41 settles this boundary and settles its ending: a referral list, not one
+  // counter. A citizen handed a single name has been handed whichever one happened to be
+  // nearest to whoever wrote the caller.
   if (code === 'advice_boundary' && handoffs.length < 2) {
     throw new Error(
       'advice_boundary must name the referral list, not one counter; Decision 41 settles it ' +
@@ -761,8 +776,30 @@ export function renderRefusalCard({ code, sentence, payload, governingText, hand
     );
   }
 
+  return {
+    code,
+    sentence,
+    payload,
+    payloadHtml,
+    governingText: hasGoverningText ? governingText : null,
+    handoffs,
+    retryable: RETRYABLE.has(code),
+    note: MANDATED_NOTE[code] ?? null,
+  };
+}
+
+export function renderRefusalCard({ code, sentence, payload, governingText, handoff }) {
+  // Every rule lives in validateRefusal and is applied once. This function decides only how
+  // the validated result looks, which is what lets the React runtime share the rules rather
+  // than reimplement them beside a copy that can drift.
+  const card = validateRefusal({ code, sentence, payload, governingText, handoff });
+  const payloadHtml = card.payloadHtml;
+  const hasGoverningText = card.governingText !== null;
+  const handoffs = card.handoffs;
+  const hasHandoff = handoffs.length > 0;
+
   const retry = RETRYABLE.has(code)
-    ? '<p class="refusal-retry">This one is worth retrying.</p>'
+    ? `<p class="refusal-retry">${escapeHtml(RETRY_SENTENCE)}</p>`
     : '';
 
   const note = MANDATED_NOTE[code]
