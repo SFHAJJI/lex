@@ -20,6 +20,7 @@
 // All three take their token, so the meaning arrives as an icon and a label rather than as a
 // colour, and none of them takes a "hide" parameter.
 
+import { STATE_PHRASE, requireSemantics } from './timeline.mjs';
 import { mark } from './design-tokens.mjs';
 import { isOrderedInterval, requireCalendarDate } from './temporal.mjs';
 
@@ -39,9 +40,14 @@ function escapeHtml(value) {
  * @param {string} input.stateValidFrom    the enclosing state's applicability date
  * @param {string} input.wordingValidFrom  the publisher's date on this wording
  */
-export function renderValidityConflict({ stateValidFrom, wordingValidFrom }) {
+export function renderValidityConflict({ stateValidFrom, wordingValidFrom, semantics }) {
   requireCalendarDate(stateValidFrom, 'the state valid_from');
   requireCalendarDate(wordingValidFrom, 'the wording valid_from');
+  // The publisher's own vocabulary, not this screen's. Hardcoding applicability made an EU
+  // consolidation state read as an applicability claim the publisher never made. Checked
+  // after the dates, because placed first it shadowed both date guards and every test
+  // feeding a malformed date passed on this error instead.
+  requireSemantics(semantics, 'a validity conflict');
   if (stateValidFrom === wordingValidFrom) {
     throw new Error(
       'these two dates agree, so there is no conflict to badge; a conflict badge on agreeing ' +
@@ -55,7 +61,7 @@ export function renderValidityConflict({ stateValidFrom, wordingValidFrom }) {
     '<p class="validity-conflict">' +
     mark(
       '--conflict',
-      `The publisher dates this wording ${wordingValidFrom} inside a state applicable from ` +
+      `The publisher dates this wording ${wordingValidFrom} inside ${STATE_PHRASE[semantics]} ` +
         `${stateValidFrom}. Both are the publisher's. Not resolved.`,
     ) +
     '</p>'
@@ -69,7 +75,7 @@ export function renderValidityConflict({ stateValidFrom, wordingValidFrom }) {
  * is provisional is a fact about the reader's chosen date and the publisher's record, and a
  * frontend that consulted its own clock would answer a question nobody asked.
  */
-export function renderProvisional({ validFrom, asOf }) {
+export function renderProvisional({ validFrom, asOf, semantics }) {
   requireCalendarDate(validFrom, 'the state valid_from');
   requireCalendarDate(asOf, 'the comparison date');
   if (validFrom <= asOf) {
@@ -78,11 +84,14 @@ export function renderProvisional({ validFrom, asOf }) {
         'would be false; the mark is for a state the publisher has scheduled and not started',
     );
   }
+  // After the date guards, so neither is shadowed by this one.
+  requireSemantics(semantics, 'a provisional watermark');
   return (
     '<p class="provisional-watermark" data-provisional="true">' +
     mark(
       '--provisional',
-      `Publisher-scheduled state, applicable from ${validFrom}. As of ${asOf} it has not begun.`,
+      `Publisher-scheduled state, ${STATE_PHRASE[semantics]} ${validFrom}. As of ${asOf} it ` +
+        'has not begun.',
     ) +
     '</p>'
   );

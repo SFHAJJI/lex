@@ -13,6 +13,7 @@ test('a validity conflict shows both publisher dates and resolves neither', () =
   // article carry a per-article date of 2020-11-01 inside enclosing states applicable from
   // four later dates. Corpus-wide it is 39.8 percent of Luxembourg provision states.
   const html = renderValidityConflict({
+    semantics: 'publisher_applicability',
     stateValidFrom: '2021-01-01',
     wordingValidFrom: '2020-11-01',
   });
@@ -31,7 +32,7 @@ test('a conflict badge on agreeing dates is refused', () => {
   // there is one.
   assert.throws(
     () =>
-      renderValidityConflict({ stateValidFrom: '2021-01-01', wordingValidFrom: '2021-01-01' }),
+      renderValidityConflict({ stateValidFrom: '2021-01-01', wordingValidFrom: '2021-01-01', semantics: 'publisher_applicability' }),
     /no conflict to badge/,
   );
 });
@@ -51,14 +52,14 @@ test('a conflict needs two dates that are dates', () => {
 });
 
 test('provisional is decided against the reader date, not a machine clock', () => {
-  const html = renderProvisional({ validFrom: '2030-09-15', asOf: '2026-09-01' });
+  const html = renderProvisional({ validFrom: '2030-09-15', asOf: '2026-09-01', semantics: 'publisher_applicability' });
   assert.ok(html.includes('Publisher-scheduled state, applicable from 2030-09-15'));
   assert.ok(html.includes('As of 2026-09-01 it has not begun'));
   assert.ok(html.includes('token--provisional'));
 
   // A state that has begun is not provisional, and saying it is would be false.
   assert.throws(
-    () => renderProvisional({ validFrom: '2020-01-01', asOf: '2026-09-01' }),
+    () => renderProvisional({ validFrom: '2020-01-01', asOf: '2026-09-01', semantics: 'publisher_applicability' }),
     /has begun as of/,
   );
   assert.throws(
@@ -117,4 +118,48 @@ test('values are escaped rather than trusted', () => {
     () => renderHole({ kind: '"><img src=x>', from: '2004-01-01', to: '2024-01-01' }),
     /is not a hole kind/,
   );
+});
+
+test('O5: qualifiers speak the publisher vocabulary, not a hardcoded one', () => {
+  // Hardcoded applicability made an EU consolidation state read as an applicability claim the
+  // publisher never made, on the two badges most likely to be quoted out of context.
+  const luConflict = renderValidityConflict({
+    stateValidFrom: '2003-01-01',
+    wordingValidFrom: '2001-01-01',
+    semantics: 'publisher_applicability',
+  });
+  assert.equal(luConflict.includes('applicable from'), true);
+
+  const euConflict = renderValidityConflict({
+    stateValidFrom: '2003-01-01',
+    wordingValidFrom: '2001-01-01',
+    semantics: 'official_consolidation_state',
+  });
+  assert.equal(euConflict.includes('a consolidated wording state from'), true);
+  assert.equal(
+    euConflict.includes('applicable from'),
+    false,
+    'a consolidation state was badged as applicability',
+  );
+
+  const euProvisional = renderProvisional({
+    validFrom: '2030-09-15',
+    asOf: '2026-09-01',
+    semantics: 'official_consolidation_state',
+  });
+  assert.equal(euProvisional.includes('a consolidated wording state from'), true);
+  assert.equal(euProvisional.includes('applicable from'), false);
+});
+
+test('O5: a qualifier without a declared vocabulary is refused', () => {
+  for (const semantics of [undefined, null, '', 'in_force']) {
+    assert.throws(
+      () => renderValidityConflict({ stateValidFrom: '2003-01-01', wordingValidFrom: '2001-01-01', semantics }),
+      /renders in the publisher's own vocabulary/,
+    );
+    assert.throws(
+      () => renderProvisional({ validFrom: '2030-09-15', asOf: '2026-09-01', semantics }),
+      /renders in the publisher's own vocabulary/,
+    );
+  }
 });

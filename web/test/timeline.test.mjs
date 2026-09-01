@@ -450,3 +450,45 @@ test('values are escaped rather than trusted', () => {
   assert.ok(html.includes('&amp; more'), 'an ampersand was not escaped');
   assert.ok(!html.includes('onerror="alert'), 'a quote broke out of the attribute');
 });
+
+test('O4: a truncated timeline claims no gaps, because it cannot know', () => {
+  // A hole is the universal claim "no publisher state covers this span". A page holding some
+  // of the states cannot support it: the state that fills the gap may be one of the missing.
+  const states = [
+    state({ valid_from: '2001-01-01', valid_to: '2002-01-01', hash: HASH_A }),
+    state({ valid_from: '2010-01-01', valid_to: null, hash: HASH_B }),
+  ];
+  const whole = renderTimeline({ ...GOOD, states, totalCount: 2 });
+  assert.equal(whole.includes('No publisher state covers'), true, 'a complete timeline hid its gap');
+
+  const partial = renderTimeline({ ...GOOD, states, totalCount: 9 });
+  assert.equal(
+    partial.includes('No publisher state covers'),
+    false,
+    'a truncated timeline asserted that no state covers a span it did not enumerate',
+  );
+});
+
+test('O4: a digest is lowercase hex, not sixty-four of anything', () => {
+  for (const hash of ['g'.repeat(64), ' '.repeat(64), 'A'.repeat(64), 'a'.repeat(63), 'a'.repeat(65)]) {
+    assert.throws(
+      () => renderTimeline({ ...GOOD, states: [state({ valid_from: '2001-01-01', hash })], totalCount: 1 }),
+      /lowercase hex SHA-256/,
+      `${JSON.stringify(hash.slice(0, 8))} was accepted as a digest`,
+    );
+  }
+});
+
+test('O4: the open interval is null, never the sorting sentinel', () => {
+  // Supplied literally, 9999-12-31 sorts as open and renders as a real end date, so a state
+  // the publisher never ended reads as one that ends on a specific day.
+  assert.throws(
+    () =>
+      renderTimeline({
+        ...GOOD,
+        states: [state({ valid_from: '2001-01-01', valid_to: '9999-12-31' })],
+        totalCount: 1,
+      }),
+    /an open interval is null/,
+  );
+});

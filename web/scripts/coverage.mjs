@@ -159,24 +159,38 @@ export function renderCoverage({ coverage }) {
     );
   }
 
-  // A build that did not finish is not a smaller corpus, it is an unknown one.
-  if (coverage.build_complete !== true) {
+  // A build that did not finish is not a smaller corpus, it is an unknown one. The gate is
+  // the whole tuple, because each leg alone can be true of a build whose counts are not
+  // trustworthy: an unsigned stamp means nothing vouches for the numbers, and a build that
+  // reports itself complete without declaring the scope it was measured against has not
+  // said what complete means. Any leg missing renders the limitation instead of counts.
+  const signed = coverage?.envelope?.freshness?.stamp_signature_valid === true;
+  const declaresScope = Number.isInteger(coverage.scope_expected_works);
+  if (coverage.build_complete !== true || !signed || !declaresScope) {
     const issues = Array.isArray(coverage.build_issues) ? coverage.build_issues.length : 0;
     return (
       '<section class="coverage coverage-incomplete">' +
       `<h2>${escapeHtml(coverage.publisher_name)}</h2>` +
-      '<p class="coverage-build">This index build did not complete, so the counts below would ' +
-      'describe an unknown fraction of what this corpus holds and are not shown. ' +
+      '<p class="coverage-build">The counts below would describe an unknown fraction of ' +
+      'what this corpus holds, so they are not shown. ' +
+      `${escapeHtml(
+        [
+          coverage.build_complete === true ? null : 'the build did not complete',
+          signed ? null : 'the build stamp is not signed',
+          declaresScope ? null : 'the build does not declare the scope it was measured against',
+        ]
+          .filter((one) => one !== null)
+          .join('; '),
+      )}. ` +
       `Build status: ${escapeHtml(String(coverage.build_inventory_status ?? 'unknown'))}, ` +
       `${issues} recorded issue${issues === 1 ? '' : 's'}, measured ` +
       `${escapeHtml(builtAt)}.</p>` +
       '</section>'
     );
   }
-  if (
-    Number.isInteger(coverage.scope_expected_works) &&
-    coverage.scope_expected_works !== coverage.works
-  ) {
+  // Unconditional. Guarded on the field being an integer, an absent scope skipped the check
+  // entirely and the counts rendered as complete against nothing.
+  if (coverage.scope_expected_works !== coverage.works) {
     throw new Error(
       `the build expected ${coverage.scope_expected_works} works and holds ${coverage.works} ` +
         'while reporting itself complete; one of those two numbers is wrong and this page ' +
@@ -185,7 +199,16 @@ export function renderCoverage({ coverage }) {
   }
 
   const typeRows = types.map(renderTypeRow).join('');
-  const languageRows = (coverage.languages ?? [])
+  // Required, not defaulted. `?? []` rendered an empty language table for a payload that
+  // named no languages at all, and an empty table reads as a corpus holding none rather
+  // than as a payload that did not say.
+  if (!Array.isArray(coverage.languages) || coverage.languages.length === 0) {
+    throw new Error(
+      'coverage lists the languages it holds; an absent list renders as an empty table, ' +
+        'which reads as a corpus that holds no language rather than a payload that did not say',
+    );
+  }
+  const languageRows = coverage.languages
     .map((row, index) => {
       requireCount(row?.works, `language row ${index + 1} works`);
       requireCount(row?.versions, `language row ${index + 1} versions`);

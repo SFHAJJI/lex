@@ -27,14 +27,14 @@ const CLAIMS = [
   {
     sentence: 'The state applicable on 2001-06-01 begins on 2001-01-01.',
     kind: 'publisher_asserted',
-    bindings: [{ call_id: 'call-1', fact: 'valid_from 2001-01-01' }],
+    bindings: [{ call_id: 'call-1' }],
   },
   {
     sentence: 'That state is the second of four the publisher holds.',
     kind: 'derived',
     bindings: [
-      { call_id: 'call-2', fact: 'four states' },
-      { call_id: 'call-1', fact: 'valid_from 2001-01-01' },
+      { call_id: 'call-2' },
+      { call_id: 'call-1' },
     ],
   },
 ];
@@ -66,7 +66,7 @@ test('a claim cannot cite a call the trace does not contain', () => {
           {
             sentence: 'A sentence citing a call nobody recorded.',
             kind: 'publisher_asserted',
-            bindings: [{ call_id: 'call-99', fact: 'something' }],
+            bindings: [{ call_id: 'call-99' }],
           },
         ],
       }),
@@ -78,14 +78,42 @@ test('a claim cannot cite a call the trace does not contain', () => {
         ...GOOD,
         claims: [
           {
-            sentence: 'A sentence citing a call without saying which fact.',
+            sentence: 'A sentence quoting prose nothing here can check.',
             kind: 'publisher_asserted',
-            bindings: [{ call_id: 'call-1' }],
+            bindings: [{ call_id: 'call-1', fact: 'the rate is 15%' }],
           },
         ],
       }),
-    /names which fact in that result/,
+    /may not carry free prose as the fact it relies on/,
   );
+});
+
+test('O8: a binding may cite a recorded call, and may not quote it', () => {
+  // The chip used to print caller-supplied prose as the fact the claim rests on, sourced to a
+  // recorded call. Nothing in this module carries that call's result, so nothing could tell a
+  // quotation from an invention. answer_dossier/1 on #348 is the contract that will; until it
+  // lands the surface is refused rather than blessed.
+  const html = renderAnswerDossier(GOOD);
+  assert.equal(html.includes('claim-chip'), true, 'the citation to the call was removed too');
+  assert.equal(html.includes('call-1'), true);
+
+  for (const fact of ['the rate is 15%', '', '   ', 'anything at all']) {
+    assert.throws(
+      () =>
+        renderAnswerDossier({
+          ...GOOD,
+          claims: [
+            {
+              sentence: 'A sentence.',
+              kind: 'publisher_asserted',
+              bindings: [{ call_id: 'call-1', fact }],
+            },
+          ],
+        }),
+      /may not carry free prose as the fact it relies on/,
+      `${JSON.stringify(fact)} was accepted as a checkable fact`,
+    );
+  }
 });
 
 test('every claim declares whether it is the publisher or this product speaking', () => {
@@ -96,7 +124,7 @@ test('every claim declares whether it is the publisher or this product speaking'
         renderAnswerDossier({
           ...GOOD,
           claims: [
-            { sentence: 'A sentence.', kind, bindings: [{ call_id: 'call-1', fact: 'x' }] },
+            { sentence: 'A sentence.', kind, bindings: [{ call_id: 'call-1' }] },
           ],
         }),
       /is not a claim kind/,
@@ -190,7 +218,7 @@ test('values are escaped rather than trusted', () => {
       {
         sentence: '<img src=x onerror=alert(1)>',
         kind: 'publisher_asserted',
-        bindings: [{ call_id: 'call-1', fact: '<script>alert(1)</script>' }],
+        bindings: [{ call_id: 'call-1' }],
       },
     ],
   });

@@ -35,6 +35,42 @@ export const TIMELINE_SEMANTICS = Object.freeze({
     `Consolidated wording state from ${from} to ${to === null ? 'no end recorded' : to}`,
 });
 
+/**
+ * What the interval is called, per publisher vocabulary.
+ *
+ * The two publishers make different claims and this product does not choose between them. LU
+ * dates a state's applicability; EU dates the wording state of a consolidation. Printing
+ * "applicable" over an EU interval relabels a consolidation state as applicability, which is
+ * the failure this vocabulary exists to prevent, and it was hardcoded in three places.
+ */
+export const INTERVAL_TERM = Object.freeze({
+  publisher_applicability: 'applicable',
+  official_consolidation_state: 'consolidated wording',
+});
+
+/** The phrase a qualifier uses for the state it is attached to. */
+export const STATE_PHRASE = Object.freeze({
+  publisher_applicability: 'applicable from',
+  official_consolidation_state: 'a consolidated wording state from',
+});
+
+/**
+ * Refuse anything outside the two vocabularies, in one place.
+ *
+ * Every caller that renders a date interval needs this, and a default would silently pick one
+ * publisher's claim for the other's records.
+ */
+export function requireSemantics(semantics, where) {
+  if (!Object.hasOwn(INTERVAL_TERM, semantics ?? '')) {
+    throw new Error(
+      `${where} renders in the publisher's own vocabulary and ${JSON.stringify(semantics)} is ` +
+        `not one of ${Object.keys(INTERVAL_TERM).join(', ')}; the two publishers make different ` +
+        'claims and this product does not choose between them',
+    );
+  }
+  return semantics;
+}
+
 /** Fixed by the spec, three sentences, because the screen is the two clocks. */
 export const LEGEND =
   'Top: when the publisher says the state applied. Bottom: when the publisher published it. ' +
@@ -104,8 +140,23 @@ function requireState(state, index) {
         'a row that is silent about it reads as a row that has it',
     );
   }
-  if (typeof state.hash !== 'string' || state.hash.length !== 64) {
-    throw new Error(`${where} needs its digest, which is what makes its permalink stable`);
+  // Sixty-four of anything was the whole check, so a row could carry sixty-four spaces or
+  // an uppercase digest and still print a permalink chip. A digest is a grammar.
+  // The open interval is represented by null and by nothing else. 9999-12-31 is this
+  // module's internal sentinel for sorting, so a caller supplying it literally would sort
+  // as open while rendering as a real end date, and the row would read "applicable to
+  // 9999-12-31" instead of "no end recorded" for a state the publisher never ended.
+  if (state.valid_to === '9999-12-31') {
+    throw new Error(
+      `${where} carries 9999-12-31 as its end date; an open interval is null, and this ` +
+        'value is the internal sentinel this screen sorts by',
+    );
+  }
+  if (typeof state.hash !== 'string' || !/^[0-9a-f]{64}$/.test(state.hash)) {
+    throw new Error(
+      `${where} needs its digest as lowercase hex SHA-256, which is what makes its ` +
+        'permalink stable; sixty-four characters of anything is not a digest',
+    );
   }
 
   // The publisher's current-state flag is not a statement about a historical interval. A held
@@ -359,7 +410,10 @@ export function renderTimeline({ semantics, states, asOf, totalCount, truncated,
       compare(a.lex_id, b.lex_id),
   );
 
-  const holes = holesBetween(ordered);
+  // A hole is a universal claim: "no publisher state covers this span". A truncated
+  // enumeration cannot support it, because the state that fills the gap may simply be one
+  // of the ones not held. Truncation is a fact about this page, and absence of law is not.
+  const holes = isTruncated ? [] : holesBetween(ordered);
   const overlaps = overlapsIn(ordered);
 
   const rows = [

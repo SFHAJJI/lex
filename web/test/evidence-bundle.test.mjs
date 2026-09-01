@@ -35,7 +35,14 @@ const VERIFICATION = {
 
 const COLUMNS = ['identifier', 'valid_from', 'valid_to', 'official_uri', 'record_sha256'];
 
-const GOOD = { items: [ITEM], columns: COLUMNS, verification: VERIFICATION };
+const GOOD = {
+  items: [ITEM],
+  columns: COLUMNS,
+  verification: VERIFICATION,
+  // The publisher's own vocabulary. Without it every item's dates were labelled
+  // "applicable", so an EU consolidation state was exported as an applicability claim.
+  semantics: 'publisher_applicability',
+};
 
 test('a derived or unofficial item cannot enter a bundle', () => {
   // Not excluded by default, refused. A labelled convenience that quietly enters a bundle
@@ -179,4 +186,59 @@ test('values are escaped rather than trusted', () => {
   });
   assert.ok(!html.includes('<img'));
   assert.ok(html.includes('&lt;img'));
+});
+
+test('O5: the interval label is the publisher vocabulary, not this screen assuming one', () => {
+  // An EU consolidation state exported under the word "applicable" is an applicability claim
+  // the publisher never made, inside the artefact a reader keeps and cites.
+  const lu = renderEvidenceBundle({ ...GOOD, semantics: 'publisher_applicability' });
+  assert.equal(lu.includes('<dt>applicable</dt>'), true);
+  assert.equal(lu.includes('<dt>consolidated wording</dt>'), false);
+
+  const eu = renderEvidenceBundle({ ...GOOD, semantics: 'official_consolidation_state' });
+  assert.equal(eu.includes('<dt>consolidated wording</dt>'), true);
+  assert.equal(
+    eu.includes('<dt>applicable</dt>'),
+    false,
+    'a consolidation state was exported as applicability',
+  );
+});
+
+test('O5: a bundle without a declared vocabulary is refused', () => {
+  for (const semantics of [undefined, null, '', 'in_force', 'publisher_applicability_v2']) {
+    assert.throws(
+      () => renderEvidenceBundle({ ...GOOD, semantics }),
+      /renders in the publisher's own vocabulary/,
+      `${JSON.stringify(semantics)} was accepted as a date vocabulary`,
+    );
+  }
+});
+
+test('O7: a licence requiring attribution refuses an item that carries none', () => {
+  // The licence table declared two obligations and enforced one, so the bundle travelled with
+  // the publisher's text and without the credit the publisher's own licence requires.
+  for (const licence of ['cc-by-4.0', 'licence-scl']) {
+    assert.throws(
+      () =>
+        renderEvidenceBundle({
+          ...GOOD,
+          items: [{ ...ITEM, licence, attribution: undefined }],
+        }),
+      /requires attribution, and carries none/,
+      `${licence} was bundled without attribution`,
+    );
+    assert.throws(
+      () => renderEvidenceBundle({ ...GOOD, items: [{ ...ITEM, licence, attribution: '   ' }] }),
+      /requires attribution, and carries none/,
+      `${licence} was bundled with blank attribution`,
+    );
+  }
+  // cc0 requires none, so it must still be renderable without one.
+  assert.equal(
+    typeof renderEvidenceBundle({
+      ...GOOD,
+      items: [{ ...ITEM, licence: 'cc0', attribution: undefined }],
+    }),
+    'string',
+  );
 });

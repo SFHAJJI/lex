@@ -24,6 +24,7 @@
 // pair is worse than no diff.
 
 import { isCalendarDate, isUtcInstant } from './temporal.mjs';
+import { isSafeSegment } from './urls.mjs';
 import { renderRefusalCard } from './refusal-card.mjs';
 
 /** The two axes a comparison can run along. They are never mixed. */
@@ -52,9 +53,28 @@ function escapeHtml(value) {
  * be compared to anything.
  */
 /** The work half of a lex_id: publisher and work key, without the state. */
-function workOf(lexId) {
+/**
+ * The work half of a state identifier, validated rather than sliced.
+ *
+ * Splitting and taking the first two parts made any two strings comparable, so `garbage` and
+ * `garbage` named the same work and a diff between them was legal. The segments are checked
+ * against the same rule the object-URL builders and parser share, which keeps this screen's
+ * notion of a work identical to the routable one.
+ */
+function workOf(lexId, which) {
   const parts = String(lexId).split(':');
-  return parts.slice(0, 2).join(':');
+  if (
+    parts.length < 3 ||
+    !isSafeSegment(parts[0]) ||
+    !isSafeSegment(parts[1]) ||
+    parts.slice(2).join(':').length === 0
+  ) {
+    throw new Error(
+      `the ${which} side's lex_id ${JSON.stringify(lexId)} does not name a publisher, a work ` +
+        'and a state',
+    );
+  }
+  return `${parts[0]}:${parts[1]}`;
 }
 
 function requireSide(side, which) {
@@ -312,6 +332,19 @@ export function renderCompare({ mode, left, right, result }) {
     );
   }
 
+  // One work, on both axes. This check lived inside the language branch, so the temporal path
+  // walked past it: two unrelated instruments with the same publisher, language and profile
+  // rendered a full provision-aligned diff, and a tax rate replaced by a speed limit was
+  // presented as amendment. Every checkability affordance on the screen corroborated the false
+  // pairing, because both sides really did resolve. This module's own header says a diff of the
+  // wrong pair is worse than no diff; the wrong pair was reachable on the axis nobody guarded.
+  if (workOf(left.lex_id, 'left') !== workOf(right.lex_id, 'right')) {
+    throw new Error(
+      'a comparison must be of one work and these are two different works; two unrelated ' +
+        'instruments are not states of each other, and their differences are not legislation',
+    );
+  }
+
   // Translation read as amendment. A temporal comparison across two languages shows a
   // difference on every line and not one of them is a change in the law.
   if (mode === 'temporal' && left.language !== right.language) {
@@ -326,14 +359,6 @@ export function renderCompare({ mode, left, right, result }) {
   if (mode === 'language') {
     if (left.language === right.language) {
       throw new Error('a language comparison needs two different languages');
-    }
-    // Same period is not same state: two unrelated works sharing validity dates would have
-    // rendered as "Language comparison, same state. Both texts are authentic."
-    if (workOf(left.lex_id) !== workOf(right.lex_id)) {
-      throw new Error(
-        'a language comparison must be of one state and these are two different works; two ' +
-          'unrelated instruments that share validity dates are not expressions of each other',
-      );
     }
     if (left.valid_from !== right.valid_from || left.valid_to !== right.valid_to) {
       throw new Error(

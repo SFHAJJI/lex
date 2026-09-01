@@ -24,6 +24,7 @@
 
 import { isCalendarDate, isUtcInstant } from './temporal.mjs';
 import { publisherSourceUri } from './routes.mjs';
+import { INTERVAL_TERM, requireSemantics } from './timeline.mjs';
 
 /** What an item is. Only the first may enter a bundle. */
 export const ITEM_KINDS = Object.freeze(['publisher_text', 'derived', 'unofficial']);
@@ -109,6 +110,21 @@ function requireItem(item, index) {
         `at compose time and can only do that for a licence it knows: ${Object.keys(LICENCES).join(', ')}`,
     );
   }
+
+  // O7. The licence table declares two obligations per licence and only one was enforced.
+  // A licence requiring attribution was satisfied by an item that carried none, so the
+  // bundle travelled with the publisher's text and without the credit the publisher's own
+  // licence requires. Declaring an obligation and not checking it is worse than not
+  // declaring it, because the table reads as the thing that enforces it.
+  if (LICENCES[item.licence].attribution) {
+    if (typeof item.attribution !== 'string' || item.attribution.trim().length === 0) {
+      throw new Error(
+        `${where} is licensed ${item.licence}, which requires attribution, and carries ` +
+          'none; the composer cannot satisfy at compose time an obligation the item does ' +
+          'not name',
+      );
+    }
+  }
   return publisherSourceUri({ publisher: item.publisher, uri: item.official_uri });
 }
 
@@ -118,7 +134,7 @@ function isCalendarDateOrThrow(value, what) {
   }
 }
 
-function renderItem(item, index) {
+function renderItem(item, index, semantics) {
   const official = requireItem(item, index);
   const licence = LICENCES[item.licence];
 
@@ -137,7 +153,7 @@ function renderItem(item, index) {
     `<li class="bundle-item" data-kind="${escapeHtml(item.kind)}">` +
     `<p class="bundle-citation">${escapeHtml(item.citation)}</p>` +
     '<dl class="bundle-dates">' +
-    `<div class="strip-row"><dt>applicable</dt><dd>${escapeHtml(item.valid_from)} to ` +
+    `<div class="strip-row"><dt>${escapeHtml(INTERVAL_TERM[semantics])}</dt><dd>${escapeHtml(item.valid_from)} to ` +
     `${escapeHtml(item.valid_to ?? 'no end recorded')}</dd></div>` +
     `<div class="strip-row"><dt>published</dt><dd>${escapeHtml(item.publication_date)}</dd></div>` +
     `<div class="strip-row"><dt>observed</dt><dd>${escapeHtml(item.observed_from)}</dd></div>` +
@@ -207,7 +223,7 @@ export function renderRegister({ items, columns }) {
  * @param {Array}  input.columns
  * @param {object} input.verification  the recipe, the signing key and the fetch note
  */
-export function renderEvidenceBundle({ items, columns, verification }) {
+export function renderEvidenceBundle({ items, columns, verification, semantics }) {
   if (!Array.isArray(items) || items.length === 0) {
     throw new Error('an evidence bundle with no items is a cover sheet');
   }
@@ -221,10 +237,18 @@ export function renderEvidenceBundle({ items, columns, verification }) {
     }
   }
 
+  // Last, after every item and the annex, so this check shadows none of them. The
+  // publisher's own vocabulary: every item's dates were labelled "applicable" regardless
+  // of publisher, so an EU consolidation state was exported as an applicability claim the
+  // publisher never made, inside the artefact a reader keeps and cites.
+  requireSemantics(semantics, 'an evidence bundle');
+
   return (
     '<section class="evidence-bundle">' +
     `<p class="bundle-watermark">${escapeHtml(WATERMARK)}</p>` +
-    `<ul class="bundle-items">${items.map(renderItem).join('')}</ul>` +
+    `<ul class="bundle-items">${items
+      .map((item, index) => renderItem(item, index, semantics))
+      .join('')}</ul>` +
     renderRegister({ items, columns }) +
     '<section class="bundle-verification"><h2>How to verify this bundle</h2>' +
     `<p class="bundle-recipe">${escapeHtml(verification.recompute_recipe)}</p>` +

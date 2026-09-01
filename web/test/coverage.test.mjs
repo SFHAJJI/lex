@@ -201,3 +201,54 @@ test('values are escaped rather than trusted', () => {
   assert.ok(!html.includes('<img'));
   assert.ok(html.includes('&lt;img'));
 });
+
+test('O6: counts render only from the complete, signed, scope-declaring tuple', () => {
+  // Each leg removed on its own. The gate tested build_complete alone, so an unsigned stamp or
+  // an undeclared scope still produced counts that read as a complete account of the corpus.
+  const cases = [
+    ['the build did not complete', { build_complete: false }],
+    [
+      'the build stamp is not signed',
+      { envelope: { ...payload().envelope, freshness: { built_at: '2026-08-15T09:22:08Z', stamp_signature_valid: false } } },
+    ],
+    ['the build does not declare the scope', { scope_expected_works: undefined }],
+  ];
+  for (const [what, override] of cases) {
+    const html = renderCoverage({ coverage: payload(override) });
+    assert.equal(
+      html.includes('coverage-incomplete'),
+      true,
+      `${what}: counts rendered as a complete account`,
+    );
+    assert.equal(html.includes('<table'), false, `${what}: a count table was rendered anyway`);
+  }
+});
+
+test('O6: the limitation says which leg failed', () => {
+  // A reader who cannot tell an unfinished build from an unsigned one has been told the counts
+  // are missing without being told what is wrong with the corpus.
+  assert.equal(
+    renderCoverage({ coverage: payload({ build_complete: false }) }).includes('the build did not complete'),
+    true,
+  );
+  assert.equal(
+    renderCoverage({
+      coverage: payload({
+        envelope: { ...payload().envelope, freshness: { built_at: '2026-08-15T09:22:08Z', stamp_signature_valid: false } },
+      }),
+    }).includes('the build stamp is not signed'),
+    true,
+  );
+});
+
+test('O6: an absent language list is refused, not rendered as an empty table', () => {
+  // `?? []` rendered an empty table, which reads as a corpus holding no languages rather than
+  // as a payload that did not say.
+  for (const languages of [undefined, null, []]) {
+    assert.throws(
+      () => renderCoverage({ coverage: payload({ languages }) }),
+      /coverage lists the languages it holds/,
+      `${JSON.stringify(languages)} rendered as a language table`,
+    );
+  }
+});

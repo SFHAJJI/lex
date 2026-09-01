@@ -114,8 +114,22 @@ function requireClaims(claims, callIds) {
             'operations trace; a citation to a call nobody recorded is a citation to nothing',
         );
       }
-      if (typeof binding?.fact !== 'string' || binding.fact.trim().length === 0) {
-        throw new Error('a binding names which fact in that result it relies on');
+      // O8. This validated that a caller supplied a non-empty string and then rendered it
+      // verbatim as a citation chip, so any prose became "the fact this claim relies on,"
+      // sourced to a recorded call. Nothing in this module carries the result the chip
+      // claims to quote, so nothing here can tell a quotation from an invention.
+      //
+      // The contract that would settle it is answer_dossier/1, which binds a claim to an
+      // exact operation, snapshot and observation. It does not exist yet: it is Stage 4
+      // work on #348. Until it lands, this refuses the binding rather than approving it,
+      // because a validator that cannot check a claim must not be the thing that blesses
+      // it. The claim and its call id still render; the unverifiable quotation does not.
+      if (binding !== null && Object.hasOwn(binding, 'fact')) {
+        throw new Error(
+          'a binding may not carry free prose as the fact it relies on; nothing here can ' +
+            'distinguish a quotation from an invention, and answer_dossier/1 is the ' +
+            'contract that will, on #348',
+        );
       }
     }
   }
@@ -126,7 +140,7 @@ function renderClaim(claim) {
     .map(
       (binding) =>
         `<li class="claim-chip"><a href="#trace-${escapeHtml(binding.call_id)}">` +
-        `${escapeHtml(binding.fact)}</a></li>`,
+        `call ${escapeHtml(binding.call_id)}</a></li>`,
     )
     .join('');
 

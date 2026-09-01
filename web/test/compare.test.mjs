@@ -360,3 +360,37 @@ test('values are escaped rather than trusted', () => {
   assert.ok(!html.includes('<img'));
   assert.ok(html.includes('&lt;img'));
 });
+
+test('O3: a comparison binds both sides to one canonical work, on either axis', () => {
+  // The identity check lived inside the language branch, so the temporal path walked past it.
+  // Every other guard passes here: same publisher, same language, same profile, different
+  // periods, different digests. Only the work differs, and nothing looked.
+  assert.throws(
+    () => renderCompare({ ...GOOD, right: { ...RIGHT, lex_id: 'preview-synthetic:a-different-work:2002-01-01' } }),
+    /two different works/,
+    'a temporal diff rendered between two unrelated instruments',
+  );
+
+  // Cross-publisher is the same falsehood with a wider gap.
+  assert.throws(
+    () => renderCompare({ ...GOOD, right: { ...RIGHT, lex_id: 'eu-eurlex:some-regulation:2002-01-01' } }),
+    /two different works/,
+    'a temporal diff rendered across two publishers',
+  );
+
+  // And the work halves must be real segments rather than any two strings that happen to
+  // match: slicing made `garbage` and `garbage` name the same work.
+  for (const lexId of ['garbage', 'preview-synthetic:only-two-parts', '::2001-01-01']) {
+    assert.throws(
+      () =>
+        renderCompare({
+          mode: 'temporal',
+          left: { ...LEFT, lex_id: lexId },
+          right: { ...RIGHT, lex_id: lexId },
+          result: CHANGED,
+        }),
+      /does not name a publisher, a work and a state/,
+      `${lexId} was accepted as binding a canonical work`,
+    );
+  }
+});

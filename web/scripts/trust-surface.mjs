@@ -186,6 +186,8 @@ export function renderTrustSurface() {
     )}</section>`,
 
     `<section class="surface-block"><h2>What leaves the building</h2>${renderEvidenceBundle({
+      // This preview shows a Luxembourg item, whose publisher dates applicability.
+      semantics: 'publisher_applicability',
       items: [
         {
           kind: 'publisher_text',
@@ -232,8 +234,8 @@ export function renderTrustSurface() {
         wording is 39.8 percent of Luxembourg provision states; a scheduled state that has
         not begun reads as current law without a mark; and a gap closed by inference is this
         product's inference, not the publisher's assertion.</p>
-      ${renderValidityConflict({ stateValidFrom: '2003-01-01', wordingValidFrom: '2001-01-01' })}
-      ${renderProvisional({ validFrom: '2030-09-15', asOf: '2026-09-01' })}
+      ${renderValidityConflict({ stateValidFrom: '2003-01-01', wordingValidFrom: '2001-01-01', semantics: 'publisher_applicability' })}
+      ${renderProvisional({ validFrom: '2030-09-15', asOf: '2026-09-01', semantics: 'publisher_applicability' })}
       ${renderHole({ kind: 'no_state_held', from: '2002-01-02', to: '2002-12-31' })}
       ${renderHole({ kind: 'continuity_inferred', from: '2004-01-02', to: '2026-01-01' })}</section>`,
 
@@ -243,12 +245,12 @@ export function renderTrustSurface() {
           {
             sentence: 'The synthetic state applicable on 2001-06-01 begins on 2001-01-01.',
             kind: 'publisher_asserted',
-            bindings: [{ call_id: 'call-1', fact: 'valid_from 2001-01-01' }],
+            bindings: [{ call_id: 'call-1' }],
           },
           {
             sentence: 'That state is the second of the two this fixture holds.',
             kind: 'derived',
-            bindings: [{ call_id: 'call-2', fact: 'two states' }],
+            bindings: [{ call_id: 'call-2' }],
           },
         ],
         operations: [
