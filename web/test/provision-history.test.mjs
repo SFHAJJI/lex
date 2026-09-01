@@ -61,7 +61,7 @@ test('a validity conflict shows both publisher dates, and only where there is on
   const html = renderProvisionHistory(LIVE);
   assert.ok(html.includes('2023-04-01'), 'the provision date is missing');
   assert.ok(html.includes('2023-07-01'), 'the version date is missing');
-  assert.ok(html.includes('Both are shown because both are the publisher'));
+  assert.ok(html.includes('Both are shown because both come from the publisher'));
 
   // The agreeing row says nothing. One conflict block, not two.
   assert.equal((html.match(/two dates for this text/g) ?? []).length, 1);

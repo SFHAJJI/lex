@@ -212,8 +212,8 @@ export function renderProvisionHistory(input) {
         (state.conflict
           ? '<span class="provision-conflict">The publisher gives two dates for this text: the ' +
             `provision takes effect ${escapeHtml(state.articleFrom)} and the version it sits in ` +
-            `applies from ${escapeHtml(state.versionFrom)}. Both are shown because both are the ` +
-            'publisher\'s.</span>'
+            `applies from ${escapeHtml(state.versionFrom)}. Both are shown because both come ` +
+            'from the publisher.</span>'
           : '') +
         `<a class="provision-link" href="${escapeHtml(state.permalink)}">Read this wording</a>` +
         '</li>',

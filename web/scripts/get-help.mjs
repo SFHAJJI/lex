@@ -68,13 +68,17 @@ export function admissibleCounter(counter, index) {
 }
 
 /**
- * The get-help page.
+ * The counters this build may actually offer, in order.
+ *
+ * Extracted so the string renderer and the React component apply one implementation. Which of the
+ * two the page shows, a list or the no-counter sentence, follows from the length of what comes
+ * back, and neither surface decides it independently.
  *
  * @param {object} input
  * @param {Array} [input.counters]  verified counters, each `{ label, href }`
  * @param {Array} input.officialRoutes  the publisher's own routes, which are always true
  */
-export function renderGetHelp({ counters = [], officialRoutes }) {
+export function admissibleCounters({ counters = [], officialRoutes }) {
   if (!Array.isArray(officialRoutes) || officialRoutes.length === 0) {
     throw new Error(
       'get help lists the publisher routes that remain open; without them a page with no verified ' +
@@ -88,7 +92,18 @@ export function renderGetHelp({ counters = [], officialRoutes }) {
   const real = counters.filter(
     (counter) => new URL(handoffUri(counter?.href)).hostname !== SYNTHETIC_HANDOFF_HOST,
   );
-  const admitted = real.map(admissibleCounter);
+  return real.map(admissibleCounter);
+}
+
+/**
+ * The get-help page.
+ *
+ * @param {object} input
+ * @param {Array} [input.counters]  verified counters, each `{ label, href }`
+ * @param {Array} input.officialRoutes  the publisher's own routes, which are always true
+ */
+export function renderGetHelp({ counters = [], officialRoutes }) {
+  const admitted = admissibleCounters({ counters, officialRoutes });
 
   const list =
     admitted.length === 0

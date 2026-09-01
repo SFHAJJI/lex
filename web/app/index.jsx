@@ -28,6 +28,8 @@ export {
   renderCoverageReactPage,
 } from './timeline-coverage-preview.jsx';
 export { Provenance } from './Provenance.jsx';
+export { ProvisionHistory } from './ProvisionHistory.jsx';
+export { GetHelp } from './GetHelp.jsx';
 export { SearchScreen } from './SearchScreen.jsx';
 export { NoHitCard, Population, requirePopulation } from './NoHitCard.jsx';
 export {
