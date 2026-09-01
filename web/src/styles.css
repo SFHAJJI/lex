@@ -566,3 +566,64 @@ summary {
   border: 1px solid currentColor;
   white-space: nowrap;
 }
+
+/* A prefix the screen reader needs and the eye does not. The diff shows removal and addition
+   with strikethrough and underline, which a sighted reader takes at a glance; a linear reading
+   needs the words. Clipped rather than display:none, because display:none is removed from the
+   accessibility tree along with everything it was meant to say. */
+.visually-hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.compare-case {
+  margin-block: var(--space-6, 2rem);
+}
+
+.compare-side {
+  border: 1px solid var(--border, #8a8a8a);
+  border-radius: 4px;
+  padding: var(--space-3, 0.75rem);
+  margin-block: var(--space-2, 0.5rem);
+}
+
+.compare-record-time,
+.compare-renumber-basis {
+  font-size: 0.875em;
+}
+
+.compare-blocks {
+  margin: 0;
+  padding-inline-start: var(--space-4, 1rem);
+}
+
+.compare-block {
+  margin-block: var(--space-3, 0.75rem);
+}
+
+.compare-removed del {
+  text-decoration: line-through;
+}
+
+.compare-added ins {
+  text-decoration: underline;
+}
+
+.compare-note {
+  font-weight: 600;
+}
+
+.compare-axis,
+.compare-profile-unknown,
+.compare-no-panes,
+.compare-note-basis {
+  border-inline-start: 3px solid var(--border, #8a8a8a);
+  padding-inline-start: var(--space-3, 0.75rem);
+}

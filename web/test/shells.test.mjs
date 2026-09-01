@@ -29,7 +29,7 @@ const CONTENT =
     sentence: 'No publisher state covers 1999-06-01.',
     payload: {
       history_begins: '2001-01-01',
-      nearest_earlier: 'none held',
+      nearest_earlier: null,
       nearest_later: '2001-01-01',
       what_would_answer: ['new_official_observation'],
       asserts_absence_of_law: false,
@@ -79,7 +79,7 @@ test('the same content reads identically under all three shells', () => {
     'Applicable from 2001-01-01 to 2002-01-01',
     'no_version_for_date',
     'history_begins',
-    'none held',
+    'No earlier state is held',
   ]) {
     assert.ok(texts[0].includes(fragment), `${fragment} is missing, so this proves nothing`);
   }

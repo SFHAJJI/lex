@@ -18,6 +18,7 @@ import { tokenCss } from "./design-tokens.mjs";
 import { renderTrustSurface } from "./trust-surface.mjs";
 import { renderShellEntry } from "./shells.mjs";
 import { renderRefusalCatalog } from "./refusal-catalog.mjs";
+import { renderComparePreview } from "./compare-preview.mjs";
 import { page } from "./render.mjs";
 import { SHELLS } from "./urls.mjs";
 import { decodeEnvelope, validateEnvelope } from "./envelope.mjs";
@@ -115,6 +116,10 @@ for (const shell of SHELLS) {
 // The refusal catalog, UX spec section 11: the closed registry as public API surface,
 // with one worked example each and an honest column for the payloads not yet settled.
 pages.push(["refusal-catalog.html", renderRefusalCatalog()]);
+
+// Compare, in the five states where a diff would otherwise be confidently wrong. The
+// refusals replace the panes, so they are measured for contrast and reflow beside them.
+pages.push(["compare.html", renderComparePreview()]);
 
 // The destination every scheme-valid link in the preview resolves to. A visible action that
 // leads to a missing page is a promise the page cannot keep, and three of them shipped: the
