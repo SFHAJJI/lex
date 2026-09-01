@@ -226,8 +226,16 @@ public sealed class AzureBlobCustodyConfigurationReceiptJournal
                     "Azure custody configuration evidence changed before verification.");
             }
 
-            // A current blob has a version ID when account versioning is enabled.
-            // Source: https://learn.microsoft.com/azure/storage/blobs/versioning-overview
+            // The durable shape of a configuration receipt: a block blob, and a length inside
+            // the private evidence bound at both ends. Zero bytes is not evidence, and anything
+            // past the bound is not what this journal wrote.
+            //
+            // The comment here used to describe a version-ID check, which this condition has
+            // never performed. Version-level WORM cannot back a stable unversioned reference,
+            // and the store enforces that on these same containers before any of them is used;
+            // this journal addresses objects by path and reads bound to an ETag, so its own
+            // correctness does not rest on it. Consistent in effect, and the comment now says
+            // what the code does rather than what a neighbour does.
             if (properties.BlobType != BlobType.Block
                 || properties.ContentLength is < 1 or > MaxReceiptBytes)
             {
