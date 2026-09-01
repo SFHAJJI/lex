@@ -12,3 +12,4 @@ export { Dossier } from './Dossier.jsx';
 export { CSP_DIRECTIVES, FORBIDDEN_SOURCES, cspValue } from '../scripts/csp.mjs';
 export { renderHydrationProof, hydrationTree, HYDRATION_FIXTURE } from './hydration-proof.jsx';
 export { renderHydratableDocument } from './render-document.mjs';
+export { AmbiguousVersion } from './AmbiguousVersion.jsx';
