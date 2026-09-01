@@ -18,6 +18,11 @@
 // default here is a claim about which publisher's vocabulary applies.
 
 import { mark } from './design-tokens.mjs';
+import {
+  isOrderedInterval,
+  requireCalendarDate,
+  requireUtcInstant,
+} from './temporal.mjs';
 
 export const OPEN_ENDED_SENTINEL = '9999-12-31';
 
@@ -76,11 +81,23 @@ export function renderStateBanner({ envelope, state }) {
     );
   }
 
-  const validFrom = required(state?.valid_from, 'valid_from');
+  // Legal time is checked before it is printed. The hostile probe rendered "Applicable from
+  // 2026-99-99" and "First observed not-a-timestamp", and a reader cannot tell a publisher's
+  // odd date from our own broken one, so an impossible date reads as a recorded fact.
+  const validFrom = requireCalendarDate(required(state?.valid_from, 'valid_from'), 'valid_from');
   const rawValidTo = state?.valid_to ?? null;
   const validTo = rawValidTo === null || rawValidTo === OPEN_ENDED_SENTINEL ? null : rawValidTo;
-  const observedFrom = required(state?.observed_from, 'observed_from');
+  if (validTo !== null) requireCalendarDate(validTo, 'valid_to');
+  if (!isOrderedInterval(validFrom, validTo)) {
+    throw new Error(
+      `valid_from ${validFrom} is after valid_to ${validTo}; an inverted interval is not a ` +
+        'state the publisher can have recorded',
+    );
+  }
+  const observedFrom = requireUtcInstant(
+    required(state?.observed_from, 'observed_from'), 'observed_from');
   const publicationDate = state?.publication_date ?? null;
+  if (publicationDate !== null) requireCalendarDate(publicationDate, 'publication_date');
 
   const legal = phrase(validFrom, validTo);
 

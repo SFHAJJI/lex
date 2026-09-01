@@ -175,3 +175,43 @@ test('a shell path cannot walk out of its own shell', () => {
   }
   assert.equal(shellUrl('ask', '/search'), '/ask/search');
 });
+
+test('the parser accepts one canonical grammar and normalises nothing', () => {
+  // Each of these parsed before as a dossier, because the parser split on the separator and
+  // dropped empty segments. A parser that normalises accepts coordinates the builders can
+  // never mint, and the ambiguous_version card checks its candidate links against it.
+  for (const path of [
+    '/lu-legilux//loi-x',
+    '//lu-legilux/loi-x',
+    '/lu-legilux/loi-x/',
+    '///',
+    '/lu-legilux/loi-x//',
+  ]) {
+    assert.equal(parseObjectUrl(path), null, `${path} parsed`);
+  }
+  assert.deepEqual(parseObjectUrl('/lu-legilux/loi-x'), {
+    kind: 'dossier',
+    publisher: 'lu-legilux',
+    work: 'loi-x',
+    anchor: null,
+  });
+});
+
+test('an anchor on a dossier is refused rather than silently discarded', () => {
+  // A dossier addresses a work. Accepting the anchor and dropping it told a caller their
+  // provision coordinate had been understood.
+  assert.equal(parseObjectUrl('/lu-legilux/loi-x#art_1'), null);
+  assert.equal(parseObjectUrl('/lu-legilux/loi-x#'), null);
+  // On a reading URL the anchor is kept verbatim.
+  const reading = parseObjectUrl(`/lu-legilux/loi-x/2007-09-01--${HASH}#art_1er__2`);
+  assert.equal(reading.anchor, 'art_1er__2');
+});
+
+test('a shell cannot be nested inside a shell', () => {
+  for (const path of ['/w/loi-x', '/ask/loi-x', '/dev/loi-x']) {
+    assert.equal(parseObjectUrl(path), null, `${path} parsed as an object URL`);
+  }
+  for (const path of ['/ask/search', '/w/search', '/dev/search']) {
+    assert.throws(() => shellUrl('ask', path), /not a safe path segment/, `${path} nested`);
+  }
+});

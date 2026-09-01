@@ -28,6 +28,7 @@ import { mark } from './design-tokens.mjs';
 import { quotedLaw } from './localization.mjs';
 import { handoffUri } from './routes.mjs';
 import { parseObjectUrl } from './urls.mjs';
+import { isCalendarDate, requireCalendarDate } from './temporal.mjs';
 
 /**
  * The closed registry, product spec section 4.9.
@@ -80,6 +81,22 @@ function unspecified() {
   });
 }
 
+/**
+ * What this module is, so nothing downstream mistakes it for more.
+ *
+ * Decision 63 permits this slice only as an explicitly synthetic preview contract or as a
+ * consumer of a complete shared validator. It is the first, and it says so here rather than
+ * in a comment somebody can skip: nine codes carry payload keys the architect pack names,
+ * nine carry none the pack states, and a partial table presented as the final V3 refusal
+ * contract would be a client-visible promise nobody made. When #348 freezes the payloads,
+ * this becomes a consumer of that validator and this constant goes.
+ */
+export const CONTRACT_STATUS = Object.freeze({
+  kind: 'synthetic-preview',
+  final: false,
+  reason: 'payloads for nine codes are unfrozen; see issue 348',
+});
+
 export const REQUIRED_PAYLOAD = Object.freeze({
   no_version_for_date: Object.freeze({
     keys: Object.freeze(['history_begins', 'nearest_earlier', 'nearest_later']),
@@ -93,7 +110,7 @@ export const REQUIRED_PAYLOAD = Object.freeze({
       '31-v3-spec: "anchor_not_in_version (with nearest_anchors and the do-not-fall-back note)"',
   }),
   ambiguous_version: Object.freeze({
-    keys: Object.freeze(['candidates']),
+    keys: Object.freeze(['publisher', 'work', 'candidates']),
     basis:
       '35-ideal-ux: "listing each candidate as applicable from {date}, hash {8 hex}, ' +
       'published {date} ... there is no default selection"',
@@ -168,7 +185,6 @@ const MANDATED_NOTE = Object.freeze({
     'so a difference between them would report parser disagreement as legislation.',
 });
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const SHA256 = /^[0-9a-f]{64}$/;
 
 function escapeHtml(value) {
@@ -197,11 +213,15 @@ function isPresent(value) {
  * structured shapes this module renders itself. Anything else is refused here rather than
  * stringified on screen.
  */
-const STRUCTURED_KEYS = new Set(['candidates']);
+const STRUCTURED_KEYS = new Map([['ambiguous_version', new Set(['candidates'])]]);
 
-function requirePayloadShapes(payload) {
+function requirePayloadShapes(code, payload) {
+  const structured = STRUCTURED_KEYS.get(code) ?? new Set();
   for (const [key, value] of Object.entries(payload ?? {})) {
-    if (STRUCTURED_KEYS.has(key)) continue;
+    // The exemption is bound to the code as well as the key. It used to be keyed only by
+    // spelling, so `ambiguous_identifier` with a `candidates` object reached the page as
+    // [object Object] by borrowing a name that means something on a different code.
+    if (structured.has(key)) continue;
     const values = Array.isArray(value) ? value : [value];
     for (const one of values) {
       const type = typeof one;
@@ -222,7 +242,17 @@ function requirePayloadShapes(payload) {
  * that says one hash and resolves to another is the silent resolution the card exists to
  * prevent, so the two are checked against each other here.
  */
-function requireCandidates(candidates) {
+const CANDIDATE_KEYS = new Set(['valid_from', 'hash', 'publication_date', 'href']);
+
+function requireCandidates(payload) {
+  const { publisher, work, candidates } = payload;
+  if (typeof publisher !== 'string' || typeof work !== 'string') {
+    throw new Error(
+      'ambiguous_version must name the work being disambiguated; without the publisher and ' +
+        'work a candidate can only be checked on its date and hash, and two different ' +
+        'instruments can share both',
+    );
+  }
   if (!Array.isArray(candidates) || candidates.length < 2) {
     throw new Error(
       'ambiguous_version means two or more publisher states cover the date; a candidate ' +
@@ -230,22 +260,20 @@ function requireCandidates(candidates) {
     );
   }
   for (const candidate of candidates) {
-    if (!ISO_DATE.test(candidate?.valid_from ?? '')) {
-      throw new Error(`a candidate state needs an ISO valid_from: ${JSON.stringify(candidate)}`);
+    for (const key of Object.keys(candidate ?? {})) {
+      if (!CANDIDATE_KEYS.has(key)) {
+        throw new Error(
+          `a candidate carries an undeclared member ${JSON.stringify(key)}; an interstitial ` +
+            'that renders fields nobody typed is how a default selection arrives',
+        );
+      }
     }
-    if (!ISO_DATE.test(candidate?.publication_date ?? '')) {
-      throw new Error(`a candidate state needs its publication_date: ${JSON.stringify(candidate)}`);
-    }
+    requireCalendarDate(candidate?.valid_from, 'a candidate valid_from');
+    requireCalendarDate(candidate?.publication_date, 'a candidate publication_date');
     if (!SHA256.test(candidate?.hash ?? '')) {
       throw new Error(
         'a candidate state is identified by its 64 hex character hash; eight characters on ' +
           'screen are a display truncation, not the identity',
-      );
-    }
-    if (candidate.selected === true || candidate.default === true) {
-      throw new Error(
-        'the ambiguous_version interstitial has no default selection; the publisher ranks ' +
-          'neither state and neither may the interface',
       );
     }
     const target = parseObjectUrl(candidate?.href ?? '');
@@ -254,9 +282,16 @@ function requireCandidates(candidates) {
         `each candidate needs a reading URL to read it at: ${JSON.stringify(candidate?.href)}`,
       );
     }
-    if (target.hash !== candidate.hash || target.validFrom !== candidate.valid_from) {
+    // The complete coordinate, not a date and a hash. A candidate for one work could link
+    // to an unrelated publisher and work that happened to share both.
+    if (
+      target.publisher !== publisher
+      || target.work !== work
+      || target.validFrom !== candidate.valid_from
+      || target.hash !== candidate.hash
+    ) {
       throw new Error(
-        'a candidate Read link resolves to a different state than the candidate names; a ' +
+        'a candidate Read link resolves to a different object than the candidate names; a ' +
           'link that disagrees with its own label resolves the ambiguity silently',
       );
     }
@@ -269,6 +304,13 @@ function requireProfiles(profiles) {
       'profiles_differ names both profiles; a refusal that does not say which two profiles ' +
         'disagreed cannot be checked by the reader',
     );
+  }
+  for (const profile of profiles) {
+    if (typeof profile !== 'string' || profile.trim().length === 0) {
+      throw new Error(
+        `a profile identifier must be a nonempty value: ${JSON.stringify(profile)}`,
+      );
+    }
   }
   if (profiles[0] === profiles[1]) {
     throw new Error('profiles_differ was raised with one profile named twice');
@@ -284,7 +326,7 @@ function requirePayload(code, payload) {
     throw new Error(`refusal ${code} must carry ${missing.join(', ')}; ${requirement.basis}`);
   }
 
-  if (code === 'ambiguous_version') requireCandidates(payload.candidates);
+  if (code === 'ambiguous_version') requireCandidates(payload);
   if (code === 'profiles_differ') requireProfiles(payload.profiles);
 }
 
@@ -331,6 +373,30 @@ function renderPayload(code, payload) {
   return structured.join('') + list;
 }
 
+const COVERAGE = new Map([
+  ['complete_provision', (asOf) => `The governing text in full, as it stood on ${asOf}`],
+  ['excerpt', () => 'An excerpt of the governing text'],
+]);
+
+function renderGoverningText(governing) {
+  const heading = COVERAGE.get(governing?.coverage);
+  if (heading === undefined) {
+    throw new Error(
+      `co-delivered text must declare its coverage as one of ${[...COVERAGE.keys()].join(', ')}; ` +
+        'labelling an excerpt as the published text in full is the claim this refusal cannot make',
+    );
+  }
+  if (governing.coverage === 'complete_provision') {
+    requireCalendarDate(governing.as_of, 'the co-delivered text as_of');
+  }
+  return (
+    '<div class="refusal-governing">' +
+    `<h3>${escapeHtml(heading(governing.as_of))}</h3>` +
+    quotedLaw(governing) +
+    '</div>'
+  );
+}
+
 /**
  * @param {object} input
  * @param {string} input.code           a member of REFUSAL_CODES
@@ -352,12 +418,15 @@ export function renderRefusalCard({ code, sentence, payload, governingText, hand
     throw new Error('a refusal card requires one human sentence');
   }
 
-  requirePayloadShapes(payload);
+  requirePayloadShapes(code, payload);
   requirePayload(code, payload);
 
   const payloadHtml = renderPayload(code, payload);
   const hasGoverningText = Boolean(governingText);
-  const hasHandoff = Boolean(handoff?.label && handoff?.href);
+  const handoffs = (Array.isArray(handoff) ? handoff : handoff ? [handoff] : []).filter(
+    (one) => one?.label && one?.href,
+  );
+  const hasHandoff = handoffs.length > 0;
 
   if (!payloadHtml && !hasGoverningText && !hasHandoff) {
     throw new Error(
@@ -373,12 +442,15 @@ export function renderRefusalCard({ code, sentence, payload, governingText, hand
     );
   }
 
-  // The fixed advice template ends "and here is who can advise you". A list of acronyms in
-  // the payload is not that: a citizen who cannot reach the counter has not been handed off.
-  if (code === 'advice_boundary' && !hasHandoff) {
+  // Decision 41 settles this boundary and settles its ending: "Who can advise you on your
+  // case: the Chambre des salariés, the ITM, the Service d'accueil et d'information
+  // juridique, or a lawyer." That is a referral list, not one counter, and a citizen handed
+  // a single name has been handed the one that happens to be nearest to whoever wrote the
+  // caller. Two or more, each reachable.
+  if (code === 'advice_boundary' && handoffs.length < 2) {
     throw new Error(
-      'advice_boundary must name a reachable human counter with a label and a link; the ' +
-        'fixed template promises to say who can advise you, and an acronym is not a counter',
+      'advice_boundary must name the referral list, not one counter; Decision 41 settles it ' +
+        'as several named services and a lawyer, and one arbitrary counter is not that list',
     );
   }
 
@@ -393,16 +465,22 @@ export function renderRefusalCard({ code, sentence, payload, governingText, hand
   // The quotation carries the expression's own language. Hardcoding `lang="fr"` mislabels
   // every EU expression and every one of the handful of non-French LU renderings, and a
   // screen reader then reads English law in a French voice.
-  const text = hasGoverningText
-    ? `<div class="refusal-governing"><h3>The published text, in full</h3>` +
-      `${quotedLaw(governingText)}</div>`
-    : '';
+  // The heading used to say "The published text, in full" over whatever text a caller
+  // supplied. Completeness is a claim about the publisher's record, so the caller has to
+  // make it explicitly and date it, and an excerpt says so.
+  const text = hasGoverningText ? renderGoverningText(governingText) : '';
 
   // Validated, not merely escaped. `javascript:alert(1)` escapes to a perfectly safe
   // attribute value and remains a working link.
   const foot = hasHandoff
-    ? `<p class="refusal-handoff"><a href="${escapeHtml(handoffUri(handoff.href))}">` +
-      `${escapeHtml(handoff.label)}</a></p>`
+    ? '<ul class="refusal-handoff">' +
+      handoffs
+        .map(
+          (one) =>
+            `<li><a href="${escapeHtml(handoffUri(one.href))}">${escapeHtml(one.label)}</a></li>`,
+        )
+        .join('') +
+      '</ul>'
     : '';
 
   // No role="alert" and no live region. A refusal is an answer, and announcing it as an

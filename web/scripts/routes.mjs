@@ -26,7 +26,7 @@
 /** Hosts each publisher actually serves from. Closed, and checked per publisher. */
 export const PUBLISHER_HOSTS = Object.freeze({
   'lu-legilux': Object.freeze(['legilux.public.lu', 'data.legilux.public.lu']),
-  'eu-eurlex': Object.freeze(['eur-lex.europa.eu', 'publications.europa.eu']),
+  'eu-eurlex': Object.freeze(['eur-lex.europa.eu', 'publications.europa.eu', 'op.europa.eu']),
   // RFC 2606 reserves `.invalid` so that it can never resolve. A synthetic fixture on this
   // host cannot be mistaken for a publisher, and cannot accidentally reach one.
   'preview-synthetic': Object.freeze(['preview.invalid']),
@@ -34,6 +34,9 @@ export const PUBLISHER_HOSTS = Object.freeze({
 
 /** The handoff registry. Editorial, verified per counter, and currently synthetic only. */
 export const HANDOFF_HOSTS = Object.freeze(['handoff.invalid']);
+
+// A plain lowercase host: labels of letters, digits and inner hyphens, at least two.
+const HOST = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
 
 function checkedUri(raw, allowedHosts, what) {
   if (typeof raw !== 'string' || raw.length === 0) {
@@ -51,6 +54,24 @@ function checkedUri(raw, allowedHosts, what) {
     throw new Error(`${what} contains whitespace or a delimiter: ${JSON.stringify(raw)}`);
   }
 
+  // The authority is read out of the raw string before anything normalises it. `new URL`
+  // erases the evidence this check needs: it reports no userinfo for `https://@host/` and no
+  // port for `https://host:443/`, so both survived a check that ran after parsing. A reader
+  // sees the raw string, so the raw string is what must be well formed.
+  const authority = raw.slice('https://'.length).split(/[/?#]/, 1)[0];
+  if (authority.includes('@')) {
+    throw new Error(
+      `${what} carries userinfo, which puts a trusted-looking name before the real host: ` +
+        JSON.stringify(raw),
+    );
+  }
+  if (authority.includes(':')) {
+    throw new Error(`${what} carries an explicit port: ${JSON.stringify(raw)}`);
+  }
+  if (!HOST.test(authority)) {
+    throw new Error(`${what} does not carry a plain host: ${JSON.stringify(raw)}`);
+  }
+
   let parsed;
   try {
     parsed = new URL(raw);
@@ -61,14 +82,11 @@ function checkedUri(raw, allowedHosts, what) {
   if (parsed.protocol !== 'https:') {
     throw new Error(`${what} is not https: ${JSON.stringify(raw)}`);
   }
-  if (parsed.username !== '' || parsed.password !== '') {
+  if (parsed.hostname !== authority) {
     throw new Error(
-      `${what} carries userinfo, which puts a trusted-looking name before the real host: ` +
-        JSON.stringify(raw),
+      `${what} parses to host ${parsed.hostname} but is written against ${authority}; a link ` +
+        'whose spelling and destination differ is a link nobody checked',
     );
-  }
-  if (parsed.port !== '') {
-    throw new Error(`${what} carries an explicit port: ${JSON.stringify(raw)}`);
   }
   if (!allowedHosts.includes(parsed.hostname)) {
     throw new Error(
@@ -101,4 +119,20 @@ export function publisherSourceUri({ publisher, uri }) {
 /** A human counter a refusal hands off to. */
 export function handoffUri(uri) {
   return checkedUri(uri, HANDOFF_HOSTS, 'a handoff');
+}
+
+/**
+ * The non-throwing form, for data that arrives from a captured envelope rather than from a
+ * caller. A route this surface cannot vouch for becomes inert text with a reason, never a
+ * link, and never an exception that takes a whole page down over one bad field.
+ *
+ * This exists so there is one route policy. There used to be two, in this module and in
+ * `render.mjs`, and they had already drifted: only one of them knew `op.europa.eu`.
+ */
+export function tryPublisherSourceUri(publisher, uri) {
+  try {
+    return publisherSourceUri({ publisher, uri });
+  } catch {
+    return null;
+  }
 }

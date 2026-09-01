@@ -22,6 +22,8 @@
 // link to the wrong place.
 
 import { publisherSourceUri } from './routes.mjs';
+import { TIMELINE_SEMANTICS } from './state-banner.mjs';
+import { requireUtcInstant } from './temporal.mjs';
 
 /** The digests a state carries, product spec section 4.6. */
 export const HASH_KINDS = Object.freeze([
@@ -100,7 +102,18 @@ export function renderEnvelopeStrip({ envelope }) {
     throw new Error('the envelope strip requires a publisher');
   }
 
+  // The same closed vocabulary the state banner uses. The strip used to print whatever it
+  // was given, or "timeline semantics not stated", so an unknown value reached a reader as
+  // if it were a publisher's word for its own dates.
+  if (!TIMELINE_SEMANTICS.includes(semantics)) {
+    throw new Error(
+      `unknown timeline_semantics ${JSON.stringify(semantics)}; the strip may not invent a ` +
+        `publisher's vocabulary, and the admitted values are ${TIMELINE_SEMANTICS.join(', ')}`,
+    );
+  }
+
   const builtAt = freshness.built_at ?? null;
+  if (builtAt !== null) requireUtcInstant(builtAt, 'freshness.built_at');
   const valid = freshness.stamp_signature_valid;
 
   if (typeof valid !== 'boolean') {
@@ -122,9 +135,15 @@ export function renderEnvelopeStrip({ envelope }) {
     ? `index built ${escapeHtml(builtAt)}`
     : 'index build time not recorded';
 
+  // Two commits, named. `code_commit` answered a different question than it appeared to:
+  // it is the commit that built the index, while the commit that computed and served the
+  // answer was nowhere in the envelope. Decision 63 settles the two names, and this strip
+  // uses them rather than freezing the ambiguous one as the V3 provenance label.
   const rows = Object.entries({
     corpus_commit: artifact.corpus_commit ?? freshness.corpus_commit,
-    code_commit: artifact.code_commit,
+    index_builder_source_commit:
+      artifact.index_builder_source_commit ?? artifact.code_commit,
+    serving_runtime_source_commit: artifact.serving_runtime_source_commit,
     manifest_set_id: artifact.manifest_set_id,
     content_digest: artifact.content_digest,
   })

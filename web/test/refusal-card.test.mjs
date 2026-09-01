@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  CONTRACT_STATUS,
   REFUSAL_CODES,
   REQUIRED_PAYLOAD,
   RETRYABLE,
@@ -11,12 +12,26 @@ import { readingUrl } from '../scripts/urls.mjs';
 
 // Synthetic throughout. A component test that embeds real statute teaches the fixture to
 // look like law, and the fixture is what every later screen copies.
+const AUTHENTICITY = {
+  schema: 'lex-v3-resource-authenticity/1',
+  resource_id: 'preview-synthetic:synthetic-preview-work:2001-01-01',
+  authentic_languages: ['en'],
+  basis: 'synthetic preview evidence',
+  asserted_by: 'synthetic preview publisher',
+  observed_at: '2026-01-01T00:00:00Z',
+};
 const GOVERNING = {
-  publisher: 'preview-synthetic',
+  authenticity: AUTHENTICITY,
   language: 'en',
   text: 'LEX V3 SYNTHETIC PREVIEW. Article 1. This text has no legal authority.',
+  coverage: 'complete_provision',
+  as_of: '2001-01-01',
 };
-const HANDOFF = { label: 'Synthetic handoff counter', href: 'https://handoff.invalid/counter' };
+// Decision 41 settles the ending as a referral list, not one counter.
+const HANDOFF = [
+  { label: 'Synthetic counter one', href: 'https://handoff.invalid/one' },
+  { label: 'Synthetic counter two', href: 'https://handoff.invalid/two' },
+];
 
 const HASH_A = '99b621c38dec11dcd362c0db35d9e9c090e62613cc5c20b0727c0b30fd39ce66';
 const HASH_B = 'c064f74a9827d610125d25c999f79df626cd987432aa110f2e05ce48388b5eef';
@@ -75,7 +90,11 @@ const EXAMPLES = Object.freeze({
   },
   ambiguous_version: {
     sentence: 'Two publisher states cover that date.',
-    payload: { candidates: CANDIDATES },
+    payload: {
+      publisher: 'preview-synthetic',
+      work: 'synthetic-preview-work',
+      candidates: CANDIDATES,
+    },
   },
   anchor_not_in_version: {
     sentence: 'art_l121-6 is not an anchor in this version.',
@@ -272,7 +291,11 @@ test('the ambiguous_version interstitial never defaults and never mislabels a ca
       renderRefusalCard({
         code: 'ambiguous_version',
         sentence: 'Two states cover that date.',
-        payload: { candidates: [CANDIDATES[0]] },
+        payload: {
+          publisher: 'preview-synthetic',
+          work: 'synthetic-preview-work',
+          candidates: [CANDIDATES[0]],
+        },
       }),
     /shorter than two/,
   );
@@ -283,10 +306,12 @@ test('the ambiguous_version interstitial never defaults and never mislabels a ca
         code: 'ambiguous_version',
         sentence: 'Two states cover that date.',
         payload: {
+          publisher: 'preview-synthetic',
+          work: 'synthetic-preview-work',
           candidates: [{ ...CANDIDATES[0], selected: true }, CANDIDATES[1]],
         },
       }),
-    /no default selection/,
+    /undeclared member/,
   );
 
   // The label says one hash; the link resolves to another. That is silent resolution.
@@ -296,10 +321,12 @@ test('the ambiguous_version interstitial never defaults and never mislabels a ca
         code: 'ambiguous_version',
         sentence: 'Two states cover that date.',
         payload: {
+          publisher: 'preview-synthetic',
+          work: 'synthetic-preview-work',
           candidates: [{ ...CANDIDATES[0], href: CANDIDATES[1].href }, CANDIDATES[1]],
         },
       }),
-    /resolves to a different state than the candidate names/,
+    /resolves to a different object than the candidate names/,
   );
 
   // Eight characters are what the reader sees; they are not what identifies the state.
@@ -309,6 +336,8 @@ test('the ambiguous_version interstitial never defaults and never mislabels a ca
         code: 'ambiguous_version',
         sentence: 'Two states cover that date.',
         payload: {
+          publisher: 'preview-synthetic',
+          work: 'synthetic-preview-work',
           candidates: [{ ...CANDIDATES[0], hash: HASH_A.slice(0, 8) }, CANDIDATES[1]],
         },
       }),
@@ -372,7 +401,8 @@ test('advice_boundary co-delivers the governing provisions and a reachable count
     /must co-deliver the governing provisions/,
   );
 
-  // An acronym in the payload is not a handoff a citizen can reach.
+  // Decision 41 settles the ending as a named referral list. One counter, or an acronym in
+  // the payload, is not that list.
   assert.throws(
     () =>
       renderRefusalCard({
@@ -381,13 +411,14 @@ test('advice_boundary co-delivers the governing provisions and a reachable count
         payload: { handoff: 'CSL, ITM, SAIJ' },
         governingText: GOVERNING,
       }),
-    /reachable human counter/,
+    /must name the referral list, not one counter/,
   );
 
   const good = renderRefusalCard({ code: 'advice_boundary', ...EXAMPLES.advice_boundary });
-  assert.ok(good.includes('The published text, in full'));
+  assert.ok(good.includes('The governing text in full, as it stood on 2001-01-01'));
   assert.ok(good.includes('no legal authority'));
-  assert.ok(good.includes('href="https://handoff.invalid/counter"'));
+  assert.ok(good.includes('href="https://handoff.invalid/one"'));
+  assert.ok(good.includes('href="https://handoff.invalid/two"'));
 });
 
 test('a refusal is not announced as an error', () => {
@@ -430,9 +461,17 @@ test('quoted text carries the expression language, not a hardcoded French', () =
     code: 'advice_boundary',
     sentence: 'I cannot apply the law to your situation.',
     governingText: {
-      publisher: 'lu-legilux',
+      authenticity: {
+        schema: 'lex-v3-resource-authenticity/1',
+        resource_id: 'preview-synthetic:synthetic-french-act:2001-01-01',
+        authentic_languages: ['fr'],
+        basis: 'synthetic preview evidence',
+        asserted_by: 'synthetic preview publisher',
+        observed_at: '2026-01-01T00:00:00Z',
+      },
       language: 'fr',
       text: 'APERCU SYNTHETIQUE. Article 1er. Ce texte est synthetique.',
+      coverage: 'excerpt',
     },
     handoff: HANDOFF,
   });
@@ -454,7 +493,7 @@ test('a handoff link is validated, not merely escaped', () => {
           code: 'advice_boundary',
           sentence: 'I cannot apply the law to your situation.',
           governingText: GOVERNING,
-          handoff: { label: 'Counter', href },
+          handoff: [{ label: 'Counter', href }, HANDOFF[1]],
         }),
       /a handoff/,
       `${href} was rendered as a working handoff link`,
@@ -534,4 +573,174 @@ test('the payload contract covers the registry, with no code left undeclared', (
   assert.equal(open.length, 9);
   assert.ok(!open.includes('no_version_for_date'));
   assert.ok(!open.includes('advice_boundary'));
+});
+
+test('a candidate link is bound to the whole coordinate, not to a date and a hash', () => {
+  // Two different instruments can share a valid_from and a content hash. Checking only those
+  // two let a candidate for one work link to an unrelated publisher and work.
+  const elsewhere = readingUrl({
+    publisher: 'other-publisher',
+    work: 'other-work',
+    validFrom: CANDIDATES[0].valid_from,
+    hash: CANDIDATES[0].hash,
+  });
+  assert.throws(
+    () =>
+      renderRefusalCard({
+        code: 'ambiguous_version',
+        sentence: 'Two states cover that date.',
+        payload: {
+          publisher: 'preview-synthetic',
+          work: 'synthetic-preview-work',
+          candidates: [{ ...CANDIDATES[0], href: elsewhere }, CANDIDATES[1]],
+        },
+      }),
+    /resolves to a different object than the candidate names/,
+  );
+
+  // Only the publisher differs, so nothing but the publisher comparison can catch it.
+  const otherPublisher = readingUrl({
+    publisher: 'other-publisher',
+    work: 'synthetic-preview-work',
+    validFrom: CANDIDATES[0].valid_from,
+    hash: CANDIDATES[0].hash,
+  });
+  assert.throws(
+    () =>
+      renderRefusalCard({
+        code: 'ambiguous_version',
+        sentence: 'Two states cover that date.',
+        payload: {
+          publisher: 'preview-synthetic',
+          work: 'synthetic-preview-work',
+          candidates: [{ ...CANDIDATES[0], href: otherPublisher }, CANDIDATES[1]],
+        },
+      }),
+    /resolves to a different object than the candidate names/,
+  );
+
+  assert.throws(
+    () =>
+      renderRefusalCard({
+        code: 'ambiguous_version',
+        sentence: 'Two states cover that date.',
+        payload: { candidates: CANDIDATES },
+      }),
+    /must carry publisher, work/,
+  );
+});
+
+test('one counter is not the referral list Decision 41 settles', () => {
+  // Zero handoffs and one handoff are different failures. A rule tested only against zero
+  // passes for a card that names a single service, which is the shape the decision rules out.
+  assert.throws(
+    () =>
+      renderRefusalCard({
+        code: 'advice_boundary',
+        sentence: 'I cannot apply the law to your situation.',
+        governingText: GOVERNING,
+        handoff: [HANDOFF[0]],
+      }),
+    /must name the referral list, not one counter/,
+  );
+  assert.throws(
+    () =>
+      renderRefusalCard({
+        code: 'advice_boundary',
+        sentence: 'I cannot apply the law to your situation.',
+        governingText: GOVERNING,
+        handoff: HANDOFF[0],
+      }),
+    /must name the referral list, not one counter/,
+  );
+  assert.ok(
+    renderRefusalCard({ code: 'advice_boundary', ...EXAMPLES.advice_boundary }).includes('<li>'),
+  );
+});
+
+test('co-delivered text must declare what it is before it is headed', () => {
+  for (const coverage of [undefined, 'in_full', 'complete', '']) {
+    assert.throws(
+      () =>
+        renderRefusalCard({
+          code: 'advice_boundary',
+          sentence: 'I cannot apply the law to your situation.',
+          governingText: { ...GOVERNING, coverage },
+          handoff: HANDOFF,
+        }),
+      /must declare its coverage/,
+      `coverage=${JSON.stringify(coverage)} was headed anyway`,
+    );
+  }
+  // Completeness is a claim about the publisher's record, so it has to be dated.
+  assert.throws(
+    () =>
+      renderRefusalCard({
+        code: 'advice_boundary',
+        sentence: 'I cannot apply the law to your situation.',
+        governingText: { ...GOVERNING, as_of: undefined },
+        handoff: HANDOFF,
+      }),
+    /as_of is not a calendar date/,
+  );
+});
+
+test('a candidate date that is not a date is refused', () => {
+  for (const [field, value] of [
+    ['publication_date', '2026-99-99'],
+    ['publication_date', '2025-02-29'],
+    ['valid_from', '2026-13-01'],
+  ]) {
+    assert.throws(
+      () =>
+        renderRefusalCard({
+          code: 'ambiguous_version',
+          sentence: 'Two states cover that date.',
+          payload: {
+            publisher: 'preview-synthetic',
+            work: 'synthetic-preview-work',
+            candidates: [{ ...CANDIDATES[0], [field]: value }, CANDIDATES[1]],
+          },
+        }),
+      /not a calendar date/,
+      `${field}=${value} was accepted`,
+    );
+  }
+});
+
+test('a profile identifier must be a value, not a shape', () => {
+  for (const profiles of [['pdf/1', ''], ['pdf/1', null], ['pdf/1', 42], ['pdf/1', {}]]) {
+    assert.throws(
+      () =>
+        renderRefusalCard({
+          code: 'profiles_differ',
+          sentence: 'The profiles differ.',
+          payload: { profiles },
+        }),
+      /must be a nonempty value|carries scalars or lists of scalars/,
+      `${JSON.stringify(profiles)} was accepted`,
+    );
+  }
+});
+
+test('a structured shape belongs to one code, not to a spelling', () => {
+  // `candidates` means something on ambiguous_version and nothing anywhere else. Keyed by
+  // spelling alone, any code could borrow the exemption and reach a reader as [object Object].
+  assert.throws(
+    () =>
+      renderRefusalCard({
+        code: 'ambiguous_identifier',
+        sentence: 'That citation matches more than one instrument.',
+        payload: { candidates: [{ nested: 'object' }] },
+      }),
+    /carries scalars or lists of scalars/,
+  );
+});
+
+test('the module says it is a preview contract rather than the final one', () => {
+  // Decision 63 permits this slice only as an explicitly synthetic preview contract. Nine
+  // payloads are unfrozen, and a partial table presented as final is a promise nobody made.
+  assert.equal(CONTRACT_STATUS.kind, 'synthetic-preview');
+  assert.equal(CONTRACT_STATUS.final, false);
+  assert.match(CONTRACT_STATUS.reason, /348/);
 });

@@ -159,3 +159,56 @@ test('the timeline vocabulary is closed against the object prototype', () => {
     );
   }
 });
+
+test('legal time is checked before it is printed', () => {
+  const envelope = { timeline_semantics: 'publisher_applicability' };
+  const good = {
+    valid_from: '2001-01-01',
+    valid_to: '2002-01-01',
+    publication_date: '2000-12-01',
+    observed_from: '2026-01-01T00:00:00Z',
+  };
+
+  // The hostile probe rendered "Applicable from 2026-99-99" and "First observed
+  // not-a-timestamp". A reader cannot tell a publisher's odd date from our own broken one.
+  for (const [field, value, pattern] of [
+    ['valid_from', '2026-99-99', /valid_from is not a calendar date/],
+    ['valid_from', '2025-02-29', /valid_from is not a calendar date/],
+    ['valid_to', '2026-13-01', /valid_to is not a calendar date/],
+    ['publication_date', 'yesterday', /publication_date is not a calendar date/],
+    ['observed_from', 'not-a-timestamp', /observed_from is not a UTC instant/],
+    ['observed_from', '2026-01-01', /observed_from is not a UTC instant/],
+    ['observed_from', '2026-01-01T00:00:00+01:00', /observed_from is not a UTC instant/],
+  ]) {
+    assert.throws(
+      () => renderStateBanner({ envelope, state: { ...good, [field]: value } }),
+      pattern,
+      `${field}=${value} was rendered`,
+    );
+  }
+
+  assert.ok(renderStateBanner({ envelope, state: good }).includes('2001-01-01'));
+  // 2024 is a leap year, so this is a day and must render.
+  assert.ok(
+    renderStateBanner({
+      envelope,
+      state: { ...good, valid_from: '2024-02-29', valid_to: null },
+    }).includes('2024-02-29'),
+  );
+});
+
+test('an inverted interval is refused rather than printed backwards', () => {
+  assert.throws(
+    () =>
+      renderStateBanner({
+        envelope: { timeline_semantics: 'publisher_applicability' },
+        state: {
+          valid_from: '2002-01-01',
+          valid_to: '2001-01-01',
+          publication_date: '2000-12-01',
+          observed_from: '2026-01-01T00:00:00Z',
+        },
+      }),
+    /is after valid_to/,
+  );
+});

@@ -1,32 +1,28 @@
-// Reviewed interface localization, and the refusal that replaces a silent fallback.
+// Reviewed interface localization, and authenticity bound to the exact resource.
 //
-// Product spec section 7 rule 1: the UI ships in FR, DE, EN and LB; Luxembourg statute is
-// always quoted in French with the standing note that only the French text is authentic;
-// EU expressions are equally authentic per language, so no such note belongs there. Rule 4
-// adds that the Luxembourgish refusal is itself in Luxembourgish. Issue #349 adds PT to the
-// reviewed refusal templates and names the behaviour when a string is missing:
+// Two rules here, and the second one replaces the first version of this module wholesale.
+//
+// Localization. Product spec section 7 ships the UI in FR, DE, EN and LB; issue #349 adds PT
+// to the reviewed refusal templates and names the behaviour when a string is missing:
 // `localization_unavailable`, never silent fallback and never machine-translated
-// authoritative copy.
+// authoritative copy. A requested locale is never answered with another locale's text.
 //
-// Three things are made structural here rather than promised.
+// Provenance of the strings themselves. The first version stored specification citations in
+// a field called `reviewed_by` while the API and the comments claimed a named human had
+// reviewed them. That was a claim to evidence the module did not possess, which is the same
+// defect it exists to prevent, aimed at itself. A string now carries either a source master,
+// meaning the specification ships this exact wording, or a human review receipt with a
+// reviewer identity and a real date. Never both, and `reviewed_by` is emitted only for the
+// second.
 //
-// A string is served only if a named human reviewed it on a named date. An entry without
-// both is treated as absent, which is what "never machine-translated authoritative copy"
-// means once it has to survive somebody pasting a translation in at midnight.
-//
-// A requested locale is never answered with another locale's text. The result is a typed
-// refusal carrying the locales the string was actually reviewed in, so a caller can offer a
-// real choice instead of quietly serving English to a Luxembourgish reader.
-//
-// Chrome language and quoted law are separated by having no channel between them. There is
-// no module-level current locale, and `quotedLaw` takes the expression's own language, so
-// the chrome switcher cannot reach the statute. That is UX spec section 1: "The chrome
-// switcher NEVER changes quoted law."
-//
-// What is deliberately absent: DE, LB and PT reviewed strings. The architect pack carries
-// verbatim EN and FR masters and nothing else, so shipping the other three would mean
-// inventing authoritative legal copy. They are missing, the refusal fires, and the gap is
-// editorial work for a reviewed translator rather than something code can close.
+// Authenticity. The first version mapped the publisher key `lu-legilux` to French-only and
+// treated every other publisher as needing no qualification. That is authenticity inferred
+// from a parent, which Decision 58 forbids, and it also refuses the handful of held
+// German-language LU expressions by asserting they cannot exist. Authenticity is now a typed
+// fact about one exact resource, supplied with the quotation and checked; when it is absent
+// the quotation fails closed rather than defaulting to "no qualification needed".
+
+import { isCalendarDate, isUtcInstant } from './temporal.mjs';
 
 /** UI chrome ships in these four, product spec section 7 rule 1. */
 export const CHROME_LOCALES = Object.freeze(['fr', 'de', 'en', 'lb']);
@@ -41,20 +37,22 @@ export const MASTER_LOCALES = Object.freeze(['en', 'fr']);
  * The code returned when a reviewed string does not exist.
  *
  * It is NOT a member of the closed refusal registry in `refusal-card.mjs`. The pack's
- * versioned registry (31-v3-spec line 128) lists nineteen codes and does not include this
- * one; it comes from the #349 acceptance list. Admitting it to the Gateway registry is a
- * versioned API contract change and belongs to #348, so it stays named here and is not
- * quietly appended to a published closed set.
+ * versioned registry lists nineteen codes and does not include this one; it comes from the
+ * #349 acceptance list. Admitting it to the Gateway registry is a versioned API contract
+ * change and belongs to #348, so it stays named here and is not quietly appended.
  */
 export const LOCALIZATION_UNAVAILABLE = 'localization_unavailable';
 
+export const RESOURCE_AUTHENTICITY_SCHEMA = 'lex-v3-resource-authenticity/1';
+
 /**
- * Reviewed strings. An entry needs `text`, `reviewed_by` and `reviewed_on` to be served.
+ * The shipped strings.
  *
- * The two advice-boundary sentences are the pack's fixed templates, quoted verbatim from
- * 33-product-spec section "Fixed refusal templates".
+ * `source_basis` means the specification ships this exact wording. `reviewed_by` with
+ * `reviewed_on` means a named person reviewed a translation on a real date. An entry may
+ * carry one or the other, never both, and an entry carrying neither is absent.
  */
-const REVIEWED = Object.freeze({
+const STRINGS = Object.freeze({
   'refusal.advice_boundary.sentence': Object.freeze({
     en: Object.freeze({
       text:
@@ -63,8 +61,7 @@ const REVIEWED = Object.freeze({
         'Luxembourg law that assessment is a legal consultation reserved to qualified ' +
         'professionals. Here is the governing text in full as of [date], and here is who ' +
         'can advise you.',
-      reviewed_by: '33-product-spec fixed refusal template, EN master',
-      reviewed_on: '2026-08-27',
+      source_basis: '33-product-spec, fixed refusal templates, EN master',
     }),
     fr: Object.freeze({
       text:
@@ -72,64 +69,81 @@ const REVIEWED = Object.freeze({
         'qui a changé, avec citations. Je ne peux pas appliquer le droit à votre ' +
         'situation; cette appréciation relève de la consultation juridique réservée. ' +
         'Voici le texte applicable en entier au [date], et voici qui peut vous conseiller.',
-      reviewed_by: '33-product-spec fixed refusal template, FR master',
-      reviewed_on: '2026-08-27',
+      source_basis: '33-product-spec, fixed refusal templates, FR master',
     }),
   }),
-  'law.lu.authenticity_note': Object.freeze({
+  // The note a sole-authentic-language resource carries. `{language}` and `{basis}` are
+  // filled from the resource's own authenticity evidence, never from a publisher key.
+  'law.sole_authentic_note': Object.freeze({
     en: Object.freeze({
-      text: 'Only the French text is authentic (loi du 24 février 1984, art. 2).',
-      reviewed_by: '33-product-spec section 7 rule 1, grounding L1984',
-      reviewed_on: '2026-08-27',
+      text: 'Only the {language} text is authentic ({basis}).',
+      source_basis: '33-product-spec section 7 rule 1',
     }),
     fr: Object.freeze({
-      text: 'Seul le texte français fait foi (loi du 24 février 1984, art. 2).',
-      reviewed_by: '33-product-spec section 7 rule 1, grounding L1984',
-      reviewed_on: '2026-08-27',
+      text: 'Seul le texte en {language} fait foi ({basis}).',
+      source_basis: '33-product-spec section 7 rule 1',
     }),
   }),
 });
 
-/**
- * What counts as reviewed: text, a named reviewer and a review date. This is the contract,
- * not an implementation detail, which is why it is exported and directly testable. An entry
- * that has only text is a translation somebody pasted in, and serving it as authoritative
- * copy is the exact thing #349 forbids.
- */
+/** True when a named person reviewed this entry on a real date. */
 export function isReviewed(entry) {
   return Boolean(
     entry &&
-      typeof entry.text === 'string' &&
-      entry.text.trim().length > 0 &&
       typeof entry.reviewed_by === 'string' &&
       entry.reviewed_by.trim().length > 0 &&
-      /^\d{4}-\d{2}-\d{2}$/.test(entry.reviewed_on ?? ''),
+      isCalendarDate(entry.reviewed_on),
   );
 }
 
-/** The locales a key is genuinely reviewed in, in the order the interface offers them. */
-export function reviewedLocales(key, bundle = REVIEWED) {
-  const entries = bundle[key] ?? {};
-  return REFUSAL_TEMPLATE_LOCALES.filter((locale) => isReviewed(entries[locale]));
+/** True when the specification itself ships this exact wording. */
+export function isSourceMaster(entry) {
+  return Boolean(
+    entry && typeof entry.source_basis === 'string' && entry.source_basis.trim().length > 0,
+  );
 }
 
 /**
- * A reviewed string, or a typed refusal naming where it does exist.
- *
- * @returns {{status: 'ok', locale: string, text: string, reviewed_by: string,
- *            reviewed_on: string}
- *          | {status: 'localization_unavailable', locale: string, key: string,
- *             reviewed_in: string[]}}
+ * What may be served, and under which claim. An entry that is both a source master and a
+ * human review is refused rather than resolved: the two are different provenances and a
+ * string cannot be served under both.
  */
-export function reviewedText(key, locale, bundle = REVIEWED) {
-  const entry = bundle[key]?.[locale];
-  if (isReviewed(entry)) {
+export function provenanceOf(entry) {
+  if (!entry || typeof entry.text !== 'string' || entry.text.trim().length === 0) return null;
+  const master = isSourceMaster(entry);
+  const reviewed = isReviewed(entry);
+  if (master === reviewed) return null;
+  return master
+    ? { kind: 'source_master', source_basis: entry.source_basis }
+    : { kind: 'human_review', reviewed_by: entry.reviewed_by, reviewed_on: entry.reviewed_on };
+}
+
+/** The locales a key is genuinely servable in, in the order the interface offers them. */
+export function servableLocales(key, bundle = STRINGS) {
+  const entries = Object.hasOwn(bundle, key) ? bundle[key] : {};
+  return REFUSAL_TEMPLATE_LOCALES.filter(
+    (locale) => provenanceOf(Object.hasOwn(entries, locale) ? entries[locale] : undefined) !== null,
+  );
+}
+
+/**
+ * A servable string with its provenance, or a typed refusal naming where it does exist.
+ *
+ * @param {string} key
+ * @param {string} locale
+ * @param {object} [values]  substitutions for `{name}` placeholders, escaped by the caller
+ * @param {object} [bundle]
+ */
+export function servableText(key, locale, values = {}, bundle = STRINGS) {
+  const entries = Object.hasOwn(bundle, key) ? bundle[key] : {};
+  const entry = Object.hasOwn(entries, locale) ? entries[locale] : undefined;
+  const provenance = provenanceOf(entry);
+  if (provenance !== null) {
     return {
       status: 'ok',
       locale,
-      text: entry.text,
-      reviewed_by: entry.reviewed_by,
-      reviewed_on: entry.reviewed_on,
+      text: fill(entry.text, values),
+      provenance,
     };
   }
   // No fallback. Serving English under a request for Luxembourgish is the failure the
@@ -138,8 +152,14 @@ export function reviewedText(key, locale, bundle = REVIEWED) {
     status: LOCALIZATION_UNAVAILABLE,
     locale,
     key,
-    reviewed_in: reviewedLocales(key, bundle),
+    servable_in: servableLocales(key, bundle),
   };
+}
+
+function fill(template, values) {
+  return template.replaceAll(/\{([a-z_]+)\}/g, (whole, name) =>
+    Object.hasOwn(values, name) ? String(values[name]) : whole,
+  );
 }
 
 const TAG = /^([A-Za-z]{2,3})(?:-[A-Za-z0-9]+)*$/;
@@ -150,9 +170,7 @@ function parseAcceptLanguage(header) {
     .split(',')
     .map((part) => {
       const [tag, ...params] = part.trim().split(';');
-      const q = params
-        .map((param) => /^\s*q=([0-9.]+)\s*$/.exec(param))
-        .find(Boolean);
+      const q = params.map((param) => /^\s*q=([0-9.]+)\s*$/.exec(param)).find(Boolean);
       const quality = q ? Number.parseFloat(q[1]) : 1;
       const match = TAG.exec(tag.trim());
       return match && Number.isFinite(quality) && quality > 0
@@ -165,11 +183,9 @@ function parseAcceptLanguage(header) {
 }
 
 /**
- * The chrome locale for a request.
- *
- * A stored choice wins, then Accept-Language among the four, then French. French is the
- * fallback because it is the sole authentic language of Luxembourg statute and one of the
- * two master locales; the pack states the four and the ordering rule but does not name a
+ * The chrome locale for a request: a stored choice, then Accept-Language among the four,
+ * then French. French because it is the sole authentic language of Luxembourg statute and
+ * one of the two master locales; the pack states the four and the ordering rule but names no
  * terminal default, so this is a stated choice rather than a quotation.
  */
 export function resolveChromeLocale({ stored, acceptLanguage } = {}) {
@@ -182,11 +198,9 @@ export function resolveChromeLocale({ stored, acceptLanguage } = {}) {
 }
 
 /**
- * Read and write the persisted chrome locale.
- *
- * Every access is wrapped: a private window, cleared site data or a browser set to block
- * storage makes the accessor itself throw, and a language switcher that takes the page down
- * is worse than one that forgets.
+ * Read and write the persisted chrome locale. Every access is wrapped: a private window,
+ * cleared site data or a browser set to block storage makes the accessor itself throw, and a
+ * language switcher that takes the page down is worse than one that forgets.
  */
 export function readStoredLocale(storage) {
   try {
@@ -218,70 +232,126 @@ function escapeHtml(value) {
     .replaceAll("'", '&#39;');
 }
 
-/** Publishers whose statute has one authentic language, and which one it is. */
-const SOLE_AUTHENTIC_LANGUAGE = Object.freeze({ 'lu-legilux': 'fr' });
+const LANGUAGE_TAG = /^[a-z]{2}$/;
 
 /**
- * A quoted statutory span, carrying its own language and, where the law says so, the
- * authenticity note.
+ * Typed authenticity for one exact resource.
  *
- * The note is not a caller's option. LU statute always carries it because French alone is
- * authentic; EU expressions never carry it because each language expression is equally
- * authentic and a note claiming otherwise would be false. There is no parameter that turns
- * either behaviour off, and no chrome locale reaches this function.
+ * Decision 58 binds authenticity to the resource and forbids lifting it from a parent,
+ * sibling, expression or publisher. So this is checked, not inferred, and there is no
+ * publisher table anywhere in this module for anything to be inferred from.
+ */
+export function requireResourceAuthenticity(evidence) {
+  if (!evidence || typeof evidence !== 'object') {
+    throw new Error(
+      'quoting law requires typed authenticity evidence for that exact resource; without it ' +
+        'the only honest rendering is an unofficial one, and defaulting to "no qualification ' +
+        'needed" is a claim nobody made',
+    );
+  }
+  if (evidence.schema !== RESOURCE_AUTHENTICITY_SCHEMA) {
+    throw new Error(
+      `authenticity evidence must declare ${RESOURCE_AUTHENTICITY_SCHEMA}, not ` +
+        JSON.stringify(evidence.schema),
+    );
+  }
+  if (typeof evidence.resource_id !== 'string' || evidence.resource_id.trim().length === 0) {
+    throw new Error('authenticity evidence must name the exact resource it describes');
+  }
+  const languages = evidence.authentic_languages;
+  if (!Array.isArray(languages) || languages.length === 0) {
+    throw new Error('authenticity evidence must name at least one authentic language');
+  }
+  if (!languages.every((one) => typeof one === 'string' && LANGUAGE_TAG.test(one))) {
+    throw new Error(
+      `authentic_languages must be language tags: ${JSON.stringify(languages)}`,
+    );
+  }
+  if (new Set(languages).size !== languages.length) {
+    throw new Error('authentic_languages repeats a language');
+  }
+  if (typeof evidence.basis !== 'string' || evidence.basis.trim().length === 0) {
+    throw new Error('authenticity evidence must carry the ground for its claim');
+  }
+  if (typeof evidence.asserted_by !== 'string' || evidence.asserted_by.trim().length === 0) {
+    throw new Error('authenticity evidence must name who asserts it');
+  }
+  if (!isUtcInstant(evidence.observed_at)) {
+    throw new Error(
+      `authenticity evidence must carry when it was observed: ${JSON.stringify(evidence.observed_at)}`,
+    );
+  }
+  return evidence;
+}
+
+/**
+ * A quoted statutory span, carrying its own language and, where the resource's own evidence
+ * says so, the authenticity note.
+ *
+ * The note is not a caller's option and not a publisher's property. It appears when the
+ * resource has exactly one authentic language, because then a reader is looking at either
+ * the authentic text or an unofficial rendering, and it does not appear when every held
+ * expression is equally authentic, because there the note would be false.
+ *
+ * A language outside the resource's authentic set is refused here. It is an unofficial
+ * rendering and belongs in a component that labels it as one, not in the one that quotes law.
  *
  * @param {object} input
- * @param {string} input.publisher       the publisher whose statute this is
- * @param {string} input.language        the expression's own language, not the chrome locale
- * @param {string} input.text            the publisher's text
- * @param {string} [input.noteLocale]    the locale to render the authenticity note in
+ * @param {object} input.authenticity  typed evidence for this exact resource
+ * @param {string} input.language      the expression's own language, not the chrome locale
+ * @param {string} input.text          the publisher's text
+ * @param {string} [input.noteLocale]  the locale to render the authenticity note in
  */
-export function quotedLaw({ publisher, language, text, noteLocale = 'en' }) {
+export function quotedLaw({ authenticity, language, text, noteLocale = 'en' }) {
+  const evidence = requireResourceAuthenticity(authenticity);
+
   if (typeof text !== 'string' || text.trim().length === 0) {
     throw new Error('a quoted span needs the publisher text');
   }
-  if (typeof language !== 'string' || !/^[a-z]{2}$/.test(language)) {
+  if (typeof language !== 'string' || !LANGUAGE_TAG.test(language)) {
     throw new Error(
       `a quoted statutory span carries its own language attribute; ${JSON.stringify(language)} ` +
         'is not a language tag, and an unmarked span makes a screen reader read French as English',
     );
   }
-
-  const authentic = SOLE_AUTHENTIC_LANGUAGE[publisher];
-  if (authentic && language !== authentic) {
+  if (!evidence.authentic_languages.includes(language)) {
     throw new Error(
-      `${publisher} statute is authentic in ${authentic} alone, so a quoted span in ` +
-        `${language} would be an unofficial rendering and must be labelled as one rather ` +
-        'than quoted as the law',
+      `${evidence.resource_id} is authentic in ${evidence.authentic_languages.join(', ')}, so a ` +
+        `${language} rendering is unofficial and must be labelled as one rather than quoted as law`,
     );
   }
 
-  const quote = `<blockquote class="law" lang="${escapeHtml(language)}">${escapeHtml(text)}</blockquote>`;
-  if (!authentic) return quote;
+  const quote =
+    `<blockquote class="law" lang="${escapeHtml(language)}">${escapeHtml(text)}</blockquote>`;
+  if (evidence.authentic_languages.length !== 1) return quote;
 
-  const note = reviewedText('law.lu.authenticity_note', noteLocale);
-  const noteHtml =
-    note.status === 'ok'
-      ? `<p class="law-authenticity" lang="${escapeHtml(note.locale)}">${escapeHtml(note.text)}</p>`
-      : renderLocalizationUnavailable(note);
-  return quote + noteHtml;
+  const note = servableText('law.sole_authentic_note', noteLocale, {
+    language: escapeHtml(evidence.authentic_languages[0]),
+    basis: escapeHtml(evidence.basis),
+  });
+  return (
+    quote +
+    (note.status === 'ok'
+      ? `<p class="law-authenticity" lang="${escapeHtml(note.locale)}">${note.text}</p>`
+      : renderLocalizationUnavailable(note))
+  );
 }
 
 /**
- * The state a missing reviewed string renders as. It says which locale was asked for, which
- * locales the string exists in, and that nothing was substituted, because a reader who sees
- * English where they asked for Luxembourgish deserves to know it was not a translation.
+ * The state a missing string renders as. It says which locale was asked for, which locales
+ * the string exists in, and that nothing was substituted, because a reader who sees English
+ * where they asked for Luxembourgish deserves to know it was not a translation.
  */
-export function renderLocalizationUnavailable({ locale, key, reviewed_in: reviewedIn = [] }) {
+export function renderLocalizationUnavailable({ locale, key, servable_in: servableIn = [] }) {
   const available =
-    reviewedIn.length > 0
-      ? `Reviewed in: ${reviewedIn.map((one) => escapeHtml(one)).join(', ')}.`
-      : 'It is not reviewed in any language yet.';
+    servableIn.length > 0
+      ? `Available in: ${servableIn.map((one) => escapeHtml(one)).join(', ')}.`
+      : 'It is not available in any language yet.';
   return (
     '<p class="localization-unavailable" ' +
     `data-code="${LOCALIZATION_UNAVAILABLE}" data-locale="${escapeHtml(locale)}">` +
     `<code>${LOCALIZATION_UNAVAILABLE}</code> ` +
-    `This text is not reviewed in ${escapeHtml(locale)}, and nothing was substituted for it. ` +
+    `This text is not available in ${escapeHtml(locale)}, and nothing was substituted for it. ` +
     `${available} ` +
     `<span class="localization-key">${escapeHtml(key)}</span></p>`
   );

@@ -30,7 +30,11 @@ test('the page banner is true: nothing on it is a real coordinate', () => {
 
   // A 40 hex identity is a git commit. The page names its identities synthetic instead.
   assert.equal(html.match(/\b[0-9a-f]{40}\b/g), null, 'a commit-shaped identity is on the page');
-  for (const field of ['synthetic-corpus-commit', 'synthetic-code-commit']) {
+  for (const field of [
+    'synthetic-corpus-commit',
+    'synthetic-index-builder-commit',
+    'synthetic-serving-runtime-commit',
+  ]) {
     assert.ok(html.includes(field), `${field} is not on the page`);
   }
 });
@@ -40,6 +44,16 @@ test('the quoted text says of itself that it is not law', () => {
   assert.ok(html.includes('SYNTHETIC PREVIEW'));
   assert.ok(html.includes('no legal authority'));
   assert.ok(html.includes('nothing here is law'));
+});
+
+test('the page does not claim that a publisher key selects authenticity', () => {
+  // Decision 58 binds authenticity to the exact resource. The first version of this section
+  // said the publisher key selected the rule, which taught the reader the thing the decision
+  // forbids, on the page whose whole job is to be checkable.
+  const html = renderTrustSurface();
+  assert.ok(!html.includes('publisher key selects'));
+  assert.ok(html.includes("resource's own evidence decides"));
+  assert.ok(html.includes('sole authentic language'));
 });
 
 test('the page still exercises every component it claims to', () => {

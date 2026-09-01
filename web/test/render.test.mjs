@@ -289,15 +289,30 @@ test("a route is linked only when its host belongs to the named publisher", () =
   );
 });
 
-// The href emitted is the parsed URL, not the raw string, so there is no gap between
-// what was validated and what the browser will follow.
-test("the linked href is the normalised url, never the raw input", () => {
-  const html = REFUSAL({
+// A route that needs repairing before it is safe is not repaired, it is refused. The
+// previous rule emitted the parsed URL, which meant `https:///legilux.public.lu/search`, a
+// string with no written authority at all, became a link to Legilux. Validating the raw
+// authority first means the written form and the destination are the same thing, and a
+// string that is not already a plain host never becomes a link.
+test("a route whose written authority is not a host is refused, never repaired", () => {
+  for (const uri of [
+    "https:///legilux.public.lu/search",
+    "https://LEGILUX.public.lu/search",
+    "https://legilux.public.lu:443/search",
+    "https://@legilux.public.lu/search",
+  ]) {
+    const html = REFUSAL({
+      official_search_actions: [{ kind: "publisher_search", publisher: "lu-legilux", uri }],
+    });
+    assert.equal(/<a href="([^"]*)"/.exec(html)?.[1], undefined, `${uri} became a link`);
+  }
+
+  const good = REFUSAL({
     official_search_actions: [
-      { kind: "publisher_search", publisher: "lu-legilux", uri: "https:///legilux.public.lu/search" },
+      { kind: "publisher_search", publisher: "lu-legilux", uri: "https://legilux.public.lu/search" },
     ],
   });
-  assert.equal(/<a href="([^"]*)"/.exec(html)?.[1], "https://legilux.public.lu/search");
+  assert.equal(/<a href="([^"]*)"/.exec(good)?.[1], "https://legilux.public.lu/search");
 });
 
 test("the success page renders the object body and invents no legal time", () => {

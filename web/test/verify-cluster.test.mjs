@@ -157,14 +157,47 @@ test('an absent signature verdict is refused rather than shown as valid', () => 
   );
 });
 
-test('the strip carries the four identity fields, and names the ones it lacks', () => {
+test('the strip names both source commits and the ones it lacks', () => {
   const full = renderEnvelopeStrip({ envelope: ENVELOPE });
-  for (const field of ['corpus_commit', 'code_commit', 'manifest_set_id', 'content_digest']) {
+  for (const field of [
+    'corpus_commit',
+    'index_builder_source_commit',
+    'serving_runtime_source_commit',
+    'manifest_set_id',
+    'content_digest',
+  ]) {
     assert.ok(full.includes(field), `${field} missing from the strip`);
   }
+  // `code_commit` answered a different question than it appeared to: it is the commit that
+  // built the index, and the commit that served the answer was nowhere. Neither may be
+  // printed under the ambiguous name.
+  assert.ok(!full.includes('>code_commit<'), 'the ambiguous provenance label is still printed');
 
   const sparse = renderEnvelopeStrip({ envelope: { ...ENVELOPE, artifact: {} } });
-  assert.equal(sparse.split('not recorded').length - 1, 4, 'absent fields were silently dropped');
+  assert.equal(sparse.split('not recorded').length - 1, 5, 'absent fields were silently dropped');
+});
+
+test('the strip refuses a timeline vocabulary it does not know', () => {
+  for (const semantics of [undefined, 'in_force', 'toString', 'constructor', '']) {
+    assert.throws(
+      () => renderEnvelopeStrip({ envelope: { ...ENVELOPE, timeline_semantics: semantics } }),
+      /unknown timeline_semantics/,
+      `${String(semantics)} reached the strip`,
+    );
+  }
+});
+
+test('the strip refuses a build instant that is not one', () => {
+  for (const builtAt of ['not-a-timestamp', '2026-99-99T00:00:00Z', '2026-01-01', '2026-01-01T25:00:00Z']) {
+    assert.throws(
+      () =>
+        renderEnvelopeStrip({
+          envelope: { ...ENVELOPE, freshness: { ...ENVELOPE.freshness, built_at: builtAt } },
+        }),
+      /not a UTC instant/,
+      `${builtAt} was rendered as a build time`,
+    );
+  }
 });
 
 test('a missing build time is stated rather than omitted', () => {

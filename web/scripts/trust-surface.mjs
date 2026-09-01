@@ -17,16 +17,22 @@
 // and a page whose own disclaimer is false is worse than one with no disclaimer, because a
 // reader who checks the banner is misled by the act of checking.
 //
-// Two sections do use the real publisher keys `lu-legilux` and `eu-eurlex`. The key is what
-// selects the authenticity rule being demonstrated, and no coordinate, URI, identity or law
-// travels with it: the quoted text there is synthetic too.
+// Authenticity is not demonstrated with a publisher key, because a publisher key does not
+// select it. Decision 58 binds authenticity to the exact resource and forbids lifting it from
+// a parent or a publisher, so the two quotations below carry their own typed evidence and the
+// page shows what that evidence produces.
 
 import { page } from './render.mjs';
 import { renderRefusalCard } from './refusal-card.mjs';
 import { renderStateBanner } from './state-banner.mjs';
 import { renderEnvelopeStrip, renderVerifyCluster } from './verify-cluster.mjs';
 import { readingUrl } from './urls.mjs';
-import { quotedLaw, renderLocalizationUnavailable, reviewedText } from './localization.mjs';
+import {
+  RESOURCE_AUTHENTICITY_SCHEMA,
+  quotedLaw,
+  renderLocalizationUnavailable,
+  servableText,
+} from './localization.mjs';
 
 // Digests from the synthetic S0-05 capture: genuine digests of text that is not law.
 const DIGEST = '5512d26f4fcdf962273e5f4ac59b893401b380a128a737ba718d3326cba0ed7e';
@@ -42,7 +48,8 @@ const APPLICABILITY_ENVELOPE = {
   freshness: { built_at: '2026-01-01T00:00:00Z', stamp_signature_valid: true },
   artifact: {
     corpus_commit: 'synthetic-corpus-commit',
-    code_commit: 'synthetic-code-commit',
+    index_builder_source_commit: 'synthetic-index-builder-commit',
+    serving_runtime_source_commit: 'synthetic-serving-runtime-commit',
     manifest_set_id: 'synthetic-manifest-set',
     content_digest: 'synthetic-content-digest',
   },
@@ -52,7 +59,7 @@ const CONSOLIDATION_ENVELOPE = {
   publisher_name: 'Synthetic preview publisher, consolidation semantics',
   timeline_semantics: 'official_consolidation_state',
   freshness: { built_at: '2026-01-01T00:00:00Z', stamp_signature_valid: false },
-  artifact: { code_commit: 'synthetic-code-commit' },
+  artifact: { index_builder_source_commit: 'synthetic-index-builder-commit' },
 };
 
 const CLOSED_STATE = {
@@ -72,6 +79,24 @@ const OPEN_STATE = {
 const SYNTHETIC_LAW =
   'LEX V3 SYNTHETIC PREVIEW. Article 1. This text is synthetic, has no legal authority, ' +
   'and must not be used for legal research.';
+
+const SOLE_AUTHENTIC = {
+  schema: RESOURCE_AUTHENTICITY_SCHEMA,
+  resource_id: 'preview-synthetic:synthetic-preview-work:2001-01-01',
+  authentic_languages: ['fr'],
+  basis: 'synthetic preview evidence, sole authentic language',
+  asserted_by: 'synthetic preview publisher',
+  observed_at: '2026-01-01T00:00:00Z',
+};
+
+const EQUALLY_AUTHENTIC = {
+  schema: RESOURCE_AUTHENTICITY_SCHEMA,
+  resource_id: 'preview-synthetic:synthetic-regulation:2001-01-01',
+  authentic_languages: ['en', 'fr'],
+  basis: 'synthetic preview evidence, every expression equally authentic',
+  asserted_by: 'synthetic preview publisher',
+  observed_at: '2026-01-01T00:00:00Z',
+};
 
 const SYNTHETIC_LAW_FR =
   'APERCU SYNTHETIQUE LEX V3. Article 1er. Ce texte est synthetique, sans aucune autorite ' +
@@ -106,8 +131,18 @@ export function renderTrustSurface() {
       sentence:
         'I can show you exactly what the published text says, at any date, and how it ' +
         'changed, with citations. I cannot apply the law to your situation.',
-      governingText: { publisher: PUBLISHER, language: 'en', text: SYNTHETIC_LAW },
-      handoff: { label: 'Synthetic handoff counter', href: 'https://handoff.invalid/counter' },
+      governingText: {
+        authenticity: EQUALLY_AUTHENTIC,
+        language: 'en',
+        text: SYNTHETIC_LAW,
+        coverage: 'complete_provision',
+        as_of: '2001-01-01',
+      },
+      handoff: [
+        { label: 'Synthetic counter one', href: 'https://handoff.invalid/one' },
+        { label: 'Synthetic counter two', href: 'https://handoff.invalid/two' },
+        { label: 'A lawyer', href: 'https://handoff.invalid/lawyer' },
+      ],
     })}</section>`,
 
     `<section class="surface-block"><h2>An absence is an answer too</h2>${renderRefusalCard({
@@ -125,24 +160,28 @@ export function renderTrustSurface() {
         code: 'ambiguous_version',
         sentence: 'Two publisher states cover 2004-06-01.',
         payload: {
+          publisher: PUBLISHER,
+          work: WORK,
           candidates: [candidate(CANDIDATE_A, '2003-12-01'), candidate(CANDIDATE_B, '2003-12-15')],
         },
       },
     )}</section>`,
 
     `<section class="surface-block"><h2>Authenticity, and what is not translated</h2>
-      <p>The publisher key selects the rule. A publisher whose statute has one authentic
-        language always carries the note; a publisher whose every language expression is
-        equally authentic never does. The quoted text below is synthetic in both cases.</p>
+      <p>The resource's own evidence decides. A resource with one authentic language always
+        carries the note, naming that language and the ground for the claim; a resource whose
+        every held expression is equally authentic never does, because there the note would be
+        false. No publisher key is consulted, and a quotation with no evidence is refused
+        rather than rendered unqualified.</p>
       ${quotedLaw({
-        publisher: 'lu-legilux',
+        authenticity: SOLE_AUTHENTIC,
         language: 'fr',
         text: SYNTHETIC_LAW_FR,
         noteLocale: 'en',
       })}
-      ${quotedLaw({ publisher: 'eu-eurlex', language: 'en', text: SYNTHETIC_LAW })}
+      ${quotedLaw({ authenticity: EQUALLY_AUTHENTIC, language: 'en', text: SYNTHETIC_LAW })}
       <p>Asked for in Luxembourgish, the note is missing rather than substituted:</p>
-      ${renderLocalizationUnavailable(reviewedText('law.lu.authenticity_note', 'lb'))}</section>`,
+      ${renderLocalizationUnavailable(servableText('law.sole_authentic_note', 'lb'))}</section>`,
 
     `<section class="surface-block"><h2>Freshness and identity</h2>${renderEnvelopeStrip({
       envelope: APPLICABILITY_ENVELOPE,
