@@ -26,74 +26,19 @@
 
 import { isCalendarDate, isUtcInstant } from './temporal.mjs';
 import { escapeHtml } from './render.mjs';
+import { INTERVAL_SENTENCE, LEGENDS, semanticsOf } from './publisher-vocabulary.mjs';
 
-/** The two vocabularies, and there is no third and no default. */
-export const TIMELINE_SEMANTICS = Object.freeze({
-  publisher_applicability: (from, to) =>
-    `Applicable from ${from} to ${to === null ? 'no end recorded' : to} (publisher)`,
-  official_consolidation_state: (from, to) =>
-    `Consolidated wording state from ${from} to ${to === null ? 'no end recorded' : to}`,
-});
+// The vocabulary lives in one module now, keyed by publisher, so no screen can pass the
+// wrong one. Re-exported here because callers of this screen already import these names.
+export {
+  INTERVAL_TERM,
+  LEGENDS,
+  STATE_PHRASE,
+  requireSemantics,
+} from './publisher-vocabulary.mjs';
 
-/**
- * What the interval is called, per publisher vocabulary.
- *
- * The two publishers make different claims and this product does not choose between them. LU
- * dates a state's applicability; EU dates the wording state of a consolidation. Printing
- * "applicable" over an EU interval relabels a consolidation state as applicability, which is
- * the failure this vocabulary exists to prevent, and it was hardcoded in three places.
- */
-export const INTERVAL_TERM = Object.freeze({
-  publisher_applicability: 'applicable',
-  official_consolidation_state: 'consolidated wording',
-});
-
-/** The phrase a qualifier uses for the state it is attached to. */
-export const STATE_PHRASE = Object.freeze({
-  publisher_applicability: 'applicable from',
-  official_consolidation_state: 'a consolidated wording state from',
-});
-
-/**
- * Refuse anything outside the two vocabularies, in one place.
- *
- * Every caller that renders a date interval needs this, and a default would silently pick one
- * publisher's claim for the other's records.
- */
-export function requireSemantics(semantics, where) {
-  if (!Object.hasOwn(INTERVAL_TERM, semantics ?? '')) {
-    throw new Error(
-      `${where} renders in the publisher's own vocabulary and ${JSON.stringify(semantics)} is ` +
-        `not one of ${Object.keys(INTERVAL_TERM).join(', ')}; the two publishers make different ` +
-        'claims and this product does not choose between them',
-    );
-  }
-  return semantics;
-}
-
-/** Fixed by the spec, three sentences, because the screen is the two clocks. */
-/**
- * The legend, per publisher vocabulary.
- *
- * One fixed sentence said "when the publisher says the state applied" over every timeline,
- * including EU ones, which is an applicability assertion the Union publisher does not make: it
- * dates the wording state of a consolidation. The row vocabulary was repaired and the legend
- * above the rows kept asserting the thing the rows had stopped saying, which is worse than the
- * original, because the legend is what teaches a reader how to read the column.
- *
- * Both sentences keep the second clause, because the two clocks are the screen.
- */
-export const LEGENDS = Object.freeze({
-  publisher_applicability:
-    'Top: when the publisher says the state applied. Bottom: when the publisher published it. ' +
-    'These routinely differ.',
-  official_consolidation_state:
-    'Top: the wording state the publisher consolidated. Bottom: when the publisher published ' +
-    'it. These routinely differ.',
-});
-
-/** @deprecated Use LEGENDS, keyed by the publisher vocabulary. Kept so the LU value has a name. */
-export const LEGEND = LEGENDS.publisher_applicability;
+/** One state's interval, as a sentence, in the publisher's own vocabulary. */
+export const TIMELINE_SEMANTICS = INTERVAL_SENTENCE;
 
 /** Fixed by the spec. Never colour alone. */
 export const PROVISIONAL_MARK = 'PROVISIONAL, publisher-scheduled';
@@ -238,9 +183,13 @@ function titleDisagreement(state) {
     if (isCalendarDate(iso)) claimed.push(iso);
   }
   // Deduplicated: one date written twice in a title is one claim, not two.
-  const disagreeing = [
-    ...new Set(claimed.filter((one) => one !== state.valid_from && one !== state.valid_to)),
-  ];
+  // Intervals here are half-open: valid_to is the first day the state does not cover. So a
+  // title date equal to valid_to is a disagreement, not agreement, and treating it as
+  // agreement hid a real one. Legilux labels every consolidated version of a work with the
+  // latest consolidation date, so the state applicable 2020-03-14 to 2020-09-25 carries the
+  // title "Version consolidee applicable au 25/09/2020", asserting applicability on a day
+  // it does not cover. Found against the live record, not against a fixture.
+  const disagreeing = [...new Set(claimed.filter((one) => one !== state.valid_from))];
   return disagreeing.length > 0 ? disagreeing : null;
 }
 
@@ -324,7 +273,8 @@ function renderRow(state, { semantics, asOf }) {
   const distrust = disagreeing
     ? '<p class="timeline-title-distrust">The publisher\'s title contains ' +
       `${escapeHtml(disagreeing.join(', '))}; this record is dated ` +
-      `${escapeHtml(state.valid_from)} to ${escapeHtml(state.valid_to ?? 'no end recorded')}. ` +
+      `${escapeHtml(state.valid_from)} up to ` +
+      `${state.valid_to === null ? 'no recorded end' : `but not including ${escapeHtml(state.valid_to)}`}. ` +
       'Both strings are the publisher\'s. The record\'s dates place this row; the title never ' +
       `does. <span class="timeline-derived">${escapeHtml(DERIVED_TITLE)}</span></p>`
     : '';

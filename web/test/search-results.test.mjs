@@ -43,7 +43,6 @@ const RELAXATIONS = {
 
 const GOOD = {
   query: 'security deposit how many months landlord',
-  semantics: 'publisher_applicability',
   asOf: '2026-09-01',
   hits: [hit()],
   rowSet: { returned: 1, total: 1 },
@@ -52,7 +51,10 @@ const GOOD = {
   searchPath: '/ask/search?q=deposit',
 };
 
-test('results are scoped to an explicit date in the publisher vocabulary', () => {
+test('each row is described in its own publisher terms, and the heading follows the rows', () => {
+  // The vocabulary is no longer a parameter. It is a property of each record's publisher, so a
+  // multi-publisher result set cannot be described in one publisher's words and a caller cannot
+  // pass a vocabulary that disagrees with the data.
   assert.deepEqual(Object.keys(DATE_SCOPE), [
     'publisher_applicability',
     'official_consolidation_state',
@@ -60,24 +62,70 @@ test('results are scoped to an explicit date in the publisher vocabulary', () =>
 
   const lu = renderSearchResults(GOOD);
   assert.ok(lu.includes('Provisions as applicable on 2026-09-01'));
+  assert.ok(lu.includes('Applicable from'), 'the LU row lost its own vocabulary');
   assert.ok(!lu.includes('Wording states covering'), 'the EU vocabulary leaked onto a LU search');
 
-  const eu = renderSearchResults({ ...GOOD, semantics: 'official_consolidation_state' });
+  const euHit = hit({
+    lex_id: 'eu-eurlex:32016R0679:2001-01-01',
+    permalink: 'https://law.soufien.lu/eu-eurlex/32016R0679/2001-01-01--' + 'a'.repeat(64),
+  });
+  const eu = renderSearchResults({ ...GOOD, hits: [euHit] });
   assert.ok(eu.includes('Wording states covering 2026-09-01'));
-  assert.ok(!eu.includes('Provisions as applicable'), 'the LU vocabulary leaked onto an EU search');
+  assert.ok(eu.includes('Consolidated wording state from'), 'the EU row was described as applicable');
+  assert.ok(
+    !eu.includes('Applicable from'),
+    'an EUR-Lex row attributed an applicability claim to the Union publisher',
+  );
+});
 
-  for (const bad of [undefined, '', 'in_force', 'toString']) {
-    assert.throws(() => renderSearchResults({ ...GOOD, semantics: bad }), /is not one of/);
-  }
+test('a mixed result set gets no single publisher vocabulary', () => {
+  // This is the case one envelope-level vocabulary could never render honestly: the rows make
+  // different kinds of assertion, so any heading naming one of them describes rows it does not.
+  const mixed = renderSearchResults({
+    ...GOOD,
+    rowSet: { returned: 2, total: 2 },
+    hits: [
+      hit(),
+      hit({
+        lex_id: 'eu-eurlex:32016R0679:2001-01-01',
+        permalink: 'https://law.soufien.lu/eu-eurlex/32016R0679/2001-01-01--' + 'a'.repeat(64),
+      }),
+    ],
+  });
+  // Asserted without the apostrophe: the heading is escaped, so the served bytes carry
+  // &#39; and a literal apostrophe never matches.
+  assert.ok(mixed.includes('each in its own publisher'), 'the mixed heading was lost');
+  assert.ok(!mixed.includes('Provisions as applicable on'), 'one publisher headline covered both');
+  assert.ok(!mixed.includes('Wording states covering'), 'one publisher headline covered both');
+  // Both row vocabularies still appear, because each row keeps its own.
+  assert.ok(mixed.includes('Applicable from'));
+  assert.ok(mixed.includes('Consolidated wording state from'));
+});
 
-  // The date is explicit even when it is today, because today is the date nobody checks.
-  for (const bad of [undefined, '', 'today', '2026-99-99']) {
+test('a caller may not choose the vocabulary, and is told so', () => {
+  for (const semantics of ['publisher_applicability', 'official_consolidation_state', 'in_force']) {
     assert.throws(
-      () => renderSearchResults({ ...GOOD, asOf: bad }),
-      /explicitly, even when it is today/,
-      `asOf=${JSON.stringify(bad)} was rendered`,
+      () => renderSearchResults({ ...GOOD, semantics }),
+      /do not take a date vocabulary/,
+      `${semantics} was accepted as a caller choice`,
     );
   }
+});
+
+test('a row whose publisher this interface has not classified is refused', () => {
+  assert.throws(
+    () =>
+      renderSearchResults({
+        ...GOOD,
+        hits: [
+          hit({
+            lex_id: 'fr-legifrance:code-civil:2001-01-01',
+            permalink: 'https://law.soufien.lu/fr-legifrance/code-civil/2001-01-01--' + 'a'.repeat(64),
+          }),
+        ],
+      }),
+    /is not a publisher this interface has classified/,
+  );
 });
 
 test('a hit list carries the same population disclosure an empty one does', () => {

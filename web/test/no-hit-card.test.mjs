@@ -338,3 +338,26 @@ test('whole-corpus wording is reachable, and only by running every layer', () =>
     }
   }
 });
+
+test('the no-hit card makes no claim about a period it was never given', () => {
+  // Found by my own sweep, not by review. The --hole token label was the sentence "no publisher
+  // state covers this period", announced as prose beside the head text. This card holds no date,
+  // no interval and no list of publisher states, so an all-not_run card said both "nothing was
+  // searched, so nothing is known" and "no publisher state covers this period" at once.
+  const html = renderNoHitCard({
+    ...GOOD,
+    layers: LAYERS.map((name) => ({
+      name,
+      outcome: name === 'semantic' ? 'unavailable' : 'not_run',
+      language: 'fr',
+    })),
+  });
+  assert.equal(html.includes('No search of the held records completed'), true);
+  assert.equal(
+    html.includes('covers this period'),
+    false,
+    'the card claimed a period it holds no dates for',
+  );
+  // The label must stay a category name rather than growing back into a claim.
+  assert.equal(html.includes('gap in held states'), true);
+});

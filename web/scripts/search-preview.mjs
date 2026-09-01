@@ -66,7 +66,6 @@ function section(heading, note, html) {
 export function renderSearchPreview({ locale = 'en' } = {}) {
   const resolved = renderSearchResults({
     query: 'synthetic preview work article 1',
-    semantics: 'publisher_applicability',
     asOf: AS_OF,
     hits: [hit(), hit({ provision_num: 'Art. 2', match_reasons: ['keyword', 'semantic'] })],
     rowSet: { returned: 2, total: 2 },
@@ -81,9 +80,22 @@ export function renderSearchPreview({ locale = 'en' } = {}) {
 
   const cut = renderSearchResults({
     query: 'synthetic preview provision',
-    semantics: 'official_consolidation_state',
     asOf: AS_OF,
-    hits: [hit({ provision_num: 'Art. 3', match_reasons: ['exact_title'] })],
+    // An EU-shaped row, because this case exists to show the consolidation-state
+    // vocabulary and that vocabulary belongs to the Union publisher. It used to be a
+    // Luxembourg-shaped record with the EU wording forced on top, which demonstrated a
+    // claim the record does not make. The vocabulary follows the data now, so the only
+    // way to show it is to hold a record that has it.
+    hits: [
+      hit({
+        provision_num: 'Art. 3',
+        match_reasons: ['exact_title'],
+        lex_id: 'eu-eurlex:synthetic-preview-regulation:2001-01-01',
+        permalink:
+          'https://law.soufien.lu/eu-eurlex/synthetic-preview-regulation/2001-01-01--' +
+          '1'.repeat(64),
+      }),
+    ],
     rowSet: { returned: 1, total: 47 },
     population: POPULATION,
     relaxations: OFF,
@@ -92,7 +104,6 @@ export function renderSearchPreview({ locale = 'en' } = {}) {
 
   const relaxed = renderSearchResults({
     query: 'how many months deposit',
-    semantics: 'publisher_applicability',
     asOf: AS_OF,
     hits: [hit({ provision_num: 'Art. 5', match_reasons: ['interpreted'] })],
     rowSet: { returned: 1, total: 1 },
@@ -107,7 +118,6 @@ export function renderSearchPreview({ locale = 'en' } = {}) {
 
   const nothing = renderSearchResults({
     query: 'security deposit how many months landlord',
-    semantics: 'publisher_applicability',
     asOf: AS_OF,
     hits: [],
     // Zero rows and a zero total, stated rather than omitted. This preview passed no row set

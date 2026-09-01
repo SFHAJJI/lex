@@ -21,6 +21,12 @@
 // one and it is refused rather than truncated.
 
 import { canonicalStateUrl } from './routes.mjs';
+import {
+  DATE_SCOPE as SCOPE_HEADING,
+  INTERVAL_SENTENCE,
+  semanticsOf,
+  sharedSemantics,
+} from './publisher-vocabulary.mjs';
 import { isCalendarDate } from './temporal.mjs';
 import { escapeHtml } from './render.mjs';
 import { renderNoHitCard } from './no-hit-card.mjs';
@@ -48,10 +54,8 @@ const MATCH_LABEL = new Map([
 ]);
 
 /** The header sentence, in the publisher's own vocabulary. There is no third and no default. */
-export const DATE_SCOPE = Object.freeze({
-  publisher_applicability: (date) => `Provisions as applicable on ${date}`,
-  official_consolidation_state: (date) => `Wording states covering ${date}`,
-});
+// The heading vocabulary lives with the rest of it, keyed by publisher.
+export { DATE_SCOPE } from './publisher-vocabulary.mjs';
 
 /**
  * The population, in the shape the zero-hit card already fixed.
@@ -194,12 +198,19 @@ function requireHit(hit, index) {
   return hit;
 }
 
-function renderHit(hit, index, semantics) {
-  requireHit(hit, index);
-  const legal =
-    semantics === 'publisher_applicability'
-      ? `Applicable from ${hit.valid_from} to ${hit.valid_to ?? 'no end recorded'} (publisher)`
-      : `Consolidated wording state from ${hit.valid_from} to ${hit.valid_to ?? 'no end recorded'}`;
+/** The publisher half of a state identifier. */
+function publisherOf(lexId) {
+  return String(lexId).split(':')[0];
+}
+
+function renderHit(hit, index) {
+  // The row's own publisher decides which clock its dates are on. This used to take the
+  // envelope's single vocabulary, so every row in a multi-publisher list was described in
+  // one publisher's words: an EUR-Lex row rendered "Applicable from ...(publisher)" and
+  // attributed to the Union an applicability claim it does not make. There is no parameter
+  // to get wrong now, because the record carries the answer.
+  const semantics = semanticsOf(publisherOf(hit.lex_id), `hit ${index + 1}`);
+  const legal = INTERVAL_SENTENCE[semantics](hit.valid_from, hit.valid_to);
 
   const badges = hit.match_reasons
     .map((reason) => `<li class="hit-badge">${escapeHtml(MATCH_LABEL.get(reason))}</li>`)
@@ -256,10 +267,15 @@ export function renderSearchResults({
   expansions = [],
   routes,
 }) {
-  if (!Object.hasOwn(DATE_SCOPE, semantics ?? '')) {
+  // There is no semantics parameter. The vocabulary is a property of each record's
+  // publisher and is derived below, so a caller cannot pass one that disagrees with the
+  // data. Passing one is refused rather than ignored: a caller who believes they are
+  // choosing the vocabulary has misunderstood the contract, and silently overriding them
+  // would leave them believing it worked.
+  if (semantics !== undefined) {
     throw new Error(
-      `results are scoped in the publisher's own vocabulary and ${JSON.stringify(semantics)} ` +
-        `is not one of ${Object.keys(DATE_SCOPE).join(', ')}`,
+      'results do not take a date vocabulary; each row is described in its own ' +
+        "publisher's terms, derived from the record, so there is nothing to choose",
     );
   }
   // Never a silent default. The pack's rule is that the operative date is explicit even when
@@ -311,7 +327,7 @@ export function renderSearchResults({
           'empty page of a nonempty result set is not evidence that the corpus holds nothing',
       );
     }
-    return (
+  return (
       '<section class="results results-none">' +
       renderNoHitCard({ query, layers, population, expansions, routes }) +
       '</section>'
@@ -375,13 +391,33 @@ export function renderSearchResults({
         'passages.</p>'
       : '';
 
+  // Rows validated before anything is derived from them. Deriving first let the publisher
+  // classification throw ahead of requireHit, so a row with an empty lex_id reported an
+  // unclassified publisher instead of a missing identifier, and four row guards became
+  // unreachable from the suite in one edit.
+  hits.forEach(requireHit);
+
+  // Null when the rows disagree, which a multi-publisher result set routinely does.
+  const scope = sharedSemantics(
+    hits.map((hit) => publisherOf(hit.lex_id)),
+    'the result heading',
+  );
+
   return (
     '<section class="results">' +
-    `<h2 class="results-scope">${escapeHtml(DATE_SCOPE[semantics](asOf))}</h2>` +
+    // The heading may use one publisher's words only when every row shares that publisher's
+    // clock. A mixed list has no single vocabulary, and picking one states a claim about
+    // the rows it does not describe. Neutral wording is not a hedge here: it is the only
+    // true sentence available over rows that make different kinds of assertion.
+    `<h2 class="results-scope">${escapeHtml(
+      scope === null
+        ? `States covering ${asOf}, each in its own publisher's terms`
+        : SCOPE_HEADING[scope](asOf),
+    )}</h2>` +
     `<p class="results-query">You asked: ${escapeHtml(query)}</p>` +
     disclosures +
     governingHtml +
-    `<ol class="hits">${hits.map((hit, i) => renderHit(hit, i, semantics)).join('')}</ol>` +
+    `<ol class="hits">${hits.map((hit, i) => renderHit(hit, i)).join('')}</ol>` +
     pager +
     renderPopulation(population) +
     '</section>'

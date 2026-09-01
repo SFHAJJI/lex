@@ -51,7 +51,7 @@ export const TOKENS = Object.freeze([
     light: '#8a2f1a',
     dark: '#f0a08c',
     icon: '⚠',
-    label: 'dates disagree, both are the publisher’s',
+    label: 'publisher date conflict',
   },
   {
     name: '--derived',
@@ -79,7 +79,13 @@ export const TOKENS = Object.freeze([
     light: '#4c4740',
     dark: '#bdb6ac',
     icon: '░',
-    label: 'no publisher state covers this period',
+    // A category name, like the other seven, not a claim. This read 'no publisher state
+    // covers this period', which is a complete declarative sentence naming an actor, an
+    // object and a temporal scope, and the label is announced as prose beside whatever text
+    // the caller supplies. The no-hit card holds no dates at all, so it printed that period
+    // claim next to its own sentence saying nothing had been searched. The specific claim
+    // belongs to the caller that actually holds an interval.
+    label: 'gap in held states',
     pattern: 'hatched',
   },
 ]);

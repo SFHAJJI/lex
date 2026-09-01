@@ -149,3 +149,18 @@ test('the built stylesheet carries every token in both schemes', async () => {
     );
   }
 });
+
+test('every token label is a category name, not a claim', () => {
+  // The --hole label was a complete declarative sentence naming an actor, an object and a
+  // temporal scope, and labels are announced as prose beside whatever text a caller supplies.
+  // A label that asserts something is a claim every caller makes, whether it holds evidence or
+  // not, which is exactly how the no-hit card ended up asserting a period it never received.
+  for (const token of TOKENS) {
+    assert.equal(
+      /\b(covers|is|are|was|were|has|have)\b/.test(token.label),
+      false,
+      `${token.name} label "${token.label}" reads as an assertion rather than a category`,
+    );
+    assert.equal(token.label.length <= 40, true, `${token.name} label is a sentence, not a label`);
+  }
+});

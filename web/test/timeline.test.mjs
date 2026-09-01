@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
-  LEGEND,
+  LEGENDS,
   PROVISIONAL_MARK,
   TIMELINE_SEMANTICS,
   holesBetween,
@@ -244,8 +244,16 @@ test('a date read out of a title is bounded, deduplicated and labelled derived',
   // An ISO date in a title is read too.
   assert.ok(titled('consolidated 2024-08-01').includes('timeline-title-distrust'));
 
-  // Either boundary of this record's own interval is agreement, not disagreement.
-  assert.ok(!titled('Version au 25/09/2020').includes('timeline-title-distrust'), 'end date');
+  // The start date is agreement. The end date is not: intervals are half-open, so valid_to
+  // is the first day the state does not cover, and a title claiming applicability on that
+  // day contradicts the record. This was asserted the other way until a live Legilux record
+  // showed why it matters: Legilux labels every consolidated version of a work with the
+  // latest consolidation date, so the state applicable 2020-03-14 to 2020-09-25 carries the
+  // title 'Version consolidee applicable au 25/09/2020' and the screen called it agreement.
+  assert.ok(
+    titled('Version au 25/09/2020').includes('timeline-title-distrust'),
+    'a title claiming applicability on the first uncovered day read as agreement',
+  );
   assert.ok(!titled('Version au 14/03/2020').includes('timeline-title-distrust'), 'start date');
 
   // One date written twice is one claim.
@@ -406,11 +414,19 @@ test('the population is stated and an empty timeline is refused', () => {
 
 test('the legend is the component words and the chart is decoration', () => {
   const html = renderTimeline(GOOD);
-  assert.ok(html.includes(LEGEND));
+  assert.ok(html.includes(LEGENDS[GOOD.semantics]));
+  // Both pinned to literals, so neither can drift into asserting the other publisher's
+  // claim. The EU sentence is the one that matters: the Union dates a consolidation's
+  // wording and makes no applicability claim at all.
   assert.equal(
-    LEGEND,
+    LEGENDS.publisher_applicability,
     'Top: when the publisher says the state applied. Bottom: when the publisher published it. ' +
       'These routinely differ.',
+  );
+  assert.equal(
+    LEGENDS.official_consolidation_state,
+    'Top: the wording state the publisher consolidated. Bottom: when the publisher ' +
+      'published it. These routinely differ.',
   );
   assert.ok(html.includes('<div class="timeline-chart" aria-hidden="true">'));
   assert.ok(html.includes('<table class="timeline-table">'), 'the table is the structure');
