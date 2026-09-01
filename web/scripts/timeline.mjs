@@ -283,8 +283,12 @@ function renderRow(state, { semantics, asOf }) {
 function renderHoleRow(hole) {
   return (
     '<tr class="timeline-hole"><td colspan="5">' +
-    `GAP ${escapeHtml(hole.from)} to ${escapeHtml(hole.to)}. No publisher state covers ` +
-    `${escapeHtml(hole.from)} to ${escapeHtml(hole.to)}. ` +
+    // This screen knows what this corpus holds, not what the publisher holds. "No publisher state
+    // covers X to Y" claims the publisher's record is empty there, and the publisher may hold a
+    // state that was never ingested. The derived note in the same cell already says absence of a
+    // held state is not evidence, so the sentence above it was contradicting the sentence below.
+    `GAP ${escapeHtml(hole.from)} to ${escapeHtml(hole.to)}. This corpus holds no state ` +
+    `covering ${escapeHtml(hole.from)} to ${escapeHtml(hole.to)}. ` +
     `<span class="timeline-derived">${escapeHtml(DERIVED_HOLE)}</span>` +
     '</td></tr>'
   );

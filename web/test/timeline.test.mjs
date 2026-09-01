@@ -179,7 +179,15 @@ test('a gap is rendered where the gap is, in full, and says it is derived', () =
   const html = renderTimeline(gapped);
 
   assert.ok(html.includes('GAP 2004-01-01 to 2024-12-28'));
-  assert.ok(html.includes('No publisher state covers 2004-01-01 to 2024-12-28'));
+  // What this corpus holds, not what the publisher holds. This line used to assert the opposite,
+  // which made the gap row claim the publisher's record was empty while the derived note in the
+  // same cell said absence of a held state is not evidence. Two sentences arguing in one table
+  // cell, and the test was holding the wrong one in place.
+  assert.ok(html.includes('This corpus holds no state covering 2004-01-01 to 2024-12-28'));
+  assert.ok(
+    !html.includes('No publisher state covers'),
+    'the gap row claims the publisher holds nothing there',
+  );
   assert.ok(html.includes('Absence of a held state is not evidence the law was unchanged'));
   assert.ok(html.includes('not asserted by the publisher'), 'the gap is derived and must say so');
 

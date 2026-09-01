@@ -259,7 +259,10 @@ function HoleRow({ hole }) {
   return (
     <tr className="timeline-hole">
       <td colSpan={5}>
-        {`GAP ${hole.from} to ${hole.to}. No publisher state covers ${hole.from} to ${hole.to}. `}
+        {/* What this corpus holds, not what the publisher holds. The note beside it says absence
+            of a held state is not evidence; a claim that no publisher state exists contradicts it
+            in the same cell. */}
+        {`GAP ${hole.from} to ${hole.to}. This corpus holds no state covering ${hole.from} to ${hole.to}. `}
         <span className="timeline-derived">{DERIVED_HOLE}</span>
       </td>
     </tr>
