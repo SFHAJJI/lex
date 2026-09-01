@@ -461,6 +461,40 @@ summary,
   padding-block: 0.15rem;
 }
 
+/* Controls.
+ *
+ * WCAG 2.2 target size (minimum), 2.5.8, is AA and asks for 24 by 24 CSS pixels. Nothing in this
+ * package had ever put a control on a built page, so there was no control sizing at all and every
+ * button, chip and input rendered 21 pixels tall on the first screen that did. The browser gate
+ * measures this, which is how it was found rather than shipped.
+ *
+ * The floor is set on the elements rather than on a class, because a control added later should
+ * be large enough by default and not by remembering. Padding sets the comfortable size; the two
+ * min-* properties are the floor that cannot be styled away by a shorter line height. */
+button,
+.filter-chip,
+input[type='text'],
+input[type='search'],
+input[type='date'] {
+  min-block-size: 24px;
+  min-inline-size: 24px;
+  padding: var(--space-2, 0.5rem) var(--space-3, 0.75rem);
+  font: inherit;
+  line-height: 1.2;
+}
+
+/* A disabled control still has to be reachable and readable.
+ *
+ * `disabled` removes a control from the tab order entirely, so a keyboard reader never learns the
+ * control exists or why it refuses. On the compare control that is the whole point of it: it
+ * refuses early precisely so the reader is told why while both rows are still on screen. The
+ * components use aria-disabled with a real tab stop instead, and this is the styling that keeps
+ * that legible rather than looking like a control that is simply broken. */
+[aria-disabled='true'] {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
 summary {
   display: list-item;
 }

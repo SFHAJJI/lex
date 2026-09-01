@@ -867,12 +867,20 @@ test('the compare control is on the screen, disarmed, and says what is needed', 
 // ---------------------------------------------------------------------------------------------
 
 test('the screen composes into a whole document, twice, without colliding with itself', () => {
-  // Not in the build: `browser-evidence.mjs` fails any built page carrying a button, whatever the
-  // page does about it. Rendered here so the composition is still exercised end to end, and so
-  // the day that gate distinguishes a hydrated page from an inert one this is one line in
-  // build.mjs rather than a page nobody has run.
+  // In the build now, and hydrated. The gate that used to fail any built page carrying a button
+  // asks whether the page ships a script first, and the page ships one, so its controls have an
+  // activation path rather than being a picture of controls.
+  //
+  // Hydratable markup means `renderToString` rather than `renderToStaticMarkup`, and React writes
+  // comment markers between adjacent text nodes so it can match this markup on the client. A
+  // sentence assembled from an interpolation is therefore present and not contiguous. The markers
+  // are stripped before matching prose, and only before that: every structural probe below still
+  // runs against the exact bytes.
   const html = renderSearchScreenPage();
+  const prose = html.replaceAll('<!-- -->', '');
   assert.ok(html.startsWith('<!doctype html>'), 'not a whole document');
+  assert.ok(html.includes('<script src="/client.js"'), 'the page ships no client runtime');
+  assert.ok(html.includes('id="search-root"'), 'the page has no hydration root');
   for (const probe of [
     'results-list',
     'results-interpretation',
@@ -884,7 +892,7 @@ test('the screen composes into a whole document, twice, without colliding with i
     'Showing 3 of 47 matching passages.',
     'aria-multiselectable="true"',
   ]) {
-    assert.ok(html.includes(probe), `${probe} is missing from the composed page`);
+    assert.ok(prose.includes(probe), `${probe} is missing from the composed page`);
   }
 
   // Two screens on one document, and every element id minted per instance. Written by hand, the

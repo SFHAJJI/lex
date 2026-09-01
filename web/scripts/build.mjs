@@ -200,6 +200,15 @@ pages.push(["hydration.html", ssr.renderHydrationProof()]);
 // hides a column, which on these two screens means hiding a disclosure.
 pages.push(["timeline-react.html", ssr.renderTimelineReactPage()]);
 pages.push(["coverage-react.html", ssr.renderCoverageReactPage()]);
+// The search screen, built rather than only unit tested.
+//
+// It was held out because the browser gate counted every button on a built page as an inert
+// control, a rule written when no built page carried one. The gate now asks whether the page
+// ships a script before deciding a control is inert, which is what its own failure message
+// always said. This is the first screen in the product with real controls, so it is the first
+// one whose target sizes, focus order and disabled-but-reachable behaviour can be measured in a
+// browser instead of asserted in a test.
+pages.push(["search-react.html", ssr.renderSearchScreenPage()]);
 
 const clientBundle = await bundleClient("app/client-entry.jsx", "client.js");
 await cp(clientBundle, new URL("client.js", destination));

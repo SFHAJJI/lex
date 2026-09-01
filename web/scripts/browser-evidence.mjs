@@ -472,9 +472,15 @@ const PROBE = `(() => {
     smallTargets: smallTargets.slice(0, 8),
     smallTargetCount: smallTargets.length,
     sameOrigin,
-    // A control with no handler and no form is a promise the page cannot keep. This line
-    // ships no script, so any button is inert by construction.
-    inertControls: [...document.querySelectorAll('button, a:not([href])')].length,
+    // A control with no handler and no form is a promise the page cannot keep, and on a page
+    // that ships no script every button is inert by construction. That last clause is the whole
+    // rule, and it used to be a comment rather than a condition: the count was unconditional, so
+    // a hydrated page carrying real controls failed a check written about pages that carry none.
+    // No built page had ever had a control, so nothing had disagreed with it yet.
+    inertControls:
+      document.querySelectorAll('script').length === 0
+        ? [...document.querySelectorAll('button, a:not([href])')].length
+        : 0,
   };
 })()`;
 

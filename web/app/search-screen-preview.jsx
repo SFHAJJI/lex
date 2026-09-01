@@ -4,28 +4,35 @@
 // did to the query and what it is a page of; a screen with none has to avoid being read as the law
 // being silent. Every value here is synthetic and none of it is law.
 //
-// This page is NOT in the build, and the reason is a property of the preview harness rather than
-// of the screen. `browser-evidence.mjs` counts every `button` on a built page as an inert control
-// and fails the run: its own comment scopes that to "a page that loads no script", but the check
-// is unconditional, because until now no built page had a control on it. So the preview surface
-// cannot host an interactive screen at all, however the screen behaves.
+// This page is in the build and it hydrates.
 //
-// It was built once, deliberately, and measured. That run found three real defects in these
-// components, two of which are repaired here and in `CompareArming.jsx`: the row title and its
-// interval were painted flush against each other, so the date a state applied read as part of its
-// name; and the Compare button used `disabled`, which removes it from the tab order, so fifteen
-// focusable elements were fourteen reachable by Tab and a keyboard reader never learned that
-// comparison existed. The third is not repairable from here: the date input, both date buttons,
-// both chips and the compare button all render 21 CSS pixels tall, under the WCAG 2.2 minimum of
-// 24, because the design system has no control sizing. Nothing else in this package has ever put
-// a control on a page.
+// It was held out for a while, and the reason was a property of the harness rather than of the
+// screen: `browser-evidence.mjs` counted every button on a built page as an inert control,
+// unconditionally, because until now no built page had carried a control. That check now asks
+// whether the page ships a script first, which is what its own failure message always said.
 //
-// Kept and exported rather than deleted, with a test that renders it, so the day that gate learns
-// to tell a hydrated page from an inert one this is one line in `build.mjs`.
+// Fixing the check was not enough, and it should not have been. With the check corrected the page
+// still failed, honestly: it shipped no script, so its seven controls really did have no
+// activation path. A search screen whose controls cannot be operated is not a delivered journey,
+// and a rendered picture of one is worse than nothing because it looks finished. So the page
+// hydrates now, like the dossier proof, and the controls work: the chips toggle, the date default
+// can be removed, and a pair of rows arms the comparison.
+//
+// The three handlers that leave the page are still no-ops, and that is honest rather than lazy.
+// Opening a row, submitting a date and running a comparison all need a service, and this preview
+// has none. Every value here is synthetic and none of it is law.
+//
+// Building it once, before any of this, is what found three real defects in these components. Two
+// are repaired in `CompareArming.jsx` and here: the row title and its interval were painted flush,
+// so the date a state applied read as part of its name, and the Compare button used `disabled`,
+// which removes it from the tab order, so a keyboard reader never learned comparison existed or
+// why a pair was refused. The third was that every control rendered 21 CSS pixels tall against the
+// WCAG 2.2 minimum of 24, because the design system had no control sizing at all; that is fixed in
+// `styles.css` and this page is what measures it.
 
 import { Document } from './Document.jsx';
 import { SearchScreen } from './SearchScreen.jsx';
-import { renderDocument } from './render-document.mjs';
+import { renderHydratableDocument } from './render-document.mjs';
 import { skinFor } from '../scripts/shells.mjs';
 
 const WORK = 'preview-synthetic:synthetic-preview-work';
@@ -104,18 +111,10 @@ const RELAXED = Object.freeze({
 
 const noop = () => {};
 
-/** The whole page, server side. Static markup: this preview ships no client runtime. */
-export function renderSearchScreenPage() {
-  return renderDocument(
-    <Document state="search-react" title="Search" shell="ask" density={skinFor('ask').density}>
-      <p className="eyebrow">Ask</p>
-      <h1>Search</h1>
-      <p>
-        The search screen, composed from the controls it is made of. Every value here is synthetic
-        and none of it is law. The page is server-rendered and carries no script, so the controls
-        are shown rather than operated.
-      </p>
-
+/** The element, built once so the two renderers cannot diverge by construction. */
+export function searchScreenTree() {
+  return (
+    <>
       <section className="results-case">
         <h2>A page of a larger result set, produced by a rewritten query</h2>
         <p className="results-case-note">
@@ -195,6 +194,24 @@ export function renderSearchScreenPage() {
           onCompare={noop}
         />
       </section>
+    </>
+  );
+}
+
+/** The whole page, server side, and then hydrated by `/client.js`. */
+export function renderSearchScreenPage() {
+  return renderHydratableDocument(
+    <Document state="search-react" title="Search" shell="ask" density={skinFor('ask').density}>
+      <p className="eyebrow">Ask</p>
+      <h1>Search</h1>
+      <p>
+        The search screen, composed from the controls it is made of. Every value here is synthetic
+        and none of it is law. The page is server-rendered and carries no script, so the controls
+        are shown rather than operated.
+      </p>
+
+      <div id="search-root">{searchScreenTree()}</div>
+      <script src="/client.js" defer />
     </Document>,
   );
 }
