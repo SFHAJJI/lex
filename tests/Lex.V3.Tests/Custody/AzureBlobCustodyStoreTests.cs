@@ -292,6 +292,38 @@ public sealed class AzureBlobCustodyStoreTests
     }
 
     [TestMethod]
+    public async Task AnObservationWhoseConfigurationReceiptDisagreesWithItIsRefused()
+    {
+        // I set out to prove the nightly path's `|| policy.ActiveLegalHold` disjunct and
+        // found it unreachable. To arrive there an observation needs a hold and a nightly
+        // configuration receipt that also reports a hold, and the receipt constructor refuses
+        // exactly that pair. Every attempt to build the input is caught first by the
+        // consistency block at the top of TryCreateReceipt, which is what this now proves:
+        // an observation and its receipt must agree on class, retention and hold.
+        var harness = new Harness();
+        harness.Policy.NightlyMisreportsLegalHold = true;
+        harness.Nightly.ConfigureNewBlob = blob => blob.CreatedOn = ObservedAt;
+
+        await Assert.ThrowsExactlyAsync<CustodyPolicyException>(() =>
+            harness.Store.CreateAsync(Body, CustodyClass.NightlyFloor90d, CancellationToken.None));
+    }
+
+    [TestMethod]
+    public async Task AnAppendBlobIsRefusedForItsTypeRatherThanForSomethingElse()
+    {
+        // FinalGenerationMustBeAnUnversionedBlockBlob covers both shapes, but neutralising the
+        // block-blob half of that condition left it green: the version-id half was carrying
+        // the whole test. Asserting the reason isolates the block-blob half.
+        var harness = new Harness();
+        harness.Nightly.ConfigureNewBlob = blob => blob.BlobType = BlobType.Append;
+
+        var refusal = await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() =>
+            harness.Store.CreateAsync(Body, CustodyClass.NightlyFloor90d, CancellationToken.None));
+
+        StringAssert.Contains(refusal.Message, "unversioned block blob");
+    }
+
+    [TestMethod]
     public async Task NightlyProtectionAtExactlyNinetyDaysIsAccepted()
     {
         var harness = new Harness();
@@ -1084,6 +1116,14 @@ public sealed class AzureBlobCustodyStoreTests
 
         public bool ActiveLegalHold { get; set; } = true;
 
+        /// <summary>
+        /// Reports a hold on the nightly lane, which the real reader never does and the
+        /// nightly configuration receipt cannot even represent. The store's disjoint-lane
+        /// check exists for a reader that misreports, so proving it needs a reader that
+        /// misreports: the observation says nightly and carries a legal-hold receipt.
+        /// </summary>
+        public bool NightlyMisreportsLegalHold { get; set; }
+
         public DateTimeOffset PolicyObservedAt { get; set; } = ObservedAt;
 
         public CustodyClass? ReturnedCustodyClass { get; set; }
@@ -1117,14 +1157,20 @@ public sealed class AzureBlobCustodyStoreTests
 
             AfterRead?.Invoke(custodyClass);
             var returnedClass = ReturnedCustodyClass ?? custodyClass;
-            var activeLegalHold = returnedClass == CustodyClass.LegalHoldEvidence
-                && ActiveLegalHold;
+            var misreported = NightlyMisreportsLegalHold
+                && returnedClass == CustodyClass.NightlyFloor90d;
+            var activeLegalHold = misreported
+                || (returnedClass == CustodyClass.LegalHoldEvidence && ActiveLegalHold);
+            // The observation keeps its locked retention, so the retention disjunct passes
+            // and only the hold disjunct can refuse it. The receipt is built as a legal-hold
+            // receipt because a nightly receipt cannot represent a hold at all, which is the
+            // shape of a reader that misreports.
             var retentionDays = returnedClass == CustodyClass.NightlyFloor90d
                 ? NightlyLockedRetentionDays
                 : null;
             var configurationReceipt = ConfigurationReceipt(
-                returnedClass,
-                retentionDays,
+                misreported ? CustodyClass.LegalHoldEvidence : returnedClass,
+                misreported ? null : retentionDays,
                 activeLegalHold,
                 ConfigurationPolicyKeyOverride,
                 ConfigurationObservedAtOverride ?? PolicyObservedAt);
