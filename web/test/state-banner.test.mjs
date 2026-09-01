@@ -138,3 +138,24 @@ test('the publisher status flag always carries its caption', () => {
     html.includes('publisher status flag, current-state flag, not a historical statement'),
   );
 });
+
+test('the timeline vocabulary is closed against the object prototype', () => {
+  // `LEGAL_TIME_PHRASING` was an object literal and the membership check was truthiness, so
+  // an inherited member found a function and rendered `[object Undefined]` as legal time.
+  for (const semantics of ['toString', 'constructor', 'hasOwnProperty', 'valueOf', '__proto__']) {
+    assert.throws(
+      () =>
+        renderStateBanner({
+          envelope: { timeline_semantics: semantics },
+          state: {
+            valid_from: '2001-01-01',
+            valid_to: null,
+            publication_date: '2000-12-01',
+            observed_from: '2026-01-01T00:00:00Z',
+          },
+        }),
+      /unknown timeline_semantics/,
+      `${semantics} reached a phrasing function`,
+    );
+  }
+});

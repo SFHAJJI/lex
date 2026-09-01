@@ -123,3 +123,55 @@ test('an anchor containing a separator is refused rather than encoded away', () 
     /not a publisher anchor/,
   );
 });
+
+test('the parser refuses every coordinate the builders refuse', () => {
+  // A parser that admits what the builders refuse is a second, weaker specification, and
+  // the ambiguous_version card checks its candidate links against exactly this parser.
+  for (const path of [
+    '/../secret',
+    '/.hidden/work',
+    '/lu-legilux/../../etc',
+    '/lu-legilux/.hidden',
+    `/lu-legilux/loi/2026-99-99--${HASH}`,
+    `/lu-legilux/loi/2025-02-29--${HASH}`,
+    `/lu-legilux/loi/2001-01-01--${HASH}#art_5/art_6`,
+    `/lu-legilux/loi/2001-01-01--${HASH}#has space`,
+  ]) {
+    assert.equal(parseObjectUrl(path), null, `${path} parsed as an object URL`);
+  }
+  // 2024 is a leap year and 2100 is not, and both are decidable rather than approximated.
+  assert.ok(parseObjectUrl(`/lu-legilux/loi/2024-02-29--${HASH}`));
+  assert.equal(parseObjectUrl(`/lu-legilux/loi/2100-02-29--${HASH}`), null);
+  // The open-ended sentinel is a real day and stays parseable.
+  assert.ok(parseObjectUrl(`/lu-legilux/loi/9999-12-31--${HASH}`));
+});
+
+test('an impossible calendar date is not a state a link may name', () => {
+  for (const validFrom of ['2026-99-99', '2025-02-29', '2025-13-01', '2025-00-10', '0000-01-01']) {
+    assert.throws(
+      () =>
+        readingUrl({
+          publisher: 'lu-legilux',
+          work: 'loi-2002-08-02-n2',
+          validFrom,
+          hash: HASH,
+        }),
+      /not a calendar date/,
+      `${validFrom} was accepted as a state date`,
+    );
+  }
+  assert.ok(
+    readingUrl({ publisher: 'lu-legilux', work: 'loi', validFrom: '2024-02-29', hash: HASH }),
+  );
+});
+
+test('a shell path cannot walk out of its own shell', () => {
+  for (const path of ['/../../provenance', '/ask/../w', '/.hidden', '/a/../b']) {
+    assert.throws(
+      () => shellUrl('ask', path),
+      /not a safe path segment/,
+      `${path} kept its shell prefix while leaving the shell`,
+    );
+  }
+  assert.equal(shellUrl('ask', '/search'), '/ask/search');
+});

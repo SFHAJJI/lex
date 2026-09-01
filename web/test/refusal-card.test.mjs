@@ -9,11 +9,14 @@ import {
 } from '../scripts/refusal-card.mjs';
 import { readingUrl } from '../scripts/urls.mjs';
 
-const GOVERNING = 'Art. L. 121-6. Le salarié incapable de travailler pour cause de maladie...';
-const HANDOFF = {
-  label: 'Service d’accueil et d’information juridique',
-  href: 'https://justice.public.lu/',
+// Synthetic throughout. A component test that embeds real statute teaches the fixture to
+// look like law, and the fixture is what every later screen copies.
+const GOVERNING = {
+  publisher: 'preview-synthetic',
+  language: 'en',
+  text: 'LEX V3 SYNTHETIC PREVIEW. Article 1. This text has no legal authority.',
 };
+const HANDOFF = { label: 'Synthetic handoff counter', href: 'https://handoff.invalid/counter' };
 
 const HASH_A = '99b621c38dec11dcd362c0db35d9e9c090e62613cc5c20b0727c0b30fd39ce66';
 const HASH_B = 'c064f74a9827d610125d25c999f79df626cd987432aa110f2e05ce48388b5eef';
@@ -24,8 +27,8 @@ function candidate(validFrom, hash, publicationDate) {
     hash,
     publication_date: publicationDate,
     href: readingUrl({
-      publisher: 'lu-legilux',
-      work: 'loi-1993-04-05-n1',
+      publisher: 'preview-synthetic',
+      work: 'synthetic-preview-work',
       validFrom,
       hash,
     }),
@@ -383,8 +386,8 @@ test('advice_boundary co-delivers the governing provisions and a reachable count
 
   const good = renderRefusalCard({ code: 'advice_boundary', ...EXAMPLES.advice_boundary });
   assert.ok(good.includes('The published text, in full'));
-  assert.ok(good.includes('L. 121-6'));
-  assert.ok(good.includes('href="https://justice.public.lu/"'));
+  assert.ok(good.includes('no legal authority'));
+  assert.ok(good.includes('href="https://handoff.invalid/counter"'));
 });
 
 test('a refusal is not announced as an error', () => {
@@ -416,9 +419,69 @@ test('retryable refusals say so, and the rest do not', () => {
   assert.ok(!terminal.includes('worth retrying'));
 });
 
-test('quoted statutory text carries its own language attribute', () => {
-  const card = renderRefusalCard({ code: 'advice_boundary', ...EXAMPLES.advice_boundary });
-  assert.ok(card.includes('lang="fr"'), 'French statute was not marked as French');
+test('quoted text carries the expression language, not a hardcoded French', () => {
+  // Every governing text used to be emitted with lang="fr", so an English EU expression was
+  // announced to a screen reader in a French voice.
+  const english = renderRefusalCard({ code: 'advice_boundary', ...EXAMPLES.advice_boundary });
+  assert.ok(english.includes('lang="en"'));
+  assert.ok(!english.includes('lang="fr"'), 'an English expression was labelled French');
+
+  const french = renderRefusalCard({
+    code: 'advice_boundary',
+    sentence: 'I cannot apply the law to your situation.',
+    governingText: {
+      publisher: 'lu-legilux',
+      language: 'fr',
+      text: 'APERCU SYNTHETIQUE. Article 1er. Ce texte est synthetique.',
+    },
+    handoff: HANDOFF,
+  });
+  assert.ok(french.includes('lang="fr"'));
+});
+
+test('a handoff link is validated, not merely escaped', () => {
+  for (const href of [
+    'javascript:alert(1)',
+    'data:text/html,<script>alert(1)</script>',
+    'http://handoff.invalid/counter',
+    'https://evil.example/counter',
+    'https://handoff.invalid@evil.example/counter',
+    'https://handoff.invalid:8443/counter',
+  ]) {
+    assert.throws(
+      () =>
+        renderRefusalCard({
+          code: 'advice_boundary',
+          sentence: 'I cannot apply the law to your situation.',
+          governingText: GOVERNING,
+          handoff: { label: 'Counter', href },
+        }),
+      /a handoff/,
+      `${href} was rendered as a working handoff link`,
+    );
+  }
+});
+
+test('a payload shape nobody typed is refused rather than stringified', () => {
+  for (const value of [{ nested: 'object' }, [{ nested: 'object' }], () => 'x']) {
+    assert.throws(
+      () =>
+        renderRefusalCard({
+          code: 'text_withheld',
+          sentence: 'The publisher licence does not permit serving this text.',
+          payload: { licence: value },
+        }),
+      /carries scalars or lists of scalars/,
+      `${JSON.stringify(value)} reached the page`,
+    );
+  }
+  // Scalars and lists of scalars still work, including the ones that are not strings.
+  const card = renderRefusalCard({
+    code: 'format_not_available',
+    sentence: 'This state is held as PDF only.',
+    payload: { formats_held: ['pdf'], count: 1, ocr_attempted: false },
+  });
+  assert.ok(card.includes('pdf'));
 });
 
 test('payload values are escaped rather than trusted', () => {
@@ -441,14 +504,34 @@ test('a card without a human sentence is refused', () => {
   );
 });
 
-test('every requirement cites where it came from', () => {
+test('the payload contract covers the registry, with no code left undeclared', () => {
+  // Ten codes have no payload the pack names. That is a fact about the pack, and it is now
+  // written down rather than left as the absence of an entry, so a new code cannot join the
+  // registry without somebody deciding which kind it is.
+  assert.deepEqual(Object.keys(REQUIRED_PAYLOAD).sort(), [...REFUSAL_CODES].sort());
+
   for (const [code, requirement] of Object.entries(REQUIRED_PAYLOAD)) {
-    assert.ok(REFUSAL_CODES.includes(code), `${code} is not in the registry`);
-    assert.ok(requirement.keys.length > 0, `${code} requires nothing`);
-    assert.match(
-      requirement.basis,
-      /^3[0-9]-[a-z0-9-]+:/,
-      `${code} does not cite a numbered architect document`,
-    );
+    assert.ok(requirement.basis.length > 20, `${code} declares no basis`);
+    if (requirement.keys.length > 0) {
+      assert.match(
+        requirement.basis,
+        /^3[0-9]-[a-z0-9-]+/,
+        `${code} requires keys without citing a numbered architect document`,
+      );
+      assert.ok(!requirement.unspecified, `${code} is both specified and unspecified`);
+    } else {
+      assert.ok(
+        requirement.unspecified === true || code === 'advice_boundary',
+        `${code} requires nothing and does not say why`,
+      );
+    }
   }
+
+  // The unspecified ones are exactly the codes the pack is silent about.
+  const open = Object.entries(REQUIRED_PAYLOAD)
+    .filter(([, requirement]) => requirement.unspecified === true)
+    .map(([code]) => code);
+  assert.equal(open.length, 9);
+  assert.ok(!open.includes('no_version_for_date'));
+  assert.ok(!open.includes('advice_boundary'));
 });

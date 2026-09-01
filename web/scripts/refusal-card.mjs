@@ -25,6 +25,8 @@
 // error toast, and the components here give a caller no way to make it one.
 
 import { mark } from './design-tokens.mjs';
+import { quotedLaw } from './localization.mjs';
+import { handoffUri } from './routes.mjs';
 import { parseObjectUrl } from './urls.mjs';
 
 /**
@@ -68,6 +70,16 @@ export const RETRYABLE = Object.freeze(new Set(['upstream_unreachable', 'rate_li
  * Only codes the architect pack actually pins down appear here. `basis` is quoted closely
  * enough that a reviewer can grep the named file for it.
  */
+function unspecified() {
+  return Object.freeze({
+    keys: Object.freeze([]),
+    unspecified: true,
+    basis:
+      'no payload named by 30-FINAL-VERDICT, 31-v3-spec, 33-product-spec or 35-ideal-ux; ' +
+      'pending the #348 API contract',
+  });
+}
+
 export const REQUIRED_PAYLOAD = Object.freeze({
   no_version_for_date: Object.freeze({
     keys: Object.freeze(['history_begins', 'nearest_earlier', 'nearest_later']),
@@ -115,6 +127,30 @@ export const REQUIRED_PAYLOAD = Object.freeze({
     keys: Object.freeze(['population_disclosure']),
     basis: '35-ideal-ux: the same population disclosure as the unresolved identifier',
   }),
+
+  // advice_boundary's obligation is not payload keys. The fixed template owes the reader
+  // the governing text and a named counter, and both are enforced in the renderer below.
+  advice_boundary: Object.freeze({
+    keys: Object.freeze([]),
+    basis:
+      '33-product-spec fixed refusal template: the governing text in full plus who can ' +
+      'advise you, enforced as governingText and handoff rather than as payload keys',
+  }),
+
+  // The remaining nine are declared, not forgotten. The architect pack names no payload for
+  // them, so they carry no key requirement yet, and saying so explicitly is the difference
+  // between a contract with holes in it and a contract nobody finished writing: a new code
+  // cannot be added without deciding which of these two it is, and the day the #348 API
+  // contract fixes these payloads, each entry gets its keys and its citation.
+  ambiguous_identifier: unspecified(),
+  language_not_available: unspecified(),
+  text_withheld: unspecified(),
+  format_not_available: unspecified(),
+  derivation_refused: unspecified(),
+  no_corpus_mounted: unspecified(),
+  snapshot_unknown: unspecified(),
+  upstream_unreachable: unspecified(),
+  rate_limited: unspecified(),
 });
 
 /**
@@ -149,6 +185,35 @@ function isPresent(value) {
   if (Array.isArray(value)) return value.length > 0;
   if (typeof value === 'object') return Object.keys(value).length > 0;
   return String(value).trim().length > 0;
+}
+
+/**
+ * The value shapes a payload may carry.
+ *
+ * `renderPayload` used to `String()` whatever it was handed, so a nested object arrived on
+ * the page as `[object Object]` and an unexpected shape rendered as a plausible-looking
+ * nothing. The ten codes whose payload keys the pack does not name still accept their own
+ * keys, but not their own shapes: a value is a scalar, or a list of scalars, or one of the
+ * structured shapes this module renders itself. Anything else is refused here rather than
+ * stringified on screen.
+ */
+const STRUCTURED_KEYS = new Set(['candidates']);
+
+function requirePayloadShapes(payload) {
+  for (const [key, value] of Object.entries(payload ?? {})) {
+    if (STRUCTURED_KEYS.has(key)) continue;
+    const values = Array.isArray(value) ? value : [value];
+    for (const one of values) {
+      const type = typeof one;
+      if (one !== null && type !== 'string' && type !== 'number' && type !== 'boolean') {
+        throw new Error(
+          `payload value ${JSON.stringify(key)} is a ${Array.isArray(value) ? 'list of ' : ''}` +
+            `${type}; a refusal payload carries scalars or lists of scalars, because a shape ` +
+            'nobody typed reaches the reader as [object Object]',
+        );
+      }
+    }
+  }
 }
 
 /**
@@ -271,7 +336,8 @@ function renderPayload(code, payload) {
  * @param {string} input.code           a member of REFUSAL_CODES
  * @param {string} input.sentence       one human sentence, the reader's answer
  * @param {object} [input.payload]      the mandatory helpful payload
- * @param {string} [input.governingText] provisions co-delivered with the refusal
+ * @param {{publisher: string, language: string, text: string}} [input.governingText]
+ *        provisions co-delivered with the refusal, carrying the expression's own language
  * @param {{label: string, href: string}} [input.handoff]
  */
 export function renderRefusalCard({ code, sentence, payload, governingText, handoff }) {
@@ -286,10 +352,11 @@ export function renderRefusalCard({ code, sentence, payload, governingText, hand
     throw new Error('a refusal card requires one human sentence');
   }
 
+  requirePayloadShapes(payload);
   requirePayload(code, payload);
 
   const payloadHtml = renderPayload(code, payload);
-  const hasGoverningText = typeof governingText === 'string' && governingText.trim().length > 0;
+  const hasGoverningText = Boolean(governingText);
   const hasHandoff = Boolean(handoff?.label && handoff?.href);
 
   if (!payloadHtml && !hasGoverningText && !hasHandoff) {
@@ -323,13 +390,18 @@ export function renderRefusalCard({ code, sentence, payload, governingText, hand
     ? `<p class="refusal-note">${escapeHtml(MANDATED_NOTE[code])}</p>`
     : '';
 
+  // The quotation carries the expression's own language. Hardcoding `lang="fr"` mislabels
+  // every EU expression and every one of the handful of non-French LU renderings, and a
+  // screen reader then reads English law in a French voice.
   const text = hasGoverningText
     ? `<div class="refusal-governing"><h3>The published text, in full</h3>` +
-      `<p class="body" lang="fr">${escapeHtml(governingText)}</p></div>`
+      `${quotedLaw(governingText)}</div>`
     : '';
 
+  // Validated, not merely escaped. `javascript:alert(1)` escapes to a perfectly safe
+  // attribute value and remains a working link.
   const foot = hasHandoff
-    ? `<p class="refusal-handoff"><a href="${escapeHtml(handoff.href)}">` +
+    ? `<p class="refusal-handoff"><a href="${escapeHtml(handoffUri(handoff.href))}">` +
       `${escapeHtml(handoff.label)}</a></p>`
     : '';
 

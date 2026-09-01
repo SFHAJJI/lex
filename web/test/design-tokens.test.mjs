@@ -73,12 +73,40 @@ test('mark always emits the icon and the label beside the text', () => {
 
 test('there is no way to apply a token colour without its icon and label', async () => {
   const module = await import('../scripts/design-tokens.mjs');
-  // Any exported function that returned a bare colour would let a caller style a span with
-  // colour alone, which is the failure this module exists to make unavailable.
+  // Any exported function that returns a colour lets a caller style a span with colour
+  // alone, which is the failure this module exists to make unavailable. The first version
+  // of this test exempted `tokenNamed` by name, which is the same defect wearing a test's
+  // clothes: the one export that broke the claim was the one the check skipped.
   for (const [name, value] of Object.entries(module)) {
     if (typeof value !== 'function' || name === 'mark' || name === 'tokenCss') continue;
-    if (name === 'tokenNamed') continue;
     assert.fail(`unexpected export ${name} may hand out a colour without its label`);
+  }
+  const colours = new Set(TOKENS.flatMap((token) => [token.light, token.dark]));
+  for (const [name, value] of Object.entries(module)) {
+    if (typeof value === 'function') continue;
+    const serialised = JSON.stringify(value);
+    for (const colour of colours) {
+      if (name === 'TOKENS') continue; // the table itself, which mark() reads and nobody else styles from
+      assert.ok(
+        !serialised?.includes(colour),
+        `export ${name} hands out the bare colour ${colour}`,
+      );
+    }
+  }
+});
+
+test('the token colour arrives by class, never by an inline style a CSP will drop', () => {
+  for (const token of TOKENS) {
+    const html = mark(token.name, 'sample content');
+    assert.ok(!html.includes('style='), `${token.name} carries an inline style`);
+    assert.ok(html.includes(`token${token.name}`), `${token.name} lost its class`);
+  }
+  const css = tokenCss();
+  for (const token of TOKENS) {
+    assert.ok(
+      css.includes(`.token${token.name} { color: var(${token.name}); }`),
+      `${token.name} has no generated class rule, so the colour never arrives`,
+    );
   }
 });
 

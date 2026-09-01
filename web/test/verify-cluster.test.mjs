@@ -8,37 +8,43 @@ import {
 } from '../scripts/verify-cluster.mjs';
 
 const DIGEST = 'ad5dace9bd5116f493fe3035fd01546284e24dd2057a15f8d6be95eba8f82cf0';
-const SOURCE = 'https://legilux.public.lu/eli/etat/leg/loi/2002/08/02/n2/consolide/20070901/fr';
-const LEX_ID = 'lu-legilux:loi-2002-08-02-n2:2007-09-01--99b621c3';
+const PUBLISHER = 'preview-synthetic';
+const SOURCE = 'https://preview.invalid/synthetic-preview-work/2001-01-01';
+const LEX_ID = 'preview-synthetic:synthetic-preview-work:2001-01-01';
 
 const ENVELOPE = {
-  publisher_name: 'Service central de législation (Legilux)',
+  publisher_name: 'Synthetic preview publisher, applicability semantics',
   timeline_semantics: 'publisher_applicability',
-  freshness: { built_at: '2026-08-15T09:22:08Z', stamp_signature_valid: true },
+  freshness: { built_at: '2026-01-01T00:00:00Z', stamp_signature_valid: true },
   artifact: {
-    corpus_commit: 'c087f9153a8cde5429965ffa897db001f3acdf09',
-    code_commit: '27f0e02cb0da8e0fdf9f8322d3eef3b3ae09c776',
-    manifest_set_id: '4dff34d9e957d469e87ca2b1dbe0e74b5a85519da3631b37ddf2ea81d3553b59',
-    content_digest: 'c064f74a9827d610125d25c999f79df626cd987432aa110f2e05ce48388b5eef',
+    corpus_commit: 'synthetic-corpus-commit',
+    code_commit: 'synthetic-code-commit',
+    manifest_set_id: 'synthetic-manifest-set',
+    content_digest: 'synthetic-content-digest',
   },
 };
 
-test('the copy control carries the whole digest, not the eight shown', () => {
+test('the whole digest is on the page, and no control promises what it cannot do', () => {
   const html = renderVerifyCluster({
+    publisher: PUBLISHER,
     sourceUri: SOURCE,
     lexId: LEX_ID,
     hash: { kind: 'record_sha256', value: DIGEST },
   });
-  assert.ok(html.includes(`data-copy="${DIGEST}"`), 'the copy control lost the full digest');
-  assert.ok(html.includes('>ad5dace9<'), 'the chip should show the first eight characters');
-  // A truncated digest in a citation cannot be verified by anyone.
-  assert.ok(!html.includes('data-copy="ad5dace9"'), 'the copy control copied the truncation');
+  // One contiguous text run, so a selection yields the whole digest, not the truncation.
+  const value = html.split('<code class="verify-hash-value">')[1].split('</code>')[0];
+  assert.equal(value.replace(/<[^>]+>/g, ''), DIGEST);
+  assert.ok(html.includes('>ad5dace9<'), 'the first eight lost their emphasis');
+  // This line ships no client script, so a Copy button would be a control with no handler.
+  assert.ok(!html.includes('<button'), 'an inert control was rendered');
+  assert.ok(!html.includes('data-copy'), 'a copy affordance was promised without a script');
 });
 
 test('a chip must name which digest it shows', () => {
   for (const kind of HASH_KINDS) {
     const html = renderVerifyCluster({
-      sourceUri: SOURCE,
+      publisher: PUBLISHER,
+    sourceUri: SOURCE,
       lexId: LEX_ID,
       hash: { kind, value: DIGEST },
     });
@@ -47,7 +53,8 @@ test('a chip must name which digest it shows', () => {
   assert.throws(
     () =>
       renderVerifyCluster({
-        sourceUri: SOURCE,
+        publisher: PUBLISHER,
+    sourceUri: SOURCE,
         lexId: LEX_ID,
         hash: { kind: 'sha256', value: DIGEST },
       }),
@@ -60,7 +67,8 @@ test('a digest that is not 64 lowercase hex is refused', () => {
     assert.throws(
       () =>
         renderVerifyCluster({
-          sourceUri: SOURCE,
+          publisher: PUBLISHER,
+    sourceUri: SOURCE,
           lexId: LEX_ID,
           hash: { kind: 'body_sha256', value: bad },
         }),
@@ -71,26 +79,18 @@ test('a digest that is not 64 lowercase hex is refused', () => {
 
 test('the official source anchor points at the publisher', () => {
   const html = renderVerifyCluster({
+    publisher: PUBLISHER,
     sourceUri: SOURCE,
     lexId: LEX_ID,
     hash: { kind: 'record_sha256', value: DIGEST },
   });
   assert.ok(html.includes(`href="${SOURCE}"`));
-  assert.throws(
-    () =>
-      renderVerifyCluster({
-        sourceUri: 'not a url',
-        lexId: LEX_ID,
-        hash: { kind: 'record_sha256', value: DIGEST },
-      }),
-    /is not a URL/,
-  );
 });
 
-test('an invalid stamp is not rendered like a valid one', () => {
+test('an invalid stamp is not rendered like a valid one, and not as a date conflict', () => {
   const good = renderEnvelopeStrip({ envelope: ENVELOPE });
-  assert.ok(good.includes('stamp valid'));
-  assert.ok(!good.includes('NOT valid'));
+  assert.ok(good.includes('stamp signature valid'));
+  assert.ok(!good.includes('did NOT verify'));
 
   const bad = renderEnvelopeStrip({
     envelope: {
@@ -98,11 +98,53 @@ test('an invalid stamp is not rendered like a valid one', () => {
       freshness: { ...ENVELOPE.freshness, stamp_signature_valid: false },
     },
   });
-  assert.ok(bad.includes('stamp NOT valid'));
-  // It takes the conflict token, so it carries an icon and a label rather than a colour.
-  assert.ok(bad.includes('token-icon'));
-  assert.ok(bad.includes('token-label'));
+  assert.ok(bad.includes('did NOT verify'));
+  assert.ok(bad.includes('<strong'), 'the invalid case lost its emphasis');
+  // It used to borrow --conflict, whose label reads "dates disagree, both are the
+  // publisher's". A signature that did not verify is not a date conflict, and the token
+  // would have put that false sentence in the one place a reader goes to decide trust.
+  assert.ok(!bad.includes('token--conflict'), 'signature invalidity reused the conflict token');
+  assert.ok(!bad.includes('dates disagree'));
   assert.notEqual(good, bad);
+});
+
+test('an official-source link is validated against the publisher, not merely escaped', () => {
+  for (const [uri, why] of [
+    ['http://preview.invalid/x', 'plaintext http under an official label'],
+    ['https://evil.example/fake', 'an arbitrary host under an official label'],
+    ['https://preview.invalid@evil.example/x', 'userinfo hiding the real host'],
+    ['https://preview.invalid:8443/x', 'an explicit port'],
+    ['javascript:alert(1)', 'a script URL'],
+    ['not a url', 'not a URL at all'],
+  ]) {
+    assert.throws(
+      () =>
+        renderVerifyCluster({
+          publisher: PUBLISHER,
+          sourceUri: uri,
+          lexId: LEX_ID,
+          hash: { kind: 'record_sha256', value: DIGEST },
+        }),
+      /source URI/,
+      `${why} was rendered as Official source`,
+    );
+  }
+});
+
+test('a publisher outside the closed set has no host to be checked against', () => {
+  for (const publisher of ['unknown-publisher', 'toString', 'constructor', undefined]) {
+    assert.throws(
+      () =>
+        renderVerifyCluster({
+          publisher,
+          sourceUri: SOURCE,
+          lexId: LEX_ID,
+          hash: { kind: 'record_sha256', value: DIGEST },
+        }),
+      /is not a publisher this build serves/,
+      `${String(publisher)} was accepted as a publisher`,
+    );
+  }
 });
 
 test('an absent signature verdict is refused rather than shown as valid', () => {

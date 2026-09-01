@@ -21,8 +21,44 @@
 export const SHELLS = Object.freeze(['ask', 'w', 'dev']);
 
 const SHELL_SET = new Set(SHELLS);
-const VERSION_KEY = /^(\d{4}-\d{2}-\d{2})--([0-9a-f]{64})$/;
+const VERSION_KEY = /^([0-9]{4}-[0-9]{2}-[0-9]{2})--([0-9a-f]{64})$/;
 const SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+const ANCHOR = /^[^#\s/]+$/;
+
+/**
+ * One segment rule, used by the builders and by the parser.
+ *
+ * They used to disagree: the builders refused `..` and `.hidden` while the parser accepted
+ * `/../secret` as a dossier and handed back a publisher of `..`. A parser that admits what
+ * the builders refuse is not a parser, it is a second, weaker specification, and the
+ * candidate links in the ambiguous_version card are checked against exactly this one.
+ */
+export function isSafeSegment(value) {
+  return typeof value === 'string' && SEGMENT.test(value) && !SHELL_SET.has(value);
+}
+
+/** The publisher's anchor: no separator, no fragment marker, no whitespace. */
+export function isSafeAnchor(value) {
+  return typeof value === 'string' && ANCHOR.test(value);
+}
+
+/**
+ * A date that exists. `2026-99-99` and `2025-02-29` match the ISO shape and are not days,
+ * and a URL built on one names a state that can never resolve. Leap years are decidable, so
+ * they are decided rather than approximated.
+ */
+export function isCalendarDate(value) {
+  if (typeof value !== 'string') return false;
+  const match = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (year < 1 || month < 1 || month > 12 || day < 1) return false;
+  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  const lengths = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return day <= lengths[month - 1];
+}
 
 function requireSegment(value, field) {
   if (typeof value !== 'string' || !SEGMENT.test(value)) {
@@ -62,14 +98,14 @@ export function readingUrl({ publisher, work, validFrom, hash, anchor }) {
         'silently onto different text when the publisher replaces a file',
     );
   }
-  if (typeof validFrom !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(validFrom)) {
-    throw new Error(`valid_from is not an ISO date: ${JSON.stringify(validFrom)}`);
+  if (!isCalendarDate(validFrom)) {
+    throw new Error(`valid_from is not a calendar date: ${JSON.stringify(validFrom)}`);
   }
 
   const base = `${dossierUrl({ publisher, work })}/${validFrom}--${hash}`;
   if (anchor === undefined || anchor === null || anchor === '') return base;
 
-  if (typeof anchor !== 'string' || /[#\s/]/.test(anchor)) {
+  if (!isSafeAnchor(anchor)) {
     throw new Error(`anchor is not a publisher anchor: ${JSON.stringify(anchor)}`);
   }
   // Verbatim. Not normalised, not lowercased, not re-encoded.
@@ -83,6 +119,17 @@ export function shellUrl(shell, path = '/') {
   }
   if (!path.startsWith('/')) {
     throw new Error('a shell applies to an absolute path');
+  }
+  // `/ask/../../provenance` is a shell prefix that walks out of its own shell. Every
+  // segment has to be one the builders would mint.
+  const [withoutFragment] = path.split('#');
+  for (const segment of withoutFragment.split('/').filter((part) => part.length > 0)) {
+    if (!SEGMENT.test(segment)) {
+      throw new Error(
+        `${JSON.stringify(segment)} is not a safe path segment, so this shell path leaves ` +
+          'the shell it claims to be inside',
+      );
+    }
   }
   return path === '/' ? `/${shell}` : `/${shell}${path}`;
 }
@@ -98,17 +145,19 @@ export function parseObjectUrl(path) {
   const anchor = fragmentParts.length > 0 ? fragmentParts.join('#') : null;
   const segments = withoutFragment.split('/').filter((part) => part.length > 0);
 
+  if (anchor !== null && !isSafeAnchor(anchor)) return null;
+
   if (segments.length === 2) {
     const [publisher, work] = segments;
-    if (SHELL_SET.has(publisher)) return null;
+    if (!isSafeSegment(publisher) || !isSafeSegment(work)) return null;
     return { kind: 'dossier', publisher, work, anchor: null };
   }
 
   if (segments.length === 3) {
     const [publisher, work, versionKey] = segments;
-    if (SHELL_SET.has(publisher)) return null;
+    if (!isSafeSegment(publisher) || !isSafeSegment(work)) return null;
     const match = VERSION_KEY.exec(versionKey);
-    if (!match) return null;
+    if (!match || !isCalendarDate(match[1])) return null;
     return {
       kind: 'reading',
       publisher,

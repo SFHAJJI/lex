@@ -21,18 +21,28 @@ import { mark } from './design-tokens.mjs';
 
 export const OPEN_ENDED_SENTINEL = '9999-12-31';
 
-const LEGAL_TIME_PHRASING = Object.freeze({
-  publisher_applicability: (from, to) =>
-    to === null
-      ? `Applicable from ${from}, with no end recorded by the publisher`
-      : `Applicable from ${from} to ${to} (publisher)`,
-  official_consolidation_state: (from, to) =>
-    to === null
-      ? `Consolidated wording state from ${from}, with no end recorded by the publisher`
-      : `Consolidated wording state from ${from} to ${to}`,
-});
+// A Map, not an object literal. An object literal is not a closed vocabulary: it inherits
+// `toString`, `constructor` and the rest, so `timeline_semantics: "toString"` found a
+// function, passed the truthiness check that was standing in for membership, and rendered
+// `[object Undefined]` as legal time. A Map has no prototype chain to walk.
+const LEGAL_TIME_PHRASING = new Map([
+  [
+    'publisher_applicability',
+    (from, to) =>
+      to === null
+        ? `Applicable from ${from}, with no end recorded by the publisher`
+        : `Applicable from ${from} to ${to} (publisher)`,
+  ],
+  [
+    'official_consolidation_state',
+    (from, to) =>
+      to === null
+        ? `Consolidated wording state from ${from}, with no end recorded by the publisher`
+        : `Consolidated wording state from ${from} to ${to}`,
+  ],
+]);
 
-export const TIMELINE_SEMANTICS = Object.freeze(Object.keys(LEGAL_TIME_PHRASING));
+export const TIMELINE_SEMANTICS = Object.freeze([...LEGAL_TIME_PHRASING.keys()]);
 
 function escapeHtml(value) {
   return String(value)
@@ -58,8 +68,8 @@ function required(value, field) {
  */
 export function renderStateBanner({ envelope, state }) {
   const semantics = envelope?.timeline_semantics;
-  const phrase = LEGAL_TIME_PHRASING[semantics];
-  if (!phrase) {
+  const phrase = LEGAL_TIME_PHRASING.get(semantics);
+  if (phrase === undefined) {
     throw new Error(
       `unknown timeline_semantics ${JSON.stringify(semantics)}; ` +
         'the publisher vocabulary is not something this renderer may choose',

@@ -68,6 +68,42 @@ const MUTATIONS = [
       }
     },
   },
+  {
+    // The defect this replaces was real and shipped: the components emitted adjacent spans
+    // with no whitespace and the stylesheet gave them no layout, so a token label and the
+    // text it qualifies were painted as one word. Contrast, overflow, console and the
+    // accessibility tree were all clean on that page.
+    name: "the component separation rules removed, so labels and values paint flush",
+    expect: /painted flush against each other/i,
+    async apply(root) {
+      const file = join(root, "styles.css");
+      const css = await readFile(file, "utf8");
+      await writeFile(
+        file,
+        `${css}\n.token, .verify-hash, .verify-cluster, .refusal-head, .refusal-header,\n` +
+          ".status-strip-flag { display: inline; gap: 0; }\n" +
+          ".envelope-strip summary > * + * { margin-inline-start: 0; }\n",
+        "utf8",
+      );
+    },
+  },
+  {
+    name: "a control with no handler on a page that loads no script",
+    expect: /control\(s\) with no activation path/i,
+    async apply(root) {
+      for (const name of await readdir(root)) {
+        if (!name.endsWith(".html")) continue;
+        const file = join(root, name);
+        const html = await readFile(file, "utf8");
+        if (!html.includes("</main>")) continue;
+        await writeFile(
+          file,
+          html.replace("</main>", '<button type="button">Copy the full digest</button></main>'),
+          "utf8",
+        );
+      }
+    },
+  },
 ];
 
 function run(root) {

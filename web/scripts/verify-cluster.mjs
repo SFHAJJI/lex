@@ -2,18 +2,26 @@
 // Identical on every screen, because a verification affordance that appears in some places
 // teaches readers that the others are not verifiable.
 //
-// Two rules here are about what a hash means.
+// Three rules here are about what a hash means, and one about what "official" means.
 //
-// The chip shows eight hex characters because a full digest is unreadable, but the copy
-// control copies the whole thing. A truncated digest pasted into a citation cannot be
-// verified by anyone, so a component that copies what it displays would quietly produce
-// unverifiable evidence, which is the opposite of this component's purpose.
+// The whole digest is on the page, as selectable text, with its first eight characters
+// emphasised. It used to be an eight-character chip beside a Copy button, and that button
+// had no handler: this line ships inert HTML with no client script, so the control was a
+// promise the page could not keep, and the only digest a reader could actually take away
+// was the truncation. A truncated digest in a citation cannot be verified by anyone. The
+// scripted chip returns when there is a script to hang it on; until then the evidence is
+// present rather than promised.
 //
-// The chip also names which digest it is. `record_sha256`, `body_sha256` and `text_sha256`
-// are all present on every state and they answer different questions. Eight hex characters
-// with no label is a number, not evidence.
+// The digest also names which one it is. `record_sha256`, `body_sha256` and `text_sha256`
+// are all present on every state and they answer different questions. Sixty-four hex
+// characters with no label is a number, not evidence.
+//
+// The official-source anchor is validated against the publisher's own host set, not merely
+// escaped. `http://evil.example/fake` under the words "Official source" was renderable
+// before, and escaping made it safe to place in the attribute while leaving it a working
+// link to the wrong place.
 
-import { mark } from './design-tokens.mjs';
+import { publisherSourceUri } from './routes.mjs';
 
 /** The digests a state carries, product spec section 4.6. */
 export const HASH_KINDS = Object.freeze([
@@ -33,30 +41,15 @@ function escapeHtml(value) {
     .replaceAll("'", '&#39;');
 }
 
-function requireHttpsPublisherUri(sourceUri) {
-  if (typeof sourceUri !== 'string' || sourceUri.length === 0) {
-    throw new Error('the verify cluster requires the publisher source_uri');
-  }
-  let parsed;
-  try {
-    parsed = new URL(sourceUri);
-  } catch {
-    throw new Error(`source_uri is not a URL: ${sourceUri}`);
-  }
-  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-    throw new Error(`source_uri is not an http(s) URL: ${sourceUri}`);
-  }
-  return sourceUri;
-}
-
 /**
  * @param {object} input
+ * @param {string} input.publisher  the publisher whose host set the source must be on
  * @param {string} input.sourceUri  the publisher's own address for this state
  * @param {string} input.lexId      the identity whose provenance page this links to
  * @param {{kind: string, value: string}} input.hash
  */
-export function renderVerifyCluster({ sourceUri, lexId, hash }) {
-  const uri = requireHttpsPublisherUri(sourceUri);
+export function renderVerifyCluster({ publisher, sourceUri, lexId, hash }) {
+  const uri = publisherSourceUri({ publisher, uri: sourceUri });
 
   if (typeof lexId !== 'string' || lexId.trim().length === 0) {
     throw new Error('the verify cluster requires a lex_id for the provenance link');
@@ -74,16 +67,17 @@ export function renderVerifyCluster({ sourceUri, lexId, hash }) {
   }
 
   const short = hash.value.slice(0, 8);
+  const rest = hash.value.slice(8);
 
   return (
     '<div class="verify-cluster">' +
     `<a class="verify-source" href="${escapeHtml(uri)}" rel="external">Official source</a>` +
     '<span class="verify-hash">' +
     `<span class="verify-hash-kind">${escapeHtml(hash.kind)}</span>` +
-    `<code class="verify-hash-short" title="${escapeHtml(hash.kind)}">${escapeHtml(short)}</code>` +
-    // The full value travels with the control that copies it, never only the eight shown.
-    `<button type="button" class="verify-copy" data-copy="${escapeHtml(hash.value)}">` +
-    `Copy the full ${escapeHtml(hash.kind)}</button>` +
+    // One text node, selectable end to end, so what a reader takes away is the whole digest
+    // even though the first eight carry the visual weight.
+    `<code class="verify-hash-value">` +
+    `<span class="verify-hash-short">${escapeHtml(short)}</span>${escapeHtml(rest)}</code>` +
     '</span>' +
     `<a class="verify-provenance" href="/provenance/${encodeURIComponent(lexId)}">Provenance</a>` +
     '</div>'
@@ -116,9 +110,13 @@ export function renderEnvelopeStrip({ envelope }) {
     );
   }
 
+  // An invalid signature is not a date conflict, and `--conflict` says in words that two
+  // publisher dates disagree. Borrowing it to mean "this stamp did not verify" would put a
+  // false sentence on the page in the one place that exists to say whether to trust it. The
+  // invalid case is plain, emphatic text with no token.
   const stamp = valid
-    ? '<span class="strip-stamp-valid">stamp valid</span>'
-    : mark('--conflict', 'stamp NOT valid');
+    ? '<span class="strip-stamp-valid">stamp signature valid</span>'
+    : '<strong class="strip-stamp-invalid">stamp signature did NOT verify</strong>';
 
   const built = builtAt
     ? `index built ${escapeHtml(builtAt)}`

@@ -163,3 +163,71 @@ blockquote.law {
   display: grid;
   gap: 0.35rem;
 }
+
+/* Readable separation.
+   Contrast and overflow both pass on a page whose label, value and code are painted flush
+   against each other, and that is what shipped: the components emitted adjacent spans with
+   no whitespace between them and no layout rules, so Chrome rendered "legal timeApplicable
+   from 2001-01-01" as one word. The browser evidence run now measures the gap between
+   adjacent inline siblings, and these are the rules that give it one. */
+.token,
+.verify-hash,
+.status-strip-flag,
+.refusal-head,
+.refusal-header {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 0.5rem;
+  min-inline-size: 0;
+}
+
+.verify-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 1rem;
+  min-inline-size: 0;
+}
+
+.token-label,
+.verify-hash-kind,
+.status-strip-caption {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.verify-hash-value {
+  overflow-wrap: anywhere;
+  min-inline-size: 0;
+}
+
+.verify-hash-short {
+  font-weight: 700;
+}
+
+.surface-block,
+.state-banner,
+.refusal-card {
+  display: grid;
+  gap: 0.5rem;
+  min-inline-size: 0;
+}
+
+.refusal-card {
+  padding: 0.75rem;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+}
+
+.envelope-strip summary > * + * {
+  margin-inline-start: 1rem;
+}
+
+.strip-publisher,
+.strip-semantics,
+.strip-built,
+.strip-stamp-valid,
+.strip-stamp-invalid {
+  display: inline-block;
+}

@@ -251,6 +251,36 @@ const PROBE = `(() => {
     });
   const worst = contrast.reduce((a, b) => (a === null || b.ratio - b.required < a.ratio - a.required ? b : a), null);
 
+  // Readable separation. Contrast and overflow both pass on a page whose labels, values
+  // and codes are painted flush against each other, and that is exactly what happened: the
+  // new component classes had no layout rules, so Chrome rendered the token label and the
+  // text it qualifies as one word. For every pair of adjacent inline element siblings,
+  // either the markup has whitespace between them or the boxes do.
+  const glued = [];
+  for (const parent of document.querySelectorAll('body *')) {
+    const children = [...parent.children].filter(
+      (el) => el.offsetParent !== null && el.textContent.trim().length > 0,
+    );
+    for (let i = 0; i + 1 < children.length; i += 1) {
+      const before = children[i];
+      const after = children[i + 1];
+      let between = '';
+      for (let node = before.nextSibling; node && node !== after; node = node.nextSibling) {
+        if (node.nodeType === 3) between += node.nodeValue;
+      }
+      if (between.length > 0 && between.trim().length !== between.length) continue;
+      if (between.trim().length > 0) continue;
+      const a = before.getBoundingClientRect();
+      const b = after.getBoundingClientRect();
+      const separated = b.left - a.right >= 2 || b.top >= a.bottom;
+      if (!separated) {
+        glued.push(
+          parent.className + ' > ' + before.className + ' | ' + after.className,
+        );
+      }
+    }
+  }
+
   const focusable = [...document.querySelectorAll(
     'a[href],button,input,select,textarea,summary,[tabindex]:not([tabindex="-1"])')];
   const headingEls = [...document.querySelectorAll('h1,h2,h3,h4,h5,h6')];
@@ -279,6 +309,11 @@ const PROBE = `(() => {
     worstContrastTag: worst ? worst.tag : null,
     worstContrastRequired: worst ? worst.required : null,
     contrastFailures: contrast.filter((c) => c.ratio < c.required).length,
+    glued: glued.slice(0, 8),
+    gluedCount: glued.length,
+    // A control with no handler and no form is a promise the page cannot keep. This line
+    // ships no script, so any button is inert by construction.
+    inertControls: [...document.querySelectorAll('button, a:not([href])')].length,
   };
 })()`;
 
@@ -508,6 +543,18 @@ async function main() {
         if (axNodes.length === 0) {
           failures.push(`${page} @${viewport.label}/${scheme}: the accessibility tree is empty`);
         }
+        if (observed.gluedCount > 0) {
+          failures.push(
+            `${page} @${viewport.label}/${scheme}: ${observed.gluedCount} adjacent element(s) ` +
+              `painted flush against each other: ${observed.glued.join("; ")}`,
+          );
+        }
+        if (observed.inertControls > 0) {
+          failures.push(
+            `${page} @${viewport.label}/${scheme}: ${observed.inertControls} control(s) with no ` +
+              "activation path on a page that loads no script",
+          );
+        }
         if (unnamedInteractive.length > 0) {
           failures.push(
             `${page} @${viewport.label}/${scheme}: ${unnamedInteractive.length} interactive node(s) ` +
@@ -607,7 +654,7 @@ async function main() {
       `${row.page.replace('state-','').replace('.html','').padEnd(18)} ${row.viewport.padEnd(8)} ${row.scheme.padEnd(6)} ` +
         `console=${row.console} h1=${row.h1Count} overflow=${row.horizontalOverflow} scripts=${row.scriptCount} ` +
         `contrast=${row.contrastChecked} worst=${row.worstContrast} ` +
-        `ax=${row.axNodes} named-interactive=${row.axInteractive} landmarks=${row.axLandmarks} main=${row.axMain}`,
+        `ax=${row.axNodes} named-interactive=${row.axInteractive} landmarks=${row.axLandmarks} main=${row.axMain} glued=${row.gluedCount} inert=${row.inertControls}`,
     );
   }
 

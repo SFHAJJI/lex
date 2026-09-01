@@ -91,11 +91,25 @@ export const BACKGROUNDS = Object.freeze({
   dark: DARK_BACKGROUND,
 });
 
-/** The custom properties for both schemes, to be appended to the stylesheet. */
+/**
+ * The custom properties for both schemes, plus one class per token, to be appended to the
+ * stylesheet.
+ *
+ * The class exists so `mark()` never writes a `style` attribute. #349 requires a
+ * restrictive Content-Security-Policy, and a policy worth having does not carry
+ * `style-src unsafe-inline`, so an inline token colour would simply be dropped and the
+ * meaning would fall back to text alone without anything failing. Generating the rule here
+ * keeps one source of truth and survives the policy.
+ */
 export function tokenCss() {
   const light = TOKENS.map((t) => `  ${t.name}: ${t.light};`).join('\n');
   const dark = TOKENS.map((t) => `    ${t.name}: ${t.dark};`).join('\n');
-  return `:root {\n${light}\n}\n\n@media (prefers-color-scheme: dark) {\n  :root {\n${dark}\n  }\n}\n`;
+  const classes = TOKENS.map((t) => `.token${t.name} { color: var(${t.name}); }`).join('\n');
+  return (
+    `:root {\n${light}\n}\n\n` +
+    `@media (prefers-color-scheme: dark) {\n  :root {\n${dark}\n  }\n}\n\n` +
+    `${classes}\n`
+  );
 }
 
 function escapeHtml(value) {
@@ -122,17 +136,13 @@ export function mark(name, text) {
     throw new Error(`unknown semantic token ${name}`);
   }
 
-  const style = `color: var(${token.name})`;
+  // No inline style. The colour arrives through the class that `tokenCss()` generates.
   const cls = `token token${token.name}`;
   return (
-    `<span class="${escapeHtml(cls)}" style="${escapeHtml(style)}">` +
+    `<span class="${escapeHtml(cls)}">` +
     `<span class="token-icon" aria-hidden="true">${escapeHtml(token.icon)}</span>` +
     `<span class="token-label">${escapeHtml(token.label)}</span>` +
     `<span class="token-text">${escapeHtml(text)}</span>` +
     '</span>'
   );
-}
-
-export function tokenNamed(name) {
-  return BY_NAME.get(name);
 }
