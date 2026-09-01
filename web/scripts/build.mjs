@@ -20,6 +20,7 @@ import { renderShellEntry } from "./shells.mjs";
 import { renderRefusalCatalog } from "./refusal-catalog.mjs";
 import { renderComparePreview } from "./compare-preview.mjs";
 import { renderTimelinePreview } from "./timeline-preview.mjs";
+import { renderCoveragePreview } from "./coverage-preview.mjs";
 import { page } from "./render.mjs";
 import { SHELLS } from "./urls.mjs";
 import { decodeEnvelope, validateEnvelope } from "./envelope.mjs";
@@ -129,6 +130,10 @@ pages.push(["compare.html", renderComparePreview()]);
 
 // The timeline, in the shapes where a chart would draw something the publisher never said.
 pages.push(["timeline.html", renderTimelinePreview()]);
+
+// Coverage, the page whose job is to say what is missing, in a finished build and an
+// unfinished one.
+pages.push(["coverage.html", renderCoveragePreview()]);
 
 // The destination every scheme-valid link in the preview resolves to. A visible action that
 // leads to a missing page is a promise the page cannot keep, and three of them shipped: the

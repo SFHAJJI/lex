@@ -702,3 +702,43 @@ summary {
 .compare {
   min-inline-size: 0;
 }
+
+.coverage-case,
+.coverage {
+  min-inline-size: 0;
+  margin-block: var(--space-6, 2rem);
+}
+
+.coverage-scroll {
+  overflow-x: auto;
+  max-inline-size: 100%;
+  min-inline-size: 0;
+}
+
+.coverage-table {
+  border-collapse: collapse;
+  inline-size: 100%;
+}
+
+.coverage-table caption {
+  text-align: start;
+  padding-block-end: var(--space-2, 0.5rem);
+  font-size: 0.875em;
+}
+
+.coverage-table th,
+.coverage-table td {
+  border: 1px solid var(--border, #8a8a8a);
+  padding: var(--space-2, 0.5rem);
+  text-align: start;
+}
+
+.coverage-as-of,
+.coverage-retention,
+.coverage-truncated,
+.coverage-build,
+.coverage-case-note {
+  border-inline-start: 3px solid var(--border, #8a8a8a);
+  padding-inline-start: var(--space-3, 0.75rem);
+  font-size: 0.9375em;
+}
