@@ -185,6 +185,13 @@ await resetWork();
 const ssr = await import(pathToFileURL(await bundle("app/index.jsx", "app.mjs")).href);
 pages.push(["hydration.html", ssr.renderHydrationProof()]);
 
+// The two screens ported to React in this change, built so the browser run measures them at
+// 320 CSS pixels rather than only in a test. Both carry a wide table that must scroll inside its
+// own labelled box instead of making the page scroll sideways, and a page that scrolls sideways
+// hides a column, which on these two screens means hiding a disclosure.
+pages.push(["timeline-react.html", ssr.renderTimelineReactPage()]);
+pages.push(["coverage-react.html", ssr.renderCoverageReactPage()]);
+
 const clientBundle = await bundleClient("app/client-entry.jsx", "client.js");
 await cp(clientBundle, new URL("client.js", destination));
 

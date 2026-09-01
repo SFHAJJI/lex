@@ -17,3 +17,9 @@ export { ResultList } from './ResultList.jsx';
 export { FilterChips } from './FilterChips.jsx';
 export { CompareArming, armingRefusal, useCompareSelection } from './CompareArming.jsx';
 export { DateField, parseAsOf, resolutionSentence } from './DateField.jsx';
+export { Timeline, DERIVED_HOLE, DERIVED_OVERLAP, DERIVED_TITLE } from './Timeline.jsx';
+export { Coverage, UNCODED_LANGUAGE_LABEL } from './Coverage.jsx';
+export {
+  renderTimelineReactPage,
+  renderCoverageReactPage,
+} from './timeline-coverage-preview.jsx';
