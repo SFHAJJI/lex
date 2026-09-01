@@ -1,9 +1,10 @@
 using Lex.V3.Contracts;
+using Lex.V3.Contracts.Source.Core;
 
 if (args.Length != 3 || !string.Equals(args[1], "--output", StringComparison.Ordinal))
 {
     Console.Error.WriteLine(
-        "Usage: Lex.V3.ContractTool <export-preview-schemas|export-synthetic-preview-schemas> --output <directory>");
+        "Usage: Lex.V3.ContractTool <export-preview-schemas|export-synthetic-preview-schemas|export-source-core-schemas> --output <directory>");
     return 2;
 }
 
@@ -30,10 +31,20 @@ else if (string.Equals(args[0], "export-synthetic-preview-schemas", StringCompar
             SyntheticSliceSchemaExporter.ExportUtf8(schemaId));
     }
 }
+else if (string.Equals(args[0], "export-source-core-schemas", StringComparison.Ordinal))
+{
+    foreach (var schemaId in SourceCoreSchemaExporter.AllSchemaIds)
+    {
+        WriteSchema(
+            schemaId,
+            SourceCoreSchemaExporter.FileNameFor(schemaId),
+            SourceCoreSchemaExporter.ExportUtf8(schemaId));
+    }
+}
 else
 {
     Console.Error.WriteLine(
-        "Usage: Lex.V3.ContractTool <export-preview-schemas|export-synthetic-preview-schemas> --output <directory>");
+        "Usage: Lex.V3.ContractTool <export-preview-schemas|export-synthetic-preview-schemas|export-source-core-schemas> --output <directory>");
     return 2;
 }
 
