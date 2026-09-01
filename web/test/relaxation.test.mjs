@@ -103,7 +103,19 @@ test('semantic ranking names the encoder and the benchmark that gates it', () =>
   });
   assert.ok(html.includes('synthetic-encoder/1'));
   assert.ok(html.includes('retrieval-bench/4'));
-  assert.ok(html.includes('serves only behind that gate'));
+  // The encoder and benchmark names are shown, because a reader who wants to check which
+  // model ranked their results needs them. What must not appear is this screen vouching
+  // for the outcome of a check it never saw: both values are caller-supplied strings, so
+  // any caller could name any pair and the screen certified it.
+  assert.ok(html.includes("does not carry that benchmark"));
+  assert.ok(
+    !html.includes('passing benchmark'),
+    'the screen certified a benchmark result it does not hold',
+  );
+  assert.ok(
+    !html.includes('serves only behind that gate'),
+    'the screen asserted a deployment gate it cannot observe',
+  );
 
   for (const broken of [
     { applied: true, benchmark: 'retrieval-bench/4' },

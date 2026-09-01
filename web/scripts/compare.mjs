@@ -30,9 +30,20 @@ import { renderRefusalCard } from './refusal-card.mjs';
 /** The two axes a comparison can run along. They are never mixed. */
 export const COMPARE_MODES = Object.freeze(['temporal', 'language']);
 
-/** The fixed label on a renumber row. Mechanical, and it says so. */
-export const RENUMBER_LABEL =
-  'renumbering detected mechanically by identical text hash, not publisher-asserted';
+/**
+ * The fixed label on a renumber row.
+ *
+ * It used to say the pairing was "detected mechanically by identical text hash", which is
+ * a claim about how the upstream established it. This module receives a from and a to and
+ * no digests, so it cannot tell a hash-matched pair from one produced any other way, and it
+ * was certifying the method rather than reporting it. Saying not-publisher-asserted is
+ * true and is the part that matters to a reader: the publisher did not say these two
+ * anchors are the same provision.
+ *
+ * When a renumber row carries the two digests it was paired on, the stronger sentence can
+ * come back, because then this screen would hold the evidence for it.
+ */
+export const RENUMBER_LABEL = 'renumbering derived by this service, not publisher-asserted';
 
 const SHA256 = /^[0-9a-f]{64}$/;
 

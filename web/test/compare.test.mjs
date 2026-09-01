@@ -295,13 +295,21 @@ test('a result with no verdict, or a changed result with no changes, is refused'
   );
 });
 
-test('renumbering says it was detected mechanically', () => {
+test('renumbering says whose claim it is, and claims no method it cannot show', () => {
   const html = renderCompare(GOOD);
   assert.ok(html.includes(RENUMBER_LABEL));
-  assert.equal(
-    RENUMBER_LABEL,
-    'renumbering detected mechanically by identical text hash, not publisher-asserted',
+  // Pinned to a literal. The label used to say the pairing was detected by identical text
+  // hash, which is a claim about how the upstream established it; this module receives a
+  // from and a to and no digests, so it could not tell a hash-matched pair from any other
+  // and was certifying the method rather than reporting it.
+  assert.equal(RENUMBER_LABEL, 'renumbering derived by this service, not publisher-asserted');
+  assert.ok(
+    !html.includes('identical text hash'),
+    'the screen certified a pairing method it holds no evidence for',
   );
+  // The part that matters to a reader survives: the publisher did not say these two
+  // anchors are the same provision.
+  assert.ok(html.includes('not publisher-asserted'));
   assert.ok(html.includes('art_1bis'));
 
   // No renumbering, no section, and no label claiming there was.

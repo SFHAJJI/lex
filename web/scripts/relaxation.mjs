@@ -141,9 +141,20 @@ function semanticDisclosure(state, searchPath) {
     relaxation: 'semantic',
     searchPath,
     heading: 'Ranked by meaning, not only by words',
+    // Names, not a verdict. This said the encoder was "passing" the benchmark and that
+    // semantic ranking "serves only behind that gate", which are two assertions: that this
+    // encoder passed that benchmark, and that the deployment enforces the gate. Both are
+    // facts about the running service, and this module holds two caller-supplied strings.
+    // A caller could name any encoder and any benchmark and the screen certified the pair.
+    //
+    // The names are still worth showing: a reader who wants to check which model ranked
+    // their results needs them. What is removed is this screen vouching for the result of
+    // a check it did not see. If an evaluation contract later carries a signed verdict for
+    // an exact encoder and benchmark pair, the sentence can come back with it behind it.
     body:
-      `<p class="relaxation-note">Encoder ${escapeHtml(encoder)}, passing benchmark ` +
-      `${escapeHtml(benchmark)}. Semantic ranking serves only behind that gate.</p>`,
+      `<p class="relaxation-note">Ranked by encoder ${escapeHtml(encoder)}, against ` +
+      `benchmark ${escapeHtml(benchmark)}. This screen does not carry that benchmark's ` +
+      'result.</p>',
     revertLabel: 'Rank by keywords instead',
   });
 }
