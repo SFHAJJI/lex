@@ -21,6 +21,8 @@ import { REFUSAL_EXAMPLES as EXAMPLES } from '../scripts/refusal-catalog.mjs';
 const AUTHENTICITY = {
   schema: 'lex-v3-resource-authenticity/1',
   resource_id: 'preview-synthetic:synthetic-preview-work:2001-01-01',
+  publisher: 'preview-synthetic',
+  official_uri: 'https://preview.invalid/synthetic-preview-work/2001-01-01',
   authentic_languages: ['en'],
   basis: 'synthetic preview evidence',
   asserted_by: 'synthetic preview publisher',
@@ -384,6 +386,8 @@ test('quoted text carries the expression language, not a hardcoded French', () =
       authenticity: {
         schema: 'lex-v3-resource-authenticity/1',
         resource_id: 'preview-synthetic:synthetic-french-act:2001-01-01',
+        publisher: 'preview-synthetic',
+        official_uri: 'https://preview.invalid/synthetic-french-act/2001-01-01',
         authentic_languages: ['fr'],
         basis: 'synthetic preview evidence',
         asserted_by: 'synthetic preview publisher',

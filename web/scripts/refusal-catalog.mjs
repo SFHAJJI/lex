@@ -42,6 +42,8 @@ const SYNTHETIC_LAW =
 const SYNTHETIC_AUTHENTICITY = {
   schema: RESOURCE_AUTHENTICITY_SCHEMA,
   resource_id: `${PUBLISHER}:${WORK}:2001-01-01`,
+  publisher: PUBLISHER,
+  official_uri: `https://preview.invalid/${WORK}/2001-01-01`,
   authentic_languages: ['en'],
   basis: 'synthetic preview evidence',
   asserted_by: 'synthetic preview publisher',
