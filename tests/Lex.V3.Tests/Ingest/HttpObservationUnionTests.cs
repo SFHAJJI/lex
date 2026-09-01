@@ -447,6 +447,13 @@ public sealed class HttpObservationUnionTests
             retainedLength,
             retainedLength.AdmitAgainst(predecessor).Observation);
 
+        var matchingResponseEtag = Revalidation(
+            predecessor: predecessor,
+            metadata: Metadata(contentLength: 1, etag: "\"opaque\""));
+        Assert.AreSame(
+            matchingResponseEtag,
+            matchingResponseEtag.AdmitAgainst(predecessor).Observation);
+
         var differentRequestedUriPredecessor = Predecessor(
             request: Request(
                 requestedUri: "https://publications.europa.eu/another-target"));
@@ -461,6 +468,40 @@ public sealed class HttpObservationUnionTests
             metadata: Metadata(contentLength: 123));
         Assert.ThrowsExactly<ArgumentException>(
             () => mismatchedRetainedLength.AdmitAgainst(predecessor));
+
+        var contradictoryResponseEtag = Revalidation(
+            predecessor: predecessor,
+            metadata: Metadata(contentLength: 1, etag: "\"changed\""));
+        Assert.ThrowsExactly<ArgumentException>(
+            () => contradictoryResponseEtag.AdmitAgainst(predecessor));
+
+        const string predecessorLastModified = "Mon, 31 Aug 2026 00:00:00 GMT";
+        var lastModifiedValidator = new HttpValidatorEvidence(
+            RegistryMember("last_modified"),
+            "If-Modified-Since",
+            "Last-Modified",
+            predecessorLastModified);
+        var lastModifiedPredecessor = Complete(
+            metadata: Metadata(contentLength: 1, lastModified: predecessorLastModified));
+        var matchingResponseLastModified = Revalidation(
+            predecessor: lastModifiedPredecessor,
+            metadata: Metadata(
+                contentLength: 1,
+                lastModified: predecessorLastModified),
+            sentValidator: lastModifiedValidator,
+            predecessorValidator: lastModifiedValidator);
+        Assert.AreSame(
+            matchingResponseLastModified,
+            matchingResponseLastModified.AdmitAgainst(lastModifiedPredecessor).Observation);
+        var contradictoryResponseLastModified = Revalidation(
+            predecessor: lastModifiedPredecessor,
+            metadata: Metadata(
+                contentLength: 1,
+                lastModified: "Tue, 01 Sep 2026 00:00:00 GMT"),
+            sentValidator: lastModifiedValidator,
+            predecessorValidator: lastModifiedValidator);
+        Assert.ThrowsExactly<ArgumentException>(
+            () => contradictoryResponseLastModified.AdmitAgainst(lastModifiedPredecessor));
 
         var duplicateContentType = new HttpResponseMetadata(
             new MultipleHttpHeader(["application/xml", "text/xml"]),
@@ -648,13 +689,14 @@ public sealed class HttpObservationUnionTests
         int statusCode = 304,
         HttpRequestEvidence? request = null,
         HttpResponseMetadata? metadata = null,
+        HttpValidatorEvidence? sentValidator = null,
         HttpValidatorEvidence? predecessorValidator = null,
         DurableBlobRef? predecessorBlobRef = null,
         ResponseCompleteBodyObservation? predecessor = null,
         SourceArtifactRef? predecessorObservationRef = null)
     {
         predecessor ??= Predecessor();
-        var validator = Validator("If-None-Match", "ETag", "\"opaque\"");
+        var validator = sentValidator ?? Validator("If-None-Match", "ETag", "\"opaque\"");
         return new(
             HttpObservationSchemaIds.HttpObservation,
             "urn:uuid:33333333-3333-4333-8333-333333333333",
@@ -743,7 +785,8 @@ public sealed class HttpObservationUnionTests
     private static HttpResponseMetadata Metadata(
         long? contentLength = null,
         string? contentRange = null,
-        string? etag = null) =>
+        string? etag = null,
+        string? lastModified = null) =>
         new(
             new SingleHttpHeader("application/xml"),
             new SingleHttpHeader("utf-8"),
@@ -757,7 +800,9 @@ public sealed class HttpObservationUnionTests
             etag is null
                 ? new AbsentHttpHeader()
                 : new SingleHttpHeader(etag),
-            new AbsentHttpHeader());
+            lastModified is null
+                ? new AbsentHttpHeader()
+                : new SingleHttpHeader(lastModified));
 
     private static DurableBlobRef Blob(long byteLength, char digestCharacter) =>
         new(

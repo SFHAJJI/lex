@@ -423,6 +423,25 @@ public sealed class Revalidation304Observation : HttpResponseObservation
                 nameof(predecessor));
         }
 
+        var responseValidatorHeader = PredecessorValidator.ValidatorKind.MemberKey switch
+        {
+            "etag" => ResponseMetadata.Etag,
+            "last_modified" => ResponseMetadata.LastModified,
+            _ => throw new ArgumentException(
+                "The revalidation validator kind is not admitted.",
+                nameof(predecessor)),
+        };
+        if (responseValidatorHeader is SingleHttpHeader responseValidator &&
+            !string.Equals(
+                responseValidator.Value,
+                PredecessorValidator.Value,
+                StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "A retained 304 validator must exactly match the predecessor validator.",
+                nameof(predecessor));
+        }
+
         if (ResponseMetadata.HasMultipleField ||
             ResponseMetadata.ContentLength is not AbsentHttpHeader &&
             (!ResponseMetadata.TryGetSingleContentLength(out var retainedLength) ||
