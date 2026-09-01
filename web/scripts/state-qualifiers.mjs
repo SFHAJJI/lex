@@ -103,7 +103,15 @@ export const HOLE_KINDS = Object.freeze(['no_state_held', 'continuity_inferred']
 const HOLE_CAPTION = new Map([
   [
     'no_state_held',
-    (from, to) => `No publisher state covers ${from} to ${to}.`,
+    // "No publisher state covers" is a claim about the publisher's records. This screen
+    // knows what this corpus holds and nothing else, and the kind is named no_state_HELD
+    // for exactly that reason, so the caption overstated its own kind. The publisher may
+    // hold a state here that was never ingested, and telling a reader otherwise is the
+    // absence-of-law claim this product exists to avoid. The second sentence is not a
+    // hedge: it is the difference between the two facts.
+    (from, to) =>
+      `This corpus holds no state covering ${from} to ${to}. Absence here is not absence ` +
+      "from the publisher's record.",
   ],
   [
     'continuity_inferred',

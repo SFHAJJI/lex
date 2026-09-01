@@ -72,7 +72,16 @@ test('the two kinds of hole are different claims and the caption says which', ()
   assert.deepEqual([...HOLE_KINDS], ['no_state_held', 'continuity_inferred']);
 
   const absent = renderHole({ kind: 'no_state_held', from: '2004-01-01', to: '2024-01-01' });
-  assert.ok(absent.includes('No publisher state covers 2004-01-01 to 2024-01-01'));
+  // This screen knows what this corpus holds and nothing else. The kind is named
+  // no_state_HELD for that reason, and the caption used to overstate its own kind by
+  // claiming no publisher state exists: the publisher may hold a state here that was
+  // never ingested.
+  assert.ok(absent.includes('This corpus holds no state covering 2004-01-01 to 2024-01-01'));
+  assert.ok(absent.includes('Absence here is not absence from the publisher'));
+  assert.ok(
+    !absent.includes('No publisher state covers'),
+    'a gap in this corpus was reported as a gap in the publisher record',
+  );
 
   const inferred = renderHole({
     kind: 'continuity_inferred',

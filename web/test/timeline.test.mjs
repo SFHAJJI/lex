@@ -398,7 +398,14 @@ test('the total is a fact about the records, not a flag the caller sets', () => 
 
 test('a single held state says so rather than drawing one segment', () => {
   const html = renderTimeline({ ...GOOD, states: [A], totalCount: 1 });
-  assert.ok(html.includes('One held state; publisher history begins 2001-01-01.'));
+  // One held state says this corpus holds one, not that the publisher's record starts
+  // there. The live envelope carries history_begins for exactly that question and this
+  // screen does not receive it, so the sentence names the corpus and says what is unknown.
+  assert.ok(html.includes('This corpus holds one state of this work, beginning 2001-01-01'));
+  assert.ok(
+    !html.includes('publisher history begins'),
+    'one held state was reported as the start of the publisher record',
+  );
 });
 
 test('the population is stated and an empty timeline is refused', () => {
