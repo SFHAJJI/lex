@@ -8,3 +8,4 @@
 export { Document, SyntheticBanner, SYNTHETIC_MARKER } from './Document.jsx';
 export { renderDocument } from './render-document.mjs';
 export { RefusalCard, Mark } from './RefusalCard.jsx';
+export { Dossier } from './Dossier.jsx';

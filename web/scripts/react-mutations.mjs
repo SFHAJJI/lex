@@ -14,6 +14,8 @@ import { readFileSync, writeFileSync } from 'node:fs';
 
 const TARGET = 'app/Document.jsx';
 const RENDERER = 'app/render-document.mjs';
+const DOSSIER = 'app/Dossier.jsx';
+const REFUSAL = 'app/RefusalCard.jsx';
 
 /** @type {{name: string, file: string, from: string, to: string}[]} */
 const MUTATIONS = [
@@ -88,6 +90,54 @@ const MUTATIONS = [
     file: RENDERER,
     from: "if (!markup.startsWith('<html')) {",
     to: 'if (false) {',
+  },
+  {
+    name: 'the status chip may appear without its caption',
+    file: DOSSIER,
+    from: '<p className="dossier-status-caption">{STATUS_CAPTION}</p>',
+    to: '<p className="dossier-status-caption" />',
+  },
+  {
+    name: 'a derived value is accepted as a publisher flag',
+    file: DOSSIER,
+    from: 'if (!PUBLISHER_FLAG.test(status.binding_status)) {',
+    to: 'if (false) {',
+  },
+  {
+    name: 'zero states held reports no gaps',
+    file: DOSSIER,
+    from: 'if (coverage.states_held === 0) {',
+    to: 'if (false) {',
+  },
+  {
+    name: 'the record clock accepts a calendar date',
+    file: DOSSIER,
+    from: "const wantsInstant = row.role === 'observed_from';",
+    to: 'const wantsInstant = false;',
+  },
+  {
+    name: 'a reversed coverage hole renders',
+    file: DOSSIER,
+    from: 'if (!isOrderedInterval(hole.from, hole.to) || hole.from === hole.to) {',
+    to: 'if (false) {',
+  },
+  {
+    name: 'the title language is hardcoded',
+    file: DOSSIER,
+    from: 'lang={card.identity.title_language}',
+    to: 'lang="en"',
+  },
+  {
+    name: 'an absent date need not say what it waits for',
+    file: DOSSIER,
+    from: "if (typeof row.awaiting !== 'string' || row.awaiting.trim().length === 0) {",
+    to: 'if (false) {',
+  },
+  {
+    name: 'the refusal route policy is bypassed',
+    file: REFUSAL,
+    from: '<a href={handoffUri(one.href)}>{one.label}</a>',
+    to: '<a href={one.href}>{one.label}</a>',
   },
   {
     name: 'CONTROL: the main landmark is removed',

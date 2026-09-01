@@ -217,7 +217,16 @@ function renderCoverageStrip(coverage) {
  * @param {object} input.coverage   states held, states with text, holes
  * @param {Array}  [input.slots]    fields the corpus cannot fill yet, each naming itself
  */
-export function renderDossier({ identity, dates, status, coverage, slots = [] }) {
+/**
+ * Every rule a dossier must satisfy, decided once and shared.
+ *
+ * Split out so the React runtime cannot become a second place where a legal rule lives. The
+ * component calls this and renders what it returns; it re-derives nothing. A rule repaired here
+ * is repaired in both renderers, because there is only one.
+ *
+ * Returns the normalised inputs a renderer needs. Throws on anything a dossier must not show.
+ */
+export function validateDossier({ identity, dates, status, coverage, slots = [] }) {
   if (typeof identity?.title !== 'string' || identity.title.trim().length === 0) {
     throw new Error('a dossier names the work as the publisher titles it');
   }
@@ -248,6 +257,27 @@ export function renderDossier({ identity, dates, status, coverage, slots = [] })
     if (seen.has(row?.role)) throw new Error(`the date table lists ${row.role} twice`);
     seen.add(row?.role);
   }
+
+  slots.forEach((slot, index) => {
+    if (typeof slot?.what !== 'string' || slot.what.trim().length === 0) {
+      throw new Error(`unfilled slot ${index + 1} does not say what it is`);
+    }
+    if (typeof slot?.where !== 'string' || slot.where.trim().length === 0) {
+      throw new Error(
+        `unfilled slot ${index + 1} does not say where the publisher keeps it; "not held" ` +
+          'without a route is indistinguishable from "does not exist"',
+      );
+    }
+  });
+
+  return { identity, workIdentifier, dates, status, coverage, slots };
+}
+
+export function renderDossier({ identity, dates, status, coverage, slots = [] }) {
+  // Every rule lives in validateDossier and is applied once. This function decides only how
+  // the validated result looks, which is what lets the React runtime share the rules rather
+  // than reimplement them beside a copy that can drift.
+  const { workIdentifier } = validateDossier({ identity, dates, status, coverage, slots });
 
   // A slot the corpus cannot fill says so and says where the publisher keeps it. A blank one
   // reads as a fact about the law rather than a fact about this corpus.
