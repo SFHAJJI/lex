@@ -430,3 +430,55 @@ summary {
   font-size: 0.9rem;
   line-height: 1.5;
 }
+
+/* Claims above the audit fold, the trace inside it. A reader who wants the answer gets the
+   answer; a reader who wants to check it gets everything needed to re-run it. */
+.answer-dossier,
+.claims,
+.claim,
+.trace,
+.trace-operation {
+  display: grid;
+  gap: 0.5rem;
+  min-inline-size: 0;
+}
+
+.claims,
+.trace,
+.claim-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.claim-line,
+.claim-exclusion,
+.trace-call,
+.trace-result {
+  margin: 0;
+  min-inline-size: 0;
+}
+
+.claim-exclusion {
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.claim-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  min-inline-size: 0;
+}
+
+.claim-chip > a {
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  padding-inline: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.trace-operation {
+  padding-block: 0.5rem;
+  border-block-start: 1px solid currentColor;
+}

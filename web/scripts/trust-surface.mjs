@@ -28,6 +28,7 @@ import { renderStateBanner } from './state-banner.mjs';
 import { renderEnvelopeStrip, renderVerifyCluster } from './verify-cluster.mjs';
 import { readingUrl } from './urls.mjs';
 import { renderNoHitCard } from './no-hit-card.mjs';
+import { renderAnswerDossier } from './answer-dossier.mjs';
 import { renderRelaxationDisclosures } from './relaxation.mjs';
 import {
   RESOURCE_AUTHENTICITY_SCHEMA,
@@ -175,6 +176,39 @@ export function renderTrustSurface() {
           work: WORK,
           candidates: [candidate(CANDIDATE_A, '2003-12-01'), candidate(CANDIDATE_B, '2003-12-15')],
         },
+      },
+    )}</section>`,
+
+    `<section class="surface-block"><h2>Every sentence binds to something</h2>${renderAnswerDossier(
+      {
+        claims: [
+          {
+            sentence: 'The synthetic state applicable on 2001-06-01 begins on 2001-01-01.',
+            kind: 'publisher_asserted',
+            bindings: [{ call_id: 'call-1', fact: 'valid_from 2001-01-01' }],
+          },
+          {
+            sentence: 'That state is the second of the two this fixture holds.',
+            kind: 'derived',
+            bindings: [{ call_id: 'call-2', fact: 'two states' }],
+          },
+        ],
+        operations: [
+          {
+            call_id: 'call-1',
+            operation_id: 'as_of',
+            parameters: { work: `${PUBLISHER}:${WORK}`, date: '2001-06-01' },
+            result_identity: DIGEST,
+            called_at: '2026-01-01T00:00:00Z',
+          },
+          {
+            call_id: 'call-2',
+            operation_id: 'timeline',
+            parameters: { work: `${PUBLISHER}:${WORK}` },
+            result_identity: CANDIDATE_A,
+            called_at: '2026-01-01T00:00:01Z',
+          },
+        ],
       },
     )}</section>`,
 
