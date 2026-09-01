@@ -72,6 +72,20 @@ function checkedUri(raw, allowedHosts, what) {
     throw new Error(`${what} does not carry a plain host: ${JSON.stringify(raw)}`);
   }
 
+  // The three checks below are backstops, and an audit was right that no test holds them.
+  //
+  // They cannot be reached from here. The raw-string grammar above already requires the exact
+  // spelling `https://`, an authority matching a lowercase ASCII host pattern with no empty
+  // label, no userinfo and no port, and a host on the publisher's own allowlist. Everything
+  // surviving that parses, parses as https, and parses to the authority it was written with.
+  // I fuzzed 117 inputs across mixed case, trailing dots, empty labels, punycode,
+  // percent-encoded dots, userinfo, ports, spaces, backslashes, control characters and
+  // malformed escapes, and none reached any of the three.
+  //
+  // They stay, because a normalisation difference between this grammar and WHATWG parsing is
+  // exactly the sort of thing that moves under one's feet, and they cost nothing. But they are
+  // recorded here as unreachable rather than left looking proven, because a fixture for an
+  // input that cannot exist would be worse than saying so.
   let parsed;
   try {
     parsed = new URL(raw);

@@ -198,3 +198,47 @@ test('values are escaped rather than trusted', () => {
   assert.ok(!html.includes('<script>'));
   assert.ok(html.includes('&lt;img'));
 });
+
+test('an operation without a call id cannot be cited, and cannot stand in for one', () => {
+  // The bypass an audit found: with the call-id guard removed, every operation missing one
+  // adds `undefined` to the set of recorded calls, and a claim binding to `undefined` then
+  // satisfies the rule that a claim must cite a call the trace recorded. The module's whole
+  // point is that binding, so the guard that makes the set meaningful gets its own case.
+  const nameless = { ...OPERATIONS[0] };
+  delete nameless.call_id;
+  assert.throws(
+    () => renderAnswerDossier({ ...GOOD, operations: [nameless] }),
+    /needs a call id to be bound to/,
+  );
+  for (const bad of ['', null, 7, {}]) {
+    assert.throws(
+      () => renderAnswerDossier({ ...GOOD, operations: [{ ...OPERATIONS[0], call_id: bad }] }),
+      /needs a call id to be bound to/,
+      `call_id=${JSON.stringify(bad)} was recorded as a call`,
+    );
+  }
+
+  // And the same for the operation's own name, which rendered as the literal "undefined" in
+  // the trace: a citation pointing at nothing.
+  for (const bad of [undefined, '', null]) {
+    assert.throws(
+      () => renderAnswerDossier({ ...GOOD, operations: [{ ...OPERATIONS[0], operation_id: bad }] }),
+      /an operation needs its id/,
+    );
+  }
+});
+
+test('a claim with no sentence is refused rather than rendered as the word undefined', () => {
+  for (const bad of [undefined, '', '  ', null]) {
+    assert.throws(
+      () => renderAnswerDossier({ ...GOOD, claims: [{ ...CLAIMS[0], sentence: bad }] }),
+      /sentence/,
+      `sentence=${JSON.stringify(bad)} rendered as a claim`,
+    );
+  }
+  assert.ok(!renderAnswerDossier(GOOD).includes('undefined'));
+});
+
+test('an answer with no claims is refused rather than rendered empty', () => {
+  assert.throws(() => renderAnswerDossier({ ...GOOD, claims: [] }), /claim/);
+});

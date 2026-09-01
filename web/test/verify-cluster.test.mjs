@@ -12,6 +12,13 @@ const PUBLISHER = 'preview-synthetic';
 const SOURCE = 'https://preview.invalid/synthetic-preview-work/2001-01-01';
 const LEX_ID = 'preview-synthetic:synthetic-preview-work:2001-01-01';
 
+const GOOD_CLUSTER = {
+  publisher: PUBLISHER,
+  sourceUri: SOURCE,
+  lexId: LEX_ID,
+  hash: { kind: 'record_sha256', value: DIGEST },
+};
+
 const ENVELOPE = {
   publisher_name: 'Synthetic preview publisher, applicability semantics',
   timeline_semantics: 'publisher_applicability',
@@ -228,4 +235,29 @@ test('a legacy code_commit is not rendered under a V3 provenance name', () => {
   assert.ok(!legacy.includes('legacy-code-commit'), 'a legacy value was promoted');
   assert.ok(legacy.includes('index_builder_source_commit'));
   assert.ok(legacy.split('not recorded').length - 1 >= 3, 'absent V3 facts were filled in');
+});
+
+test('a provenance link is never built from a missing identifier', () => {
+  // `/provenance/undefined` is a visible action leading nowhere, and CLAUDE.md records that
+  // exact shape shipping three times. Nothing held this guard.
+  for (const bad of [undefined, '', '   ', null, 7]) {
+    assert.throws(
+      () => renderVerifyCluster({ ...GOOD_CLUSTER, lexId: bad }),
+      /requires a lex_id for the provenance link/,
+      `lexId=${JSON.stringify(bad)} produced a link`,
+    );
+  }
+  const html = renderVerifyCluster(GOOD_CLUSTER);
+  assert.ok(!html.includes('provenance/undefined'));
+  assert.ok(!html.includes('provenance/null'));
+});
+
+test('the envelope strip names the party it is about', () => {
+  for (const bad of [undefined, '', null, 7]) {
+    assert.throws(
+      () => renderEnvelopeStrip({ envelope: { ...ENVELOPE, publisher_name: bad, publisher: bad } }),
+      /requires a publisher/,
+      `publisher=${JSON.stringify(bad)} was rendered as a freshness claim about nobody`,
+    );
+  }
 });
