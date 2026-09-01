@@ -14,6 +14,7 @@ import { page } from './render.mjs';
 import { renderRefusalCard } from './refusal-card.mjs';
 import { renderStateBanner } from './state-banner.mjs';
 import { renderEnvelopeStrip, renderVerifyCluster } from './verify-cluster.mjs';
+import { readingUrl } from './urls.mjs';
 
 const DIGEST = '99b621c38dec11dcd362c0db35d9e9c090e62613cc5c20b0727c0b30fd39ce66';
 
@@ -50,6 +51,33 @@ const EU_STATE = {
   observed_from: '2026-08-14T23:05:14Z',
 };
 
+// The 1993 banking law's 2025 window is the real case behind the interstitial: two publisher
+// states cover one date and the publisher ranks neither, so neither may this page.
+const AMBIGUOUS_CANDIDATES = [
+  {
+    valid_from: '2025-01-01',
+    hash: DIGEST,
+    publication_date: '2024-12-20',
+    href: readingUrl({
+      publisher: 'lu-legilux',
+      work: 'loi-1993-04-05-n1',
+      validFrom: '2025-01-01',
+      hash: DIGEST,
+    }),
+  },
+  {
+    valid_from: '2025-01-01',
+    hash: 'c064f74a9827d610125d25c999f79df626cd987432aa110f2e05ce48388b5eef',
+    publication_date: '2024-12-27',
+    href: readingUrl({
+      publisher: 'lu-legilux',
+      work: 'loi-1993-04-05-n1',
+      validFrom: '2025-01-01',
+      hash: 'c064f74a9827d610125d25c999f79df626cd987432aa110f2e05ce48388b5eef',
+    }),
+  },
+];
+
 const GOVERNING =
   'Art. L. 121-6. Le salarié incapable de travailler pour cause de maladie ou d’accident ' +
   'est obligé, le jour même de l’empêchement, d’en avertir personnellement ou par personne ' +
@@ -76,8 +104,11 @@ export function renderTrustSurface() {
       sentence:
         'I can show you exactly what the published text says, at any date, and how it ' +
         'changed, with citations. I cannot apply the law to your situation.',
-      payload: { handoff: 'CSL, ITM, SAIJ' },
       governingText: GOVERNING,
+      handoff: {
+        label: 'Service d’accueil et d’information juridique',
+        href: 'https://justice.public.lu/',
+      },
     })}</section>`,
 
     `<section class="surface-block"><h2>An absence is an answer too</h2>${renderRefusalCard({
@@ -89,6 +120,14 @@ export function renderTrustSurface() {
         nearest_later: '2017-01-01',
       },
     })}</section>`,
+
+    `<section class="surface-block"><h2>An ambiguity is never resolved for you</h2>${renderRefusalCard(
+      {
+        code: 'ambiguous_version',
+        sentence: 'Two publisher states cover 2025-03-01.',
+        payload: { candidates: AMBIGUOUS_CANDIDATES },
+      },
+    )}</section>`,
 
     `<section class="surface-block"><h2>Freshness and identity</h2>${renderEnvelopeStrip({
       envelope: LU_ENVELOPE,
