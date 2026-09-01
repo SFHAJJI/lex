@@ -16,7 +16,10 @@ import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { loadCaptured } from "./captured-envelopes.mjs";
 import { tokenCss } from "./design-tokens.mjs";
 import { renderTrustSurface } from "./trust-surface.mjs";
+import { renderShellEntry } from "./shells.mjs";
+import { renderRefusalCatalog } from "./refusal-catalog.mjs";
 import { page } from "./render.mjs";
+import { SHELLS } from "./urls.mjs";
 import { decodeEnvelope, validateEnvelope } from "./envelope.mjs";
 import {
   renderLoading,
@@ -101,6 +104,17 @@ for (const [name, file, render] of [
 // browser evidence run exercises their contrast, focus order and reflow at 320 CSS pixels
 // before there are twelve screens carrying copies of the same defect.
 pages.push(["trust-surface.html", renderTrustSurface()]);
+
+// One entry screen per shell. They exist so the browser run can measure that three
+// densities of the same component library still reflow, keep contrast and keep readable
+// separation, and so the neutrality rule is visible rather than only tested.
+for (const shell of SHELLS) {
+  pages.push([`shell-${shell}.html`, renderShellEntry({ shell })]);
+}
+
+// The refusal catalog, UX spec section 11: the closed registry as public API surface,
+// with one worked example each and an honest column for the payloads not yet settled.
+pages.push(["refusal-catalog.html", renderRefusalCatalog()]);
 
 // The destination every scheme-valid link in the preview resolves to. A visible action that
 // leads to a missing page is a promise the page cannot keep, and three of them shipped: the

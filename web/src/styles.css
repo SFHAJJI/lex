@@ -234,6 +234,153 @@ blockquote.law {
   display: inline-block;
 }
 
+/* Shell density. A shell chooses how densely one component library is laid out; it never
+   chooses what is in it. Everything below is spacing and type, and the reflow rule above
+   deliberately keeps ownership of `gap` so a density cannot reintroduce horizontal
+   overflow at 320 CSS pixels. */
+[data-density="comfortable"] main {
+  line-height: 1.7;
+}
+
+[data-density="compact"] main {
+  line-height: 1.4;
+  font-size: 0.95rem;
+}
+
+[data-density="monospace"] main {
+  line-height: 1.55;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.shell-switcher {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+  min-inline-size: 0;
+}
+
+.shell-switcher li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.5rem;
+  align-items: baseline;
+  min-inline-size: 0;
+}
+
+.shell-audience,
+.shell-neutrality {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  min-inline-size: 0;
+}
+
+/* The refusal catalog. Nineteen entries on one page, so each needs a visible boundary and
+   the facts table needs the same reflow behaviour as every other definition list here. */
+.catalog-entry {
+  display: grid;
+  gap: 0.5rem;
+  min-inline-size: 0;
+  padding-block: 1rem;
+  border-block-start: 1px solid currentColor;
+}
+
+.catalog-facts,
+.catalog-honesty {
+  min-inline-size: 0;
+}
+
+.catalog-honesty {
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+/* The typed no-hit card. Three blocks that must each be readable on their own, because a
+   reader deciding whether the law exists reads exactly one of them and stops. */
+.no-hit-card,
+.no-hit-layers,
+.no-hit-population,
+.no-hit-expansions,
+.no-hit-routes {
+  display: grid;
+  gap: 0.35rem;
+  min-inline-size: 0;
+}
+
+.no-hit-card {
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+}
+
+.no-hit-card ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+  min-inline-size: 0;
+}
+
+.no-hit-card li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.5rem;
+  align-items: baseline;
+  min-inline-size: 0;
+}
+
+.no-hit-card h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.no-hit-caution,
+.no-hit-inert {
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+/* Relaxation disclosures. Three independent blocks, visually distinct, each with its own
+   revert. Merged into one they would read as a single setting, and the cheapest way to undo
+   one relaxation would be to undo all three. */
+.relaxations {
+  display: grid;
+  gap: 0.75rem;
+  min-inline-size: 0;
+}
+
+.relaxation {
+  display: grid;
+  gap: 0.35rem;
+  min-inline-size: 0;
+  padding: 0.5rem 0.75rem;
+  border-inline-start: 3px solid currentColor;
+}
+
+.relaxation-heading {
+  margin: 0;
+  font-weight: 600;
+}
+
+.relaxation-note,
+.relaxation-revert {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.relaxation-expansions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+  min-inline-size: 0;
+}
+
 /* WCAG 2.2 SC 2.5.8, target size minimum: 24 by 24 CSS pixels.
    A link in a sentence takes the inline exception; a link in a list is a target somebody has
    to hit, and every one of them was 21 px tall because line-height was setting their height.

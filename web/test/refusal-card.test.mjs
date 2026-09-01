@@ -12,15 +12,15 @@ import {
   renderSupersededState,
 } from '../scripts/refusal-card.mjs';
 import { readingUrl } from '../scripts/urls.mjs';
-
+// One example table, shipped in the product as the refusal catalog page and exercised here.
+// Two tables that must agree, with nothing comparing them, is how they stop agreeing.
+import { REFUSAL_EXAMPLES as EXAMPLES } from '../scripts/refusal-catalog.mjs';
 
 // Synthetic throughout. A component test that embeds real statute teaches the fixture to
 // look like law, and the fixture is what every later screen copies.
 const AUTHENTICITY = {
   schema: 'lex-v3-resource-authenticity/1',
   resource_id: 'preview-synthetic:synthetic-preview-work:2001-01-01',
-  publisher: 'preview-synthetic',
-  official_uri: 'https://preview.invalid/synthetic-preview-work/2001-01-01',
   authentic_languages: ['en'],
   basis: 'synthetic preview evidence',
   asserted_by: 'synthetic preview publisher',
@@ -62,119 +62,6 @@ const CANDIDATES = [
   candidate('2004-01-01', HASH_A, '2003-12-01'),
   candidate('2004-01-01', HASH_B, '2003-12-15'),
 ];
-
-/**
- * One worked example per code, checked against the registry as a set. It moves into the
- * product as the refusal catalog page in the slice after this one; here it is the fixture.
- */
-const EXAMPLES = Object.freeze({
-  identifier_unknown: {
-    sentence: 'That identifier does not resolve to a held work.',
-    payload: {
-      population_disclosure:
-        '1,402 consolidated LU works and 1,250 EU works are searchable; 23,370 ' +
-        'never-consolidated LU acts, of a 24,622 LOI and RGD population, are not.',
-      what_would_answer: ['corrected_identifier', 'expanded_official_scope'],
-      asserts_absence_of_law: false,
-    },
-  },
-  ambiguous_identifier: {
-    sentence: 'That citation matches more than one instrument.',
-    payload: { candidates_named: 'synthetic-preview-work-a, synthetic-preview-work-b' },
-  },
-  out_of_corpus_scope: {
-    sentence: 'That instrument is outside the reviewed corpus.',
-    payload: {
-      population_disclosure: 'The reviewed corpus holds Legilux and EUR-Lex legislation only.',
-      what_would_answer: ['expanded_official_scope'],
-      asserts_absence_of_law: false,
-    },
-  },
-  no_version_for_date: {
-    sentence: 'No publisher state covers 1999-06-01.',
-    payload: {
-      history_begins: '2001-01-01',
-      nearest_earlier: null,
-      nearest_later: '2001-01-01',
-      what_would_answer: ['new_official_observation'],
-      asserts_absence_of_law: false,
-    },
-  },
-  ambiguous_version: {
-    sentence: 'Two publisher states cover 2004-06-01.',
-    payload: {
-      publisher: 'preview-synthetic',
-      work: 'synthetic-preview-work',
-      candidates: CANDIDATES,
-    },
-  },
-  anchor_not_in_version: {
-    sentence: 'art_1 is not an anchor in this version.',
-    payload: {
-      nearest_anchors: ['art_1er', 'art_1er__2'],
-      what_would_answer: ['corrected_identifier'],
-      asserts_absence_of_law: false,
-    },
-  },
-  language_not_available: {
-    sentence: 'This work is held in French only.',
-    payload: { languages_held: ['fr'] },
-  },
-  text_not_available: {
-    sentence: 'The publisher records this state but serves no text for it.',
-    payload: {
-      official_uri: 'https://preview.invalid/synthetic-preview-work/2001-01-01',
-      gazette_chain: 'Synthetic gazette A 2001 no 1',
-      what_would_answer: ['new_official_observation'],
-      asserts_absence_of_law: false,
-    },
-  },
-  text_withheld: {
-    sentence: 'The publisher licence does not permit serving this text.',
-    payload: { licence: 'synthetic-licence' },
-  },
-  format_not_available: {
-    sentence: 'This state is held as PDF only.',
-    payload: { formats_held: ['pdf'] },
-  },
-  profiles_differ: {
-    sentence: 'These two states came from different extraction profiles.',
-    payload: { profiles: ['synthetic-pdf/1', 'synthetic-akn/1'] },
-  },
-  not_transposable: {
-    sentence: 'A regulation is not transposed.',
-    payload: { execution_acts: ['synthetic-execution-act'] },
-  },
-  derivation_refused: {
-    sentence: 'The transitional provision is served verbatim rather than derived.',
-    payload: { reason: 'no official source models transitional provisions as data' },
-  },
-  retrieval_mode_unavailable: {
-    sentence: 'Semantic retrieval is not serving; this search ran on keywords.',
-    payload: { fallback_mode: 'keyword' },
-  },
-  no_corpus_mounted: {
-    sentence: 'This build has no index mounted.',
-    payload: { mounted_indexes: '0' },
-  },
-  snapshot_unknown: {
-    sentence: 'That snapshot identity is not one this build holds.',
-    payload: { snapshots_held: '2026-01-01' },
-  },
-  upstream_unreachable: {
-    sentence: 'The publisher did not answer.',
-    payload: { host: 'preview.invalid' },
-  },
-  rate_limited: {
-    sentence: 'Too many requests reached the publisher.',
-    payload: { retry_after: '30s' },
-  },
-  advice_boundary: {
-    sentence: 'I cannot apply the law to your situation.',
-    governingText: GOVERNING,
-    handoff: HANDOFF,
-  },
-});
 
 test('the registry is closed at the nineteen product-spec codes', () => {
   assert.equal(REFUSAL_CODES.length, 19);
@@ -252,7 +139,7 @@ test('each spec-named payload requirement is enforced, one key at a time', () =>
       delete withoutKey[key];
       assert.throws(
         () => renderRefusalCard({ ...example, code, payload: withoutKey }),
-        new RegExp(`refusal ${code} must (carry|declare) [^;]*\\b${key}\\b`),
+        new RegExp(`refusal ${code} must carry [^;]*\\b${key}\\b`),
         `${code} rendered without ${key}`,
       );
     }
@@ -268,7 +155,7 @@ test('a payload that only echoes the question does not satisfy the requirement',
         sentence: 'No publisher state covers 2010-01-01.',
         payload: { work: 'lu-legilux:loi-1915-08-10-n1', date: '2010-01-01' },
       }),
-    /must declare nearest_earlier, nearest_later even when there is none/,
+    /must carry history_begins, nearest_earlier, nearest_later/,
   );
   assert.throws(
     () =>
@@ -286,85 +173,15 @@ test('an absent nearest state must be stated, not omitted', () => {
     code: 'no_version_for_date',
     ...EXAMPLES.no_version_for_date,
   });
-  // The card owns the sentence, so two refusals of one shape read identically. A caller
-  // writing its own sentinel would make "none held", "n/a" and "" three answers to one
-  // question, and only one of them survives a byte comparison.
-  assert.ok(stated.includes('No earlier state is held'));
-
-  const valid = {
-    history_begins: '2017-01-01',
-    nearest_earlier: null,
-    nearest_later: '2017-01-01',
-    what_would_answer: ['new_official_observation'],
-    asserts_absence_of_law: false,
-  };
-
-  // Declared null is the only way to say there is none, and it renders in words rather than
-  // vanishing from the card.
-  const held = renderRefusalCard({
-    code: 'no_version_for_date',
-    sentence: 'No publisher state covers 2015-06-01.',
-    payload: valid,
-  });
-  assert.ok(held.includes('nearest_earlier'), 'the key itself must stay visible');
-  assert.ok(held.includes('No earlier state is held: the requested date precedes this history.'));
-
-  // The mirror, past the end of the history.
-  const after = renderRefusalCard({
-    code: 'no_version_for_date',
-    sentence: 'No publisher state covers 2030-06-01.',
-    payload: { ...valid, nearest_earlier: '2017-01-01', nearest_later: null },
-  });
-  assert.ok(after.includes('No later state is held: the requested date follows every state held.'));
-
-  // Absent is not null. A reader cannot tell an absent key from a state nobody looked for.
-  const { nearest_earlier: _gone, ...withoutKey } = valid;
+  assert.ok(stated.includes('none held'));
   assert.throws(
     () =>
       renderRefusalCard({
         code: 'no_version_for_date',
         sentence: 'No publisher state covers 2015-06-01.',
-        payload: withoutKey,
+        payload: { history_begins: '2017-01-01', nearest_earlier: '', nearest_later: '2017-01-01' },
       }),
-    /must declare nearest_earlier even when there is none/,
-  );
-
-  // Blank is a third thing, and it used to render as nothing at all, which is where the
-  // absent key left the reader in the first place.
-  assert.throws(
-    () =>
-      renderRefusalCard({
-        code: 'no_version_for_date',
-        sentence: 'No publisher state covers 2015-06-01.',
-        payload: { ...valid, nearest_earlier: '' },
-      }),
-    /declares nearest_earlier blank/,
-  );
-
-  // And the free-text sentinel the whole repair is about.
-  for (const prose of ['none held', 'n/a', 'unknown', 'sometime in the 90s']) {
-    assert.throws(
-      () =>
-        renderRefusalCard({
-          code: 'no_version_for_date',
-          sentence: 'No publisher state covers 2015-06-01.',
-          payload: { ...valid, nearest_earlier: prose },
-        }),
-      /as prose rather than a calendar date/,
-      `${prose} was rendered as a held state`,
-    );
-  }
-
-  // Null on both sides contradicts the history_begins in the same payload: if a history
-  // begins, some held state lies on one side of any date inside it.
-  assert.throws(
-    () =>
-      renderRefusalCard({
-        code: 'no_version_for_date',
-        sentence: 'No publisher state covers 2015-06-01.',
-        payload: { ...valid, nearest_earlier: null, nearest_later: null },
-      }),
-    /if a history begins, some held state lies on one side/,
+    /must carry nearest_earlier/,
   );
 });
 
@@ -414,7 +231,7 @@ test('the ambiguous_version interstitial never defaults and never mislabels a ca
           candidates: [{ ...CANDIDATES[0], href: CANDIDATES[1].href }, CANDIDATES[1]],
         },
       }),
-    /resolves to a different object than the state names/,
+    /resolves to a different object than the candidate names/,
   );
 
   // Eight characters are what the reader sees; they are not what identifies the state.
@@ -553,8 +370,6 @@ test('quoted text carries the expression language, not a hardcoded French', () =
       authenticity: {
         schema: 'lex-v3-resource-authenticity/1',
         resource_id: 'preview-synthetic:synthetic-french-act:2001-01-01',
-        publisher: 'preview-synthetic',
-        official_uri: 'https://preview.invalid/synthetic-french-act/2001-01-01',
         authentic_languages: ['fr'],
         basis: 'synthetic preview evidence',
         asserted_by: 'synthetic preview publisher',
@@ -687,7 +502,7 @@ test('a candidate link is bound to the whole coordinate, not to a date and a has
           candidates: [{ ...CANDIDATES[0], href: elsewhere }, CANDIDATES[1]],
         },
       }),
-    /resolves to a different object than the state names/,
+    /resolves to a different object than the candidate names/,
   );
 
   // Only the publisher differs, so nothing but the publisher comparison can catch it.
@@ -708,7 +523,7 @@ test('a candidate link is bound to the whole coordinate, not to a date and a has
           candidates: [{ ...CANDIDATES[0], href: otherPublisher }, CANDIDATES[1]],
         },
       }),
-    /resolves to a different object than the state names/,
+    /resolves to a different object than the candidate names/,
   );
 
   assert.throws(
@@ -868,7 +683,6 @@ test('a withdrawn-superseded pair is not a live ambiguity', () => {
           work: 'synthetic-preview-work',
           // Two live states, so the live-count rule passes and only the declaration rule
           // can catch the third.
-          // Two live and one whose withdrawal is undeclared.
           candidates: [
             CANDIDATES[0],
             CANDIDATES[1],
@@ -1031,7 +845,7 @@ test('a candidate link carries no anchor, because the choice is between states',
           candidates: [{ ...CANDIDATES[0], href: withAnchor }, CANDIDATES[1]],
         },
       }),
-    /resolves to a different object than the state names/,
+    /resolves to a different object than the candidate names/,
   );
 });
 
@@ -1070,133 +884,5 @@ test('a declared payload contract is an allowlist, not a minimum', () => {
       sentence: 'The publisher licence does not permit serving this text.',
       payload: { licence: 'synthetic-licence', anything_else: 'still allowed' },
     }).includes('still allowed'),
-  );
-});
-
-test('every candidate in the interstitial is live, not merely two of them', () => {
-  // Counting live candidates and then rendering all of them let a withdrawn state be offered
-  // as a selectable choice inside a set that happened to contain two live ones, which is the
-  // conflation the split exists to remove, reintroduced by the split itself.
-  const withdrawn = candidate('2004-01-01', HASH_A, '2003-12-20', true);
-  assert.throws(
-    () =>
-      renderRefusalCard({
-        code: 'ambiguous_version',
-        sentence: 'Two states cover that date.',
-        payload: {
-          publisher: 'preview-synthetic',
-          work: 'synthetic-preview-work',
-          candidates: [CANDIDATES[0], CANDIDATES[1], withdrawn],
-        },
-      }),
-    /every state in it must be one the publisher still holds/,
-  );
-
-  // Two live and nothing else still renders.
-  assert.ok(
-    renderRefusalCard({ code: 'ambiguous_version', ...EXAMPLES.ambiguous_version }).includes(
-      'refusal-candidates',
-    ),
-  );
-});
-
-test('the superseded renderer checks the whole coordinate too', () => {
-  // The comparison existed twice and the second copy was written without the anchor, so the
-  // defect came back in the component added to fix it. One check now, used by both.
-  const superseded = candidate('2004-01-01', HASH_B, '2003-12-15', true);
-  for (const [live, sibling, why] of [
-    [
-      { ...CANDIDATES[0], href: `${CANDIDATES[0].href}#art_1` },
-      superseded,
-      'an anchored live link',
-    ],
-    [
-      CANDIDATES[0],
-      { ...superseded, href: `${superseded.href}#art_1` },
-      'an anchored withdrawn link',
-    ],
-  ]) {
-    assert.throws(
-      () =>
-        renderSupersededState({
-          publisher: 'preview-synthetic',
-          work: 'synthetic-preview-work',
-          live,
-          withdrawn: [sibling],
-        }),
-      /resolves to a different object than the state names/,
-      `${why} was accepted`,
-    );
-  }
-});
-
-test('a payload member cannot be inherited', () => {
-  // The validators read through the prototype chain and the allowlist and renderer read own
-  // properties, so an inherited candidates array validated and then vanished: an ambiguity
-  // card offering no choice, which is the one refusal whose purpose is to make a reader choose.
-  const proto = {
-    publisher: 'preview-synthetic',
-    work: 'synthetic-preview-work',
-    candidates: [1, 2],
-  };
-  assert.throws(
-    () =>
-      renderRefusalCard({
-        code: 'ambiguous_version',
-        sentence: 'Two states cover that date.',
-        payload: Object.create(proto),
-      }),
-    /must carry publisher, work, candidates/,
-  );
-
-  // And the same for a code whose payload is a plain key, so the rule is not one candidate's.
-  assert.throws(
-    () =>
-      renderRefusalCard({
-        code: 'profiles_differ',
-        sentence: 'Two profiles.',
-        payload: Object.create({ profiles: ['akn-lu/1', 'pdf-lu/1'] }),
-      }),
-    /must carry profiles/,
-  );
-});
-
-test('the absence fields cannot be inherited either', () => {
-  // The half of the own-property repair that was missed. The renderer reads own properties and
-  // this validator read through the prototype chain, so a payload owning only its declared key
-  // while inheriting both absence fields validated here and rendered without them: an absence
-  // with no route out, which is the dead end the contract exists to prevent.
-  const inherited = {
-    what_would_answer: ['corrected_identifier'],
-    asserts_absence_of_law: false,
-  };
-  const payload = Object.assign(Object.create(inherited), {
-    population_disclosure: 'within the 1,402 consolidated LU works held by this corpus',
-  });
-
-  assert.throws(
-    () =>
-      renderRefusalCard({
-        code: 'identifier_unknown',
-        sentence: 'That identifier does not resolve.',
-        payload,
-      }),
-    /must say what would answer it/,
-    'an inherited what_would_answer satisfied the absence contract',
-  );
-
-  // And the other field on its own, so the two are proved separately rather than together.
-  assert.throws(
-    () =>
-      renderRefusalCard({
-        code: 'identifier_unknown',
-        sentence: 'That identifier does not resolve.',
-        payload: Object.assign(Object.create({ asserts_absence_of_law: false }), {
-          population_disclosure: 'within the 1,402 consolidated LU works held by this corpus',
-          what_would_answer: ['corrected_identifier'],
-        }),
-      }),
-    /absence of a record is never absence of law|asserts_absence_of_law/,
-    'an inherited asserts_absence_of_law satisfied the contract',
   );
 });

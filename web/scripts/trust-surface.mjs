@@ -27,6 +27,8 @@ import { renderRefusalCard } from './refusal-card.mjs';
 import { renderStateBanner } from './state-banner.mjs';
 import { renderEnvelopeStrip, renderVerifyCluster } from './verify-cluster.mjs';
 import { readingUrl } from './urls.mjs';
+import { renderNoHitCard } from './no-hit-card.mjs';
+import { renderRelaxationDisclosures } from './relaxation.mjs';
 import {
   RESOURCE_AUTHENTICITY_SCHEMA,
   quotedLaw,
@@ -175,6 +177,56 @@ export function renderTrustSurface() {
         },
       },
     )}</section>`,
+
+    `<section class="surface-block"><h2>Nothing runs without its banner</h2>${renderRelaxationDisclosures(
+      {
+        searchPath: '/ask/search?q=a+synthetic+query&scope=preview',
+        relaxations: {
+          fuzzy: { applied: true, expansions: ['many -> mady', 'many -> man'] },
+          crosswalk: {
+            applied: true,
+            understood_as: 'a synthetic lay term',
+            version: 'synthetic-crosswalk/1',
+            reviewed_on: '2026-01-01',
+          },
+          semantic: {
+            applied: true,
+            encoder: 'synthetic-encoder/1',
+            benchmark: 'synthetic-bench/1',
+          },
+        },
+      },
+    )}</section>`,
+
+    `<section class="surface-block"><h2>Nothing found is not nothing to say</h2>${renderNoHitCard({
+      query: 'a query that matches nothing here',
+      layers: [
+        { name: 'work_resolution', outcome: 'not_run', language: 'en' },
+        { name: 'keyword', outcome: 'ran', language: 'en' },
+        { name: 'semantic', outcome: 'unavailable', language: 'en' },
+      ],
+      expansions: ['many -> mady', 'many -> man'],
+      population: {
+        searchable_works: [
+          { what: 'synthetic preview works', count: 2, counted_at: '2026-01-01' },
+        ],
+        not_searchable: [
+          {
+            what: 'everything else',
+            count: 0,
+            note: 'this fixture holds no law at all',
+            counted_at: '2026-01-01',
+          },
+        ],
+      },
+      routes: [
+        {
+          label: 'Search the synthetic publisher',
+          publisher: PUBLISHER,
+          uri: 'https://preview.invalid/search',
+        },
+      ],
+    })}</section>`,
 
     `<section class="surface-block"><h2>Authenticity, and what is not translated</h2>
       <p>The resource's own evidence decides. A resource with one authentic language always

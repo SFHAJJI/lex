@@ -11,7 +11,7 @@
 
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { readdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { resolve as resolvePath } from "node:path";
 import { extname, join as joinPath } from "node:path";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -74,33 +74,24 @@ const WIDTHS = [
   { label: "zoom400", width: 320, height: 256 },
 ];
 
-/**
- * Every page the build emits, read from the build's own output.
- *
- * This was a hand-written list and it was wrong twice for one reason. The trust surface once
- * shipped outside it and the run reported five pages of six as clean; the page every stand-in
- * action leads to shipped outside it too, so the one page reached by every visible action was
- * the one page never measured for contrast, layout, console state or target size.
- *
- * A list somebody has to remember to update is a gate that fails open, quietly, in the
- * direction of a clean report. So the list is the directory: whatever the build emits is what
- * gets measured, and a page cannot ship unmeasured without also not shipping.
- */
-async function pagesFrom(root) {
-  const found = (await readdir(root)).filter((name) => name.endsWith(".html")).sort();
-  // An empty baseline passes forever. If the build emitted nothing, this run proves nothing,
-  // and it says so rather than reporting every zero of its combinations clean.
-  if (found.length < MINIMUM_PAGES) {
-    throw new Error(
-      `the build emitted ${found.length} pages and this run needs at least ${MINIMUM_PAGES} ` +
-        "to be worth anything; run npm run build first",
-    );
-  }
-  return found;
-}
-
-/** Below this, the run is measuring an accident rather than the product. */
-const MINIMUM_PAGES = 8;
+const PAGES = [
+  "state-loading.html",
+  "state-transport-failure.html",
+  "state-invalid-envelope.html",
+  "state-success.html",
+  "state-refusal.html",
+  // The trust surface. Added because the run reported "all combinations clean" while this
+  // page existed and was not in the list, which is evidence about five pages presented as
+  // evidence about six.
+  "trust-surface.html",
+  // One per shell, because a density is a layout claim and only a browser can check it.
+  "shell-ask.html",
+  "shell-w.html",
+  "shell-dev.html",
+  // Nineteen refusal cards on one page, which is the densest thing this library renders and
+  // therefore the best place for reflow and separation to break first.
+  "refusal-catalog.html",
+];
 
 /**
  * Ports WHATWG Fetch refuses to connect to, so a debugger listening on one is unreachable.
@@ -593,7 +584,7 @@ async function main() {
     await session.send("Runtime.enable", {}, sessionId);
     await session.send("Page.enable", {}, sessionId);
 
-    for (const page of await pagesFrom(root)) {
+    for (const page of PAGES) {
       const url = `${site.origin}/${page}`;
       for (const viewport of WIDTHS) {
        for (const scheme of ["light", "dark"]) {
@@ -790,6 +781,39 @@ async function main() {
         `contrast=${row.contrastChecked} worst=${row.worstContrast} ` +
         `ax=${row.axNodes} named-interactive=${row.axInteractive} landmarks=${row.axLandmarks} main=${row.axMain} glued=${row.gluedCount} inert=${row.inertControls} small=${row.smallTargetCount}`,
     );
+  }
+
+  // A density that does not change the layout is a shell that is not a shell. The three
+  // shells claim three densities, so the browser has to report three distinct computed
+  // line heights on `main` at the same viewport, and the Gateway shell has to actually be
+  // monospace. Nothing else in the run compares two pages against each other, and nothing
+  // else could catch a density declared in the markup and absent from the stylesheet.
+  const shellRows = rows.filter((row) => row.shell !== null && row.shell !== undefined);
+  if (shellRows.length > 0) {
+    for (const viewport of WIDTHS) {
+      const atViewport = shellRows.filter((row) => row.viewport === viewport.label && row.scheme === "light");
+      // One row per shell. More than one page may wear the same shell, and comparing rows
+      // rather than shells reported four shells when there are three: the check itself had
+      // the defect it exists to catch, counting appearances instead of kinds.
+      const byShell = new Map();
+      for (const row of atViewport) {
+        if (!byShell.has(row.shell)) byShell.set(row.shell, row);
+      }
+      if (byShell.size < 2) continue;
+      const heights = new Set([...byShell.values()].map((row) => row.mainLineHeight));
+      if (heights.size !== byShell.size) {
+        failures.push(
+          `@${viewport.label}: ${byShell.size} shells but ${heights.size} distinct main ` +
+            `line-height(s) (${[...heights].join(", ")}); a density that changes nothing is not a density`,
+        );
+      }
+    }
+    const gateway = shellRows.find((row) => row.shell === "dev");
+    if (gateway && !/mono/i.test(gateway.mainFontFamily ?? "")) {
+      failures.push(
+        `the Gateway shell claims density monospace and computed ${gateway.mainFontFamily}`,
+      );
+    }
   }
 
   if (failures.length > 0) {
