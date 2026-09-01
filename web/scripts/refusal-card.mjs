@@ -437,6 +437,17 @@ function requireCandidates(payload) {
   // Every rendered candidate, not merely two of them. Counting live candidates and then
   // rendering all of them let a withdrawn state be offered as a selectable choice inside a
   // set that happened to contain two live ones, which is the conflation the split removes.
+  // An ambiguity is a choice between different states. The same state offered twice satisfies a
+  // count of two and gives a reader nothing to choose between, which is the one thing this
+  // interstitial exists to make them do.
+  const identities = live.map((one) => `${one.valid_from}--${one.hash}`);
+  if (new Set(identities).size !== identities.length) {
+    throw new Error(
+      'this ambiguity offers the same state more than once; two entries with one identity are ' +
+        'not a choice, and the interstitial exists to make a reader choose',
+    );
+  }
+
   if (live.length !== candidates.length) {
     throw new Error(
       `${candidates.length - live.length} of these candidates is withdrawn; the interstitial ` +
@@ -559,6 +570,29 @@ function requirePayload(code, payload) {
 
   // Declared null on both sides contradicts the history this same payload asserts: if a
   // history begins, some state lies on one side of any date in it.
+  // A nearest earlier state dated after the nearest later one describes a history that cannot
+  // exist. The shapes were checked and the order never was, so the card could render a
+  // chronology the publisher does not have.
+  if (code === 'no_version_for_date') {
+    const begins = own(payload, 'history_begins');
+    const earlier = own(payload, 'nearest_earlier');
+    const later = own(payload, 'nearest_later');
+    if (earlier !== null && later !== null && earlier !== undefined && later !== undefined &&
+        !(earlier < later)) {
+      throw new Error(
+        `nearest_earlier ${earlier} does not precede nearest_later ${later}; a nearest earlier ` +
+          'state dated after the nearest later one is a history that cannot exist',
+      );
+    }
+    if (typeof begins === 'string' && earlier !== null && earlier !== undefined &&
+        earlier < begins) {
+      throw new Error(
+        `nearest_earlier ${earlier} precedes history_begins ${begins}; a state cannot be held ` +
+          'before the history it belongs to starts',
+      );
+    }
+  }
+
   const declaredNull = [...nullable].filter((key) => own(payload, key) === null);
   if (nullable.size > 0 && declaredNull.length === nullable.size) {
     throw new Error(
@@ -785,11 +819,21 @@ export function renderRefusalCard({ code, sentence, payload, governingText, hand
  * finding it silently gone.
  */
 export function renderSupersededState({ publisher, work, live, withdrawn }) {
+  // A state cannot have superseded itself. The live one was checked for not being withdrawn and
+  // the siblings for being withdrawn, and nothing checked they were different states, so one
+  // record passed as both would render as its own replacement.
   if (typeof publisher !== 'string' || typeof work !== 'string') {
     throw new Error('a superseded-state disclosure must name the work it is about');
   }
   if (live?.withdrawn !== false) {
     throw new Error('the live state of a superseded pair must be the one that is not withdrawn');
+  }
+  const liveIdentity = `${live.valid_from}--${live.hash}`;
+  if (Array.isArray(withdrawn) && withdrawn.some((one) => `${one?.valid_from}--${one?.hash}` === liveIdentity)) {
+    throw new Error(
+      'a state cannot have superseded itself; the same record appears as both the live state ' +
+        'and one it replaced',
+    );
   }
   if (!Array.isArray(withdrawn) || withdrawn.length === 0) {
     throw new Error(

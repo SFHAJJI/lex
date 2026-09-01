@@ -95,7 +95,26 @@ function requireItem(item, index) {
   // Three dates, the pack's phrase: applicable, published, observed. A bundle carrying one
   // of them lets a reader mistake the observation for the law's own date.
   isCalendarDateOrThrow(item.valid_from, `${where} valid_from`);
-  if (item.valid_to !== null) isCalendarDateOrThrow(item.valid_to, `${where} valid_to`);
+  if (item.valid_to !== null) {
+    isCalendarDateOrThrow(item.valid_to, `${where} valid_to`);
+    // An inverted interval was exported as an applicability period, in the item row and in the
+    // register, and a bundle is the artefact that leaves the room and is read by people who
+    // were not here to notice.
+    if (item.valid_to <= item.valid_from) {
+      throw new Error(
+        `${where} is applicable from ${item.valid_from} to ${item.valid_to}, which ends on or ` +
+          'before it begins; that is not a period this bundle can export as one',
+      );
+    }
+    // The open-ended sentinel is a marker, not a date. One renderer maps it to null and this
+    // one printed it, so a bundle could state that a law ceased to apply in the year 9999.
+    if (item.valid_to === '9999-12-31') {
+      throw new Error(
+        `${where} carries the open-ended sentinel as a real end date; an open interval ends in ` +
+          'null here, and printing the sentinel exports a law that ceases in the year 9999',
+      );
+    }
+  }
   isCalendarDateOrThrow(item.publication_date, `${where} publication_date`);
   if (!isUtcInstant(item.observed_from)) {
     throw new Error(`${where} needs the instant it was observed: ${JSON.stringify(item.observed_from)}`);
@@ -124,6 +143,15 @@ function renderItem(item, index) {
 
   // Rights at compose time. A licence that does not embed text loses the text here, whatever
   // the caller passed, so a bundle cannot carry text the publisher did not license.
+  // A licence that embeds text and an item with none is an empty quotation under a citation, a
+  // digest and an official link: the shape of a bundle carrying text it does not have.
+  if (licence.embedsText && (typeof item.text !== 'string' || item.text.trim().length === 0)) {
+    throw new Error(
+      `${'item ' + (index + 1)} is under a licence that embeds its text and carries none; an ` +
+        'empty quotation beneath a citation and a digest reads as text this bundle holds',
+    );
+  }
+
   const body = licence.embedsText
     ? `<blockquote class="bundle-text">${escapeHtml(item.text ?? '')}</blockquote>`
     : '<p class="bundle-withheld">Text withheld by licence. This item travels as its digest ' +

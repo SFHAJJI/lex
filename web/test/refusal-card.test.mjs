@@ -1078,3 +1078,55 @@ test('the absence fields cannot be inherited either', () => {
     'an inherited asserts_absence_of_law satisfied the contract',
   );
 });
+
+test('a nearest state lies on the side its name claims', () => {
+  // The shapes were checked and the order never was, so the card could render a chronology the
+  // publisher does not have.
+  const base = {
+    code: 'no_version_for_date',
+    sentence: 'No publisher state covers 2015-06-01.',
+  };
+  const payload = {
+    history_begins: '2017-01-01',
+    nearest_earlier: '2018-01-01',
+    nearest_later: '2017-06-01',
+    what_would_answer: ['new_official_observation'],
+    asserts_absence_of_law: false,
+  };
+  assert.throws(
+    () => renderRefusalCard({ ...base, payload }),
+    /does not precede nearest_later/,
+    'a nearest earlier state dated after the nearest later one was rendered',
+  );
+  assert.throws(
+    () =>
+      renderRefusalCard({
+        ...base,
+        payload: { ...payload, nearest_earlier: '2016-01-01', nearest_later: '2018-01-01' },
+      }),
+    /precedes history_begins/,
+    'a state was held before the history it belongs to starts',
+  );
+  // Ordered is fine, and so is a declared absence on either side.
+  assert.ok(
+    renderRefusalCard({
+      ...base,
+      payload: { ...payload, nearest_earlier: '2017-02-01', nearest_later: '2018-01-01' },
+    }).includes('2018-01-01'),
+  );
+});
+
+test('an ambiguity offers a choice, not one state listed twice', () => {
+  // Two entries with one identity satisfy a count of two and give a reader nothing to choose
+  // between, which is the one thing this interstitial exists to make them do.
+  const one = EXAMPLES.ambiguous_version.payload.candidates[0];
+  assert.throws(
+    () =>
+      renderRefusalCard({
+        code: 'ambiguous_version',
+        sentence: 'Two states cover that date.',
+        payload: { ...EXAMPLES.ambiguous_version.payload, candidates: [one, { ...one }] },
+      }),
+    /the same state more than once/,
+  );
+});

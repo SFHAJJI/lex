@@ -180,3 +180,39 @@ test('values are escaped rather than trusted', () => {
   assert.ok(!html.includes('<img'));
   assert.ok(html.includes('&lt;img'));
 });
+
+test('an exported period runs forwards, and the open sentinel is not a date', () => {
+  // A bundle is the artefact that leaves the room and is read by people who were not here.
+  for (const [valid_to, pattern] of [
+    ['2001-01-01', /ends on or before it begins/],
+    ['2000-01-01', /ends on or before it begins/],
+    ['9999-12-31', /exports a law that ceases in the year 9999/],
+  ]) {
+    assert.throws(
+      () => renderEvidenceBundle({ ...GOOD, items: [{ ...ITEM, valid_to }] }),
+      pattern,
+      `valid_to=${valid_to} was exported as an applicability period`,
+    );
+  }
+  // An open interval ends in null, which is the shape that survives.
+  assert.ok(renderEvidenceBundle({ ...GOOD, items: [{ ...ITEM, valid_to: null }] }).includes('no end recorded'));
+});
+
+test('a licence that embeds text and an item with none is refused', () => {
+  // Otherwise an empty quotation sits beneath a citation, a digest and an official link, which
+  // reads as text this bundle holds.
+  for (const text of [undefined, '', '   ']) {
+    assert.throws(
+      () => renderEvidenceBundle({ ...GOOD, items: [{ ...ITEM, text }] }),
+      /carries none; an empty quotation/,
+      `text=${JSON.stringify(text)} produced an empty quotation`,
+    );
+  }
+  // A licence that withholds text is unaffected: it never had any to embed.
+  assert.ok(
+    renderEvidenceBundle({
+      ...GOOD,
+      items: [{ ...ITEM, licence: 'licence-scl', text: undefined }],
+    }).includes('Text withheld by licence'),
+  );
+});

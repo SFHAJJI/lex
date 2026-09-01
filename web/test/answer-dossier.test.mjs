@@ -242,3 +242,37 @@ test('a claim with no sentence is refused rather than rendered as the word undef
 test('an answer with no claims is refused rather than rendered empty', () => {
   assert.throws(() => renderAnswerDossier({ ...GOOD, claims: [] }), /claim/);
 });
+
+test('a trace records only what somebody could write down and re-enter', () => {
+  // A parameter rendered as [object Object], undefined or null is a call nobody can repeat,
+  // recorded as though they could, on the surface whose whole purpose is that they can.
+  for (const value of [{ nested: 1 }, undefined, null, [], [{ a: 1 }]]) {
+    assert.throws(
+      () =>
+        renderAnswerDossier({
+          ...GOOD,
+          operations: [{ ...OPERATIONS[0], parameters: { work: 'x', bad: value } }, ...OPERATIONS.slice(1)],
+        }),
+      /cannot be written down and re-entered|records an empty parameter set/,
+      `${JSON.stringify(value)} was recorded as a re-runnable parameter`,
+    );
+  }
+  assert.throws(
+    () =>
+      renderAnswerDossier({
+        ...GOOD,
+        operations: [{ ...OPERATIONS[0], parameters: {} }, ...OPERATIONS.slice(1)],
+      }),
+    /records an empty parameter set/,
+  );
+  // Scalars and lists of scalars are exactly what a reader can retype.
+  assert.ok(
+    renderAnswerDossier({
+      ...GOOD,
+      operations: [
+        { ...OPERATIONS[0], parameters: { work: 'lu-legilux:x', limit: 3, anchors: ['art_1'] } },
+        ...OPERATIONS.slice(1),
+      ],
+    }).includes('lu-legilux:x'),
+  );
+});

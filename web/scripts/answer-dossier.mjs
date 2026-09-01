@@ -63,6 +63,33 @@ function requireOperations(operations) {
       throw new Error(`call id ${operation.call_id} appears twice in one trace`);
     }
     seen.add(operation.call_id);
+    // A trace exists so somebody can run the call again. A parameter rendered as [object
+    // Object], undefined or null is a call nobody can repeat, recorded as though they could,
+    // and an empty parameter set is a call that records nothing about how it was made.
+    if (operation.parameters !== null && typeof operation.parameters === 'object') {
+      const entries = Object.entries(operation.parameters);
+      if (entries.length === 0) {
+        throw new Error(
+          `${operation.operation_id} records an empty parameter set; a call whose arguments are ` +
+            'not recorded cannot be re-run, and an empty object records none',
+        );
+      }
+      for (const [key, value] of entries) {
+        const scalar =
+          typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
+        const scalarList =
+          Array.isArray(value) &&
+          value.length > 0 &&
+          value.every((one) => typeof one === 'string' || typeof one === 'number');
+        if (!scalar && !scalarList) {
+          throw new Error(
+            `${operation.operation_id} records parameter ${key} as ` +
+              `${JSON.stringify(value)}, which cannot be written down and re-entered; a trace ` +
+              'that renders it reads as a call somebody could repeat',
+          );
+        }
+      }
+    }
     if (operation.parameters === null || typeof operation.parameters !== 'object') {
       throw new Error(
         `${operation.operation_id} must record the parameters it was called with; a call ` +

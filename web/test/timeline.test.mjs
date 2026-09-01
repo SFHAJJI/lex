@@ -455,3 +455,34 @@ test('values are escaped rather than trusted', () => {
   assert.ok(html.includes('&amp; more'), 'an ampersand was not escaped');
   assert.ok(!html.includes('onerror="alert'), 'a quote broke out of the attribute');
 });
+
+test('a truncated history cannot say what lies between the states it did not list', () => {
+  // Gaps are only knowable from a complete history. Derived from a truncated list, the gap
+  // sentence is asserted across exactly the states the same page admits it is not showing, so
+  // pagination alone manufactures an absence in the record.
+  const gapped = [A, state({ valid_from: '2024-12-28', valid_to: null, hash: HASH_C })];
+
+  const complete = renderTimeline({ ...GOOD, states: gapped, totalCount: 2 });
+  assert.ok(complete.includes('GAP 2004-01-01 to 2024-12-28'), 'a complete history states its gap');
+
+  const cut = renderTimeline({ ...GOOD, states: gapped, totalCount: 12 });
+  assert.ok(!cut.includes('GAP '), 'a truncated history asserted a gap it cannot know');
+  assert.ok(cut.includes('Gaps are not shown'));
+  assert.ok(cut.includes('cannot be read from the states listed here'));
+});
+
+test('one record listed twice is a duplicate, not a publisher contradiction', () => {
+  // Reporting it as an overlap invents a disagreement, in the same function whose sibling was
+  // already repaired for inventing an absence.
+  assert.deepEqual(overlapsIn([A, { ...A }]), []);
+  const twice = renderTimeline({ ...GOOD, states: [A, { ...A }, B], totalCount: 3 });
+  assert.ok(!twice.includes('Overlapping states'), 'a duplicate was reported as a conflict');
+
+  // A genuine overlap between two different records still is one.
+  const real = renderTimeline({
+    ...GOOD,
+    states: [A, state({ valid_from: '2003-01-01', valid_to: '2005-01-01', hash: HASH_C })],
+    totalCount: 2,
+  });
+  assert.ok(real.includes('Overlapping states'));
+});

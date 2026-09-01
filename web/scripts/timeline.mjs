@@ -236,6 +236,10 @@ export function overlapsIn(states) {
     for (let j = i + 1; j < states.length; j += 1) {
       const a = states[i];
       const b = states[j];
+      // The same record listed twice is a duplicate, not a publisher contradiction. Reporting
+      // it as an overlap invents a disagreement, in the same function whose sibling was already
+      // repaired for inventing an absence.
+      if (a.lex_id === b.lex_id) continue;
       // Half-open intervals, the same reading the resolver uses: a state covers [from, to).
       const aEnd = a.valid_to ?? '9999-12-31';
       const bEnd = b.valid_to ?? '9999-12-31';
@@ -366,7 +370,14 @@ export function renderTimeline({ semantics, states, asOf, totalCount, truncated,
       compare(a.lex_id, b.lex_id),
   );
 
-  const holes = holesBetween(ordered);
+  // Gaps are only knowable from a complete history. Derived from a truncated list, "No
+  // publisher state covers X to Y" is asserted across exactly the states the same page admits
+  // it is not showing, so pagination alone manufactures an absence in the record.
+  const holes = isTruncated ? [] : holesBetween(ordered);
+  const holesUnknown = isTruncated
+    ? '<p class="timeline-holes-unknown">Gaps are not shown: this is part of the history, and ' +
+      'what lies between states nobody listed cannot be read from the states listed here.</p>'
+    : '';
   const overlaps = overlapsIn(ordered);
 
   const rows = [
@@ -420,6 +431,7 @@ export function renderTimeline({ semantics, states, asOf, totalCount, truncated,
     '<th scope="col">extraction profile</th><th scope="col">digest</th>' +
     `</tr></thead><tbody>${rows}</tbody></table></div>` +
     overlapSection +
+    holesUnknown +
     pager +
     `<p class="timeline-population">${escapeHtml(population)}</p>` +
     '</section>'
