@@ -301,6 +301,37 @@ export function canonicalStateUrl(value) {
  *
  * @param {object} input  the same coordinates `readingUrl` takes
  */
+/**
+ * A same-origin search path, validated rather than assumed from its first character.
+ *
+ * A leading slash was the whole check where this is used, and `//evil.example/x` has one.
+ * Protocol-relative is off-site and begins with a slash, so a control offering the reader their
+ * own words back offered a one-tap trip to another origin instead.
+ *
+ * @param {unknown} value
+ * @returns {{path: string, query: string}|null}
+ */
+export function canonicalSearchPath(value) {
+  if (typeof value !== 'string' || !value.startsWith('/')) return null;
+  // Shadowed and kept. Removing this line fails no test, because the route-shape check below
+  // already refuses `//evil.example/x`: its path is not one of the three search routes. Verified
+  // by seeding exactly that mutation rather than assuming it. It stays because protocol-relative
+  // is the classic form of this bypass and the route check is the thing most likely to be
+  // relaxed later, at which point this becomes the only line refusing it.
+  if (value.startsWith('//')) return null;
+  // Backslash, written as a code point: some parsers treat it as a separator and some do not,
+  // so it never reaches one here.
+  if (value.includes(String.fromCharCode(92))) return null;
+  if (value.includes('#')) return null;
+  // A control character or whitespace inside a path is a parser disagreement waiting to happen.
+  if (/[\u0000-\u0020\u007f]/.test(value)) return null;
+
+  const [path, ...rest] = value.split('?');
+  if (rest.length > 1) return null;
+  if (!/^\/(ask|w|dev)\/search$/.test(path)) return null;
+  return { path, query: rest[0] ?? '' };
+}
+
 export function canonicalStateHref(input) {
   return `https://${CANONICAL_HOST}${readingUrl(input)}`;
 }

@@ -155,8 +155,33 @@ test('each revert turns off exactly its own relaxation and leaves the rest alone
 
 test('a revert needs a real search path and a real relaxation', () => {
   assert.throws(() => revertPath(SEARCH, 'stemming'), /is not a relaxation/);
-  assert.throws(() => revertPath('search?q=x', 'fuzzy'), /needs the current search path/);
-  assert.throws(() => revertPath('/ask/search?q=x#art_1', 'fuzzy'), /carries no fragment/);
+
+  // The control comes first. A refusal that also refuses the true case is not a check, and the
+  // three shells are all legitimate here.
+  for (const good of ['/ask/search?q=x', '/w/search', '/dev/search?q=x&fuzzy=on']) {
+    assert.equal(typeof revertPath(good, 'fuzzy'), 'string', `${good} was refused`);
+  }
+
+  // A leading slash used to be the whole check, and `//evil.example/x` has one. This control is
+  // the one a reader reaches for when they have stopped trusting what they are being shown, and
+  // it promised them their own words back while sending them to another origin.
+  for (const bad of [
+    '//evil.example/steal',
+    '/' + String.fromCharCode(92) + 'evil.example/steal',
+    'https://evil.example/steal',
+    'search?q=x',
+    '/ask/read?q=x',
+    '/ask/search?q=x?y=z',
+    '/ask/search	?q=x',
+  ]) {
+    assert.throws(
+      () => revertPath(bad, 'fuzzy'),
+      /needs the current same-origin search path/,
+      `${JSON.stringify(bad)} was accepted as a revert target`,
+    );
+  }
+
+  assert.throws(() => revertPath('/ask/search?q=x#art_1', 'fuzzy'), /same-origin search path/);
 });
 
 test('values are escaped rather than trusted', () => {

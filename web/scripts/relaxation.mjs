@@ -19,6 +19,7 @@
 // crosswalk fired cannot honestly disclose that it did not.
 
 import { isCalendarDate } from './temporal.mjs';
+import { canonicalSearchPath } from './routes.mjs';
 
 /** The three relaxations, each disclosed on its own terms. */
 export const RELAXATIONS = Object.freeze(['fuzzy', 'crosswalk', 'semantic']);
@@ -59,14 +60,20 @@ export function revertPath(searchPath, relaxation) {
       `${JSON.stringify(relaxation)} is not a relaxation; the three are ${RELAXATIONS.join(', ')}`,
     );
   }
-  if (typeof searchPath !== 'string' || !searchPath.startsWith('/')) {
-    throw new Error(`a revert needs the current search path: ${JSON.stringify(searchPath)}`);
-  }
-  if (searchPath.includes('#')) {
-    throw new Error('a search path carries no fragment');
+  // Through the shared route policy. A leading slash was the whole check, and
+  // `//evil.example/x` has one: protocol-relative is off-site and begins with a slash, so the
+  // revert control offered a one-tap trip to another origin under a label promising the reader
+  // their own words back. That is the control a reader reaches for precisely when they have
+  // stopped trusting what they are being shown.
+  const search = canonicalSearchPath(searchPath);
+  if (search === null) {
+    throw new Error(
+      `a revert needs the current same-origin search path; ${JSON.stringify(searchPath)} is ` +
+        'not one, and a revert that leaves this origin is not a revert',
+    );
   }
 
-  const [path, rawQuery = ''] = searchPath.split('?');
+  const { path, query: rawQuery } = search;
   const params = new URLSearchParams(rawQuery);
   const [name, value] = REVERT.get(relaxation);
   params.set(name, value);
