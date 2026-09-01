@@ -29,6 +29,7 @@ import { renderEnvelopeStrip, renderVerifyCluster } from './verify-cluster.mjs';
 import { readingUrl } from './urls.mjs';
 import { renderNoHitCard } from './no-hit-card.mjs';
 import { renderAnswerDossier } from './answer-dossier.mjs';
+import { renderEvidenceBundle } from './evidence-bundle.mjs';
 import {
   renderHole,
   renderProvisional,
@@ -183,6 +184,48 @@ export function renderTrustSurface() {
         },
       },
     )}</section>`,
+
+    `<section class="surface-block"><h2>What leaves the building</h2>${renderEvidenceBundle({
+      items: [
+        {
+          kind: 'publisher_text',
+          citation: 'Synthetic preview work, article 1, applicable from 2001-01-01',
+          identifier: `${PUBLISHER}:${WORK}:2001-01-01`,
+          valid_from: '2001-01-01',
+          valid_to: '2002-01-01',
+          publication_date: '2000-12-01',
+          observed_from: '2026-01-01T00:00:00Z',
+          record_sha256: DIGEST,
+          licence: 'cc-by-4.0',
+          attribution: 'Synthetic preview publisher, CC BY 4.0',
+          publisher: PUBLISHER,
+          official_uri: 'https://preview.invalid/synthetic-preview-work/2001-01-01',
+          text: SYNTHETIC_LAW,
+        },
+        {
+          kind: 'publisher_text',
+          citation: 'Synthetic preview work, article 2, applicable from 2003-01-01',
+          identifier: `${PUBLISHER}:${WORK}:2003-01-01`,
+          valid_from: '2003-01-01',
+          valid_to: null,
+          publication_date: '2002-12-01',
+          observed_from: '2026-01-01T00:00:00Z',
+          record_sha256: CANDIDATE_A,
+          licence: 'licence-scl',
+          attribution: 'Synthetic preview publisher, licence restricts redistribution',
+          publisher: PUBLISHER,
+          official_uri: 'https://preview.invalid/synthetic-preview-work/2003-01-01',
+          text: SYNTHETIC_LAW,
+        },
+      ],
+      columns: ['identifier', 'valid_from', 'valid_to', 'official_uri', 'record_sha256'],
+      verification: {
+        recompute_recipe:
+          'Fetch each official source with GET and hash the exact bytes with SHA-256.',
+        signing_key: 'synthetic-public-key',
+        fetch_note: 'Use GET rather than HEAD; the publishers answer 403 to HEAD.',
+      },
+    })}</section>`,
 
     `<section class="surface-block"><h2>What the record does not say</h2>
       <p>Three qualifications, each common rather than exotic. Two publisher dates on one

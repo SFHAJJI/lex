@@ -281,7 +281,13 @@ const PROBE = `(() => {
       if (between.trim().length > 0) continue;
       const a = before.getBoundingClientRect();
       const b = after.getBoundingClientRect();
-      const separated = b.left - a.right >= 2 || b.top >= a.bottom;
+      // A visible border between two boxes is a separator, and with collapsed table borders
+      // adjacent cells share one, so their rects touch exactly. Reading that as "painted
+      // flush" was a false positive of this gate rather than a defect in the page.
+      const afterStyle = getComputedStyle(after);
+      const bordered =
+        parseFloat(afterStyle.borderLeftWidth) > 0 || parseFloat(afterStyle.borderTopWidth) > 0;
+      const separated = b.left - a.right >= 2 || b.top >= a.bottom || bordered;
       if (!separated) {
         glued.push(
           parent.className + ' > ' + before.className + ' | ' + after.className,

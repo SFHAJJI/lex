@@ -497,3 +497,72 @@ summary {
   border-inline-start: 3px dashed currentColor;
   padding-inline-start: 0.75rem;
 }
+
+/* The evidence bundle. It leaves and is read by people who were not here, so every item has
+   to stand on its own and the register has to survive a narrow screen. */
+.evidence-bundle,
+.bundle-item,
+.bundle-verification {
+  display: grid;
+  gap: 0.5rem;
+  min-inline-size: 0;
+}
+
+.bundle-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+  min-inline-size: 0;
+}
+
+.bundle-item {
+  padding: 0.75rem;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+}
+
+.bundle-watermark {
+  margin: 0;
+  font-weight: 600;
+}
+
+.bundle-citation,
+.bundle-withheld,
+.bundle-attribution,
+.bundle-official,
+.bundle-recipe,
+.bundle-key,
+.bundle-fetch {
+  margin: 0;
+  min-inline-size: 0;
+}
+
+.bundle-text {
+  margin: 0;
+  min-inline-size: 0;
+  max-inline-size: 72ch;
+  border-inline-start: 3px solid currentColor;
+  padding-inline-start: 0.75rem;
+}
+
+/* A register is wide by nature. It scrolls inside its own box rather than making the page
+   scroll, which is the reflow rule for tabular content. */
+.bundle-register-scroll {
+  overflow-x: auto;
+  max-inline-size: 100%;
+  min-inline-size: 0;
+}
+
+.bundle-register {
+  border-collapse: collapse;
+}
+
+.bundle-register th,
+.bundle-register td {
+  text-align: start;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
