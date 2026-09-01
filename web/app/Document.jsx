@@ -55,11 +55,19 @@ export function Document({
   density = null,
   children,
 }) {
+  // Each axis names itself. Both guards used to raise the same sentence, so a test feeding an
+  // unreviewed value to both could not tell which fired, and the first was unprovable: removing
+  // it left the second producing byte-identical output. Found by mutating this file.
   if (!CHROME_LOCALES.includes(locale)) {
-    throw new Error(`${JSON.stringify(locale)} is not one of the reviewed chrome locales`);
+    throw new Error(
+      `the page locale ${JSON.stringify(locale)} is not one of the reviewed chrome locales`,
+    );
   }
   if (!CHROME_LOCALES.includes(copyLocale)) {
-    throw new Error(`${JSON.stringify(copyLocale)} is not one of the reviewed chrome locales`);
+    throw new Error(
+      `the copy locale ${JSON.stringify(copyLocale)} is not one of the reviewed chrome ` +
+        'locales',
+    );
   }
   if (locale !== copyLocale) {
     throw new Error(
