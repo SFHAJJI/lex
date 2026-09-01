@@ -967,3 +967,45 @@ main > * {
 .reading-permalink code {
   overflow-wrap: anywhere;
 }
+
+/* Provenance. The stamp public key is PEM, so its line structure is part of the value and is
+   kept rather than collapsed; the `code` rule at the top of this file already breaks the
+   base64 runs, so a 320 CSS pixel viewport still does not scroll sideways. Truncating either
+   value would leave a reader something they cannot verify with, which is the same defect the
+   verify cluster's eight character hash chip had. */
+.provenance-pem {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The proof chain is a list of records, each a block of labelled rows. The gap is what keeps
+   one observation from reading as part of the next one. */
+.provenance,
+.provenance-block,
+.provenance-events,
+.provenance-observations {
+  display: grid;
+  gap: var(--space-3, 0.75rem);
+  min-inline-size: 0;
+}
+
+.provenance-events,
+.provenance-observations {
+  margin: 0;
+  padding-inline-start: 1.25rem;
+}
+
+.provenance-event,
+.provenance-observation {
+  min-inline-size: 0;
+}
+
+.provenance-note,
+.provenance-count,
+.provenance-holdings {
+  min-inline-size: 0;
+  max-inline-size: 72ch;
+  margin: 0;
+  font-size: 0.9375em;
+  line-height: 1.5;
+}

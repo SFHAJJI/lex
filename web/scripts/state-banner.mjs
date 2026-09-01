@@ -66,13 +66,19 @@ function required(value, field) {
 }
 
 /**
+ * One state's legal time, as one sentence, in the publisher's own vocabulary.
+ *
+ * Extracted from the banner so a second screen cannot become a second place where legal time
+ * is phrased. The provenance page renders in two runtimes, and a React component composing
+ * this sentence itself would put two spellings of one publisher claim into the product; the
+ * one that drifts is always the one nobody tested.
+ *
  * @param {object} input
- * @param {{ timeline_semantics?: string }} input.envelope
- * @param {{ valid_from: string, valid_to?: string|null,
- *           publication_date?: string|null, observed_from: string }} input.state
+ * @param {string} input.semantics       a member of TIMELINE_SEMANTICS
+ * @param {string} input.validFrom       the publisher's start date
+ * @param {string|null} [input.validTo]  the end date, or the open-ended sentinel, or none
  */
-export function renderStateBanner({ envelope, state }) {
-  const semantics = envelope?.timeline_semantics;
+export function legalTimeSentence({ semantics, validFrom, validTo = null }) {
   const phrase = LEGAL_TIME_PHRASING.get(semantics);
   if (phrase === undefined) {
     throw new Error(
@@ -84,22 +90,36 @@ export function renderStateBanner({ envelope, state }) {
   // Legal time is checked before it is printed. The hostile probe rendered "Applicable from
   // 2026-99-99" and "First observed not-a-timestamp", and a reader cannot tell a publisher's
   // odd date from our own broken one, so an impossible date reads as a recorded fact.
-  const validFrom = requireCalendarDate(required(state?.valid_from, 'valid_from'), 'valid_from');
-  const rawValidTo = state?.valid_to ?? null;
-  const validTo = rawValidTo === null || rawValidTo === OPEN_ENDED_SENTINEL ? null : rawValidTo;
-  if (validTo !== null) requireCalendarDate(validTo, 'valid_to');
-  if (!isOrderedInterval(validFrom, validTo)) {
+  const from = requireCalendarDate(required(validFrom, 'valid_from'), 'valid_from');
+  const rawValidTo = validTo ?? null;
+  const to = rawValidTo === null || rawValidTo === OPEN_ENDED_SENTINEL ? null : rawValidTo;
+  if (to !== null) requireCalendarDate(to, 'valid_to');
+  if (!isOrderedInterval(from, to)) {
     throw new Error(
-      `valid_from ${validFrom} is after valid_to ${validTo}; an inverted interval is not a ` +
+      `valid_from ${from} is after valid_to ${to}; an inverted interval is not a ` +
         'state the publisher can have recorded',
     );
   }
+  return phrase(from, to);
+}
+
+/**
+ * @param {object} input
+ * @param {{ timeline_semantics?: string }} input.envelope
+ * @param {{ valid_from: string, valid_to?: string|null,
+ *           publication_date?: string|null, observed_from: string }} input.state
+ */
+export function renderStateBanner({ envelope, state }) {
+  const legal = legalTimeSentence({
+    semantics: envelope?.timeline_semantics,
+    validFrom: state?.valid_from,
+    validTo: state?.valid_to,
+  });
+
   const observedFrom = requireUtcInstant(
     required(state?.observed_from, 'observed_from'), 'observed_from');
   const publicationDate = state?.publication_date ?? null;
   if (publicationDate !== null) requireCalendarDate(publicationDate, 'publication_date');
-
-  const legal = phrase(validFrom, validTo);
 
   // The record clock is rendered verbatim. An observation timestamp is evidence, and
   // reformatting evidence is the same class of error as normalising an identifier.
