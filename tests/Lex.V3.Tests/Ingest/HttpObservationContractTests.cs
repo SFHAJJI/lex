@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Lex.V3.Contracts;
+using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Http;
 
 namespace Lex.V3.Tests.Ingest;
@@ -233,6 +234,137 @@ public sealed class HttpObservationContractTests
                 propertyName);
         }
     }
+
+    [TestMethod]
+    public void RequestEvidenceCarriesOnlyTheBoundedR2CausalInputs()
+    {
+        var request = RequestEvidence();
+        using var document = JsonDocument.Parse(ContractJson.Serialize(request));
+        CollectionAssert.AreEquivalent(
+            new[]
+            {
+                "requested_uri",
+                "method",
+                "observed_at_utc",
+                "timestamp_precision",
+                "clock_source",
+                "run_identity",
+                "adapter_identity",
+                "request_policy_identity",
+                "outbound_crawler_identity",
+                "origin",
+                "query_plan_identity",
+            },
+            document.RootElement.EnumerateObject().Select(static property => property.Name).ToArray());
+
+        string[] forbidden =
+        [
+            "Headers", "Cookies", "Addresses", "Credentials", "Query", "Sparql",
+            "UserText", "Ip", "InboundUserAgent", "RedirectHistory",
+        ];
+        var publicMembers = typeof(HttpRequestEvidence)
+            .GetProperties()
+            .Select(static property => property.Name)
+            .ToArray();
+        Assert.IsFalse(forbidden.Any(publicMembers.Contains));
+
+        var roundTrip = ContractJson.Deserialize<HttpRequestEvidence>(ContractJson.Serialize(request));
+        Assert.AreEqual(request, roundTrip);
+        Assert.AreEqual(OutboundCrawlerIdentity.Schema, request.OutboundCrawlerIdentity.Schema);
+        Assert.AreEqual(OutboundCrawlerIdentity.Token, request.OutboundCrawlerIdentity.Token);
+    }
+
+    [TestMethod]
+    public void RequestEvidenceRejectsOriginTimeIdentityAndCrawlerDrift()
+    {
+        var valid = RequestEvidence();
+        Assert.IsNotNull(valid);
+        Assert.ThrowsExactly<ArgumentException>(() => RequestEvidence(
+            observedAtUtc: new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.FromHours(1))));
+        Assert.ThrowsExactly<ArgumentException>(() => RequestEvidence(
+            origin: new HttpOrigin("https", "op.europa.eu", 443)));
+        Assert.ThrowsExactly<ArgumentException>(() => RequestEvidence(
+            requestedUri: "https://publications.europa.eu:443/sparql?query=secret"));
+        Assert.ThrowsExactly<ArgumentException>(() => new OutboundCrawlerIdentityEvidence(
+            "outbound_crawler_identity/2",
+            Artifact("urn:uuid:77777777-7777-4777-8777-777777777777", '7'),
+            OutboundCrawlerIdentity.Token));
+        Assert.ThrowsExactly<ArgumentException>(() => new OutboundCrawlerIdentityEvidence(
+            OutboundCrawlerIdentity.Schema,
+            Artifact("urn:uuid:77777777-7777-4777-8777-777777777777", '7'),
+            "caller override"));
+    }
+
+    [TestMethod]
+    public void EveryRequestEvidenceMemberIsRequiredAndUnknownMembersFail()
+    {
+        var complete = JsonNode.Parse(ContractJson.Serialize(RequestEvidence()))!.AsObject();
+        foreach (var propertyName in complete.Select(static pair => pair.Key).ToArray())
+        {
+            var missingOne = JsonNode.Parse(complete.ToJsonString())!.AsObject();
+            Assert.IsTrue(missingOne.Remove(propertyName));
+            Assert.ThrowsExactly<JsonException>(
+                () => ContractJson.Deserialize<HttpRequestEvidence>(missingOne.ToJsonString()),
+                propertyName);
+        }
+
+        var extra = JsonNode.Parse(complete.ToJsonString())!.AsObject();
+        extra["headers"] = new JsonObject();
+        Assert.ThrowsExactly<JsonException>(
+            () => ContractJson.Deserialize<HttpRequestEvidence>(extra.ToJsonString()));
+    }
+
+    [TestMethod]
+    public void OriginIsAnExactDnsTupleAndNeverAnAddress()
+    {
+        Assert.AreEqual(
+            new HttpOrigin("https", "publications.europa.eu", 443),
+            new HttpOrigin("https", "publications.europa.eu", 443));
+
+        foreach (var (scheme, host) in new[]
+        {
+            ("HTTPS", "publications.europa.eu"),
+            ("https", "Publications.europa.eu"),
+            ("https", "127.0.0.1"),
+            ("https", "evil..example"),
+            ("https", "-evil.example"),
+            ("https", "evil-.example"),
+        })
+        {
+            Assert.ThrowsExactly<ArgumentException>(() => new HttpOrigin(scheme, host, 443));
+        }
+
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => new HttpOrigin("https", "evil.example", 0));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => new HttpOrigin("https", "evil.example", 65536));
+    }
+
+    private static HttpRequestEvidence RequestEvidence(
+        string requestedUri = "https://publications.europa.eu:443/resource/cellar",
+        DateTimeOffset? observedAtUtc = null,
+        HttpOrigin? origin = null) =>
+        new(
+            requestedUri: requestedUri,
+            method: RegistryMember("GET"),
+            observedAtUtc: observedAtUtc ?? new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero),
+            timestampPrecision: RegistryMember("millisecond"),
+            clockSource: RegistryMember("system_utc"),
+            runIdentity: Artifact("urn:uuid:11111111-1111-4111-8111-111111111111", '1'),
+            adapterIdentity: Artifact("urn:uuid:22222222-2222-4222-8222-222222222222", '2'),
+            requestPolicyIdentity: Artifact("urn:uuid:33333333-3333-4333-8333-333333333333", '3'),
+            outboundCrawlerIdentity: new OutboundCrawlerIdentityEvidence(
+                OutboundCrawlerIdentity.Schema,
+                Artifact("urn:uuid:44444444-4444-4444-8444-444444444444", '4'),
+                OutboundCrawlerIdentity.Token),
+            origin: origin ?? new HttpOrigin("https", "publications.europa.eu", 443),
+            queryPlanIdentity: Artifact("urn:uuid:55555555-5555-4555-8555-555555555555", '5'));
+
+    private static SourceRegistryMemberRef RegistryMember(string memberKey) =>
+        new(Artifact("urn:uuid:66666666-6666-4666-8666-666666666666", '6'), memberKey);
+
+    private static SourceArtifactRef Artifact(string resourceId, char digestCharacter) =>
+        new(resourceId, new string(digestCharacter, 64));
 
     private static HttpResponseMetadata EmptyResponseMetadata() =>
         new(null, null, null, null, null, null, null);
