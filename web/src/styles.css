@@ -807,3 +807,45 @@ h3,
 main > * {
   min-inline-size: 0;
 }
+
+.dossier-case,
+.dossier {
+  min-inline-size: 0;
+  margin-block: var(--space-6, 2rem);
+}
+
+.dossier-scroll {
+  overflow-x: auto;
+  max-inline-size: 100%;
+  min-inline-size: 0;
+}
+
+.dossier-dates {
+  border-collapse: collapse;
+  inline-size: 100%;
+}
+
+.dossier-dates th,
+.dossier-dates td {
+  border: 1px solid var(--border, #8a8a8a);
+  padding: var(--space-2, 0.5rem);
+  text-align: start;
+}
+
+.dossier-status,
+.dossier-coverage {
+  border-inline-start: 3px solid var(--border, #8a8a8a);
+  padding-inline-start: var(--space-3, 0.75rem);
+  margin-block: var(--space-4, 1rem);
+}
+
+.dossier-status-caption,
+.dossier-case-note,
+.dossier-holes,
+.dossier-slots {
+  font-size: 0.9375em;
+}
+
+.dossier-identifier code {
+  overflow-wrap: anywhere;
+}
