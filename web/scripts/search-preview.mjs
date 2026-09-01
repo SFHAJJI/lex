@@ -44,7 +44,7 @@ function hit(overrides = {}) {
   return {
     lex_id: `${WORK}:2001-01-01`,
     valid_from: '2001-01-01',
-    valid_to: '2004-01-01',
+    valid_to: null,
     publication_date: '2000-12-01',
     text_available: true,
     permalink: `https://law.soufien.lu/preview-synthetic/synthetic-preview-work/2001-01-01--${'a'.repeat(64)}`,
@@ -68,6 +68,7 @@ export function renderSearchPreview({ locale = 'en' } = {}) {
     query: 'synthetic preview work article 1',
     semantics: 'publisher_applicability',
     asOf: AS_OF,
+    timeScope: 'as_of',
     hits: [hit(), hit({ provision_num: 'Art. 2', match_reasons: ['keyword', 'semantic'] })],
     rowSet: { returned: 2, total: 2 },
     population: POPULATION,
@@ -83,8 +84,12 @@ export function renderSearchPreview({ locale = 'en' } = {}) {
     query: 'synthetic preview provision',
     semantics: 'official_consolidation_state',
     asOf: AS_OF,
-    hits: [hit({ provision_num: 'Art. 3', match_reasons: ['exact_title'] })],
-    rowSet: { returned: 1, total: 47 },
+    timeScope: 'all_versions',
+    hits: [
+      hit({ provision_num: 'Art. 3', match_reasons: ['exact_title'] }),
+      hit({ provision_num: 'Art. 3', valid_from: '2001-01-01', valid_to: '2004-01-01' }),
+    ],
+    rowSet: { returned: 2, total: 47 },
     population: POPULATION,
     relaxations: OFF,
     searchPath: '/ask/search',
@@ -94,6 +99,7 @@ export function renderSearchPreview({ locale = 'en' } = {}) {
     query: 'how many months deposit',
     semantics: 'publisher_applicability',
     asOf: AS_OF,
+    timeScope: 'as_of',
     hits: [hit({ provision_num: 'Art. 5', match_reasons: ['interpreted'] })],
     rowSet: { returned: 1, total: 1 },
     population: POPULATION,
@@ -109,6 +115,7 @@ export function renderSearchPreview({ locale = 'en' } = {}) {
     query: 'security deposit how many months landlord',
     semantics: 'publisher_applicability',
     asOf: AS_OF,
+    timeScope: 'as_of',
     hits: [],
     // Zero rows and a zero total, stated rather than omitted. This preview passed no row set
     // at all on the empty path, which is exactly the hole O9 names: without it nothing
@@ -152,8 +159,11 @@ export function renderSearchPreview({ locale = 'en' } = {}) {
         resolved,
       ) +
       section(
-        'A list that was cut',
-        'It names its total, because a list that simply ends reads as a complete one.',
+        'Every state held, and a list that was cut',
+        'The service answers all versions by default, so the heading does not claim these rows ' +
+          'were narrowed to a date. The operative date is still stated, and the second row is a ' +
+          'state that ended in 2004: legitimate here, and a false claim under the other heading. ' +
+          'The list also names its total, because a list that simply ends reads as complete.',
         cut,
       ) +
       section(

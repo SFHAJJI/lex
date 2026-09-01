@@ -186,43 +186,60 @@ test('an unchanged result renders the publisher note verbatim and builds no pane
   );
 });
 
-test('the unchanged answer is bound to the records, not to the caller flag', () => {
-  // Both directions were reachable and both are the worst thing this screen can do. Two
-  // byte-identical states rendered red and green change blocks; two different states rendered
-  // the publisher's "nothing changed" note over a header naming both of them.
+test('the digest decides whether anything changed, not the identifier', () => {
+  // The identifier says which state; the digest says whether the text differs, and only the
+  // second is what a diff is about. Keying this on state identity left a hole: two states under
+  // different identifiers carrying the same digest were not "the same state", skipped the
+  // guard, and rendered a full red and green diff between byte-identical text.
+  const SAME = 'a'.repeat(64);
+  const other = (extra) => ({
+    ...LEFT,
+    lex_id: 'preview-synthetic:synthetic-preview-work:2002-01-01',
+    valid_from: '2002-01-01',
+    valid_to: null,
+    legal_time_sentence: 'Applicable from 2002-01-01 (publisher)',
+    ...extra,
+  });
+
+  // Identical text under two identifiers cannot have changed.
+  assert.throws(
+    () =>
+      renderCompare({
+        ...GOOD,
+        left: { ...LEFT, body_sha256: SAME },
+        right: other({ body_sha256: SAME }),
+        result: CHANGED,
+      }),
+    /same body digest, so their text is identical/,
+    'a diff was invented between two states carrying identical bytes',
+  );
+
+  // And one state against itself, which is the same rule with the identifiers equal too.
   assert.throws(
     () => renderCompare({ ...GOOD, right: { ...LEFT }, result: CHANGED }),
-    /a diff here would be invented/,
-    'a diff was invented between one state and itself',
+    /same body digest, so their text is identical/,
   );
+
+  // Two different states whose text happens to be identical, declaring nothing changed, is a
+  // true statement and renders. The old rule refused it, which was wrong in the other
+  // direction: it demanded the identifiers match before it would believe the digests.
+  const identicalText = renderCompare({
+    ...GOOD,
+    left: { ...LEFT, body_sha256: SAME },
+    right: other({ body_sha256: SAME }),
+    result: { changed: false, note: 'the same version applied on both dates' },
+  });
+  assert.ok(identicalText.includes('changed: false'));
+
+  // Different digests cannot be unchanged.
   assert.throws(
     () =>
       renderCompare({
         ...GOOD,
         result: { changed: false, note: 'the same version applied on both dates' },
       }),
-    /printed over evidence against it/,
-    'the publisher note was printed over two different states',
-  );
-
-  // The digest alone is enough to make them different states, and so is the identifier.
-  assert.throws(
-    () =>
-      renderCompare({
-        ...GOOD,
-        right: { ...LEFT, body_sha256: RIGHT_DIGEST },
-        result: { changed: false, note: 'x' },
-      }),
-    /printed over evidence against it/,
-  );
-  assert.throws(
-    () =>
-      renderCompare({
-        ...GOOD,
-        right: { ...LEFT, lex_id: 'preview-synthetic:synthetic-preview-work:2099-01-01' },
-        result: { changed: false, note: 'x' },
-      }),
-    /printed over evidence against it/,
+    /different body digests/,
+    'the publisher note was printed over evidence against it',
   );
 });
 

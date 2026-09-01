@@ -364,17 +364,27 @@ export function renderCompare({ mode, left, right, result }) {
   // green change blocks, and two different states rendered "the same version applied on both
   // dates" over a header naming both of them. The digests are already validated a few lines
   // up, so the check costs one comparison and closes the screen's worst failure.
-  const sameState = left.lex_id === right.lex_id && left.body_sha256 === right.body_sha256;
-  if (sameState && result?.changed !== false) {
+  // The digest decides, not the identifier.
+  //
+  // This was keyed on state identity, an AND of lex_id and digest, and the AND was the hole: two
+  // states under different identifiers carrying the SAME body digest were not "the same state",
+  // so they skipped the guard and rendered a full red and green diff between byte-identical
+  // text. The identifier says which state; the digest says whether the text differs, and only
+  // the second is what a diff is about.
+  //
+  // It was also wrong in the other direction. Two different states whose text happens to be
+  // identical, declaring nothing changed, were refused, and that declaration is simply true.
+  const sameText = left.body_sha256 === right.body_sha256;
+  if (sameText && result?.changed !== false) {
     throw new Error(
-      'these two sides are one state, same identifier and same digest, so there is nothing ' +
-        'between them to render; a diff here would be invented',
+      'these two sides carry the same body digest, so their text is identical and there is ' +
+        'nothing between them to render; a diff here would be invented whatever the result says',
     );
   }
-  if (!sameState && result?.changed === false) {
+  if (!sameText && result?.changed === false) {
     throw new Error(
-      'this result says nothing changed while the two sides carry different identifiers or ' +
-        'different digests; the publisher note would be printed over evidence against it',
+      'this result says nothing changed while the two sides carry different body digests; the ' +
+        "publisher's note would be printed over evidence against it",
     );
   }
 

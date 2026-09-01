@@ -53,6 +53,26 @@ export const DATE_SCOPE = Object.freeze({
 });
 
 /**
+ * Whether these rows were narrowed to a date at all.
+ *
+ * The live service answers `all_versions` by default, and this screen printed the date-scoped
+ * heading over every result set regardless. So a list drawn from a whole history was published
+ * under "Provisions as applicable on 2026-09-01", and nothing let a reader tell that a row from
+ * a long-superseded state was not among the provisions applicable that day.
+ */
+export const TIME_SCOPES = Object.freeze(['as_of', 'all_versions']);
+
+const SCOPE_HEADING = Object.freeze({
+  publisher_applicability: 'Every state held for these provisions, not narrowed to one date',
+  official_consolidation_state: 'Every wording state held, not narrowed to one date',
+});
+
+/** Half-open, the same reading the resolver uses: a state covers [valid_from, valid_to). */
+function covers(hit, date) {
+  return hit.valid_from <= date && (hit.valid_to === null || date < hit.valid_to);
+}
+
+/**
  * The population, in the shape the zero-hit card already fixed.
  *
  * Two shapes for one disclosure would let a hit list say less than an empty one, which is the
@@ -209,7 +229,8 @@ function renderHit(hit, index, semantics) {
  * @param {object}  input
  * @param {string}  input.query          what was asked, verbatim
  * @param {string}  input.semantics      the envelope's timeline_semantics, no default
- * @param {string}  input.asOf           the date the results are scoped to, always explicit
+ * @param {string}  input.asOf           the operative date, always explicit even when today
+ * @param {string}  input.timeScope      as_of or all_versions; the service's own answer
  * @param {Array}   input.hits
  * @param {object}  input.rowSet         `{ returned, total }` for the served page
  * @param {object}  input.population      the structured disclosure, as the no-hit card takes
@@ -224,6 +245,7 @@ export function renderSearchResults({
   query,
   semantics,
   asOf,
+  timeScope,
   hits,
   rowSet,
   population,
@@ -254,6 +276,12 @@ export function renderSearchResults({
   requirePopulationShape(population);
   if (typeof query !== 'string' || query.trim().length === 0) {
     throw new Error('results echo the query they answer');
+  }
+  if (!TIME_SCOPES.includes(timeScope)) {
+    throw new Error(
+      `results say whether they were narrowed to a date; ${JSON.stringify(timeScope)} is not ` +
+        `one of ${TIME_SCOPES.join(', ')}, and the service answers all_versions by default`,
+    );
   }
 
   // The row set is checked before anything branches on the hits, because the branch that
@@ -306,6 +334,22 @@ export function renderSearchResults({
     throw new Error('the row set returned more rows than it holds');
   }
 
+  // A row under a date-scoped heading must satisfy that scope. Nothing compared the two, so a
+  // long-superseded state could be listed among the provisions applicable on a date it does not
+  // cover, under a heading asserting exactly that.
+  if (timeScope === 'as_of') {
+    hits.forEach((hit, index) => {
+      requireHit(hit, index);
+      if (!covers(hit, asOf)) {
+        throw new Error(
+          `hit ${index + 1} is applicable from ${hit.valid_from} to ` +
+            `${hit.valid_to ?? 'no end recorded'} and does not cover ${asOf}, while the heading ` +
+            'says these rows are the ones applicable on that date',
+        );
+      }
+    });
+  }
+
   // A relaxation that ran without its disclosure is the screen answering a question the reader
   // did not ask. The expansions are the evidence that one ran, so they cannot be silent.
   const applied = Object.values(relaxations).filter((one) => one?.applied === true);
@@ -355,7 +399,14 @@ export function renderSearchResults({
 
   return (
     '<section class="results">' +
-    `<h2 class="results-scope">${escapeHtml(DATE_SCOPE[semantics](asOf))}</h2>` +
+    `<h2 class="results-scope">${escapeHtml(
+      timeScope === 'as_of' ? DATE_SCOPE[semantics](asOf) : SCOPE_HEADING[semantics],
+    )}</h2>` +
+    `<p class="results-operative-date">Operative date: ${escapeHtml(asOf)}.` +
+    (timeScope === 'as_of'
+      ? ''
+      : ' These rows were not narrowed to it; each carries its own interval below.') +
+    '</p>' +
     `<p class="results-query">You asked: ${escapeHtml(query)}</p>` +
     disclosures +
     governingHtml +

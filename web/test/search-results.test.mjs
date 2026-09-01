@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { DATE_SCOPE, MATCH_REASONS, renderSearchResults } from '../scripts/search-results.mjs';
+import {
+  DATE_SCOPE,
+  MATCH_REASONS,
+  TIME_SCOPES,
+  renderSearchResults,
+} from '../scripts/search-results.mjs';
 
 const PERMALINK =
   'https://law.soufien.lu/preview-synthetic/synthetic-preview-work/2001-01-01--' + 'a'.repeat(64);
@@ -9,8 +14,10 @@ const PERMALINK =
 function hit(overrides = {}) {
   return {
     lex_id: 'preview-synthetic:synthetic-preview-work:2001-01-01',
+    // Covers the operative date the heading claims. It did not, and every fixture in this file
+    // was therefore a row listed as applicable on a date it does not cover.
     valid_from: '2001-01-01',
-    valid_to: '2004-01-01',
+    valid_to: null,
     publication_date: '2000-12-01',
     text_available: true,
     permalink: PERMALINK,
@@ -43,6 +50,7 @@ const RELAXATIONS = {
 
 const GOOD = {
   query: 'security deposit how many months landlord',
+  timeScope: 'as_of',
   semantics: 'publisher_applicability',
   asOf: '2026-09-01',
   hits: [hit()],
@@ -152,6 +160,10 @@ test('every row says why it matched, from the closed set', () => {
 
   const interpreted = renderSearchResults({
     ...GOOD,
+    relaxations: {
+      ...RELAXATIONS,
+      crosswalk: { applied: true, understood_as: 'garantie locative', version: 'crosswalk/1', reviewed_on: '2026-08-15' },
+    },
     hits: [hit({ match_reasons: ['interpreted'] })],
   });
   assert.ok(interpreted.includes('interpreted (editorial layer, versioned, non-official)'));
@@ -170,7 +182,7 @@ test('a relaxation that ran cannot be silent', () => {
   // answered about a different word has not been answered.
   assert.throws(
     () => renderSearchResults({ ...GOOD, expansions: ['many -> mady', 'many -> man'] }),
-    /no relaxation is declared as applied/,
+    /fuzzy expansion is not declared as applied/,
   );
 
   const disclosed = renderSearchResults({
@@ -375,6 +387,105 @@ test('the row set is validated even when no rows came back', () => {
       () => renderSearchResults({ ...GOOD, hits: [], rowSet }),
       /how many rows it returned|counts rows/,
       `${JSON.stringify(rowSet)} skipped row-set validation on the empty path`,
+    );
+  }
+});
+
+test('a row under a date-scoped heading must actually cover that date', () => {
+  // The heading asserts "Provisions as applicable on X" and nothing compared the rows to X, so
+  // a long-superseded state could be listed among them under that exact claim.
+  assert.throws(
+    () =>
+      renderSearchResults({
+        ...GOOD,
+        hits: [hit({ valid_from: '2001-01-01', valid_to: '2004-01-01' })],
+      }),
+    /does not cover 2026-09-01, while the heading says these rows are the ones applicable/,
+    'a superseded state was listed as applicable on a date it does not cover',
+  );
+
+  // Half-open, the same reading the resolver uses: the end date itself is not covered.
+  assert.throws(
+    () =>
+      renderSearchResults({
+        ...GOOD,
+        hits: [hit({ valid_from: '2001-01-01', valid_to: '2026-09-01' })],
+      }),
+    /does not cover 2026-09-01/,
+  );
+  // And the start date itself is.
+  assert.ok(
+    renderSearchResults({
+      ...GOOD,
+      hits: [hit({ valid_from: '2026-09-01', valid_to: null })],
+    }).includes('Provisions as applicable on 2026-09-01'),
+  );
+});
+
+test('results say whether they were narrowed to a date at all', () => {
+  assert.deepEqual([...TIME_SCOPES], ['as_of', 'all_versions']);
+
+  // The live service answers all_versions by default, and this screen printed the date-scoped
+  // heading over every result set regardless.
+  const all = renderSearchResults({
+    ...GOOD,
+    timeScope: 'all_versions',
+    hits: [hit({ valid_from: '2001-01-01', valid_to: '2004-01-01' })],
+  });
+  assert.ok(all.includes('not narrowed to one date'));
+  assert.ok(!all.includes('Provisions as applicable on'), 'a date scope was claimed anyway');
+  assert.ok(all.includes('Operative date: 2026-09-01'), 'the operative date is still explicit');
+  assert.ok(all.includes('These rows were not narrowed to it'));
+
+  // And a superseded row is allowed there, because nothing claims it was applicable that day.
+  assert.ok(all.includes('Art. 1'));
+
+  for (const bad of [undefined, '', 'as-of', 'latest']) {
+    assert.throws(
+      () => renderSearchResults({ ...GOOD, timeScope: bad }),
+      /results say whether they were narrowed to a date/,
+      `timeScope=${JSON.stringify(bad)} was accepted`,
+    );
+  }
+});
+
+test('a row cannot claim a layer this screen says did not run', () => {
+  // A badge saying "semantic match" beside a disclosure saying semantic retrieval was off is
+  // the page contradicting itself, and the badge is the half a reader believes.
+  for (const [reason, needs] of [['semantic', 'semantic'], ['interpreted', 'crosswalk']]) {
+    assert.throws(
+      () => renderSearchResults({ ...GOOD, hits: [hit({ match_reasons: [reason] })] }),
+      new RegExp(`carries the ${reason} badge while ${needs} is not declared as applied`),
+      `${reason} was claimed on a screen that says it did not run`,
+    );
+    // Declared applied, the same row renders.
+    assert.ok(
+      renderSearchResults({
+        ...GOOD,
+        relaxations: {
+          ...RELAXATIONS,
+          [needs]: {
+            applied: true,
+            expansions: [],
+            understood_as: 'garantie locative',
+            version: 'crosswalk/1',
+            reviewed_on: '2026-08-15',
+            encoder: 'local-encoder/1',
+            benchmark: 'benchmark/1',
+          },
+        },
+        hits: [hit({ match_reasons: [reason] })],
+      }).includes('Art. 1'),
+    );
+  }
+});
+
+test('an absent relaxation set is a caller who did not say, not none applied', () => {
+  for (const bad of [undefined, [], null, 'off']) {
+    assert.throws(
+      () => renderSearchResults({ ...GOOD, relaxations: bad }),
+      /an absent set is not "none ran"/,
+      `relaxations=${JSON.stringify(bad)} was read as none applied`,
     );
   }
 });
