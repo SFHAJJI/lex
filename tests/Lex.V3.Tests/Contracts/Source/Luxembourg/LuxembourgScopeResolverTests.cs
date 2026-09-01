@@ -1,0 +1,656 @@
+using System.Security.Cryptography;
+using System.Text;
+using Lex.V3.Contracts;
+using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Luxembourg;
+using Lex.V3.Contracts.Source.Scope;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+namespace Lex.V3.Tests.Contracts.Source.Luxembourg;
+
+[TestClass]
+public sealed class LuxembourgScopeResolverTests
+{
+    private const string Jolux =
+        "http://data.legilux.public.lu/resource/ontology/jolux#";
+    private const string RdfType =
+        "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+
+    [TestMethod]
+    public void EmptyExactObservationStaysFailClosedAndAccountsForEveryDimensionState()
+    {
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve([Observation(ObservationRef)]));
+
+        var resource = resolved.Resources.Single();
+        Assert.AreEqual(
+            LuScopeTerminalState.MissingPublisherValue,
+            resource.Dimensions.Record.State);
+        Assert.AreEqual(LuScopeTerminalState.Point, resource.Dimensions.Body.State);
+        Assert.HasCount(70, resolved.Accounting);
+        foreach (var dimension in Enum.GetValues<LuxembourgDimension>())
+        {
+            Assert.HasCount(
+                7,
+                resolved.Accounting.Where(row => row.Dimension == dimension));
+        }
+
+        CollectionAssert.AreEqual(
+            new[] { ObservationRef },
+            resolved.OrderedEvidenceArtifacts.ToArray());
+    }
+
+    [TestMethod]
+    public void ResourceObservationFromAnotherRunFailsBeforeScopeProjection()
+    {
+        var failed = Assert.IsInstanceOfType<LuxembourgProfileResolution.Failed>(
+            Profile().Resolve([Observation(OtherObservationRef)]));
+
+        Assert.AreEqual(
+            LuxembourgProfileResolutionFailureCode.EvidenceBindingRejected,
+            failed.Failure.Code);
+    }
+
+    [TestMethod]
+    public void RightsCollectionsMustBeBoundToTheResourceObservationRun()
+    {
+        var observation = new LuxembourgResourceObservation(
+            ObjectRef(),
+            ObservationRef,
+            [],
+            [],
+            new LuxembourgSparqlRightsChannelObservations(
+                OtherObservationRef,
+                SparqlEnumerationRef,
+                []),
+            new LuxembourgInFileRightsChannelObservations(
+                ObservationRef,
+                InFileEnumerationRef,
+                []));
+
+        var failed = Assert.IsInstanceOfType<LuxembourgProfileResolution.Failed>(
+            Profile().Resolve([observation]));
+
+        Assert.AreEqual(
+            LuxembourgProfileResolutionFailureCode.EvidenceBindingRejected,
+            failed.Failure.Code);
+    }
+
+    [TestMethod]
+    public void ExactWemiTupleIsExposedButEveryUnprovenBodyGateRemainsBlocking()
+    {
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve([BodyObservation()]));
+
+        var resource = resolved.Resources.Single();
+        Assert.HasCount(1, resource.WemiTopology.Candidates);
+        Assert.HasCount(1, resource.BodyJoin.Candidates);
+        var candidate = resource.BodyJoin.Candidates.Single();
+        Assert.AreEqual(ExpressionIri, candidate.WemiCandidate.ExpressionIri);
+        Assert.AreEqual(ManifestationIri, candidate.WemiCandidate.ManifestationIri);
+        Assert.AreEqual(
+            LuxembourgBodyCandidateDisposition.Withheld,
+            candidate.Disposition);
+        Assert.HasCount(8, candidate.BlockerCodes);
+        Assert.AreEqual(
+            LuScopeTerminalState.AcceptedCandidate,
+            resource.Dimensions.PublicationFamily.State);
+        Assert.AreEqual(
+            LuScopeTerminalState.NotApplicable,
+            resource.Dimensions.Rights.State);
+        Assert.AreEqual(
+            "not_applicable_no_manifestation",
+            resource.Dimensions.Rights.ReasonCode);
+        Assert.AreEqual(
+            LuScopeTerminalState.NotApplicable,
+            resource.Dimensions.Language.State);
+        Assert.AreEqual(
+            LuScopeTerminalState.NotApplicable,
+            resource.Dimensions.Format.State);
+        Assert.AreEqual(
+            LuScopeTerminalState.NotApplicable,
+            resource.Dimensions.Authenticity.State);
+        Assert.AreEqual(
+            LuScopeTerminalState.TypedQuarantine,
+            resource.Dimensions.Transport.State);
+        Assert.AreEqual(
+            LuScopeTerminalState.TypedQuarantine,
+            resource.Dimensions.Body.State);
+        Assert.AreEqual(
+            "typed_quarantine_verified_body_join_required",
+            resource.Dimensions.Body.ReasonCode);
+        Assert.IsTrue(resolved.ScopeInputs.Single().Selectors.Any(selector =>
+            selector.CanonicalValues.Any(value => value.StartsWith(
+                "body_join_sha256:",
+                StringComparison.Ordinal))));
+    }
+
+    [TestMethod]
+    public void ConflictingPublisherValuesRemainTypedConflictsInScopeInput()
+    {
+        const string pdfFormat = JoluxAuthority + "user-format/pdf";
+        const string xmlFormat = JoluxAuthority + "user-format/xml";
+        var observation = new LuxembourgResourceObservation(
+            ObjectRef(ManifestationIri),
+            ObservationRef,
+            [
+                Iri(ManifestationIri, RdfType, Jolux + "Manifestation"),
+                Iri(ManifestationIri, Jolux + "userFormat", xmlFormat),
+                Iri(ManifestationIri, Jolux + "userFormat", pdfFormat),
+            ],
+            [],
+            new LuxembourgSparqlRightsChannelObservations(
+                ObservationRef,
+                SparqlEnumerationRef,
+                []),
+            new LuxembourgInFileRightsChannelObservations(
+                ObservationRef,
+                InFileEnumerationRef,
+                []));
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve([observation]));
+
+        var resource = resolved.Resources.Single();
+        Assert.AreEqual(
+            LuScopeTerminalState.TypedQuarantine,
+            resource.Dimensions.Format.State);
+        Assert.AreEqual(
+            "typed_quarantine_selector_conflict",
+            resource.Dimensions.Format.ReasonCode);
+
+        var selector = resolved.ScopeInputs.Single().Selectors.Single(candidate =>
+            candidate.CanonicalValues.Contains(pdfFormat));
+        Assert.AreEqual(ScopeSelectorState.PublisherValueConflict, selector.State);
+        Assert.AreEqual(
+            ScopeSelectorEvidenceKind.ObservedConflictingValueSet,
+            selector.EvidenceKind);
+        CollectionAssert.AreEqual(
+            new[] { pdfFormat, xmlFormat },
+            selector.CanonicalValues.ToArray());
+        Assert.IsNotNull(selector.EvidenceArtifactOrdinal);
+        Assert.IsNotNull(selector.CauseMemberOrdinal);
+        Assert.IsNull(selector.RuleOrdinal);
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                ObservationRef,
+                SparqlEnumerationRef,
+                InFileEnumerationRef,
+            },
+            resolved.OrderedEvidenceArtifacts.ToArray());
+    }
+
+    [TestMethod]
+    public void ManifestationAuthenticityRemainsOnItsExactSubjectWithoutSiblingOrRootLift()
+    {
+        const string pdfManifestation = ExpressionIri + "/pdf";
+        const string pdfItem =
+            "http://data.legilux.public.lu/filestore/body-fr.pdf";
+        const string nonOfficial = JoluxAuthority + "statut-version/non-officiel";
+        const string official = JoluxAuthority + "statut-version/officiel";
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve([BodyObservation(additionalAssertions:
+            [
+                Iri(ExpressionIri, Jolux + "isEmbodiedBy", pdfManifestation),
+                Iri(pdfManifestation, RdfType, Jolux + "Manifestation"),
+                Iri(pdfManifestation, Jolux + "userFormat", JoluxAuthority + "user-format/pdf"),
+                Iri(pdfManifestation, Jolux + "isExemplifiedBy", pdfItem),
+                Iri(ManifestationIri, Jolux + "legalValue", nonOfficial),
+                Iri(pdfManifestation, Jolux + "legalValue", official),
+            ])]));
+
+        var resource = resolved.Resources.Single();
+        Assert.AreEqual(
+            LuScopeTerminalState.NotApplicable,
+            resource.Dimensions.Authenticity.State);
+        Assert.AreEqual(
+            "not_applicable_no_expression_or_manifestation",
+            resource.Dimensions.Authenticity.ReasonCode);
+
+        var legalValues = resource.Assertions
+            .Where(candidate => candidate.Assertion.PredicateIri == Jolux + "legalValue")
+            .OrderBy(candidate => candidate.Assertion.SubjectIri, StringComparer.Ordinal)
+            .ToArray();
+        Assert.HasCount(2, legalValues);
+        Assert.IsTrue(legalValues.All(candidate =>
+            candidate.Disposition == LuxembourgAssertionDisposition.Accepted));
+        Assert.AreEqual(
+            nonOfficial,
+            legalValues.Single(candidate =>
+                candidate.Assertion.SubjectIri == ManifestationIri)
+                .Assertion.ObjectIriOrLexical);
+        Assert.AreEqual(
+            official,
+            legalValues.Single(candidate =>
+                candidate.Assertion.SubjectIri == pdfManifestation)
+                .Assertion.ObjectIriOrLexical);
+    }
+
+    [TestMethod]
+    public void NonHttpAbsolutePublisherValueIsRetainedAndTypedQuarantined()
+    {
+        const string unknownLanguage = "urn:lex:language:unruled";
+        var profile = VerifiedLuxembourgSourceProfile.Open(new LuxembourgVocabularySnapshot(
+            ObservationRef,
+            CompleteEnumerationRef,
+            [
+                .. VerifiedLuxembourgSourceProfile.RequiredIriVocabulary,
+                new LuxembourgIriVocabularyValue(
+                    LuxembourgVocabularyKind.Language,
+                    unknownLanguage),
+            ],
+            []));
+        var observation = new LuxembourgResourceObservation(
+            ObjectRef(ExpressionIri),
+            ObservationRef,
+            [
+                Iri(ExpressionIri, RdfType, Jolux + "Expression"),
+                Iri(ExpressionIri, Jolux + "language", unknownLanguage),
+            ],
+            [],
+            new LuxembourgSparqlRightsChannelObservations(
+                ObservationRef,
+                SparqlEnumerationRef,
+                []),
+            new LuxembourgInFileRightsChannelObservations(
+                ObservationRef,
+                InFileEnumerationRef,
+                []));
+
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            profile.Resolve([observation]));
+        var resource = resolved.Resources.Single();
+        Assert.AreEqual(
+            LuScopeTerminalState.TypedQuarantine,
+            resource.Dimensions.Language.State);
+        Assert.AreEqual(
+            "typed_quarantine_unknown_language",
+            resource.Dimensions.Language.ReasonCode);
+        var assertion = resource.Assertions.Single(candidate =>
+            candidate.Assertion.ObjectIriOrLexical == unknownLanguage);
+        Assert.AreEqual(
+            LuxembourgAssertionDisposition.TypedQuarantine,
+            assertion.Disposition);
+    }
+
+    [TestMethod]
+    public void NonHttpAbsoluteAssertionSubjectIsRetainedAndTypedQuarantined()
+    {
+        const string externalSubject = "urn:lex:external-subject";
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve([BodyObservation(additionalAssertions:
+            [
+                Iri(externalSubject, RdfType, Jolux + "Act"),
+            ])]));
+
+        var assertion = resolved.Resources.Single().Assertions.Single(candidate =>
+            candidate.Assertion.SubjectIri == externalSubject);
+        Assert.AreEqual(
+            LuxembourgAssertionDisposition.TypedQuarantine,
+            assertion.Disposition);
+    }
+
+    [TestMethod]
+    public void NonHttpPreviousItemSubjectStaysRawQuarantineWithoutEnteringWemiProjection()
+    {
+        const string externalSubject = "urn:lex:external-manifestation";
+        const string replacedItem =
+            "http://data.legilux.public.lu/file/external-replaced-body.xml";
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve([BodyObservation(additionalAssertions:
+            [
+                Iri(externalSubject, Jolux + "previousIsExemplifiedBy", replacedItem),
+            ])]));
+
+        var resource = resolved.Resources.Single();
+        var assertion = resource.Assertions.Single(candidate =>
+            candidate.Assertion.SubjectIri == externalSubject);
+        Assert.AreEqual(
+            LuxembourgAssertionDisposition.TypedQuarantine,
+            assertion.Disposition);
+        Assert.IsFalse(resource.WemiTopology.PreviousItems.Any(candidate =>
+            candidate.ManifestationIri == externalSubject));
+    }
+
+    [TestMethod]
+    public void NonHttpAbsoluteRelationTargetIsRetainedWithoutBecomingTransportAuthority()
+    {
+        const string externalTarget = "urn:lex:external-relation-target";
+        var observation = new LuxembourgResourceObservation(
+            ObjectRef(),
+            ObservationRef,
+            [],
+            [
+                new LuxembourgObservedRelation(
+                    ActIri,
+                    Jolux + "cites",
+                    externalTarget,
+                    ObservationRef),
+            ],
+            new LuxembourgSparqlRightsChannelObservations(
+                ObservationRef,
+                SparqlEnumerationRef,
+                []),
+            new LuxembourgInFileRightsChannelObservations(
+                ObservationRef,
+                InFileEnumerationRef,
+                []));
+
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve([observation]));
+        var relation = resolved.Resources.Single().Relations.Single();
+        Assert.AreEqual(externalTarget, relation.ObjectIri);
+        Assert.AreEqual(LuxembourgRelationDisposition.Accepted, relation.Disposition);
+        Assert.AreEqual(
+            LuScopeTerminalState.AcceptedMetadata,
+            resolved.Resources.Single().Dimensions.Relation.State);
+        Assert.AreEqual(
+            LuScopeTerminalState.NotApplicable,
+            resolved.Resources.Single().Dimensions.Transport.State);
+    }
+
+    [TestMethod]
+    public void NonHttpConsolidatesTargetIsRetainedAsMissingTargetShape()
+    {
+        const string externalTarget = "urn:lex:external-consolidation-target";
+        var observation = new LuxembourgResourceObservation(
+            ObjectRef(),
+            ObservationRef,
+            [
+                Iri(ActIri, RdfType, Jolux + "Act"),
+                Iri(ActIri, Jolux + "typeDocument", JoluxAuthority + "resource-type/TC"),
+            ],
+            [
+                new LuxembourgObservedRelation(
+                    ActIri,
+                    Jolux + "consolidates",
+                    externalTarget,
+                    ObservationRef),
+            ],
+            new LuxembourgSparqlRightsChannelObservations(
+                ObservationRef,
+                SparqlEnumerationRef,
+                []),
+            new LuxembourgInFileRightsChannelObservations(
+                ObservationRef,
+                InFileEnumerationRef,
+                []));
+
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve([observation]));
+        var relation = resolved.Resources.Single().Relations.Single();
+        Assert.AreEqual(externalTarget, relation.ObjectIri);
+        Assert.AreEqual(
+            LuxembourgRelationDisposition.TypedQuarantine,
+            relation.Disposition);
+        Assert.AreEqual(
+            LuxembourgConsolidatesShapeState.TypedQuarantineTargetResourceMissing,
+            relation.ConsolidatesShape?.State);
+    }
+
+    [TestMethod]
+    public void CurrentAndPreviousItemIdentityBothChangeTheBoundBodyJoinDigest()
+    {
+        const string otherCurrent =
+            "http://data.legilux.public.lu/filestore/body-fr-other.xml";
+        const string previous =
+            "http://data.legilux.public.lu/file/replaced-body-fr.xml";
+        var profile = Profile();
+
+        var baseline = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            profile.Resolve([BodyObservation()]));
+        var currentChanged = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            profile.Resolve([BodyObservation(otherCurrent)]));
+        var previousAdded = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            profile.Resolve([BodyObservation(previousItemIri: previous)]));
+
+        Assert.AreNotEqual(BodyJoinSelector(baseline), BodyJoinSelector(currentChanged));
+        Assert.AreNotEqual(BodyJoinSelector(baseline), BodyJoinSelector(previousAdded));
+    }
+
+    [TestMethod]
+    public void MalformedIriTermIsRetainedButCannotClassifyOrBuildAWemiPath()
+    {
+        const string xsdString = "http://www.w3.org/2001/XMLSchema#string";
+        var malformedRootType = new LuxembourgObservedAssertion(
+            ActIri,
+            RdfType,
+            LuxembourgAssertionObjectKind.Iri,
+            Jolux + "Act",
+            xsdString,
+            string.Empty,
+            ObservationRef);
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve([BodyObservation(
+                removePredicate: RdfType,
+                additionalAssertions: [malformedRootType])]));
+
+        var resource = resolved.Resources.Single();
+        Assert.IsFalse(resource.WemiTopology.Candidates.Any(candidate =>
+            candidate.Disposition ==
+            LuxembourgWemiCandidateDisposition.StructurallyConsistent));
+        Assert.AreEqual(
+            LuxembourgAssertionDisposition.TypedQuarantine,
+            resource.Assertions.Single(assertion =>
+                assertion.Assertion == malformedRootType).Disposition);
+        Assert.AreEqual(
+            LuScopeTerminalState.TypedQuarantine,
+            resource.Dimensions.PublicationFamily.State);
+    }
+
+    [TestMethod]
+    public void UnrelatedWemiSubtreeIsRetainedOnlyAsTypedQuarantine()
+    {
+        const string orphanManifestation =
+            "http://data.legilux.public.lu/eli/orphan/manifestation";
+        const string orphanCurrentItem =
+            "http://data.legilux.public.lu/filestore/orphan.xml";
+        const string orphanPreviousItem =
+            "http://data.legilux.public.lu/file/orphan.xml";
+        var observation = BodyObservation(additionalAssertions:
+        [
+            Iri(orphanManifestation, RdfType, Jolux + "Manifestation"),
+            Iri(
+                orphanManifestation,
+                Jolux + "userFormat",
+                JoluxAuthority + "user-format/xml"),
+            Iri(orphanManifestation, Jolux + "isExemplifiedBy", orphanCurrentItem),
+            Iri(
+                orphanManifestation,
+                Jolux + "previousIsExemplifiedBy",
+                orphanPreviousItem),
+        ]);
+
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve([observation]));
+        var resource = resolved.Resources.Single();
+        var orphanAssertions = resource.Assertions.Where(assertion =>
+            assertion.Assertion.SubjectIri == orphanManifestation).ToArray();
+
+        Assert.HasCount(4, orphanAssertions);
+        Assert.IsTrue(orphanAssertions.All(assertion =>
+            assertion.Disposition == LuxembourgAssertionDisposition.TypedQuarantine));
+        Assert.IsFalse(resource.WemiTopology.Candidates.Any(candidate =>
+            candidate.ItemIri == orphanCurrentItem));
+        Assert.AreEqual(
+            LuxembourgPreviousItemDisposition.TypedQuarantineManifestationUnproven,
+            resource.WemiTopology.PreviousItems.Single(previous =>
+                previous.ItemIri == orphanPreviousItem).Disposition);
+    }
+
+    [TestMethod]
+    [DataRow("Expression")]
+    [DataRow("Manifestation")]
+    public void MixedRootWemiRolesCannotQualifyPublicationFamily(string conflictingRole)
+    {
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve([BodyObservation(additionalAssertions:
+            [
+                Iri(ActIri, RdfType, Jolux + conflictingRole),
+            ])]));
+
+        Assert.AreEqual(
+            LuScopeTerminalState.TypedQuarantine,
+            resolved.Resources.Single().Dimensions.PublicationFamily.State);
+    }
+
+    private static VerifiedLuxembourgSourceProfile Profile() =>
+        VerifiedLuxembourgSourceProfile.Open(new LuxembourgVocabularySnapshot(
+            ObservationRef,
+            CompleteEnumerationRef,
+            VerifiedLuxembourgSourceProfile.RequiredIriVocabulary,
+            []));
+
+    private static LuxembourgResourceObservation Observation(SourceArtifactRef runRef) => new(
+        ObjectRef(),
+        runRef,
+        [],
+        [],
+        new LuxembourgSparqlRightsChannelObservations(
+            runRef,
+            SparqlEnumerationRef,
+            []),
+        new LuxembourgInFileRightsChannelObservations(
+            runRef,
+            InFileEnumerationRef,
+            []));
+
+    private static LuxembourgResourceObservation BodyObservation(
+        string itemIri = ItemIri,
+        string? previousItemIri = null,
+        string? removePredicate = null,
+        IReadOnlyList<LuxembourgObservedAssertion>? additionalAssertions = null)
+    {
+        var assertions = new List<LuxembourgObservedAssertion>
+        {
+            Iri(ActIri, RdfType, Jolux + "Act"),
+            Iri(ActIri, Jolux + "typeDocument", JoluxAuthority + "resource-type/LOI"),
+            Iri(ActIri, Jolux + "isMemberOf", ActParentIri),
+            Iri(ActIri, Jolux + "isRealizedBy", ExpressionIri),
+            Iri(ExpressionIri, RdfType, Jolux + "Expression"),
+            Iri(ExpressionIri, Jolux + "language", LanguageFra),
+            Iri(ExpressionIri, Jolux + "isEmbodiedBy", ManifestationIri),
+            Iri(ManifestationIri, RdfType, Jolux + "Manifestation"),
+            Iri(ManifestationIri, Jolux + "userFormat", JoluxAuthority + "user-format/xml"),
+            Iri(ManifestationIri, Jolux + "isExemplifiedBy", itemIri),
+        };
+        if (previousItemIri is not null)
+        {
+            assertions.Add(Iri(
+                ManifestationIri,
+                Jolux + "previousIsExemplifiedBy",
+                previousItemIri));
+        }
+
+        if (removePredicate is not null)
+        {
+            assertions.RemoveAll(assertion =>
+                assertion.SubjectIri == ActIri && assertion.PredicateIri == removePredicate);
+        }
+
+        if (additionalAssertions is not null)
+        {
+            assertions.AddRange(additionalAssertions);
+        }
+
+        return new LuxembourgResourceObservation(
+            ObjectRef(),
+            ObservationRef,
+            assertions,
+            [],
+            new LuxembourgSparqlRightsChannelObservations(
+                ObservationRef,
+                SparqlEnumerationRef,
+                [Rights(SparqlRightsEvidenceRef)]),
+            new LuxembourgInFileRightsChannelObservations(
+                ObservationRef,
+                InFileEnumerationRef,
+                [Rights(InFileRightsEvidenceRef)]));
+    }
+
+    private static string BodyJoinSelector(LuxembourgProfileResolution.Resolved value) =>
+        value.ScopeInputs.Single().Selectors
+            .SelectMany(static selector => selector.CanonicalValues)
+            .Single(candidate => candidate.StartsWith(
+                "body_join_sha256:",
+                StringComparison.Ordinal));
+
+    private static LuxembourgObservedAssertion Iri(
+        string subject,
+        string predicate,
+        string value) => new(
+        subject,
+        predicate,
+        LuxembourgAssertionObjectKind.Iri,
+        value,
+        string.Empty,
+        string.Empty,
+        ObservationRef);
+
+    private static LuxembourgRightsChannelObservation Rights(SourceArtifactRef evidenceRef) =>
+        new(
+            ManifestationIri,
+            ObservationRef,
+            evidenceRef,
+            ["http://creativecommons.org/licenses/by/4.0/"]);
+
+    private static SourceObjectRef ObjectRef(string publisherUri = ActIri)
+    {
+        return new SourceObjectRef(
+            SourceCoreSchemaIds.SourceObjectRef,
+            SourceAuthority.Jolux,
+            new SourceRegistryMemberRef(EntityRegistryRef, "legal_resource"),
+            publisherUri,
+            publisherUri,
+            Sha256(publisherUri),
+            IdentityProfileRef,
+            null);
+    }
+
+    private static string Sha256(string value) =>
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+
+    private static SourceArtifactRef ObservationRef { get; } = Artifact(
+        "10dd0a6e-3fa4-468d-a2aa-570a93ec4bf0",
+        '1');
+    private static SourceArtifactRef OtherObservationRef { get; } = Artifact(
+        "a796278c-f25b-4c55-a4b1-42ee7ef1c345",
+        '2');
+    private static SourceArtifactRef CompleteEnumerationRef { get; } = Artifact(
+        "3f60c78d-6e8a-4208-9146-43b634db9bbc",
+        '3');
+    private static SourceArtifactRef SparqlEnumerationRef { get; } = Artifact(
+        "7163031e-a002-4fa2-af00-868b92d77f54",
+        '4');
+    private static SourceArtifactRef InFileEnumerationRef { get; } = Artifact(
+        "e7a24ee4-bb66-4352-8d35-edb8a3664526",
+        '5');
+    private static SourceArtifactRef SparqlRightsEvidenceRef { get; } = Artifact(
+        "5be675e4-64b4-42df-aae4-4f2da91a76d4",
+        '8');
+    private static SourceArtifactRef InFileRightsEvidenceRef { get; } = Artifact(
+        "4f17db13-a542-48fd-a253-96ea3ce9a57c",
+        '9');
+    private static SourceArtifactRef EntityRegistryRef { get; } = Artifact(
+        "760b560c-15c2-407d-b38f-f99f4c59e345",
+        '6');
+    private static SourceArtifactRef IdentityProfileRef { get; } = Artifact(
+        "54b9c06f-ed04-4d07-8239-72dce5fed499",
+        '7');
+
+    private static SourceArtifactRef Artifact(string id, char digestCharacter) => new(
+        "urn:uuid:" + id,
+        new string(digestCharacter, 64));
+
+    private const string JoluxAuthority =
+        "http://data.legilux.public.lu/resource/authority/";
+    private const string ActParentIri =
+        "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a1";
+    private const string ActIri = ActParentIri + "/jo";
+    private const string ExpressionIri = ActIri + "/fr";
+    private const string ManifestationIri = ExpressionIri + "/xml";
+    private const string ItemIri =
+        "http://data.legilux.public.lu/filestore/body-fr.xml";
+    private const string LanguageFra =
+        "http://publications.europa.eu/resource/authority/language/FRA";
+}

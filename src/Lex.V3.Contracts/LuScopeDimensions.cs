@@ -5,25 +5,25 @@ namespace Lex.V3.Contracts;
 public enum LuScopeTerminalState
 {
     [JsonStringEnumMemberName("accepted_metadata")]
-    AcceptedMetadata,
+    AcceptedMetadata = 1,
 
     [JsonStringEnumMemberName("accepted_candidate")]
-    AcceptedCandidate,
+    AcceptedCandidate = 2,
 
     [JsonStringEnumMemberName("point")]
-    Point,
+    Point = 3,
 
     [JsonStringEnumMemberName("never_ingest")]
-    NeverIngest,
+    NeverIngest = 4,
 
     [JsonStringEnumMemberName("typed_quarantine")]
-    TypedQuarantine,
+    TypedQuarantine = 5,
 
     [JsonStringEnumMemberName("missing_publisher_value")]
-    MissingPublisherValue,
+    MissingPublisherValue = 6,
 
     [JsonStringEnumMemberName("not_applicable")]
-    NotApplicable,
+    NotApplicable = 7,
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
