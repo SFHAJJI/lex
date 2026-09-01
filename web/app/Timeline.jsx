@@ -380,9 +380,16 @@ export function Timeline({ semantics: declaredSemantics, states, asOf, totalCoun
           accessibility rule and the only version of this screen that survives without a
           client. */}
       <div className="timeline-chart" aria-hidden="true" />
+      {/* "publisher history begins X" is a claim about where the publisher's record starts.
+          One held state and a nontruncated count of one says only that this corpus holds one
+          state; the publisher may hold earlier ones that were never ingested. The live envelope
+          carries history_begins for exactly this question and this screen does not receive it,
+          so the honest sentence is about the corpus and says what would settle it. */}
       {ordered.length === 1 && !isTruncated ? (
         <p className="timeline-single">
-          {`One held state; publisher history begins ${ordered[0].valid_from}.`}
+          {`This corpus holds one state of this work, beginning ${ordered[0].valid_from}. ` +
+            "Whether the publisher's record begins there is not something this page can " +
+            'tell you.'}
         </p>
       ) : null}
       {/* The table is wide and it is the accessible structure, so it scrolls in its own box
