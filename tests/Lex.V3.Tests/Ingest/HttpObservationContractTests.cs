@@ -1,3 +1,5 @@
+using System.Text.Json;
+using Lex.V3.Contracts;
 using Lex.V3.Contracts.Source.Http;
 
 namespace Lex.V3.Tests.Ingest;
@@ -84,5 +86,62 @@ public sealed class HttpObservationContractTests
             nameof(OutboundCrawlerIdentity.Token));
         Assert.IsNotNull(property);
         Assert.IsNull(property.SetMethod);
+    }
+
+    [TestMethod]
+    public void ResponseMetadataIsExactlyTheSevenFieldAllowlistWithExplicitNulls()
+    {
+        var metadata = new HttpResponseMetadata(
+            contentType: null,
+            declaredCharset: null,
+            contentLength: null,
+            contentEncoding: null,
+            contentRange: null,
+            etag: null,
+            lastModified: null);
+
+        using var document = JsonDocument.Parse(ContractJson.Serialize(metadata));
+        var properties = document.RootElement.EnumerateObject().ToArray();
+        CollectionAssert.AreEquivalent(
+            new[]
+            {
+                "content_type",
+                "declared_charset",
+                "content_length",
+                "content_encoding",
+                "content_range",
+                "etag",
+                "last_modified",
+            },
+            properties.Select(static property => property.Name).ToArray());
+        Assert.IsTrue(properties.All(static property => property.Value.ValueKind == JsonValueKind.Null));
+
+        string[] forbidden =
+        [
+            "Headers", "Cookies", "Addresses", "Credentials", "Query", "Sparql",
+            "UserText", "Ip", "InboundUserAgent", "RedirectHistory",
+        ];
+        var publicMembers = typeof(HttpResponseMetadata)
+            .GetProperties()
+            .Select(static property => property.Name)
+            .ToArray();
+        Assert.IsFalse(forbidden.Any(publicMembers.Contains));
+    }
+
+    [TestMethod]
+    public void ResponseMetadataRejectsUnboundedOrStructurallyUnsafeValues()
+    {
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new HttpResponseMetadata(
+            null, null, -1, null, null, null, null));
+        Assert.ThrowsExactly<ArgumentException>(() => new HttpResponseMetadata(
+            "text/plain\r\nset-cookie: secret", null, null, null, null, null, null));
+        Assert.ThrowsExactly<ArgumentException>(() => new HttpResponseMetadata(
+            new string('x', HttpResponseMetadata.MaximumHeaderValueLength + 1),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null));
     }
 }
