@@ -11,7 +11,7 @@
 // format encodes closed vocabularies as integer indices, so an undecoded envelope would
 // put bare numbers where a reader expects machine codes.
 
-import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 
 import { loadCaptured } from "./captured-envelopes.mjs";
 import { tokenCss } from "./design-tokens.mjs";
@@ -19,6 +19,7 @@ import { renderTrustSurface } from "./trust-surface.mjs";
 import { renderShellEntry } from "./shells.mjs";
 import { renderRefusalCatalog } from "./refusal-catalog.mjs";
 import { renderComparePreview } from "./compare-preview.mjs";
+import { renderTimelinePreview } from "./timeline-preview.mjs";
 import { page } from "./render.mjs";
 import { SHELLS } from "./urls.mjs";
 import { decodeEnvelope, validateEnvelope } from "./envelope.mjs";
@@ -36,6 +37,11 @@ const destination = new URL("../dist/", import.meta.url);
 await rm(destination, { force: true, recursive: true });
 await mkdir(destination, { recursive: true });
 await cp(source, destination, { recursive: true });
+
+// The pages copied in rather than generated. They are pages a reader can reach, so they are
+// declared and measured like any other; the entry page shipped unmeasured for exactly as
+// long as nothing named it.
+const copiedPages = (await readdir(source)).filter((name) => name.endsWith(".html"));
 
 // The semantic tokens are appended from `design-tokens.mjs` rather than written into
 // `src/styles.css`. Two copies of a colour is two sources of truth, and the one that drifts
@@ -121,6 +127,9 @@ pages.push(["refusal-catalog.html", renderRefusalCatalog()]);
 // refusals replace the panes, so they are measured for contrast and reflow beside them.
 pages.push(["compare.html", renderComparePreview()]);
 
+// The timeline, in the shapes where a chart would draw something the publisher never said.
+pages.push(["timeline.html", renderTimelinePreview()]);
+
 // The destination every scheme-valid link in the preview resolves to. A visible action that
 // leads to a missing page is a promise the page cannot keep, and three of them shipped: the
 // provenance link and both ambiguity candidates answered 404. This is the preview's stand-in
@@ -141,5 +150,15 @@ pages.push([
 for (const [name, html] of pages) {
   await writeFile(new URL(name, destination), html, "utf8");
 }
+
+// What this build emitted, so the browser run measures exactly this and nothing else. A page
+// present on disk and absent here is a stale artefact; one declared here and absent there is a
+// build that half ran. Either way the run refuses rather than reporting a clean number.
+await writeFile(
+  new URL("pages.json", destination),
+  `${JSON.stringify({ pages: [...copiedPages, ...pages.map(([name]) => name)].sort() }, null, 2)}
+`,
+  "utf8",
+);
 
 console.log(`generated ${pages.length} state pages`);

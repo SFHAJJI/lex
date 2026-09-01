@@ -144,8 +144,21 @@ test('a language comparison must be two languages of one state', () => {
         right: { ...fr, valid_from: '2005-01-01' },
         result: CHANGED,
       }),
-    /must be of one state/,
+    /these two cover different periods/,
     'change over time was labelled a language difference',
+  );
+
+  // Same dates is not same state. Two unrelated works that happen to share validity dates
+  // would have rendered as two authentic expressions of each other.
+  assert.throws(
+    () =>
+      renderCompare({
+        mode: 'language',
+        left: en,
+        right: { ...fr, lex_id: 'preview-synthetic:a-different-work:2001-01-01' },
+        result: CHANGED,
+      }),
+    /two different works/,
   );
 });
 
@@ -157,19 +170,99 @@ test('a comparison must declare its axis', () => {
 
 test('an unchanged result renders the publisher note verbatim and builds no panes', () => {
   const note = 'the same version applied on both dates';
-  const html = renderCompare({
-    ...GOOD,
-    result: { changed: false, note },
-  });
+  // Both dates resolving to one state means one state: same identifier, same digest.
+  const SAME = { ...GOOD, right: { ...LEFT }, result: { changed: false, note } };
+  const html = renderCompare(SAME);
   assert.ok(html.includes(`changed: false. ${note}`), 'the note is not verbatim');
   assert.ok(!html.includes('compare-blocks'), 'empty panes rendered for an unchanged result');
   assert.ok(html.includes('This is the answer, not an empty result'));
   assert.ok(html.includes(LEFT.lex_id), 'the covering state is still named');
 
   assert.throws(
-    () => renderCompare({ ...GOOD, result: { changed: false } }),
+    () => renderCompare({ ...SAME, result: { changed: false } }),
     /must not compose its own sentence/,
   );
+});
+
+test('the unchanged answer is bound to the records, not to the caller flag', () => {
+  // Both directions were reachable and both are the worst thing this screen can do. Two
+  // byte-identical states rendered red and green change blocks; two different states rendered
+  // the publisher's "nothing changed" note over a header naming both of them.
+  assert.throws(
+    () => renderCompare({ ...GOOD, right: { ...LEFT }, result: CHANGED }),
+    /a diff here would be invented/,
+    'a diff was invented between one state and itself',
+  );
+  assert.throws(
+    () =>
+      renderCompare({
+        ...GOOD,
+        result: { changed: false, note: 'the same version applied on both dates' },
+      }),
+    /printed over evidence against it/,
+    'the publisher note was printed over two different states',
+  );
+
+  // The digest alone is enough to make them different states, and so is the identifier.
+  assert.throws(
+    () =>
+      renderCompare({
+        ...GOOD,
+        right: { ...LEFT, body_sha256: RIGHT_DIGEST },
+        result: { changed: false, note: 'x' },
+      }),
+    /printed over evidence against it/,
+  );
+  assert.throws(
+    () =>
+      renderCompare({
+        ...GOOD,
+        right: { ...LEFT, lex_id: 'preview-synthetic:synthetic-preview-work:2099-01-01' },
+        result: { changed: false, note: 'x' },
+      }),
+    /printed over evidence against it/,
+  );
+});
+
+test('an extraction profile is a string or it is absent', () => {
+  // It used to be "a non-empty string, or anything else means unknown", so a renamed upstream
+  // field turned a non-overridable refusal into a rendered diff with a caveat above it.
+  for (const profile of [new String('pdf-lu/1'), 1, { id: 'pdf-lu/1' }, ['pdf-lu/1'], true]) {
+    assert.throws(
+      () => renderCompare({ ...GOOD, right: { ...RIGHT, profile } }),
+      /neither a profile nor an absent one/,
+      `${String(profile)} was read as an unknown profile`,
+    );
+  }
+  // Absent stays absent, which is the one case that legitimately means unknown.
+  for (const profile of [undefined, null]) {
+    const html = renderCompare({ ...GOOD, right: { ...RIGHT, profile } });
+    assert.ok(html.includes('does not record its extraction profile'));
+  }
+});
+
+test('a change block carries text or nothing, never a shape', () => {
+  for (const value of [[], {}, false, 0, ['a'], '   ']) {
+    assert.throws(
+      () =>
+        renderCompare({
+          ...GOOD,
+          result: { changed: true, blocks: [{ anchor_label: 'Art. 1', added: value }] },
+        }),
+      /is blank, which renders as a change that is not there|reached the page as/,
+      `${JSON.stringify(value)} rendered as a change`,
+    );
+  }
+});
+
+test('a renumber row names two anchors and neither is blank', () => {
+  for (const row of [{ from: '', to: 'art_2' }, { from: 'art_1', to: '  ' }, { from: 'art_1' }]) {
+    assert.throws(
+      () => renderCompare({ ...GOOD, result: { ...CHANGED, renumbering: [row] } }),
+      /needs its (from|to) anchor/,
+      `${JSON.stringify(row)} carried the mechanical label over nothing`,
+    );
+  }
 });
 
 test('a result with no verdict, or a changed result with no changes, is refused', () => {
@@ -186,7 +279,9 @@ test('a result with no verdict, or a changed result with no changes, is refused'
     () =>
       renderCompare({
         ...GOOD,
-        result: { changed: true, blocks: [{ anchor_label: 'Art. 1', removed: '', added: '' }] },
+        // Both absent, which is the case this guard is for; a blank string is refused
+        // earlier, by the rule about shapes that render as a change.
+        result: { changed: true, blocks: [{ anchor_label: 'Art. 1' }] },
       }),
     /neither a removal nor an addition/,
   );

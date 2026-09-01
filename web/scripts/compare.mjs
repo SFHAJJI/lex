@@ -51,6 +51,12 @@ function escapeHtml(value) {
  * A side that cannot produce all of them has not been resolved, and an unresolved side cannot
  * be compared to anything.
  */
+/** The work half of a lex_id: publisher and work key, without the state. */
+function workOf(lexId) {
+  const parts = String(lexId).split(':');
+  return parts.slice(0, 2).join(':');
+}
+
 function requireSide(side, which) {
   const where = `the ${which} side`;
 
@@ -91,8 +97,14 @@ function requireSide(side, which) {
  * vocabulary is the caller's because it comes from the envelope's timeline_semantics; a card
  * that invented its own wording would be putting the product's words in the publisher's mouth.
  */
+/**
+ * A card for a side that has already been required.
+ *
+ * It used to call `requireSide` itself, and `renderCompare` called it too, so every field had
+ * two guards and a test that deleted one still passed on the other. Six of the seven fields in
+ * the resolution test were proving nothing at all. One caller, one check.
+ */
 function renderSideCard(side, which) {
-  requireSide(side, which);
   if (typeof side.legal_time_sentence !== 'string' || side.legal_time_sentence.trim().length === 0) {
     throw new Error(
       `the ${which} side needs its legal-time sentence in the publisher's own vocabulary; ` +
@@ -117,6 +129,8 @@ function renderSideCard(side, which) {
  * as well as before anything else in this function, so a reader meets the pair first.
  */
 export function renderResolutionHeader({ left, right }) {
+  requireSide(left, 'left');
+  requireSide(right, 'right');
   return (
     '<header class="compare-resolution"><h2>The two states being compared</h2>' +
     renderSideCard(left, 'left') +
@@ -129,6 +143,15 @@ export function renderResolutionHeader({ left, right }) {
  * A side that refused. The healthy side stays and the failing side becomes its refusal, so a
  * reader sees which half of their question could not be answered rather than losing both.
  */
+function header(left, right) {
+  return (
+    '<header class="compare-resolution"><h2>The two states being compared</h2>' +
+    renderSideCard(left, 'left') +
+    renderSideCard(right, 'right') +
+    '</header>'
+  );
+}
+
 function renderSideRefusal(refusal, which) {
   return (
     `<article class="compare-side compare-side-refused" data-side="${escapeHtml(which)}">` +
@@ -141,6 +164,19 @@ function renderChangeBlock(block, index) {
   const where = `change block ${index + 1}`;
   if (typeof block?.anchor_label !== 'string' || block.anchor_label.trim().length === 0) {
     throw new Error(`${where} does not say which provision it is in`);
+  }
+  for (const field of ['removed', 'added']) {
+    const value = block[field];
+    if (value === undefined || value === null) continue;
+    if (typeof value !== 'string') {
+      throw new Error(
+        `${where} ${field} is ${JSON.stringify(value)}; an array reached the page as an empty ` +
+          'strike and an object reached it as [object Object], both of which read as a change',
+      );
+    }
+    if (value.trim().length === 0) {
+      throw new Error(`${where} ${field} is blank, which renders as a change that is not there`);
+    }
   }
   const removed = block.removed ?? '';
   const added = block.added ?? '';
@@ -174,8 +210,13 @@ function renderRenumbering(rows) {
   if (rows.length === 0) return '';
   const items = rows
     .map((row, index) => {
-      if (typeof row?.from !== 'string' || typeof row?.to !== 'string') {
-        throw new Error(`renumber row ${index + 1} needs both anchors`);
+      for (const field of ['from', 'to']) {
+        if (typeof row?.[field] !== 'string' || row[field].trim().length === 0) {
+          throw new Error(
+            `renumber row ${index + 1} needs its ${field} anchor; a blank one carries the fixed ` +
+              'mechanical-detection label over nothing at all',
+          );
+        }
       }
       return (
         `<li class="compare-renumber"><code>${escapeHtml(row.from)}</code> to ` +
@@ -212,8 +253,12 @@ export function renderCompare({ mode, left, right, result }) {
     return (
       '<section class="compare compare-partial">' +
       '<header class="compare-resolution"><h2>The two states being compared</h2>' +
-      (leftRefused ? renderSideRefusal(left.refusal, 'left') : renderSideCard(left, 'left')) +
-      (rightRefused ? renderSideRefusal(right.refusal, 'right') : renderSideCard(right, 'right')) +
+      (leftRefused
+        ? renderSideRefusal(left.refusal, 'left')
+        : renderSideCard(requireSide(left, 'left'), 'left')) +
+      (rightRefused
+        ? renderSideRefusal(right.refusal, 'right')
+        : renderSideCard(requireSide(right, 'right'), 'right')) +
       '</header>' +
       '<p class="compare-no-panes">One side of this comparison did not resolve, so no ' +
       'comparison is shown. The side that did resolve is above and can be read on its own.</p>' +
@@ -228,6 +273,24 @@ export function renderCompare({ mode, left, right, result }) {
   // extractors, so alignment would report their disagreement as legislation. The panes are not
   // built, rather than built and hidden, because "not overridable" has to be a property of the
   // code and not of a flag somebody can pass.
+  // A profile is a string, or it is absent. It used to be "a non-empty string, or anything
+  // else means unknown", so a renamed upstream field, a boxed String, a number or an object
+  // silently turned a non-overridable refusal into a rendered diff with a caveat above it.
+  // That is the wrong direction to fail on the one rule CLAUDE.md calls out by name.
+  for (const [side, which] of [
+    [left, 'left'],
+    [right, 'right'],
+  ]) {
+    const profile = side.profile;
+    const declared = profile === undefined || profile === null;
+    if (!declared && (typeof profile !== 'string' || profile.length === 0)) {
+      throw new Error(
+        `the ${which} side's extraction profile is ${JSON.stringify(profile)}, which is neither ` +
+          'a profile nor an absent one; a shape nobody typed would be read as unknown and ' +
+          'turn this refusal into a diff',
+      );
+    }
+  }
   const bothProfilesKnown =
     typeof left.profile === 'string' &&
     left.profile.length > 0 &&
@@ -236,7 +299,7 @@ export function renderCompare({ mode, left, right, result }) {
   if (bothProfilesKnown && left.profile !== right.profile) {
     return (
       '<section class="compare compare-refused">' +
-      renderResolutionHeader({ left, right }) +
+      header(left, right) +
       renderRefusalCard({
         code: 'profiles_differ',
         sentence:
@@ -264,6 +327,14 @@ export function renderCompare({ mode, left, right, result }) {
     if (left.language === right.language) {
       throw new Error('a language comparison needs two different languages');
     }
+    // Same period is not same state: two unrelated works sharing validity dates would have
+    // rendered as "Language comparison, same state. Both texts are authentic."
+    if (workOf(left.lex_id) !== workOf(right.lex_id)) {
+      throw new Error(
+        'a language comparison must be of one state and these are two different works; two ' +
+          'unrelated instruments that share validity dates are not expressions of each other',
+      );
+    }
     if (left.valid_from !== right.valid_from || left.valid_to !== right.valid_to) {
       throw new Error(
         'a language comparison must be of one state; these two cover different periods, so ' +
@@ -288,6 +359,25 @@ export function renderCompare({ mode, left, right, result }) {
       'extraction profile, so this comparison could not be checked for the parser disagreement ' +
       'that profiles_differ exists to catch.</p>';
 
+  // The identical-state answer and the changed answer are bound to the records, not to the
+  // caller's flag. Both directions were reachable: two byte-identical states rendered red and
+  // green change blocks, and two different states rendered "the same version applied on both
+  // dates" over a header naming both of them. The digests are already validated a few lines
+  // up, so the check costs one comparison and closes the screen's worst failure.
+  const sameState = left.lex_id === right.lex_id && left.body_sha256 === right.body_sha256;
+  if (sameState && result?.changed !== false) {
+    throw new Error(
+      'these two sides are one state, same identifier and same digest, so there is nothing ' +
+        'between them to render; a diff here would be invented',
+    );
+  }
+  if (!sameState && result?.changed === false) {
+    throw new Error(
+      'this result says nothing changed while the two sides carry different identifiers or ' +
+        'different digests; the publisher note would be printed over evidence against it',
+    );
+  }
+
   if (result?.changed === false) {
     // The publisher's note, verbatim. Composing our own sentence here would turn the
     // publisher's statement into ours, on the one screen where the difference matters most.
@@ -299,7 +389,7 @@ export function renderCompare({ mode, left, right, result }) {
     }
     return (
       '<section class="compare compare-identical">' +
-      renderResolutionHeader({ left, right }) +
+      header(left, right) +
       banner +
       unverified +
       `<p class="compare-note">changed: false. ${escapeHtml(result.note)}</p>` +
@@ -327,7 +417,7 @@ export function renderCompare({ mode, left, right, result }) {
 
   return (
     '<section class="compare compare-changed">' +
-    renderResolutionHeader({ left, right }) +
+    header(left, right) +
     banner +
     unverified +
     `<ol class="compare-blocks">${blocks.map(renderChangeBlock).join('')}</ol>` +

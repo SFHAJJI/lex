@@ -88,20 +88,34 @@ const WIDTHS = [
  * what gets measured, and a page cannot ship unmeasured without also not shipping.
  */
 async function pagesFrom(root) {
+  // The build says what it emitted, and this run measures exactly that.
+  //
+  // A floor of "at least N pages" was the same hand-maintained number the directory read was
+  // supposed to retire, and it checked only how many there were. Twelve unrelated files would
+  // have passed it, and it sat one below the count the build actually produced, so a page
+  // could vanish without a word. The build now declares its own list and the two must agree
+  // as sets: a page declared and absent is a build that half ran, and a page present and
+  // undeclared is a stale artefact being measured as though it were current.
+  const declared = JSON.parse(await readFile(joinPath(root, "pages.json"), "utf8"));
+  const manifest = [...declared.pages].sort();
   const found = (await readdir(root)).filter((name) => name.endsWith(".html")).sort();
-  // An empty baseline passes forever. If the build emitted nothing, this run proves nothing,
-  // and it says so rather than reporting every zero of its combinations clean.
-  if (found.length < MINIMUM_PAGES) {
+
+  const missing = manifest.filter((name) => !found.includes(name));
+  const extra = found.filter((name) => !manifest.includes(name));
+  if (missing.length > 0 || extra.length > 0) {
     throw new Error(
-      `the build emitted ${found.length} pages and this run needs at least ${MINIMUM_PAGES} ` +
-        "to be worth anything; run npm run build first",
+      `the build declared ${manifest.length} pages and the directory holds ${found.length}` +
+        (missing.length > 0 ? `; declared and absent: ${missing.join(", ")}` : "") +
+        (extra.length > 0 ? `; present and undeclared: ${extra.join(", ")}` : "") +
+        "; run npm run build",
     );
+  }
+  // An empty baseline passes forever, so it is refused rather than reported clean.
+  if (found.length === 0) {
+    throw new Error("the build emitted no pages, so this run would prove nothing");
   }
   return found;
 }
-
-/** Below this, the run is measuring an accident rather than the product. */
-const MINIMUM_PAGES = 12;
 
 /**
  * Ports WHATWG Fetch refuses to connect to, so a debugger listening on one is unreachable.
@@ -279,11 +293,15 @@ const PROBE = `(() => {
   for (const parent of document.querySelectorAll('body *')) {
     const children = [...parent.children].filter((el) => {
       if (el.offsetParent === null || el.textContent.trim().length === 0) return false;
-      // A visually-hidden element is clipped to a pixel so a screen reader can still reach
-      // it. Nothing is painted there, so it cannot be painted flush against anything, and
-      // counting it turned the linear-reading prefixes on the diff into eight failures.
-      const rect = el.getBoundingClientRect();
-      return rect.width > 1 && rect.height > 1;
+      // A visually-hidden element is clipped away so a screen reader can still reach it.
+      // Nothing is painted there, so it cannot be painted flush against anything.
+      //
+      // The first version of this exemption skipped anything thinner than two pixels, which
+      // is far wider than the thing it was written for: a value collapsed to zero width with
+      // its text hidden, and a genuinely one-pixel element touching its neighbour, both
+      // disappeared from a gate whose entire justification is catching what the others miss.
+      // Clipping is exactly identifiable, so that is the only thing exempted.
+      return getComputedStyle(el).clipPath === 'none';
     });
     for (let i = 0; i + 1 < children.length; i += 1) {
       const before = children[i];

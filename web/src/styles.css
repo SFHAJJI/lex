@@ -627,3 +627,78 @@ summary {
   border-inline-start: 3px solid var(--border, #8a8a8a);
   padding-inline-start: var(--space-3, 0.75rem);
 }
+
+.timeline-case {
+  margin-block: var(--space-6, 2rem);
+}
+
+.timeline-table {
+  border-collapse: collapse;
+  inline-size: 100%;
+}
+
+.timeline-table th,
+.timeline-table td {
+  border: 1px solid var(--border, #8a8a8a);
+  padding: var(--space-2, 0.5rem);
+  vertical-align: top;
+  text-align: start;
+}
+
+.timeline-record-time,
+.timeline-derived,
+.timeline-title-distrust,
+.timeline-population {
+  font-size: 0.875em;
+}
+
+.timeline-provisional,
+.timeline-withdrawn {
+  font-weight: 600;
+}
+
+.timeline-row[data-withdrawn="true"] .timeline-title {
+  text-decoration: line-through;
+}
+
+.timeline-hole td {
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 6px,
+    var(--border, #8a8a8a) 6px,
+    var(--border, #8a8a8a) 7px
+  );
+}
+
+.timeline-legend,
+.timeline-single,
+.timeline-pager,
+.timeline-as-of {
+  border-inline-start: 3px solid var(--border, #8a8a8a);
+  padding-inline-start: var(--space-3, 0.75rem);
+}
+
+.timeline-scroll {
+  overflow-x: auto;
+  max-inline-size: 100%;
+  min-inline-size: 0;
+}
+
+/* An identifier is one long unbreakable token, and outside the scrolling table it pushed the
+   page sideways at 320 CSS pixels. It wraps rather than scrolls here because it sits in prose:
+   a sentence that scrolls away is worse than one that runs onto a second line. */
+.timeline-overlaps code,
+.timeline-hole code,
+.compare-side-id code {
+  overflow-wrap: anywhere;
+}
+
+/* A grid item will not shrink below its own min-content unless told to, so a wide table
+   inside one pushes the page sideways however carefully the table itself scrolls. */
+.timeline-case,
+.compare-case,
+.timeline,
+.compare {
+  min-inline-size: 0;
+}

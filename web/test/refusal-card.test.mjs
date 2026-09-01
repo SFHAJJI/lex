@@ -199,6 +199,32 @@ test('an absent nearest state must be stated, not omitted', () => {
       }),
     /declares nearest_earlier blank/,
   );
+
+  // And the sentinel the fix was written for. Adding null gave a caller a machine-readable
+  // way to say none; it did not take away the free-text one, and "none held" in a date field
+  // was the whole defect. A declared nearest state is a calendar date or it is null.
+  for (const payload of [
+    { nearest_earlier: 'none held', nearest_later: '2017-01-01' },
+    { nearest_earlier: 'n/a', nearest_later: '2017-01-01' },
+    { nearest_earlier: null, nearest_later: 'unknown' },
+    { nearest_earlier: null, nearest_later: '2017-01-01', history_begins: 'sometime in the 90s' },
+  ]) {
+    assert.throws(
+      () =>
+        renderRefusalCard({
+          code: 'no_version_for_date',
+          sentence: 'No publisher state covers 2015-06-01.',
+          payload: {
+            history_begins: '2017-01-01',
+            what_would_answer: ['new_official_observation'],
+            asserts_absence_of_law: false,
+            ...payload,
+          },
+        }),
+      /as prose rather than a calendar date/,
+      `${JSON.stringify(payload)} was rendered as a date`,
+    );
+  }
 });
 
 test('the ambiguous_version interstitial never defaults and never mislabels a candidate', () => {
