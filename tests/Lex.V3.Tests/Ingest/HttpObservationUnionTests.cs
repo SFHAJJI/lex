@@ -1,0 +1,443 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using Lex.V3.Contracts;
+using Lex.V3.Contracts.Custody;
+using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Http;
+
+namespace Lex.V3.Tests.Ingest;
+
+[TestClass]
+public sealed class HttpObservationUnionTests
+{
+    [TestMethod]
+    public void WireUnionIsExactlyTheSixR2Variants()
+    {
+        (HttpObservation Observation, string Kind, Type RuntimeType)[] cases =
+        [
+            (Complete(), "response_complete_body", typeof(ResponseCompleteBodyObservation)),
+            (Partial(), "response_partial_body", typeof(ResponsePartialBodyObservation)),
+            (Revalidation(), "revalidation_304", typeof(Revalidation304Observation)),
+            (WithoutBody(), "response_without_body", typeof(ResponseWithoutBodyObservation)),
+            (Failure(), "transport_failure_before_body", typeof(TransportFailureBeforeBodyObservation)),
+            (Rejection(), "policy_rejection", typeof(PolicyRejectionObservation)),
+        ];
+
+        foreach (var (observation, kind, runtimeType) in cases)
+        {
+            var json = ContractJson.Serialize<HttpObservation>(observation);
+            using var document = JsonDocument.Parse(json);
+            Assert.AreEqual(kind, document.RootElement.GetProperty("kind").GetString());
+            Assert.AreEqual(HttpObservationSchemaIds.HttpObservation, document.RootElement.GetProperty("schema").GetString());
+            CollectionAssert.AreEquivalent(
+                ExpectedProperties(kind),
+                document.RootElement.EnumerateObject().Select(static property => property.Name).ToArray(),
+                kind);
+            Assert.AreEqual(runtimeType, ContractJson.Deserialize<HttpObservation>(json).GetType());
+        }
+
+        var valid = JsonNode.Parse(ContractJson.Serialize<HttpObservation>(Complete()))!.AsObject();
+        valid["kind"] = "ResponseCompleteBody";
+        Assert.ThrowsExactly<JsonException>(
+            () => ContractJson.Deserialize<HttpObservation>(valid.ToJsonString()));
+        valid["kind"] = 1;
+        Assert.ThrowsExactly<JsonException>(
+            () => ContractJson.Deserialize<HttpObservation>(valid.ToJsonString()));
+        valid["kind"] = "unknown";
+        Assert.ThrowsExactly<JsonException>(
+            () => ContractJson.Deserialize<HttpObservation>(valid.ToJsonString()));
+    }
+
+    [TestMethod]
+    public void NoBodyReasonsAreExactlyTheTwoR2Members()
+    {
+        (HttpNoBodyReason Value, int Number, string Wire)[] expected =
+        [
+            (HttpNoBodyReason.SemanticNoEntity, 1, "semantic_no_entity"),
+            (HttpNoBodyReason.CompleteZeroOctetEntity, 2, "complete_zero_octet_entity"),
+        ];
+
+        CollectionAssert.AreEqual(
+            expected.Select(static row => row.Number).ToArray(),
+            Enum.GetValues<HttpNoBodyReason>().Select(static value => (int)value).ToArray());
+        Assert.IsFalse(Enum.IsDefined((HttpNoBodyReason)0));
+        foreach (var (value, _, wire) in expected)
+        {
+            Assert.AreEqual($"\"{wire}\"", ContractJson.Serialize(value));
+            Assert.AreEqual(value, ContractJson.Deserialize<HttpNoBodyReason>($"\"{wire}\""));
+        }
+
+        Assert.ThrowsExactly<JsonException>(() => ContractJson.Deserialize<HttpNoBodyReason>("1"));
+        Assert.ThrowsExactly<JsonException>(() => ContractJson.Deserialize<HttpNoBodyReason>("\"unknown\""));
+    }
+
+    [TestMethod]
+    public void ValidatorEvidenceClosesTheTwoExactHeaderPairs()
+    {
+        var etag = Validator("If-None-Match", "ETag", "\"opaque\"");
+        var lastModified = new HttpValidatorEvidence(
+            RegistryMember("last_modified"),
+            "If-Modified-Since",
+            "Last-Modified",
+            "Mon, 01 Sep 2026 00:00:00 GMT");
+        Assert.AreEqual("etag", etag.ValidatorKind.MemberKey);
+        Assert.AreEqual("last_modified", lastModified.ValidatorKind.MemberKey);
+
+        Assert.ThrowsExactly<ArgumentException>(() => new HttpValidatorEvidence(
+            RegistryMember("etag"), "If-Modified-Since", "Last-Modified", "value"));
+        Assert.ThrowsExactly<ArgumentException>(() => new HttpValidatorEvidence(
+            RegistryMember("unknown"), "If-None-Match", "ETag", "value"));
+        Assert.ThrowsExactly<ArgumentException>(() => new HttpValidatorEvidence(
+            RegistryMember("etag"), "If-None-Match", "ETag", "bad\r\nvalue"));
+    }
+
+    [TestMethod]
+    public void CompleteBodyBindsExactNonemptyTransportBytes()
+    {
+        Assert.ThrowsExactly<ArgumentException>(() => Complete(transferComplete: false));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => Complete(byteCount: 0));
+        Assert.ThrowsExactly<ArgumentException>(() => Complete(
+            byteCount: 2,
+            blob: Blob(1, 'a')));
+        Assert.ThrowsExactly<ArgumentException>(() => Complete(
+            transportSha256: new string('b', 64)));
+        Assert.ThrowsExactly<ArgumentException>(() => Complete(
+            metadata: Metadata(contentLength: 2)));
+        Assert.ThrowsExactly<ArgumentException>(() => Complete(statusCode: 204));
+
+        var rangeEvidence = Complete(
+            statusCode: 206,
+            statusDisposition: HttpStatusDisposition.RangeNotApproved,
+            metadata: Metadata(contentLength: 1, contentRange: "bytes 0-0/1"));
+        Assert.AreEqual(HttpStatusDisposition.RangeNotApproved, rangeEvidence.StatusDisposition);
+    }
+
+    [TestMethod]
+    public void PartialBodyKeepsZeroAndPositiveEvidenceDistinct()
+    {
+        Assert.IsNull(Partial(byteCount: 0, transportSha256: null, blob: null).DurableBlobRef);
+        Assert.ThrowsExactly<ArgumentException>(() => Partial(
+            byteCount: 0,
+            transportSha256: new string('a', 64),
+            blob: null));
+        Assert.ThrowsExactly<ArgumentException>(() => Partial(
+            byteCount: 1,
+            omitEvidence: true));
+        Assert.ThrowsExactly<ArgumentException>(() => Partial(
+            byteCount: 2,
+            transportSha256: new string('a', 64),
+            blob: Blob(1, 'a')));
+
+        var declaredLengthMismatch = Partial(
+            byteCount: 1,
+            transportSha256: new string('a', 64),
+            blob: Blob(1, 'a'),
+            metadata: Metadata(contentLength: 2));
+        Assert.AreEqual(1, declaredLengthMismatch.ReceivedEncodedEntityByteCount);
+    }
+
+    [TestMethod]
+    public void NoBodyReasonMatchesTheStatusAndNeverCreatesAnEmptyBlob()
+    {
+        Assert.AreEqual(HttpNoBodyReason.SemanticNoEntity, WithoutBody().Reason);
+        Assert.AreEqual(
+            HttpNoBodyReason.CompleteZeroOctetEntity,
+            WithoutBody(
+                statusCode: 200,
+                statusDisposition: HttpStatusDisposition.DerivableStatus,
+                reason: HttpNoBodyReason.CompleteZeroOctetEntity).Reason);
+
+        Assert.ThrowsExactly<ArgumentException>(() => WithoutBody(
+            statusCode: 200,
+            statusDisposition: HttpStatusDisposition.DerivableStatus,
+            reason: HttpNoBodyReason.SemanticNoEntity));
+        Assert.ThrowsExactly<ArgumentException>(() => WithoutBody(
+            statusCode: 204,
+            statusDisposition: HttpStatusDisposition.SemanticNoEntityStatus,
+            reason: HttpNoBodyReason.CompleteZeroOctetEntity));
+        Assert.ThrowsExactly<ArgumentException>(() => WithoutBody(
+            statusCode: 304,
+            statusDisposition: HttpStatusDisposition.RevalidationReferenceOnly,
+            reason: HttpNoBodyReason.CompleteZeroOctetEntity));
+        Assert.ThrowsExactly<ArgumentException>(() => WithoutBody(metadata: Metadata(contentLength: 1)));
+    }
+
+    [TestMethod]
+    public void ResponseDispositionIsDerivedFromStatusAndRetainedMetadata()
+    {
+        Assert.ThrowsExactly<ArgumentException>(() => Complete(
+            statusDisposition: HttpStatusDisposition.NonDerivableStatus));
+        Assert.ThrowsExactly<ArgumentException>(() => Complete(
+            statusDisposition: HttpStatusDisposition.DerivableStatus,
+            metadata: Metadata(contentLength: 1, contentRange: "bytes 0-0/1")));
+    }
+
+    [TestMethod]
+    public void RevalidationIsAnExactReferenceAndCarriesNoNewBytes()
+    {
+        var observation = Revalidation();
+        Assert.AreEqual(304, observation.StatusCode);
+        Assert.AreEqual(observation.SentValidator, observation.PredecessorValidator);
+
+        var properties = typeof(Revalidation304Observation)
+            .GetProperties()
+            .Select(static property => property.Name)
+            .ToArray();
+        CollectionAssert.DoesNotContain(properties, "ReceivedEncodedEntityByteCount");
+        CollectionAssert.DoesNotContain(properties, "TransportByteSha256");
+
+        Assert.ThrowsExactly<ArgumentException>(() => Revalidation(statusCode: 200));
+        Assert.ThrowsExactly<ArgumentException>(() => Revalidation(
+            request: Request(method: RegistryMember("POST"))));
+        Assert.ThrowsExactly<ArgumentException>(() => Revalidation(
+            predecessorValidator: Validator("If-None-Match", "ETag", "different")));
+        Assert.ThrowsExactly<ArgumentException>(() => Revalidation(
+            metadata: Metadata(contentRange: "bytes 0-0/1")));
+        Assert.ThrowsExactly<ArgumentException>(() => Revalidation(
+            predecessorBlobRef: Blob(0, '0')));
+    }
+
+    [TestMethod]
+    public void PreHeaderFailureAndPolicyRejectionExposeNoResponseSurface()
+    {
+        string[] forbidden =
+        [
+            "EffectiveUri", "StatusCode", "StatusDisposition", "ResponseMetadata",
+            "ReceivedEncodedEntityByteCount", "TransportByteSha256", "DurableBlobRef",
+        ];
+
+        foreach (var type in new[]
+        {
+            typeof(TransportFailureBeforeBodyObservation),
+            typeof(PolicyRejectionObservation),
+        })
+        {
+            var names = type.GetProperties().Select(static property => property.Name).ToArray();
+            Assert.IsFalse(forbidden.Any(names.Contains), type.Name);
+        }
+
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => Failure(elapsedMilliseconds: -1));
+    }
+
+    [TestMethod]
+    public void VariantFieldsCannotBeSmuggledAcrossTheDiscriminator()
+    {
+        var original = JsonNode.Parse(ContractJson.Serialize<HttpObservation>(Complete()))!.AsObject();
+        foreach (var otherKind in new[]
+        {
+            "response_partial_body",
+            "revalidation_304",
+            "response_without_body",
+            "transport_failure_before_body",
+            "policy_rejection",
+        })
+        {
+            var smuggled = JsonNode.Parse(original.ToJsonString())!.AsObject();
+            smuggled["kind"] = otherKind;
+            Assert.ThrowsExactly<JsonException>(
+                () => ContractJson.Deserialize<HttpObservation>(smuggled.ToJsonString()),
+                otherKind);
+        }
+    }
+
+    [TestMethod]
+    public void EveryCompleteBodyWireMemberIsRequiredAndTheShapeIsClosed()
+    {
+        var complete = JsonNode.Parse(ContractJson.Serialize<HttpObservation>(Complete()))!.AsObject();
+        foreach (var propertyName in complete.Select(static pair => pair.Key).ToArray())
+        {
+            var missingOne = JsonNode.Parse(complete.ToJsonString())!.AsObject();
+            Assert.IsTrue(missingOne.Remove(propertyName));
+            if (propertyName == "kind")
+            {
+                Assert.ThrowsExactly<NotSupportedException>(
+                    () => ContractJson.Deserialize<HttpObservation>(missingOne.ToJsonString()),
+                    propertyName);
+            }
+            else
+            {
+                Assert.ThrowsExactly<JsonException>(
+                    () => ContractJson.Deserialize<HttpObservation>(missingOne.ToJsonString()),
+                    propertyName);
+            }
+        }
+
+        complete["headers"] = new JsonObject();
+        Assert.ThrowsExactly<JsonException>(
+            () => ContractJson.Deserialize<HttpObservation>(complete.ToJsonString()));
+    }
+
+    private static ResponseCompleteBodyObservation Complete(
+        bool transferComplete = true,
+        long byteCount = 1,
+        string? transportSha256 = null,
+        DurableBlobRef? blob = null,
+        int statusCode = 200,
+        HttpStatusDisposition statusDisposition = HttpStatusDisposition.DerivableStatus,
+        HttpResponseMetadata? metadata = null) =>
+        new(
+            HttpObservationSchemaIds.HttpObservation,
+            "urn:uuid:11111111-1111-4111-8111-111111111111",
+            Request(),
+            "https://publications.europa.eu:443/resource/cellar",
+            statusCode,
+            statusDisposition,
+            metadata ?? Metadata(contentLength: 1),
+            transferComplete,
+            byteCount,
+            transportSha256 ?? new string('a', 64),
+            blob ?? Blob(byteCount, 'a'));
+
+    private static ResponsePartialBodyObservation Partial(
+        long byteCount = 1,
+        string? transportSha256 = null,
+        DurableBlobRef? blob = null,
+        HttpResponseMetadata? metadata = null,
+        bool omitEvidence = false) =>
+        new(
+            HttpObservationSchemaIds.HttpObservation,
+            "urn:uuid:22222222-2222-4222-8222-222222222222",
+            Request(),
+            "https://publications.europa.eu:443/resource/cellar",
+            200,
+            HttpStatusDisposition.DerivableStatus,
+            metadata ?? Metadata(),
+            byteCount,
+            RegistryMember("abrupt_eof"),
+            omitEvidence ? null : transportSha256 ?? (byteCount > 0 ? new string('a', 64) : null),
+            omitEvidence ? null : blob ?? (byteCount > 0 ? Blob(byteCount, 'a') : null));
+
+    private static Revalidation304Observation Revalidation(
+        int statusCode = 304,
+        HttpRequestEvidence? request = null,
+        HttpResponseMetadata? metadata = null,
+        HttpValidatorEvidence? predecessorValidator = null,
+        DurableBlobRef? predecessorBlobRef = null)
+    {
+        var validator = Validator("If-None-Match", "ETag", "\"opaque\"");
+        return new(
+            HttpObservationSchemaIds.HttpObservation,
+            "urn:uuid:33333333-3333-4333-8333-333333333333",
+            request ?? Request(),
+            "https://publications.europa.eu:443/resource/cellar",
+            statusCode,
+            HttpStatusDisposition.RevalidationReferenceOnly,
+            metadata ?? Metadata(),
+            validator,
+            predecessorValidator ?? validator,
+            Artifact("urn:uuid:77777777-7777-4777-8777-777777777777", '7'),
+            Artifact("urn:uuid:88888888-8888-4888-8888-888888888888", '8'),
+            predecessorBlobRef ?? Blob(1, 'a'));
+    }
+
+    private static ResponseWithoutBodyObservation WithoutBody(
+        int statusCode = 204,
+        HttpStatusDisposition statusDisposition = HttpStatusDisposition.SemanticNoEntityStatus,
+        HttpNoBodyReason reason = HttpNoBodyReason.SemanticNoEntity,
+        HttpResponseMetadata? metadata = null) =>
+        new(
+            HttpObservationSchemaIds.HttpObservation,
+            "urn:uuid:44444444-4444-4444-8444-444444444444",
+            Request(),
+            "https://publications.europa.eu:443/resource/cellar",
+            statusCode,
+            statusDisposition,
+            metadata ?? Metadata(contentLength: 0),
+            0,
+            reason);
+
+    private static TransportFailureBeforeBodyObservation Failure(int elapsedMilliseconds = 250) =>
+        new(
+            HttpObservationSchemaIds.HttpObservation,
+            "urn:uuid:55555555-5555-4555-8555-555555555555",
+            Request(),
+            RegistryMember("dns_failure"),
+            elapsedMilliseconds);
+
+    private static PolicyRejectionObservation Rejection() =>
+        new(
+            HttpObservationSchemaIds.HttpObservation,
+            "urn:uuid:99999999-9999-4999-8999-999999999999",
+            Request(),
+            RegistryMember("robots_denied"),
+            RegistryMember("initial_request"),
+            Artifact("urn:uuid:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", 'a'));
+
+    private static HttpValidatorEvidence Validator(
+        string requestHeaderName,
+        string responseHeaderName,
+        string value) =>
+        new(RegistryMember("etag"), requestHeaderName, responseHeaderName, value);
+
+    private static HttpRequestEvidence Request(SourceRegistryMemberRef? method = null) =>
+        new(
+            "https://publications.europa.eu:443/resource/cellar",
+            method ?? RegistryMember("GET"),
+            new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero),
+            RegistryMember("millisecond"),
+            RegistryMember("system_utc"),
+            Artifact("urn:uuid:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", 'b'),
+            Artifact("urn:uuid:cccccccc-cccc-4ccc-8ccc-cccccccccccc", 'c'),
+            Artifact("urn:uuid:dddddddd-dddd-4ddd-8ddd-dddddddddddd", 'd'),
+            new OutboundCrawlerIdentityEvidence(
+                OutboundCrawlerIdentity.Schema,
+                Artifact("urn:uuid:eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", 'e'),
+                OutboundCrawlerIdentity.Token),
+            new HttpOrigin("https", "publications.europa.eu", 443),
+            Artifact("urn:uuid:ffffffff-ffff-4fff-8fff-ffffffffffff", 'f'));
+
+    private static HttpResponseMetadata Metadata(
+        long? contentLength = null,
+        string? contentRange = null) =>
+        new("application/xml", "utf-8", contentLength, null, contentRange, null, null);
+
+    private static DurableBlobRef Blob(long byteLength, char digestCharacter) =>
+        new(
+            CustodySchemaIds.DurableBlobRef,
+            new string(digestCharacter, 64),
+            byteLength,
+            CustodyClass.NightlyFloor90d);
+
+    private static SourceRegistryMemberRef RegistryMember(string memberKey) =>
+        new(Artifact("urn:uuid:12121212-1212-4212-8212-121212121212", '1'), memberKey);
+
+    private static SourceArtifactRef Artifact(string resourceId, char digestCharacter) =>
+        new(resourceId, new string(digestCharacter, 64));
+
+    private static string[] ExpectedProperties(string kind) => kind switch
+    {
+        "response_complete_body" =>
+        [
+            "kind", "schema", "observation_id", "request", "effective_uri", "status_code",
+            "status_disposition", "response_metadata", "transfer_complete",
+            "received_encoded_entity_byte_count", "transport_byte_sha256", "durable_blob_ref",
+        ],
+        "response_partial_body" =>
+        [
+            "kind", "schema", "observation_id", "request", "effective_uri", "status_code",
+            "status_disposition", "response_metadata", "received_encoded_entity_byte_count",
+            "terminal_failure_reason", "transport_byte_sha256", "durable_blob_ref",
+        ],
+        "revalidation_304" =>
+        [
+            "kind", "schema", "observation_id", "request", "effective_uri", "status_code",
+            "status_disposition", "response_metadata", "sent_validator",
+            "predecessor_validator", "predecessor_observation_ref",
+            "representation_request_key_ref", "predecessor_blob_ref",
+        ],
+        "response_without_body" =>
+        [
+            "kind", "schema", "observation_id", "request", "effective_uri", "status_code",
+            "status_disposition", "response_metadata", "received_encoded_entity_byte_count",
+            "reason",
+        ],
+        "transport_failure_before_body" =>
+        ["kind", "schema", "observation_id", "request", "failure_class", "elapsed_milliseconds"],
+        "policy_rejection" =>
+        [
+            "kind", "schema", "observation_id", "request", "rejection_reason",
+            "rejected_stage", "zero_request_proof_ref",
+        ],
+        _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+    };
+}

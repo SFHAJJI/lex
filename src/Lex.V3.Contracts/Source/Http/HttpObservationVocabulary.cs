@@ -2,24 +2,39 @@ using System.Text.Json.Serialization;
 
 namespace Lex.V3.Contracts.Source.Http;
 
+public static class HttpObservationSchemaIds
+{
+    public const string HttpObservation = "http_observation/1";
+}
+
+public static class HttpObservationWireKinds
+{
+    public const string ResponseCompleteBody = "response_complete_body";
+    public const string ResponsePartialBody = "response_partial_body";
+    public const string Revalidation304 = "revalidation_304";
+    public const string ResponseWithoutBody = "response_without_body";
+    public const string TransportFailureBeforeBody = "transport_failure_before_body";
+    public const string PolicyRejection = "policy_rejection";
+}
+
 public enum HttpObservationKind
 {
-    [JsonStringEnumMemberName("response_complete_body")]
+    [JsonStringEnumMemberName(HttpObservationWireKinds.ResponseCompleteBody)]
     ResponseCompleteBody = 1,
 
-    [JsonStringEnumMemberName("response_partial_body")]
+    [JsonStringEnumMemberName(HttpObservationWireKinds.ResponsePartialBody)]
     ResponsePartialBody = 2,
 
-    [JsonStringEnumMemberName("revalidation_304")]
+    [JsonStringEnumMemberName(HttpObservationWireKinds.Revalidation304)]
     Revalidation304 = 3,
 
-    [JsonStringEnumMemberName("response_without_body")]
+    [JsonStringEnumMemberName(HttpObservationWireKinds.ResponseWithoutBody)]
     ResponseWithoutBody = 4,
 
-    [JsonStringEnumMemberName("transport_failure_before_body")]
+    [JsonStringEnumMemberName(HttpObservationWireKinds.TransportFailureBeforeBody)]
     TransportFailureBeforeBody = 5,
 
-    [JsonStringEnumMemberName("policy_rejection")]
+    [JsonStringEnumMemberName(HttpObservationWireKinds.PolicyRejection)]
     PolicyRejection = 6,
 }
 

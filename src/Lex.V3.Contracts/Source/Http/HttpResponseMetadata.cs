@@ -45,7 +45,7 @@ public sealed record HttpResponseMetadata
 
     public string? LastModified { get; }
 
-    private static string? RequireBoundedHeaderValue(string? value, string parameterName)
+    internal static string? RequireBoundedHeaderValue(string? value, string parameterName)
     {
         if (value is null)
         {
