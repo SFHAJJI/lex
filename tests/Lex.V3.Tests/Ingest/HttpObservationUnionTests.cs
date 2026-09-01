@@ -149,14 +149,15 @@ public sealed class HttpObservationUnionTests
             new AbsentHttpHeader(),
             new MultipleHttpHeader(["\"one\"", "\"two\""]),
             new AbsentHttpHeader());
-        Assert.ThrowsExactly<ArgumentException>(() => Complete(metadata: duplicateMetadata));
-        var duplicateHeaderEvidence = Complete(
-            statusDisposition: HttpStatusDisposition.NonDerivableStatus,
-            metadata: duplicateMetadata);
+        var duplicateHeaderEvidence = Complete(metadata: duplicateMetadata);
         Assert.IsInstanceOfType<MultipleHttpHeader>(duplicateHeaderEvidence.ResponseMetadata.Etag);
         Assert.AreEqual(
-            HttpStatusDisposition.NonDerivableStatus,
+            HttpStatusDisposition.DerivableStatus,
             duplicateHeaderEvidence.StatusDisposition);
+        Assert.IsTrue(duplicateHeaderEvidence.ResponseMetadata.BlocksDerivation);
+        Assert.ThrowsExactly<ArgumentException>(() => Complete(
+            statusDisposition: HttpStatusDisposition.NonDerivableStatus,
+            metadata: duplicateMetadata));
 
         var malformedLengthMetadata = new HttpResponseMetadata(
             new SingleHttpHeader("application/xml"),
@@ -173,15 +174,17 @@ public sealed class HttpObservationUnionTests
             new string('a', 64),
             1,
             Artifact("urn:uuid:14141414-1414-4414-8414-141414141414", '1'));
+        var malformedLengthEvidence = Complete(
+            metadata: malformedLengthMetadata,
+            completionEvidence: protocolCompletion);
+        Assert.AreEqual(
+            HttpStatusDisposition.DerivableStatus,
+            malformedLengthEvidence.StatusDisposition);
+        Assert.IsTrue(malformedLengthEvidence.ResponseMetadata.BlocksDerivation);
         Assert.ThrowsExactly<ArgumentException>(() => Complete(
+            statusDisposition: HttpStatusDisposition.NonDerivableStatus,
             metadata: malformedLengthMetadata,
             completionEvidence: protocolCompletion));
-        Assert.AreEqual(
-            HttpStatusDisposition.NonDerivableStatus,
-            Complete(
-                statusDisposition: HttpStatusDisposition.NonDerivableStatus,
-                metadata: malformedLengthMetadata,
-                completionEvidence: protocolCompletion).StatusDisposition);
         Assert.ThrowsExactly<ArgumentException>(() => Complete(
             metadata: Metadata(contentLength: 2),
             completionEvidence: protocolCompletion));
@@ -444,6 +447,15 @@ public sealed class HttpObservationUnionTests
             retainedLength,
             retainedLength.AdmitAgainst(predecessor).Observation);
 
+        var differentRequestedUriPredecessor = Predecessor(
+            request: Request(
+                requestedUri: "https://publications.europa.eu/another-target"));
+        var differentRequestedUriRevalidation = Revalidation(
+            predecessor: differentRequestedUriPredecessor);
+        Assert.ThrowsExactly<ArgumentException>(
+            () => differentRequestedUriRevalidation.AdmitAgainst(
+                differentRequestedUriPredecessor));
+
         var mismatchedRetainedLength = Revalidation(
             predecessor: predecessor,
             metadata: Metadata(contentLength: 123));
@@ -458,12 +470,11 @@ public sealed class HttpObservationUnionTests
             new AbsentHttpHeader(),
             new SingleHttpHeader("\"opaque\""),
             new AbsentHttpHeader());
-        var nonDerivablePredecessor = Complete(
-            statusDisposition: HttpStatusDisposition.NonDerivableStatus,
-            metadata: duplicateContentType);
-        var nonDerivableRevalidation = Revalidation(predecessor: nonDerivablePredecessor);
+        var ambiguousMetadataPredecessor = Complete(metadata: duplicateContentType);
+        var ambiguousMetadataRevalidation = Revalidation(
+            predecessor: ambiguousMetadataPredecessor);
         Assert.ThrowsExactly<ArgumentException>(
-            () => nonDerivableRevalidation.AdmitAgainst(nonDerivablePredecessor));
+            () => ambiguousMetadataRevalidation.AdmitAgainst(ambiguousMetadataPredecessor));
 
         var protocolCompletion = new Http2EndStreamCompleteEvidence(
             TransferCompletionSchemaIds.TransferCompletionEvidence,
@@ -473,7 +484,6 @@ public sealed class HttpObservationUnionTests
             1,
             Artifact("urn:uuid:14141414-1414-4414-8414-141414141414", '1'));
         var malformedLengthPredecessor = Complete(
-            statusDisposition: HttpStatusDisposition.NonDerivableStatus,
             metadata: new HttpResponseMetadata(
                 new SingleHttpHeader("application/xml"),
                 new SingleHttpHeader("utf-8"),
@@ -711,9 +721,10 @@ public sealed class HttpObservationUnionTests
 
     private static HttpRequestEvidence Request(
         HttpRequestMethod method = HttpRequestMethod.Get,
-        SourceArtifactRef? representationRequestKeyIdentity = null) =>
+        SourceArtifactRef? representationRequestKeyIdentity = null,
+        string requestedUri = "https://publications.europa.eu/resource/cellar") =>
         new(
-            "https://publications.europa.eu/resource/cellar",
+            requestedUri,
             method,
             "2026-09-01T00:00:00.000Z",
             HttpObservationTimestampPrecision.Millisecond,

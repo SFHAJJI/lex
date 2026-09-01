@@ -393,7 +393,12 @@ public sealed class Revalidation304Observation : HttpResponseObservation
         ArgumentNullException.ThrowIfNull(predecessor);
         if (predecessor.StatusCode != 200 ||
             predecessor.StatusDisposition != HttpStatusDisposition.DerivableStatus ||
+            predecessor.ResponseMetadata.BlocksDerivation ||
             predecessor.Request.Method != HttpRequestMethod.Get ||
+            !string.Equals(
+                predecessor.Request.RequestedUri,
+                Request.RequestedUri,
+                StringComparison.Ordinal) ||
             predecessor.Request.RepresentationRequestKeyIdentity != RepresentationRequestKeyRef ||
             !string.Equals(predecessor.EffectiveUri, EffectiveUri, StringComparison.Ordinal))
         {

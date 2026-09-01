@@ -110,7 +110,8 @@ public sealed record HttpResponseMetadata
         Etag is MultipleHttpHeader ||
         LastModified is MultipleHttpHeader;
 
-    internal bool BlocksDerivation =>
+    [JsonIgnore]
+    public bool BlocksDerivation =>
         HasMultipleField ||
         ContentLength is SingleHttpHeader && !TryGetSingleContentLength(out _);
 

@@ -150,11 +150,6 @@ public static class HttpStatusClassifier
             return HttpStatusDisposition.RangeNotApproved;
         }
 
-        if (statusCode == 200 && responseMetadata.BlocksDerivation)
-        {
-            return HttpStatusDisposition.NonDerivableStatus;
-        }
-
         return statusCode switch
         {
             200 => HttpStatusDisposition.DerivableStatus,
