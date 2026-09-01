@@ -61,8 +61,18 @@
 //     two dates; where the authentic file lives is the authenticity evidence. Each of those
 //     arrived once as a boolean somebody passed, and a boolean somebody passed is a fact
 //     about the caller.
+//
+//  9. The work this page is about, and the vocabulary its dates are in, are read off
+//     `state.lex_id` rather than accepted beside it. A `lex_id` is `publisher:work:state`, so
+//     a page holding the state is already holding both. Taken separately they can disagree
+//     with it, and neither disagreement is visible: permalinks mint for one work while
+//     Provenance addresses another, and Luxembourg applicability dates get the Union's word
+//     for a consolidated wording state. A caller may still state them, and is then refused
+//     when it states something the record contradicts.
 
 import { quotedLaw, renderUnofficialRendering } from './localization.mjs';
+import { semanticsOf } from './publisher-vocabulary.mjs';
+import { identityOf } from './record-identity.mjs';
 import { escapeHtml } from './render.mjs';
 import { renderRefusalCard, renderSupersededState } from './refusal-card.mjs';
 import { renderStateBanner } from './state-banner.mjs';
@@ -192,10 +202,19 @@ function withAuthenticityFooting(html, consolidated) {
 }
 
 /**
- * One provision: its number, its dating, its text or the reason there is none, its
- * renderings, its permalink and its digest.
+ * Everything one provision will show, checked.
+ *
+ * The rules live here and the markup lives in the renderers, so the string renderer and the
+ * React component apply one implementation rather than two that can drift apart. What comes
+ * back is the checked input for the components this screen composes, never their markup. The
+ * quotation, the two refusals, the unofficial renderings and the verification cluster each
+ * hold their own rules and are called by both renderers.
+ *
+ * @param {object} provision  one provision as the record carries it
+ * @param {number} index      its position, so a refusal can name which one
+ * @param {object} context    the state, the expression and the work it belongs to
  */
-function renderProvision(provision, index, context) {
+export function validateProvision(provision, index, context) {
   const where = `provision ${index + 1}`;
   const { state, expression, publisher, work, consolidated, noteLocale } = context;
 
@@ -255,13 +274,6 @@ function renderProvision(provision, index, context) {
     );
   }
 
-  const dating = conflicted
-    ? renderValidityConflict({
-      stateValidFrom: state.valid_from,
-      wordingValidFrom: provision.wording_valid_from,
-    })
-    : `<p class="reading-unchanged">${escapeHtml(unchangedSince(provision.wording_valid_from))}</p>`;
-
   if (!TEXT_STATUSES.includes(provision.text_status)) {
     throw new Error(
       `${where} carries text_status ${JSON.stringify(provision.text_status)}; the set is closed `
@@ -270,28 +282,29 @@ function renderProvision(provision, index, context) {
     );
   }
 
-  let body;
-  let verify;
+  // Exactly one of these is filled, and which one is the record's answer to "why is there no
+  // text here". Three causes with three different answers, which is why `text_status` is a
+  // closed set rather than a boolean.
+  let quotation = null;
+  let refusal = null;
+  let verify = null;
 
   if (provision.text_status === 'held') {
     // The expression's own language, from the expression's own record. `noteLocale` is the
     // chrome locale and reaches only the authenticity note.
-    body = withAuthenticityFooting(
-      quotedLaw({
-        resourceId: expression.resource_id,
-        authenticity: expression.authenticity,
-        language: expression.language,
-        text: provision.text,
-        noteLocale,
-      }),
-      consolidated,
-    );
-    verify = renderVerifyCluster({
+    quotation = {
+      resourceId: expression.resource_id,
+      authenticity: expression.authenticity,
+      language: expression.language,
+      text: provision.text,
+      noteLocale,
+    };
+    verify = {
       publisher,
       sourceUri: state.source_uri,
       lexId: state.lex_id,
       hash: { kind: 'text_sha256', value: provision.text_sha256 },
-    });
+    };
   } else if (provision.text_status === 'withheld') {
     if (Object.hasOwn(provision, 'text')) {
       throw new Error(
@@ -308,24 +321,24 @@ function renderProvision(provision, index, context) {
     // A digest is evidence about bytes at a time. Without the time it is a number.
     requireUtcInstant(provision.digest_observed_at, `${where} digest_observed_at`);
 
-    body = renderRefusalCard({
+    refusal = {
       code: 'text_withheld',
       sentence: WITHHELD_NOTE,
       payload: {
         licence: provision.licence,
         digest_observed_at: provision.digest_observed_at,
       },
-    });
+    };
     // The digest and the official link, through the same cluster every other screen uses, so
     // the link is checked against the publisher's own host set rather than merely escaped.
-    verify = renderVerifyCluster({
+    verify = {
       publisher,
       sourceUri: provision.official_uri,
       lexId: state.lex_id,
       hash: { kind: 'text_sha256', value: provision.text_sha256 },
-    });
+    };
   } else {
-    body = renderRefusalCard({
+    refusal = {
       code: 'text_not_available',
       sentence: NOT_AVAILABLE_NOTE,
       payload: {
@@ -334,64 +347,98 @@ function renderProvision(provision, index, context) {
         what_would_answer: TEXT_ROUTES,
         asserts_absence_of_law: false,
       },
-    });
-    verify = '';
+    };
   }
 
-  const renderings = (provision.renderings ?? [])
-    .map((rendering, position) => {
-      // The publisher and the official address belong to the authenticity evidence. A
-      // rendering that brought its own would put a link nothing bound to the claim under
-      // the words that name the authentic text.
-      const supplied = ownKeys(rendering, ['publisher', 'official_uri', 'officialUri']);
-      if (supplied.length > 0) {
-        throw new Error(
-          `${where} rendering ${position + 1} supplies ${supplied.join(', ')}; the authentic `
-            + 'route is the resource evidence, and a route the caller chose is a route nobody '
-            + 'checked against the claim above it',
-        );
-      }
-      return withAuthenticityFooting(
-        renderUnofficialRendering({
-          resourceId: expression.resource_id,
-          authenticity: expression.authenticity,
-          language: rendering?.language,
-          text: rendering?.text,
-          publisher: expression.authenticity.publisher,
-          officialUri: expression.authenticity.official_uri,
-        }),
-        consolidated,
+  const renderings = (provision.renderings ?? []).map((rendering, position) => {
+    // The publisher and the official address belong to the authenticity evidence. A
+    // rendering that brought its own would put a link nothing bound to the claim under
+    // the words that name the authentic text.
+    const supplied = ownKeys(rendering, ['publisher', 'official_uri', 'officialUri']);
+    if (supplied.length > 0) {
+      throw new Error(
+        `${where} rendering ${position + 1} supplies ${supplied.join(', ')}; the authentic `
+          + 'route is the resource evidence, and a route the caller chose is a route nobody '
+          + 'checked against the claim above it',
       );
-    })
-    .join('');
-
-  const permalink = readingUrl({
-    publisher,
-    work,
-    validFrom: state.valid_from,
-    hash: state.hash,
-    anchor: provision.anchor,
+    }
+    return {
+      resourceId: expression.resource_id,
+      authenticity: expression.authenticity,
+      language: rendering?.language,
+      text: rendering?.text,
+      publisher: expression.authenticity.publisher,
+      officialUri: expression.authenticity.official_uri,
+    };
   });
 
-  return (
-    `<article class="reading-provision" id="${escapeHtml(provision.anchor)}">`
-    + `<h3 class="reading-num">${escapeHtml(provision.num)}</h3>`
-    + dating
-    + body
-    + renderings
-    + '<p class="reading-permalink"><a href="'
-    + `${escapeHtml(permalink)}">Permalink</a> <code>${escapeHtml(permalink)}</code></p>`
-    + verify
-    + '</article>'
-  );
+  return Object.freeze({
+    anchor: provision.anchor,
+    num: provision.num,
+    conflicted,
+    stateValidFrom: state.valid_from,
+    wordingValidFrom: provision.wording_valid_from,
+    consolidated,
+    quotation,
+    refusal,
+    verify,
+    renderings: Object.freeze(renderings),
+    permalink: readingUrl({
+      publisher,
+      work,
+      validFrom: state.valid_from,
+      hash: state.hash,
+      anchor: provision.anchor,
+    }),
+  });
 }
 
 /**
- * One work's text as it stood on one date.
+ * The work this page is about and the vocabulary its dates are in, both read off the record.
+ *
+ * See rule 9 at the top of this file. A caller may still state either, and is refused when it
+ * states something `state.lex_id` contradicts. Refused rather than corrected: a page told the
+ * wrong work has a caller that believes something false, and quietly rendering the right one
+ * leaves that belief in place.
+ */
+function readingIdentity({ envelope, work, state }) {
+  const identity = identityOf(state?.lex_id, 'the reading view');
+
+  if (work !== undefined && work !== null
+    && (work.publisher !== identity.publisher || work.work !== identity.work)) {
+    throw new Error(
+      `this page was told it is about ${work.publisher}/${work.work} while its state names `
+        + `${identity.workKey}; the work is written on the record, and a second one beside it `
+        + 'mints permalinks for a work this page is not showing',
+    );
+  }
+
+  const semantics = semanticsOf(identity.publisher, 'the reading view');
+  const stated = envelope?.timeline_semantics;
+  if (stated !== undefined && stated !== semantics) {
+    throw new Error(
+      `this page was told its dates are ${JSON.stringify(stated)} while ${identity.publisher} `
+        + `publishes ${semantics}; which clock a publisher's dates are on is a property of the `
+        + "publisher, so a vocabulary chosen beside the record labels one publisher's dates "
+        + "with another publisher's words",
+    );
+  }
+
+  return { identity, semantics };
+}
+
+/**
+ * Everything one work's text as it stood on one date will show, checked.
+ *
+ * The rules live here and the markup lives in the renderers, for the reason
+ * `validateProvision` gives. The header is settled before the anchor is resolved, so the
+ * refusal below is a page about a resolved version rather than a page about nothing: a
+ * refusal that dropped the two clocks would leave a reader unable to say which version did
+ * not contain their anchor.
  *
  * @param {object} input
- * @param {object} input.envelope    carries `timeline_semantics`, the publisher's vocabulary
- * @param {object} input.work        the two shell-neutral URL segments, publisher and work
+ * @param {object} [input.envelope]  may state `timeline_semantics`, and must then agree
+ * @param {object} [input.work]      may state the two URL segments, and must then agree
  * @param {object} input.state       the state being read, with both clocks and its digests
  * @param {object} input.expression  the language expression, its own language, its evidence
  * @param {Array}  input.provisions  the provisions this version holds, in publisher order
@@ -401,7 +448,7 @@ function renderProvision(provision, index, context) {
  * @param {object} [input.superseded] the live state, when this one was withdrawn
  * @param {string} [input.noteLocale] the chrome locale, for the authenticity note only
  */
-export function renderReading(input) {
+export function validateReading(input) {
   const {
     envelope,
     work,
@@ -435,6 +482,8 @@ export function renderReading(input) {
         + 'status strip with its caption and nowhere else',
     );
   }
+
+  const { identity, semantics } = readingIdentity({ envelope, work, state });
 
   if (!CONSOLIDATION_STATUSES.includes(state?.consolidation_status)) {
     throw new Error(
@@ -491,81 +540,155 @@ export function renderReading(input) {
     );
   }
 
-  // Provisional is the state's date against the reader's date, computed here rather than
-  // read from a flag, and the comparison date is the reader's rather than this machine's.
-  const provisional = state.valid_from > asOf
-    ? renderProvisional({ validFrom: state.valid_from, asOf })
-    : '';
-
-  // The header is built before the request is answered, so the refusal below is a page about
-  // a resolved version rather than a page about nothing. A refusal that dropped the two
-  // clocks would leave a reader unable to say which version did not contain their anchor.
-  const head = '<header class="reading-state">'
-    + renderStateBanner({ envelope, state })
-    + provisional
-    + `<p class="reading-as-of">Read as of ${escapeHtml(asOf)}.</p>`
-    + renderVerifyCluster({
-      publisher: work?.publisher,
-      sourceUri: state.source_uri,
-      lexId: state.lex_id,
-      hash: { kind: 'record_sha256', value: state.record_sha256 },
-    })
-    + '</header>';
-
   const selected = anchor === null
     ? provisions
     : provisions.filter((provision) => provision?.anchor === anchor);
 
-  if (anchor !== null && selected.length === 0) {
-    // A typed refusal that hands back the coordinates this version does have. Never an empty
-    // page, and never a fall back to full-text search: a different provision is not a near
-    // miss, which is the note the card writes itself.
+  // A typed refusal that hands back the coordinates this version does have. Never an empty
+  // page, and never a fall back to full-text search: a different provision is not a near
+  // miss, which is the note the card writes itself.
+  const anchorRefusal = anchor !== null && selected.length === 0
+    ? {
+      code: 'anchor_not_in_version',
+      sentence: ANCHOR_NOT_IN_VERSION_NOTE,
+      payload: {
+        nearest_anchors: anchors,
+        what_would_answer: ANCHOR_ROUTES,
+        asserts_absence_of_law: false,
+      },
+    }
+    : null;
+
+  const context = {
+    state,
+    expression,
+    publisher: identity.publisher,
+    work: identity.work,
+    consolidated,
+    noteLocale,
+  };
+
+  return Object.freeze({
+    identity,
+    semantics,
+    state,
+    expression,
+    asOf,
+    consolidated,
+    // Provisional is the state's date against the reader's date, decided here rather than
+    // read from a flag, and the comparison date is the reader's rather than this machine's.
+    provisional: state.valid_from > asOf,
+    holes: Object.freeze([...holes]),
+    anchors: Object.freeze([...anchors]),
+    anchorRefusal,
+    superseded,
+    noteLocale,
+    stateVerify: Object.freeze({
+      publisher: identity.publisher,
+      sourceUri: state.source_uri,
+      lexId: state.lex_id,
+      hash: { kind: 'record_sha256', value: state.record_sha256 },
+    }),
+    provisions: Object.freeze(
+      anchorRefusal === null
+        ? selected.map((provision, index) => validateProvision(provision, index, context))
+        : [],
+    ),
+  });
+}
+
+/**
+ * One provision: its number, its dating, its text or the reason there is none, its
+ * renderings, its permalink and its digest.
+ *
+ * @param {object} provision  a provision already through `validateProvision`
+ */
+function renderProvision(provision) {
+  const dating = provision.conflicted
+    ? renderValidityConflict({
+      stateValidFrom: provision.stateValidFrom,
+      wordingValidFrom: provision.wordingValidFrom,
+    })
+    : `<p class="reading-unchanged">${escapeHtml(unchangedSince(provision.wordingValidFrom))}</p>`;
+
+  const body = provision.quotation === null
+    ? renderRefusalCard(provision.refusal)
+    : withAuthenticityFooting(quotedLaw(provision.quotation), provision.consolidated);
+
+  const verify = provision.verify === null ? '' : renderVerifyCluster(provision.verify);
+
+  const renderings = provision.renderings
+    .map((rendering) => withAuthenticityFooting(
+      renderUnofficialRendering(rendering),
+      provision.consolidated,
+    ))
+    .join('');
+
+  return (
+    `<article class="reading-provision" id="${escapeHtml(provision.anchor)}">`
+    + `<h3 class="reading-num">${escapeHtml(provision.num)}</h3>`
+    + dating
+    + body
+    + renderings
+    + '<p class="reading-permalink"><a href="'
+    + `${escapeHtml(provision.permalink)}">Permalink</a> `
+    + `<code>${escapeHtml(provision.permalink)}</code></p>`
+    + verify
+    + '</article>'
+  );
+}
+
+/**
+ * One work's text as it stood on one date.
+ *
+ * @see validateReading, which holds every rule this renders.
+ */
+export function renderReading(input) {
+  const view = validateReading(input);
+  const { state } = view;
+
+  const provisional = view.provisional
+    ? renderProvisional({ validFrom: state.valid_from, asOf: view.asOf })
+    : '';
+
+  // The vocabulary the record decided, handed to the banner in the shape the banner takes.
+  const head = '<header class="reading-state">'
+    + renderStateBanner({ envelope: { timeline_semantics: view.semantics }, state })
+    + provisional
+    + `<p class="reading-as-of">Read as of ${escapeHtml(view.asOf)}.</p>`
+    + renderVerifyCluster(view.stateVerify)
+    + '</header>';
+
+  if (view.anchorRefusal !== null) {
     return (
       '<section class="reading reading-anchor-refused">'
       + head
-      + renderRefusalCard({
-        code: 'anchor_not_in_version',
-        sentence: ANCHOR_NOT_IN_VERSION_NOTE,
-        payload: {
-          nearest_anchors: anchors,
-          what_would_answer: ANCHOR_ROUTES,
-          asserts_absence_of_law: false,
-        },
-      })
+      + renderRefusalCard(view.anchorRefusal)
       + '</section>'
     );
   }
 
-  const gaps = holes.map((hole) => renderHole({
+  const gaps = view.holes.map((hole) => renderHole({
     kind: hole?.kind,
     from: hole?.from,
     to: hole?.to,
   })).join('');
 
-  const disclosure = superseded === null
+  const disclosure = view.superseded === null
     ? ''
     : renderSupersededState({
-      publisher: work?.publisher,
-      work: work?.work,
-      live: superseded.live,
-      withdrawn: superseded.withdrawn,
+      publisher: view.identity.publisher,
+      work: view.identity.work,
+      live: view.superseded.live,
+      withdrawn: view.superseded.withdrawn,
     });
-
-  const context = {
-    state,
-    expression,
-    publisher: work?.publisher,
-    work: work?.work,
-    consolidated,
-    noteLocale,
-  };
 
   return (
     '<section class="reading">'
     + head
     + disclosure
     + gaps
-    + selected.map((provision, index) => renderProvision(provision, index, context)).join('')
+    + view.provisions.map((provision) => renderProvision(provision)).join('')
     + '</section>'
   );
 }

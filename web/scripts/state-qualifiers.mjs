@@ -33,13 +33,18 @@ function escapeHtml(value) {
 }
 
 /**
- * Two publisher dates on one wording, shown as both, resolved as neither.
+ * What a validity conflict says: two publisher dates on one wording, resolved as neither.
+ *
+ * The sentence lives here rather than inside the markup so that the string renderer and the
+ * React component say one thing, checked once. Both dates, in text, in the order the
+ * publisher records them. No arithmetic, no preference, and no clause that could be read as
+ * this product resolving it.
  *
  * @param {object} input
  * @param {string} input.stateValidFrom    the enclosing state's applicability date
  * @param {string} input.wordingValidFrom  the publisher's date on this wording
  */
-export function renderValidityConflict({ stateValidFrom, wordingValidFrom }) {
+export function validityConflictSentence({ stateValidFrom, wordingValidFrom }) {
   requireCalendarDate(stateValidFrom, 'the state valid_from');
   requireCalendarDate(wordingValidFrom, 'the wording valid_from');
   if (stateValidFrom === wordingValidFrom) {
@@ -48,16 +53,23 @@ export function renderValidityConflict({ stateValidFrom, wordingValidFrom }) {
         'dates teaches a reader to ignore it where it matters',
     );
   }
+  return (
+    `The publisher dates this wording ${wordingValidFrom} inside a state applicable from ` +
+    `${stateValidFrom}. Both are the publisher's. Not resolved.`
+  );
+}
 
-  // Both dates, in text, in the order the publisher records them. No arithmetic, no
-  // preference, and no sentence that could be read as this product resolving it.
+/**
+ * Two publisher dates on one wording, shown as both, resolved as neither.
+ *
+ * @param {object} input
+ * @param {string} input.stateValidFrom    the enclosing state's applicability date
+ * @param {string} input.wordingValidFrom  the publisher's date on this wording
+ */
+export function renderValidityConflict({ stateValidFrom, wordingValidFrom }) {
   return (
     '<p class="validity-conflict">' +
-    mark(
-      '--conflict',
-      `The publisher dates this wording ${wordingValidFrom} inside a state applicable from ` +
-        `${stateValidFrom}. Both are the publisher's. Not resolved.`,
-    ) +
+    mark('--conflict', validityConflictSentence({ stateValidFrom, wordingValidFrom })) +
     '</p>'
   );
 }
@@ -69,7 +81,7 @@ export function renderValidityConflict({ stateValidFrom, wordingValidFrom }) {
  * is provisional is a fact about the reader's chosen date and the publisher's record, and a
  * frontend that consulted its own clock would answer a question nobody asked.
  */
-export function renderProvisional({ validFrom, asOf }) {
+export function provisionalSentence({ validFrom, asOf }) {
   requireCalendarDate(validFrom, 'the state valid_from');
   requireCalendarDate(asOf, 'the comparison date');
   if (validFrom <= asOf) {
@@ -78,12 +90,14 @@ export function renderProvisional({ validFrom, asOf }) {
         'would be false; the mark is for a state the publisher has scheduled and not started',
     );
   }
+  return `Publisher-scheduled state, applicable from ${validFrom}. As of ${asOf} it has not begun.`;
+}
+
+/** The watermark itself. @see provisionalSentence for the rule it carries. */
+export function renderProvisional({ validFrom, asOf }) {
   return (
     '<p class="provisional-watermark" data-provisional="true">' +
-    mark(
-      '--provisional',
-      `Publisher-scheduled state, applicable from ${validFrom}. As of ${asOf} it has not begun.`,
-    ) +
+    mark('--provisional', provisionalSentence({ validFrom, asOf })) +
     '</p>'
   );
 }
@@ -110,14 +124,15 @@ const HOLE_CAPTION = new Map([
 ]);
 
 /**
- * A period no held state covers, hatched and captioned.
+ * The caption a period with no held state carries.
  *
  * The two kinds are different claims and the caption says which. "No state covers this" is a
  * fact about the record. "The previous wording continued" is an inference this product makes
  * from the absence of a later state, and presenting it as the publisher's would turn a
- * missing record into an assertion about the law.
+ * missing record into an assertion about the law. Choosing the caption is therefore a rule
+ * and not a presentation detail, so it lives here and both renderers call it.
  */
-export function renderHole({ kind, from, to }) {
+export function holeSentence({ kind, from, to }) {
   const caption = HOLE_CAPTION.get(kind);
   if (caption === undefined) {
     throw new Error(
@@ -132,9 +147,19 @@ export function renderHole({ kind, from, to }) {
       `${from} to ${to} is not a period; a hole with no duration is a boundary, not a gap`,
     );
   }
+  return caption(from, to);
+}
+
+/**
+ * A period no held state covers, hatched and captioned.
+ *
+ * @see holeSentence, which decides which of the two claims this is and refuses a third.
+ */
+export function renderHole({ kind, from, to }) {
+  const sentence = holeSentence({ kind, from, to });
   return (
     `<p class="hole hole-${escapeHtml(kind)}" data-hole-kind="${escapeHtml(kind)}">` +
-    mark('--hole', caption(from, to)) +
+    mark('--hole', sentence) +
     '</p>'
   );
 }
