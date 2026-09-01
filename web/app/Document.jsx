@@ -15,6 +15,7 @@
 //     served at /w/<work>/<version> loads a stylesheet that is not there.
 
 import { CHROME_LOCALES } from '../scripts/localization.mjs';
+import { cspValue } from '../scripts/csp.mjs';
 
 /** The marker that says, in the DOM, that nothing on this page is law. */
 export const SYNTHETIC_MARKER = 'lex-v3-synthetic-preview';
@@ -91,6 +92,11 @@ export function Document({
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        {/* Enumerated in csp.mjs and asserted by the browser run against that exact
+            object. A hydrated client ships scripts, so "no scripts" stops being evidence
+            of anything; what has to hold is that nothing executes which was not reviewed
+            and served from this origin. */}
+        <meta httpEquiv="Content-Security-Policy" content={cspValue()} />
         <title>{`${title} - Lex V3 preview`}</title>
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="stylesheet" href="/styles.css" />

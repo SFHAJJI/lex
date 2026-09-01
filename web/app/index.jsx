@@ -9,3 +9,4 @@ export { Document, SyntheticBanner, SYNTHETIC_MARKER } from './Document.jsx';
 export { renderDocument } from './render-document.mjs';
 export { RefusalCard, Mark } from './RefusalCard.jsx';
 export { Dossier } from './Dossier.jsx';
+export { CSP_DIRECTIVES, FORBIDDEN_SOURCES, cspValue } from '../scripts/csp.mjs';

@@ -3,6 +3,9 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Kept in step with scripts/csp.mjs, which is the single source. This page is
+         copied rather than rendered, so the browser run is what catches it drifting. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; object-src 'none'">
     <meta name="color-scheme" content="light dark">
     <meta name="description" content="Aperçu technique isolé de la ligne Lex V3, sans données juridiques.">
     <title>Lex V3</title>

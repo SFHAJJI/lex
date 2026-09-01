@@ -14,6 +14,7 @@ import { createServer } from "node:http";
 import { readdir, readFile, realpath } from "node:fs/promises";
 import { resolve as resolvePath } from "node:path";
 import { extname, join as joinPath, sep as pathSep } from "node:path";
+import { CSP_DIRECTIVES, FORBIDDEN_SOURCES, cspValue } from "./csp.mjs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -415,6 +416,17 @@ const PROBE = `(() => {
     bodyColor: body.color,
     bodyBackground: body.backgroundColor,
     scriptCount: document.querySelectorAll('script').length,
+    // The policy as the browser parsed it, and every script's origin. A zero-script
+    // count was only ever a proxy for nothing-unreviewed-executes, and it stops being
+    // one the moment a page is hydrated. A gate that silently becomes vacuous is worse
+    // than no gate, because it keeps reporting a pass.
+    csp:
+      document.querySelector('meta[http-equiv="Content-Security-Policy" i]')?.content ?? null,
+    inlineScripts: [...document.querySelectorAll('script')].filter((el) => !el.src).length,
+    scriptOrigins: [...document.querySelectorAll('script[src]')].map(
+      (el) => new URL(el.src, document.baseURI).origin,
+    ),
+    documentOrigin: window.location.origin,
     // What the browser actually decoded the bytes as, not what the head claims. React writes
     // this attribute as charSet, which HTML matches case-insensitively, and the fixture is
     // ASCII enough that a wrong encoding would not surface until real French statute renders,
@@ -869,7 +881,37 @@ async function main() {
           }
         }
         if (!observed.syntheticBanner) failures.push(`${page} @${viewport.label}: synthetic banner missing`);
-        if (observed.scriptCount !== 0) failures.push(`${page} @${viewport.label}: ${observed.scriptCount} script tags`);
+        // The policy, compared against the declared object rather than searched for a
+        // substring. Asserting that the served value contains script-src self would pass
+        // a policy that also contained unsafe-inline, which is the whole failure mode.
+        if (observed.csp !== cspValue()) {
+          failures.push(
+            `${page} @${viewport.label}: served policy does not match the declared one.` +
+              ` expected ${JSON.stringify(cspValue())}, got ${JSON.stringify(observed.csp)}`,
+          );
+        }
+        for (const forbidden of FORBIDDEN_SOURCES) {
+          if ((observed.csp ?? "").includes(forbidden)) {
+            failures.push(`${page} @${viewport.label}: policy admits ${forbidden}`);
+          }
+        }
+        // What the policy forbids, measured on the page rather than trusted to it. A meta
+        // policy is not applied to markup the parser already saw in some browsers, so the
+        // page must also not contain what the policy would have refused.
+        if (observed.inlineScripts !== 0) {
+          failures.push(
+            `${page} @${viewport.label}: ${observed.inlineScripts} inline script tags; an` +
+              " inline script cannot be reviewed by reading the deployed bundle",
+          );
+        }
+        for (const origin of observed.scriptOrigins ?? []) {
+          if (origin !== observed.documentOrigin) {
+            failures.push(
+              `${page} @${viewport.label}: a script is served from ${origin}, not this` +
+                " origin; an answer assembled by code from elsewhere came from somewhere unstated",
+            );
+          }
+        }
         if (observed.state === undefined) failures.push(`${page} @${viewport.label}: no data-preview-state`);
         if (observed.characterSet !== "UTF-8") {
           failures.push(

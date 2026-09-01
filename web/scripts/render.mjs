@@ -10,6 +10,7 @@
 // failure this surface exists to prevent, so each renders its own state and nothing
 // about the law.
 
+import { cspValue } from './csp.mjs';
 import { CHROME_LOCALES } from "./localization.mjs";
 import { tryPublisherSourceUri } from "./routes.mjs";
 
@@ -86,6 +87,7 @@ export function page({
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="${escapeHtml(cspValue())}">
     <title>${escapeHtml(title)} - Lex V3 preview</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/styles.css">
