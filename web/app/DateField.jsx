@@ -17,7 +17,7 @@
 // The vocabulary comes from the publisher, as everywhere else: the Union does not date
 // applicability.
 
-import { useCallback, useState } from 'react';
+import { useCallback, useId, useState } from 'react';
 
 import { RESOLUTION_SENTENCE, semanticsOf } from '../scripts/publisher-vocabulary.mjs';
 import { identityOf } from '../scripts/record-identity.mjs';
@@ -88,6 +88,12 @@ export function DateField({ today, resolved = null, onSubmit }) {
     );
   }
 
+  // Minted per instance, never written by hand. A hardcoded id is a control that may appear once
+  // per document, and this one appears on every screen that scopes anything to a date: two of
+  // them on one page silently break the label association for both, so a screen reader announces
+  // an unlabelled text box and a click on the label focuses the other field.
+  const fieldId = useId();
+
   const [text, setText] = useState('');
   const [defaultRemoved, setDefaultRemoved] = useState(false);
   const [unreadable, setUnreadable] = useState(false);
@@ -111,9 +117,9 @@ export function DateField({ today, resolved = null, onSubmit }) {
 
   return (
     <form className="date-field" onSubmit={submit}>
-      <label htmlFor="as-of">Date to read the law at</label>
+      <label htmlFor={fieldId}>Date to read the law at</label>
       <input
-        id="as-of"
+        id={fieldId}
         name="as-of"
         type="text"
         inputMode="numeric"

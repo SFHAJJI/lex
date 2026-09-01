@@ -19,9 +19,13 @@ import { useCallback } from 'react';
 /**
  * A group of filters, each on or off, each saying which it is.
  *
+ * `hides`, the count of rows a chip was removing, used to be part of this contract. It was never
+ * read, so nothing would have noticed it being wrong, and it was derivable from the rows the
+ * caller was already filtering. A renderer that accepts a fact it can derive is a renderer a
+ * caller can contradict, and an unread one is worse: it is a contradiction nobody can see.
+ *
  * @param {object} props
- * @param {Array} props.filters   `{ key, label, active, hides }`, hides being how many rows this
- *                                filter is currently removing
+ * @param {Array} props.filters   `{ key, label, active }`
  * @param {number} props.total    rows before any filter
  * @param {number} props.shown    rows after all filters
  * @param {Function} props.onToggle called with the filter key
@@ -33,7 +37,16 @@ export function FilterChips({ filters, total, shown, onToggle }) {
         'reader is not shown a control that cannot change what they are reading',
     );
   }
-  if (!Number.isInteger(total) || !Number.isInteger(shown) || shown > total) {
+  // Negative counts refused as well as impossible ones. Only `shown > total` was checked, so a
+  // negative `shown` passed and the group reported hiding more rows than it ever held, which is
+  // the same page-describing-a-corpus-it-does-not-have failure with the sign flipped.
+  if (
+    !Number.isInteger(total) ||
+    !Number.isInteger(shown) ||
+    shown > total ||
+    shown < 0 ||
+    total < 0
+  ) {
     throw new Error(
       'a filter group states how many rows it is hiding, so it needs the count before and after; ' +
         'showing only what remains lets a filtered page read as a whole result set',
