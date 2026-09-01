@@ -41,6 +41,7 @@
 
 import { INTERVAL_SENTENCE, LEGENDS, semanticsOf } from '../scripts/publisher-vocabulary.mjs';
 import { oneWorkAcross } from '../scripts/record-identity.mjs';
+import { describeProfile } from '../scripts/extraction-profiles.mjs';
 import { isCalendarDate, isUtcInstant } from '../scripts/temporal.mjs';
 import { PROVISIONAL_MARK, holesBetween, overlapsIn } from '../scripts/timeline.mjs';
 
@@ -207,6 +208,7 @@ function titleDisagreement(state) {
 
 /** One held state, on both clocks. */
 function StateRow({ state, semantics, asOf }) {
+  const profile = describeProfile(state.extraction_profile);
   const disagreeing = titleDisagreement(state);
   const titleLanguage = state.title_language ?? state.language;
   return (
@@ -246,7 +248,16 @@ function StateRow({ state, semantics, asOf }) {
         )}
       </td>
       <td>{state.text_available ? 'text held' : 'no text held'}</td>
-      <td>{state.extraction_profile}</td>
+      {/* The identifier alone is provenance only to whoever wrote the pipeline. The
+          sentence beside it says how the text was obtained. */}
+      <td>
+        <code className="timeline-profile-id">{state.extraction_profile}</code>
+        <span
+          className={`timeline-profile-note${profile.described ? '' : ' timeline-profile-undescribed'}`}
+        >
+          {profile.note}
+        </span>
+      </td>
       <td>
         <code>{state.hash.slice(0, 8)}</code>
       </td>

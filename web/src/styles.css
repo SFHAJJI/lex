@@ -1063,6 +1063,29 @@ main > * {
   max-inline-size: 72ch;
 }
 
+/* The extraction profile cell.
+ *
+ * Two claims in one cell: which profile produced the text, and what that profile means. Added
+ * proactively rather than after the browser run, because this is the fourth cell today whose
+ * adjacent children would have painted flush, and the failure is always the same: an identifier
+ * and a sentence read as one string. The identifier stays monospace and the sentence wraps under
+ * it, so the two are never mistaken for one value. */
+.timeline-profile-id {
+  display: block;
+}
+
+.timeline-profile-note {
+  display: block;
+  margin-block-start: var(--space-1, 0.25rem);
+  max-inline-size: 46ch;
+}
+
+/* An undescribed profile is a gap in this page, so it is marked as one rather than styled to look
+ * like an answer. No colour alone: the sentence itself says what it is. */
+.timeline-profile-undescribed {
+  font-style: italic;
+}
+
 /* Export composer rows.
  *
  * The same flush-paint defect the provision rows had, found the same way and fixed the same way.

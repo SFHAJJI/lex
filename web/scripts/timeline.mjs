@@ -31,6 +31,7 @@ import { isCalendarDate, isUtcInstant } from './temporal.mjs';
 import { escapeHtml } from './render.mjs';
 import { INTERVAL_SENTENCE, LEGENDS, semanticsOf } from './publisher-vocabulary.mjs';
 import { oneWorkAcross } from './record-identity.mjs';
+import { describeProfile } from './extraction-profiles.mjs';
 
 /** Fixed by the spec. Never colour alone. */
 export const PROVISIONAL_MARK = 'PROVISIONAL, publisher-scheduled';
@@ -244,6 +245,7 @@ export function overlapsIn(states) {
 }
 
 function renderRow(state, { semantics, asOf }) {
+  const profile = describeProfile(state.extraction_profile);
   const legalTime = INTERVAL_SENTENCE[semantics](state.valid_from, state.valid_to);
   const provisional =
     state.valid_from > asOf
@@ -274,7 +276,12 @@ function renderRow(state, { semantics, asOf }) {
     `<p class="timeline-record-time">Published ${escapeHtml(state.publication_date)} / ` +
     `First observed ${escapeHtml(state.observed_from)}</p>${title}${distrust}</td>` +
     `<td>${state.text_available ? 'text held' : 'no text held'}</td>` +
-    `<td>${escapeHtml(state.extraction_profile)}</td>` +
+    // The identifier alone is provenance only to whoever wrote the pipeline. The sentence
+    // beside it says how the text was obtained, and where this build cannot say, it says
+    // that rather than leaving the identifier standing in silence.
+    `<td><code class="timeline-profile-id">${escapeHtml(state.extraction_profile)}</code>` +
+    `<span class="timeline-profile-note${profile.described ? '' : ' timeline-profile-undescribed'}">` +
+    `${escapeHtml(profile.note)}</span></td>` +
     `<td><code>${escapeHtml(state.hash.slice(0, 8))}</code></td>` +
     '</tr>'
   );

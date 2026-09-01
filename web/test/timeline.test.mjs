@@ -399,9 +399,16 @@ test('every row says whether its text is held and which profile made it', () => 
   assert.ok(html.includes('<td>text held</td>'));
   assert.ok(html.includes('<td>no text held</td>'));
 
-  // Two different profiles, so a constant cannot satisfy the assertion.
-  assert.ok(html.includes('<td>akn-lu/1</td>'));
-  assert.ok(html.includes('<td>xhtml-eu/1</td>'));
+  // Two different profiles, so a constant cannot satisfy the assertion. The cell used to be the
+  // bare identifier; it now carries the identifier and the sentence saying how the text was
+  // obtained, because an identifier alone is provenance only to whoever wrote the pipeline.
+  assert.ok(html.includes('<code class="timeline-profile-id">akn-lu/1</code>'));
+  assert.ok(html.includes('<code class="timeline-profile-id">xhtml-eu/1</code>'));
+
+  // The two are described differently, so one constant note cannot satisfy both.
+  assert.ok(html.includes('own XML (Akoma Ntoso)'));
+  assert.ok(html.includes('own XHTML'));
+  assert.ok(!html.includes('timeline-profile-undescribed'), 'a known profile rendered as a gap');
 
   // And each row is named by its own record.
   assert.ok(html.includes(A.lex_id));
