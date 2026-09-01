@@ -245,11 +245,13 @@ export function renderNoHitCard({ query, layers, population, expansions, routes 
   // the held records matches", which is an absence claim resting on a search that never
   // happened. A reader cannot tell that sentence apart from a real corpus miss, and on this
   // product that is the most expensive confusion available.
-  // Applicable, not supplied. The plan is closed above, so a layer marked not_applicable is
-  // a stated fact about this query rather than a gap, and the whole-corpus sentence is
-  // available only when every layer that did apply actually ran.
-  const applicable = layers.filter((layer) => layer.outcome !== 'not_applicable');
-  const ran = applicable.filter((layer) => layer.outcome === 'ran');
+  // Every exported layer must have run, not every layer the caller considered applicable.
+  // not_applicable is the caller's own judgement, so letting it unlock the whole-corpus
+  // sentence hands the caller a switch for the strongest claim on the screen: mark the
+  // inconvenient layers non-applicable and the card asserts the corpus holds nothing. That
+  // is the same hole as inferring completeness from the supplied list, one level up. The
+  // claim stays reachable, it just has to be earned by actually running all five.
+  const ran = layers.filter((layer) => layer.outcome === 'ran');
   const account =
     ran.length === 0
       ? {
@@ -258,7 +260,7 @@ export function renderNoHitCard({ query, layers, population, expansions, routes 
             'Nothing was searched, so nothing is known about whether this corpus holds a match. ' +
             'This is a fact about this request, not about the records.',
         }
-      : ran.length < applicable.length
+      : ran.length < LAYERS.length
         ? {
             head:
               `Nothing matched ${query} in the searches that ran ` +

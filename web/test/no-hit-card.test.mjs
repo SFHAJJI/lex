@@ -285,10 +285,14 @@ test('an omitted applicable layer is refused, one at a time', () => {
   }
 });
 
-test('a complete plan may use whole-corpus wording even when a layer does not apply', () => {
-  // The counterpart: not_applicable is a stated fact, so declaring it keeps the plan complete
-  // and the whole-corpus sentence honest. Without this, the fix would have made the strongest
-  // claim unreachable rather than merely harder to earn.
+test('a declared non-applicable layer does not unlock the whole-corpus claim', () => {
+  // Codex's exact probe: all five exported layers present, four ran, semantic not_applicable.
+  // This previously returned "Nothing in the held records matches", and the test that covered
+  // it asserted that behaviour, so the suite codified the false claim rather than catching it.
+  //
+  // not_applicable is the caller's own judgement. Letting it unlock the strongest sentence on
+  // the screen hands the caller a switch: mark the inconvenient layers non-applicable and the
+  // card asserts the corpus holds nothing. The claim is still reachable, by running all five.
   const html = renderNoHitCard({
     ...GOOD,
     layers: LAYERS.map((name) => ({
@@ -297,6 +301,40 @@ test('a complete plan may use whole-corpus wording even when a layer does not ap
       language: 'en',
     })),
   });
-  assert.equal(html.includes('Nothing in the held records matches'), true);
+  assert.equal(
+    html.includes('Nothing in the held records matches'),
+    false,
+    'a caller-declared non-applicable layer unlocked the whole-corpus claim',
+  );
+  assert.equal(html.includes('in the searches that ran'), true);
   assert.equal(html.includes('did not apply to this query'), true);
+  assert.equal(html.includes('not evidence that the instrument or the law does not exist'), true);
+});
+
+test('whole-corpus wording is reachable, and only by running every layer', () => {
+  // The counterpart, so the repair cannot be satisfied by making the strong claim impossible.
+  const html = renderNoHitCard({
+    ...GOOD,
+    layers: LAYERS.map((name) => ({ name, outcome: 'ran', language: 'en' })),
+  });
+  assert.equal(html.includes('Nothing in the held records matches'), true);
+
+  // And one layer short of that, on each layer in turn, must not reach it.
+  for (const held of LAYERS) {
+    for (const outcome of ['not_run', 'unavailable', 'not_applicable']) {
+      const partial = renderNoHitCard({
+        ...GOOD,
+        layers: LAYERS.map((name) => ({
+          name,
+          outcome: name === held ? outcome : 'ran',
+          language: 'en',
+        })),
+      });
+      assert.equal(
+        partial.includes('Nothing in the held records matches'),
+        false,
+        `${held} reporting ${outcome} still produced the whole-corpus claim`,
+      );
+    }
+  }
 });
