@@ -98,7 +98,7 @@ jobs:
           test "$(dotnet --version)" = '10.0.400'
           dotnet restore Lex.V3.slnx --locked-mode
           dotnet build Lex.V3.slnx --configuration Release --no-restore
-          dotnet test Lex.V3.slnx --configuration Release --no-restore --no-build
+          dotnet test --solution Lex.V3.slnx --configuration Release --no-restore --no-build --minimum-expected-tests 1
           pwsh -NoLogo -NoProfile -File ./eng/verify-v3-tree.ps1
       - name: Tracked schemas and builder source digest are exact
         shell: bash

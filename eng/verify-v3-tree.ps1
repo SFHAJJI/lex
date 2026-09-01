@@ -36,6 +36,7 @@ function Test-V3TrackedPath {
         $normalized -ceq 'eng/verify-s0-05-preview.ps1' -or
         $normalized -cmatch '^schemas/v3-[a-z0-9-]+/[a-z0-9-]+\.schema\.json$' -or
         $normalized -cmatch '^schemas/v3-source/core/[a-z0-9-]+\.schema\.json$' -or
+        $normalized -cmatch '^schemas/v3-source/http/[a-z0-9-]+\.json$' -or
         $normalized -cmatch '^src/Lex\.V3\.[A-Za-z0-9.]+/.+$' -or
         $normalized -cmatch '^tests/Lex\.V3\.[A-Za-z0-9.]+/.+$' -or
         $normalized -cmatch '^web/package(?:-lock)?\.json$' -or
@@ -112,7 +113,8 @@ $requiredV3Paths = @(
     'schemas/v3-facts/vocabulary-drift.schema.json',
     'schemas/v3-source/core/source-common.schema.json',
     'schemas/v3-source/core/source-object-ref.schema.json',
-    'schemas/v3-source/core/source-profile-topology.schema.json'
+    'schemas/v3-source/core/source-profile-topology.schema.json',
+    'schemas/v3-source/http/http-acquisition-reason-registry.json'
 )
 if ($requiredV3Paths.Where({ -not (Test-V3TrackedPath -Path $_) })) {
     throw 'A required bounded V3 path was rejected by the structural allowlist.'
@@ -137,6 +139,8 @@ $pathMutations = @(
     'schemas/v3-facts/core/source-common.schema.json',
     'schemas/v3-source/other/source-common.schema.json',
     'schemas/v3-source/core/source-common.schema.yaml',
+    'schemas/v3-source/http/nested/http-acquisition-reason-registry.json',
+    'schemas/v3-source/http/http-acquisition-reason-registry.yaml',
     'web/src/App.tsx'
 )
 if ($pathMutations.Where({ Test-V3TrackedPath -Path $_ })) {

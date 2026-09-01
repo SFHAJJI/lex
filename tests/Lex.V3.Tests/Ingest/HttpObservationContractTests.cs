@@ -14,16 +14,20 @@ public sealed class HttpObservationContractTests
     {
         (HttpTransferFacts Facts, HttpObservationKind Expected)[] cases =
         [
-            (new(true, false, false, null, 0), HttpObservationKind.PolicyRejection),
-            (new(false, false, false, null, 0), HttpObservationKind.TransportFailureBeforeBody),
-            (new(false, true, false, 200, 0), HttpObservationKind.ResponsePartialBody),
-            (new(false, true, false, 200, 7), HttpObservationKind.ResponsePartialBody),
-            (new(false, true, true, 304, 0), HttpObservationKind.Revalidation304),
-            (new(false, true, true, 204, 0), HttpObservationKind.ResponseWithoutBody),
-            (new(false, true, true, 205, 0), HttpObservationKind.ResponseWithoutBody),
-            (new(false, true, true, 200, 0), HttpObservationKind.ResponseWithoutBody),
-            (new(false, true, true, 200, 1), HttpObservationKind.ResponseCompleteBody),
-            (new(false, true, false, 304, 7), HttpObservationKind.ResponsePartialBody),
+            (new(true, false, HttpTransferState.NotStarted, null, 0), HttpObservationKind.PolicyRejection),
+            (new(false, false, HttpTransferState.NotStarted, null, 0), HttpObservationKind.TransportFailureBeforeBody),
+            (new(false, true, HttpTransferState.Incomplete, 200, 0), HttpObservationKind.ResponsePartialBody),
+            (new(false, true, HttpTransferState.Incomplete, 200, 7), HttpObservationKind.ResponsePartialBody),
+            (new(false, true, HttpTransferState.CompletionUnproven, 200, 7), HttpObservationKind.ResponseCompletionUnproven),
+            (new(false, true, HttpTransferState.Complete, 304, 0), HttpObservationKind.Revalidation304),
+            (new(false, true, HttpTransferState.Complete, 101, 0), HttpObservationKind.ResponseWithoutBody),
+            (new(false, true, HttpTransferState.Complete, 204, 0), HttpObservationKind.ResponseWithoutBody),
+            (new(false, true, HttpTransferState.Complete, 205, 0), HttpObservationKind.ResponseWithoutBody),
+            (new(false, true, HttpTransferState.Complete, 205, 1), HttpObservationKind.ResponseCompleteBody),
+            (new(false, true, HttpTransferState.Incomplete, 205, 1), HttpObservationKind.ResponsePartialBody),
+            (new(false, true, HttpTransferState.CompletionUnproven, 205, 1), HttpObservationKind.ResponseCompletionUnproven),
+            (new(false, true, HttpTransferState.Complete, 200, 0), HttpObservationKind.ResponseWithoutBody),
+            (new(false, true, HttpTransferState.Complete, 200, 1), HttpObservationKind.ResponseCompleteBody),
         ];
 
         foreach (var (facts, expected) in cases)
@@ -37,17 +41,24 @@ public sealed class HttpObservationContractTests
     {
         HttpTransferFacts[] invalid =
         [
-            new(true, true, true, 200, 1),
-            new(true, false, false, null, 1),
-            new(false, false, true, null, 0),
-            new(false, false, false, 200, 0),
-            new(false, false, false, null, 1),
-            new(false, true, false, null, 0),
-            new(false, true, true, 99, 0),
-            new(false, true, true, 600, 0),
-            new(false, true, true, 304, 1),
-            new(false, true, true, 204, 1),
-            new(false, true, true, 205, 1),
+            new(true, true, HttpTransferState.Complete, 200, 1),
+            new(true, false, HttpTransferState.NotStarted, null, 1),
+            new(false, false, HttpTransferState.Complete, null, 0),
+            new(false, false, HttpTransferState.NotStarted, 200, 0),
+            new(false, false, HttpTransferState.NotStarted, null, 1),
+            new(false, true, HttpTransferState.NotStarted, 200, 0),
+            new(false, true, HttpTransferState.Incomplete, null, 0),
+            new(false, true, HttpTransferState.Complete, 99, 0),
+            new(false, true, HttpTransferState.Complete, 600, 0),
+            new(false, true, HttpTransferState.Complete, 101, 1),
+            new(false, true, HttpTransferState.Incomplete, 101, 0),
+            new(false, true, HttpTransferState.CompletionUnproven, 101, 0),
+            new(false, true, HttpTransferState.Complete, 304, 1),
+            new(false, true, HttpTransferState.Incomplete, 304, 0),
+            new(false, true, HttpTransferState.CompletionUnproven, 304, 0),
+            new(false, true, HttpTransferState.Complete, 204, 1),
+            new(false, true, HttpTransferState.Incomplete, 204, 0),
+            new(false, true, HttpTransferState.CompletionUnproven, 204, 0),
         ];
 
         foreach (var facts in invalid)
@@ -59,16 +70,17 @@ public sealed class HttpObservationContractTests
     }
 
     [TestMethod]
-    public void ObservationKindsAreExactlyTheSixR2Variants()
+    public void ObservationKindsAreExactlyTheSevenV3Variants()
     {
         (HttpObservationKind Value, int Number, string Symbol, string Wire)[] expected =
         [
             (HttpObservationKind.ResponseCompleteBody, 1, nameof(HttpObservationKind.ResponseCompleteBody), "response_complete_body"),
             (HttpObservationKind.ResponsePartialBody, 2, nameof(HttpObservationKind.ResponsePartialBody), "response_partial_body"),
-            (HttpObservationKind.Revalidation304, 3, nameof(HttpObservationKind.Revalidation304), "revalidation_304"),
-            (HttpObservationKind.ResponseWithoutBody, 4, nameof(HttpObservationKind.ResponseWithoutBody), "response_without_body"),
-            (HttpObservationKind.TransportFailureBeforeBody, 5, nameof(HttpObservationKind.TransportFailureBeforeBody), "transport_failure_before_body"),
-            (HttpObservationKind.PolicyRejection, 6, nameof(HttpObservationKind.PolicyRejection), "policy_rejection"),
+            (HttpObservationKind.ResponseCompletionUnproven, 3, nameof(HttpObservationKind.ResponseCompletionUnproven), "response_completion_unproven"),
+            (HttpObservationKind.Revalidation304, 4, nameof(HttpObservationKind.Revalidation304), "revalidation_304"),
+            (HttpObservationKind.ResponseWithoutBody, 5, nameof(HttpObservationKind.ResponseWithoutBody), "response_without_body"),
+            (HttpObservationKind.TransportFailureBeforeBody, 6, nameof(HttpObservationKind.TransportFailureBeforeBody), "transport_failure_before_body"),
+            (HttpObservationKind.PolicyRejection, 7, nameof(HttpObservationKind.PolicyRejection), "policy_rejection"),
         ];
 
         CollectionAssert.AreEqual(expected.Select(static row => row.Symbol).ToArray(), Enum.GetNames<HttpObservationKind>());
@@ -92,6 +104,7 @@ public sealed class HttpObservationContractTests
     {
         var withoutContentRange = EmptyResponseMetadata();
         var withContentRange = new HttpResponseMetadata(
+            new AbsentHttpHeader(),
             new AbsentHttpHeader(),
             new AbsentHttpHeader(),
             new AbsentHttpHeader(),
@@ -171,7 +184,7 @@ public sealed class HttpObservationContractTests
     }
 
     [TestMethod]
-    public void ResponseMetadataIsExactlyTheSevenFieldAllowlistWithExplicitAbsence()
+    public void ResponseMetadataIsExactlyTheEightFieldAllowlistWithExplicitAbsence()
     {
         var metadata = EmptyResponseMetadata();
 
@@ -184,6 +197,7 @@ public sealed class HttpObservationContractTests
                 "declared_charset",
                 "content_length",
                 "content_encoding",
+                "transfer_encoding",
                 "content_range",
                 "etag",
                 "last_modified",
@@ -223,6 +237,7 @@ public sealed class HttpObservationContractTests
             new SingleHttpHeader("utf-8"),
             new MultipleHttpHeader(["1", "1"]),
             new AbsentHttpHeader(),
+            new SingleHttpHeader("chunked"),
             new AbsentHttpHeader(),
             new SingleHttpHeader("\"opaque\""),
             new AbsentHttpHeader());
@@ -242,11 +257,15 @@ public sealed class HttpObservationContractTests
             new[] { "1", "1" },
             document.RootElement.GetProperty("content_length").GetProperty("values")
                 .EnumerateArray().Select(static value => value.GetString()).ToArray());
+        Assert.AreEqual(
+            "chunked",
+            document.RootElement.GetProperty("transfer_encoding").GetProperty("value").GetString());
 
         var roundTrip = ContractJson.Deserialize<HttpResponseMetadata>(json);
         Assert.IsInstanceOfType<AbsentHttpHeader>(roundTrip.ContentType);
         Assert.IsInstanceOfType<SingleHttpHeader>(roundTrip.DeclaredCharset);
         Assert.IsInstanceOfType<MultipleHttpHeader>(roundTrip.ContentLength);
+        Assert.AreEqual("chunked", ((SingleHttpHeader)roundTrip.TransferEncoding).Value);
 
         Assert.ThrowsExactly<ArgumentException>(() => new MultipleHttpHeader(["only-one"]));
         Assert.ThrowsExactly<ArgumentException>(() => new SingleHttpHeader("bad\r\nvalue"));
@@ -508,6 +527,7 @@ public sealed class HttpObservationContractTests
 
     private static HttpResponseMetadata EmptyResponseMetadata() =>
         new(
+            new AbsentHttpHeader(),
             new AbsentHttpHeader(),
             new AbsentHttpHeader(),
             new AbsentHttpHeader(),

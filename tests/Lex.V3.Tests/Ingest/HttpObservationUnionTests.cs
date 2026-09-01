@@ -13,12 +13,13 @@ namespace Lex.V3.Tests.Ingest;
 public sealed class HttpObservationUnionTests
 {
     [TestMethod]
-    public void WireUnionIsExactlyTheSixR2Variants()
+    public void WireUnionIsExactlyTheSevenV3Variants()
     {
         (HttpObservation Observation, string Kind, Type RuntimeType)[] cases =
         [
             (Complete(), "response_complete_body", typeof(ResponseCompleteBodyObservation)),
             (Partial(), "response_partial_body", typeof(ResponsePartialBodyObservation)),
+            (CompletionUnproven(), "response_completion_unproven", typeof(ResponseCompletionUnprovenObservation)),
             (Revalidation(), "revalidation_304", typeof(Revalidation304Observation)),
             (WithoutBody(), "response_without_body", typeof(ResponseWithoutBodyObservation)),
             (Failure(), "transport_failure_before_body", typeof(TransportFailureBeforeBodyObservation)),
@@ -55,6 +56,7 @@ public sealed class HttpObservationUnionTests
     {
         AssertConcretePath(Complete(), "response_complete_body");
         AssertConcretePath(Partial(), "response_partial_body");
+        AssertConcretePath(CompletionUnproven(), "response_completion_unproven");
         AssertConcretePath(Revalidation(), "revalidation_304");
         AssertConcretePath(WithoutBody(), "response_without_body");
         AssertConcretePath(Failure(), "transport_failure_before_body");
@@ -62,12 +64,13 @@ public sealed class HttpObservationUnionTests
     }
 
     [TestMethod]
-    public void NoBodyReasonsAreExactlyTheTwoR2Members()
+    public void NoBodyReasonsAreExactlyTheThreeR2Members()
     {
         (HttpNoBodyReason Value, int Number, string Wire)[] expected =
         [
             (HttpNoBodyReason.SemanticNoEntity, 1, "semantic_no_entity"),
             (HttpNoBodyReason.CompleteZeroOctetEntity, 2, "complete_zero_octet_entity"),
+            (HttpNoBodyReason.FramingForbidsBody, 3, "framing_forbids_body"),
         ];
 
         CollectionAssert.AreEqual(
@@ -126,7 +129,17 @@ public sealed class HttpObservationUnionTests
                 responseObservationId: "urn:uuid:abababab-abab-4bab-8bab-abababababab")));
         Assert.ThrowsExactly<ArgumentException>(() => Complete(
             metadata: Metadata(contentLength: 2)));
+        var conflictingFraming = Metadata(contentLength: 1, transferEncoding: "chunked");
+        Assert.IsTrue(conflictingFraming.BlocksDerivation);
+        Assert.ThrowsExactly<ArgumentException>(() => Complete(metadata: conflictingFraming));
         Assert.ThrowsExactly<ArgumentException>(() => Complete(statusCode: 204));
+        Assert.ThrowsExactly<ArgumentException>(() => Complete(
+            statusCode: 101,
+            statusDisposition: HttpStatusDisposition.NonDerivableStatus));
+        var violating205 = Complete(
+            statusCode: 205,
+            statusDisposition: HttpStatusDisposition.SemanticNoEntityStatus);
+        Assert.AreEqual(HttpStatusDisposition.SemanticNoEntityStatus, violating205.StatusDisposition);
 
         var rangeEvidence = Complete(
             statusCode: 206,
@@ -147,6 +160,7 @@ public sealed class HttpObservationUnionTests
             new SingleHttpHeader("1"),
             new AbsentHttpHeader(),
             new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
             new MultipleHttpHeader(["\"one\"", "\"two\""]),
             new AbsentHttpHeader());
         var duplicateHeaderEvidence = Complete(metadata: duplicateMetadata);
@@ -163,6 +177,7 @@ public sealed class HttpObservationUnionTests
             new SingleHttpHeader("application/xml"),
             new SingleHttpHeader("utf-8"),
             new SingleHttpHeader("not-a-length"),
+            new AbsentHttpHeader(),
             new AbsentHttpHeader(),
             new AbsentHttpHeader(),
             new SingleHttpHeader("\"one\""),
@@ -209,6 +224,130 @@ public sealed class HttpObservationUnionTests
             writeReceipt: WriteReceipt(1, 'a'),
             metadata: Metadata(contentLength: 2));
         Assert.AreEqual(1, declaredLengthMismatch.ReceivedEncodedEntityByteCount);
+
+        foreach (var status in new[] { 101, 204, 304 })
+        {
+            var disposition = status switch
+            {
+                204 => HttpStatusDisposition.SemanticNoEntityStatus,
+                304 => HttpStatusDisposition.RevalidationReferenceOnly,
+                _ => HttpStatusDisposition.NonDerivableStatus,
+            };
+            Assert.ThrowsExactly<ArgumentException>(() => Partial(
+                statusCode: status,
+                statusDisposition: disposition));
+        }
+
+        Assert.AreEqual(
+            HttpStatusDisposition.SemanticNoEntityStatus,
+            Partial(
+                statusCode: 205,
+                statusDisposition: HttpStatusDisposition.SemanticNoEntityStatus)
+                .StatusDisposition);
+    }
+
+    [TestMethod]
+    public void PartialReasonInvariantsRejectForgedFramingClaims()
+    {
+        Assert.ThrowsExactly<ArgumentException>(() => Partial(
+            metadata: Metadata(),
+            reason: HttpPartialBodyReason.DeclaredLengthShortRead));
+        Assert.ThrowsExactly<ArgumentException>(() => Partial(
+            metadata: Metadata(contentLength: 2, transferEncoding: "chunked"),
+            reason: HttpPartialBodyReason.DeclaredLengthShortRead));
+        Assert.ThrowsExactly<ArgumentException>(() => Partial(
+            byteCount: 1,
+            admittedEncodedEntityByteLimit: 2,
+            reason: HttpPartialBodyReason.ByteBoundPreventedCompletion));
+        Assert.ThrowsExactly<ArgumentException>(() => Partial(
+            byteCount: 1,
+            admittedEncodedEntityByteLimit: 2,
+            metadata: Metadata(contentLength: 1),
+            reason: HttpPartialBodyReason.BodyDeadline));
+        Assert.ThrowsExactly<ArgumentException>(() => Partial(
+            byteCount: 1024,
+            admittedEncodedEntityByteLimit: 1024,
+            metadata: Metadata(contentLength: 1024),
+            reason: HttpPartialBodyReason.ByteBoundPreventedCompletion));
+        Assert.ThrowsExactly<ArgumentException>(() => Partial(
+            byteCount: 1024,
+            admittedEncodedEntityByteLimit: 1024,
+            metadata: Metadata(contentLength: 1),
+            reason: HttpPartialBodyReason.ByteBoundPreventedCompletion));
+        Assert.ThrowsExactly<ArgumentException>(() => Partial(
+            byteCount: 1024,
+            admittedEncodedEntityByteLimit: 1024,
+            metadata: Metadata(contentLength: 2048),
+            reason: HttpPartialBodyReason.DeclaredLengthShortRead));
+        foreach (var terminalReason in new[]
+        {
+            HttpPartialBodyReason.BodyDeadline,
+            HttpPartialBodyReason.BodyReadFailure,
+            HttpPartialBodyReason.CallerCancelledAfterHeaders,
+        })
+        {
+            Assert.ThrowsExactly<ArgumentException>(() => Partial(
+                byteCount: 1,
+                admittedEncodedEntityByteLimit: 1,
+                metadata: Metadata(contentLength: 2),
+                reason: terminalReason));
+        }
+    }
+
+    [TestMethod]
+    public void CompletionUnprovenReasonsRejectForgedFramingClaims()
+    {
+        Assert.AreEqual(
+            HttpCompletionUnprovenReason.MissingCompletionProof,
+            HttpAcquisitionReasonRegistry.RequireCompletionUnproven(
+                CompletionUnproven().CompletionUnprovenReason));
+        Assert.AreEqual(
+            HttpCompletionUnprovenReason.TransferCodingConflict,
+            HttpAcquisitionReasonRegistry.RequireCompletionUnproven(
+                CompletionUnproven(
+                    metadata: Metadata(contentLength: 1, transferEncoding: "chunked"),
+                    reason: HttpCompletionUnprovenReason.TransferCodingConflict)
+                    .CompletionUnprovenReason));
+
+        Assert.ThrowsExactly<ArgumentException>(() => CompletionUnproven(
+            metadata: Metadata(contentLength: 1),
+            reason: HttpCompletionUnprovenReason.MissingCompletionProof));
+        Assert.ThrowsExactly<ArgumentException>(() => CompletionUnproven(
+            metadata: Metadata(transferEncoding: "chunked"),
+            reason: HttpCompletionUnprovenReason.TransferCodingConflict));
+        Assert.ThrowsExactly<ArgumentException>(() => CompletionUnproven(
+            metadata: Metadata(contentLength: 1, transferEncoding: "chunked"),
+            reason: HttpCompletionUnprovenReason.MissingCompletionProof));
+        Assert.ThrowsExactly<ArgumentException>(() => CompletionUnproven(
+            byteCount: 1,
+            admittedEncodedEntityByteLimit: 1,
+            metadata: Metadata(transferEncoding: "chunked"),
+            reason: HttpCompletionUnprovenReason.MissingCompletionProof));
+        Assert.ThrowsExactly<ArgumentException>(() => CompletionUnproven(
+            byteCount: 1,
+            admittedEncodedEntityByteLimit: 1,
+            metadata: Metadata(contentLength: 1, transferEncoding: "chunked"),
+            reason: HttpCompletionUnprovenReason.TransferCodingConflict));
+
+        foreach (var status in new[] { 101, 204, 304 })
+        {
+            var disposition = status switch
+            {
+                204 => HttpStatusDisposition.SemanticNoEntityStatus,
+                304 => HttpStatusDisposition.RevalidationReferenceOnly,
+                _ => HttpStatusDisposition.NonDerivableStatus,
+            };
+            Assert.ThrowsExactly<ArgumentException>(() => CompletionUnproven(
+                statusCode: status,
+                statusDisposition: disposition));
+        }
+
+        Assert.AreEqual(
+            HttpStatusDisposition.SemanticNoEntityStatus,
+            CompletionUnproven(
+                statusCode: 205,
+                statusDisposition: HttpStatusDisposition.SemanticNoEntityStatus)
+                .StatusDisposition);
     }
 
     [TestMethod]
@@ -322,7 +461,13 @@ public sealed class HttpObservationUnionTests
     [TestMethod]
     public void NoBodyReasonMatchesTheStatusAndNeverCreatesAnEmptyBlob()
     {
-        Assert.AreEqual(HttpNoBodyReason.SemanticNoEntity, WithoutBody().Reason);
+        Assert.AreEqual(HttpNoBodyReason.FramingForbidsBody, WithoutBody().Reason);
+        Assert.AreEqual(
+            HttpNoBodyReason.SemanticNoEntity,
+            WithoutBody(
+                statusCode: 205,
+                statusDisposition: HttpStatusDisposition.SemanticNoEntityStatus,
+                reason: HttpNoBodyReason.SemanticNoEntity).Reason);
         var completedZero = WithoutBody(
             statusCode: 200,
             statusDisposition: HttpStatusDisposition.DerivableStatus,
@@ -373,6 +518,10 @@ public sealed class HttpObservationUnionTests
             statusDisposition: HttpStatusDisposition.DerivableStatus,
             reason: HttpNoBodyReason.SemanticNoEntity));
         Assert.ThrowsExactly<ArgumentException>(() => WithoutBody(
+            statusCode: 205,
+            statusDisposition: HttpStatusDisposition.SemanticNoEntityStatus,
+            reason: HttpNoBodyReason.FramingForbidsBody));
+        Assert.ThrowsExactly<ArgumentException>(() => WithoutBody(
             zeroOctetCompletionEvidence: ZeroOctetCompletionEvidence()));
         Assert.ThrowsExactly<ArgumentException>(() => WithoutBody(
             statusCode: 204,
@@ -382,12 +531,47 @@ public sealed class HttpObservationUnionTests
             statusCode: 304,
             statusDisposition: HttpStatusDisposition.RevalidationReferenceOnly,
             reason: HttpNoBodyReason.CompleteZeroOctetEntity));
-        Assert.ThrowsExactly<ArgumentException>(() => WithoutBody(metadata: Metadata(contentLength: 1)));
+        var semanticPositiveLength = WithoutBody(metadata: Metadata(contentLength: 1));
+        Assert.AreEqual(
+            "1",
+            Assert.IsInstanceOfType<SingleHttpHeader>(
+                semanticPositiveLength.ResponseMetadata.ContentLength).Value);
         Assert.ThrowsExactly<ArgumentException>(() => WithoutBody(
             statusCode: 200,
             statusDisposition: HttpStatusDisposition.DerivableStatus,
             reason: HttpNoBodyReason.CompleteZeroOctetEntity,
             metadata: Metadata(contentLength: 1)));
+        var semanticTransferCoding = WithoutBody(
+            metadata: Metadata(transferEncoding: "chunked"));
+        Assert.AreEqual(
+            "chunked",
+            Assert.IsInstanceOfType<SingleHttpHeader>(
+                semanticTransferCoding.ResponseMetadata.TransferEncoding).Value);
+        Assert.ThrowsExactly<ArgumentException>(() => WithoutBody(
+            statusCode: 200,
+            statusDisposition: HttpStatusDisposition.DerivableStatus,
+            reason: HttpNoBodyReason.CompleteZeroOctetEntity,
+            metadata: Metadata(contentLength: 0, transferEncoding: "chunked")));
+
+        var transferEncoding = JsonNode.Parse(
+            ContractJson.Serialize<HttpHeaderField>(new SingleHttpHeader("chunked")));
+        var forgedSemantic = JsonNode.Parse(
+            ContractJson.Serialize<HttpObservation>(
+                WithoutBody(metadata: Metadata())))!.AsObject();
+        forgedSemantic["response_metadata"]!.AsObject()["transfer_encoding"] =
+            transferEncoding!.DeepClone();
+        Assert.IsInstanceOfType<ResponseWithoutBodyObservation>(
+            ContractJson.Deserialize<HttpObservation>(forgedSemantic.ToJsonString()));
+
+        var forgedDeclaredZero = JsonNode.Parse(ContractJson.Serialize<HttpObservation>(
+            WithoutBody(
+                statusCode: 200,
+                statusDisposition: HttpStatusDisposition.DerivableStatus,
+                reason: HttpNoBodyReason.CompleteZeroOctetEntity)))!.AsObject();
+        forgedDeclaredZero["response_metadata"]!.AsObject()["transfer_encoding"] =
+            transferEncoding.DeepClone();
+        Assert.ThrowsExactly<JsonException>(() =>
+            ContractJson.Deserialize<HttpObservation>(forgedDeclaredZero.ToJsonString()));
     }
 
     [TestMethod]
@@ -509,6 +693,7 @@ public sealed class HttpObservationUnionTests
             new SingleHttpHeader("1"),
             new AbsentHttpHeader(),
             new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
             new SingleHttpHeader("\"opaque\""),
             new AbsentHttpHeader());
         var ambiguousMetadataPredecessor = Complete(metadata: duplicateContentType);
@@ -529,6 +714,7 @@ public sealed class HttpObservationUnionTests
                 new SingleHttpHeader("application/xml"),
                 new SingleHttpHeader("utf-8"),
                 new SingleHttpHeader("invalid"),
+                new AbsentHttpHeader(),
                 new AbsentHttpHeader(),
                 new AbsentHttpHeader(),
                 new SingleHttpHeader("\"opaque\""),
@@ -672,17 +858,44 @@ public sealed class HttpObservationUnionTests
         long byteCount = 1,
         DurableBlobWriteReceipt? writeReceipt = null,
         HttpResponseMetadata? metadata = null,
-        bool omitEvidence = false) =>
+        bool omitEvidence = false,
+        long admittedEncodedEntityByteLimit = 1024,
+        HttpPartialBodyReason reason = HttpPartialBodyReason.DeclaredLengthShortRead,
+        int statusCode = 200,
+        HttpStatusDisposition statusDisposition = HttpStatusDisposition.DerivableStatus) =>
         new(
             HttpObservationSchemaIds.HttpObservation,
             "urn:uuid:22222222-2222-4222-8222-222222222222",
             Request(),
             "https://publications.europa.eu/resource/cellar",
-            200,
-            HttpStatusDisposition.DerivableStatus,
-            metadata ?? Metadata(),
+            statusCode,
+            statusDisposition,
+            metadata ?? Metadata(contentLength: byteCount + 1),
             byteCount,
-            RegistryMember("abrupt_eof"),
+            admittedEncodedEntityByteLimit,
+            HttpAcquisitionReasonRegistry.Member(reason),
+            omitEvidence ? null : writeReceipt ?? (byteCount > 0 ? WriteReceipt(byteCount, 'a') : null));
+
+    private static ResponseCompletionUnprovenObservation CompletionUnproven(
+        long byteCount = 1,
+        DurableBlobWriteReceipt? writeReceipt = null,
+        HttpResponseMetadata? metadata = null,
+        bool omitEvidence = false,
+        long admittedEncodedEntityByteLimit = 1024,
+        HttpCompletionUnprovenReason reason = HttpCompletionUnprovenReason.MissingCompletionProof,
+        int statusCode = 200,
+        HttpStatusDisposition statusDisposition = HttpStatusDisposition.DerivableStatus) =>
+        new(
+            HttpObservationSchemaIds.HttpObservation,
+            "urn:uuid:23232323-2323-4323-8323-232323232323",
+            Request(),
+            "https://publications.europa.eu/resource/cellar",
+            statusCode,
+            statusDisposition,
+            metadata ?? Metadata(transferEncoding: "chunked"),
+            byteCount,
+            admittedEncodedEntityByteLimit,
+            HttpAcquisitionReasonRegistry.Member(reason),
             omitEvidence ? null : writeReceipt ?? (byteCount > 0 ? WriteReceipt(byteCount, 'a') : null));
 
     private static Revalidation304Observation Revalidation(
@@ -720,7 +933,7 @@ public sealed class HttpObservationUnionTests
     private static ResponseWithoutBodyObservation WithoutBody(
         int statusCode = 204,
         HttpStatusDisposition statusDisposition = HttpStatusDisposition.SemanticNoEntityStatus,
-        HttpNoBodyReason reason = HttpNoBodyReason.SemanticNoEntity,
+        HttpNoBodyReason reason = HttpNoBodyReason.FramingForbidsBody,
         HttpResponseMetadata? metadata = null,
         ZeroOctetTransferCompletionEvidence? zeroOctetCompletionEvidence = null,
         bool omitCompletionEvidence = false) =>
@@ -734,7 +947,7 @@ public sealed class HttpObservationUnionTests
             metadata ?? Metadata(contentLength: 0),
             0,
             reason,
-            omitCompletionEvidence || reason == HttpNoBodyReason.SemanticNoEntity
+            omitCompletionEvidence || reason != HttpNoBodyReason.CompleteZeroOctetEntity
                 ? zeroOctetCompletionEvidence
                 : zeroOctetCompletionEvidence ?? ZeroOctetCompletionEvidence());
 
@@ -743,7 +956,8 @@ public sealed class HttpObservationUnionTests
             HttpObservationSchemaIds.HttpObservation,
             "urn:uuid:55555555-5555-4555-8555-555555555555",
             Request(),
-            RegistryMember("dns_failure"),
+            HttpAcquisitionReasonRegistry.Member(
+                HttpPreHeaderFailureClass.TransportBeforeHeaders),
             elapsedMilliseconds);
 
     private static PolicyRejectionObservation Rejection() =>
@@ -784,6 +998,7 @@ public sealed class HttpObservationUnionTests
 
     private static HttpResponseMetadata Metadata(
         long? contentLength = null,
+        string? transferEncoding = null,
         string? contentRange = null,
         string? etag = null,
         string? lastModified = null) =>
@@ -794,6 +1009,9 @@ public sealed class HttpObservationUnionTests
                 ? new AbsentHttpHeader()
                 : new SingleHttpHeader(contentLength.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)),
             new AbsentHttpHeader(),
+            transferEncoding is null
+                ? new AbsentHttpHeader()
+                : new SingleHttpHeader(transferEncoding),
             contentRange is null
                 ? new AbsentHttpHeader()
                 : new SingleHttpHeader(contentRange),
@@ -910,7 +1128,13 @@ public sealed class HttpObservationUnionTests
         [
             "kind", "schema", "observation_id", "request", "effective_uri", "status_code",
             "status_disposition", "response_metadata", "received_encoded_entity_byte_count",
-            "terminal_failure_reason", "durable_write_receipt",
+            "admitted_encoded_entity_byte_limit", "terminal_failure_reason", "durable_write_receipt",
+        ],
+        "response_completion_unproven" =>
+        [
+            "kind", "schema", "observation_id", "request", "effective_uri", "status_code",
+            "status_disposition", "response_metadata", "received_encoded_entity_byte_count",
+            "admitted_encoded_entity_byte_limit", "completion_unproven_reason", "durable_write_receipt",
         ],
         "revalidation_304" =>
         [

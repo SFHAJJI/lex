@@ -72,6 +72,7 @@ public sealed record HttpResponseMetadata
         HttpHeaderField declaredCharset,
         HttpHeaderField contentLength,
         HttpHeaderField contentEncoding,
+        HttpHeaderField transferEncoding,
         HttpHeaderField contentRange,
         HttpHeaderField etag,
         HttpHeaderField lastModified)
@@ -80,6 +81,7 @@ public sealed record HttpResponseMetadata
         DeclaredCharset = declaredCharset ?? throw new ArgumentNullException(nameof(declaredCharset));
         ContentLength = contentLength ?? throw new ArgumentNullException(nameof(contentLength));
         ContentEncoding = contentEncoding ?? throw new ArgumentNullException(nameof(contentEncoding));
+        TransferEncoding = transferEncoding ?? throw new ArgumentNullException(nameof(transferEncoding));
         ContentRange = contentRange ?? throw new ArgumentNullException(nameof(contentRange));
         Etag = etag ?? throw new ArgumentNullException(nameof(etag));
         LastModified = lastModified ?? throw new ArgumentNullException(nameof(lastModified));
@@ -92,6 +94,8 @@ public sealed record HttpResponseMetadata
     public HttpHeaderField ContentLength { get; }
 
     public HttpHeaderField ContentEncoding { get; }
+
+    public HttpHeaderField TransferEncoding { get; }
 
     public HttpHeaderField ContentRange { get; }
 
@@ -106,6 +110,7 @@ public sealed record HttpResponseMetadata
         DeclaredCharset is MultipleHttpHeader ||
         ContentLength is MultipleHttpHeader ||
         ContentEncoding is MultipleHttpHeader ||
+        TransferEncoding is MultipleHttpHeader ||
         ContentRange is MultipleHttpHeader ||
         Etag is MultipleHttpHeader ||
         LastModified is MultipleHttpHeader;
@@ -113,7 +118,13 @@ public sealed record HttpResponseMetadata
     [JsonIgnore]
     public bool BlocksDerivation =>
         HasMultipleField ||
+        ContentEncoding is not AbsentHttpHeader ||
+        HasTransferEncoding && HasContentLength ||
         ContentLength is SingleHttpHeader && !TryGetSingleContentLength(out _);
+
+    internal bool HasTransferEncoding => TransferEncoding is not AbsentHttpHeader;
+
+    internal bool HasContentLength => ContentLength is not AbsentHttpHeader;
 
     internal bool TryGetSingleContentLength(out long length)
     {
