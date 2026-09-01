@@ -78,6 +78,8 @@ main > p:last-child {
    makes the scroll container itself a keyboard tab stop. Both were caught by the browser
    evidence run at 320px. */
 code,
+dt,
+dd,
 .body {
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -230,4 +232,54 @@ blockquote.law {
 .strip-stamp-valid,
 .strip-stamp-invalid {
   display: inline-block;
+}
+
+/* WCAG 2.2 SC 2.5.8, target size minimum: 24 by 24 CSS pixels.
+   A link in a sentence takes the inline exception; a link in a list is a target somebody has
+   to hit, and every one of them was 21 px tall because line-height was setting their height.
+   Lighthouse found three of these; the browser run now measures all of them. */
+li > a,
+summary,
+.verify-cluster a {
+  display: inline-block;
+  min-block-size: 24px;
+  min-inline-size: 24px;
+  padding-block: 0.15rem;
+}
+
+summary {
+  display: list-item;
+}
+
+/* Spacing as well as size: adjacent targets in a list need room between them, or a 24 px
+   pointer aimed at one lands on its neighbour. */
+.refusal-handoff,
+.refusal-candidates,
+.refusal-anchors,
+.shell-switcher,
+.no-hit-card ul,
+.superseded-siblings {
+  gap: 0.5rem;
+}
+
+/* An unofficial rendering. Structurally distinct from a quotation, because the difference
+   between the authentic text and a convenience is the difference this product exists for. */
+.unofficial-rendering {
+  display: grid;
+  gap: 0.5rem;
+  min-inline-size: 0;
+  padding: 0.75rem;
+  border: 1px dashed currentColor;
+}
+
+.unofficial-head,
+.unofficial-note,
+.unofficial-official {
+  margin: 0;
+  min-inline-size: 0;
+}
+
+.unofficial-note {
+  font-size: 0.9rem;
+  line-height: 1.5;
 }

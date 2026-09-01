@@ -214,3 +214,18 @@ test('values are escaped rather than trusted', () => {
   assert.ok(!html.includes('<img'));
   assert.ok(html.includes('&lt;img'));
 });
+
+test('a legacy code_commit is not rendered under a V3 provenance name', () => {
+  // Decision 63 gives code_commit no standing. An alias from it into
+  // index_builder_source_commit renders a legacy-only value under a stronger V3 fact, which
+  // is the V2 envelope surviving inside the V3 line.
+  const legacy = renderEnvelopeStrip({
+    envelope: {
+      ...ENVELOPE,
+      artifact: { code_commit: 'legacy-code-commit', manifest_set_id: 'synthetic-manifest-set' },
+    },
+  });
+  assert.ok(!legacy.includes('legacy-code-commit'), 'a legacy value was promoted');
+  assert.ok(legacy.includes('index_builder_source_commit'));
+  assert.ok(legacy.split('not recorded').length - 1 >= 3, 'absent V3 facts were filled in');
+});

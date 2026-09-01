@@ -31,6 +31,7 @@ import {
   RESOURCE_AUTHENTICITY_SCHEMA,
   quotedLaw,
   renderLocalizationUnavailable,
+  renderUnofficialRendering,
   servableText,
 } from './localization.mjs';
 
@@ -102,11 +103,12 @@ const SYNTHETIC_LAW_FR =
   'APERCU SYNTHETIQUE LEX V3. Article 1er. Ce texte est synthetique, sans aucune autorite ' +
   'juridique, et ne doit pas servir a une recherche juridique.';
 
-function candidate(hash, publicationDate) {
+function candidate(hash, publicationDate, withdrawn = false) {
   return {
     valid_from: '2004-01-01',
     hash,
     publication_date: publicationDate,
+    withdrawn,
     href: readingUrl({ publisher: PUBLISHER, work: WORK, validFrom: '2004-01-01', hash }),
   };
 }
@@ -132,6 +134,7 @@ export function renderTrustSurface() {
         'I can show you exactly what the published text says, at any date, and how it ' +
         'changed, with citations. I cannot apply the law to your situation.',
       governingText: {
+        resourceId: EQUALLY_AUTHENTIC.resource_id,
         authenticity: EQUALLY_AUTHENTIC,
         language: 'en',
         text: SYNTHETIC_LAW,
@@ -152,6 +155,8 @@ export function renderTrustSurface() {
         history_begins: '2001-01-01',
         nearest_earlier: 'none held',
         nearest_later: '2001-01-01',
+        what_would_answer: ['new_official_observation'],
+        asserts_absence_of_law: false,
       },
     })}</section>`,
 
@@ -174,12 +179,28 @@ export function renderTrustSurface() {
         false. No publisher key is consulted, and a quotation with no evidence is refused
         rather than rendered unqualified.</p>
       ${quotedLaw({
+        resourceId: SOLE_AUTHENTIC.resource_id,
         authenticity: SOLE_AUTHENTIC,
         language: 'fr',
         text: SYNTHETIC_LAW_FR,
         noteLocale: 'en',
       })}
-      ${quotedLaw({ authenticity: EQUALLY_AUTHENTIC, language: 'en', text: SYNTHETIC_LAW })}
+      ${quotedLaw({
+        resourceId: EQUALLY_AUTHENTIC.resource_id,
+        authenticity: EQUALLY_AUTHENTIC,
+        language: 'en',
+        text: SYNTHETIC_LAW,
+      })}
+      <p>A body that is not the authentic text has its own place, labelled, with the route
+        to the text that does count:</p>
+      ${renderUnofficialRendering({
+        resourceId: SOLE_AUTHENTIC.resource_id,
+        authenticity: SOLE_AUTHENTIC,
+        language: 'en',
+        text: 'An English rendering of the synthetic French text above.',
+        publisher: PUBLISHER,
+        officialUri: 'https://preview.invalid/synthetic-preview-work/2001-01-01',
+      })}
       <p>Asked for in Luxembourgish, the note is missing rather than substituted:</p>
       ${renderLocalizationUnavailable(servableText('law.sole_authentic_note', 'lb'))}</section>`,
 

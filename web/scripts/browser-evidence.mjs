@@ -19,6 +19,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { parseObjectUrl } from "./urls.mjs";
+
 /**
  * Where a real Chromium lives, per platform.
  *
@@ -281,12 +283,43 @@ const PROBE = `(() => {
     }
   }
 
+  // WCAG 2.2 SC 2.5.8, target size minimum: 24 by 24 CSS pixels. The exception this takes is
+  // the inline one, a link inside a sentence, approximated as an anchor whose parent is a
+  // paragraph. Everything else is a target somebody has to hit, and Lighthouse found three
+  // handoff links at 19 to 21 px that every check here passed.
+  const smallTargets = [];
+  for (const el of document.querySelectorAll('a[href],button,input,select,textarea,summary')) {
+    if (el.offsetParent === null) continue;
+    const inSentence = el.tagName === 'A' && el.parentElement?.tagName === 'P';
+    if (inSentence) continue;
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 24 || rect.height < 24) {
+      smallTargets.push({
+        tag: el.tagName.toLowerCase(),
+        cls: (el.className || '').toString().slice(0, 40),
+        width: Math.round(rect.width * 10) / 10,
+        height: Math.round(rect.height * 10) / 10,
+      });
+    }
+  }
+
+  // Same-origin destinations, collected so the run can check that each one resolves. A
+  // visible action leading to a missing page is a promise the page cannot keep, and three
+  // of them shipped: the provenance link and both ambiguity candidates returned 404.
+  const sameOrigin = [...new Set(
+    [...document.querySelectorAll('a[href]')]
+      .map((el) => el.getAttribute('href'))
+      .filter((href) => href && href.startsWith('/')),
+  )];
+
   const focusable = [...document.querySelectorAll(
     'a[href],button,input,select,textarea,summary,[tabindex]:not([tabindex="-1"])')];
   const headingEls = [...document.querySelectorAll('h1,h2,h3,h4,h5,h6')];
   const heads = headingEls.map((h) => h.tagName + ':' + h.textContent.trim().slice(0, 40));
   const headingLevels = headingEls.map((h) => Number(h.tagName.slice(1)));
   const body = getComputedStyle(document.body);
+  const mainEl = document.querySelector('main');
+  const mainStyle = mainEl ? getComputedStyle(mainEl) : null;
   return {
     lang: document.documentElement.lang,
     state: document.documentElement.dataset.previewState,
@@ -304,6 +337,10 @@ const PROBE = `(() => {
     bodyColor: body.color,
     bodyBackground: body.backgroundColor,
     scriptCount: document.querySelectorAll('script').length,
+    shell: document.documentElement.dataset.shell ?? null,
+    density: document.documentElement.dataset.density ?? null,
+    mainLineHeight: mainStyle ? mainStyle.lineHeight : null,
+    mainFontFamily: mainStyle ? mainStyle.fontFamily : null,
     contrastChecked: contrast.length,
     worstContrast: worst ? worst.ratio : null,
     worstContrastTag: worst ? worst.tag : null,
@@ -311,6 +348,9 @@ const PROBE = `(() => {
     contrastFailures: contrast.filter((c) => c.ratio < c.required).length,
     glued: glued.slice(0, 8),
     gluedCount: glued.length,
+    smallTargets: smallTargets.slice(0, 8),
+    smallTargetCount: smallTargets.length,
+    sameOrigin,
     // A control with no handler and no form is a promise the page cannot keep. This line
     // ships no script, so any button is inert by construction.
     inertControls: [...document.querySelectorAll('button, a:not([href])')].length,
@@ -377,6 +417,29 @@ export async function keyboardWalk(session, sessionId, expected) {
 }
 
 
+/** Poll until the document is complete and its fonts have resolved. */
+async function waitForSettled(session, sessionId, deadlineMs = 10000) {
+  const started = Date.now();
+  while (Date.now() - started < deadlineMs) {
+    const { result } = await session.send(
+      "Runtime.evaluate",
+      {
+        expression:
+          'document.readyState === "complete" && document.fonts.status === "loaded"',
+        returnByValue: true,
+      },
+      sessionId,
+    );
+    if (result.value === true) {
+      // One frame after settling, so the first layout after font resolution is done.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error("a page never reached a settled state within 10s");
+}
+
 const CONTENT_TYPES = new Map([
   [".html", "text/html; charset=utf-8"],
   [".css", "text/css; charset=utf-8"],
@@ -393,10 +456,28 @@ const CONTENT_TYPES = new Map([
  * content types. This is 30 lines and removes a whole class of thing the harness could
  * not see.
  */
+/**
+ * The URL scheme, resolved onto the built pages.
+ *
+ * The static build is a preview of a routed application, so the harness has to route the
+ * scheme or every real link in it is a 404. It routes exactly what `urls.mjs` defines and
+ * nothing else: the three shell entries onto their generated pages, and object, provenance
+ * and search paths onto one stand-in destination that says what it is. A link outside the
+ * scheme still 404s, which is what makes the destination check worth running.
+ */
+function routeSchemePath(path) {
+  if (path === "/ask" || path === "/w" || path === "/dev") return `/shell-${path.slice(1)}.html`;
+  if (/^\/(ask|w|dev)\/search$/.test(path)) return "/preview-destination.html";
+  if (/^\/provenance\/[^/]+$/.test(path)) return "/preview-destination.html";
+  if (parseObjectUrl(path) !== null) return "/preview-destination.html";
+  return null;
+}
+
 async function serveDist(root) {
   const server = createServer((request, response) => {
     const path = decodeURIComponent(new URL(request.url, "http://127.0.0.1").pathname);
-    const file = joinPath(root, path === "/" ? "/index.html" : path);
+    const routed = routeSchemePath(path);
+    const file = joinPath(root, routed ?? (path === "/" ? "/index.html" : path));
     readFile(file).then(
       (body) => {
         response.writeHead(200, {
@@ -512,7 +593,12 @@ async function main() {
         );
         logged = [];
         await session.send("Page.navigate", { url }, sessionId);
-        await new Promise((resolve) => setTimeout(resolve, 250));
+        // Wait for the document to be complete and its fonts resolved, rather than for a
+        // fixed 250 ms. A fixed wait measures whatever has arrived: one combination reported
+        // 17 px targets on a page that was 24 px in every other combination, which was the
+        // stylesheet not yet applied rather than a layout defect. A harness that sometimes
+        // measures an unstyled page produces both false failures and false passes.
+        await waitForSettled(session, sessionId);
         const { result } = await session.send(
           "Runtime.evaluate",
           { expression: PROBE, returnByValue: true, awaitPromise: true },
@@ -547,6 +633,15 @@ async function main() {
           failures.push(
             `${page} @${viewport.label}/${scheme}: ${observed.gluedCount} adjacent element(s) ` +
               `painted flush against each other: ${observed.glued.join("; ")}`,
+          );
+        }
+        if (observed.smallTargetCount > 0) {
+          failures.push(
+            `${page} @${viewport.label}/${scheme}: ${observed.smallTargetCount} target(s) below ` +
+              `the WCAG 2.2 24 CSS px minimum: ` +
+              observed.smallTargets
+                .map((t) => `<${t.tag} class=${t.cls}> ${t.width}x${t.height}`)
+                .join("; "),
           );
         }
         if (observed.inertControls > 0) {
@@ -640,6 +735,29 @@ async function main() {
       }
     }
     session.close();
+    // Every same-origin destination the pages offer has to resolve. A visible action leading
+    // to a missing page is a promise the page cannot keep, and nothing else in this run looks
+    // past the page it is on.
+    const destinations = new Map();
+    for (const row of rows) {
+      for (const href of row.sameOrigin ?? []) {
+        if (!destinations.has(href)) destinations.set(href, row.page);
+      }
+    }
+    for (const [href, fromPage] of destinations) {
+      let status = 0;
+      try {
+        status = (await fetch(`${site.origin}${href}`, { redirect: "manual" })).status;
+      } catch (error) {
+        failures.push(`${fromPage}: ${href} could not be requested: ${error.message}`);
+        continue;
+      }
+      if (status !== 200) {
+        failures.push(
+          `${fromPage}: ${href} answers ${status}; a visible action must not lead to a missing page`,
+        );
+      }
+    }
   } finally {
     // Chrome spawns a process tree, and killing only the process we launched leaves the
     // renderers and the GPU process behind. Repeated runs left 51 of them alive, holding
@@ -654,7 +772,7 @@ async function main() {
       `${row.page.replace('state-','').replace('.html','').padEnd(18)} ${row.viewport.padEnd(8)} ${row.scheme.padEnd(6)} ` +
         `console=${row.console} h1=${row.h1Count} overflow=${row.horizontalOverflow} scripts=${row.scriptCount} ` +
         `contrast=${row.contrastChecked} worst=${row.worstContrast} ` +
-        `ax=${row.axNodes} named-interactive=${row.axInteractive} landmarks=${row.axLandmarks} main=${row.axMain} glued=${row.gluedCount} inert=${row.inertControls}`,
+        `ax=${row.axNodes} named-interactive=${row.axInteractive} landmarks=${row.axLandmarks} main=${row.axMain} glued=${row.gluedCount} inert=${row.inertControls} small=${row.smallTargetCount}`,
     );
   }
 

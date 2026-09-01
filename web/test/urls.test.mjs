@@ -215,3 +215,20 @@ test('a shell cannot be nested inside a shell', () => {
     assert.throws(() => shellUrl('ask', path), /not a safe path segment/, `${path} nested`);
   }
 });
+
+test('a shell path uses the same canonical grammar as an object path', () => {
+  // It filtered empty segments before validating them, so these passed and were preserved
+  // verbatim, producing paths the object grammar refuses.
+  // Each case asserts its own message, so each rule is held by a case of its own rather
+  // than the segment predicate standing in for the empty-segment check.
+  for (const [path, pattern] of [
+    ['//search', /empty path segment/],
+    ['/a//b', /empty path segment/],
+    ['/search/', /trailing separator/],
+    ['/ask/search', /not a safe path segment/],
+  ]) {
+    assert.throws(() => shellUrl('ask', path), pattern, `${path} was preserved`);
+  }
+  assert.equal(shellUrl('ask', '/'), '/ask');
+  assert.equal(shellUrl('ask', '/search'), '/ask/search');
+});

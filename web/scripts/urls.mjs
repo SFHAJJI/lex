@@ -108,7 +108,17 @@ export function shellUrl(shell, path = '/') {
   // `/ask/w/work` is a shell nested inside a shell. Every segment has to be one the object
   // builders would mint, which refuses both.
   const [withoutFragment] = path.split('#');
-  for (const segment of withoutFragment.split('/').filter((part) => part.length > 0)) {
+  // The same canonical grammar the object parser uses. This filtered empty segments before
+  // validating them, so `//search`, `/search/` and `/a//b` all passed and were preserved
+  // verbatim, producing paths the object grammar refuses.
+  if (withoutFragment.length > 1 && withoutFragment.endsWith('/')) {
+    throw new Error('a shell path carries no trailing separator');
+  }
+  const shellSegments = withoutFragment === '/' ? [] : withoutFragment.slice(1).split('/');
+  for (const segment of shellSegments) {
+    if (segment.length === 0) {
+      throw new Error(`${JSON.stringify(path)} carries an empty path segment`);
+    }
     if (!isSafeSegment(segment)) {
       throw new Error(
         `${JSON.stringify(segment)} is not a safe path segment, so this shell path leaves ` +

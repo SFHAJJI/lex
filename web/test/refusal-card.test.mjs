@@ -2,13 +2,17 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  ABSENCE_CODES,
   CONTRACT_STATUS,
   REFUSAL_CODES,
   REQUIRED_PAYLOAD,
   RETRYABLE,
+  WHAT_WOULD_ANSWER,
   renderRefusalCard,
+  renderSupersededState,
 } from '../scripts/refusal-card.mjs';
 import { readingUrl } from '../scripts/urls.mjs';
+
 
 // Synthetic throughout. A component test that embeds real statute teaches the fixture to
 // look like law, and the fixture is what every later screen copies.
@@ -21,6 +25,7 @@ const AUTHENTICITY = {
   observed_at: '2026-01-01T00:00:00Z',
 };
 const GOVERNING = {
+  resourceId: AUTHENTICITY.resource_id,
   authenticity: AUTHENTICITY,
   language: 'en',
   text: 'LEX V3 SYNTHETIC PREVIEW. Article 1. This text has no legal authority.',
@@ -33,14 +38,15 @@ const HANDOFF = [
   { label: 'Synthetic counter two', href: 'https://handoff.invalid/two' },
 ];
 
-const HASH_A = '99b621c38dec11dcd362c0db35d9e9c090e62613cc5c20b0727c0b30fd39ce66';
-const HASH_B = 'c064f74a9827d610125d25c999f79df626cd987432aa110f2e05ce48388b5eef';
+const HASH_A = 'dedbcbe0f53f5e2b41fd98551d5913b0ed56525ec35f7b26a6c0fa9eaad4ba3c';
+const HASH_B = 'cfc9fe90f4f020e99f8da43c8d9e5f74c570eced2ad5d303c6dee7b485eb0212';
 
-function candidate(validFrom, hash, publicationDate) {
+function candidate(validFrom, hash, publicationDate, withdrawn = false) {
   return {
     valid_from: validFrom,
     hash,
     publication_date: publicationDate,
+    withdrawn,
     href: readingUrl({
       publisher: 'preview-synthetic',
       work: 'synthetic-preview-work',
@@ -51,45 +57,49 @@ function candidate(validFrom, hash, publicationDate) {
 }
 
 const CANDIDATES = [
-  candidate('2025-01-01', HASH_A, '2024-12-20'),
-  candidate('2025-01-01', HASH_B, '2024-12-27'),
+  candidate('2004-01-01', HASH_A, '2003-12-01'),
+  candidate('2004-01-01', HASH_B, '2003-12-15'),
 ];
 
 /**
- * One valid example per code. UX spec section 11 wants a refusal registry page carrying
- * "one live example payload each", and the same table is what proves here that every code in
- * the closed registry is constructible under its own rule rather than only in principle.
+ * One worked example per code, checked against the registry as a set. It moves into the
+ * product as the refusal catalog page in the slice after this one; here it is the fixture.
  */
 const EXAMPLES = Object.freeze({
   identifier_unknown: {
     sentence: 'That identifier does not resolve to a held work.',
     payload: {
       population_disclosure:
-        '1,402 consolidated LU works and 1,250 EU works are searchable; about 24,579 ' +
-        'never-consolidated LU acts are not.',
+        '1,402 consolidated LU works and 1,250 EU works are searchable; 23,370 ' +
+        'never-consolidated LU acts, of a 24,622 LOI and RGD population, are not.',
+      what_would_answer: ['corrected_identifier', 'expanded_official_scope'],
+      asserts_absence_of_law: false,
     },
   },
   ambiguous_identifier: {
     sentence: 'That citation matches more than one instrument.',
-    payload: { candidates_named: 'loi-2002-08-02-n2, loi-2002-08-02-n3' },
+    payload: { candidates_named: 'synthetic-preview-work-a, synthetic-preview-work-b' },
   },
   out_of_corpus_scope: {
     sentence: 'That instrument is outside the reviewed corpus.',
     payload: {
-      classified_as: 'CSSF circular',
       population_disclosure: 'The reviewed corpus holds Legilux and EUR-Lex legislation only.',
+      what_would_answer: ['expanded_official_scope'],
+      asserts_absence_of_law: false,
     },
   },
   no_version_for_date: {
-    sentence: 'No publisher state covers 2015-06-01.',
+    sentence: 'No publisher state covers 1999-06-01.',
     payload: {
-      history_begins: '2017-01-01',
+      history_begins: '2001-01-01',
       nearest_earlier: 'none held',
-      nearest_later: '2017-01-01',
+      nearest_later: '2001-01-01',
+      what_would_answer: ['new_official_observation'],
+      asserts_absence_of_law: false,
     },
   },
   ambiguous_version: {
-    sentence: 'Two publisher states cover that date.',
+    sentence: 'Two publisher states cover 2004-06-01.',
     payload: {
       publisher: 'preview-synthetic',
       work: 'synthetic-preview-work',
@@ -97,8 +107,12 @@ const EXAMPLES = Object.freeze({
     },
   },
   anchor_not_in_version: {
-    sentence: 'art_l121-6 is not an anchor in this version.',
-    payload: { nearest_anchors: ['art_l_121-6', 'art_l_121-7'] },
+    sentence: 'art_1 is not an anchor in this version.',
+    payload: {
+      nearest_anchors: ['art_1er', 'art_1er__2'],
+      what_would_answer: ['corrected_identifier'],
+      asserts_absence_of_law: false,
+    },
   },
   language_not_available: {
     sentence: 'This work is held in French only.',
@@ -107,13 +121,15 @@ const EXAMPLES = Object.freeze({
   text_not_available: {
     sentence: 'The publisher records this state but serves no text for it.',
     payload: {
-      official_uri: 'https://legilux.public.lu/eli/etat/leg/loi/2002/08/02/n2',
-      gazette_chain: 'Mémorial A 1993 no 27, A 2002 no 92',
+      official_uri: 'https://preview.invalid/synthetic-preview-work/2001-01-01',
+      gazette_chain: 'Synthetic gazette A 2001 no 1',
+      what_would_answer: ['new_official_observation'],
+      asserts_absence_of_law: false,
     },
   },
   text_withheld: {
     sentence: 'The publisher licence does not permit serving this text.',
-    payload: { licence: 'licenceSCL' },
+    payload: { licence: 'synthetic-licence' },
   },
   format_not_available: {
     sentence: 'This state is held as PDF only.',
@@ -121,11 +137,11 @@ const EXAMPLES = Object.freeze({
   },
   profiles_differ: {
     sentence: 'These two states came from different extraction profiles.',
-    payload: { profiles: ['pdf-lu/1', 'akn-lu/1'] },
+    payload: { profiles: ['synthetic-pdf/1', 'synthetic-akn/1'] },
   },
   not_transposable: {
     sentence: 'A regulation is not transposed.',
-    payload: { execution_acts: ['loi-2018-08-01-n1'] },
+    payload: { execution_acts: ['synthetic-execution-act'] },
   },
   derivation_refused: {
     sentence: 'The transitional provision is served verbatim rather than derived.',
@@ -141,11 +157,11 @@ const EXAMPLES = Object.freeze({
   },
   snapshot_unknown: {
     sentence: 'That snapshot identity is not one this build holds.',
-    payload: { snapshots_held: '2026-08-15' },
+    payload: { snapshots_held: '2026-01-01' },
   },
   upstream_unreachable: {
     sentence: 'The publisher did not answer.',
-    payload: { host: 'legilux.public.lu' },
+    payload: { host: 'preview.invalid' },
   },
   rate_limited: {
     sentence: 'Too many requests reached the publisher.',
@@ -282,8 +298,8 @@ test('an absent nearest state must be stated, not omitted', () => {
 
 test('the ambiguous_version interstitial never defaults and never mislabels a candidate', () => {
   const card = renderRefusalCard({ code: 'ambiguous_version', ...EXAMPLES.ambiguous_version });
-  assert.ok(card.includes('applicable from 2025-01-01, hash <code>99b621c3</code>, published'));
-  assert.ok(card.includes('c064f74a'));
+  assert.ok(card.includes('applicable from 2004-01-01, hash <code>dedbcbe0</code>, published'));
+  assert.ok(card.includes('cfc9fe90'));
   assert.ok(card.includes('The publisher ranks neither state'));
 
   assert.throws(
@@ -347,8 +363,8 @@ test('the ambiguous_version interstitial never defaults and never mislabels a ca
 
 test('profiles_differ names both profiles and says it cannot be overridden', () => {
   const card = renderRefusalCard({ code: 'profiles_differ', ...EXAMPLES.profiles_differ });
-  assert.ok(card.includes('pdf-lu/1'));
-  assert.ok(card.includes('akn-lu/1'));
+  assert.ok(card.includes('synthetic-pdf/1'));
+  assert.ok(card.includes('synthetic-akn/1'));
   assert.ok(card.includes('not overridable'));
 
   assert.throws(
@@ -376,7 +392,7 @@ test('anchor_not_in_version shows nearest anchors and rules out the fallback', (
     code: 'anchor_not_in_version',
     ...EXAMPLES.anchor_not_in_version,
   });
-  assert.ok(card.includes('<code>art_l_121-6</code>'), 'nearest anchors were not rendered as chips');
+  assert.ok(card.includes('<code>art_1er</code>'), 'nearest anchors were not rendered as chips');
   assert.ok(card.includes('does not fall back to full-text search'));
 });
 
@@ -461,6 +477,7 @@ test('quoted text carries the expression language, not a hardcoded French', () =
     code: 'advice_boundary',
     sentence: 'I cannot apply the law to your situation.',
     governingText: {
+      resourceId: 'preview-synthetic:synthetic-french-act:2001-01-01',
       authenticity: {
         schema: 'lex-v3-resource-authenticity/1',
         resource_id: 'preview-synthetic:synthetic-french-act:2001-01-01',
@@ -528,8 +545,9 @@ test('payload values are escaped rather than trusted', () => {
     code: 'identifier_unknown',
     sentence: 'That identifier does not resolve.',
     payload: {
-      population_disclosure: 'about 24,579 never-consolidated LU acts are not searchable',
-      echoed: '<img src=x onerror=alert(1)>',
+      population_disclosure: '23,370 never-consolidated LU acts are not <img src=x onerror=alert(1)>',
+      what_would_answer: ['corrected_identifier'],
+      asserts_absence_of_law: false,
     },
   });
   assert.ok(!card.includes('<img'));
@@ -743,4 +761,239 @@ test('the module says it is a preview contract rather than the final one', () =>
   assert.equal(CONTRACT_STATUS.kind, 'synthetic-preview');
   assert.equal(CONTRACT_STATUS.final, false);
   assert.match(CONTRACT_STATUS.reason, /348/);
+});
+
+test('a withdrawn-superseded pair is not a live ambiguity', () => {
+  // 30-FINAL-VERDICT splits this population per attack 4.4. The census that produced the
+  // original requirement conflated two populations with opposite correct behaviours: four
+  // live-ambiguity pairs need the interstitial, twelve withdrawn-superseded pairs need the
+  // live state with the sibling disclosed. Forcing a choice on the second invents an
+  // ambiguity the publisher already resolved.
+  const superseded = candidate('2004-01-01', HASH_B, '2003-12-15', true);
+  assert.throws(
+    () =>
+      renderRefusalCard({
+        code: 'ambiguous_version',
+        sentence: 'Two states cover that date.',
+        payload: {
+          publisher: 'preview-synthetic',
+          work: 'synthetic-preview-work',
+          candidates: [CANDIDATES[0], superseded],
+        },
+      }),
+    /not the live ambiguity the interstitial is for/,
+  );
+
+  assert.throws(
+    () =>
+      renderRefusalCard({
+        code: 'ambiguous_version',
+        sentence: 'Two states cover that date.',
+        payload: {
+          publisher: 'preview-synthetic',
+          work: 'synthetic-preview-work',
+          // Two live states, so the live-count rule passes and only the declaration rule
+          // can catch the third.
+          candidates: [
+            CANDIDATES[0],
+            CANDIDATES[1],
+            { ...candidate('2004-01-01', HASH_A, '2003-12-20'), withdrawn: undefined },
+          ],
+        },
+      }),
+    /must declare whether the publisher withdrew it/,
+  );
+});
+
+test('the superseded pair discloses the sibling instead of asking for a choice', () => {
+  const superseded = candidate('2004-01-01', HASH_B, '2003-12-15', true);
+  const html = renderSupersededState({
+    publisher: 'preview-synthetic',
+    work: 'synthetic-preview-work',
+    live: CANDIDATES[0],
+    withdrawn: [superseded],
+  });
+  assert.ok(html.includes('The state the publisher holds'));
+  assert.ok(html.includes('dedbcbe0'));
+  assert.ok(html.includes('cfc9fe90'), 'the withdrawn sibling was hidden rather than disclosed');
+  assert.ok(html.includes('no choice is asked of'));
+  // It is not a refusal and must not borrow the refusal card's shape.
+  assert.ok(!html.includes('refusal-card'));
+
+  assert.throws(
+    () =>
+      renderSupersededState({
+        publisher: 'preview-synthetic',
+        work: 'synthetic-preview-work',
+        live: superseded,
+        withdrawn: [CANDIDATES[0]],
+      }),
+    /must be the one that is not withdrawn/,
+  );
+  assert.throws(
+    () =>
+      renderSupersededState({
+        publisher: 'preview-synthetic',
+        work: 'synthetic-preview-work',
+        live: CANDIDATES[0],
+        withdrawn: [],
+      }),
+    /exists to disclose a withdrawn sibling/,
+  );
+});
+
+test('an absence must say what would answer it, from the closed contract vocabulary', () => {
+  // Not invented here. The vocabulary, the non-emptiness, the uniqueness and the declared
+  // enum order are all in schemas/v3-synthetic-preview, and the array is required on every
+  // refusal the shipped contract describes.
+  assert.deepEqual(
+    [...WHAT_WOULD_ANSWER],
+    ['corrected_identifier', 'new_official_observation', 'expanded_official_scope'],
+  );
+
+  for (const code of ABSENCE_CODES) {
+    const example = EXAMPLES[code];
+    const { what_would_answer: _drop, ...without } = example.payload;
+    assert.throws(
+      () => renderRefusalCard({ ...example, code, payload: without }),
+      /must say what would answer it/,
+      `${code} rendered with no route out`,
+    );
+    assert.throws(
+      () =>
+        renderRefusalCard({
+          ...example,
+          code,
+          payload: { ...example.payload, what_would_answer: ['a_new_law'] },
+        }),
+      /is not in the what_would_answer vocabulary/,
+      `${code} accepted an invented route`,
+    );
+  }
+
+  // The same set in two orders is two different responses, so the order is the contract's.
+  assert.throws(
+    () =>
+      renderRefusalCard({
+        ...EXAMPLES.identifier_unknown,
+        code: 'identifier_unknown',
+        payload: {
+          ...EXAMPLES.identifier_unknown.payload,
+          what_would_answer: ['expanded_official_scope', 'corrected_identifier'],
+        },
+      }),
+    /must be in declared enum order/,
+  );
+  assert.throws(
+    () =>
+      renderRefusalCard({
+        ...EXAMPLES.identifier_unknown,
+        code: 'identifier_unknown',
+        payload: {
+          ...EXAMPLES.identifier_unknown.payload,
+          what_would_answer: ['corrected_identifier', 'corrected_identifier'],
+        },
+      }),
+    /repeats a what_would_answer value/,
+  );
+});
+
+test('an absence can never assert that the law does not exist', () => {
+  // The contract pins asserts_absence_of_law to the constant false. It is the product's
+  // oldest invariant and the one a reader is most likely to get wrong on their own.
+  for (const value of [true, 'false', 0]) {
+    assert.throws(
+      () =>
+        renderRefusalCard({
+          ...EXAMPLES.no_version_for_date,
+          code: 'no_version_for_date',
+          payload: { ...EXAMPLES.no_version_for_date.payload, asserts_absence_of_law: value },
+        }),
+      /must carry asserts_absence_of_law: false/,
+      `${JSON.stringify(value)} was accepted`,
+    );
+  }
+  // Absent entirely, which is the realistic way it goes missing.
+  const { asserts_absence_of_law: _drop, ...without } = EXAMPLES.no_version_for_date.payload;
+  assert.throws(
+    () =>
+      renderRefusalCard({
+        ...EXAMPLES.no_version_for_date,
+        code: 'no_version_for_date',
+        payload: without,
+      }),
+    /must carry asserts_absence_of_law: false/,
+  );
+
+  const html = renderRefusalCard({
+    code: 'no_version_for_date',
+    ...EXAMPLES.no_version_for_date,
+  });
+  assert.ok(html.includes('not evidence that the instrument or the law does not exist'));
+  assert.ok(html.includes('What would answer this'));
+  assert.ok(html.includes('a new observation, if the publisher publishes this'));
+});
+
+test('a code that is not an absence is not made to carry absence evidence', () => {
+  // text_withheld is a licence fact, not an absence: the record exists and is held.
+  assert.ok(!ABSENCE_CODES.includes('text_withheld'));
+  const html = renderRefusalCard({ code: 'text_withheld', ...EXAMPLES.text_withheld });
+  assert.ok(!html.includes('What would answer this'));
+});
+
+test('a candidate link carries no anchor, because the choice is between states', () => {
+  // Links ending in #art_1 and #art_2 both passed while the candidate declared no anchor,
+  // so two candidates that looked identical led to different provisions.
+  const withAnchor = `${CANDIDATES[0].href}#art_1`;
+  assert.throws(
+    () =>
+      renderRefusalCard({
+        code: 'ambiguous_version',
+        sentence: 'Two states cover that date.',
+        payload: {
+          publisher: 'preview-synthetic',
+          work: 'synthetic-preview-work',
+          candidates: [{ ...CANDIDATES[0], href: withAnchor }, CANDIDATES[1]],
+        },
+      }),
+    /resolves to a different object than the candidate names/,
+  );
+});
+
+test('a declared payload contract is an allowlist, not a minimum', () => {
+  // It was a minimum, so ambiguous_version accepted and rendered `selected: true`, which is
+  // exactly the default this refusal exists to refuse.
+  assert.throws(
+    () =>
+      renderRefusalCard({
+        code: 'ambiguous_version',
+        sentence: 'Two states cover that date.',
+        payload: {
+          publisher: 'preview-synthetic',
+          work: 'synthetic-preview-work',
+          candidates: CANDIDATES,
+          selected: true,
+        },
+      }),
+    /carries undeclared payload selected/,
+  );
+  assert.throws(
+    () =>
+      renderRefusalCard({
+        ...EXAMPLES.no_version_for_date,
+        code: 'no_version_for_date',
+        payload: { ...EXAMPLES.no_version_for_date.payload, nearest_anchors: ['art_1'] },
+      }),
+    /carries undeclared payload nearest_anchors/,
+  );
+
+  // The nine variants Decision 63 defers stay open, because closing a set nobody has
+  // specified would be inventing the contract rather than implementing it.
+  assert.ok(
+    renderRefusalCard({
+      code: 'text_withheld',
+      sentence: 'The publisher licence does not permit serving this text.',
+      payload: { licence: 'synthetic-licence', anything_else: 'still allowed' },
+    }).includes('still allowed'),
+  );
 });

@@ -14,6 +14,7 @@ import {
   quotedLaw,
   readStoredLocale,
   renderLocalizationUnavailable,
+  renderUnofficialRendering,
   requireResourceAuthenticity,
   resolveChromeLocale,
   servableLocales,
@@ -176,7 +177,7 @@ test('quoting law without authenticity evidence fails closed', () => {
   // and which also declared held German LU statute impossible. There is no publisher table
   // in the module any more, so there is nothing left to infer from.
   assert.throws(
-    () => quotedLaw({ language: 'fr', text: LU_TEXT }),
+    () => quotedLaw({ resourceId: SOLE.resource_id, language: 'fr', text: LU_TEXT }),
     /requires typed authenticity evidence/,
   );
   const source = JSON.stringify(localization);
@@ -201,23 +202,23 @@ test('authenticity evidence is checked, not taken', () => {
 });
 
 test('the note follows the resource evidence, not a publisher key', () => {
-  const sole = quotedLaw({ authenticity: SOLE, language: 'fr', text: LU_TEXT });
+  const sole = quotedLaw({ resourceId: SOLE.resource_id, authenticity: SOLE, language: 'fr', text: LU_TEXT });
   assert.ok(sole.includes('lang="fr"'));
   assert.ok(sole.includes('Only the fr text is authentic (loi du 24 fevrier 1984, art. 2)'));
 
-  const equal = quotedLaw({ authenticity: EQUAL, language: 'en', text: 'Article 5.' });
+  const equal = quotedLaw({ resourceId: EQUAL.resource_id, authenticity: EQUAL, language: 'en', text: 'Article 5.' });
   assert.ok(equal.includes('lang="en"'));
   assert.ok(!equal.includes('authentic'), 'an equally authentic expression was qualified');
 
   // The case the publisher-key version declared impossible.
-  const german = quotedLaw({ authenticity: GERMAN, language: 'de', text: 'Artikel 1.' });
+  const german = quotedLaw({ resourceId: GERMAN.resource_id, authenticity: GERMAN, language: 'de', text: 'Artikel 1.' });
   assert.ok(german.includes('lang="de"'));
   assert.ok(german.includes('Only the de text is authentic'));
 });
 
 test('a language outside the resource authentic set is not quoted as law', () => {
   assert.throws(
-    () => quotedLaw({ authenticity: SOLE, language: 'en', text: 'An English rendering' }),
+    () => quotedLaw({ resourceId: SOLE.resource_id, authenticity: SOLE, language: 'en', text: 'An English rendering' }),
     /is unofficial and must be labelled as one/,
   );
 });
@@ -225,7 +226,7 @@ test('a language outside the resource authentic set is not quoted as law', () =>
 test('a quoted span without its own language is refused', () => {
   for (const bad of [undefined, '', 'french', 'FR', 'fr-LU']) {
     assert.throws(
-      () => quotedLaw({ authenticity: EQUAL, language: bad, text: 'x y z' }),
+      () => quotedLaw({ resourceId: EQUAL.resource_id, authenticity: EQUAL, language: bad, text: 'x y z' }),
       /carries its own language attribute/,
       `${JSON.stringify(bad)} was accepted as a language tag`,
     );
@@ -237,13 +238,14 @@ test('the chrome switcher has no channel to quoted law', () => {
   assert.deepEqual(setters, [], `a global locale setter appeared: ${setters.join(', ')}`);
 
   const quoted = CHROME_LOCALES.map(() =>
-    quotedLaw({ authenticity: SOLE, language: 'fr', text: LU_TEXT }),
+    quotedLaw({ resourceId: SOLE.resource_id, authenticity: SOLE, language: 'fr', text: LU_TEXT }),
   );
   assert.equal(new Set(quoted).size, 1, 'the quotation varied with something it must not see');
 });
 
 test('the note refuses rather than substituting when its locale is missing', () => {
   const luxembourgish = quotedLaw({
+    resourceId: SOLE.resource_id,
     authenticity: SOLE,
     language: 'fr',
     text: LU_TEXT,
@@ -255,6 +257,7 @@ test('the note refuses rather than substituting when its locale is missing', () 
   assert.ok(!luxembourgish.includes('Seul le texte'));
 
   const french = quotedLaw({
+    resourceId: SOLE.resource_id,
     authenticity: SOLE,
     language: 'fr',
     text: LU_TEXT,
@@ -289,6 +292,7 @@ test('values are escaped rather than trusted', () => {
   assert.ok(!html.includes('<script>'));
 
   const quoted = quotedLaw({
+    resourceId: EQUAL.resource_id,
     authenticity: EQUAL,
     language: 'en',
     text: '<img src=x onerror=alert(1)>',
@@ -298,10 +302,109 @@ test('values are escaped rather than trusted', () => {
 
   // The note is filled from evidence, so the evidence has to be escaped too.
   const injected = quotedLaw({
+    resourceId: SOLE.resource_id,
     authenticity: { ...SOLE, basis: '<img src=x onerror=alert(1)>' },
     language: 'fr',
     text: LU_TEXT,
   });
   assert.ok(!injected.includes('<img'));
   assert.ok(injected.includes('&lt;img'));
+});
+
+test('evidence for one resource says nothing about another', () => {
+  // The evidence was validated in isolation, which checked that somebody had done the work
+  // and not that they had done it for this text. Valid evidence for A rendered B as law.
+  assert.throws(
+    () =>
+      quotedLaw({
+        resourceId: EQUAL.resource_id,
+        authenticity: SOLE,
+        language: 'fr',
+        text: LU_TEXT,
+      }),
+    /evidence for one resource says nothing about another/,
+  );
+  assert.throws(
+    () => quotedLaw({ authenticity: SOLE, language: 'fr', text: LU_TEXT }),
+    /must name the resource it is from/,
+  );
+});
+
+test('provenance evidence must be the entry own, not its prototype', () => {
+  // An entry whose prototype supplies reviewed_by and reviewed_on would otherwise become
+  // claimed human-review evidence, which is the closed-vocabulary defect aimed at the field
+  // that says a person looked at this.
+  // One inherited field at a time, so each own-property check is held by a case of its own.
+  // With both inherited, either check alone would stand in for the other and either could be
+  // deleted with nothing going red.
+  const borrowedReviewer = Object.create({ reviewed_by: 'A Reviewer' });
+  borrowedReviewer.text = 'text with a borrowed reviewer';
+  borrowedReviewer.reviewed_on = '2026-08-27';
+  assert.ok(!isReviewed(borrowedReviewer), 'a prototype supplied the reviewer');
+
+  const borrowedDate = Object.create({ reviewed_on: '2026-08-27' });
+  borrowedDate.text = 'text with a borrowed review date';
+  borrowedDate.reviewed_by = 'A Reviewer';
+  assert.ok(!isReviewed(borrowedDate), 'a prototype supplied the review date');
+
+  const borrowedBasis = Object.create({ source_basis: '33-product-spec' });
+  borrowedBasis.text = 'text with a borrowed basis';
+  assert.ok(!isSourceMaster(borrowedBasis), 'a prototype supplied the source basis');
+  assert.equal(provenanceOf(borrowedBasis), null);
+
+  const inheritedText = Object.create({ text: 'borrowed text' });
+  inheritedText.source_basis = '33-product-spec';
+  assert.equal(provenanceOf(inheritedText), null);
+});
+
+test('a body that is not authentic has somewhere to live, labelled', () => {
+  // quotedLaw refuses these, and a refusal with nowhere to go would mean the interface simply
+  // cannot show a non-French Luxembourg rendering or an image-only annex. A reader is better
+  // served by labelled text plus the official route than by nothing.
+  const html = renderUnofficialRendering({
+    resourceId: SOLE.resource_id,
+    authenticity: SOLE,
+    language: 'en',
+    text: 'An English rendering of a French statute.',
+    publisher: 'lu-legilux',
+    officialUri: 'https://legilux.public.lu/eli/etat/leg/loi/2001/01/01/n1',
+  });
+  assert.ok(html.includes('token--unofficial'), 'the UNOFFICIAL token is missing');
+  assert.ok(html.includes('lang="en"'));
+  assert.ok(html.includes('This is not the authentic text'));
+  assert.ok(html.includes('excluded from evidence exports'));
+  assert.ok(html.includes('href="https://legilux.public.lu/eli/etat/leg/loi/2001/01/01/n1"'));
+});
+
+test('the authentic text cannot be relabelled as unofficial', () => {
+  assert.throws(
+    () =>
+      renderUnofficialRendering({
+        resourceId: SOLE.resource_id,
+        authenticity: SOLE,
+        language: 'fr',
+        text: LU_TEXT,
+        publisher: 'lu-legilux',
+        officialUri: 'https://legilux.public.lu/eli/etat/leg/loi/2001/01/01/n1',
+      }),
+    /belongs in quotedLaw/,
+  );
+});
+
+test('an unofficial rendering routes to the publisher, through the one policy', () => {
+  for (const uri of ['https://evil.example/x', 'http://legilux.public.lu/x', 'not a url']) {
+    assert.throws(
+      () =>
+        renderUnofficialRendering({
+          resourceId: SOLE.resource_id,
+          authenticity: SOLE,
+          language: 'en',
+          text: 'An English rendering.',
+          publisher: 'lu-legilux',
+          officialUri: uri,
+        }),
+      /source URI/,
+      `${uri} was offered as the authentic text`,
+    );
+  }
 });

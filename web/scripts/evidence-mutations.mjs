@@ -104,6 +104,33 @@ const MUTATIONS = [
       }
     },
   },
+  {
+    // Lighthouse found three of these at 19 to 21 CSS px while every check here passed. The
+    // gate measures every target now, so turning the rule off has to bring them all back.
+    name: "the target-size floor removed, so list targets fall under 24 CSS px",
+    expect: /below the WCAG 2.2 24 CSS px minimum/i,
+    async apply(root) {
+      const file = join(root, "styles.css");
+      const css = await readFile(file, "utf8");
+      await writeFile(
+        file,
+        `${css}\nli > a, summary, .verify-cluster a ` +
+          "{ min-block-size: 0; min-inline-size: 0; padding-block: 0; }\n",
+        "utf8",
+      );
+    },
+  },
+  {
+    // Three shipped: the provenance link and both ambiguity candidates answered 404. Nothing
+    // else in the run looks past the page it is on.
+    name: "a visible action pointing at a page that does not exist",
+    expect: /answers 404|could not be requested/i,
+    async apply(root) {
+      const file = join(root, "trust-surface.html");
+      const html = await readFile(file, "utf8");
+      await writeFile(file, html.replace('href="/provenance/', 'href="/no-such-screen/'), "utf8");
+    },
+  },
 ];
 
 function run(root) {

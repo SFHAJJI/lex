@@ -62,6 +62,97 @@ export const REFUSAL_CODES = Object.freeze([
 
 const CODES = new Set(REFUSAL_CODES);
 
+/**
+ * What could turn this absence into an answer.
+ *
+ * Not invented here: this is the closed vocabulary of the shipped contract, in
+ * `schemas/v3-synthetic-preview/synthetic-resolve-envelope.schema.json`, where the array is
+ * required, non-empty, unique and in declared enum order. The order matters because a client
+ * comparing two refusals byte for byte cannot do so if the same set arrives in two orders.
+ */
+export const WHAT_WOULD_ANSWER = Object.freeze([
+  'corrected_identifier',
+  'new_official_observation',
+  'expanded_official_scope',
+]);
+
+const WHAT_WOULD_ANSWER_LABEL = new Map([
+  ['corrected_identifier', 'a corrected identifier, if you meant a different instrument'],
+  ['new_official_observation', 'a new observation, if the publisher publishes this'],
+  ['expanded_official_scope', 'an expansion of the reviewed corpus to this class of act'],
+]);
+
+/**
+ * The codes where a reader can reasonably conclude that the law does not exist.
+ *
+ * The contract requires `what_would_answer` and `asserts_absence_of_law` on every refusal.
+ * These are the ones where getting it wrong changes what somebody believes about the law
+ * rather than about this service, so the card enforces both here and says so on the page.
+ */
+export const ABSENCE_CODES = Object.freeze([
+  'identifier_unknown',
+  'out_of_corpus_scope',
+  'no_version_for_date',
+  'anchor_not_in_version',
+  'text_not_available',
+]);
+
+const ABSENCES = new Set(ABSENCE_CODES);
+
+function requireAbsenceEvidence(code, payload) {
+  if (!ABSENCES.has(code)) return;
+
+  const routes = payload?.what_would_answer;
+  if (!Array.isArray(routes) || routes.length === 0) {
+    throw new Error(
+      `${code} is an absence, so it must say what would answer it; the closed vocabulary is ` +
+        `${WHAT_WOULD_ANSWER.join(', ')} and an absence with no route out is a dead end`,
+    );
+  }
+  for (const route of routes) {
+    if (!WHAT_WOULD_ANSWER_LABEL.has(route)) {
+      throw new Error(
+        `${JSON.stringify(route)} is not in the what_would_answer vocabulary; the contract ` +
+          `closes it at ${WHAT_WOULD_ANSWER.join(', ')}`,
+      );
+    }
+  }
+  if (new Set(routes).size !== routes.length) {
+    throw new Error(`${code} repeats a what_would_answer value`);
+  }
+  // Declared enum order, as the schema requires. Two refusals with the same set must be the
+  // same bytes, or a client cannot compare them.
+  const ordered = WHAT_WOULD_ANSWER.filter((one) => routes.includes(one));
+  if (ordered.join() !== routes.join()) {
+    throw new Error(
+      `what_would_answer must be in declared enum order, ${ordered.join(', ')}, not ` +
+        `${routes.join(', ')}; the same set in two orders is two different responses`,
+    );
+  }
+
+  // The contract pins this to false. The invariant it protects is the product's oldest:
+  // absence of a record is never absence of law.
+  if (payload?.asserts_absence_of_law !== false) {
+    throw new Error(
+      `${code} must carry asserts_absence_of_law: false; the contract pins it to that constant ` +
+        'because absence of a held record is never evidence that the law does not exist',
+    );
+  }
+}
+
+function renderAbsenceEvidence(code, payload) {
+  if (!ABSENCES.has(code)) return '';
+  const items = payload.what_would_answer
+    .map((route) => `<li>${escapeHtml(WHAT_WOULD_ANSWER_LABEL.get(route))}</li>`)
+    .join('');
+  return (
+    '<div class="refusal-absence">' +
+    '<p class="refusal-absence-note">This is what this service holds, and does not hold. It ' +
+    'is not evidence that the instrument or the law does not exist.</p>' +
+    `<h3>What would answer this</h3><ul>${items}</ul></div>`
+  );
+}
+
 /** Refusals the reader can retry; the card says so rather than leaving them guessing. */
 export const RETRYABLE = Object.freeze(new Set(['upstream_unreachable', 'rate_limited']));
 
@@ -242,7 +333,7 @@ function requirePayloadShapes(code, payload) {
  * that says one hash and resolves to another is the silent resolution the card exists to
  * prevent, so the two are checked against each other here.
  */
-const CANDIDATE_KEYS = new Set(['valid_from', 'hash', 'publication_date', 'href']);
+const CANDIDATE_KEYS = new Set(['valid_from', 'hash', 'publication_date', 'href', 'withdrawn']);
 
 function requireCandidates(payload) {
   const { publisher, work, candidates } = payload;
@@ -259,6 +350,21 @@ function requireCandidates(payload) {
         'list shorter than two does not describe the ambiguity it claims',
     );
   }
+  // 30-FINAL-VERDICT splits this population per attack 4.4: a live ambiguity, where the
+  // publisher ranks two states that both stand, gets the interstitial; a withdrawn-superseded
+  // pair does not, because there the publisher has ranked them and the right answer is the
+  // live state with the withdrawn sibling disclosed. The census that produced the original
+  // requirement conflated two populations with opposite correct behaviours, so this card
+  // refuses the second rather than forcing a choice the publisher already made.
+  const live = candidates.filter((candidate) => candidate?.withdrawn === false);
+  if (live.length < 2) {
+    throw new Error(
+      `${live.length} of these ${candidates.length} states is live, so this is not the live ` +
+        'ambiguity the interstitial is for; a withdrawn-superseded pair is rendered by ' +
+        'renderSupersededState, which shows the live state and discloses the withdrawn sibling',
+    );
+  }
+
   for (const candidate of candidates) {
     for (const key of Object.keys(candidate ?? {})) {
       if (!CANDIDATE_KEYS.has(key)) {
@@ -267,6 +373,12 @@ function requireCandidates(payload) {
             'that renders fields nobody typed is how a default selection arrives',
         );
       }
+    }
+    if (typeof candidate?.withdrawn !== 'boolean') {
+      throw new Error(
+        `a candidate must declare whether the publisher withdrew it: ${JSON.stringify(candidate)}; ` +
+          'an undeclared withdrawal is how a superseded state gets offered as a live choice',
+      );
     }
     requireCalendarDate(candidate?.valid_from, 'a candidate valid_from');
     requireCalendarDate(candidate?.publication_date, 'a candidate publication_date');
@@ -284,11 +396,15 @@ function requireCandidates(payload) {
     }
     // The complete coordinate, not a date and a hash. A candidate for one work could link
     // to an unrelated publisher and work that happened to share both.
+    // The anchor is part of the coordinate. Without it, links ending in #art_1 and #art_2
+    // both passed while the candidate declared no anchor at all, so two candidates that
+    // looked identical led to different provisions.
     if (
       target.publisher !== publisher
       || target.work !== work
       || target.validFrom !== candidate.valid_from
       || target.hash !== candidate.hash
+      || target.anchor !== null
     ) {
       throw new Error(
         'a candidate Read link resolves to a different object than the candidate names; a ' +
@@ -324,6 +440,24 @@ function requirePayload(code, payload) {
   const missing = requirement.keys.filter((key) => !isPresent(payload?.[key]));
   if (missing.length > 0) {
     throw new Error(`refusal ${code} must carry ${missing.join(', ')}; ${requirement.basis}`);
+  }
+
+  // A declared key set is an allowlist, not a minimum. It was a minimum, and
+  // `ambiguous_version` therefore accepted and rendered `selected: true`, which is precisely
+  // the default this refusal exists to refuse. The nine variants Decision 63 defers stay
+  // open, because closing a set nobody has specified would be inventing the contract.
+  if (requirement.keys.length > 0) {
+    const allowed = new Set([
+      ...requirement.keys,
+      ...(ABSENCES.has(code) ? ['what_would_answer', 'asserts_absence_of_law'] : []),
+    ]);
+    const undeclared = Object.keys(payload ?? {}).filter((key) => !allowed.has(key));
+    if (undeclared.length > 0) {
+      throw new Error(
+        `refusal ${code} carries undeclared payload ${undeclared.join(', ')}; its contract is ` +
+          `${[...allowed].join(', ')}, and a field nobody declared is a field nobody checked`,
+      );
+    }
   }
 
   if (code === 'ambiguous_version') requireCandidates(payload);
@@ -402,8 +536,8 @@ function renderGoverningText(governing) {
  * @param {string} input.code           a member of REFUSAL_CODES
  * @param {string} input.sentence       one human sentence, the reader's answer
  * @param {object} [input.payload]      the mandatory helpful payload
- * @param {{publisher: string, language: string, text: string}} [input.governingText]
- *        provisions co-delivered with the refusal, carrying the expression's own language
+ * @param {object} [input.governingText] provisions co-delivered with the refusal, carrying
+ *        the resource identity, its authenticity evidence and the expression's own language
  * @param {{label: string, href: string}} [input.handoff]
  */
 export function renderRefusalCard({ code, sentence, payload, governingText, handoff }) {
@@ -420,6 +554,7 @@ export function renderRefusalCard({ code, sentence, payload, governingText, hand
 
   requirePayloadShapes(code, payload);
   requirePayload(code, payload);
+  requireAbsenceEvidence(code, payload);
 
   const payloadHtml = renderPayload(code, payload);
   const hasGoverningText = Boolean(governingText);
@@ -493,9 +628,77 @@ export function renderRefusalCard({ code, sentence, payload, governingText, hand
     '</p>' +
     retry +
     note +
+    renderAbsenceEvidence(code, payload) +
     payloadHtml +
     text +
     foot +
+    '</section>'
+  );
+}
+
+/**
+ * The other half of the split: a state the publisher superseded, and the live state that
+ * replaced it.
+ *
+ * This is not a refusal and does not use the refusal card. The publisher has ranked these,
+ * so forcing a reader to choose would invent an ambiguity that the record does not contain.
+ * The live state is the answer; the withdrawn sibling is disclosed, because a reader who
+ * followed an old link needs to know their state exists and was superseded rather than
+ * finding it silently gone.
+ */
+export function renderSupersededState({ publisher, work, live, withdrawn }) {
+  if (typeof publisher !== 'string' || typeof work !== 'string') {
+    throw new Error('a superseded-state disclosure must name the work it is about');
+  }
+  if (live?.withdrawn !== false) {
+    throw new Error('the live state of a superseded pair must be the one that is not withdrawn');
+  }
+  if (!Array.isArray(withdrawn) || withdrawn.length === 0) {
+    throw new Error(
+      'a superseded-state disclosure exists to disclose a withdrawn sibling; with none, the ' +
+        'live state is simply the state and needs no disclosure',
+    );
+  }
+  if (!withdrawn.every((one) => one?.withdrawn === true)) {
+    throw new Error('a disclosed sibling must be one the publisher withdrew');
+  }
+  for (const candidate of [live, ...withdrawn]) {
+    requireCalendarDate(candidate?.valid_from, 'a state valid_from');
+    requireCalendarDate(candidate?.publication_date, 'a state publication_date');
+    if (!SHA256.test(candidate?.hash ?? '')) {
+      throw new Error('a state is identified by its 64 hex character hash');
+    }
+    const target = parseObjectUrl(candidate?.href ?? '');
+    if (
+      target?.kind !== 'reading'
+      || target.publisher !== publisher
+      || target.work !== work
+      || target.validFrom !== candidate.valid_from
+      || target.hash !== candidate.hash
+    ) {
+      throw new Error('a state link resolves to a different object than the state names');
+    }
+  }
+
+  const siblings = withdrawn
+    .map(
+      (one) =>
+        `<li><a href="${escapeHtml(one.href)}">applicable from ${escapeHtml(one.valid_from)}, ` +
+        `hash <code>${escapeHtml(one.hash.slice(0, 8))}</code>, published ` +
+        `${escapeHtml(one.publication_date)}</a></li>`,
+    )
+    .join('');
+
+  return (
+    '<section class="superseded-state">' +
+    `<p class="superseded-live"><a href="${escapeHtml(live.href)}">The state the publisher ` +
+    `holds, applicable from ${escapeHtml(live.valid_from)}, hash ` +
+    `<code>${escapeHtml(live.hash.slice(0, 8))}</code></a></p>` +
+    '<p class="superseded-note">The publisher withdrew the state below and replaced it. This ' +
+    'is the publisher ranking them, not this interface choosing, so no choice is asked of ' +
+    'you. The withdrawn state is still addressable, because a link to it should not lead ' +
+    'nowhere.</p>' +
+    `<ul class="superseded-siblings">${siblings}</ul>` +
     '</section>'
   );
 }

@@ -23,6 +23,8 @@
 // the quotation fails closed rather than defaulting to "no qualification needed".
 
 import { isCalendarDate, isUtcInstant } from './temporal.mjs';
+import { mark } from './design-tokens.mjs';
+import { publisherSourceUri } from './routes.mjs';
 
 /** UI chrome ships in these four, product spec section 7 rule 1. */
 export const CHROME_LOCALES = Object.freeze(['fr', 'de', 'en', 'lb']);
@@ -88,8 +90,14 @@ const STRINGS = Object.freeze({
 
 /** True when a named person reviewed this entry on a real date. */
 export function isReviewed(entry) {
+  // Own properties only. An entry whose prototype supplies `reviewed_by` and `reviewed_on`
+  // would otherwise become claimed human-review evidence, which is the same defect as a
+  // closed vocabulary reached through `toString`, aimed at the field that says a person
+  // looked at this.
   return Boolean(
     entry &&
+      Object.hasOwn(entry, 'reviewed_by') &&
+      Object.hasOwn(entry, 'reviewed_on') &&
       typeof entry.reviewed_by === 'string' &&
       entry.reviewed_by.trim().length > 0 &&
       isCalendarDate(entry.reviewed_on),
@@ -99,7 +107,10 @@ export function isReviewed(entry) {
 /** True when the specification itself ships this exact wording. */
 export function isSourceMaster(entry) {
   return Boolean(
-    entry && typeof entry.source_basis === 'string' && entry.source_basis.trim().length > 0,
+    entry
+      && Object.hasOwn(entry, 'source_basis')
+      && typeof entry.source_basis === 'string'
+      && entry.source_basis.trim().length > 0,
   );
 }
 
@@ -109,7 +120,14 @@ export function isSourceMaster(entry) {
  * string cannot be served under both.
  */
 export function provenanceOf(entry) {
-  if (!entry || typeof entry.text !== 'string' || entry.text.trim().length === 0) return null;
+  if (
+    !entry
+    || !Object.hasOwn(entry, 'text')
+    || typeof entry.text !== 'string'
+    || entry.text.trim().length === 0
+  ) {
+    return null;
+  }
   const master = isSourceMaster(entry);
   const reviewed = isReviewed(entry);
   if (master === reviewed) return null;
@@ -297,13 +315,31 @@ export function requireResourceAuthenticity(evidence) {
  * rendering and belongs in a component that labels it as one, not in the one that quotes law.
  *
  * @param {object} input
- * @param {object} input.authenticity  typed evidence for this exact resource
+ * @param {string} input.resourceId    the resource this text is from
+ * @param {object} input.authenticity  typed evidence for that exact resource
  * @param {string} input.language      the expression's own language, not the chrome locale
  * @param {string} input.text          the publisher's text
  * @param {string} [input.noteLocale]  the locale to render the authenticity note in
  */
-export function quotedLaw({ authenticity, language, text, noteLocale = 'en' }) {
+export function quotedLaw({ resourceId, authenticity, language, text, noteLocale = 'en' }) {
   const evidence = requireResourceAuthenticity(authenticity);
+
+  // The evidence names a resource and the quotation names a resource, and until they were
+  // compared, valid evidence for one resource could render another resource's text as law.
+  // Validating the evidence in isolation checked that somebody had done the work; it did not
+  // check that they had done it for this text.
+  if (typeof resourceId !== 'string' || resourceId.trim().length === 0) {
+    throw new Error(
+      'a quotation must name the resource it is from, so its authenticity evidence can be ' +
+        'checked against it rather than merely checked',
+    );
+  }
+  if (resourceId !== evidence.resource_id) {
+    throw new Error(
+      `this text is from ${resourceId} and the authenticity evidence is for ` +
+        `${evidence.resource_id}; evidence for one resource says nothing about another`,
+    );
+  }
 
   if (typeof text !== 'string' || text.trim().length === 0) {
     throw new Error('a quoted span needs the publisher text');
@@ -354,5 +390,69 @@ export function renderLocalizationUnavailable({ locale, key, servable_in: servab
     `This text is not available in ${escapeHtml(locale)}, and nothing was substituted for it. ` +
     `${available} ` +
     `<span class="localization-key">${escapeHtml(key)}</span></p>`
+  );
+}
+
+/**
+ * A body that is not the authentic text: an unofficial rendering, or a transcription of a
+ * body the publisher serves only as an image.
+ *
+ * `quotedLaw` refuses these, and a refusal with nowhere to go would mean the interface simply
+ * cannot show them, which is worse: the corpus holds bodies in languages that are not
+ * authentic and annexes that exist only as PDFs, and a reader is better served by labelled
+ * text plus the official route than by nothing.
+ *
+ * So this is the other path, and it is the opposite of the quotation in every way that
+ * matters. It carries the UNOFFICIAL token, which is an icon and a label rather than a
+ * colour. It names the exact official route, checked by the one route policy, so the reader
+ * can reach the text that does count. And it says on its face that it is excluded from
+ * evidence exports, because a labelled convenience that quietly enters a bundle stops being
+ * labelled at the moment it matters.
+ */
+export function renderUnofficialRendering({
+  resourceId,
+  authenticity,
+  language,
+  text,
+  publisher,
+  officialUri,
+}) {
+  const evidence = requireResourceAuthenticity(authenticity);
+  if (resourceId !== evidence.resource_id) {
+    throw new Error(
+      `this rendering is of ${resourceId} and the evidence is for ${evidence.resource_id}`,
+    );
+  }
+  if (typeof text !== 'string' || text.trim().length === 0) {
+    throw new Error('an unofficial rendering needs its text');
+  }
+  if (typeof language !== 'string' || !LANGUAGE_TAG.test(language)) {
+    throw new Error(
+      `an unofficial rendering carries its own language attribute; ${JSON.stringify(language)} ` +
+        'is not a language tag',
+    );
+  }
+  // The authentic text is not unofficial. Routing it here would relabel the law.
+  if (evidence.authentic_languages.includes(language)) {
+    throw new Error(
+      `${language} is authentic for ${evidence.resource_id}, so this is the law and belongs in ` +
+        'quotedLaw; labelling authentic text as unofficial is the same error in the other ' +
+        'direction',
+    );
+  }
+
+  const official = publisherSourceUri({ publisher, uri: officialUri });
+
+  return (
+    '<section class="unofficial-rendering">' +
+    `<p class="unofficial-head">${mark('--unofficial', `Rendering in ${language}`)}</p>` +
+    `<blockquote class="body" lang="${escapeHtml(language)}">${escapeHtml(text)}</blockquote>` +
+    '<p class="unofficial-note">This is not the authentic text. ' +
+    `${escapeHtml(evidence.resource_id)} is authentic in ` +
+    `${escapeHtml(evidence.authentic_languages.join(', '))} ` +
+    `(${escapeHtml(evidence.basis)}). This rendering is excluded from evidence exports.</p>` +
+    `<p class="unofficial-official"><a href="${escapeHtml(official)}" rel="external">` +
+    'The authentic text, at the publisher</a></p>' +
+    '</section>'
   );
 }
