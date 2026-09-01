@@ -207,3 +207,44 @@ test('values are escaped rather than trusted', () => {
   assert.ok(!html.includes('<img'));
   assert.ok(html.includes('&lt;img'));
 });
+
+test('a card whose layers all failed to run makes no claim about the corpus', () => {
+  // O10. Every layer reporting not_run or unavailable still printed "Nothing in the held
+  // records matches", which is an absence claim resting on a search that never happened. A
+  // reader cannot tell that sentence apart from a real corpus miss.
+  const html = renderNoHitCard({
+    ...GOOD,
+    layers: [
+      { name: 'exact_identifier', outcome: 'not_run', language: 'en' },
+      { name: 'keyword', outcome: 'not_run', language: 'en' },
+      { name: 'semantic', outcome: 'unavailable', language: 'en' },
+    ],
+  });
+  assert.equal(
+    html.includes('Nothing in the held records matches'),
+    false,
+    'the card claimed the corpus holds no match while nothing was searched',
+  );
+  assert.equal(html.includes('No search of the held records completed'), true);
+  assert.equal(html.includes('Nothing was searched'), true);
+  // The disclaimer is invariant and must survive every branch.
+  assert.equal(html.includes('not evidence that the instrument or the law does not exist'), true);
+});
+
+test('a card whose layers partly ran scopes its sentence to what ran', () => {
+  const html = renderNoHitCard({
+    ...GOOD,
+    layers: [
+      { name: 'keyword', outcome: 'ran', language: 'fr' },
+      { name: 'semantic', outcome: 'not_run', language: 'fr' },
+    ],
+  });
+  assert.equal(
+    html.includes('Nothing in the held records matches'),
+    false,
+    'a partial search was reported as a statement about all held records',
+  );
+  assert.equal(html.includes('in the searches that ran'), true);
+  assert.equal(html.includes('searched provision wording by keyword'), true);
+  assert.equal(html.includes('not evidence that the instrument or the law does not exist'), true);
+});

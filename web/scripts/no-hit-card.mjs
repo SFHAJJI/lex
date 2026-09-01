@@ -212,15 +212,50 @@ export function renderNoHitCard({ query, layers, population, expansions, routes 
     );
   }
 
+  // What this card may claim is decided by what actually ran, not by the fact that no rows came
+  // back. Every layer could report not_run or unavailable and the card still said "Nothing in
+  // the held records matches", which is an absence claim resting on a search that never
+  // happened. A reader cannot tell that sentence apart from a real corpus miss, and on this
+  // product that is the most expensive confusion available.
+  const ran = layers.filter((layer) => layer.outcome === 'ran');
+  const account =
+    ran.length === 0
+      ? {
+          head: `No search of the held records completed for ${query}.`,
+          scope:
+            'Nothing was searched, so nothing is known about whether this corpus holds a match. ' +
+            'This is a fact about this request, not about the records.',
+        }
+      : ran.length < layers.length
+        ? {
+            head:
+              `Nothing matched ${query} in the searches that ran ` +
+              `(${ran.map((layer) => LAYER_LABEL.get(layer.name)).join(', ')}).`,
+            scope:
+              'The layers that did not run are listed below, and this says nothing about what ' +
+              'they would have found.',
+          }
+        : {
+            head: `Nothing in the held records matches ${query}.`,
+            scope: 'It is what this corpus holds, and what it does not.',
+          };
+
+  // The disclaimer is invariant across all three accounts. Scoping the sentence to what ran is
+  // the point of this change, but an earlier draft moved this clause into the branches and the
+  // partial case silently lost it, which would have made a narrower search read as a broader
+  // claim. What varies is how much was searched; that this is never a statement about the law
+  // does not vary.
+  const caution =
+    'This is not evidence that the instrument or the law does not exist. ' + account.scope;
+
   // Not styled as an error, and not announced as one. Nothing was found, which is a fact
   // about this corpus on this query, and it is frequently not a fact about the law.
   return (
     '<section class="no-hit-card">' +
     '<p class="no-hit-head">' +
-    mark('--hole', `Nothing in the held records matches ${query}.`) +
+    mark('--hole', account.head) +
     '</p>' +
-    '<p class="no-hit-caution">This is not evidence that the instrument or the law does not ' +
-    'exist. It is what this corpus holds, and what it does not.</p>' +
+    `<p class="no-hit-caution">${escapeHtml(caution)}</p>` +
     renderLayers(layers) +
     renderExpansions(expansions) +
     renderPopulation(population) +

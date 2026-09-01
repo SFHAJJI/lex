@@ -247,10 +247,39 @@ export function renderSearchResults({
     throw new Error('results echo the query they answer');
   }
 
+  // The row set is checked before anything branches on the hits, because the branch that
+  // reads as "the law does not say so" used to be reachable without it. An empty page of a
+  // nine-row result set rendered the corpus-miss card, and so did a malformed `hits` that was
+  // not an array at all: a response this screen could not parse was published to the reader as
+  // an absence of law. The row set is the only thing that distinguishes an empty page from an
+  // empty corpus, so it is validated first and unconditionally.
+  if (!Number.isInteger(rowSet?.total) || !Number.isInteger(rowSet?.returned)) {
+    throw new Error(
+      'a result list says how many rows it returned and how many there were; a list that ' +
+        'simply ends reads as a complete one',
+    );
+  }
+  if (rowSet.returned < 0 || rowSet.total < 0) {
+    throw new Error('a row set counts rows, and a negative count is not a number of rows');
+  }
+  if (!Array.isArray(hits)) {
+    throw new Error(
+      'the hits are not a list; a response this screen cannot read is a transport fact, and ' +
+        'rendering it as an absence of law states something the service never said',
+    );
+  }
+
   // Zero hits is the result most likely to be read as "the law does not say so", so it is
   // never an empty list. It is a card that names every layer that ran and every word the
-  // query was turned into.
-  if (!Array.isArray(hits) || hits.length === 0) {
+  // query was turned into. It is also only honest when the result set itself is empty:
+  // returning no rows out of a nonzero total is a page boundary, not a corpus miss.
+  if (hits.length === 0) {
+    if (rowSet.total !== 0 || rowSet.returned !== 0) {
+      throw new Error(
+        `no rows were given while the row set reports ${rowSet.returned} of ${rowSet.total}; an ` +
+          'empty page of a nonempty result set is not evidence that the corpus holds nothing',
+      );
+    }
     return (
       '<section class="results results-none">' +
       renderNoHitCard({ query, layers, population, expansions, routes }) +
@@ -258,12 +287,6 @@ export function renderSearchResults({
     );
   }
 
-  if (!Number.isInteger(rowSet?.total) || !Number.isInteger(rowSet?.returned)) {
-    throw new Error(
-      'a result list says how many rows it returned and how many there were; a list that ' +
-        'simply ends reads as a complete one',
-    );
-  }
   if (rowSet.returned !== hits.length) {
     throw new Error(
       `the row set says ${rowSet.returned} rows and ${hits.length} were given; one of those ` +

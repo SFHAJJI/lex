@@ -13,7 +13,7 @@ import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { readdir, readFile } from "node:fs/promises";
 import { resolve as resolvePath } from "node:path";
-import { extname, join as joinPath } from "node:path";
+import { extname, join as joinPath, sep as pathSep } from "node:path";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -519,11 +519,55 @@ function routeSchemePath(path) {
   return null;
 }
 
-async function serveDist(root) {
+/**
+ * Is this resolved path inside the distribution root?
+ *
+ * Exported because the containment rule is the whole security property of this server and a
+ * rule nothing can call is a rule nothing can test.
+ */
+export function withinRoot(root, candidate) {
+  const base = resolvePath(root);
+  const target = resolvePath(candidate);
+  return target === base || target.startsWith(base + pathSep);
+}
+
+export async function serveDist(root) {
   const server = createServer((request, response) => {
-    const path = decodeURIComponent(new URL(request.url, "http://127.0.0.1").pathname);
+    const refuse = () => {
+      response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+      response.end("not found");
+    };
+
+    const raw = new URL(request.url, "http://127.0.0.1").pathname;
+    // The URL parser normalises `..` segments, and this used to decode percent-escapes
+    // afterwards, which put them back. Twelve encoded parent segments followed by an encoded
+    // separator resolved to C:\Windows\win.ini and the harness served it. The server binds
+    // loopback, but it is still a local file disclosure primitive living inside the tool that
+    // reviews this product. Encoded separators and control bytes are refused before decoding.
+    if (/%2f|%5c|%00/i.test(raw)) {
+      refuse();
+      return;
+    }
+    let path;
+    try {
+      path = decodeURIComponent(raw);
+    } catch {
+      refuse();
+      return;
+    }
+    if (path.includes("\\") || path.includes("\0")) {
+      refuse();
+      return;
+    }
+
     const routed = routeSchemePath(path);
     const file = joinPath(root, routed ?? (path === "/" ? "/index.html" : path));
+    // Belt and braces: whatever the two checks above let through, the resolved file still has
+    // to sit inside the distribution root.
+    if (!withinRoot(root, file)) {
+      refuse();
+      return;
+    }
     readFile(file).then(
       (body) => {
         response.writeHead(200, {

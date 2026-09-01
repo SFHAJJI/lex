@@ -221,6 +221,9 @@ test('zero hits is a card that names what ran, never an empty list', () => {
   const html = renderSearchResults({
     ...GOOD,
     hits: [],
+    // Zero rows and a zero total. This fixture inherited one of one from GOOD, which is
+    // the defect O9 names: an empty page of a nonempty result set read as a corpus miss.
+    rowSet: { returned: 0, total: 0 },
     layers: [
       { name: 'exact_identifier', outcome: 'ran', language: 'en' },
       { name: 'keyword', outcome: 'ran', language: 'en' },
@@ -313,4 +316,41 @@ test('values are escaped rather than trusted', () => {
   assert.ok(!html.includes('<img'));
   assert.ok(html.includes('&lt;img'));
   assert.ok(html.includes('&amp; more'));
+});
+
+test('an empty page of a nonempty result set is not a corpus miss', () => {
+  // O9. The no-hit branch was reached before the row set was validated, so zero rows out of a
+  // nine-row result set rendered the card that says nothing in the corpus matches. That is a
+  // page boundary being published to the reader as an absence of law.
+  for (const rowSet of [
+    { returned: 0, total: 9 },
+    { returned: 9, total: 9 },
+    { returned: 0, total: 1 },
+  ]) {
+    assert.throws(
+      () => renderSearchResults({ ...GOOD, hits: [], rowSet }),
+      /empty page of a nonempty result set/,
+      `${JSON.stringify(rowSet)} rendered a corpus miss`,
+    );
+  }
+});
+
+test('a hits value that is not a list is a transport fact, not an absence of law', () => {
+  for (const hits of [undefined, null, {}, 'none', 0]) {
+    assert.throws(
+      () => renderSearchResults({ ...GOOD, hits, rowSet: { returned: 0, total: 0 } }),
+      /not a list/,
+      `${JSON.stringify(hits)} was rendered as an absence`,
+    );
+  }
+});
+
+test('the row set is validated even when no rows came back', () => {
+  for (const rowSet of [undefined, null, { returned: 0 }, { total: 0 }, { returned: -1, total: 0 }]) {
+    assert.throws(
+      () => renderSearchResults({ ...GOOD, hits: [], rowSet }),
+      /how many rows it returned|counts rows/,
+      `${JSON.stringify(rowSet)} skipped row-set validation on the empty path`,
+    );
+  }
 });

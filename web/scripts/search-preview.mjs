@@ -110,6 +110,11 @@ export function renderSearchPreview({ locale = 'en' } = {}) {
     semantics: 'publisher_applicability',
     asOf: AS_OF,
     hits: [],
+    // Zero rows and a zero total, stated rather than omitted. This preview passed no row set
+    // at all on the empty path, which is exactly the hole O9 names: without it nothing
+    // distinguishes an empty page of a larger result set from a corpus holding no match, and
+    // this is the one screen where that distinction is the whole product.
+    rowSet: { returned: 0, total: 0 },
     population: POPULATION,
     layers: [
       { name: 'exact_identifier', outcome: 'ran', language: 'en' },
