@@ -1,0 +1,316 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import { DATE_SCOPE, MATCH_REASONS, renderSearchResults } from '../scripts/search-results.mjs';
+
+const PERMALINK =
+  'https://law.soufien.lu/preview-synthetic/synthetic-preview-work/2001-01-01--' + 'a'.repeat(64);
+
+function hit(overrides = {}) {
+  return {
+    lex_id: 'preview-synthetic:synthetic-preview-work:2001-01-01',
+    valid_from: '2001-01-01',
+    valid_to: '2004-01-01',
+    publication_date: '2000-12-01',
+    text_available: true,
+    permalink: PERMALINK,
+    match_reasons: ['keyword'],
+    provision_num: 'Art. 1',
+    chapter_path: 'Title I, Chapter 2',
+    ...overrides,
+  };
+}
+
+const POPULATION = {
+  searchable_works: [
+    { what: 'consolidated LU works held by this corpus', count: 1402, counted_at: '2026-08-15' },
+    { what: 'reviewed EU works held by this corpus', count: 1250, counted_at: '2026-08-15' },
+  ],
+  not_searchable: [
+    {
+      what: 'LU acts of a 24,622 LOI and RGD population that never receive a consolidated edition',
+      count: 23370,
+      counted_at: '2026-08-15',
+    },
+  ],
+};
+
+const RELAXATIONS = {
+  fuzzy: { applied: false },
+  crosswalk: { applied: false },
+  semantic: { applied: false },
+};
+
+const GOOD = {
+  query: 'security deposit how many months landlord',
+  semantics: 'publisher_applicability',
+  asOf: '2026-09-01',
+  hits: [hit()],
+  rowSet: { returned: 1, total: 1 },
+  population: POPULATION,
+  relaxations: RELAXATIONS,
+  searchPath: '/ask/search?q=deposit',
+};
+
+test('results are scoped to an explicit date in the publisher vocabulary', () => {
+  assert.deepEqual(Object.keys(DATE_SCOPE), [
+    'publisher_applicability',
+    'official_consolidation_state',
+  ]);
+
+  const lu = renderSearchResults(GOOD);
+  assert.ok(lu.includes('Provisions as applicable on 2026-09-01'));
+  assert.ok(!lu.includes('Wording states covering'), 'the EU vocabulary leaked onto a LU search');
+
+  const eu = renderSearchResults({ ...GOOD, semantics: 'official_consolidation_state' });
+  assert.ok(eu.includes('Wording states covering 2026-09-01'));
+  assert.ok(!eu.includes('Provisions as applicable'), 'the LU vocabulary leaked onto an EU search');
+
+  for (const bad of [undefined, '', 'in_force', 'toString']) {
+    assert.throws(() => renderSearchResults({ ...GOOD, semantics: bad }), /is not one of/);
+  }
+
+  // The date is explicit even when it is today, because today is the date nobody checks.
+  for (const bad of [undefined, '', 'today', '2026-99-99']) {
+    assert.throws(
+      () => renderSearchResults({ ...GOOD, asOf: bad }),
+      /explicitly, even when it is today/,
+      `asOf=${JSON.stringify(bad)} was rendered`,
+    );
+  }
+});
+
+test('a hit list carries the same population disclosure an empty one does', () => {
+  const html = renderSearchResults(GOOD);
+  assert.ok(html.includes('1402 consolidated LU works'));
+  assert.ok(html.includes('23370'), 'what is not searchable must be disclosed beside what is');
+  assert.ok(html.includes('counted 2026-08-15'), 'a count with no date outlives its measurement');
+
+  // A reader who got results is exactly the reader who stops checking, so the list with hits
+  // cannot disclose less than the list without.
+  for (const field of ['searchable_works', 'not_searchable']) {
+    assert.throws(
+      () => renderSearchResults({ ...GOOD, population: { ...POPULATION, [field]: [] } }),
+      new RegExp(`needs ${field}`),
+    );
+  }
+  assert.throws(
+    () =>
+      renderSearchResults({
+        ...GOOD,
+        population: {
+          ...POPULATION,
+          searchable_works: [{ what: 'works', count: 1402 }],
+        },
+      }),
+    /must say when it was counted/,
+  );
+  assert.throws(
+    () =>
+      renderSearchResults({
+        ...GOOD,
+        population: {
+          ...POPULATION,
+          searchable_works: [{ count: 1402, counted_at: '2026-08-15' }],
+        },
+      }),
+    /must say what it counts/,
+  );
+});
+
+test('a list that was cut names its total', () => {
+  const html = renderSearchResults({ ...GOOD, rowSet: { returned: 1, total: 47 } });
+  assert.ok(html.includes('Showing 1 of 47 matching passages.'));
+  assert.ok(!renderSearchResults(GOOD).includes('Showing'), 'a complete list claimed truncation');
+
+  // The row set is checked against the rows, so a caller cannot say complete and be believed.
+  assert.throws(
+    () => renderSearchResults({ ...GOOD, rowSet: { returned: 3, total: 47 } }),
+    /one of those two numbers is wrong/,
+  );
+  assert.throws(
+    () => renderSearchResults({ ...GOOD, rowSet: { returned: 1, total: 0 } }),
+    /returned more rows than it holds/,
+  );
+  for (const bad of [undefined, { total: 1 }, { returned: 1 }, { returned: 1, total: 'many' }]) {
+    assert.throws(
+      () => renderSearchResults({ ...GOOD, rowSet: bad }),
+      /how many rows it returned and how many there were/,
+      `rowSet=${JSON.stringify(bad)} was rendered`,
+    );
+  }
+});
+
+test('every row says why it matched, from the closed set', () => {
+  assert.deepEqual([...MATCH_REASONS], ['exact_title', 'keyword', 'interpreted', 'semantic']);
+
+  const html = renderSearchResults({
+    ...GOOD,
+    hits: [hit({ match_reasons: ['exact_title'] })],
+  });
+  assert.ok(html.includes('matched on title, not wording'));
+
+  const interpreted = renderSearchResults({
+    ...GOOD,
+    hits: [hit({ match_reasons: ['interpreted'] })],
+  });
+  assert.ok(interpreted.includes('interpreted (editorial layer, versioned, non-official)'));
+
+  for (const bad of [undefined, [], ['fuzzy'], 'keyword']) {
+    assert.throws(
+      () => renderSearchResults({ ...GOOD, hits: [hit({ match_reasons: bad })] }),
+      /does not say why it matched|is not a match reason/,
+      `match_reasons=${JSON.stringify(bad)} was rendered`,
+    );
+  }
+});
+
+test('a relaxation that ran cannot be silent', () => {
+  // The expansions are the evidence one ran. A reader who asked about a deposit and was
+  // answered about a different word has not been answered.
+  assert.throws(
+    () => renderSearchResults({ ...GOOD, expansions: ['many -> mady', 'many -> man'] }),
+    /no relaxation is declared as applied/,
+  );
+
+  const disclosed = renderSearchResults({
+    ...GOOD,
+    expansions: ['many -> mady'],
+    relaxations: { ...RELAXATIONS, fuzzy: { applied: true, expansions: ['many -> mady'] } },
+  });
+  // Escaped, as any publisher-supplied token is.
+  assert.ok(disclosed.includes('many -&gt; mady'));
+
+  // And a relaxation that does not declare itself is refused, because a screen that does not
+  // know cannot disclose.
+  assert.throws(
+    () =>
+      renderSearchResults({
+        ...GOOD,
+        relaxations: { fuzzy: { applied: false }, crosswalk: { applied: false } },
+      }),
+    /must declare whether it was applied/,
+  );
+});
+
+test('there is at most one governing instrument and it says why', () => {
+  const html = renderSearchResults({
+    ...GOOD,
+    governing: {
+      lex_id: 'preview-synthetic:synthetic-preview-work',
+      why: 'Your question names this instrument by title.',
+    },
+  });
+  assert.ok(html.includes('The instrument your question names'));
+  assert.ok(html.includes('not a second answer'));
+  // And it comes before the ranked rows, because keyword ranking alone puts an unrelated
+  // instrument above the governing one.
+  assert.ok(html.indexOf('governing') < html.indexOf('<ol class="hits">'));
+
+  assert.throws(
+    () => renderSearchResults({ ...GOOD, governing: [{ lex_id: 'a' }, { lex_id: 'b' }] }),
+    /two cards are two answers to one question/,
+  );
+  assert.throws(
+    () => renderSearchResults({ ...GOOD, governing: { lex_id: 'a' } }),
+    /says why it is the answer/,
+  );
+});
+
+test('zero hits is a card that names what ran, never an empty list', () => {
+  const html = renderSearchResults({
+    ...GOOD,
+    hits: [],
+    layers: [
+      { name: 'exact_identifier', outcome: 'ran', language: 'en' },
+      { name: 'keyword', outcome: 'ran', language: 'en' },
+      { name: 'semantic', outcome: 'unavailable', language: 'en' },
+    ],
+    expansions: ['many -> mady', 'many -> man'],
+    routes: [
+      { label: 'Search Legilux', publisher: 'lu-legilux', uri: 'https://legilux.public.lu/' },
+    ],
+  });
+  assert.ok(!html.includes('<ol class="hits">'), 'an empty hit list rendered');
+  assert.ok(html.includes('many -&gt; mady'), 'the query was silently rewritten');
+  assert.ok(html.includes('23370'), 'the population is missing from the one result that needs it');
+  assert.ok(html.includes('legilux.public.lu'), 'a dead end with no next step');
+});
+
+test('the words in force never reach a hit row', () => {
+  assert.ok(!renderSearchResults(GOOD).includes('in force'));
+  for (const value of ['in_force', null, false]) {
+    assert.throws(
+      () => renderSearchResults({ ...GOOD, hits: [hit({ binding_status: value })] }),
+      /belongs in the dossier status strip/,
+      `binding_status=${JSON.stringify(value)} reached a row`,
+    );
+  }
+});
+
+test('a row carries its hash-carrying permalink and whether its text is held', () => {
+  const html = renderSearchResults({ ...GOOD, hits: [hit({ text_available: false })] });
+  assert.ok(html.includes('no text held'));
+  assert.ok(renderSearchResults(GOOD).includes('>text held<'));
+
+  for (const bad of [undefined, 'https://law.soufien.lu/lu/work/2001-01-01', '']) {
+    assert.throws(
+      () => renderSearchResults({ ...GOOD, hits: [hit({ permalink: bad })] }),
+      /needs its hash-carrying permalink/,
+      `permalink=${JSON.stringify(bad)} was offered as stable`,
+    );
+  }
+  assert.throws(
+    () => renderSearchResults({ ...GOOD, hits: [hit({ text_available: undefined })] }),
+    /does not say whether its text is held/,
+  );
+});
+
+test('a row title carries the language it is written in', () => {
+  const html = renderSearchResults({
+    ...GOOD,
+    hits: [hit({ title: 'An English title of a Union act', title_language: 'en' })],
+  });
+  assert.ok(html.includes('lang="en"'));
+  assert.ok(!html.includes('lang="fr"'), 'defaulted to French');
+
+  for (const bad of [undefined, '', 'french']) {
+    assert.throws(
+      () =>
+        renderSearchResults({ ...GOOD, hits: [hit({ title: 'A title', title_language: bad })] }),
+      /does not say what language it is in/,
+    );
+  }
+});
+
+test('a row that cannot be placed is refused rather than listed', () => {
+  for (const [field, value, pattern] of [
+    ['lex_id', '', /has no lex_id/],
+    ['valid_from', '2001-13-01', /valid_from is not a calendar date/],
+    ['valid_to', 'soon', /neither null nor a calendar date/],
+    ['publication_date', undefined, /publication_date is not a calendar date/],
+  ]) {
+    assert.throws(
+      () => renderSearchResults({ ...GOOD, hits: [hit({ [field]: value })] }),
+      pattern,
+      `${field}=${String(value)} was listed`,
+    );
+  }
+});
+
+test('results echo the query they answer', () => {
+  assert.ok(renderSearchResults(GOOD).includes('security deposit how many months landlord'));
+  for (const bad of [undefined, '   ']) {
+    assert.throws(() => renderSearchResults({ ...GOOD, query: bad }), /echo the query/);
+  }
+});
+
+test('values are escaped rather than trusted', () => {
+  const html = renderSearchResults({
+    ...GOOD,
+    query: '<img src=x onerror=alert(1)> & more',
+  });
+  assert.ok(!html.includes('<img'));
+  assert.ok(html.includes('&lt;img'));
+  assert.ok(html.includes('&amp; more'));
+});

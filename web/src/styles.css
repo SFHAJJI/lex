@@ -742,3 +742,50 @@ summary {
   padding-inline-start: var(--space-3, 0.75rem);
   font-size: 0.9375em;
 }
+
+.results-case,
+.results {
+  min-inline-size: 0;
+  margin-block: var(--space-6, 2rem);
+}
+
+.hits {
+  margin: 0;
+  padding-inline-start: var(--space-4, 1rem);
+}
+
+.hit {
+  border-inline-start: 3px solid var(--border, #8a8a8a);
+  padding-inline-start: var(--space-3, 0.75rem);
+  margin-block: var(--space-4, 1rem);
+}
+
+.hit-record-time,
+.hit-text,
+.hit-badges {
+  font-size: 0.875em;
+}
+
+.hit-badges {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.governing {
+  border: 1px solid var(--border, #8a8a8a);
+  border-radius: 4px;
+  padding: var(--space-3, 0.75rem);
+}
+
+.results-scope,
+.results-pager,
+.results-query {
+  border-inline-start: 3px solid var(--border, #8a8a8a);
+  padding-inline-start: var(--space-3, 0.75rem);
+}
+
+.hit-link a,
+.results-population a {
+  overflow-wrap: anywhere;
+}

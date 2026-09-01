@@ -21,6 +21,7 @@ import { renderRefusalCatalog } from "./refusal-catalog.mjs";
 import { renderComparePreview } from "./compare-preview.mjs";
 import { renderTimelinePreview } from "./timeline-preview.mjs";
 import { renderCoveragePreview } from "./coverage-preview.mjs";
+import { renderSearchPreview } from "./search-preview.mjs";
 import { page } from "./render.mjs";
 import { SHELLS } from "./urls.mjs";
 import { decodeEnvelope, validateEnvelope } from "./envelope.mjs";
@@ -134,6 +135,10 @@ pages.push(["timeline.html", renderTimelinePreview()]);
 // Coverage, the page whose job is to say what is missing, in a finished build and an
 // unfinished one.
 pages.push(["coverage.html", renderCoveragePreview()]);
+
+// Discovery, in the four results read as something they are not, including the zero-hit
+// case that is read as the law being silent.
+pages.push(["search.html", renderSearchPreview()]);
 
 // The destination every scheme-valid link in the preview resolves to. A visible action that
 // leads to a missing page is a promise the page cannot keep, and three of them shipped: the
