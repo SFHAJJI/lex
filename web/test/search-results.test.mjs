@@ -279,11 +279,33 @@ test('a row title carries the language it is written in', () => {
   assert.ok(html.includes('lang="en"'));
   assert.ok(!html.includes('lang="fr"'), 'defaulted to French');
 
-  for (const bad of [undefined, '', 'french']) {
+  // The record answers for its own title when the wire carries no separate field, which is
+  // every live hit today. That is reading the expression's own claim, not guessing: a
+  // hardcoded constant was the defect this guard was written for, and it is a different thing.
+  const fromRecord = renderSearchResults({
+    ...GOOD,
+    hits: [hit({ title: 'Version consolidee', language: 'fr' })],
+  });
+  assert.ok(fromRecord.includes('lang="fr"'), 'the record language did not reach the title');
+
+  // An explicit title language still wins, for an expression served under a title the
+  // publisher writes in another language.
+  const explicit = renderSearchResults({
+    ...GOOD,
+    hits: [hit({ title: 'An English title', language: 'fr', title_language: 'en' })],
+  });
+  assert.ok(explicit.includes('lang="en"'), 'the explicit title language was ignored');
+
+  // Neither present is still refused, because then nothing has said anything.
+  for (const bad of ['', 'french', 'FR']) {
     assert.throws(
       () =>
-        renderSearchResults({ ...GOOD, hits: [hit({ title: 'A title', title_language: bad })] }),
-      /does not say what language it is in/,
+        renderSearchResults({
+          ...GOOD,
+          hits: [hit({ title: 'A title', language: bad, title_language: undefined })],
+        }),
+      /neither it nor the record says what language it is in/,
+      `language=${JSON.stringify(bad)} was accepted for a title`,
     );
   }
 });

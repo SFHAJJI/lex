@@ -138,16 +138,25 @@ function requireHit(hit, index) {
     }
   }
 
-  // A title carries the language it is written in. The same defect was live on the timeline:
-  // a default labelled every title of one publisher as the language of the other, and a
-  // screen reader then read Union law in a French voice.
+  // A title carries the language it is written in, and the record already says what that is.
+  //
+  // This required a separate `title_language` and therefore refused every live hit that has a
+  // title, which is all of them. The defect it was written for was a hardcoded `'fr'` default
+  // on the timeline, and that is a different thing: falling back to a constant guesses, while
+  // falling back to this record's own `language` reads the expression's own claim about
+  // itself. A title is published as part of the expression it belongs to.
+  //
+  // An explicit `title_language` still wins when the wire grows one, for the case where a
+  // publisher serves an expression in one language under a title it only publishes in
+  // another. Neither present is still refused, because then nothing has said anything.
   if (Object.hasOwn(hit, 'title')) {
     if (typeof hit.title !== 'string' || hit.title.trim().length === 0) {
       throw new Error(`${where} carries a title that is not a string`);
     }
-    if (typeof hit.title_language !== 'string' || !/^[a-z]{2}$/.test(hit.title_language)) {
+    const declared = hit.title_language ?? hit.language;
+    if (typeof declared !== 'string' || !/^[a-z]{2}$/.test(declared)) {
       throw new Error(
-        `${where} carries a title and does not say what language it is in`,
+        `${where} carries a title and neither it nor the record says what language it is in`,
       );
     }
   }
@@ -176,7 +185,7 @@ function renderHit(hit, index, semantics) {
 
   const title =
     typeof hit.title === 'string' && hit.title.length > 0
-      ? `<p class="hit-title" lang="${escapeHtml(hit.title_language)}">${escapeHtml(hit.title)}</p>`
+      ? `<p class="hit-title" lang="${escapeHtml(hit.title_language ?? hit.language)}">${escapeHtml(hit.title)}</p>`
       : '';
 
   return (

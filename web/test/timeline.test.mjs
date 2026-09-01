@@ -268,10 +268,15 @@ test('a title carries the language it is written in, with no default', () => {
   assert.ok(withTitle({ title_language: 'en' }).includes('lang="en"'));
   assert.ok(!withTitle({ title_language: 'en' }).includes('lang="fr"'), 'defaulted to French');
 
-  for (const bad of [undefined, '', 'french', { a: 1 }]) {
+  // The state answers for its own title when no separate field is given, which is what the
+  // wire carries today. A hardcoded constant was the defect; reading this record's own
+  // language is not.
+  assert.ok(withTitle({ language: 'de' }).includes('lang="de"'), 'the record language was ignored');
+
+  for (const bad of ['', 'french', { a: 1 }]) {
     assert.throws(
-      () => withTitle({ title_language: bad }),
-      /does not say what language it is in/,
+      () => withTitle({ title_language: bad, language: bad }),
+      /neither it nor the record says what language it is in/,
       `title_language=${JSON.stringify(bad)} was accepted`,
     );
   }
