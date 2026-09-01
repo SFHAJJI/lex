@@ -9,6 +9,7 @@
     <ProjectReference Include="../../src/Lex.V3.Artifacts/Lex.V3.Artifacts.csproj" />
     <ProjectReference Include="../../src/Lex.V3.Contracts/Lex.V3.Contracts.csproj" />
     <ProjectReference Include="../../src/Lex.V3.Custody.Azure/Lex.V3.Custody.Azure.csproj" />
+    <ProjectReference Include="../../src/Lex.V3.Custody.Probe/Lex.V3.Custody.Probe.csproj" />
     <ProjectReference Include="../../src/Lex.V3.Preview/Lex.V3.Preview.csproj" />
   </ItemGroup>
 </Project>
