@@ -24,13 +24,32 @@
 export const SEMANTICS = Object.freeze(['publisher_applicability', 'official_consolidation_state']);
 
 /**
+ * A lookup that holds only what it was given.
+ *
+ * An object literal inherits from `Object.prototype`, so a table written to fail closed quietly
+ * answers `constructor`, `toString`, `valueOf`, `__proto__` and `hasOwnProperty` with inherited
+ * members. `semanticsOf('constructor')` returned the Object constructor, which is not
+ * `undefined`, so it passed the very check whose purpose is to refuse a publisher nobody
+ * classified. The module built to make a defect class impossible contained the class.
+ *
+ * The repair belongs to the prototype rather than to the call site. `Object.hasOwn` at each
+ * lookup also works, but it must be remembered every time and by everyone, and this module
+ * exists precisely because "remember to apply it" failed five times. A table with no prototype
+ * cannot answer for a key it was never given, so being wrong here stops being possible rather
+ * than being caught.
+ */
+function closedTable(entries) {
+  return Object.freeze(Object.assign(Object.create(null), entries));
+}
+
+/**
  * Which vocabulary each publisher's dates are in.
  *
  * Closed. A publisher nobody has classified fails closed rather than inheriting a neighbour's
  * claim, because inheriting is exactly how an EU consolidation state came to be labelled
  * applicable.
  */
-const BY_PUBLISHER = Object.freeze({
+const BY_PUBLISHER = closedTable({
   'lu-legilux': 'publisher_applicability',
   'eu-eurlex': 'official_consolidation_state',
   // The synthetic publisher stands in for a Luxembourg record in previews. Named rather than
@@ -60,33 +79,50 @@ export function semanticsOf(publisher, where) {
 export const CLASSIFIED_PUBLISHERS = Object.freeze(Object.keys(BY_PUBLISHER));
 
 /** What the interval is called, as a column or field label. */
-export const INTERVAL_TERM = Object.freeze({
+export const INTERVAL_TERM = closedTable({
   publisher_applicability: 'applicable',
   official_consolidation_state: 'consolidated wording',
 });
 
 /** The phrase a qualifier uses for the state it is attached to. */
-export const STATE_PHRASE = Object.freeze({
+export const STATE_PHRASE = closedTable({
   publisher_applicability: 'applicable from',
   official_consolidation_state: 'a consolidated wording state from',
 });
 
 /** One state's interval, as a sentence. */
-export const INTERVAL_SENTENCE = Object.freeze({
+export const INTERVAL_SENTENCE = closedTable({
   publisher_applicability: (from, to) =>
     `Applicable from ${from} to ${to === null ? 'no end recorded' : to} (publisher)`,
   official_consolidation_state: (from, to) =>
     `Consolidated wording state from ${from} to ${to === null ? 'no end recorded' : to}`,
 });
 
+/**
+ * What a submitted date resolved to, announced.
+ *
+ * One sentence per vocabulary rather than a phrase composed at the call site, because the two
+ * publishers' words do not fit one sentence frame: "the state applicable from" reads correctly
+ * and "the state a consolidated wording state from" does not. A caller assembling this out of
+ * parts would have to know that, and would eventually get it wrong.
+ */
+export const RESOLUTION_SENTENCE = closedTable({
+  publisher_applicability: (from, to, published) =>
+    `Resolved to the state applicable from ${from} to ${to === null ? 'no end recorded' : to}, ` +
+    `published ${published}.`,
+  official_consolidation_state: (from, to, published) =>
+    `Resolved to the consolidated wording state from ${from} to ` +
+    `${to === null ? 'no end recorded' : to}, published ${published}.`,
+});
+
 /** The heading over a set of states scoped to one date. */
-export const DATE_SCOPE = Object.freeze({
+export const DATE_SCOPE = closedTable({
   publisher_applicability: (date) => `Provisions as applicable on ${date}`,
   official_consolidation_state: (date) => `Wording states covering ${date}`,
 });
 
 /** The legend explaining the two clocks. */
-export const LEGENDS = Object.freeze({
+export const LEGENDS = closedTable({
   publisher_applicability:
     'Top: when the publisher says the state applied. Bottom: when the publisher published it. ' +
     'These routinely differ.',

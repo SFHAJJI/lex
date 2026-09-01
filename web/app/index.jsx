@@ -16,3 +16,4 @@ export { AmbiguousVersion } from './AmbiguousVersion.jsx';
 export { ResultList } from './ResultList.jsx';
 export { FilterChips } from './FilterChips.jsx';
 export { CompareArming, armingRefusal, useCompareSelection } from './CompareArming.jsx';
+export { DateField, parseAsOf, resolutionSentence } from './DateField.jsx';
