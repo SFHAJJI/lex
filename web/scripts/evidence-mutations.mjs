@@ -68,6 +68,69 @@ const MUTATIONS = [
       }
     },
   },
+  {
+    // The defect this replaces was real and shipped: the components emitted adjacent spans
+    // with no whitespace and the stylesheet gave them no layout, so a token label and the
+    // text it qualifies were painted as one word. Contrast, overflow, console and the
+    // accessibility tree were all clean on that page.
+    name: "the component separation rules removed, so labels and values paint flush",
+    expect: /painted flush against each other/i,
+    async apply(root) {
+      const file = join(root, "styles.css");
+      const css = await readFile(file, "utf8");
+      await writeFile(
+        file,
+        `${css}\n.token, .verify-hash, .verify-cluster, .refusal-head, .refusal-header,\n` +
+          ".status-strip-flag { display: inline; gap: 0; }\n" +
+          ".envelope-strip summary > * + * { margin-inline-start: 0; }\n",
+        "utf8",
+      );
+    },
+  },
+  {
+    name: "a control with no handler on a page that loads no script",
+    expect: /control\(s\) with no activation path/i,
+    async apply(root) {
+      for (const name of await readdir(root)) {
+        if (!name.endsWith(".html")) continue;
+        const file = join(root, name);
+        const html = await readFile(file, "utf8");
+        if (!html.includes("</main>")) continue;
+        await writeFile(
+          file,
+          html.replace("</main>", '<button type="button">Copy the full digest</button></main>'),
+          "utf8",
+        );
+      }
+    },
+  },
+  {
+    // Lighthouse found three of these at 19 to 21 CSS px while every check here passed. The
+    // gate measures every target now, so turning the rule off has to bring them all back.
+    name: "the target-size floor removed, so list targets fall under 24 CSS px",
+    expect: /below the WCAG 2.2 24 CSS px minimum/i,
+    async apply(root) {
+      const file = join(root, "styles.css");
+      const css = await readFile(file, "utf8");
+      await writeFile(
+        file,
+        `${css}\nli > a, summary, .verify-cluster a ` +
+          "{ min-block-size: 0; min-inline-size: 0; padding-block: 0; }\n",
+        "utf8",
+      );
+    },
+  },
+  {
+    // Three shipped: the provenance link and both ambiguity candidates answered 404. Nothing
+    // else in the run looks past the page it is on.
+    name: "a visible action pointing at a page that does not exist",
+    expect: /answers 404|could not be requested/i,
+    async apply(root) {
+      const file = join(root, "trust-surface.html");
+      const html = await readFile(file, "utf8");
+      await writeFile(file, html.replace('href="/provenance/', 'href="/no-such-screen/'), "utf8");
+    },
+  },
 ];
 
 function run(root) {

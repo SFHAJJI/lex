@@ -14,6 +14,9 @@
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 
 import { loadCaptured } from "./captured-envelopes.mjs";
+import { tokenCss } from "./design-tokens.mjs";
+import { renderTrustSurface } from "./trust-surface.mjs";
+import { page } from "./render.mjs";
 import { decodeEnvelope, validateEnvelope } from "./envelope.mjs";
 import {
   renderLoading,
@@ -29,6 +32,18 @@ const destination = new URL("../dist/", import.meta.url);
 await rm(destination, { force: true, recursive: true });
 await mkdir(destination, { recursive: true });
 await cp(source, destination, { recursive: true });
+
+// The semantic tokens are appended from `design-tokens.mjs` rather than written into
+// `src/styles.css`. Two copies of a colour is two sources of truth, and the one that drifts
+// is always the one nobody tested. A test asserts the stylesheet source does not define them.
+const stylesheet = new URL("styles.css", destination);
+await writeFile(
+  stylesheet,
+  `${await readFile(stylesheet, "utf8")}
+/* Semantic tokens, generated from scripts/design-tokens.mjs. */
+${tokenCss()}`,
+  "utf8",
+);
 
 // Each page states one thing that is true and nothing about any law. The reasons are
 // concrete rather than generic, because "an error occurred" teaches a reader nothing
@@ -81,6 +96,28 @@ for (const [name, file, render] of [
   }
   pages.push([name, render({ envelope: decoded })]);
 }
+
+// The trust surface: the four components every screen composes, rendered together so the
+// browser evidence run exercises their contrast, focus order and reflow at 320 CSS pixels
+// before there are twelve screens carrying copies of the same defect.
+pages.push(["trust-surface.html", renderTrustSurface()]);
+
+// The destination every scheme-valid link in the preview resolves to. A visible action that
+// leads to a missing page is a promise the page cannot keep, and three of them shipped: the
+// provenance link and both ambiguity candidates answered 404. This is the preview's stand-in
+// for screens that do not exist yet, and it says so rather than pretending to be one.
+pages.push([
+  "preview-destination.html",
+  page({
+    state: "preview-destination",
+    title: "Preview destination",
+    main: `      <p class="eyebrow">Preview destination</p>
+      <h1>Preview destination</h1>
+      <p>You followed a real link from the synthetic preview. The screen it addresses is not
+        built yet, so this page stands in for it. The URL you arrived by is the scheme the
+        product uses; nothing here is law, and no coordinate was resolved.</p>`,
+  }),
+]);
 
 for (const [name, html] of pages) {
   await writeFile(new URL(name, destination), html, "utf8");

@@ -10,6 +10,9 @@
 // failure this surface exists to prevent, so each renders its own state and nothing
 // about the law.
 
+import { CHROME_LOCALES } from "./localization.mjs";
+import { tryPublisherSourceUri } from "./routes.mjs";
+
 /** Escape for HTML text and quoted attribute contexts. */
 export function escapeHtml(value) {
   return String(value)
@@ -37,9 +40,26 @@ function syntheticBanner() {
     </aside>`;
 }
 
-function page({ state, title, main }) {
+// Exported so every page in this line goes through one shell. The shell is what carries the
+// synthetic banner and data-preview-state, and a page that builds its own head forgets them:
+// the trust surface did exactly that and the browser run caught it.
+export function page({ state, title, main, locale = "en", shell = null, density = null }) {
+  // `lang` is the page's own language, never the subject's. A work page is English chrome
+  // about a French law and stays `en`; a page of French statute is `fr`. The locale is
+  // checked against the reviewed four, because a tag nobody reviewed the chrome in tells a
+  // screen reader to use a voice for text that was never written in that language.
+  if (!CHROME_LOCALES.includes(locale)) {
+    throw new Error(`${JSON.stringify(locale)} is not one of the four chrome locales`);
+  }
+  // The shell rides on the root element as data attributes and nowhere else. A stylesheet
+  // can select on them; nothing in the render path can branch on them, because `page` has
+  // already been handed the finished `main`.
+  const shellAttributes =
+    shell === null
+      ? ""
+      : ` data-shell="${escapeHtml(shell)}" data-density="${escapeHtml(density ?? "")}"`;
   return `<!doctype html>
-<html lang="en" data-product-line="lex-v3" data-preview-state="${escapeHtml(state)}">
+<html lang="${escapeHtml(locale)}" data-product-line="lex-v3" data-preview-state="${escapeHtml(state)}"${shellAttributes}>
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -230,51 +250,13 @@ ${envelopeStrip(context)}`,
   });
 }
 
-// The host each publisher is allowed to send a reader to. The publisher vocabulary is
-// closed by the schema, so this table is complete by construction and a publisher with
-// no entry fails closed rather than linking anywhere.
-const PUBLISHER_HOSTS = new Map([
-  ["lu-legilux", ["legilux.public.lu", "data.legilux.public.lu"]],
-  ["eu-eurlex", ["eur-lex.europa.eu", "publications.europa.eu", "op.europa.eu"]],
-]);
-
-/**
- * Is this route safe to turn into something a reader can activate?
- *
- * A prefix check on "https://" is not enough, and I shipped one. Three shapes got
- * through it: `https://legilux.public.lu@evil.invalid/x` displays a trustworthy host
- * and navigates to an attacker's, `https://evil.invalid/#legilux.public.lu` links any
- * host at all, and `https:///legilux.public.lu/search` has no host and parses as
- * something else again.
- *
- * So the URL is parsed rather than pattern-matched, and the host must be one the named
- * publisher is allowed to own. That is the real claim being made by an "official search
- * route for lu-legilux": not that the string starts with https, but that it leads to
- * Legilux. Userinfo and an explicit port are refused outright, which is the same rule
- * D1-01 R3.1 applies before any publisher request.
- */
-function officialRouteHref(action) {
-  let url;
-  try {
-    url = new URL(String(action.uri));
-  } catch {
-    return null;
-  }
-  if (url.protocol !== "https:") return null;
-  if (url.username !== "" || url.password !== "") return null;
-  if (url.port !== "") return null;
-  if (url.hostname === "") return null;
-  const allowed = PUBLISHER_HOSTS.get(action.publisher);
-  if (!allowed || !allowed.includes(url.hostname)) return null;
-  return url.href;
-}
-
 /**
  * The official routes, as real links.
  *
  * These are the handoff the pack requires: a refusal that names where to look next is an
  * answer, and one that names it as unclickable text is a smaller answer. A route that
- * does not pass `officialRouteHref` is rendered as inert text with the reason, because a
+ * the one route policy in `routes.mjs` refuses is rendered as inert text with the reason,
+ * because a
  * destination this surface cannot vouch for must not become something a reader can
  * activate from an otherwise inert page.
  */
@@ -285,7 +267,7 @@ function officialRoutes(actions) {
   const items = actions
     .map((action) => {
       const label = `${action.publisher}: ${action.uri}`;
-      const href = officialRouteHref(action);
+      const href = tryPublisherSourceUri(action.publisher, String(action.uri));
       const inner = href
         ? `<a href="${escapeHtml(href)}" rel="noreferrer noopener">${escapeHtml(label)}</a>`
         : `${escapeHtml(label)} <span class="note">(not linked: not an official host for this publisher)</span>`;

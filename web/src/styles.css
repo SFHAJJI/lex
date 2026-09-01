@@ -78,6 +78,8 @@ main > p:last-child {
    makes the scroll container itself a keyboard tab stop. Both were caught by the browser
    evidence run at 320px. */
 code,
+dt,
+dd,
 .body {
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -127,4 +129,157 @@ dd {
     padding: 1rem 0.75rem;
     gap: 0.75rem;
   }
+}
+
+/* Statutory quotation. UX spec section 1 sets serif at 17px/1.65 with a 72ch measure; the
+   measure is a maximum, so the block still reflows to a 320 CSS px viewport. */
+blockquote.law {
+  margin: 0;
+  min-inline-size: 0;
+  max-inline-size: 72ch;
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  border-inline-start: 3px solid currentColor;
+  padding-inline-start: 0.75rem;
+}
+
+/* The lines that qualify something rather than assert it: the authenticity note, the
+   contract notes the refusal card owes the reader, and the missing-translation state.
+   They inherit the body colour rather than being greyed, because a qualification nobody
+   can read is a qualification nobody made. */
+.law-authenticity,
+.localization-unavailable,
+.refusal-note {
+  min-inline-size: 0;
+  margin: 0.5rem 0 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.refusal-candidates,
+.refusal-anchors {
+  min-inline-size: 0;
+  margin: 0.5rem 0 0;
+  padding-inline-start: 1.25rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+/* Readable separation.
+   Contrast and overflow both pass on a page whose label, value and code are painted flush
+   against each other, and that is what shipped: the components emitted adjacent spans with
+   no whitespace between them and no layout rules, so Chrome rendered "legal timeApplicable
+   from 2001-01-01" as one word. The browser evidence run now measures the gap between
+   adjacent inline siblings, and these are the rules that give it one. */
+.token,
+.verify-hash,
+.status-strip-flag,
+.refusal-head,
+.refusal-header {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 0.5rem;
+  min-inline-size: 0;
+}
+
+.verify-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 1rem;
+  min-inline-size: 0;
+}
+
+.token-label,
+.verify-hash-kind,
+.status-strip-caption {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.verify-hash-value {
+  overflow-wrap: anywhere;
+  min-inline-size: 0;
+}
+
+.verify-hash-short {
+  font-weight: 700;
+}
+
+.surface-block,
+.state-banner,
+.refusal-card {
+  display: grid;
+  gap: 0.5rem;
+  min-inline-size: 0;
+}
+
+.refusal-card {
+  padding: 0.75rem;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+}
+
+.envelope-strip summary > * + * {
+  margin-inline-start: 1rem;
+}
+
+.strip-publisher,
+.strip-semantics,
+.strip-built,
+.strip-stamp-valid,
+.strip-stamp-invalid {
+  display: inline-block;
+}
+
+/* WCAG 2.2 SC 2.5.8, target size minimum: 24 by 24 CSS pixels.
+   A link in a sentence takes the inline exception; a link in a list is a target somebody has
+   to hit, and every one of them was 21 px tall because line-height was setting their height.
+   Lighthouse found three of these; the browser run now measures all of them. */
+li > a,
+summary,
+.verify-cluster a {
+  display: inline-block;
+  min-block-size: 24px;
+  min-inline-size: 24px;
+  padding-block: 0.15rem;
+}
+
+summary {
+  display: list-item;
+}
+
+/* Spacing as well as size: adjacent targets in a list need room between them, or a 24 px
+   pointer aimed at one lands on its neighbour. */
+.refusal-handoff,
+.refusal-candidates,
+.refusal-anchors,
+.shell-switcher,
+.no-hit-card ul,
+.superseded-siblings {
+  gap: 0.5rem;
+}
+
+/* An unofficial rendering. Structurally distinct from a quotation, because the difference
+   between the authentic text and a convenience is the difference this product exists for. */
+.unofficial-rendering {
+  display: grid;
+  gap: 0.5rem;
+  min-inline-size: 0;
+  padding: 0.75rem;
+  border: 1px dashed currentColor;
+}
+
+.unofficial-head,
+.unofficial-note,
+.unofficial-official {
+  margin: 0;
+  min-inline-size: 0;
+}
+
+.unofficial-note {
+  font-size: 0.9rem;
+  line-height: 1.5;
 }

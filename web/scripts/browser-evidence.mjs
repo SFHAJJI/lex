@@ -11,13 +11,15 @@
 
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { resolve as resolvePath } from "node:path";
 import { extname, join as joinPath } from "node:path";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+
+import { parseObjectUrl } from "./urls.mjs";
 
 /**
  * Where a real Chromium lives, per platform.
@@ -72,13 +74,33 @@ const WIDTHS = [
   { label: "zoom400", width: 320, height: 256 },
 ];
 
-const PAGES = [
-  "state-loading.html",
-  "state-transport-failure.html",
-  "state-invalid-envelope.html",
-  "state-success.html",
-  "state-refusal.html",
-];
+/**
+ * Every page the build emits, read from the build's own output.
+ *
+ * This was a hand-written list and it was wrong twice for one reason. The trust surface once
+ * shipped outside it and the run reported five pages of six as clean; the page every stand-in
+ * action leads to shipped outside it too, so the one page reached by every visible action was
+ * the one page never measured for contrast, layout, console state or target size.
+ *
+ * A list somebody has to remember to update is a gate that fails open, quietly, in the
+ * direction of a clean report. So the list is the directory: whatever the build emits is what
+ * gets measured, and a page cannot ship unmeasured without also not shipping.
+ */
+async function pagesFrom(root) {
+  const found = (await readdir(root)).filter((name) => name.endsWith(".html")).sort();
+  // An empty baseline passes forever. If the build emitted nothing, this run proves nothing,
+  // and it says so rather than reporting every zero of its combinations clean.
+  if (found.length < MINIMUM_PAGES) {
+    throw new Error(
+      `the build emitted ${found.length} pages and this run needs at least ${MINIMUM_PAGES} ` +
+        "to be worth anything; run npm run build first",
+    );
+  }
+  return found;
+}
+
+/** Below this, the run is measuring an accident rather than the product. */
+const MINIMUM_PAGES = 8;
 
 /**
  * Ports WHATWG Fetch refuses to connect to, so a debugger listening on one is unreachable.
@@ -247,12 +269,73 @@ const PROBE = `(() => {
     });
   const worst = contrast.reduce((a, b) => (a === null || b.ratio - b.required < a.ratio - a.required ? b : a), null);
 
+  // Readable separation. Contrast and overflow both pass on a page whose labels, values
+  // and codes are painted flush against each other, and that is exactly what happened: the
+  // new component classes had no layout rules, so Chrome rendered the token label and the
+  // text it qualifies as one word. For every pair of adjacent inline element siblings,
+  // either the markup has whitespace between them or the boxes do.
+  const glued = [];
+  for (const parent of document.querySelectorAll('body *')) {
+    const children = [...parent.children].filter(
+      (el) => el.offsetParent !== null && el.textContent.trim().length > 0,
+    );
+    for (let i = 0; i + 1 < children.length; i += 1) {
+      const before = children[i];
+      const after = children[i + 1];
+      let between = '';
+      for (let node = before.nextSibling; node && node !== after; node = node.nextSibling) {
+        if (node.nodeType === 3) between += node.nodeValue;
+      }
+      if (between.length > 0 && between.trim().length !== between.length) continue;
+      if (between.trim().length > 0) continue;
+      const a = before.getBoundingClientRect();
+      const b = after.getBoundingClientRect();
+      const separated = b.left - a.right >= 2 || b.top >= a.bottom;
+      if (!separated) {
+        glued.push(
+          parent.className + ' > ' + before.className + ' | ' + after.className,
+        );
+      }
+    }
+  }
+
+  // WCAG 2.2 SC 2.5.8, target size minimum: 24 by 24 CSS pixels. The exception this takes is
+  // the inline one, a link inside a sentence, approximated as an anchor whose parent is a
+  // paragraph. Everything else is a target somebody has to hit, and Lighthouse found three
+  // handoff links at 19 to 21 px that every check here passed.
+  const smallTargets = [];
+  for (const el of document.querySelectorAll('a[href],button,input,select,textarea,summary')) {
+    if (el.offsetParent === null) continue;
+    const inSentence = el.tagName === 'A' && el.parentElement?.tagName === 'P';
+    if (inSentence) continue;
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 24 || rect.height < 24) {
+      smallTargets.push({
+        tag: el.tagName.toLowerCase(),
+        cls: (el.className || '').toString().slice(0, 40),
+        width: Math.round(rect.width * 10) / 10,
+        height: Math.round(rect.height * 10) / 10,
+      });
+    }
+  }
+
+  // Same-origin destinations, collected so the run can check that each one resolves. A
+  // visible action leading to a missing page is a promise the page cannot keep, and three
+  // of them shipped: the provenance link and both ambiguity candidates returned 404.
+  const sameOrigin = [...new Set(
+    [...document.querySelectorAll('a[href]')]
+      .map((el) => el.getAttribute('href'))
+      .filter((href) => href && href.startsWith('/')),
+  )];
+
   const focusable = [...document.querySelectorAll(
     'a[href],button,input,select,textarea,summary,[tabindex]:not([tabindex="-1"])')];
   const headingEls = [...document.querySelectorAll('h1,h2,h3,h4,h5,h6')];
   const heads = headingEls.map((h) => h.tagName + ':' + h.textContent.trim().slice(0, 40));
   const headingLevels = headingEls.map((h) => Number(h.tagName.slice(1)));
   const body = getComputedStyle(document.body);
+  const mainEl = document.querySelector('main');
+  const mainStyle = mainEl ? getComputedStyle(mainEl) : null;
   return {
     lang: document.documentElement.lang,
     state: document.documentElement.dataset.previewState,
@@ -270,11 +353,23 @@ const PROBE = `(() => {
     bodyColor: body.color,
     bodyBackground: body.backgroundColor,
     scriptCount: document.querySelectorAll('script').length,
+    shell: document.documentElement.dataset.shell ?? null,
+    density: document.documentElement.dataset.density ?? null,
+    mainLineHeight: mainStyle ? mainStyle.lineHeight : null,
+    mainFontFamily: mainStyle ? mainStyle.fontFamily : null,
     contrastChecked: contrast.length,
     worstContrast: worst ? worst.ratio : null,
     worstContrastTag: worst ? worst.tag : null,
     worstContrastRequired: worst ? worst.required : null,
     contrastFailures: contrast.filter((c) => c.ratio < c.required).length,
+    glued: glued.slice(0, 8),
+    gluedCount: glued.length,
+    smallTargets: smallTargets.slice(0, 8),
+    smallTargetCount: smallTargets.length,
+    sameOrigin,
+    // A control with no handler and no form is a promise the page cannot keep. This line
+    // ships no script, so any button is inert by construction.
+    inertControls: [...document.querySelectorAll('button, a:not([href])')].length,
   };
 })()`;
 
@@ -338,6 +433,29 @@ export async function keyboardWalk(session, sessionId, expected) {
 }
 
 
+/** Poll until the document is complete and its fonts have resolved. */
+async function waitForSettled(session, sessionId, deadlineMs = 10000) {
+  const started = Date.now();
+  while (Date.now() - started < deadlineMs) {
+    const { result } = await session.send(
+      "Runtime.evaluate",
+      {
+        expression:
+          'document.readyState === "complete" && document.fonts.status === "loaded"',
+        returnByValue: true,
+      },
+      sessionId,
+    );
+    if (result.value === true) {
+      // One frame after settling, so the first layout after font resolution is done.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error("a page never reached a settled state within 10s");
+}
+
 const CONTENT_TYPES = new Map([
   [".html", "text/html; charset=utf-8"],
   [".css", "text/css; charset=utf-8"],
@@ -354,10 +472,28 @@ const CONTENT_TYPES = new Map([
  * content types. This is 30 lines and removes a whole class of thing the harness could
  * not see.
  */
+/**
+ * The URL scheme, resolved onto the built pages.
+ *
+ * The static build is a preview of a routed application, so the harness has to route the
+ * scheme or every real link in it is a 404. It routes exactly what `urls.mjs` defines and
+ * nothing else: the three shell entries onto their generated pages, and object, provenance
+ * and search paths onto one stand-in destination that says what it is. A link outside the
+ * scheme still 404s, which is what makes the destination check worth running.
+ */
+function routeSchemePath(path) {
+  if (path === "/ask" || path === "/w" || path === "/dev") return `/shell-${path.slice(1)}.html`;
+  if (/^\/(ask|w|dev)\/search$/.test(path)) return "/preview-destination.html";
+  if (/^\/provenance\/[^/]+$/.test(path)) return "/preview-destination.html";
+  if (parseObjectUrl(path) !== null) return "/preview-destination.html";
+  return null;
+}
+
 async function serveDist(root) {
   const server = createServer((request, response) => {
     const path = decodeURIComponent(new URL(request.url, "http://127.0.0.1").pathname);
-    const file = joinPath(root, path === "/" ? "/index.html" : path);
+    const routed = routeSchemePath(path);
+    const file = joinPath(root, routed ?? (path === "/" ? "/index.html" : path));
     readFile(file).then(
       (body) => {
         response.writeHead(200, {
@@ -457,7 +593,7 @@ async function main() {
     await session.send("Runtime.enable", {}, sessionId);
     await session.send("Page.enable", {}, sessionId);
 
-    for (const page of PAGES) {
+    for (const page of await pagesFrom(root)) {
       const url = `${site.origin}/${page}`;
       for (const viewport of WIDTHS) {
        for (const scheme of ["light", "dark"]) {
@@ -473,7 +609,12 @@ async function main() {
         );
         logged = [];
         await session.send("Page.navigate", { url }, sessionId);
-        await new Promise((resolve) => setTimeout(resolve, 250));
+        // Wait for the document to be complete and its fonts resolved, rather than for a
+        // fixed 250 ms. A fixed wait measures whatever has arrived: one combination reported
+        // 17 px targets on a page that was 24 px in every other combination, which was the
+        // stylesheet not yet applied rather than a layout defect. A harness that sometimes
+        // measures an unstyled page produces both false failures and false passes.
+        await waitForSettled(session, sessionId);
         const { result } = await session.send(
           "Runtime.evaluate",
           { expression: PROBE, returnByValue: true, awaitPromise: true },
@@ -503,6 +644,27 @@ async function main() {
 
         if (axNodes.length === 0) {
           failures.push(`${page} @${viewport.label}/${scheme}: the accessibility tree is empty`);
+        }
+        if (observed.gluedCount > 0) {
+          failures.push(
+            `${page} @${viewport.label}/${scheme}: ${observed.gluedCount} adjacent element(s) ` +
+              `painted flush against each other: ${observed.glued.join("; ")}`,
+          );
+        }
+        if (observed.smallTargetCount > 0) {
+          failures.push(
+            `${page} @${viewport.label}/${scheme}: ${observed.smallTargetCount} target(s) below ` +
+              `the WCAG 2.2 24 CSS px minimum: ` +
+              observed.smallTargets
+                .map((t) => `<${t.tag} class=${t.cls}> ${t.width}x${t.height}`)
+                .join("; "),
+          );
+        }
+        if (observed.inertControls > 0) {
+          failures.push(
+            `${page} @${viewport.label}/${scheme}: ${observed.inertControls} control(s) with no ` +
+              "activation path on a page that loads no script",
+          );
         }
         if (unnamedInteractive.length > 0) {
           failures.push(
@@ -589,6 +751,29 @@ async function main() {
       }
     }
     session.close();
+    // Every same-origin destination the pages offer has to resolve. A visible action leading
+    // to a missing page is a promise the page cannot keep, and nothing else in this run looks
+    // past the page it is on.
+    const destinations = new Map();
+    for (const row of rows) {
+      for (const href of row.sameOrigin ?? []) {
+        if (!destinations.has(href)) destinations.set(href, row.page);
+      }
+    }
+    for (const [href, fromPage] of destinations) {
+      let status = 0;
+      try {
+        status = (await fetch(`${site.origin}${href}`, { redirect: "manual" })).status;
+      } catch (error) {
+        failures.push(`${fromPage}: ${href} could not be requested: ${error.message}`);
+        continue;
+      }
+      if (status !== 200) {
+        failures.push(
+          `${fromPage}: ${href} answers ${status}; a visible action must not lead to a missing page`,
+        );
+      }
+    }
   } finally {
     // Chrome spawns a process tree, and killing only the process we launched leaves the
     // renderers and the GPU process behind. Repeated runs left 51 of them alive, holding
@@ -603,7 +788,7 @@ async function main() {
       `${row.page.replace('state-','').replace('.html','').padEnd(18)} ${row.viewport.padEnd(8)} ${row.scheme.padEnd(6)} ` +
         `console=${row.console} h1=${row.h1Count} overflow=${row.horizontalOverflow} scripts=${row.scriptCount} ` +
         `contrast=${row.contrastChecked} worst=${row.worstContrast} ` +
-        `ax=${row.axNodes} named-interactive=${row.axInteractive} landmarks=${row.axLandmarks} main=${row.axMain}`,
+        `ax=${row.axNodes} named-interactive=${row.axInteractive} landmarks=${row.axLandmarks} main=${row.axMain} glued=${row.gluedCount} inert=${row.inertControls} small=${row.smallTargetCount}`,
     );
   }
 
