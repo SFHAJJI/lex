@@ -434,6 +434,12 @@ const PROBE = `(() => {
     // result also covers a wrong Content-Type header and a byte-order mark, which reading the
     // attribute back out of the DOM would not.
     characterSet: document.characterSet,
+    // Hydration, as the client reports it. Set only after the first pass completes, and set
+    // to recovered when React had to redraw because the server markup and the client tree
+    // disagreed. React recovers from that quietly, so a page that hydrated by re-rendering
+    // looks identical to one that hydrated cleanly unless something records the difference.
+    hydrated: document.documentElement.dataset.hydrated ?? null,
+    hydrationRecovered: document.documentElement.dataset.hydrationRecovered ?? null,
     shell: document.documentElement.dataset.shell ?? null,
     density: document.documentElement.dataset.density ?? null,
     mainLineHeight: mainStyle ? mainStyle.lineHeight : null,
@@ -913,6 +919,23 @@ async function main() {
           }
         }
         if (observed.state === undefined) failures.push(`${page} @${viewport.label}: no data-preview-state`);
+        // A page that ships a script must hydrate, and must hydrate without changing what
+        // the server sent. The reader saw the server's document; if the client redraws it,
+        // the text they kept is not the text that was served, and the legal content is
+        // exactly what must not move between those two moments.
+        if (observed.scriptCount > 0) {
+          if (observed.hydrated === null) {
+            failures.push(
+              `${page} @${viewport.label}: ships a script and never reported hydrating; a` +
+                " page with an inert runtime has shipped weight that does nothing",
+            );
+          } else if (observed.hydrated !== "clean") {
+            failures.push(
+              `${page} @${viewport.label}: hydrated as ${observed.hydrated}` +
+                `${observed.hydrationRecovered ? `, ${observed.hydrationRecovered}` : ''}`,
+            );
+          }
+        }
         if (observed.characterSet !== "UTF-8") {
           failures.push(
             `${page} @${viewport.label}: decoded as ${observed.characterSet}, not UTF-8; every ` +

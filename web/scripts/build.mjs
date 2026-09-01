@@ -12,6 +12,7 @@
 // put bare numbers where a reader expects machine codes.
 
 import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { pathToFileURL } from "node:url";
 
 import { loadCaptured } from "./captured-envelopes.mjs";
 import { tokenCss } from "./design-tokens.mjs";
@@ -175,6 +176,17 @@ pages.push([
         product uses; nothing here is law, and no coordinate was resolved.</p>`,
   }),
 ]);
+
+// The hydrated page and the script that hydrates it. Compiled from app/ through the same
+// esbuild pipeline the tests use, so the bytes measured in the browser are the bytes the tests
+// asserted against rather than a second compilation that happens to agree.
+const { bundle, bundleClient, resetWork } = await import("./react-build.mjs");
+await resetWork();
+const ssr = await import(pathToFileURL(await bundle("app/index.jsx", "app.mjs")).href);
+pages.push(["hydration.html", ssr.renderHydrationProof()]);
+
+const clientBundle = await bundleClient("app/client-entry.jsx", "client.js");
+await cp(clientBundle, new URL("client.js", destination));
 
 for (const [name, html] of pages) {
   await writeFile(new URL(name, destination), html, "utf8");

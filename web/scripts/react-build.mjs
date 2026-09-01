@@ -36,6 +36,7 @@ export async function bundle(entry, outfile, { platform = 'node' } = {}) {
     // for node builtins, and bundling it into ESM turns those into a dynamic require that
     // throws at import time. The browser build has no such escape and bundles everything.
     packages: platform === 'node' ? 'external' : undefined,
+    minify: platform === 'browser',
     logLevel: 'silent',
   });
   return out;
@@ -45,6 +46,18 @@ export async function bundle(entry, outfile, { platform = 'node' } = {}) {
 export async function resetWork() {
   await rm(work, { force: true, recursive: true });
   await mkdir(work, { recursive: true });
+}
+
+/**
+ * Build the client bundle a hydrated page loads.
+ *
+ * Browser platform, everything bundled: the page is served under a policy that admits scripts
+ * only from this origin, so a bare specifier the browser would have to resolve elsewhere is a
+ * script that never loads. Minified because the bundle is shipped, and the reviewable artefact is
+ * the source in app/, not the bytes.
+ */
+export async function bundleClient(entry, outfile) {
+  return bundle(entry, outfile, { platform: 'browser' });
 }
 
 /** Write one built page and return its file name. */
