@@ -117,8 +117,10 @@ export function renderSearchPreview({ locale = 'en' } = {}) {
     rowSet: { returned: 0, total: 0 },
     population: POPULATION,
     layers: [
+      { name: 'work_resolution', outcome: 'not_run', language: 'en' },
       { name: 'exact_identifier', outcome: 'ran', language: 'en' },
       { name: 'keyword', outcome: 'ran', language: 'en' },
+      { name: 'lay_vocabulary_bridge', outcome: 'not_applicable', language: 'en' },
       { name: 'semantic', outcome: 'unavailable', language: 'en' },
     ],
     expansions: ['many -> mady', 'many -> man'],

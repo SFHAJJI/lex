@@ -43,13 +43,28 @@ const LAYER_LABEL = new Map([
   ['semantic', 'ranked by meaning'],
 ]);
 
-/** What a layer did. `not_run` is a first-class outcome and says so on the page. */
-export const LAYER_OUTCOMES = Object.freeze(['ran', 'not_run', 'unavailable']);
+/**
+ * What a layer did. `not_run` is a first-class outcome and says so on the page.
+ *
+ * `not_applicable` exists so the plan can be closed. Completeness used to be inferred from
+ * every supplied entry being `ran`, which proved only that the caller's own list was fully
+ * executed. A caller naming one layer and running it produced the whole-corpus sentence while
+ * four layers went unmentioned. A layer that genuinely does not apply to this query must say
+ * so explicitly rather than be omitted, because omission and non-applicability read the same
+ * to a reader and only one of them is a fact about the search.
+ */
+export const LAYER_OUTCOMES = Object.freeze([
+  'ran',
+  'not_run',
+  'unavailable',
+  'not_applicable',
+]);
 
 const OUTCOME_LABEL = new Map([
   ['ran', 'ran'],
   ['not_run', 'did not run'],
   ['unavailable', 'was unavailable'],
+  ['not_applicable', 'did not apply to this query'],
 ]);
 
 const LANGUAGE_TAG = /^[a-z]{2}$/;
@@ -94,6 +109,19 @@ function requireLayers(layers) {
           'nothing is owed that, because the statute is not in English',
       );
     }
+  }
+
+  // Completeness last, so a malformed entry is still reported by its own guard. Placed first,
+  // this check shadowed the per-layer name, outcome and language rules: every test that fed a
+  // deliberately broken single layer got the completeness message instead, and three rules
+  // became unreachable from the suite in one edit.
+  const named = new Set(layers.map((layer) => layer.name));
+  const missing = LAYERS.filter((name) => !named.has(name));
+  if (missing.length > 0) {
+    throw new Error(
+      `the execution plan omits ${missing.join(', ')}; completeness cannot be inferred from a ` +
+        'partial list, and a layer that does not apply must say so rather than be left out',
+    );
   }
 }
 
@@ -217,7 +245,11 @@ export function renderNoHitCard({ query, layers, population, expansions, routes 
   // the held records matches", which is an absence claim resting on a search that never
   // happened. A reader cannot tell that sentence apart from a real corpus miss, and on this
   // product that is the most expensive confusion available.
-  const ran = layers.filter((layer) => layer.outcome === 'ran');
+  // Applicable, not supplied. The plan is closed above, so a layer marked not_applicable is
+  // a stated fact about this query rather than a gap, and the whole-corpus sentence is
+  // available only when every layer that did apply actually ran.
+  const applicable = layers.filter((layer) => layer.outcome !== 'not_applicable');
+  const ran = applicable.filter((layer) => layer.outcome === 'ran');
   const account =
     ran.length === 0
       ? {
@@ -226,7 +258,7 @@ export function renderNoHitCard({ query, layers, population, expansions, routes 
             'Nothing was searched, so nothing is known about whether this corpus holds a match. ' +
             'This is a fact about this request, not about the records.',
         }
-      : ran.length < layers.length
+      : ran.length < applicable.length
         ? {
             head:
               `Nothing matched ${query} in the searches that ran ` +

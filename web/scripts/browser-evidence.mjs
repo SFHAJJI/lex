@@ -11,7 +11,7 @@
 
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, realpath } from "node:fs/promises";
 import { resolve as resolvePath } from "node:path";
 import { extname, join as joinPath, sep as pathSep } from "node:path";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -63,7 +63,14 @@ export function browserCandidates(platform = process.platform) {
 
 // Narrow, tablet, desktop. The narrow width is a real small phone rather than a
 // convenient round number, because layouts tend to be tuned to round numbers.
-const WIDTHS = [
+// Iterating on one truth rule does not need 315 page and viewport combinations to tell you
+// whether the rule holds; it needs one. LEX_EVIDENCE_FAST=1 keeps every page and every gate and
+// drops the matrix to a single width and scheme, which turns a two-minute wait into seconds.
+// The full matrix is what a freeze is measured on and is still the default, because responsive
+// and forced-colours defects are exactly the ones a single viewport cannot see.
+const FAST = process.env.LEX_EVIDENCE_FAST === "1";
+
+const ALL_WIDTHS = [
   { label: "narrow", width: 320, height: 640 },
   { label: "tablet", width: 768, height: 1024 },
   { label: "desktop", width: 1440, height: 900 },
@@ -73,6 +80,8 @@ const WIDTHS = [
   { label: "zoom200", width: 720, height: 450 },
   { label: "zoom400", width: 320, height: 256 },
 ];
+
+const WIDTHS = FAST ? ALL_WIDTHS.slice(2, 3) : ALL_WIDTHS;
 
 /**
  * Every page the build emits, read from the build's own output.
@@ -568,18 +577,30 @@ export async function serveDist(root) {
       refuse();
       return;
     }
-    readFile(file).then(
-      (body) => {
-        response.writeHead(200, {
-          "content-type": CONTENT_TYPES.get(extname(file)) ?? "application/octet-stream",
-        });
-        response.end(body);
-      },
-      () => {
-        response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
-        response.end("not found");
-      },
-    );
+    // Lexical containment is not containment. `readFile` follows reparse points, so a directory
+    // junction inside dist pointing outside it satisfied every string check above and still
+    // served the outside file with a real 200. The final target is resolved and re-checked
+    // against the resolved root before anything is opened, and a path that cannot be resolved
+    // is refused rather than opened optimistically.
+    Promise.all([realpath(file), realpath(root)])
+      .then(([realFile, realRoot]) => {
+        if (!withinRoot(realRoot, realFile)) {
+          throw new Error("resolved outside the distribution root");
+        }
+        return readFile(realFile);
+      })
+      .then(
+        (body) => {
+          response.writeHead(200, {
+            "content-type": CONTENT_TYPES.get(extname(file)) ?? "application/octet-stream",
+          });
+          response.end(body);
+        },
+        () => {
+          response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+          response.end("not found");
+        },
+      );
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address();
@@ -670,7 +691,7 @@ async function main() {
     for (const page of await pagesFrom(root)) {
       const url = `${site.origin}/${page}`;
       for (const viewport of WIDTHS) {
-       for (const scheme of ["light", "dark"]) {
+       for (const scheme of FAST ? ["light"] : ["light", "dark"]) {
         await session.send(
           "Emulation.setEmulatedMedia",
           { features: [{ name: "prefers-color-scheme", value: scheme }, { name: "prefers-reduced-motion", value: "reduce" }] },

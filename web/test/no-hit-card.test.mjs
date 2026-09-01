@@ -7,7 +7,9 @@ import { LAYERS, LAYER_OUTCOMES, renderNoHitCard } from '../scripts/no-hit-card.
 // against French statute, the resolver lane not requested, and two nonsense expansions.
 const LAYERS_RUN = [
   { name: 'work_resolution', outcome: 'not_run', language: 'en' },
+  { name: 'exact_identifier', outcome: 'ran', language: 'en' },
   { name: 'keyword', outcome: 'ran', language: 'en' },
+  { name: 'lay_vocabulary_bridge', outcome: 'not_applicable', language: 'en' },
   { name: 'semantic', outcome: 'unavailable', language: 'en' },
 ];
 
@@ -100,7 +102,10 @@ test('a layer that did not run is reported, not omitted', () => {
   assert.ok(html.includes('resolved the query against work titles'));
   assert.ok(html.includes('did not run'));
   assert.ok(html.includes('was unavailable'));
-  assert.deepEqual([...LAYER_OUTCOMES], ['ran', 'not_run', 'unavailable']);
+  // not_applicable joined the closed set so a plan can be complete without pretending a
+  // layer that does not apply to this query was somehow executed.
+  assert.deepEqual([...LAYER_OUTCOMES], ['ran', 'not_run', 'unavailable', 'not_applicable']);
+  assert.ok(html.includes('did not apply to this query'));
   assert.ok(LAYERS.includes('lay_vocabulary_bridge'));
 });
 
@@ -215,8 +220,10 @@ test('a card whose layers all failed to run makes no claim about the corpus', ()
   const html = renderNoHitCard({
     ...GOOD,
     layers: [
+      { name: 'work_resolution', outcome: 'not_run', language: 'en' },
       { name: 'exact_identifier', outcome: 'not_run', language: 'en' },
       { name: 'keyword', outcome: 'not_run', language: 'en' },
+      { name: 'lay_vocabulary_bridge', outcome: 'not_run', language: 'en' },
       { name: 'semantic', outcome: 'unavailable', language: 'en' },
     ],
   });
@@ -235,7 +242,10 @@ test('a card whose layers partly ran scopes its sentence to what ran', () => {
   const html = renderNoHitCard({
     ...GOOD,
     layers: [
+      { name: 'work_resolution', outcome: 'not_applicable', language: 'fr' },
+      { name: 'exact_identifier', outcome: 'not_applicable', language: 'fr' },
       { name: 'keyword', outcome: 'ran', language: 'fr' },
+      { name: 'lay_vocabulary_bridge', outcome: 'not_applicable', language: 'fr' },
       { name: 'semantic', outcome: 'not_run', language: 'fr' },
     ],
   });
@@ -247,4 +257,46 @@ test('a card whose layers partly ran scopes its sentence to what ran', () => {
   assert.equal(html.includes('in the searches that ran'), true);
   assert.equal(html.includes('searched provision wording by keyword'), true);
   assert.equal(html.includes('not evidence that the instrument or the law does not exist'), true);
+});
+
+test('one layer that ran is not a complete execution account', () => {
+  // O10-R1, Codex's exact probe. Every supplied entry being `ran` proved only that the caller's
+  // own list was fully executed. Naming one layer and running it omitted four and still produced
+  // the whole-corpus sentence, which his runtime probe returned as FALSE_COMPLETE_CLAIM.
+  assert.throws(
+    () =>
+      renderNoHitCard({
+        ...GOOD,
+        layers: [{ name: 'keyword', outcome: 'ran', language: 'en' }],
+      }),
+    /the execution plan omits work_resolution, exact_identifier, lay_vocabulary_bridge, semantic/,
+  );
+});
+
+test('an omitted applicable layer is refused, one at a time', () => {
+  // Each layer removed individually, so the rule cannot be satisfied by catching only the
+  // easy case where most of the plan is missing.
+  for (const dropped of LAYERS) {
+    assert.throws(
+      () => renderNoHitCard({ ...GOOD, layers: LAYERS_RUN.filter((l) => l.name !== dropped) }),
+      new RegExp(`the execution plan omits ${dropped}`),
+      `omitting ${dropped} was accepted as a complete plan`,
+    );
+  }
+});
+
+test('a complete plan may use whole-corpus wording even when a layer does not apply', () => {
+  // The counterpart: not_applicable is a stated fact, so declaring it keeps the plan complete
+  // and the whole-corpus sentence honest. Without this, the fix would have made the strongest
+  // claim unreachable rather than merely harder to earn.
+  const html = renderNoHitCard({
+    ...GOOD,
+    layers: LAYERS.map((name) => ({
+      name,
+      outcome: name === 'semantic' ? 'not_applicable' : 'ran',
+      language: 'en',
+    })),
+  });
+  assert.equal(html.includes('Nothing in the held records matches'), true);
+  assert.equal(html.includes('did not apply to this query'), true);
 });

@@ -225,8 +225,10 @@ test('zero hits is a card that names what ran, never an empty list', () => {
     // the defect O9 names: an empty page of a nonempty result set read as a corpus miss.
     rowSet: { returned: 0, total: 0 },
     layers: [
+      { name: 'work_resolution', outcome: 'not_run', language: 'en' },
       { name: 'exact_identifier', outcome: 'ran', language: 'en' },
       { name: 'keyword', outcome: 'ran', language: 'en' },
+      { name: 'lay_vocabulary_bridge', outcome: 'not_applicable', language: 'en' },
       { name: 'semantic', outcome: 'unavailable', language: 'en' },
     ],
     expansions: ['many -> mady', 'many -> man'],

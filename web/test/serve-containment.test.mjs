@@ -12,7 +12,7 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -88,4 +88,44 @@ test('containment accepts the root itself and refuses its siblings', () => {
   assert.equal(withinRoot(root, join(root, 'nested', 'page.html')), true);
   assert.equal(withinRoot(root, `${root}-sibling/page.html`), false);
   assert.equal(withinRoot(root, join(tmpdir(), 'elsewhere.txt')), false);
+});
+
+test('a directory junction inside the root cannot serve a file outside it', async (t) => {
+  // O11-R1. Lexical containment is not containment: readFile follows reparse points, so a
+  // junction placed inside dist and pointing outside satisfied every string check and still
+  // returned the outside sentinel with a real 200. This drives the actual server, because the
+  // defect is in what gets opened, not in what the path looks like.
+  const base = await mkdtemp(join(tmpdir(), 'lex-junction-'));
+  const root = join(base, 'dist');
+  const outside = join(base, 'outside');
+  await mkdir(root, { recursive: true });
+  await mkdir(join(outside, 'nested'), { recursive: true });
+  await writeFile(join(root, 'index.html'), '<!doctype html><title>inside</title>', 'utf8');
+  await writeFile(join(outside, 'nested', 'secret.txt'), SECRET, 'utf8');
+
+  let linked = false;
+  try {
+    // 'junction' needs no elevation on Windows; POSIX takes the directory symlink.
+    await symlink(outside, join(root, 'leak'), process.platform === 'win32' ? 'junction' : 'dir');
+    linked = true;
+  } catch {
+    // Named inconclusive rather than a silent pass: a host that cannot create the link has not
+    // demonstrated the property, and saying nothing would read as having proved it.
+    t.diagnostic('INCONCLUSIVE: this host does not permit link creation; the escape is unproven here');
+  }
+
+  const site = await serveDist(root);
+  try {
+    if (linked) {
+      const response = await fetch(`${site.origin}/leak/nested/secret.txt`);
+      const body = await response.text();
+      assert.equal(body.includes(SECRET), false, 'a junction served a file outside the root');
+      assert.equal(response.status, 404);
+    }
+    // The root itself must still work, so the guard is not simply refusing everything.
+    assert.equal((await fetch(`${site.origin}/index.html`)).status, 200);
+  } finally {
+    await site.close();
+    await rm(base, { force: true, recursive: true });
+  }
 });
