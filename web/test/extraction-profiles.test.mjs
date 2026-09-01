@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
 
 import {
   DESCRIBED_PROFILES,
@@ -83,7 +82,11 @@ test('every profile a V3 surface renders as provenance is one this table describ
     for (const name of readdirSync(dir)) {
       if (!/\.(mjs|jsx)$/.test(name)) continue;
       if (name === 'extraction-profiles.mjs') continue;
-      const source = readFileSync(join(dir.pathname.slice(1), name), 'utf8');
+      // Read through the URL rather than converting it to a path. `pathname` is `/C:/...`
+      // on Windows and `/home/...` on Linux, so slicing the leading slash happens to work on
+      // one and produces a relative path on the other. This passed here and failed CI, which
+      // is the whole reason CI runs somewhere else.
+      const source = readFileSync(new URL(name, dir), 'utf8');
       for (const match of source.matchAll(
         /\b(?:extraction_profile|profile)\s*:\s*['"]([^'"]+)['"]/g,
       )) {
