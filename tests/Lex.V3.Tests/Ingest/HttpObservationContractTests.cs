@@ -328,6 +328,15 @@ public sealed class HttpObservationContractTests
             "https://eur-lex.europa.eu/content/legal-notice/legal-notice.html?locale=en",
             legalNotice.RequestedUri);
 
+        foreach (var encodedLiteral in new[]
+        {
+            "https://publications.europa.eu/resource/a%20b",
+            "https://publications.europa.eu/resource/a%2520b",
+        })
+        {
+            Assert.AreEqual(encodedLiteral, RequestEvidence(requestedUri: encodedLiteral).RequestedUri);
+        }
+
         Assert.ThrowsExactly<ArgumentException>(() => RequestEvidence(
             observedAtUtc: "2026-09-01T00:00:00.000-00:00"));
         Assert.ThrowsExactly<ArgumentException>(() => RequestEvidence(
@@ -355,6 +364,9 @@ public sealed class HttpObservationContractTests
             "https://publications.europa.eu/a/%2f..%2f/b",
             "https://publications.europa.eu/a/%5c..%5c/b",
             "https://publications.europa.eu/a/%252e%252e/b",
+            "https://publications.europa.eu/a/%25%2532%2565%25%2532%2565/b",
+            "https://publications.europa.eu/a/%25%2532%2566/b",
+            "https://publications.europa.eu/a/%25%2535%2563/b",
         })
         {
             Assert.ThrowsExactly<ArgumentException>(() => RequestEvidence(requestedUri: alias), alias);

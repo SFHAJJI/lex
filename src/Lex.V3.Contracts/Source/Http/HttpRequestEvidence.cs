@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net;
+using System.Text;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Source.Core;
 
@@ -246,34 +247,61 @@ public sealed record HttpRequestEvidence
 
     private static bool HasEncodedPathAlias(string path)
     {
-        for (var index = 0; index < path.Length; index++)
+        var candidate = path;
+        while (true)
         {
-            if (path[index] != '%')
+            var decodedAny = false;
+            var decoded = new StringBuilder(candidate.Length);
+            for (var index = 0; index < candidate.Length; index++)
             {
-                continue;
+                if (candidate[index] == '%' &&
+                    index + 2 < candidate.Length &&
+                    TryDecodeHexByte(candidate[index + 1], candidate[index + 2], out var value))
+                {
+                    decodedAny = true;
+                    var character = (char)value;
+                    if (character is '.' or '/' or '\\')
+                    {
+                        return true;
+                    }
+
+                    decoded.Append(character);
+                    index += 2;
+                }
+                else
+                {
+                    decoded.Append(candidate[index]);
+                }
             }
 
-            var tokenStart = index + 1;
-            while (tokenStart + 1 < path.Length &&
-                   path[tokenStart] == '2' &&
-                   path[tokenStart + 1] == '5')
+            if (!decodedAny)
             {
-                tokenStart += 2;
+                return false;
             }
 
-            if (tokenStart + 1 >= path.Length)
-            {
-                continue;
-            }
+            candidate = decoded.ToString();
+        }
+    }
 
-            var first = char.ToLowerInvariant(path[tokenStart]);
-            var second = char.ToLowerInvariant(path[tokenStart + 1]);
-            if ((first, second) is ('2', 'e') or ('2', 'f') or ('5', 'c'))
-            {
-                return true;
-            }
+    private static bool TryDecodeHexByte(char first, char second, out byte value)
+    {
+        var high = HexValue(first);
+        var low = HexValue(second);
+        if (high < 0 || low < 0)
+        {
+            value = 0;
+            return false;
         }
 
-        return false;
+        value = (byte)((high << 4) | low);
+        return true;
     }
+
+    private static int HexValue(char value) => value switch
+    {
+        >= '0' and <= '9' => value - '0',
+        >= 'a' and <= 'f' => value - 'a' + 10,
+        >= 'A' and <= 'F' => value - 'A' + 10,
+        _ => -1,
+    };
 }

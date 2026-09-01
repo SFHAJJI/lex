@@ -408,6 +408,16 @@ public sealed class Revalidation304Observation : HttpResponseObservation
                 nameof(predecessor));
         }
 
+        if (ResponseMetadata.HasMultipleField ||
+            ResponseMetadata.ContentLength is not AbsentHttpHeader &&
+            (!ResponseMetadata.TryGetSingleContentLength(out var retainedLength) ||
+             retainedLength != predecessor.DurableBlobRef.ByteLength))
+        {
+            throw new ArgumentException(
+                "A 304 may be admitted only with unambiguous metadata and a retained Content-Length matching the predecessor.",
+                nameof(predecessor));
+        }
+
         var serialized = ContractJson.Serialize<HttpObservation>(predecessor);
         var expectedDigest = Convert.ToHexStringLower(
             SHA256.HashData(Encoding.UTF8.GetBytes(serialized)));

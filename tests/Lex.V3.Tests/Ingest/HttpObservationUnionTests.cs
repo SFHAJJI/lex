@@ -141,15 +141,47 @@ public sealed class HttpObservationUnionTests
             metadata: Metadata(contentLength: 1, contentRange: "bytes 0-0/1"));
         Assert.AreEqual(HttpStatusDisposition.RangeNotApproved, rangeEvidence.StatusDisposition);
 
-        var duplicateHeaderEvidence = Complete(metadata: new HttpResponseMetadata(
+        var duplicateMetadata = new HttpResponseMetadata(
             new SingleHttpHeader("application/xml"),
             new SingleHttpHeader("utf-8"),
             new SingleHttpHeader("1"),
             new AbsentHttpHeader(),
             new AbsentHttpHeader(),
             new MultipleHttpHeader(["\"one\"", "\"two\""]),
-            new AbsentHttpHeader()));
+            new AbsentHttpHeader());
+        Assert.ThrowsExactly<ArgumentException>(() => Complete(metadata: duplicateMetadata));
+        var duplicateHeaderEvidence = Complete(
+            statusDisposition: HttpStatusDisposition.NonDerivableStatus,
+            metadata: duplicateMetadata);
         Assert.IsInstanceOfType<MultipleHttpHeader>(duplicateHeaderEvidence.ResponseMetadata.Etag);
+        Assert.AreEqual(
+            HttpStatusDisposition.NonDerivableStatus,
+            duplicateHeaderEvidence.StatusDisposition);
+
+        var malformedLengthMetadata = new HttpResponseMetadata(
+            new SingleHttpHeader("application/xml"),
+            new SingleHttpHeader("utf-8"),
+            new SingleHttpHeader("not-a-length"),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new SingleHttpHeader("\"one\""),
+            new AbsentHttpHeader());
+        var protocolCompletion = new Http2EndStreamCompleteEvidence(
+            TransferCompletionSchemaIds.TransferCompletionEvidence,
+            Artifact("urn:uuid:cccccccc-cccc-4ccc-8ccc-cccccccccccc", 'c'),
+            "urn:uuid:11111111-1111-4111-8111-111111111111",
+            new string('a', 64),
+            1,
+            Artifact("urn:uuid:14141414-1414-4414-8414-141414141414", '1'));
+        Assert.ThrowsExactly<ArgumentException>(() => Complete(
+            metadata: malformedLengthMetadata,
+            completionEvidence: protocolCompletion));
+        Assert.AreEqual(
+            HttpStatusDisposition.NonDerivableStatus,
+            Complete(
+                statusDisposition: HttpStatusDisposition.NonDerivableStatus,
+                metadata: malformedLengthMetadata,
+                completionEvidence: protocolCompletion).StatusDisposition);
     }
 
     [TestMethod]
@@ -268,6 +300,8 @@ public sealed class HttpObservationUnionTests
             effectiveUri: "https://publications.europa.eu/a/%2f..%2f/b"));
         Assert.ThrowsExactly<ArgumentException>(() => Complete(
             effectiveUri: "https://publications.europa.eu/a/%252e%252e/b"));
+        Assert.ThrowsExactly<ArgumentException>(() => Complete(
+            effectiveUri: "https://publications.europa.eu/a/%25%2532%2565%25%2532%2565/b"));
     }
 
     [TestMethod]
@@ -298,14 +332,20 @@ public sealed class HttpObservationUnionTests
 
         var retainedLength = Revalidation(
             predecessor: predecessor,
-            metadata: Metadata(contentLength: 123));
+            metadata: Metadata(contentLength: 1));
         Assert.AreEqual(
-            "123",
+            "1",
             Assert.IsInstanceOfType<SingleHttpHeader>(
                 retainedLength.ResponseMetadata.ContentLength).Value);
         Assert.AreSame(
             retainedLength,
             retainedLength.AdmitAgainst(predecessor).Observation);
+
+        var mismatchedRetainedLength = Revalidation(
+            predecessor: predecessor,
+            metadata: Metadata(contentLength: 123));
+        Assert.ThrowsExactly<ArgumentException>(
+            () => mismatchedRetainedLength.AdmitAgainst(predecessor));
 
         var wrongObservationRef = Revalidation(
             predecessor: predecessor,

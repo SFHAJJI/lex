@@ -101,6 +101,19 @@ public sealed record HttpResponseMetadata
 
     internal bool HasContentRange => ContentRange is not AbsentHttpHeader;
 
+    internal bool HasMultipleField =>
+        ContentType is MultipleHttpHeader ||
+        DeclaredCharset is MultipleHttpHeader ||
+        ContentLength is MultipleHttpHeader ||
+        ContentEncoding is MultipleHttpHeader ||
+        ContentRange is MultipleHttpHeader ||
+        Etag is MultipleHttpHeader ||
+        LastModified is MultipleHttpHeader;
+
+    internal bool BlocksDerivation =>
+        HasMultipleField ||
+        ContentLength is SingleHttpHeader && !TryGetSingleContentLength(out _);
+
     internal bool TryGetSingleContentLength(out long length)
     {
         length = 0;
