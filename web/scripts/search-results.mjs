@@ -235,7 +235,7 @@ function renderHit(hit, index, semantics) {
  * @param {object}  input.rowSet         `{ returned, total }` for the served page
  * @param {object}  input.population      the structured disclosure, as the no-hit card takes
  * @param {object}  [input.governing]     the one resolved instrument, when the query named one
- * @param {Array}   [input.relaxations]   every relaxation, each declaring whether it applied
+ * @param {object}  input.relaxations    every relaxation, each declaring whether it applied
  * @param {string}  [input.searchPath]    the path a revert link goes back to
  * @param {Array}   [input.layers]        for the zero-hit case
  * @param {Array}   [input.expansions]    what the query was turned into
@@ -250,7 +250,7 @@ export function renderSearchResults({
   rowSet,
   population,
   governing = null,
-  relaxations = [],
+  relaxations,
   searchPath,
   layers,
   expansions = [],
@@ -276,6 +276,15 @@ export function renderSearchResults({
   requirePopulationShape(population);
   if (typeof query !== 'string' || query.trim().length === 0) {
     throw new Error('results echo the query they answer');
+  }
+  // An absent relaxation set is not "none applied", it is a caller who did not say. The whole
+  // disclosure rule was reachable only through a gate an omission walked straight past, and the
+  // default was an array, so it had no keys to gate on either.
+  if (relaxations === null || typeof relaxations !== 'object' || Array.isArray(relaxations)) {
+    throw new Error(
+      'results declare every relaxation and whether it applied; an absent set is not "none ' +
+        'ran", it is a caller who did not say, and a screen that does not know cannot disclose',
+    );
   }
   if (!TIME_SCOPES.includes(timeScope)) {
     throw new Error(
@@ -352,17 +361,37 @@ export function renderSearchResults({
 
   // A relaxation that ran without its disclosure is the screen answering a question the reader
   // did not ask. The expansions are the evidence that one ran, so they cannot be silent.
-  const applied = Object.values(relaxations).filter((one) => one?.applied === true);
-  if (expansions.length > 0 && applied.length === 0) {
+  // The expansions are evidence a rewrite happened, and they belong to the relaxation that
+  // produced them. Testing whether ANY relaxation applied let fuzzy substitutions disappear
+  // behind an unrelated crosswalk, so the reader saw a disclosure about the wrong thing.
+  if (expansions.length > 0 && relaxations.fuzzy?.applied !== true) {
     throw new Error(
-      `this query was expanded into ${expansions.join(', ')} and no relaxation is declared ` +
-        'as applied; a reader who asked one thing and was answered another has to be told',
+      `this query was expanded into ${expansions.join(', ')} and fuzzy expansion is not ` +
+        'declared as applied; substitutions have to be attributed to the relaxation that made ' +
+        'them, or the reader is answered on words nobody says were used',
     );
   }
-  const disclosures =
-    Object.keys(relaxations).length > 0
-      ? renderRelaxationDisclosures({ searchPath, relaxations })
-      : '';
+  // A row cannot claim a layer this same screen declares did not run. A badge saying "semantic
+  // match" beside a disclosure saying semantic retrieval was off is the page contradicting
+  // itself, and the badge is the half a reader believes.
+  const BADGE_NEEDS = new Map([
+    ['semantic', 'semantic'],
+    ['interpreted', 'crosswalk'],
+  ]);
+  hits.forEach((hit, index) => {
+    for (const reason of hit.match_reasons ?? []) {
+      const needs = BADGE_NEEDS.get(reason);
+      if (needs && relaxations[needs]?.applied !== true) {
+        throw new Error(
+          `hit ${index + 1} carries the ${reason} badge while ${needs} is not declared as ` +
+            'applied on this screen; a row cannot have been produced by a layer the same page ' +
+            'says did not run',
+        );
+      }
+    }
+  });
+
+  const disclosures = renderRelaxationDisclosures({ searchPath, relaxations });
 
   // One resolved instrument, or none. Two would be two answers to one question.
   let governingHtml = '';

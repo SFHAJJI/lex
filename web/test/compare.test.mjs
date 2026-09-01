@@ -404,3 +404,56 @@ test('aligned blocks need the service to say the states can be aligned', () => {
     renderCompare({ ...same, result: { changed: false, note: 'x' } }).includes('changed: false'),
   );
 });
+
+test('both axes compare one work, not one instrument against another', () => {
+  // The work-identity check lived only in the language branch, so a temporal comparison of two
+  // unrelated instruments rendered a diff, and the difference between one law and another read
+  // as one being amended into the other.
+  assert.throws(
+    () =>
+      renderCompare({
+        ...GOOD,
+        right: { ...RIGHT, lex_id: 'eu-eurlex:32016r0679:2016-05-04' },
+      }),
+    /the difference between two instruments is not a change to either of them/,
+  );
+});
+
+test('the legal-time sentence names the dates the card is about', () => {
+  // It was free caller prose beside validated dates that were never rendered, so a card could
+  // read "applicable from 1066-10-14" over a record saying 2001-01-01, with nothing on the page
+  // disagreeing.
+  assert.throws(
+    () =>
+      renderCompare({
+        ...GOOD,
+        left: { ...LEFT, legal_time_sentence: 'Applicable from 1066-10-14 to 1067-01-01' },
+      }),
+    /does not name 2001-01-01 or 2002-01-01/,
+  );
+
+  // An open interval has no end to name, and demanding a phrase for its absence would put this
+  // product's wording in the publisher's mouth.
+  assert.ok(
+    renderCompare({
+      ...GOOD,
+      right: { ...RIGHT, legal_time_sentence: 'Applicable from 2002-01-01 (publisher)' },
+    }).includes('Applicable from 2002-01-01'),
+  );
+});
+
+test('identical text on both sides of a block is not a change', () => {
+  // Struck through on one side and underlined on the other, byte-identical text is exactly the
+  // noise this module exists to keep out of the record.
+  assert.throws(
+    () =>
+      renderCompare({
+        ...GOOD,
+        result: {
+          ...CHANGED,
+          blocks: [{ anchor_label: 'Art. 5', removed: 'the same words', added: 'the same words' }],
+        },
+      }),
+    /identical bytes shown as a removal and an addition/,
+  );
+});

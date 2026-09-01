@@ -69,7 +69,7 @@ export function renderSearchPreview({ locale = 'en' } = {}) {
     semantics: 'publisher_applicability',
     asOf: AS_OF,
     timeScope: 'as_of',
-    hits: [hit(), hit({ provision_num: 'Art. 2', match_reasons: ['keyword', 'semantic'] })],
+    hits: [hit(), hit({ provision_num: 'Art. 2', match_reasons: ['keyword'] })],
     rowSet: { returned: 2, total: 2 },
     population: POPULATION,
     relaxations: OFF,
@@ -107,6 +107,12 @@ export function renderSearchPreview({ locale = 'en' } = {}) {
     relaxations: {
       ...OFF,
       fuzzy: { applied: true, expansions: ['many -> mady', 'many -> man'] },
+      crosswalk: {
+        applied: true,
+        understood_as: 'garantie locative',
+        version: 'crosswalk/1',
+        reviewed_on: '2026-08-15',
+      },
     },
     searchPath: '/ask/search',
   });
@@ -116,6 +122,12 @@ export function renderSearchPreview({ locale = 'en' } = {}) {
     semantics: 'publisher_applicability',
     asOf: AS_OF,
     timeScope: 'as_of',
+    // Declared even here, and especially here: the zero-hit screen is the one most likely to be
+    // read as "the law does not say so", and it is the one where a silent rewrite matters most.
+    relaxations: {
+      ...OFF,
+      fuzzy: { applied: true, expansions: ['many -> mady', 'many -> man'] },
+    },
     hits: [],
     // Zero rows and a zero total, stated rather than omitted. This preview passed no row set
     // at all on the empty path, which is exactly the hole O9 names: without it nothing

@@ -111,6 +111,22 @@ function renderSideCard(side, which) {
         'this product does not choose between "applicable" and "consolidated wording state"',
     );
   }
+  // And the sentence must be about the dates on the same card. It was free caller prose beside
+  // validated dates that were never rendered, so a card could read "applicable from 1066-10-14"
+  // over a record saying 2001-01-01, with nothing on the page disagreeing.
+  // Only the dates the record actually asserts. An open interval has no end to name, and
+  // demanding a phrase for its absence would put this product's wording in the publisher's
+  // mouth on the one line whose whole point is that the wording is theirs.
+  const missing = [side.valid_from, side.valid_to].filter(
+    (date) => date !== null && !side.legal_time_sentence.includes(date),
+  );
+  if (missing.length > 0) {
+    throw new Error(
+      `the ${which} side's legal-time sentence does not name ${missing.join(' or ')}, which ` +
+        'this card is about; a sentence beside dates it does not mention is a claim nothing on ' +
+        'the page checks',
+    );
+  }
 
   return (
     `<article class="compare-side" data-side="${escapeHtml(which)}">` +
@@ -180,6 +196,14 @@ function renderChangeBlock(block, index) {
   }
   const removed = block.removed ?? '';
   const added = block.added ?? '';
+  // Byte-identical text struck through on one side and underlined on the other is precisely the
+  // parser noise this module exists to refuse, rendered as an amendment.
+  if (removed !== '' && removed === added) {
+    throw new Error(
+      `${where} removes and adds the same text; identical bytes shown as a removal and an ` +
+        'addition are the noise this screen exists to keep out of the record',
+    );
+  }
   if (removed === '' && added === '') {
     throw new Error(
       `${where} has neither a removal nor an addition; an empty block in a changed diff ` +
@@ -312,6 +336,16 @@ export function renderCompare({ mode, left, right, result }) {
     );
   }
 
+  // Both axes compare one work. This check lived only in the language branch, so a temporal
+  // comparison of two unrelated instruments rendered a diff, and the difference between one
+  // law and another read as one law being amended into the other.
+  if (workOf(left.lex_id) !== workOf(right.lex_id)) {
+    throw new Error(
+      `these are two different works, ${workOf(left.lex_id)} and ${workOf(right.lex_id)}; the ` +
+        'difference between two instruments is not a change to either of them',
+    );
+  }
+
   // Translation read as amendment. A temporal comparison across two languages shows a
   // difference on every line and not one of them is a change in the law.
   if (mode === 'temporal' && left.language !== right.language) {
@@ -326,14 +360,6 @@ export function renderCompare({ mode, left, right, result }) {
   if (mode === 'language') {
     if (left.language === right.language) {
       throw new Error('a language comparison needs two different languages');
-    }
-    // Same period is not same state: two unrelated works sharing validity dates would have
-    // rendered as "Language comparison, same state. Both texts are authentic."
-    if (workOf(left.lex_id) !== workOf(right.lex_id)) {
-      throw new Error(
-        'a language comparison must be of one state and these are two different works; two ' +
-          'unrelated instruments that share validity dates are not expressions of each other',
-      );
     }
     if (left.valid_from !== right.valid_from || left.valid_to !== right.valid_to) {
       throw new Error(
