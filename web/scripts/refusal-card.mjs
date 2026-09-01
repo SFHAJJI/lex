@@ -33,10 +33,17 @@ import { isCalendarDate, requireCalendarDate } from './temporal.mjs';
 /**
  * The closed registry, product spec section 4.9.
  *
- * One line of this comment used to say that the live service uses `identifier_unknown` where the
- * UX spec's prose says `unknown_work`. That was wrong about the service. Measured, not inferred:
- * `provenance` for `eu-eurlex:32016R0679:2018-05-25` against production returns
- * `{"status": "unknown_work"}`.
+ * There are two services and they use different words, which is what an earlier version of this
+ * comment flattened into one wrong sentence.
+ *
+ * The V3 path uses `identifier_unknown`, and that is not an assumption: the captured refusal
+ * envelope in `captured-envelopes.mjs`, taken from a production run of the merged S0-05 C# path,
+ * carries `"status":"identifier_unknown"` and its bytes are digest-checked on every read. So
+ * this registry matches the path this interface is being built for.
+ *
+ * The currently deployed service uses `unknown_work`. Measured, not inferred: `provenance` for
+ * `eu-eurlex:32016R0679:2018-05-25` against production returns `{"status": "unknown_work"}`.
+ * That is the word the old wire speaks, and the reason a translation exists at all.
  *
  * The registry stays closed at these nineteen, because the product spec is the versioned registry
  * and a wire status is not a product code. `unknown_work` is translated where it arrives, by a
