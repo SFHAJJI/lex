@@ -226,8 +226,9 @@ public sealed class AzureBlobCustodyConfigurationReceiptJournal
                     "Azure custody configuration evidence changed before verification.");
             }
 
+            // A current blob has a version ID when account versioning is enabled.
+            // Source: https://learn.microsoft.com/azure/storage/blobs/versioning-overview
             if (properties.BlobType != BlobType.Block
-                || !string.IsNullOrEmpty(properties.VersionId)
                 || properties.ContentLength is < 1 or > MaxReceiptBytes)
             {
                 throw new CustodyIntegrityException(
@@ -281,9 +282,17 @@ public sealed class AzureBlobCustodyConfigurationReceiptJournal
         var lane = receipt.CustodyClass switch
         {
             CustodyClass.NightlyFloor90d =>
-                new Lane(_nightly, _options.NightlyPolicyKey, "nightly_floor_90d"),
+                new Lane(
+                    _nightly,
+                    _options.NightlyContainer,
+                    _options.NightlyPolicyKey,
+                    "nightly_floor_90d"),
             CustodyClass.LegalHoldEvidence =>
-                new Lane(_legalHold, _options.LegalHoldPolicyKey, "legal_hold_evidence"),
+                new Lane(
+                    _legalHold,
+                    _options.LegalHoldContainer,
+                    _options.LegalHoldPolicyKey,
+                    "legal_hold_evidence"),
             _ => throw new ArgumentOutOfRangeException(
                 nameof(receipt), receipt.CustodyClass, "Unknown custody class."),
         };
@@ -293,37 +302,40 @@ public sealed class AzureBlobCustodyConfigurationReceiptJournal
                 "The Azure custody configuration receipt names the wrong policy lane.");
         }
 
+        if (receipt.ManagedIdentityClientId != _options.ManagedIdentityClientId
+            || !string.Equals(
+                receipt.ArmResourceId,
+                ResourceId(lane.ContainerName),
+                StringComparison.Ordinal))
+        {
+            throw new CustodyIntegrityException(
+                "The Azure custody configuration receipt does not match the configured destination and identity.");
+        }
+
         return lane;
     }
+
+    private string ResourceId(string container) =>
+        $"/subscriptions/{_options.SubscriptionId:D}"
+        + $"/resourceGroups/{_options.ResourceGroup}"
+        + "/providers/Microsoft.Storage/storageAccounts/"
+        + _options.StorageAccountName
+        + "/blobServices/default/containers/"
+        + container;
 
     private static bool SameNormalizedFacts(
         AzureCustodyConfigurationReceipt left,
         AzureCustodyConfigurationReceipt right) =>
-        string.Equals(left.Schema, right.Schema, StringComparison.Ordinal)
-        && left.PolicyKey == right.PolicyKey
-        && left.CustodyClass == right.CustodyClass
+        left.PolicyKey == right.PolicyKey
         && left.ObservedAt == right.ObservedAt
         && string.Equals(left.ArmResourceId, right.ArmResourceId, StringComparison.Ordinal)
-        && string.Equals(left.ArmApiVersion, right.ArmApiVersion, StringComparison.Ordinal)
         && string.Equals(left.ArmResourceEtag, right.ArmResourceEtag, StringComparison.Ordinal)
         && left.ManagedIdentityClientId == right.ManagedIdentityClientId
-        && string.Equals(left.PublicAccess, right.PublicAccess, StringComparison.Ordinal)
-        && left.ImmutableStorageWithVersioningEnabled
-            == right.ImmutableStorageWithVersioningEnabled
-        && string.Equals(left.MigrationState, right.MigrationState, StringComparison.Ordinal)
         && string.Equals(
             left.ImmutabilityPolicyEtag,
             right.ImmutabilityPolicyEtag,
             StringComparison.Ordinal)
-        && string.Equals(
-            left.ImmutabilityPolicyState,
-            right.ImmutabilityPolicyState,
-            StringComparison.Ordinal)
-        && left.RetentionDays == right.RetentionDays
-        && left.ProtectedAppendWrites == right.ProtectedAppendWrites
-        && left.ProtectedAppendWritesAll == right.ProtectedAppendWritesAll
-        && left.ActiveLegalHold == right.ActiveLegalHold
-        && left.ProtectedBlockBlobAppends == right.ProtectedBlockBlobAppends;
+        && left.RetentionDays == right.RetentionDays;
 
     private static bool IsCreateCollision(RequestFailedException exception) =>
         exception.Status == 412
@@ -343,6 +355,7 @@ public sealed class AzureBlobCustodyConfigurationReceiptJournal
 
     private sealed record Lane(
         BlobContainerClient Container,
+        string ContainerName,
         Guid PolicyKey,
         string Token);
 }

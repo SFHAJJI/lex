@@ -127,8 +127,6 @@ public sealed class AzureBlobCustodyConfigurationJournalTests
 
     [TestMethod]
     [DataRow("resource_etag")]
-    [DataRow("managed_identity")]
-    [DataRow("resource_id")]
     [DataRow("policy_etag")]
     [DataRow("retention_days")]
     public async Task ConflictingFactAtSameTupleFailsBeforeItsRequestWrite(string changedFact)
@@ -141,10 +139,6 @@ public sealed class AzureBlobCustodyConfigurationJournalTests
             resourceEtag: changedFact == "resource_etag"
                 ? "\"changed-resource-etag\""
                 : ResourceEtag,
-            managedIdentityClientId: changedFact == "managed_identity"
-                ? Guid.Parse("f270fa75-1adb-46ed-9fb1-a3fb390c1469")
-                : ManagedIdentityClientId,
-            resourceIdSuffix: changedFact == "resource_id" ? "nightly-other" : "nightly",
             policyEtag: changedFact == "policy_etag" ? "\"changed-policy-etag\"" : "\"policy-etag\"",
             retentionDays: changedFact == "retention_days" ? 181 : 180);
         await harness.Journal.AppendAsync(first, CancellationToken.None);
@@ -175,6 +169,102 @@ public sealed class AzureBlobCustodyConfigurationJournalTests
         Assert.AreEqual(0, harness.Nightly.Blobs.Count);
         Assert.AreEqual(0, harness.LegalHold.Blobs.Count);
         Assert.AreEqual(0, harness.Events.Count);
+    }
+
+    [TestMethod]
+    [DataRow("resource_id")]
+    [DataRow("managed_identity")]
+    public async Task FirstReceiptMustMatchTheConfiguredContainerAndIdentity(string changedFact)
+    {
+        var harness = new Harness();
+        var receipt = Receipt(
+            CustodyClass.NightlyFloor90d,
+            FirstRequestId,
+            managedIdentityClientId: changedFact == "managed_identity"
+                ? Guid.Parse("f270fa75-1adb-46ed-9fb1-a3fb390c1469")
+                : ManagedIdentityClientId,
+            resourceIdSuffix: changedFact == "resource_id" ? "nightly-other" : "nightly");
+
+        await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() =>
+            harness.Journal.AppendAsync(receipt, CancellationToken.None));
+
+        Assert.AreEqual(0, harness.Nightly.Blobs.Count);
+        Assert.AreEqual(0, harness.LegalHold.Blobs.Count);
+        Assert.AreEqual(0, harness.Events.Count);
+    }
+
+    [TestMethod]
+    public async Task AVersionIdOnTheCurrentBlobDoesNotInvalidateExactReadback()
+    {
+        var harness = new Harness();
+        harness.Nightly.ConfigureNewBlob = blob => blob.VersionId = "2026-09-01T00:00:00.0000000Z";
+        var receipt = Receipt(CustodyClass.NightlyFloor90d, FirstRequestId);
+
+        await harness.Journal.AppendAsync(receipt, CancellationToken.None);
+
+        AssertExactReceipt(
+            harness.Nightly.Blobs[$"{TuplePrefix(receipt)}/anchor.json"], receipt);
+        AssertExactReceipt(
+            harness.Nightly.Blobs[$"{TuplePrefix(receipt)}/requests/{FirstRequestId:N}.json"],
+            receipt);
+    }
+
+    [TestMethod]
+    [DataRow("policy_key")]
+    [DataRow("custody_class")]
+    [DataRow("observed_at")]
+    [DataRow("resource_id")]
+    [DataRow("resource_etag")]
+    [DataRow("managed_identity")]
+    [DataRow("policy_etag")]
+    [DataRow("retention_days")]
+    public async Task AnchorDocumentMustMatchItsTupleAndNormalizedFacts(string changedFact)
+    {
+        var harness = new Harness();
+        var expected = Receipt(CustodyClass.NightlyFloor90d, FirstRequestId);
+        var conflicting = changedFact switch
+        {
+            "policy_key" => Receipt(
+                CustodyClass.NightlyFloor90d,
+                SecondRequestId,
+                policyKey: Guid.Parse("6822ca9c-5bc4-4532-8318-6474cf0e4552")),
+            "custody_class" => Receipt(CustodyClass.LegalHoldEvidence, SecondRequestId),
+            "observed_at" => Receipt(
+                CustodyClass.NightlyFloor90d,
+                SecondRequestId,
+                observedAt: ObservedAt.AddSeconds(1)),
+            "resource_id" => Receipt(
+                CustodyClass.NightlyFloor90d,
+                SecondRequestId,
+                resourceIdSuffix: "nightly-other"),
+            "resource_etag" => Receipt(
+                CustodyClass.NightlyFloor90d,
+                SecondRequestId,
+                resourceEtag: "\"changed-resource-etag\""),
+            "managed_identity" => Receipt(
+                CustodyClass.NightlyFloor90d,
+                SecondRequestId,
+                managedIdentityClientId: Guid.Parse("f270fa75-1adb-46ed-9fb1-a3fb390c1469")),
+            "policy_etag" => Receipt(
+                CustodyClass.NightlyFloor90d,
+                SecondRequestId,
+                policyEtag: "\"changed-policy-etag\""),
+            "retention_days" => Receipt(
+                CustodyClass.NightlyFloor90d,
+                SecondRequestId,
+                retentionDays: 181),
+            _ => throw new AssertFailedException($"Unknown changed fact {changedFact}."),
+        };
+        var anchorName = $"{TuplePrefix(expected)}/anchor.json";
+        _ = harness.Nightly.GetBlockBlobClient(anchorName);
+        harness.Nightly.Blobs[anchorName].Seed(
+            Encoding.UTF8.GetBytes(ContractJson.Serialize(conflicting)));
+
+        await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() =>
+            harness.Journal.AppendAsync(expected, CancellationToken.None));
+
+        Assert.IsFalse(harness.Nightly.Blobs.ContainsKey(
+            $"{TuplePrefix(expected)}/requests/{FirstRequestId:N}.json"));
     }
 
     [TestMethod]
@@ -345,13 +435,14 @@ public sealed class AzureBlobCustodyConfigurationJournalTests
         Guid? managedIdentityClientId = null,
         string? resourceIdSuffix = null,
         string policyEtag = "\"policy-etag\"",
-        int retentionDays = 180) => new(
+        int retentionDays = 180,
+        DateTimeOffset? observedAt = null) => new(
             AzureCustodySchemaIds.ConfigurationReceipt,
             policyKey ?? (custodyClass == CustodyClass.NightlyFloor90d
                 ? NightlyPolicyKey
                 : LegalHoldPolicyKey),
             custodyClass,
-            ObservedAt,
+            observedAt ?? ObservedAt,
             $"/subscriptions/{SubscriptionId:D}/resourceGroups/rg-lex-v3/providers/Microsoft.Storage/storageAccounts/stlexv3custody/blobServices/default/containers/"
                 + (resourceIdSuffix
                     ?? (custodyClass == CustodyClass.NightlyFloor90d ? "nightly" : "legal-hold")),
@@ -463,6 +554,8 @@ public sealed class AzureBlobCustodyConfigurationJournalTests
 
         public ETag? DownloadResponseEtag { get; set; }
 
+        public string? VersionId { get; set; }
+
         public int UploadAttempts { get; private set; }
 
         public BlobUploadOptions? UploadOptions { get; private set; }
@@ -558,7 +651,8 @@ public sealed class AzureBlobCustodyConfigurationJournalTests
                 BlobsModelFactory.BlobProperties(
                     contentLength: Content.LongLength,
                     eTag: Etag,
-                    blobType: BlobType.Block),
+                    blobType: BlobType.Block,
+                    versionId: VersionId),
                 new FakeResponse()));
         }
     }
