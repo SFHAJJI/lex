@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Lex.V3.Ingest</RootNamespace>
+    <AssemblyName>Lex.V3.Ingest</AssemblyName>
+    <RuntimeIdentifiers>linux-x64</RuntimeIdentifiers>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreLockedMode Condition="'$(CI)' == 'true'">true</RestoreLockedMode>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Lex.V3.Contracts/Lex.V3.Contracts.csproj" />
+  </ItemGroup>
+</Project>

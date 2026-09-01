@@ -11,6 +11,7 @@ public static class HttpObservationWireKinds
 {
     public const string ResponseCompleteBody = "response_complete_body";
     public const string ResponsePartialBody = "response_partial_body";
+    public const string ResponseCompletionUnproven = "response_completion_unproven";
     public const string Revalidation304 = "revalidation_304";
     public const string ResponseWithoutBody = "response_without_body";
     public const string TransportFailureBeforeBody = "transport_failure_before_body";
@@ -25,17 +26,20 @@ public enum HttpObservationKind
     [JsonStringEnumMemberName(HttpObservationWireKinds.ResponsePartialBody)]
     ResponsePartialBody = 2,
 
+    [JsonStringEnumMemberName(HttpObservationWireKinds.ResponseCompletionUnproven)]
+    ResponseCompletionUnproven = 3,
+
     [JsonStringEnumMemberName(HttpObservationWireKinds.Revalidation304)]
-    Revalidation304 = 3,
+    Revalidation304 = 4,
 
     [JsonStringEnumMemberName(HttpObservationWireKinds.ResponseWithoutBody)]
-    ResponseWithoutBody = 4,
+    ResponseWithoutBody = 5,
 
     [JsonStringEnumMemberName(HttpObservationWireKinds.TransportFailureBeforeBody)]
-    TransportFailureBeforeBody = 5,
+    TransportFailureBeforeBody = 6,
 
     [JsonStringEnumMemberName(HttpObservationWireKinds.PolicyRejection)]
-    PolicyRejection = 6,
+    PolicyRejection = 7,
 }
 
 public enum HttpStatusDisposition
@@ -59,12 +63,26 @@ public enum HttpStatusDisposition
     NonDerivableStatus = 6,
 }
 
+public enum HttpTransferState
+{
+    NotStarted = 1,
+    Incomplete = 2,
+    CompletionUnproven = 3,
+    Complete = 4,
+}
+
 public readonly record struct HttpTransferFacts(
     bool PolicyRejected,
     bool HeadersComplete,
-    bool TransferComplete,
+    HttpTransferState TransferState,
     int? StatusCode,
     long ReceivedByteCount);
+
+public static class HttpResponseFraming
+{
+    public static bool IsHeaderTerminatedStatus(int statusCode) =>
+        statusCode is >= 100 and <= 199 or 204 or 304;
+}
 
 public static class HttpTransferClassifier
 {
@@ -75,9 +93,14 @@ public static class HttpTransferClassifier
             throw new ArgumentOutOfRangeException(nameof(facts));
         }
 
+        if (!Enum.IsDefined(facts.TransferState))
+        {
+            throw new ArgumentException("The transfer state must be defined.", nameof(facts));
+        }
+
         if (facts.PolicyRejected)
         {
-            if (facts.HeadersComplete || facts.TransferComplete ||
+            if (facts.HeadersComplete || facts.TransferState != HttpTransferState.NotStarted ||
                 facts.StatusCode is not null || facts.ReceivedByteCount != 0)
             {
                 throw new ArgumentException(
@@ -90,7 +113,8 @@ public static class HttpTransferClassifier
 
         if (!facts.HeadersComplete)
         {
-            if (facts.TransferComplete || facts.StatusCode is not null || facts.ReceivedByteCount != 0)
+            if (facts.TransferState != HttpTransferState.NotStarted ||
+                facts.StatusCode is not null || facts.ReceivedByteCount != 0)
             {
                 throw new ArgumentException(
                     "Failure before complete headers cannot carry response or entity evidence.",
@@ -106,24 +130,37 @@ public static class HttpTransferClassifier
                 "Complete response headers must carry one valid HTTP status.", nameof(facts));
         }
 
-        if (!facts.TransferComplete)
+        if (facts.TransferState == HttpTransferState.NotStarted)
+        {
+            throw new ArgumentException(
+                "Complete response headers require a body-transfer state.", nameof(facts));
+        }
+
+        if (HttpResponseFraming.IsHeaderTerminatedStatus(facts.StatusCode.Value))
+        {
+            if (facts.TransferState != HttpTransferState.Complete || facts.ReceivedByteCount != 0)
+            {
+                throw new ArgumentException(
+                    "A header-terminated response cannot carry an incomplete, unproven or positive body.",
+                    nameof(facts));
+            }
+
+            return facts.StatusCode == 304
+                ? HttpObservationKind.Revalidation304
+                : HttpObservationKind.ResponseWithoutBody;
+        }
+
+        if (facts.TransferState == HttpTransferState.Incomplete)
         {
             return HttpObservationKind.ResponsePartialBody;
         }
 
-        if (facts.StatusCode is 204 or 205 or 304 && facts.ReceivedByteCount != 0)
+        if (facts.TransferState == HttpTransferState.CompletionUnproven)
         {
-            throw new ArgumentException(
-                "A completed semantic no-body or 304 response cannot carry entity octets.",
-                nameof(facts));
+            return HttpObservationKind.ResponseCompletionUnproven;
         }
 
-        if (facts.StatusCode == 304)
-        {
-            return HttpObservationKind.Revalidation304;
-        }
-
-        if (facts.StatusCode is 204 or 205 || facts.ReceivedByteCount == 0)
+        if (facts.ReceivedByteCount == 0)
         {
             return HttpObservationKind.ResponseWithoutBody;
         }

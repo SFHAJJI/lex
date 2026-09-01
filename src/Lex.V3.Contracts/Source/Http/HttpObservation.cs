@@ -14,6 +14,9 @@ public enum HttpNoBodyReason
 
     [JsonStringEnumMemberName("complete_zero_octet_entity")]
     CompleteZeroOctetEntity = 2,
+
+    [JsonStringEnumMemberName("framing_forbids_body")]
+    FramingForbidsBody = 3,
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -59,6 +62,7 @@ public sealed record HttpValidatorEvidence
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
 [JsonDerivedType(typeof(ResponseCompleteBodyObservation), HttpObservationWireKinds.ResponseCompleteBody)]
 [JsonDerivedType(typeof(ResponsePartialBodyObservation), HttpObservationWireKinds.ResponsePartialBody)]
+[JsonDerivedType(typeof(ResponseCompletionUnprovenObservation), HttpObservationWireKinds.ResponseCompletionUnproven)]
 [JsonDerivedType(typeof(Revalidation304Observation), HttpObservationWireKinds.Revalidation304)]
 [JsonDerivedType(typeof(ResponseWithoutBodyObservation), HttpObservationWireKinds.ResponseWithoutBody)]
 [JsonDerivedType(typeof(TransportFailureBeforeBodyObservation), HttpObservationWireKinds.TransportFailureBeforeBody)]
@@ -183,19 +187,19 @@ public sealed class ResponseCompleteBodyObservation : HttpResponseObservation
         }
 
         if (TransferCompletionEvidence is DeclaredContentLengthCompleteEvidence &&
-            (statusCode == 206 ||
+            (responseMetadata.HasTransferEncoding ||
              !responseMetadata.TryGetSingleContentLength(out var declaredLength) ||
              declaredLength != TransferCompletionEvidence.TransportByteLength))
         {
             throw new ArgumentException(
-                "Declared-length completion requires one matching Content-Length on a non-206 response.",
+                "Declared-length completion requires one matching Content-Length without Transfer-Encoding.",
                 nameof(transferCompletionEvidence));
         }
 
-        if (statusCode is 204 or 205 or 304)
+        if (HttpResponseFraming.IsHeaderTerminatedStatus(statusCode))
         {
             throw new ArgumentException(
-                "A semantic no-body or 304 response cannot be represented as a complete body.",
+                "A header-terminated response cannot be represented as a complete body.",
                 nameof(statusCode));
         }
 
@@ -244,6 +248,7 @@ public sealed class ResponsePartialBodyObservation : HttpResponseObservation
         HttpStatusDisposition statusDisposition,
         HttpResponseMetadata responseMetadata,
         long receivedEncodedEntityByteCount,
+        long admittedEncodedEntityByteLimit,
         SourceRegistryMemberRef terminalFailureReason,
         DurableBlobWriteReceipt? durableWriteReceipt)
         : base(
@@ -260,8 +265,70 @@ public sealed class ResponsePartialBodyObservation : HttpResponseObservation
             throw new ArgumentOutOfRangeException(nameof(receivedEncodedEntityByteCount));
         }
 
+        if (admittedEncodedEntityByteLimit is <= 0 or > CustodyBounds.MaxObjectBytes)
+        {
+            throw new ArgumentOutOfRangeException(nameof(admittedEncodedEntityByteLimit));
+        }
+
+        if (receivedEncodedEntityByteCount > admittedEncodedEntityByteLimit)
+        {
+            throw new ArgumentException(
+                "A body observation cannot retain more bytes than its admitted limit.",
+                nameof(receivedEncodedEntityByteCount));
+        }
+
+        if (HttpResponseFraming.IsHeaderTerminatedStatus(statusCode))
+        {
+            throw new ArgumentException(
+                "A header-terminated response cannot be represented as a partial body.",
+                nameof(statusCode));
+        }
+
         TerminalFailureReason = terminalFailureReason
             ?? throw new ArgumentNullException(nameof(terminalFailureReason));
+        var reason = HttpAcquisitionReasonRegistry.RequirePartial(TerminalFailureReason);
+        long? validDeclaredLength = !responseMetadata.HasTransferEncoding &&
+            responseMetadata.TryGetSingleContentLength(out var retainedDeclaredLength)
+                ? retainedDeclaredLength
+                : null;
+        if (validDeclaredLength is long declaredLength &&
+            declaredLength <= receivedEncodedEntityByteCount)
+        {
+            throw new ArgumentException(
+                "A partial body must contain fewer bytes than its valid declared length.",
+                nameof(terminalFailureReason));
+        }
+
+        if (receivedEncodedEntityByteCount == admittedEncodedEntityByteLimit &&
+            reason != HttpPartialBodyReason.ByteBoundPreventedCompletion)
+        {
+            throw new ArgumentException(
+                "Reaching the admitted byte limit outranks an unobserved terminal cause.",
+                nameof(terminalFailureReason));
+        }
+
+        switch (reason)
+        {
+            case HttpPartialBodyReason.DeclaredLengthShortRead:
+                if (responseMetadata.HasTransferEncoding ||
+                    !responseMetadata.TryGetSingleContentLength(out var shortReadLength) ||
+                    shortReadLength <= receivedEncodedEntityByteCount)
+                {
+                    throw new ArgumentException(
+                        "A declared-length short read requires one retained length greater than the received count.",
+                        nameof(terminalFailureReason));
+                }
+                break;
+
+            case HttpPartialBodyReason.ByteBoundPreventedCompletion:
+                if (receivedEncodedEntityByteCount != admittedEncodedEntityByteLimit)
+                {
+                    throw new ArgumentException(
+                        "A byte-bound outcome must retain exactly the admitted prefix.",
+                        nameof(terminalFailureReason));
+                }
+                break;
+        }
         if (receivedEncodedEntityByteCount == 0)
         {
             if (durableWriteReceipt is not null)
@@ -288,12 +355,143 @@ public sealed class ResponsePartialBodyObservation : HttpResponseObservation
         }
 
         ReceivedEncodedEntityByteCount = receivedEncodedEntityByteCount;
+        AdmittedEncodedEntityByteLimit = admittedEncodedEntityByteLimit;
         DurableWriteReceipt = durableWriteReceipt;
     }
 
     public long ReceivedEncodedEntityByteCount { get; }
 
+    public long AdmittedEncodedEntityByteLimit { get; }
+
     public SourceRegistryMemberRef TerminalFailureReason { get; }
+
+    public DurableBlobWriteReceipt? DurableWriteReceipt { get; }
+
+    [JsonIgnore]
+    public string? TransportByteSha256 => DurableWriteReceipt?.Reference.ContentSha256;
+
+    [JsonIgnore]
+    public DurableBlobRef? DurableBlobRef => DurableWriteReceipt?.Reference;
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed class ResponseCompletionUnprovenObservation : HttpResponseObservation
+{
+    [JsonConstructor]
+    public ResponseCompletionUnprovenObservation(
+        string schema,
+        string observationId,
+        HttpRequestEvidence request,
+        string effectiveUri,
+        int statusCode,
+        HttpStatusDisposition statusDisposition,
+        HttpResponseMetadata responseMetadata,
+        long receivedEncodedEntityByteCount,
+        long admittedEncodedEntityByteLimit,
+        SourceRegistryMemberRef completionUnprovenReason,
+        DurableBlobWriteReceipt? durableWriteReceipt)
+        : base(
+            schema,
+            observationId,
+            request,
+            effectiveUri,
+            statusCode,
+            statusDisposition,
+            responseMetadata)
+    {
+        if (receivedEncodedEntityByteCount < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(receivedEncodedEntityByteCount));
+        }
+
+        if (admittedEncodedEntityByteLimit is <= 0 or > CustodyBounds.MaxObjectBytes)
+        {
+            throw new ArgumentOutOfRangeException(nameof(admittedEncodedEntityByteLimit));
+        }
+
+        if (receivedEncodedEntityByteCount > admittedEncodedEntityByteLimit)
+        {
+            throw new ArgumentException(
+                "A body observation cannot retain more bytes than its admitted limit.",
+                nameof(receivedEncodedEntityByteCount));
+        }
+
+        if (HttpResponseFraming.IsHeaderTerminatedStatus(statusCode))
+        {
+            throw new ArgumentException(
+                "A header-terminated response cannot have unproven body completion.",
+                nameof(statusCode));
+        }
+
+        CompletionUnprovenReason = completionUnprovenReason
+            ?? throw new ArgumentNullException(nameof(completionUnprovenReason));
+        var reason = HttpAcquisitionReasonRegistry.RequireCompletionUnproven(
+            CompletionUnprovenReason);
+        if (receivedEncodedEntityByteCount == admittedEncodedEntityByteLimit)
+        {
+            throw new ArgumentException(
+                "Reaching the admitted byte limit is a bounded incomplete transfer, not an unproven completion.",
+                nameof(receivedEncodedEntityByteCount));
+        }
+
+        switch (reason)
+        {
+            case HttpCompletionUnprovenReason.TransferCodingConflict:
+                if (!responseMetadata.HasTransferEncoding || !responseMetadata.HasContentLength)
+                {
+                    throw new ArgumentException(
+                        "A transfer-coding conflict requires retained Transfer-Encoding and Content-Length evidence.",
+                        nameof(completionUnprovenReason));
+                }
+                break;
+
+            case HttpCompletionUnprovenReason.MissingCompletionProof:
+                if (responseMetadata.HasTransferEncoding && responseMetadata.HasContentLength ||
+                    !responseMetadata.HasTransferEncoding &&
+                    responseMetadata.TryGetSingleContentLength(out _))
+                {
+                    throw new ArgumentException(
+                        "Missing completion proof requires framing that is neither a valid declared length nor a coding conflict.",
+                        nameof(completionUnprovenReason));
+                }
+                break;
+        }
+
+        if (receivedEncodedEntityByteCount == 0)
+        {
+            if (durableWriteReceipt is not null)
+            {
+                throw new ArgumentException(
+                    "A zero-octet completion-unproven response carries no durable write receipt.",
+                    nameof(durableWriteReceipt));
+            }
+        }
+        else
+        {
+            if (durableWriteReceipt is null)
+            {
+                throw new ArgumentException(
+                    "A positive completion-unproven response must retain its durable write receipt.",
+                    nameof(durableWriteReceipt));
+            }
+
+            ResponseCompleteBodyObservation.RequireTransportBlob(
+                durableWriteReceipt.Reference,
+                receivedEncodedEntityByteCount,
+                durableWriteReceipt.Reference.ContentSha256,
+                nameof(durableWriteReceipt));
+        }
+
+        ReceivedEncodedEntityByteCount = receivedEncodedEntityByteCount;
+        AdmittedEncodedEntityByteLimit = admittedEncodedEntityByteLimit;
+        DurableWriteReceipt = durableWriteReceipt;
+    }
+
+    public long ReceivedEncodedEntityByteCount { get; }
+
+    public long AdmittedEncodedEntityByteLimit { get; }
+
+    public SourceRegistryMemberRef CompletionUnprovenReason { get; }
 
     public DurableBlobWriteReceipt? DurableWriteReceipt { get; }
 
@@ -523,11 +721,16 @@ public sealed class ResponseWithoutBodyObservation : HttpResponseObservation
             throw new ArgumentException("A no-body observation must carry one admitted non-304 reason.", nameof(reason));
         }
 
-        var semantic = statusCode is 204 or 205;
-        if (semantic != (reason == HttpNoBodyReason.SemanticNoEntity))
+        var expectedReason = statusCode switch
+        {
+            >= 100 and <= 199 or 204 => HttpNoBodyReason.FramingForbidsBody,
+            205 => HttpNoBodyReason.SemanticNoEntity,
+            _ => HttpNoBodyReason.CompleteZeroOctetEntity,
+        };
+        if (reason != expectedReason)
         {
             throw new ArgumentException(
-                "The no-body reason must distinguish semantic no-entity from a clean zero-octet entity.",
+                "The no-body reason must match header framing, semantic no-entity or a complete zero-octet entity.",
                 nameof(reason));
         }
 
@@ -547,7 +750,8 @@ public sealed class ResponseWithoutBodyObservation : HttpResponseObservation
             }
 
             if (ZeroOctetCompletionEvidence is DeclaredZeroOctetContentLengthCompleteEvidence &&
-                (!responseMetadata.TryGetSingleContentLength(out var declaredZeroLength) ||
+                (responseMetadata.HasTransferEncoding ||
+                 !responseMetadata.TryGetSingleContentLength(out var declaredZeroLength) ||
                  declaredZeroLength != 0))
             {
                 throw new ArgumentException(
@@ -557,17 +761,28 @@ public sealed class ResponseWithoutBodyObservation : HttpResponseObservation
         }
         else
         {
+            if (reason == HttpNoBodyReason.SemanticNoEntity &&
+                (responseMetadata.HasTransferEncoding ||
+                 !responseMetadata.TryGetSingleContentLength(out var semanticZeroLength) ||
+                 semanticZeroLength != 0))
+            {
+                throw new ArgumentException(
+                    "A semantic no-entity response requires one exact Content-Length of zero.",
+                    nameof(responseMetadata));
+            }
+
             if (zeroOctetCompletionEvidence is not null)
             {
                 throw new ArgumentException(
-                    "A semantic no-entity response carries no zero-octet transfer proof.",
+                    "A framing or semantic no-body response carries no zero-octet transfer proof.",
                     nameof(zeroOctetCompletionEvidence));
             }
 
             ZeroOctetCompletionEvidence = null;
         }
 
-        if (responseMetadata.ContentLength is not AbsentHttpHeader &&
+        if (reason != HttpNoBodyReason.FramingForbidsBody &&
+            responseMetadata.ContentLength is not AbsentHttpHeader &&
             (!responseMetadata.TryGetSingleContentLength(out var declaredLength) || declaredLength > 0))
         {
             throw new ArgumentException(
@@ -599,6 +814,7 @@ public sealed class TransportFailureBeforeBodyObservation : HttpObservation
         : base(schema, observationId, request)
     {
         FailureClass = failureClass ?? throw new ArgumentNullException(nameof(failureClass));
+        _ = HttpAcquisitionReasonRegistry.RequireBeforeHeaders(FailureClass);
         if (elapsedMilliseconds < 0)
         {
             throw new ArgumentOutOfRangeException(nameof(elapsedMilliseconds));

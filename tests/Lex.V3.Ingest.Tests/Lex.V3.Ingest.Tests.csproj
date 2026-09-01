@@ -1,0 +1,13 @@
+<Project Sdk="MSTest.Sdk/4.3.3">
+  <PropertyGroup>
+    <RootNamespace>Lex.V3.Ingest.Tests</RootNamespace>
+    <AssemblyName>Lex.V3.Ingest.Tests</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Lex.V3.Contracts/Lex.V3.Contracts.csproj" />
+    <ProjectReference Include="../../src/Lex.V3.Ingest/Lex.V3.Ingest.csproj" />
+    <Content Include="../../schemas/v3-source/http/http-acquisition-reason-registry.json"
+             Link="http-acquisition-reason-registry.json"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
