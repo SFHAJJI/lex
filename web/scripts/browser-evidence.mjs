@@ -338,6 +338,29 @@ const PROBE = `(() => {
     }
   }
 
+  // Meaning carried only by paint.
+  //
+  // Forced-colours mode removes background images, so any element whose meaning lives in one
+  // loses it entirely, and the reader is not told anything is missing. This screen has exactly
+  // that shape: the timeline hatches its gaps with a repeating gradient, and a gap that becomes
+  // invisible is the one mark whose absence asserts something false about the law.
+  //
+  // The rule this project already states is that nothing means anything by colour alone. This
+  // measures it rather than trusting it: an element painted with a background image must also
+  // say what it is, in text or in an accessible name. Decorative elements are exempt because
+  // they are already declared decorative.
+  const paintOnly = [];
+  for (const el of document.querySelectorAll('body *')) {
+    if (el.closest('[aria-hidden="true"]') !== null) continue;
+    const style = getComputedStyle(el);
+    if (style.backgroundImage === 'none') continue;
+    const named =
+      el.textContent.trim().length > 0 ||
+      (el.getAttribute('aria-label') ?? '').trim().length > 0 ||
+      (el.getAttribute('alt') ?? '').trim().length > 0;
+    if (!named) paintOnly.push(el.tagName + '.' + String(el.className).slice(0, 30));
+  }
+
   // WCAG 2.2 SC 2.5.8, target size minimum: 24 by 24 CSS pixels. The exception this takes is
   // the inline one, a link inside a sentence, approximated as an anchor whose parent is a
   // paragraph. Everything else is a target somebody has to hit, and Lighthouse found three
@@ -401,6 +424,8 @@ const PROBE = `(() => {
     worstContrastTag: worst ? worst.tag : null,
     worstContrastRequired: worst ? worst.required : null,
     contrastFailures: contrast.filter((c) => c.ratio < c.required).length,
+    paintOnly: paintOnly.slice(0, 8),
+    paintOnlyCount: paintOnly.length,
     glued: glued.slice(0, 8),
     gluedCount: glued.length,
     smallTargets: smallTargets.slice(0, 8),
@@ -691,10 +716,27 @@ async function main() {
     for (const page of await pagesFrom(root)) {
       const url = `${site.origin}/${page}`;
       for (const viewport of WIDTHS) {
-       for (const scheme of FAST ? ["light"] : ["light", "dark"]) {
+       // Forced colours is the third scheme rather than a fourth dimension, because it is a
+       // rendering mode a reader is in, not an axis crossed with the other two. Windows High
+       // Contrast is the common case and it removes background images, which matters here: the
+       // timeline hatches its gaps with a repeating gradient, and a gap that becomes invisible
+       // is the one mark on that screen whose absence asserts something false.
+       for (const scheme of FAST ? ["light"] : ["light", "dark", "forced"]) {
         await session.send(
           "Emulation.setEmulatedMedia",
-          { features: [{ name: "prefers-color-scheme", value: scheme }, { name: "prefers-reduced-motion", value: "reduce" }] },
+          {
+            features:
+              scheme === "forced"
+                ? [
+                    { name: "forced-colors", value: "active" },
+                    { name: "prefers-color-scheme", value: "light" },
+                    { name: "prefers-reduced-motion", value: "reduce" },
+                  ]
+                : [
+                    { name: "prefers-color-scheme", value: scheme },
+                    { name: "prefers-reduced-motion", value: "reduce" },
+                  ],
+          },
           sessionId,
         );
         await session.send(
@@ -739,6 +781,12 @@ async function main() {
 
         if (axNodes.length === 0) {
           failures.push(`${page} @${viewport.label}/${scheme}: the accessibility tree is empty`);
+        }
+        if (observed.paintOnlyCount > 0) {
+          failures.push(
+            `${page} @${viewport.label}/${scheme}: ${observed.paintOnlyCount} element(s) carry ` +
+              `meaning only as paint, which forced colours removes: ${observed.paintOnly.join("; ")}`,
+          );
         }
         if (observed.gluedCount > 0) {
           failures.push(
