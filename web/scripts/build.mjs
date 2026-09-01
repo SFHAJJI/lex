@@ -14,6 +14,7 @@
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 
 import { loadCaptured } from "./captured-envelopes.mjs";
+import { tokenCss } from "./design-tokens.mjs";
 import { decodeEnvelope, validateEnvelope } from "./envelope.mjs";
 import {
   renderLoading,
@@ -29,6 +30,18 @@ const destination = new URL("../dist/", import.meta.url);
 await rm(destination, { force: true, recursive: true });
 await mkdir(destination, { recursive: true });
 await cp(source, destination, { recursive: true });
+
+// The semantic tokens are appended from `design-tokens.mjs` rather than written into
+// `src/styles.css`. Two copies of a colour is two sources of truth, and the one that drifts
+// is always the one nobody tested. A test asserts the stylesheet source does not define them.
+const stylesheet = new URL("styles.css", destination);
+await writeFile(
+  stylesheet,
+  `${await readFile(stylesheet, "utf8")}
+/* Semantic tokens, generated from scripts/design-tokens.mjs. */
+${tokenCss()}`,
+  "utf8",
+);
 
 // Each page states one thing that is true and nothing about any law. The reasons are
 // concrete rather than generic, because "an error occurred" teaches a reader nothing
