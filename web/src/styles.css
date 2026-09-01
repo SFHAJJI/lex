@@ -849,3 +849,54 @@ main > * {
 .dossier-identifier code {
   overflow-wrap: anywhere;
 }
+
+/* Reading. The text column is the page, so everything else on it is a line about the text
+   rather than a box around it. The provision card is separated by rule and space rather than
+   by a border, because a page of statute with a frame around every article reads as a form. */
+.reading-case,
+.reading {
+  min-inline-size: 0;
+  margin-block: var(--space-6, 2rem);
+}
+
+.reading-provision {
+  min-inline-size: 0;
+  margin-block: var(--space-5, 1.5rem);
+  padding-block-start: var(--space-4, 1rem);
+  border-block-start: 1px solid var(--border, #8a8a8a);
+}
+
+/* The number is the publisher's own citation handle, so it is set in the same face as the
+   text it names rather than in the chrome face. */
+.reading-num {
+  margin: 0 0 var(--space-2, 0.5rem);
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 1.0625rem;
+}
+
+/* The lines that qualify the text: the dating badge, the authenticity footing, the operative
+   date. They inherit the body colour, because a qualification nobody can read is a
+   qualification nobody made, and they keep the text measure so they read as part of it. */
+.reading-as-of,
+.reading-unchanged,
+.reading-no-legal-effect,
+.reading-case-note {
+  min-inline-size: 0;
+  max-inline-size: 72ch;
+  margin: var(--space-2, 0.5rem) 0 0;
+  font-size: 0.9375em;
+  line-height: 1.5;
+}
+
+/* The permalink is evidence, so the whole URL is on the page as selectable text rather than
+   hidden behind the word. A 64 character digest is one unbreakable token and sets the page's
+   minimum width if it is left alone. */
+.reading-permalink {
+  min-inline-size: 0;
+  margin: var(--space-3, 0.75rem) 0 0;
+  font-size: 0.9375em;
+}
+
+.reading-permalink code {
+  overflow-wrap: anywhere;
+}

@@ -23,6 +23,7 @@ import { renderTimelinePreview } from "./timeline-preview.mjs";
 import { renderCoveragePreview } from "./coverage-preview.mjs";
 import { renderSearchPreview } from "./search-preview.mjs";
 import { renderDossierPreview } from "./dossier-preview.mjs";
+import { renderReadingPreview } from "./reading-preview.mjs";
 import { renderLocaleUnavailable, REVIEWED_CHROME_LOCALES } from "./locale-unavailable.mjs";
 import { CHROME_LOCALES } from "./localization.mjs";
 import { page } from "./render.mjs";
@@ -146,6 +147,10 @@ pages.push(["search.html", renderSearchPreview()]);
 // The dossier, the one screen where the publisher current-state flag belongs, and the three
 // shapes in which a hub page misleads.
 pages.push(["dossier.html", renderDossierPreview()]);
+
+// Reading: one work's text as it stood on one date, with every provision carrying the
+// permalink that makes it checkable.
+pages.push(["reading.html", renderReadingPreview()]);
 
 // One page per chrome locale this build has no reviewed copy in. They are built rather than
 // described, because the browser run measures what is built, and until now every measurement
