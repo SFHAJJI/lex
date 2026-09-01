@@ -26,6 +26,7 @@ import test from 'node:test';
 
 import { renderTimeline } from '../scripts/timeline.mjs';
 import { renderSearchResults } from '../scripts/search-results.mjs';
+import { renderCoverage } from '../scripts/coverage.mjs';
 
 /**
  * The record, verbatim.
@@ -160,4 +161,137 @@ test('a real search row is described in its own publisher terms', () => {
   assert.equal(html.includes('Consolidated wording state'), false);
   // A real permalink carries an anchor and must survive the canonical route policy.
   assert.equal(html.includes('#art_2'), true, 'the anchor was dropped from a real permalink');
+});
+
+// The two live coverage payloads, fetched from the production MCP endpoint on 2026-09-01.
+//
+// These are here because the facet reconciliation rules were a design decision I could have got
+// wrong in a way no synthetic fixture would have shown me. The thin fixture has one language row,
+// so under it the language table and the document-type table look like the same kind of thing,
+// and applying one rule to both looks obviously right.
+//
+// Real data says otherwise, and says it loudly. Luxembourg's language rows sum to 1,406 works
+// against 1,402 held, because 3 works are multilingual. The Union's sum to 4,652 versions against
+// 2,366, because 1,212 of its works carry two languages. Had the partition rule been applied to
+// languages, both live coverage pages would have refused to render.
+//
+// The document-type tables do sum exactly, on both publishers, which is the other half of the
+// same decision and the reason the stricter rule is worth having where it applies.
+const LIVE_LU_COVERAGE = {
+  envelope: { freshness: { built_at: '2026-08-15T09:22:08Z', stamp_signature_valid: true } },
+  publisher_name: 'Service central de legislation (Legilux)',
+  works: 1402,
+  scope_expected_works: 1402,
+  build_inventory_status: 'complete',
+  build_complete: true,
+  build_issues: [],
+  versions: 4656,
+  valid_from_earliest: '1849-03-14',
+  valid_from_latest: '2030-09-15',
+  document_types: [
+    { code: 'LOI', versions: 1536, versions_with_text: 1510 },
+    { code: 'RGD', versions: 1200, versions_with_text: 1192 },
+    { code: 'RECUEIL', versions: 752, versions_with_text: 72 },
+    { code: 'CODE_RECUEIL', versions: 711, versions_with_text: 15 },
+    { code: 'CODE', versions: 192, versions_with_text: 189 },
+    { code: null, versions: 80, versions_with_text: 0 },
+    { code: 'AGD', versions: 39, versions_with_text: 39 },
+    { code: 'Constitution', versions: 37, versions_with_text: 37 },
+    { code: 'RMIN', versions: 32, versions_with_text: 32 },
+    { code: 'RI', versions: 21, versions_with_text: 21 },
+    { code: 'AMIN', versions: 17, versions_with_text: 17 },
+    { code: 'RGC', versions: 13, versions_with_text: 13 },
+    { code: 'PA', versions: 6, versions_with_text: 6 },
+    { code: 'CONV', versions: 4, versions_with_text: 4 },
+    { code: 'ORD', versions: 3, versions_with_text: 3 },
+    { code: 'AGC', versions: 3, versions_with_text: 3 },
+    { code: 'TC', versions: 2, versions_with_text: 2 },
+    { code: 'ARGD', versions: 2, versions_with_text: 2 },
+    { code: 'ST', versions: 1, versions_with_text: 1 },
+    { code: 'REG', versions: 1, versions_with_text: 1 },
+    { code: 'RBCL', versions: 1, versions_with_text: 1 },
+    { code: 'PROT', versions: 1, versions_with_text: 1 },
+    { code: 'DIV', versions: 1, versions_with_text: 1 },
+    { code: 'A', versions: 1, versions_with_text: 1 },
+  ],
+  document_types_total: 24,
+  facets_truncated: false,
+  languages: [
+    { code: 'fr', works: 1402, versions: 4656 },
+    { code: 'en', works: 2, versions: 2 },
+    { code: 'lb', works: 1, versions: 1 },
+    { code: 'de', works: 1, versions: 1 },
+  ],
+  text: { versions_with_text_served: 3163, versions_without_text: 1493 },
+  known_gaps: [
+    'never-consolidated LU acts (~24,579 as-published lois/RGD) are not ingested; ingestion scheduled, see coverage',
+    "coverage density follows the publisher's own digitised consolidations: dense from 2017 onward; sparse before; isolated snapshots back to 1849; forward-dated to 2030",
+  ],
+};
+
+const LIVE_EU_COVERAGE = {
+  envelope: { freshness: { built_at: '2026-08-15T09:01:06Z', stamp_signature_valid: true } },
+  publisher_name: 'Publications Office of the EU (EUR-Lex / Cellar)',
+  works: 1250,
+  scope_expected_works: 1250,
+  build_inventory_status: 'complete',
+  build_complete: true,
+  build_issues: [],
+  versions: 2366,
+  valid_from_earliest: '1957-03-25',
+  valid_from_latest: '2029-03-29',
+  document_types: [
+    { code: 'DIR', versions: 774, versions_with_text: 774 },
+    { code: 'REG', versions: 646, versions_with_text: 646 },
+    { code: 'REG_DEL', versions: 457, versions_with_text: 457 },
+    { code: 'REG_IMPL', versions: 383, versions_with_text: 383 },
+    { code: 'TREATY', versions: 54, versions_with_text: 54 },
+    { code: 'CORRIGENDUM', versions: 26, versions_with_text: 26 },
+    { code: 'DIR_DEL', versions: 8, versions_with_text: 8 },
+    { code: 'DEC_IMPL', versions: 7, versions_with_text: 7 },
+    { code: 'DEC', versions: 7, versions_with_text: 7 },
+    { code: 'DEC_ENTSCHEID', versions: 2, versions_with_text: 2 },
+    { code: 'DIR_IMPL', versions: 1, versions_with_text: 1 },
+    { code: 'DEC_DEL', versions: 1, versions_with_text: 1 },
+  ],
+  document_types_total: 12,
+  facets_truncated: false,
+  languages: [
+    { code: 'fr', works: 1246, versions: 2360 },
+    { code: 'en', works: 1216, versions: 2292 },
+  ],
+  text: { versions_with_text_served: 2366, versions_without_text: 0 },
+  known_gaps: [
+    '1,250 EU works from the reviewed scope are currently mounted; the wider acquis is not yet ingested, see coverage',
+    "coverage follows the publisher's consolidation practice; future-dated versions are provisional",
+  ],
+};
+
+test('both live coverage payloads render, which is what makes the two facet rules right', () => {
+  for (const [name, live] of [
+    ['lu-legilux', LIVE_LU_COVERAGE],
+    ['eu-eurlex', LIVE_EU_COVERAGE],
+  ]) {
+    assert.equal(typeof renderCoverage({ coverage: live }), 'string', `${name} refused to render`);
+  }
+
+  // The measurements the two rules rest on, asserted rather than described, so that a future
+  // change to either rule has to argue with production numbers.
+  for (const [name, live] of [
+    ['lu-legilux', LIVE_LU_COVERAGE],
+    ['eu-eurlex', LIVE_EU_COVERAGE],
+  ]) {
+    const typeSum = live.document_types.reduce((total, row) => total + row.versions, 0);
+    assert.equal(typeSum, live.versions, `${name} document types stopped partitioning`);
+
+    const languageSum = live.languages.reduce((total, row) => total + row.works, 0);
+    assert.ok(
+      languageSum > live.works,
+      `${name} languages stopped overlapping, so this fixture no longer tests the distinction`,
+    );
+    for (const row of live.languages) {
+      assert.ok(row.works <= live.works, `${name} ${row.code} claims more works than are held`);
+      assert.ok(row.versions <= live.versions, `${name} ${row.code} claims more states than held`);
+    }
+  }
 });
