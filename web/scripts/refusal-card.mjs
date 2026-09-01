@@ -335,6 +335,43 @@ function requirePayloadShapes(code, payload) {
  */
 const CANDIDATE_KEYS = new Set(['valid_from', 'hash', 'publication_date', 'href', 'withdrawn']);
 
+/**
+ * One coordinate check for every state a reader can be offered.
+ *
+ * This existed twice, in the interstitial and in the superseded-sibling renderer, and the
+ * second copy was written without the anchor comparison, so the same defect came back in the
+ * component added to fix the first one. A rule that has to be repaired in two places is a
+ * rule that will be repaired in one.
+ */
+function requireStateCoordinate(candidate, publisher, work, what) {
+  requireCalendarDate(candidate?.valid_from, `${what} valid_from`);
+  requireCalendarDate(candidate?.publication_date, `${what} publication_date`);
+  if (!SHA256.test(candidate?.hash ?? '')) {
+    throw new Error(
+      `${what} is identified by its 64 hex character hash; eight characters on screen are a ` +
+        'display truncation, not the identity',
+    );
+  }
+  const target = parseObjectUrl(candidate?.href ?? '');
+  if (target?.kind !== 'reading') {
+    throw new Error(`${what} needs a reading URL to read it at: ${JSON.stringify(candidate?.href)}`);
+  }
+  // The whole coordinate, anchor included. Two states that agree on publisher, work, date
+  // and hash but differ in anchor lead to different provisions.
+  if (
+    target.publisher !== publisher
+    || target.work !== work
+    || target.validFrom !== candidate.valid_from
+    || target.hash !== candidate.hash
+    || target.anchor !== null
+  ) {
+    throw new Error(
+      `${what} link resolves to a different object than the state names; a link that ` +
+        'disagrees with its own label resolves the ambiguity silently',
+    );
+  }
+}
+
 function requireCandidates(payload) {
   const { publisher, work, candidates } = payload;
   if (typeof publisher !== 'string' || typeof work !== 'string') {
@@ -356,12 +393,35 @@ function requireCandidates(payload) {
   // live state with the withdrawn sibling disclosed. The census that produced the original
   // requirement conflated two populations with opposite correct behaviours, so this card
   // refuses the second rather than forcing a choice the publisher already made.
+  // Declared first, so an undeclared withdrawal is named as one rather than reported as a
+  // withdrawal. Behind the live-count rules it was unreachable, and an unreachable guard is
+  // a guard that will be deleted by somebody who notices it never fires.
+  const undeclared = candidates.filter(
+    (candidate) => typeof candidate?.withdrawn !== 'boolean',
+  );
+  if (undeclared.length > 0) {
+    throw new Error(
+      `${undeclared.length} candidate must declare whether the publisher withdrew it; an ` +
+        'undeclared withdrawal is how a superseded state gets offered as a live choice',
+    );
+  }
+
   const live = candidates.filter((candidate) => candidate?.withdrawn === false);
   if (live.length < 2) {
     throw new Error(
       `${live.length} of these ${candidates.length} states is live, so this is not the live ` +
         'ambiguity the interstitial is for; a withdrawn-superseded pair is rendered by ' +
         'renderSupersededState, which shows the live state and discloses the withdrawn sibling',
+    );
+  }
+  // Every rendered candidate, not merely two of them. Counting live candidates and then
+  // rendering all of them let a withdrawn state be offered as a selectable choice inside a
+  // set that happened to contain two live ones, which is the conflation the split removes.
+  if (live.length !== candidates.length) {
+    throw new Error(
+      `${candidates.length - live.length} of these candidates is withdrawn; the interstitial ` +
+        'offers a choice, so every state in it must be one the publisher still holds, and a ' +
+        'withdrawn sibling is disclosed by renderSupersededState rather than offered here',
     );
   }
 
@@ -374,43 +434,7 @@ function requireCandidates(payload) {
         );
       }
     }
-    if (typeof candidate?.withdrawn !== 'boolean') {
-      throw new Error(
-        `a candidate must declare whether the publisher withdrew it: ${JSON.stringify(candidate)}; ` +
-          'an undeclared withdrawal is how a superseded state gets offered as a live choice',
-      );
-    }
-    requireCalendarDate(candidate?.valid_from, 'a candidate valid_from');
-    requireCalendarDate(candidate?.publication_date, 'a candidate publication_date');
-    if (!SHA256.test(candidate?.hash ?? '')) {
-      throw new Error(
-        'a candidate state is identified by its 64 hex character hash; eight characters on ' +
-          'screen are a display truncation, not the identity',
-      );
-    }
-    const target = parseObjectUrl(candidate?.href ?? '');
-    if (target?.kind !== 'reading') {
-      throw new Error(
-        `each candidate needs a reading URL to read it at: ${JSON.stringify(candidate?.href)}`,
-      );
-    }
-    // The complete coordinate, not a date and a hash. A candidate for one work could link
-    // to an unrelated publisher and work that happened to share both.
-    // The anchor is part of the coordinate. Without it, links ending in #art_1 and #art_2
-    // both passed while the candidate declared no anchor at all, so two candidates that
-    // looked identical led to different provisions.
-    if (
-      target.publisher !== publisher
-      || target.work !== work
-      || target.validFrom !== candidate.valid_from
-      || target.hash !== candidate.hash
-      || target.anchor !== null
-    ) {
-      throw new Error(
-        'a candidate Read link resolves to a different object than the candidate names; a ' +
-          'link that disagrees with its own label resolves the ambiguity silently',
-      );
-    }
+    requireStateCoordinate(candidate, publisher, work, 'a candidate');
   }
 }
 
@@ -663,21 +687,7 @@ export function renderSupersededState({ publisher, work, live, withdrawn }) {
     throw new Error('a disclosed sibling must be one the publisher withdrew');
   }
   for (const candidate of [live, ...withdrawn]) {
-    requireCalendarDate(candidate?.valid_from, 'a state valid_from');
-    requireCalendarDate(candidate?.publication_date, 'a state publication_date');
-    if (!SHA256.test(candidate?.hash ?? '')) {
-      throw new Error('a state is identified by its 64 hex character hash');
-    }
-    const target = parseObjectUrl(candidate?.href ?? '');
-    if (
-      target?.kind !== 'reading'
-      || target.publisher !== publisher
-      || target.work !== work
-      || target.validFrom !== candidate.valid_from
-      || target.hash !== candidate.hash
-    ) {
-      throw new Error('a state link resolves to a different object than the state names');
-    }
+    requireStateCoordinate(candidate, publisher, work, 'a state');
   }
 
   const siblings = withdrawn
