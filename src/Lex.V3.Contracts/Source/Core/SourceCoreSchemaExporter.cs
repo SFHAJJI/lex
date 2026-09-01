@@ -14,6 +14,9 @@ public static class SourceCoreSchemaExporter
         {
             [SourceCoreSchemaIds.SourceObjectRef] = typeof(SourceObjectRef),
             [SourceCoreSchemaIds.SourceProfileTopology] = typeof(SourceProfileTopology),
+            [SourceCoreSchemaIds.MachineQueryPlan] = typeof(MachineQueryPlan),
+            [SourceCoreSchemaIds.MachineQueryRenderReceipt] = typeof(MachineQueryRenderReceipt),
+            [SourceCoreSchemaIds.MachineRequestEvidence] = typeof(MachineRequestEvidence),
         });
 
     private static readonly ReadOnlyDictionary<string, string> SchemaFiles =
@@ -22,6 +25,9 @@ public static class SourceCoreSchemaExporter
             [SourceCoreSchemaIds.Common] = "source-common.schema.json",
             [SourceCoreSchemaIds.SourceObjectRef] = "source-object-ref.schema.json",
             [SourceCoreSchemaIds.SourceProfileTopology] = "source-profile-topology.schema.json",
+            [SourceCoreSchemaIds.MachineQueryPlan] = "machine-query-plan.schema.json",
+            [SourceCoreSchemaIds.MachineQueryRenderReceipt] = "machine-query-render-receipt.schema.json",
+            [SourceCoreSchemaIds.MachineRequestEvidence] = "machine-request-evidence.schema.json",
         });
 
     private static readonly ReadOnlyDictionary<string, Type> CommonDefinitionTypes =
@@ -38,6 +44,9 @@ public static class SourceCoreSchemaExporter
             SourceCoreSchemaIds.Common,
             SourceCoreSchemaIds.SourceObjectRef,
             SourceCoreSchemaIds.SourceProfileTopology,
+            SourceCoreSchemaIds.MachineQueryPlan,
+            SourceCoreSchemaIds.MachineQueryRenderReceipt,
+            SourceCoreSchemaIds.MachineRequestEvidence,
         });
 
     public static string FileNameFor(string schemaId) =>
@@ -110,11 +119,33 @@ internal static class SourceCoreSchemaHardener
         "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}" + End;
     private const string PublisherUriPattern =
         "^(?!.*%(?![0-9A-Fa-f]{2}))https?://(?![^/?#]*@)[^/?#\\s]+(?:/[^?#\\s]*)?" + End;
+    private const string MachineMemberPattern = "^[a-z0-9][a-z0-9._-]{0,127}" + End;
+    private const string MediaTypePattern =
+        "^[a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+-]+" + End;
+    private const string DnsLabelPattern = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
+    private const string NonDefaultPortPattern =
+        "(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|" +
+        "655[0-2][0-9]|6553[0-5])";
+    private const string MachineTargetOriginAndPathPattern =
+        "^(?=[!-~]{1,4096}" + End + ")" +
+        "(?!https://[^/?#]+:443/)https://" +
+        "(?![^/?#]*@)(?![0-9.]+(?::" + NonDefaultPortPattern + ")?/)" +
+        "(?=[a-z0-9.-]{1,253}(?::" + NonDefaultPortPattern + ")?/)" +
+        DnsLabelPattern + "(?:\\." + DnsLabelPattern + ")*(?::" + NonDefaultPortPattern + ")?/" +
+        "(?![^?#]*(?:\\\\|%(?:25)*(?:2[eEfF]|5[cC])))" +
+        "(?!\\.{1,2}(?:/|$)|[^?#]*/\\.{1,2}(?:/|$))[^?#\\s]*" + End;
 
     public static void Apply(string schemaId, JsonObject root)
     {
         PinConst(root, "schema", schemaId);
+        if (string.Equals(schemaId, SourceCoreSchemaIds.MachineQueryRenderReceipt, StringComparison.Ordinal) ||
+            string.Equals(schemaId, SourceCoreSchemaIds.MachineRequestEvidence, StringComparison.Ordinal))
+        {
+            PinConst(root, "query_plan_schema", MachineQueryPlan.SchemaId);
+        }
+
         ApplyValueObject(root);
+        ApplyMachineQueryConditions(schemaId, root);
     }
 
     public static void ApplyValueObject(JsonObject root) => HardenTree(root);
@@ -141,6 +172,11 @@ internal static class SourceCoreSchemaHardener
                             HardenProperty(name, property);
                         }
                     }
+
+                    if (properties.ContainsKey("kind") && properties.ContainsKey("row_limit"))
+                    {
+                        ApplyResponseCardinalityConditions(value);
+                    }
                 }
 
                 foreach (var (_, child) in value)
@@ -163,7 +199,7 @@ internal static class SourceCoreSchemaHardener
                 break;
 
             case "sha256":
-            case "canonical_key_sha256":
+            case var hashName when hashName.EndsWith("_sha256", StringComparison.Ordinal):
                 property["pattern"] = Sha256Pattern;
                 property["minLength"] = 64;
                 property["maxLength"] = 64;
@@ -186,7 +222,208 @@ internal static class SourceCoreSchemaHardener
                 property["minLength"] = 1;
                 property["maxLength"] = 4096;
                 break;
+
+            case "target_origin_and_path":
+                property["format"] = "uri";
+                property["pattern"] = MachineTargetOriginAndPathPattern;
+                property["minLength"] = 1;
+                property["maxLength"] = 4096;
+                break;
+
+            case "request_target_length":
+            case "expected_request_target_length":
+                property["minimum"] = 1;
+                property["maximum"] = 4096;
+                break;
+
+            case "expected_request_body_length":
+            case "request_body_length":
+                property["minimum"] = 0;
+                property["maximum"] = MachineQueryValidation.MaximumRequestBodyBytes;
+                break;
+
+            case "row_limit":
+                property["minimum"] = 1;
+                property["maximum"] = MachineQueryValidation.MaximumResponseRowLimit;
+                break;
+
+            case "expected_partition_row_count":
+                property["minimum"] = 0;
+                break;
         }
+    }
+
+    private static void ApplyResponseCardinalityConditions(JsonObject root)
+    {
+        root["allOf"] = new JsonArray(
+            EnumCondition("opaque_body", "row_limit", present: false),
+            EnumCondition("opaque_body", "expected_partition_row_count", present: false),
+            EnumCondition(
+                "opaque_body",
+                "expected_partition_row_count_evidence_ref",
+                present: false),
+            EnumCondition(
+                "bounded_row_set_page",
+                "row_limit",
+                present: true,
+                minimum: 1,
+                maximum: MachineQueryValidation.MaximumResponseRowLimit),
+            EnumCondition(
+                "bounded_row_set_page",
+                "expected_partition_row_count",
+                present: true,
+                minimum: 0),
+            EnumCondition(
+                "bounded_row_set_page",
+                "expected_partition_row_count_evidence_ref",
+                present: true));
+    }
+
+    private static JsonObject EnumCondition(
+        string discriminator,
+        string propertyName,
+        bool present,
+        int? minimum = null,
+        int? maximum = null) => new()
+        {
+            ["if"] = new JsonObject
+            {
+                ["properties"] = new JsonObject
+                {
+                    ["kind"] = new JsonObject { ["const"] = discriminator },
+                },
+                ["required"] = new JsonArray("kind"),
+            },
+            ["then"] = new JsonObject
+            {
+                ["properties"] = new JsonObject
+                {
+                    [propertyName] = NullabilityConstraint(
+                    present,
+                    minimum: minimum,
+                    maximum: maximum),
+                },
+            },
+        };
+
+    private static void ApplyMachineQueryConditions(string schemaId, JsonObject root)
+    {
+        if (string.Equals(schemaId, SourceCoreSchemaIds.MachineQueryPlan, StringComparison.Ordinal) ||
+            string.Equals(
+                schemaId,
+                SourceCoreSchemaIds.MachineQueryRenderReceipt,
+                StringComparison.Ordinal))
+        {
+            var conditions = new JsonArray(
+                MethodCondition("GET", bodyPresent: false, includeHeaders: true),
+                MethodCondition("POST", bodyPresent: true, includeHeaders: true));
+            conditions.Add(RegistryMemberPattern("content_type", MediaTypePattern));
+            if (string.Equals(schemaId, SourceCoreSchemaIds.MachineQueryPlan, StringComparison.Ordinal))
+            {
+                conditions.Add(RegistryMemberPattern("query_family_ref", MachineMemberPattern));
+                conditions.Add(RegistryMemberPattern("partition_binding", MachineMemberPattern));
+            }
+
+            root["allOf"] = conditions;
+        }
+        else if (string.Equals(
+                     schemaId,
+                     SourceCoreSchemaIds.MachineRequestEvidence,
+                     StringComparison.Ordinal))
+        {
+            root["oneOf"] = new JsonArray(
+                BodyPair(bodyPresent: false),
+                BodyPair(bodyPresent: true));
+        }
+    }
+
+    private static JsonObject RegistryMemberPattern(string propertyName, string pattern) => new()
+    {
+        ["properties"] = new JsonObject
+        {
+            [propertyName] = new JsonObject
+            {
+                ["properties"] = new JsonObject
+                {
+                    ["member_key"] = new JsonObject { ["pattern"] = pattern },
+                },
+            },
+        },
+    };
+
+    private static JsonObject MethodCondition(
+        string method,
+        bool bodyPresent,
+        bool includeHeaders)
+    {
+        var properties = BodyPairProperties(bodyPresent);
+        if (includeHeaders)
+        {
+            properties["content_type"] = NullabilityConstraint(bodyPresent);
+            properties["charset"] = NullabilityConstraint(bodyPresent, allowNullWhenPresent: true);
+        }
+
+        return new JsonObject
+        {
+            ["if"] = new JsonObject
+            {
+                ["properties"] = new JsonObject
+                {
+                    ["method"] = new JsonObject { ["const"] = method },
+                },
+                ["required"] = new JsonArray("method"),
+            },
+            ["then"] = new JsonObject { ["properties"] = properties },
+        };
+    }
+
+    private static JsonObject BodyPair(bool bodyPresent) => new()
+    {
+        ["properties"] = BodyPairProperties(bodyPresent),
+    };
+
+    private static JsonObject BodyPairProperties(bool bodyPresent) => new()
+    {
+        ["expected_request_body_length"] = NullabilityConstraint(
+            bodyPresent,
+            minimum: 1,
+            maximum: MachineQueryValidation.MaximumRequestBodyBytes),
+        ["expected_request_body_sha256"] = NullabilityConstraint(bodyPresent),
+        ["request_body_length"] = NullabilityConstraint(
+            bodyPresent,
+            minimum: 1,
+            maximum: MachineQueryValidation.MaximumRequestBodyBytes),
+        ["request_body_sha256"] = NullabilityConstraint(bodyPresent),
+    };
+
+    private static JsonObject NullabilityConstraint(
+        bool present,
+        bool allowNullWhenPresent = false,
+        int? minimum = null,
+        int? maximum = null)
+    {
+        if (!present || allowNullWhenPresent)
+        {
+            return allowNullWhenPresent && present
+                ? new JsonObject()
+                : new JsonObject { ["type"] = "null" };
+        }
+
+        var result = new JsonObject
+        {
+            ["not"] = new JsonObject { ["type"] = "null" },
+        };
+        if (minimum is not null)
+        {
+            result["minimum"] = minimum.Value;
+        }
+
+        if (maximum is not null)
+        {
+            result["maximum"] = maximum.Value;
+        }
+
+        return result;
     }
 
     private static void PinConst(JsonObject root, string propertyName, string value)

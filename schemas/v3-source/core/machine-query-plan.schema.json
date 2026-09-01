@@ -1,0 +1,528 @@
+{
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "machine_query_plan/1"
+    },
+    "query_family_ref": {
+      "type": "object",
+      "properties": {
+        "registry_ref": {
+          "type": "object",
+          "properties": {
+            "resource_id": {
+              "type": "string",
+              "pattern": "^urn:uuid:(?!00000000-0000-0000-0000-000000000000)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\\s\\S])",
+              "minLength": 45,
+              "maxLength": 45
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}(?![\\s\\S])",
+              "minLength": 64,
+              "maxLength": 64
+            }
+          },
+          "required": [
+            "resource_id",
+            "sha256"
+          ],
+          "additionalProperties": false
+        },
+        "member_key": {
+          "type": "string",
+          "pattern": "^[!-~]{1,256}(?![\\s\\S])",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "registry_ref",
+        "member_key"
+      ],
+      "additionalProperties": false
+    },
+    "renderer_profile_ref": {
+      "type": "object",
+      "properties": {
+        "resource_id": {
+          "type": "string",
+          "pattern": "^urn:uuid:(?!00000000-0000-0000-0000-000000000000)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\\s\\S])",
+          "minLength": 45,
+          "maxLength": 45
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])",
+          "minLength": 64,
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "resource_id",
+        "sha256"
+      ],
+      "additionalProperties": false
+    },
+    "renderer_source_ref": {
+      "type": "object",
+      "properties": {
+        "resource_id": {
+          "type": "string",
+          "pattern": "^urn:uuid:(?!00000000-0000-0000-0000-000000000000)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\\s\\S])",
+          "minLength": 45,
+          "maxLength": 45
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])",
+          "minLength": 64,
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "resource_id",
+        "sha256"
+      ],
+      "additionalProperties": false
+    },
+    "method": {
+      "enum": [
+        "GET",
+        "POST"
+      ]
+    },
+    "target_origin_and_path": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^(?=[!-~]{1,4096}(?![\\s\\S]))(?!https://[^/?#]\u002B:443/)https://(?![^/?#]*@)(?![0-9.]\u002B(?::(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]))?/)(?=[a-z0-9.-]{1,253}(?::(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]))?/)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*(?::(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]))?/(?![^?#]*(?:\\\\|%(?:25)*(?:2[eEfF]|5[cC])))(?!\\.{1,2}(?:/|$)|[^?#]*/\\.{1,2}(?:/|$))[^?#\\s]*(?![\\s\\S])",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "expected_request_target_length": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4096
+    },
+    "expected_request_target_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}(?![\\s\\S])",
+      "minLength": 64,
+      "maxLength": 64
+    },
+    "response_cardinality": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "opaque_body",
+            "bounded_row_set_page"
+          ]
+        },
+        "row_limit": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 999999
+        },
+        "expected_partition_row_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "expected_partition_row_count_evidence_ref": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "resource_id": {
+              "type": "string",
+              "pattern": "^urn:uuid:(?!00000000-0000-0000-0000-000000000000)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\\s\\S])",
+              "minLength": 45,
+              "maxLength": 45
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}(?![\\s\\S])",
+              "minLength": 64,
+              "maxLength": 64
+            }
+          },
+          "required": [
+            "resource_id",
+            "sha256"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "kind",
+        "row_limit",
+        "expected_partition_row_count",
+        "expected_partition_row_count_evidence_ref"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "opaque_body"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "row_limit": {
+                "type": "null",
+                "minimum": 1,
+                "maximum": 999999
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "opaque_body"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "expected_partition_row_count": {
+                "type": "null",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "opaque_body"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "expected_partition_row_count_evidence_ref": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "bounded_row_set_page"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "row_limit": {
+                "not": {
+                  "type": "null"
+                },
+                "minimum": 1,
+                "maximum": 999999
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "bounded_row_set_page"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "expected_partition_row_count": {
+                "not": {
+                  "type": "null"
+                },
+                "minimum": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "bounded_row_set_page"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "expected_partition_row_count_evidence_ref": {
+                "not": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "content_type": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "registry_ref": {
+          "$ref": "#/properties/query_family_ref/properties/registry_ref"
+        },
+        "member_key": {
+          "type": "string",
+          "pattern": "^[!-~]{1,256}(?![\\s\\S])",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "registry_ref",
+        "member_key"
+      ],
+      "additionalProperties": false
+    },
+    "charset": {
+      "enum": [
+        "utf-8",
+        null
+      ]
+    },
+    "input_mode": {
+      "enum": [
+        "renderer_with_ordered_inputs"
+      ]
+    },
+    "ordered_parameter_set": {
+      "type": "object",
+      "properties": {
+        "resource_id": {
+          "type": "string",
+          "pattern": "^urn:uuid:(?!00000000-0000-0000-0000-000000000000)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\\s\\S])",
+          "minLength": 45,
+          "maxLength": 45
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])",
+          "minLength": 64,
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "resource_id",
+        "sha256"
+      ],
+      "additionalProperties": false
+    },
+    "partition_binding": {
+      "type": "object",
+      "properties": {
+        "registry_ref": {
+          "$ref": "#/properties/query_family_ref/properties/registry_ref"
+        },
+        "member_key": {
+          "type": "string",
+          "pattern": "^[!-~]{1,256}(?![\\s\\S])",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "registry_ref",
+        "member_key"
+      ],
+      "additionalProperties": false
+    },
+    "expected_request_body_length": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1048576
+    },
+    "expected_request_body_sha256": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[0-9a-f]{64}(?![\\s\\S])",
+      "minLength": 64,
+      "maxLength": 64
+    }
+  },
+  "required": [
+    "schema",
+    "query_family_ref",
+    "renderer_profile_ref",
+    "renderer_source_ref",
+    "method",
+    "target_origin_and_path",
+    "expected_request_target_length",
+    "expected_request_target_sha256",
+    "response_cardinality",
+    "content_type",
+    "charset",
+    "input_mode",
+    "ordered_parameter_set",
+    "partition_binding",
+    "expected_request_body_length",
+    "expected_request_body_sha256"
+  ],
+  "additionalProperties": false,
+  "$id": "urn:uuid:8383f554-e474-4619-8826-2c99cb16b91a",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "method": {
+            "const": "GET"
+          }
+        },
+        "required": [
+          "method"
+        ]
+      },
+      "then": {
+        "properties": {
+          "expected_request_body_length": {
+            "type": "null"
+          },
+          "expected_request_body_sha256": {
+            "type": "null"
+          },
+          "request_body_length": {
+            "type": "null"
+          },
+          "request_body_sha256": {
+            "type": "null"
+          },
+          "content_type": {
+            "type": "null"
+          },
+          "charset": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "method": {
+            "const": "POST"
+          }
+        },
+        "required": [
+          "method"
+        ]
+      },
+      "then": {
+        "properties": {
+          "expected_request_body_length": {
+            "not": {
+              "type": "null"
+            },
+            "minimum": 1,
+            "maximum": 1048576
+          },
+          "expected_request_body_sha256": {
+            "not": {
+              "type": "null"
+            }
+          },
+          "request_body_length": {
+            "not": {
+              "type": "null"
+            },
+            "minimum": 1,
+            "maximum": 1048576
+          },
+          "request_body_sha256": {
+            "not": {
+              "type": "null"
+            }
+          },
+          "content_type": {
+            "not": {
+              "type": "null"
+            }
+          },
+          "charset": {}
+        }
+      }
+    },
+    {
+      "properties": {
+        "content_type": {
+          "properties": {
+            "member_key": {
+              "pattern": "^[a-z0-9!#$\u0026^_.\u002B-]\u002B/[a-z0-9!#$\u0026^_.\u002B-]\u002B(?![\\s\\S])"
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "query_family_ref": {
+          "properties": {
+            "member_key": {
+              "pattern": "^[a-z0-9][a-z0-9._-]{0,127}(?![\\s\\S])"
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "partition_binding": {
+          "properties": {
+            "member_key": {
+              "pattern": "^[a-z0-9][a-z0-9._-]{0,127}(?![\\s\\S])"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -29,7 +29,7 @@ public sealed class BoundedHttpObservationLifecycleTests
         var custody = new ControlledCustodyStore(CustodyBlock.None);
         using var acquirer = Acquirer(Response(content), custody);
 
-        var result = await acquirer.AcquireAsync(RequestEvidence(), caller.Token);
+        var result = await acquirer.AcquireAsync(RequestTemplate(), caller.Token);
 
         AssertBodyReadFailure(result, string.Empty, custody);
     }
@@ -50,7 +50,7 @@ public sealed class BoundedHttpObservationLifecycleTests
         var custody = new ControlledCustodyStore(CustodyBlock.None);
         using var acquirer = Acquirer(Response(stream, declaredLength: 5), custody);
 
-        var result = await acquirer.AcquireAsync(RequestEvidence(), caller.Token);
+        var result = await acquirer.AcquireAsync(RequestTemplate(), caller.Token);
 
         AssertBodyReadFailure(result, "AB", custody);
     }
@@ -71,7 +71,7 @@ public sealed class BoundedHttpObservationLifecycleTests
                 ? GuardDeadline + TimeSpan.FromSeconds(1)
                 : OperationDeadline);
 
-        var acquisition = acquirer.AcquireAsync(RequestEvidence(), caller.Token);
+        var acquisition = acquirer.AcquireAsync(RequestTemplate(), caller.Token);
         await RequireCompletion(content.OpenStarted, "The body opener was not reached.");
         if (cancelCaller)
         {
@@ -118,7 +118,7 @@ public sealed class BoundedHttpObservationLifecycleTests
             bodyTimeout: OperationDeadline);
 
         var result = await RequireCompletion(
-            acquirer.AcquireAsync(RequestEvidence(), CancellationToken.None),
+            acquirer.AcquireAsync(RequestTemplate(), CancellationToken.None),
             "A declared-zero response waited for a body stream it does not have.");
 
         var withoutBody = result as ResponseWithoutBodyObservation;
@@ -139,7 +139,7 @@ public sealed class BoundedHttpObservationLifecycleTests
             custody,
             bodyTimeout: OperationDeadline);
 
-        var acquisition = acquirer.AcquireAsync(RequestEvidence(), caller.Token);
+        var acquisition = acquirer.AcquireAsync(RequestTemplate(), caller.Token);
         await RequireCompletion(custody.CreateStarted, "Custody create was not reached.");
         var winner = await Task.WhenAny(acquisition, Task.Delay(GuardDeadline));
         if (!ReferenceEquals(winner, acquisition))
@@ -174,7 +174,7 @@ public sealed class BoundedHttpObservationLifecycleTests
             custody,
             bodyTimeout: OperationDeadline);
 
-        var acquisition = acquirer.AcquireAsync(RequestEvidence(), caller.Token);
+        var acquisition = acquirer.AcquireAsync(RequestTemplate(), caller.Token);
         await RequireCompletion(custody.ReadStarted, "Custody readback was not reached.");
         var winner = await Task.WhenAny(acquisition, Task.Delay(GuardDeadline));
         if (!ReferenceEquals(winner, acquisition))
@@ -211,7 +211,7 @@ public sealed class BoundedHttpObservationLifecycleTests
             bodyTimeout: OperationDeadline);
 
         var acquisition = Task.Run(() =>
-            acquirer.AcquireAsync(RequestEvidence(), CancellationToken.None));
+            acquirer.AcquireAsync(RequestTemplate(), CancellationToken.None));
         await RequireCompletion(custody.CreateStarted, "Custody create was not reached.");
         var winner = await Task.WhenAny(acquisition, Task.Delay(GuardDeadline));
         if (!ReferenceEquals(winner, acquisition))
@@ -246,7 +246,7 @@ public sealed class BoundedHttpObservationLifecycleTests
             bodyTimeout: OperationDeadline);
 
         var acquisition = Task.Run(() =>
-            acquirer.AcquireAsync(RequestEvidence(), CancellationToken.None));
+            acquirer.AcquireAsync(RequestTemplate(), CancellationToken.None));
         await RequireCompletion(custody.ReadStarted, "Custody read was not reached.");
         var winner = await Task.WhenAny(acquisition, Task.Delay(GuardDeadline));
         if (!ReferenceEquals(winner, acquisition))
@@ -287,7 +287,7 @@ public sealed class BoundedHttpObservationLifecycleTests
             custody);
 
         await Assert.ThrowsExactlyAsync<CustodyRequiredException>(() =>
-            acquirer.AcquireAsync(RequestEvidence(), CancellationToken.None));
+            acquirer.AcquireAsync(RequestTemplate(), CancellationToken.None));
 
         Assert.AreEqual(1, custody.CreateCount);
         Assert.AreEqual(stage == "read" ? 1 : 0, custody.ReadCount);
@@ -360,7 +360,8 @@ public sealed class BoundedHttpObservationLifecycleTests
             custody,
             maximumResponseBytes: 1024,
             headersTimeout: TimeSpan.FromSeconds(5),
-            bodyTimeout ?? TimeSpan.FromSeconds(5));
+            bodyTimeout ?? TimeSpan.FromSeconds(5),
+            MachineQueryEvidenceFixture.Clock());
 
     private static HttpResponseMessage Response(Stream stream, long? declaredLength = null)
     {
@@ -378,25 +379,8 @@ public sealed class BoundedHttpObservationLifecycleTests
         Content = content,
     };
 
-    private static HttpRequestEvidence RequestEvidence() => new(
-        requestedUri: "https://data.legilux.public.lu/example.xml",
-        HttpRequestMethod.Get,
-        observedAtUtc: "2026-09-01T10:00:00.000Z",
-        timestampPrecision: HttpObservationTimestampPrecision.Millisecond,
-        clockSource: HttpObservationClockSource.SystemUtc,
-        runIdentity: Artifact(1),
-        adapterIdentity: Artifact(2),
-        requestPolicyIdentity: Artifact(3),
-        representationRequestKeyIdentity: Artifact(4),
-        outboundCrawlerIdentity: new OutboundCrawlerIdentityEvidence(
-            OutboundCrawlerIdentity.Schema,
-            OutboundCrawlerIdentity.Token),
-        origin: new HttpOrigin("https", "data.legilux.public.lu", 443),
-        queryPlanIdentity: Artifact(5));
-
-    private static SourceArtifactRef Artifact(int suffix) => new(
-        $"urn:uuid:00000000-0000-0000-0000-{suffix:D12}",
-        new string('a', 64));
+    private static HttpRequestTemplate RequestTemplate() =>
+        MachineQueryEvidenceFixture.Template();
 
     private sealed class RecordingHandler(HttpResponseMessage response) : HttpMessageHandler
     {

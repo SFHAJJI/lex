@@ -9,6 +9,9 @@ public static class SourceCoreSchemaIds
     public const string Common = "lex-v3-source-common/1";
     public const string SourceObjectRef = "lex-v3-source-object-ref/1";
     public const string SourceProfileTopology = "lex-v3-source-profile-topology/1";
+    public const string MachineQueryPlan = "machine_query_plan/1";
+    public const string MachineQueryRenderReceipt = "machine_query_render_receipt/1";
+    public const string MachineRequestEvidence = "machine_request_evidence/1";
 }
 
 public static class SourceCoreSchemaResourceIds
@@ -16,12 +19,18 @@ public static class SourceCoreSchemaResourceIds
     public const string Common = "urn:uuid:26641197-e5e5-422c-ba6c-61dce566f8a3";
     public const string SourceObjectRef = "urn:uuid:4710a0f9-f83a-4747-82d9-84185db6728f";
     public const string SourceProfileTopology = "urn:uuid:6c66e724-8fb2-4521-81b9-12a2f15c508d";
+    public const string MachineQueryPlan = "urn:uuid:8383f554-e474-4619-8826-2c99cb16b91a";
+    public const string MachineQueryRenderReceipt = "urn:uuid:eed9f5fc-620f-4369-ba60-785d8f249071";
+    public const string MachineRequestEvidence = "urn:uuid:4785641c-a6ad-4ecf-bbc1-e1fa86d2baf5";
 
     public static string ForWireSchema(string schema) => schema switch
     {
         SourceCoreSchemaIds.Common => Common,
         SourceCoreSchemaIds.SourceObjectRef => SourceObjectRef,
         SourceCoreSchemaIds.SourceProfileTopology => SourceProfileTopology,
+        SourceCoreSchemaIds.MachineQueryPlan => MachineQueryPlan,
+        SourceCoreSchemaIds.MachineQueryRenderReceipt => MachineQueryRenderReceipt,
+        SourceCoreSchemaIds.MachineRequestEvidence => MachineRequestEvidence,
         _ => throw new ArgumentException("Unknown source-core schema identity.", nameof(schema)),
     };
 }

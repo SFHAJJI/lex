@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Lex.V3.Contracts;
@@ -304,7 +306,7 @@ public sealed class HttpObservationContractTests
                 "representation_request_key_identity",
                 "outbound_crawler_identity",
                 "origin",
-                "query_plan_identity",
+                "render_receipt",
             },
             document.RootElement.EnumerateObject().Select(static property => property.Name).ToArray());
 
@@ -318,6 +320,7 @@ public sealed class HttpObservationContractTests
             .Select(static property => property.Name)
             .ToArray();
         Assert.IsFalse(forbidden.Any(publicMembers.Contains));
+        Assert.AreEqual(0, typeof(HttpRequestEvidence).GetConstructors().Length);
 
         var roundTrip = ContractJson.Deserialize<HttpRequestEvidence>(ContractJson.Serialize(request));
         Assert.AreEqual(request, roundTrip);
@@ -363,7 +366,10 @@ public sealed class HttpObservationContractTests
         Assert.ThrowsExactly<ArgumentException>(() => RequestEvidence(
             origin: new HttpOrigin("https", "op.europa.eu", 443)));
         Assert.ThrowsExactly<ArgumentException>(() => RequestEvidence(
-            requestedUri: "https://publications.europa.eu/sparql?query=secret"));
+            requestedUri: "https://publications.europa.eu/sparql?query=secret",
+            renderReceipt: RenderReceipt(
+                HttpRequestMethod.Get,
+                "https://publications.europa.eu/sparql")));
         Assert.ThrowsExactly<ArgumentException>(() => new OutboundCrawlerIdentityEvidence(
             "outbound_crawler_identity/2",
             OutboundCrawlerIdentity.Token));
@@ -501,13 +507,33 @@ public sealed class HttpObservationContractTests
         HttpOrigin? origin = null,
         HttpRequestMethod method = HttpRequestMethod.Get,
         HttpObservationTimestampPrecision timestampPrecision = HttpObservationTimestampPrecision.Millisecond,
-        HttpObservationClockSource clockSource = HttpObservationClockSource.SystemUtc) =>
-        new(
+        HttpObservationClockSource clockSource = HttpObservationClockSource.SystemUtc,
+        MachineQueryRenderReceipt? renderReceipt = null)
+    {
+        if (timestampPrecision != HttpObservationTimestampPrecision.Millisecond)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timestampPrecision));
+        }
+
+        if (clockSource != HttpObservationClockSource.SystemUtc)
+        {
+            throw new ArgumentOutOfRangeException(nameof(clockSource));
+        }
+
+        if (!DateTimeOffset.TryParseExact(
+                observedAtUtc,
+                "yyyy-MM-dd'T'HH:mm:ss.fff'Z'",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeUniversal |
+                System.Globalization.DateTimeStyles.AdjustToUniversal,
+                out var timestamp))
+        {
+            throw new ArgumentException("The observation time must be canonical UTC milliseconds.", nameof(observedAtUtc));
+        }
+
+        var template = new HttpRequestTemplate(
             requestedUri: requestedUri,
             method: method,
-            observedAtUtc: observedAtUtc,
-            timestampPrecision: timestampPrecision,
-            clockSource: clockSource,
             runIdentity: Artifact("urn:uuid:11111111-1111-4111-8111-111111111111", '1'),
             adapterIdentity: Artifact("urn:uuid:22222222-2222-4222-8222-222222222222", '2'),
             requestPolicyIdentity: Artifact("urn:uuid:33333333-3333-4333-8333-333333333333", '3'),
@@ -517,7 +543,41 @@ public sealed class HttpObservationContractTests
                 OutboundCrawlerIdentity.Schema,
                 OutboundCrawlerIdentity.Token),
             origin: origin ?? new HttpOrigin("https", "publications.europa.eu", 443),
-            queryPlanIdentity: Artifact("urn:uuid:55555555-5555-4555-8555-555555555555", '5'));
+            renderReceipt: renderReceipt ?? RenderReceipt(method, requestedUri));
+        return HttpRequestEvidence.CreateAtSend(template, timestamp);
+    }
+
+    private static MachineQueryRenderReceipt RenderReceipt(
+        HttpRequestMethod method,
+        string requestedUri)
+    {
+        var requestTargetBytes = Encoding.ASCII.GetBytes(
+            Uri.TryCreate(requestedUri, UriKind.Absolute, out var parsed)
+                ? parsed.PathAndQuery
+                : "/");
+        var bodyBytes = method == HttpRequestMethod.Post
+            ? Encoding.UTF8.GetBytes("query=ASK%20%7B%7D")
+            : null;
+        return new MachineQueryRenderReceipt(
+            MachineQueryRenderReceipt.SchemaId,
+            Artifact("urn:uuid:55555555-5555-4555-8555-555555555555", '5'),
+            MachineQueryPlan.SchemaId,
+            Artifact("urn:uuid:77777777-7777-4777-8777-777777777777", '7'),
+            Artifact("urn:uuid:88888888-8888-4888-8888-888888888888", '8'),
+            Artifact("urn:uuid:99999999-9999-4999-8999-999999999999", '9'),
+            method == HttpRequestMethod.Post
+                ? RegistryMember("application/x-www-form-urlencoded")
+                : null,
+            method == HttpRequestMethod.Post ? MachineQueryCharset.Utf8 : null,
+            MachineQueryInputMode.RendererInputs,
+            method,
+            requestTargetBytes.LongLength,
+            Convert.ToHexString(SHA256.HashData(requestTargetBytes)).ToLowerInvariant(),
+            bodyBytes?.LongLength,
+            bodyBytes is null
+                ? null
+                : Convert.ToHexString(SHA256.HashData(bodyBytes)).ToLowerInvariant());
+    }
 
     private static SourceRegistryMemberRef RegistryMember(string memberKey) =>
         new(Artifact("urn:uuid:66666666-6666-4666-8666-666666666666", '6'), memberKey);

@@ -1,4 +1,6 @@
+using System.Buffers;
 using System.Reflection;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
@@ -76,6 +78,11 @@ public static class ContractJson
             WriteIndented = false,
         };
 
+        if (exactEnums)
+        {
+            options.Converters.Add(new ValidUnicodeStringConverter());
+        }
+
         options.Converters.Add(exactEnums
             ? new ExactStringEnumConverterFactory()
             : new JsonStringEnumConverter(
@@ -83,6 +90,51 @@ public static class ContractJson
                 allowIntegerValues: false));
         options.MakeReadOnly();
         return options;
+    }
+}
+
+internal sealed class ValidUnicodeStringConverter : JsonConverter<string>
+{
+    public override string? Read(
+        ref Utf8JsonReader reader,
+        Type typeToConvert,
+        JsonSerializerOptions options) => reader.GetString();
+
+    public override void Write(
+        Utf8JsonWriter writer,
+        string value,
+        JsonSerializerOptions options)
+    {
+        EnsureValidUnicode(value);
+        writer.WriteStringValue(value);
+    }
+
+    public override string ReadAsPropertyName(
+        ref Utf8JsonReader reader,
+        Type typeToConvert,
+        JsonSerializerOptions options) => reader.GetString()!;
+
+    public override void WriteAsPropertyName(
+        Utf8JsonWriter writer,
+        string value,
+        JsonSerializerOptions options)
+    {
+        EnsureValidUnicode(value);
+        writer.WritePropertyName(options.DictionaryKeyPolicy?.ConvertName(value) ?? value);
+    }
+
+    private static void EnsureValidUnicode(string value)
+    {
+        for (var index = 0; index < value.Length;)
+        {
+            var status = Rune.DecodeFromUtf16(value.AsSpan(index), out _, out var consumed);
+            if (status != OperationStatus.Done)
+            {
+                throw new JsonException("Contract strings must contain valid Unicode scalars.");
+            }
+
+            index += consumed;
+        }
     }
 }
 

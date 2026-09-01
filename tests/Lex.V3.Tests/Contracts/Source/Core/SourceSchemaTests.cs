@@ -16,7 +16,7 @@ public sealed class SourceSchemaTests
     private static readonly string CanonicalKeyDigest = Sha256("cellar:work:example");
 
     [TestMethod]
-    public void ExporterPublishesExactlyThreeDeterministicDraft202012Schemas()
+    public void ExporterPublishesExactlySixDeterministicDraft202012Schemas()
     {
         CollectionAssert.AreEqual(
             new[]
@@ -24,6 +24,9 @@ public sealed class SourceSchemaTests
                 SourceCoreSchemaIds.Common,
                 SourceCoreSchemaIds.SourceObjectRef,
                 SourceCoreSchemaIds.SourceProfileTopology,
+                SourceCoreSchemaIds.MachineQueryPlan,
+                SourceCoreSchemaIds.MachineQueryRenderReceipt,
+                SourceCoreSchemaIds.MachineRequestEvidence,
             },
             SourceCoreSchemaExporter.AllSchemaIds.ToArray());
 
@@ -51,6 +54,9 @@ public sealed class SourceSchemaTests
         Assert.AreEqual("source-common.schema.json", SourceCoreSchemaExporter.FileNameFor(SourceCoreSchemaIds.Common));
         Assert.AreEqual("source-object-ref.schema.json", SourceCoreSchemaExporter.FileNameFor(SourceCoreSchemaIds.SourceObjectRef));
         Assert.AreEqual("source-profile-topology.schema.json", SourceCoreSchemaExporter.FileNameFor(SourceCoreSchemaIds.SourceProfileTopology));
+        Assert.AreEqual("machine-query-plan.schema.json", SourceCoreSchemaExporter.FileNameFor(SourceCoreSchemaIds.MachineQueryPlan));
+        Assert.AreEqual("machine-query-render-receipt.schema.json", SourceCoreSchemaExporter.FileNameFor(SourceCoreSchemaIds.MachineQueryRenderReceipt));
+        Assert.AreEqual("machine-request-evidence.schema.json", SourceCoreSchemaExporter.FileNameFor(SourceCoreSchemaIds.MachineRequestEvidence));
         Assert.ThrowsExactly<ArgumentException>(() => SourceCoreSchemaExporter.FileNameFor("unknown/1"));
         Assert.ThrowsExactly<ArgumentException>(() => SourceCoreSchemaExporter.ExportUtf8("unknown/1"));
     }
@@ -79,9 +85,91 @@ public sealed class SourceSchemaTests
             new SourceRegistryMemberRef(
                 Artifact("bb86e4c4-775d-45ac-90e8-f0f6b39c47cb"),
                 "single_publisher_store"));
+        var plan = CreateQueryPlan();
+        var planRef = MachineQueryPlanIdentity.Create(
+            "urn:uuid:55555555-5555-4555-8555-555555555555",
+            plan);
+        var receipt = CreateRenderReceipt(plan, planRef);
+        var receiptRef = MachineQueryRenderReceiptIdentity.Create(
+            "urn:uuid:66666666-6666-4666-8666-666666666666",
+            receipt);
+        var evidence = MachineRequestEvidence.FromReceipt(
+            planRef,
+            receiptRef,
+            receipt,
+            Artifact("77777777-7777-4777-8777-777777777777"));
 
         Assert.IsTrue(Evaluate(SourceCoreSchemaIds.SourceObjectRef, objectRef, registry).IsValid);
         Assert.IsTrue(Evaluate(SourceCoreSchemaIds.SourceProfileTopology, topology, registry).IsValid);
+        Assert.IsTrue(Evaluate(SourceCoreSchemaIds.MachineQueryPlan, plan, registry).IsValid);
+        Assert.IsTrue(Evaluate(SourceCoreSchemaIds.MachineQueryRenderReceipt, receipt, registry).IsValid);
+        Assert.IsTrue(Evaluate(SourceCoreSchemaIds.MachineRequestEvidence, evidence, registry).IsValid);
+    }
+
+    [TestMethod]
+    public void MachineQuerySchemaRejectsMethodCardinalityAndRendererIdentityDrift()
+    {
+        var valid = JsonNode.Parse(ContractJson.Serialize(CreateQueryPlan()))!.AsObject();
+        foreach (var mutation in new Action<JsonObject>[]
+                 {
+                     root => root.Remove("renderer_source_ref"),
+                     root => root.Remove("expected_request_target_sha256"),
+                     root => root["renderer_source_ref"]!["sha256"] = "ABC",
+                     root => root["expected_request_target_length"] = 0,
+                     root => root["expected_request_target_sha256"] = "ABC",
+                     root => root["query_family_ref"]!["member_key"] = "SELECT * WHERE { ?s ?p ?o }",
+                     root => root["partition_binding"]!["member_key"] = "cursor=user%20text",
+                     root => root["method"] = "HEAD",
+                     root => root["response_cardinality"]!["kind"] = "unknown",
+                     root => root["response_cardinality"]!["row_limit"] = 0,
+                     root => root["response_cardinality"]!["kind"] = "opaque_body",
+                     root => root["response_cardinality"]!["row_limit"] = null,
+                     root => root["method"] = "GET",
+                 })
+        {
+            var candidate = valid.DeepClone().AsObject();
+            mutation(candidate);
+            Assert.IsFalse(
+                Evaluate(SourceCoreSchemaIds.MachineQueryPlan, candidate, RegistryWithCommon()).IsValid,
+                candidate.ToJsonString());
+        }
+    }
+
+    [TestMethod]
+    public void MachineQuerySchemaRejectsRuntimeRejectedBaseTargets()
+    {
+        var valid = JsonNode.Parse(ContractJson.Serialize(CreateQueryPlan()))!.AsObject();
+        foreach (var target in MachineQueryValidationVectors.RuntimeRejectedTargets)
+        {
+            var candidate = valid.DeepClone().AsObject();
+            candidate["target_origin_and_path"] = target;
+            Assert.IsFalse(
+                Evaluate(SourceCoreSchemaIds.MachineQueryPlan, candidate, RegistryWithCommon()).IsValid,
+                target);
+        }
+    }
+
+    [TestMethod]
+    public void MachineQueryReceiptSchemaRejectsMediaTypesTheRuntimeRejects()
+    {
+        var plan = CreateQueryPlan();
+        var planRef = MachineQueryPlanIdentity.Create(
+            "urn:uuid:55555555-5555-4555-8555-555555555555",
+            plan);
+        var receipt = CreateRenderReceipt(plan, planRef);
+        var valid = JsonNode.Parse(ContractJson.Serialize(receipt))!.AsObject();
+
+        foreach (var mediaType in MachineQueryValidationVectors.RuntimeRejectedMediaTypes)
+        {
+            var candidate = valid.DeepClone().AsObject();
+            candidate["content_type"]!["member_key"] = mediaType;
+            Assert.IsFalse(
+                Evaluate(
+                    SourceCoreSchemaIds.MachineQueryRenderReceipt,
+                    candidate,
+                    RegistryWithCommon()).IsValid,
+                mediaType);
+        }
     }
 
     [TestMethod]
@@ -147,6 +235,61 @@ public sealed class SourceSchemaTests
                 "http://publications.europa.eu/resource/cellar",
                 "cellar:collection",
                 Sha256("cellar:collection")));
+    }
+
+    private static MachineQueryPlan CreateQueryPlan()
+    {
+        const string body = "query=ASK%20%7B%7D";
+        var parameterSet = Artifact("44444444-4444-4444-8444-444444444444");
+        return new MachineQueryPlan(
+            MachineQueryPlan.SchemaId,
+            new SourceRegistryMemberRef(
+                Artifact("11111111-1111-4111-8111-111111111111"),
+                "jolux-resource-page"),
+            Artifact("22222222-2222-4222-8222-222222222222"),
+            Artifact("33333333-3333-4333-8333-333333333333"),
+            HttpRequestMethod.Post,
+            "https://data.legilux.public.lu/sparqlendpoint",
+            Encoding.ASCII.GetByteCount("/sparqlendpoint"),
+            Sha256("/sparqlendpoint"),
+            new MachineResponseCardinality(
+                MachineResponseCardinalityKind.BoundedRowSetPage,
+                rowLimit: 500,
+                expectedPartitionRowCount: 13_207_454,
+                expectedPartitionRowCountEvidenceRef:
+                    Artifact("99999999-9999-4999-8999-999999999999")),
+            new SourceRegistryMemberRef(
+                Artifact("88888888-8888-4888-8888-888888888888"),
+                "application/x-www-form-urlencoded"),
+            MachineQueryCharset.Utf8,
+            MachineQueryInputMode.RendererInputs,
+            parameterSet,
+            new SourceRegistryMemberRef(parameterSet, "complete-keyset-page"),
+            Encoding.UTF8.GetByteCount(body),
+            Sha256(body));
+    }
+
+    private static MachineQueryRenderReceipt CreateRenderReceipt(
+        MachineQueryPlan plan,
+        SourceArtifactRef planRef)
+    {
+        const string body = "query=ASK%20%7B%7D";
+        const string target = "/sparqlendpoint";
+        return new MachineQueryRenderReceipt(
+            MachineQueryRenderReceipt.SchemaId,
+            planRef,
+            MachineQueryPlan.SchemaId,
+            plan.RendererProfileRef,
+            plan.RendererSourceRef,
+            plan.OrderedParameterSet,
+            plan.ContentType,
+            plan.Charset,
+            plan.InputMode,
+            plan.Method,
+            Encoding.ASCII.GetByteCount(target),
+            Sha256(target),
+            Encoding.UTF8.GetByteCount(body),
+            Sha256(body));
     }
 
     private static SourceArtifactRef Artifact(string id) => new($"urn:uuid:{id}", Digest);

@@ -6,15 +6,6 @@ using Lex.V3.Contracts.Source.Core;
 
 namespace Lex.V3.Contracts.Source.Http;
 
-public enum HttpRequestMethod
-{
-    [JsonStringEnumMemberName("GET")]
-    Get = 1,
-
-    [JsonStringEnumMemberName("POST")]
-    Post = 2,
-}
-
 public enum HttpObservationTimestampPrecision
 {
     [JsonStringEnumMemberName("millisecond")]
@@ -104,10 +95,83 @@ public sealed record OutboundCrawlerIdentityEvidence
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record HttpRequestTemplate
+{
+    [JsonConstructor]
+    public HttpRequestTemplate(
+        string requestedUri,
+        HttpRequestMethod method,
+        SourceArtifactRef runIdentity,
+        SourceArtifactRef adapterIdentity,
+        SourceArtifactRef requestPolicyIdentity,
+        SourceArtifactRef representationRequestKeyIdentity,
+        OutboundCrawlerIdentityEvidence outboundCrawlerIdentity,
+        HttpOrigin origin,
+        MachineQueryRenderReceipt renderReceipt)
+    {
+        RequestedUri = HttpRequestEvidence.RequireCanonicalRequestUri(
+            requestedUri,
+            nameof(requestedUri));
+        Method = SourceCoreValidation.RequireDefined(method, nameof(method));
+        RunIdentity = runIdentity ?? throw new ArgumentNullException(nameof(runIdentity));
+        AdapterIdentity = adapterIdentity ?? throw new ArgumentNullException(nameof(adapterIdentity));
+        RequestPolicyIdentity = requestPolicyIdentity
+            ?? throw new ArgumentNullException(nameof(requestPolicyIdentity));
+        RepresentationRequestKeyIdentity = representationRequestKeyIdentity
+            ?? throw new ArgumentNullException(nameof(representationRequestKeyIdentity));
+        OutboundCrawlerIdentity = outboundCrawlerIdentity
+            ?? throw new ArgumentNullException(nameof(outboundCrawlerIdentity));
+        Origin = origin ?? throw new ArgumentNullException(nameof(origin));
+        RenderReceipt = renderReceipt ?? throw new ArgumentNullException(nameof(renderReceipt));
+
+        var requestTargetBytes = Encoding.ASCII.GetBytes(new Uri(RequestedUri).PathAndQuery);
+        if (RenderReceipt.Method != Method ||
+            RenderReceipt.RequestTargetLength != requestTargetBytes.LongLength ||
+            !string.Equals(
+                RenderReceipt.RequestTargetSha256,
+                MachineQueryValidation.Sha256(requestTargetBytes),
+                StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "The HTTP request tuple differs from its machine query render receipt.",
+                nameof(renderReceipt));
+        }
+
+        var parsed = new Uri(RequestedUri, UriKind.Absolute);
+        if (!string.Equals(parsed.Scheme, Origin.Scheme, StringComparison.Ordinal) ||
+            !string.Equals(parsed.Host, Origin.Host, StringComparison.Ordinal) ||
+            parsed.Port != Origin.EffectivePort)
+        {
+            throw new ArgumentException(
+                "The retained origin must equal the requested URI scheme, host and effective port.",
+                nameof(origin));
+        }
+    }
+
+    public string RequestedUri { get; }
+
+    public HttpRequestMethod Method { get; }
+
+    public SourceArtifactRef RunIdentity { get; }
+
+    public SourceArtifactRef AdapterIdentity { get; }
+
+    public SourceArtifactRef RequestPolicyIdentity { get; }
+
+    public SourceArtifactRef RepresentationRequestKeyIdentity { get; }
+
+    public OutboundCrawlerIdentityEvidence OutboundCrawlerIdentity { get; }
+
+    public HttpOrigin Origin { get; }
+
+    public MachineQueryRenderReceipt RenderReceipt { get; }
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record HttpRequestEvidence
 {
     [JsonConstructor]
-    public HttpRequestEvidence(
+    private HttpRequestEvidence(
         string requestedUri,
         HttpRequestMethod method,
         string observedAtUtc,
@@ -119,53 +183,42 @@ public sealed record HttpRequestEvidence
         SourceArtifactRef representationRequestKeyIdentity,
         OutboundCrawlerIdentityEvidence outboundCrawlerIdentity,
         HttpOrigin origin,
-        SourceArtifactRef queryPlanIdentity)
+        MachineQueryRenderReceipt renderReceipt)
+        : this(
+            new HttpRequestTemplate(
+                requestedUri,
+                method,
+                runIdentity,
+                adapterIdentity,
+                requestPolicyIdentity,
+                representationRequestKeyIdentity,
+                outboundCrawlerIdentity,
+                origin,
+                renderReceipt),
+            RequireTimestamp(observedAtUtc, nameof(observedAtUtc)),
+            SourceCoreValidation.RequireDefined(timestampPrecision, nameof(timestampPrecision)),
+            SourceCoreValidation.RequireDefined(clockSource, nameof(clockSource)))
     {
-        RequestedUri = RequireCanonicalRequestUri(requestedUri, nameof(requestedUri));
-        Method = SourceCoreValidation.RequireDefined(method, nameof(method));
-        ArgumentException.ThrowIfNullOrWhiteSpace(observedAtUtc);
-        if (!DateTimeOffset.TryParseExact(
-                observedAtUtc,
-                "yyyy-MM-dd'T'HH:mm:ss.fff'Z'",
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
-                out var parsedTimestamp) ||
-            !string.Equals(
-                observedAtUtc,
-                parsedTimestamp.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture),
-                StringComparison.Ordinal))
-        {
-            throw new ArgumentException(
-                "An HTTP observation timestamp must use the exact millisecond UTC Z form.",
-                nameof(observedAtUtc));
-        }
+    }
 
+    private HttpRequestEvidence(
+        HttpRequestTemplate template,
+        string observedAtUtc,
+        HttpObservationTimestampPrecision timestampPrecision,
+        HttpObservationClockSource clockSource)
+    {
+        RequestedUri = template.RequestedUri;
+        Method = template.Method;
         ObservedAtUtc = observedAtUtc;
-        TimestampPrecision = SourceCoreValidation.RequireDefined(
-            timestampPrecision,
-            nameof(timestampPrecision));
-        ClockSource = SourceCoreValidation.RequireDefined(clockSource, nameof(clockSource));
-        RunIdentity = runIdentity ?? throw new ArgumentNullException(nameof(runIdentity));
-        AdapterIdentity = adapterIdentity ?? throw new ArgumentNullException(nameof(adapterIdentity));
-        RequestPolicyIdentity = requestPolicyIdentity
-            ?? throw new ArgumentNullException(nameof(requestPolicyIdentity));
-        RepresentationRequestKeyIdentity = representationRequestKeyIdentity
-            ?? throw new ArgumentNullException(nameof(representationRequestKeyIdentity));
-        OutboundCrawlerIdentity = outboundCrawlerIdentity
-            ?? throw new ArgumentNullException(nameof(outboundCrawlerIdentity));
-        Origin = origin ?? throw new ArgumentNullException(nameof(origin));
-        QueryPlanIdentity = queryPlanIdentity
-            ?? throw new ArgumentNullException(nameof(queryPlanIdentity));
-
-        var parsed = new Uri(RequestedUri, UriKind.Absolute);
-        if (!string.Equals(parsed.Scheme, Origin.Scheme, StringComparison.Ordinal) ||
-            !string.Equals(parsed.Host, Origin.Host, StringComparison.Ordinal) ||
-            parsed.Port != Origin.EffectivePort)
-        {
-            throw new ArgumentException(
-                "The retained origin must equal the requested URI scheme, host and effective port.",
-                nameof(origin));
-        }
+        TimestampPrecision = timestampPrecision;
+        ClockSource = clockSource;
+        RunIdentity = template.RunIdentity;
+        AdapterIdentity = template.AdapterIdentity;
+        RequestPolicyIdentity = template.RequestPolicyIdentity;
+        RepresentationRequestKeyIdentity = template.RepresentationRequestKeyIdentity;
+        OutboundCrawlerIdentity = template.OutboundCrawlerIdentity;
+        Origin = template.Origin;
+        RenderReceipt = template.RenderReceipt;
     }
 
     public string RequestedUri { get; }
@@ -190,118 +243,55 @@ public sealed record HttpRequestEvidence
 
     public HttpOrigin Origin { get; }
 
-    public SourceArtifactRef QueryPlanIdentity { get; }
+    public MachineQueryRenderReceipt RenderReceipt { get; }
 
-    internal static string RequireCanonicalRequestUri(string value, string parameterName)
+    public static HttpRequestEvidence CreateAtSend(
+        HttpRequestTemplate template,
+        TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        return CreateAtSend(template, timeProvider.GetUtcNow());
+    }
+
+    internal static HttpRequestEvidence CreateAtSend(
+        HttpRequestTemplate template,
+        DateTimeOffset observedAtUtc)
+    {
+        ArgumentNullException.ThrowIfNull(template);
+        var timestamp = observedAtUtc
+            .ToUniversalTime()
+            .ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
+        return new HttpRequestEvidence(
+            template,
+            timestamp,
+            HttpObservationTimestampPrecision.Millisecond,
+            HttpObservationClockSource.SystemUtc);
+    }
+
+    private static string RequireTimestamp(string value, string parameterName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
-        if (value.Length > 4096 ||
-            value.Any(static character => character is < '!' or > '~') ||
-            !(value.StartsWith("http://", StringComparison.Ordinal) ||
-              value.StartsWith("https://", StringComparison.Ordinal)) ||
-            HasAuthorityUserInfoMarker(value) ||
-            HasUnsafePathAlias(value) ||
-            !Uri.TryCreate(value, UriKind.Absolute, out var parsed) ||
-            string.IsNullOrEmpty(parsed.Host) ||
-            !string.IsNullOrEmpty(parsed.UserInfo) ||
-            !string.IsNullOrEmpty(parsed.Fragment) ||
-            parsed.Query is not ("" or "?locale=en") ||
-            !string.Equals(value, parsed.AbsoluteUri, StringComparison.Ordinal))
+        if (!DateTimeOffset.TryParseExact(
+                value,
+                "yyyy-MM-dd'T'HH:mm:ss.fff'Z'",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var parsedTimestamp) ||
+            !string.Equals(
+                value,
+                parsedTimestamp.ToString(
+                    "yyyy-MM-dd'T'HH:mm:ss.fff'Z'",
+                    CultureInfo.InvariantCulture),
+                StringComparison.Ordinal))
         {
             throw new ArgumentException(
-                "A request URI must be the exact canonical HTTP target and carry no unrestricted query.",
+                "An HTTP observation timestamp must use the exact millisecond UTC Z form.",
                 parameterName);
         }
 
-        _ = new HttpOrigin(parsed.Scheme, parsed.Host, parsed.Port);
         return value;
     }
 
-    private static bool HasAuthorityUserInfoMarker(string value)
-    {
-        var authorityStart = value.IndexOf("://", StringComparison.Ordinal) + 3;
-        var authorityEnd = value.IndexOfAny(['/', '?', '#'], authorityStart);
-        if (authorityEnd < 0)
-        {
-            authorityEnd = value.Length;
-        }
-
-        return value.AsSpan(authorityStart, authorityEnd - authorityStart).Contains('@');
-    }
-
-    private static bool HasUnsafePathAlias(string value)
-    {
-        var authorityStart = value.IndexOf("://", StringComparison.Ordinal) + 3;
-        var pathStart = value.IndexOf('/', authorityStart);
-        if (pathStart < 0)
-        {
-            return false;
-        }
-
-        var queryStart = value.IndexOfAny(['?', '#'], pathStart);
-        var path = queryStart < 0
-            ? value[pathStart..]
-            : value[pathStart..queryStart];
-        return path.Contains('\\') || HasEncodedPathAlias(path);
-    }
-
-    private static bool HasEncodedPathAlias(string path)
-    {
-        var candidate = path;
-        while (true)
-        {
-            var decodedAny = false;
-            var decoded = new StringBuilder(candidate.Length);
-            for (var index = 0; index < candidate.Length; index++)
-            {
-                if (candidate[index] == '%' &&
-                    index + 2 < candidate.Length &&
-                    TryDecodeHexByte(candidate[index + 1], candidate[index + 2], out var value))
-                {
-                    decodedAny = true;
-                    var character = (char)value;
-                    if (character is '.' or '/' or '\\')
-                    {
-                        return true;
-                    }
-
-                    decoded.Append(character);
-                    index += 2;
-                }
-                else
-                {
-                    decoded.Append(candidate[index]);
-                }
-            }
-
-            if (!decodedAny)
-            {
-                return false;
-            }
-
-            candidate = decoded.ToString();
-        }
-    }
-
-    private static bool TryDecodeHexByte(char first, char second, out byte value)
-    {
-        var high = HexValue(first);
-        var low = HexValue(second);
-        if (high < 0 || low < 0)
-        {
-            value = 0;
-            return false;
-        }
-
-        value = (byte)((high << 4) | low);
-        return true;
-    }
-
-    private static int HexValue(char value) => value switch
-    {
-        >= '0' and <= '9' => value - '0',
-        >= 'a' and <= 'f' => value - 'a' + 10,
-        >= 'A' and <= 'F' => value - 'A' + 10,
-        _ => -1,
-    };
+    internal static string RequireCanonicalRequestUri(string value, string parameterName) =>
+        MachineQueryValidation.RequireRenderedRequestTarget(value, parameterName);
 }
