@@ -14,3 +14,4 @@ export { renderHydrationProof, hydrationTree, HYDRATION_FIXTURE } from './hydrat
 export { renderHydratableDocument } from './render-document.mjs';
 export { AmbiguousVersion } from './AmbiguousVersion.jsx';
 export { ResultList } from './ResultList.jsx';
+export { FilterChips } from './FilterChips.jsx';
