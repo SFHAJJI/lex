@@ -1063,6 +1063,42 @@ main > * {
   max-inline-size: 72ch;
 }
 
+/* Export composer rows.
+ *
+ * The same flush-paint defect the provision rows had, found the same way and fixed the same way.
+ * A cart row carries six separate claims: identity, interval, digest, licence, what the item will
+ * contribute, and its official link. Painted flush, an identifier and a date range read as one
+ * string, and a licence name sitting against a rights sentence reads as if the licence were the
+ * reason. The rights sentence takes its own line because it is prose beside labels, and because
+ * the whole point of this screen is that the reason is stated rather than inferred from what it
+ * happens to sit next to. */
+.compose-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2, 0.5rem) var(--space-3, 0.75rem);
+  padding-block: var(--space-2, 0.5rem);
+}
+
+.compose-disposition {
+  flex-basis: 100%;
+  max-inline-size: 72ch;
+}
+
+.compose-items,
+.compose-columns {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 0.5rem);
+  padding-inline-start: var(--space-4, 1rem);
+}
+
+.compose-matter {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-2, 0.5rem) var(--space-3, 0.75rem);
+}
+
 .provision-states,
 .get-help-counters,
 .get-help-official {

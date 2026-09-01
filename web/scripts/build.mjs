@@ -23,6 +23,7 @@ import { renderComparePreview } from "./compare-preview.mjs";
 import { renderTimelinePreview } from "./timeline-preview.mjs";
 import { renderProvisionHistoryPreview } from "./provision-history-preview.mjs";
 import { renderGetHelpPreview } from "./get-help-preview.mjs";
+import { renderExportComposerPreview } from "./export-composer-preview.mjs";
 import { renderCoveragePreview } from "./coverage-preview.mjs";
 import { renderSearchPreview } from "./search-preview.mjs";
 import { renderDossierPreview } from "./dossier-preview.mjs";
@@ -217,6 +218,7 @@ pages.push(["search-react.html", ssr.renderSearchScreenPage()]);
 // leaving those asserted only in a test.
 pages.push(["provision-history.html", renderProvisionHistoryPreview()]);
 pages.push(["get-help.html", renderGetHelpPreview()]);
+pages.push(["export-composer.html", renderExportComposerPreview()]);
 
 const clientBundle = await bundleClient("app/client-entry.jsx", "client.js");
 await cp(clientBundle, new URL("client.js", destination));

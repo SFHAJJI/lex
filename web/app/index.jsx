@@ -40,3 +40,4 @@ export {
 } from './RelaxationDisclosures.jsx';
 export { BADGE_LABELS, Interpretation, REASON_EVIDENCES } from './ResultList.jsx';
 export { renderSearchScreenPage } from './search-screen-preview.jsx';
+export { ExportComposer } from './ExportComposer.jsx';
