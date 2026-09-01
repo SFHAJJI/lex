@@ -195,20 +195,23 @@ public sealed class AzureCustodyProbeContractTests
     }
 
     [TestMethod]
-    public async Task WriteRefusesAReceiptForDifferentBytes()
+    public async Task WriteRefusesAReceiptForDifferentBytesOrLane()
     {
-        var output = new StringWriter();
+        foreach (var mismatch in Enum.GetValues<WriteReceiptMismatch>())
+        {
+            var output = new StringWriter();
 
-        await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() =>
-            CustodyProbeApplication.RunAsync(
-                ["write", "nightly_floor_90d"],
-                TextReader.Null,
-                output,
-                ValidEnvironment(),
-                _ => new MismatchingWriteStore(),
-                CancellationToken.None));
+            await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() =>
+                CustodyProbeApplication.RunAsync(
+                    ["write", "nightly_floor_90d"],
+                    TextReader.Null,
+                    output,
+                    ValidEnvironment(),
+                    _ => new MismatchingWriteStore(mismatch),
+                    CancellationToken.None));
 
-        Assert.AreEqual(string.Empty, output.ToString());
+            Assert.AreEqual(string.Empty, output.ToString(), mismatch.ToString());
+        }
     }
 
     [TestMethod]
@@ -481,13 +484,30 @@ public sealed class AzureCustodyProbeContractTests
         }
     }
 
-    private sealed class MismatchingWriteStore : ICustodyStore
+    private enum WriteReceiptMismatch
+    {
+        ContentDigest,
+        CustodyLane,
+    }
+
+    private sealed class MismatchingWriteStore(WriteReceiptMismatch mismatch) : ICustodyStore
     {
         public Task<DurableBlobWriteReceipt> CreateAsync(
             ReadOnlyMemory<byte> bytes,
             CustodyClass custodyClass,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(ReceiptFor([0], custodyClass));
+            CancellationToken cancellationToken)
+        {
+            var receiptBytes = bytes.ToArray();
+            if (mismatch == WriteReceiptMismatch.ContentDigest)
+            {
+                receiptBytes[0] ^= byte.MaxValue;
+            }
+
+            var receiptLane = mismatch == WriteReceiptMismatch.CustodyLane
+                ? CustodyClass.LegalHoldEvidence
+                : custodyClass;
+            return Task.FromResult(ReceiptFor(receiptBytes, receiptLane));
+        }
 
         public Task<ReadOnlyMemory<byte>> ReadAsync(
             DurableBlobRef reference,
