@@ -165,8 +165,9 @@ public sealed class ResponseCompleteBodyObservation : HttpResponseObservation
         ArgumentNullException.ThrowIfNull(durableBlobRef);
         var digest = SourceCoreValidation.RequireSha256(transportByteSha256, nameof(transportByteSha256));
         RequireTransportBlob(durableBlobRef, receivedEncodedEntityByteCount, digest, nameof(durableBlobRef));
-        if (responseMetadata.ContentLength is not null &&
-            responseMetadata.ContentLength != receivedEncodedEntityByteCount)
+        if (responseMetadata.ContentLength is not AbsentHttpHeader &&
+            (!responseMetadata.TryGetSingleContentLength(out var declaredLength) ||
+             declaredLength != receivedEncodedEntityByteCount))
         {
             throw new ArgumentException(
                 "A declared Content-Length mismatch is partial transport evidence, not a complete body.",
@@ -319,7 +320,7 @@ public sealed class Revalidation304Observation : HttpResponseObservation
             throw new ArgumentException("A 304 predecessor reference is admitted only for GET.", nameof(request));
         }
 
-        if (responseMetadata.ContentRange is not null || responseMetadata.ContentLength is > 0)
+        if (responseMetadata.HasContentRange)
         {
             throw new ArgumentException("A 304 carries no new entity representation.", nameof(responseMetadata));
         }
@@ -401,7 +402,8 @@ public sealed class ResponseWithoutBodyObservation : HttpResponseObservation
                 nameof(reason));
         }
 
-        if (responseMetadata.ContentLength is > 0)
+        if (responseMetadata.ContentLength is not AbsentHttpHeader &&
+            (!responseMetadata.TryGetSingleContentLength(out var declaredLength) || declaredLength > 0))
         {
             throw new ArgumentException(
                 "A positive declared length with zero received octets is partial evidence.",

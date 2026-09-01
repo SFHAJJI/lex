@@ -145,7 +145,7 @@ public static class HttpStatusClassifier
             throw new ArgumentOutOfRangeException(nameof(statusCode));
         }
 
-        if (statusCode == 206 || responseMetadata.ContentRange is not null)
+        if (statusCode == 206 || responseMetadata.HasContentRange)
         {
             return HttpStatusDisposition.RangeNotApproved;
         }

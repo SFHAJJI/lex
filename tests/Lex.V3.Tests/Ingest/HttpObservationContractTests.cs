@@ -92,7 +92,13 @@ public sealed class HttpObservationContractTests
     {
         var withoutContentRange = EmptyResponseMetadata();
         var withContentRange = new HttpResponseMetadata(
-            null, null, null, null, "bytes 0-0/1", null, null);
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new SingleHttpHeader("bytes 0-0/1"),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader());
 
         for (var status = 100; status <= 599; status++)
         {
@@ -165,16 +171,9 @@ public sealed class HttpObservationContractTests
     }
 
     [TestMethod]
-    public void ResponseMetadataIsExactlyTheSevenFieldAllowlistWithExplicitNulls()
+    public void ResponseMetadataIsExactlyTheSevenFieldAllowlistWithExplicitAbsence()
     {
-        var metadata = new HttpResponseMetadata(
-            contentType: null,
-            declaredCharset: null,
-            contentLength: null,
-            contentEncoding: null,
-            contentRange: null,
-            etag: null,
-            lastModified: null);
+        var metadata = EmptyResponseMetadata();
 
         using var document = JsonDocument.Parse(ContractJson.Serialize(metadata));
         var properties = document.RootElement.EnumerateObject().ToArray();
@@ -190,7 +189,8 @@ public sealed class HttpObservationContractTests
                 "last_modified",
             },
             properties.Select(static property => property.Name).ToArray());
-        Assert.IsTrue(properties.All(static property => property.Value.ValueKind == JsonValueKind.Null));
+        Assert.IsTrue(properties.All(static property =>
+            property.Value.GetProperty("cardinality").GetString() == "absent"));
 
         string[] forbidden =
         [
@@ -207,18 +207,49 @@ public sealed class HttpObservationContractTests
     [TestMethod]
     public void ResponseMetadataRejectsUnboundedOrStructurallyUnsafeValues()
     {
-        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new HttpResponseMetadata(
-            null, null, -1, null, null, null, null));
-        Assert.ThrowsExactly<ArgumentException>(() => new HttpResponseMetadata(
-            "text/plain\r\nset-cookie: secret", null, null, null, null, null, null));
-        Assert.ThrowsExactly<ArgumentException>(() => new HttpResponseMetadata(
-            new string('x', HttpResponseMetadata.MaximumHeaderValueLength + 1),
-            null,
-            null,
-            null,
-            null,
-            null,
-            null));
+        Assert.ThrowsExactly<ArgumentException>(() => new SingleHttpHeader(
+            "text/plain\r\nset-cookie: secret"));
+        Assert.ThrowsExactly<ArgumentException>(() => new SingleHttpHeader(
+            new string('x', HttpResponseMetadata.MaximumHeaderValueLength + 1)));
+        Assert.ThrowsExactly<ArgumentException>(() => new MultipleHttpHeader(
+            Enumerable.Repeat("value", HttpResponseMetadata.MaximumHeaderOccurrences + 1).ToArray()));
+    }
+
+    [TestMethod]
+    public void ResponseMetadataPreservesAbsentSingleAndMultipleHeaderEvidence()
+    {
+        var metadata = new HttpResponseMetadata(
+            new AbsentHttpHeader(),
+            new SingleHttpHeader("utf-8"),
+            new MultipleHttpHeader(["1", "1"]),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new SingleHttpHeader("\"opaque\""),
+            new AbsentHttpHeader());
+
+        var json = ContractJson.Serialize(metadata);
+        using var document = JsonDocument.Parse(json);
+        Assert.AreEqual(
+            "absent",
+            document.RootElement.GetProperty("content_type").GetProperty("cardinality").GetString());
+        Assert.AreEqual(
+            "single",
+            document.RootElement.GetProperty("declared_charset").GetProperty("cardinality").GetString());
+        Assert.AreEqual(
+            "multiple",
+            document.RootElement.GetProperty("content_length").GetProperty("cardinality").GetString());
+        CollectionAssert.AreEqual(
+            new[] { "1", "1" },
+            document.RootElement.GetProperty("content_length").GetProperty("values")
+                .EnumerateArray().Select(static value => value.GetString()).ToArray());
+
+        var roundTrip = ContractJson.Deserialize<HttpResponseMetadata>(json);
+        Assert.IsInstanceOfType<AbsentHttpHeader>(roundTrip.ContentType);
+        Assert.IsInstanceOfType<SingleHttpHeader>(roundTrip.DeclaredCharset);
+        Assert.IsInstanceOfType<MultipleHttpHeader>(roundTrip.ContentLength);
+
+        Assert.ThrowsExactly<ArgumentException>(() => new MultipleHttpHeader(["only-one"]));
+        Assert.ThrowsExactly<ArgumentException>(() => new SingleHttpHeader("bad\r\nvalue"));
     }
 
     [TestMethod]
@@ -457,5 +488,12 @@ public sealed class HttpObservationContractTests
         new(resourceId, new string(digestCharacter, 64));
 
     private static HttpResponseMetadata EmptyResponseMetadata() =>
-        new(null, null, null, null, null, null, null);
+        new(
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader());
 }

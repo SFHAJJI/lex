@@ -391,7 +391,18 @@ public sealed class HttpObservationUnionTests
     private static HttpResponseMetadata Metadata(
         long? contentLength = null,
         string? contentRange = null) =>
-        new("application/xml", "utf-8", contentLength, null, contentRange, null, null);
+        new(
+            new SingleHttpHeader("application/xml"),
+            new SingleHttpHeader("utf-8"),
+            contentLength is null
+                ? new AbsentHttpHeader()
+                : new SingleHttpHeader(contentLength.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            new AbsentHttpHeader(),
+            contentRange is null
+                ? new AbsentHttpHeader()
+                : new SingleHttpHeader(contentRange),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader());
 
     private static DurableBlobRef Blob(long byteLength, char digestCharacter) =>
         new(
