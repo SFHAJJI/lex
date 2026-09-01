@@ -7,6 +7,9 @@ namespace Lex.V3.Contracts.Source.Http;
 public static class TransferCompletionSchemaIds
 {
     public const string TransferCompletionEvidence = "lex-v3-transfer-completion-evidence/1";
+
+    public const string ZeroOctetTransferCompletionEvidence =
+        "lex-v3-zero-octet-transfer-completion-evidence/1";
 }
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
@@ -157,6 +160,123 @@ public sealed class Http3FinCompleteEvidence : TransferCompletionEvidence
             responseObservationId,
             transportByteSha256,
             transportByteLength)
+    {
+        AdapterReceiptRef = adapterReceiptRef
+            ?? throw new ArgumentNullException(nameof(adapterReceiptRef));
+    }
+
+    public SourceArtifactRef AdapterReceiptRef { get; }
+}
+
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
+[JsonDerivedType(
+    typeof(DeclaredZeroOctetContentLengthCompleteEvidence),
+    "declared_content_length_complete")]
+[JsonDerivedType(
+    typeof(Http1ZeroOctetTerminalChunkCompleteEvidence),
+    "http1_terminal_chunk_complete")]
+[JsonDerivedType(
+    typeof(Http2ZeroOctetEndStreamCompleteEvidence),
+    "http2_end_stream_complete")]
+[JsonDerivedType(
+    typeof(Http3ZeroOctetFinCompleteEvidence),
+    "http3_fin_complete")]
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public abstract class ZeroOctetTransferCompletionEvidence
+{
+    private protected ZeroOctetTransferCompletionEvidence(
+        string schema,
+        SourceArtifactRef adapterExecutionIdentity,
+        string responseObservationId)
+    {
+        if (!string.Equals(
+                schema,
+                TransferCompletionSchemaIds.ZeroOctetTransferCompletionEvidence,
+                StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                $"Zero-octet transfer evidence must declare {TransferCompletionSchemaIds.ZeroOctetTransferCompletionEvidence}.",
+                nameof(schema));
+        }
+
+        Schema = schema;
+        AdapterExecutionIdentity = adapterExecutionIdentity
+            ?? throw new ArgumentNullException(nameof(adapterExecutionIdentity));
+        ResponseObservationId = SourceCoreValidation.RequireUuidUrn(
+            responseObservationId,
+            nameof(responseObservationId));
+    }
+
+    public string Schema { get; }
+
+    public SourceArtifactRef AdapterExecutionIdentity { get; }
+
+    public string ResponseObservationId { get; }
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed class DeclaredZeroOctetContentLengthCompleteEvidence
+    : ZeroOctetTransferCompletionEvidence
+{
+    [JsonConstructor]
+    public DeclaredZeroOctetContentLengthCompleteEvidence(
+        string schema,
+        SourceArtifactRef adapterExecutionIdentity,
+        string responseObservationId)
+        : base(schema, adapterExecutionIdentity, responseObservationId)
+    {
+    }
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed class Http1ZeroOctetTerminalChunkCompleteEvidence
+    : ZeroOctetTransferCompletionEvidence
+{
+    [JsonConstructor]
+    public Http1ZeroOctetTerminalChunkCompleteEvidence(
+        string schema,
+        SourceArtifactRef adapterExecutionIdentity,
+        string responseObservationId,
+        SourceArtifactRef adapterReceiptRef)
+        : base(schema, adapterExecutionIdentity, responseObservationId)
+    {
+        AdapterReceiptRef = adapterReceiptRef
+            ?? throw new ArgumentNullException(nameof(adapterReceiptRef));
+    }
+
+    public SourceArtifactRef AdapterReceiptRef { get; }
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed class Http2ZeroOctetEndStreamCompleteEvidence
+    : ZeroOctetTransferCompletionEvidence
+{
+    [JsonConstructor]
+    public Http2ZeroOctetEndStreamCompleteEvidence(
+        string schema,
+        SourceArtifactRef adapterExecutionIdentity,
+        string responseObservationId,
+        SourceArtifactRef adapterReceiptRef)
+        : base(schema, adapterExecutionIdentity, responseObservationId)
+    {
+        AdapterReceiptRef = adapterReceiptRef
+            ?? throw new ArgumentNullException(nameof(adapterReceiptRef));
+    }
+
+    public SourceArtifactRef AdapterReceiptRef { get; }
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed class Http3ZeroOctetFinCompleteEvidence
+    : ZeroOctetTransferCompletionEvidence
+{
+    [JsonConstructor]
+    public Http3ZeroOctetFinCompleteEvidence(
+        string schema,
+        SourceArtifactRef adapterExecutionIdentity,
+        string responseObservationId,
+        SourceArtifactRef adapterReceiptRef)
+        : base(schema, adapterExecutionIdentity, responseObservationId)
     {
         AdapterReceiptRef = adapterReceiptRef
             ?? throw new ArgumentNullException(nameof(adapterReceiptRef));

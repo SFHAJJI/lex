@@ -182,6 +182,9 @@ public sealed class HttpObservationUnionTests
                 statusDisposition: HttpStatusDisposition.NonDerivableStatus,
                 metadata: malformedLengthMetadata,
                 completionEvidence: protocolCompletion).StatusDisposition);
+        Assert.ThrowsExactly<ArgumentException>(() => Complete(
+            metadata: Metadata(contentLength: 2),
+            completionEvidence: protocolCompletion));
     }
 
     [TestMethod]
@@ -259,20 +262,115 @@ public sealed class HttpObservationUnionTests
     }
 
     [TestMethod]
+    public void ZeroOctetCompletionEvidenceIsExactlyTheFourPositiveProtocolLeaves()
+    {
+        ZeroOctetTransferCompletionEvidence[] evidence =
+        [
+            ZeroOctetCompletionEvidence(),
+            new Http1ZeroOctetTerminalChunkCompleteEvidence(
+                TransferCompletionSchemaIds.ZeroOctetTransferCompletionEvidence,
+                Artifact("urn:uuid:cccccccc-cccc-4ccc-8ccc-cccccccccccc", 'c'),
+                "urn:uuid:44444444-4444-4444-8444-444444444444",
+                Artifact("urn:uuid:13131313-1313-4313-8313-131313131313", '1')),
+            new Http2ZeroOctetEndStreamCompleteEvidence(
+                TransferCompletionSchemaIds.ZeroOctetTransferCompletionEvidence,
+                Artifact("urn:uuid:cccccccc-cccc-4ccc-8ccc-cccccccccccc", 'c'),
+                "urn:uuid:44444444-4444-4444-8444-444444444444",
+                Artifact("urn:uuid:14141414-1414-4414-8414-141414141414", '1')),
+            new Http3ZeroOctetFinCompleteEvidence(
+                TransferCompletionSchemaIds.ZeroOctetTransferCompletionEvidence,
+                Artifact("urn:uuid:cccccccc-cccc-4ccc-8ccc-cccccccccccc", 'c'),
+                "urn:uuid:44444444-4444-4444-8444-444444444444",
+                Artifact("urn:uuid:15151515-1515-4515-8515-151515151515", '1')),
+        ];
+
+        AssertZeroOctetConcretePath(
+            (DeclaredZeroOctetContentLengthCompleteEvidence)evidence[0],
+            "declared_content_length_complete");
+        AssertZeroOctetConcretePath(
+            (Http1ZeroOctetTerminalChunkCompleteEvidence)evidence[1],
+            "http1_terminal_chunk_complete");
+        AssertZeroOctetConcretePath(
+            (Http2ZeroOctetEndStreamCompleteEvidence)evidence[2],
+            "http2_end_stream_complete");
+        AssertZeroOctetConcretePath(
+            (Http3ZeroOctetFinCompleteEvidence)evidence[3],
+            "http3_fin_complete");
+
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "declared_content_length_complete",
+                "http1_terminal_chunk_complete",
+                "http2_end_stream_complete",
+                "http3_fin_complete",
+            },
+            evidence.Select(item =>
+            {
+                var json = ContractJson.Serialize<ZeroOctetTransferCompletionEvidence>(item);
+                using var document = JsonDocument.Parse(json);
+                Assert.AreEqual(
+                    item.GetType(),
+                    ContractJson.Deserialize<ZeroOctetTransferCompletionEvidence>(json).GetType());
+                return document.RootElement.GetProperty("kind").GetString();
+            }).ToArray());
+    }
+
+    [TestMethod]
     public void NoBodyReasonMatchesTheStatusAndNeverCreatesAnEmptyBlob()
     {
         Assert.AreEqual(HttpNoBodyReason.SemanticNoEntity, WithoutBody().Reason);
-        Assert.AreEqual(
-            HttpNoBodyReason.CompleteZeroOctetEntity,
+        var completedZero = WithoutBody(
+            statusCode: 200,
+            statusDisposition: HttpStatusDisposition.DerivableStatus,
+            reason: HttpNoBodyReason.CompleteZeroOctetEntity);
+        Assert.AreEqual(HttpNoBodyReason.CompleteZeroOctetEntity, completedZero.Reason);
+        Assert.IsInstanceOfType<DeclaredZeroOctetContentLengthCompleteEvidence>(
+            completedZero.ZeroOctetCompletionEvidence);
+        Assert.ThrowsExactly<ArgumentException>(() => WithoutBody(
+            statusCode: 200,
+            statusDisposition: HttpStatusDisposition.DerivableStatus,
+            reason: HttpNoBodyReason.CompleteZeroOctetEntity,
+            metadata: Metadata()));
+        Assert.ThrowsExactly<ArgumentNullException>(() => WithoutBody(
+            statusCode: 200,
+            statusDisposition: HttpStatusDisposition.DerivableStatus,
+            reason: HttpNoBodyReason.CompleteZeroOctetEntity,
+            omitCompletionEvidence: true));
+        Assert.ThrowsExactly<ArgumentException>(() => WithoutBody(
+            statusCode: 200,
+            statusDisposition: HttpStatusDisposition.DerivableStatus,
+            reason: HttpNoBodyReason.CompleteZeroOctetEntity,
+            zeroOctetCompletionEvidence: ZeroOctetCompletionEvidence(
+                adapterExecutionIdentity: Artifact(
+                    "urn:uuid:abababab-abab-4bab-8bab-abababababab", 'a'))));
+        Assert.ThrowsExactly<ArgumentException>(() => WithoutBody(
+            statusCode: 200,
+            statusDisposition: HttpStatusDisposition.DerivableStatus,
+            reason: HttpNoBodyReason.CompleteZeroOctetEntity,
+            zeroOctetCompletionEvidence: ZeroOctetCompletionEvidence(
+                responseObservationId: "urn:uuid:abababab-abab-4bab-8bab-abababababab")));
+
+        var endStream = new Http2ZeroOctetEndStreamCompleteEvidence(
+            TransferCompletionSchemaIds.ZeroOctetTransferCompletionEvidence,
+            Artifact("urn:uuid:cccccccc-cccc-4ccc-8ccc-cccccccccccc", 'c'),
+            "urn:uuid:44444444-4444-4444-8444-444444444444",
+            Artifact("urn:uuid:14141414-1414-4414-8414-141414141414", '1'));
+        Assert.AreSame(
+            endStream,
             WithoutBody(
                 statusCode: 200,
                 statusDisposition: HttpStatusDisposition.DerivableStatus,
-                reason: HttpNoBodyReason.CompleteZeroOctetEntity).Reason);
+                reason: HttpNoBodyReason.CompleteZeroOctetEntity,
+                metadata: Metadata(),
+                zeroOctetCompletionEvidence: endStream).ZeroOctetCompletionEvidence);
 
         Assert.ThrowsExactly<ArgumentException>(() => WithoutBody(
             statusCode: 200,
             statusDisposition: HttpStatusDisposition.DerivableStatus,
             reason: HttpNoBodyReason.SemanticNoEntity));
+        Assert.ThrowsExactly<ArgumentException>(() => WithoutBody(
+            zeroOctetCompletionEvidence: ZeroOctetCompletionEvidence()));
         Assert.ThrowsExactly<ArgumentException>(() => WithoutBody(
             statusCode: 204,
             statusDisposition: HttpStatusDisposition.SemanticNoEntityStatus,
@@ -282,6 +380,11 @@ public sealed class HttpObservationUnionTests
             statusDisposition: HttpStatusDisposition.RevalidationReferenceOnly,
             reason: HttpNoBodyReason.CompleteZeroOctetEntity));
         Assert.ThrowsExactly<ArgumentException>(() => WithoutBody(metadata: Metadata(contentLength: 1)));
+        Assert.ThrowsExactly<ArgumentException>(() => WithoutBody(
+            statusCode: 200,
+            statusDisposition: HttpStatusDisposition.DerivableStatus,
+            reason: HttpNoBodyReason.CompleteZeroOctetEntity,
+            metadata: Metadata(contentLength: 1)));
     }
 
     [TestMethod]
@@ -346,6 +449,63 @@ public sealed class HttpObservationUnionTests
             metadata: Metadata(contentLength: 123));
         Assert.ThrowsExactly<ArgumentException>(
             () => mismatchedRetainedLength.AdmitAgainst(predecessor));
+
+        var duplicateContentType = new HttpResponseMetadata(
+            new MultipleHttpHeader(["application/xml", "text/xml"]),
+            new SingleHttpHeader("utf-8"),
+            new SingleHttpHeader("1"),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new SingleHttpHeader("\"opaque\""),
+            new AbsentHttpHeader());
+        var nonDerivablePredecessor = Complete(
+            statusDisposition: HttpStatusDisposition.NonDerivableStatus,
+            metadata: duplicateContentType);
+        var nonDerivableRevalidation = Revalidation(predecessor: nonDerivablePredecessor);
+        Assert.ThrowsExactly<ArgumentException>(
+            () => nonDerivableRevalidation.AdmitAgainst(nonDerivablePredecessor));
+
+        var protocolCompletion = new Http2EndStreamCompleteEvidence(
+            TransferCompletionSchemaIds.TransferCompletionEvidence,
+            Artifact("urn:uuid:cccccccc-cccc-4ccc-8ccc-cccccccccccc", 'c'),
+            "urn:uuid:11111111-1111-4111-8111-111111111111",
+            new string('a', 64),
+            1,
+            Artifact("urn:uuid:14141414-1414-4414-8414-141414141414", '1'));
+        var malformedLengthPredecessor = Complete(
+            statusDisposition: HttpStatusDisposition.NonDerivableStatus,
+            metadata: new HttpResponseMetadata(
+                new SingleHttpHeader("application/xml"),
+                new SingleHttpHeader("utf-8"),
+                new SingleHttpHeader("invalid"),
+                new AbsentHttpHeader(),
+                new AbsentHttpHeader(),
+                new SingleHttpHeader("\"opaque\""),
+                new AbsentHttpHeader()),
+            completionEvidence: protocolCompletion);
+        var malformedLengthRevalidation = Revalidation(predecessor: malformedLengthPredecessor);
+        Assert.ThrowsExactly<ArgumentException>(
+            () => malformedLengthRevalidation.AdmitAgainst(malformedLengthPredecessor));
+
+        var status203Predecessor = Complete(
+            statusCode: 203,
+            statusDisposition: HttpStatusDisposition.NonDerivableStatus,
+            metadata: Metadata(contentLength: 1, etag: "\"opaque\""));
+        var status203Revalidation = Revalidation(predecessor: status203Predecessor);
+        Assert.ThrowsExactly<ArgumentException>(
+            () => status203Revalidation.AdmitAgainst(status203Predecessor));
+
+        var rangePredecessor = Complete(
+            statusCode: 206,
+            statusDisposition: HttpStatusDisposition.RangeNotApproved,
+            metadata: Metadata(
+                contentLength: 1,
+                contentRange: "bytes 0-0/1",
+                etag: "\"opaque\""),
+            completionEvidence: protocolCompletion);
+        var rangeRevalidation = Revalidation(predecessor: rangePredecessor);
+        Assert.ThrowsExactly<ArgumentException>(
+            () => rangeRevalidation.AdmitAgainst(rangePredecessor));
 
         var wrongObservationRef = Revalidation(
             predecessor: predecessor,
@@ -509,7 +669,9 @@ public sealed class HttpObservationUnionTests
         int statusCode = 204,
         HttpStatusDisposition statusDisposition = HttpStatusDisposition.SemanticNoEntityStatus,
         HttpNoBodyReason reason = HttpNoBodyReason.SemanticNoEntity,
-        HttpResponseMetadata? metadata = null) =>
+        HttpResponseMetadata? metadata = null,
+        ZeroOctetTransferCompletionEvidence? zeroOctetCompletionEvidence = null,
+        bool omitCompletionEvidence = false) =>
         new(
             HttpObservationSchemaIds.HttpObservation,
             "urn:uuid:44444444-4444-4444-8444-444444444444",
@@ -519,7 +681,10 @@ public sealed class HttpObservationUnionTests
             statusDisposition,
             metadata ?? Metadata(contentLength: 0),
             0,
-            reason);
+            reason,
+            omitCompletionEvidence || reason == HttpNoBodyReason.SemanticNoEntity
+                ? zeroOctetCompletionEvidence
+                : zeroOctetCompletionEvidence ?? ZeroOctetCompletionEvidence());
 
     private static TransportFailureBeforeBodyObservation Failure(int elapsedMilliseconds = 250) =>
         new(
@@ -620,6 +785,15 @@ public sealed class HttpObservationUnionTests
             new string(digestCharacter, 64),
             byteCount);
 
+    private static ZeroOctetTransferCompletionEvidence ZeroOctetCompletionEvidence(
+        SourceArtifactRef? adapterExecutionIdentity = null,
+        string responseObservationId = "urn:uuid:44444444-4444-4444-8444-444444444444") =>
+        new DeclaredZeroOctetContentLengthCompleteEvidence(
+            TransferCompletionSchemaIds.ZeroOctetTransferCompletionEvidence,
+            adapterExecutionIdentity ?? Artifact(
+                "urn:uuid:cccccccc-cccc-4ccc-8ccc-cccccccccccc", 'c'),
+            responseObservationId);
+
     private static SourceRegistryMemberRef RegistryMember(string memberKey) =>
         new(Artifact("urn:uuid:12121212-1212-4212-8212-121212121212", '1'), memberKey);
 
@@ -652,6 +826,22 @@ public sealed class HttpObservationUnionTests
         }
     }
 
+    private static void AssertZeroOctetConcretePath<TEvidence>(TEvidence evidence, string kind)
+        where TEvidence : ZeroOctetTransferCompletionEvidence
+    {
+        var json = ContractJson.Serialize(evidence);
+        using var document = JsonDocument.Parse(json);
+        Assert.AreEqual(kind, document.RootElement.GetProperty("kind").GetString());
+        Assert.AreEqual(
+            typeof(TEvidence),
+            ContractJson.Deserialize<TEvidence>(json).GetType());
+
+        var missingKind = JsonNode.Parse(json)!.AsObject();
+        Assert.IsTrue(missingKind.Remove("kind"));
+        Assert.ThrowsExactly<NotSupportedException>(
+            () => ContractJson.Deserialize<TEvidence>(missingKind.ToJsonString()));
+    }
+
     private static string[] ExpectedProperties(string kind) => kind switch
     {
         "response_complete_body" =>
@@ -677,7 +867,7 @@ public sealed class HttpObservationUnionTests
         [
             "kind", "schema", "observation_id", "request", "effective_uri", "status_code",
             "status_disposition", "response_metadata", "received_encoded_entity_byte_count",
-            "reason",
+            "reason", "zero_octet_completion_evidence",
         ],
         "transport_failure_before_body" =>
         ["kind", "schema", "observation_id", "request", "failure_class", "elapsed_milliseconds"],

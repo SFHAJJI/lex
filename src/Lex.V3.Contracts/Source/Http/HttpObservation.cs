@@ -174,6 +174,14 @@ public sealed class ResponseCompleteBodyObservation : HttpResponseObservation
                 nameof(transferCompletionEvidence));
         }
 
+        if (responseMetadata.TryGetSingleContentLength(out var retainedContentLength) &&
+            retainedContentLength != TransferCompletionEvidence.TransportByteLength)
+        {
+            throw new ArgumentException(
+                "A retained valid Content-Length must equal the completed transport-byte length.",
+                nameof(transferCompletionEvidence));
+        }
+
         if (TransferCompletionEvidence is DeclaredContentLengthCompleteEvidence &&
             (statusCode == 206 ||
              !responseMetadata.TryGetSingleContentLength(out var declaredLength) ||
@@ -383,12 +391,14 @@ public sealed class Revalidation304Observation : HttpResponseObservation
         ResponseCompleteBodyObservation predecessor)
     {
         ArgumentNullException.ThrowIfNull(predecessor);
-        if (predecessor.Request.Method != HttpRequestMethod.Get ||
+        if (predecessor.StatusCode != 200 ||
+            predecessor.StatusDisposition != HttpStatusDisposition.DerivableStatus ||
+            predecessor.Request.Method != HttpRequestMethod.Get ||
             predecessor.Request.RepresentationRequestKeyIdentity != RepresentationRequestKeyRef ||
             !string.Equals(predecessor.EffectiveUri, EffectiveUri, StringComparison.Ordinal))
         {
             throw new ArgumentException(
-                "The predecessor must be the same GET representation and effective resource.",
+                "The predecessor must be one derivable HTTP-200 GET representation of the same effective resource.",
                 nameof(predecessor));
         }
 
@@ -468,7 +478,8 @@ public sealed class ResponseWithoutBodyObservation : HttpResponseObservation
         HttpStatusDisposition statusDisposition,
         HttpResponseMetadata responseMetadata,
         long receivedEncodedEntityByteCount,
-        HttpNoBodyReason reason)
+        HttpNoBodyReason reason,
+        ZeroOctetTransferCompletionEvidence? zeroOctetCompletionEvidence)
         : base(
             schema,
             observationId,
@@ -496,6 +507,42 @@ public sealed class ResponseWithoutBodyObservation : HttpResponseObservation
                 nameof(reason));
         }
 
+        if (reason == HttpNoBodyReason.CompleteZeroOctetEntity)
+        {
+            ZeroOctetCompletionEvidence = zeroOctetCompletionEvidence
+                ?? throw new ArgumentNullException(nameof(zeroOctetCompletionEvidence));
+            if (ZeroOctetCompletionEvidence.AdapterExecutionIdentity != request.AdapterIdentity ||
+                !string.Equals(
+                    ZeroOctetCompletionEvidence.ResponseObservationId,
+                    observationId,
+                    StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "Zero-octet completion must bind this exact adapter execution and response.",
+                    nameof(zeroOctetCompletionEvidence));
+            }
+
+            if (ZeroOctetCompletionEvidence is DeclaredZeroOctetContentLengthCompleteEvidence &&
+                (!responseMetadata.TryGetSingleContentLength(out var declaredZeroLength) ||
+                 declaredZeroLength != 0))
+            {
+                throw new ArgumentException(
+                    "Declared zero-octet completion requires one exact Content-Length of zero.",
+                    nameof(zeroOctetCompletionEvidence));
+            }
+        }
+        else
+        {
+            if (zeroOctetCompletionEvidence is not null)
+            {
+                throw new ArgumentException(
+                    "A semantic no-entity response carries no zero-octet transfer proof.",
+                    nameof(zeroOctetCompletionEvidence));
+            }
+
+            ZeroOctetCompletionEvidence = null;
+        }
+
         if (responseMetadata.ContentLength is not AbsentHttpHeader &&
             (!responseMetadata.TryGetSingleContentLength(out var declaredLength) || declaredLength > 0))
         {
@@ -511,6 +558,8 @@ public sealed class ResponseWithoutBodyObservation : HttpResponseObservation
     public long ReceivedEncodedEntityByteCount { get; }
 
     public HttpNoBodyReason Reason { get; }
+
+    public ZeroOctetTransferCompletionEvidence? ZeroOctetCompletionEvidence { get; }
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
