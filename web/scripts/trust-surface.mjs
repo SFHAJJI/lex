@@ -157,7 +157,7 @@ export function renderTrustSurface() {
       sentence: 'No publisher state covers 1999-06-01.',
       payload: {
         history_begins: '2001-01-01',
-        nearest_earlier: 'none held',
+        nearest_earlier: null,
         nearest_later: '2001-01-01',
         what_would_answer: ['new_official_observation'],
         asserts_absence_of_law: false,

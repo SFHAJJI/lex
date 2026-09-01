@@ -477,13 +477,94 @@ function requireProfiles(profiles) {
   }
 }
 
+/**
+ * Keys whose declared value may legitimately be `null`.
+ *
+ * The pack's own worked example broke this card. Asking for loi-1915 at 2010-01-01 refuses
+ * with `no_version_for_date`, and the publisher's history begins in 2017: there is no nearest
+ * earlier state, and there cannot be one. Requiring all three keys to be present left a
+ * caller two ways out, and both were worse than the refusal. Omitting the key hit the same
+ * error, and inventing a date put a state in the publisher's history that the publisher does
+ * not have.
+ *
+ * So the rule is declaration, not presence. The key must be there; `null` is a legitimate
+ * declared value meaning there is none, and the card says so in words. What stays refused is
+ * the key being absent, because then a reader cannot tell "there is no earlier state" from
+ * "nobody looked".
+ */
+const NULLABLE_KEYS = new Map([['no_version_for_date', new Set(['nearest_earlier', 'nearest_later'])]]);
+
+/** Keys whose value is a date, so the card can tell a state from a sentence about one. */
+const DATED_KEYS = new Map([
+  ['no_version_for_date', new Set(['history_begins', 'nearest_earlier', 'nearest_later'])],
+]);
+
+const NULL_SENTENCE = new Map([
+  ['nearest_earlier', 'No earlier state is held: the requested date precedes this history.'],
+  ['nearest_later', 'No later state is held: the requested date follows every state held.'],
+]);
+
 function requirePayload(code, payload) {
   const requirement = REQUIRED_PAYLOAD[code];
   if (!requirement) return;
 
-  const missing = requirement.keys.filter((key) => !isPresent(own(payload, key)));
+  const nullable = NULLABLE_KEYS.get(code) ?? new Set();
+
+  const undeclared = requirement.keys.filter(
+    (key) => nullable.has(key) && !Object.hasOwn(payload ?? {}, key),
+  );
+  if (undeclared.length > 0) {
+    throw new Error(
+      `refusal ${code} must declare ${undeclared.join(', ')} even when there is none; an ` +
+        'absent key cannot be told apart from a state nobody looked for',
+    );
+  }
+
+  // Declared but blank is neither a state nor a declaration that there is none. Leaving it
+  // through would drop the row from the card and put the reader back where an absent key did.
+  const blank = requirement.keys.filter(
+    (key) => nullable.has(key) && own(payload, key) !== null && !isPresent(own(payload, key)),
+  );
+  if (blank.length > 0) {
+    throw new Error(
+      `refusal ${code} declares ${blank.join(', ')} blank; the value is a held state or null ` +
+        'for none, and a blank is a third thing that renders as nothing at all',
+    );
+  }
+
+  // Adding `null` gave the caller a machine-readable way to say none. It did not take away
+  // the free-text one, and "none held" in a date field was the whole defect: the caller writes
+  // the words, so one fact has as many renderings as it has callers. A declared nearest state
+  // is a calendar date or it is null, and nothing else is either.
+  const dated = DATED_KEYS.get(code) ?? new Set();
+  const prose = [...dated].filter((key) => {
+    const value = own(payload, key);
+    if (value === null || value === undefined) return false;
+    return !isCalendarDate(value);
+  });
+  if (prose.length > 0) {
+    throw new Error(
+      `refusal ${code} carries ${prose.join(', ')} as prose rather than a calendar date; a ` +
+        'sentinel a caller writes has as many spellings as it has callers, and only one of ' +
+        'them survives a byte comparison',
+    );
+  }
+
+  const missing = requirement.keys.filter(
+    (key) => !nullable.has(key) && !isPresent(own(payload, key)),
+  );
   if (missing.length > 0) {
     throw new Error(`refusal ${code} must carry ${missing.join(', ')}; ${requirement.basis}`);
+  }
+
+  // Declared null on both sides contradicts the history this same payload asserts: if a
+  // history begins, some state lies on one side of any date in it.
+  const declaredNull = [...nullable].filter((key) => own(payload, key) === null);
+  if (nullable.size > 0 && declaredNull.length === nullable.size) {
+    throw new Error(
+      `refusal ${code} declares no nearest state in either direction while also carrying ` +
+        'history_begins; if a history begins, some held state lies on one side of the date',
+    );
   }
 
   // A declared key set is an allowlist, not a minimum. It was a minimum, and
@@ -528,7 +609,15 @@ function renderChips(className, values) {
 }
 
 function renderPayload(code, payload) {
-  const entries = Object.entries(payload ?? {}).filter(([, value]) => isPresent(value));
+  const nullable = NULLABLE_KEYS.get(code) ?? new Set();
+  // A declared null renders as its sentence rather than being filtered away. Dropping the row
+  // would put the reader back where the missing key left them.
+  const declaredNull = [...nullable].filter(
+    (key) => Object.hasOwn(payload ?? {}, key) && payload[key] === null,
+  );
+  const entries = Object.entries(payload ?? {}).filter(
+    ([key, value]) => isPresent(value) || declaredNull.includes(key),
+  );
   if (entries.length === 0) return '';
 
   const structured = [];
@@ -539,6 +628,11 @@ function renderPayload(code, payload) {
       structured.push(renderCandidates(value));
     } else if (key === 'nearest_anchors' && Array.isArray(value)) {
       structured.push(renderChips('refusal-anchors', value));
+    } else if (value === null) {
+      rows.push(
+        `<div class="strip-row"><dt>${escapeHtml(key)}</dt>` +
+          `<dd>${escapeHtml(NULL_SENTENCE.get(key))}</dd></div>`,
+      );
     } else {
       rows.push(
         `<div class="strip-row"><dt>${escapeHtml(key)}</dt>` +

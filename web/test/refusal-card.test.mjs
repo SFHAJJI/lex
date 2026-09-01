@@ -94,7 +94,7 @@ const EXAMPLES = Object.freeze({
     sentence: 'No publisher state covers 1999-06-01.',
     payload: {
       history_begins: '2001-01-01',
-      nearest_earlier: 'none held',
+      nearest_earlier: null,
       nearest_later: '2001-01-01',
       what_would_answer: ['new_official_observation'],
       asserts_absence_of_law: false,
@@ -252,7 +252,7 @@ test('each spec-named payload requirement is enforced, one key at a time', () =>
       delete withoutKey[key];
       assert.throws(
         () => renderRefusalCard({ ...example, code, payload: withoutKey }),
-        new RegExp(`refusal ${code} must carry [^;]*\\b${key}\\b`),
+        new RegExp(`refusal ${code} must (carry|declare) [^;]*\\b${key}\\b`),
         `${code} rendered without ${key}`,
       );
     }
@@ -268,7 +268,7 @@ test('a payload that only echoes the question does not satisfy the requirement',
         sentence: 'No publisher state covers 2010-01-01.',
         payload: { work: 'lu-legilux:loi-1915-08-10-n1', date: '2010-01-01' },
       }),
-    /must carry history_begins, nearest_earlier, nearest_later/,
+    /must declare nearest_earlier, nearest_later even when there is none/,
   );
   assert.throws(
     () =>
@@ -286,15 +286,85 @@ test('an absent nearest state must be stated, not omitted', () => {
     code: 'no_version_for_date',
     ...EXAMPLES.no_version_for_date,
   });
-  assert.ok(stated.includes('none held'));
+  // The card owns the sentence, so two refusals of one shape read identically. A caller
+  // writing its own sentinel would make "none held", "n/a" and "" three answers to one
+  // question, and only one of them survives a byte comparison.
+  assert.ok(stated.includes('No earlier state is held'));
+
+  const valid = {
+    history_begins: '2017-01-01',
+    nearest_earlier: null,
+    nearest_later: '2017-01-01',
+    what_would_answer: ['new_official_observation'],
+    asserts_absence_of_law: false,
+  };
+
+  // Declared null is the only way to say there is none, and it renders in words rather than
+  // vanishing from the card.
+  const held = renderRefusalCard({
+    code: 'no_version_for_date',
+    sentence: 'No publisher state covers 2015-06-01.',
+    payload: valid,
+  });
+  assert.ok(held.includes('nearest_earlier'), 'the key itself must stay visible');
+  assert.ok(held.includes('No earlier state is held: the requested date precedes this history.'));
+
+  // The mirror, past the end of the history.
+  const after = renderRefusalCard({
+    code: 'no_version_for_date',
+    sentence: 'No publisher state covers 2030-06-01.',
+    payload: { ...valid, nearest_earlier: '2017-01-01', nearest_later: null },
+  });
+  assert.ok(after.includes('No later state is held: the requested date follows every state held.'));
+
+  // Absent is not null. A reader cannot tell an absent key from a state nobody looked for.
+  const { nearest_earlier: _gone, ...withoutKey } = valid;
   assert.throws(
     () =>
       renderRefusalCard({
         code: 'no_version_for_date',
         sentence: 'No publisher state covers 2015-06-01.',
-        payload: { history_begins: '2017-01-01', nearest_earlier: '', nearest_later: '2017-01-01' },
+        payload: withoutKey,
       }),
-    /must carry nearest_earlier/,
+    /must declare nearest_earlier even when there is none/,
+  );
+
+  // Blank is a third thing, and it used to render as nothing at all, which is where the
+  // absent key left the reader in the first place.
+  assert.throws(
+    () =>
+      renderRefusalCard({
+        code: 'no_version_for_date',
+        sentence: 'No publisher state covers 2015-06-01.',
+        payload: { ...valid, nearest_earlier: '' },
+      }),
+    /declares nearest_earlier blank/,
+  );
+
+  // And the free-text sentinel the whole repair is about.
+  for (const prose of ['none held', 'n/a', 'unknown', 'sometime in the 90s']) {
+    assert.throws(
+      () =>
+        renderRefusalCard({
+          code: 'no_version_for_date',
+          sentence: 'No publisher state covers 2015-06-01.',
+          payload: { ...valid, nearest_earlier: prose },
+        }),
+      /as prose rather than a calendar date/,
+      `${prose} was rendered as a held state`,
+    );
+  }
+
+  // Null on both sides contradicts the history_begins in the same payload: if a history
+  // begins, some held state lies on one side of any date inside it.
+  assert.throws(
+    () =>
+      renderRefusalCard({
+        code: 'no_version_for_date',
+        sentence: 'No publisher state covers 2015-06-01.',
+        payload: { ...valid, nearest_earlier: null, nearest_later: null },
+      }),
+    /if a history begins, some held state lies on one side/,
   );
 });
 
