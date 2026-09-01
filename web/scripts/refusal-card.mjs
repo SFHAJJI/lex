@@ -102,7 +102,11 @@ const ABSENCES = new Set(ABSENCE_CODES);
 function requireAbsenceEvidence(code, payload) {
   if (!ABSENCES.has(code)) return;
 
-  const routes = payload?.what_would_answer;
+  // Own properties, the same accessor the payload contract uses. These two were the half of
+  // the repair I missed: a payload owning only its declared key while inheriting both absence
+  // fields validated here and then rendered, because the renderer reads own properties and
+  // this did not. One rule, two readers, disagreeing about what the payload contains.
+  const routes = own(payload, 'what_would_answer');
   if (!Array.isArray(routes) || routes.length === 0) {
     throw new Error(
       `${code} is an absence, so it must say what would answer it; the closed vocabulary is ` +
@@ -132,7 +136,7 @@ function requireAbsenceEvidence(code, payload) {
 
   // The contract pins this to false. The invariant it protects is the product's oldest:
   // absence of a record is never absence of law.
-  if (payload?.asserts_absence_of_law !== false) {
+  if (own(payload, 'asserts_absence_of_law') !== false) {
     throw new Error(
       `${code} must carry asserts_absence_of_law: false; the contract pins it to that constant ` +
         'because absence of a held record is never evidence that the law does not exist',

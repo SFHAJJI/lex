@@ -232,3 +232,18 @@ test('a shell path uses the same canonical grammar as an object path', () => {
   assert.equal(shellUrl('ask', '/'), '/ask');
   assert.equal(shellUrl('ask', '/search'), '/ask/search');
 });
+
+test('a shell entry URL carries no fragment', () => {
+  // The exact defect: the path was validated with the fragment stripped, so `/#frag` was
+  // checked as `/`, and then the output was rebuilt from the original string, restoring a
+  // trailing separator this same function refuses two lines below. What was validated was not
+  // what was emitted.
+  assert.throws(() => shellUrl('ask', '/#frag'), /carries a fragment/);
+  assert.throws(() => shellUrl('ask', '/search#art_1'), /carries a fragment/);
+  assert.throws(() => shellUrl('w', '/#'), /carries a fragment/);
+
+  // And the paths either side of it still build, so the refusal is about the fragment and not
+  // about the path.
+  assert.equal(shellUrl('ask', '/'), '/ask');
+  assert.equal(shellUrl('ask', '/search'), '/ask/search');
+});
