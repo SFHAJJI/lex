@@ -1043,3 +1043,31 @@ main > * {
   font-size: 0.9375em;
   line-height: 1.5;
 }
+
+/* Provision history rows.
+ *
+ * The browser run caught these painted flush at 400 percent zoom: the interval, the digest and the
+ * conflict sentence ran together, so "Applicable from 2023-07-01 to 2024-06-30" and an eight
+ * character hash read as one string. Three separate claims need three separate shapes, and a gap
+ * is the cheapest one that survives reflow. */
+.provision-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2, 0.5rem) var(--space-3, 0.75rem);
+  padding-block: var(--space-2, 0.5rem);
+}
+
+.provision-conflict {
+  flex-basis: 100%;
+  max-inline-size: 72ch;
+}
+
+.provision-states,
+.get-help-counters,
+.get-help-official {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 0.5rem);
+  padding-inline-start: var(--space-4, 1rem);
+}
