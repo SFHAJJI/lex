@@ -82,6 +82,7 @@ internal static class CustodyProbeApplication
         "MSI_SECRET",
         "IMDS_ENDPOINT",
         "IDENTITY_SERVER_THUMBPRINT",
+        "AZURE_FEDERATED_TOKEN_FILE",
     ];
 
     internal static async Task<int> RunConsoleAsync(

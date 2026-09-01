@@ -101,6 +101,8 @@ public sealed class AzureCustodyProbeContractTests
             ("arc selector", environment => environment["IMDS_ENDPOINT"] = "http://127.0.0.1/token"),
             ("service fabric selector", environment =>
                 environment["IDENTITY_SERVER_THUMBPRINT"] = "00"),
+            ("federated token selector", environment =>
+                environment["AZURE_FEDERATED_TOKEN_FILE"] = "/token/exchange"),
         };
 
         foreach (var (name, mutate) in invalidEnvironments)
@@ -328,6 +330,7 @@ public sealed class AzureCustodyProbeContractTests
                      "MSI_SECRET",
                      "IMDS_ENDPOINT",
                      "IDENTITY_SERVER_THUMBPRINT",
+                     "AZURE_FEDERATED_TOKEN_FILE",
                  })
         {
             startInfo.Environment.Remove(name);
