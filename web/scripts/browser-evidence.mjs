@@ -11,7 +11,7 @@
 
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { resolve as resolvePath } from "node:path";
 import { extname, join as joinPath } from "node:path";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -74,17 +74,33 @@ const WIDTHS = [
   { label: "zoom400", width: 320, height: 256 },
 ];
 
-const PAGES = [
-  "state-loading.html",
-  "state-transport-failure.html",
-  "state-invalid-envelope.html",
-  "state-success.html",
-  "state-refusal.html",
-  // The trust surface. Added because the run reported "all combinations clean" while this
-  // page existed and was not in the list, which is evidence about five pages presented as
-  // evidence about six.
-  "trust-surface.html",
-];
+/**
+ * Every page the build emits, read from the build's own output.
+ *
+ * This was a hand-written list and it was wrong twice for one reason. The trust surface once
+ * shipped outside it and the run reported five pages of six as clean; the page every stand-in
+ * action leads to shipped outside it too, so the one page reached by every visible action was
+ * the one page never measured for contrast, layout, console state or target size.
+ *
+ * A list somebody has to remember to update is a gate that fails open, quietly, in the
+ * direction of a clean report. So the list is the directory: whatever the build emits is what
+ * gets measured, and a page cannot ship unmeasured without also not shipping.
+ */
+async function pagesFrom(root) {
+  const found = (await readdir(root)).filter((name) => name.endsWith(".html")).sort();
+  // An empty baseline passes forever. If the build emitted nothing, this run proves nothing,
+  // and it says so rather than reporting every zero of its combinations clean.
+  if (found.length < MINIMUM_PAGES) {
+    throw new Error(
+      `the build emitted ${found.length} pages and this run needs at least ${MINIMUM_PAGES} ` +
+        "to be worth anything; run npm run build first",
+    );
+  }
+  return found;
+}
+
+/** Below this, the run is measuring an accident rather than the product. */
+const MINIMUM_PAGES = 8;
 
 /**
  * Ports WHATWG Fetch refuses to connect to, so a debugger listening on one is unreachable.
@@ -577,7 +593,7 @@ async function main() {
     await session.send("Runtime.enable", {}, sessionId);
     await session.send("Page.enable", {}, sessionId);
 
-    for (const page of PAGES) {
+    for (const page of await pagesFrom(root)) {
       const url = `${site.origin}/${page}`;
       for (const viewport of WIDTHS) {
        for (const scheme of ["light", "dark"]) {

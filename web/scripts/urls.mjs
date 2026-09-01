@@ -107,7 +107,24 @@ export function shellUrl(shell, path = '/') {
   // `/ask/../../provenance` is a shell prefix that walks out of its own shell, and
   // `/ask/w/work` is a shell nested inside a shell. Every segment has to be one the object
   // builders would mint, which refuses both.
-  const [withoutFragment] = path.split('#');
+  // A shell entry URL carries no fragment.
+  //
+  // This validated the path with the fragment stripped and then rebuilt the output from the
+  // original string, so `/#frag` was checked as `/` and emitted as `/ask/#frag`: a trailing
+  // separator the same function refuses two lines below, restored by the syntax it had
+  // dropped in order to pass. Dropping a piece of a coordinate to validate it and putting it
+  // back to emit it means the thing validated is not the thing emitted.
+  //
+  // Forbidding rather than parsing, because a shell entry screen has no anchors to target;
+  // the fragment belongs on the object URLs, where `anchorUrl` and `parseObjectUrl` already
+  // agree on one grammar for it.
+  if (path.includes('#')) {
+    throw new Error(
+      `${JSON.stringify(path)} carries a fragment; a shell entry URL has nothing to anchor ` +
+        'to, and an anchor belongs on the object URL the shell leads to',
+    );
+  }
+  const withoutFragment = path;
   // The same canonical grammar the object parser uses. This filtered empty segments before
   // validating them, so `//search`, `/search/` and `/a//b` all passed and were preserved
   // verbatim, producing paths the object grammar refuses.

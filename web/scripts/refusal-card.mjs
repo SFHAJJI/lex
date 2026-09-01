@@ -306,6 +306,20 @@ function isPresent(value) {
  */
 const STRUCTURED_KEYS = new Map([['ambiguous_version', new Set(['candidates'])]]);
 
+/**
+ * Read a declared payload member, own properties only.
+ *
+ * `requirePayload` and `requireCandidates` read `payload[key]`, which walks the prototype
+ * chain; the allowlist and the renderer use `Object.keys`, which does not. So an inherited
+ * `candidates` array validated and then vanished, producing an ambiguity card offering no
+ * choice at all: the one refusal whose entire purpose is to make the reader choose.
+ *
+ * Validation and rendering have to be looking at the same object, so both look here.
+ */
+function own(payload, key) {
+  return Object.hasOwn(payload ?? {}, key) ? payload[key] : undefined;
+}
+
 function requirePayloadShapes(code, payload) {
   const structured = STRUCTURED_KEYS.get(code) ?? new Set();
   for (const [key, value] of Object.entries(payload ?? {})) {
@@ -373,7 +387,9 @@ function requireStateCoordinate(candidate, publisher, work, what) {
 }
 
 function requireCandidates(payload) {
-  const { publisher, work, candidates } = payload;
+  const publisher = own(payload, 'publisher');
+  const work = own(payload, 'work');
+  const candidates = own(payload, 'candidates');
   if (typeof publisher !== 'string' || typeof work !== 'string') {
     throw new Error(
       'ambiguous_version must name the work being disambiguated; without the publisher and ' +
@@ -461,7 +477,7 @@ function requirePayload(code, payload) {
   const requirement = REQUIRED_PAYLOAD[code];
   if (!requirement) return;
 
-  const missing = requirement.keys.filter((key) => !isPresent(payload?.[key]));
+  const missing = requirement.keys.filter((key) => !isPresent(own(payload, key)));
   if (missing.length > 0) {
     throw new Error(`refusal ${code} must carry ${missing.join(', ')}; ${requirement.basis}`);
   }
@@ -485,7 +501,7 @@ function requirePayload(code, payload) {
   }
 
   if (code === 'ambiguous_version') requireCandidates(payload);
-  if (code === 'profiles_differ') requireProfiles(payload.profiles);
+  if (code === 'profiles_differ') requireProfiles(own(payload, 'profiles'));
 }
 
 function renderCandidates(candidates) {

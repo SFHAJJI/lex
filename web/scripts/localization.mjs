@@ -294,6 +294,26 @@ export function requireResourceAuthenticity(evidence) {
   if (typeof evidence.asserted_by !== 'string' || evidence.asserted_by.trim().length === 0) {
     throw new Error('authenticity evidence must name who asserts it');
   }
+
+  // The publisher and the official URI belong to the evidence, not to whoever renders it.
+  //
+  // They were the renderer's arguments, and the renderer then printed "The authentic text, at
+  // the publisher" over a link nothing had bound to the claim. Evidence for resource A plus
+  // any accepted URL for resource B produced that exact sentence over the wrong document,
+  // which is Decision 58's failure in the shape Decision 58 exists to prevent: authenticity
+  // lifted off one resource and set down on a sibling.
+  if (typeof evidence.publisher !== 'string' || evidence.publisher.trim().length === 0) {
+    throw new Error('authenticity evidence must name the publisher whose resource it describes');
+  }
+  if (!evidence.resource_id.startsWith(`${evidence.publisher}:`)) {
+    throw new Error(
+      `authenticity evidence names publisher ${evidence.publisher} for resource ` +
+        `${evidence.resource_id}, which belongs to somebody else`,
+    );
+  }
+  // Through the one route policy, here, where the publisher is known for certain, rather than
+  // wherever a caller happens to hold both halves.
+  publisherSourceUri({ publisher: evidence.publisher, uri: evidence.official_uri });
   if (!isUtcInstant(evidence.observed_at)) {
     throw new Error(
       `authenticity evidence must carry when it was observed: ${JSON.stringify(evidence.observed_at)}`,
@@ -441,7 +461,22 @@ export function renderUnofficialRendering({
     );
   }
 
-  const official = publisherSourceUri({ publisher, uri: officialUri });
+  // The link is the evidence's, and the caller may only agree with it. Passing a different
+  // publisher or a different URI is refused rather than quietly preferred, because the copy
+  // beneath this link asserts that the target is the authentic text.
+  if (publisher !== evidence.publisher) {
+    throw new Error(
+      `this rendering names publisher ${publisher} and the evidence is from ` +
+        `${evidence.publisher}`,
+    );
+  }
+  if (officialUri !== evidence.official_uri) {
+    throw new Error(
+      'the official link must be the one this evidence carries; a link nothing bound to the ' +
+        'claim cannot be labelled the authentic text',
+    );
+  }
+  const official = publisherSourceUri({ publisher: evidence.publisher, uri: evidence.official_uri });
 
   return (
     '<section class="unofficial-rendering">' +

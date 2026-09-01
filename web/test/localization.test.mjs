@@ -29,7 +29,9 @@ const LU_TEXT = 'APERCU SYNTHETIQUE. Article 1er. Ce texte est synthetique.';
 /** Sole authentic language, the Luxembourg statute case, as evidence about one resource. */
 const SOLE = Object.freeze({
   schema: RESOURCE_AUTHENTICITY_SCHEMA,
-  resource_id: 'preview-synthetic:synthetic-preview-work:2001-01-01',
+  resource_id: 'lu-legilux:loi-2001-01-01-n1:2001-01-01',
+  publisher: 'lu-legilux',
+  official_uri: 'https://legilux.public.lu/eli/etat/leg/loi/2001/01/01/n1',
   authentic_languages: ['fr'],
   basis: 'loi du 24 fevrier 1984, art. 2',
   asserted_by: 'synthetic preview publisher',
@@ -39,7 +41,9 @@ const SOLE = Object.freeze({
 /** Equally authentic per language, the EU expression case. */
 const EQUAL = Object.freeze({
   ...SOLE,
-  resource_id: 'preview-synthetic:synthetic-regulation:2001-01-01',
+  resource_id: 'eu-eurlex:synthetic-regulation:2001-01-01',
+  publisher: 'eu-eurlex',
+  official_uri: 'https://eur-lex.europa.eu/eli/reg/2001/1/oj',
   authentic_languages: ['en', 'fr', 'de'],
   basis: 'every language expression is equally authentic',
 });
@@ -47,7 +51,8 @@ const EQUAL = Object.freeze({
 /** A held expression whose sole authentic language is not French. */
 const GERMAN = Object.freeze({
   ...SOLE,
-  resource_id: 'preview-synthetic:synthetic-german-act:2001-01-01',
+  resource_id: 'lu-legilux:synthetic-german-act:2001-01-01',
+  official_uri: 'https://legilux.public.lu/eli/etat/leg/loi/2001/01/02/n1',
   authentic_languages: ['de'],
 });
 
@@ -193,6 +198,10 @@ test('authenticity evidence is checked, not taken', () => {
     [{ ...SOLE, authentic_languages: ['fr', 'fr'] }, /repeats a language/],
     [{ ...SOLE, basis: '' }, /the ground for its claim/],
     [{ ...SOLE, asserted_by: '' }, /must name who asserts it/],
+    [{ ...SOLE, publisher: '' }, /must name the publisher/],
+    [{ ...SOLE, publisher: 'eu-eurlex' }, /which belongs to somebody else/],
+    [{ ...SOLE, official_uri: 'https://evil.example/x' }, /source URI/],
+    [{ ...SOLE, official_uri: undefined }, /source URI/],
     [{ ...SOLE, observed_at: 'yesterday' }, /when it was observed/],
     [{ ...SOLE, observed_at: '2026-99-99T00:00:00Z' }, /when it was observed/],
   ]) {
@@ -392,7 +401,16 @@ test('the authentic text cannot be relabelled as unofficial', () => {
 });
 
 test('an unofficial rendering routes to the publisher, through the one policy', () => {
-  for (const uri of ['https://evil.example/x', 'http://legilux.public.lu/x', 'not a url']) {
+  // Two rules, and they fire in this order because the second cannot save the first. A caller
+  // URI that disagrees with the evidence is refused whatever it is, including a URI the route
+  // policy would happily accept: the copy under that link says the target is the authentic
+  // text, and only the evidence can say which document that is.
+  for (const uri of [
+    'https://evil.example/x',
+    'http://legilux.public.lu/x',
+    'not a url',
+    'https://legilux.public.lu/eli/etat/leg/loi/2001/01/01/n2',
+  ]) {
     assert.throws(
       () =>
         renderUnofficialRendering({
@@ -403,8 +421,40 @@ test('an unofficial rendering routes to the publisher, through the one policy', 
           publisher: 'lu-legilux',
           officialUri: uri,
         }),
-      /source URI/,
+      /must be the one this evidence carries/,
       `${uri} was offered as the authentic text`,
     );
   }
+
+  // And the evidence's own URI still goes through the one route policy, so evidence cannot
+  // launder a link the policy refuses.
+  for (const uri of ['https://evil.example/x', 'http://legilux.public.lu/x', 'not a url']) {
+    assert.throws(
+      () =>
+        renderUnofficialRendering({
+          resourceId: SOLE.resource_id,
+          authenticity: { ...SOLE, official_uri: uri },
+          language: 'en',
+          text: 'An English rendering.',
+          publisher: 'lu-legilux',
+          officialUri: uri,
+        }),
+      /source URI/,
+      `evidence laundered ${uri}`,
+    );
+  }
+
+  // A publisher the caller invents is refused rather than quietly preferred.
+  assert.throws(
+    () =>
+      renderUnofficialRendering({
+        resourceId: SOLE.resource_id,
+        authenticity: SOLE,
+        language: 'en',
+        text: 'An English rendering.',
+        publisher: 'eu-eurlex',
+        officialUri: SOLE.official_uri,
+      }),
+    /the evidence is from lu-legilux/,
+  );
 });

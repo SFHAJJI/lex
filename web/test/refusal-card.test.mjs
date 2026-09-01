@@ -19,6 +19,8 @@ import { readingUrl } from '../scripts/urls.mjs';
 const AUTHENTICITY = {
   schema: 'lex-v3-resource-authenticity/1',
   resource_id: 'preview-synthetic:synthetic-preview-work:2001-01-01',
+  publisher: 'preview-synthetic',
+  official_uri: 'https://preview.invalid/synthetic-preview-work/2001-01-01',
   authentic_languages: ['en'],
   basis: 'synthetic preview evidence',
   asserted_by: 'synthetic preview publisher',
@@ -481,6 +483,8 @@ test('quoted text carries the expression language, not a hardcoded French', () =
       authenticity: {
         schema: 'lex-v3-resource-authenticity/1',
         resource_id: 'preview-synthetic:synthetic-french-act:2001-01-01',
+        publisher: 'preview-synthetic',
+        official_uri: 'https://preview.invalid/synthetic-french-act/2001-01-01',
         authentic_languages: ['fr'],
         basis: 'synthetic preview evidence',
         asserted_by: 'synthetic preview publisher',
@@ -1054,4 +1058,35 @@ test('the superseded renderer checks the whole coordinate too', () => {
       `${why} was accepted`,
     );
   }
+});
+
+test('a payload member cannot be inherited', () => {
+  // The validators read through the prototype chain and the allowlist and renderer read own
+  // properties, so an inherited candidates array validated and then vanished: an ambiguity
+  // card offering no choice, which is the one refusal whose purpose is to make a reader choose.
+  const proto = {
+    publisher: 'preview-synthetic',
+    work: 'synthetic-preview-work',
+    candidates: [1, 2],
+  };
+  assert.throws(
+    () =>
+      renderRefusalCard({
+        code: 'ambiguous_version',
+        sentence: 'Two states cover that date.',
+        payload: Object.create(proto),
+      }),
+    /must carry publisher, work, candidates/,
+  );
+
+  // And the same for a code whose payload is a plain key, so the rule is not one candidate's.
+  assert.throws(
+    () =>
+      renderRefusalCard({
+        code: 'profiles_differ',
+        sentence: 'Two profiles.',
+        payload: Object.create({ profiles: ['akn-lu/1', 'pdf-lu/1'] }),
+      }),
+    /must carry profiles/,
+  );
 });

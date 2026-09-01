@@ -84,6 +84,8 @@ const SYNTHETIC_LAW =
 const SOLE_AUTHENTIC = {
   schema: RESOURCE_AUTHENTICITY_SCHEMA,
   resource_id: 'preview-synthetic:synthetic-preview-work:2001-01-01',
+  publisher: 'preview-synthetic',
+  official_uri: 'https://preview.invalid/synthetic-preview-work/2001-01-01',
   authentic_languages: ['fr'],
   basis: 'synthetic preview evidence, sole authentic language',
   asserted_by: 'synthetic preview publisher',
@@ -93,6 +95,8 @@ const SOLE_AUTHENTIC = {
 const EQUALLY_AUTHENTIC = {
   schema: RESOURCE_AUTHENTICITY_SCHEMA,
   resource_id: 'preview-synthetic:synthetic-regulation:2001-01-01',
+  publisher: 'preview-synthetic',
+  official_uri: 'https://preview.invalid/synthetic-regulation/2001-01-01',
   authentic_languages: ['en', 'fr'],
   basis: 'synthetic preview evidence, every expression equally authentic',
   asserted_by: 'synthetic preview publisher',
