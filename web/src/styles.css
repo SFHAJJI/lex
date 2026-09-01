@@ -789,3 +789,21 @@ summary {
 .results-population a {
   overflow-wrap: anywhere;
 }
+
+/* A long word in a heading is not an edge case once more than one language is measured.
+   "Luxembourgish" overflowed a 320 CSS pixel viewport the first time this page was built,
+   which is the defect an English-only measurement cannot find. */
+h1,
+h2,
+h3,
+.locale-code {
+  /* `anywhere` rather than `break-word`: only the first reduces the min-content width a grid
+     item is sized by, and `main` is a grid whose items default to min-width auto. With
+     `break-word` the heading still wrapped and the page still overflowed, which is a fix that
+     looks right and measures wrong. */
+  overflow-wrap: anywhere;
+}
+
+main > * {
+  min-inline-size: 0;
+}

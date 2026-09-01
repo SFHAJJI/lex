@@ -278,8 +278,39 @@ test('the note refuses rather than substituting when its locale is missing', () 
 test('the page carries the chrome language, and only a reviewed one', async () => {
   const { page } = await import('../scripts/render.mjs');
   for (const locale of CHROME_LOCALES) {
-    const html = page({ state: 'trust-surface', title: 'T', main: '<h1>T</h1>', locale });
+    // The copy has to be in the language the tag claims. Passing the locale alone is what let
+    // every page in this build answer a German request with English prose under lang="de".
+    const html = page({
+      state: 'trust-surface',
+      title: 'T',
+      main: '<h1>T</h1>',
+      locale,
+      copyLocale: locale,
+    });
     assert.ok(html.includes(`<html lang="${locale}"`), `${locale} did not reach html lang`);
+  }
+
+  // A page cannot be labelled a language its copy is not written in. A screen reader would
+  // read one language in the voice of another, and Decision 63 forbids substituting a locale;
+  // a substitution wearing the requested tag is the one nobody can see.
+  for (const [locale, copyLocale] of [
+    ['de', 'en'],
+    ['fr', 'en'],
+    ['lb', 'fr'],
+    ['en', 'de'],
+  ]) {
+    assert.throws(
+      () => page({ state: 's', title: 'T', main: '<h1>T</h1>', locale, copyLocale }),
+      /would be labelled .* while its copy is written in/,
+      `${locale} chrome was served ${copyLocale} copy`,
+    );
+  }
+  for (const bad of ['pt', 'es', '']) {
+    assert.throws(
+      () => page({ state: 's', title: 'T', main: '<h1>T</h1>', copyLocale: bad }),
+      /not one of the four chrome locales/,
+      `${JSON.stringify(bad)} was accepted as a copy language`,
+    );
   }
   assert.ok(page({ state: 's', title: 'T', main: '<h1>T</h1>' }).includes('<html lang="en"'));
   for (const bad of ['pt', 'es', 'EN', '']) {
