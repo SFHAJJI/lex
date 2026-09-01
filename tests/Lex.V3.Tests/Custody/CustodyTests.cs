@@ -423,6 +423,62 @@ public sealed class CustodyTests
         }
     }
 
+    [TestMethod]
+    [DataRow(CustodyProtection.LockedTime)]
+    [DataRow(CustodyProtection.ActiveLegalHold)]
+    public void TheFilesystemProfileCannotClaimEnforcedProtection(CustodyProtection claimed)
+    {
+        // The local adapter is honest by type rather than by care: it is the one store that
+        // enforces nothing, and a green local run that reported enforced retention would read
+        // exactly like a green Azure run. Nothing proved this guard existed until now.
+        var reference = new DurableBlobRef(
+            CustodySchemaIds.DurableBlobRef,
+            CustodyDigest.Of(Body),
+            Body.Length,
+            CustodyClass.NightlyFloor90d);
+
+        Assert.ThrowsExactly<ArgumentException>(() => new CustodyPolicyEvidence(
+            CustodySchemaIds.CustodyPolicyEvidence,
+            reference,
+            CustodyVerificationProfile.FileSystemUnenforced1,
+            null,
+            claimed,
+            ObservedAt,
+            null));
+    }
+
+    [TestMethod]
+    public void TheFilesystemProfileCannotCarryAPolicyKeyOrAnExpiry()
+    {
+        // The other two halves of the same rule. A policy key joins an observation to a
+        // configuration receipt, and an expiry is a protection claim; a store that enforces
+        // nothing has neither, and each is refused on its own so neither can stand in for
+        // the other.
+        var reference = new DurableBlobRef(
+            CustodySchemaIds.DurableBlobRef,
+            CustodyDigest.Of(Body),
+            Body.Length,
+            CustodyClass.NightlyFloor90d);
+
+        Assert.ThrowsExactly<ArgumentException>(() => new CustodyPolicyEvidence(
+            CustodySchemaIds.CustodyPolicyEvidence,
+            reference,
+            CustodyVerificationProfile.FileSystemUnenforced1,
+            Guid.NewGuid(),
+            CustodyProtection.NotEnforced,
+            ObservedAt,
+            null));
+
+        Assert.ThrowsExactly<ArgumentException>(() => new CustodyPolicyEvidence(
+            CustodySchemaIds.CustodyPolicyEvidence,
+            reference,
+            CustodyVerificationProfile.FileSystemUnenforced1,
+            null,
+            CustodyProtection.NotEnforced,
+            ObservedAt,
+            ObservedAt.AddDays(90)));
+    }
+
     private static DurableBlobWriteReceipt UnenforcedReceipt(
         ReadOnlySpan<byte> bytes,
         CustodyClass custodyClass)
