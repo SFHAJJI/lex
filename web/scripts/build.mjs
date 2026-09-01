@@ -25,6 +25,7 @@ import { renderCoveragePreview } from "./coverage-preview.mjs";
 import { renderSearchPreview } from "./search-preview.mjs";
 import { renderDossierPreview } from "./dossier-preview.mjs";
 import { renderReadingPreview } from "./reading-preview.mjs";
+import { provenancePreviewPages } from "./provenance-preview.mjs";
 import { renderLocaleUnavailable, REVIEWED_CHROME_LOCALES } from "./locale-unavailable.mjs";
 import { CHROME_LOCALES } from "./localization.mjs";
 import { page } from "./render.mjs";
@@ -176,6 +177,14 @@ pages.push([
         product uses; nothing here is law, and no coordinate was resolved.</p>`,
   }),
 ]);
+
+// Provenance: the destination of the Provenance link every data view in this product carries.
+// It answered 404 everywhere, which is the worst thing that can be wrong with a product whose
+// claim is that an answer can be checked rather than trusted. One page per record, named after
+// the record, because a provenance link resolving to some other record's proof chain would be
+// worse than the missing page it replaces. The fourth page is the refusal a reader meets after
+// following a link to a record this corpus does not hold.
+pages.push(...provenancePreviewPages());
 
 // The hydrated page and the script that hydrates it. Compiled from app/ through the same
 // esbuild pipeline the tests use, so the bytes measured in the browser are the bytes the tests

@@ -583,14 +583,26 @@ const CONTENT_TYPES = new Map([
  *
  * The static build is a preview of a routed application, so the harness has to route the
  * scheme or every real link in it is a 404. It routes exactly what `urls.mjs` defines and
- * nothing else: the three shell entries onto their generated pages, and object, provenance
- * and search paths onto one stand-in destination that says what it is. A link outside the
- * scheme still 404s, which is what makes the destination check worth running.
+ * nothing else: the three shell entries onto their generated pages, and object and search
+ * paths onto one stand-in destination that says what it is. A link outside the scheme still
+ * 404s, which is what makes the destination check worth running.
+ *
+ * Provenance no longer routes to the stand-in. It routes to the page built for that exact
+ * record, because a provenance link that resolved to a proof chain belonging to a different
+ * record would be worse than the 404 it replaces. A key with no page built for it still 404s,
+ * which is what keeps the build honest about which records it rendered.
+ *
+ * Exported so a test can hold the route and the file name the build writes to one rule.
  */
-function routeSchemePath(path) {
+export function routeSchemePath(path) {
   if (path === "/ask" || path === "/w" || path === "/dev") return `/shell-${path.slice(1)}.html`;
   if (/^\/(ask|w|dev)\/search$/.test(path)) return "/preview-destination.html";
-  if (/^\/provenance\/[^/]+$/.test(path)) return "/preview-destination.html";
+  if (/^\/provenance\/[^/]+$/.test(path)) {
+    // The same name `provenancePageName` mints in `provenance.mjs`, spelled here rather than
+    // imported so this harness keeps depending on nothing it measures. A test holds the two
+    // to one rule, because a disagreement between them is a 404 nothing else would find.
+    return `/provenance-${path.slice("/provenance/".length).replaceAll(":", "~")}.html`;
+  }
   if (parseObjectUrl(path) !== null) return "/preview-destination.html";
   return null;
 }

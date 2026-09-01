@@ -27,3 +27,4 @@ export {
   renderTimelineReactPage,
   renderCoverageReactPage,
 } from './timeline-coverage-preview.jsx';
+export { Provenance } from './Provenance.jsx';
