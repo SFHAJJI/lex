@@ -482,3 +482,18 @@ summary {
   padding-block: 0.5rem;
   border-block-start: 1px solid currentColor;
 }
+
+/* The three qualifications on a dated object. Each is a sentence a reader has to be able to
+   read at a glance, so they get their own line rather than being folded into a row. */
+.validity-conflict,
+.provisional-watermark,
+.hole {
+  margin: 0;
+  min-inline-size: 0;
+  line-height: 1.5;
+}
+
+.hole {
+  border-inline-start: 3px dashed currentColor;
+  padding-inline-start: 0.75rem;
+}
