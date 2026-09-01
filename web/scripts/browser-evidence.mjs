@@ -16,7 +16,7 @@ import { existsSync } from "node:fs";
 import { resolve as resolvePath } from "node:path";
 import { extname, join as joinPath, sep as pathSep } from "node:path";
 import { CSP_DIRECTIVES, FORBIDDEN_SOURCES, cspValue } from "./csp.mjs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -727,7 +727,38 @@ async function killTree(pid) {
   await new Promise((resolve) => setTimeout(resolve, 400));
 }
 
+/**
+ * Remove profile directories a previous run left behind.
+ *
+ * The cleanup at the end of this run lives in a `finally`, so it survives an exception. It does
+ * not survive the process being killed, and an interrupted evidence run is ordinary: 204
+ * `lex-cdp-` directories had accumulated in the temp directory by the time anyone looked, on a
+ * machine that then reached zero bytes free mid-write and truncated a source file to nothing.
+ *
+ * Sweeping at startup rather than trying harder to clean up at exit is the robust direction. It
+ * costs one directory listing, and it works however the last run died, including a power cut. An
+ * hour is well clear of any real run, so a concurrent one is never touched.
+ */
+async function sweepStaleProfiles() {
+  const root = tmpdir();
+  const cutoff = Date.now() - 60 * 60 * 1000;
+  let removed = 0;
+  const entries = await readdir(root).catch(() => []);
+  for (const name of entries) {
+    if (!name.startsWith("lex-cdp-")) continue;
+    const full = join(root, name);
+    const info = await stat(full).catch(() => null);
+    if (info === null || !info.isDirectory() || info.mtimeMs > cutoff) continue;
+    await rm(full, { force: true, recursive: true }).catch(() => {});
+    removed += 1;
+  }
+  if (removed > 0) {
+    console.error("  [evidence] swept " + removed + " stale browser profile(s)");
+  }
+}
+
 async function main() {
+  await sweepStaleProfiles();
   const browser = await findBrowser();
   const port = allocateDebuggerPort(9222, 500);
   const profile = await mkdtemp(join(tmpdir(), "lex-cdp-"));
