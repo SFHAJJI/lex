@@ -94,7 +94,12 @@ export const HOLE_KINDS = Object.freeze(['no_state_held', 'continuity_inferred']
 const HOLE_CAPTION = new Map([
   [
     'no_state_held',
-    (from, to) => `No publisher state covers ${from} to ${to}.`,
+    // This screen knows what this corpus holds and nothing else, and the kind is named
+    // no_state_HELD for that reason, so the caption overstated its own kind. The publisher
+    // may hold a state here that was never ingested.
+    (from, to) =>
+      `This corpus holds no state covering ${from} to ${to}. Absence here is not absence ` +
+      "from the publisher's record.",
   ],
   [
     'continuity_inferred',

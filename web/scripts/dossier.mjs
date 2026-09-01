@@ -190,9 +190,14 @@ function renderCoverageStrip(coverage) {
               );
             }
             return (
-              `<li>No publisher state covers ${escapeHtml(hole.from)} to ` +
-              `${escapeHtml(hole.to)}. Absence of a held state is not evidence the law was ` +
-              'unchanged.</li>'
+              // This screen knows what this corpus holds and nothing else. Saying no
+              // publisher state covers the period claims the publisher's record is empty
+              // there, and the publisher may hold a state that was never ingested. The
+              // second sentence already said absence is not evidence; the first was
+              // contradicting it.
+              `<li>This corpus holds no state covering ${escapeHtml(hole.from)} to ` +
+              `${escapeHtml(hole.to)}. Absence here is not absence from the publisher's ` +
+              'record, and not evidence the law was unchanged.</li>'
             );
           })
           .join('') +

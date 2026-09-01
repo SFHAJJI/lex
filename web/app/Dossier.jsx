@@ -164,8 +164,9 @@ function CoverageStrip({ coverage }) {
         <ul className="dossier-holes">
           {coverage.holes.map((hole) => (
             <li key={`${hole.from}:${hole.to}`}>
-              No publisher state covers {hole.from} to {hole.to}. Absence of a held state is not
-              evidence the law was unchanged.
+              This corpus holds no state covering {hole.from} to {hole.to}. Absence here is
+              not absence from the publisher&#39;s record, and not evidence the law was
+              unchanged.
             </li>
           ))}
         </ul>

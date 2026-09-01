@@ -612,7 +612,7 @@ test('the gaps around this state are declared, even when there are none', () => 
   const html = renderReading(
     reading({ holes: [{ kind: 'no_state_held', from: '2004-04-02', to: '2024-12-28' }] }),
   );
-  assert.ok(html.includes('No publisher state covers 2004-04-02 to 2024-12-28.'));
+  assert.ok(html.includes('This corpus holds no state covering 2004-04-02 to 2024-12-28'));
 
   for (const holes of [undefined, null, {}, 'none']) {
     assert.throws(

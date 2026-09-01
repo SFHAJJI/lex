@@ -116,8 +116,15 @@ test('the coverage strip pairs its counts and declares its gaps', () => {
     ...GOOD,
     coverage: { ...COVERAGE, holes: [{ from: '2004-04-02', to: '2024-12-28' }] },
   });
-  assert.ok(gapped.includes('No publisher state covers 2004-04-02 to 2024-12-28'));
-  assert.ok(gapped.includes('Absence of a held state is not evidence the law was unchanged'));
+  // A gap in what this corpus holds, not in the publisher's record. The publisher may hold a
+  // state here that was never ingested, and the sentence beside it already said absence is
+  // not evidence, so the first half was contradicting the second.
+  assert.ok(gapped.includes('This corpus holds no state covering 2004-04-02 to 2024-12-28'));
+  assert.ok(
+    !gapped.includes('No publisher state covers'),
+    'a gap in this corpus was reported as a gap in the publisher record',
+  );
+  assert.ok(gapped.includes('Absence here is not absence from the publisher'));
 
   // Silence about gaps reads as an absence of gaps, so silence is refused.
   assert.throws(
