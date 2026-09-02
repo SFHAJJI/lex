@@ -1,0 +1,610 @@
+using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using Lex.V3.Contracts;
+using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Europe;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+namespace Lex.V3.Tests.Contracts.Source.Europe;
+
+/// <summary>
+/// The Union manifestation and rights scope.
+///
+/// The load-bearing test is the enlargement counterexample: format availability is a property of a
+/// language expression, and any type that lets it be stated per work produces a false absence the
+/// first time it meets a special edition.
+/// </summary>
+[TestClass]
+public sealed class EuManifestationScopeTests
+{
+    private const string Boundary = EuManifestationScope.CanonicalFormexAvailableFrom;
+
+    [TestMethod]
+    public void EveryOfferedFormatIsAMemberIncludingTheOnesNeverFetched()
+    {
+        // Pinned by hand, in declaration order. A format missing from the vocabulary would mean
+        // "not considered" rather than "considered and refused".
+        AssertTokens<EuManifestationFormat>(
+            "fmx4", "xhtml", "xhtml5", "html", "pdf", "pdfa1a", "pdfa1b", "pdfa2a", "print");
+        AssertTokens<EuFormatBodyAdmission>("body_admitted", "body_not_admitted");
+    }
+
+    [TestMethod]
+    public void Akn4EuIsNotAMemberBecauseThePublisherDisseminatesNoLegalActInIt()
+    {
+        // Listing it would imply we chose not to fetch something on offer. The AKN4EU types that
+        // exist belong to schema releases, not to legal acts.
+        foreach (var name in Enum.GetNames<EuManifestationFormat>())
+        {
+            Assert.IsFalse(
+                name.Contains("Akn", StringComparison.OrdinalIgnoreCase),
+                $"{name} implies the publisher offers AKN4EU for legal acts");
+        }
+    }
+
+    [TestMethod]
+    public void FormatDispositionsAreExhaustiveAndAtLeastOneAdmitsABody()
+    {
+        foreach (var missing in Enum.GetValues<EuManifestationFormat>())
+        {
+            var partial = FullFormats().Where(d => d.Format != missing).ToArray();
+            if (!partial.Any(d => d.Admission == EuFormatBodyAdmission.BodyAdmitted))
+            {
+                continue;
+            }
+
+            var thrown = Assert.ThrowsExactly<ArgumentException>(() => Scope(partial));
+            StringAssert.Contains(thrown.Message, missing.ToString());
+        }
+
+        var noneAdmitted = Enum.GetValues<EuManifestationFormat>()
+            .Select(f => Format(f, EuFormatBodyAdmission.BodyNotAdmitted))
+            .ToArray();
+        var refused = Assert.ThrowsExactly<ArgumentException>(() => Scope(noneAdmitted));
+        StringAssert.Contains(refused.Message, "no text could ever be held");
+    }
+
+    [TestMethod]
+    public void PrintCanNeverBeAdmittedAsABodySourceAndTheRuleLivesInTheContract()
+    {
+        // Walked over all seven rather than sampled, because the interesting claim is as much about
+        // which formats the rule does not cover as which it does. Print is a physical manifestation
+        // and no configuration reads a digital body off paper, so the contract refuses it. Every
+        // other format is a per-scope judgement and must stay constructible both ways, or the type
+        // would be inventing a publisher fact nobody established.
+        foreach (var format in Enum.GetValues<EuManifestationFormat>())
+        {
+            var dispositions = Enum.GetValues<EuManifestationFormat>()
+                .Select(f => Format(
+                    f,
+                    f == format || f != EuManifestationFormat.Print
+                        ? EuFormatBodyAdmission.BodyAdmitted
+                        : EuFormatBodyAdmission.BodyNotAdmitted))
+                .ToArray();
+
+            if (format == EuManifestationFormat.Print)
+            {
+                var thrown = Assert.ThrowsExactly<ArgumentException>(
+                    () => Scope(dispositions),
+                    "print was admitted as a body source");
+                StringAssert.Contains(thrown.Message, "can never carry a body");
+            }
+            else
+            {
+                _ = Scope(dispositions);
+            }
+        }
+
+        CollectionAssert.AreEquivalent(
+            new[] { EuManifestationFormat.Print },
+            EuManifestationScope.FormatsThatCanNeverCarryABody.ToArray());
+    }
+
+    [TestMethod]
+    public void ThePrintRuleHoldsOnTheWireToo()
+    {
+        // A document could otherwise carry a shape the constructor refuses.
+        var json = ContractJson.Serialize(Scope(FullFormats()));
+        var hostile = json.Replace(
+            "\"format\":\"print\",\"admission\":\"body_not_admitted\"",
+            "\"format\":\"print\",\"admission\":\"body_admitted\"",
+            StringComparison.Ordinal);
+
+        Assert.AreNotEqual(json, hostile, "the hostile rewrite did not match the serialized shape");
+        Assert.ThrowsExactly<JsonException>(
+            () => ContractJson.Deserialize<EuManifestationScope>(hostile));
+    }
+
+    [TestMethod]
+    public void EveryContentClassCarriesOneBasisAndTheBasisMayBeUnknown()
+    {
+        // The ruling in full: an unmeasured split is recorded as unknown, never as a blanket
+        // licence. Without the Unknown member a caller with no measurement is forced to assert one
+        // of the three real bases, and the type manufactures a licence out of absent evidence.
+        AssertTokens<EuContentClass>("metadata", "consolidation", "summary", "original_legal_text");
+        AssertTokens<EuReuseBasis>("cc0", "cc_by_4_0", "decision_2011_833_eu", "unknown");
+
+        var withUnknown = Enum.GetValues<EuContentClass>()
+            .Select(c => new EuRightsDisposition(c, EuReuseBasis.Unknown, Evidence("bb")))
+            .ToArray();
+        Assert.AreEqual(4, Scope(FullFormats(), withUnknown).Rights.Count);
+
+        foreach (var missing in Enum.GetValues<EuContentClass>())
+        {
+            var partial = FullRights().Where(d => d.ContentClass != missing).ToArray();
+            var thrown = Assert.ThrowsExactly<ArgumentException>(
+                () => Scope(FullFormats(), partial));
+            StringAssert.Contains(thrown.Message, missing.ToString());
+        }
+    }
+
+    [TestMethod]
+    public void EveryBasisNeedsItsEvidenceIncludingUnknown()
+    {
+        // "We looked and found no split" and "nobody looked" are the same token with different
+        // standing, and only the evidence separates them.
+        foreach (var basis in Enum.GetValues<EuReuseBasis>())
+        {
+            Assert.ThrowsExactly<ArgumentNullException>(
+                () => new EuRightsDisposition(EuContentClass.Metadata, basis, null!),
+                $"{basis} was allowed to carry no evidence");
+        }
+    }
+
+    [TestMethod]
+    public void FormatAvailabilityIsAnExpressionFactAndTheEnlargementCaseProvesWhy()
+    {
+        // 32004R0139 carries no Formex in its English or French expressions and does carry it in
+        // Bulgarian, Croatian and Romanian from the 2007 and 2013 enlargement special editions, so a
+        // per-work claim is false for three languages while being true for the one somebody checked.
+        //
+        // The work is no longer restated on the fact. It is the expression's parent, which is where
+        // the publisher puts it and the only place it can be proved rather than asserted.
+        foreach (var language in new[]
+                 {
+                     EuOfficialLanguage.Bulgarian,
+                     EuOfficialLanguage.Croatian,
+                     EuOfficialLanguage.Romanian,
+                 })
+        {
+            var fact = new EuExpressionFormatFact(
+                IdentityBoundary(),
+                language,
+                Expression($"{WorkUuid}.0006"),
+                EuManifestationFormat.Formex4,
+                Evidence("cc"));
+            Assert.AreEqual(language, fact.Language);
+            Assert.AreEqual(WorkUuid, fact.ExpressionRef.ParentKeyRef!.CanonicalKey);
+        }
+
+        // The other half is structural: there is no way to record that English lacks Formex,
+        // because nothing in this slice can establish it. TheTypeCannotStateAnAbsenceAtAll holds it.
+    }
+
+    [TestMethod]
+    public void TheTypeCannotStateAnAbsenceAtAll()
+    {
+        // A content-bound observation reference proves which bytes were named. It does not prove
+        // the manifestation enumeration for that expression ran to completion, and only a complete
+        // bounded observation supports an absence. Formats do not get a second, weaker completion
+        // mechanism than the relation families already follow, so a negative is deferred to the
+        // later source-completion validator and cannot be expressed here at all.
+        //
+        // Before this rule the constructor took a present flag, and passing false minted exactly
+        // that absence from an arbitrary artifact reference.
+        var members = typeof(EuExpressionFormatFact)
+            .GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
+            .Select(member => member.Name)
+            .ToArray();
+
+        foreach (var forbidden in new[] { "Present", "Absent", "Missing", "NotHeld", "IsHeld" })
+        {
+            Assert.IsFalse(
+                members.Contains(forbidden, StringComparer.Ordinal),
+                $"{forbidden} lets this slice mint an absence with no completion evidence");
+        }
+
+        foreach (var parameter in typeof(EuExpressionFormatFact)
+                     .GetConstructors().Single().GetParameters())
+        {
+            Assert.AreNotEqual(
+                typeof(bool),
+                parameter.ParameterType,
+                $"the parameter {parameter.Name} can carry a negative into the fact");
+        }
+    }
+
+    [TestMethod]
+    public void ThereIsNoWayToStateFormatAbsenceForAWork()
+    {
+        // The type must not offer the shape at all. A work-level answer could only be produced by
+        // quantifying over expressions this type does not hold, so any such member would be a false
+        // absence wearing a convenient name.
+        var members = typeof(EuExpressionFormatFact)
+            .GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
+            .Select(member => member.Name)
+            .ToArray();
+
+        foreach (var member in members)
+        {
+            Assert.IsFalse(
+                member.Contains("WorkHas", StringComparison.Ordinal) ||
+                member.Contains("AbsentForWork", StringComparison.Ordinal) ||
+                member.Contains("AnyLanguage", StringComparison.Ordinal),
+                $"{member} answers a format question at the work level");
+        }
+
+        // Language is required to construct one at all, which is the structural half of the rule.
+        var required = typeof(EuExpressionFormatFact)
+            .GetConstructors()
+            .Single()
+            .GetParameters()
+            .Select(parameter => parameter.ParameterType);
+        CollectionAssert.Contains(required.ToArray(), typeof(EuOfficialLanguage));
+    }
+
+    [TestMethod]
+    public void APositiveFactStillCarriesTheObservationThatFoundIt()
+    {
+        Assert.ThrowsExactly<ArgumentNullException>(
+            () => new EuExpressionFormatFact(
+                IdentityBoundary(),
+                EuOfficialLanguage.English,
+                Expression($"{WorkUuid}.0006"),
+                EuManifestationFormat.Formex4,
+                observationRef: null!));
+
+        Assert.ThrowsExactly<ArgumentNullException>(
+            () => new EuExpressionFormatFact(
+                boundary: null!,
+                EuOfficialLanguage.English,
+                Expression($"{WorkUuid}.0006"),
+                EuManifestationFormat.Formex4,
+                Evidence("cc")));
+    }
+
+    [TestMethod]
+    public void TheFormexBoundaryTravelsInTheRetainedBytesAndClassifiesNothing()
+    {
+        // A const never reaches the wire. An artifact carrying only the evidence reference would
+        // not state which date that evidence supports, and editing the constant later would
+        // reinterpret old bytes without changing them or their schema. So the boundary is an
+        // instance value, and the serialized document must actually contain it.
+        var scope = Scope(FullFormats());
+        // Read through reflection rather than compared to its own literal, which the compiler
+        // folds so the assertion cannot fail within a single compilation.
+        Assert.AreEqual(
+            "2004-05-01",
+            typeof(EuManifestationScope)
+                .GetField(nameof(EuManifestationScope.CanonicalFormexAvailableFrom))!
+                .GetRawConstantValue());
+        Assert.AreEqual(Boundary, scope.FormexAvailableFrom);
+
+        var json = ContractJson.Serialize(scope);
+        StringAssert.Contains(json, Boundary);
+        Assert.AreEqual(
+            Boundary,
+            ContractJson.Deserialize<EuManifestationScope>(json).FormexAvailableFrom);
+
+        // Carried for checking and partition planning only. A method here that decided availability
+        // from a date would erase the two cases the record documents: consolidations of pre-2004
+        // acts do carry Formex, and enlargement special editions carry it for languages whose
+        // original publication predates the boundary.
+        foreach (var name in new[] { "HasFormex", "IsFormexAvailable", "FormexExpectedFor" })
+        {
+            Assert.IsNull(
+                typeof(EuManifestationScope).GetMethod(name),
+                $"{name} turns the availability boundary into a classifier");
+        }
+    }
+
+    [TestMethod]
+    public void TheBoundaryMustBeAnExactCalendarDateAndIsRequired()
+    {
+        foreach (var hostile in new[]
+                 {
+                     "", "   ", "2004-5-1", "2004-05-01T00:00:00Z", "not-a-date", "2004-02-30",
+
+                     // Well-formed and wrong. These are the dangerous ones: a shape check alone
+                     // accepts them and serializes them beside the same evidence reference, so the
+                     // retained bytes look verified while naming a boundary nobody established.
+                     "2004-05-02", "2004-04-30", "1999-01-01", "2038-01-19",
+                 })
+        {
+            Assert.ThrowsExactly<ArgumentException>(
+                () => Scope(FullFormats(), FullRights(), hostile),
+                $"the boundary \"{hostile}\" was accepted");
+        }
+
+        // The canonical value itself still constructs, or the guard would refuse everything.
+        Assert.AreEqual(
+            EuManifestationScope.CanonicalFormexAvailableFrom,
+            Scope(FullFormats()).FormexAvailableFrom);
+
+        // And a document carrying a well-formed wrong boundary is refused on the wire too.
+        var json = ContractJson.Serialize(Scope(FullFormats()));
+        var drifted = json.Replace("2004-05-01", "2004-05-02", StringComparison.Ordinal);
+        Assert.AreNotEqual(json, drifted, "the boundary is not in the serialized document");
+        Assert.ThrowsExactly<JsonException>(
+            () => ContractJson.Deserialize<EuManifestationScope>(drifted));
+
+        Assert.ThrowsExactly<ArgumentNullException>(
+            () => new EuManifestationScope(FullFormats(), FullRights(), Boundary, null!));
+    }
+
+    [TestMethod]
+    public void MutatingTheCallersListsAfterConstructionCannotChangeTheScope()
+    {
+        // IReadOnlyList is a view, not a guarantee: a caller can hand a List through it and clear
+        // it afterwards. Both axes must keep their own snapshot, or a scope that satisfied its
+        // closure check at construction reports a different vocabulary later, and the check that
+        // every member carries exactly one disposition becomes a statement about a list nobody
+        // holds any more.
+        var formats = new List<EuFormatDisposition>(FullFormats());
+        var rights = new List<EuRightsDisposition>(FullRights());
+        var scope = new EuManifestationScope(formats, rights, Boundary, Evidence("aa"));
+
+        formats.Clear();
+        rights.Clear();
+
+        Assert.AreEqual(9, scope.Formats.Count);
+        Assert.AreEqual(4, scope.Rights.Count);
+        Assert.IsTrue(scope.Formats.Any(d => d.Admission == EuFormatBodyAdmission.BodyAdmitted));
+    }
+
+    [TestMethod]
+    public void TheConstructorsRefuseUndefinedEnums()
+    {
+        // UnknownVocabularyFailsClosedInEveryClosedSet reaches these types through JSON, where the
+        // converter does the refusing. A cast reaches the constructor without passing a converter,
+        // so without these cases only the wire is closed.
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => new EuRightsDisposition(EuContentClass.Metadata, (EuReuseBasis)99, Evidence("bb")));
+
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => new EuExpressionFormatFact(
+                IdentityBoundary(),
+                (EuOfficialLanguage)999,
+                Expression($"{WorkUuid}.0006"),
+                EuManifestationFormat.Formex4,
+                Evidence("cc")));
+
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => new EuExpressionFormatFact(
+                IdentityBoundary(),
+                EuOfficialLanguage.English,
+                Expression($"{WorkUuid}.0006"),
+                (EuManifestationFormat)99,
+                Evidence("cc")));
+    }
+
+    [TestMethod]
+    public void TheScopeRoundTripsAndRefusesAnUnknownFormat()
+    {
+        var scope = Scope(FullFormats());
+        var json = ContractJson.Serialize(scope);
+
+        StringAssert.Contains(json, "fmx4");
+        StringAssert.Contains(json, "original_legal_text");
+
+        var restored = ContractJson.Deserialize<EuManifestationScope>(json);
+        Assert.AreEqual(scope.Formats.Count, restored.Formats.Count);
+        Assert.AreEqual(scope.Rights.Count, restored.Rights.Count);
+
+        Assert.ThrowsExactly<JsonException>(
+            () => ContractJson.Deserialize<EuManifestationScope>(
+                json.Replace("\"fmx4\"", "\"fmx5\"", StringComparison.Ordinal)));
+    }
+
+    [TestMethod]
+    public void UnknownVocabularyFailsClosedInEveryClosedSet()
+    {
+        AssertScopeDrift<EuManifestationFormat>("akn4eu");
+        AssertScopeDrift<EuManifestationFormat>("pdfa");
+        AssertScopeDrift<EuFormatBodyAdmission>("body_conditional");
+        AssertScopeDrift<EuContentClass>("case_law");
+        AssertScopeDrift<EuReuseBasis>("cc_by_sa_4_0");
+    }
+
+    [TestMethod]
+    public void CaseLawFormatsAreOutOfScopeHereRatherThanAbsentFromThePublisher()
+    {
+        // The scope of this vocabulary is legal acts plus the summary class. Case-law formats are a
+        // different question: an ECLI is an identifier and a relation target, and admitting one does
+        // not mean this profile ingests court text. Those formats belong to the later E6 source
+        // profile, which covers case-law link metadata rather than bodies.
+        //
+        // This is the one place where absence from the vocabulary means "another profile answers
+        // this" rather than "considered and refused", so the type must not grow a member that reads
+        // as a case-law disposition.
+        foreach (var name in Enum.GetNames<EuManifestationFormat>())
+        {
+            foreach (var forbidden in new[] { "Ecli", "CaseLaw", "Judgment", "Xml" })
+            {
+                Assert.IsFalse(
+                    name.Contains(forbidden, StringComparison.OrdinalIgnoreCase),
+                    $"{name} reads as a case-law disposition in a legal-act profile");
+            }
+        }
+
+        // The token still fails closed, which is correct: an unrecognised token is refused rather
+        // than guessed. That refusal is about this profile and is NOT a claim that Cellar lacks
+        // case-law xml, which it does serve.
+        AssertScopeDrift<EuManifestationFormat>("xml");
+    }
+
+    [TestMethod]
+    public void TheFactDelegatesIdentityToTheSharedBoundaryRatherThanRepeatingIt()
+    {
+        // One case, not a matrix. EuWemiIdentityTests owns the full attack set: wrong authority,
+        // wrong registry, wrong identity profile, wrong role, malformed key, wrong suffix depth and
+        // an expression of another work. Repeating it here would be a second copy of a rule that
+        // must have exactly one, which is the duplication O10 objected to.
+        //
+        // What this proves is only that the fact routes through the boundary at all.
+        var refused = Assert.ThrowsExactly<ArgumentException>(
+            () => new EuExpressionFormatFact(
+                IdentityBoundary(),
+                EuOfficialLanguage.English,
+                Expression(WorkUuid, EuWemiRole.Work),
+                EuManifestationFormat.Formex4,
+                Evidence("cc")));
+        StringAssert.Contains(refused.Message, "eu_cellar_expression");
+
+        // And a legitimate expression still constructs, or the delegation would be refusing all.
+        var fact = new EuExpressionFormatFact(
+            IdentityBoundary(),
+            EuOfficialLanguage.English,
+            Expression($"{WorkUuid}.0006"),
+            EuManifestationFormat.Formex4,
+            Evidence("cc"));
+        Assert.AreEqual(SourceAuthority.Cellar, fact.ExpressionRef.Authority);
+    }
+
+    [TestMethod]
+    public void TwoExpressionsOfOneWorkInOneLanguageStayDistinct()
+    {
+        // Work plus language does not identify an expression: a corrigendum republishes the same
+        // work in the same language as a second Cellar expression, which the accepted inventory
+        // records as a real shape rather than a hypothetical one.
+        var first = new EuExpressionFormatFact(
+            IdentityBoundary(), EuOfficialLanguage.English, Expression($"{WorkUuid}.0006"),
+            EuManifestationFormat.Formex4, Evidence("cc"));
+        var second = new EuExpressionFormatFact(
+            IdentityBoundary(), EuOfficialLanguage.English, Expression($"{WorkUuid}.0007"),
+            EuManifestationFormat.Formex4, Evidence("cc"));
+
+        Assert.AreEqual(first.Language, second.Language);
+        Assert.AreEqual(
+            first.ExpressionRef.ParentKeyRef!.CanonicalKey,
+            second.ExpressionRef.ParentKeyRef!.CanonicalKey,
+            "the two expressions should share one work");
+        Assert.AreNotEqual(
+            first.ExpressionRef.CanonicalKey, second.ExpressionRef.CanonicalKey);
+        Assert.AreNotEqual(first, second, "the two expressions collapsed into one fact");
+
+        // Same observation reference on both, so the distinction cannot be coming from our bytes.
+        Assert.AreEqual(first.ObservationRef, second.ObservationRef);
+    }
+
+    [TestMethod]
+    public void TheRetainedBytesDoNotDependOnTheOrderTheCallerSupplied()
+    {
+        // Both axes are set-like maps with no semantic order, but ContractJson emits list order and
+        // the canonicaliser preserves arrays. Without an imposed order, two scopes with identical
+        // content digest differently purely because of how a caller built its list, which breaks
+        // the deterministic retained profile.
+        var forward = new EuManifestationScope(
+            FullFormats(), FullRights(), Boundary, Evidence("aa"));
+        var reversed = new EuManifestationScope(
+            FullFormats().Reverse().ToArray(),
+            FullRights().Reverse().ToArray(),
+            Boundary,
+            Evidence("aa"));
+
+        var forwardJson = ContractJson.Serialize(forward);
+        Assert.AreEqual(forwardJson, ContractJson.Serialize(reversed));
+        Assert.AreEqual(
+            Sha256Hex(forwardJson),
+            Sha256Hex(ContractJson.Serialize(reversed)),
+            "the same content produced two digests");
+
+        // Ordered by the closed key, not by arrival.
+        CollectionAssert.AreEqual(
+            Enum.GetValues<EuManifestationFormat>(),
+            reversed.Formats.Select(d => d.Format).ToArray());
+        CollectionAssert.AreEqual(
+            Enum.GetValues<EuContentClass>(),
+            reversed.Rights.Select(d => d.ContentClass).ToArray());
+    }
+
+    private const string WorkUuid = "3e485e15-11bd-11e6-ba9a-01aa75ed71a1";
+
+    private static EuWemiIdentityBoundary IdentityBoundary() => new(Evidence("ee"), Evidence("ff"));
+
+    private static SourceObjectRef Expression(string key, EuWemiRole role = EuWemiRole.Expression)
+    {
+        var registry = Evidence("ee");
+        var parentRole = EuWemiIdentityBoundary.ParentRoleOf(role);
+        SourceObjectKeyRef? parent = null;
+        if (parentRole is not null)
+        {
+            var cut = key.LastIndexOf('.');
+            var parentKey = cut < 0 ? key : key[..cut];
+            parent = new SourceObjectKeyRef(
+                new SourceRegistryMemberRef(
+                    registry, EuWemiIdentityBoundary.MemberKeyOf(parentRole.Value)),
+                CellarUri(parentKey), parentKey, Sha256Hex(parentKey));
+        }
+
+        return new SourceObjectRef(
+            SourceCoreSchemaIds.SourceObjectRef,
+            SourceAuthority.Cellar,
+            new SourceRegistryMemberRef(registry, EuWemiIdentityBoundary.MemberKeyOf(role)),
+            CellarUri(key),
+            key,
+            Sha256Hex(key),
+            Evidence("ff"),
+            parent);
+    }
+
+    private static string CellarUri(string key) =>
+        "http://publications.europa.eu/resource/cellar/" + key;
+
+    private static string Sha256Hex(string value) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
+
+    private static EuManifestationScope Scope(
+        IReadOnlyList<EuFormatDisposition> formats,
+        IReadOnlyList<EuRightsDisposition>? rights = null,
+        string? boundary = null) =>
+        new(formats, rights ?? FullRights(), boundary ?? Boundary, Evidence("aa"));
+
+    private static EuFormatDisposition[] FullFormats() =>
+        Enum.GetValues<EuManifestationFormat>()
+            .Select(format => Format(
+                format,
+                format is EuManifestationFormat.Print or EuManifestationFormat.PdfA1b
+                    ? EuFormatBodyAdmission.BodyNotAdmitted
+                    : EuFormatBodyAdmission.BodyAdmitted))
+            .ToArray();
+
+    private static EuFormatDisposition Format(
+        EuManifestationFormat format,
+        EuFormatBodyAdmission admission) =>
+        new(format, admission, "reason_code", Evidence("dd"));
+
+    private static EuRightsDisposition[] FullRights() =>
+        Enum.GetValues<EuContentClass>()
+            .Select(contentClass => new EuRightsDisposition(
+                contentClass,
+                contentClass == EuContentClass.Metadata
+                    ? EuReuseBasis.Cc0
+                    : EuReuseBasis.CcBy40,
+                Evidence("bb")))
+            .ToArray();
+
+    private static SourceArtifactRef Evidence(string seed) =>
+        new("urn:uuid:00000000-0000-4000-8000-0000000000" + seed, new string(seed[0], 64));
+
+    private static void AssertTokens<TEnum>(params string[] expected)
+        where TEnum : struct, Enum
+    {
+        var members = Enum.GetValues<TEnum>();
+        Assert.AreEqual(expected.Length, members.Length, $"{typeof(TEnum).Name} member count");
+        for (var index = 0; index < members.Length; index++)
+        {
+            Assert.AreEqual("\"" + expected[index] + "\"", ContractJson.Serialize(members[index]));
+        }
+    }
+
+    private static void AssertScopeDrift<TEnum>(string hostile)
+        where TEnum : struct, Enum
+    {
+        Assert.ThrowsExactly<JsonException>(
+            () => ContractJson.Deserialize<TEnum>(JsonSerializer.Serialize(hostile)),
+            $"{typeof(TEnum).Name} accepted the unknown token {hostile}");
+    }
+}
