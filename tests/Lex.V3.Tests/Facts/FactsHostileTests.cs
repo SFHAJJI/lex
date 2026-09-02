@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Lex.V3.Contracts;
+using System.Text.RegularExpressions;
 using Lex.V3.Contracts.Facts;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -16,6 +17,9 @@ namespace Lex.V3.Tests.Facts;
 [TestClass]
 public sealed class FactsHostileTests
 {
+    /// <summary>A literal backslash, which System.Uri resolves as a path separator.</summary>
+    private const string Backslash = "\\";
+
     // ---- O1: identity is a set, and a lossy one is refused ---------------------------------
 
     [TestMethod]
@@ -868,6 +872,200 @@ public sealed class FactsHostileTests
         Assert.IsTrue(ClosedVocabulary.WireNames<DateSemanticRole>().Contains("signature_date"));
         Assert.IsTrue(ClosedVocabulary.WireNames<DateSemanticRole>().Contains("application_date"));
         Assert.IsTrue(ClosedVocabulary.WireNames<DateSemanticRole>().Contains("publisher_deadline"));
+    }
+
+    /// <summary>
+    /// The resource family documented itself as covering manifestations and items while its grammar
+    /// rejected the publisher's own dotted expression and manifestation identifiers, because
+    /// <c>Guid.TryParseExact(.., "D")</c> cannot admit a dotted suffix.
+    ///
+    /// Every shape below was checked live against the official endpoint on 2026-09-02 rather than
+    /// inferred: the bare work, the dotted expression and the dotted manifestation each answered 200
+    /// and redirected to their own distinct rdf/object/full, <c>{manifestation}/DOC_1</c> answered
+    /// 200 directly, and a third dotted level answered 404. The depth ceiling asserted here is the
+    /// publisher's answer, not ours.
+    /// </summary>
+    [TestMethod]
+    public void TheCellarFamiliesAdmitEveryPublisherLevelAndNothingDeeper()
+    {
+        const string work = FactsFixtures.CellarWorkUri;
+
+        var admittedAsResource = new[]
+        {
+            work + ".0006",            // expression
+            work + ".0006.03",         // manifestation
+            work + ".0006.03/DOC_1",   // item, the data stream beneath a manifestation
+            work + "/DOC_1",           // already admitted before this repair
+        };
+
+        foreach (var value in admittedAsResource)
+        {
+            Assert.AreEqual(
+                value,
+                new OfficialIdentifier(FactsIdentifierFamily.CellarResourceUri, value).RawValue,
+                $"the resource family refused {value}");
+
+            // The reader is only half the contract. The first version of this widening moved the
+            // reader alone, so every shape below was constructible and unserializable at once, and
+            // this test passed because it never asked the schema. Reader and schema must admit the
+            // same set, which is the rule FactsCommon states and which nothing here checked.
+            Assert.IsTrue(
+                Regex.IsMatch(value, FactsSchemaHardener.CellarResourcePattern),
+                $"the schema pattern refused {value} that the reader admits");
+
+            // and the same value is never also a work, so the level is carried by the shape rather
+            // than by whichever family the caller reached for.
+            Assert.ThrowsExactly<ArgumentException>(
+                () => new OfficialIdentifier(FactsIdentifierFamily.CellarWorkUri, value),
+                $"{value} was admitted as a work");
+        }
+
+        // The bare work is the work and only the work, in both directions.
+        Assert.AreEqual(
+            work, new OfficialIdentifier(FactsIdentifierFamily.CellarWorkUri, work).RawValue);
+        Assert.ThrowsExactly<ArgumentException>(
+            () => new OfficialIdentifier(FactsIdentifierFamily.CellarResourceUri, work));
+        Assert.IsTrue(Regex.IsMatch(work, FactsSchemaHardener.CellarWorkPattern));
+        Assert.IsFalse(
+            Regex.IsMatch(work, FactsSchemaHardener.CellarResourcePattern),
+            "the schema admits the bare work as a resource, so the families are not disjoint there");
+
+        // Near misses, refused by both families. The first is the publisher's own 404.
+        var refused = new (string Value, string Why)[]
+        {
+            (work + ".0006.03.01", "a third dotted level, which Cellar answers 404"),
+            (work + ".006", "an expression suffix one digit short"),
+            (work + ".00006", "an expression suffix one digit wide"),
+            (work + ".0006.3", "a manifestation suffix one digit short"),
+            (work + ".0006.003", "a manifestation suffix one digit wide"),
+            (work + ".0006.0a", "a manifestation suffix that is not digits"),
+            (work + ".", "an empty suffix"),
+            (work + "..0006", "an empty level between the work and the expression"),
+            ("http://publications.europa.eu/resource/cellar/not-a-uuid.0006", "a head that is not a UUID"),
+
+            // Spellings the reader used to accept because it validated uri.AbsolutePath rather than
+            // the string a store retains. Trim('/') swallowed a trailing slash the schemas reject,
+            // and System.Uri removes dot segments before AbsolutePath can be read, so the grammar
+            // saw a shorter path than the value being kept. Each is a second raw spelling of one
+            // coordinate: two rows to every store, one thing to a reader.
+            (work + "/", "a trailing slash on the work"),
+            (work + ".0006/", "a trailing slash on a dotted expression"),
+            (work + ".0006.03/", "a trailing slash on a dotted manifestation"),
+            (work + "//DOC_1", "a doubled slash"),
+            (work + "/./DOC_1", "a single-dot segment"),
+            (work + "/../1f8c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f/DOC_1", "a dot-segment alias"),
+            (work + ".0006/../0007", "a dot segment after a dotted expression"),
+
+            // The publisher mints lowercase, the reader round-trips through ToString("D"), and the
+            // schemas now say so too. An uppercase spelling is a second name for one object.
+            ("http://publications.europa.eu/resource/cellar/1F8C2D3E-4A5B-6C7D-8E9F-0A1B2C3D4E5F",
+                "an uppercase work UUID"),
+            ("http://publications.europa.eu/resource/cellar/1F8C2D3E-4A5B-6C7D-8E9F-0A1B2C3D4E5F.0006",
+                "an uppercase dotted expression"),
+
+            // Percent encoding, refused as a class rather than by naming escapes. Codex's probe at
+            // the previous frozen head constructed the first four. The probe answering it found the
+            // class is wider than any list could be: a valid escape decodes, so an encoded letter
+            // is another spelling of an ordinary item with no dot segment in it at all, and an
+            // invalid escape is re-encoded, so the raw string and the parsed path differ even when
+            // the escape means nothing. Naming `%2e` would then require `%252e`, then `%25252e`.
+            (work + "/%2e/DOC_1", "an encoded single-dot segment"),
+            (work + "/%2e%2e/DOC_1", "an encoded double-dot segment, which escapes the work"),
+            (work + "/%2fDOC_1", "an encoded separator"),
+            (work + "/%5cDOC_1", "an encoded backslash"),
+            (work + "/%2E/DOC_1", "an encoded dot in upper-case hex"),
+            (work + "/%252e/DOC_1", "a doubly encoded dot"),
+            (work + "/%25252e/DOC_1", "a triply encoded dot"),
+            (work + "/%44OC_1", "an encoded letter, an alias of /DOC_1 carrying no dot segment"),
+            (work + "/DOC%5f1", "an encoded underscore, a second alias of the same item"),
+            (work + "/%3fview=1", "an encoded question mark, which the query check never sees"),
+            (work + "/%23frag", "an encoded hash, which the fragment check never sees"),
+            (work + "/%00", "an encoded null"),
+            (work + "/DOC_1%20", "an encoded trailing space"),
+            (work + "/%", "a bare percent, which System.Uri re-encodes to %25"),
+            (work + "/%zz", "a malformed escape, which System.Uri re-encodes"),
+            (work + "/.%2e", "a mixed dot segment, which resolves away the work entirely"),
+            (work + "/a/%2e%2e/DOC_1", "an encoded traversal through a real segment"),
+            (work + ".0006/%2e/DOC_1", "an encoded dot segment after a dotted expression"),
+
+            // A literal backslash needs no escape at all: System.Uri resolves it as a separator, so
+            // the second of these was accepted and parsed as the ordinary item beneath the work.
+            (work + "/" + Backslash + "DOC_1", "a literal backslash segment"),
+            (work + "/a" + Backslash + ".." + Backslash + "DOC_1", "a literal backslash traversal"),
+        };
+
+        foreach (var (value, why) in refused)
+        {
+            foreach (var family in new[]
+                     {
+                         FactsIdentifierFamily.CellarWorkUri,
+                         FactsIdentifierFamily.CellarResourceUri,
+                     })
+            {
+                Assert.ThrowsExactly<ArgumentException>(
+                    () => new OfficialIdentifier(family, value),
+                    $"{family} admitted {value} despite {why}");
+            }
+
+            foreach (var pattern in new[]
+                     {
+                         FactsSchemaHardener.CellarWorkPattern,
+                         FactsSchemaHardener.CellarResourcePattern,
+                     })
+            {
+                Assert.IsFalse(
+                    Regex.IsMatch(value, pattern),
+                    $"a schema pattern admitted {value} that the reader refuses, despite {why}");
+            }
+        }
+    }
+
+
+    /// <summary>
+    /// MUTATION RECEIPT: the persistent identifier validated the parsed path, so four raw strings
+    /// reached one accepted identity while the emitted schema admitted only the first.
+    /// </summary>
+    /// <remarks>
+    /// The round that moved the work and the resource families onto the original spelling left the
+    /// alias reading <c>AbsolutePath</c>, which is the repair-the-instance habit inside the round
+    /// that named it. The reader was then strictly wider than its own schema, so every spelling
+    /// below was constructible and unserializable at once. Nothing caught it because the parity
+    /// assertions covered the two Cellar families and never asked this one.
+    /// </remarks>
+    [TestMethod]
+    public void ThePersistentIdentifierIsTheSpellingAStoreKeeps()
+    {
+        const string psi = FactsFixtures.CellarPsiUri;
+
+        Assert.AreEqual(
+            psi, new OfficialIdentifier(FactsIdentifierFamily.CellarPsiUri, psi).RawValue);
+        Assert.IsTrue(
+            Regex.IsMatch(psi, FactsSchemaHardener.CellarPsiPattern),
+            "the schema refused the persistent identifier the reader admits");
+
+        const string root = "https://publications.europa.eu/resource/celex/";
+        var refused = new (string Value, string Why)[]
+        {
+            (root + "%2e/32016R0679", "an encoded dot segment"),
+            (root + "x/%2e%2e/32016R0679", "an encoded traversal through an invented segment"),
+            (root + "a/b/%2e%2e/%2e%2e/32016R0679", "two encoded traversals"),
+            (root + "32016R0679/%2e", "an encoded trailing dot segment"),
+            (root + "./32016R0679", "a literal dot segment"),
+            (root + "32016R0679/", "a trailing slash"),
+            (root + "/32016R0679", "a doubled separator"),
+            (root + "x/" + Backslash + ".." + Backslash + "32016R0679", "a backslash traversal"),
+            (root + "32016R0679/DOC_1", "a path beneath the alias"),
+        };
+
+        foreach (var (value, why) in refused)
+        {
+            Assert.ThrowsExactly<ArgumentException>(
+                () => new OfficialIdentifier(FactsIdentifierFamily.CellarPsiUri, value),
+                $"the persistent identifier admitted {value} despite {why}");
+            Assert.IsFalse(
+                Regex.IsMatch(value, FactsSchemaHardener.CellarPsiPattern),
+                $"the schema admitted {value} despite {why}");
+        }
     }
 
     /// <summary>

@@ -165,7 +165,9 @@ internal static class FactsSchemaHardener
 
     private const string CellarHost = @"^https?://publications\.europa\.eu/resource/";
 
-    private const string Uuid = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
+    // Lowercase only, because the reader round-trips through Guid.ToString("D") and the two must
+    // admit the same set. An uppercase spelling is a second name for one object.
+    private const string Uuid = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 
     /// <summary>The work is the Cellar UUID work, not a persistent-identifier alias.</summary>
     internal const string CellarWorkPattern = CellarHost + "cellar/" + Uuid + End;
@@ -174,8 +176,27 @@ internal static class FactsSchemaHardener
     // `[!-~]+` includes `?` and `#`, so the schema matched `.../DOC_1?view=1` and `.../DOC_1#page`
     // while the reader refused both. The work and the persistent identifier were repaired at the
     // reader and the resource grammar was not.
+    // The reader admits a dotted expression or manifestation identifier as well as a sub-resource
+    // path, and this pattern required a literal slash immediately after the UUID, so the schema
+    // refused every dotted shape the reader accepts. Reader and schema must admit the same set;
+    // widening one alone is how a document becomes constructible and unserializable at once.
+    internal const string CellarDottedSuffix = @"\.[0-9]{4}(?:\.[0-9]{2})?";
+
+    // One path segment: at least one printable character that is not a slash, and never a dot
+    // segment. Spelled this way so the schema refuses exactly what the reader refuses: an empty
+    // segment, which covers a trailing or doubled slash, and `.` or `..`, which System.Uri would
+    // normalise away and leave a second raw spelling of one coordinate.
+    //
+    // `%` and `\` join them for the reason IsCanonicalPathSegment gives: every escape divides
+    // the string a store keeps from the path a parser returns, whether it is valid and decodes or
+    // invalid and is re-encoded, and System.Uri resolves a literal backslash as a separator.
+    private const string CellarPathSegment =
+        @"(?!\.{1,2}(?:/|$))(?:(?![?#/%\\])[!-~])+";
+
     internal const string CellarResourcePattern =
-        CellarHost + "cellar/" + Uuid + "/" + PathPrintable + "+" + End;
+        CellarHost + "cellar/" + Uuid +
+        "(?:" + CellarDottedSuffix + "(?:/" + CellarPathSegment + ")*" +
+        "|(?:/" + CellarPathSegment + ")+)" + End;
 
     /// <summary>An alias such as the CELEX PSI, which is never the work.</summary>
     // Narrowed to the one alias class the accepted scope actually proves. An arbitrary resource

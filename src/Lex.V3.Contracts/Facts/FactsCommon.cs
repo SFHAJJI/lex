@@ -363,20 +363,31 @@ public sealed record OfficialIdentifier
     /// A Cellar URI on the publisher's own host, at the level its family claims.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Candidate 3 called the identical check for both families, so the caller's enum tag was the
-    /// only claimed level distinction and one URI could be admitted as either. Cellar work URIs
-    /// live under a work segment; a resource-level URI names a manifestation or item beneath one.
-    /// </remarks>
-    /// <summary>
-    /// A Cellar URI at the level its family claims.
-    /// </summary>
-    /// <remarks>
-    /// The work is <c>/resource/cellar/&lt;uuid&gt;</c>, where the publisher's predicates actually
-    /// live. Candidate 4 admitted any three-segment <c>/resource/&lt;class&gt;/&lt;id&gt;</c>, so
+    /// only claimed level distinction and one URI could be admitted as either. The work is
+    /// <c>/resource/cellar/&lt;uuid&gt;</c>, where the publisher's predicates actually live.
+    /// Candidate 4 admitted any three-segment <c>/resource/&lt;class&gt;/&lt;id&gt;</c>, so
     /// <c>/resource/celex/32016R0679</c> passed as a work. That URI is a persistent-identifier
     /// alias tied to the work by <c>owl:sameAs</c>; treating it as the work relabels an alias as
-    /// the thing itself, which is the loss this package exists to prevent one level up from where
-    /// I was looking.
+    /// the thing itself.
+    /// </para>
+    /// <para>
+    /// The resource family previously required a bare work UUID with a further path segment, so it
+    /// rejected the publisher's own dotted expression and manifestation identifiers while its
+    /// documentation claimed to cover exactly those levels. Cellar identifies an expression as
+    /// <c>{work}.{four digits}</c> and a manifestation as <c>{expression}.{two digits}</c>, and all
+    /// four shapes were confirmed live against the official endpoint on 2026-09-02: the bare work,
+    /// the dotted expression and the dotted manifestation each answered 200 and redirected to their
+    /// own distinct <c>rdf/object/full</c>, and <c>{manifestation}/DOC_1</c> answered 200 directly.
+    /// A third dotted level answered 404, so the depth ceiling is the publisher's answer rather
+    /// than an inference of ours.
+    /// </para>
+    /// <para>
+    /// The two families stay disjoint by shape rather than by the caller's label: a bare UUID with
+    /// no further path is the work and only the work, and the resource family requires either a
+    /// dotted suffix or a further path segment.
+    /// </para>
     /// </remarks>
     private static bool IsCellarUri(string value, bool work)
     {
@@ -396,24 +407,142 @@ public sealed record OfficialIdentifier
             return false;
         }
 
-        var segments = uri.AbsolutePath.Trim('/').Split('/');
-        if (segments.Length < 3 ||
-            !string.Equals(segments[0], "resource", StringComparison.Ordinal))
+        // The grammar is applied to the ORIGINAL spelling, never to uri.AbsolutePath. Two
+        // separate aliases came from reading the parsed path. System.Uri removes dot segments
+        // before AbsolutePath can be read, so `{work}/../{uuid}/DOC_1` validated as the shorter
+        // path it normalises to while every store retained the longer string. And `Trim('/')`
+        // accepted a trailing slash that the emitted schemas reject, so the reader and the schema
+        // disagreed about a spelling either could see. Both mint a second raw spelling of one
+        // coordinate, which is two rows to every store and one thing to a reader.
+        if (PathAfterResourceClass(value, "cellar") is not { } rest)
         {
             return false;
         }
 
-        if (work)
+        var segments = rest.Split('/');
+        foreach (var segment in segments)
         {
-            return segments.Length == 3 &&
-                string.Equals(segments[1], "cellar", StringComparison.Ordinal) &&
-                Guid.TryParseExact(segments[2], "D", out _);
+            if (!IsCanonicalPathSegment(segment))
+            {
+                return false;
+            }
         }
 
-        return segments.Length > 3 &&
-            string.Equals(segments[1], "cellar", StringComparison.Ordinal) &&
-            Guid.TryParseExact(segments[2], "D", out _);
+        if (CellarObjectDepth(segments[0]) is not { } depth)
+        {
+            return false;
+        }
+
+        // A bare UUID with nothing after it is the work, and only the work. Anything the resource
+        // family admits therefore carries either a dotted suffix or a further path segment, so one
+        // URI can never satisfy both families.
+        return work
+            ? segments.Length == 1 && depth == 0
+            : segments.Length > 1 || depth > 0;
     }
+
+    /// <summary>
+    /// Whether a path segment is spelled the way the publisher minted it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// An empty segment covers a trailing slash, a leading one and a doubled one at once, and a
+    /// literal <c>.</c> or <c>..</c> is a dot segment System.Uri removes before any store sees it.
+    /// </para>
+    /// <para>
+    /// The percent sign is refused outright rather than by a list of dangerous escapes, because a
+    /// list cannot close this. A valid escape decodes, so <c>/%44OC_1</c> and <c>/DOC%5f1</c> are
+    /// two further spellings of <c>/DOC_1</c> with no dot segment in either; an invalid one is
+    /// re-encoded, so <c>/%zz</c> is stored as written and parsed as <c>/%25zz</c>. Naming
+    /// <c>%2e</c> would then require <c>%252e</c>, then <c>%25252e</c>, without end. Percent
+    /// encoding and canonical spelling are incompatible: the character is the rule.
+    /// </para>
+    /// <para>
+    /// A backslash is refused because System.Uri treats it as a separator.
+    /// <c>{work}/a\..\DOC_1</c> was accepted and resolved to
+    /// <c>{work}/DOC_1</c>, which is traversal with no escape involved at all.
+    /// </para>
+    /// <para>
+    /// Nothing else is excluded here, deliberately. A <c>?</c> or <c>#</c> sets Query or Fragment,
+    /// which the caller has already refused, and <c>/</c> is the character this segment was split
+    /// on. Refusing them again would read as prudent and be unreachable, and an unreachable guard
+    /// is one a mutation deletes with no test noticing.
+    /// </para>
+    /// <para>
+    /// Nothing observed is lost. All four levels the publisher answered on carry only hex digits,
+    /// hyphens, dots, digits and upper-case alphanumerics with underscore.
+    /// </para>
+    /// </remarks>
+    private static bool IsCanonicalPathSegment(string segment) =>
+        segment.Length > 0 &&
+        !string.Equals(segment, ".", StringComparison.Ordinal) &&
+        !string.Equals(segment, "..", StringComparison.Ordinal) &&
+        !segment.Contains('%', StringComparison.Ordinal) &&
+        !segment.Contains('\\', StringComparison.Ordinal);
+
+    /// <summary>
+    /// The only origins a Union publisher identifier may be spelled with, both schemes the
+    /// publisher answers on.
+    /// </summary>
+    private static readonly string[] ResourceOrigins =
+    [
+        "http://publications.europa.eu/resource/",
+        "https://publications.europa.eu/resource/",
+    ];
+
+    /// <summary>
+    /// What follows the exact origin and resource class in the original spelling, or <c>null</c>.
+    /// </summary>
+    private static string? PathAfterResourceClass(string value, string resourceClass)
+    {
+        foreach (var origin in ResourceOrigins)
+        {
+            var prefix = origin + resourceClass + "/";
+            if (value.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                return value[prefix.Length..];
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The WEMI depth a Cellar object identifier carries, or <c>null</c> where it is not one.
+    /// </summary>
+    /// <remarks>
+    /// Zero is a work, one an expression, two a manifestation. The digit widths are the
+    /// publisher's, four then two, and the ceiling is the publisher's too: a third dotted level
+    /// answers 404, so admitting one would mean carrying an identity Cellar does not mint.
+    /// </remarks>
+    private static int? CellarObjectDepth(string segment)
+    {
+        var parts = segment.Split('.');
+        // Round-trip rather than parse. TryParseExact is case-insensitive on the hex digits and
+        // strips surrounding white space, so a bare parse gives one work several admitted
+        // spellings. The publisher mints lowercase, and the emitted schemas now say so too.
+        if (parts.Length > 3 ||
+            !Guid.TryParseExact(parts[0], "D", out var uuid) ||
+            !string.Equals(parts[0], uuid.ToString("D"), StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        if (parts.Length >= 2 && !IsExactDigits(parts[1], 4))
+        {
+            return null;
+        }
+
+        if (parts.Length == 3 && !IsExactDigits(parts[2], 2))
+        {
+            return null;
+        }
+
+        return parts.Length - 1;
+    }
+
+    private static bool IsExactDigits(string value, int width) =>
+        value.Length == width && value.All(static character => character is >= '0' and <= '9');
 
     /// <summary>A persistent-identifier alias URI, which is a fact in its own right.</summary>
     /// <summary>
@@ -430,13 +559,19 @@ public sealed record OfficialIdentifier
         string.Equals(uri.Host, "publications.europa.eu", StringComparison.Ordinal) &&
         uri.Query.Length == 0 &&
         uri.Fragment.Length == 0 &&
-        uri.AbsolutePath.Trim('/').Split('/') is { Length: 3 } segments &&
-        string.Equals(segments[0], "resource", StringComparison.Ordinal) &&
-        string.Equals(segments[1], "celex", StringComparison.Ordinal) &&
-        // The terminal segment is a CELEX number, so it is held to the CELEX grammar rather than
-        // to "nonempty". Candidate round six admitted any terminal, including a percent-encoded
-        // slash, which made a two-segment path spell itself as a one-segment one.
-        ProfileOf(segments[2]) is not null;
+        // The original spelling, for the reason the two Cellar families already read it. Reading
+        // AbsolutePath here admitted four raw strings as one persistent identifier, because
+        // System.Uri decodes `%2e` and then removes the dot segment it has just produced:
+        // `celex/32016R0679`, `celex/%2e/32016R0679`, `celex/x/%2e%2e/32016R0679` and
+        // `celex/a/b/%2e%2e/%2e%2e/32016R0679` all reached the same accepted terminal, while the
+        // emitted schema refused every one but the first. Round seven repaired the work and the
+        // resource and left the alias reading the parsed path, which is the repair-the-instance
+        // habit inside the round that named it.
+        PathAfterResourceClass(value, "celex") is { } celex &&
+        // The terminal is a CELEX number, so it is held to the CELEX grammar rather than to
+        // "nonempty". That grammar is closed and alphanumeric, so it refuses an escape, a
+        // separator and a dot segment without a further rule here.
+        ProfileOf(celex) is not null;
 }
 
 /// <summary>
