@@ -98,13 +98,24 @@ public enum EuFormatBodyAdmission
 /// The classes of Union content whose reuse basis differs. Closed.
 /// </summary>
 /// <remarks>
-/// Separate members rather than one licence for everything. The record states a classed basis:
-/// metadata under CC0, consolidations and summaries under CC BY 4.0, and a wider reuse basis in
-/// Commission Decision 2011/833/EU. No per-manifestation split has been measured on this
-/// publisher, and that is evidence only that none is currently known. It is not authority to
-/// collapse four content classes into one token, which is the same mistake as reading an
-/// unmeasured relation family as an empty one, so an unmeasured basis is recorded as
-/// <see cref="EuReuseBasis.Unknown"/> rather than as a blanket licence.
+/// <para>
+/// Separate members rather than one licence for everything. The reviewed EUR-Lex legal notice
+/// states a classed basis: metadata under CC0, editorial content, summaries and consolidations
+/// under CC BY 4.0, and a wider reuse basis in Commission Decision 2011/833/EU. Which class
+/// carries which is read from that notice by <see cref="EuRightsDisposition.BasisFor"/> and is
+/// not a caller's choice.
+/// </para>
+/// <para>
+/// Editorial content is its own member although it shares an answer with summaries and
+/// consolidations, on the same principle that keeps two wholesale sectors apart: a shared answer
+/// is not a shared identity, and a disposition has to say which of the three it was about.
+/// </para>
+/// <para>
+/// Every member here is a whole-object class. Third-party material and document-specific terms
+/// are deliberately not members: both are conditions that can hold of part of a document while a
+/// class answer holds of the rest, so putting them here would force a choice between two facts
+/// that are true at once. They live on <see cref="EuRightsExceptionChannel"/> instead.
+/// </para>
 /// </remarks>
 public enum EuContentClass
 {
@@ -119,6 +130,10 @@ public enum EuContentClass
 
     [JsonStringEnumMemberName("original_legal_text")]
     OriginalLegalText = 4,
+
+    /// <summary>Union-owned editorial content.</summary>
+    [JsonStringEnumMemberName("editorial_content")]
+    EditorialContent = 5,
 }
 
 /// <summary>
@@ -136,28 +151,25 @@ public enum EuReuseBasis
     [JsonStringEnumMemberName("decision_2011_833_eu")]
     Decision2011833Eu = 3,
 
-    /// <summary>
-    /// No basis has been measured for this class at this granularity.
-    /// </summary>
-    /// <remarks>
-    /// Required, and the reason is the whole ruling. Without this member every class must be given
-    /// one of the three real bases, so a caller with no measurement is forced to assert one, and
-    /// the type manufactures a blanket licence out of an absence of evidence. That is the same
-    /// error as reading an unacquired relation family as an empty one, in a place where being
-    /// wrong means republishing text under a licence nobody established.
-    /// </remarks>
-    [JsonStringEnumMemberName("unknown")]
-    Unknown = 4,
 }
 
 /// <summary>
 /// One content class and the reuse basis established for it, with the evidence.
 /// </summary>
 /// <remarks>
-/// The mapping is supplied and evidenced rather than hard-coded here. This type enforces that
-/// every class carries one basis and that the basis is evidenced; which basis belongs to which
-/// class is a publisher fact, and a contract that decided it internally would be asserting the
-/// answer rather than recording it.
+/// <para>
+/// The mapping is fixed here, read from the reviewed EUR-Lex legal notice by
+/// <see cref="EuRightsDisposition.BasisFor"/>, and a record claiming another is refused. It was a
+/// supplied argument once, on the reasoning that a publisher fact should be recorded rather than
+/// decided internally. That was the wrong shape for this fact: nothing checked the pairing, so
+/// metadata could be recorded as CC BY 4.0 and original legal text as CC0, which states a public
+/// domain dedication over published law. The notice is the evidence, and reading it in one place
+/// is what stops each record restating it differently.
+/// </para>
+/// <para>
+/// What stays per record is the reference to the class-level source. The evidence says which
+/// notice this class answer came from; it never establishes anything about an individual object.
+/// </para>
 /// </remarks>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record EuRightsDisposition
@@ -170,16 +182,125 @@ public sealed record EuRightsDisposition
     {
         ContentClass = ContractValidation.RequireDefined(contentClass, nameof(contentClass));
         Basis = ContractValidation.RequireDefined(basis, nameof(basis));
-        // Evidence is required for every basis including Unknown, where it is the observation
-        // showing that no split is currently established. "We looked and found none" and "nobody
-        // looked" are the same token with different standing.
+        var accepted = BasisFor(ContentClass);
+        if (Basis != accepted)
+        {
+            throw new ArgumentException(
+                $"{ContentClass} is {accepted} in the reviewed notice, not {Basis}; the reuse " +
+                "basis is read from the publisher's notice rather than chosen by whoever writes " +
+                "a record.",
+                nameof(basis));
+        }
+
+        // Required for every class. It names the class-level source the answer was read from,
+        // and a class answer with no reference to the notice behind it is an assertion rather
+        // than a reading.
         EvidenceRef = evidenceRef ?? throw new ArgumentNullException(nameof(evidenceRef));
     }
+
+    /// <summary>The reviewed reuse basis for one content class. Total over the closed set.</summary>
+    /// <remarks>
+    /// <para>
+    /// Read from the EUR-Lex legal notice, made under Commission Decision 2011/833/EU, rather than
+    /// chosen by whoever writes a record. Before this existed the basis was a constructor argument
+    /// nothing checked, so metadata could be recorded as CC BY 4.0 and original legal text as CC0.
+    /// The second is the dangerous direction: it states a public domain dedication over published
+    /// law whose actual basis reserves an exception, which is a permission this project would be
+    /// inventing on the class where inventing one is least defensible.
+    /// </para>
+    /// <para>
+    /// Every member is written out and no arm returns a plausible default. A switch expression over
+    /// an enum cannot be exhaustive to the compiler, because the variable can hold a value no member
+    /// names, so an undecided class throws and the closed set is pinned by test.
+    /// </para>
+    /// </remarks>
+    public static EuReuseBasis BasisFor(EuContentClass contentClass) =>
+        ContractValidation.RequireDefined(contentClass, nameof(contentClass)) switch
+        {
+            EuContentClass.Metadata => EuReuseBasis.Cc0,
+            EuContentClass.EditorialContent => EuReuseBasis.CcBy40,
+            EuContentClass.Summary => EuReuseBasis.CcBy40,
+            EuContentClass.Consolidation => EuReuseBasis.CcBy40,
+            EuContentClass.OriginalLegalText => EuReuseBasis.Decision2011833Eu,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(contentClass),
+                contentClass,
+                "This content class has no reviewed reuse basis. A class with no decision behind " +
+                "it does not inherit one from a class it resembles."),
+        };
 
     public EuContentClass ContentClass { get; }
 
     public EuReuseBasis Basis { get; }
 
+    public SourceArtifactRef EvidenceRef { get; }
+}
+
+/// <summary>
+/// A rights condition that can override or block a class default, per document or per element.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Closed, and separate from <see cref="EuContentClass"/> on purpose. One official legal document
+/// is Union material and can at the same time carry a third party's work, and the notice reserves
+/// special terms for particular documents, International Accounting Standards among them, stated
+/// in that document or its Official Journal issue. Both facts hold of parts of an object while the
+/// class answer holds of the rest, so a mutually exclusive content class would force a choice
+/// between two true things and erase whichever lost.
+/// </para>
+/// <para>
+/// Neither may be inferred from a class. A document does not carry special terms because of what
+/// kind of document it is; it carries them because that document says so.
+/// </para>
+/// </remarks>
+public enum EuRightsExceptionChannel
+{
+    /// <summary>A third party's material carried inside a Union document.</summary>
+    [JsonStringEnumMemberName("third_party_material")]
+    ThirdPartyMaterial = 1,
+
+    /// <summary>Terms stated for one particular document or its Official Journal issue.</summary>
+    [JsonStringEnumMemberName("document_specific_terms")]
+    DocumentSpecificTerms = 2,
+}
+
+/// <summary>
+/// One exception channel, and the class-level evidence that it exists at all.
+/// </summary>
+/// <remarks>
+/// <para>
+/// What this records is that the channel exists and requires per-item resolution. What it
+/// deliberately cannot record is whether any given document or element is subject to it.
+/// </para>
+/// <para>
+/// That absence is the design. Resolving either channel needs an observation binding a source
+/// object, an exact term and value, and the run that saw it, and no acquisition path in this
+/// project can produce one yet. A member for "present", "absent" or "resolved" would therefore
+/// hold a caller's opinion under a word that promises evidence, which is the same defect as a
+/// delivery subject nobody established. On this subject a wrong opinion republishes somebody
+/// else's work, so the type refuses to hold one. The declared surface is pinned by test, so a
+/// resolution member cannot arrive quietly ahead of the capability that would justify it.
+/// </para>
+/// </remarks>
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record EuRightsExceptionDisposition
+{
+    [JsonConstructor]
+    public EuRightsExceptionDisposition(
+        EuRightsExceptionChannel channel,
+        SourceArtifactRef evidenceRef)
+    {
+        Channel = ContractValidation.RequireDefined(channel, nameof(channel));
+        EvidenceRef = evidenceRef ?? throw new ArgumentNullException(nameof(evidenceRef));
+    }
+
+    public EuRightsExceptionChannel Channel { get; }
+
+    /// <summary>The class-level notice evidence that this channel exists.</summary>
+    /// <remarks>
+    /// Class-level, and that is all it is. It establishes that the exception can occur, never that
+    /// it does or does not occur in any particular document.
+    /// </remarks>
     public SourceArtifactRef EvidenceRef { get; }
 }
 
@@ -280,6 +401,23 @@ public sealed record EuExpressionFormatFact
 /// The Union manifestation and rights scope: which formats exist, which may serve as bodies, when
 /// Formex became available, and what reuse basis each content class carries.
 /// </summary>
+/// <remarks>
+/// <para>
+/// What this inventory is, and the four things it is not. It is a closed class-policy inventory
+/// and a constraint on what later rights evidence must resolve. It is not itself a
+/// reuse-conditions artifact, publication authority, clearance result, or notice.
+/// </para>
+/// <para>
+/// It may guide which condition must be sought, but it cannot generate, satisfy, or substitute for
+/// <c>CORE-06</c>, <c>OPS-EU-AUTHORITY</c>, <c>PUB-06</c>, or <c>OBS-07</c>. Later artifacts may
+/// bind the same official notice evidence, but their authority is independently acquired,
+/// reviewed, signed, unexpired, use-specific, and generation-bound.
+/// </para>
+/// <para>
+/// Public projection remains <c>not_assessed_by_lex-license-policy/1</c> unless that separate
+/// authority chain passes. A scope value is never authority.
+/// </para>
+/// </remarks>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record EuManifestationScope
 {
@@ -324,11 +462,13 @@ public sealed record EuManifestationScope
     public EuManifestationScope(
         IReadOnlyList<EuFormatDisposition> formats,
         IReadOnlyList<EuRightsDisposition> rights,
+        IReadOnlyList<EuRightsExceptionDisposition> exceptions,
         string formexAvailableFrom,
         SourceArtifactRef formexBoundaryEvidenceRef)
     {
         ArgumentNullException.ThrowIfNull(formats);
         ArgumentNullException.ThrowIfNull(rights);
+        ArgumentNullException.ThrowIfNull(exceptions);
         FormexAvailableFrom = RequireCanonicalBoundary(formexAvailableFrom, nameof(formexAvailableFrom));
         FormexBoundaryEvidenceRef = formexBoundaryEvidenceRef
             ?? throw new ArgumentNullException(nameof(formexBoundaryEvidenceRef));
@@ -343,6 +483,14 @@ public sealed record EuManifestationScope
             static disposition => disposition.ContentClass,
             Enum.GetValues<EuContentClass>(),
             nameof(rights));
+        // Closed the same way the other two are. A scope that could omit these would be calling
+        // itself the Union rights scope while saying nothing about the two conditions that can
+        // override a class answer, which is the omission a reader is least able to notice.
+        Exceptions = CloseOver(
+            exceptions,
+            static disposition => disposition.Channel,
+            Enum.GetValues<EuRightsExceptionChannel>(),
+            nameof(exceptions));
 
         foreach (var disposition in Formats)
         {
@@ -367,6 +515,18 @@ public sealed record EuManifestationScope
     public IReadOnlyList<EuFormatDisposition> Formats { get; }
 
     public IReadOnlyList<EuRightsDisposition> Rights { get; }
+
+    /// <summary>
+    /// The two conditions that can override a class answer, each with the class-level evidence
+    /// that the condition exists.
+    /// </summary>
+    /// <remarks>
+    /// Complete and closed, and deliberately silent about any individual object. Holding both
+    /// channels is what makes the class answers readable without being read as whole-object
+    /// permissions: the scope states its policy and states, in the same breath, the two ways that
+    /// policy does not reach. Neither carries a resolution, because nothing can derive one yet.
+    /// </remarks>
+    public IReadOnlyList<EuRightsExceptionDisposition> Exceptions { get; }
 
     /// <summary>
     /// The expected-availability boundary this scope carries, bound to its own evidence.
