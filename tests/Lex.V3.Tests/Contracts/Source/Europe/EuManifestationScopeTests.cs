@@ -132,7 +132,13 @@ public sealed class EuManifestationScopeTests
     {
         AssertTokens<EuContentClass>(
             "metadata", "consolidation", "summary", "original_legal_text", "editorial_content");
-        AssertTokens<EuReuseBasis>("cc0", "cc_by_4_0", "decision_2011_833_eu");
+        AssertTokens<EuReuseBasis>("cc0", "cc_by_4_0", "eur_lex_legal_notice_permission");
+
+        // The rename is a breaking wire change on purpose. A consumer still pinned to the old
+        // token must fail loudly rather than silently reading a renamed member, because the old
+        // name asserted that a Commission decision granted reuse of acts the Commission did not
+        // adopt, and a silent read would carry that claim forward under a corrected label.
+        AssertScopeDrift<EuReuseBasis>("decision_2011_833_eu");
 
         Assert.AreEqual(EuReuseBasis.Cc0, EuRightsDisposition.BasisFor(EuContentClass.Metadata));
         Assert.AreEqual(
@@ -143,7 +149,7 @@ public sealed class EuManifestationScopeTests
             EuReuseBasis.CcBy40,
             EuRightsDisposition.BasisFor(EuContentClass.Consolidation));
         Assert.AreEqual(
-            EuReuseBasis.Decision2011833Eu,
+            EuReuseBasis.EurLexLegalNoticePermission,
             EuRightsDisposition.BasisFor(EuContentClass.OriginalLegalText));
 
         // Metadata as CC BY states an attribution obligation over a public domain dedication.
@@ -188,7 +194,19 @@ public sealed class EuManifestationScopeTests
     [TestMethod]
     public void TheExceptionChannelsAreAnAxisAndCarryNoItemResolution()
     {
-        AssertTokens<EuRightsExceptionChannel>("third_party_material", "document_specific_terms");
+        AssertTokens<EuRightsExceptionChannel>(
+            "third_party_material",
+            "document_specific_terms",
+            "industrial_property_rights",
+            "identifiable_private_individuals");
+
+        // Industrial property and identifiable individuals are their own channels, not kinds of
+        // third-party material. A Union trademark or the EU emblem is Union-owned, so filing it
+        // as a third party's material would be false; and identifiable individuals is a
+        // data-protection clearance condition rather than a licensing one. The exact list, not a
+        // count, is what stops either being folded back in later.
+        AssertScopeDrift<EuRightsExceptionChannel>("third_party_industrial_property");
+        AssertScopeDrift<EuRightsExceptionChannel>("private_individuals");
 
         foreach (var name in Enum.GetNames<EuContentClass>())
         {
