@@ -191,6 +191,58 @@ public sealed class LuxembourgSourceProfileTests
     }
 
     [TestMethod]
+    public void PredicateAuthorityIsExactlyTwentySixAssertionsAndEighteenRelations()
+    {
+        var expectedAssertions = new[]
+        {
+            "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+            Jolux + "dateApplicability",
+            Jolux + "dateDocument",
+            Jolux + "dateEndApplicability",
+            Jolux + "dateEntryInForce",
+            Jolux + "dateNoLongerInForce",
+            Jolux + "historicalLegalId",
+            Jolux + "inForceStatus",
+            Jolux + "isEmbodiedBy",
+            Jolux + "isExemplifiedBy",
+            Jolux + "isMemberOf",
+            Jolux + "isPartOf",
+            Jolux + "isRealizedBy",
+            Jolux + "language",
+            Jolux + "legalValue",
+            Jolux + "license",
+            Jolux + "previousIsExemplifiedBy",
+            Jolux + "publicationDate",
+            Jolux + "publisher",
+            Jolux + "responsibilityOf",
+            Jolux + "rights",
+            Jolux + "rightsHolder",
+            Jolux + "title",
+            Jolux + "titleShort",
+            Jolux + "typeDocument",
+            Jolux + "userFormat",
+        }.Order(StringComparer.Ordinal).ToArray();
+        var expectedRelations = new[]
+        {
+            "basedOn", "basicAct", "cites", "consolidates", "hasIndirectImpact",
+            "impactConsolidatedBy", "impactConsolidatedByExpression", "impactFromLegalResource",
+            "impactToExpression", "impactToLegalResource", "legalAnalysisHasLegalResourceImpact",
+            "legalResourceImpactHasDateEntryInForce", "legalResourceImpactHasType",
+            "modifiedTempBy", "modifies", "rectifies", "repeals", "transposes",
+        }.Select(static value => Jolux + value).Order(StringComparer.Ordinal).ToArray();
+        var required = VerifiedLuxembourgSourceProfile.RequiredIriVocabulary;
+
+        CollectionAssert.AreEqual(
+            expectedAssertions,
+            required.Where(static value => value.Kind == LuxembourgVocabularyKind.AssertionPredicate)
+                .Select(static value => value.FullIri).ToArray());
+        CollectionAssert.AreEqual(
+            expectedRelations,
+            required.Where(static value => value.Kind == LuxembourgVocabularyKind.RelationPredicate)
+                .Select(static value => value.FullIri).ToArray());
+    }
+
+    [TestMethod]
     public void CitesPreservesPublisherDirectionWithoutInventingInterpretation()
     {
         var profile = VerifiedLuxembourgSourceProfile.Open(CompleteSnapshot());

@@ -64,7 +64,7 @@ public sealed class LuxembourgSourceProfileAdversarialProofTests
         var profile = ExpectedProfile();
 
         Assert.AreEqual(
-            "0d887cb768a0ebc5d98e9e2f2ca156aa1468da7f121a0a44d1d7a0a72a8fbb3d",
+            "7e693eda015f85ecf09b30f455914d57cf23870aea99ceb6b567292b840ef798",
             profile.ScopeBinding.SourceProfileRef.Sha256);
         Assert.AreEqual(
             "c25b96ade3fe55ebc81ee4135859954abc46c04026124336d7a2ab493809fb3e",
@@ -559,13 +559,29 @@ public sealed class LuxembourgSourceProfileAdversarialProofTests
         (LuxembourgVocabularyKind.Licence, "http://creativecommons.org/licenses/by/4.0/"),
         (LuxembourgVocabularyKind.Licence,
             "http://data.legilux.public.lu/resource/authority/license/licenceSCL"),
+        (LuxembourgVocabularyKind.AssertionPredicate, Jolux + "dateApplicability"),
+        (LuxembourgVocabularyKind.AssertionPredicate, Jolux + "dateDocument"),
+        (LuxembourgVocabularyKind.AssertionPredicate, Jolux + "dateEndApplicability"),
+        (LuxembourgVocabularyKind.AssertionPredicate, Jolux + "dateEntryInForce"),
+        (LuxembourgVocabularyKind.AssertionPredicate, Jolux + "dateNoLongerInForce"),
+        (LuxembourgVocabularyKind.AssertionPredicate, Jolux + "historicalLegalId"),
+        (LuxembourgVocabularyKind.AssertionPredicate, Jolux + "inForceStatus"),
         (LuxembourgVocabularyKind.AssertionPredicate, Jolux + "isEmbodiedBy"),
         (LuxembourgVocabularyKind.AssertionPredicate, Jolux + "isExemplifiedBy"),
         (LuxembourgVocabularyKind.AssertionPredicate, Jolux + "isMemberOf"),
+        (LuxembourgVocabularyKind.AssertionPredicate, Jolux + "isPartOf"),
         (LuxembourgVocabularyKind.AssertionPredicate, Jolux + "isRealizedBy"),
         (LuxembourgVocabularyKind.AssertionPredicate, Jolux + "language"),
         (LuxembourgVocabularyKind.AssertionPredicate, Jolux + "legalValue"),
+        (LuxembourgVocabularyKind.AssertionPredicate, Jolux + "license"),
         (LuxembourgVocabularyKind.AssertionPredicate, Jolux + "previousIsExemplifiedBy"),
+        (LuxembourgVocabularyKind.AssertionPredicate, Jolux + "publicationDate"),
+        (LuxembourgVocabularyKind.AssertionPredicate, Jolux + "publisher"),
+        (LuxembourgVocabularyKind.AssertionPredicate, Jolux + "responsibilityOf"),
+        (LuxembourgVocabularyKind.AssertionPredicate, Jolux + "rights"),
+        (LuxembourgVocabularyKind.AssertionPredicate, Jolux + "rightsHolder"),
+        (LuxembourgVocabularyKind.AssertionPredicate, Jolux + "title"),
+        (LuxembourgVocabularyKind.AssertionPredicate, Jolux + "titleShort"),
         (LuxembourgVocabularyKind.AssertionPredicate, Jolux + "typeDocument"),
         (LuxembourgVocabularyKind.AssertionPredicate, Jolux + "userFormat"),
         (LuxembourgVocabularyKind.AssertionPredicate, RdfType),
