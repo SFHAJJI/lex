@@ -14,7 +14,7 @@
     "pretest": "node scripts/react-bundle.mjs"
   },
   "dependencies": {
-    "esbuild": "^0.24.2",
+    "esbuild": "^0.28.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   }

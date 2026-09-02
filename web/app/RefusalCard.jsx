@@ -161,4 +161,3 @@ export function RefusalCard({ code, sentence, payload, governingText, handoff })
     </section>
   );
 }
-
