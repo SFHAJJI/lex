@@ -23,6 +23,8 @@
 // Both policies reject userinfo and an explicit port. `https://legilux.public.lu@evil.example/`
 // has hostname `evil.example`, and a reader scanning the start of a link sees the publisher.
 
+import { parseObjectUrl, readingUrl } from './urls.mjs';
+
 /** Hosts each publisher actually serves from. Closed, and checked per publisher. */
 export const PUBLISHER_HOSTS = Object.freeze({
   'lu-legilux': Object.freeze(['legilux.public.lu', 'data.legilux.public.lu']),
@@ -72,6 +74,20 @@ function checkedUri(raw, allowedHosts, what) {
     throw new Error(`${what} does not carry a plain host: ${JSON.stringify(raw)}`);
   }
 
+  // The three checks below are backstops, and an audit was right that no test holds them.
+  //
+  // They cannot be reached from here. The raw-string grammar above already requires the exact
+  // spelling `https://`, an authority matching a lowercase ASCII host pattern with no empty
+  // label, no userinfo and no port, and a host on the publisher's own allowlist. Everything
+  // surviving that parses, parses as https, and parses to the authority it was written with.
+  // I fuzzed 117 inputs across mixed case, trailing dots, empty labels, punycode,
+  // percent-encoded dots, userinfo, ports, spaces, backslashes, control characters and
+  // malformed escapes, and none reached any of the three.
+  //
+  // They stay, because a normalisation difference between this grammar and WHATWG parsing is
+  // exactly the sort of thing that moves under one's feet, and they cost nothing. But they are
+  // recorded here as unreachable rather than left looking proven, because a fixture for an
+  // input that cannot exist would be worse than saying so.
   let parsed;
   try {
     parsed = new URL(raw);
@@ -116,6 +132,70 @@ export function publisherSourceUri({ publisher, uri }) {
   return checkedUri(uri, PUBLISHER_HOSTS[publisher], `the ${publisher} source URI`);
 }
 
+/**
+ * A publisher's own name for a work, as opposed to a link to it.
+ *
+ * An ELI or a CELEX is an identifier that happens to be spelled as an HTTP URI. It is a name:
+ * it is printed, cited and compared, and it is not somewhere a reader is sent. Putting it
+ * through the outbound-link policy was a category error, and it had a consequence rather than
+ * being merely untidy: both identifiers the pack cites as live are `http://`, so the dossier
+ * could not render a single real work. The only escape was rewriting the scheme, which mints an
+ * identifier the publisher never issued and prints it as the work's own name.
+ *
+ * The live data shows how different the two are. Legilux names a work
+ * `http://data.legilux.public.lu/eli/...` and serves its file from
+ * `https://legilux.public.lu/eli/...`: different scheme, different host, same work.
+ *
+ * So this keeps the publisher's host allowlist, because a name on somebody else's namespace is
+ * not that publisher's name for anything, and keeps the refusal of userinfo, ports and
+ * malformed escapes. It permits the scheme the publisher actually issues. It returns a string
+ * for display, and nothing here is an href.
+ *
+ * @param {object} input
+ * @param {string} input.publisher  the publisher whose namespace this name must be in
+ * @param {string} input.uri        the identifier as the publisher issues it
+ */
+export function publisherIdentifier({ publisher, uri }) {
+  if (!Object.hasOwn(PUBLISHER_HOSTS, publisher ?? '')) {
+    throw new Error(
+      `${JSON.stringify(publisher)} is not a publisher this build serves; the publisher set ` +
+        `is closed at ${Object.keys(PUBLISHER_HOSTS).join(', ')}`,
+    );
+  }
+  const what = `the ${publisher} work identifier`;
+  if (typeof uri !== 'string' || uri.length === 0) {
+    throw new Error(`${what} requires a value`);
+  }
+  const scheme = uri.startsWith('https://') ? 'https://' : uri.startsWith('http://') ? 'http://' : null;
+  if (scheme === null) {
+    throw new Error(
+      `${what} must be an http or https identifier, spelled exactly; ` +
+        `${JSON.stringify(uri)} is neither`,
+    );
+  }
+  if (/[\s\<>"']/.test(uri)) {
+    throw new Error(`${what} contains whitespace or a delimiter: ${JSON.stringify(uri)}`);
+  }
+  const authority = uri.slice(scheme.length).split(/[/?#]/, 1)[0];
+  if (authority.includes('@')) {
+    throw new Error(`${what} carries userinfo: ${JSON.stringify(uri)}`);
+  }
+  if (authority.includes(':')) {
+    throw new Error(`${what} carries an explicit port: ${JSON.stringify(uri)}`);
+  }
+  if (!HOST.test(authority)) {
+    throw new Error(`${what} does not carry a plain host: ${JSON.stringify(uri)}`);
+  }
+  if (!PUBLISHER_HOSTS[publisher].includes(authority)) {
+    throw new Error(
+      `${what} is on ${authority}, which is not one of ` +
+        `${PUBLISHER_HOSTS[publisher].join(', ')}; a name in somebody else's namespace is not ` +
+        "this publisher's name for anything",
+    );
+  }
+  return uri;
+}
+
 /** A human counter a refusal hands off to. */
 export function handoffUri(uri) {
   return checkedUri(uri, HANDOFF_HOSTS, 'a handoff');
@@ -135,4 +215,123 @@ export function tryPublisherSourceUri(publisher, uri) {
   } catch {
     return null;
   }
+}
+
+/**
+ * The one host this product serves its own object URLs from.
+ *
+ * Declared here because it did not exist anywhere: it was a literal inside a single preview
+ * fixture, so nothing could check that a link claiming to be one of ours actually was.
+ */
+export const CANONICAL_HOST = 'law.soufien.lu';
+
+/**
+ * A state permalink, validated rather than pattern-matched.
+ *
+ * The guard this replaces was `permalink.includes('--')`, which `javascript:alert(1)--x`
+ * satisfies, and the value was then rendered as an href. Containing a digest separator is not
+ * evidence of anything; being a canonical same-origin state URL is.
+ *
+ * Accepts the absolute form on this product's own host, which is what the service emits, and
+ * the root-relative form. Everything else is refused: another host, another scheme,
+ * protocol-relative, userinfo, a port, a backslash, or a path the object-URL grammar rejects.
+ *
+ * @param {unknown} value
+ * @returns {{path: string, publisher: string, work: string, validFrom: string, hash: string,
+ *   anchor: string|null}|null} the parsed state, or null
+ */
+export function canonicalStateUrl(value) {
+  if (typeof value !== 'string' || value.length === 0) return null;
+  // A backslash is a separator to some parsers and not to others, so it never reaches one here.
+  // Written as a code point because a backslash literal in a shell heredoc has been mangled
+  // twice on this project already, once silently into a backspace byte.
+  if (value.includes(String.fromCharCode(92))) return null;
+
+  let path = value;
+  if (!value.startsWith('/')) {
+    let parsed;
+    try {
+      parsed = new URL(value);
+    } catch {
+      return null;
+    }
+    if (parsed.protocol !== 'https:') return null;
+    // One equality, on the authority as written, is the whole host policy.
+    //
+    // `URL` normalizes before it reports, and every normalization it performs is a way to make
+    // a hostile URL read as a familiar one. It lowercases `LAW.SOUFIEN.LU`, drops the default
+    // port so `parsed.port` is empty for both `host/` and `host:443/`, and reports
+    // `law.soufien.lu` as the hostname of `https://law.soufien.lu@evil.example/`, where the
+    // familiar name is userinfo and the host is not. A reader sees the raw string, so the raw
+    // string is what has to be well formed.
+    //
+    // Written as one check rather than as separate host, userinfo and port checks, because the
+    // separate ones are all strictly weaker than this and each other's shadow: with this line
+    // present, none of them can fail on any input, so a test cannot hold them and deleting one
+    // turns nothing red. This equality refuses another host, any userinfo, any port, a
+    // different case and a trailing label separator, and it refuses them for the same reason.
+    const authority = value.slice('https://'.length).split('/')[0];
+    if (authority !== CANONICAL_HOST) return null;
+    if (parsed.search !== '') return null;
+    path = `${parsed.pathname}${parsed.hash}`;
+  } else if (value.startsWith('//')) {
+    // Protocol-relative: `//evil.example/x` is off-site and starts with a slash.
+    //
+    // Kept although `parseObjectUrl` also refuses it today, and this is a deliberate exception
+    // to the rule stated above. That refusal is a side effect of its empty-segment rule, in
+    // another module, and its own comment records that an earlier version dropped empty
+    // segments instead. If that rule ever relaxes again, this is the line that keeps an
+    // off-origin link from being published as a permalink. A guard that survives a mutation is
+    // worth keeping when the thing shadowing it lives behind a different module's contract.
+    return null;
+  }
+
+  const object = parseObjectUrl(path);
+  if (object === null || object.kind !== 'reading') return null;
+  return { path, ...object };
+}
+
+/**
+ * The absolute permalink for one state, minted rather than written out.
+ *
+ * The parser above is only worth having if nothing hand-writes what it is meant to check. The
+ * preview fixture used to interpolate the host and the version key itself, so the one place
+ * that demonstrated the policy was also the one place that bypassed it, and a change to the
+ * grammar would have left the fixture asserting the old one.
+ *
+ * @param {object} input  the same coordinates `readingUrl` takes
+ */
+/**
+ * A same-origin search path, validated rather than assumed from its first character.
+ *
+ * A leading slash was the whole check where this is used, and `//evil.example/x` has one.
+ * Protocol-relative is off-site and begins with a slash, so a control offering the reader their
+ * own words back offered a one-tap trip to another origin instead.
+ *
+ * @param {unknown} value
+ * @returns {{path: string, query: string}|null}
+ */
+export function canonicalSearchPath(value) {
+  if (typeof value !== 'string' || !value.startsWith('/')) return null;
+  // Shadowed and kept. Removing this line fails no test, because the route-shape check below
+  // already refuses `//evil.example/x`: its path is not one of the three search routes. Verified
+  // by seeding exactly that mutation rather than assuming it. It stays because protocol-relative
+  // is the classic form of this bypass and the route check is the thing most likely to be
+  // relaxed later, at which point this becomes the only line refusing it.
+  if (value.startsWith('//')) return null;
+  // Backslash, written as a code point: some parsers treat it as a separator and some do not,
+  // so it never reaches one here.
+  if (value.includes(String.fromCharCode(92))) return null;
+  if (value.includes('#')) return null;
+  // A control character or whitespace inside a path is a parser disagreement waiting to happen.
+  if (/[\u0000-\u0020\u007f]/.test(value)) return null;
+
+  const [path, ...rest] = value.split('?');
+  if (rest.length > 1) return null;
+  if (!/^\/(ask|w|dev)\/search$/.test(path)) return null;
+  return { path, query: rest[0] ?? '' };
+}
+
+export function canonicalStateHref(input) {
+  return `https://${CANONICAL_HOST}${readingUrl(input)}`;
 }

@@ -105,8 +105,26 @@ const MUTATIONS = [
     },
   },
   {
-    // Lighthouse found three of these at 19 to 21 CSS px while every check here passed. The
-    // gate measures every target now, so turning the rule off has to bring them all back.
+    // A shell that declares a density in the markup and gets no rule from the stylesheet
+    // looks correct in every single-page check: the attribute is there, the tests pass, and
+    // all three shells render identically. Only a comparison across pages can see it.
+    name: "the shell densities declared but not styled, so three shells lay out identically",
+    expect: /a density that changes nothing is not a density|claims density monospace/i,
+    async apply(root) {
+      const file = join(root, "styles.css");
+      const css = await readFile(file, "utf8");
+      await writeFile(
+        file,
+        `${css}\n[data-density="comfortable"] main,\n[data-density="compact"] main,\n` +
+          '[data-density="monospace"] main { line-height: 1.5; font-size: 1rem;\n' +
+          "  font-family: system-ui, sans-serif; }\n",
+        "utf8",
+      );
+    },
+  },
+  {
+    // Lighthouse found three of these at 19 to 21 CSS px and every check here passed. The
+    // gate now measures every target, and turning the rule off has to bring them all back.
     name: "the target-size floor removed, so list targets fall under 24 CSS px",
     expect: /below the WCAG 2.2 24 CSS px minimum/i,
     async apply(root) {
@@ -121,14 +139,16 @@ const MUTATIONS = [
     },
   },
   {
-    // Three shipped: the provenance link and both ambiguity candidates answered 404. Nothing
-    // else in the run looks past the page it is on.
     name: "a visible action pointing at a page that does not exist",
     expect: /answers 404|could not be requested/i,
     async apply(root) {
       const file = join(root, "trust-surface.html");
       const html = await readFile(file, "utf8");
-      await writeFile(file, html.replace('href="/provenance/', 'href="/no-such-screen/'), "utf8");
+      await writeFile(
+        file,
+        html.replace('href="/provenance/', 'href="/no-such-screen/'),
+        "utf8",
+      );
     },
   },
 ];

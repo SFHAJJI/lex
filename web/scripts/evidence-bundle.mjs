@@ -1,0 +1,373 @@
+// The evidence bundle, and the four things it will not do.
+//
+// This is the artefact somebody takes into a meeting, or attaches to advice they are
+// accountable for. Everything else in the interface can be re-read in context; a bundle
+// leaves and is read by people who were not here. So the rules that matter are the ones
+// about what cannot be in it, and each is structural rather than a setting.
+//
+// A derived or unofficial object cannot enter. Not "is excluded by default": an item
+// declares what it is, and the composer refuses the two kinds outright. The pack's words are
+// "excluded structurally", and the reason is that a labelled convenience which quietly
+// enters a bundle stops being labelled at the exact moment it matters.
+//
+// Rights are applied at compose time, not at read time, and by two gates rather than one. A
+// bundle is a public surface, so D38's `text_public` decides whether a body may travel at all;
+// the licence's own terms then decide whether this grant lets it. The composer strips the text
+// rather than trusting a caller to have withheld it, and it refuses an item that never stated
+// the gate, because a closed gate and an unstated one are different facts.
+//
+// The register has a closed column set, and three names are refused by name: impact, owner
+// action, and compliant. Those are the columns that turn a record of what the publisher
+// published into an opinion about somebody's situation, which is the one thing this product
+// does not do. A column header is a cheap way to smuggle that back in.
+//
+// The verification annex is mandatory, because a bundle nobody can check is a bundle that
+// has to be trusted, and the whole product is built so that it does not have to be.
+
+import { isCalendarDate, isUtcInstant } from './temporal.mjs';
+import { publisherSourceUri } from './routes.mjs';
+import { INTERVAL_TERM, semanticsOf } from './publisher-vocabulary.mjs';
+import { identityOf } from './record-identity.mjs';
+
+/** What an item is. Only the first may enter a bundle. */
+export const ITEM_KINDS = Object.freeze(['publisher_text', 'derived', 'unofficial']);
+
+const EXCLUDED_KINDS = new Set(['derived', 'unofficial']);
+
+/** Licences, and whether they let the text itself travel. */
+export const LICENCES = Object.freeze({
+  'cc-by-4.0': Object.freeze({ embedsText: true, attribution: true }),
+  cc0: Object.freeze({ embedsText: true, attribution: false }),
+  'licence-scl': Object.freeze({ embedsText: false, attribution: true }),
+});
+
+/** The register's columns, closed. */
+export const REGISTER_COLUMNS = Object.freeze([
+  'identifier',
+  'valid_from',
+  'valid_to',
+  'publication_date',
+  'observed_from',
+  'official_uri',
+  'record_sha256',
+]);
+
+/**
+ * Column names that turn a record into an opinion. Named individually because they are the
+ * ones a well-meaning person adds, and because refusing them generically would not say why.
+ */
+const FORBIDDEN_COLUMNS = new Map([
+  ['impact', 'an impact is an assessment of somebody’s situation, which this product refuses'],
+  ['owner_action', 'an owner action tells a reader what to do, which is advice'],
+  ['compliant', 'a compliance verdict applies the law to a person, which is the reserved act'],
+]);
+
+const SHA256 = /^[0-9a-f]{64}$/;
+
+const WATERMARK =
+  'Documentation. Consolidations have no legal effect. Authentic sources cited per item.';
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+/**
+ * The interval and digest rules every surface that quotes a held state must apply.
+ *
+ * Exported so the export composer inherits them rather than restating them. It restated the shape
+ * and not the rules, and consequently accepted a non-date, a non-digest, an inverted interval and
+ * the open-ended sentinel that this function has always refused. Two surfaces describing one
+ * record must not disagree about what a record is.
+ *
+ * @param {object} item  a held state carrying `valid_from`, `valid_to` and `record_sha256`
+ * @param {string} where names the item in any refusal
+ */
+export function requireIntervalAndDigest(item, where) {
+  isCalendarDateOrThrow(item?.valid_from, `${where} valid_from`);
+  // Explicit null only. Extracting this rule, I widened the test to skip an undefined valid_to,
+  // which quietly turned an omitted field into an open interval: a record that never said whether
+  // it ended would have exported as one that has not ended. An open interval is a claim and has to
+  // be made deliberately, so omission falls through to the date check below and is refused.
+  if (item?.valid_to !== null) {
+    isCalendarDateOrThrow(item.valid_to, `${where} valid_to`);
+    // An inverted interval was exported as an applicability period, in the item row and in the
+    // register, and an export is the artefact that leaves the room and is read by people who were
+    // not here to notice.
+    if (item.valid_to <= item.valid_from) {
+      throw new Error(
+        `${where} is applicable from ${item.valid_from} to ${item.valid_to}, which ends on or ` +
+          'before it begins; that is not a period this product can export as one',
+      );
+    }
+    // The open-ended sentinel is a marker, not a date. One renderer maps it to null and another
+    // printed it, so an export could state that a law ceased to apply in the year 9999.
+    if (item.valid_to === '9999-12-31') {
+      throw new Error(
+        `${where} carries the open-ended sentinel as a real end date; an open interval ends in ` +
+          'null here, and printing the sentinel exports a law that ceases in the year 9999',
+      );
+    }
+  }
+  if (!SHA256.test(item?.record_sha256 ?? '')) {
+    throw new Error(`${where} needs its record digest, 64 lowercase hex characters`);
+  }
+}
+
+function requireItem(item, index) {
+  const where = `item ${index + 1}`;
+
+  if (!ITEM_KINDS.includes(item?.kind)) {
+    throw new Error(
+      `${where} must declare its kind, one of ${ITEM_KINDS.join(', ')}; an item that does not ` +
+        'say what it is cannot be excluded for being it',
+    );
+  }
+  if (EXCLUDED_KINDS.has(item.kind)) {
+    throw new Error(
+      `${where} is ${item.kind} and cannot enter an evidence bundle; the exclusion is ` +
+        'structural, because a labelled convenience that quietly enters a bundle stops being ' +
+        'labelled at the moment it matters',
+    );
+  }
+
+  if (typeof item.citation !== 'string' || item.citation.trim().length === 0) {
+    throw new Error(`${where} needs its citation string`);
+  }
+  // Three dates, the pack's phrase: applicable, published, observed. A bundle carrying one
+  // of them lets a reader mistake the observation for the law's own date.
+  requireIntervalAndDigest(item, where);
+  isCalendarDateOrThrow(item.publication_date, `${where} publication_date`);
+  if (!isUtcInstant(item.observed_from)) {
+    throw new Error(`${where} needs the instant it was observed: ${JSON.stringify(item.observed_from)}`);
+  }
+  if (!Object.hasOwn(LICENCES, item.licence ?? '')) {
+    throw new Error(
+      `${where} declares licence ${JSON.stringify(item.licence)}; the composer applies rights ` +
+        `at compose time and can only do that for a licence it knows: ${Object.keys(LICENCES).join(', ')}`,
+    );
+  }
+
+  // The publisher is not a second, independent fact the caller supplies. It is the first
+  // segment of the item's own identifier, and an item whose declared publisher disagrees with
+  // its identifier has one of those two wrong. The official-source host check runs against the
+  // declared value, so a disagreement here decides whose official hosts this item may link to.
+  const identity = identityOf(item.identifier, where);
+  if (item.publisher !== identity.publisher) {
+    throw new Error(
+      `${where} declares publisher ${JSON.stringify(item.publisher)} while its identifier names ` +
+        `${JSON.stringify(identity.publisher)}; one of those is wrong, and the composer must not ` +
+        'choose which, because that choice decides whose official hosts this item may link to',
+    );
+  }
+
+  // D38, honoured here because an evidence bundle is a public surface and the decision says
+  // every public surface honours the gate. It was not honoured at all: the composer asked the
+  // caller-supplied licence label whether the text could travel, so a caller who wrote `cc0`
+  // over a Legilux item exported the publisher's text on the strength of their own label. The
+  // licence is a term of the grant. `text_public` is whether the grant was established, with
+  // recorded evidence (C2). Only the second can unlock a body.
+  //
+  // Absence is refused rather than read as false. C2 says the flag starts false, so false is the
+  // safe reading, but "the publisher's gate is closed" and "this payload never said" are
+  // different facts, and D38 exists to keep withholding reasons distinct. Treating a missing
+  // field as a closed gate hides a payload defect behind a correct-looking refusal.
+  if (typeof item.text_public !== 'boolean') {
+    throw new Error(
+      `${where} does not carry text_public; an evidence bundle is a public surface, D38 says ` +
+        'every public surface honours that gate, and an item that never states it cannot be ' +
+        'composed either way',
+    );
+  }
+
+  return publisherSourceUri({ publisher: item.publisher, uri: item.official_uri });
+}
+
+function isCalendarDateOrThrow(value, what) {
+  if (!isCalendarDate(value)) {
+    throw new Error(`${what} is not a calendar date: ${JSON.stringify(value)}`);
+  }
+}
+
+function renderItem(item, index) {
+  const official = requireItem(item, index);
+  const licence = LICENCES[item.licence];
+  // Per item, not per bundle. A bundle may carry Luxembourg and Union items together, and one
+  // vocabulary spread over both prints an applicability claim onto a consolidation that the
+  // Union never said applied to anything.
+  const semantics = semanticsOf(item.publisher, `item ${index + 1}`);
+
+  // Rights at compose time, through two gates that refuse for different reasons and therefore
+  // say so separately. `text_public` is whether the publisher's rights position was established
+  // with recorded evidence (C2, D38); the licence's own terms are whether that grant lets the
+  // body itself travel. A reader told only "withheld" cannot tell which, and one of the two may
+  // change tomorrow while the other will not.
+  const carriesBody = item.text_public && licence.embedsText;
+
+  // A bundle that may carry a body and has none is an empty quotation under a citation, a
+  // digest and an official link: the shape of a bundle carrying text it does not have. Asked of
+  // the licence alone, this also demanded text from an item whose gate is closed, where there
+  // is no body to carry and nothing to be empty.
+  if (carriesBody && (typeof item.text !== 'string' || item.text.trim().length === 0)) {
+    throw new Error(
+      `${'item ' + (index + 1)} may carry its text and carries none; an empty quotation ` +
+        'beneath a citation and a digest reads as text this bundle holds',
+    );
+  }
+
+  // Attribution travels with any body, whatever the licence says. A licence that waives
+  // attribution waives an obligation; it does not make it acceptable to leave the source
+  // unnamed. This artefact exists to be checked against the publisher, and a body with no
+  // publisher named cannot be checked against anything. The licence table decides obligations,
+  // not provenance.
+  if (
+    carriesBody &&
+    (typeof item.attribution !== 'string' || item.attribution.trim().length === 0)
+  ) {
+    throw new Error(
+      `item ${index + 1} exports the publisher's text and names no attribution; the licence ` +
+        'may waive that obligation, but a bundle carrying a body without saying whose it is ' +
+        'cannot be checked against the source it came from',
+    );
+  }
+
+  const body = !item.text_public
+    ? '<p class="bundle-withheld">Text withheld: the publisher\'s text gate has not cleared, ' +
+      'so no public surface of this service carries the body. The digest and the official link ' +
+      'are enough to fetch and verify it at the publisher.</p>'
+    : licence.embedsText
+      ? `<blockquote class="bundle-text">${escapeHtml(item.text ?? '')}</blockquote>`
+      : '<p class="bundle-withheld">Text withheld by licence. This item travels as its digest ' +
+        'and its official link, which are enough to fetch and verify it at the publisher.</p>';
+
+  const attribution =
+    licence.attribution || carriesBody
+      ? `<p class="bundle-attribution">${escapeHtml(item.attribution ?? '')}</p>`
+      : '';
+
+  return (
+    `<li class="bundle-item" data-kind="${escapeHtml(item.kind)}">` +
+    `<p class="bundle-citation">${escapeHtml(item.citation)}</p>` +
+    '<dl class="bundle-dates">' +
+    `<div class="strip-row"><dt>${escapeHtml(INTERVAL_TERM[semantics])}</dt>` +
+    `<dd>${escapeHtml(item.valid_from)} to ` +
+    `${escapeHtml(item.valid_to ?? 'no end recorded')}</dd></div>` +
+    `<div class="strip-row"><dt>published</dt><dd>${escapeHtml(item.publication_date)}</dd></div>` +
+    `<div class="strip-row"><dt>observed</dt><dd>${escapeHtml(item.observed_from)}</dd></div>` +
+    `<div class="strip-row"><dt>record_sha256</dt><dd><code>${escapeHtml(item.record_sha256)}</code></dd></div>` +
+    `<div class="strip-row"><dt>licence</dt><dd>${escapeHtml(item.licence)}</dd></div>` +
+    '</dl>' +
+    body +
+    attribution +
+    `<p class="bundle-official"><a href="${escapeHtml(official)}" rel="external">Official source</a></p>` +
+    '</li>'
+  );
+}
+
+/**
+ * The register, as rows over a closed column set.
+ *
+ * @param {Array} items    the same items as the bundle
+ * @param {Array} columns  a subset of REGISTER_COLUMNS, in any order
+ */
+export function renderRegister({ items, columns }) {
+  if (!Array.isArray(columns) || columns.length === 0) {
+    throw new Error('a register needs columns');
+  }
+  for (const column of columns) {
+    const reason = FORBIDDEN_COLUMNS.get(column);
+    if (reason !== undefined) {
+      throw new Error(`the register has no ${column} column: ${reason}`);
+    }
+    if (!REGISTER_COLUMNS.includes(column)) {
+      throw new Error(
+        `${JSON.stringify(column)} is not a register column; the set is closed at ` +
+          `${REGISTER_COLUMNS.join(', ')} so a header cannot introduce a claim the data does not make`,
+      );
+    }
+  }
+  if (new Set(columns).size !== columns.length) {
+    throw new Error('a register column appears twice');
+  }
+
+  const head = columns.map((column) => `<th scope="col">${escapeHtml(column)}</th>`).join('');
+  const rows = items
+    .map((item, index) => {
+      requireItem(item, index);
+      const cells = columns
+        .map((column) => `<td>${escapeHtml(item[column] ?? 'not recorded')}</td>`)
+        .join('');
+      return `<tr>${cells}</tr>`;
+    })
+    .join('');
+  // A register is wide, so it scrolls in its own box rather than making the page scroll. A
+  // scrollable box is keyboard-focusable in a browser whether or not it is asked to be, so
+  // it is given a role and a name here rather than being left an anonymous tab stop.
+  return (
+    '<div class="bundle-register-scroll" role="region" tabindex="0" ' +
+    'aria-label="Evidence register, scrollable">' +
+    `<table class="bundle-register"><thead><tr>${head}</tr></thead>` +
+    `<tbody>${rows}</tbody></table>` +
+    '</div>'
+  );
+}
+
+/**
+ * The bundle: cover, items, register, verification annex, watermark.
+ *
+ * @param {object} input
+ * @param {Array}  input.items
+ * @param {Array}  input.columns
+ * @param {object} input.verification  the recipe, the signing key and the fetch note
+ */
+export function renderEvidenceBundle({
+  items,
+  columns,
+  verification,
+  semantics: declaredSemantics,
+}) {
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new Error('an evidence bundle with no items is a cover sheet');
+  }
+
+  for (const field of ['recompute_recipe', 'signing_key', 'fetch_note']) {
+    if (typeof verification?.[field] !== 'string' || verification[field].trim().length === 0) {
+      throw new Error(
+        `the verification annex needs ${field}; a bundle nobody can check is a bundle that has ` +
+          'to be trusted, and this product is built so that it does not have to be',
+      );
+    }
+  }
+
+  // Last, after every item and the annex, so this check shadows none of them.
+  //
+  // There is no bundle-wide vocabulary, and one could never have been right: a bundle may carry
+  // Luxembourg and Union items side by side, so a single value describes at most half of them.
+  // Each item is labelled from its own publisher. Passing one is refused rather than ignored,
+  // because a caller who believes they are choosing it has misunderstood the contract and
+  // silently overriding them leaves them believing it worked.
+  if (declaredSemantics !== undefined) {
+    throw new Error(
+      'an evidence bundle does not take a date vocabulary; it is a property of the publisher ' +
+        'of each item, and a bundle may span publishers, so no single value can describe every ' +
+        'item',
+    );
+  }
+
+  return (
+    '<section class="evidence-bundle">' +
+    `<p class="bundle-watermark">${escapeHtml(WATERMARK)}</p>` +
+    `<ul class="bundle-items">${items.map(renderItem).join('')}</ul>` +
+    renderRegister({ items, columns }) +
+    '<section class="bundle-verification"><h2>How to verify this bundle</h2>' +
+    `<p class="bundle-recipe">${escapeHtml(verification.recompute_recipe)}</p>` +
+    `<p class="bundle-key">Signing key: <code>${escapeHtml(verification.signing_key)}</code></p>` +
+    `<p class="bundle-fetch">${escapeHtml(verification.fetch_note)}</p>` +
+    '</section>' +
+    '</section>'
+  );
+}

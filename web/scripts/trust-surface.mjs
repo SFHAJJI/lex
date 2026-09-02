@@ -27,6 +27,14 @@ import { renderRefusalCard } from './refusal-card.mjs';
 import { renderStateBanner } from './state-banner.mjs';
 import { renderEnvelopeStrip, renderVerifyCluster } from './verify-cluster.mjs';
 import { readingUrl } from './urls.mjs';
+import { renderNoHitCard } from './no-hit-card.mjs';
+import { renderEvidenceBundle } from './evidence-bundle.mjs';
+import {
+  renderHole,
+  renderProvisional,
+  renderValidityConflict,
+} from './state-qualifiers.mjs';
+import { renderRelaxationDisclosures } from './relaxation.mjs';
 import {
   RESOURCE_AUTHENTICITY_SCHEMA,
   quotedLaw,
@@ -175,6 +183,128 @@ export function renderTrustSurface() {
         },
       },
     )}</section>`,
+
+    `<section class="surface-block"><h2>What leaves the building</h2>${renderEvidenceBundle({
+      items: [
+        {
+          kind: 'publisher_text',
+          citation: 'Synthetic preview work, article 1, applicable from 2001-01-01',
+          identifier: `${PUBLISHER}:${WORK}:2001-01-01`,
+          valid_from: '2001-01-01',
+          valid_to: '2002-01-01',
+          publication_date: '2000-12-01',
+          observed_from: '2026-01-01T00:00:00Z',
+          record_sha256: DIGEST,
+          licence: 'cc-by-4.0',
+          // D38's gate, stated by the record rather than assumed by the composer. The synthetic
+          // preview publisher's text carries no legal authority and is cleared for display.
+          text_public: true,
+          attribution: 'Synthetic preview publisher, CC BY 4.0',
+          publisher: PUBLISHER,
+          official_uri: 'https://preview.invalid/synthetic-preview-work/2001-01-01',
+          text: SYNTHETIC_LAW,
+        },
+        {
+          kind: 'publisher_text',
+          citation: 'Synthetic preview work, article 2, applicable from 2003-01-01',
+          identifier: `${PUBLISHER}:${WORK}:2003-01-01`,
+          valid_from: '2003-01-01',
+          valid_to: null,
+          publication_date: '2002-12-01',
+          observed_from: '2026-01-01T00:00:00Z',
+          record_sha256: CANDIDATE_A,
+          licence: 'licence-scl',
+          // Declared true so this preview shows the licence withholding a body, rather than the
+          // rights gate withholding it. The two reasons are different and the page demonstrates
+          // the licence one.
+          text_public: true,
+          attribution: 'Synthetic preview publisher, licence restricts redistribution',
+          publisher: PUBLISHER,
+          official_uri: 'https://preview.invalid/synthetic-preview-work/2003-01-01',
+          text: SYNTHETIC_LAW,
+        },
+      ],
+      columns: ['identifier', 'valid_from', 'valid_to', 'official_uri', 'record_sha256'],
+      verification: {
+        recompute_recipe:
+          'Fetch each official source with GET and hash the exact bytes with SHA-256.',
+        signing_key: 'synthetic-public-key',
+        fetch_note: 'Use GET rather than HEAD; the publishers answer 403 to HEAD.',
+      },
+    })}</section>`,
+
+    `<section class="surface-block"><h2>What the record does not say</h2>
+      <p>Three qualifications, each common rather than exotic. Two publisher dates on one
+        wording is ordinary rather than rare; a scheduled state that has not begun reads as
+        current law without a mark; and a gap closed by inference is this product's inference,
+        not the publisher's assertion.</p>
+      ${renderValidityConflict({ stateValidFrom: '2003-01-01', wordingValidFrom: '2001-01-01' })}
+      ${renderProvisional({ validFrom: '2030-09-15', asOf: '2026-09-01' })}
+      ${renderHole({ kind: 'no_state_held', from: '2002-01-02', to: '2002-12-31' })}
+      ${renderHole({ kind: 'continuity_inferred', from: '2004-01-02', to: '2026-01-01' })}</section>`,
+
+    // The answer-dossier block is removed. It rendered a claim sentence bound only to a call id,
+    // and a call-id chip is not evidence for the sentence above it. Probed on this branch: an
+    // invented proposition, "Employers must grant ninety days of parental leave in all cases",
+    // marked publisher_asserted and bound to an operation whose parameters name an entirely
+    // different work, rendered as a bound claim. The heading over it read "Every sentence binds
+    // to something", which is the worst place in the product for that to be untrue.
+    //
+    // answer_dossier/1 is the contract that would settle it and it is not frozen, so the honest
+    // state of this surface is absent rather than approved by a validator that cannot check it.
+    // The sibling branch removed it for the same reason and the removal was never carried across.
+    // #348.
+    `<section class="surface-block"><h2>Nothing runs without its banner</h2>${renderRelaxationDisclosures(
+      {
+        searchPath: '/ask/search?q=a+synthetic+query&scope=preview',
+        relaxations: {
+          fuzzy: { applied: true, expansions: ['many -> mady', 'many -> man'] },
+          crosswalk: {
+            applied: true,
+            understood_as: 'a synthetic lay term',
+            version: 'synthetic-crosswalk/1',
+            reviewed_on: '2026-01-01',
+          },
+          semantic: {
+            applied: true,
+            encoder: 'synthetic-encoder/1',
+            benchmark: 'synthetic-bench/1',
+          },
+        },
+      },
+    )}</section>`,
+
+    `<section class="surface-block"><h2>Nothing found is not nothing to say</h2>${renderNoHitCard({
+      query: 'a query that matches nothing here',
+      layers: [
+        { name: 'work_resolution', outcome: 'not_run', language: 'en' },
+        { name: 'exact_identifier', outcome: 'ran', language: 'en' },
+        { name: 'keyword', outcome: 'ran', language: 'en' },
+        { name: 'lay_vocabulary_bridge', outcome: 'not_applicable', language: 'en' },
+        { name: 'semantic', outcome: 'unavailable', language: 'en' },
+      ],
+      expansions: ['many -> mady', 'many -> man'],
+      population: {
+        searchable_works: [
+          { what: 'synthetic preview works', count: 2, counted_at: '2026-01-01' },
+        ],
+        not_searchable: [
+          {
+            what: 'everything else',
+            count: 0,
+            note: 'this fixture holds no law at all',
+            counted_at: '2026-01-01',
+          },
+        ],
+      },
+      routes: [
+        {
+          label: 'Search the synthetic publisher',
+          publisher: PUBLISHER,
+          uri: 'https://preview.invalid/search',
+        },
+      ],
+    })}</section>`,
 
     `<section class="surface-block"><h2>Authenticity, and what is not translated</h2>
       <p>The resource's own evidence decides. A resource with one authentic language always

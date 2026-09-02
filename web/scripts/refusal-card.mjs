@@ -33,10 +33,27 @@ import { isCalendarDate, requireCalendarDate } from './temporal.mjs';
 /**
  * The closed registry, product spec section 4.9.
  *
- * The UX spec's prose names two of these informally, `unknown_anchor` and `unknown_work`,
- * where the product spec and the live service use `anchor_not_in_version` and
- * `identifier_unknown`. The product spec is the versioned registry, so it governs here, and
- * the discrepancy is raised rather than silently resolved.
+ * There are two services and they use different words, which is what an earlier version of this
+ * comment flattened into one wrong sentence.
+ *
+ * The V3 path uses `identifier_unknown`, and that is not an assumption: the captured refusal
+ * envelope in `captured-envelopes.mjs`, taken from a production run of the merged S0-05 C# path,
+ * carries `"status":"identifier_unknown"` and its bytes are digest-checked on every read. So
+ * this registry matches the path this interface is being built for.
+ *
+ * The currently deployed service uses `unknown_work`. Measured, not inferred: `provenance` for
+ * `eu-eurlex:32016R0679:2018-05-25` against production returns `{"status": "unknown_work"}`.
+ * That is the word the old wire speaks, and the reason a translation exists at all.
+ *
+ * The registry stays closed at these nineteen, because the product spec is the versioned registry
+ * and a wire status is not a product code. `unknown_work` is translated where it arrives, by a
+ * closed table in `provenance.mjs`, and that translation deliberately does not let the sentence
+ * claim more than the status supports: the service returns `unknown_work` both for an identifier
+ * no work matches and for a work held at other dates but not the one asked for, so the reader is
+ * told that rather than told the work does not exist.
+ *
+ * `unknown_anchor` remains the UX spec's informal name for `anchor_not_in_version`, which the
+ * product spec governs and which the service has not contradicted.
  */
 export const REFUSAL_CODES = Object.freeze([
   'identifier_unknown',
@@ -144,21 +161,56 @@ function requireAbsenceEvidence(code, payload) {
   }
 }
 
+/**
+ * The sentence an absence refusal cannot appear without.
+ *
+ * Named, because it is the product's oldest invariant said out loud, and a sentence written
+ * as a literal in two renderers is a sentence that gets corrected in one of them.
+ */
+export const ABSENCE_NOTE =
+  'This is what this service holds, and does not hold. It is not evidence that the instrument '
+  + 'or the law does not exist.';
+
+/** The heading over the routes that would answer an absence. */
+export const ABSENCE_HEADING = 'What would answer this';
+
+/**
+ * What an absence refusal discloses, as claims rather than markup, or null when the code is
+ * not an absence. Both renderers call this, so neither can drop the note that makes the
+ * absence readable.
+ */
+export function absenceEvidenceParts(code, payload) {
+  if (!ABSENCES.has(code)) return null;
+  return Object.freeze({
+    note: ABSENCE_NOTE,
+    heading: ABSENCE_HEADING,
+    routes: Object.freeze(
+      payload.what_would_answer.map((route) => WHAT_WOULD_ANSWER_LABEL.get(route)),
+    ),
+  });
+}
+
 function renderAbsenceEvidence(code, payload) {
-  if (!ABSENCES.has(code)) return '';
-  const items = payload.what_would_answer
-    .map((route) => `<li>${escapeHtml(WHAT_WOULD_ANSWER_LABEL.get(route))}</li>`)
-    .join('');
+  const absence = absenceEvidenceParts(code, payload);
+  if (absence === null) return '';
+  const items = absence.routes.map((label) => `<li>${escapeHtml(label)}</li>`).join('');
   return (
     '<div class="refusal-absence">' +
-    '<p class="refusal-absence-note">This is what this service holds, and does not hold. It ' +
-    'is not evidence that the instrument or the law does not exist.</p>' +
-    `<h3>What would answer this</h3><ul>${items}</ul></div>`
+    `<p class="refusal-absence-note">${escapeHtml(absence.note)}</p>` +
+    `<h3>${escapeHtml(absence.heading)}</h3><ul>${items}</ul></div>`
   );
 }
 
 /** Refusals the reader can retry; the card says so rather than leaving them guessing. */
 export const RETRYABLE = Object.freeze(new Set(['upstream_unreachable', 'rate_limited']));
+
+/**
+ * What a retryable refusal says.
+ *
+ * Exported so the two renderers cannot drift on it. A sentence duplicated as a literal in two
+ * files is a sentence that gets corrected in one of them.
+ */
+export const RETRY_SENTENCE = 'This one is worth retrying.';
 
 /**
  * The payload each code must carry, and where the requirement comes from.
@@ -437,6 +489,17 @@ function requireCandidates(payload) {
   // Every rendered candidate, not merely two of them. Counting live candidates and then
   // rendering all of them let a withdrawn state be offered as a selectable choice inside a
   // set that happened to contain two live ones, which is the conflation the split removes.
+  // An ambiguity is a choice between different states. The same state offered twice satisfies a
+  // count of two and gives a reader nothing to choose between, which is the one thing this
+  // interstitial exists to make them do.
+  const identities = live.map((one) => `${one.valid_from}--${one.hash}`);
+  if (new Set(identities).size !== identities.length) {
+    throw new Error(
+      'this ambiguity offers the same state more than once; two entries with one identity are ' +
+        'not a choice, and the interstitial exists to make a reader choose',
+    );
+  }
+
   if (live.length !== candidates.length) {
     throw new Error(
       `${candidates.length - live.length} of these candidates is withdrawn; the interstitial ` +
@@ -559,6 +622,29 @@ function requirePayload(code, payload) {
 
   // Declared null on both sides contradicts the history this same payload asserts: if a
   // history begins, some state lies on one side of any date in it.
+  // A nearest earlier state dated after the nearest later one describes a history that cannot
+  // exist. The shapes were checked and the order never was, so the card could render a
+  // chronology the publisher does not have.
+  if (code === 'no_version_for_date') {
+    const begins = own(payload, 'history_begins');
+    const earlier = own(payload, 'nearest_earlier');
+    const later = own(payload, 'nearest_later');
+    if (earlier !== null && later !== null && earlier !== undefined && later !== undefined &&
+        !(earlier < later)) {
+      throw new Error(
+        `nearest_earlier ${earlier} does not precede nearest_later ${later}; a nearest earlier ` +
+          'state dated after the nearest later one is a history that cannot exist',
+      );
+    }
+    if (typeof begins === 'string' && earlier !== null && earlier !== undefined &&
+        earlier < begins) {
+      throw new Error(
+        `nearest_earlier ${earlier} precedes history_begins ${begins}; a state cannot be held ` +
+          'before the history it belongs to starts',
+      );
+    }
+  }
+
   const declaredNull = [...nullable].filter((key) => own(payload, key) === null);
   if (nullable.size > 0 && declaredNull.length === nullable.size) {
     throw new Error(
@@ -608,7 +694,15 @@ function renderChips(className, values) {
   return `<ul class="${className}">${items}</ul>`;
 }
 
-function renderPayload(code, payload) {
+/**
+ * The payload as the things it shows rather than as markup: the candidate list, the anchor
+ * chips, and the labelled rows.
+ *
+ * Which keys appear and what a declared null says are rules, so they live here and both
+ * renderers call them. A row dropped in one renderer and kept in the other is a refusal that
+ * hands two readers different amounts of help.
+ */
+export function payloadParts(code, payload) {
   const nullable = NULLABLE_KEYS.get(code) ?? new Set();
   // A declared null renders as its sentence rather than being filtered away. Dropping the row
   // would put the reader back where the missing key left them.
@@ -618,31 +712,53 @@ function renderPayload(code, payload) {
   const entries = Object.entries(payload ?? {}).filter(
     ([key, value]) => isPresent(value) || declaredNull.includes(key),
   );
-  if (entries.length === 0) return '';
 
   const structured = [];
   const rows = [];
 
   for (const [key, value] of entries) {
     if (code === 'ambiguous_version' && key === 'candidates') {
-      structured.push(renderCandidates(value));
+      structured.push({ kind: 'candidates', key, values: value });
     } else if (key === 'nearest_anchors' && Array.isArray(value)) {
-      structured.push(renderChips('refusal-anchors', value));
+      structured.push({ kind: 'chips', key, className: 'refusal-anchors', values: value });
     } else if (value === null) {
-      rows.push(
-        `<div class="strip-row"><dt>${escapeHtml(key)}</dt>` +
-          `<dd>${escapeHtml(NULL_SENTENCE.get(key))}</dd></div>`,
-      );
+      rows.push({ key, value: NULL_SENTENCE.get(key) });
     } else {
-      rows.push(
-        `<div class="strip-row"><dt>${escapeHtml(key)}</dt>` +
-          `<dd>${escapeHtml(Array.isArray(value) ? value.join(', ') : value)}</dd></div>`,
-      );
+      // Text, not the raw value. `asserts_absence_of_law: false` is the one payload field
+      // whose whole job is to be read, and a component tree renders a boolean `false` as
+      // nothing at all: the row survived with an empty cell, which reads as a field the
+      // service declined to answer. The string surface stringified it on the way out and so
+      // never showed the defect, which is exactly why the conversion belongs here.
+      rows.push({ key, value: Array.isArray(value) ? value.join(', ') : String(value) });
     }
   }
 
-  const list = rows.length > 0 ? `<dl class="refusal-payload">${rows.join('')}</dl>` : '';
-  return structured.join('') + list;
+  return Object.freeze({ structured: Object.freeze(structured), rows: Object.freeze(rows) });
+}
+
+function renderPayload(code, payload) {
+  const parts = payloadParts(code, payload);
+  if (parts.structured.length === 0 && parts.rows.length === 0) return '';
+
+  const structured = parts.structured
+    .map((item) => (item.kind === 'candidates'
+      ? renderCandidates(item.values)
+      : renderChips(item.className, item.values)))
+    .join('');
+
+  const list = parts.rows.length > 0
+    ? '<dl class="refusal-payload">' +
+      parts.rows
+        .map(
+          ({ key, value }) =>
+            `<div class="strip-row"><dt>${escapeHtml(key)}</dt>` +
+            `<dd>${escapeHtml(value)}</dd></div>`,
+        )
+        .join('') +
+      '</dl>'
+    : '';
+
+  return structured + list;
 }
 
 const COVERAGE = new Map([
@@ -678,7 +794,17 @@ function renderGoverningText(governing) {
  *        the resource identity, its authenticity evidence and the expression's own language
  * @param {{label: string, href: string}} [input.handoff]
  */
-export function renderRefusalCard({ code, sentence, payload, governingText, handoff }) {
+/**
+ * Every rule a refusal card must satisfy, decided once and shared.
+ *
+ * Split out so the React runtime cannot become a second place where a legal rule lives. The
+ * component calls this and renders what it returns; it re-derives nothing. If a rule is wrong it
+ * is wrong in one file, and a fix cannot land in the string renderer while the React one keeps
+ * the defect, which is the failure mode a parallel implementation invites.
+ *
+ * Returns the normalised inputs a renderer needs. Throws on anything a card must not display.
+ */
+export function validateRefusal({ code, sentence, payload, governingText, handoff }) {
   if (!CODES.has(code)) {
     throw new Error(
       `unknown refusal code ${JSON.stringify(code)}; the registry is closed and a code ` +
@@ -699,9 +825,8 @@ export function renderRefusalCard({ code, sentence, payload, governingText, hand
   const handoffs = (Array.isArray(handoff) ? handoff : handoff ? [handoff] : []).filter(
     (one) => one?.label && one?.href,
   );
-  const hasHandoff = handoffs.length > 0;
 
-  if (!payloadHtml && !hasGoverningText && !hasHandoff) {
+  if (!payloadHtml && !hasGoverningText && handoffs.length === 0) {
     throw new Error(
       `refusal ${code} carries no payload, no governing text and no handoff; a sterile ` +
         'refusal teaches a reader that honesty equals uselessness',
@@ -715,11 +840,9 @@ export function renderRefusalCard({ code, sentence, payload, governingText, hand
     );
   }
 
-  // Decision 41 settles this boundary and settles its ending: "Who can advise you on your
-  // case: the Chambre des salariés, the ITM, the Service d'accueil et d'information
-  // juridique, or a lawyer." That is a referral list, not one counter, and a citizen handed
-  // a single name has been handed the one that happens to be nearest to whoever wrote the
-  // caller. Two or more, each reachable.
+  // Decision 41 settles this boundary and settles its ending: a referral list, not one
+  // counter. A citizen handed a single name has been handed whichever one happened to be
+  // nearest to whoever wrote the caller.
   if (code === 'advice_boundary' && handoffs.length < 2) {
     throw new Error(
       'advice_boundary must name the referral list, not one counter; Decision 41 settles it ' +
@@ -727,8 +850,35 @@ export function renderRefusalCard({ code, sentence, payload, governingText, hand
     );
   }
 
+  return {
+    code,
+    sentence,
+    payload,
+    payloadHtml,
+    // The same payload and absence disclosure, as claims a renderer can lay out itself. The
+    // HTML form above is what the string surface emits and what the sterility check counts;
+    // these two are what a component tree renders, from the same decisions.
+    payloadParts: payloadParts(code, payload),
+    absence: absenceEvidenceParts(code, payload),
+    governingText: hasGoverningText ? governingText : null,
+    handoffs,
+    retryable: RETRYABLE.has(code),
+    note: MANDATED_NOTE[code] ?? null,
+  };
+}
+
+export function renderRefusalCard({ code, sentence, payload, governingText, handoff }) {
+  // Every rule lives in validateRefusal and is applied once. This function decides only how
+  // the validated result looks, which is what lets the React runtime share the rules rather
+  // than reimplement them beside a copy that can drift.
+  const card = validateRefusal({ code, sentence, payload, governingText, handoff });
+  const payloadHtml = card.payloadHtml;
+  const hasGoverningText = card.governingText !== null;
+  const handoffs = card.handoffs;
+  const hasHandoff = handoffs.length > 0;
+
   const retry = RETRYABLE.has(code)
-    ? '<p class="refusal-retry">This one is worth retrying.</p>'
+    ? `<p class="refusal-retry">${escapeHtml(RETRY_SENTENCE)}</p>`
     : '';
 
   const note = MANDATED_NOTE[code]
@@ -784,12 +934,41 @@ export function renderRefusalCard({ code, sentence, payload, governingText, hand
  * followed an old link needs to know their state exists and was superseded rather than
  * finding it silently gone.
  */
-export function renderSupersededState({ publisher, work, live, withdrawn }) {
+
+/**
+ * The sentence a superseded-state disclosure cannot appear without.
+ *
+ * Fixed, and named, because it is what makes the two links readable: the publisher ranked
+ * these states, so nothing is being asked of the reader, and the withdrawn one stays
+ * addressable because a link somebody already holds should not lead nowhere.
+ */
+export const SUPERSEDED_NOTE =
+  'The publisher withdrew the state below and replaced it. This is the publisher ranking '
+  + 'them, not this interface choosing, so no choice is asked of you. The withdrawn state is '
+  + 'still addressable, because a link to it should not lead nowhere.';
+
+/**
+ * The two coordinates a superseded-state disclosure shows, both checked against the work.
+ *
+ * The rules live here so the string renderer and the React component apply one implementation
+ * rather than two that can drift apart.
+ */
+export function validateSupersededState({ publisher, work, live, withdrawn }) {
+  // A state cannot have superseded itself. The live one was checked for not being withdrawn and
+  // the siblings for being withdrawn, and nothing checked they were different states, so one
+  // record passed as both would render as its own replacement.
   if (typeof publisher !== 'string' || typeof work !== 'string') {
     throw new Error('a superseded-state disclosure must name the work it is about');
   }
   if (live?.withdrawn !== false) {
     throw new Error('the live state of a superseded pair must be the one that is not withdrawn');
+  }
+  const liveIdentity = `${live.valid_from}--${live.hash}`;
+  if (Array.isArray(withdrawn) && withdrawn.some((one) => `${one?.valid_from}--${one?.hash}` === liveIdentity)) {
+    throw new Error(
+      'a state cannot have superseded itself; the same record appears as both the live state ' +
+        'and one it replaced',
+    );
   }
   if (!Array.isArray(withdrawn) || withdrawn.length === 0) {
     throw new Error(
@@ -804,24 +983,36 @@ export function renderSupersededState({ publisher, work, live, withdrawn }) {
     requireStateCoordinate(candidate, publisher, work, 'a state');
   }
 
-  const siblings = withdrawn
+  // Eight characters are what a reader can hold in their eye, so the display truncation is
+  // computed once here and carried beside the whole hash rather than sliced at each mention.
+  // The identity is the whole hash, which is why it was checked above and is not this.
+  const shown = (one) => Object.freeze({ ...one, short_hash: one.hash.slice(0, 8) });
+  return Object.freeze({ live: shown(live), withdrawn: Object.freeze(withdrawn.map(shown)) });
+}
+
+/**
+ * The disclosure a withdrawn state cannot be read without.
+ *
+ * @see validateSupersededState, which holds every rule this renders.
+ */
+export function renderSupersededState({ publisher, work, live, withdrawn }) {
+  const pair = validateSupersededState({ publisher, work, live, withdrawn });
+
+  const siblings = pair.withdrawn
     .map(
       (one) =>
         `<li><a href="${escapeHtml(one.href)}">applicable from ${escapeHtml(one.valid_from)}, ` +
-        `hash <code>${escapeHtml(one.hash.slice(0, 8))}</code>, published ` +
+        `hash <code>${escapeHtml(one.short_hash)}</code>, published ` +
         `${escapeHtml(one.publication_date)}</a></li>`,
     )
     .join('');
 
   return (
     '<section class="superseded-state">' +
-    `<p class="superseded-live"><a href="${escapeHtml(live.href)}">The state the publisher ` +
-    `holds, applicable from ${escapeHtml(live.valid_from)}, hash ` +
-    `<code>${escapeHtml(live.hash.slice(0, 8))}</code></a></p>` +
-    '<p class="superseded-note">The publisher withdrew the state below and replaced it. This ' +
-    'is the publisher ranking them, not this interface choosing, so no choice is asked of ' +
-    'you. The withdrawn state is still addressable, because a link to it should not lead ' +
-    'nowhere.</p>' +
+    `<p class="superseded-live"><a href="${escapeHtml(pair.live.href)}">The state the publisher ` +
+    `holds, applicable from ${escapeHtml(pair.live.valid_from)}, hash ` +
+    `<code>${escapeHtml(pair.live.short_hash)}</code></a></p>` +
+    `<p class="superseded-note">${escapeHtml(SUPERSEDED_NOTE)}</p>` +
     `<ul class="superseded-siblings">${siblings}</ul>` +
     '</section>'
   );

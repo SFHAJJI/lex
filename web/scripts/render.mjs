@@ -10,6 +10,7 @@
 // failure this surface exists to prevent, so each renders its own state and nothing
 // about the law.
 
+import { cspValue } from './csp.mjs';
 import { CHROME_LOCALES } from "./localization.mjs";
 import { tryPublisherSourceUri } from "./routes.mjs";
 
@@ -43,13 +44,36 @@ function syntheticBanner() {
 // Exported so every page in this line goes through one shell. The shell is what carries the
 // synthetic banner and data-preview-state, and a page that builds its own head forgets them:
 // the trust surface did exactly that and the browser run caught it.
-export function page({ state, title, main, locale = "en", shell = null, density = null }) {
+export function page({
+  state,
+  title,
+  main,
+  locale = "en",
+  copyLocale = "en",
+  shell = null,
+  density = null,
+}) {
   // `lang` is the page's own language, never the subject's. A work page is English chrome
   // about a French law and stays `en`; a page of French statute is `fr`. The locale is
   // checked against the reviewed four, because a tag nobody reviewed the chrome in tells a
   // screen reader to use a voice for text that was never written in that language.
   if (!CHROME_LOCALES.includes(locale)) {
     throw new Error(`${JSON.stringify(locale)} is not one of the four chrome locales`);
+  }
+  if (!CHROME_LOCALES.includes(copyLocale)) {
+    throw new Error(`${JSON.stringify(copyLocale)} is not one of the four chrome locales`);
+  }
+  // The comment above stated this rule and the code enforced a weaker one, which is how a
+  // request for German returned English prose under `lang="de"` on every page in this build.
+  // Being one of the four locales is not the same as being the language this page is written
+  // in, and only the second is what the tag asserts. Decision 63 forbids substituting a
+  // locale, and a substitution wearing the requested tag is the substitution nobody can see.
+  if (locale !== copyLocale) {
+    throw new Error(
+      `this page would be labelled ${locale} while its copy is written in ${copyLocale}; a ` +
+        "screen reader would read one language in the voice of another, and a reader would " +
+        "have been served a locale nobody reviewed",
+    );
   }
   // The shell rides on the root element as data attributes and nowhere else. A stylesheet
   // can select on them; nothing in the render path can branch on them, because `page` has
@@ -63,9 +87,10 @@ export function page({ state, title, main, locale = "en", shell = null, density 
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="${escapeHtml(cspValue())}">
     <title>${escapeHtml(title)} - Lex V3 preview</title>
-    <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="./styles.css">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
     ${syntheticBanner()}

@@ -40,10 +40,25 @@ const CAPTURES = Object.freeze({
  * production run instead of from me.
  */
 export function loadCaptured(name) {
-  const entry = CAPTURES[name];
-  if (!entry) {
+  if (!Object.hasOwn(CAPTURES, name ?? "")) {
     throw new Error(`no captured envelope named ${name}`);
   }
+  return JSON.parse(verifyCapture(name, CAPTURES[name]));
+}
+
+/**
+ * The recomputation itself, as its own function so it can be proved.
+ *
+ * It was inline, and an audit found that removing it left the whole suite green: the one
+ * guard whose absence changes what these fixtures mean was the one nothing held. It could not
+ * be tested where it was, because the captures it reads are a private frozen constant and a
+ * test cannot hand it a tampered one. Now it can.
+ *
+ * @param {string} name   which capture, for the message
+ * @param {object} entry  `{ text, sha256, bytes }` as recorded beside the bytes
+ * @returns {string} the verified text
+ */
+export function verifyCapture(name, entry) {
   const bytes = Buffer.from(entry.text, "utf8");
   const digest = createHash("sha256").update(bytes).digest("hex");
   if (digest !== entry.sha256 || bytes.length !== entry.bytes) {
@@ -52,7 +67,7 @@ export function loadCaptured(name) {
         `${bytes.length} bytes ${digest}, expected ${entry.bytes} bytes ${entry.sha256}`,
     );
   }
-  return JSON.parse(entry.text);
+  return entry.text;
 }
 
 export const CAPTURED_NAMES = Object.freeze(Object.keys(CAPTURES));
