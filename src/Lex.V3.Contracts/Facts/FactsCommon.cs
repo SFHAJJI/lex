@@ -409,15 +409,31 @@ public sealed record OfficialIdentifier
             return false;
         }
 
-        var segments = uri.AbsolutePath.Trim('/').Split('/');
-        if (segments.Length < 3 ||
-            !string.Equals(segments[0], "resource", StringComparison.Ordinal))
+        // The grammar is applied to the ORIGINAL spelling, never to uri.AbsolutePath. Two
+        // separate aliases came from reading the parsed path. System.Uri removes dot segments
+        // before AbsolutePath can be read, so `{work}/../{uuid}/DOC_1` validated as the shorter
+        // path it normalises to while every store retained the longer string. And `Trim('/')`
+        // accepted a trailing slash that the emitted schemas reject, so the reader and the schema
+        // disagreed about a spelling either could see. Both mint a second raw spelling of one
+        // coordinate, which is two rows to every store and one thing to a reader.
+        if (CellarPathAfterOrigin(value) is not { } rest)
         {
             return false;
         }
 
-        if (!string.Equals(segments[1], "cellar", StringComparison.Ordinal) ||
-            CellarObjectDepth(segments[2]) is not { } depth)
+        var segments = rest.Split('/');
+        foreach (var segment in segments)
+        {
+            // An empty segment covers a trailing slash, a leading one and a doubled one at once.
+            if (segment.Length == 0 ||
+                string.Equals(segment, ".", StringComparison.Ordinal) ||
+                string.Equals(segment, "..", StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        if (CellarObjectDepth(segments[0]) is not { } depth)
         {
             return false;
         }
@@ -426,8 +442,33 @@ public sealed record OfficialIdentifier
         // family admits therefore carries either a dotted suffix or a further path segment, so one
         // URI can never satisfy both families.
         return work
-            ? segments.Length == 3 && depth == 0
-            : segments.Length > 3 || depth > 0;
+            ? segments.Length == 1 && depth == 0
+            : segments.Length > 1 || depth > 0;
+    }
+
+    /// <summary>
+    /// The only origins a Cellar object may be spelled with, both schemes the publisher answers on.
+    /// </summary>
+    private static readonly string[] CellarOrigins =
+    [
+        "http://publications.europa.eu/resource/cellar/",
+        "https://publications.europa.eu/resource/cellar/",
+    ];
+
+    /// <summary>
+    /// What follows the exact Cellar origin in the original spelling, or <c>null</c>.
+    /// </summary>
+    private static string? CellarPathAfterOrigin(string value)
+    {
+        foreach (var origin in CellarOrigins)
+        {
+            if (value.StartsWith(origin, StringComparison.Ordinal))
+            {
+                return value[origin.Length..];
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -441,7 +482,12 @@ public sealed record OfficialIdentifier
     private static int? CellarObjectDepth(string segment)
     {
         var parts = segment.Split('.');
-        if (parts.Length > 3 || !Guid.TryParseExact(parts[0], "D", out _))
+        // Round-trip rather than parse. TryParseExact is case-insensitive on the hex digits and
+        // strips surrounding white space, so a bare parse gives one work several admitted
+        // spellings. The publisher mints lowercase, and the emitted schemas now say so too.
+        if (parts.Length > 3 ||
+            !Guid.TryParseExact(parts[0], "D", out var uuid) ||
+            !string.Equals(parts[0], uuid.ToString("D"), StringComparison.Ordinal))
         {
             return null;
         }
