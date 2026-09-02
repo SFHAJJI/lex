@@ -271,6 +271,19 @@ public sealed class RobotsExclusionPolicyTests
     }
 
     [TestMethod]
+    public void InvalidUserAgentBeforeRulesDoesNotEraseTheValidHeader()
+    {
+        var policy = Bytes(
+            """
+            User-agent: Lex
+            User-agent: Invalid Agent
+            Disallow: /private
+            """);
+
+        Assert.AreEqual(RobotsPathVerdict.Denied, Evaluate(policy, "/private"));
+    }
+
+    [TestMethod]
     public void PublicEvaluatorSurfaceAndVerdictsStayClosed()
     {
         var type = typeof(RobotsExclusionPolicy);

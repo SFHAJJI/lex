@@ -116,7 +116,11 @@ public static class RobotsExclusionPolicy
             {
                 if (!IsPolicyUserAgent(value))
                 {
-                    current = null;
+                    if (current?.HasRuleDirective == true)
+                    {
+                        current = null;
+                    }
+
                     continue;
                 }
 
