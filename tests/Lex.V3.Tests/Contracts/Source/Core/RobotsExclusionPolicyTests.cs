@@ -257,6 +257,51 @@ public sealed class RobotsExclusionPolicyTests
     }
 
     [TestMethod]
+    public void InvalidUserAgentQuarantinesFollowingRulesFromThePriorGroup()
+    {
+        var policy = Bytes(
+            """
+            User-agent: *
+            Disallow: /private
+            User-agent: Invalid Agent
+            Allow: /private
+            """);
+
+        Assert.AreEqual(RobotsPathVerdict.Denied, Evaluate(policy, "/private"));
+    }
+
+    [TestMethod]
+    public void PublicEvaluatorSurfaceAndVerdictsStayClosed()
+    {
+        var type = typeof(RobotsExclusionPolicy);
+        Assert.IsTrue(type.IsPublic);
+        Assert.IsTrue(type.IsAbstract);
+        Assert.IsTrue(type.IsSealed);
+
+        var members = type.GetMembers(
+            System.Reflection.BindingFlags.Public |
+            System.Reflection.BindingFlags.Static |
+            System.Reflection.BindingFlags.DeclaredOnly);
+        Assert.HasCount(1, members);
+        Assert.AreEqual(System.Reflection.MemberTypes.Method, members[0].MemberType);
+
+        var method = (System.Reflection.MethodInfo)members[0];
+        Assert.AreEqual(nameof(RobotsExclusionPolicy.Evaluate), method.Name);
+        Assert.AreEqual(typeof(RobotsPathVerdict), method.ReturnType);
+        CollectionAssert.AreEqual(
+            new[] { typeof(ReadOnlySpan<byte>), typeof(string), typeof(string) },
+            method.GetParameters().Select(static parameter => parameter.ParameterType).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "policyBytes", "productToken", "pathAndQuery" },
+            method.GetParameters().Select(static parameter => parameter.Name).ToArray());
+
+        CollectionAssert.AreEqual(new[] { "Allowed", "Denied" }, Enum.GetNames<RobotsPathVerdict>());
+        CollectionAssert.AreEqual(
+            new[] { 1, 2 },
+            Enum.GetValues<RobotsPathVerdict>().Select(static value => (int)value).ToArray());
+    }
+
+    [TestMethod]
     public void Utf8ByteOrderMarkAtTheStartDoesNotHideTheFirstGroup()
     {
         var policy = Encoding.UTF8.GetPreamble()

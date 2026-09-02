@@ -13,7 +13,7 @@ public enum RobotsPathVerdict
 /// Evaluates the parseable rules from a bounded RFC 9309 robots.txt observation.
 /// Source: https://www.rfc-editor.org/rfc/rfc9309.html#section-2.2
 /// </summary>
-internal static class RobotsExclusionPolicy
+public static class RobotsExclusionPolicy
 {
     internal const int MaximumPolicyBytes = 500 * 1024;
 
@@ -116,6 +116,7 @@ internal static class RobotsExclusionPolicy
             {
                 if (!IsPolicyUserAgent(value))
                 {
+                    current = null;
                     continue;
                 }
 
