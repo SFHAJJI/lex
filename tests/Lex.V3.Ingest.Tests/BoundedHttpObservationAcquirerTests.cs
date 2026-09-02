@@ -330,6 +330,54 @@ public sealed class BoundedHttpObservationAcquirerTests
     }
 
     [TestMethod]
+    public async Task RedirectAndCacheHeadersAreRetainedWithExactCardinality()
+    {
+        var transport = new RecordingHandler(request =>
+        {
+            var content = new ByteArrayContent(EntityBytes);
+            content.Headers.ContentLength = EntityBytes.Length;
+            var response = new HttpResponseMessage(HttpStatusCode.MovedPermanently)
+            {
+                RequestMessage = request,
+                Content = content,
+            };
+            Assert.IsTrue(response.Headers.TryAddWithoutValidation(
+                "Location",
+                "https://op.europa.eu/robots.txt"));
+            Assert.IsTrue(response.Headers.TryAddWithoutValidation(
+                "Cache-Control",
+                new[] { "max-age=60", "must-revalidate" }));
+            Assert.IsTrue(content.Headers.TryAddWithoutValidation(
+                "Expires",
+                "Wed, 02 Sep 2026 09:01:00 GMT"));
+            Assert.IsTrue(response.Headers.TryAddWithoutValidation(
+                "Date",
+                "Wed, 02 Sep 2026 09:00:00 GMT"));
+            Assert.IsTrue(response.Headers.TryAddWithoutValidation("Age", "5"));
+            return response;
+        });
+        using var acquirer = Acquirer(transport, new RecordingCustodyStore());
+
+        var result = await acquirer.AcquireAsync(RequestTemplate(), CancellationToken.None);
+
+        var observation = result as ResponseCompleteBodyObservation;
+        Assert.IsNotNull(observation);
+        Assert.AreEqual(
+            "https://op.europa.eu/robots.txt",
+            ((SingleHttpHeader)observation.ResponseMetadata.Location).Value);
+        CollectionAssert.AreEqual(
+            new[] { "max-age=60", "must-revalidate" },
+            ((MultipleHttpHeader)observation.ResponseMetadata.CacheControl).Values.ToArray());
+        Assert.AreEqual(
+            "Wed, 02 Sep 2026 09:01:00 GMT",
+            ((SingleHttpHeader)observation.ResponseMetadata.Expires).Value);
+        Assert.AreEqual(
+            "Wed, 02 Sep 2026 09:00:00 GMT",
+            ((SingleHttpHeader)observation.ResponseMetadata.Date).Value);
+        Assert.AreEqual("5", ((SingleHttpHeader)observation.ResponseMetadata.Age).Value);
+    }
+
+    [TestMethod]
     public async Task UnallowlistedResponseHeadersNeverEnterObservation()
     {
         const string secret = "super-secret-cookie-value";

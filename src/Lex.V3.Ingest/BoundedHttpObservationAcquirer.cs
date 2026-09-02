@@ -756,7 +756,12 @@ internal sealed class BoundedHttpObservationAcquirer : IDisposable
             ToField(HeaderValues(response, "Transfer-Encoding")),
             ToField(HeaderValues(response, "Content-Range")),
             ToField(HeaderValues(response, "ETag")),
-            ToField(HeaderValues(response, "Last-Modified")));
+            ToField(HeaderValues(response, "Last-Modified")),
+            ToField(HeaderValues(response, "Location")),
+            ToField(HeaderValues(response, "Cache-Control")),
+            ToField(HeaderValues(response, "Expires")),
+            ToField(HeaderValues(response, "Date")),
+            ToField(HeaderValues(response, "Age")));
     }
 
     private static IReadOnlyList<string> HeaderValues(

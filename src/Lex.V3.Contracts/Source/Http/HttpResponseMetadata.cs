@@ -75,7 +75,12 @@ public sealed record HttpResponseMetadata
         HttpHeaderField transferEncoding,
         HttpHeaderField contentRange,
         HttpHeaderField etag,
-        HttpHeaderField lastModified)
+        HttpHeaderField lastModified,
+        HttpHeaderField location,
+        HttpHeaderField cacheControl,
+        HttpHeaderField expires,
+        HttpHeaderField date,
+        HttpHeaderField age)
     {
         ContentType = contentType ?? throw new ArgumentNullException(nameof(contentType));
         DeclaredCharset = declaredCharset ?? throw new ArgumentNullException(nameof(declaredCharset));
@@ -85,6 +90,11 @@ public sealed record HttpResponseMetadata
         ContentRange = contentRange ?? throw new ArgumentNullException(nameof(contentRange));
         Etag = etag ?? throw new ArgumentNullException(nameof(etag));
         LastModified = lastModified ?? throw new ArgumentNullException(nameof(lastModified));
+        Location = location ?? throw new ArgumentNullException(nameof(location));
+        CacheControl = cacheControl ?? throw new ArgumentNullException(nameof(cacheControl));
+        Expires = expires ?? throw new ArgumentNullException(nameof(expires));
+        Date = date ?? throw new ArgumentNullException(nameof(date));
+        Age = age ?? throw new ArgumentNullException(nameof(age));
     }
 
     public HttpHeaderField ContentType { get; }
@@ -102,6 +112,16 @@ public sealed record HttpResponseMetadata
     public HttpHeaderField Etag { get; }
 
     public HttpHeaderField LastModified { get; }
+
+    public HttpHeaderField Location { get; }
+
+    public HttpHeaderField CacheControl { get; }
+
+    public HttpHeaderField Expires { get; }
+
+    public HttpHeaderField Date { get; }
+
+    public HttpHeaderField Age { get; }
 
     internal bool HasContentRange => ContentRange is not AbsentHttpHeader;
 
