@@ -180,15 +180,12 @@ public sealed record EuAcquisitionProfile
             }
         }
 
-        // An acquisition profile that admits nothing cannot acquire. Expressing that state is
-        // possible elsewhere; here it is a configuration error, and a loud one is better than a
-        // run that fetches nothing and reports success.
-        if (!snapshot.Any(static disposition => disposition.MayGraduate()))
-        {
-            throw new ArgumentException(
-                "No channel is admitted, so this profile can acquire nothing.",
-                nameof(channels));
-        }
+        // There is deliberately no "admits nothing" check here any more. Admission is read from
+        // EuChannelDisposition.PolicyFor, and every channel must carry a disposition, so a
+        // constructible profile always admits the Cellar endpoint and the REST resource. The
+        // check had become unreachable through every path including JSON, which uses this same
+        // constructor, and an unreachable guard is worse than no guard: it reads as protection
+        // while no input can ever prove it fires.
 
         Channels = Array.AsReadOnly(snapshot);
     }

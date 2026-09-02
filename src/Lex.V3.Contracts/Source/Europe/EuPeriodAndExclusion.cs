@@ -151,8 +151,12 @@ public sealed record EuSelectionDisposition
 
     /// <summary>The reviewed policy for one selector. Total over the closed set.</summary>
     /// <remarks>
-    /// A switch with no default arm, so adding a selector without deciding its policy does not
-    /// compile rather than defaulting to something plausible.
+    /// Every one of the twelve is written out and no arm returns a plausible default. A switch
+    /// expression over an enum cannot be exhaustive to the compiler, because the variable can hold
+    /// a value no member names, so the previous claim that a new selector would fail to compile
+    /// was not something this mechanism could keep. What it does keep: an undecided selector
+    /// throws rather than inheriting the answer of whichever arm happened to be last, and the
+    /// closed member set is pinned by test, so a thirteenth fails loudly.
     /// </remarks>
     public static EuSelectionPolicy PolicyFor(EuExcludedSelector selector) =>
         ContractValidation.RequireDefined(selector, nameof(selector)) switch
@@ -168,7 +172,12 @@ public sealed record EuSelectionDisposition
             EuExcludedSelector.SyntheticConsolidation => EuSelectionPolicy.NeverIngest,
             EuExcludedSelector.Akn4EuLegalBody => EuSelectionPolicy.NeverIngest,
             EuExcludedSelector.EurLexPortalFallback => EuSelectionPolicy.NeverIngest,
-            _ => EuSelectionPolicy.NeverExpand,
+            EuExcludedSelector.InboundTreatyBasedOnExpansion => EuSelectionPolicy.NeverExpand,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(selector),
+                selector,
+                "This selector has no reviewed policy. An accounted class with no decision behind " +
+                "it is not excluded by default."),
         };
 
     public EuExcludedSelector Selector { get; }
@@ -183,14 +192,62 @@ public sealed record EuSelectionDisposition
 }
 
 /// <summary>
-/// The exact RDF term that marks a Cellar Work as not to be indexed.
+/// One observed value in the do-not-index position, as the publisher spelled it.
+/// </summary>
+public sealed record EuDoNotIndexValue
+{
+    public EuDoNotIndexValue(string lexical, string datatypeIri)
+    {
+        Lexical = lexical ?? throw new ArgumentNullException(nameof(lexical));
+        DatatypeIri = datatypeIri ?? throw new ArgumentNullException(nameof(datatypeIri));
+    }
+
+    /// <summary>The lexical form, compared ordinally and never trimmed.</summary>
+    public string Lexical { get; }
+
+    /// <summary>The datatype IRI, compared ordinally. An empty string means none was given.</summary>
+    public string DatatypeIri { get; }
+}
+
+/// <summary>
+/// What one Work's do-not-index position says, over the whole observed value set.
+/// </summary>
+public enum EuDoNotIndexClassification
+{
+    /// <summary>Nothing in that position. The Work is not marked.</summary>
+    [JsonStringEnumMemberName("absent")]
+    Absent = 1,
+
+    /// <summary>Exactly one value, and it is the exact accepted term.</summary>
+    [JsonStringEnumMemberName("do_not_index_marker")]
+    ExactMarker = 2,
+
+    /// <summary>
+    /// Anything else in that position: a second spelling, a missing datatype, the negative term,
+    /// or the accepted term accompanied by any further value.
+    /// </summary>
+    [JsonStringEnumMemberName("scope_drift_do_not_index")]
+    ScopeDrift = 3,
+}
+
+/// <summary>
+/// The exact RDF term that marks a Cellar Work as not to be indexed, read over the whole value set.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The accepted inventory names one term and only one: <c>"1"^^xsd:boolean</c>. Anything else in
 /// that position, including an untyped <c>1</c>, a <c>true</c> spelling, or more than one value,
 /// is drift in the publisher's own vocabulary rather than an ordinary exclusion, and the two must
 /// not share an answer: an exclusion means we decided, and drift means we no longer recognise what
 /// we are reading.
+/// </para>
+/// <para>
+/// This classifies the set rather than a value, and that is the whole point. A per-value predicate
+/// reads correctly and is still wrong at the boundary, because a caller folding it with an
+/// any-match over a record holding the exact term <em>and</em> a further value gets the marker
+/// answer for a record the reviewed scope calls drift. The value set has exactly three readings
+/// and only the set can tell them apart, so the set is what this accepts.
+/// </para>
 /// </remarks>
 public static class EuDoNotIndexTerm
 {
@@ -201,16 +258,49 @@ public static class EuDoNotIndexTerm
     public const string Lexical = "1";
 
     /// <summary>
+    /// Reads one Work's whole do-not-index value set. Three outcomes, and no fourth.
+    /// </summary>
+    /// <remarks>
+    /// Fail-closed: every set that is not empty and not the exact singleton is drift, so a
+    /// spelling nobody anticipated is refused rather than quietly read as the marker.
+    /// </remarks>
+    public static EuDoNotIndexClassification Classify(IReadOnlyList<EuDoNotIndexValue> observed)
+    {
+        ArgumentNullException.ThrowIfNull(observed);
+        for (var index = 0; index < observed.Count; index++)
+        {
+            if (observed[index] is null)
+            {
+                throw new ArgumentException(
+                    $"The observed do-not-index value at {index} is null; an unread value cannot " +
+                    "be classified as absent, as the marker, or as drift.",
+                    nameof(observed));
+            }
+        }
+
+        if (observed.Count == 0)
+        {
+            return EuDoNotIndexClassification.Absent;
+        }
+
+        return observed.Count == 1 && IsExactTerm(observed[0])
+            ? EuDoNotIndexClassification.ExactMarker
+            : EuDoNotIndexClassification.ScopeDrift;
+    }
+
+    /// <summary>
     /// Whether one observed value is the exact accepted term.
     /// </summary>
     /// <remarks>
-    /// Lexical and datatype both compared ordinally. <c>true</c> is a valid xsd:boolean lexical
-    /// form and is deliberately not accepted here, because the inventory names the exact term and
-    /// a second spelling admitted quietly is a second way to say one thing.
+    /// Private on purpose. Exposed, it is an invitation to fold it with an any-match, which is
+    /// precisely the reading that turns the exact term plus one extra value into the marker.
+    /// Lexical and datatype are both compared ordinally, and <c>true</c> is a valid xsd:boolean
+    /// lexical form deliberately not accepted, because a second spelling admitted quietly is a
+    /// second way to say one thing.
     /// </remarks>
-    public static bool IsExactTerm(string lexical, string datatypeIri) =>
-        string.Equals(lexical, Lexical, StringComparison.Ordinal) &&
-        string.Equals(datatypeIri, DatatypeIri, StringComparison.Ordinal);
+    private static bool IsExactTerm(EuDoNotIndexValue value) =>
+        string.Equals(value.Lexical, Lexical, StringComparison.Ordinal) &&
+        string.Equals(value.DatatypeIri, DatatypeIri, StringComparison.Ordinal);
 }
 
 /// <summary>

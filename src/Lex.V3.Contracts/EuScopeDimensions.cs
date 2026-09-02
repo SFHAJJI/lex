@@ -495,6 +495,15 @@ public sealed record EuChannelDisposition
     {
         Channel = ContractValidation.RequireDefined(channel, nameof(channel));
         Admission = ContractValidation.RequireDefined(admission, nameof(admission));
+        var accepted = PolicyFor(Channel);
+        if (Admission != accepted)
+        {
+            throw new ArgumentException(
+                $"{Channel} is {accepted} in the reviewed policy, not {Admission}; admission is " +
+                "read from the accepted scope rather than chosen by whoever writes a row.",
+                nameof(admission));
+        }
+
         // Reason, rule and evidence are required for both outcomes. An exclusion without a reason
         // is an assertion, and an admission without one is worse: it is the state a consumer will
         // rely on to fetch.
@@ -502,6 +511,33 @@ public sealed record EuChannelDisposition
         RuleId = ContractValidation.RequireIdentifier(ruleId, nameof(ruleId));
         EvidenceRef = evidenceRef ?? throw new ArgumentNullException(nameof(evidenceRef));
     }
+
+    /// <summary>The reviewed admission for one channel. Total over the closed set.</summary>
+    /// <remarks>
+    /// <para>
+    /// The single authoritative answer. Admission is a decision this project made about a route,
+    /// so it belongs beside the channel vocabulary rather than in whichever slice happens to need
+    /// it; a second copy inside a scope row would be a second place for it to drift, and the two
+    /// would disagree silently because nothing would compare them.
+    /// </para>
+    /// <para>
+    /// No arm returns a plausible default. A channel with no reviewed admission throws, and the
+    /// closed member set is pinned by test, so a fourth route fails loudly instead of inheriting
+    /// an answer decided for a different one.
+    /// </para>
+    /// </remarks>
+    public static EuChannelAdmission PolicyFor(EuChannel channel) =>
+        ContractValidation.RequireDefined(channel, nameof(channel)) switch
+        {
+            EuChannel.CellarSparqlEndpoint => EuChannelAdmission.Admitted,
+            EuChannel.PublicationsRestResource => EuChannelAdmission.Admitted,
+            EuChannel.EurLexPortal => EuChannelAdmission.Excluded,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(channel),
+                channel,
+                "This channel has no reviewed admission. A route with no decision behind it is " +
+                "not admitted by default."),
+        };
 
     public EuChannel Channel { get; }
 

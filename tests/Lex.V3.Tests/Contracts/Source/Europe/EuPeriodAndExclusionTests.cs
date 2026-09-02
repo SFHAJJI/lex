@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Source.Core;
@@ -152,18 +153,31 @@ public sealed class EuPeriodAndExclusionTests
     /// The EUR-Lex portal row is bound to the exact existing channel member.
     /// </summary>
     /// <remarks>
-    /// Binding to the member's identity rather than to a fixed disposition, because there is not
-    /// one: <see cref="EuChannelDisposition"/> accepts any channel with any admission, unlike
-    /// <see cref="EuLanguageBodyDisposition"/>, which pins its accepted inventory in the type.
-    /// That gap is reported in the freeze packet rather than closed here, because pinning a
-    /// channel's admission is a change to the acquisition profile row and not to this one.
+    /// Bound to the shared channel policy, not to the member's existence. The first version
+    /// asserted only that <c>EurLexPortal</c> was still a defined member, which is true of a
+    /// channel anyone may construct as admitted; S8's exclusion row and the channel vocabulary
+    /// could then disagree with nothing able to notice. The admission now has one authoritative
+    /// answer on <see cref="EuChannelDisposition"/> and this row reads it rather than restating it,
+    /// so a second portal rule cannot exist to drift from the first.
     /// </remarks>
     [TestMethod]
     public void TheEurLexPortalRowIsBoundToTheExactChannelMember()
     {
-        Assert.IsTrue(
-            Enum.IsDefined(EuChannel.EurLexPortal),
-            "the channel S8's portal exclusion refers to no longer exists");
+        Assert.AreEqual(
+            EuChannelAdmission.Excluded,
+            EuChannelDisposition.PolicyFor(EuChannel.EurLexPortal),
+            "the portal's reviewed admission moved, so S8's exclusion row now points at a route " +
+            "the shared policy admits");
+
+        Assert.ThrowsExactly<ArgumentException>(
+            () => new EuChannelDisposition(
+                EuChannel.EurLexPortal,
+                EuChannelAdmission.Admitted,
+                "reason_code",
+                "rule-portal",
+                Evidence),
+            "the portal can still be constructed as admitted, so this row is bound to a name " +
+            "rather than to a policy");
 
         Assert.AreEqual(
             "eurlex_portal",
@@ -173,26 +187,92 @@ public sealed class EuPeriodAndExclusionTests
     }
 
     /// <summary>
-    /// The do-not-index selector matches one term, and everything else is drift rather than absence.
+    /// The do-not-index position has exactly three readings, and they are read off the whole set.
     /// </summary>
+    /// <remarks>
+    /// The last two vectors are the ones a per-value predicate cannot answer. A record carrying
+    /// the exact term beside any further value is drift, not the marker, and a caller folding a
+    /// scalar predicate with an any-match would have read it as the marker while every test here
+    /// stayed green.
+    /// </remarks>
     [TestMethod]
-    public void OnlyTheExactDoNotIndexTermMatches()
+    public void TheDoNotIndexPositionIsClassifiedOverTheWholeValueSet()
     {
-        Assert.IsTrue(EuDoNotIndexTerm.IsExactTerm("1", EuDoNotIndexTerm.DatatypeIri));
+        Assert.AreEqual(
+            EuDoNotIndexClassification.Absent,
+            EuDoNotIndexTerm.Classify(Array.Empty<EuDoNotIndexValue>()));
 
-        foreach (var (lexical, datatype, why) in new[]
+        Assert.AreEqual(
+            EuDoNotIndexClassification.ExactMarker,
+            EuDoNotIndexTerm.Classify(new[] { Term("1", EuDoNotIndexTerm.DatatypeIri) }));
+
+        foreach (var (values, why) in new (EuDoNotIndexValue[] Values, string Why)[]
                  {
-                     ("true", EuDoNotIndexTerm.DatatypeIri, "a second valid boolean spelling"),
-                     ("1", "http://www.w3.org/2001/XMLSchema#integer", "an untyped numeric one"),
-                     ("1", "", "no datatype at all"),
-                     ("0", EuDoNotIndexTerm.DatatypeIri, "the negative term"),
-                     (" 1", EuDoNotIndexTerm.DatatypeIri, "leading space"),
+                     (new[] { Term("true", EuDoNotIndexTerm.DatatypeIri) },
+                      "a second valid boolean spelling"),
+                     (new[] { Term("1", "http://www.w3.org/2001/XMLSchema#integer") },
+                      "an untyped numeric one"),
+                     (new[] { Term("1", string.Empty) }, "no datatype at all"),
+                     (new[] { Term("0", EuDoNotIndexTerm.DatatypeIri) }, "the negative term"),
+                     (new[] { Term(" 1", EuDoNotIndexTerm.DatatypeIri) }, "a leading space"),
+                     (new[]
+                      {
+                          Term("1", EuDoNotIndexTerm.DatatypeIri),
+                          Term("0", EuDoNotIndexTerm.DatatypeIri),
+                      },
+                      "the exact term beside the negative one"),
+                     (new[]
+                      {
+                          Term("1", EuDoNotIndexTerm.DatatypeIri),
+                          Term("1", EuDoNotIndexTerm.DatatypeIri),
+                      },
+                      "the exact term twice"),
                  })
         {
-            Assert.IsFalse(
-                EuDoNotIndexTerm.IsExactTerm(lexical, datatype),
-                $"{why} was accepted as the exact do-not-index term");
+            Assert.AreEqual(
+                EuDoNotIndexClassification.ScopeDrift,
+                EuDoNotIndexTerm.Classify(values),
+                $"{why} was not read as scope drift");
         }
+
+        // An unread value is not an absence. Classifying it as one would report that a Work is
+        // unmarked because we failed to look at it.
+        Assert.ThrowsExactly<ArgumentNullException>(
+            () => EuDoNotIndexTerm.Classify(null!));
+        Assert.ThrowsExactly<ArgumentException>(
+            () => EuDoNotIndexTerm.Classify(new EuDoNotIndexValue[] { null! }));
+    }
+
+    private static EuDoNotIndexValue Term(string lexical, string datatypeIri) =>
+        new(lexical, datatypeIri);
+
+    /// <summary>
+    /// Both closed vocabularies are pinned member by member, which is what makes the policy
+    /// switches total in fact rather than in a comment.
+    /// </summary>
+    /// <remarks>
+    /// A switch expression over an enum cannot be exhaustive to the compiler, because the variable
+    /// can hold a value no member names. So the closed set is held here instead: a thirteenth
+    /// selector or a fourth channel fails this test, and until it is given a reviewed answer the
+    /// policy switch throws rather than returning whichever arm happened to be last.
+    /// </remarks>
+    [TestMethod]
+    public void TheClosedVocabulariesAreExactlyTheReviewedMembers()
+    {
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "Akn4EuLegalBody", "CellarDoNotIndex", "DossierContainedSector5Body",
+                "EuJudgmentText", "EurLexPortalFallback", "InboundTreatyBasedOnExpansion",
+                "NonLuxNationalImplementing", "Sector3OutsideReviewedClosure",
+                "SyntheticConsolidation", "UnreviewedSectorOrTreatyVersion", "WholesaleSector2",
+                "WholesaleSector5",
+            },
+            Enum.GetNames<EuExcludedSelector>().OrderBy(n => n, StringComparer.Ordinal).ToArray());
+
+        CollectionAssert.AreEqual(
+            new[] { "CellarSparqlEndpoint", "EurLexPortal", "PublicationsRestResource" },
+            Enum.GetNames<EuChannel>().OrderBy(n => n, StringComparer.Ordinal).ToArray());
     }
 
     [TestMethod]
@@ -205,15 +285,27 @@ public sealed class EuPeriodAndExclusionTests
         Assert.IsTrue(EuAcquisitionPeriod.IsOpenEnded("9999-12-31"));
         Assert.IsFalse(EuAcquisitionPeriod.IsOpenEnded("2030-09-15"));
 
-        // No floor, no cutoff, and no retroactive observation. Asserted as the absence of any
-        // member that could express one, because the rule is that the type offers no way to say it.
-        var names = typeof(EuAcquisitionPeriod).GetMembers().Select(m => m.Name).ToArray();
-        foreach (var forbidden in new[] { "Floor", "Earliest", "Cutoff", "Observed", "Retroactive" })
-        {
-            Assert.IsFalse(
-                names.Any(name => name.Contains(forbidden, StringComparison.Ordinal)),
-                $"{forbidden} would let this type express an inclusion bound the scope has none of");
-        }
+        // The no-floor rule pinned as the exact declared surface rather than as a list of names
+        // nobody may use. A denylist only refuses the words it happens to know: a public
+        // StartDate passes every entry in the old list while being exactly the inclusion bound
+        // the scope has none of. This refuses any addition at all, which is the only shape of the
+        // rule that survives somebody naming a floor something reasonable.
+        var declared = typeof(EuAcquisitionPeriod)
+            .GetMembers(BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance |
+                        BindingFlags.DeclaredOnly)
+            .Select(member => $"{member.MemberType} {member}")
+            .OrderBy(signature => signature, StringComparer.Ordinal)
+            .ToArray();
+
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "Field System.String OpenSentinel",
+                "Method Boolean IsOpenEnded(System.String)",
+            },
+            declared,
+            "the acquisition period's declared surface changed; it now declares " +
+            string.Join(" | ", declared));
     }
 
     /// <summary>
