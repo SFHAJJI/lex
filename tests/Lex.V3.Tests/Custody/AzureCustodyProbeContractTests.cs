@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Lex.V3.Contracts;
@@ -58,6 +59,103 @@ public sealed class AzureCustodyProbeContractTests
         Assert.AreEqual(string.Empty, output.ToString());
         Assert.AreEqual(1, store.ReadCalls);
         Assert.AreEqual(0, store.CreateCalls);
+    }
+
+    [TestMethod]
+    public async Task WriteUsesFreshSyntheticBytesForEveryProbe()
+    {
+        var firstStore = new ProbeStore();
+        var secondStore = new ProbeStore();
+
+        await CustodyProbeApplication.RunAsync(
+            ["write", "nightly_floor_90d"], TextReader.Null, TextWriter.Null,
+            ValidEnvironment(), _ => firstStore, CancellationToken.None);
+        await CustodyProbeApplication.RunAsync(
+            ["write", "nightly_floor_90d"], TextReader.Null, TextWriter.Null,
+            ValidEnvironment(), _ => secondStore, CancellationToken.None);
+
+        Assert.HasCount(32, firstStore.CreatedBytes);
+        Assert.HasCount(32, secondStore.CreatedBytes);
+        CollectionAssert.AreNotEqual(firstStore.CreatedBytes, secondStore.CreatedBytes);
+    }
+
+    [TestMethod]
+    public async Task ReceiptArgumentRestoresCheckedBytesThroughASeparateInvocation()
+    {
+        foreach (var lane in Enum.GetValues<CustodyClass>())
+        {
+            var body = RandomNumberGenerator.GetBytes(32);
+            var receipt = ReceiptFor(body, lane);
+            var store = new ProbeStore(body);
+            var output = new StringWriter();
+
+            await CustodyProbeApplication.RunAsync(
+                ["read-receipt", EncodeReceipt(receipt)],
+                TextReader.Null,
+                output,
+                ValidEnvironment(),
+                _ => store,
+                CancellationToken.None);
+
+            Assert.AreEqual(string.Empty, output.ToString());
+            Assert.AreEqual(1, store.ReadCalls);
+            Assert.AreEqual(0, store.CreateCalls);
+            Assert.AreEqual(lane, store.LastReadReference!.CustodyClass);
+        }
+    }
+
+    [TestMethod]
+    public async Task ReceiptArgumentRefusesNoncanonicalOrOversizedEncodingBeforeStoreCreation()
+    {
+        var receipt = ReceiptFor(new byte[32], CustodyClass.NightlyFloor90d);
+        var canonical = EncodeReceipt(receipt);
+        var noncanonical = EncodeReceiptWithNoncanonicalBase64Url(receipt);
+        var invalidUtf8 = EncodeBytes([byte.MaxValue]);
+        foreach (var value in new[]
+                 {
+                     canonical + "=",
+                     " " + canonical,
+                     "a",
+                     noncanonical,
+                     invalidUtf8,
+                     new string('a', 16_385),
+                 })
+        {
+            var storeCreated = false;
+            await Assert.ThrowsExactlyAsync<ArgumentException>(() => CustodyProbeApplication.RunAsync(
+                ["read-receipt", value],
+                TextReader.Null,
+                TextWriter.Null,
+                ValidEnvironment(),
+                _ =>
+                {
+                    storeCreated = true;
+                    return new ProbeStore();
+                },
+                CancellationToken.None));
+            Assert.IsFalse(storeCreated);
+        }
+
+        Assert.IsFalse(canonical.Contains('='));
+        Assert.AreNotEqual(canonical, noncanonical);
+    }
+
+    [TestMethod]
+    public async Task ReceiptArgumentRefusesCorruptedRestoredBytes()
+    {
+        var expected = RandomNumberGenerator.GetBytes(32);
+        var corrupted = expected.ToArray();
+        corrupted[0] ^= byte.MaxValue;
+        var receipt = ReceiptFor(expected, CustodyClass.NightlyFloor90d);
+
+        await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() =>
+            CustodyProbeApplication.RunAsync(
+                ["read-receipt", EncodeReceipt(receipt)],
+                TextReader.Null,
+                TextWriter.Null,
+                ValidEnvironment(),
+                _ => new ProbeStore(corrupted),
+                CancellationToken.None));
     }
 
     [TestMethod]
@@ -151,20 +249,29 @@ public sealed class AzureCustodyProbeContractTests
 
         foreach (var receipt in new[] { wrongPolicy, unenforced })
         {
-            var storeCreated = false;
-            await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
-                CustodyProbeApplication.RunAsync(
-                    ["read"],
-                    new StringReader(ContractJson.Serialize(receipt)),
-                    TextWriter.Null,
-                    ValidEnvironment(),
-                    _ =>
-                    {
-                        storeCreated = true;
-                        return new ProbeStore(body);
-                    },
-                    CancellationToken.None));
-            Assert.IsFalse(storeCreated);
+            foreach (var command in new[] { "read", "read-receipt" })
+            {
+                var storeCreated = false;
+                var arguments = command == "read"
+                    ? new[] { "read" }
+                    : new[] { "read-receipt", EncodeReceipt(receipt) };
+                var input = command == "read"
+                    ? new StringReader(ContractJson.Serialize(receipt))
+                    : TextReader.Null;
+                await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
+                    CustodyProbeApplication.RunAsync(
+                        arguments,
+                        input,
+                        TextWriter.Null,
+                        ValidEnvironment(),
+                        _ =>
+                        {
+                            storeCreated = true;
+                            return new ProbeStore(body);
+                        },
+                        CancellationToken.None));
+                Assert.IsFalse(storeCreated, command);
+            }
         }
     }
 
@@ -223,6 +330,11 @@ public sealed class AzureCustodyProbeContractTests
                      new[] { "WRITE", "nightly_floor_90d" },
                      new[] { "write" },
                      new[] { "write", "NightlyFloor90d" },
+                     new[] { "roundtrip", "nightly_floor_90d" },
+                     new[] { "read-receipt" },
+                     new[] { "roundtrip" },
+                     new[] { "roundtrip", "NightlyFloor90d" },
+                     new[] { "roundtrip", "nightly_floor_90d", "extra" },
                      new[] { "read", "extra" },
                      new[] { "verify" },
                  })
@@ -479,6 +591,34 @@ public sealed class AzureCustodyProbeContractTests
             evidence);
     }
 
+    private static string EncodeReceipt(DurableBlobWriteReceipt receipt) =>
+        EncodeBytes(Encoding.UTF8.GetBytes(ContractJson.Serialize(receipt)));
+
+    private static string EncodeReceiptWithNoncanonicalBase64Url(
+        DurableBlobWriteReceipt receipt)
+    {
+        var json = ContractJson.Serialize(receipt);
+        while (Encoding.UTF8.GetByteCount(json) % 3 == 0)
+        {
+            json += " ";
+        }
+
+        var canonical = EncodeBytes(Encoding.UTF8.GetBytes(json));
+        const string alphabet =
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+        var last = alphabet.IndexOf(canonical[^1], StringComparison.Ordinal);
+        var unusedBits = canonical.Length % 4 == 2 ? 4 : 2;
+        var groupSize = 1 << unusedBits;
+        var replacement = last / groupSize * groupSize + (last + 1) % groupSize;
+        return canonical[..^1] + alphabet[replacement];
+    }
+
+    private static string EncodeBytes(byte[] bytes) =>
+        Convert.ToBase64String(bytes)
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_');
+
     private static DurableBlobRef ReferenceFor(byte[] body, CustodyClass custodyClass) =>
         new(
             CustodySchemaIds.DurableBlobRef,
@@ -488,9 +628,13 @@ public sealed class AzureCustodyProbeContractTests
 
     private sealed class ProbeStore(ReadOnlyMemory<byte>? restored = null) : ICustodyStore
     {
+        public byte[] CreatedBytes { get; private set; } = [];
+
         public int CreateCalls { get; private set; }
 
         public int ReadCalls { get; private set; }
+
+        public DurableBlobRef? LastReadReference { get; private set; }
 
         public Task<DurableBlobWriteReceipt> CreateAsync(
             ReadOnlyMemory<byte> bytes,
@@ -498,6 +642,7 @@ public sealed class AzureCustodyProbeContractTests
             CancellationToken cancellationToken)
         {
             CreateCalls++;
+            CreatedBytes = bytes.ToArray();
             return Task.FromResult(ReceiptFor(bytes.ToArray(), custodyClass));
         }
 
@@ -506,6 +651,7 @@ public sealed class AzureCustodyProbeContractTests
             CancellationToken cancellationToken)
         {
             ReadCalls++;
+            LastReadReference = reference;
             return Task.FromResult(restored ?? ReadOnlyMemory<byte>.Empty);
         }
     }
