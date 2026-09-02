@@ -171,6 +171,15 @@ public sealed class EuWemiIdentityBoundary
     }
 
     /// <summary>
+    /// The only origins a Cellar object may be named by, both schemes the publisher answers on.
+    /// </summary>
+    private static readonly string[] CellarOrigins =
+    [
+        "http://publications.europa.eu/resource/cellar/",
+        "https://publications.europa.eu/resource/cellar/",
+    ];
+
+    /// <summary>
     /// Require the publisher URI and the canonical key to name one object.
     /// </summary>
     /// <remarks>
@@ -181,15 +190,6 @@ public sealed class EuWemiIdentityBoundary
     /// proved from caller-authored strings about a caller-authored object, which is the failure this
     /// type exists to end rather than relocate one level down.
     /// </remarks>
-    /// <summary>
-    /// The only origins a Cellar object may be named by, both schemes the publisher answers on.
-    /// </summary>
-    private static readonly string[] CellarOrigins =
-    [
-        "http://publications.europa.eu/resource/cellar/",
-        "https://publications.europa.eu/resource/cellar/",
-    ];
-
     private static void RequirePublisherUriNamesTheKey(
         string publisherUri,
         string canonicalKey,

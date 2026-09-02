@@ -265,34 +265,52 @@ public sealed class EuWemiIdentityTests
     [TestMethod]
     public void TheBoundaryDecidesIdentityAndNothingElse()
     {
-        // Pinned as the exact public surface rather than as forbidden substrings. A name grep is
-        // vacuous: it constrains what a future member may be called and not what the type may do,
-        // so it passes unchanged if Require grows an acquisition-ledger parameter and starts
-        // refusing objects that were never fetched. An exact set fails on any addition.
-        var declared = typeof(EuWemiIdentityBoundary)
+        // Pinned by FULL SIGNATURE, not by name. Two earlier versions of this test claimed more
+        // than they proved. The first greped member names for "Complete" and "Absence", which
+        // constrains what a member may be called rather than what the type may do. The second took
+        // GetMembers().Select(Name).Distinct(), which collapses overloads: adding a second public
+        // constructor taking (registryRef, identityProfileRef, bool acquisitionComplete) put
+        // acquisition policy inside an identity boundary and every test still passed, because the
+        // new overload shared the name ".ctor" with the old one.
+        //
+        // So the pin now carries overload count, parameter types, static or instance, and return
+        // type, for every declared public member including fields and properties.
+        var surface = typeof(EuWemiIdentityBoundary)
             .GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static |
                         BindingFlags.DeclaredOnly)
-            .Select(member => member.Name)
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(name => name, StringComparer.Ordinal)
+            .Where(member => member is not MethodInfo { IsSpecialName: true })
+            .Select(Describe)
+            .OrderBy(text => text, StringComparer.Ordinal)
             .ToArray();
 
         CollectionAssert.AreEqual(
-            new[] { ".ctor", "MemberKeyOf", "ParentRoleOf", "Require" },
-            declared,
-            "the public surface changed; identity is all this type may decide, so an addition " +
-            "needs a decision rather than a test update: " + string.Join(", ", declared));
-
-        // And the one method that takes an object takes nothing else, so it cannot consult
-        // acquisition, completeness or coverage even if somebody wanted it to.
-        var parameters = typeof(EuWemiIdentityBoundary)
-            .GetMethod(nameof(EuWemiIdentityBoundary.Require))!
-            .GetParameters()
-            .Select(parameter => parameter.ParameterType)
-            .ToArray();
-        CollectionAssert.AreEqual(
-            new[] { typeof(SourceObjectRef), typeof(EuWemiRole), typeof(string) }, parameters);
+            new[]
+            {
+                "SourceObjectRef Require(SourceObjectRef, EuWemiRole, String)",
+                "static Nullable`1 ParentRoleOf(EuWemiRole)",
+                "static String MemberKeyOf(EuWemiRole)",
+                "void .ctor(SourceArtifactRef, SourceArtifactRef)",
+            },
+            surface,
+            "the public surface changed. Identity is all this type may decide, so an addition is a " +
+            "decision rather than a test update. Observed: " + string.Join(" | ", surface));
     }
+
+    private static string Describe(MemberInfo member) => member switch
+    {
+        ConstructorInfo constructor => $"void .ctor({Parameters(constructor)})",
+        MethodInfo method =>
+            $"{(method.IsStatic ? "static " : string.Empty)}{method.ReturnType.Name} " +
+            $"{method.Name}({Parameters(method)})",
+        PropertyInfo property => $"property {property.PropertyType.Name} {property.Name}",
+        FieldInfo field =>
+            $"{(field.IsStatic ? "static " : string.Empty)}field {field.FieldType.Name} {field.Name}",
+        _ => $"{member.MemberType} {member.Name}",
+    };
+
+    private static string Parameters(MethodBase method) =>
+        string.Join(", ", method.GetParameters().Select(parameter => parameter.ParameterType.Name));
+
 
     [TestMethod]
     public void OneCellarObjectHasExactlyOneAdmittedIdentity()
