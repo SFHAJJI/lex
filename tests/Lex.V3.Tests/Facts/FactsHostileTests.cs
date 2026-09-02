@@ -872,6 +872,79 @@ public sealed class FactsHostileTests
 
     /// <summary>
     /// MUTATION RECEIPT: two level claims about one string. Candidate 2 admitted one URI as both
+    /// <summary>
+    /// The resource family documented itself as covering manifestations and items while its grammar
+    /// rejected the publisher's own dotted expression and manifestation identifiers, because
+    /// <c>Guid.TryParseExact(.., "D")</c> cannot admit a dotted suffix.
+    ///
+    /// Every shape below was checked live against the official endpoint on 2026-09-02 rather than
+    /// inferred: the bare work, the dotted expression and the dotted manifestation each answered 200
+    /// and redirected to their own distinct rdf/object/full, <c>{manifestation}/DOC_1</c> answered
+    /// 200 directly, and a third dotted level answered 404. The depth ceiling asserted here is the
+    /// publisher's answer, not ours.
+    /// </summary>
+    [TestMethod]
+    public void TheCellarFamiliesAdmitEveryPublisherLevelAndNothingDeeper()
+    {
+        const string work = FactsFixtures.CellarWorkUri;
+
+        var admittedAsResource = new[]
+        {
+            work + ".0006",            // expression
+            work + ".0006.03",         // manifestation
+            work + ".0006.03/DOC_1",   // item, the data stream beneath a manifestation
+            work + "/DOC_1",           // already admitted before this repair
+        };
+
+        foreach (var value in admittedAsResource)
+        {
+            Assert.AreEqual(
+                value,
+                new OfficialIdentifier(FactsIdentifierFamily.CellarResourceUri, value).RawValue,
+                $"the resource family refused {value}");
+
+            // and the same value is never also a work, so the level is carried by the shape rather
+            // than by whichever family the caller reached for.
+            Assert.ThrowsExactly<ArgumentException>(
+                () => new OfficialIdentifier(FactsIdentifierFamily.CellarWorkUri, value),
+                $"{value} was admitted as a work");
+        }
+
+        // The bare work is the work and only the work, in both directions.
+        Assert.AreEqual(
+            work, new OfficialIdentifier(FactsIdentifierFamily.CellarWorkUri, work).RawValue);
+        Assert.ThrowsExactly<ArgumentException>(
+            () => new OfficialIdentifier(FactsIdentifierFamily.CellarResourceUri, work));
+
+        // Near misses, refused by both families. The first is the publisher's own 404.
+        var refused = new (string Value, string Why)[]
+        {
+            (work + ".0006.03.01", "a third dotted level, which Cellar answers 404"),
+            (work + ".006", "an expression suffix one digit short"),
+            (work + ".00006", "an expression suffix one digit wide"),
+            (work + ".0006.3", "a manifestation suffix one digit short"),
+            (work + ".0006.003", "a manifestation suffix one digit wide"),
+            (work + ".0006.0a", "a manifestation suffix that is not digits"),
+            (work + ".", "an empty suffix"),
+            (work + "..0006", "an empty level between the work and the expression"),
+            ("http://publications.europa.eu/resource/cellar/not-a-uuid.0006", "a head that is not a UUID"),
+        };
+
+        foreach (var (value, why) in refused)
+        {
+            foreach (var family in new[]
+                     {
+                         FactsIdentifierFamily.CellarWorkUri,
+                         FactsIdentifierFamily.CellarResourceUri,
+                     })
+            {
+                Assert.ThrowsExactly<ArgumentException>(
+                    () => new OfficialIdentifier(family, value),
+                    $"{family} admitted {value} despite {why}");
+            }
+        }
+    }
+
     /// work-level and resource-level inside a single identity.
     /// </summary>
     [TestMethod]
