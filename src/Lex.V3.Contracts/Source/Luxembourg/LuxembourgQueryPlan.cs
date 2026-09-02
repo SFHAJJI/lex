@@ -231,27 +231,7 @@ internal static class LuxembourgQueryText
         }
     }
 
-    public static string SparqlString(string value)
-    {
-        var builder = new StringBuilder(value.Length + 2).Append('"');
-        foreach (var character in value)
-        {
-            _ = character switch
-            {
-                '\\' => builder.Append("\\\\"),
-                '"' => builder.Append("\\\""),
-                '\t' => builder.Append("\\t"),
-                '\n' => builder.Append("\\n"),
-                '\r' => builder.Append("\\r"),
-                '\b' => builder.Append("\\b"),
-                '\f' => builder.Append("\\f"),
-                < ' ' or '\u007f' => builder.Append("\\u").Append(((int)character).ToString("X4", CultureInfo.InvariantCulture)),
-                _ => builder.Append(character),
-            };
-        }
-
-        return builder.Append('"').ToString();
-    }
+    public static string SparqlString(string value) => SparqlQueryText.StringLiteral(value);
 }
 
 public sealed class LuxembourgBoundQueryPage

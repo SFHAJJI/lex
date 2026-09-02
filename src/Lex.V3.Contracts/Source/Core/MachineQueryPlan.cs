@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -35,6 +36,9 @@ public enum MachineQueryParameterKind
 
     [JsonStringEnumMemberName("publisher_cursor")]
     PublisherCursor = 2,
+
+    [JsonStringEnumMemberName("publisher_literal")]
+    PublisherLiteral = 3,
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -71,6 +75,19 @@ public sealed record MachineQueryParameter
             throw new ArgumentException(
                 "A publisher cursor carries one bounded printable-ASCII value.",
                 nameof(textValue));
+        }
+
+
+        if (Kind == MachineQueryParameterKind.PublisherLiteral)
+        {
+            if (IntegerValue is not null)
+            {
+                throw new ArgumentException(
+                    "A publisher literal carries text and no integer.",
+                    nameof(integerValue));
+            }
+
+            _ = MachineQueryValidation.RequirePublisherLiteral(TextValue, nameof(textValue));
         }
     }
 
@@ -978,6 +995,35 @@ internal static class MachineQueryValidation
         return value;
     }
 
+    public static string RequirePublisherLiteral(string? value, string parameterName)
+    {
+        if (string.IsNullOrEmpty(value) || value.Any(char.IsControl))
+        {
+            throw new ArgumentException(
+                "A publisher literal must be nonempty control-free text.",
+                parameterName);
+        }
+
+        try
+        {
+            if (StrictUtf8.GetByteCount(value) > MaximumParameterTextLength)
+            {
+                throw new ArgumentException(
+                    "A publisher literal exceeds the bounded UTF-8 length.",
+                    parameterName);
+            }
+        }
+        catch (EncoderFallbackException exception)
+        {
+            throw new ArgumentException(
+                "A publisher literal must be valid Unicode text.",
+                parameterName,
+                exception);
+        }
+
+        return value;
+    }
+
     public static SourceRegistryMemberRef RequireMediaTypeRegistryMember(
         SourceRegistryMemberRef? value,
         string parameterName)
@@ -1167,4 +1213,31 @@ internal static class MachineQueryValidation
         >= 'A' and <= 'F' => value - 'A' + 10,
         _ => -1,
     };
+}
+
+internal static class SparqlQueryText
+{
+    internal static string StringLiteral(string value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var builder = new StringBuilder(value.Length + 2).Append('"');
+        foreach (var character in value)
+        {
+            _ = character switch
+            {
+                '\\' => builder.Append("\\\\"),
+                '"' => builder.Append("\\\""),
+                '\t' => builder.Append("\\t"),
+                '\n' => builder.Append("\\n"),
+                '\r' => builder.Append("\\r"),
+                '\b' => builder.Append("\\b"),
+                '\f' => builder.Append("\\f"),
+                < ' ' or '\u007f' => builder.Append("\\u").Append(
+                    ((int)character).ToString("X4", CultureInfo.InvariantCulture)),
+                _ => builder.Append(character),
+            };
+        }
+
+        return builder.Append('"').ToString();
+    }
 }
