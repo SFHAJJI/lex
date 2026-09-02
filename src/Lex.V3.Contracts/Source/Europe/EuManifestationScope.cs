@@ -401,14 +401,11 @@ public sealed record EuExpressionFormatFact
 /// The Union manifestation and rights scope: which formats exist, which may serve as bodies, when
 /// Formex became available, and what reuse basis each content class carries.
 /// </summary>
-/// <summary>
-/// What this inventory is, and the four things it is not.
-/// </summary>
 /// <remarks>
 /// <para>
-/// <see cref="EuManifestationScope"/> is a closed class-policy inventory and a constraint on what
-/// later rights evidence must resolve. It is not itself a reuse-conditions artifact, publication
-/// authority, clearance result, or notice.
+/// What this inventory is, and the four things it is not. It is a closed class-policy inventory
+/// and a constraint on what later rights evidence must resolve. It is not itself a
+/// reuse-conditions artifact, publication authority, clearance result, or notice.
 /// </para>
 /// <para>
 /// It may guide which condition must be sought, but it cannot generate, satisfy, or substitute for
