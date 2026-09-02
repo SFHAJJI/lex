@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Europe;
@@ -229,6 +230,82 @@ public sealed class EuManifestationScopeTests
                 () => new EuRightsExceptionDisposition(channel, null!),
                 $"{channel} was allowed to exist with no evidence that it exists");
         }
+
+        // Membership, not only vocabulary. The first version of this test pinned the enum and the
+        // disposition's surface and never asked whether a scope carried them, so both types could
+        // sit beside the model asserting nothing while a serialized scope stayed silent about the
+        // two conditions that can override its class answers.
+        var scope = Scope(FullFormats());
+        CollectionAssert.AreEqual(
+            Enum.GetValues<EuRightsExceptionChannel>(),
+            scope.Exceptions.Select(disposition => disposition.Channel).ToArray());
+
+        foreach (var missing in Enum.GetValues<EuRightsExceptionChannel>())
+        {
+            var partial = FullExceptions().Where(d => d.Channel != missing).ToArray();
+            var thrown = Assert.ThrowsExactly<ArgumentException>(
+                () => Scope(FullFormats(), exceptions: partial));
+            StringAssert.Contains(thrown.Message, missing.ToString());
+        }
+
+        var doubled = FullExceptions()
+            .Append(new EuRightsExceptionDisposition(
+                EuRightsExceptionChannel.ThirdPartyMaterial, Evidence("cc")))
+            .ToArray();
+        Assert.ThrowsExactly<ArgumentException>(() => Scope(FullFormats(), exceptions: doubled));
+
+        Assert.ThrowsExactly<ArgumentException>(
+            () => Scope(FullFormats(), exceptions: new EuRightsExceptionDisposition[] { null! }));
+
+        Assert.ThrowsExactly<ArgumentNullException>(
+            () => new EuManifestationScope(
+                FullFormats(), FullRights(), null!, Boundary, Evidence("aa")));
+
+        // A caller keeping its own reference cannot reach in afterwards.
+        var supplied = FullExceptions();
+        var retained = Scope(FullFormats(), exceptions: supplied);
+        supplied[0] = new EuRightsExceptionDisposition(
+            EuRightsExceptionChannel.DocumentSpecificTerms, Evidence("cc"));
+        Assert.AreEqual(
+            EuRightsExceptionChannel.ThirdPartyMaterial,
+            retained.Exceptions[0].Channel,
+            "the scope followed a caller's later edit");
+
+        // And the same closure holds on the wire, not only in the constructor. The document is
+        // edited as a node tree rather than as text, because hand-quoting JSON inside a C# string
+        // is how a test ends up proving that a malformed document is rejected.
+        var document = JsonNode.Parse(ContractJson.Serialize(retained))!.AsObject();
+        var channels = document["exceptions"]!.AsArray();
+
+        // The deserializer wraps a constructor refusal, so the inner exception is asserted too.
+        // Without that this would pass on any malformed document, which is the vacuous shape: it
+        // would prove the parser works rather than that the closure holds.
+        static void RefusedOnTheWire(JsonObject document, string why)
+        {
+            var thrown = Assert.ThrowsExactly<JsonException>(
+                () => ContractJson.Deserialize<EuManifestationScope>(document.ToJsonString()),
+                why);
+            Assert.IsInstanceOfType<ArgumentException>(
+                thrown.InnerException,
+                $"{why}: refused, but not by the closure");
+        }
+
+        var dropped = channels.Deserialize<JsonArray>()!;
+        dropped.RemoveAt(dropped.Count - 1);
+        document["exceptions"] = dropped;
+        RefusedOnTheWire(document, "a scope missing an exception channel survived deserialization");
+
+        var duplicated = channels.Deserialize<JsonArray>()!;
+        duplicated.Add(JsonNode.Parse(duplicated[0]!.ToJsonString()));
+        document["exceptions"] = duplicated;
+        RefusedOnTheWire(document, "a duplicated channel survived deserialization");
+
+        var unknown = channels.Deserialize<JsonArray>()!;
+        unknown[0]!.AsObject()["channel"] = "no_such_channel";
+        document["exceptions"] = unknown;
+        Assert.ThrowsExactly<JsonException>(
+            () => ContractJson.Deserialize<EuManifestationScope>(document.ToJsonString()),
+            "an unknown channel token survived deserialization");
     }
 
     [TestMethod]
@@ -438,7 +515,7 @@ public sealed class EuManifestationScopeTests
             () => ContractJson.Deserialize<EuManifestationScope>(drifted));
 
         Assert.ThrowsExactly<ArgumentNullException>(
-            () => new EuManifestationScope(FullFormats(), FullRights(), Boundary, null!));
+            () => new EuManifestationScope(FullFormats(), FullRights(), FullExceptions(), Boundary, null!));
     }
 
     [TestMethod]
@@ -451,7 +528,9 @@ public sealed class EuManifestationScopeTests
         // holds any more.
         var formats = new List<EuFormatDisposition>(FullFormats());
         var rights = new List<EuRightsDisposition>(FullRights());
-        var scope = new EuManifestationScope(formats, rights, Boundary, Evidence("aa"));
+        var exceptions = new List<EuRightsExceptionDisposition>(FullExceptions());
+        var scope = new EuManifestationScope(
+            formats, rights, exceptions, Boundary, Evidence("aa"));
 
         formats.Clear();
         rights.Clear();
@@ -604,10 +683,11 @@ public sealed class EuManifestationScopeTests
         // content digest differently purely because of how a caller built its list, which breaks
         // the deterministic retained profile.
         var forward = new EuManifestationScope(
-            FullFormats(), FullRights(), Boundary, Evidence("aa"));
+            FullFormats(), FullRights(), FullExceptions(), Boundary, Evidence("aa"));
         var reversed = new EuManifestationScope(
             FullFormats().Reverse().ToArray(),
             FullRights().Reverse().ToArray(),
+            FullExceptions().Reverse().ToArray(),
             Boundary,
             Evidence("aa"));
 
@@ -666,8 +746,19 @@ public sealed class EuManifestationScopeTests
     private static EuManifestationScope Scope(
         IReadOnlyList<EuFormatDisposition> formats,
         IReadOnlyList<EuRightsDisposition>? rights = null,
-        string? boundary = null) =>
-        new(formats, rights ?? FullRights(), boundary ?? Boundary, Evidence("aa"));
+        string? boundary = null,
+        IReadOnlyList<EuRightsExceptionDisposition>? exceptions = null) =>
+        new(
+            formats,
+            rights ?? FullRights(),
+            exceptions ?? FullExceptions(),
+            boundary ?? Boundary,
+            Evidence("aa"));
+
+    private static EuRightsExceptionDisposition[] FullExceptions() =>
+        Enum.GetValues<EuRightsExceptionChannel>()
+            .Select(channel => new EuRightsExceptionDisposition(channel, Evidence("cc")))
+            .ToArray();
 
     private static EuFormatDisposition[] FullFormats() =>
         Enum.GetValues<EuManifestationFormat>()

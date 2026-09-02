@@ -95,26 +95,6 @@ public enum EuFormatBodyAdmission
 }
 
 /// <summary>
-/// What this inventory is, and the four things it is not.
-/// </summary>
-/// <remarks>
-/// <para>
-/// <see cref="EuManifestationScope"/> is a closed class-policy inventory and a constraint on what
-/// later rights evidence must resolve. It is not itself a reuse-conditions artifact, publication
-/// authority, clearance result, or notice.
-/// </para>
-/// <para>
-/// It may guide which condition must be sought, but it cannot generate, satisfy, or substitute for
-/// <c>CORE-06</c>, <c>OPS-EU-AUTHORITY</c>, <c>PUB-06</c>, or <c>OBS-07</c>. Later artifacts may
-/// bind the same official notice evidence, but their authority is independently acquired,
-/// reviewed, signed, unexpired, use-specific, and generation-bound.
-/// </para>
-/// <para>
-/// Public projection remains <c>not_assessed_by_lex-license-policy/1</c> unless that separate
-/// authority chain passes. A scope value is never authority.
-/// </para>
-/// </remarks>
-/// <summary>
 /// The classes of Union content whose reuse basis differs. Closed.
 /// </summary>
 /// <remarks>
@@ -177,10 +157,19 @@ public enum EuReuseBasis
 /// One content class and the reuse basis established for it, with the evidence.
 /// </summary>
 /// <remarks>
-/// The mapping is supplied and evidenced rather than hard-coded here. This type enforces that
-/// every class carries one basis and that the basis is evidenced; which basis belongs to which
-/// class is a publisher fact, and a contract that decided it internally would be asserting the
-/// answer rather than recording it.
+/// <para>
+/// The mapping is fixed here, read from the reviewed EUR-Lex legal notice by
+/// <see cref="EuRightsDisposition.BasisFor"/>, and a record claiming another is refused. It was a
+/// supplied argument once, on the reasoning that a publisher fact should be recorded rather than
+/// decided internally. That was the wrong shape for this fact: nothing checked the pairing, so
+/// metadata could be recorded as CC BY 4.0 and original legal text as CC0, which states a public
+/// domain dedication over published law. The notice is the evidence, and reading it in one place
+/// is what stops each record restating it differently.
+/// </para>
+/// <para>
+/// What stays per record is the reference to the class-level source. The evidence says which
+/// notice this class answer came from; it never establishes anything about an individual object.
+/// </para>
 /// </remarks>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record EuRightsDisposition
@@ -203,9 +192,9 @@ public sealed record EuRightsDisposition
                 nameof(basis));
         }
 
-        // Evidence is required for every basis including Unknown, where it is the observation
-        // showing that no split is currently established. "We looked and found none" and "nobody
-        // looked" are the same token with different standing.
+        // Required for every class. It names the class-level source the answer was read from,
+        // and a class answer with no reference to the notice behind it is an assertion rather
+        // than a reading.
         EvidenceRef = evidenceRef ?? throw new ArgumentNullException(nameof(evidenceRef));
     }
 
@@ -412,6 +401,26 @@ public sealed record EuExpressionFormatFact
 /// The Union manifestation and rights scope: which formats exist, which may serve as bodies, when
 /// Formex became available, and what reuse basis each content class carries.
 /// </summary>
+/// <summary>
+/// What this inventory is, and the four things it is not.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <see cref="EuManifestationScope"/> is a closed class-policy inventory and a constraint on what
+/// later rights evidence must resolve. It is not itself a reuse-conditions artifact, publication
+/// authority, clearance result, or notice.
+/// </para>
+/// <para>
+/// It may guide which condition must be sought, but it cannot generate, satisfy, or substitute for
+/// <c>CORE-06</c>, <c>OPS-EU-AUTHORITY</c>, <c>PUB-06</c>, or <c>OBS-07</c>. Later artifacts may
+/// bind the same official notice evidence, but their authority is independently acquired,
+/// reviewed, signed, unexpired, use-specific, and generation-bound.
+/// </para>
+/// <para>
+/// Public projection remains <c>not_assessed_by_lex-license-policy/1</c> unless that separate
+/// authority chain passes. A scope value is never authority.
+/// </para>
+/// </remarks>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record EuManifestationScope
 {
@@ -456,11 +465,13 @@ public sealed record EuManifestationScope
     public EuManifestationScope(
         IReadOnlyList<EuFormatDisposition> formats,
         IReadOnlyList<EuRightsDisposition> rights,
+        IReadOnlyList<EuRightsExceptionDisposition> exceptions,
         string formexAvailableFrom,
         SourceArtifactRef formexBoundaryEvidenceRef)
     {
         ArgumentNullException.ThrowIfNull(formats);
         ArgumentNullException.ThrowIfNull(rights);
+        ArgumentNullException.ThrowIfNull(exceptions);
         FormexAvailableFrom = RequireCanonicalBoundary(formexAvailableFrom, nameof(formexAvailableFrom));
         FormexBoundaryEvidenceRef = formexBoundaryEvidenceRef
             ?? throw new ArgumentNullException(nameof(formexBoundaryEvidenceRef));
@@ -475,6 +486,14 @@ public sealed record EuManifestationScope
             static disposition => disposition.ContentClass,
             Enum.GetValues<EuContentClass>(),
             nameof(rights));
+        // Closed the same way the other two are. A scope that could omit these would be calling
+        // itself the Union rights scope while saying nothing about the two conditions that can
+        // override a class answer, which is the omission a reader is least able to notice.
+        Exceptions = CloseOver(
+            exceptions,
+            static disposition => disposition.Channel,
+            Enum.GetValues<EuRightsExceptionChannel>(),
+            nameof(exceptions));
 
         foreach (var disposition in Formats)
         {
@@ -499,6 +518,18 @@ public sealed record EuManifestationScope
     public IReadOnlyList<EuFormatDisposition> Formats { get; }
 
     public IReadOnlyList<EuRightsDisposition> Rights { get; }
+
+    /// <summary>
+    /// The two conditions that can override a class answer, each with the class-level evidence
+    /// that the condition exists.
+    /// </summary>
+    /// <remarks>
+    /// Complete and closed, and deliberately silent about any individual object. Holding both
+    /// channels is what makes the class answers readable without being read as whole-object
+    /// permissions: the scope states its policy and states, in the same breath, the two ways that
+    /// policy does not reach. Neither carries a resolution, because nothing can derive one yet.
+    /// </remarks>
+    public IReadOnlyList<EuRightsExceptionDisposition> Exceptions { get; }
 
     /// <summary>
     /// The expected-availability boundary this scope carries, bound to its own evidence.
