@@ -539,9 +539,9 @@ public sealed class FactsHostileTests
     [TestMethod]
     public void ACaseIsRecognisedFromItsIdentifiersRatherThanDeclared()
     {
-        Assert.IsTrue(FactsFixtures.EuCaseWithEcli().IsCase, "an ECLI proves a case");
-        Assert.IsTrue(FactsFixtures.EuCaseWithoutEcli().IsCase, "a CELEX sector 6 number is a case");
-        Assert.IsFalse(FactsFixtures.LuWork().IsCase, "a LU statute is not a case");
+        Assert.IsTrue(FactsFixtures.EuCaseWithEcli().IsCase(), "an ECLI proves a case");
+        Assert.IsTrue(FactsFixtures.EuCaseWithoutEcli().IsCase(), "a CELEX sector 6 number is a case");
+        Assert.IsFalse(FactsFixtures.LuWork().IsCase(), "a LU statute is not a case");
     }
 
     // ---- shape and identity ------------------------------------------------------------------
@@ -723,12 +723,12 @@ public sealed class FactsHostileTests
             PublisherId.EuEurLex,
             [new OfficialIdentifier(FactsIdentifierFamily.Celex, "62020CJ1042")]);
 
-        Assert.IsTrue(celexOnly.IsCase, "sector 6 is case law and sits at position zero");
+        Assert.IsTrue(celexOnly.IsCase(), "sector 6 is case law and sits at position zero");
 
         var regulation = new OfficialIdentitySet(
             PublisherId.EuEurLex,
             [new OfficialIdentifier(FactsIdentifierFamily.Celex, "32016R0679")]);
-        Assert.IsFalse(regulation.IsCase, "sector 3 is secondary legislation");
+        Assert.IsFalse(regulation.IsCase(), "sector 3 is secondary legislation");
     }
 
     /// <summary>
@@ -1011,8 +1011,8 @@ public sealed class FactsHostileTests
         var fact = FactsFixtures.CaseFactWithoutEcli();
 
         Assert.AreEqual(EcliState.EcliNotInThisSet, fact.TargetEcliState);
-        Assert.IsNull(fact.TargetEcli);
-        Assert.IsTrue(fact.CarriedTarget.IsCase, "the state only applies to a case");
+        Assert.IsNull(fact.TargetEcli());
+        Assert.IsTrue(fact.CarriedTarget().IsCase(), "the state only applies to a case");
 
         // The wire name says what is claimed, so a reader cannot mistake it for a publisher fact.
         Assert.Contains("ecli_not_in_this_set", ContractJson.Serialize(fact));
@@ -1039,8 +1039,16 @@ public sealed class FactsHostileTests
         }
 
         CollectionAssert.AreEqual(
-            new[] { "Identifiers", "IsCase", "Publisher" },
+            new[] { "Identifiers", "Publisher" },
             properties.Where(n => n is not "EqualityContract").OrderBy(n => n).ToArray());
+
+        // IsCase left the property surface deliberately rather than disappearing, so the pin above
+        // shrinking is not evidence that a claim was dropped. It is derived from Identifiers and
+        // was never a wire input, and as a JsonIgnore property its own name stayed open on the
+        // wire while the emitted schema refused it. A method is invisible to the serializer, so
+        // UnmappedMemberHandling.Disallow now refuses is_case like any other name the type does
+        // not carry.
+        Assert.IsNotNull(typeof(OfficialIdentitySet).GetMethod("IsCase", Type.EmptyTypes));
     }
 
     /// <summary>

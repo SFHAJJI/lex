@@ -15,7 +15,7 @@ public sealed class ContractControlTests
     {
         var contract = SyntheticResolveRequestContract.V1;
         var independentDigest = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
-                SyntheticResolveRequestContract.DigestDomain + "\0" + contract.CanonicalDescriptor)))
+                SyntheticResolveRequestContract.DigestDomain + "\0" + contract.CanonicalDescriptor())))
             .ToLowerInvariant();
 
         Assert.AreEqual("lex-v3-synthetic-resolve-request/1", contract.ContractId);
@@ -36,7 +36,7 @@ public sealed class ContractControlTests
             "\"product_raw_targets\":[\"/api/v3-preview/resolve?family=eli&coordinate=eli%2Fsynthetic-preview\"," +
             "\"/api/v3-preview/resolve?family=historical_legal_id&coordinate=historical_legal_id%3Asynthetic-preview\"]," +
             "\"readiness_method\":\"GET\",\"readiness_target\":\"/health/ready\"}",
-            contract.CanonicalDescriptor);
+            contract.CanonicalDescriptor());
         Assert.AreEqual(independentDigest, contract.Sha256);
     }
 
@@ -45,7 +45,7 @@ public sealed class ContractControlTests
     {
         var scope = SyntheticSliceScope.CompleteLu;
         var independentDigest = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
-                SyntheticSliceScope.DigestDomain + "\0" + scope.CanonicalDescriptor)))
+                SyntheticSliceScope.DigestDomain + "\0" + scope.CanonicalDescriptor())))
             .ToLowerInvariant();
 
         Assert.AreEqual(PublisherId.LuLegilux, scope.Publisher);

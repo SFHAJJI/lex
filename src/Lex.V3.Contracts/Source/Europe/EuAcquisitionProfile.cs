@@ -183,7 +183,7 @@ public sealed record EuAcquisitionProfile
         // An acquisition profile that admits nothing cannot acquire. Expressing that state is
         // possible elsewhere; here it is a configuration error, and a loud one is better than a
         // run that fetches nothing and reports success.
-        if (!snapshot.Any(static disposition => disposition.MayGraduate))
+        if (!snapshot.Any(static disposition => disposition.MayGraduate()))
         {
             throw new ArgumentException(
                 "No channel is admitted, so this profile can acquire nothing.",
@@ -202,10 +202,9 @@ public sealed record EuAcquisitionProfile
     /// <summary>
     /// The channels a datum may arrive by and still graduate past POINT.
     /// </summary>
-    [JsonIgnore]
-    public IReadOnlyList<EuChannel> AdmittedChannels =>
+    public IReadOnlyList<EuChannel> AdmittedChannels() =>
         new ReadOnlyCollection<EuChannel>(
-            Channels.Where(static disposition => disposition.MayGraduate)
+            Channels.Where(static disposition => disposition.MayGraduate())
                 .Select(static disposition => disposition.Channel)
                 .ToArray());
 }

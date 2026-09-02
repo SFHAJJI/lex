@@ -130,7 +130,7 @@ public sealed class HttpObservationUnionTests
         Assert.ThrowsExactly<ArgumentException>(() => Complete(
             metadata: Metadata(contentLength: 2)));
         var conflictingFraming = Metadata(contentLength: 1, transferEncoding: "chunked");
-        Assert.IsTrue(conflictingFraming.BlocksDerivation);
+        Assert.IsTrue(conflictingFraming.BlocksDerivation());
         Assert.ThrowsExactly<ArgumentException>(() => Complete(metadata: conflictingFraming));
         Assert.ThrowsExactly<ArgumentException>(() => Complete(statusCode: 204));
         Assert.ThrowsExactly<ArgumentException>(() => Complete(
@@ -173,7 +173,7 @@ public sealed class HttpObservationUnionTests
         Assert.AreEqual(
             HttpStatusDisposition.DerivableStatus,
             duplicateHeaderEvidence.StatusDisposition);
-        Assert.IsTrue(duplicateHeaderEvidence.ResponseMetadata.BlocksDerivation);
+        Assert.IsTrue(duplicateHeaderEvidence.ResponseMetadata.BlocksDerivation());
         Assert.ThrowsExactly<ArgumentException>(() => Complete(
             statusDisposition: HttpStatusDisposition.NonDerivableStatus,
             metadata: duplicateMetadata));
@@ -205,7 +205,7 @@ public sealed class HttpObservationUnionTests
         Assert.AreEqual(
             HttpStatusDisposition.DerivableStatus,
             malformedLengthEvidence.StatusDisposition);
-        Assert.IsTrue(malformedLengthEvidence.ResponseMetadata.BlocksDerivation);
+        Assert.IsTrue(malformedLengthEvidence.ResponseMetadata.BlocksDerivation());
         Assert.ThrowsExactly<ArgumentException>(() => Complete(
             statusDisposition: HttpStatusDisposition.NonDerivableStatus,
             metadata: malformedLengthMetadata,
@@ -927,7 +927,7 @@ public sealed class HttpObservationUnionTests
             mismatch.Reason);
     }
 
-    private static ResponseCompleteBodyObservation Complete(
+    internal static ResponseCompleteBodyObservation Complete(
         long byteCount = 1,
         TransferCompletionEvidence? completionEvidence = null,
         DurableBlobWriteReceipt? writeReceipt = null,
@@ -947,7 +947,7 @@ public sealed class HttpObservationUnionTests
             completionEvidence ?? CompletionEvidence(byteCount: byteCount),
             writeReceipt ?? WriteReceipt(byteCount, 'a'));
 
-    private static ResponsePartialBodyObservation Partial(
+    internal static ResponsePartialBodyObservation Partial(
         long byteCount = 1,
         DurableBlobWriteReceipt? writeReceipt = null,
         HttpResponseMetadata? metadata = null,
@@ -969,7 +969,7 @@ public sealed class HttpObservationUnionTests
             HttpAcquisitionReasonRegistry.Member(reason),
             omitEvidence ? null : writeReceipt ?? (byteCount > 0 ? WriteReceipt(byteCount, 'a') : null));
 
-    private static ResponseCompletionUnprovenObservation CompletionUnproven(
+    internal static ResponseCompletionUnprovenObservation CompletionUnproven(
         long byteCount = 1,
         DurableBlobWriteReceipt? writeReceipt = null,
         HttpResponseMetadata? metadata = null,
@@ -1015,7 +1015,7 @@ public sealed class HttpObservationUnionTests
             predecessorValidator ?? validator,
             predecessorObservationRef ?? ObservationRef(predecessor),
             (request ?? Request()).RepresentationRequestKeyIdentity,
-            predecessorBlobRef ?? predecessor.DurableBlobRef);
+            predecessorBlobRef ?? predecessor.DurableBlobRef());
     }
 
     private static ResponseCompleteBodyObservation Predecessor(HttpRequestEvidence? request = null) =>

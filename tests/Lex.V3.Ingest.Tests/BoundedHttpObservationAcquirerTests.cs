@@ -63,7 +63,7 @@ public sealed class BoundedHttpObservationAcquirerTests
         var observation = result as ResponseCompleteBodyObservation;
         Assert.IsNotNull(observation);
         Assert.AreEqual(HttpStatusDisposition.DerivableStatus, observation.StatusDisposition);
-        Assert.AreEqual(EntityBytes.Length, observation.ReceivedEncodedEntityByteCount);
+        Assert.AreEqual(EntityBytes.Length, observation.ReceivedEncodedEntityByteCount());
         Assert.AreEqual("https://data.legilux.public.lu/example.xml", observation.EffectiveUri);
         Assert.IsInstanceOfType<DeclaredContentLengthCompleteEvidence>(
             observation.TransferCompletionEvidence);
@@ -78,7 +78,7 @@ public sealed class BoundedHttpObservationAcquirerTests
             observation.TransferCompletionEvidence.TransportByteSha256);
         Assert.AreEqual(
             observation.DurableWriteReceipt.Reference,
-            observation.DurableBlobRef);
+            observation.DurableBlobRef());
         Assert.AreEqual(
             EntityBytes.Length.ToString(System.Globalization.CultureInfo.InvariantCulture),
             ((SingleHttpHeader)observation.ResponseMetadata.ContentLength).Value);
@@ -264,7 +264,7 @@ public sealed class BoundedHttpObservationAcquirerTests
         Assert.IsNotNull(observation);
         CollectionAssert.AreEqual(codedBytes, custody.CreatedBytes);
         Assert.AreEqual("gzip", ((SingleHttpHeader)observation.ResponseMetadata.ContentEncoding).Value);
-        Assert.IsTrue(observation.ResponseMetadata.BlocksDerivation);
+        Assert.IsTrue(observation.ResponseMetadata.BlocksDerivation());
     }
 
     [TestMethod]
@@ -295,7 +295,7 @@ public sealed class BoundedHttpObservationAcquirerTests
         CollectionAssert.AreEqual(
             new[] { "utf-8", "iso-8859-1" },
             charsets.Values.ToArray());
-        Assert.IsTrue(observation.ResponseMetadata.BlocksDerivation);
+        Assert.IsTrue(observation.ResponseMetadata.BlocksDerivation());
     }
 
     [TestMethod]
@@ -326,7 +326,7 @@ public sealed class BoundedHttpObservationAcquirerTests
         CollectionAssert.AreEqual(
             new[] { "\"first\"", "\"second\"" },
             etags.Values.ToArray());
-        Assert.IsTrue(observation.ResponseMetadata.BlocksDerivation);
+        Assert.IsTrue(observation.ResponseMetadata.BlocksDerivation());
     }
 
     [TestMethod]

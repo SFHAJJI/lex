@@ -35,7 +35,7 @@ public sealed class BoundedHttpObservationPartialTests
 
         var complete = result as ResponseCompleteBodyObservation;
         Assert.IsNotNull(complete);
-        Assert.AreEqual(2, complete.ReceivedEncodedEntityByteCount);
+        Assert.AreEqual(2, complete.ReceivedEncodedEntityByteCount());
         CollectionAssert.AreEqual(Encoding.ASCII.GetBytes("AB"), custody.CreatedBytes);
         Assert.AreEqual(2, stream.BytesReturned);
     }
@@ -53,7 +53,7 @@ public sealed class BoundedHttpObservationPartialTests
         Assert.IsTrue(caller.IsCancellationRequested);
         var complete = result as ResponseCompleteBodyObservation;
         Assert.IsNotNull(complete);
-        Assert.AreEqual(2, complete.ReceivedEncodedEntityByteCount);
+        Assert.AreEqual(2, complete.ReceivedEncodedEntityByteCount());
         CollectionAssert.AreEqual(Encoding.ASCII.GetBytes("AB"), custody.CreatedBytes);
         Assert.AreEqual(2, stream.BytesReturned);
     }
@@ -142,7 +142,7 @@ public sealed class BoundedHttpObservationPartialTests
 
         var complete = result as ResponseCompleteBodyObservation;
         Assert.IsNotNull(complete);
-        Assert.AreEqual(3, complete.ReceivedEncodedEntityByteCount);
+        Assert.AreEqual(3, complete.ReceivedEncodedEntityByteCount());
         CollectionAssert.AreEqual(Encoding.ASCII.GetBytes("ABC"), custody.CreatedBytes);
     }
 
@@ -162,7 +162,7 @@ public sealed class BoundedHttpObservationPartialTests
 
         var complete = result as ResponseCompleteBodyObservation;
         Assert.IsNotNull(complete);
-        Assert.AreEqual(2, complete.ReceivedEncodedEntityByteCount);
+        Assert.AreEqual(2, complete.ReceivedEncodedEntityByteCount());
         CollectionAssert.AreEqual(Encoding.ASCII.GetBytes("AB"), custody.CreatedBytes);
     }
 

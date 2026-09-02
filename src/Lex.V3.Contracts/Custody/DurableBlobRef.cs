@@ -112,8 +112,7 @@ public sealed record DurableBlobWriteReceipt
 
     public DurableBlobRef Reference { get; }
 
-    [JsonIgnore]
-    public DateTimeOffset VerifiedAt => PolicyEvidence.ObservedAt;
+    public DateTimeOffset VerifiedAt() => PolicyEvidence.ObservedAt;
 
     /// <summary>
     /// The exact protection observed by the adapter after the object was read back and verified.
