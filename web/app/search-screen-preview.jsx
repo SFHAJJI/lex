@@ -41,17 +41,22 @@ const AS_OF = '2026-09-01';
 
 const POPULATION = Object.freeze({
   searchable_works: [
-    { what: 'consolidated LU works held by this corpus', count: 1402, counted_at: '2026-08-15' },
-    { what: 'reviewed EU works held by this corpus', count: 1250, counted_at: '2026-08-15' },
+    { what: 'consolidated LU works held by this corpus', count: 1111, counted_at: '2026-08-15' },
+    { what: 'reviewed EU works held by this corpus', count: 2222, counted_at: '2026-08-15' },
   ],
   not_searchable: [
     {
+        // Synthetic populations, not measured ones. `counted_at` satisfies Decision 27's
+        // dating rule, and a dated real number is still a real number on a page that tells
+        // the reader every value here is synthetic. The dating rule and the synthetic
+        // banner are two different claims and this fixture has to satisfy both, so the
+        // counts are obviously invented and the shape is what the preview demonstrates.
       what:
         // See the note in scripts/search-preview.mjs: the dated count is fine, an undated
         // population figure in the prose beside it is not, and the guard cannot see it there.
         'LU acts that never receive a consolidated edition and are therefore not ' +
         'searchable here',
-      count: 23370,
+      count: 7777,
       counted_at: '2026-08-15',
     },
   ],

@@ -13,7 +13,12 @@
 // caller. A caller who could declare "this one embeds" could declare it wrongly, and the bundle
 // and the preview would then disagree about the same item, with only one of them tested.
 
-import { LICENCES, ITEM_KINDS, REGISTER_COLUMNS } from './evidence-bundle.mjs';
+import {
+  LICENCES,
+  ITEM_KINDS,
+  REGISTER_COLUMNS,
+  requireIntervalAndDigest,
+} from './evidence-bundle.mjs';
 import { identityOf } from './record-identity.mjs';
 import { publisherSourceUri } from './routes.mjs';
 
@@ -128,6 +133,11 @@ function requireCartItem(item, index) {
       );
     }
   }
+
+  // The same interval and digest rules the bundle applies. Checking only that these fields are
+  // non-empty let a not-a-date, a not-a-digest, an inverted interval and the year-9999 sentinel
+  // through a screen whose entire purpose is telling a reader what the export will contain.
+  requireIntervalAndDigest(item, where);
 
   // The official link is validated against the publisher the record names, not merely escaped.
   // `escapeHtml` replaces `& < > "`, and `javascript:alert(1)` contains none of them, so an

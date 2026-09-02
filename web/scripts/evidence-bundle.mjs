@@ -76,6 +76,44 @@ function escapeHtml(value) {
     .replaceAll("'", '&#39;');
 }
 
+/**
+ * The interval and digest rules every surface that quotes a held state must apply.
+ *
+ * Exported so the export composer inherits them rather than restating them. It restated the shape
+ * and not the rules, and consequently accepted a non-date, a non-digest, an inverted interval and
+ * the open-ended sentinel that this function has always refused. Two surfaces describing one
+ * record must not disagree about what a record is.
+ *
+ * @param {object} item  a held state carrying `valid_from`, `valid_to` and `record_sha256`
+ * @param {string} where names the item in any refusal
+ */
+export function requireIntervalAndDigest(item, where) {
+  isCalendarDateOrThrow(item?.valid_from, `${where} valid_from`);
+  if (item?.valid_to !== null && item?.valid_to !== undefined) {
+    isCalendarDateOrThrow(item.valid_to, `${where} valid_to`);
+    // An inverted interval was exported as an applicability period, in the item row and in the
+    // register, and an export is the artefact that leaves the room and is read by people who were
+    // not here to notice.
+    if (item.valid_to <= item.valid_from) {
+      throw new Error(
+        `${where} is applicable from ${item.valid_from} to ${item.valid_to}, which ends on or ` +
+          'before it begins; that is not a period this product can export as one',
+      );
+    }
+    // The open-ended sentinel is a marker, not a date. One renderer maps it to null and another
+    // printed it, so an export could state that a law ceased to apply in the year 9999.
+    if (item.valid_to === '9999-12-31') {
+      throw new Error(
+        `${where} carries the open-ended sentinel as a real end date; an open interval ends in ` +
+          'null here, and printing the sentinel exports a law that ceases in the year 9999',
+      );
+    }
+  }
+  if (!SHA256.test(item?.record_sha256 ?? '')) {
+    throw new Error(`${where} needs its record digest, 64 lowercase hex characters`);
+  }
+}
+
 function requireItem(item, index) {
   const where = `item ${index + 1}`;
 
@@ -98,33 +136,10 @@ function requireItem(item, index) {
   }
   // Three dates, the pack's phrase: applicable, published, observed. A bundle carrying one
   // of them lets a reader mistake the observation for the law's own date.
-  isCalendarDateOrThrow(item.valid_from, `${where} valid_from`);
-  if (item.valid_to !== null) {
-    isCalendarDateOrThrow(item.valid_to, `${where} valid_to`);
-    // An inverted interval was exported as an applicability period, in the item row and in the
-    // register, and a bundle is the artefact that leaves the room and is read by people who
-    // were not here to notice.
-    if (item.valid_to <= item.valid_from) {
-      throw new Error(
-        `${where} is applicable from ${item.valid_from} to ${item.valid_to}, which ends on or ` +
-          'before it begins; that is not a period this bundle can export as one',
-      );
-    }
-    // The open-ended sentinel is a marker, not a date. One renderer maps it to null and this
-    // one printed it, so a bundle could state that a law ceased to apply in the year 9999.
-    if (item.valid_to === '9999-12-31') {
-      throw new Error(
-        `${where} carries the open-ended sentinel as a real end date; an open interval ends in ` +
-          'null here, and printing the sentinel exports a law that ceases in the year 9999',
-      );
-    }
-  }
+  requireIntervalAndDigest(item, where);
   isCalendarDateOrThrow(item.publication_date, `${where} publication_date`);
   if (!isUtcInstant(item.observed_from)) {
     throw new Error(`${where} needs the instant it was observed: ${JSON.stringify(item.observed_from)}`);
-  }
-  if (!SHA256.test(item.record_sha256 ?? '')) {
-    throw new Error(`${where} needs its record digest, 64 lowercase hex characters`);
   }
   if (!Object.hasOwn(LICENCES, item.licence ?? '')) {
     throw new Error(

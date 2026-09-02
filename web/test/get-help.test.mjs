@@ -44,6 +44,17 @@ test('a build with no verified counter says so, and offers no fixture', () => {
   assert.ok(html.includes('eur-lex.europa.eu'));
 });
 
+/**
+ * Phrasings that would put the categorical overclaim back.
+ *
+ * Plain substrings, deliberately. This check was first written as a word-boundary regex and
+ * reached the file with U+0008 backspace bytes where the boundaries should have been, so the
+ * pattern searched for a literal backspace and could never match: the canary guarding the
+ * correction was itself a no-op from the moment it was written. Substrings cannot be mangled that
+ * way, and the test below proves this list still bites.
+ */
+const FORBIDDEN_OVERCLAIMS = ['every assessment', 'any assessment', 'that assessment is a legal consultation and it is reserved'];
+
 test('the boundary is stated, because it is why this page exists', () => {
   const html = renderGetHelp({ officialRoutes: ROUTES });
   assert.ok(html.includes(BOUNDARY_NOTE));
@@ -61,10 +72,29 @@ test('the boundary is stated, because it is why this page exists', () => {
     'the boundary stopped naming who the reservation is for',
   );
   assert.ok(
-    !/every|any assessment/i.test(BOUNDARY_NOTE),
+    !FORBIDDEN_OVERCLAIMS.some((phrase) => BOUNDARY_NOTE.toLowerCase().includes(phrase)),
     'the boundary went back to claiming every assessment is reserved',
   );
   assert.ok(html.includes(NO_COUNTER_NOTE), 'an empty registry rendered no explanation');
+});
+
+test('the overclaim canary can actually fail', () => {
+  // The previous version of this canary could not fail. Asserting that a guard rejects something
+  // is the only way to know the guard runs at all, and this file is the reason I now write that
+  // assertion every time.
+  const hostile = [
+    'It cannot apply the law to you; every assessment is a legal consultation.',
+    'Any assessment of your facts is reserved.',
+    'That assessment is a legal consultation and it is reserved.',
+  ];
+  for (const wording of hostile) {
+    assert.ok(
+      FORBIDDEN_OVERCLAIMS.some((phrase) => wording.toLowerCase().includes(phrase)),
+      `the canary would not have caught: ${wording}`,
+    );
+  }
+  // And it does not fire on the settled copy, or it would be useless in the other direction.
+  assert.ok(!FORBIDDEN_OVERCLAIMS.some((phrase) => BOUNDARY_NOTE.toLowerCase().includes(phrase)));
 });
 
 test('a verified counter is listed, and an unverifiable one is refused rather than dropped', () => {
