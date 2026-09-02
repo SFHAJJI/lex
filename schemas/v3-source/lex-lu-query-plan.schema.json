@@ -1,0 +1,231 @@
+{
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "lex-lu-query-plan/1"
+    },
+    "dataset_graph_identity": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "default_graph"
+          ]
+        },
+        "endpoint": {
+          "type": "string",
+          "const": "https://data.legilux.public.lu/sparqlendpoint"
+        },
+        "source_profile_ref": {
+          "type": "object",
+          "properties": {
+            "resource_id": {
+              "type": "string",
+              "pattern": "^urn:uuid:(?!00000000-0000-0000-0000-000000000000)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\\s\\S])",
+              "minLength": 45,
+              "maxLength": 45
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}(?![\\s\\S])",
+              "minLength": 64,
+              "maxLength": 64
+            }
+          },
+          "required": [
+            "resource_id",
+            "sha256"
+          ],
+          "additionalProperties": false
+        },
+        "scope_definition_ref": {
+          "type": "object",
+          "properties": {
+            "resource_id": {
+              "type": "string",
+              "pattern": "^urn:uuid:(?!00000000-0000-0000-0000-000000000000)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\\s\\S])",
+              "minLength": 45,
+              "maxLength": 45
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}(?![\\s\\S])",
+              "minLength": 64,
+              "maxLength": 64
+            }
+          },
+          "required": [
+            "resource_id",
+            "sha256"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "kind",
+        "endpoint",
+        "source_profile_ref",
+        "scope_definition_ref"
+      ],
+      "additionalProperties": false
+    },
+    "scheme_roots": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "selector_predicates": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "relation_predicates": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "set_definitions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "set_id": {
+            "type": "string"
+          },
+          "template_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "acquisition": {
+            "enum": [
+              "publisher_query",
+              "local_materialization"
+            ]
+          },
+          "key_kind": {
+            "enum": [
+              "absolute_iri_utf8",
+              "composite_literal_utf8"
+            ]
+          }
+        },
+        "required": [
+          "set_id",
+          "template_id",
+          "acquisition",
+          "key_kind"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "query_templates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "template_id": {
+            "type": "string"
+          },
+          "utf8_query_template": {
+            "type": "string"
+          },
+          "utf8_count_template": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "template_id",
+          "utf8_query_template",
+          "utf8_count_template"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "keyset_successor_rule": {
+      "type": "object",
+      "properties": {
+        "comparison": {
+          "type": "string",
+          "const": "strict_greater_than"
+        },
+        "order_by": {
+          "type": "string",
+          "const": "canonical_utf8_tuple_ascending"
+        },
+        "component_count": {
+          "type": "integer",
+          "const": 6
+        },
+        "empty_successor_required": {
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "required": [
+        "comparison",
+        "order_by",
+        "component_count",
+        "empty_successor_required"
+      ],
+      "additionalProperties": false
+    },
+    "page_traversal_rule": {
+      "type": "object",
+      "properties": {
+        "successor_after_full_page_required": {
+          "type": "boolean",
+          "const": true
+        },
+        "empty_successor_after_short_page_required": {
+          "type": "boolean",
+          "const": true
+        },
+        "duplicate_key_rejects_observation": {
+          "type": "boolean",
+          "const": true
+        },
+        "non_strict_order_rejects_observation": {
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "required": [
+        "successor_after_full_page_required",
+        "empty_successor_after_short_page_required",
+        "duplicate_key_rejects_observation",
+        "non_strict_order_rejects_observation"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema",
+    "dataset_graph_identity",
+    "scheme_roots",
+    "selector_predicates",
+    "relation_predicates",
+    "set_definitions",
+    "query_templates",
+    "keyset_successor_rule",
+    "page_traversal_rule"
+  ],
+  "additionalProperties": false,
+  "$id": "urn:uuid:65ff531a-8db0-4723-b3d8-2fc9c8e91c10",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}
