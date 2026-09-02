@@ -2,6 +2,7 @@ using System.Net;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using System.Text;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Custody.Azure;
@@ -59,7 +60,9 @@ internal static class Program
 internal static class CustodyProbeApplication
 {
     private const int MaximumReceiptCharacters = 32 * 1024;
+    private const int MaximumReceiptArgumentCharacters = 16 * 1024;
     private const int SyntheticByteCount = 32;
+    private static readonly UTF8Encoding StrictUtf8 = new(false, true);
 
     private static readonly string[] ForbiddenCredentialVariables =
     [
@@ -135,9 +138,11 @@ internal static class CustodyProbeApplication
         var options = ReadOptions(environment);
 
         DurableBlobWriteReceipt? inputReceipt = null;
-        if (command.Mode == ProbeMode.Read)
+        if (command.Mode is ProbeMode.Read or ProbeMode.ReadReceipt)
         {
-            var json = await ReadBoundedAsync(input, cancellationToken).ConfigureAwait(false);
+            var json = command.Mode == ProbeMode.Read
+                ? await ReadBoundedAsync(input, cancellationToken).ConfigureAwait(false)
+                : DecodeReceiptArgument(command.ReceiptArgument!);
             inputReceipt = ContractJson.Deserialize<DurableBlobWriteReceipt>(json);
             ValidateConfiguredReceipt(inputReceipt, options);
         }
@@ -182,10 +187,17 @@ internal static class CustodyProbeApplication
     {
         if (arguments.Length == 1 && string.Equals(arguments[0], "read", StringComparison.Ordinal))
         {
-            return new ProbeCommand(ProbeMode.Read, null);
+            return new ProbeCommand(ProbeMode.Read, null, null);
         }
 
-        if (arguments.Length == 2 && string.Equals(arguments[0], "write", StringComparison.Ordinal))
+        if (arguments.Length == 2
+            && string.Equals(arguments[0], "read-receipt", StringComparison.Ordinal))
+        {
+            return new ProbeCommand(ProbeMode.ReadReceipt, null, arguments[1]);
+        }
+
+        if (arguments.Length == 2
+            && string.Equals(arguments[0], "write", StringComparison.Ordinal))
         {
             var custodyClass = arguments[1] switch
             {
@@ -193,10 +205,69 @@ internal static class CustodyProbeApplication
                 "legal_hold_evidence" => CustodyClass.LegalHoldEvidence,
                 _ => throw new ArgumentException("Unknown custody probe lane.", nameof(arguments)),
             };
-            return new ProbeCommand(ProbeMode.Write, custodyClass);
+            return new ProbeCommand(ProbeMode.Write, custodyClass, null);
         }
 
-        throw new ArgumentException("Expected read or write with one exact custody lane.", nameof(arguments));
+        throw new ArgumentException(
+            "Expected read, read-receipt or write with one exact custody lane.",
+            nameof(arguments));
+    }
+
+    private static string DecodeReceiptArgument(string value)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(value);
+        if (value.Length > MaximumReceiptArgumentCharacters
+            || value.Length % 4 == 1
+            || value.Any(static character =>
+                character is not (>= 'A' and <= 'Z')
+                    and not (>= 'a' and <= 'z')
+                    and not (>= '0' and <= '9')
+                    and not '-'
+                    and not '_'))
+        {
+            throw new ArgumentException(
+                "The custody receipt argument is not bounded canonical base64url.",
+                nameof(value));
+        }
+
+        var base64 = value.Replace('-', '+').Replace('_', '/');
+        base64 = base64.PadRight((base64.Length + 3) / 4 * 4, '=');
+        byte[] bytes;
+        try
+        {
+            bytes = Convert.FromBase64String(base64);
+        }
+        catch (FormatException exception)
+        {
+            throw new ArgumentException(
+                "The custody receipt argument is not valid base64url.",
+                nameof(value),
+                exception);
+        }
+
+        var canonical = Convert.ToBase64String(bytes)
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_');
+        if (!string.Equals(value, canonical, StringComparison.Ordinal)
+            || bytes.Length > MaximumReceiptCharacters)
+        {
+            throw new ArgumentException(
+                "The custody receipt argument is not canonical or exceeds its bound.",
+                nameof(value));
+        }
+
+        try
+        {
+            return StrictUtf8.GetString(bytes);
+        }
+        catch (DecoderFallbackException exception)
+        {
+            throw new ArgumentException(
+                "The custody receipt argument is not strict UTF-8.",
+                nameof(value),
+                exception);
+        }
     }
 
     private static AzureBlobCustodyOptions ReadOptions(
@@ -357,7 +428,11 @@ internal static class CustodyProbeApplication
     {
         Write,
         Read,
+        ReadReceipt,
     }
 
-    private sealed record ProbeCommand(ProbeMode Mode, CustodyClass? CustodyClass);
+    private sealed record ProbeCommand(
+        ProbeMode Mode,
+        CustodyClass? CustodyClass,
+        string? ReceiptArgument);
 }
