@@ -15,7 +15,8 @@ public enum RobotsPolicyEvaluationResult
 
 /// <summary>
 /// Parses and evaluates a bounded RFC 9309 robots.txt observation.
-/// Invalid recognized directives return <see cref="RobotsPolicyEvaluationResult.UnsafeToInterpret"/>.
+/// Invalid recognized directives in an applicable group return
+/// <see cref="RobotsPolicyEvaluationResult.UnsafeToInterpret"/>.
 /// Source: https://www.rfc-editor.org/rfc/rfc9309.html#section-2.2
 /// </summary>
 public static class RobotsExclusionPolicy
@@ -33,15 +34,7 @@ public static class RobotsExclusionPolicy
     {
         ValidateProductToken(productToken);
         var normalizedPath = NormalizePath(pathAndQuery);
-        if (!TryParse(policyBytes, out var groups))
-        {
-            return RobotsPolicyEvaluationResult.UnsafeToInterpret;
-        }
-
-        if (string.Equals(normalizedPath, "/robots.txt", StringComparison.Ordinal))
-        {
-            return RobotsPolicyEvaluationResult.Allowed;
-        }
+        var groups = Parse(policyBytes);
 
         var exactGroups = groups
             .Where(group => group.UserAgents.Any(agent =>
@@ -50,6 +43,16 @@ public static class RobotsExclusionPolicy
         var applicableGroups = exactGroups.Length > 0
             ? exactGroups
             : groups.Where(group => group.UserAgents.Contains("*", StringComparer.Ordinal)).ToArray();
+
+        if (applicableGroups.Any(static group => group.IsUnsafe))
+        {
+            return RobotsPolicyEvaluationResult.UnsafeToInterpret;
+        }
+
+        if (string.Equals(normalizedPath, "/robots.txt", StringComparison.Ordinal))
+        {
+            return RobotsPolicyEvaluationResult.Allowed;
+        }
 
         Rule? winner = null;
         foreach (var rule in applicableGroups.SelectMany(static group => group.Rules))
@@ -73,9 +76,7 @@ public static class RobotsExclusionPolicy
             : RobotsPolicyEvaluationResult.Allowed;
     }
 
-    private static bool TryParse(
-        ReadOnlySpan<byte> policyBytes,
-        out IReadOnlyList<Group> groups)
+    private static IReadOnlyList<Group> Parse(ReadOnlySpan<byte> policyBytes)
     {
         if (policyBytes.Length > MaximumPolicyBytes)
         {
@@ -103,7 +104,7 @@ public static class RobotsExclusionPolicy
             policy = policy[1..];
         }
 
-        var parsedGroups = new List<Group>();
+        var groups = new List<Group>();
         Group? current = null;
         foreach (var sourceLine in policy.Split(['\r', '\n']))
         {
@@ -124,19 +125,21 @@ public static class RobotsExclusionPolicy
             var value = line[(separator + 1)..].Trim(' ', '\t');
             if (string.Equals(key, "user-agent", StringComparison.OrdinalIgnoreCase))
             {
-                if (!IsPolicyUserAgent(value))
-                {
-                    groups = [];
-                    return false;
-                }
-
                 if (current is null || current.HasRuleDirective)
                 {
                     current = new Group();
-                    parsedGroups.Add(current);
+                    groups.Add(current);
                 }
 
-                current.UserAgents.Add(value);
+                if (IsPolicyUserAgent(value))
+                {
+                    current.UserAgents.Add(value);
+                }
+                else
+                {
+                    current.IsUnsafe = true;
+                }
+
                 continue;
             }
 
@@ -146,26 +149,25 @@ public static class RobotsExclusionPolicy
                 continue;
             }
 
-            if (!TryCreateRule(value, isAllow, out var rule))
-            {
-                groups = [];
-                return false;
-            }
-
             if (current is null)
             {
                 continue;
             }
 
             current.HasRuleDirective = true;
+            if (!TryCreateRule(value, isAllow, out var rule))
+            {
+                current.IsUnsafe = true;
+                continue;
+            }
+
             if (rule is not null)
             {
                 current.Rules.Add(rule.Value);
             }
         }
 
-        groups = parsedGroups;
-        return true;
+        return groups;
     }
 
     private static bool TryCreateRule(string value, bool isAllow, out Rule? rule)
@@ -543,6 +545,8 @@ public static class RobotsExclusionPolicy
         public List<Rule> Rules { get; } = [];
 
         public bool HasRuleDirective { get; set; }
+
+        public bool IsUnsafe { get; set; }
     }
 
     private readonly record struct Rule(

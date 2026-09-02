@@ -264,7 +264,7 @@ public sealed class RobotsExclusionPolicyTests
     }
 
     [TestMethod]
-    public void MalformedRuleMakesTheWholePolicyUnsafeToInterpret()
+    public void MalformedRuleMakesOnlyItsGroupUnsafeToInterpret()
     {
         var policy = Bytes(
             """
@@ -278,20 +278,38 @@ public sealed class RobotsExclusionPolicyTests
             RobotsPolicyEvaluationResult.UnsafeToInterpret,
             Evaluate(policy, "/private"));
         Assert.AreEqual(
-            RobotsPolicyEvaluationResult.UnsafeToInterpret,
+            RobotsPolicyEvaluationResult.Denied,
             RobotsExclusionPolicy.Evaluate(policy, "Other", "/private"));
     }
 
     [TestMethod]
     [DataRow("User-agent: Lex\nUser-agent: Bad Token\nDisallow: /private")]
-    [DataRow("User-agent: Lex\nDisallow: /a\nUser-agent: Bad Token\nDisallow: /b")]
-    [DataRow("User-agent: *\nDisallow: /a\nUser-agent: Bad Token\nDisallow: /b")]
-    [DataRow("User-agent: Other\nDisallow: /a\nUSER-AGENT: Bad Token\nDisallow: /b")]
-    public void InvalidRecognizedUserAgentMakesThePolicyUnsafeToInterpret(string policy)
+    [DataRow("User-agent: Bad Token\nUser-agent: Lex\nDisallow: /private")]
+    [DataRow("User-agent: *\nUSER-AGENT: Bad Token\nDisallow: /private")]
+    public void InvalidUserAgentInAnApplicableHeaderSequenceIsUnsafe(string policy)
     {
         Assert.AreEqual(
             RobotsPolicyEvaluationResult.UnsafeToInterpret,
-            Evaluate(Bytes(policy), "/b"));
+            Evaluate(Bytes(policy), "/private"));
+    }
+
+    [TestMethod]
+    public void InvalidUserAgentAfterARuleStartsAnUnrelatedQuarantinedGroup()
+    {
+        var policy = Bytes(
+            """
+            User-agent: *
+            Disallow: /c/portal/
+            User-agent: Sogou web spider
+            Disallow: /
+            """);
+
+        Assert.AreEqual(
+            RobotsPolicyEvaluationResult.Allowed,
+            Evaluate(policy, "/resource/cellar/abc"));
+        Assert.AreEqual(
+            RobotsPolicyEvaluationResult.Denied,
+            Evaluate(policy, "/c/portal/"));
     }
 
     [TestMethod]
@@ -304,11 +322,54 @@ public sealed class RobotsExclusionPolicyTests
             RobotsPolicyEvaluationResult.UnsafeToInterpret,
             Evaluate(Bytes("User-agent: Lex\nAllow: /bad%ZZ"), "/public"));
         Assert.AreEqual(
-            RobotsPolicyEvaluationResult.UnsafeToInterpret,
+            RobotsPolicyEvaluationResult.Allowed,
             Evaluate(Bytes("Allow: /bad%ZZ"), "/public"));
         Assert.AreEqual(
             RobotsPolicyEvaluationResult.Allowed,
             Evaluate(Bytes("User-agent: Lex\nDisallow:"), "/public"));
+    }
+
+    [TestMethod]
+    public void UnrelatedMalformedRuleGroupDoesNotTaintTheApplicableGroup()
+    {
+        var policy = Bytes(
+            """
+            User-agent: Other
+            Disallow: /bad%ZZ
+            User-agent: Lex
+            Disallow: /private
+            """);
+
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Denied, Evaluate(policy, "/private"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Allowed, Evaluate(policy, "/public"));
+    }
+
+    [TestMethod]
+    public void ExactGroupsKeepPrecedenceOverUnsafeWildcardGroups()
+    {
+        var policy = Bytes(
+            """
+            User-agent: *
+            Disallow: /bad%ZZ
+            User-agent: Lex
+            Allow: /private
+            """);
+
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Allowed, Evaluate(policy, "/private"));
+        Assert.AreEqual(
+            RobotsPolicyEvaluationResult.UnsafeToInterpret,
+            RobotsExclusionPolicy.Evaluate(policy, "Other", "/private"));
+
+        var unsafeExact = Bytes(
+            """
+            User-agent: *
+            Allow: /private
+            User-agent: Lex
+            Disallow: /bad%ZZ
+            """);
+        Assert.AreEqual(
+            RobotsPolicyEvaluationResult.UnsafeToInterpret,
+            Evaluate(unsafeExact, "/private"));
     }
 
     [TestMethod]
