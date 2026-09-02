@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Lex.V3.Contracts;
+using System.Text.RegularExpressions;
 using Lex.V3.Contracts.Facts;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -871,8 +872,6 @@ public sealed class FactsHostileTests
     }
 
     /// <summary>
-    /// MUTATION RECEIPT: two level claims about one string. Candidate 2 admitted one URI as both
-    /// <summary>
     /// The resource family documented itself as covering manifestations and items while its grammar
     /// rejected the publisher's own dotted expression and manifestation identifiers, because
     /// <c>Guid.TryParseExact(.., "D")</c> cannot admit a dotted suffix.
@@ -903,6 +902,14 @@ public sealed class FactsHostileTests
                 new OfficialIdentifier(FactsIdentifierFamily.CellarResourceUri, value).RawValue,
                 $"the resource family refused {value}");
 
+            // The reader is only half the contract. The first version of this widening moved the
+            // reader alone, so every shape below was constructible and unserializable at once, and
+            // this test passed because it never asked the schema. Reader and schema must admit the
+            // same set, which is the rule FactsCommon states and which nothing here checked.
+            Assert.IsTrue(
+                Regex.IsMatch(value, FactsSchemaHardener.CellarResourcePattern),
+                $"the schema pattern refused {value} that the reader admits");
+
             // and the same value is never also a work, so the level is carried by the shape rather
             // than by whichever family the caller reached for.
             Assert.ThrowsExactly<ArgumentException>(
@@ -915,6 +922,10 @@ public sealed class FactsHostileTests
             work, new OfficialIdentifier(FactsIdentifierFamily.CellarWorkUri, work).RawValue);
         Assert.ThrowsExactly<ArgumentException>(
             () => new OfficialIdentifier(FactsIdentifierFamily.CellarResourceUri, work));
+        Assert.IsTrue(Regex.IsMatch(work, FactsSchemaHardener.CellarWorkPattern));
+        Assert.IsFalse(
+            Regex.IsMatch(work, FactsSchemaHardener.CellarResourcePattern),
+            "the schema admits the bare work as a resource, so the families are not disjoint there");
 
         // Near misses, refused by both families. The first is the publisher's own 404.
         var refused = new (string Value, string Why)[]
@@ -942,9 +953,22 @@ public sealed class FactsHostileTests
                     () => new OfficialIdentifier(family, value),
                     $"{family} admitted {value} despite {why}");
             }
+
+            foreach (var pattern in new[]
+                     {
+                         FactsSchemaHardener.CellarWorkPattern,
+                         FactsSchemaHardener.CellarResourcePattern,
+                     })
+            {
+                Assert.IsFalse(
+                    Regex.IsMatch(value, pattern),
+                    $"a schema pattern admitted {value} that the reader refuses, despite {why}");
+            }
         }
     }
 
+    /// <summary>
+    /// MUTATION RECEIPT: two level claims about one string. Candidate 2 admitted one URI as both
     /// work-level and resource-level inside a single identity.
     /// </summary>
     [TestMethod]
