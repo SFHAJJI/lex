@@ -138,6 +138,7 @@ public sealed record HttpResponseMetadata
     public bool BlocksDerivation() =>
         HasMultipleField ||
         ContentEncoding is not AbsentHttpHeader ||
+        HasContentRange ||
         HasTransferEncoding && HasContentLength ||
         ContentLength is SingleHttpHeader && !TryGetSingleContentLength(out _);
 
