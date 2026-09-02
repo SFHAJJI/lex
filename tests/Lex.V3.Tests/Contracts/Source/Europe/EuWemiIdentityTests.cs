@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -264,23 +265,143 @@ public sealed class EuWemiIdentityTests
     [TestMethod]
     public void TheBoundaryDecidesIdentityAndNothingElse()
     {
-        // Whether the object was acquired, whether its family is complete, and whether an absence
-        // may be asserted are questions this type must not answer, because answering them from an
-        // identity is the defect the whole source lane exists to prevent.
-        foreach (var member in typeof(EuWemiIdentityBoundary)
-                     .GetMembers(System.Reflection.BindingFlags.Public |
-                                 System.Reflection.BindingFlags.Instance |
-                                 System.Reflection.BindingFlags.Static)
-                     .Select(m => m.Name))
+        // Pinned as the exact public surface rather than as forbidden substrings. A name grep is
+        // vacuous: it constrains what a future member may be called and not what the type may do,
+        // so it passes unchanged if Require grows an acquisition-ledger parameter and starts
+        // refusing objects that were never fetched. An exact set fails on any addition.
+        var declared = typeof(EuWemiIdentityBoundary)
+            .GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static |
+                        BindingFlags.DeclaredOnly)
+            .Select(member => member.Name)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+
+        CollectionAssert.AreEqual(
+            new[] { ".ctor", "MemberKeyOf", "ParentRoleOf", "Require" },
+            declared,
+            "the public surface changed; identity is all this type may decide, so an addition " +
+            "needs a decision rather than a test update: " + string.Join(", ", declared));
+
+        // And the one method that takes an object takes nothing else, so it cannot consult
+        // acquisition, completeness or coverage even if somebody wanted it to.
+        var parameters = typeof(EuWemiIdentityBoundary)
+            .GetMethod(nameof(EuWemiIdentityBoundary.Require))!
+            .GetParameters()
+            .Select(parameter => parameter.ParameterType)
+            .ToArray();
+        CollectionAssert.AreEqual(
+            new[] { typeof(SourceObjectRef), typeof(EuWemiRole), typeof(string) }, parameters);
+    }
+
+    [TestMethod]
+    public void OneCellarObjectHasExactlyOneAdmittedIdentity()
+    {
+        // Guid.TryParseExact is case-insensitive on the hex digits and strips leading and trailing
+        // white space. I measured it rather than trusting the documentation: uppercase, a leading
+        // space, a trailing space, a newline and a non-breaking space all parse, and only the exact
+        // lowercase form round-trips through ToString("D").
+        //
+        // Without the round-trip each of those is a distinct canonical key with a distinct digest,
+        // all naming one work, and any index keyed on the canonical key then holds several works.
+        var boundary = Boundary();
+        var canonical = $"{Work}.0006";
+
+        Assert.AreEqual(
+            canonical,
+            boundary.Require(
+                Object(canonical, EuWemiRole.Expression, Work),
+                EuWemiRole.Expression,
+                "value").CanonicalKey);
+
+        var upper = $"{Work.ToUpperInvariant()}.0006";
+        var thrown = Assert.ThrowsExactly<ArgumentException>(
+            () => boundary.Require(
+                Object(upper, EuWemiRole.Expression, Work.ToUpperInvariant()),
+                EuWemiRole.Expression,
+                "value"),
+            "an uppercase UUID gave this work a second admitted identity");
+        StringAssert.Contains(thrown.Message, "grammar");
+
+        // The whitespace spellings cannot even be built now, because the publisher URI must name
+        // the key and a URI may not carry a space. Asserted so the reason is on the record: the
+        // round-trip closes the casing half and the URI binding closes the whitespace half.
+        foreach (var padded in new[] { " " + Work, Work + " ", Work + "\n" })
         {
-            foreach (var forbidden in new[]
-                     { "Complete", "Absence", "Acquired", "MayPublish", "Held", "Coverage" })
-            {
-                Assert.IsFalse(
-                    member.Contains(forbidden, StringComparison.Ordinal),
-                    $"{member} answers something other than identity");
-            }
+            Assert.ThrowsExactly<ArgumentException>(
+                () => Object(padded, EuWemiRole.Work),
+                $"a padded key built a reference at all: \"{padded}\"");
         }
+    }
+
+    [TestMethod]
+    public void AParentCarryingTheWrongEntityKindIsRefused()
+    {
+        // A whole-statement deletion of the parent registry-member check left the entire class
+        // green, so the guard was there and nothing reached it. Its registry half is genuinely
+        // unreachable, because SourceObjectRef already forces a child and its parent to share one
+        // registry and the child's was checked first. The member-key half is not: without it a
+        // parent shaped like a work but labelled a manifestation is admitted as this expression's
+        // work, and the role stops being a coordinate again.
+        var boundary = Boundary();
+        var key = $"{Work}.0006";
+
+        var mislabelledParent = new SourceObjectRef(
+            SourceCoreSchemaIds.SourceObjectRef,
+            SourceAuthority.Cellar,
+            new SourceRegistryMemberRef(Registry, "eu_cellar_expression"),
+            Uri(key),
+            key,
+            Sha256Hex(key),
+            Profile,
+            new SourceObjectKeyRef(
+                new SourceRegistryMemberRef(Registry, "eu_cellar_manifestation"),
+                Uri(Work), Work, Sha256Hex(Work)));
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(
+            () => boundary.Require(mislabelledParent, EuWemiRole.Expression, "value"));
+        StringAssert.Contains(thrown.Message, "eu_cellar_work");
+    }
+
+    [TestMethod]
+    public void ThePublisherUriMustNameTheCanonicalKey()
+    {
+        // The URI is the only field that denotes the publisher's object, and nothing read it.
+        // Two different real Cellar objects could carry one canonical key and be admitted as one
+        // identity, which is the failure this whole type exists to end rather than relocate.
+        var boundary = Boundary();
+        var key = $"{Work}.0006";
+
+        var strangerUri = new SourceObjectRef(
+            SourceCoreSchemaIds.SourceObjectRef,
+            SourceAuthority.Cellar,
+            new SourceRegistryMemberRef(Registry, "eu_cellar_expression"),
+            Uri($"{OtherWork}.0006"),
+            key,
+            Sha256Hex(key),
+            Profile,
+            new SourceObjectKeyRef(
+                new SourceRegistryMemberRef(Registry, "eu_cellar_work"),
+                Uri(Work), Work, Sha256Hex(Work)));
+        var thrown = Assert.ThrowsExactly<ArgumentException>(
+            () => boundary.Require(strangerUri, EuWemiRole.Expression, "value"));
+        StringAssert.Contains(thrown.Message, "does not name");
+
+        // The parent is bound the same way, so a parent whose URI is a different object is refused
+        // even though its key is the right one.
+        var strangerParent = new SourceObjectRef(
+            SourceCoreSchemaIds.SourceObjectRef,
+            SourceAuthority.Cellar,
+            new SourceRegistryMemberRef(Registry, "eu_cellar_expression"),
+            Uri(key),
+            key,
+            Sha256Hex(key),
+            Profile,
+            new SourceObjectKeyRef(
+                new SourceRegistryMemberRef(Registry, "eu_cellar_work"),
+                Uri(OtherWork), Work, Sha256Hex(Work)));
+        Assert.ThrowsExactly<ArgumentException>(
+            () => boundary.Require(strangerParent, EuWemiRole.Expression, "value"));
     }
 
     [TestMethod]

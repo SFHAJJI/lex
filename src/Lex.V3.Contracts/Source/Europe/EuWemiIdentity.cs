@@ -110,6 +110,7 @@ public sealed class EuWemiIdentityBoundary
         }
 
         RequireRegistryMember(value.EntityKind, role, parameterName);
+        RequirePublisherUriNamesTheKey(value.PublisherUri, value.CanonicalKey, parameterName);
 
         if (value.IdentityProfileRef != _identityProfileRef)
         {
@@ -142,6 +143,7 @@ public sealed class EuWemiIdentityBoundary
         }
 
         RequireRegistryMember(parent.EntityKind, parentRole.Value, parameterName);
+        RequirePublisherUriNamesTheKey(parent.PublisherUri, parent.CanonicalKey, parameterName);
 
         if (!MatchesGrammar(parent.CanonicalKey, parentRole.Value))
         {
@@ -166,6 +168,33 @@ public sealed class EuWemiIdentityBoundary
         }
 
         return value;
+    }
+
+    /// <summary>
+    /// Require the publisher URI and the canonical key to name one object.
+    /// </summary>
+    /// <remarks>
+    /// Without this the URI is never read at all, and it is the only field that denotes the
+    /// publisher's object. Two different real Cellar objects could then carry one canonical key and
+    /// be admitted as the same identity, and a single object could be admitted as a Work and as an
+    /// Expression by writing a different member key beside an expression-shaped key. Both would be
+    /// proved from caller-authored strings about a caller-authored object, which is the failure this
+    /// type exists to end rather than relocate one level down.
+    /// </remarks>
+    private static void RequirePublisherUriNamesTheKey(
+        string publisherUri,
+        string canonicalKey,
+        string parameterName)
+    {
+        const string cellar = "/cellar/";
+        var at = publisherUri.LastIndexOf(cellar, StringComparison.Ordinal);
+        if (at < 0 ||
+            !string.Equals(
+                publisherUri[(at + cellar.Length)..], canonicalKey, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                $"The publisher URI {publisherUri} does not name {canonicalKey}.", parameterName);
+        }
     }
 
     private void RequireRegistryMember(
@@ -198,7 +227,10 @@ public sealed class EuWemiIdentityBoundary
     /// </remarks>
     private static bool MatchesGrammar(string key, EuWemiRole role)
     {
-        if (key is null || key.Length == 0)
+        // The null half of an earlier `key is null ||` was unreachable: every caller passes a
+        // canonical key the wire primitives already proved non-null, and the recursive call passes
+        // a slice. The empty half is reachable, through a key that is nothing but a separator.
+        if (key.Length == 0)
         {
             return false;
         }
@@ -231,7 +263,14 @@ public sealed class EuWemiIdentityBoundary
             _ => 3,
         };
 
-        if (parts.Length != expected || !Guid.TryParseExact(parts[0], "D", out _))
+        // Round-trip rather than parse. TryParseExact is case-insensitive on the hex digits and
+        // strips leading and trailing white space, so a bare parse admits {uuid}, {UUID} and
+        // " {uuid}" as three canonical keys with three digests, all naming one work, and any index
+        // keyed on the canonical key then holds three works. This is the check
+        // SourceCoreValidation already applies to artifact identities, reused rather than restated.
+        if (parts.Length != expected ||
+            !Guid.TryParseExact(parts[0], "D", out var uuid) ||
+            !string.Equals(parts[0], uuid.ToString("D"), StringComparison.Ordinal))
         {
             return false;
         }
