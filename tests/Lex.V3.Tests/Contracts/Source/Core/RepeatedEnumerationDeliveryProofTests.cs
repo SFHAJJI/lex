@@ -128,6 +128,13 @@ public sealed class RepeatedEnumerationDeliveryProofTests
     }
 
     [TestMethod]
+    public void EveryPageMustBindTheSamePartitionAsBothCounts()
+    {
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            new Fixture(mismatchedPagePartition: true).Create("a,b", "a,b"));
+    }
+
+    [TestMethod]
     public void OutcomeClassifierRequiresCountsRowsKeysAndCursorsToAgreeIndependently()
     {
         const string same = "same";
@@ -455,6 +462,7 @@ public sealed class RepeatedEnumerationDeliveryProofTests
         private readonly int _statusCode;
         private readonly bool _samePass;
         private readonly bool _mismatchedPartition;
+        private readonly bool _mismatchedPagePartition;
         private readonly string _partitionKey;
         private readonly bool _samePageLimit;
         private readonly bool _wrongExpectedPageCount;
@@ -494,6 +502,7 @@ public sealed class RepeatedEnumerationDeliveryProofTests
             int statusCode = 200,
             bool samePass = false,
             bool mismatchedPartition = false,
+            bool mismatchedPagePartition = false,
             string partitionKey = "laws",
             bool samePageLimit = false,
             bool wrongExpectedPageCount = false,
@@ -528,6 +537,7 @@ public sealed class RepeatedEnumerationDeliveryProofTests
             _statusCode = statusCode;
             _samePass = samePass;
             _mismatchedPartition = mismatchedPartition;
+            _mismatchedPagePartition = mismatchedPagePartition;
             _partitionKey = partitionKey;
             _samePageLimit = samePageLimit;
             _wrongExpectedPageCount = wrongExpectedPageCount;
@@ -700,7 +710,9 @@ public sealed class RepeatedEnumerationDeliveryProofTests
             {
                 parameters.Reverse();
             }
-            var partitionMemberKey = _mismatchedPartition && pass == 2 ? "other-laws" : _partitionKey;
+            var partitionMemberKey = (_mismatchedPartition && pass == 2) || (_mismatchedPagePartition && seed == 2)
+                ? "other-laws"
+                : _partitionKey;
             var input = MachineQueryInputArtifact.Create(Artifact(seed + 100).ResourceId, family, partitionMemberKey, cardinality, parameters);
             var target = Encoding.ASCII.GetBytes("/feed");
             var plan = new MachineQueryPlan(MachineQueryPlan.SchemaId, input.QueryFamilyRef, Artifact(907), Artifact(908), HttpRequestMethod.Get, "https://publisher.example/feed", target.Length, Sha(target), cardinality, null, null, MachineQueryInputMode.RendererInputs, input.ArtifactRef, input.PartitionBinding, null, null);
