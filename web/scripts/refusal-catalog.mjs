@@ -59,9 +59,16 @@ export const REFUSAL_EXAMPLES = Object.freeze({
   identifier_unknown: {
     sentence: 'That identifier does not resolve to a held work.',
     payload: {
+      // Deliberately unmistakable placeholders rather than the real figures. This catalogue is a
+      // fixture on a page that tells the reader every value is synthetic, and it carried the
+      // measured 1,402 / 1,250 / 23,370 / 24,622 population while saying so. Decision 27 forbids
+      // literal population counts here, and a page that prints real measurements under a synthetic
+      // banner is wrong twice: the numbers go stale silently, and the banner stops being true.
+      // A live surface takes these from a dated build-derived input; this fixture shows the shape.
       population_disclosure:
-        '1,402 consolidated LU works and 1,250 EU works are searchable; 23,370 ' +
-        'never-consolidated LU acts, of a 24,622 LOI and RGD population, are not.',
+        '{held_lu_works} consolidated LU works and {held_eu_works} EU works are searchable; ' +
+        '{unconsolidated_lu_acts} never-consolidated LU acts, of a {lu_act_population} LOI and ' +
+        'RGD population, are not.',
       what_would_answer: ['corrected_identifier', 'expanded_official_scope'],
       asserts_absence_of_law: false,
     },

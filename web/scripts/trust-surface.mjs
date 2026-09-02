@@ -235,9 +235,9 @@ export function renderTrustSurface() {
 
     `<section class="surface-block"><h2>What the record does not say</h2>
       <p>Three qualifications, each common rather than exotic. Two publisher dates on one
-        wording is 39.8 percent of Luxembourg provision states; a scheduled state that has
-        not begun reads as current law without a mark; and a gap closed by inference is this
-        product's inference, not the publisher's assertion.</p>
+        wording is ordinary rather than rare; a scheduled state that has not begun reads as
+        current law without a mark; and a gap closed by inference is this product's inference,
+        not the publisher's assertion.</p>
       ${renderValidityConflict({ stateValidFrom: '2003-01-01', wordingValidFrom: '2001-01-01' })}
       ${renderProvisional({ validFrom: '2030-09-15', asOf: '2026-09-01' })}
       ${renderHole({ kind: 'no_state_held', from: '2002-01-02', to: '2002-12-31' })}

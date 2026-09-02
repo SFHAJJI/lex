@@ -29,8 +29,12 @@ const POPULATION = {
   not_searchable: [
     {
       what:
-        'LU acts, of a 24,622 LOI and RGD population, that never receive a consolidated ' +
-        'edition and are therefore not searchable here',
+        // The count below carries counted_at and is legitimate under Decision 27. The
+        // population figure that used to sit in this sentence did not: requirePopulation
+        // dates the number in `count` and cannot see a second number written into the prose
+        // beside it, so an undated literal escaped the guard written to catch exactly that.
+        'LU acts that never receive a consolidated edition and are therefore not ' +
+        'searchable here',
       count: 23370,
       counted_at: '2026-08-15',
     },

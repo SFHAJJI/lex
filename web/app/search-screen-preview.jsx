@@ -47,8 +47,10 @@ const POPULATION = Object.freeze({
   not_searchable: [
     {
       what:
-        'LU acts, of a 24,622 LOI and RGD population, that never receive a consolidated edition ' +
-        'and are therefore not searchable here',
+        // See the note in scripts/search-preview.mjs: the dated count is fine, an undated
+        // population figure in the prose beside it is not, and the guard cannot see it there.
+        'LU acts that never receive a consolidated edition and are therefore not ' +
+        'searchable here',
       count: 23370,
       counted_at: '2026-08-15',
     },

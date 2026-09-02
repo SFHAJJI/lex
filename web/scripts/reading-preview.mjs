@@ -1,7 +1,9 @@
 // Reading, in the five shapes where a page of law says something the publisher did not.
 //
-// A wording the publisher dates before the state that carries it, which is 39.8 percent of
-// the Luxembourg provision states and therefore the ordinary case rather than the exotic one.
+// A wording the publisher dates before the state that carries it. Common rather than
+// exotic, and the measured share is deliberately not printed: this page tells the reader
+// every value on it is synthetic, and a real measurement two lines below that sentence
+// makes the sentence false and the number undated at the same time. Decision 27.
 // A provision whose licence forbids republishing its wording, which renders as a blank pane
 // unless something makes the absence legible. A provision this corpus holds no text for at
 // all, which is a different absence with a different answer. An anchor the version does not
@@ -208,8 +210,7 @@ export function renderReadingPreview({ locale = 'en' } = {}) {
       + section(
         'A wording the publisher dates before the state carrying it',
         'Both dates are the publisher own and neither is derived, so both are shown and '
-          + 'neither is chosen. This is 39.8 percent of the Luxembourg provision states, which '
-          + 'makes it the ordinary case rather than the exception.',
+          + 'neither is chosen. This is the ordinary case rather than the exception.',
         ordinary,
       )
       + section(
