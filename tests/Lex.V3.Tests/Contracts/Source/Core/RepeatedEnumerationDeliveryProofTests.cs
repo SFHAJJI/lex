@@ -1,6 +1,8 @@
-using System.Text.Json.Serialization;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Http;
@@ -16,6 +18,25 @@ public sealed class RepeatedEnumerationDeliveryProofTests
     private const string CellarSparqlCountObservation20260902 = "\n{ \"head\": { \"link\": [], \"vars\": [\"count\"] },\n  \"results\": { \"distinct\": false, \"ordered\": true, \"bindings\": [\n    { \"count\": { \"type\": \"literal\", \"datatype\": \"http://www.w3.org/2001/XMLSchema#integer\", \"value\": \"1\" }} ] } }";
     private const string LegiluxSparqlRowObservation20260902 = "\n{ \"head\": { \"link\": [], \"vars\": [\"id\", \"cursor\", \"value\"] },\n  \"results\": { \"distinct\": false, \"ordered\": true, \"bindings\": [\n    { \"id\": { \"type\": \"uri\", \"value\": \"urn:lex:v3:probe:lu\" }\t, \"cursor\": { \"type\": \"literal\", \"value\": \"a\" }\t, \"value\": { \"type\": \"literal\", \"value\": \"x\" }} ] } }";
     private const string CellarSparqlRowObservation20260902 = "\n{ \"head\": { \"link\": [], \"vars\": [\"id\", \"cursor\", \"value\"] },\n  \"results\": { \"distinct\": false, \"ordered\": true, \"bindings\": [\n    { \"id\": { \"type\": \"uri\", \"value\": \"urn:lex:v3:probe:eu\" }\t, \"cursor\": { \"type\": \"literal\", \"value\": \"a\" }\t, \"value\": { \"type\": \"literal\", \"value\": \"x\" }} ] } }";
+
+    [TestMethod]
+    public void SharedDeliveryWireTokensAreExplicitAndStable()
+    {
+        Assert.AreEqual(
+            "\"below_maximum\"",
+            ContractJson.Serialize(RepeatedEnumerationThresholdAssessment.BelowMaximum));
+        Assert.AreEqual(
+            "\"partition_required\"",
+            ContractJson.Serialize(RepeatedEnumerationThresholdAssessment.PartitionRequired));
+        Assert.AreEqual(
+            "\"equal_selections\"",
+            ContractJson.Serialize(EnumerationDeliveryOutcome.EqualSelections));
+        Assert.AreEqual(
+            "\"different_selections\"",
+            ContractJson.Serialize(EnumerationDeliveryOutcome.DifferentSelections));
+        Assert.ThrowsExactly<JsonException>(() =>
+            ContractJson.Deserialize<EnumerationDeliveryOutcome>("\"EqualSelections\""));
+    }
 
     [TestMethod]
     public void ThresholdUsesTheSourceProfileMaximumAndNotTheRequestLimit()

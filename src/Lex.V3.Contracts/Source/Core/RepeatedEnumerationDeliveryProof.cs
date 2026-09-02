@@ -1,12 +1,28 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Source.Http;
 
 namespace Lex.V3.Contracts.Source.Core;
 
-public enum RepeatedEnumerationThresholdAssessment { BelowMaximum = 1, PartitionRequired = 2 }
-public enum EnumerationDeliveryOutcome { EqualSelections = 1, DifferentSelections = 2 }
+public enum RepeatedEnumerationThresholdAssessment
+{
+    [JsonStringEnumMemberName("below_maximum")]
+    BelowMaximum = 1,
+
+    [JsonStringEnumMemberName("partition_required")]
+    PartitionRequired = 2,
+}
+
+public enum EnumerationDeliveryOutcome
+{
+    [JsonStringEnumMemberName("equal_selections")]
+    EqualSelections = 1,
+
+    [JsonStringEnumMemberName("different_selections")]
+    DifferentSelections = 2,
+}
 public enum RepeatedEnumerationRdfTermKind { Iri = 1, BlankNode = 2, Literal = 3, Unbound = 4 }
 public enum RepeatedEnumerationSparqlJsonDialect { LuxembourgVirtuoso = 1, EuropeanUnionVirtuoso = 2 }
 public enum RepeatedEnumerationTerminalPagePolicy
