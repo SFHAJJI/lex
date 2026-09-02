@@ -117,20 +117,123 @@ public sealed class EuManifestationScopeTests
             () => ContractJson.Deserialize<EuManifestationScope>(hostile));
     }
 
+    /// <summary>
+    /// The reuse basis is read from the publisher's notice, and a record claiming another is
+    /// refused.
+    /// </summary>
+    /// <remarks>
+    /// Pinned against literals rather than against <c>BasisFor</c>, because a test that asks the
+    /// mapping what the mapping says holds under every change to it. Both hostile pairings are the
+    /// ones that constructed before this boundary existed.
+    /// </remarks>
     [TestMethod]
-    public void EveryContentClassCarriesOneBasisAndTheBasisMayBeUnknown()
+    public void TheReuseBasisIsReadFromTheNoticeAndAMismatchIsRefused()
     {
-        // The ruling in full: an unmeasured split is recorded as unknown, never as a blanket
-        // licence. Without the Unknown member a caller with no measurement is forced to assert one
-        // of the three real bases, and the type manufactures a licence out of absent evidence.
-        AssertTokens<EuContentClass>("metadata", "consolidation", "summary", "original_legal_text");
-        AssertTokens<EuReuseBasis>("cc0", "cc_by_4_0", "decision_2011_833_eu", "unknown");
+        AssertTokens<EuContentClass>(
+            "metadata", "consolidation", "summary", "original_legal_text", "editorial_content");
+        AssertTokens<EuReuseBasis>("cc0", "cc_by_4_0", "decision_2011_833_eu");
 
-        var withUnknown = Enum.GetValues<EuContentClass>()
-            .Select(c => new EuRightsDisposition(c, EuReuseBasis.Unknown, Evidence("bb")))
+        Assert.AreEqual(EuReuseBasis.Cc0, EuRightsDisposition.BasisFor(EuContentClass.Metadata));
+        Assert.AreEqual(
+            EuReuseBasis.CcBy40,
+            EuRightsDisposition.BasisFor(EuContentClass.EditorialContent));
+        Assert.AreEqual(EuReuseBasis.CcBy40, EuRightsDisposition.BasisFor(EuContentClass.Summary));
+        Assert.AreEqual(
+            EuReuseBasis.CcBy40,
+            EuRightsDisposition.BasisFor(EuContentClass.Consolidation));
+        Assert.AreEqual(
+            EuReuseBasis.Decision2011833Eu,
+            EuRightsDisposition.BasisFor(EuContentClass.OriginalLegalText));
+
+        // Metadata as CC BY states an attribution obligation over a public domain dedication.
+        Assert.ThrowsExactly<ArgumentException>(
+            () => new EuRightsDisposition(
+                EuContentClass.Metadata, EuReuseBasis.CcBy40, Evidence("bb")));
+
+        // Original legal text as CC0 states a public domain dedication over published law, whose
+        // basis reserves an exception. This is the pairing that mattered most.
+        Assert.ThrowsExactly<ArgumentException>(
+            () => new EuRightsDisposition(
+                EuContentClass.OriginalLegalText, EuReuseBasis.Cc0, Evidence("bb")));
+
+        // And every class refuses every basis that is not its own, so the two above are examples
+        // of a rule rather than the whole of it.
+        foreach (var contentClass in Enum.GetValues<EuContentClass>())
+        {
+            foreach (var basis in Enum.GetValues<EuReuseBasis>())
+            {
+                if (basis == EuRightsDisposition.BasisFor(contentClass))
+                {
+                    continue;
+                }
+
+                Assert.ThrowsExactly<ArgumentException>(
+                    () => new EuRightsDisposition(contentClass, basis, Evidence("bb")),
+                    $"{contentClass} was allowed to carry {basis}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Third-party material and document-specific terms are an axis, not content classes, and
+    /// neither can be resolved for an item yet.
+    /// </summary>
+    /// <remarks>
+    /// The surface is pinned exactly rather than by a list of forbidden words. A member named
+    /// <c>Present</c>, <c>Resolved</c> or <c>Absent</c> would let a caller state for one document
+    /// what only an observation could establish, and a denylist only refuses the words somebody
+    /// thought of.
+    /// </remarks>
+    [TestMethod]
+    public void TheExceptionChannelsAreAnAxisAndCarryNoItemResolution()
+    {
+        AssertTokens<EuRightsExceptionChannel>("third_party_material", "document_specific_terms");
+
+        foreach (var name in Enum.GetNames<EuContentClass>())
+        {
+            Assert.IsFalse(
+                name.Contains("ThirdParty", StringComparison.Ordinal)
+                || name.Contains("Restricted", StringComparison.Ordinal)
+                || name.Contains("Specific", StringComparison.Ordinal),
+                $"{name} makes an element-level exception into a whole-object class");
+        }
+
+        var declared = typeof(EuRightsExceptionDisposition)
+            .GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+            .Select(member => $"{member.MemberType} {member}")
+            .OrderBy(signature => signature, StringComparer.Ordinal)
             .ToArray();
-        Assert.AreEqual(4, Scope(FullFormats(), withUnknown).Rights.Count);
 
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "Constructor Void .ctor(Lex.V3.Contracts.Source.Europe."
+                + "EuRightsExceptionChannel, Lex.V3.Contracts.Source.Core.SourceArtifactRef)",
+                "Method Boolean Equals(Lex.V3.Contracts.Source.Europe.EuRightsExceptionDisposition)",
+                "Method Boolean Equals(System.Object)",
+                "Method Int32 GetHashCode()",
+                "Method Lex.V3.Contracts.Source.Core.SourceArtifactRef get_EvidenceRef()",
+                "Method Lex.V3.Contracts.Source.Europe.EuRightsExceptionChannel get_Channel()",
+                "Method Lex.V3.Contracts.Source.Europe.EuRightsExceptionDisposition <Clone>$()",
+                "Method System.String ToString()",
+                "Property Lex.V3.Contracts.Source.Core.SourceArtifactRef EvidenceRef",
+                "Property Lex.V3.Contracts.Source.Europe.EuRightsExceptionChannel Channel",
+            },
+            declared,
+            "the exception disposition's surface changed; it now declares "
+            + string.Join(" | ", declared));
+
+        foreach (var channel in Enum.GetValues<EuRightsExceptionChannel>())
+        {
+            Assert.ThrowsExactly<ArgumentNullException>(
+                () => new EuRightsExceptionDisposition(channel, null!),
+                $"{channel} was allowed to exist with no evidence that it exists");
+        }
+    }
+
+    [TestMethod]
+    public void EveryContentClassCarriesOneBasis()
+    {
         foreach (var missing in Enum.GetValues<EuContentClass>())
         {
             var partial = FullRights().Where(d => d.ContentClass != missing).ToArray();
@@ -141,15 +244,19 @@ public sealed class EuManifestationScopeTests
     }
 
     [TestMethod]
-    public void EveryBasisNeedsItsEvidenceIncludingUnknown()
+    public void EveryBasisNeedsItsEvidence()
     {
-        // "We looked and found no split" and "nobody looked" are the same token with different
-        // standing, and only the evidence separates them.
-        foreach (var basis in Enum.GetValues<EuReuseBasis>())
+        // Walked over the classes rather than over the bases, because the basis is no longer a
+        // caller's choice: each class is paired with the one the notice gives it, which reaches
+        // every basis while constructing nothing the notice does not say.
+        foreach (var contentClass in Enum.GetValues<EuContentClass>())
         {
             Assert.ThrowsExactly<ArgumentNullException>(
-                () => new EuRightsDisposition(EuContentClass.Metadata, basis, null!),
-                $"{basis} was allowed to carry no evidence");
+                () => new EuRightsDisposition(
+                    contentClass,
+                    EuRightsDisposition.BasisFor(contentClass),
+                    null!),
+                $"{contentClass} was allowed to carry no evidence");
         }
     }
 
@@ -350,7 +457,7 @@ public sealed class EuManifestationScopeTests
         rights.Clear();
 
         Assert.AreEqual(9, scope.Formats.Count);
-        Assert.AreEqual(4, scope.Rights.Count);
+        Assert.AreEqual(Enum.GetValues<EuContentClass>().Length, scope.Rights.Count);
         Assert.IsTrue(scope.Formats.Any(d => d.Admission == EuFormatBodyAdmission.BodyAdmitted));
     }
 
@@ -580,9 +687,7 @@ public sealed class EuManifestationScopeTests
         Enum.GetValues<EuContentClass>()
             .Select(contentClass => new EuRightsDisposition(
                 contentClass,
-                contentClass == EuContentClass.Metadata
-                    ? EuReuseBasis.Cc0
-                    : EuReuseBasis.CcBy40,
+                EuRightsDisposition.BasisFor(contentClass),
                 Evidence("bb")))
             .ToArray();
 
