@@ -111,11 +111,12 @@ public sealed class LuxembourgQueryPlanTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "has_cursor", "last_key_1", "last_key_2", "last_key_3", "last_key_4",
-                "last_key_5", "last_key_6", "partition_end_1", "partition_end_2",
-                "partition_end_3", "partition_end_4", "partition_end_5", "partition_end_6",
                 "partition_start_1", "partition_start_2", "partition_start_3",
-                "partition_start_4", "partition_start_5", "partition_start_6", "pass_id",
+                "partition_start_4", "partition_start_5", "partition_start_6",
+                "partition_end_1", "partition_end_2", "partition_end_3", "partition_end_4",
+                "partition_end_5", "partition_end_6", "pass_id", "has_cursor",
+                "last_key_1", "last_key_2", "last_key_3", "last_key_4", "last_key_5",
+                "last_key_6",
             },
             page.InputArtifact.OrderedParameters.Select(static value => value.Name).ToArray());
         Assert.IsFalse(page.InputArtifact.OrderedParameters.Any(
@@ -149,10 +150,10 @@ public sealed class LuxembourgQueryPlanTests
         CollectionAssert.AreEqual(
             new[]
             {
+                "partition_start_1", "partition_start_2", "partition_start_3",
+                "partition_start_4", "partition_start_5", "partition_start_6",
                 "partition_end_1", "partition_end_2", "partition_end_3", "partition_end_4",
-                "partition_end_5", "partition_end_6", "partition_start_1", "partition_start_2",
-                "partition_start_3", "partition_start_4", "partition_start_5",
-                "partition_start_6", "pass_id",
+                "partition_end_5", "partition_end_6", "pass_id",
             },
             count.InputArtifact.OrderedParameters.Select(static value => value.Name).ToArray());
         var query = Uri.UnescapeDataString(
@@ -164,6 +165,128 @@ public sealed class LuxembourgQueryPlanTests
         Assert.IsFalse(count.InputArtifact.OrderedParameters.Any(
             static value => value.Name is "page_limit" or "has_cursor" ||
                 value.Name.StartsWith("last_key_", StringComparison.Ordinal)));
+    }
+
+    [TestMethod]
+    public void EveryPublisherQueryBuildsTheSharedDeliveryProfileAndExactInputRoles()
+    {
+        const string planResourceId = "urn:uuid:55555555-5555-4555-8555-555555555555";
+        var plan = Plan();
+        var partition = new LuxembourgQueryPartitionRange(
+            "delivery-profile",
+            Cursor("a"),
+            Cursor("z"));
+        var expectedSelection = Enumerable.Range(1, 6)
+            .Select(static index => $"partition_start_{index}")
+            .Concat(Enumerable.Range(1, 6)
+                .Select(static index => $"partition_end_{index}"))
+            .ToArray();
+        var cursorVariables = Enumerable.Range(1, 6)
+            .Select(static index => $"key_{index}")
+            .ToArray();
+        var cursorParameters = Enumerable.Range(1, 6)
+            .Select(static index => $"last_key_{index}")
+            .ToArray();
+
+        foreach (var definition in plan.SetDefinitions.Where(
+                     static value => value.Acquisition == LuxembourgQuerySetAcquisition.PublisherQuery))
+        {
+            var profile = plan.CreateDeliveryProfile(planResourceId, definition.SetId);
+            var count = plan.BindCount(
+                planResourceId,
+                "urn:uuid:66666666-6666-4666-8666-666666666666",
+                "urn:uuid:77777777-7777-4777-8777-777777777777",
+                definition.SetId,
+                LuxembourgQueryPass.Pass1,
+                partition,
+                Artifact("88888888-8888-4888-8888-888888888888", '8'));
+            var page = plan.BindPage(
+                planResourceId,
+                "urn:uuid:99999999-9999-4999-8999-999999999999",
+                "urn:uuid:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                definition.SetId,
+                LuxembourgQueryPass.Pass1,
+                partition,
+                lastCursor: null,
+                expectedPartitionRowCount: 0,
+                Artifact("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", 'b'),
+                Artifact("cccccccc-cccc-4ccc-8ccc-cccccccccccc", 'c'));
+            var continuedPage = plan.BindPage(
+                planResourceId,
+                "urn:uuid:99999999-9999-4999-8999-999999999998",
+                "urn:uuid:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab",
+                definition.SetId,
+                LuxembourgQueryPass.Pass1,
+                partition,
+                Cursor("m"),
+                expectedPartitionRowCount: 1,
+                Artifact("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbc", 'd'),
+                Artifact("cccccccc-cccc-4ccc-8ccc-cccccccccccd", 'e'));
+
+            Assert.AreEqual(
+                RepeatedEnumerationSparqlJsonDialect.LuxembourgVirtuoso,
+                profile.Dialect);
+            Assert.AreEqual(LuxembourgQueryPlan.PublisherDeliveryCeilingRows,
+                profile.MaximumDeliverableRows);
+            Assert.AreEqual(count.MachinePlan.QueryFamilyRef, profile.CountQueryFamilyRef);
+            Assert.AreEqual(page.MachinePlan.QueryFamilyRef, profile.PageQueryFamilyRef);
+            CollectionAssert.AreEqual(expectedSelection, profile.SelectionParameterNames.ToArray());
+            var expectedProjection = definition.TemplateId switch
+            {
+                "assertion-rows" => new[]
+                {
+                    "subject", "predicate", "object", "object_kind", "datatype_iri",
+                    "language_tag",
+                }.Concat(cursorVariables).ToArray(),
+                "relation-assertions" => new[]
+                {
+                    "subject", "predicate", "object",
+                }.Concat(cursorVariables).ToArray(),
+                _ => cursorVariables,
+            };
+            CollectionAssert.AreEqual(expectedProjection, profile.ProjectionVariables.ToArray());
+            CollectionAssert.AreEqual(
+                profile.ProjectionVariables.ToArray(),
+                profile.CanonicalKeyVariables.ToArray());
+            CollectionAssert.AreEqual(cursorVariables, profile.CursorVariables.ToArray());
+            CollectionAssert.AreEqual(cursorParameters, profile.CursorParameterNames.ToArray());
+            CollectionAssert.AreEqual(
+                expectedSelection.Append("pass_id").ToArray(),
+                count.InputArtifact.OrderedParameters.Select(static value => value.Name).ToArray());
+            CollectionAssert.AreEqual(
+                expectedSelection.Append("pass_id").Append("has_cursor").ToArray(),
+                page.InputArtifact.OrderedParameters.Select(static value => value.Name).ToArray());
+            CollectionAssert.AreEqual(
+                expectedSelection.Append("pass_id").Append("has_cursor")
+                    .Concat(cursorParameters).ToArray(),
+                continuedPage.InputArtifact.OrderedParameters
+                    .Select(static value => value.Name).ToArray());
+        }
+
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            plan.CreateDeliveryProfile(planResourceId, "M"));
+        Assert.IsNull(typeof(LuxembourgQueryText).GetMethod("EncodeHex"));
+        Assert.IsNull(typeof(LuxembourgQueryText).GetMethod("DecodeHex"));
+        Assert.IsNull(typeof(LuxembourgQueryText).GetMethod("CompareUtf8"));
+    }
+
+    [TestMethod]
+    public void LuxembourgDeliveryProfilePartitionsAtThePublisherCeiling()
+    {
+        var profile = Plan().CreateDeliveryProfile(
+            "urn:uuid:55555555-5555-4555-8555-555555555555",
+            "A");
+
+        Assert.AreEqual(
+            RepeatedEnumerationThresholdAssessment.BelowMaximum,
+            EnumerationDeliveryComparison.AssessThreshold(
+                LuxembourgQueryPlan.PublisherDeliveryCeilingRows - 1,
+                profile));
+        Assert.AreEqual(
+            RepeatedEnumerationThresholdAssessment.PartitionRequired,
+            EnumerationDeliveryComparison.AssessThreshold(
+                LuxembourgQueryPlan.PublisherDeliveryCeilingRows,
+                profile));
     }
 
     [TestMethod]
@@ -436,7 +559,7 @@ public sealed class LuxembourgQueryPlanTests
             Assert.AreEqual("hee8080", encodedStart.TextValue);
             Assert.AreEqual("hf0908080", encodedEnd.TextValue);
             Assert.ThrowsExactly<ArgumentException>(() =>
-                LuxembourgQueryText.DecodeHex("hEE8080"));
+                EnumerationCursorEnvelope.Decode("hEE8080"));
             var unicodeQuery = Uri.UnescapeDataString(
                 Encoding.UTF8.GetString(unicode.Request.CopyRequestBody())["query=".Length..]);
             StringAssert.Contains(unicodeQuery, "\"\uE000\"");

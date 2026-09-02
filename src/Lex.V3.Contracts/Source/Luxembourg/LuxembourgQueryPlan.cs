@@ -150,7 +150,7 @@ public sealed record LuxembourgQueryCursor
         var right = other.Parts;
         for (var index = 0; index < left.Length; index++)
         {
-            var comparison = LuxembourgQueryText.CompareUtf8(left[index], right[index]);
+            var comparison = EnumerationCursorEnvelope.CompareRaw(left[index], right[index]);
             if (comparison != 0)
             {
                 return comparison;
@@ -217,35 +217,6 @@ internal static class LuxembourgQueryText
         }
 
         return value;
-    }
-
-    public static string EncodeHex(string value) =>
-        "h" + Convert.ToHexString(StrictUtf8.GetBytes(value)).ToLowerInvariant();
-
-    public static int CompareUtf8(string left, string right) =>
-        StrictUtf8.GetBytes(left).AsSpan().SequenceCompareTo(StrictUtf8.GetBytes(right));
-
-    public static string DecodeHex(string value)
-    {
-        try
-        {
-            if (!value.StartsWith('h'))
-            {
-                throw new FormatException("Missing canonical hex envelope.");
-            }
-
-            var decoded = StrictUtf8.GetString(Convert.FromHexString(value[1..]));
-            if (!string.Equals(value, EncodeHex(decoded), StringComparison.Ordinal))
-            {
-                throw new FormatException("The UTF-8 hex envelope is not canonical.");
-            }
-
-            return decoded;
-        }
-        catch (Exception exception) when (exception is FormatException or DecoderFallbackException)
-        {
-            throw new ArgumentException("A query key input is not canonical UTF-8 hex.", nameof(value), exception);
-        }
     }
 
     public static string DecodeStrict(ReadOnlySpan<byte> value)
@@ -378,7 +349,8 @@ internal static class LuxembourgQueryPageBinder
                 nameof(lastCursor));
         }
 
-        var parameters = RangeParameters(partition, pass, invariantPlanRef).ToList();
+        var parameters = SelectionParameters(partition, invariantPlanRef).ToList();
+        parameters.Add(Integer("pass_id", (int)pass, invariantPlanRef));
         parameters.Add(Integer("has_cursor", lastCursor is null ? 0 : 1, invariantPlanRef));
         if (lastCursor is not null)
         {
@@ -450,7 +422,8 @@ internal static class LuxembourgQueryPageBinder
             partition,
             LuxembourgQueryRequestKind.Count,
             response,
-            RangeParameters(partition, pass, invariantPlanRef),
+            SelectionParameters(partition, invariantPlanRef)
+                .Append(Integer("pass_id", (int)pass, invariantPlanRef)),
             rendererSourceRef));
     }
 
@@ -475,7 +448,7 @@ internal static class LuxembourgQueryPageBinder
             queryFamily,
             partition.PartitionId,
             response,
-            parameters.OrderBy(static value => value.Name, StringComparer.Ordinal).ToArray());
+            parameters.ToArray());
         var renderer = new LuxembourgSparqlRenderer(
             invariantPlanRef,
             rendererSourceRef,
@@ -523,21 +496,23 @@ internal static class LuxembourgQueryPageBinder
             value.TemplateId == definition.TemplateId));
     }
 
-    private static IEnumerable<MachineQueryParameter> RangeParameters(
+    private static IEnumerable<MachineQueryParameter> SelectionParameters(
         LuxembourgQueryPartitionRange partition,
-        LuxembourgQueryPass pass,
         SourceArtifactRef provenance)
     {
-        yield return Integer("pass_id", (int)pass, provenance);
+        for (var index = 0; index < partition.StartInclusive.Parts.Length; index++)
+        {
+            yield return Text(
+                $"partition_start_{index + 1}",
+                partition.StartInclusive.Parts[index],
+                provenance);
+        }
+
         for (var index = 0; index < partition.EndExclusive.Parts.Length; index++)
         {
             yield return Text(
                 $"partition_end_{index + 1}",
                 partition.EndExclusive.Parts[index],
-                provenance);
-            yield return Text(
-                $"partition_start_{index + 1}",
-                partition.StartInclusive.Parts[index],
                 provenance);
         }
     }
@@ -553,7 +528,7 @@ internal static class LuxembourgQueryPageBinder
         string value,
         SourceArtifactRef provenance) => new(
         name, MachineQueryParameterKind.PublisherCursor, null,
-        LuxembourgQueryText.EncodeHex(value), provenance);
+        EnumerationCursorEnvelope.Encode(value), provenance);
 
     private static string Sha256(ReadOnlySpan<byte> value) =>
         Convert.ToHexString(SHA256.HashData(value)).ToLowerInvariant();
@@ -674,7 +649,7 @@ internal sealed class LuxembourgSparqlRenderer : IMachineQueryRenderer
         IReadOnlyDictionary<string, MachineQueryParameter> parameters,
         string name) => parameters.TryGetValue(name, out var value) &&
         value.Kind == MachineQueryParameterKind.PublisherCursor && value.TextValue is not null
-            ? LuxembourgQueryText.DecodeHex(value.TextValue)
+            ? EnumerationCursorEnvelope.Decode(value.TextValue)
             : throw new ArgumentException($"The text input {name} is missing or invalid.", nameof(parameters));
 
     private static string Replace(string value, string slot, string replacement)
@@ -764,6 +739,7 @@ public sealed record LuxembourgQueryPlan
 {
     public const string SchemaId = "lex-lu-query-plan/1";
     public const string PublisherEndpoint = "https://data.legilux.public.lu/sparqlendpoint";
+    public const long PublisherDeliveryCeilingRows = 1_000_000;
     private static readonly string[] SchemeRootIris =
     [
         "http://data.legilux.public.lu/resource/authority/license/",
@@ -941,6 +917,53 @@ public sealed record LuxembourgQueryPlan
         pass,
         partition,
         rendererSourceRef);
+
+    public RepeatedEnumerationInterpretationProfile CreateDeliveryProfile(
+        string queryPlanResourceId,
+        string setId)
+    {
+        EnsureClosed(this);
+        var definition = SetDefinitions.SingleOrDefault(value => value.SetId == setId)
+            ?? throw new ArgumentException("The set identity is not in the LU plan.", nameof(setId));
+        if (definition.Acquisition != LuxembourgQuerySetAcquisition.PublisherQuery ||
+            definition.TemplateId is null)
+        {
+            throw new ArgumentException(
+                "A local materialization has no repeated publisher delivery profile.",
+                nameof(setId));
+        }
+
+        var planRef = LuxembourgQueryPlanIdentity.Create(queryPlanResourceId, this);
+        var projection = DeliveryProjectionVariables(definition.TemplateId);
+        var cursorVariables = Enumerable.Range(1, 6)
+            .Select(static index => $"key_{index}")
+            .ToArray();
+        var selectionParameters = Enumerable.Range(1, 6)
+            .Select(static index => $"partition_start_{index}")
+            .Concat(Enumerable.Range(1, 6)
+                .Select(static index => $"partition_end_{index}"))
+            .ToArray();
+        var cursorParameters = Enumerable.Range(1, 6)
+            .Select(static index => $"last_key_{index}")
+            .ToArray();
+        return new RepeatedEnumerationInterpretationProfile(
+            RepeatedEnumerationInterpretationProfile.SchemaId,
+            RepeatedEnumerationSparqlJsonDialect.LuxembourgVirtuoso,
+            "application/sparql-results+json",
+            EnumerationCursorEnvelope.Identity,
+            PublisherDeliveryCeilingRows,
+            "enumeration-row-threshold/1",
+            new SourceRegistryMemberRef(planRef, $"{definition.TemplateId}.count"),
+            new SourceRegistryMemberRef(planRef, $"{definition.TemplateId}.page"),
+            "count",
+            projection,
+            projection,
+            cursorVariables,
+            selectionParameters,
+            "pass_id",
+            cursorParameters,
+            "has_cursor");
+    }
 
     private static LuxembourgQueryPlan CreateClosed(
         LuxembourgDatasetGraphIdentity graph,
@@ -1198,4 +1221,24 @@ public sealed record LuxembourgQueryPlan
             .Select(static value => value.FullIri)
             .Order(StringComparer.Ordinal)
             .ToArray();
+
+    private static string[] DeliveryProjectionVariables(string templateId)
+    {
+        var values = templateId switch
+        {
+            "assertion-rows" => new[]
+            {
+                "subject", "predicate", "object", "object_kind", "datatype_iri", "language_tag",
+            },
+            "relation-assertions" => ["subject", "predicate", "object"],
+            "controlled-concepts" or "iri-objects" or "predicates" or
+                "relation-endpoints" or "subjects" or "typed-resources" or "types" => [],
+            _ => throw new ArgumentException(
+                "The query template has no closed delivery projection.",
+                nameof(templateId)),
+        };
+        return values.Concat(Enumerable.Range(1, 6)
+            .Select(static index => $"key_{index}"))
+            .ToArray();
+    }
 }
