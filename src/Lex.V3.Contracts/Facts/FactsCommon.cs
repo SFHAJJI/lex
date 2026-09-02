@@ -365,20 +365,31 @@ public sealed record OfficialIdentifier
     /// A Cellar URI on the publisher's own host, at the level its family claims.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Candidate 3 called the identical check for both families, so the caller's enum tag was the
-    /// only claimed level distinction and one URI could be admitted as either. Cellar work URIs
-    /// live under a work segment; a resource-level URI names a manifestation or item beneath one.
-    /// </remarks>
-    /// <summary>
-    /// A Cellar URI at the level its family claims.
-    /// </summary>
-    /// <remarks>
-    /// The work is <c>/resource/cellar/&lt;uuid&gt;</c>, where the publisher's predicates actually
-    /// live. Candidate 4 admitted any three-segment <c>/resource/&lt;class&gt;/&lt;id&gt;</c>, so
+    /// only claimed level distinction and one URI could be admitted as either. The work is
+    /// <c>/resource/cellar/&lt;uuid&gt;</c>, where the publisher's predicates actually live.
+    /// Candidate 4 admitted any three-segment <c>/resource/&lt;class&gt;/&lt;id&gt;</c>, so
     /// <c>/resource/celex/32016R0679</c> passed as a work. That URI is a persistent-identifier
     /// alias tied to the work by <c>owl:sameAs</c>; treating it as the work relabels an alias as
-    /// the thing itself, which is the loss this package exists to prevent one level up from where
-    /// I was looking.
+    /// the thing itself.
+    /// </para>
+    /// <para>
+    /// The resource family previously required a bare work UUID with a further path segment, so it
+    /// rejected the publisher's own dotted expression and manifestation identifiers while its
+    /// documentation claimed to cover exactly those levels. Cellar identifies an expression as
+    /// <c>{work}.{four digits}</c> and a manifestation as <c>{expression}.{two digits}</c>, and all
+    /// four shapes were confirmed live against the official endpoint on 2026-09-02: the bare work,
+    /// the dotted expression and the dotted manifestation each answered 200 and redirected to their
+    /// own distinct <c>rdf/object/full</c>, and <c>{manifestation}/DOC_1</c> answered 200 directly.
+    /// A third dotted level answered 404, so the depth ceiling is the publisher's answer rather
+    /// than an inference of ours.
+    /// </para>
+    /// <para>
+    /// The two families stay disjoint by shape rather than by the caller's label: a bare UUID with
+    /// no further path is the work and only the work, and the resource family requires either a
+    /// dotted suffix or a further path segment.
+    /// </para>
     /// </remarks>
     private static bool IsCellarUri(string value, bool work)
     {
@@ -405,17 +416,51 @@ public sealed record OfficialIdentifier
             return false;
         }
 
-        if (work)
+        if (!string.Equals(segments[1], "cellar", StringComparison.Ordinal) ||
+            CellarObjectDepth(segments[2]) is not { } depth)
         {
-            return segments.Length == 3 &&
-                string.Equals(segments[1], "cellar", StringComparison.Ordinal) &&
-                Guid.TryParseExact(segments[2], "D", out _);
+            return false;
         }
 
-        return segments.Length > 3 &&
-            string.Equals(segments[1], "cellar", StringComparison.Ordinal) &&
-            Guid.TryParseExact(segments[2], "D", out _);
+        // A bare UUID with nothing after it is the work, and only the work. Anything the resource
+        // family admits therefore carries either a dotted suffix or a further path segment, so one
+        // URI can never satisfy both families.
+        return work
+            ? segments.Length == 3 && depth == 0
+            : segments.Length > 3 || depth > 0;
     }
+
+    /// <summary>
+    /// The WEMI depth a Cellar object identifier carries, or <c>null</c> where it is not one.
+    /// </summary>
+    /// <remarks>
+    /// Zero is a work, one an expression, two a manifestation. The digit widths are the
+    /// publisher's, four then two, and the ceiling is the publisher's too: a third dotted level
+    /// answers 404, so admitting one would mean carrying an identity Cellar does not mint.
+    /// </remarks>
+    private static int? CellarObjectDepth(string segment)
+    {
+        var parts = segment.Split('.');
+        if (parts.Length > 3 || !Guid.TryParseExact(parts[0], "D", out _))
+        {
+            return null;
+        }
+
+        if (parts.Length >= 2 && !IsExactDigits(parts[1], 4))
+        {
+            return null;
+        }
+
+        if (parts.Length == 3 && !IsExactDigits(parts[2], 2))
+        {
+            return null;
+        }
+
+        return parts.Length - 1;
+    }
+
+    private static bool IsExactDigits(string value, int width) =>
+        value.Length == width && value.All(static character => character is >= '0' and <= '9');
 
     /// <summary>A persistent-identifier alias URI, which is a fact in its own right.</summary>
     /// <summary>
