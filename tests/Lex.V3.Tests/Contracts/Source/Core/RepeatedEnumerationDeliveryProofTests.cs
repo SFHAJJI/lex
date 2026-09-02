@@ -99,6 +99,49 @@ public sealed class RepeatedEnumerationDeliveryProofTests
     }
 
     [TestMethod]
+    public void OutcomeClassifierRequiresCountsRowsKeysAndCursorsToAgreeIndependently()
+    {
+        const string same = "same";
+
+        Assert.AreEqual(
+            EnumerationDeliveryOutcome.EqualSelections,
+            EnumerationDeliveryComparison.ClassifyOutcome(
+                2, 2, 2, 2, same, same, same, same, same, same));
+        Assert.AreEqual(
+            EnumerationDeliveryOutcome.DifferentSelections,
+            EnumerationDeliveryComparison.ClassifyOutcome(
+                3, 3, 2, 2, same, same, same, same, same, same),
+            "both passes can skip the same row and still agree with each other");
+        Assert.AreEqual(
+            EnumerationDeliveryOutcome.DifferentSelections,
+            EnumerationDeliveryComparison.ClassifyOutcome(
+                3, 2, 3, 2, same, same, same, same, same, same),
+            "the two independently observed counts must agree");
+        Assert.AreEqual(
+            EnumerationDeliveryOutcome.DifferentSelections,
+            EnumerationDeliveryComparison.ClassifyOutcome(
+                2, 2, 2, 2, "row-a", "row-b", same, same, same, same));
+        Assert.AreEqual(
+            EnumerationDeliveryOutcome.DifferentSelections,
+            EnumerationDeliveryComparison.ClassifyOutcome(
+                2, 2, 2, 2, same, same, "key-a", "key-b", same, same));
+        Assert.AreEqual(
+            EnumerationDeliveryOutcome.DifferentSelections,
+            EnumerationDeliveryComparison.ClassifyOutcome(
+                2, 2, 2, 2, same, same, same, same, "cursor-a", "cursor-b"));
+    }
+
+    [TestMethod]
+    public void MatchingPassDigestsCannotHideASelectedRowShortfall()
+    {
+        var proof = new Fixture(expectedCount: 3).Create("a,b", "a,b");
+
+        Assert.AreEqual(EnumerationDeliveryOutcome.DifferentSelections, proof.Outcome);
+        Assert.AreEqual(3, proof.SelectedRowCountA);
+        Assert.AreEqual(2, proof.DeliveredRowCountA);
+    }
+
+    [TestMethod]
     public void AcceptedRdfDatatypeAndLanguageArePartOfSelectionIdentity()
     {
         var id = Iri("a");
@@ -155,7 +198,36 @@ public sealed class RepeatedEnumerationDeliveryProofTests
     public void FactoryRejectsDuplicateKeysAndNonmonotonicCursors()
     {
         Assert.ThrowsExactly<ArgumentException>(() => new Fixture(rawRows: RowsWithKeys(("same", "a"), ("same", "b"))).Create("ignored", "ignored"));
+        Assert.ThrowsExactly<ArgumentException>(() => new Fixture(rawRows: RowsWithKeys(("a", "same"), ("b", "same"))).Create("ignored", "ignored"));
         Assert.ThrowsExactly<ArgumentException>(() => new Fixture().Create("b,a", "b,a"));
+    }
+
+    [TestMethod]
+    public void AFullFinalPageAndAContinuationAfterAShortPageAreBothRefused()
+    {
+        var tenRows = RowsWithKeys(
+            ("a", "a"), ("b", "b"), ("c", "c"), ("d", "d"), ("e", "e"),
+            ("f", "f"), ("g", "g"), ("h", "h"), ("i", "i"), ("j", "j"));
+        var sevenRows = RowsWithKeys(
+            ("a", "a"), ("b", "b"), ("c", "c"), ("d", "d"),
+            ("e", "e"), ("f", "f"), ("g", "g"));
+
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            new Fixture(
+                expectedCount: 10,
+                rawRowsA: tenRows,
+                rawRowsB: sevenRows).Create("ignored", "ignored"));
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            EnumerationDeliveryComparison.RequireContinuation(
+                1, ["i"], ["i"], previousPageCount: 9, rowLimit: 10));
+    }
+
+    [TestMethod]
+    public void ContinuationRequiresTheExplicitCursorClaimEvenWhenTheCursorMatches()
+    {
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            EnumerationDeliveryComparison.RequireContinuation(
+                0, ["i"], ["i"], previousPageCount: 10, rowLimit: 10));
     }
 
     [TestMethod]
@@ -220,9 +292,12 @@ public sealed class RepeatedEnumerationDeliveryProofTests
     public void VirtuosoEnvelopeMembersAndDialectTypesAreRequired()
     {
         var eu = new Fixture().OfficialCountJson(2);
+        var row = ValidRowDocument(Iri("a"), PlainLiteral("a"), PlainLiteral("x"));
         Assert.ThrowsExactly<ArgumentException>(() => new Fixture(rawCount: eu.Replace("\"link\":[],", string.Empty, StringComparison.Ordinal)).Create("a,b", "a,b"));
         Assert.ThrowsExactly<ArgumentException>(() => new Fixture(rawCount: eu.Replace("\"distinct\":false,", string.Empty, StringComparison.Ordinal)).Create("a,b", "a,b"));
         Assert.ThrowsExactly<ArgumentException>(() => new Fixture(rawCount: eu.Replace("\"ordered\":true,", string.Empty, StringComparison.Ordinal)).Create("a,b", "a,b"));
+        Assert.ThrowsExactly<ArgumentException>(() => new Fixture(rawCount: eu.Replace("\"ordered\":true", "\"ordered\":false", StringComparison.Ordinal)).Create("a,b", "a,b"));
+        Assert.ThrowsExactly<ArgumentException>(() => new Fixture(rawRows: row.Replace("\"ordered\":true", "\"ordered\":false", StringComparison.Ordinal), expectedCount: 1).Create("a", "a"));
         Assert.ThrowsExactly<ArgumentException>(() => new Fixture(dialect: RepeatedEnumerationSparqlJsonDialect.LuxembourgVirtuoso, rawCount: eu).Create("a,b", "a,b"));
     }
 

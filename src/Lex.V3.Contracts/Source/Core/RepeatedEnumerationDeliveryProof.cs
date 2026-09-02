@@ -174,7 +174,17 @@ public sealed class EnumerationDeliveryComparison
         CanonicalRowDigestA = Digest("repeated_enumeration_rows/1", rowsA.Select(static row => row.Terms)); CanonicalRowDigestB = Digest("repeated_enumeration_rows/1", rowsB.Select(static row => row.Terms));
         CanonicalKeyDigestA = Digest("repeated_enumeration_keys/1", rowsA.Select(static row => row.CanonicalKey)); CanonicalKeyDigestB = Digest("repeated_enumeration_keys/1", rowsB.Select(static row => row.CanonicalKey));
         CursorDigestA = Digest("repeated_enumeration_cursors/1", rowsA.Select(static row => row.Cursor)); CursorDigestB = Digest("repeated_enumeration_cursors/1", rowsB.Select(static row => row.Cursor));
-        Outcome = selectedA == selectedB && selectedA == rowsA.Count && selectedB == rowsB.Count && CanonicalRowDigestA == CanonicalRowDigestB && CanonicalKeyDigestA == CanonicalKeyDigestB && CursorDigestA == CursorDigestB ? EnumerationDeliveryOutcome.EqualSelections : EnumerationDeliveryOutcome.DifferentSelections;
+        Outcome = ClassifyOutcome(
+            selectedA,
+            selectedB,
+            rowsA.Count,
+            rowsB.Count,
+            CanonicalRowDigestA,
+            CanonicalRowDigestB,
+            CanonicalKeyDigestA,
+            CanonicalKeyDigestB,
+            CursorDigestA,
+            CursorDigestB);
     }
     public SourceArtifactRef InterpretationProfileRef { get; }
     public RepeatedEnumerationThresholdAssessment ThresholdAssessment { get; }
@@ -215,6 +225,43 @@ public sealed class EnumerationDeliveryComparison
     }
     public static RepeatedEnumerationThresholdAssessment AssessThreshold(long count, RepeatedEnumerationInterpretationProfile profile) { if (count < 0) throw new ArgumentOutOfRangeException(nameof(count)); ArgumentNullException.ThrowIfNull(profile); return count < profile.MaximumDeliverableRows ? RepeatedEnumerationThresholdAssessment.BelowMaximum : RepeatedEnumerationThresholdAssessment.PartitionRequired; }
 
+    internal static EnumerationDeliveryOutcome ClassifyOutcome(
+        long selectedA,
+        long selectedB,
+        long deliveredA,
+        long deliveredB,
+        string canonicalRowDigestA,
+        string canonicalRowDigestB,
+        string canonicalKeyDigestA,
+        string canonicalKeyDigestB,
+        string cursorDigestA,
+        string cursorDigestB) =>
+        selectedA == selectedB &&
+        selectedA == deliveredA &&
+        selectedB == deliveredB &&
+        string.Equals(canonicalRowDigestA, canonicalRowDigestB, StringComparison.Ordinal) &&
+        string.Equals(canonicalKeyDigestA, canonicalKeyDigestB, StringComparison.Ordinal) &&
+        string.Equals(cursorDigestA, cursorDigestB, StringComparison.Ordinal)
+            ? EnumerationDeliveryOutcome.EqualSelections
+            : EnumerationDeliveryOutcome.DifferentSelections;
+
+    internal static void RequireContinuation(
+        long hasCursor,
+        IReadOnlyList<string> actualCursor,
+        IReadOnlyList<string> expectedCursor,
+        long previousPageCount,
+        long rowLimit)
+    {
+        ArgumentNullException.ThrowIfNull(actualCursor);
+        ArgumentNullException.ThrowIfNull(expectedCursor);
+        if (hasCursor != 1 ||
+            !actualCursor.SequenceEqual(expectedCursor, StringComparer.Ordinal) ||
+            previousPageCount != rowLimit)
+        {
+            throw new ArgumentException("The typed cursor continuation is invalid.");
+        }
+    }
+
     private static RepeatedEnumerationResolvedEvidence Resolve(RepeatedEnumerationEvidenceRefs refs, RepeatedEnumerationInterpretationProfile profile, SourceRegistryMemberRef family, IRepeatedEnumerationEvidenceResolver resolver)
     {
         var value = resolver.Resolve(refs) ?? throw new ArgumentException("Retained evidence is missing.", nameof(resolver));
@@ -248,7 +295,12 @@ public sealed class EnumerationDeliveryComparison
             {
                 var cursors = Parameters(page.QueryInput, profile.CursorParameterNames);
                 var expected = prior[^1].Cursor.Select(static term => term.Value ?? throw new ArgumentException("A cursor term must be bound.")).ToArray();
-                if (hasCursor != 1 || !cursors.SequenceEqual(expected, StringComparer.Ordinal) || prior.Count != limit) throw new ArgumentException("The typed cursor continuation is invalid.");
+                RequireContinuation(
+                    hasCursor,
+                    cursors,
+                    expected,
+                    prior.Count,
+                    limit ?? throw new InvalidOperationException("The page limit was not established."));
             }
             if (rows.SelectMany(static row => row.Cursor).Any(static term => term.Kind != RepeatedEnumerationRdfTermKind.Literal || term.Datatype is not null || term.Language is not null)) throw new ArgumentException("Cursor projections must be plain literals matching the query comparator.");
             if (rows.SelectMany(static row => row.CanonicalKey).Any(static term => term.Kind is RepeatedEnumerationRdfTermKind.Unbound or RepeatedEnumerationRdfTermKind.BlankNode)) throw new ArgumentException("Canonical-key components must be bound and stable.");
@@ -268,8 +320,63 @@ public sealed class EnumerationDeliveryComparison
     }
     private static List<RepeatedEnumerationRdfTerm[]> Parse(ReadOnlySpan<byte> bytes, IReadOnlyList<string> expected, RepeatedEnumerationSparqlJsonDialect dialect)
     {
-        using var document = JsonDocument.Parse(bytes.ToArray(), new JsonDocumentOptions { AllowTrailingCommas = false, CommentHandling = JsonCommentHandling.Disallow, MaxDepth = 32 }); var root = document.RootElement; Object(root, "root", ["head", "results"]); var head = root.GetProperty("head"); Object(head, "head", ["link", "vars"]); if (head.GetProperty("link").ValueKind != JsonValueKind.Array || head.GetProperty("link").GetArrayLength() != 0) throw new ArgumentException("Virtuoso head.link must be empty."); var vars = head.GetProperty("vars"); if (vars.ValueKind != JsonValueKind.Array || !vars.EnumerateArray().Select(static item => item.GetString()!).SequenceEqual(expected)) throw new ArgumentException("The SPARQL projection drifted."); var results = root.GetProperty("results"); Object(results, "results", ["distinct", "ordered", "bindings"]); if (results.GetProperty("distinct").ValueKind != JsonValueKind.False || results.GetProperty("ordered").ValueKind != JsonValueKind.True) throw new ArgumentException("Virtuoso result flags differ."); var bindings = results.GetProperty("bindings"); if (bindings.ValueKind != JsonValueKind.Array) throw new ArgumentException("SPARQL bindings must be an array.");
-        return bindings.EnumerateArray().Select(binding => { Object(binding, "binding", binding.EnumerateObject().Select(static property => property.Name).ToArray()); if (binding.EnumerateObject().Any(property => !expected.Contains(property.Name, StringComparer.Ordinal))) throw new ArgumentException("A binding contains an unknown variable."); return expected.Select(variable => binding.TryGetProperty(variable, out var term) ? Term(term, dialect) : RepeatedEnumerationRdfTerm.Unbound()).ToArray(); }).ToList();
+        using var document = JsonDocument.Parse(bytes.ToArray(), new JsonDocumentOptions
+        {
+            AllowTrailingCommas = false,
+            CommentHandling = JsonCommentHandling.Disallow,
+            MaxDepth = 32,
+        });
+        var root = document.RootElement;
+        Object(root, "root", ["head", "results"]);
+        var head = root.GetProperty("head");
+        Object(head, "head", ["link", "vars"]);
+        if (head.GetProperty("link").ValueKind != JsonValueKind.Array ||
+            head.GetProperty("link").GetArrayLength() != 0)
+        {
+            throw new ArgumentException("Virtuoso head.link must be empty.");
+        }
+
+        var variables = head.GetProperty("vars");
+        if (variables.ValueKind != JsonValueKind.Array ||
+            !variables.EnumerateArray()
+                .Select(static item => item.GetString()!)
+                .SequenceEqual(expected))
+        {
+            throw new ArgumentException("The SPARQL projection drifted.");
+        }
+
+        var results = root.GetProperty("results");
+        Object(results, "results", ["distinct", "ordered", "bindings"]);
+        if (results.GetProperty("distinct").ValueKind != JsonValueKind.False ||
+            results.GetProperty("ordered").ValueKind != JsonValueKind.True)
+        {
+            throw new ArgumentException("Virtuoso result flags differ.");
+        }
+
+        var bindings = results.GetProperty("bindings");
+        if (bindings.ValueKind != JsonValueKind.Array)
+        {
+            throw new ArgumentException("SPARQL bindings must be an array.");
+        }
+
+        return bindings.EnumerateArray().Select(binding =>
+        {
+            Object(
+                binding,
+                "binding",
+                binding.EnumerateObject().Select(static property => property.Name).ToArray());
+            if (binding.EnumerateObject().Any(
+                    property => !expected.Contains(property.Name, StringComparer.Ordinal)))
+            {
+                throw new ArgumentException("A binding contains an unknown variable.");
+            }
+
+            return expected.Select(variable =>
+                    binding.TryGetProperty(variable, out var term)
+                        ? Term(term, dialect)
+                        : RepeatedEnumerationRdfTerm.Unbound())
+                .ToArray();
+        }).ToList();
     }
     private static RepeatedEnumerationRdfTerm Term(JsonElement element, RepeatedEnumerationSparqlJsonDialect dialect)
     {
