@@ -111,10 +111,10 @@ public enum EuFormatBodyAdmission
 /// is not a shared identity, and a disposition has to say which of the three it was about.
 /// </para>
 /// <para>
-/// Every member here is a whole-object class. Third-party material and document-specific terms
-/// are deliberately not members: both are conditions that can hold of part of a document while a
-/// class answer holds of the rest, so putting them here would force a choice between two facts
-/// that are true at once. They live on <see cref="EuRightsExceptionChannel"/> instead.
+/// Every member here is a whole-object class. The exception channels are deliberately not members:
+/// each is a condition that can hold of part of a document while a class answer holds of the rest,
+/// so putting any of them here would force a choice between two facts that are true at once. They
+/// live on <see cref="EuRightsExceptionChannel"/> instead.
 /// </para>
 /// </remarks>
 public enum EuContentClass
@@ -270,8 +270,9 @@ public sealed record EuRightsDisposition
 /// between two true things and erase whichever lost.
 /// </para>
 /// <para>
-/// Neither may be inferred from a class. A document does not carry special terms because of what
-/// kind of document it is; it carries them because that document says so.
+/// No channel may be inferred from a class. A document does not carry special terms, industrial
+/// property or an identifiable individual because of what kind of document it is; it carries them
+/// because that document says so.
 /// </para>
 /// </remarks>
 public enum EuRightsExceptionChannel
@@ -323,7 +324,7 @@ public enum EuRightsExceptionChannel
 /// deliberately cannot record is whether any given document or element is subject to it.
 /// </para>
 /// <para>
-/// That absence is the design. Resolving either channel needs an observation binding a source
+/// That absence is the design. Resolving any channel needs an observation binding a source
 /// object, an exact term and value, and the run that saw it, and no acquisition path in this
 /// project can produce one yet. A member for "present", "absent" or "resolved" would therefore
 /// hold a caller's opinion under a word that promises evidence, which is the same defect as a
@@ -533,8 +534,8 @@ public sealed record EuManifestationScope
             static disposition => disposition.ContentClass,
             Enum.GetValues<EuContentClass>(),
             nameof(rights));
-        // Closed the same way the other two are. A scope that could omit these would be calling
-        // itself the Union rights scope while saying nothing about the two conditions that can
+        // Closed the same way the other members are. A scope that could omit these would be
+        // calling itself the Union rights scope while saying nothing about the conditions that can
         // override a class answer, which is the omission a reader is least able to notice.
         Exceptions = CloseOver(
             exceptions,
@@ -567,14 +568,14 @@ public sealed record EuManifestationScope
     public IReadOnlyList<EuRightsDisposition> Rights { get; }
 
     /// <summary>
-    /// The two conditions that can override a class answer, each with the class-level evidence
+    /// The conditions that can override a class answer, each with the class-level evidence
     /// that the condition exists.
     /// </summary>
     /// <remarks>
-    /// Complete and closed, and deliberately silent about any individual object. Holding both
-    /// channels is what makes the class answers readable without being read as whole-object
-    /// permissions: the scope states its policy and states, in the same breath, the two ways that
-    /// policy does not reach. Neither carries a resolution, because nothing can derive one yet.
+    /// Complete and closed, and deliberately silent about any individual object. Holding every
+    /// channel is what makes the class answers readable without being read as whole-object
+    /// permissions: the scope states its policy and states, in the same breath, each way that
+    /// policy does not reach. None carries a resolution, because nothing can derive one yet.
     /// </remarks>
     public IReadOnlyList<EuRightsExceptionDisposition> Exceptions { get; }
 
