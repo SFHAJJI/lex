@@ -605,7 +605,7 @@ public sealed class HttpObservationContractTests
     private static SourceArtifactRef Artifact(string resourceId, char digestCharacter) =>
         new(resourceId, new string(digestCharacter, 64));
 
-    private static HttpResponseMetadata EmptyResponseMetadata() =>
+    internal static HttpResponseMetadata EmptyResponseMetadata() =>
         new(
             new AbsentHttpHeader(),
             new AbsentHttpHeader(),

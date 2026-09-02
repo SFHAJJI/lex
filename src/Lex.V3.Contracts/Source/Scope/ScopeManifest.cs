@@ -541,8 +541,7 @@ public sealed record ScopeAccountingSet
 
     public IReadOnlyList<int> ObjectOrdinals { get; }
 
-    [JsonIgnore]
-    public int Count => ObjectOrdinals.Count;
+    public int Count() => ObjectOrdinals.Count;
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]

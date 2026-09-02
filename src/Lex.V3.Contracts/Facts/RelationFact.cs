@@ -84,7 +84,7 @@ public sealed record RelationFact
                     "An edge stating ecli_not_in_this_set cannot carry an ECLI in that set.",
                     nameof(targetEcliState));
 
-            case EcliState.EcliNotInThisSet when !carried.IsCase:
+            case EcliState.EcliNotInThisSet when !carried.IsCase():
                 throw new ArgumentException(
                     "ecli_not_in_this_set describes a case whose set lacks an ECLI, so the target "
                         + "must be a case.",
@@ -95,7 +95,7 @@ public sealed record RelationFact
                     "An edge stating ecli_not_applicable cannot carry an ECLI.",
                     nameof(targetEcliState));
 
-            case EcliState.EcliNotApplicable when carried.IsCase:
+            case EcliState.EcliNotApplicable when carried.IsCase():
                 throw new ArgumentException(
                     "The target is a case, so ECLI applies to it and the state cannot be not_applicable.",
                     nameof(targetEcliState));
@@ -137,11 +137,9 @@ public sealed record RelationFact
     public LocalInboundView? LocalInboundView { get; }
 
     /// <summary>The target of whichever edge this fact carries.</summary>
-    [JsonIgnore]
-    public OfficialIdentitySet CarriedTarget =>
+    public OfficialIdentitySet CarriedTarget() =>
         PublisherAsserted?.Target ?? OntologyAuthorizedInverse?.Target ?? LocalInboundView!.Target;
 
     /// <summary>The target's ECLI, which exists only inside its identity set.</summary>
-    [JsonIgnore]
-    public string? TargetEcli => CarriedTarget.Value(FactsIdentifierFamily.Ecli);
+    public string? TargetEcli() => CarriedTarget().Value(FactsIdentifierFamily.Ecli);
 }

@@ -36,7 +36,7 @@ public sealed class FactsRoundTripTests
         var restored = ContractJson.Deserialize<RelationFact>(
             ContractJson.Serialize(FactsFixtures.CaseFactWithEcli()));
 
-        var target = restored.CarriedTarget;
+        var target = restored.CarriedTarget();
         Assert.HasCount(4, target.Identifiers);
         Assert.AreEqual(
             FactsFixtures.CellarWorkUri,
@@ -53,7 +53,7 @@ public sealed class FactsRoundTripTests
             target.Value(FactsIdentifierFamily.CellarWorkUri),
             target.Value(FactsIdentifierFamily.CellarPsiUri));
         Assert.AreEqual(EcliState.EcliPresent, restored.TargetEcliState);
-        Assert.AreEqual("ECLI:EU:C:2020:1042", restored.TargetEcli);
+        Assert.AreEqual("ECLI:EU:C:2020:1042", restored.TargetEcli());
     }
 
     [TestMethod]
@@ -125,7 +125,7 @@ public sealed class FactsRoundTripTests
         Assert.AreEqual(RelationAssertionKind.PublisherAsserted, restored.Kind);
         Assert.AreEqual(TargetBodyScope.BodyInScopeHeld, restored.TargetBodyScope);
         Assert.AreEqual(EcliState.EcliNotApplicable, restored.TargetEcliState);
-        Assert.IsNull(restored.TargetEcli);
+        Assert.IsNull(restored.TargetEcli());
         Assert.IsNotNull(restored.PublisherAsserted);
         Assert.IsNull(restored.OntologyAuthorizedInverse);
         Assert.IsNull(restored.LocalInboundView);
@@ -142,10 +142,10 @@ public sealed class FactsRoundTripTests
             ContractJson.Serialize(FactsFixtures.CaseFactWithoutEcli()));
 
         Assert.AreEqual(EcliState.EcliNotInThisSet, restored.TargetEcliState);
-        Assert.IsNull(restored.TargetEcli);
+        Assert.IsNull(restored.TargetEcli());
         Assert.IsNotNull(restored.PublisherAsserted);
-        Assert.AreEqual("62019CJ0311", restored.CarriedTarget.Value(FactsIdentifierFamily.Celex));
-        Assert.IsTrue(restored.CarriedTarget.IsCase);
+        Assert.AreEqual("62019CJ0311", restored.CarriedTarget().Value(FactsIdentifierFamily.Celex));
+        Assert.IsTrue(restored.CarriedTarget().IsCase());
         Assert.AreEqual(TargetBodyScope.BodyInScopeNotHeld, restored.TargetBodyScope);
     }
 

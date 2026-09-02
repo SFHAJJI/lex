@@ -69,8 +69,7 @@ public sealed record OfficialIdentifier
     public string RawValue { get; }
 
     /// <summary>The CELEX sector digit, or null where this is not a CELEX.</summary>
-    [JsonIgnore]
-    public char? CelexSector =>
+    public char? CelexSector() =>
         Family == FactsIdentifierFamily.Celex ? RawValue[0] : null;
 
     /// <summary>
@@ -84,8 +83,7 @@ public sealed record OfficialIdentifier
     /// because the fixture also carried a URI containing <c>/case/</c>, so the assertion was true
     /// for a reason it did not name.
     /// </remarks>
-    [JsonIgnore]
-    public bool ProvesCase =>
+    public bool ProvesCase() =>
         Family == FactsIdentifierFamily.Ecli ||
         (Family == FactsIdentifierFamily.Celex && RawValue[0] == '6');
 
@@ -610,8 +608,7 @@ public sealed record OfficialIdentitySet
     /// does not, and a caller's choice of family label cannot manufacture it, because the label is
     /// only accepted when the value parses as that family.
     /// </remarks>
-    [JsonIgnore]
-    public bool IsCase => Identifiers.Any(static identifier => identifier.ProvesCase);
+    public bool IsCase() => Identifiers.Any(static identifier => identifier.ProvesCase());
 
     /// <summary>Canonical, order-independent identity equality.</summary>
     public bool SameIdentity(OfficialIdentitySet? other)

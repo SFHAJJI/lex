@@ -207,14 +207,11 @@ public sealed class ResponseCompleteBodyObservation : HttpResponseObservation
 
     public DurableBlobWriteReceipt DurableWriteReceipt { get; }
 
-    [JsonIgnore]
-    public long ReceivedEncodedEntityByteCount => DurableWriteReceipt.Reference.ByteLength;
+    public long ReceivedEncodedEntityByteCount() => DurableWriteReceipt.Reference.ByteLength;
 
-    [JsonIgnore]
-    public string TransportByteSha256 => DurableWriteReceipt.Reference.ContentSha256;
+    public string TransportByteSha256() => DurableWriteReceipt.Reference.ContentSha256;
 
-    [JsonIgnore]
-    public DurableBlobRef DurableBlobRef => DurableWriteReceipt.Reference;
+    public DurableBlobRef DurableBlobRef() => DurableWriteReceipt.Reference;
 
     internal static void RequireTransportBlob(
         DurableBlobRef blob,
@@ -365,11 +362,9 @@ public sealed class ResponsePartialBodyObservation : HttpResponseObservation
 
     public DurableBlobWriteReceipt? DurableWriteReceipt { get; }
 
-    [JsonIgnore]
-    public string? TransportByteSha256 => DurableWriteReceipt?.Reference.ContentSha256;
+    public string? TransportByteSha256() => DurableWriteReceipt?.Reference.ContentSha256;
 
-    [JsonIgnore]
-    public DurableBlobRef? DurableBlobRef => DurableWriteReceipt?.Reference;
+    public DurableBlobRef? DurableBlobRef() => DurableWriteReceipt?.Reference;
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -493,11 +488,9 @@ public sealed class ResponseCompletionUnprovenObservation : HttpResponseObservat
 
     public DurableBlobWriteReceipt? DurableWriteReceipt { get; }
 
-    [JsonIgnore]
-    public string? TransportByteSha256 => DurableWriteReceipt?.Reference.ContentSha256;
+    public string? TransportByteSha256() => DurableWriteReceipt?.Reference.ContentSha256;
 
-    [JsonIgnore]
-    public DurableBlobRef? DurableBlobRef => DurableWriteReceipt?.Reference;
+    public DurableBlobRef? DurableBlobRef() => DurableWriteReceipt?.Reference;
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -589,7 +582,7 @@ public sealed class Revalidation304Observation : HttpResponseObservation
         ArgumentNullException.ThrowIfNull(predecessor);
         if (predecessor.StatusCode != 200 ||
             predecessor.StatusDisposition != HttpStatusDisposition.DerivableStatus ||
-            predecessor.ResponseMetadata.BlocksDerivation ||
+            predecessor.ResponseMetadata.BlocksDerivation() ||
             predecessor.Request.Method != HttpRequestMethod.Get ||
             !string.Equals(
                 predecessor.Request.RequestedUri,
@@ -641,7 +634,7 @@ public sealed class Revalidation304Observation : HttpResponseObservation
         if (ResponseMetadata.HasMultipleField ||
             ResponseMetadata.ContentLength is not AbsentHttpHeader &&
             (!ResponseMetadata.TryGetSingleContentLength(out var retainedLength) ||
-             retainedLength != predecessor.DurableBlobRef.ByteLength))
+             retainedLength != predecessor.DurableBlobRef().ByteLength))
         {
             throw new ArgumentException(
                 "A 304 may be admitted only with unambiguous metadata and a retained Content-Length matching the predecessor.",
@@ -649,7 +642,7 @@ public sealed class Revalidation304Observation : HttpResponseObservation
         }
 
         if (PredecessorObservationRef != HttpObservationIdentity.Create(predecessor) ||
-            PredecessorBlobRef != predecessor.DurableBlobRef)
+            PredecessorBlobRef != predecessor.DurableBlobRef())
         {
             throw new ArgumentException(
                 "The predecessor reference and blob must name the exact checked complete observation.",

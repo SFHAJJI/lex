@@ -268,7 +268,7 @@ public sealed class EuScopeDimensionsTests
             "waf_challenge_to_non_browser_clients",
             "eu_channel_admission_1",
             Evidence("44"));
-        Assert.IsFalse(excluded.MayGraduate);
+        Assert.IsFalse(excluded.MayGraduate());
 
         var admitted = new EuChannelDisposition(
             EuChannel.CellarSparqlEndpoint,
@@ -276,7 +276,7 @@ public sealed class EuScopeDimensionsTests
             "open_unauthenticated_robots_permitted",
             "eu_channel_admission_1",
             Evidence("55"));
-        Assert.IsTrue(admitted.MayGraduate);
+        Assert.IsTrue(admitted.MayGraduate());
 
         // Both outcomes need their reason, rule and evidence. An admission without one is the
         // state a consumer relies on to fetch.
@@ -308,7 +308,7 @@ public sealed class EuScopeDimensionsTests
             "bilingual_body_scope",
             "eu_language_body_1",
             Evidence("66"));
-        Assert.IsTrue(carried.CarriesBody);
+        Assert.IsTrue(carried.CarriesBody());
 
         var pointOnly = new EuLanguageBodyDisposition(
             EuOfficialLanguage.German,
@@ -316,7 +316,7 @@ public sealed class EuScopeDimensionsTests
             "language_body_not_held",
             "eu_language_body_1",
             Evidence("66"));
-        Assert.IsFalse(pointOnly.CarriesBody);
+        Assert.IsFalse(pointOnly.CarriesBody());
         // Not an exclusion, and the type must not offer a way to say it is: there is no member
         // on this axis that removes the record.
         AssertTokens<EuLanguageBodyState>("body_candidate", "body_not_held_point");
@@ -364,7 +364,7 @@ public sealed class EuScopeDimensionsTests
                 var held = new EuLanguageBodyDisposition(
                     language, EuLanguageBodyState.BodyCandidate,
                     "bilingual_body_scope", "eu_language_body_1", Evidence("66"));
-                Assert.IsTrue(held.CarriesBody);
+                Assert.IsTrue(held.CarriesBody());
                 candidates++;
             }
             else
@@ -381,7 +381,7 @@ public sealed class EuScopeDimensionsTests
             var point = new EuLanguageBodyDisposition(
                 language, EuLanguageBodyState.BodyNotHeldPoint,
                 "language_body_not_held", "eu_language_body_1", Evidence("66"));
-            Assert.IsFalse(point.CarriesBody);
+            Assert.IsFalse(point.CarriesBody());
             pointOnly++;
         }
 

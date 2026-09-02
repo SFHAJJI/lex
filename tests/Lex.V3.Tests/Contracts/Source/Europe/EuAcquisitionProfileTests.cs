@@ -24,7 +24,7 @@ public sealed class EuAcquisitionProfileTests
         foreach (var missing in EuScopeVocabulary.Channels)
         {
             var partial = FullChannelSet().Where(d => d.Channel != missing).ToArray();
-            if (!partial.Any(d => d.MayGraduate))
+            if (!partial.Any(d => d.MayGraduate()))
             {
                 continue; // covered by the no-admitted-channel test instead
             }
@@ -66,8 +66,8 @@ public sealed class EuAcquisitionProfileTests
 
         CollectionAssert.AreEquivalent(
             new[] { EuChannel.CellarSparqlEndpoint, EuChannel.PublicationsRestResource },
-            profile.AdmittedChannels.ToArray());
-        CollectionAssert.DoesNotContain(profile.AdmittedChannels.ToArray(), EuChannel.EurLexPortal);
+            profile.AdmittedChannels().ToArray());
+        CollectionAssert.DoesNotContain(profile.AdmittedChannels().ToArray(), EuChannel.EurLexPortal);
     }
 
     [TestMethod]
@@ -80,7 +80,7 @@ public sealed class EuAcquisitionProfileTests
         live.Clear();
 
         Assert.AreEqual(3, profile.Channels.Count);
-        Assert.AreEqual(2, profile.AdmittedChannels.Count);
+        Assert.AreEqual(2, profile.AdmittedChannels().Count);
     }
 
     [TestMethod]
@@ -193,6 +193,9 @@ public sealed class EuAcquisitionProfileTests
             () => ContractJson.Deserialize<EuAcquisitionProfile>(everythingExcluded),
             "a wire document admitted no channel and was accepted");
     }
+
+    internal static EuAcquisitionProfile ProbeProfile() =>
+        new(FullChannelSet(), Pacing(), Ceiling());
 
     private static EuChannelDisposition[] FullChannelSet() =>
     [

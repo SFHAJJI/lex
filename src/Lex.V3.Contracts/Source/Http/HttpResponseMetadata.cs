@@ -135,8 +135,7 @@ public sealed record HttpResponseMetadata
         Etag is MultipleHttpHeader ||
         LastModified is MultipleHttpHeader;
 
-    [JsonIgnore]
-    public bool BlocksDerivation =>
+    public bool BlocksDerivation() =>
         HasMultipleField ||
         ContentEncoding is not AbsentHttpHeader ||
         HasTransferEncoding && HasContentLength ||

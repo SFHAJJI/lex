@@ -98,7 +98,7 @@ internal static class SyntheticSqliteIndex
         var logicalRows = CreateLogicalRows(transport, includeCandidate);
         var logicalRowsJson = SerializeLogicalRows(logicalRows);
         var logicalRowsSha256 = DigestFraming.Hash("lex-v3-s0-05-logical-rows", logicalRowsJson);
-        var scopeJson = Encoding.UTF8.GetBytes(SyntheticSliceScope.CompleteLu.CanonicalDescriptor);
+        var scopeJson = Encoding.UTF8.GetBytes(SyntheticSliceScope.CompleteLu.CanonicalDescriptor());
         var scopeSha256 = SyntheticSliceScope.CompleteLu.Sha256;
 
         SyntheticSqliteProvenance provenance;

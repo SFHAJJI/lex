@@ -217,7 +217,7 @@ public sealed class CustodyRestoreTests
             CustodyVerificationProfile.FileSystemUnenforced1,
             restored.PolicyEvidence.VerificationProfile);
         Assert.AreEqual(reference, restored.PolicyEvidence.Reference);
-        Assert.AreEqual(observed, restored.VerifiedAt);
+        Assert.AreEqual(observed, restored.VerifiedAt());
         Assert.AreEqual("lex-v3-durable-blob-write-receipt/2", restored.Schema);
         foreach (var forbidden in new[]
                  {

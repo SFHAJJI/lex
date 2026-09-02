@@ -69,8 +69,7 @@ public sealed record SyntheticResolveRequestContract
 
     public string Sha256 { get; }
 
-    [JsonIgnore]
-    public string CanonicalDescriptor => Descriptor;
+    public string CanonicalDescriptor() => Descriptor;
 
     public static SyntheticResolveRequestContract V1 { get; } = new(
         Identity,
@@ -132,8 +131,7 @@ public sealed record SyntheticSliceScope
 
     public string Sha256 { get; }
 
-    [JsonIgnore]
-    public string CanonicalDescriptor => Descriptor;
+    public string CanonicalDescriptor() => Descriptor;
 
     public static SyntheticSliceScope CompleteLu { get; } = new(
         PublisherId.LuLegilux,

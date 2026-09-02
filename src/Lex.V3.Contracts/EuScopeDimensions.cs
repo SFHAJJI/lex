@@ -330,8 +330,7 @@ public sealed record EuLanguageBodyDisposition
     /// Whether body text is carried. Deliberately not named for holding the language: metadata is
     /// accepted in all twenty-four regardless of this value.
     /// </summary>
-    [JsonIgnore]
-    public bool CarriesBody => BodyState == EuLanguageBodyState.BodyCandidate;
+    public bool CarriesBody() => BodyState == EuLanguageBodyState.BodyCandidate;
 }
 
 /// <summary>
@@ -515,8 +514,7 @@ public sealed record EuChannelDisposition
     public SourceArtifactRef EvidenceRef { get; }
 
     /// <summary>Whether a datum arriving by this channel may graduate past POINT.</summary>
-    [JsonIgnore]
-    public bool MayGraduate => Admission == EuChannelAdmission.Admitted;
+    public bool MayGraduate() => Admission == EuChannelAdmission.Admitted;
 }
 
 /// <summary>

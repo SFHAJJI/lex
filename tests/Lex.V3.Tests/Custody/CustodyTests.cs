@@ -409,7 +409,7 @@ public sealed class CustodyTests
         var restored = ContractJson.Deserialize<DurableBlobWriteReceipt>(json);
 
         Assert.AreEqual(receipt.Reference, restored.Reference);
-        Assert.AreEqual(ObservedAt, restored.VerifiedAt);
+        Assert.AreEqual(ObservedAt, restored.VerifiedAt());
 
         string[] forbidden =
         [

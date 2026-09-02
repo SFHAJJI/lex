@@ -393,7 +393,7 @@ public sealed class AzureBlobCustodyStoreTests
         var receipt = await harness.Store.CreateAsync(
             Body, CustodyClass.NightlyFloor90d, CancellationToken.None);
 
-        Assert.AreEqual(harness.Policy.PolicyObservedAt, receipt.VerifiedAt);
+        Assert.AreEqual(harness.Policy.PolicyObservedAt, receipt.VerifiedAt());
         Assert.AreEqual(ObservedAt, harness.Nightly.SingleBlob.ServerDate);
         Assert.AreEqual(2, harness.Nightly.SingleBlob.PropertiesConditions.Count);
     }
@@ -434,7 +434,7 @@ public sealed class AzureBlobCustodyStoreTests
         var receipt = await harness.Store.CreateAsync(
             Body, CustodyClass.NightlyFloor90d, CancellationToken.None);
 
-        Assert.AreEqual(ObservedAt, receipt.VerifiedAt);
+        Assert.AreEqual(ObservedAt, receipt.VerifiedAt());
         Assert.AreEqual(0, harness.Staging.Blobs.Count);
         Assert.IsFalse(harness.Events.Contains("credential", StringComparer.Ordinal));
         Assert.IsFalse(harness.Events.Contains("nightly.copy", StringComparer.Ordinal));
