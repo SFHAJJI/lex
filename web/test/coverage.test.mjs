@@ -322,3 +322,80 @@ test('an absent language list is a payload that did not say, not a corpus with n
     );
   }
 });
+
+test('a truncated table may not serve more rows than the total it names', () => {
+  // The carry-forward defect. `facets_truncated: true` switched the whole reconciliation off, so
+  // two rows against a total of one rendered "Showing 2 of 1 types." A truncated view shows fewer
+  // rows than the whole; more rows than the whole is not a truncation, it is two figures that
+  // cannot both be about the same table.
+  assert.throws(
+    () =>
+      renderCoverage({
+        coverage: payload({
+          document_types: [
+            { code: 'LOI', versions: 12, versions_with_text: 12 },
+            { code: 'RECUEIL', versions: 15, versions_with_text: 2 },
+          ],
+          document_types_total: 1,
+          facets_truncated: true,
+        }),
+      }),
+    /never more/,
+  );
+});
+
+test('two rows for one facet key are refused even when every figure reconciles', () => {
+  // Count and sums both reconcile here: four rows against a total of four, and the versions still
+  // add to the headline. Only the repeated key is wrong, and a reader would see one type listed
+  // twice with no way to tell which row was the type.
+  assert.throws(
+    () =>
+      renderCoverage({
+        coverage: payload({
+          document_types: [
+            { code: 'LOI', versions: 6, versions_with_text: 6 },
+            { code: 'LOI', versions: 6, versions_with_text: 6 },
+            { code: 'RECUEIL', versions: 15, versions_with_text: 2 },
+            { code: null, versions: 3, versions_with_text: 0 },
+          ],
+          document_types_total: 4,
+        }),
+      }),
+    /listed twice/,
+  );
+});
+
+test('the untyped row is one row, so two null codes are also a repeat', () => {
+  assert.throws(
+    () =>
+      renderCoverage({
+        coverage: payload({
+          document_types: [
+            { code: 'LOI', versions: 12, versions_with_text: 12 },
+            { code: 'RECUEIL', versions: 15, versions_with_text: 2 },
+            { code: null, versions: 2, versions_with_text: 0 },
+            { code: null, versions: 1, versions_with_text: 0 },
+          ],
+          document_types_total: 4,
+        }),
+      }),
+    /listed twice/,
+  );
+});
+
+test('a repeated language row is refused too', () => {
+  // The language table overlaps rather than partitions, so neither the sum rule nor the row-count
+  // rule reaches it. A repeated key is still a repeated key.
+  assert.throws(
+    () =>
+      renderCoverage({
+        coverage: payload({
+          languages: [
+            { code: 'fr', works: 10, versions: 30 },
+            { code: 'fr', works: 10, versions: 30 },
+          ],
+        }),
+      }),
+    /listed twice/,
+  );
+});

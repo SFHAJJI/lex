@@ -62,6 +62,32 @@ export const UNCODED_LANGUAGE_LABEL = 'language not recorded by the publisher';
  * @param {boolean} input.truncated whether rows were left out
  * @param {string}  input.what      what to name in the error
  */
+function requireDistinctFacetKeys(rows, what) {
+  const seen = new Set();
+  for (const row of rows) {
+    // The untyped and uncoded rows are one row each, so a null code is a key like any other and
+    // two of them repeat just as a repeated code does.
+    const key = row.code === null || row.code === undefined ? '\u0000null' : String(row.code);
+    if (seen.has(key)) {
+      throw new Error(
+        `${what} has ${JSON.stringify(row.code)} listed twice; one facet key is one row, so a ` +
+          'reader cannot tell which of the two is the figure for it, and the totals reconciling ' +
+          'means only that the duplicate was counted consistently',
+      );
+    }
+    seen.add(key);
+  }
+}
+
+function requireServedRowsWithinTotal(rows, total, what) {
+  if (rows.length > total) {
+    throw new Error(
+      `${what} serves ${rows.length} rows against a total of ${total}; a truncated view shows ` +
+        'fewer rows than the whole, never more, so these two figures are not about one table',
+    );
+  }
+}
+
 function reconcileFacets({ rows, field, headline, kind, truncated, what }) {
   for (const [index, row] of rows.entries()) {
     if (row[field] > headline) {
@@ -223,6 +249,12 @@ export function renderCoverage({ coverage }) {
   // valid document-type count, and the only thing that caught it downstream was a truncation
   // check that a payload declaring itself truncated turned off.
   requireCount(coverage.document_types_total, 'document_types_total');
+  // Both of these hold whether or not the payload declares truncation. The check below is
+  // switched off by `facets_truncated: true`, which is correct for the rule it guards and is
+  // why two rows against a total of one once rendered as `Showing 2 of 1 types.`
+  requireServedRowsWithinTotal(
+    types, coverage.document_types_total, 'the document-type breakdown');
+  requireDistinctFacetKeys(types, 'the document-type breakdown');
   const truncatedTypes =
     coverage.facets_truncated === true || types.length !== coverage.document_types_total;
   if (truncatedTypes && coverage.facets_truncated !== true) {
@@ -268,6 +300,7 @@ export function renderCoverage({ coverage }) {
         'reads as a corpus that holds no language rather than a payload that did not say',
     );
   }
+  requireDistinctFacetKeys(coverage.languages, 'the language breakdown');
   const languageRows = coverage.languages
     .map((row, index) => {
       requireCount(row?.works, `language row ${index + 1} works`);

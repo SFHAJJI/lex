@@ -339,3 +339,58 @@ test('values are escaped rather than trusted, in the React port too', () => {
     assert.ok(html.includes('&lt;script&gt;'));
   }
 });
+
+test('both renderers refuse a truncated table that serves more rows than its total', () => {
+  const oversizedTruncation = {
+    ...COMPLETE,
+    document_types: COMPLETE.document_types.slice(0, 2),
+    document_types_total: 1,
+    facets_truncated: true,
+  };
+
+  assert.throws(() => string(oversizedTruncation), /never more/);
+  assert.throws(() => react(oversizedTruncation), /never more/);
+});
+
+test('both renderers refuse a repeated facet key', () => {
+  const repeated = {
+    ...COMPLETE,
+    document_types: [COMPLETE.document_types[0], COMPLETE.document_types[0]],
+    document_types_total: 2,
+    facets_truncated: true,
+  };
+
+  assert.throws(() => string(repeated), /listed twice/);
+  assert.throws(() => react(repeated), /listed twice/);
+});
+
+test('both renderers treat two untyped rows as a repeat', () => {
+  // The untyped row is one row, and a null code is a key like any other. Tested on both sides
+  // because a mutation that made null codes never collide died in the string renderer and
+  // survived here, which is the asymmetry a second copy of the rules produces.
+  const twoUntyped = {
+    ...COMPLETE,
+    document_types: [
+      COMPLETE.document_types[0],
+      { code: null, versions: 1, versions_with_text: 0 },
+      { code: null, versions: 1, versions_with_text: 0 },
+    ],
+    document_types_total: 3,
+    facets_truncated: true,
+  };
+
+  assert.throws(() => string(twoUntyped), /listed twice/);
+  assert.throws(() => react(twoUntyped), /listed twice/);
+});
+
+test('both renderers refuse a repeated language row', () => {
+  // The language table overlaps rather than partitions, so neither the sum rule nor the row-count
+  // rule reaches it, and only the key rule does.
+  const repeatedLanguage = {
+    ...COMPLETE,
+    languages: [COMPLETE.languages[0], COMPLETE.languages[0]],
+  };
+
+  assert.throws(() => string(repeatedLanguage), /listed twice/);
+  assert.throws(() => react(repeatedLanguage), /listed twice/);
+});
