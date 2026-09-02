@@ -416,7 +416,7 @@ public sealed record OfficialIdentifier
         // accepted a trailing slash that the emitted schemas reject, so the reader and the schema
         // disagreed about a spelling either could see. Both mint a second raw spelling of one
         // coordinate, which is two rows to every store and one thing to a reader.
-        if (CellarPathAfterOrigin(value) is not { } rest)
+        if (PathAfterResourceClass(value, "cellar") is not { } rest)
         {
             return false;
         }
@@ -424,10 +424,7 @@ public sealed record OfficialIdentifier
         var segments = rest.Split('/');
         foreach (var segment in segments)
         {
-            // An empty segment covers a trailing slash, a leading one and a doubled one at once.
-            if (segment.Length == 0 ||
-                string.Equals(segment, ".", StringComparison.Ordinal) ||
-                string.Equals(segment, "..", StringComparison.Ordinal))
+            if (!IsCanonicalPathSegment(segment))
             {
                 return false;
             }
@@ -447,24 +444,65 @@ public sealed record OfficialIdentifier
     }
 
     /// <summary>
-    /// The only origins a Cellar object may be spelled with, both schemes the publisher answers on.
+    /// Whether a path segment is spelled the way the publisher minted it.
     /// </summary>
-    private static readonly string[] CellarOrigins =
+    /// <remarks>
+    /// <para>
+    /// An empty segment covers a trailing slash, a leading one and a doubled one at once, and a
+    /// literal <c>.</c> or <c>..</c> is a dot segment System.Uri removes before any store sees it.
+    /// </para>
+    /// <para>
+    /// The percent sign is refused outright rather than by a list of dangerous escapes, because a
+    /// list cannot close this. A valid escape decodes, so <c>/%44OC_1</c> and <c>/DOC%5f1</c> are
+    /// two further spellings of <c>/DOC_1</c> with no dot segment in either; an invalid one is
+    /// re-encoded, so <c>/%zz</c> is stored as written and parsed as <c>/%25zz</c>. Naming
+    /// <c>%2e</c> would then require <c>%252e</c>, then <c>%25252e</c>, without end. Percent
+    /// encoding and canonical spelling are incompatible: the character is the rule.
+    /// </para>
+    /// <para>
+    /// A backslash is refused because System.Uri treats it as a separator.
+    /// <c>{work}/a\..\DOC_1</c> was accepted and resolved to
+    /// <c>{work}/DOC_1</c>, which is traversal with no escape involved at all.
+    /// </para>
+    /// <para>
+    /// Nothing else is excluded here, deliberately. A <c>?</c> or <c>#</c> sets Query or Fragment,
+    /// which the caller has already refused, and <c>/</c> is the character this segment was split
+    /// on. Refusing them again would read as prudent and be unreachable, and an unreachable guard
+    /// is one a mutation deletes with no test noticing.
+    /// </para>
+    /// <para>
+    /// Nothing observed is lost. All four levels the publisher answered on carry only hex digits,
+    /// hyphens, dots, digits and upper-case alphanumerics with underscore.
+    /// </para>
+    /// </remarks>
+    private static bool IsCanonicalPathSegment(string segment) =>
+        segment.Length > 0 &&
+        !string.Equals(segment, ".", StringComparison.Ordinal) &&
+        !string.Equals(segment, "..", StringComparison.Ordinal) &&
+        !segment.Contains('%', StringComparison.Ordinal) &&
+        !segment.Contains('\\', StringComparison.Ordinal);
+
+    /// <summary>
+    /// The only origins a Union publisher identifier may be spelled with, both schemes the
+    /// publisher answers on.
+    /// </summary>
+    private static readonly string[] ResourceOrigins =
     [
-        "http://publications.europa.eu/resource/cellar/",
-        "https://publications.europa.eu/resource/cellar/",
+        "http://publications.europa.eu/resource/",
+        "https://publications.europa.eu/resource/",
     ];
 
     /// <summary>
-    /// What follows the exact Cellar origin in the original spelling, or <c>null</c>.
+    /// What follows the exact origin and resource class in the original spelling, or <c>null</c>.
     /// </summary>
-    private static string? CellarPathAfterOrigin(string value)
+    private static string? PathAfterResourceClass(string value, string resourceClass)
     {
-        foreach (var origin in CellarOrigins)
+        foreach (var origin in ResourceOrigins)
         {
-            if (value.StartsWith(origin, StringComparison.Ordinal))
+            var prefix = origin + resourceClass + "/";
+            if (value.StartsWith(prefix, StringComparison.Ordinal))
             {
-                return value[origin.Length..];
+                return value[prefix.Length..];
             }
         }
 
@@ -523,13 +561,19 @@ public sealed record OfficialIdentifier
         string.Equals(uri.Host, "publications.europa.eu", StringComparison.Ordinal) &&
         uri.Query.Length == 0 &&
         uri.Fragment.Length == 0 &&
-        uri.AbsolutePath.Trim('/').Split('/') is { Length: 3 } segments &&
-        string.Equals(segments[0], "resource", StringComparison.Ordinal) &&
-        string.Equals(segments[1], "celex", StringComparison.Ordinal) &&
-        // The terminal segment is a CELEX number, so it is held to the CELEX grammar rather than
-        // to "nonempty". Candidate round six admitted any terminal, including a percent-encoded
-        // slash, which made a two-segment path spell itself as a one-segment one.
-        ProfileOf(segments[2]) is not null;
+        // The original spelling, for the reason the two Cellar families already read it. Reading
+        // AbsolutePath here admitted four raw strings as one persistent identifier, because
+        // System.Uri decodes `%2e` and then removes the dot segment it has just produced:
+        // `celex/32016R0679`, `celex/%2e/32016R0679`, `celex/x/%2e%2e/32016R0679` and
+        // `celex/a/b/%2e%2e/%2e%2e/32016R0679` all reached the same accepted terminal, while the
+        // emitted schema refused every one but the first. Round seven repaired the work and the
+        // resource and left the alias reading the parsed path, which is the repair-the-instance
+        // habit inside the round that named it.
+        PathAfterResourceClass(value, "celex") is { } celex &&
+        // The terminal is a CELEX number, so it is held to the CELEX grammar rather than to
+        // "nonempty". That grammar is closed and alphanumeric, so it refuses an escape, a
+        // separator and a dot segment without a further rule here.
+        ProfileOf(celex) is not null;
 }
 
 /// <summary>

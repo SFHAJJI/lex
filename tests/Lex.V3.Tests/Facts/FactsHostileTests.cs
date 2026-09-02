@@ -17,6 +17,9 @@ namespace Lex.V3.Tests.Facts;
 [TestClass]
 public sealed class FactsHostileTests
 {
+    /// <summary>A literal backslash, which System.Uri resolves as a path separator.</summary>
+    private const string Backslash = "\\";
+
     // ---- O1: identity is a set, and a lossy one is refused ---------------------------------
 
     [TestMethod]
@@ -959,6 +962,36 @@ public sealed class FactsHostileTests
                 "an uppercase work UUID"),
             ("http://publications.europa.eu/resource/cellar/1F8C2D3E-4A5B-6C7D-8E9F-0A1B2C3D4E5F.0006",
                 "an uppercase dotted expression"),
+
+            // Percent encoding, refused as a class rather than by naming escapes. Codex's probe at
+            // the previous frozen head constructed the first four. The probe answering it found the
+            // class is wider than any list could be: a valid escape decodes, so an encoded letter
+            // is another spelling of an ordinary item with no dot segment in it at all, and an
+            // invalid escape is re-encoded, so the raw string and the parsed path differ even when
+            // the escape means nothing. Naming `%2e` would then require `%252e`, then `%25252e`.
+            (work + "/%2e/DOC_1", "an encoded single-dot segment"),
+            (work + "/%2e%2e/DOC_1", "an encoded double-dot segment, which escapes the work"),
+            (work + "/%2fDOC_1", "an encoded separator"),
+            (work + "/%5cDOC_1", "an encoded backslash"),
+            (work + "/%2E/DOC_1", "an encoded dot in upper-case hex"),
+            (work + "/%252e/DOC_1", "a doubly encoded dot"),
+            (work + "/%25252e/DOC_1", "a triply encoded dot"),
+            (work + "/%44OC_1", "an encoded letter, an alias of /DOC_1 carrying no dot segment"),
+            (work + "/DOC%5f1", "an encoded underscore, a second alias of the same item"),
+            (work + "/%3fview=1", "an encoded question mark, which the query check never sees"),
+            (work + "/%23frag", "an encoded hash, which the fragment check never sees"),
+            (work + "/%00", "an encoded null"),
+            (work + "/DOC_1%20", "an encoded trailing space"),
+            (work + "/%", "a bare percent, which System.Uri re-encodes to %25"),
+            (work + "/%zz", "a malformed escape, which System.Uri re-encodes"),
+            (work + "/.%2e", "a mixed dot segment, which resolves away the work entirely"),
+            (work + "/a/%2e%2e/DOC_1", "an encoded traversal through a real segment"),
+            (work + ".0006/%2e/DOC_1", "an encoded dot segment after a dotted expression"),
+
+            // A literal backslash needs no escape at all: System.Uri resolves it as a separator, so
+            // the second of these was accepted and parsed as the ordinary item beneath the work.
+            (work + "/" + Backslash + "DOC_1", "a literal backslash segment"),
+            (work + "/a" + Backslash + ".." + Backslash + "DOC_1", "a literal backslash traversal"),
         };
 
         foreach (var (value, why) in refused)
@@ -984,6 +1017,54 @@ public sealed class FactsHostileTests
                     Regex.IsMatch(value, pattern),
                     $"a schema pattern admitted {value} that the reader refuses, despite {why}");
             }
+        }
+    }
+
+
+    /// <summary>
+    /// MUTATION RECEIPT: the persistent identifier validated the parsed path, so four raw strings
+    /// reached one accepted identity while the emitted schema admitted only the first.
+    /// </summary>
+    /// <remarks>
+    /// The round that moved the work and the resource families onto the original spelling left the
+    /// alias reading <c>AbsolutePath</c>, which is the repair-the-instance habit inside the round
+    /// that named it. The reader was then strictly wider than its own schema, so every spelling
+    /// below was constructible and unserializable at once. Nothing caught it because the parity
+    /// assertions covered the two Cellar families and never asked this one.
+    /// </remarks>
+    [TestMethod]
+    public void ThePersistentIdentifierIsTheSpellingAStoreKeeps()
+    {
+        const string psi = FactsFixtures.CellarPsiUri;
+
+        Assert.AreEqual(
+            psi, new OfficialIdentifier(FactsIdentifierFamily.CellarPsiUri, psi).RawValue);
+        Assert.IsTrue(
+            Regex.IsMatch(psi, FactsSchemaHardener.CellarPsiPattern),
+            "the schema refused the persistent identifier the reader admits");
+
+        const string root = "https://publications.europa.eu/resource/celex/";
+        var refused = new (string Value, string Why)[]
+        {
+            (root + "%2e/32016R0679", "an encoded dot segment"),
+            (root + "x/%2e%2e/32016R0679", "an encoded traversal through an invented segment"),
+            (root + "a/b/%2e%2e/%2e%2e/32016R0679", "two encoded traversals"),
+            (root + "32016R0679/%2e", "an encoded trailing dot segment"),
+            (root + "./32016R0679", "a literal dot segment"),
+            (root + "32016R0679/", "a trailing slash"),
+            (root + "/32016R0679", "a doubled separator"),
+            (root + "x/" + Backslash + ".." + Backslash + "32016R0679", "a backslash traversal"),
+            (root + "32016R0679/DOC_1", "a path beneath the alias"),
+        };
+
+        foreach (var (value, why) in refused)
+        {
+            Assert.ThrowsExactly<ArgumentException>(
+                () => new OfficialIdentifier(FactsIdentifierFamily.CellarPsiUri, value),
+                $"the persistent identifier admitted {value} despite {why}");
+            Assert.IsFalse(
+                Regex.IsMatch(value, FactsSchemaHardener.CellarPsiPattern),
+                $"the schema admitted {value} despite {why}");
         }
     }
 
