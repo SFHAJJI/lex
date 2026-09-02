@@ -29,6 +29,7 @@ public sealed class VerifiedLuxembourgSourceProfile
     internal const string RdfType =
         "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
 
+    // Candidate 6 is the base policy; Decision 65 is bound by the exact canonical predicate rows.
     private const string Candidate6Sha256 =
         "a8e4fc0159127e8a7102f1cc51c76daf617224e1515d1c8d8c92bbb882c9ded9";
     private const string ProfileResourceId =
@@ -369,9 +370,12 @@ public sealed class VerifiedLuxembourgSourceProfile
             LuxembourgVocabularyKind.AssertionPredicate,
             RdfType));
         Add(values, LuxembourgVocabularyKind.AssertionPredicate, JoluxPrefix,
-            "typeDocument", "userFormat", "language", "legalValue", "isMemberOf",
-            "isRealizedBy", "isEmbodiedBy", "isExemplifiedBy",
-            "previousIsExemplifiedBy");
+            "dateApplicability", "dateDocument", "dateEndApplicability", "dateEntryInForce",
+            "dateNoLongerInForce", "historicalLegalId", "inForceStatus", "isEmbodiedBy",
+            "isExemplifiedBy", "isMemberOf", "isPartOf", "isRealizedBy", "language",
+            "legalValue", "license", "previousIsExemplifiedBy", "publicationDate", "publisher",
+            "responsibilityOf", "rights", "rightsHolder", "title", "titleShort", "typeDocument",
+            "userFormat");
 
         Add(values, LuxembourgVocabularyKind.TypeDocument, TypeDocumentPrefix,
             "TC", "RECT", "ACC", "ACCA", "RC", "DIV", "PA", "RECUEIL", "CODE_RECUEIL",
