@@ -165,6 +165,36 @@ test('each row carries a sentence, so meaning never rests on a badge beside a li
   assert.ok(html.includes('The licence does not let the text travel.'));
 });
 
+test('the composer applies the interval and digest rules, not only the field shapes', () => {
+  // Committed as a composer-level test on purpose. The rules live in evidence-bundle and the
+  // composer inherits them, so a future edit removing that call would leave every bundle test
+  // green while reopening this exact bypass here. A shared rule needs a test at each surface that
+  // depends on it, or the sharing is only a convention.
+  //
+  // All five were accepted before requireIntervalAndDigest was wired in.
+  const hostile = {
+    'a valid_from that is not a date': { valid_from: 'not-a-date' },
+    'a digest that is not 64 hex characters': { record_sha256: 'zz' },
+    'an interval that ends before it begins': { valid_to: '2020-01-01' },
+    'the open-ended sentinel as a real end date': { valid_to: '9999-12-31' },
+    // Omission is not an open interval: an open interval is a claim and must be made with null.
+    'an omitted valid_to': { valid_to: undefined },
+  };
+
+  for (const [name, overrides] of Object.entries(hostile)) {
+    assert.throws(
+      () => exportComposerModel({ items: [item(overrides)], matter: MATTER }),
+      undefined,
+      `the composer accepted ${name}`,
+    );
+  }
+
+  // And the legitimate item still composes, or the guard would be refusing everything.
+  const model = exportComposerModel({ items: [item()], matter: MATTER });
+  assert.equal(model.rows.length, 1);
+  assert.equal(model.rows[0].valid_to, null);
+});
+
 test('an item missing its hash, interval or official source cannot be listed', () => {
   for (const field of ['valid_from', 'official_uri', 'record_sha256']) {
     const bare = item();

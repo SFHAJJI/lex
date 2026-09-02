@@ -89,7 +89,11 @@ function escapeHtml(value) {
  */
 export function requireIntervalAndDigest(item, where) {
   isCalendarDateOrThrow(item?.valid_from, `${where} valid_from`);
-  if (item?.valid_to !== null && item?.valid_to !== undefined) {
+  // Explicit null only. Extracting this rule, I widened the test to skip an undefined valid_to,
+  // which quietly turned an omitted field into an open interval: a record that never said whether
+  // it ended would have exported as one that has not ended. An open interval is a claim and has to
+  // be made deliberately, so omission falls through to the date check below and is refused.
+  if (item?.valid_to !== null) {
     isCalendarDateOrThrow(item.valid_to, `${where} valid_to`);
     // An inverted interval was exported as an applicability period, in the item row and in the
     // register, and an export is the artefact that leaves the room and is read by people who were
