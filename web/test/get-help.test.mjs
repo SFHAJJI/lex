@@ -20,8 +20,8 @@ import {
 } from '../scripts/get-help.mjs';
 
 const ROUTES = [
-  { label: 'Legilux, the publisher', uri: 'https://legilux.public.lu/' },
-  { label: 'EUR-Lex', uri: 'https://eur-lex.europa.eu/' },
+  { label: 'Legilux, the publisher', publisher: 'lu-legilux', uri: 'https://legilux.public.lu/' },
+  { label: 'EUR-Lex', publisher: 'eu-eurlex', uri: 'https://eur-lex.europa.eu/' },
 ];
 const SYNTHETIC = { label: 'Synthetic preview counter', href: 'https://handoff.invalid/one' };
 
@@ -47,7 +47,23 @@ test('a build with no verified counter says so, and offers no fixture', () => {
 test('the boundary is stated, because it is why this page exists', () => {
   const html = renderGetHelp({ officialRoutes: ROUTES });
   assert.ok(html.includes(BOUNDARY_NOTE));
-  assert.ok(BOUNDARY_NOTE.includes('does not'), 'the boundary stopped being a refusal');
+  // Pin the settled wording rather than a fragment. The product spec's fixed EN master scopes the
+  // reservation to applying the law to the reader's own situation; an earlier version of this
+  // sentence said any assessment is reserved consultation, which is wider than the loi du
+  // 10 aout 1991 supports, since art. 2(2) reserves it only for advice given habitually and for
+  // remuneration and art. 2(3) exempts several categories outright.
+  assert.ok(
+    BOUNDARY_NOTE.includes('cannot apply the law to your situation'),
+    'the boundary stopped being a refusal',
+  );
+  assert.ok(
+    BOUNDARY_NOTE.includes('reserved to qualified professionals'),
+    'the boundary stopped naming who the reservation is for',
+  );
+  assert.ok(
+    !/every|any assessment/i.test(BOUNDARY_NOTE),
+    'the boundary went back to claiming every assessment is reserved',
+  );
   assert.ok(html.includes(NO_COUNTER_NOTE), 'an empty registry rendered no explanation');
 });
 

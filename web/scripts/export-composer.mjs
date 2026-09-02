@@ -15,6 +15,7 @@
 
 import { LICENCES, ITEM_KINDS, REGISTER_COLUMNS } from './evidence-bundle.mjs';
 import { identityOf } from './record-identity.mjs';
+import { publisherSourceUri } from './routes.mjs';
 
 /** Kinds a bundle refuses structurally, whatever their licence says. */
 const EXCLUDED_KINDS = Object.freeze(['derived', 'unofficial']);
@@ -127,6 +128,16 @@ function requireCartItem(item, index) {
       );
     }
   }
+
+  // The official link is validated against the publisher the record names, not merely escaped.
+  // `escapeHtml` replaces `& < > "`, and `javascript:alert(1)` contains none of them, so an
+  // unvalidated value survives escaping intact and renders as a working link on the one control a
+  // reader uses to check us against the source. This is the same open-redirect shape as the revert
+  // control repaired earlier on this branch; I fixed that one and did not sweep for siblings.
+  publisherSourceUri({
+    publisher: identityOf(item.lex_id, where).publisher,
+    uri: item.official_uri,
+  });
 
   const disposition = dispositionOf(item, where);
   // Attribution travels with any body. Checked here and not only in the bundle, because the

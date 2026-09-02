@@ -41,8 +41,8 @@ const HISTORY = {
 };
 
 const ROUTES = [
-  { label: 'Legilux, the publisher', uri: 'https://legilux.public.lu/' },
-  { label: 'EUR-Lex', uri: 'https://eur-lex.europa.eu/' },
+  { label: 'Legilux, the publisher', publisher: 'lu-legilux', uri: 'https://legilux.public.lu/' },
+  { label: 'EUR-Lex', publisher: 'eu-eurlex', uri: 'https://eur-lex.europa.eu/' },
 ];
 
 /** React writes `&#x27;` where the string renderer writes `&#39;`; both parse identically. */

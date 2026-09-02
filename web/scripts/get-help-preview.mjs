@@ -13,8 +13,8 @@ import { renderGetHelp } from './get-help.mjs';
 import { skinFor } from './shells.mjs';
 
 const OFFICIAL_ROUTES = [
-  { label: 'Legilux, the Luxembourg publisher', uri: 'https://legilux.public.lu/' },
-  { label: 'EUR-Lex, the Union publisher', uri: 'https://eur-lex.europa.eu/' },
+  { label: 'Legilux, the Luxembourg publisher', publisher: 'lu-legilux', uri: 'https://legilux.public.lu/' },
+  { label: 'EUR-Lex, the Union publisher', publisher: 'eu-eurlex', uri: 'https://eur-lex.europa.eu/' },
 ];
 
 // What the registry holds today. It is dropped rather than offered, and the page says why.

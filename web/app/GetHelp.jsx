@@ -6,7 +6,12 @@
 // arrives here having already been refused once, and a destination that does not resolve is a
 // second refusal wearing the word help.
 
-import { BOUNDARY_NOTE, NO_COUNTER_NOTE, admissibleCounters } from '../scripts/get-help.mjs';
+import {
+  BOUNDARY_NOTE,
+  NO_COUNTER_NOTE,
+  admissibleCounters,
+  admissibleOfficialRoutes,
+} from '../scripts/get-help.mjs';
 
 /**
  * The get-help page.
@@ -17,6 +22,9 @@ import { BOUNDARY_NOTE, NO_COUNTER_NOTE, admissibleCounters } from '../scripts/g
  */
 export function GetHelp({ counters = [], officialRoutes }) {
   const admitted = admissibleCounters({ counters, officialRoutes });
+  // The same validator the string renderer uses. Rendering these directly is what left this
+  // surface accepting a javascript: URI after the other one was repaired.
+  const routes = admissibleOfficialRoutes(officialRoutes);
 
   return (
     <section className="get-help">
@@ -40,7 +48,7 @@ export function GetHelp({ counters = [], officialRoutes }) {
       )}
       <h3>The publisher, directly</h3>
       <ul className="get-help-official">
-        {officialRoutes.map((route) => (
+        {routes.map((route) => (
           <li key={route.uri}>
             <a href={route.uri} rel="external">
               {route.label}

@@ -14,7 +14,7 @@
 // A reader on this page has already been refused once. Offering them a destination that does not
 // resolve, or one that resolves to a fixture, is a second refusal disguised as an answer.
 
-import { handoffUri } from './routes.mjs';
+import { handoffUri, publisherSourceUri } from './routes.mjs';
 
 /** The synthetic host, which is a fixture and must never be offered as help. */
 const SYNTHETIC_HANDOFF_HOST = 'handoff.invalid';
@@ -34,10 +34,21 @@ export const NO_COUNTER_NOTE =
   'statement about this build and not about who can help you: counters exist, and this page will ' +
   'list them once each has been verified with its own address.';
 
-/** The boundary sentence, which is the reason this page exists at all. */
+/**
+ * Said once, above whatever is offered, because it is why this page exists.
+ *
+ * The wording is the product spec's fixed EN master, not a paraphrase. An earlier version here
+ * said "that assessment is a legal consultation and it is reserved", which claims categorically
+ * that every assessment of facts is reserved. That is wider than the law it rests on: the loi du
+ * 10 aout 1991 art. 2(2) reserves consultation given *a titre habituel et contre remuneration*,
+ * and art. 2(3) exempts public administrations, regulated professions within their remit,
+ * in-house counsel, unions informing members and others. Overclaiming a legal boundary on a page
+ * whose entire purpose is to state that boundary accurately is the worst place to be loose.
+ */
 export const BOUNDARY_NOTE =
-  'This service shows what the published text says, at any date, with citations. It does not ' +
-  'apply the law to your situation. That assessment is a legal consultation and it is reserved.';
+  'This service shows what the published text says, at any date, and how it changed, with ' +
+  'citations. It cannot apply the law to your situation; under Luxembourg law that assessment ' +
+  'is a legal consultation reserved to qualified professionals.';
 
 /**
  * A counter that may be offered, or a refusal saying why not.
@@ -65,6 +76,37 @@ export function admissibleCounter(counter, index) {
     );
   }
   return { label: counter.label, href };
+}
+
+/**
+ * The publisher routes this page may link to, validated.
+ *
+ * One implementation for both surfaces. Validated against the publisher each route names rather
+ * than merely escaped: `escapeHtml` replaces `& < > "`, and `javascript:alert(1)` contains none of
+ * them, so an unvalidated value survives escaping intact and renders as a working link. A reader
+ * reaches this page having already been refused once, and a destination that runs script or leaves
+ * the origin is a second refusal wearing the word help.
+ *
+ * Extracted rather than repeated because repeating it is exactly how the React surface kept the
+ * defect after the string renderer was repaired. The parity test caught that, which is the only
+ * reason this is a shared function and not two.
+ */
+export function admissibleOfficialRoutes(officialRoutes) {
+  if (!Array.isArray(officialRoutes) || officialRoutes.length === 0) {
+    throw new Error(
+      'get help lists the publisher routes that remain open; without them a page with no verified ' +
+        'counter would offer a reader nothing at all',
+    );
+  }
+
+  for (const route of officialRoutes) {
+    publisherSourceUri({ publisher: route?.publisher, uri: route?.uri });
+    if (typeof route?.label !== 'string' || route.label.trim().length === 0) {
+      throw new Error('an official route with no label is a link a reader cannot read');
+    }
+  }
+
+  return officialRoutes;
 }
 
 /**
@@ -125,10 +167,11 @@ export function renderGetHelp({ counters = [], officialRoutes }) {
     list +
     '<h3>The publisher, directly</h3>' +
     '<ul class="get-help-official">' +
-    officialRoutes
+    admissibleOfficialRoutes(officialRoutes)
       .map(
         (route) =>
-          `<li><a href="${escapeHtml(route.uri)}" rel="external">${escapeHtml(route.label)}</a></li>`,
+          `<li><a href="${escapeHtml(route.uri)}" rel="external">` +
+          `${escapeHtml(route.label)}</a></li>`,
       )
       .join('') +
     '</ul>' +
