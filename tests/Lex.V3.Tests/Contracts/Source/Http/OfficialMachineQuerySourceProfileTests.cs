@@ -156,6 +156,16 @@ public sealed class OfficialMachineQuerySourceProfileTests
                 value is >= '0' and <= '9' or >= 'a' and <= 'f'));
             Assert.IsTrue(identities.Add(french), "Every exact profile needs a distinct identity.");
             Assert.AreEqual(ExpectedProfileSha256(id), french);
+
+            var profile = OfficialMachineQuerySourceProfiles.Resolve(id);
+            var canonicalBytes = profile.CopyCanonicalBytes();
+            Assert.AreEqual(french, Sha256(canonicalBytes));
+            Assert.AreEqual(
+                new SourceArtifactRef(ExpectedResourceId(id), french),
+                profile.ArtifactRef);
+
+            canonicalBytes[0] ^= 0xff;
+            Assert.AreEqual(french, Sha256(profile.CopyCanonicalBytes()));
         }
     }
 
@@ -216,6 +226,8 @@ public sealed class OfficialMachineQuerySourceProfileTests
             new[]
             {
                 "Accept",
+                "ArtifactRef",
+                "CopyCanonicalBytes",
                 "CrawlerUserAgent",
                 "EvaluateRobotsPolicyFreshness",
                 "Id",
@@ -346,9 +358,18 @@ public sealed class OfficialMachineQuerySourceProfileTests
     private static string ExpectedProfileSha256(OfficialMachineQuerySourceProfileId id) => id switch
     {
         OfficialMachineQuerySourceProfileId.LuxembourgSparql =>
-            "0c67e70ecc6f72f8ca9b0b209c7c72abcb5fc1ee1834c98d113a6ec583978b71",
+            "7cec68b0c435654506188a7c20ba55a77dddaf8c170741fdf0f292af439052e3",
         OfficialMachineQuerySourceProfileId.EuropeanUnionSparql =>
-            "e4d738a4dbeaadb665c103da3123ac2bf67975e6ea56e3100be544a78c442488",
+            "69ce2949fc1e0c19acb841fe60c14cc9cad93bfd2480b8e7fdd2d4238ce22418",
+        _ => throw new ArgumentOutOfRangeException(nameof(id)),
+    };
+
+    private static string ExpectedResourceId(OfficialMachineQuerySourceProfileId id) => id switch
+    {
+        OfficialMachineQuerySourceProfileId.LuxembourgSparql =>
+            "urn:uuid:911499a3-087c-42ec-9dca-5c9131ccec47",
+        OfficialMachineQuerySourceProfileId.EuropeanUnionSparql =>
+            "urn:uuid:f08afb3b-e30f-41cc-b9be-cf29da97bb76",
         _ => throw new ArgumentOutOfRangeException(nameof(id)),
     };
 

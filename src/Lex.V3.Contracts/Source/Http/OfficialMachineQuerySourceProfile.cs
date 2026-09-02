@@ -201,14 +201,17 @@ public sealed class OfficialMachineQuerySourceProfile
 {
     internal const string CanonicalizationIdentity = "official-machine-query-source-profile/1";
     private static readonly TimeSpan RobotsAgeCeiling = TimeSpan.FromHours(24);
+    private readonly byte[] _canonicalBytes;
 
     private OfficialMachineQuerySourceProfile(
         OfficialMachineQuerySourceProfileId id,
+        string resourceId,
         string requestTarget,
         string requestContentType,
         RobotsPolicyRoute robotsRoute)
     {
         Id = id;
+        ResourceId = SourceCoreValidation.RequireUuidUrn(resourceId, nameof(resourceId));
         RequestTarget = requestTarget;
         RequestContentType = requestContentType;
         RobotsRoute = robotsRoute;
@@ -223,10 +226,15 @@ public sealed class OfficialMachineQuerySourceProfile
             OfficialMachineQueryRetryCondition.Http503,
             OfficialMachineQueryRetryCondition.Http504,
         });
-        ProfileSha256 = ComputeSha256();
+        _canonicalBytes = BuildCanonicalBytes();
+        ArtifactRef = new SourceArtifactRef(
+            ResourceId,
+            Convert.ToHexString(SHA256.HashData(_canonicalBytes)).ToLowerInvariant());
     }
 
     public OfficialMachineQuerySourceProfileId Id { get; }
+
+    private string ResourceId { get; }
 
     public string RequestTarget { get; }
 
@@ -274,7 +282,11 @@ public sealed class OfficialMachineQuerySourceProfile
     public RobotsRevalidationMode RobotsRevalidation =>
         RobotsRevalidationMode.FullGetWithoutValidators;
 
-    public string ProfileSha256 { get; }
+    public SourceArtifactRef ArtifactRef { get; }
+
+    public string ProfileSha256 => ArtifactRef.Sha256;
+
+    public byte[] CopyCanonicalBytes() => _canonicalBytes.ToArray();
 
     /// <summary>
     /// Classifies retained UTC evidence against the RFC ceiling. This pure classification is not
@@ -299,6 +311,7 @@ public sealed class OfficialMachineQuerySourceProfile
 
     internal static OfficialMachineQuerySourceProfile LuxembourgSparql() => new(
         OfficialMachineQuerySourceProfileId.LuxembourgSparql,
+        "urn:uuid:911499a3-087c-42ec-9dca-5c9131ccec47",
         "https://data.legilux.public.lu/sparqlendpoint",
         "application/x-www-form-urlencoded",
         new RobotsPolicyRoute(
@@ -310,6 +323,7 @@ public sealed class OfficialMachineQuerySourceProfile
 
     internal static OfficialMachineQuerySourceProfile EuropeanUnionSparql() => new(
         OfficialMachineQuerySourceProfileId.EuropeanUnionSparql,
+        "urn:uuid:f08afb3b-e30f-41cc-b9be-cf29da97bb76",
         "https://publications.europa.eu/webapi/rdf/sparql",
         "application/sparql-query",
         new RobotsPolicyRoute(
@@ -323,11 +337,12 @@ public sealed class OfficialMachineQuerySourceProfile
                 200,
                 null)));
 
-    private string ComputeSha256()
+    private byte[] BuildCanonicalBytes()
     {
         var lines = new List<string>
         {
             $"schema={CanonicalizationIdentity}",
+            $"resource_id={ResourceId}",
             $"id={ProfileIdToken(Id)}",
             $"request_target={RequestTarget}",
             $"method=POST",
@@ -360,8 +375,7 @@ public sealed class OfficialMachineQuerySourceProfile
             lines.Add($"route_{index.ToString(CultureInfo.InvariantCulture)}_location={step.ExpectedLocation ?? string.Empty}");
         }
 
-        var canonicalBytes = Encoding.UTF8.GetBytes(string.Join('\n', lines));
-        return Convert.ToHexString(SHA256.HashData(canonicalBytes)).ToLowerInvariant();
+        return Encoding.UTF8.GetBytes(string.Join('\n', lines));
     }
 
     private static string ProfileIdToken(OfficialMachineQuerySourceProfileId id) => id switch
