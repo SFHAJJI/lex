@@ -270,9 +270,13 @@ public sealed record EuRightsDisposition
 /// between two true things and erase whichever lost.
 /// </para>
 /// <para>
-/// No channel may be inferred from a class. A document does not carry special terms, industrial
-/// property or an identifiable individual because of what kind of document it is; it carries them
-/// because that document says so.
+/// No channel may be inferred from a content class. What establishes one differs by channel, and
+/// collapsing that difference is how a resolution rule ends up demanding the wrong evidence.
+/// Document-specific terms are stated: an act or its Official Journal issue says them, so the
+/// evidence is an explicit term or notice. The other three are not stated but present. Third-party
+/// material, industrial property and an identifiable individual are depicted or embedded in the
+/// content, so the evidence is the material itself together with the applicable rights or
+/// clearance position for it. Neither shape is derivable from what kind of document this is.
 /// </para>
 /// </remarks>
 public enum EuRightsExceptionChannel
@@ -324,9 +328,10 @@ public enum EuRightsExceptionChannel
 /// deliberately cannot record is whether any given document or element is subject to it.
 /// </para>
 /// <para>
-/// That absence is the design. Resolving any channel needs an observation binding a source
-/// object, an exact term and value, and the run that saw it, and no acquisition path in this
-/// project can produce one yet. A member for "present", "absent" or "resolved" would therefore
+/// That absence is the design. Resolving any channel needs an item-specific observation binding a
+/// source object and the run that saw it: an exact term or notice for document-specific terms, and
+/// the identified material plus its applicable rights or clearance position for the other three.
+/// No acquisition path in this project can produce either yet. A member for "present", "absent" or "resolved" would therefore
 /// hold a caller's opinion under a word that promises evidence, which is the same defect as a
 /// delivery subject nobody established. On this subject a wrong opinion republishes somebody
 /// else's work, so the type refuses to hold one. The declared surface is pinned by test, so a
