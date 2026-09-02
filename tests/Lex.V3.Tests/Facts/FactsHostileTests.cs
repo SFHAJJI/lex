@@ -939,6 +939,26 @@ public sealed class FactsHostileTests
             (work + ".", "an empty suffix"),
             (work + "..0006", "an empty level between the work and the expression"),
             ("http://publications.europa.eu/resource/cellar/not-a-uuid.0006", "a head that is not a UUID"),
+
+            // Spellings the reader used to accept because it validated uri.AbsolutePath rather than
+            // the string a store retains. Trim('/') swallowed a trailing slash the schemas reject,
+            // and System.Uri removes dot segments before AbsolutePath can be read, so the grammar
+            // saw a shorter path than the value being kept. Each is a second raw spelling of one
+            // coordinate: two rows to every store, one thing to a reader.
+            (work + "/", "a trailing slash on the work"),
+            (work + ".0006/", "a trailing slash on a dotted expression"),
+            (work + ".0006.03/", "a trailing slash on a dotted manifestation"),
+            (work + "//DOC_1", "a doubled slash"),
+            (work + "/./DOC_1", "a single-dot segment"),
+            (work + "/../1f8c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f/DOC_1", "a dot-segment alias"),
+            (work + ".0006/../0007", "a dot segment after a dotted expression"),
+
+            // The publisher mints lowercase, the reader round-trips through ToString("D"), and the
+            // schemas now say so too. An uppercase spelling is a second name for one object.
+            ("http://publications.europa.eu/resource/cellar/1F8C2D3E-4A5B-6C7D-8E9F-0A1B2C3D4E5F",
+                "an uppercase work UUID"),
+            ("http://publications.europa.eu/resource/cellar/1F8C2D3E-4A5B-6C7D-8E9F-0A1B2C3D4E5F.0006",
+                "an uppercase dotted expression"),
         };
 
         foreach (var (value, why) in refused)
