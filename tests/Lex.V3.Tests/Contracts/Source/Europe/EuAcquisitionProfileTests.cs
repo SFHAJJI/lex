@@ -39,24 +39,17 @@ public sealed class EuAcquisitionProfileTests
     [TestMethod]
     public void AChannelWithTwoDispositionsHasNone()
     {
+        // Doubled with the channel's own reviewed admission. The duplicate is what this test is
+        // about, and a contradicting admission is now refused at construction, which would throw
+        // outside the assertion below and prove nothing about the profile.
         var doubled = FullChannelSet()
-            .Append(Disposition(EuChannel.CellarSparqlEndpoint, EuChannelAdmission.Excluded))
+            .Append(Disposition(
+                EuChannel.CellarSparqlEndpoint,
+                EuChannelDisposition.PolicyFor(EuChannel.CellarSparqlEndpoint)))
             .ToArray();
 
         Assert.ThrowsExactly<ArgumentException>(
             () => new EuAcquisitionProfile(doubled, Pacing(), Ceiling()));
-    }
-
-    [TestMethod]
-    public void AProfileAdmittingNothingIsRefusedRatherThanSilentlyFetchingNothing()
-    {
-        var noneAdmitted = EuScopeVocabulary.Channels
-            .Select(channel => Disposition(channel, EuChannelAdmission.Excluded))
-            .ToArray();
-
-        var thrown = Assert.ThrowsExactly<ArgumentException>(
-            () => new EuAcquisitionProfile(noneAdmitted, Pacing(), Ceiling()));
-        StringAssert.Contains(thrown.Message, "acquire nothing");
     }
 
     [TestMethod]

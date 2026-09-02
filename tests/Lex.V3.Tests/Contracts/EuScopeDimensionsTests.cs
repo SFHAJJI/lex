@@ -279,18 +279,32 @@ public sealed class EuScopeDimensionsTests
         Assert.IsTrue(admitted.MayGraduate());
 
         // Both outcomes need their reason, rule and evidence. An admission without one is the
-        // state a consumer relies on to fetch.
-        foreach (var admission in new[] { EuChannelAdmission.Admitted, EuChannelAdmission.Excluded })
+        // state a consumer relies on to fetch. Walked over the channels rather than over the two
+        // admissions, because admission is no longer a caller's choice: each channel is paired
+        // with its reviewed answer, which covers both outcomes and reaches all three routes
+        // instead of the one the old loop named twice.
+        foreach (var channel in EuScopeVocabulary.Channels)
         {
+            var admission = EuChannelDisposition.PolicyFor(channel);
             Assert.ThrowsExactly<ArgumentException>(
                 () => new EuChannelDisposition(
-                    EuChannel.EurLexPortal, admission, "  ", "rule", Evidence("77")));
+                    channel, admission, "  ", "rule", Evidence("77")));
             // ArgumentNullException, not ArgumentException: ThrowsExactly demands the exact type,
             // and a missing reference is a different refusal from a blank reason.
             Assert.ThrowsExactly<ArgumentNullException>(
                 () => new EuChannelDisposition(
-                    EuChannel.EurLexPortal, admission, "reason", "rule", null!));
+                    channel, admission, "reason", "rule", null!));
         }
+
+        // The pairing itself is refused, so a row cannot claim an admission the reviewed policy
+        // does not give that channel.
+        Assert.ThrowsExactly<ArgumentException>(
+            () => new EuChannelDisposition(
+                EuChannel.EurLexPortal,
+                EuChannelAdmission.Admitted,
+                "reason",
+                "rule",
+                Evidence("77")));
     }
 
     [TestMethod]
