@@ -113,6 +113,11 @@ public sealed class HttpObservationContractTests
             new AbsentHttpHeader(),
             new SingleHttpHeader("bytes 0-0/1"),
             new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
             new AbsentHttpHeader());
 
         for (var status = 100; status <= 599; status++)
@@ -186,7 +191,7 @@ public sealed class HttpObservationContractTests
     }
 
     [TestMethod]
-    public void ResponseMetadataIsExactlyTheEightFieldAllowlistWithExplicitAbsence()
+    public void ResponseMetadataIsExactlyTheThirteenFieldAllowlistWithExplicitAbsence()
     {
         var metadata = EmptyResponseMetadata();
 
@@ -203,6 +208,11 @@ public sealed class HttpObservationContractTests
                 "content_range",
                 "etag",
                 "last_modified",
+                "location",
+                "cache_control",
+                "expires",
+                "date",
+                "age",
             },
             properties.Select(static property => property.Name).ToArray());
         Assert.IsTrue(properties.All(static property =>
@@ -242,7 +252,12 @@ public sealed class HttpObservationContractTests
             new SingleHttpHeader("chunked"),
             new AbsentHttpHeader(),
             new SingleHttpHeader("\"opaque\""),
-            new AbsentHttpHeader());
+            new AbsentHttpHeader(),
+            new SingleHttpHeader("https://op.europa.eu/robots.txt"),
+            new MultipleHttpHeader(["max-age=60", "must-revalidate"]),
+            new SingleHttpHeader("Wed, 02 Sep 2026 09:00:00 GMT"),
+            new SingleHttpHeader("Wed, 02 Sep 2026 08:59:55 GMT"),
+            new SingleHttpHeader("5"));
 
         var json = ContractJson.Serialize(metadata);
         using var document = JsonDocument.Parse(json);
@@ -268,6 +283,11 @@ public sealed class HttpObservationContractTests
         Assert.IsInstanceOfType<SingleHttpHeader>(roundTrip.DeclaredCharset);
         Assert.IsInstanceOfType<MultipleHttpHeader>(roundTrip.ContentLength);
         Assert.AreEqual("chunked", ((SingleHttpHeader)roundTrip.TransferEncoding).Value);
+        Assert.AreEqual(
+            "https://op.europa.eu/robots.txt",
+            ((SingleHttpHeader)roundTrip.Location).Value);
+        Assert.IsInstanceOfType<MultipleHttpHeader>(roundTrip.CacheControl);
+        Assert.AreEqual("5", ((SingleHttpHeader)roundTrip.Age).Value);
 
         Assert.ThrowsExactly<ArgumentException>(() => new MultipleHttpHeader(["only-one"]));
         Assert.ThrowsExactly<ArgumentException>(() => new SingleHttpHeader("bad\r\nvalue"));
@@ -587,6 +607,11 @@ public sealed class HttpObservationContractTests
 
     private static HttpResponseMetadata EmptyResponseMetadata() =>
         new(
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
             new AbsentHttpHeader(),
             new AbsentHttpHeader(),
             new AbsentHttpHeader(),

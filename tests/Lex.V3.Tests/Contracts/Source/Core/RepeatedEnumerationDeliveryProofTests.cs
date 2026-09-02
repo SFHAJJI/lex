@@ -709,7 +709,7 @@ public sealed class RepeatedEnumerationDeliveryProofTests
             var policy = new CustodyPolicyEvidence(CustodySchemaIds.CustodyPolicyEvidence, blob, CustodyVerificationProfile.ImmutableObject1, Guid.NewGuid(), CustodyProtection.LockedTime, time, time.AddDays(91));
             var write = new DurableBlobWriteReceipt(CustodySchemaIds.DurableBlobWriteReceipt, blob, policy);
             var absent = new AbsentHttpHeader();
-            var metadata = new HttpResponseMetadata(new SingleHttpHeader(_mediaType), absent, new SingleHttpHeader(bytes.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)), absent, absent, absent, absent, absent);
+            var metadata = new HttpResponseMetadata(new SingleHttpHeader(_mediaType), absent, new SingleHttpHeader(bytes.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)), absent, absent, absent, absent, absent, absent, absent, absent, absent, absent);
             var completion = new DeclaredContentLengthCompleteEvidence(TransferCompletionSchemaIds.TransferCompletionEvidence, request.AdapterIdentity, observationId, digest, bytes.Length);
             var statusDisposition = HttpStatusClassifier.Classify(_statusCode, metadata);
             var observation = new ResponseCompleteBodyObservation(HttpObservationSchemaIds.HttpObservation, observationId, request, "https://publisher.example/feed", _statusCode, statusDisposition, metadata, completion, write);

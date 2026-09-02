@@ -157,6 +157,11 @@ public sealed class HttpAcquisitionReasonRegistryTests
         new AbsentHttpHeader(),
         new AbsentHttpHeader(),
         new AbsentHttpHeader(),
+        new AbsentHttpHeader(),
+        new AbsentHttpHeader(),
+        new AbsentHttpHeader(),
+        new AbsentHttpHeader(),
+        new AbsentHttpHeader(),
         new AbsentHttpHeader());
 
     private static HttpRequestEvidence RequestEvidence() =>

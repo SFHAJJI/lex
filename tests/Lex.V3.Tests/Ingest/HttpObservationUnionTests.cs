@@ -162,6 +162,11 @@ public sealed class HttpObservationUnionTests
             new AbsentHttpHeader(),
             new AbsentHttpHeader(),
             new MultipleHttpHeader(["\"one\"", "\"two\""]),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
             new AbsentHttpHeader());
         var duplicateHeaderEvidence = Complete(metadata: duplicateMetadata);
         Assert.IsInstanceOfType<MultipleHttpHeader>(duplicateHeaderEvidence.ResponseMetadata.Etag);
@@ -181,6 +186,11 @@ public sealed class HttpObservationUnionTests
             new AbsentHttpHeader(),
             new AbsentHttpHeader(),
             new SingleHttpHeader("\"one\""),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
             new AbsentHttpHeader());
         var protocolCompletion = new Http2EndStreamCompleteEvidence(
             TransferCompletionSchemaIds.TransferCompletionEvidence,
@@ -695,6 +705,11 @@ public sealed class HttpObservationUnionTests
             new AbsentHttpHeader(),
             new AbsentHttpHeader(),
             new SingleHttpHeader("\"opaque\""),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
             new AbsentHttpHeader());
         var ambiguousMetadataPredecessor = Complete(metadata: duplicateContentType);
         var ambiguousMetadataRevalidation = Revalidation(
@@ -718,6 +733,11 @@ public sealed class HttpObservationUnionTests
                 new AbsentHttpHeader(),
                 new AbsentHttpHeader(),
                 new SingleHttpHeader("\"opaque\""),
+                new AbsentHttpHeader(),
+                new AbsentHttpHeader(),
+                new AbsentHttpHeader(),
+                new AbsentHttpHeader(),
+                new AbsentHttpHeader(),
                 new AbsentHttpHeader()),
             completionEvidence: protocolCompletion);
         var malformedLengthRevalidation = Revalidation(predecessor: malformedLengthPredecessor);
@@ -1192,7 +1212,12 @@ public sealed class HttpObservationUnionTests
                 : new SingleHttpHeader(etag),
             lastModified is null
                 ? new AbsentHttpHeader()
-                : new SingleHttpHeader(lastModified));
+                : new SingleHttpHeader(lastModified),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader(),
+            new AbsentHttpHeader());
 
     private static DurableBlobRef Blob(long byteLength, char digestCharacter) =>
         new(
