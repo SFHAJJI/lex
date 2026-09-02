@@ -268,6 +268,34 @@ public sealed class BoundedHttpObservationAcquirerTests
     }
 
     [TestMethod]
+    public async Task CompleteHtml200WithContentRangeBlocksDerivation()
+    {
+        var transport = new RecordingHandler(request =>
+        {
+            var content = new ByteArrayContent(EntityBytes);
+            content.Headers.ContentType = new MediaTypeHeaderValue("text/html");
+            content.Headers.ContentLength = EntityBytes.Length;
+            content.Headers.ContentRange = new ContentRangeHeaderValue(
+                0,
+                EntityBytes.Length - 1,
+                EntityBytes.Length + 100);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                RequestMessage = request,
+                Content = content,
+            };
+        });
+        using var acquirer = Acquirer(transport, new RecordingCustodyStore());
+
+        var result = await acquirer.AcquireAsync(RequestTemplate(), CancellationToken.None);
+
+        var observation = result as ResponseCompleteBodyObservation;
+        Assert.IsNotNull(observation);
+        Assert.IsInstanceOfType<SingleHttpHeader>(observation.ResponseMetadata.ContentRange);
+        Assert.IsTrue(observation.ResponseMetadata.BlocksDerivation());
+    }
+
+    [TestMethod]
     public async Task ConflictingCharsetParametersRemainMultipleAndBlockDerivation()
     {
         var transport = new RecordingHandler(request =>
