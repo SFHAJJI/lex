@@ -101,9 +101,9 @@ public enum EuFormatBodyAdmission
 /// <para>
 /// Separate members rather than one licence for everything. The reviewed EUR-Lex legal notice
 /// states a classed basis: metadata under CC0, editorial content, summaries and consolidations
-/// under CC BY 4.0, and a wider reuse basis in Commission Decision 2011/833/EU. Which class
-/// carries which is read from that notice by <see cref="EuRightsDisposition.BasisFor"/> and is
-/// not a caller's choice.
+/// under CC BY 4.0, and a default permission for everything else that the notice asserts on its
+/// own account while citing Commission Decision 2011/833/EU. Which class carries which is read
+/// from that notice by <see cref="EuRightsDisposition.BasisFor"/> and is not a caller's choice.
 /// </para>
 /// <para>
 /// Editorial content is its own member although it shares an answer with summaries and
@@ -111,10 +111,10 @@ public enum EuFormatBodyAdmission
 /// is not a shared identity, and a disposition has to say which of the three it was about.
 /// </para>
 /// <para>
-/// Every member here is a whole-object class. Third-party material and document-specific terms
-/// are deliberately not members: both are conditions that can hold of part of a document while a
-/// class answer holds of the rest, so putting them here would force a choice between two facts
-/// that are true at once. They live on <see cref="EuRightsExceptionChannel"/> instead.
+/// Every member here is a whole-object class. The exception channels are deliberately not members:
+/// each is a condition that can hold of part of a document while a class answer holds of the rest,
+/// so putting any of them here would force a choice between two facts that are true at once. They
+/// live on <see cref="EuRightsExceptionChannel"/> instead.
 /// </para>
 /// </remarks>
 public enum EuContentClass
@@ -147,9 +147,30 @@ public enum EuReuseBasis
     [JsonStringEnumMemberName("cc_by_4_0")]
     CcBy40 = 2,
 
-    /// <summary>The general basis in Commission Decision 2011/833/EU and the legal notice.</summary>
-    [JsonStringEnumMemberName("decision_2011_833_eu")]
-    Decision2011833Eu = 3,
+    /// <summary>
+    /// The default reuse permission the EUR-Lex legal notice asserts, which cites Commission
+    /// Decision 2011/833/EU as its basis.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Named for the notice rather than for the Decision, because the Decision is not the operative
+    /// grant here. It was called <c>Decision2011833Eu</c> with the wire token
+    /// <c>decision_2011_833_eu</c>, which stated that a Commission instrument grants reuse of
+    /// documents the Commission did not adopt. Decision 2011/833/EU Article 1 determines conditions
+    /// for reuse of documents held by the Commission, Article 2(1) scopes it to documents produced
+    /// by the Commission or on its behalf, and recital 14 excludes documents received from the other
+    /// Institutions. An act of the Parliament and the Council is such a document.
+    /// </para>
+    /// <para>
+    /// What this member records is therefore what the notice says, and only that. The notice speaks
+    /// to us and cites the Decision; we record the notice's assertion and its citation, and we do
+    /// not restate the citation as a grant of our own. Whether original legal text may be served on
+    /// this footing is a separate question this type does not answer, because this scope is
+    /// evidence and is never publication authority.
+    /// </para>
+    /// </remarks>
+    [JsonStringEnumMemberName("eur_lex_legal_notice_permission")]
+    EurLexLegalNoticePermission = 3,
 
 }
 
@@ -201,8 +222,8 @@ public sealed record EuRightsDisposition
     /// <summary>The reviewed reuse basis for one content class. Total over the closed set.</summary>
     /// <remarks>
     /// <para>
-    /// Read from the EUR-Lex legal notice, made under Commission Decision 2011/833/EU, rather than
-    /// chosen by whoever writes a record. Before this existed the basis was a constructor argument
+    /// Read from the EUR-Lex legal notice, which cites Commission Decision 2011/833/EU, rather
+    /// than chosen by whoever writes a record. Before this existed the basis was a constructor argument
     /// nothing checked, so metadata could be recorded as CC BY 4.0 and original legal text as CC0.
     /// The second is the dangerous direction: it states a public domain dedication over published
     /// law whose actual basis reserves an exception, which is a permission this project would be
@@ -221,7 +242,7 @@ public sealed record EuRightsDisposition
             EuContentClass.EditorialContent => EuReuseBasis.CcBy40,
             EuContentClass.Summary => EuReuseBasis.CcBy40,
             EuContentClass.Consolidation => EuReuseBasis.CcBy40,
-            EuContentClass.OriginalLegalText => EuReuseBasis.Decision2011833Eu,
+            EuContentClass.OriginalLegalText => EuReuseBasis.EurLexLegalNoticePermission,
             _ => throw new ArgumentOutOfRangeException(
                 nameof(contentClass),
                 contentClass,
@@ -249,8 +270,13 @@ public sealed record EuRightsDisposition
 /// between two true things and erase whichever lost.
 /// </para>
 /// <para>
-/// Neither may be inferred from a class. A document does not carry special terms because of what
-/// kind of document it is; it carries them because that document says so.
+/// No channel may be inferred from a content class. What establishes one differs by channel, and
+/// collapsing that difference is how a resolution rule ends up demanding the wrong evidence.
+/// Document-specific terms are stated: an act or its Official Journal issue says them, so the
+/// evidence is an explicit term or notice. The other three are not stated but present. Third-party
+/// material, industrial property and an identifiable individual are depicted or embedded in the
+/// content, so the evidence is the material itself together with the applicable rights or
+/// clearance position for it. Neither shape is derivable from what kind of document this is.
 /// </para>
 /// </remarks>
 public enum EuRightsExceptionChannel
@@ -262,6 +288,35 @@ public enum EuRightsExceptionChannel
     /// <summary>Terms stated for one particular document or its Official Journal issue.</summary>
     [JsonStringEnumMemberName("document_specific_terms")]
     DocumentSpecificTerms = 2,
+
+    /// <summary>
+    /// Material covered by industrial property rights, excluded from the reuse policy and not
+    /// licensed.
+    /// </summary>
+    /// <remarks>
+    /// Its own channel rather than a kind of third-party material, and the distinction is the point.
+    /// Patents, trademarks, registered designs, logos and names in a Union document are frequently
+    /// the Union's own: the emblem, an institutional logo, an agency mark. Recording those as a
+    /// third party's material would state that the Union's marks belong to somebody else, which is
+    /// false in the same direction as calling a Commission decision the grant for an act the
+    /// Commission did not adopt. Official Journal acts carry the emblem and named signatories, and
+    /// annexes carry figures and marks, so this is an ordinary condition rather than a rare one.
+    /// </remarks>
+    [JsonStringEnumMemberName("industrial_property_rights")]
+    IndustrialPropertyRights = 3,
+
+    /// <summary>
+    /// Content depicting identifiable private individuals, for which additional rights may need
+    /// clearing.
+    /// </summary>
+    /// <remarks>
+    /// Not a copyright channel at all. This is a personal-data clearance condition, and filing it
+    /// under third-party material would label a data-protection obligation as a licensing one, so a
+    /// reader clearing rights would look in the wrong place and a reader reading the record would be
+    /// told the wrong kind of thing.
+    /// </remarks>
+    [JsonStringEnumMemberName("identifiable_private_individuals")]
+    IdentifiablePrivateIndividuals = 4,
 }
 
 /// <summary>
@@ -273,9 +328,10 @@ public enum EuRightsExceptionChannel
 /// deliberately cannot record is whether any given document or element is subject to it.
 /// </para>
 /// <para>
-/// That absence is the design. Resolving either channel needs an observation binding a source
-/// object, an exact term and value, and the run that saw it, and no acquisition path in this
-/// project can produce one yet. A member for "present", "absent" or "resolved" would therefore
+/// That absence is the design. Resolving any channel needs an item-specific observation binding a
+/// source object and the run that saw it: an exact term or notice for document-specific terms, and
+/// the identified material plus its applicable rights or clearance position for the other three.
+/// No acquisition path in this project can produce either yet. A member for "present", "absent" or "resolved" would therefore
 /// hold a caller's opinion under a word that promises evidence, which is the same defect as a
 /// delivery subject nobody established. On this subject a wrong opinion republishes somebody
 /// else's work, so the type refuses to hold one. The declared surface is pinned by test, so a
@@ -483,8 +539,8 @@ public sealed record EuManifestationScope
             static disposition => disposition.ContentClass,
             Enum.GetValues<EuContentClass>(),
             nameof(rights));
-        // Closed the same way the other two are. A scope that could omit these would be calling
-        // itself the Union rights scope while saying nothing about the two conditions that can
+        // Closed the same way the other members are. A scope that could omit these would be
+        // calling itself the Union rights scope while saying nothing about the conditions that can
         // override a class answer, which is the omission a reader is least able to notice.
         Exceptions = CloseOver(
             exceptions,
@@ -517,14 +573,14 @@ public sealed record EuManifestationScope
     public IReadOnlyList<EuRightsDisposition> Rights { get; }
 
     /// <summary>
-    /// The two conditions that can override a class answer, each with the class-level evidence
+    /// The conditions that can override a class answer, each with the class-level evidence
     /// that the condition exists.
     /// </summary>
     /// <remarks>
-    /// Complete and closed, and deliberately silent about any individual object. Holding both
-    /// channels is what makes the class answers readable without being read as whole-object
-    /// permissions: the scope states its policy and states, in the same breath, the two ways that
-    /// policy does not reach. Neither carries a resolution, because nothing can derive one yet.
+    /// Complete and closed, and deliberately silent about any individual object. Holding every
+    /// channel is what makes the class answers readable without being read as whole-object
+    /// permissions: the scope states its policy and states, in the same breath, each way that
+    /// policy does not reach. None carries a resolution, because nothing can derive one yet.
     /// </remarks>
     public IReadOnlyList<EuRightsExceptionDisposition> Exceptions { get; }
 

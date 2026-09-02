@@ -132,7 +132,13 @@ public sealed class EuManifestationScopeTests
     {
         AssertTokens<EuContentClass>(
             "metadata", "consolidation", "summary", "original_legal_text", "editorial_content");
-        AssertTokens<EuReuseBasis>("cc0", "cc_by_4_0", "decision_2011_833_eu");
+        AssertTokens<EuReuseBasis>("cc0", "cc_by_4_0", "eur_lex_legal_notice_permission");
+
+        // The rename is a breaking wire change on purpose. A consumer still pinned to the old
+        // token must fail loudly rather than silently reading a renamed member, because the old
+        // name asserted that a Commission decision granted reuse of acts the Commission did not
+        // adopt, and a silent read would carry that claim forward under a corrected label.
+        AssertScopeDrift<EuReuseBasis>("decision_2011_833_eu");
 
         Assert.AreEqual(EuReuseBasis.Cc0, EuRightsDisposition.BasisFor(EuContentClass.Metadata));
         Assert.AreEqual(
@@ -143,7 +149,7 @@ public sealed class EuManifestationScopeTests
             EuReuseBasis.CcBy40,
             EuRightsDisposition.BasisFor(EuContentClass.Consolidation));
         Assert.AreEqual(
-            EuReuseBasis.Decision2011833Eu,
+            EuReuseBasis.EurLexLegalNoticePermission,
             EuRightsDisposition.BasisFor(EuContentClass.OriginalLegalText));
 
         // Metadata as CC BY states an attribution obligation over a public domain dedication.
@@ -188,7 +194,19 @@ public sealed class EuManifestationScopeTests
     [TestMethod]
     public void TheExceptionChannelsAreAnAxisAndCarryNoItemResolution()
     {
-        AssertTokens<EuRightsExceptionChannel>("third_party_material", "document_specific_terms");
+        AssertTokens<EuRightsExceptionChannel>(
+            "third_party_material",
+            "document_specific_terms",
+            "industrial_property_rights",
+            "identifiable_private_individuals");
+
+        // Industrial property and identifiable individuals are their own channels, not kinds of
+        // third-party material. A Union trademark or the EU emblem is Union-owned, so filing it
+        // as a third party's material would be false; and identifiable individuals is a
+        // data-protection clearance condition rather than a licensing one. The exact list, not a
+        // count, is what stops either being folded back in later.
+        AssertScopeDrift<EuRightsExceptionChannel>("third_party_industrial_property");
+        AssertScopeDrift<EuRightsExceptionChannel>("private_individuals");
 
         foreach (var name in Enum.GetNames<EuContentClass>())
         {
@@ -199,26 +217,47 @@ public sealed class EuManifestationScopeTests
                 $"{name} makes an element-level exception into a whole-object class");
         }
 
+        // Static is in the flags on purpose. Without it this assertion did not see static members
+        // at all, so a public static bool IsResolved(EuRightsExceptionChannel) could be added to
+        // the one type whose entire purpose is that it cannot hold a resolution, and all 23 focused
+        // tests stayed green. Codex found that by mutation rather than by reading. The signature
+        // now carries the binding too, so a member cannot change between static and instance
+        // without this list changing.
         var declared = typeof(EuRightsExceptionDisposition)
-            .GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
-            .Select(member => $"{member.MemberType} {member}")
+            .GetMembers(
+                BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static
+                | BindingFlags.DeclaredOnly)
+            .Select(member => $"{member.MemberType} {(IsStaticMember(member) ? "static" : "instance")} {member}")
             .OrderBy(signature => signature, StringComparer.Ordinal)
             .ToArray();
 
         CollectionAssert.AreEqual(
             new[]
             {
-                "Constructor Void .ctor(Lex.V3.Contracts.Source.Europe."
+                "Constructor instance Void .ctor(Lex.V3.Contracts.Source.Europe."
                 + "EuRightsExceptionChannel, Lex.V3.Contracts.Source.Core.SourceArtifactRef)",
-                "Method Boolean Equals(Lex.V3.Contracts.Source.Europe.EuRightsExceptionDisposition)",
-                "Method Boolean Equals(System.Object)",
-                "Method Int32 GetHashCode()",
-                "Method Lex.V3.Contracts.Source.Core.SourceArtifactRef get_EvidenceRef()",
-                "Method Lex.V3.Contracts.Source.Europe.EuRightsExceptionChannel get_Channel()",
-                "Method Lex.V3.Contracts.Source.Europe.EuRightsExceptionDisposition <Clone>$()",
-                "Method System.String ToString()",
-                "Property Lex.V3.Contracts.Source.Core.SourceArtifactRef EvidenceRef",
-                "Property Lex.V3.Contracts.Source.Europe.EuRightsExceptionChannel Channel",
+                "Method instance Boolean Equals(Lex.V3.Contracts.Source.Europe."
+                + "EuRightsExceptionDisposition)",
+                "Method instance Boolean Equals(System.Object)",
+                "Method instance Int32 GetHashCode()",
+                "Method instance Lex.V3.Contracts.Source.Core.SourceArtifactRef get_EvidenceRef()",
+                "Method instance Lex.V3.Contracts.Source.Europe.EuRightsExceptionChannel "
+                + "get_Channel()",
+                "Method instance Lex.V3.Contracts.Source.Europe.EuRightsExceptionDisposition "
+                + "<Clone>$()",
+                "Method instance System.String ToString()",
+
+                // The two the previous flags could not see. Record-generated and legitimate, and
+                // now pinned, so a third static member cannot arrive beside them unnoticed.
+                "Method static Boolean op_Equality(Lex.V3.Contracts.Source.Europe."
+                + "EuRightsExceptionDisposition, Lex.V3.Contracts.Source.Europe."
+                + "EuRightsExceptionDisposition)",
+                "Method static Boolean op_Inequality(Lex.V3.Contracts.Source.Europe."
+                + "EuRightsExceptionDisposition, Lex.V3.Contracts.Source.Europe."
+                + "EuRightsExceptionDisposition)",
+                "Property instance Lex.V3.Contracts.Source.Core.SourceArtifactRef EvidenceRef",
+                "Property instance Lex.V3.Contracts.Source.Europe.EuRightsExceptionChannel "
+                + "Channel",
             },
             declared,
             "the exception disposition's surface changed; it now declares "
@@ -234,7 +273,7 @@ public sealed class EuManifestationScopeTests
         // Membership, not only vocabulary. The first version of this test pinned the enum and the
         // disposition's surface and never asked whether a scope carried them, so both types could
         // sit beside the model asserting nothing while a serialized scope stayed silent about the
-        // two conditions that can override its class answers.
+        // conditions that can override its class answers.
         var scope = Scope(FullFormats());
         CollectionAssert.AreEqual(
             Enum.GetValues<EuRightsExceptionChannel>(),
@@ -784,6 +823,14 @@ public sealed class EuManifestationScopeTests
 
     private static SourceArtifactRef Evidence(string seed) =>
         new("urn:uuid:00000000-0000-4000-8000-0000000000" + seed, new string(seed[0], 64));
+
+    private static bool IsStaticMember(MemberInfo member) => member switch
+    {
+        MethodBase method => method.IsStatic,
+        PropertyInfo property => (property.GetMethod ?? property.SetMethod)!.IsStatic,
+        FieldInfo field => field.IsStatic,
+        _ => false,
+    };
 
     private static void AssertTokens<TEnum>(params string[] expected)
         where TEnum : struct, Enum
