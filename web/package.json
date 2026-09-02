@@ -10,6 +10,12 @@
     "build": "node scripts/build.mjs",
     "test": "node --test test/*.test.mjs",
     "evidence": "npm run build && node scripts/browser-evidence.mjs",
-    "evidence:mutations": "node scripts/evidence-mutations.mjs"
+    "evidence:mutations": "node scripts/evidence-mutations.mjs",
+    "pretest": "node scripts/react-bundle.mjs"
+  },
+  "dependencies": {
+    "esbuild": "^0.28.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   }
 }

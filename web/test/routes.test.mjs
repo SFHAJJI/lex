@@ -2,8 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  CANONICAL_HOST,
   HANDOFF_HOSTS,
   PUBLISHER_HOSTS,
+  canonicalStateHref,
+  canonicalStateUrl,
   handoffUri,
   publisherSourceUri,
   tryPublisherSourceUri,
@@ -142,4 +145,89 @@ test('the non-throwing form refuses rather than raising, for captured data', () 
   assert.equal(tryPublisherSourceUri('lu-legilux', 'https://evil.example/x'), null);
   assert.equal(tryPublisherSourceUri('unknown-publisher', OK), null);
   assert.equal(tryPublisherSourceUri('lu-legilux', OK), OK);
+});
+
+// The canonical same-origin policy, which is what a permalink is checked against.
+//
+// The guard it replaces was `permalink.includes('--')`, and every case below satisfies that
+// guard. Each was rendered as a working href on a row whose every visible field described the
+// real record, which is the worst shape this failure takes: nothing on the screen is wrong.
+
+const HASH = 'a'.repeat(64);
+const STATE = { publisher: 'lu-legilux', work: 'code-travail', validFrom: '2021-01-26', hash: HASH };
+
+test('a minted permalink is the one the policy accepts, and it round-trips', () => {
+  // The control, first and deliberately. A refusal that also refuses the true case is not a
+  // check, and asserting the hostile cases alone cannot tell the two apart.
+  const href = canonicalStateHref(STATE);
+  assert.equal(href, `https://${CANONICAL_HOST}/lu-legilux/code-travail/2021-01-26--${HASH}`);
+
+  const parsed = canonicalStateUrl(href);
+  assert.notEqual(parsed, null, 'the builder minted a URL its own parser refuses');
+  assert.equal(parsed.publisher, STATE.publisher);
+  assert.equal(parsed.work, STATE.work);
+  assert.equal(parsed.validFrom, STATE.validFrom);
+  assert.equal(parsed.hash, STATE.hash);
+  assert.equal(parsed.anchor, null);
+
+  // The publisher's own anchor survives verbatim, because a permalink to a provision is the
+  // useful one and re-encoding it mints a coordinate the publisher never issued.
+  const anchored = canonicalStateUrl(canonicalStateHref({ ...STATE, anchor: 'art_2' }));
+  assert.equal(anchored.anchor, 'art_2');
+
+  // The root-relative form is the same state, because that is what an internal link looks like.
+  assert.equal(canonicalStateUrl(`/lu-legilux/code-travail/2021-01-26--${HASH}`).work, 'code-travail');
+});
+
+test('a permalink that is not this product own state URL is refused', () => {
+  // Each case carries its own reason, so each guard is held by a case of its own. A shared
+  // pattern would let the host check stand in for the scheme check and either could then be
+  // deleted with nothing going red.
+  const path = `/lu-legilux/code-travail/2021-01-26--${HASH}`;
+  for (const [value, why] of [
+    [`https://evil.example${path}`, 'another host'],
+    [`http://${CANONICAL_HOST}${path}`, 'a scheme that is not https'],
+    [`//evil.example${path}`, 'protocol-relative, which starts with a slash'],
+    ['javascript:alert(1)--x', 'a javascript URL carrying the digest separator'],
+    [`https://${CANONICAL_HOST}.evil.example${path}`, 'a host this one is a prefix of'],
+    // One canonical spelling, the one the builder emits. The publisher policy in this module
+    // already refuses `https://LEGILUX.public.lu/x` for the same reason: `URL` would lowercase
+    // it, and a parser that accepts what its builder cannot mint is a second specification.
+    [`https://${CANONICAL_HOST.toUpperCase()}${path}`, 'a host spelled in another case'],
+    [`https://evil.example/x--${HASH}`, 'any host at all, carrying the separator'],
+    // `URL` normalises the default port away, so `parsed.port` is empty here and `parsed.hostname`
+    // is evil.example. A check on the port alone made the claim that ports are refused false;
+    // the raw authority is what says where this actually points.
+    [`https://${CANONICAL_HOST}:443@evil.example${path}`, 'userinfo dressed as this host with a hidden port'],
+    [`https://${CANONICAL_HOST}@evil.example${path}`, 'userinfo dressed as this host'],
+    [`https://${CANONICAL_HOST}:443${path}`, 'an explicit default port the parser hides'],
+    [`https://${CANONICAL_HOST}${path}?next=https://evil.example`, 'a query string'],
+    [`https://${CANONICAL_HOST}${path.replace('/code-travail', String.fromCharCode(92) + 'code-travail')}`, 'a backslash'],
+    [`https://${CANONICAL_HOST}/lu-legilux/code-travail/2021-01-26`, 'no digest at all'],
+    [`https://${CANONICAL_HOST}/lu-legilux/code-travail/2021-13-45--${HASH}`, 'a version key that is not a date'],
+    [`https://${CANONICAL_HOST}/lu-legilux/code-travail`, 'a dossier, which is not a state'],
+    [`https://${CANONICAL_HOST}//lu-legilux/code-travail/2021-01-26--${HASH}`, 'a doubled separator'],
+    [`https://${CANONICAL_HOST}/lu-legilux/../secret/2021-01-26--${HASH}`, 'a segment that walks out'],
+    ['', 'the empty string'],
+    [undefined, 'nothing at all'],
+    [{ toString: () => `https://${CANONICAL_HOST}${path}` }, 'an object that stringifies to a good one'],
+  ]) {
+    assert.equal(
+      canonicalStateUrl(value),
+      null,
+      `${why} was accepted as a permalink: ${String(value)}`,
+    );
+  }
+});
+
+test('the canonical host is one value, not a literal spelled out per call site', () => {
+  // It was a literal inside a single preview fixture, so nothing could check that a link
+  // claiming to be one of ours actually was, and the fixture could not drift into disagreement
+  // with the policy because there was no policy to disagree with.
+  assert.equal(CANONICAL_HOST, 'law.soufien.lu');
+  assert.equal(canonicalStateHref(STATE).startsWith(`https://${CANONICAL_HOST}/`), true);
+  // The builder refuses what it cannot mint, rather than emitting something the parser refuses.
+  assert.throws(() => canonicalStateHref({ ...STATE, hash: 'short' }), /64 hex character state hash/);
+  assert.throws(() => canonicalStateHref({ ...STATE, validFrom: 'soon' }), /not a calendar date/);
+  assert.throws(() => canonicalStateHref({ ...STATE, work: '..' }), /not a safe URL segment/);
 });

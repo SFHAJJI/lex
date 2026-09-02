@@ -20,7 +20,13 @@
 // escaped. `http://evil.example/fake` under the words "Official source" was renderable
 // before, and escaping made it safe to place in the attribute while leaving it a working
 // link to the wrong place.
+//
+// And the publisher whose host set that is comes off the `lex_id`, not from a second argument
+// beside it. Both of this cluster's links are about one record, and a caller that could name
+// the publisher separately could have the anchor checked against one publisher while
+// "Provenance" addressed another. The record already says which, so nobody is asked.
 
+import { publisherOf } from './record-identity.mjs';
 import { publisherSourceUri } from './routes.mjs';
 import { TIMELINE_SEMANTICS } from './state-banner.mjs';
 import { requireUtcInstant } from './temporal.mjs';
@@ -44,17 +50,46 @@ function escapeHtml(value) {
 }
 
 /**
+ * The publisher a cluster is about, which is the record's and never a caller's.
+ *
+ * A `lex_id` is `publisher:work:state`, so the publisher is already written on the record this
+ * cluster links to. Reading it here rather than accepting it beside the identifier is what
+ * makes the two links agree by construction: the "Official source" anchor is checked against
+ * one publisher's host set and the provenance link addresses one publisher's record, and a
+ * caller holding both halves could otherwise name a different publisher for each.
+ */
+export function clusterPublisher(lexId) {
+  if (typeof lexId !== 'string' || lexId.trim().length === 0) {
+    throw new Error('the verify cluster requires a lex_id for the provenance link');
+  }
+  return publisherOf(lexId, 'the verify cluster');
+}
+
+/**
+ * Everything a verify cluster shows, checked. The markup is the renderers' business.
+ *
  * @param {object} input
- * @param {string} input.publisher  the publisher whose host set the source must be on
+ * @param {string} input.publisher  the publisher a caller believes this is, cross-checked
  * @param {string} input.sourceUri  the publisher's own address for this state
  * @param {string} input.lexId      the identity whose provenance page this links to
  * @param {{kind: string, value: string}} input.hash
  */
-export function renderVerifyCluster({ publisher, sourceUri, lexId, hash }) {
+export function verifyClusterModel({ publisher, sourceUri, lexId, hash }) {
   const uri = publisherSourceUri({ publisher, uri: sourceUri });
 
-  if (typeof lexId !== 'string' || lexId.trim().length === 0) {
-    throw new Error('the verify cluster requires a lex_id for the provenance link');
+  // The record's own publisher, and the caller may only agree with it. Before this, a cluster
+  // could be handed `lu-legilux` beside an `eu-eurlex:` identifier: the anchor was then checked
+  // against Legilux hosts while "Provenance" led to a Union record, and both links looked
+  // official. That is the same shape as authenticity evidence lifted from one resource onto a
+  // sibling, and escaping does nothing about it.
+  const recordPublisher = clusterPublisher(lexId);
+  if (publisher !== recordPublisher) {
+    throw new Error(
+      `this cluster was told publisher ${JSON.stringify(publisher)} while ${lexId} names ` +
+        `${recordPublisher}; the publisher is written on the record, so a second one beside it ` +
+        'is a fact about the caller and it decides which host set the official link is checked ' +
+        'against',
+    );
   }
 
   if (!hash || !KINDS.has(hash.kind)) {
@@ -68,20 +103,39 @@ export function renderVerifyCluster({ publisher, sourceUri, lexId, hash }) {
     throw new Error('a digest is 64 lowercase hex characters');
   }
 
-  const short = hash.value.slice(0, 8);
-  const rest = hash.value.slice(8);
+  return Object.freeze({
+    publisher: recordPublisher,
+    uri,
+    kind: hash.kind,
+    // The digest is one value shown in two runs: the first eight carry the visual weight and
+    // the rest sits beside them, in one selectable text node.
+    short: hash.value.slice(0, 8),
+    rest: hash.value.slice(8),
+    provenance: `/provenance/${encodeURIComponent(lexId)}`,
+  });
+}
+
+/**
+ * @param {object} input
+ * @param {string} input.publisher  the publisher whose host set the source must be on
+ * @param {string} input.sourceUri  the publisher's own address for this state
+ * @param {string} input.lexId      the identity whose provenance page this links to
+ * @param {{kind: string, value: string}} input.hash
+ */
+export function renderVerifyCluster({ publisher, sourceUri, lexId, hash }) {
+  const cluster = verifyClusterModel({ publisher, sourceUri, lexId, hash });
 
   return (
     '<div class="verify-cluster">' +
-    `<a class="verify-source" href="${escapeHtml(uri)}" rel="external">Official source</a>` +
+    `<a class="verify-source" href="${escapeHtml(cluster.uri)}" rel="external">Official source</a>` +
     '<span class="verify-hash">' +
-    `<span class="verify-hash-kind">${escapeHtml(hash.kind)}</span>` +
+    `<span class="verify-hash-kind">${escapeHtml(cluster.kind)}</span>` +
     // One text node, selectable end to end, so what a reader takes away is the whole digest
     // even though the first eight carry the visual weight.
     `<code class="verify-hash-value">` +
-    `<span class="verify-hash-short">${escapeHtml(short)}</span>${escapeHtml(rest)}</code>` +
+    `<span class="verify-hash-short">${escapeHtml(cluster.short)}</span>${escapeHtml(cluster.rest)}</code>` +
     '</span>' +
-    `<a class="verify-provenance" href="/provenance/${encodeURIComponent(lexId)}">Provenance</a>` +
+    `<a class="verify-provenance" href="${escapeHtml(cluster.provenance)}">Provenance</a>` +
     '</div>'
   );
 }

@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  page,
   escapeHtml,
   renderLoading,
   renderTransportFailure,
@@ -353,4 +354,29 @@ test("a vocabulary index outside its declared members is refused", () => {
 
   const { problems } = decodeEnvelope(ENVELOPE_SCHEMA, base(), REGISTRY);
   assert.deepEqual(problems, [], "the unmutated capture must still decode cleanly");
+});
+
+test('asset references do not depend on how deep the page is served', () => {
+  // Found by the browser journey gate, which followed a link to a nested route and landed on a
+  // page whose stylesheet had 404ed. Every preview page sits at the root of dist/, where
+  // "./styles.css" happens to resolve, so a flat preview can never show this. A real V3 route
+  // is nested (/w/<work>/<version>, /provenance/<id>), and there "./styles.css" resolves inside
+  // a directory that holds no stylesheet: the page renders completely unstyled.
+  const html = page({
+    state: 'dossier',
+    title: 'Depth',
+    locale: 'en',
+    copyLocale: 'en',
+    shell: 'w',
+    density: 'reading',
+    main: '      <h1>Depth</h1>\n',
+  });
+  for (const [, href] of html.matchAll(/<link[^>]+href="([^"]+)"/g)) {
+    assert.equal(
+      href.startsWith('/'),
+      true,
+      `${href} is resolved against the page's own path, so the same page served at a nested ` +
+        'route loads a different file or none',
+    );
+  }
 });

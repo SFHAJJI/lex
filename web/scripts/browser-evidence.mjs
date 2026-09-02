@@ -11,10 +11,12 @@
 
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, realpath } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { resolve as resolvePath } from "node:path";
-import { extname, join as joinPath } from "node:path";
-import { mkdtemp, rm } from "node:fs/promises";
+import { extname, join as joinPath, sep as pathSep } from "node:path";
+import { CSP_DIRECTIVES, FORBIDDEN_SOURCES, cspValue } from "./csp.mjs";
+import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -63,7 +65,14 @@ export function browserCandidates(platform = process.platform) {
 
 // Narrow, tablet, desktop. The narrow width is a real small phone rather than a
 // convenient round number, because layouts tend to be tuned to round numbers.
-const WIDTHS = [
+// Iterating on one truth rule does not need 315 page and viewport combinations to tell you
+// whether the rule holds; it needs one. LEX_EVIDENCE_FAST=1 keeps every page and every gate and
+// drops the matrix to a single width and scheme, which turns a two-minute wait into seconds.
+// The full matrix is what a freeze is measured on and is still the default, because responsive
+// and forced-colours defects are exactly the ones a single viewport cannot see.
+const FAST = process.env.LEX_EVIDENCE_FAST === "1";
+
+const ALL_WIDTHS = [
   { label: "narrow", width: 320, height: 640 },
   { label: "tablet", width: 768, height: 1024 },
   { label: "desktop", width: 1440, height: 900 },
@@ -74,33 +83,50 @@ const WIDTHS = [
   { label: "zoom400", width: 320, height: 256 },
 ];
 
+const WIDTHS = FAST ? ALL_WIDTHS.slice(2, 3) : ALL_WIDTHS;
+
 /**
  * Every page the build emits, read from the build's own output.
  *
- * This was a hand-written list and it was wrong twice for one reason. The trust surface once
- * shipped outside it and the run reported five pages of six as clean; the page every stand-in
- * action leads to shipped outside it too, so the one page reached by every visible action was
- * the one page never measured for contrast, layout, console state or target size.
+ * This was a hand-written list, and it was wrong twice for the same reason. The first time
+ * the trust surface shipped outside it, and the run said "all combinations clean" while
+ * measuring five pages out of six. The comment left behind said so, and then compare shipped
+ * and the count stayed at 100, which is evidence about eleven pages presented as evidence
+ * about twelve.
  *
  * A list somebody has to remember to update is a gate that fails open, quietly, in the
- * direction of a clean report. So the list is the directory: whatever the build emits is what
- * gets measured, and a page cannot ship unmeasured without also not shipping.
+ * direction of a clean report. So the list is now the directory: whatever the build emits is
+ * what gets measured, and a page cannot ship unmeasured without also not shipping.
  */
 async function pagesFrom(root) {
+  // The build says what it emitted, and this run measures exactly that.
+  //
+  // A floor of "at least N pages" was the same hand-maintained number the directory read was
+  // supposed to retire, and it checked only how many there were. Twelve unrelated files would
+  // have passed it, and it sat one below the count the build actually produced, so a page
+  // could vanish without a word. The build now declares its own list and the two must agree
+  // as sets: a page declared and absent is a build that half ran, and a page present and
+  // undeclared is a stale artefact being measured as though it were current.
+  const declared = JSON.parse(await readFile(joinPath(root, "pages.json"), "utf8"));
+  const manifest = [...declared.pages].sort();
   const found = (await readdir(root)).filter((name) => name.endsWith(".html")).sort();
-  // An empty baseline passes forever. If the build emitted nothing, this run proves nothing,
-  // and it says so rather than reporting every zero of its combinations clean.
-  if (found.length < MINIMUM_PAGES) {
+
+  const missing = manifest.filter((name) => !found.includes(name));
+  const extra = found.filter((name) => !manifest.includes(name));
+  if (missing.length > 0 || extra.length > 0) {
     throw new Error(
-      `the build emitted ${found.length} pages and this run needs at least ${MINIMUM_PAGES} ` +
-        "to be worth anything; run npm run build first",
+      `the build declared ${manifest.length} pages and the directory holds ${found.length}` +
+        (missing.length > 0 ? `; declared and absent: ${missing.join(", ")}` : "") +
+        (extra.length > 0 ? `; present and undeclared: ${extra.join(", ")}` : "") +
+        "; run npm run build",
     );
+  }
+  // An empty baseline passes forever, so it is refused rather than reported clean.
+  if (found.length === 0) {
+    throw new Error("the build emitted no pages, so this run would prove nothing");
   }
   return found;
 }
-
-/** Below this, the run is measuring an accident rather than the product. */
-const MINIMUM_PAGES = 8;
 
 /**
  * Ports WHATWG Fetch refuses to connect to, so a debugger listening on one is unreachable.
@@ -276,9 +302,18 @@ const PROBE = `(() => {
   // either the markup has whitespace between them or the boxes do.
   const glued = [];
   for (const parent of document.querySelectorAll('body *')) {
-    const children = [...parent.children].filter(
-      (el) => el.offsetParent !== null && el.textContent.trim().length > 0,
-    );
+    const children = [...parent.children].filter((el) => {
+      if (el.offsetParent === null || el.textContent.trim().length === 0) return false;
+      // A visually-hidden element is clipped away so a screen reader can still reach it.
+      // Nothing is painted there, so it cannot be painted flush against anything.
+      //
+      // The first version of this exemption skipped anything thinner than two pixels, which
+      // is far wider than the thing it was written for: a value collapsed to zero width with
+      // its text hidden, and a genuinely one-pixel element touching its neighbour, both
+      // disappeared from a gate whose entire justification is catching what the others miss.
+      // Clipping is exactly identifiable, so that is the only thing exempted.
+      return getComputedStyle(el).clipPath === 'none';
+    });
     for (let i = 0; i + 1 < children.length; i += 1) {
       const before = children[i];
       const after = children[i + 1];
@@ -290,13 +325,42 @@ const PROBE = `(() => {
       if (between.trim().length > 0) continue;
       const a = before.getBoundingClientRect();
       const b = after.getBoundingClientRect();
-      const separated = b.left - a.right >= 2 || b.top >= a.bottom;
+      // A visible border between two boxes is a separator, and with collapsed table borders
+      // adjacent cells share one, so their rects touch exactly. Reading that as "painted
+      // flush" was a false positive of this gate rather than a defect in the page.
+      const afterStyle = getComputedStyle(after);
+      const bordered =
+        parseFloat(afterStyle.borderLeftWidth) > 0 || parseFloat(afterStyle.borderTopWidth) > 0;
+      const separated = b.left - a.right >= 2 || b.top >= a.bottom || bordered;
       if (!separated) {
         glued.push(
           parent.className + ' > ' + before.className + ' | ' + after.className,
         );
       }
     }
+  }
+
+  // Meaning carried only by paint.
+  //
+  // Forced-colours mode removes background images, so any element whose meaning lives in one
+  // loses it entirely, and the reader is not told anything is missing. This screen has exactly
+  // that shape: the timeline hatches its gaps with a repeating gradient, and a gap that becomes
+  // invisible is the one mark whose absence asserts something false about the law.
+  //
+  // The rule this project already states is that nothing means anything by colour alone. This
+  // measures it rather than trusting it: an element painted with a background image must also
+  // say what it is, in text or in an accessible name. Decorative elements are exempt because
+  // they are already declared decorative.
+  const paintOnly = [];
+  for (const el of document.querySelectorAll('body *')) {
+    if (el.closest('[aria-hidden="true"]') !== null) continue;
+    const style = getComputedStyle(el);
+    if (style.backgroundImage === 'none') continue;
+    const named =
+      el.textContent.trim().length > 0 ||
+      (el.getAttribute('aria-label') ?? '').trim().length > 0 ||
+      (el.getAttribute('alt') ?? '').trim().length > 0;
+    if (!named) paintOnly.push(el.tagName + '.' + String(el.className).slice(0, 30));
   }
 
   // WCAG 2.2 SC 2.5.8, target size minimum: 24 by 24 CSS pixels. The exception this takes is
@@ -353,6 +417,45 @@ const PROBE = `(() => {
     bodyColor: body.color,
     bodyBackground: body.backgroundColor,
     scriptCount: document.querySelectorAll('script').length,
+    // The policy as the browser parsed it, and every script's origin. A zero-script
+    // count was only ever a proxy for nothing-unreviewed-executes, and it stops being
+    // one the moment a page is hydrated. A gate that silently becomes vacuous is worse
+    // than no gate, because it keeps reporting a pass.
+    csp:
+      document.querySelector('meta[http-equiv="Content-Security-Policy" i]')?.content ?? null,
+    inlineScripts: [...document.querySelectorAll('script')].filter((el) => !el.src).length,
+    scriptOrigins: [...document.querySelectorAll('script[src]')].map(
+      (el) => new URL(el.src, document.baseURI).origin,
+    ),
+    documentOrigin: window.location.origin,
+    // What the browser actually decoded the bytes as, not what the head claims. React writes
+    // this attribute as charSet, which HTML matches case-insensitively, and the fixture is
+    // ASCII enough that a wrong encoding would not surface until real French statute renders,
+    // by which point every accented character in the corpus is wrong. Asserting the decoded
+    // result also covers a wrong Content-Type header and a byte-order mark, which reading the
+    // attribute back out of the DOM would not.
+    characterSet: document.characterSet,
+    // Statutory type, as rendered rather than as declared. The UX spec fixes serif at
+    // 17px/1.65 on desktop, 16px/1.6 on mobile, and a 72ch maximum measure. A stylesheet
+    // saying so is a comment: a font that fails to load, a rule overridden downstream, or a
+    // measure that never applies all leave the declaration intact and the page wrong. This
+    // is the type a reader actually gets for the law itself, which is the one run of text
+    // on the site that is not ours.
+    statutoryType: [...document.querySelectorAll('blockquote.law, .reading-text')].map((el) => {
+      const style = getComputedStyle(el);
+      return {
+        fontSize: Number.parseFloat(style.fontSize),
+        lineHeight: Number.parseFloat(style.lineHeight) / Number.parseFloat(style.fontSize),
+        family: style.fontFamily,
+        width: el.getBoundingClientRect().width,
+      };
+    }),
+    // Hydration, as the client reports it. Set only after the first pass completes, and set
+    // to recovered when React had to redraw because the server markup and the client tree
+    // disagreed. React recovers from that quietly, so a page that hydrated by re-rendering
+    // looks identical to one that hydrated cleanly unless something records the difference.
+    hydrated: document.documentElement.dataset.hydrated ?? null,
+    hydrationRecovered: document.documentElement.dataset.hydrationRecovered ?? null,
     shell: document.documentElement.dataset.shell ?? null,
     density: document.documentElement.dataset.density ?? null,
     mainLineHeight: mainStyle ? mainStyle.lineHeight : null,
@@ -362,14 +465,22 @@ const PROBE = `(() => {
     worstContrastTag: worst ? worst.tag : null,
     worstContrastRequired: worst ? worst.required : null,
     contrastFailures: contrast.filter((c) => c.ratio < c.required).length,
+    paintOnly: paintOnly.slice(0, 8),
+    paintOnlyCount: paintOnly.length,
     glued: glued.slice(0, 8),
     gluedCount: glued.length,
     smallTargets: smallTargets.slice(0, 8),
     smallTargetCount: smallTargets.length,
     sameOrigin,
-    // A control with no handler and no form is a promise the page cannot keep. This line
-    // ships no script, so any button is inert by construction.
-    inertControls: [...document.querySelectorAll('button, a:not([href])')].length,
+    // A control with no handler and no form is a promise the page cannot keep, and on a page
+    // that ships no script every button is inert by construction. That last clause is the whole
+    // rule, and it used to be a comment rather than a condition: the count was unconditional, so
+    // a hydrated page carrying real controls failed a check written about pages that carry none.
+    // No built page had ever had a control, so nothing had disagreed with it yet.
+    inertControls:
+      document.querySelectorAll('script').length === 0
+        ? [...document.querySelectorAll('button, a:not([href])')].length
+        : 0,
   };
 })()`;
 
@@ -457,6 +568,7 @@ async function waitForSettled(session, sessionId, deadlineMs = 10000) {
 }
 
 const CONTENT_TYPES = new Map([
+  [".woff2", "font/woff2"],
   [".html", "text/html; charset=utf-8"],
   [".css", "text/css; charset=utf-8"],
   [".svg", "image/svg+xml"],
@@ -477,35 +589,110 @@ const CONTENT_TYPES = new Map([
  *
  * The static build is a preview of a routed application, so the harness has to route the
  * scheme or every real link in it is a 404. It routes exactly what `urls.mjs` defines and
- * nothing else: the three shell entries onto their generated pages, and object, provenance
- * and search paths onto one stand-in destination that says what it is. A link outside the
- * scheme still 404s, which is what makes the destination check worth running.
+ * nothing else: the three shell entries onto their generated pages, and object and search
+ * paths onto one stand-in destination that says what it is. A link outside the scheme still
+ * 404s, which is what makes the destination check worth running.
+ *
+ * Provenance no longer routes to the stand-in. It routes to the page built for that exact
+ * record, because a provenance link that resolved to a proof chain belonging to a different
+ * record would be worse than the 404 it replaces. A key with no page built for it still 404s,
+ * which is what keeps the build honest about which records it rendered.
+ *
+ * Exported so a test can hold the route and the file name the build writes to one rule.
  */
-function routeSchemePath(path) {
+export function routeSchemePath(path) {
   if (path === "/ask" || path === "/w" || path === "/dev") return `/shell-${path.slice(1)}.html`;
   if (/^\/(ask|w|dev)\/search$/.test(path)) return "/preview-destination.html";
-  if (/^\/provenance\/[^/]+$/.test(path)) return "/preview-destination.html";
+  if (/^\/provenance\/[^/]+$/.test(path)) {
+    // The same name `provenancePageName` mints in `provenance.mjs`, spelled here rather than
+    // imported so this harness keeps depending on nothing it measures. A test holds the two
+    // to one rule, because a disagreement between them is a 404 nothing else would find.
+    return `/provenance-${path.slice("/provenance/".length).replaceAll(":", "~")}.html`;
+  }
   if (parseObjectUrl(path) !== null) return "/preview-destination.html";
   return null;
 }
 
-async function serveDist(root) {
+/**
+ * Is this resolved path inside the distribution root?
+ *
+ * Exported because the containment rule is the whole security property of this server and a
+ * rule nothing can call is a rule nothing can test.
+ */
+export function withinRoot(root, candidate) {
+  const base = resolvePath(root);
+  const target = resolvePath(candidate);
+  return target === base || target.startsWith(base + pathSep);
+}
+
+export async function serveDist(root) {
   const server = createServer((request, response) => {
-    const path = decodeURIComponent(new URL(request.url, "http://127.0.0.1").pathname);
-    const routed = routeSchemePath(path);
+    const refuse = () => {
+      response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+      response.end("not found");
+    };
+
+    const raw = new URL(request.url, "http://127.0.0.1").pathname;
+    // The URL parser normalises `..` segments, and this used to decode percent-escapes
+    // afterwards, which put them back. Twelve encoded parent segments followed by an encoded
+    // separator resolved to C:\Windows\win.ini and the harness served it. The server binds
+    // loopback, but it is still a local file disclosure primitive living inside the tool that
+    // reviews this product. Encoded separators and control bytes are refused before decoding.
+    if (/%2f|%5c|%00/i.test(raw)) {
+      refuse();
+      return;
+    }
+    let path;
+    try {
+      path = decodeURIComponent(raw);
+    } catch {
+      refuse();
+      return;
+    }
+    if (path.includes("\\") || path.includes("\0")) {
+      refuse();
+      return;
+    }
+
+    // A real file wins over a synthetic route. The object-URL grammar accepts any two safe
+    // segments as a dossier, so /fonts/inter-400-latin.woff2 was routed to the stand-in
+    // destination page and the browser received <!doctype where it expected wOF2. The
+    // console reported an OTS parsing error, which is a long way from the cause.
+    // Plain path join, not a file URL: fileURLToPath refuses encoded separators, and a
+    // double-encoded payload still carries one after the first decode.
+    const onDisk = existsSync(joinPath(root, path));
+    const routed = onDisk ? null : routeSchemePath(path);
     const file = joinPath(root, routed ?? (path === "/" ? "/index.html" : path));
-    readFile(file).then(
-      (body) => {
-        response.writeHead(200, {
-          "content-type": CONTENT_TYPES.get(extname(file)) ?? "application/octet-stream",
-        });
-        response.end(body);
-      },
-      () => {
-        response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
-        response.end("not found");
-      },
-    );
+    // Belt and braces: whatever the two checks above let through, the resolved file still has
+    // to sit inside the distribution root.
+    if (!withinRoot(root, file)) {
+      refuse();
+      return;
+    }
+    // Lexical containment is not containment. `readFile` follows reparse points, so a directory
+    // junction inside dist pointing outside it satisfied every string check above and still
+    // served the outside file with a real 200. The final target is resolved and re-checked
+    // against the resolved root before anything is opened, and a path that cannot be resolved
+    // is refused rather than opened optimistically.
+    Promise.all([realpath(file), realpath(root)])
+      .then(([realFile, realRoot]) => {
+        if (!withinRoot(realRoot, realFile)) {
+          throw new Error("resolved outside the distribution root");
+        }
+        return readFile(realFile);
+      })
+      .then(
+        (body) => {
+          response.writeHead(200, {
+            "content-type": CONTENT_TYPES.get(extname(file)) ?? "application/octet-stream",
+          });
+          response.end(body);
+        },
+        () => {
+          response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+          response.end("not found");
+        },
+      );
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address();
@@ -540,7 +727,38 @@ async function killTree(pid) {
   await new Promise((resolve) => setTimeout(resolve, 400));
 }
 
+/**
+ * Remove profile directories a previous run left behind.
+ *
+ * The cleanup at the end of this run lives in a `finally`, so it survives an exception. It does
+ * not survive the process being killed, and an interrupted evidence run is ordinary: 204
+ * `lex-cdp-` directories had accumulated in the temp directory by the time anyone looked, on a
+ * machine that then reached zero bytes free mid-write and truncated a source file to nothing.
+ *
+ * Sweeping at startup rather than trying harder to clean up at exit is the robust direction. It
+ * costs one directory listing, and it works however the last run died, including a power cut. An
+ * hour is well clear of any real run, so a concurrent one is never touched.
+ */
+async function sweepStaleProfiles() {
+  const root = tmpdir();
+  const cutoff = Date.now() - 60 * 60 * 1000;
+  let removed = 0;
+  const entries = await readdir(root).catch(() => []);
+  for (const name of entries) {
+    if (!name.startsWith("lex-cdp-")) continue;
+    const full = join(root, name);
+    const info = await stat(full).catch(() => null);
+    if (info === null || !info.isDirectory() || info.mtimeMs > cutoff) continue;
+    await rm(full, { force: true, recursive: true }).catch(() => {});
+    removed += 1;
+  }
+  if (removed > 0) {
+    console.error("  [evidence] swept " + removed + " stale browser profile(s)");
+  }
+}
+
 async function main() {
+  await sweepStaleProfiles();
   const browser = await findBrowser();
   const port = allocateDebuggerPort(9222, 500);
   const profile = await mkdtemp(join(tmpdir(), "lex-cdp-"));
@@ -596,10 +814,27 @@ async function main() {
     for (const page of await pagesFrom(root)) {
       const url = `${site.origin}/${page}`;
       for (const viewport of WIDTHS) {
-       for (const scheme of ["light", "dark"]) {
+       // Forced colours is the third scheme rather than a fourth dimension, because it is a
+       // rendering mode a reader is in, not an axis crossed with the other two. Windows High
+       // Contrast is the common case and it removes background images, which matters here: the
+       // timeline hatches its gaps with a repeating gradient, and a gap that becomes invisible
+       // is the one mark on that screen whose absence asserts something false.
+       for (const scheme of FAST ? ["light"] : ["light", "dark", "forced"]) {
         await session.send(
           "Emulation.setEmulatedMedia",
-          { features: [{ name: "prefers-color-scheme", value: scheme }, { name: "prefers-reduced-motion", value: "reduce" }] },
+          {
+            features:
+              scheme === "forced"
+                ? [
+                    { name: "forced-colors", value: "active" },
+                    { name: "prefers-color-scheme", value: "light" },
+                    { name: "prefers-reduced-motion", value: "reduce" },
+                  ]
+                : [
+                    { name: "prefers-color-scheme", value: scheme },
+                    { name: "prefers-reduced-motion", value: "reduce" },
+                  ],
+          },
           sessionId,
         );
         await session.send(
@@ -644,6 +879,12 @@ async function main() {
 
         if (axNodes.length === 0) {
           failures.push(`${page} @${viewport.label}/${scheme}: the accessibility tree is empty`);
+        }
+        if (observed.paintOnlyCount > 0) {
+          failures.push(
+            `${page} @${viewport.label}/${scheme}: ${observed.paintOnlyCount} element(s) carry ` +
+              `meaning only as paint, which forced colours removes: ${observed.paintOnly.join("; ")}`,
+          );
         }
         if (observed.gluedCount > 0) {
           failures.push(
@@ -719,8 +960,115 @@ async function main() {
           }
         }
         if (!observed.syntheticBanner) failures.push(`${page} @${viewport.label}: synthetic banner missing`);
-        if (observed.scriptCount !== 0) failures.push(`${page} @${viewport.label}: ${observed.scriptCount} script tags`);
+        // The policy, compared against the declared object rather than searched for a
+        // substring. Asserting that the served value contains script-src self would pass
+        // a policy that also contained unsafe-inline, which is the whole failure mode.
+        if (observed.csp !== cspValue()) {
+          failures.push(
+            `${page} @${viewport.label}: served policy does not match the declared one.` +
+              ` expected ${JSON.stringify(cspValue())}, got ${JSON.stringify(observed.csp)}`,
+          );
+        }
+        for (const forbidden of FORBIDDEN_SOURCES) {
+          if ((observed.csp ?? "").includes(forbidden)) {
+            failures.push(`${page} @${viewport.label}: policy admits ${forbidden}`);
+          }
+        }
+        // What the policy forbids, measured on the page rather than trusted to it. A meta
+        // policy is not applied to markup the parser already saw in some browsers, so the
+        // page must also not contain what the policy would have refused.
+        if (observed.inlineScripts !== 0) {
+          failures.push(
+            `${page} @${viewport.label}: ${observed.inlineScripts} inline script tags; an` +
+              " inline script cannot be reviewed by reading the deployed bundle",
+          );
+        }
+        for (const origin of observed.scriptOrigins ?? []) {
+          if (origin !== observed.documentOrigin) {
+            failures.push(
+              `${page} @${viewport.label}: a script is served from ${origin}, not this` +
+                " origin; an answer assembled by code from elsewhere came from somewhere unstated",
+            );
+          }
+        }
         if (observed.state === undefined) failures.push(`${page} @${viewport.label}: no data-preview-state`);
+        // A page that ships a script must hydrate, and must hydrate without changing what
+        // the server sent. The reader saw the server's document; if the client redraws it,
+        // the text they kept is not the text that was served, and the legal content is
+        // exactly what must not move between those two moments.
+        if (observed.scriptCount > 0) {
+          if (observed.hydrated === null) {
+            failures.push(
+              `${page} @${viewport.label}: ships a script and never reported hydrating; a` +
+                " page with an inert runtime has shipped weight that does nothing",
+            );
+          } else if (observed.hydrated !== "clean") {
+            failures.push(
+              `${page} @${viewport.label}: hydrated as ${observed.hydrated}` +
+                `${observed.hydrationRecovered ? `, ${observed.hydrationRecovered}` : ''}`,
+            );
+          }
+        }
+        // The UX spec fixes statutory type at 17px/1.65 desktop and 16px/1.6 mobile, with a
+        // 72ch maximum measure. Asserted on what rendered, because the law is the one run
+        // of text on this site that is not ours to reflow at will.
+        for (const [index, type] of (observed.statutoryType ?? []).entries()) {
+          const narrow = viewport.width <= 480;
+          const wantSize = narrow ? 16 : 17;
+          const wantLead = narrow ? 1.6 : 1.65;
+          const where = `${page} @${viewport.label}: statutory block ${index + 1}`;
+          if (Math.abs(type.fontSize - wantSize) > 0.5) {
+            failures.push(`${where} renders at ${type.fontSize}px, not ${wantSize}px`);
+          }
+          if (Math.abs(type.lineHeight - wantLead) > 0.05) {
+            failures.push(
+              `${where} has a line height of ${type.lineHeight.toFixed(2)}, not ${wantLead}`,
+            );
+          }
+          if (!/serif/i.test(type.family)) {
+            failures.push(`${where} is set in ${type.family}, which is not a serif`);
+          }
+          // 72ch is a maximum, and a ch at this size is roughly half the font size, so a
+          // block wider than 72 times that is a measure the spec refuses.
+          if (type.width > 72 * type.fontSize * 0.6) {
+            failures.push(
+              `${where} is ${Math.round(type.width)}px wide, past the 72ch maximum measure`,
+            );
+          }
+        }
+        // The UX spec fixes statutory type at 17px/1.65 desktop and 16px/1.6 mobile with a
+        // 72ch maximum measure. Asserted on what rendered, because a stylesheet saying so
+        // is a comment: a font that fails to load, a rule overridden downstream, or a
+        // measure that never applies all leave the declaration intact and the page wrong.
+        // The law is the one run of text on this site that is not ours to reflow at will.
+        for (const [index, type] of (observed.statutoryType ?? []).entries()) {
+          const narrow = viewport.width <= 480;
+          const wantSize = narrow ? 16 : 17;
+          const wantLead = narrow ? 1.6 : 1.65;
+          const where = `${page} @${viewport.label}: statutory block ${index + 1}`;
+          if (Math.abs(type.fontSize - wantSize) > 0.5) {
+            failures.push(`${where} renders at ${type.fontSize}px, not ${wantSize}px`);
+          }
+          if (Math.abs(type.lineHeight - wantLead) > 0.05) {
+            failures.push(
+              `${where} leads at ${type.lineHeight.toFixed(2)}, not ${wantLead}`,
+            );
+          }
+          if (!/Source Serif 4/.test(type.family)) {
+            failures.push(`${where} is set in ${type.family}, not the specified serif`);
+          }
+          if (type.width > 72 * type.fontSize * 0.62) {
+            failures.push(
+              `${where} is ${Math.round(type.width)}px wide, past the 72ch maximum measure`,
+            );
+          }
+        }
+        if (observed.characterSet !== "UTF-8") {
+          failures.push(
+            `${page} @${viewport.label}: decoded as ${observed.characterSet}, not UTF-8; every ` +
+              "accented character in French, German and Luxembourgish statute would be wrong",
+          );
+        }
         if (observed.contrastChecked === 0) {
           failures.push(`${page} @${viewport.label}/${scheme}: no text was contrast-checked`);
         }
@@ -750,10 +1098,13 @@ async function main() {
        }
       }
     }
-    session.close();
-    // Every same-origin destination the pages offer has to resolve. A visible action leading
-    // to a missing page is a promise the page cannot keep, and nothing else in this run looks
-    // past the page it is on.
+    // Every same-origin destination the pages offer has to resolve, and a reader following one
+    // has to land somewhere coherent. This used to be a fetch and a status code, which proves a
+    // file exists and nothing about what a reader arrives at: a 200 can be a blank body, a page
+    // that never says what it is, or one that throws in the browser and renders half of itself.
+    // So each destination is now navigated to in the same browser the rest of this run uses,
+    // and the landing page has to declare its own state, carry exactly one first-level heading,
+    // and log nothing.
     const destinations = new Map();
     for (const row of rows) {
       for (const href of row.sameOrigin ?? []) {
@@ -772,8 +1123,51 @@ async function main() {
         failures.push(
           `${fromPage}: ${href} answers ${status}; a visible action must not lead to a missing page`,
         );
+        continue;
+      }
+
+      // Follow it the way a reader would. `logged` is the same per-page buffer the main loop
+      // fills from the CDP listener, so clearing it here scopes it to this one navigation.
+      logged = [];
+      await session.send("Page.navigate", { url: `${site.origin}${href}` }, sessionId);
+      await waitForSettled(session, sessionId);
+      const { result } = await session.send(
+        "Runtime.evaluate",
+        {
+          expression: `(() => ({
+             state: document.documentElement.getAttribute('data-preview-state'),
+             headings: document.querySelectorAll('h1').length,
+             text: document.body.innerText.trim().length,
+           }))()`,
+          returnByValue: true,
+          awaitPromise: true,
+        },
+        sessionId,
+      );
+      const landed = result.value;
+      if (!landed?.state) {
+        failures.push(
+          `${fromPage}: following ${href} lands on a page that does not declare what it is; a ` +
+            "reader who followed an action needs the destination to say where they arrived",
+        );
+      }
+      if (landed && landed.headings !== 1) {
+        failures.push(
+          `${fromPage}: following ${href} lands on a page with ${landed.headings} first-level ` +
+            "headings, so it does not name itself once",
+        );
+      }
+      if (landed && landed.text < 40) {
+        failures.push(
+          `${fromPage}: following ${href} lands on ${landed.text} characters of text; a ` +
+            "destination that says almost nothing is a dead end that answered 200",
+        );
+      }
+      if (logged.length > 0) {
+        failures.push(`${fromPage}: following ${href} logged ${logged.join(", ")}`);
       }
     }
+    session.close();
   } finally {
     // Chrome spawns a process tree, and killing only the process we launched leaves the
     // renderers and the GPU process behind. Repeated runs left 51 of them alive, holding
@@ -790,6 +1184,39 @@ async function main() {
         `contrast=${row.contrastChecked} worst=${row.worstContrast} ` +
         `ax=${row.axNodes} named-interactive=${row.axInteractive} landmarks=${row.axLandmarks} main=${row.axMain} glued=${row.gluedCount} inert=${row.inertControls} small=${row.smallTargetCount}`,
     );
+  }
+
+  // A density that does not change the layout is a shell that is not a shell. The three
+  // shells claim three densities, so the browser has to report three distinct computed
+  // line heights on `main` at the same viewport, and the Gateway shell has to actually be
+  // monospace. Nothing else in the run compares two pages against each other, and nothing
+  // else could catch a density declared in the markup and absent from the stylesheet.
+  const shellRows = rows.filter((row) => row.shell !== null && row.shell !== undefined);
+  if (shellRows.length > 0) {
+    for (const viewport of WIDTHS) {
+      const atViewport = shellRows.filter((row) => row.viewport === viewport.label && row.scheme === "light");
+      // One row per shell. More than one page may wear the same shell, and comparing rows
+      // rather than shells reported four shells when there are three: the check itself had
+      // the defect it exists to catch, counting appearances instead of kinds.
+      const byShell = new Map();
+      for (const row of atViewport) {
+        if (!byShell.has(row.shell)) byShell.set(row.shell, row);
+      }
+      if (byShell.size < 2) continue;
+      const heights = new Set([...byShell.values()].map((row) => row.mainLineHeight));
+      if (heights.size !== byShell.size) {
+        failures.push(
+          `@${viewport.label}: ${byShell.size} shells but ${heights.size} distinct main ` +
+            `line-height(s) (${[...heights].join(", ")}); a density that changes nothing is not a density`,
+        );
+      }
+    }
+    const gateway = shellRows.find((row) => row.shell === "dev");
+    if (gateway && !/mono/i.test(gateway.mainFontFamily ?? "")) {
+      failures.push(
+        `the Gateway shell claims density monospace and computed ${gateway.mainFontFamily}`,
+      );
+    }
   }
 
   if (failures.length > 0) {
