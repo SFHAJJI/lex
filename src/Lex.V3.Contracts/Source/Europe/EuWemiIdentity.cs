@@ -181,20 +181,36 @@ public sealed class EuWemiIdentityBoundary
     /// proved from caller-authored strings about a caller-authored object, which is the failure this
     /// type exists to end rather than relocate one level down.
     /// </remarks>
+    /// <summary>
+    /// The only origins a Cellar object may be named by, both schemes the publisher answers on.
+    /// </summary>
+    private static readonly string[] CellarOrigins =
+    [
+        "http://publications.europa.eu/resource/cellar/",
+        "https://publications.europa.eu/resource/cellar/",
+    ];
+
     private static void RequirePublisherUriNamesTheKey(
         string publisherUri,
         string canonicalKey,
         string parameterName)
     {
-        const string cellar = "/cellar/";
-        var at = publisherUri.LastIndexOf(cellar, StringComparison.Ordinal);
-        if (at < 0 ||
-            !string.Equals(
-                publisherUri[(at + cellar.Length)..], canonicalKey, StringComparison.Ordinal))
+        // The exact official origin and path, not a suffix. An earlier version took the last
+        // "/cellar/" and compared what followed, which binds the URI to the key and not to the
+        // publisher: https://example.invalid/resource/cellar/{key} carries the right key under a
+        // host we have never fetched from, and SourceObjectRef admits any absolute HTTP(S) host.
+        // SourceAuthority.Cellar cannot stand in for this, because the caller supplies it.
+        foreach (var origin in CellarOrigins)
         {
-            throw new ArgumentException(
-                $"The publisher URI {publisherUri} does not name {canonicalKey}.", parameterName);
+            if (string.Equals(publisherUri, origin + canonicalKey, StringComparison.Ordinal))
+            {
+                return;
+            }
         }
+
+        throw new ArgumentException(
+            $"The publisher URI {publisherUri} is not the official Cellar URI for {canonicalKey}.",
+            parameterName);
     }
 
     private void RequireRegistryMember(

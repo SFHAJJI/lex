@@ -385,7 +385,74 @@ public sealed class EuWemiIdentityTests
                 Uri(Work), Work, Sha256Hex(Work)));
         var thrown = Assert.ThrowsExactly<ArgumentException>(
             () => boundary.Require(strangerUri, EuWemiRole.Expression, "value"));
-        StringAssert.Contains(thrown.Message, "does not name");
+        StringAssert.Contains(thrown.Message, "official Cellar URI");
+
+        // Binding the URI to the key is not binding it to the publisher. An earlier version took
+        // the last "/cellar/" and compared the suffix, so a host we have never fetched from carried
+        // the right key and was admitted. SourceObjectRef admits any absolute HTTP(S) host, and
+        // SourceAuthority.Cellar cannot stand in for the check because the caller supplies it.
+        var foreignOrigins = new[]
+        {
+            "https://example.invalid/resource/cellar/" + key,
+            "http://example.invalid/resource/cellar/" + key,
+            "https://example.invalid/x/resource/cellar/" + key,
+            "http://publications.europa.eu/other/cellar/" + key,
+            "http://publications.europa.eu/resource/celex/" + key,
+            "http://publications.europa.eu.evil.invalid/resource/cellar/" + key,
+        };
+
+        foreach (var uri in foreignOrigins)
+        {
+            // On the child.
+            Assert.ThrowsExactly<ArgumentException>(
+                () => boundary.Require(
+                    new SourceObjectRef(
+                        SourceCoreSchemaIds.SourceObjectRef,
+                        SourceAuthority.Cellar,
+                        new SourceRegistryMemberRef(Registry, "eu_cellar_expression"),
+                        uri, key, Sha256Hex(key), Profile,
+                        new SourceObjectKeyRef(
+                            new SourceRegistryMemberRef(Registry, "eu_cellar_work"),
+                            Uri(Work), Work, Sha256Hex(Work))),
+                    EuWemiRole.Expression,
+                    "value"),
+                $"a child named by {uri} was admitted");
+
+            // And on the parent, which is bound by the same rule.
+            Assert.ThrowsExactly<ArgumentException>(
+                () => boundary.Require(
+                    new SourceObjectRef(
+                        SourceCoreSchemaIds.SourceObjectRef,
+                        SourceAuthority.Cellar,
+                        new SourceRegistryMemberRef(Registry, "eu_cellar_expression"),
+                        Uri(key), key, Sha256Hex(key), Profile,
+                        new SourceObjectKeyRef(
+                            new SourceRegistryMemberRef(Registry, "eu_cellar_work"),
+                            uri.Replace(key, Work, StringComparison.Ordinal),
+                            Work,
+                            Sha256Hex(Work))),
+                    EuWemiRole.Expression,
+                    "value"),
+                $"a parent named by {uri} was admitted");
+        }
+
+        // Both official schemes still construct, so the guard is an origin rule and not an
+        // http-only accident.
+        foreach (var scheme in new[] { "http", "https" })
+        {
+            var official = $"{scheme}://publications.europa.eu/resource/cellar/";
+            _ = boundary.Require(
+                new SourceObjectRef(
+                    SourceCoreSchemaIds.SourceObjectRef,
+                    SourceAuthority.Cellar,
+                    new SourceRegistryMemberRef(Registry, "eu_cellar_expression"),
+                    official + key, key, Sha256Hex(key), Profile,
+                    new SourceObjectKeyRef(
+                        new SourceRegistryMemberRef(Registry, "eu_cellar_work"),
+                        official + Work, Work, Sha256Hex(Work))),
+                EuWemiRole.Expression,
+                "value");
+        }
 
         // The parent is bound the same way, so a parent whose URI is a different object is refused
         // even though its key is the right one.
