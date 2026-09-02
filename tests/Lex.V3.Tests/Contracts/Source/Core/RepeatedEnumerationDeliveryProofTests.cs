@@ -219,7 +219,41 @@ public sealed class RepeatedEnumerationDeliveryProofTests
                 rawRowsB: sevenRows).Create("ignored", "ignored"));
         Assert.ThrowsExactly<ArgumentException>(() =>
             EnumerationDeliveryComparison.RequireContinuation(
-                1, ["i"], ["i"], previousPageCount: 9, rowLimit: 10));
+                1, ["i"], ["i"], previousPageCount: 9, rowLimit: 10,
+                RepeatedEnumerationTerminalPagePolicy.ShortPageTerminal));
+    }
+
+    [TestMethod]
+    public void EmptySuccessorPolicyRequiresOneEmptyPageAfterANonemptyShortPage()
+    {
+        var strict = new Fixture(
+            terminalPagePolicy:
+                RepeatedEnumerationTerminalPagePolicy.EmptySuccessorAfterShortPage);
+
+        Assert.ThrowsExactly<ArgumentException>(() => strict.Create("a,b", "a,b"));
+        Assert.AreEqual(
+            EnumerationDeliveryOutcome.EqualSelections,
+            strict.CreateShortThenEmpty().Outcome);
+        Assert.AreEqual(
+            EnumerationDeliveryOutcome.EqualSelections,
+            strict.CreateFullThenEmptyAgainstFullShortEmpty().Outcome);
+        Assert.AreEqual(
+            EnumerationDeliveryOutcome.EqualSelections,
+            new Fixture(
+                terminalPagePolicy:
+                    RepeatedEnumerationTerminalPagePolicy.EmptySuccessorAfterShortPage,
+                expectedCount: 0,
+                rawRows: EmptyRowsJson()).Create("ignored", "ignored").Outcome);
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            new Fixture(
+                terminalPagePolicy:
+                    RepeatedEnumerationTerminalPagePolicy.EmptySuccessorAfterShortPage)
+                .CreateShortThenEmpty(pageAfterEmpty: true));
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            new Fixture(
+                terminalPagePolicy:
+                    RepeatedEnumerationTerminalPagePolicy.EmptySuccessorAfterShortPage)
+                .CreateShortThenNonemptyThenEmpty());
     }
 
     [TestMethod]
@@ -227,7 +261,8 @@ public sealed class RepeatedEnumerationDeliveryProofTests
     {
         Assert.ThrowsExactly<ArgumentException>(() =>
             EnumerationDeliveryComparison.RequireContinuation(
-                0, ["i"], ["i"], previousPageCount: 10, rowLimit: 10));
+                0, ["i"], ["i"], previousPageCount: 10, rowLimit: 10,
+                RepeatedEnumerationTerminalPagePolicy.ShortPageTerminal));
     }
 
     [TestMethod]
@@ -279,6 +314,17 @@ public sealed class RepeatedEnumerationDeliveryProofTests
         Assert.ThrowsExactly<ArgumentException>(() => ProfileWith(cursorEnvelopeIdentity: "raw/1"));
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => ProfileWith(maximumDeliverableRows: 0));
         Assert.ThrowsExactly<ArgumentException>(() => ProfileWith(thresholdDetectorIdentity: "caller-threshold/1"));
+        var shortTerminal = ProfileWith();
+        var emptySuccessor = ProfileWith(
+            terminalPagePolicy:
+                RepeatedEnumerationTerminalPagePolicy.EmptySuccessorAfterShortPage);
+        Assert.AreNotEqual(
+            RepeatedEnumerationInterpretationProfileIdentity.Create(
+                Fixture.Artifact(920).ResourceId,
+                shortTerminal),
+            RepeatedEnumerationInterpretationProfileIdentity.Create(
+                Fixture.Artifact(920).ResourceId,
+                emptySuccessor));
     }
 
     [TestMethod]
@@ -312,7 +358,8 @@ public sealed class RepeatedEnumerationDeliveryProofTests
         Assert.ThrowsExactly<ArgumentException>(() => new RepeatedEnumerationInterpretationProfile(
             RepeatedEnumerationInterpretationProfile.SchemaId, RepeatedEnumerationSparqlJsonDialect.EuropeanUnionVirtuoso, "application/sparql-results+json",
             EnumerationCursorEnvelope.Identity, 100, "enumeration-row-threshold/1",
-            new(Fixture.Artifact(905), "count"), new(Fixture.Artifact(905), "page"), "count", ["id"], ["id"], ["id"], ["cursor"], "pass_id", ["cursor"], "has_cursor"));
+            new(Fixture.Artifact(905), "count"), new(Fixture.Artifact(905), "page"), "count", ["id"], ["id"], ["id"], ["cursor"], "pass_id", ["cursor"], "has_cursor",
+            RepeatedEnumerationTerminalPagePolicy.ShortPageTerminal));
     }
 
     [TestMethod]
@@ -345,11 +392,12 @@ public sealed class RepeatedEnumerationDeliveryProofTests
     private static string PlainLiteral(string value) => $"{{\"type\":\"literal\",\"value\":\"{value}\"}}";
     private static string ValidRowDocument(string? id, string cursor, string value) => "{\"head\":{\"link\":[],\"vars\":[\"id\",\"cursor\",\"value\"]},\"results\":{\"distinct\":false,\"ordered\":true,\"bindings\":[{" + (id is null ? string.Empty : $"\"id\":{id},") + $"\"cursor\":{cursor},\"value\":{value}" + "}]}}";
     private static string RowsWithKeys(params (string Id, string Cursor)[] rows) => "{\"head\":{\"link\":[],\"vars\":[\"id\",\"cursor\",\"value\"]},\"results\":{\"distinct\":false,\"ordered\":true,\"bindings\":[" + string.Join(',', rows.Select(row => $"{{\"id\":{{\"type\":\"uri\",\"value\":\"urn:row:{row.Id}\"}},\"cursor\":{{\"type\":\"literal\",\"value\":\"{row.Cursor}\"}}}}")) + "]}}";
+    private static string EmptyRowsJson() => "{\"head\":{\"link\":[],\"vars\":[\"id\",\"cursor\",\"value\"]},\"results\":{\"distinct\":false,\"ordered\":true,\"bindings\":[]}}";
     private static string CursorRowDocument(string? cursor) => "{\"head\":{\"link\":[],\"vars\":[\"id\",\"cursor\",\"value\"]},\"results\":{\"distinct\":false,\"ordered\":true,\"bindings\":[{\"id\":{\"type\":\"uri\",\"value\":\"urn:row:a\"}" + (cursor is null ? string.Empty : $",\"cursor\":{cursor}") + "}]}}";
-    private static RepeatedEnumerationInterpretationProfile ProfileWith(string cursorEnvelopeIdentity = EnumerationCursorEnvelope.Identity, long maximumDeliverableRows = 100, string thresholdDetectorIdentity = "enumeration-row-threshold/1") => new(
+    private static RepeatedEnumerationInterpretationProfile ProfileWith(string cursorEnvelopeIdentity = EnumerationCursorEnvelope.Identity, long maximumDeliverableRows = 100, string thresholdDetectorIdentity = "enumeration-row-threshold/1", RepeatedEnumerationTerminalPagePolicy terminalPagePolicy = RepeatedEnumerationTerminalPagePolicy.ShortPageTerminal) => new(
         RepeatedEnumerationInterpretationProfile.SchemaId, RepeatedEnumerationSparqlJsonDialect.EuropeanUnionVirtuoso, "application/sparql-results+json",
         cursorEnvelopeIdentity, maximumDeliverableRows, thresholdDetectorIdentity,
-        new(Fixture.Artifact(905), "count"), new(Fixture.Artifact(905), "page"), "count", ["id", "cursor", "value"], ["id"], ["cursor"], ["scope"], "pass_id", ["cursor"], "has_cursor");
+        new(Fixture.Artifact(905), "count"), new(Fixture.Artifact(905), "page"), "count", ["id", "cursor", "value"], ["id"], ["cursor"], ["scope"], "pass_id", ["cursor"], "has_cursor", terminalPagePolicy);
 
     private sealed class Fixture : IRepeatedEnumerationEvidenceResolver
     {
@@ -385,6 +433,7 @@ public sealed class RepeatedEnumerationDeliveryProofTests
         private readonly bool _reorderParameters;
         private readonly string? _rawRowsA;
         private readonly string? _rawRowsB;
+        private readonly RepeatedEnumerationTerminalPagePolicy _terminalPagePolicy;
         private List<RepeatedEnumerationPageRef>? _passToMutate;
         private readonly SourceRegistryMemberRef _countFamily = new(Artifact(905), "count-query");
         private readonly SourceRegistryMemberRef _pageFamily = new(Artifact(905), "page-query");
@@ -421,7 +470,9 @@ public sealed class RepeatedEnumerationDeliveryProofTests
             bool inconsistentWithinPassLimit = false,
             bool reorderParameters = false,
             string? rawRowsA = null,
-            string? rawRowsB = null)
+            string? rawRowsB = null,
+            RepeatedEnumerationTerminalPagePolicy terminalPagePolicy =
+                RepeatedEnumerationTerminalPagePolicy.ShortPageTerminal)
         {
             _badRequestRef = badRequestRef;
             _mutatePayload = mutatePayload;
@@ -453,6 +504,7 @@ public sealed class RepeatedEnumerationDeliveryProofTests
             _reorderParameters = reorderParameters;
             _rawRowsA = rawRowsA;
             _rawRowsB = rawRowsB;
+            _terminalPagePolicy = terminalPagePolicy;
         }
 
         public RepeatedEnumerationInterpretationProfile ProfileForTest => Profile();
@@ -493,6 +545,80 @@ public sealed class RepeatedEnumerationDeliveryProofTests
                 countB, new([new(0, pageB1), new(1, pageB2)]), this);
         }
 
+        public EnumerationDeliveryComparison CreateShortThenEmpty(bool pageAfterEmpty = false)
+        {
+            var countA = Add(1, CountJson(2), 2, Artifact(301), DateTimeOffset.UnixEpoch, true);
+            var pageA1 = Add(2, RowsJson("a,b"), 2, countA.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(1), false);
+            var pageA2 = Add(5, EmptyRowsJson(), 2, countA.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(2), false, "b");
+            var countB = Add(3, CountJson(2), 2, Artifact(303), DateTimeOffset.UnixEpoch.AddSeconds(3), true);
+            var pageB1 = Add(4, RowsJson("a,b"), 2, countB.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(4), false, rowLimit: 7);
+            var pageB2 = Add(6, EmptyRowsJson(), 2, countB.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(5), false, "b", 7);
+            var pagesA = new List<RepeatedEnumerationPageRef> { new(0, pageA1), new(1, pageA2) };
+            var pagesB = new List<RepeatedEnumerationPageRef> { new(0, pageB1), new(1, pageB2) };
+            if (pageAfterEmpty)
+            {
+                pagesA.Add(new(2, Add(7, EmptyRowsJson(), 2, countA.ObservationRef,
+                    DateTimeOffset.UnixEpoch.AddSeconds(6), false, "b", passId: 1)));
+            }
+
+            var profile = Profile();
+            return EnumerationDeliveryComparison.Create(
+                profile,
+                RepeatedEnumerationInterpretationProfileIdentity.Create(
+                    Artifact(920).ResourceId,
+                    profile),
+                countA,
+                new(pagesA),
+                countB,
+                new(pagesB),
+                this);
+        }
+
+        public EnumerationDeliveryComparison CreateShortThenNonemptyThenEmpty()
+        {
+            var countA = Add(1, CountJson(3), 3, Artifact(301), DateTimeOffset.UnixEpoch, true);
+            var pageA1 = Add(2, RowsJson("a,b"), 3, countA.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(1), false);
+            var pageA2 = Add(5, RowsJson("c"), 3, countA.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(2), false, "b");
+            var pageA3 = Add(7, EmptyRowsJson(), 3, countA.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(3), false, "c", passId: 1);
+            var countB = Add(3, CountJson(3), 3, Artifact(303), DateTimeOffset.UnixEpoch.AddSeconds(4), true);
+            var pageB1 = Add(4, RowsJson("a,b"), 3, countB.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(5), false, rowLimit: 7);
+            var pageB2 = Add(6, RowsJson("c"), 3, countB.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(6), false, "b", 7);
+            var pageB3 = Add(8, EmptyRowsJson(), 3, countB.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(7), false, "c", 7, passId: 2);
+            var profile = Profile();
+            return EnumerationDeliveryComparison.Create(
+                profile,
+                RepeatedEnumerationInterpretationProfileIdentity.Create(
+                    Artifact(920).ResourceId,
+                    profile),
+                countA,
+                new([new(0, pageA1), new(1, pageA2), new(2, pageA3)]),
+                countB,
+                new([new(0, pageB1), new(1, pageB2), new(2, pageB3)]),
+                this);
+        }
+
+        public EnumerationDeliveryComparison CreateFullThenEmptyAgainstFullShortEmpty()
+        {
+            var countA = Add(11, CountJson(10), 10, Artifact(311), DateTimeOffset.UnixEpoch, true, passId: 1);
+            var pageA1 = Add(12, RowsJson("a,b,c,d,e,f,g,h,i,j"), 10, countA.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(1), false, passId: 1);
+            var pageA2 = Add(13, EmptyRowsJson(), 10, countA.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(2), false, "j", passId: 1);
+            var countB = Add(14, CountJson(10), 10, Artifact(314), DateTimeOffset.UnixEpoch.AddSeconds(3), true, passId: 2);
+            var pageB1 = Add(15, RowsJson("a,b,c,d,e,f,g"), 10, countB.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(4), false, rowLimit: 7, passId: 2);
+            var pageB2 = Add(16, RowsJson("h,i,j"), 10, countB.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(5), false, "g", 7, passId: 2);
+            var pageB3 = Add(17, EmptyRowsJson(), 10, countB.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(6), false, "j", 7, passId: 2);
+            var profile = Profile();
+            return EnumerationDeliveryComparison.Create(
+                profile,
+                RepeatedEnumerationInterpretationProfileIdentity.Create(
+                    Artifact(920).ResourceId,
+                    profile),
+                countA,
+                new([new(0, pageA1), new(1, pageA2)]),
+                countB,
+                new([new(0, pageB1), new(1, pageB2), new(2, pageB3)]),
+                this);
+        }
+
         public RepeatedEnumerationResolvedEvidence Resolve(RepeatedEnumerationEvidenceRefs references)
         {
             ResolveCalls++;
@@ -508,7 +634,7 @@ public sealed class RepeatedEnumerationDeliveryProofTests
             return value;
         }
 
-        private RepeatedEnumerationEvidenceRefs Add(int seed, string text, long count, SourceArtifactRef countRef, DateTimeOffset time, bool countQuery, string cursor = "start", long rowLimit = 10)
+        private RepeatedEnumerationEvidenceRefs Add(int seed, string text, long count, SourceArtifactRef countRef, DateTimeOffset time, bool countQuery, string cursor = "start", long rowLimit = 10, long? passId = null)
         {
             var bytes = Encoding.UTF8.GetBytes(text);
             var effectiveRowLimit = _inconsistentWithinPassLimit && seed == 5 ? rowLimit - 1 : rowLimit;
@@ -519,7 +645,7 @@ public sealed class RepeatedEnumerationDeliveryProofTests
                 : new MachineResponseCardinality(MachineResponseCardinalityKind.BoundedRowSetPage, effectiveRowLimit, expectedPageCount, expectedPageCountRef);
             var family = countQuery ? _countFamily : _pageFamily;
             var parameters = new List<MachineQueryParameter> { new("scope", MachineQueryParameterKind.PublisherCursor, null, _selectionLie && seed == 5 ? "other" : "all", Artifact(906)) };
-            var pass = _samePass || seed is 1 or 2 or 5 ? 1 : 2;
+            var pass = passId ?? (_samePass || seed is 1 or 2 or 5 ? 1 : 2);
             parameters.Add(new("pass_id", MachineQueryParameterKind.BoundedInteger, pass, null, Artifact(906)));
             if (countQuery && _extraCountParameter)
             {
@@ -577,7 +703,7 @@ public sealed class RepeatedEnumerationDeliveryProofTests
         }
 
         private RepeatedEnumerationInterpretationProfile Profile() => new(
-            RepeatedEnumerationInterpretationProfile.SchemaId, _dialect, "application/sparql-results+json", EnumerationCursorEnvelope.Identity, _maximumDeliverableRows, "enumeration-row-threshold/1", _countFamily, _pageFamily, "count", ["id", "cursor", "value"], ["id"], ["cursor"], ["scope"], "pass_id", ["cursor"], "has_cursor");
+            RepeatedEnumerationInterpretationProfile.SchemaId, _dialect, "application/sparql-results+json", EnumerationCursorEnvelope.Identity, _maximumDeliverableRows, "enumeration-row-threshold/1", _countFamily, _pageFamily, "count", ["id", "cursor", "value"], ["id"], ["cursor"], ["scope"], "pass_id", ["cursor"], "has_cursor", _terminalPagePolicy);
 
         private string CountJson(long count) { var type = _dialect == RepeatedEnumerationSparqlJsonDialect.LuxembourgVirtuoso ? "typed-literal" : "literal"; return $"{{\"head\":{{\"link\":[],\"vars\":[\"count\"]}},\"results\":{{\"distinct\":false,\"ordered\":true,\"bindings\":[{{\"count\":{{\"type\":\"{type}\",\"datatype\":\"http://www.w3.org/2001/XMLSchema#integer\",\"value\":\"{count}\"}}}}]}}}}"; }
         public string OfficialCountJson(long count) => CountJson(count);

@@ -185,7 +185,48 @@
       ],
       "additionalProperties": false
     },
-    "page_traversal_rule": {
+    "pass_1_page_limit": {
+      "type": "integer",
+      "const": 997
+    },
+    "pass_2_page_limit": {
+      "type": "integer",
+      "const": 613
+    },
+    "partition_rule": {
+      "type": "object",
+      "properties": {
+        "accumulated_completed_slice_threshold": {
+          "type": "integer",
+          "const": 900
+        },
+        "cardinality_basis": {
+          "type": "string",
+          "const": "accumulated_completed_slice_cardinality"
+        },
+        "split_rule_identity": {
+          "type": "string",
+          "const": "next_utf8_byte_00_80_successor"
+        },
+        "terminal_child_maximum_rows": {
+          "type": "integer",
+          "const": 899
+        },
+        "empty_child_ranges_retained": {
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "required": [
+        "accumulated_completed_slice_threshold",
+        "cardinality_basis",
+        "split_rule_identity",
+        "terminal_child_maximum_rows",
+        "empty_child_ranges_retained"
+      ],
+      "additionalProperties": false
+    },
+    "completion_rule": {
       "type": "object",
       "properties": {
         "successor_after_full_page_required": {
@@ -223,7 +264,10 @@
     "set_definitions",
     "query_templates",
     "keyset_successor_rule",
-    "page_traversal_rule"
+    "pass_1_page_limit",
+    "pass_2_page_limit",
+    "partition_rule",
+    "completion_rule"
   ],
   "additionalProperties": false,
   "$id": "urn:uuid:65ff531a-8db0-4723-b3d8-2fc9c8e91c10",

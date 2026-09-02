@@ -51,11 +51,27 @@ internal static class LuxembourgQueryPlanSchemaHardener
         Object(keyset, "component_count")["const"] = 6;
         Object(keyset, "empty_successor_required")["const"] = true;
 
-        var traversal = Object(Object(properties, "page_traversal_rule"), "properties");
-        Object(traversal, "successor_after_full_page_required")["const"] = true;
-        Object(traversal, "empty_successor_after_short_page_required")["const"] = true;
-        Object(traversal, "duplicate_key_rejects_observation")["const"] = true;
-        Object(traversal, "non_strict_order_rejects_observation")["const"] = true;
+        Object(properties, "pass_1_page_limit")["const"] =
+            LuxembourgQueryPassPolicy.Pass1PageLimit;
+        Object(properties, "pass_2_page_limit")["const"] =
+            LuxembourgQueryPassPolicy.Pass2PageLimit;
+
+        var partition = Object(Object(properties, "partition_rule"), "properties");
+        Object(partition, "accumulated_completed_slice_threshold")["const"] =
+            LuxembourgPartitionRule.CanonicalAccumulatedCompletedSliceThreshold;
+        Object(partition, "cardinality_basis")["const"] =
+            LuxembourgPartitionRule.CanonicalCardinalityBasis;
+        Object(partition, "split_rule_identity")["const"] =
+            LuxembourgPartitionRule.CanonicalSplitRuleIdentity;
+        Object(partition, "terminal_child_maximum_rows")["const"] =
+            LuxembourgPartitionRule.CanonicalAccumulatedCompletedSliceThreshold - 1;
+        Object(partition, "empty_child_ranges_retained")["const"] = true;
+
+        var completion = Object(Object(properties, "completion_rule"), "properties");
+        Object(completion, "successor_after_full_page_required")["const"] = true;
+        Object(completion, "empty_successor_after_short_page_required")["const"] = true;
+        Object(completion, "duplicate_key_rejects_observation")["const"] = true;
+        Object(completion, "non_strict_order_rejects_observation")["const"] = true;
     }
 
     private static void UniqueNonempty(JsonObject properties, string name)

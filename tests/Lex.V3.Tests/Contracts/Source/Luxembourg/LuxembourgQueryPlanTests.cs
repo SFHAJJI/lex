@@ -32,11 +32,25 @@ public sealed class LuxembourgQueryPlanTests
             new[] { "A", "C", "E", "G", "M", "O", "P", "R", "S", "T" },
             plan.SetDefinitions.Select(static value => value.SetId).ToArray());
         Assert.AreEqual(9, plan.QueryTemplates.Count);
-        Assert.AreEqual(997u, LuxembourgQueryPassPolicy.PageLimitFor(LuxembourgQueryPass.Pass1));
-        Assert.AreEqual(613u, LuxembourgQueryPassPolicy.PageLimitFor(LuxembourgQueryPass.Pass2));
+        Assert.AreEqual(997u, plan.Pass1PageLimit);
+        Assert.AreEqual(613u, plan.Pass2PageLimit);
+        Assert.AreEqual(997u, plan.PageLimitFor(LuxembourgQueryPass.Pass1));
+        Assert.AreEqual(613u, plan.PageLimitFor(LuxembourgQueryPass.Pass2));
         Assert.AreEqual(6, plan.KeysetSuccessorRule.ComponentCount);
-        Assert.IsNull(typeof(LuxembourgQueryPlan).GetProperty("Pass1PageLimit"));
-        Assert.IsNull(typeof(LuxembourgQueryPlan).GetProperty("Pass2PageLimit"));
+        Assert.AreEqual(900u, plan.PartitionRule.AccumulatedCompletedSliceThreshold);
+        Assert.AreEqual(
+            "accumulated_completed_slice_cardinality",
+            plan.PartitionRule.CardinalityBasis);
+        Assert.AreEqual(
+            "next_utf8_byte_00_80_successor",
+            plan.PartitionRule.SplitRuleIdentity);
+        Assert.AreEqual(899u, plan.PartitionRule.TerminalChildMaximumRows);
+        Assert.IsTrue(plan.PartitionRule.EmptyChildRangesRetained);
+        Assert.IsTrue(plan.CompletionRule.SuccessorAfterFullPageRequired);
+        Assert.IsTrue(plan.CompletionRule.EmptySuccessorAfterShortPageRequired);
+        Assert.IsTrue(plan.CompletionRule.DuplicateKeyRejectsObservation);
+        Assert.IsTrue(plan.CompletionRule.NonStrictOrderRejectsObservation);
+        Assert.IsNull(typeof(LuxembourgQueryPlan).GetProperty("PageTraversalRule"));
 
         foreach (var template in plan.QueryTemplates)
         {
@@ -228,6 +242,9 @@ public sealed class LuxembourgQueryPlanTests
                 profile.Dialect);
             Assert.AreEqual(LuxembourgQueryPlan.PublisherDeliveryCeilingRows,
                 profile.MaximumDeliverableRows);
+            Assert.AreEqual(
+                RepeatedEnumerationTerminalPagePolicy.EmptySuccessorAfterShortPage,
+                profile.TerminalPagePolicy);
             Assert.AreEqual(count.MachinePlan.QueryFamilyRef, profile.CountQueryFamilyRef);
             Assert.AreEqual(page.MachinePlan.QueryFamilyRef, profile.PageQueryFamilyRef);
             CollectionAssert.AreEqual(expectedSelection, profile.SelectionParameterNames.ToArray());
@@ -297,9 +314,9 @@ public sealed class LuxembourgQueryPlanTests
         {
             var plan = Plan();
             var first = LuxembourgQueryPlanIdentity.GetCanonicalBytes(plan);
-            Assert.AreEqual(78_680, first.Length);
+            Assert.AreEqual(78_973, first.Length);
             Assert.AreEqual(
-                "206c5bed65bdd2b9de6a5539bf5d7d623509178d41cd6d276c06a42a3064a5da",
+                "8537234c5be8db84c3c040318167eefe3991046a7d4132c1e751c9d520af5b98",
                 Sha256(first));
             Assert.IsFalse(first.Contains((byte)'\r'));
             CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("ar-SA");
@@ -458,10 +475,28 @@ public sealed class LuxembourgQueryPlanTests
             "ORDER BY ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 ?key_6",
             "ORDER BY ?key_6 ?key_5 ?key_4 ?key_3 ?key_2 ?key_1",
             StringComparison.Ordinal));
+        var passLimitMutation = Encoding.UTF8.GetBytes(json.Replace(
+            "\"pass_1_page_limit\":997",
+            "\"pass_1_page_limit\":998",
+            StringComparison.Ordinal));
+        var partitionMutation = Encoding.UTF8.GetBytes(json.Replace(
+            "\"accumulated_completed_slice_threshold\":900",
+            "\"accumulated_completed_slice_threshold\":899",
+            StringComparison.Ordinal));
+        var completionMutation = Encoding.UTF8.GetBytes(json.Replace(
+            "\"empty_successor_after_short_page_required\":true",
+            "\"empty_successor_after_short_page_required\":false",
+            StringComparison.Ordinal));
         Assert.ThrowsExactly<ArgumentException>(() =>
             LuxembourgQueryPlan.ParseAndVerify(planRef, predicateMutation));
         Assert.ThrowsExactly<ArgumentException>(() =>
             LuxembourgQueryPlan.ParseAndVerify(planRef, templateMutation));
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            LuxembourgQueryPlan.ParseAndVerify(planRef, passLimitMutation));
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            LuxembourgQueryPlan.ParseAndVerify(planRef, partitionMutation));
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            LuxembourgQueryPlan.ParseAndVerify(planRef, completionMutation));
         Assert.ThrowsExactly<ArgumentException>(() => LuxembourgQueryPlan.ParseAndVerify(
             Artifact("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", 'f'),
             bytes));

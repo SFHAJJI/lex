@@ -339,7 +339,7 @@ internal static class LuxembourgQueryPageBinder
 
         var (invariantPlanRef, template) = Resolve(
             invariantPlan, invariantPlanResourceId, definition);
-        var pageLimit = LuxembourgQueryPassPolicy.PageLimitFor(pass);
+        var pageLimit = invariantPlan.PageLimitFor(pass);
         if (lastCursor is not null &&
             (lastCursor.CompareTo(partition.StartInclusive) < 0 ||
              lastCursor.CompareTo(partition.EndExclusive) >= 0))
@@ -396,7 +396,7 @@ internal static class LuxembourgQueryPageBinder
         ArgumentNullException.ThrowIfNull(invariantPlan);
         ArgumentNullException.ThrowIfNull(partition);
         ArgumentNullException.ThrowIfNull(rendererSourceRef);
-        _ = LuxembourgQueryPassPolicy.PageLimitFor(pass);
+        _ = invariantPlan.PageLimitFor(pass);
         var definition = invariantPlan.SetDefinitions.SingleOrDefault(value => value.SetId == setId)
             ?? throw new ArgumentException("The set identity is not in the LU plan.", nameof(setId));
         if (definition.Acquisition != LuxembourgQuerySetAcquisition.PublisherQuery ||
@@ -452,6 +452,7 @@ internal static class LuxembourgQueryPageBinder
         var renderer = new LuxembourgSparqlRenderer(
             invariantPlanRef,
             rendererSourceRef,
+            invariantPlan,
             template,
             kind);
         var rendered = renderer.RenderInput(input, response);
@@ -538,17 +539,25 @@ internal sealed class LuxembourgSparqlRenderer : IMachineQueryRenderer
 {
     private readonly LuxembourgQueryTemplate _template;
     private readonly LuxembourgQueryRequestKind _kind;
+    private readonly uint _pass1PageLimit;
+    private readonly uint _pass2PageLimit;
 
     public LuxembourgSparqlRenderer(
         SourceArtifactRef rendererProfileRef,
         SourceArtifactRef rendererSourceRef,
+        LuxembourgQueryPlan invariantPlan,
         LuxembourgQueryTemplate template,
         LuxembourgQueryRequestKind kind)
     {
+        ArgumentNullException.ThrowIfNull(invariantPlan);
+        LuxembourgQueryPlan.EnsureClosed(invariantPlan);
+        LuxembourgQueryPlanIdentity.Validate(rendererProfileRef, invariantPlan);
         RendererProfileRef = rendererProfileRef;
         RendererSourceRef = rendererSourceRef;
         _template = template;
         _kind = kind;
+        _pass1PageLimit = invariantPlan.Pass1PageLimit;
+        _pass2PageLimit = invariantPlan.Pass2PageLimit;
     }
 
     public SourceArtifactRef RendererProfileRef { get; }
@@ -572,7 +581,12 @@ internal sealed class LuxembourgSparqlRenderer : IMachineQueryRenderer
             static value => value.Name,
             StringComparer.Ordinal);
         var pass = (LuxembourgQueryPass)Integer(parameters, "pass_id");
-        var passLimit = LuxembourgQueryPassPolicy.PageLimitFor(pass);
+        var passLimit = pass switch
+        {
+            LuxembourgQueryPass.Pass1 => _pass1PageLimit,
+            LuxembourgQueryPass.Pass2 => _pass2PageLimit,
+            _ => throw new ArgumentOutOfRangeException(nameof(pass)),
+        };
         var query = _kind == LuxembourgQueryRequestKind.Page
             ? _template.Utf8QueryTemplate
             : _template.Utf8CountTemplate;
@@ -696,19 +710,61 @@ public sealed record LuxembourgKeysetSuccessorRule
 public static class LuxembourgQueryPassPolicy
 {
     public const uint MaximumPageLimit = 1000;
-
-    public static uint PageLimitFor(LuxembourgQueryPass pass) => pass switch
-    {
-        LuxembourgQueryPass.Pass1 => 997,
-        LuxembourgQueryPass.Pass2 => 613,
-        _ => throw new ArgumentOutOfRangeException(nameof(pass)),
-    };
+    public const uint Pass1PageLimit = 997;
+    public const uint Pass2PageLimit = 613;
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record LuxembourgPageTraversalRule
+public sealed record LuxembourgPartitionRule
 {
-    public LuxembourgPageTraversalRule(
+    public const uint CanonicalAccumulatedCompletedSliceThreshold = 900;
+    public const string CanonicalCardinalityBasis =
+        "accumulated_completed_slice_cardinality";
+    public const string CanonicalSplitRuleIdentity =
+        "next_utf8_byte_00_80_successor";
+
+    public LuxembourgPartitionRule(
+        uint accumulatedCompletedSliceThreshold,
+        string cardinalityBasis,
+        string splitRuleIdentity,
+        uint terminalChildMaximumRows,
+        bool emptyChildRangesRetained)
+    {
+        if (accumulatedCompletedSliceThreshold !=
+                CanonicalAccumulatedCompletedSliceThreshold ||
+            !string.Equals(
+                cardinalityBasis,
+                CanonicalCardinalityBasis,
+                StringComparison.Ordinal) ||
+            !string.Equals(
+                splitRuleIdentity,
+                CanonicalSplitRuleIdentity,
+                StringComparison.Ordinal) ||
+            terminalChildMaximumRows !=
+                CanonicalAccumulatedCompletedSliceThreshold - 1 ||
+            !emptyChildRangesRetained)
+        {
+            throw new ArgumentException("The LU partition rule is closed.");
+        }
+
+        AccumulatedCompletedSliceThreshold = accumulatedCompletedSliceThreshold;
+        CardinalityBasis = cardinalityBasis;
+        SplitRuleIdentity = splitRuleIdentity;
+        TerminalChildMaximumRows = terminalChildMaximumRows;
+        EmptyChildRangesRetained = emptyChildRangesRetained;
+    }
+
+    public uint AccumulatedCompletedSliceThreshold { get; }
+    public string CardinalityBasis { get; }
+    public string SplitRuleIdentity { get; }
+    public uint TerminalChildMaximumRows { get; }
+    public bool EmptyChildRangesRetained { get; }
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record LuxembourgCompletionRule
+{
+    public LuxembourgCompletionRule(
         bool successorAfterFullPageRequired,
         bool emptySuccessorAfterShortPageRequired,
         bool duplicateKeyRejectsObservation,
@@ -771,7 +827,10 @@ public sealed record LuxembourgQueryPlan
         IReadOnlyList<LuxembourgQuerySetDefinition> setDefinitions,
         IReadOnlyList<LuxembourgQueryTemplate> queryTemplates,
         LuxembourgKeysetSuccessorRule keysetSuccessorRule,
-        LuxembourgPageTraversalRule pageTraversalRule)
+        uint pass1PageLimit,
+        uint pass2PageLimit,
+        LuxembourgPartitionRule partitionRule,
+        LuxembourgCompletionRule completionRule)
     {
         if (!string.Equals(schema, SchemaId, StringComparison.Ordinal))
         {
@@ -801,8 +860,21 @@ public sealed record LuxembourgQueryPlan
         }
         KeysetSuccessorRule = keysetSuccessorRule
             ?? throw new ArgumentNullException(nameof(keysetSuccessorRule));
-        PageTraversalRule = pageTraversalRule
-            ?? throw new ArgumentNullException(nameof(pageTraversalRule));
+        if (pass1PageLimit != LuxembourgQueryPassPolicy.Pass1PageLimit ||
+            pass2PageLimit != LuxembourgQueryPassPolicy.Pass2PageLimit ||
+            pass1PageLimit > LuxembourgQueryPassPolicy.MaximumPageLimit ||
+            pass2PageLimit > LuxembourgQueryPassPolicy.MaximumPageLimit ||
+            pass1PageLimit == pass2PageLimit)
+        {
+            throw new ArgumentException("The LU pass limits are closed and distinct.");
+        }
+
+        Pass1PageLimit = pass1PageLimit;
+        Pass2PageLimit = pass2PageLimit;
+        PartitionRule = partitionRule
+            ?? throw new ArgumentNullException(nameof(partitionRule));
+        CompletionRule = completionRule
+            ?? throw new ArgumentNullException(nameof(completionRule));
     }
 
     public string Schema { get; }
@@ -813,7 +885,20 @@ public sealed record LuxembourgQueryPlan
     public IReadOnlyList<LuxembourgQuerySetDefinition> SetDefinitions => _setDefinitions;
     public IReadOnlyList<LuxembourgQueryTemplate> QueryTemplates => _queryTemplates;
     public LuxembourgKeysetSuccessorRule KeysetSuccessorRule { get; }
-    public LuxembourgPageTraversalRule PageTraversalRule { get; }
+    [JsonPropertyName("pass_1_page_limit")]
+    public uint Pass1PageLimit { get; }
+
+    [JsonPropertyName("pass_2_page_limit")]
+    public uint Pass2PageLimit { get; }
+    public LuxembourgPartitionRule PartitionRule { get; }
+    public LuxembourgCompletionRule CompletionRule { get; }
+
+    public uint PageLimitFor(LuxembourgQueryPass pass) => pass switch
+    {
+        LuxembourgQueryPass.Pass1 => Pass1PageLimit,
+        LuxembourgQueryPass.Pass2 => Pass2PageLimit,
+        _ => throw new ArgumentOutOfRangeException(nameof(pass)),
+    };
 
     public static LuxembourgQueryPlan CreateDefaultGraph(
         SourceArtifactRef sourceProfileRef,
@@ -962,7 +1047,8 @@ public sealed record LuxembourgQueryPlan
             selectionParameters,
             "pass_id",
             cursorParameters,
-            "has_cursor");
+            "has_cursor",
+            RepeatedEnumerationTerminalPagePolicy.EmptySuccessorAfterShortPage);
     }
 
     private static LuxembourgQueryPlan CreateClosed(
@@ -996,7 +1082,15 @@ public sealed record LuxembourgQueryPlan
                 "canonical_utf8_tuple_ascending",
                 6,
                 emptySuccessorRequired: true),
-            new LuxembourgPageTraversalRule(true, true, true, true));
+            LuxembourgQueryPassPolicy.Pass1PageLimit,
+            LuxembourgQueryPassPolicy.Pass2PageLimit,
+            new LuxembourgPartitionRule(
+                LuxembourgPartitionRule.CanonicalAccumulatedCompletedSliceThreshold,
+                LuxembourgPartitionRule.CanonicalCardinalityBasis,
+                LuxembourgPartitionRule.CanonicalSplitRuleIdentity,
+                LuxembourgPartitionRule.CanonicalAccumulatedCompletedSliceThreshold - 1,
+                emptyChildRangesRetained: true),
+            new LuxembourgCompletionRule(true, true, true, true));
     }
 
     private static IReadOnlyList<string> CopySortedUnique(
