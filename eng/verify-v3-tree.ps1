@@ -35,10 +35,15 @@ function Test-V3TrackedPath {
         $normalized -cmatch '^eng/verify-v3-[a-z0-9-]+\.ps1$' -or
         $normalized -ceq 'eng/verify-s0-05-preview.ps1' -or
         $normalized -cmatch '^schemas/v3-[a-z0-9-]+/[a-z0-9-]+\.schema\.json$' -or
+        $normalized -cmatch '^schemas/v3-source/core/[a-z0-9-]+\.schema\.json$' -or
+        $normalized -cmatch '^schemas/v3-source/http/[a-z0-9-]+\.json$' -or
         $normalized -cmatch '^src/Lex\.V3\.[A-Za-z0-9.]+/.+$' -or
         $normalized -cmatch '^tests/Lex\.V3\.[A-Za-z0-9.]+/.+$' -or
+        $normalized -ceq 'web/.gitignore' -or
+        $normalized -cmatch '^web/app/[A-Za-z0-9.-]+\.(?:jsx|mjs)$' -or
         $normalized -cmatch '^web/package(?:-lock)?\.json$' -or
         $normalized -cmatch '^web/scripts/[a-z0-9.-]+\.mjs$' -or
+        $normalized -cmatch '^web/src/fonts/[a-z0-9-]+\.woff2$' -or
         $normalized -cmatch '^web/src/[a-z0-9.-]+\.(?:css|html|svg)$' -or
         $normalized -cmatch '^web/test/[a-z0-9.-]+\.test\.mjs$'
     )
@@ -108,7 +113,15 @@ $requiredV3Paths = @(
     'schemas/v3-facts/relation-fact.schema.json',
     'schemas/v3-facts/publisher-date.schema.json',
     'schemas/v3-facts/publisher-date-fact.schema.json',
-    'schemas/v3-facts/vocabulary-drift.schema.json'
+    'schemas/v3-facts/vocabulary-drift.schema.json',
+    'schemas/v3-source/core/source-common.schema.json',
+    'schemas/v3-source/core/source-object-ref.schema.json',
+    'schemas/v3-source/core/source-profile-topology.schema.json',
+    'schemas/v3-source/http/http-acquisition-reason-registry.json',
+    'web/.gitignore',
+    'web/app/index.jsx',
+    'web/app/render-document.mjs',
+    'web/src/fonts/inter-400-latin.woff2'
 )
 if ($requiredV3Paths.Where({ -not (Test-V3TrackedPath -Path $_) })) {
     throw 'A required bounded V3 path was rejected by the structural allowlist.'
@@ -128,7 +141,19 @@ $pathMutations = @(
     'schemas/v3-facts/nested/facts-common.schema.json',
     'schemas/v3-facts/facts-common.json',
     'schemas/v3-facts/facts-common.schema.json.bak',
-    'web/src/App.tsx'
+    'schemas/v3-Source/core/source-common.schema.json',
+    'schemas/v3-source/core/nested/source-common.schema.json',
+    'schemas/v3-facts/core/source-common.schema.json',
+    'schemas/v3-source/other/source-common.schema.json',
+    'schemas/v3-source/core/source-common.schema.yaml',
+    'schemas/v3-source/http/nested/http-acquisition-reason-registry.json',
+    'schemas/v3-source/http/http-acquisition-reason-registry.yaml',
+    'web/src/App.tsx',
+    'web/.env',
+    'web/app/App.tsx',
+    'web/app/nested/App.jsx',
+    'web/src/fonts/font.ttf',
+    'web/src/fonts/nested/font.woff2'
 )
 if ($pathMutations.Where({ Test-V3TrackedPath -Path $_ })) {
     throw 'A legacy path mutation escaped the V3 structural allowlist.'

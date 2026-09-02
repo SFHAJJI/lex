@@ -1,0 +1,134 @@
+{
+  "$id": "urn:uuid:26641197-e5e5-422c-ba6c-61dce566f8a3",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "source_artifact_ref": {
+      "type": "object",
+      "properties": {
+        "resource_id": {
+          "type": "string",
+          "pattern": "^urn:uuid:(?!00000000-0000-0000-0000-000000000000)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\\s\\S])",
+          "minLength": 45,
+          "maxLength": 45
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])",
+          "minLength": 64,
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "resource_id",
+        "sha256"
+      ],
+      "additionalProperties": false
+    },
+    "source_registry_member_ref": {
+      "type": "object",
+      "properties": {
+        "registry_ref": {
+          "type": "object",
+          "properties": {
+            "resource_id": {
+              "type": "string",
+              "pattern": "^urn:uuid:(?!00000000-0000-0000-0000-000000000000)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\\s\\S])",
+              "minLength": 45,
+              "maxLength": 45
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}(?![\\s\\S])",
+              "minLength": 64,
+              "maxLength": 64
+            }
+          },
+          "required": [
+            "resource_id",
+            "sha256"
+          ],
+          "additionalProperties": false
+        },
+        "member_key": {
+          "type": "string",
+          "pattern": "^[!-~]{1,256}(?![\\s\\S])",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "registry_ref",
+        "member_key"
+      ],
+      "additionalProperties": false
+    },
+    "source_object_key_ref": {
+      "type": "object",
+      "properties": {
+        "entity_kind": {
+          "type": "object",
+          "properties": {
+            "registry_ref": {
+              "type": "object",
+              "properties": {
+                "resource_id": {
+                  "type": "string",
+                  "pattern": "^urn:uuid:(?!00000000-0000-0000-0000-000000000000)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\\s\\S])",
+                  "minLength": 45,
+                  "maxLength": 45
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}(?![\\s\\S])",
+                  "minLength": 64,
+                  "maxLength": 64
+                }
+              },
+              "required": [
+                "resource_id",
+                "sha256"
+              ],
+              "additionalProperties": false
+            },
+            "member_key": {
+              "type": "string",
+              "pattern": "^[!-~]{1,256}(?![\\s\\S])",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "registry_ref",
+            "member_key"
+          ],
+          "additionalProperties": false
+        },
+        "publisher_uri": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^(?!.*%(?![0-9A-Fa-f]{2}))https?://(?![^/?#]*@)[^/?#\\s]\u002B(?:/[^?#\\s]*)?(?![\\s\\S])",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "canonical_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "canonical_key_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])",
+          "minLength": 64,
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "entity_kind",
+        "publisher_uri",
+        "canonical_key",
+        "canonical_key_sha256"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

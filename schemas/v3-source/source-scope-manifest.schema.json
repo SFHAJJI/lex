@@ -1,0 +1,1153 @@
+{
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "lex-v3-source-scope-manifest/1"
+    },
+    "profile": {
+      "type": "object",
+      "properties": {
+        "source_profile_ref": {
+          "type": "object",
+          "properties": {
+            "resource_id": {
+              "type": "string",
+              "pattern": "^urn:uuid:(?!00000000-0000-0000-0000-000000000000)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\\s\\S])",
+              "minLength": 45,
+              "maxLength": 45
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}(?![\\s\\S])",
+              "minLength": 64,
+              "maxLength": 64
+            }
+          },
+          "required": [
+            "resource_id",
+            "sha256"
+          ],
+          "additionalProperties": false
+        },
+        "selector_table_ref": {
+          "type": "object",
+          "properties": {
+            "resource_id": {
+              "type": "string",
+              "pattern": "^urn:uuid:(?!00000000-0000-0000-0000-000000000000)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\\s\\S])",
+              "minLength": 45,
+              "maxLength": 45
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}(?![\\s\\S])",
+              "minLength": 64,
+              "maxLength": 64
+            }
+          },
+          "required": [
+            "resource_id",
+            "sha256"
+          ],
+          "additionalProperties": false
+        },
+        "ordered_members": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "registry_ref": {
+                "type": "object",
+                "properties": {
+                  "resource_id": {
+                    "type": "string",
+                    "pattern": "^urn:uuid:(?!00000000-0000-0000-0000-000000000000)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\\s\\S])",
+                    "minLength": 45,
+                    "maxLength": 45
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}(?![\\s\\S])",
+                    "minLength": 64,
+                    "maxLength": 64
+                  }
+                },
+                "required": [
+                  "resource_id",
+                  "sha256"
+                ],
+                "additionalProperties": false
+              },
+              "member_key": {
+                "type": "string",
+                "pattern": "^[!-~]{1,256}(?![\\s\\S])",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            },
+            "required": [
+              "registry_ref",
+              "member_key"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "ordered_selector_member_ordinals": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "ordered_rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "axis": {
+                "enum": [
+                  "record",
+                  "body",
+                  "relation",
+                  "supporting_document"
+                ]
+              },
+              "rule_member_ordinal": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "ordinal": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "axis",
+              "rule_member_ordinal",
+              "ordinal"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "body_candidate_role_member_ordinal": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "source_profile_ref",
+        "selector_table_ref",
+        "ordered_members",
+        "ordered_selector_member_ordinals",
+        "ordered_rules",
+        "body_candidate_role_member_ordinal"
+      ],
+      "additionalProperties": false
+    },
+    "complete_enumeration_ref": {
+      "type": "object",
+      "properties": {
+        "resource_id": {
+          "type": "string",
+          "pattern": "^urn:uuid:(?!00000000-0000-0000-0000-000000000000)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\\s\\S])",
+          "minLength": 45,
+          "maxLength": 45
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])",
+          "minLength": 64,
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "resource_id",
+        "sha256"
+      ],
+      "additionalProperties": false
+    },
+    "ordered_evidence_artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "resource_id": {
+            "type": "string",
+            "pattern": "^urn:uuid:(?!00000000-0000-0000-0000-000000000000)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\\s\\S])",
+            "minLength": 45,
+            "maxLength": 45
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}(?![\\s\\S])",
+            "minLength": 64,
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "resource_id",
+          "sha256"
+        ],
+        "additionalProperties": false
+      },
+      "uniqueItems": true
+    },
+    "observed_objects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "object_ref": {
+            "type": "object",
+            "properties": {
+              "schema": {
+                "type": "string",
+                "const": "lex-v3-source-object-ref/1"
+              },
+              "authority": {
+                "enum": [
+                  "jolux",
+                  "cellar"
+                ]
+              },
+              "entity_kind": {
+                "type": "object",
+                "properties": {
+                  "registry_ref": {
+                    "$ref": "#/properties/profile/properties/ordered_members/items/properties/registry_ref"
+                  },
+                  "member_key": {
+                    "type": "string",
+                    "pattern": "^[!-~]{1,256}(?![\\s\\S])",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "registry_ref",
+                  "member_key"
+                ],
+                "additionalProperties": false
+              },
+              "publisher_uri": {
+                "type": "string",
+                "format": "uri",
+                "pattern": "^(?!.*%(?![0-9A-Fa-f]{2}))https?://(?![^/?#]*@)[^/?#\\s]\u002B(?:/[^?#\\s]*)?(?![\\s\\S])",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "canonical_key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "canonical_key_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}(?![\\s\\S])",
+                "minLength": 64,
+                "maxLength": 64
+              },
+              "identity_profile_ref": {
+                "type": "object",
+                "properties": {
+                  "resource_id": {
+                    "type": "string",
+                    "pattern": "^urn:uuid:(?!00000000-0000-0000-0000-000000000000)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\\s\\S])",
+                    "minLength": 45,
+                    "maxLength": 45
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}(?![\\s\\S])",
+                    "minLength": 64,
+                    "maxLength": 64
+                  }
+                },
+                "required": [
+                  "resource_id",
+                  "sha256"
+                ],
+                "additionalProperties": false
+              },
+              "parent_key_ref": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "entity_kind": {
+                    "type": "object",
+                    "properties": {
+                      "registry_ref": {
+                        "$ref": "#/properties/profile/properties/ordered_members/items/properties/registry_ref"
+                      },
+                      "member_key": {
+                        "type": "string",
+                        "pattern": "^[!-~]{1,256}(?![\\s\\S])",
+                        "minLength": 1,
+                        "maxLength": 256
+                      }
+                    },
+                    "required": [
+                      "registry_ref",
+                      "member_key"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "publisher_uri": {
+                    "type": "string",
+                    "format": "uri",
+                    "pattern": "^(?!.*%(?![0-9A-Fa-f]{2}))https?://(?![^/?#]*@)[^/?#\\s]\u002B(?:/[^?#\\s]*)?(?![\\s\\S])",
+                    "minLength": 1,
+                    "maxLength": 4096
+                  },
+                  "canonical_key": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096
+                  },
+                  "canonical_key_sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}(?![\\s\\S])",
+                    "minLength": 64,
+                    "maxLength": 64
+                  }
+                },
+                "required": [
+                  "entity_kind",
+                  "publisher_uri",
+                  "canonical_key",
+                  "canonical_key_sha256"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "schema",
+              "authority",
+              "entity_kind",
+              "publisher_uri",
+              "canonical_key",
+              "canonical_key_sha256",
+              "identity_profile_ref",
+              "parent_key_ref"
+            ],
+            "additionalProperties": false
+          },
+          "object_ref_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}(?![\\s\\S])",
+            "minLength": 64,
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "object_ref",
+          "object_ref_sha256"
+        ],
+        "additionalProperties": false
+      },
+      "uniqueItems": true
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "object_ordinal": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "selectors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "enum": [
+                    "publisher_value_present",
+                    "publisher_value_absent",
+                    "publisher_value_conflict",
+                    "selector_not_applicable"
+                  ]
+                },
+                "canonical_values": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096,
+                    "$comment": "Length is limited to 4096 Unicode scalar values. The verified reader rejects invalid Unicode scalar sequences."
+                  },
+                  "uniqueItems": true
+                },
+                "evidence_kind": {
+                  "enum": [
+                    "observed_value_set",
+                    "complete_observation_absence",
+                    "observed_conflicting_value_set",
+                    null
+                  ]
+                },
+                "evidence_artifact_ordinal": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "rule_ordinal": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "cause_member_ordinal": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "state",
+                "canonical_values",
+                "evidence_kind",
+                "evidence_artifact_ordinal",
+                "rule_ordinal",
+                "cause_member_ordinal"
+              ],
+              "additionalProperties": false,
+              "oneOf": [
+                {
+                  "properties": {
+                    "state": {
+                      "const": "publisher_value_present"
+                    },
+                    "canonical_values": {
+                      "minItems": 1
+                    },
+                    "evidence_kind": {
+                      "const": "observed_value_set"
+                    },
+                    "evidence_artifact_ordinal": {
+                      "not": {
+                        "type": "null"
+                      }
+                    },
+                    "rule_ordinal": {
+                      "type": "null"
+                    },
+                    "cause_member_ordinal": {
+                      "type": "null"
+                    }
+                  }
+                },
+                {
+                  "properties": {
+                    "state": {
+                      "const": "publisher_value_absent"
+                    },
+                    "canonical_values": {
+                      "maxItems": 0
+                    },
+                    "evidence_kind": {
+                      "const": "complete_observation_absence"
+                    },
+                    "evidence_artifact_ordinal": {
+                      "not": {
+                        "type": "null"
+                      }
+                    },
+                    "rule_ordinal": {
+                      "type": "null"
+                    },
+                    "cause_member_ordinal": {
+                      "type": "null"
+                    }
+                  }
+                },
+                {
+                  "properties": {
+                    "state": {
+                      "const": "publisher_value_conflict"
+                    },
+                    "canonical_values": {
+                      "minItems": 2
+                    },
+                    "evidence_kind": {
+                      "const": "observed_conflicting_value_set"
+                    },
+                    "evidence_artifact_ordinal": {
+                      "not": {
+                        "type": "null"
+                      }
+                    },
+                    "rule_ordinal": {
+                      "type": "null"
+                    },
+                    "cause_member_ordinal": {
+                      "not": {
+                        "type": "null"
+                      }
+                    }
+                  }
+                },
+                {
+                  "properties": {
+                    "state": {
+                      "const": "selector_not_applicable"
+                    },
+                    "canonical_values": {
+                      "maxItems": 0
+                    },
+                    "evidence_kind": {
+                      "type": "null"
+                    },
+                    "evidence_artifact_ordinal": {
+                      "type": "null"
+                    },
+                    "rule_ordinal": {
+                      "not": {
+                        "type": "null"
+                      }
+                    },
+                    "cause_member_ordinal": {
+                      "type": "null"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "rule_match_bits_base64_url": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]\u002B(?![\\s\\S])",
+            "minLength": 1
+          },
+          "matched_evaluations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "rule_ordinal": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "effect": {
+                  "enum": [
+                    "positive",
+                    "exact_denial"
+                  ]
+                },
+                "disposition": {
+                  "enum": [
+                    "accepted_selected",
+                    "typed_quarantine",
+                    "point",
+                    "never_ingest"
+                  ]
+                },
+                "role_member_ordinals": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "uniqueItems": true
+                },
+                "capability_member_ordinals": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "uniqueItems": true
+                }
+              },
+              "required": [
+                "rule_ordinal",
+                "effect",
+                "disposition",
+                "role_member_ordinals",
+                "capability_member_ordinals"
+              ],
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "effect": {
+                        "const": "exact_denial"
+                      }
+                    },
+                    "required": [
+                      "effect"
+                    ]
+                  },
+                  "then": {
+                    "properties": {
+                      "disposition": {
+                        "not": {
+                          "const": "accepted_selected"
+                        }
+                      }
+                    },
+                    "required": [
+                      "disposition"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "disposition": {
+                        "not": {
+                          "const": "accepted_selected"
+                        }
+                      }
+                    },
+                    "required": [
+                      "disposition"
+                    ]
+                  },
+                  "then": {
+                    "properties": {
+                      "role_member_ordinals": {
+                        "maxItems": 0
+                      },
+                      "capability_member_ordinals": {
+                        "maxItems": 0
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "uniqueItems": true
+          },
+          "axis_winning_rule_ordinals": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "minItems": 4,
+            "maxItems": 4,
+            "prefixItems": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "$comment": "Fixed record axis position."
+              },
+              {
+                "type": "integer",
+                "minimum": 0,
+                "$comment": "Fixed body axis position."
+              },
+              {
+                "type": "integer",
+                "minimum": 0,
+                "$comment": "Fixed relation axis position."
+              },
+              {
+                "type": "integer",
+                "minimum": 0,
+                "$comment": "Fixed supporting_document axis position."
+              }
+            ]
+          },
+          "row_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}(?![\\s\\S])",
+            "minLength": 64,
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "object_ordinal",
+          "selectors",
+          "rule_match_bits_base64_url",
+          "matched_evaluations",
+          "axis_winning_rule_ordinals",
+          "row_sha256"
+        ],
+        "additionalProperties": false
+      },
+      "uniqueItems": true
+    },
+    "accounting": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "axis": {
+            "enum": [
+              "record",
+              "body",
+              "relation",
+              "supporting_document"
+            ]
+          },
+          "disposition": {
+            "enum": [
+              "accepted_selected",
+              "typed_quarantine",
+              "point",
+              "never_ingest"
+            ]
+          },
+          "object_ordinals": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "axis",
+          "disposition",
+          "object_ordinals"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 16,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "prefixItems": [
+        {
+          "type": "object",
+          "properties": {
+            "axis": {
+              "const": "record"
+            },
+            "disposition": {
+              "const": "accepted_selected"
+            },
+            "object_ordinals": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "axis",
+            "disposition",
+            "object_ordinals"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "axis": {
+              "const": "record"
+            },
+            "disposition": {
+              "const": "typed_quarantine"
+            },
+            "object_ordinals": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "axis",
+            "disposition",
+            "object_ordinals"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "axis": {
+              "const": "record"
+            },
+            "disposition": {
+              "const": "point"
+            },
+            "object_ordinals": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "axis",
+            "disposition",
+            "object_ordinals"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "axis": {
+              "const": "record"
+            },
+            "disposition": {
+              "const": "never_ingest"
+            },
+            "object_ordinals": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "axis",
+            "disposition",
+            "object_ordinals"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "axis": {
+              "const": "body"
+            },
+            "disposition": {
+              "const": "accepted_selected"
+            },
+            "object_ordinals": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "axis",
+            "disposition",
+            "object_ordinals"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "axis": {
+              "const": "body"
+            },
+            "disposition": {
+              "const": "typed_quarantine"
+            },
+            "object_ordinals": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "axis",
+            "disposition",
+            "object_ordinals"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "axis": {
+              "const": "body"
+            },
+            "disposition": {
+              "const": "point"
+            },
+            "object_ordinals": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "axis",
+            "disposition",
+            "object_ordinals"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "axis": {
+              "const": "body"
+            },
+            "disposition": {
+              "const": "never_ingest"
+            },
+            "object_ordinals": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "axis",
+            "disposition",
+            "object_ordinals"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "axis": {
+              "const": "relation"
+            },
+            "disposition": {
+              "const": "accepted_selected"
+            },
+            "object_ordinals": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "axis",
+            "disposition",
+            "object_ordinals"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "axis": {
+              "const": "relation"
+            },
+            "disposition": {
+              "const": "typed_quarantine"
+            },
+            "object_ordinals": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "axis",
+            "disposition",
+            "object_ordinals"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "axis": {
+              "const": "relation"
+            },
+            "disposition": {
+              "const": "point"
+            },
+            "object_ordinals": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "axis",
+            "disposition",
+            "object_ordinals"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "axis": {
+              "const": "relation"
+            },
+            "disposition": {
+              "const": "never_ingest"
+            },
+            "object_ordinals": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "axis",
+            "disposition",
+            "object_ordinals"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "axis": {
+              "const": "supporting_document"
+            },
+            "disposition": {
+              "const": "accepted_selected"
+            },
+            "object_ordinals": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "axis",
+            "disposition",
+            "object_ordinals"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "axis": {
+              "const": "supporting_document"
+            },
+            "disposition": {
+              "const": "typed_quarantine"
+            },
+            "object_ordinals": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "axis",
+            "disposition",
+            "object_ordinals"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "axis": {
+              "const": "supporting_document"
+            },
+            "disposition": {
+              "const": "point"
+            },
+            "object_ordinals": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "axis",
+            "disposition",
+            "object_ordinals"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "axis": {
+              "const": "supporting_document"
+            },
+            "disposition": {
+              "const": "never_ingest"
+            },
+            "object_ordinals": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "axis",
+            "disposition",
+            "object_ordinals"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "body_candidate_ordinals": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "uniqueItems": true
+    }
+  },
+  "required": [
+    "schema",
+    "profile",
+    "complete_enumeration_ref",
+    "ordered_evidence_artifacts",
+    "observed_objects",
+    "rows",
+    "accounting",
+    "body_candidate_ordinals"
+  ],
+  "additionalProperties": false,
+  "$id": "urn:uuid:8c1f7247-4391-4e28-8f45-9edb60dd13aa",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

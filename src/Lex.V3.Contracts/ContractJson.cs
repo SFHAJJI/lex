@@ -1,4 +1,6 @@
+using System.Buffers;
 using System.Reflection;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
@@ -12,15 +14,23 @@ public static class ContractJson
     public static string Serialize<T>(T value)
     {
         ArgumentNullException.ThrowIfNull(value);
-        return JsonSerializer.Serialize(value, Options);
+        var runtimeType = value.GetType();
+        var contractType = FindRegisteredPolymorphicContract(runtimeType) ?? typeof(T);
+        return JsonSerializer.Serialize(value, contractType, Options);
     }
 
     public static T Deserialize<T>(string json)
     {
         try
         {
-            return JsonSerializer.Deserialize<T>(json, Options)
+            var requestedType = typeof(T);
+            var contractType = FindRegisteredPolymorphicContract(requestedType) ?? requestedType;
+            var value = JsonSerializer.Deserialize(json, contractType, Options)
                 ?? throw new JsonException("The contract document cannot be null.");
+            return value is T typed
+                ? typed
+                : throw new JsonException(
+                    $"The contract discriminator does not name {requestedType.Name}.");
         }
         catch (ArgumentException exception)
         {
@@ -29,6 +39,26 @@ public static class ContractJson
     }
 
     public static JsonSerializerOptions CreateSchemaOptions() => CreateOptions(exactEnums: false);
+
+    private static Type? FindRegisteredPolymorphicContract(Type type)
+    {
+        for (var candidate = type; candidate is not null; candidate = candidate.BaseType)
+        {
+            if (candidate.GetCustomAttribute<JsonPolymorphicAttribute>() is null)
+            {
+                continue;
+            }
+
+            if (candidate == type || candidate
+                .GetCustomAttributes<JsonDerivedTypeAttribute>()
+                .Any(attribute => attribute.DerivedType == type))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
 
     private static JsonSerializerOptions CreateOptions(bool exactEnums)
     {
@@ -48,6 +78,11 @@ public static class ContractJson
             WriteIndented = false,
         };
 
+        if (exactEnums)
+        {
+            options.Converters.Add(new ValidUnicodeStringConverter());
+        }
+
         options.Converters.Add(exactEnums
             ? new ExactStringEnumConverterFactory()
             : new JsonStringEnumConverter(
@@ -55,6 +90,51 @@ public static class ContractJson
                 allowIntegerValues: false));
         options.MakeReadOnly();
         return options;
+    }
+}
+
+internal sealed class ValidUnicodeStringConverter : JsonConverter<string>
+{
+    public override string? Read(
+        ref Utf8JsonReader reader,
+        Type typeToConvert,
+        JsonSerializerOptions options) => reader.GetString();
+
+    public override void Write(
+        Utf8JsonWriter writer,
+        string value,
+        JsonSerializerOptions options)
+    {
+        EnsureValidUnicode(value);
+        writer.WriteStringValue(value);
+    }
+
+    public override string ReadAsPropertyName(
+        ref Utf8JsonReader reader,
+        Type typeToConvert,
+        JsonSerializerOptions options) => reader.GetString()!;
+
+    public override void WriteAsPropertyName(
+        Utf8JsonWriter writer,
+        string value,
+        JsonSerializerOptions options)
+    {
+        EnsureValidUnicode(value);
+        writer.WritePropertyName(options.DictionaryKeyPolicy?.ConvertName(value) ?? value);
+    }
+
+    private static void EnsureValidUnicode(string value)
+    {
+        for (var index = 0; index < value.Length;)
+        {
+            var status = Rune.DecodeFromUtf16(value.AsSpan(index), out _, out var consumed);
+            if (status != OperationStatus.Done)
+            {
+                throw new JsonException("Contract strings must contain valid Unicode scalars.");
+            }
+
+            index += consumed;
+        }
     }
 }
 

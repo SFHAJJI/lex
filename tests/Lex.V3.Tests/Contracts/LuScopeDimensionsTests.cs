@@ -28,6 +28,8 @@ public sealed class LuScopeDimensionsTests
         Assert.ThrowsExactly<JsonException>(() =>
             ContractJson.Deserialize<LuScopeTerminalState>("0"));
         Assert.ThrowsExactly<JsonException>(() =>
+            ContractJson.Serialize((LuScopeTerminalState)0));
+        Assert.ThrowsExactly<JsonException>(() =>
             ContractJson.Serialize((LuScopeTerminalState)999));
     }
 

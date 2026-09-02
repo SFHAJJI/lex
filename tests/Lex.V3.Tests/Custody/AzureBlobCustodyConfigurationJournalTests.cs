@@ -416,6 +416,17 @@ public sealed class AzureBlobCustodyConfigurationJournalTests
         }
     }
 
+    /// <summary>The anchor object for a receipt's tuple, created if the journal has not asked
+    /// for it yet.</summary>
+    private static FakeBlockBlobClient Anchor(
+        FakeBlobContainerClient container,
+        AzureCustodyConfigurationReceipt receipt) =>
+        (FakeBlockBlobClient)container.GetBlockBlobClient($"{TuplePrefix(receipt)}/anchor.json");
+
+    /// <summary>The exact bytes this journal would write for a receipt.</summary>
+    private static byte[] ExactAnchorBytes(AzureCustodyConfigurationReceipt receipt) =>
+        Encoding.UTF8.GetBytes(ContractJson.Serialize(receipt));
+
     private static string TuplePrefix(AzureCustodyConfigurationReceipt receipt)
     {
         var lane = receipt.CustodyClass switch
@@ -475,6 +486,147 @@ public sealed class AzureBlobCustodyConfigurationJournalTests
         LegalHoldPolicyKey,
         SubscriptionId,
         "rg-lex-v3");
+
+
+    /// <summary>
+    /// The write-side bound. This is the one that cannot be undone: an oversize object entering
+    /// a container under a locked retention policy stays there for the retention period, and
+    /// nobody, including the platform operator, can shorten that.
+    /// </summary>
+    [TestMethod]
+    public async Task AnOversizeReceiptIsRefusedBeforeItReachesAWormContainer()
+    {
+        var harness = new Harness();
+        var receipt = Receipt(
+            CustodyClass.NightlyFloor90d,
+            FirstRequestId,
+            resourceEtag: $"\"{new string('e', 32 * 1024)}\"");
+
+        await Assert.ThrowsExactlyAsync<ArgumentException>(
+            () => harness.Journal.AppendAsync(receipt, CancellationToken.None));
+
+        // Refused before the write rather than after it: nothing was attempted.
+        Assert.AreEqual(0, harness.Nightly.Blobs.Count, "an oversize receipt reached a container");
+        CollectionAssert.AreEqual(Array.Empty<string>(), harness.Events);
+    }
+
+    /// <summary>
+    /// The read-side bound, in both directions. A zero-length object is not evidence and an
+    /// object past the bound is not the evidence this journal wrote.
+    /// </summary>
+    [TestMethod]
+    public async Task ExistingEvidenceOutsideTheBoundIsRefusedAtBothEnds()
+    {
+        foreach (var bytes in new[] { Array.Empty<byte>(), new byte[(16 * 1024) + 1] })
+        {
+            var harness = new Harness();
+            var receipt = Receipt(CustodyClass.NightlyFloor90d, FirstRequestId);
+            var anchor = Anchor(harness.Nightly, receipt);
+            anchor.Seed(bytes);
+
+            var thrown = await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(
+                () => harness.Journal.AppendAsync(receipt, CancellationToken.None),
+                $"{bytes.Length} bytes was accepted as configuration evidence");
+
+            // Refused for its shape, not for failing to parse afterwards. Without this the test
+            // passes with the bound removed, because an empty or oversize object fails the JSON
+            // decode a few lines later and raises the same exception type for a different
+            // reason. That is a test that proves the outcome and not the rule.
+            StringAssert.Contains(
+                thrown.Message,
+                "invalid durable shape",
+                $"{bytes.Length} bytes was rejected by something other than the bound");
+        }
+    }
+
+    /// <summary>
+    /// Strict decoding, which is a different rule from parsing.
+    /// </summary>
+    /// <remarks>
+    /// Lenient decoding substitutes U+FFFD for an invalid sequence rather than throwing, and the
+    /// JSON parse would usually fail afterwards anyway. Usually is the problem: the stated intent
+    /// is to refuse invalid bytes rather than to substitute for them, and a substitution that
+    /// happens to produce parseable JSON is a silent rewrite of custody evidence.
+    /// </remarks>
+    [TestMethod]
+    public async Task ExistingEvidenceThatIsNotUtf8IsRefusedRatherThanSubstitutedFor()
+    {
+        var harness = new Harness();
+        var receipt = Receipt(CustodyClass.NightlyFloor90d, FirstRequestId);
+        var anchor = Anchor(harness.Nightly, receipt);
+
+        // A lone continuation byte inside otherwise valid JSON. Long enough to pass the bound,
+        // and shaped so that a lenient decoder would produce a parseable document.
+        anchor.Seed([.. Encoding.ASCII.GetBytes("{\"schema\":\""), 0x80, .. Encoding.ASCII.GetBytes("\"}")]);
+
+        var thrown = await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(
+            () => harness.Journal.AppendAsync(receipt, CancellationToken.None));
+
+        // Refused by the decoder, not by the parser that would have run on the substituted
+        // text. Without this the test passes with lenient decoding, because U+FFFD inside the
+        // document makes the contract validation fail instead, which is the same exception for
+        // a different reason and leaves the stated rule unproven.
+        Assert.IsInstanceOfType<DecoderFallbackException>(
+            thrown.InnerException,
+            "the invalid bytes were substituted for and refused later, not refused as bytes");
+    }
+
+    /// <summary>
+    /// The collision taxonomy, which decides whether a failure is benign.
+    /// </summary>
+    /// <remarks>
+    /// A create that collides means the object is already there, so the code reads it back and
+    /// compares. A create that failed for any other reason means the object is not there, so the
+    /// read returns 404 and the journal raises an integrity failure. That turns an availability
+    /// problem into an integrity verdict about custody evidence, which is the more alarming of
+    /// the two and the less true. Each status is asserted separately.
+    /// </remarks>
+    [TestMethod]
+    public async Task OnlyAnExistingObjectCountsAsACreateCollision()
+    {
+        // Benign: the object is already there.
+        foreach (var benign in new[]
+        {
+            new RequestFailedException(412, "Create-only object already exists."),
+            new RequestFailedException(409, "Blob already exists.", "BlobAlreadyExists", null),
+        })
+        {
+            var harness = new Harness();
+            var receipt = Receipt(CustodyClass.NightlyFloor90d, FirstRequestId);
+            var anchor = Anchor(harness.Nightly, receipt);
+            anchor.Seed(ExactAnchorBytes(receipt));
+            anchor.UploadFailure = benign;
+
+            await harness.Journal.AppendAsync(receipt, CancellationToken.None);
+        }
+
+        // Not benign: the object is not there, and calling it a collision makes the journal
+        // report an integrity failure about evidence that was never written.
+        foreach (var hostile in new[]
+        {
+            new RequestFailedException(409, "Lease is held.", "LeaseIdMissing", null),
+            new RequestFailedException(403, "Forbidden.", "AuthorizationFailure", null),
+            new RequestFailedException(500, "Server error.", "InternalError", null),
+            new RequestFailedException(503, "Slow down.", "ServerBusy", null),
+        })
+        {
+            var harness = new Harness();
+            var receipt = Receipt(CustodyClass.NightlyFloor90d, FirstRequestId);
+            Anchor(harness.Nightly, receipt).UploadFailure = hostile;
+
+            var thrown = await Assert.ThrowsExactlyAsync<CustodyRequiredException>(
+                () => harness.Journal.AppendAsync(receipt, CancellationToken.None),
+                $"status {hostile.Status} was treated as an existing object");
+
+            // And specifically not an integrity verdict. Treating a create that never happened
+            // as a collision makes the journal read a blob that is not there, receive a 404,
+            // and report that custody evidence is corrupt. The alarming answer and the less
+            // true one.
+            Assert.IsNotInstanceOfType<CustodyIntegrityException>(
+                thrown,
+                $"status {hostile.Status} became an integrity failure about evidence never written");
+        }
+    }
 
     private sealed class Harness
     {
@@ -566,6 +718,13 @@ public sealed class AzureBlobCustodyConfigurationJournalTests
 
         public Action<FakeBlockBlobClient>? AfterUpload { get; set; }
 
+        /// <summary>
+        /// Fails the next upload with an exact status, so the create-collision taxonomy can be
+        /// reached. Without it the only reachable failure is the 412 the fake raises itself,
+        /// which is one of the four statuses that matter.
+        /// </summary>
+        public RequestFailedException? UploadFailure { get; set; }
+
         public void Seed(byte[] bytes)
         {
             Content = bytes.ToArray();
@@ -581,6 +740,12 @@ public sealed class AzureBlobCustodyConfigurationJournalTests
             cancellationToken.ThrowIfCancellationRequested();
             UploadAttempts++;
             UploadOptions = options;
+            if (UploadFailure is { } failure)
+            {
+                UploadFailure = null;
+                throw failure;
+            }
+
             if (Present && options.Conditions?.IfNoneMatch == ETag.All)
             {
                 throw new RequestFailedException(412, "Create-only object already exists.");
