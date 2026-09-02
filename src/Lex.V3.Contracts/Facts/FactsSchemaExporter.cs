@@ -186,8 +186,12 @@ internal static class FactsSchemaHardener
     // segment. Spelled this way so the schema refuses exactly what the reader refuses: an empty
     // segment, which covers a trailing or doubled slash, and `.` or `..`, which System.Uri would
     // normalise away and leave a second raw spelling of one coordinate.
+    //
+    // `%` and `\` join them for the reason IsCanonicalPathSegment gives: every escape divides
+    // the string a store keeps from the path a parser returns, whether it is valid and decodes or
+    // invalid and is re-encoded, and System.Uri resolves a literal backslash as a separator.
     private const string CellarPathSegment =
-        @"(?!\.{1,2}(?:/|$))(?:(?![?#/])[!-~])+";
+        @"(?!\.{1,2}(?:/|$))(?:(?![?#/%\\])[!-~])+";
 
     internal const string CellarResourcePattern =
         CellarHost + "cellar/" + Uuid +
