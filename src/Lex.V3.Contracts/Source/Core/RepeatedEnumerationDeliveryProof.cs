@@ -1,14 +1,35 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Source.Http;
 
 namespace Lex.V3.Contracts.Source.Core;
 
-public enum RepeatedEnumerationThresholdAssessment { BelowMaximum = 1, PartitionRequired = 2 }
-public enum EnumerationDeliveryOutcome { EqualSelections = 1, DifferentSelections = 2 }
+public enum RepeatedEnumerationThresholdAssessment
+{
+    [JsonStringEnumMemberName("below_maximum")]
+    BelowMaximum = 1,
+
+    [JsonStringEnumMemberName("partition_required")]
+    PartitionRequired = 2,
+}
+
+public enum EnumerationDeliveryOutcome
+{
+    [JsonStringEnumMemberName("equal_selections")]
+    EqualSelections = 1,
+
+    [JsonStringEnumMemberName("different_selections")]
+    DifferentSelections = 2,
+}
 public enum RepeatedEnumerationRdfTermKind { Iri = 1, BlankNode = 2, Literal = 3, Unbound = 4 }
 public enum RepeatedEnumerationSparqlJsonDialect { LuxembourgVirtuoso = 1, EuropeanUnionVirtuoso = 2 }
+public enum RepeatedEnumerationTerminalPagePolicy
+{
+    ShortPageTerminal = 1,
+    EmptySuccessorAfterShortPage = 2,
+}
 
 public static class EnumerationCursorEnvelope
 {
@@ -77,7 +98,7 @@ public sealed record RepeatedEnumerationRow(IReadOnlyList<RepeatedEnumerationRdf
 public sealed record RepeatedEnumerationInterpretationProfile
 {
     public const string SchemaId = "repeated_enumeration_sparql_json_profile/1";
-    public RepeatedEnumerationInterpretationProfile(string schema, RepeatedEnumerationSparqlJsonDialect dialect, string expectedMediaType, string cursorEnvelopeIdentity, long maximumDeliverableRows, string thresholdDetectorIdentity, SourceRegistryMemberRef countQueryFamilyRef, SourceRegistryMemberRef pageQueryFamilyRef, string countVariable, IReadOnlyList<string> projectionVariables, IReadOnlyList<string> canonicalKeyVariables, IReadOnlyList<string> cursorVariables, IReadOnlyList<string> selectionParameterNames, string passParameterName, IReadOnlyList<string> cursorParameterNames, string hasCursorParameterName)
+    public RepeatedEnumerationInterpretationProfile(string schema, RepeatedEnumerationSparqlJsonDialect dialect, string expectedMediaType, string cursorEnvelopeIdentity, long maximumDeliverableRows, string thresholdDetectorIdentity, SourceRegistryMemberRef countQueryFamilyRef, SourceRegistryMemberRef pageQueryFamilyRef, string countVariable, IReadOnlyList<string> projectionVariables, IReadOnlyList<string> canonicalKeyVariables, IReadOnlyList<string> cursorVariables, IReadOnlyList<string> selectionParameterNames, string passParameterName, IReadOnlyList<string> cursorParameterNames, string hasCursorParameterName, RepeatedEnumerationTerminalPagePolicy terminalPagePolicy)
     {
         if (schema != SchemaId) throw new ArgumentException($"The profile must declare {SchemaId}.", nameof(schema));
         Schema = schema;
@@ -100,6 +121,9 @@ public sealed record RepeatedEnumerationInterpretationProfile
         PassParameterName = Name(passParameterName, nameof(passParameterName));
         CursorParameterNames = Names(cursorParameterNames, nameof(cursorParameterNames));
         HasCursorParameterName = Name(hasCursorParameterName, nameof(hasCursorParameterName));
+        TerminalPagePolicy = SourceCoreValidation.RequireDefined(
+            terminalPagePolicy,
+            nameof(terminalPagePolicy));
         if (CursorVariables.Count != CursorParameterNames.Count)
             throw new ArgumentException("Cursor variables and input parameters must have equal arity.");
         if (SelectionParameterNames.Intersect(CursorParameterNames, StringComparer.Ordinal).Any() ||
@@ -126,6 +150,7 @@ public sealed record RepeatedEnumerationInterpretationProfile
     public string PassParameterName { get; }
     public IReadOnlyList<string> CursorParameterNames { get; }
     public string HasCursorParameterName { get; }
+    public RepeatedEnumerationTerminalPagePolicy TerminalPagePolicy { get; }
     private static string Name(string value, string name) => MachineQueryValidation.RequireMachineMemberKey(value, name);
     private static IReadOnlyList<string> Names(IReadOnlyList<string> source, string name, bool allowEmpty = false)
     {
@@ -250,13 +275,23 @@ public sealed class EnumerationDeliveryComparison
         IReadOnlyList<string> actualCursor,
         IReadOnlyList<string> expectedCursor,
         long previousPageCount,
-        long rowLimit)
+        long rowLimit,
+        RepeatedEnumerationTerminalPagePolicy terminalPagePolicy)
     {
         ArgumentNullException.ThrowIfNull(actualCursor);
         ArgumentNullException.ThrowIfNull(expectedCursor);
+        SourceCoreValidation.RequireDefined(terminalPagePolicy, nameof(terminalPagePolicy));
+        var validPreviousCount = terminalPagePolicy switch
+        {
+            RepeatedEnumerationTerminalPagePolicy.ShortPageTerminal =>
+                previousPageCount == rowLimit,
+            RepeatedEnumerationTerminalPagePolicy.EmptySuccessorAfterShortPage =>
+                previousPageCount is > 0 && previousPageCount <= rowLimit,
+            _ => false,
+        };
         if (hasCursor != 1 ||
             !actualCursor.SequenceEqual(expectedCursor, StringComparer.Ordinal) ||
-            previousPageCount != rowLimit)
+            !validPreviousCount)
         {
             throw new ArgumentException("The typed cursor continuation is invalid.");
         }
@@ -293,6 +328,11 @@ public sealed class EnumerationDeliveryComparison
             }
             else
             {
+                if (prior.Count == 0)
+                {
+                    throw new ArgumentException("No page may follow an empty terminal page.");
+                }
+
                 var cursors = Parameters(page.QueryInput, profile.CursorParameterNames);
                 var expected = prior[^1].Cursor.Select(static term => term.Value ?? throw new ArgumentException("A cursor term must be bound.")).ToArray();
                 RequireContinuation(
@@ -300,13 +340,32 @@ public sealed class EnumerationDeliveryComparison
                     cursors,
                     expected,
                     prior.Count,
-                    limit ?? throw new InvalidOperationException("The page limit was not established."));
+                    limit ?? throw new InvalidOperationException("The page limit was not established."),
+                    profile.TerminalPagePolicy);
+                if (profile.TerminalPagePolicy ==
+                        RepeatedEnumerationTerminalPagePolicy.EmptySuccessorAfterShortPage &&
+                    prior.Count < limit &&
+                    rows.Count != 0)
+                {
+                    throw new ArgumentException(
+                        "A successor after a short page must be empty.");
+                }
             }
             if (rows.SelectMany(static row => row.Cursor).Any(static term => term.Kind != RepeatedEnumerationRdfTermKind.Literal || term.Datatype is not null || term.Language is not null)) throw new ArgumentException("Cursor projections must be plain literals matching the query comparator.");
             if (rows.SelectMany(static row => row.CanonicalKey).Any(static term => term.Kind is RepeatedEnumerationRdfTermKind.Unbound or RepeatedEnumerationRdfTermKind.BlankNode)) throw new ArgumentException("Canonical-key components must be bound and stable.");
             all.AddRange(rows); prior = rows;
         }
-        if (prior!.Count >= limit) throw new ArgumentException("The final page must be short or empty.");
+        var validTerminalPage = profile.TerminalPagePolicy switch
+        {
+            RepeatedEnumerationTerminalPagePolicy.ShortPageTerminal => prior!.Count < limit,
+            RepeatedEnumerationTerminalPagePolicy.EmptySuccessorAfterShortPage =>
+                prior!.Count == 0,
+            _ => false,
+        };
+        if (!validTerminalPage)
+        {
+            throw new ArgumentException("The final page does not satisfy the terminal-page policy.");
+        }
         var keys = new HashSet<string>(); for (var i = 0; i < all.Count; i++) if (!keys.Add(Digest("repeated_enumeration_key/1", [all[i].CanonicalKey])) || i > 0 && Compare(all[i - 1].Cursor, all[i].Cursor) >= 0) throw new ArgumentException("Keys must be unique and cursors strictly increase.");
         return all;
     }
