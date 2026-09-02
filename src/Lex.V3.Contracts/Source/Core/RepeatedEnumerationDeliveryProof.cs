@@ -190,9 +190,9 @@ public static class MachineRequestEvidenceIdentity
 
 public sealed class EnumerationDeliveryComparison
 {
-    private EnumerationDeliveryComparison(SourceArtifactRef profileRef, RepeatedEnumerationThresholdAssessment thresholdAssessment, RepeatedEnumerationEvidenceRefs countA, EnumerationPageSetRefs pagesA, RepeatedEnumerationEvidenceRefs countB, EnumerationPageSetRefs pagesB, EnumerationObservationTimes observationTimes, long selectedA, long selectedB, IReadOnlyList<RepeatedEnumerationRow> rowsA, IReadOnlyList<RepeatedEnumerationRow> rowsB)
+    private EnumerationDeliveryComparison(SourceArtifactRef profileRef, string partitionKey, RepeatedEnumerationThresholdAssessment thresholdAssessment, RepeatedEnumerationEvidenceRefs countA, EnumerationPageSetRefs pagesA, RepeatedEnumerationEvidenceRefs countB, EnumerationPageSetRefs pagesB, EnumerationObservationTimes observationTimes, long selectedA, long selectedB, IReadOnlyList<RepeatedEnumerationRow> rowsA, IReadOnlyList<RepeatedEnumerationRow> rowsB)
     {
-        InterpretationProfileRef = profileRef; CountA = countA; PagesA = Snapshot(pagesA); CountB = countB; PagesB = Snapshot(pagesB);
+        InterpretationProfileRef = profileRef; PartitionKey = partitionKey; CountA = countA; PagesA = Snapshot(pagesA); CountB = countB; PagesB = Snapshot(pagesB);
         ThresholdAssessment = thresholdAssessment;
         ObservationTimes = new(observationTimes.CountA, Array.AsReadOnly(observationTimes.PagesA.ToArray()), observationTimes.CountB, Array.AsReadOnly(observationTimes.PagesB.ToArray()));
         SelectedRowCountA = selectedA; SelectedRowCountB = selectedB; DeliveredRowCountA = rowsA.Count; DeliveredRowCountB = rowsB.Count;
@@ -212,6 +212,14 @@ public sealed class EnumerationDeliveryComparison
             CursorDigestB);
     }
     public SourceArtifactRef InterpretationProfileRef { get; }
+
+    /// <summary>The partition member key shared by every verified count and page input.</summary>
+    /// <remarks>
+    /// The registry reference is deliberately not retained as the cross-pass subject: each
+    /// machine-input artifact is its own ordered-parameter registry, so those references differ
+    /// by construction. The member key is the stable subject under this interpretation profile.
+    /// </remarks>
+    public string PartitionKey { get; }
     public RepeatedEnumerationThresholdAssessment ThresholdAssessment { get; }
     public RepeatedEnumerationEvidenceRefs CountA { get; }
     public EnumerationPageSetRefs PagesA { get; }
@@ -240,13 +248,13 @@ public sealed class EnumerationDeliveryComparison
         var evidenceA = new[] { aCount }.Concat(aPages).ToArray();
         var evidenceB = new[] { bCount }.Concat(bPages).ToArray();
         RequireSameSelection(evidenceA.Concat(evidenceB), profile);
-        RequireSamePartition(evidenceA.Concat(evidenceB));
+        var partitionKey = RequireSamePartition(evidenceA.Concat(evidenceB));
         RequireDistinctPasses(evidenceA, evidenceB, profile);
         RequireDifferentPageLimits(aPages, bPages);
         var selectedA = ParseCount(aCount.RetainedPayloadBytes.Span, profile); var selectedB = ParseCount(bCount.RetainedPayloadBytes.Span, profile);
         var rowsA = VerifyPages(aPages, countA.ObservationRef, selectedA, profile); var rowsB = VerifyPages(bPages, countB.ObservationRef, selectedB, profile);
         var times = new EnumerationObservationTimes(aCount.Observation.Request.ObservedAtUtc, aPages.Select(static page => page.Observation.Request.ObservedAtUtc).ToArray(), bCount.Observation.Request.ObservedAtUtc, bPages.Select(static page => page.Observation.Request.ObservedAtUtc).ToArray());
-        return new(profileRef, AssessThreshold(Math.Max(selectedA, selectedB), profile), countA, frozenPagesA, countB, frozenPagesB, times, selectedA, selectedB, rowsA, rowsB);
+        return new(profileRef, partitionKey, AssessThreshold(Math.Max(selectedA, selectedB), profile), countA, frozenPagesA, countB, frozenPagesB, times, selectedA, selectedB, rowsA, rowsB);
     }
     public static RepeatedEnumerationThresholdAssessment AssessThreshold(long count, RepeatedEnumerationInterpretationProfile profile) { if (count < 0) throw new ArgumentOutOfRangeException(nameof(count)); ArgumentNullException.ThrowIfNull(profile); return count < profile.MaximumDeliverableRows ? RepeatedEnumerationThresholdAssessment.BelowMaximum : RepeatedEnumerationThresholdAssessment.PartitionRequired; }
 
@@ -488,9 +496,14 @@ public sealed class EnumerationDeliveryComparison
         var passB = evidenceB.Select(value => IntegerParameter(value.QueryInput, profile.PassParameterName)).Distinct().ToArray();
         if (passA.Length != 1 || passB.Length != 1 || passA[0] == passB[0]) throw new ArgumentException("The two evidence sets must use distinct internally consistent pass values.");
     }
-    private static void RequireSamePartition(IEnumerable<RepeatedEnumerationResolvedEvidence> evidence)
+    private static string RequireSamePartition(IEnumerable<RepeatedEnumerationResolvedEvidence> evidence)
     {
-        if (evidence.Select(static value => value.QueryInput.PartitionBinding.MemberKey).Distinct(StringComparer.Ordinal).Count() != 1) throw new ArgumentException("The retained evidence sets must bind the same partition.");
+        var partitions = evidence
+            .Select(static value => value.QueryInput.PartitionBinding.MemberKey)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (partitions.Length != 1) throw new ArgumentException("The retained evidence sets must bind the same partition.");
+        return partitions[0];
     }
     private static void RequireDifferentPageLimits(IReadOnlyList<RepeatedEnumerationResolvedEvidence> evidenceA, IReadOnlyList<RepeatedEnumerationResolvedEvidence> evidenceB)
     {

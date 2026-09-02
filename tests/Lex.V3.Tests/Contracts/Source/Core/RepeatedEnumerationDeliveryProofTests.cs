@@ -99,7 +99,7 @@ public sealed class RepeatedEnumerationDeliveryProofTests
     [TestMethod]
     public void ComparisonExposesExactlyTheContentBoundPublicApi()
     {
-        CollectionAssert.AreEquivalent(new[] { "InterpretationProfileRef", "ThresholdAssessment", "CountA", "PagesA", "CountB", "PagesB", "ObservationTimes", "SelectedRowCountA", "SelectedRowCountB", "DeliveredRowCountA", "DeliveredRowCountB", "CanonicalRowDigestA", "CanonicalRowDigestB", "CanonicalKeyDigestA", "CanonicalKeyDigestB", "CursorDigestA", "CursorDigestB", "Outcome" }, typeof(EnumerationDeliveryComparison).GetProperties().Select(static property => property.Name).ToArray());
+        CollectionAssert.AreEquivalent(new[] { "InterpretationProfileRef", "PartitionKey", "ThresholdAssessment", "CountA", "PagesA", "CountB", "PagesB", "ObservationTimes", "SelectedRowCountA", "SelectedRowCountB", "DeliveredRowCountA", "DeliveredRowCountB", "CanonicalRowDigestA", "CanonicalRowDigestB", "CanonicalKeyDigestA", "CanonicalKeyDigestB", "CursorDigestA", "CursorDigestB", "Outcome" }, typeof(EnumerationDeliveryComparison).GetProperties().Select(static property => property.Name).ToArray());
         CollectionAssert.AreEquivalent(new[] { "Create", "AssessThreshold" }, typeof(EnumerationDeliveryComparison).GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.DeclaredOnly).Where(static method => !method.IsSpecialName).Select(static method => method.Name).ToArray());
         CollectionAssert.AreEquivalent(new[] { "QueryPlanRef", "QueryInputRef", "RenderReceiptRef", "RequestEvidenceRef", "ObservationRef" }, typeof(RepeatedEnumerationEvidenceRefs).GetProperties().Select(static property => property.Name).ToArray());
     }
@@ -117,6 +117,14 @@ public sealed class RepeatedEnumerationDeliveryProofTests
 
         var changed = new Fixture().Create("a|same,b|old", "a|same,b|new");
         Assert.AreEqual(EnumerationDeliveryOutcome.DifferentSelections, changed.Outcome);
+    }
+
+    [TestMethod]
+    public void ComparisonRetainsThePartitionKeyDerivedFromVerifiedInputs()
+    {
+        var comparison = new Fixture(partitionKey: "eu_2016").Create("a,b", "a,b");
+
+        Assert.AreEqual("eu_2016", comparison.PartitionKey);
     }
 
     [TestMethod]
@@ -447,6 +455,7 @@ public sealed class RepeatedEnumerationDeliveryProofTests
         private readonly int _statusCode;
         private readonly bool _samePass;
         private readonly bool _mismatchedPartition;
+        private readonly string _partitionKey;
         private readonly bool _samePageLimit;
         private readonly bool _wrongExpectedPageCount;
         private readonly bool _wrongPageCountRef;
@@ -485,6 +494,7 @@ public sealed class RepeatedEnumerationDeliveryProofTests
             int statusCode = 200,
             bool samePass = false,
             bool mismatchedPartition = false,
+            string partitionKey = "laws",
             bool samePageLimit = false,
             bool wrongExpectedPageCount = false,
             bool wrongPageCountRef = false,
@@ -518,6 +528,7 @@ public sealed class RepeatedEnumerationDeliveryProofTests
             _statusCode = statusCode;
             _samePass = samePass;
             _mismatchedPartition = mismatchedPartition;
+            _partitionKey = partitionKey;
             _samePageLimit = samePageLimit;
             _wrongExpectedPageCount = wrongExpectedPageCount;
             _wrongPageCountRef = wrongPageCountRef;
@@ -689,7 +700,7 @@ public sealed class RepeatedEnumerationDeliveryProofTests
             {
                 parameters.Reverse();
             }
-            var partitionMemberKey = _mismatchedPartition && pass == 2 ? "other-laws" : "laws";
+            var partitionMemberKey = _mismatchedPartition && pass == 2 ? "other-laws" : _partitionKey;
             var input = MachineQueryInputArtifact.Create(Artifact(seed + 100).ResourceId, family, partitionMemberKey, cardinality, parameters);
             var target = Encoding.ASCII.GetBytes("/feed");
             var plan = new MachineQueryPlan(MachineQueryPlan.SchemaId, input.QueryFamilyRef, Artifact(907), Artifact(908), HttpRequestMethod.Get, "https://publisher.example/feed", target.Length, Sha(target), cardinality, null, null, MachineQueryInputMode.RendererInputs, input.ArtifactRef, input.PartitionBinding, null, null);
