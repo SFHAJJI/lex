@@ -426,6 +426,41 @@ public sealed class MachineQueryPlanContractTests
     }
 
     [TestMethod]
+    public void PublisherLiteralIsTypedAsLexicalInputRatherThanAsACursor()
+    {
+        var provenance = Artifact("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", 'b');
+        var value = new MachineQueryParameter(
+            "requested_identifier",
+            MachineQueryParameterKind.PublisherLiteral,
+            integerValue: null,
+            textValue: "32016R0679",
+            provenance);
+
+        Assert.AreEqual(MachineQueryParameterKind.PublisherLiteral, value.Kind);
+        Assert.AreEqual("32016R0679", value.TextValue);
+        Assert.AreEqual(provenance, value.ProvenanceRef);
+        Assert.AreEqual(
+            "\"publisher_literal\"",
+            ContractJson.Serialize(MachineQueryParameterKind.PublisherLiteral));
+        Assert.AreEqual(
+            value,
+            ContractJson.Deserialize<MachineQueryParameter>(ContractJson.Serialize(value)));
+
+        Assert.ThrowsExactly<ArgumentException>(() => new MachineQueryParameter(
+            "requested_identifier", MachineQueryParameterKind.PublisherLiteral,
+            integerValue: 1, textValue: "32016R0679", provenance));
+        Assert.ThrowsExactly<ArgumentException>(() => new MachineQueryParameter(
+            "requested_identifier", MachineQueryParameterKind.PublisherLiteral,
+            integerValue: null, textValue: string.Empty, provenance));
+        Assert.ThrowsExactly<ArgumentException>(() => new MachineQueryParameter(
+            "requested_identifier", MachineQueryParameterKind.PublisherLiteral,
+            integerValue: null, textValue: "line\nbreak", provenance));
+        Assert.ThrowsExactly<ArgumentException>(() => new MachineQueryParameter(
+            "requested_identifier", MachineQueryParameterKind.PublisherLiteral,
+            integerValue: null, textValue: "\ud800", provenance));
+    }
+
+    [TestMethod]
     public void RetainedInputArtifactCanBeReconstructedAndReplayedOutsideItsProducer()
     {
         var produced = Parameters();
