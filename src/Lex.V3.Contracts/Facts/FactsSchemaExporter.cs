@@ -174,8 +174,15 @@ internal static class FactsSchemaHardener
     // `[!-~]+` includes `?` and `#`, so the schema matched `.../DOC_1?view=1` and `.../DOC_1#page`
     // while the reader refused both. The work and the persistent identifier were repaired at the
     // reader and the resource grammar was not.
+    // The reader admits a dotted expression or manifestation identifier as well as a sub-resource
+    // path, and this pattern required a literal slash immediately after the UUID, so the schema
+    // refused every dotted shape the reader accepts. Reader and schema must admit the same set;
+    // widening one alone is how a document becomes constructible and unserializable at once.
+    internal const string CellarDottedSuffix = @"\.[0-9]{4}(?:\.[0-9]{2})?";
+
     internal const string CellarResourcePattern =
-        CellarHost + "cellar/" + Uuid + "/" + PathPrintable + "+" + End;
+        CellarHost + "cellar/" + Uuid +
+        "(?:" + CellarDottedSuffix + "(?:/" + PathPrintable + "+)?|/" + PathPrintable + "+)" + End;
 
     /// <summary>An alias such as the CELEX PSI, which is never the work.</summary>
     // Narrowed to the one alias class the accepted scope actually proves. An arbitrary resource
