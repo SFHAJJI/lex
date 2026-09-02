@@ -19,9 +19,9 @@ public sealed class RobotsExclusionPolicyTests
             Disallow: /second
             """);
 
-        Assert.AreEqual(RobotsPathVerdict.Denied, Evaluate(policy, "/first"));
-        Assert.AreEqual(RobotsPathVerdict.Denied, Evaluate(policy, "/second"));
-        Assert.AreEqual(RobotsPathVerdict.Allowed, Evaluate(policy, "/third"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Denied, Evaluate(policy, "/first"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Denied, Evaluate(policy, "/second"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Allowed, Evaluate(policy, "/third"));
     }
 
     [TestMethod]
@@ -35,9 +35,9 @@ public sealed class RobotsExclusionPolicyTests
             Allow: /public
             """);
 
-        Assert.AreEqual(RobotsPathVerdict.Allowed, Evaluate(policy, "/private"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Allowed, Evaluate(policy, "/private"));
         Assert.AreEqual(
-            RobotsPathVerdict.Denied,
+            RobotsPolicyEvaluationResult.Denied,
             RobotsExclusionPolicy.Evaluate(policy, "AnotherBot", "/private"));
     }
 
@@ -50,8 +50,8 @@ public sealed class RobotsExclusionPolicyTests
             Disallow: /private
             """);
 
-        Assert.AreEqual(RobotsPathVerdict.Denied, Evaluate(policy, "/private/file"));
-        Assert.AreEqual(RobotsPathVerdict.Allowed, Evaluate(policy, "/public/file"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Denied, Evaluate(policy, "/private/file"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Allowed, Evaluate(policy, "/public/file"));
     }
 
     [TestMethod]
@@ -66,9 +66,9 @@ public sealed class RobotsExclusionPolicyTests
             Allow: /same
             """);
 
-        Assert.AreEqual(RobotsPathVerdict.Allowed, Evaluate(policy, "/records/public/1"));
-        Assert.AreEqual(RobotsPathVerdict.Denied, Evaluate(policy, "/records/private/1"));
-        Assert.AreEqual(RobotsPathVerdict.Allowed, Evaluate(policy, "/same"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Allowed, Evaluate(policy, "/records/public/1"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Denied, Evaluate(policy, "/records/private/1"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Allowed, Evaluate(policy, "/same"));
     }
 
     [TestMethod]
@@ -82,8 +82,8 @@ public sealed class RobotsExclusionPolicyTests
             Allow: /x/page.
             """);
 
-        Assert.AreEqual(RobotsPathVerdict.Denied, Evaluate(policy, "/page.html"));
-        Assert.AreEqual(RobotsPathVerdict.Allowed, Evaluate(policy, "/x/page.html"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Denied, Evaluate(policy, "/page.html"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Allowed, Evaluate(policy, "/x/page.html"));
 
         var equivalent = Bytes(
             """
@@ -91,7 +91,7 @@ public sealed class RobotsExclusionPolicyTests
             Disallow: /plain/baz
             Allow: /plain/%62%61%7A
             """);
-        Assert.AreEqual(RobotsPathVerdict.Allowed, Evaluate(equivalent, "/plain/baz"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Allowed, Evaluate(equivalent, "/plain/baz"));
     }
 
     [TestMethod]
@@ -105,10 +105,10 @@ public sealed class RobotsExclusionPolicyTests
             Disallow: /a*b$
             """);
 
-        Assert.AreEqual(RobotsPathVerdict.Denied, Evaluate(policy, "/law/file.xml"));
-        Assert.AreEqual(RobotsPathVerdict.Allowed, Evaluate(policy, "/law/file.xml?download=1"));
-        Assert.AreEqual(RobotsPathVerdict.Denied, Evaluate(policy, "/search?q=x&secret=true"));
-        Assert.AreEqual(RobotsPathVerdict.Denied, Evaluate(policy, "/axbxb"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Denied, Evaluate(policy, "/law/file.xml"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Allowed, Evaluate(policy, "/law/file.xml?download=1"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Denied, Evaluate(policy, "/search?q=x&secret=true"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Denied, Evaluate(policy, "/axbxb"));
     }
 
     [TestMethod]
@@ -119,25 +119,24 @@ public sealed class RobotsExclusionPolicyTests
         var policy = Bytes($"User-agent: Lex\nDisallow: /*{repeated}b$");
 
         Assert.AreEqual(
-            RobotsPathVerdict.Allowed,
+            RobotsPolicyEvaluationResult.Allowed,
             Evaluate(policy, $"/{repeated}{repeated}"));
         Assert.AreEqual(
-            RobotsPathVerdict.Denied,
+            RobotsPolicyEvaluationResult.Denied,
             Evaluate(policy, $"/{repeated}{repeated}b"));
     }
 
     [TestMethod]
-    public void MatchingIsCaseSensitiveAndStartsAtTheFirstPathOctet()
+    public void MatchingIsCaseSensitive()
     {
         var policy = Bytes(
             """
             User-agent: Lex
             Disallow: /Private
-            Disallow: private
             """);
 
-        Assert.AreEqual(RobotsPathVerdict.Denied, Evaluate(policy, "/Private/file"));
-        Assert.AreEqual(RobotsPathVerdict.Allowed, Evaluate(policy, "/private/file"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Denied, Evaluate(policy, "/Private/file"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Allowed, Evaluate(policy, "/private/file"));
     }
 
     [TestMethod]
@@ -150,10 +149,10 @@ public sealed class RobotsExclusionPolicyTests
             Disallow: /plain/%62%61%7A
             """);
 
-        Assert.AreEqual(RobotsPathVerdict.Denied, Evaluate(policy, "/unicode/%E3%83%84"));
-        Assert.AreEqual(RobotsPathVerdict.Denied, Evaluate(policy, "/unicode/ツ"));
-        Assert.AreEqual(RobotsPathVerdict.Denied, Evaluate(policy, "/plain/baz"));
-        Assert.AreEqual(RobotsPathVerdict.Denied, Evaluate(policy, "/plain/%62%61%7a"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Denied, Evaluate(policy, "/unicode/%E3%83%84"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Denied, Evaluate(policy, "/unicode/ツ"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Denied, Evaluate(policy, "/plain/baz"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Denied, Evaluate(policy, "/plain/%62%61%7a"));
     }
 
     [TestMethod]
@@ -166,13 +165,38 @@ public sealed class RobotsExclusionPolicyTests
             Disallow: /literal-%2A-%24
             """);
 
-        Assert.AreEqual(RobotsPathVerdict.Denied, Evaluate(policy, "/a%2fb"));
-        Assert.AreEqual(RobotsPathVerdict.Allowed, Evaluate(policy, "/a/b"));
-        Assert.AreEqual(RobotsPathVerdict.Denied, Evaluate(policy, "/literal-*-$"));
-        Assert.AreEqual(RobotsPathVerdict.Allowed, Evaluate(policy, "/literal-anything-x"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Denied, Evaluate(policy, "/a%2fb"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Allowed, Evaluate(policy, "/a/b"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Denied, Evaluate(policy, "/literal-*-$"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Allowed, Evaluate(policy, "/literal-anything-x"));
 
         var dollar = Bytes("User-agent: Lex\nDisallow: /money/%24");
-        Assert.AreEqual(RobotsPathVerdict.Denied, Evaluate(dollar, "/money/$"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Denied, Evaluate(dollar, "/money/$"));
+    }
+
+    [TestMethod]
+    public void RawPrintablePatternCharactersMatchTheirEncodedRequestOctets()
+    {
+        foreach (var character in "\"<>[]\\^`{|}")
+        {
+            var policy = Bytes($"User-agent: Lex\nDisallow: /a{character}b");
+            var encodedPath = $"/a%{(byte)character:X2}b";
+
+            Assert.AreEqual(
+                RobotsPolicyEvaluationResult.Denied,
+                Evaluate(policy, encodedPath),
+                $"Raw U+{(int)character:X4} must match its encoded request octet.");
+        }
+
+        Assert.AreEqual(
+            RobotsPolicyEvaluationResult.Denied,
+            Evaluate(Bytes("User-agent: Lex\nDisallow: /a%62c"), "/abc"));
+        Assert.AreEqual(
+            RobotsPolicyEvaluationResult.Denied,
+            Evaluate(Bytes("User-agent: Lex\nDisallow: /a%2Ab"), "/a*b"));
+        Assert.AreEqual(
+            RobotsPolicyEvaluationResult.Denied,
+            Evaluate(Bytes("User-agent: Lex\nDisallow: /money/$/receipt"), "/money/$/receipt"));
     }
 
     [TestMethod]
@@ -184,8 +208,8 @@ public sealed class RobotsExclusionPolicyTests
             "Sitemap: https://example.invalid/map\n" +
             "Disallow: /private # retained rule\r\n");
 
-        Assert.AreEqual(RobotsPathVerdict.Denied, Evaluate(policy, "/private"));
-        Assert.AreEqual(RobotsPathVerdict.Allowed, Evaluate(policy, "/outside"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Denied, Evaluate(policy, "/private"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Allowed, Evaluate(policy, "/outside"));
     }
 
     [TestMethod]
@@ -201,13 +225,13 @@ public sealed class RobotsExclusionPolicyTests
             Disallow: /second
             """);
 
-        Assert.AreEqual(RobotsPathVerdict.Denied, Evaluate(policy, "/first"));
-        Assert.AreEqual(RobotsPathVerdict.Allowed, Evaluate(policy, "/second"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Denied, Evaluate(policy, "/first"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Allowed, Evaluate(policy, "/second"));
         Assert.AreEqual(
-            RobotsPathVerdict.Denied,
+            RobotsPolicyEvaluationResult.Denied,
             RobotsExclusionPolicy.Evaluate(policy, "AnotherBot", "/first"));
         Assert.AreEqual(
-            RobotsPathVerdict.Denied,
+            RobotsPolicyEvaluationResult.Denied,
             RobotsExclusionPolicy.Evaluate(policy, "AnotherBot", "/second"));
     }
 
@@ -220,27 +244,27 @@ public sealed class RobotsExclusionPolicyTests
             Disallow: /
             """);
 
-        Assert.AreEqual(RobotsPathVerdict.Allowed, Evaluate(policy, "/private"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Allowed, Evaluate(policy, "/private"));
     }
 
     [TestMethod]
-    public void InvalidLinesAreIgnoredWhileLaterParseableRulesRemainEffective()
+    public void UnrecognizedLinesAreIgnoredWhileLaterParseableRulesRemainEffective()
     {
         var policy = Bytes(
             """
             User-agent Lex
             Disallow: /
             User-agent: Lex
-            Disallow: /bad%ZZ
+            Sitemap: https://example.invalid/%ZZ
             Disallow: /private
             """);
 
-        Assert.AreEqual(RobotsPathVerdict.Allowed, Evaluate(policy, "/public"));
-        Assert.AreEqual(RobotsPathVerdict.Denied, Evaluate(policy, "/private"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Allowed, Evaluate(policy, "/public"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Denied, Evaluate(policy, "/private"));
     }
 
     [TestMethod]
-    public void MalformedRuleStillEndsTheUserAgentHeaderSequence()
+    public void MalformedRuleMakesTheWholePolicyUnsafeToInterpret()
     {
         var policy = Bytes(
             """
@@ -250,37 +274,66 @@ public sealed class RobotsExclusionPolicyTests
             Disallow: /private
             """);
 
-        Assert.AreEqual(RobotsPathVerdict.Allowed, Evaluate(policy, "/private"));
         Assert.AreEqual(
-            RobotsPathVerdict.Denied,
+            RobotsPolicyEvaluationResult.UnsafeToInterpret,
+            Evaluate(policy, "/private"));
+        Assert.AreEqual(
+            RobotsPolicyEvaluationResult.UnsafeToInterpret,
             RobotsExclusionPolicy.Evaluate(policy, "Other", "/private"));
     }
 
     [TestMethod]
-    public void InvalidUserAgentQuarantinesFollowingRulesFromThePriorGroup()
+    [DataRow("User-agent: Lex\nUser-agent: Bad Token\nDisallow: /private")]
+    [DataRow("User-agent: Lex\nDisallow: /a\nUser-agent: Bad Token\nDisallow: /b")]
+    [DataRow("User-agent: *\nDisallow: /a\nUser-agent: Bad Token\nDisallow: /b")]
+    [DataRow("User-agent: Other\nDisallow: /a\nUSER-AGENT: Bad Token\nDisallow: /b")]
+    public void InvalidRecognizedUserAgentMakesThePolicyUnsafeToInterpret(string policy)
     {
-        var policy = Bytes(
-            """
-            User-agent: *
-            Disallow: /private
-            User-agent: Invalid Agent
-            Allow: /private
-            """);
-
-        Assert.AreEqual(RobotsPathVerdict.Denied, Evaluate(policy, "/private"));
+        Assert.AreEqual(
+            RobotsPolicyEvaluationResult.UnsafeToInterpret,
+            Evaluate(Bytes(policy), "/b"));
     }
 
     [TestMethod]
-    public void InvalidUserAgentBeforeRulesDoesNotEraseTheValidHeader()
+    public void InvalidRecognizedRuleMakesThePolicyUnsafeButEmptyDisallowStaysValid()
     {
-        var policy = Bytes(
-            """
-            User-agent: Lex
-            User-agent: Invalid Agent
-            Disallow: /private
-            """);
+        Assert.AreEqual(
+            RobotsPolicyEvaluationResult.UnsafeToInterpret,
+            Evaluate(Bytes("User-agent: Lex\nDisallow: /bad%ZZ"), "/public"));
+        Assert.AreEqual(
+            RobotsPolicyEvaluationResult.UnsafeToInterpret,
+            Evaluate(Bytes("User-agent: Lex\nAllow: /bad%ZZ"), "/public"));
+        Assert.AreEqual(
+            RobotsPolicyEvaluationResult.UnsafeToInterpret,
+            Evaluate(Bytes("Allow: /bad%ZZ"), "/public"));
+        Assert.AreEqual(
+            RobotsPolicyEvaluationResult.Allowed,
+            Evaluate(Bytes("User-agent: Lex\nDisallow:"), "/public"));
+    }
 
-        Assert.AreEqual(RobotsPathVerdict.Denied, Evaluate(policy, "/private"));
+    [TestMethod]
+    [DataRow("private")]
+    [DataRow("$")]
+    [DataRow("%2Fprivate")]
+    public void InvalidRuleStartMakesThePolicyUnsafeToInterpret(string pattern)
+    {
+        Assert.AreEqual(
+            RobotsPolicyEvaluationResult.UnsafeToInterpret,
+            Evaluate(Bytes($"User-agent: Lex\nDisallow: {pattern}"), "/private"));
+    }
+
+    [TestMethod]
+    public void SlashAndWildcardRuleStartsRemainValid()
+    {
+        Assert.AreEqual(
+            RobotsPolicyEvaluationResult.Denied,
+            Evaluate(Bytes("User-agent: Lex\nDisallow: /private"), "/private"));
+        Assert.AreEqual(
+            RobotsPolicyEvaluationResult.Denied,
+            Evaluate(Bytes("User-agent: Lex\nDisallow: *.gif$"), "/image.gif"));
+        Assert.AreEqual(
+            RobotsPolicyEvaluationResult.Allowed,
+            Evaluate(Bytes("User-agent: Lex\nDisallow:"), "/private"));
     }
 
     [TestMethod]
@@ -300,7 +353,7 @@ public sealed class RobotsExclusionPolicyTests
 
         var method = (System.Reflection.MethodInfo)members[0];
         Assert.AreEqual(nameof(RobotsExclusionPolicy.Evaluate), method.Name);
-        Assert.AreEqual(typeof(RobotsPathVerdict), method.ReturnType);
+        Assert.AreEqual(typeof(RobotsPolicyEvaluationResult), method.ReturnType);
         CollectionAssert.AreEqual(
             new[] { typeof(ReadOnlySpan<byte>), typeof(string), typeof(string) },
             method.GetParameters().Select(static parameter => parameter.ParameterType).ToArray());
@@ -308,10 +361,14 @@ public sealed class RobotsExclusionPolicyTests
             new[] { "policyBytes", "productToken", "pathAndQuery" },
             method.GetParameters().Select(static parameter => parameter.Name).ToArray());
 
-        CollectionAssert.AreEqual(new[] { "Allowed", "Denied" }, Enum.GetNames<RobotsPathVerdict>());
         CollectionAssert.AreEqual(
-            new[] { 1, 2 },
-            Enum.GetValues<RobotsPathVerdict>().Select(static value => (int)value).ToArray());
+            new[] { "Allowed", "Denied", "UnsafeToInterpret" },
+            Enum.GetNames<RobotsPolicyEvaluationResult>());
+        CollectionAssert.AreEqual(
+            new[] { 1, 2, 3 },
+            Enum.GetValues<RobotsPolicyEvaluationResult>().Select(static value => (int)value).ToArray());
+        Assert.IsNull(
+            type.Assembly.GetType("Lex.V3.Contracts.Source.Core.RobotsPathVerdict"));
     }
 
     [TestMethod]
@@ -321,7 +378,7 @@ public sealed class RobotsExclusionPolicyTests
             .Concat(Bytes("User-agent: Lex\nDisallow: /private"))
             .ToArray();
 
-        Assert.AreEqual(RobotsPathVerdict.Denied, Evaluate(policy, "/private"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Denied, Evaluate(policy, "/private"));
     }
 
     [TestMethod]
@@ -335,10 +392,10 @@ public sealed class RobotsExclusionPolicyTests
             Disallow: /
             """);
 
-        Assert.AreEqual(RobotsPathVerdict.Allowed, Evaluate(policy, "/anything"));
-        Assert.AreEqual(RobotsPathVerdict.Allowed, Evaluate(Bytes("User-agent: Lex\nDisallow: /"), "/robots.txt"));
-        Assert.AreEqual(RobotsPathVerdict.Allowed, Evaluate(Bytes("User-agent: Lex\nDisallow: /"), "/robots%2Etxt"));
-        Assert.AreEqual(RobotsPathVerdict.Allowed, Evaluate([], "/anything"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Allowed, Evaluate(policy, "/anything"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Allowed, Evaluate(Bytes("User-agent: Lex\nDisallow: /"), "/robots.txt"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Allowed, Evaluate(Bytes("User-agent: Lex\nDisallow: /"), "/robots%2Etxt"));
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Allowed, Evaluate([], "/anything"));
     }
 
     [TestMethod]
@@ -368,7 +425,7 @@ public sealed class RobotsExclusionPolicyTests
     public void PathAndQueryAcceptsOnlyCanonicalRfc3986Characters()
     {
         Assert.AreEqual(
-            RobotsPathVerdict.Allowed,
+            RobotsPolicyEvaluationResult.Allowed,
             Evaluate([], "/p:@!$&'()*+,;=~?q=/?:@!$&'()*+,;=~"));
 
         foreach (var invalidCharacter in "\\\"<>[]^`{|}")
@@ -380,7 +437,7 @@ public sealed class RobotsExclusionPolicyTests
         }
     }
 
-    private static RobotsPathVerdict Evaluate(byte[] policy, string pathAndQuery) =>
+    private static RobotsPolicyEvaluationResult Evaluate(byte[] policy, string pathAndQuery) =>
         RobotsExclusionPolicy.Evaluate(policy, "Lex", pathAndQuery);
 
     private static byte[] Bytes(string value) => Encoding.UTF8.GetBytes(value);

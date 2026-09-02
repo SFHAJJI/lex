@@ -3,14 +3,19 @@ using System.Text;
 
 namespace Lex.V3.Contracts.Source.Core;
 
-public enum RobotsPathVerdict
+/// <summary>
+/// The result of parsing and evaluating one robots policy for one request target.
+/// </summary>
+public enum RobotsPolicyEvaluationResult
 {
     Allowed = 1,
     Denied = 2,
+    UnsafeToInterpret = 3,
 }
 
 /// <summary>
-/// Evaluates the parseable rules from a bounded RFC 9309 robots.txt observation.
+/// Parses and evaluates a bounded RFC 9309 robots.txt observation.
+/// Invalid recognized directives return <see cref="RobotsPolicyEvaluationResult.UnsafeToInterpret"/>.
 /// Source: https://www.rfc-editor.org/rfc/rfc9309.html#section-2.2
 /// </summary>
 public static class RobotsExclusionPolicy
@@ -21,18 +26,21 @@ public static class RobotsExclusionPolicy
         encoderShouldEmitUTF8Identifier: false,
         throwOnInvalidBytes: true);
 
-    public static RobotsPathVerdict Evaluate(
+    public static RobotsPolicyEvaluationResult Evaluate(
         ReadOnlySpan<byte> policyBytes,
         string productToken,
         string pathAndQuery)
     {
         ValidateProductToken(productToken);
         var normalizedPath = NormalizePath(pathAndQuery);
-        var groups = Parse(policyBytes);
+        if (!TryParse(policyBytes, out var groups))
+        {
+            return RobotsPolicyEvaluationResult.UnsafeToInterpret;
+        }
 
         if (string.Equals(normalizedPath, "/robots.txt", StringComparison.Ordinal))
         {
-            return RobotsPathVerdict.Allowed;
+            return RobotsPolicyEvaluationResult.Allowed;
         }
 
         var exactGroups = groups
@@ -61,11 +69,13 @@ public static class RobotsExclusionPolicy
         }
 
         return winner is { IsAllow: false }
-            ? RobotsPathVerdict.Denied
-            : RobotsPathVerdict.Allowed;
+            ? RobotsPolicyEvaluationResult.Denied
+            : RobotsPolicyEvaluationResult.Allowed;
     }
 
-    private static IReadOnlyList<Group> Parse(ReadOnlySpan<byte> policyBytes)
+    private static bool TryParse(
+        ReadOnlySpan<byte> policyBytes,
+        out IReadOnlyList<Group> groups)
     {
         if (policyBytes.Length > MaximumPolicyBytes)
         {
@@ -93,7 +103,7 @@ public static class RobotsExclusionPolicy
             policy = policy[1..];
         }
 
-        var groups = new List<Group>();
+        var parsedGroups = new List<Group>();
         Group? current = null;
         foreach (var sourceLine in policy.Split(['\r', '\n']))
         {
@@ -116,18 +126,14 @@ public static class RobotsExclusionPolicy
             {
                 if (!IsPolicyUserAgent(value))
                 {
-                    if (current?.HasRuleDirective == true)
-                    {
-                        current = null;
-                    }
-
-                    continue;
+                    groups = [];
+                    return false;
                 }
 
                 if (current is null || current.HasRuleDirective)
                 {
                     current = new Group();
-                    groups.Add(current);
+                    parsedGroups.Add(current);
                 }
 
                 current.UserAgents.Add(value);
@@ -140,22 +146,26 @@ public static class RobotsExclusionPolicy
                 continue;
             }
 
+            if (!TryCreateRule(value, isAllow, out var rule))
+            {
+                groups = [];
+                return false;
+            }
+
             if (current is null)
             {
                 continue;
             }
 
             current.HasRuleDirective = true;
-            if (TryCreateRule(value, isAllow, out var rule))
+            if (rule is not null)
             {
-                if (rule is not null)
-                {
-                    current.Rules.Add(rule.Value);
-                }
+                current.Rules.Add(rule.Value);
             }
         }
 
-        return groups;
+        groups = parsedGroups;
+        return true;
     }
 
     private static bool TryCreateRule(string value, bool isAllow, out Rule? rule)
@@ -164,6 +174,11 @@ public static class RobotsExclusionPolicy
         if (value.Length == 0)
         {
             return true;
+        }
+
+        if (value[0] is not ('/' or '*'))
+        {
+            return false;
         }
 
         var requiresEnd = value[^1] == '$';
@@ -216,9 +231,9 @@ public static class RobotsExclusionPolicy
                     return false;
                 }
 
-                if (character == '$')
+                if (character == '$' || !IsPathAndQueryCharacter(character))
                 {
-                    AppendPercentEncoded(result, (byte)'$');
+                    AppendPercentEncoded(result, (byte)character);
                 }
                 else
                 {
