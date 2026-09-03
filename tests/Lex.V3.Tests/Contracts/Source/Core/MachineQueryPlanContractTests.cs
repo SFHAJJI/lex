@@ -214,6 +214,95 @@ public sealed class MachineQueryPlanContractTests
     }
 
     [TestMethod]
+    public async Task RendererWithoutBytesIsReopenedRatherThanRetained()
+    {
+        var fixture = AsyncCapability();
+        var resolver = new RecordingArtifactResolver(fixture.ExternalArtifacts, fixture.Events);
+
+        _ = await MachineQueryBinder.OpenForSendAsync(
+            fixture.Capability,
+            resolver,
+            CancellationToken.None);
+
+        // A renderer that produces nothing must offer nothing. The failure this pins is not a
+        // missing feature: an offer of zero bytes is a present offer, so the send would retain an
+        // empty artifact under a true digest and the reopen-by-reference path would never run. The
+        // three binder-produced artifacts are retained as they always were.
+        CollectionAssert.DoesNotContain(
+            resolver.RetainedReferences.ToArray(),
+            fixture.RendererProfileRef,
+            "a renderer that produces no bytes cannot have any retained on its behalf");
+        CollectionAssert.DoesNotContain(
+            resolver.RetainedReferences.ToArray(),
+            fixture.RendererSourceRef);
+        Assert.AreEqual(
+            3,
+            resolver.RetainedReferences.Count,
+            "only the receipt, the plan and the input are the binder's own to retain here");
+        CollectionAssert.Contains(
+            resolver.OpenedReferences.ToArray(),
+            fixture.RendererProfileRef,
+            "it must still be opened, by reference, from a store that already holds it");
+    }
+
+    [TestMethod]
+    public async Task RendererProducingItsBytesSendsAgainstAStoreThatNeverHeldThem()
+    {
+        var fixture = AsyncCapability(rendererProducesItsBytes: true);
+        var resolver = new RecordingArtifactResolver(
+            fixture.ExternalArtifacts,
+            fixture.Events,
+            absentRefs: new HashSet<SourceArtifactRef>
+            {
+                fixture.RendererProfileRef,
+                fixture.RendererSourceRef,
+            });
+
+        // Decision 75, stated as the only thing that proves it: a store that would throw for both
+        // renderer artifacts if they were merely reopened. Passing means the run put them there
+        // itself. This is the shape that a pre-seeding test double cannot distinguish, and the
+        // shape whose absence made the product route fail against a real FileSystemCustodyStore
+        // while every double-backed test stayed green.
+        var opened = await MachineQueryBinder.OpenForSendAsync(
+            fixture.Capability,
+            resolver,
+            CancellationToken.None);
+
+        Assert.AreEqual(Target, opened.RequestedUri);
+        CollectionAssert.Contains(
+            resolver.RetainedReferences.ToArray(),
+            fixture.RendererProfileRef);
+        CollectionAssert.Contains(
+            resolver.RetainedReferences.ToArray(),
+            fixture.RendererSourceRef);
+    }
+
+    [TestMethod]
+    public void BytesThatDoNotCarryTheirReferencesDigestAreRefusedAtBind()
+    {
+        var fixture = AsyncCapability(rendererProducesItsBytes: true);
+        var wrongBytes = Encoding.UTF8.GetBytes("renderer-profile/2\n");
+
+        // The digest stays the authority. Producing bytes is a witness to the frozen reference,
+        // never a way to redefine what it names, so a renderer offering other bytes cannot bind at
+        // all rather than being caught later at reopen.
+        var renderer = new ObservedRenderer(
+            fixture.RendererProfileRef,
+            fixture.RendererSourceRef,
+            Target,
+            PostBody,
+            fixture.Events,
+            wrongBytes,
+            null);
+
+        Assert.ThrowsExactly<ArgumentException>(() => MachineQueryBinder.BindForSend(
+            fixture.Plan,
+            fixture.PlanRef,
+            fixture.Input,
+            renderer));
+    }
+
+    [TestMethod]
     public async Task MissingLastTransitiveArtifactFailsBeforeRendering()
     {
         var fixture = AsyncCapability();
@@ -1066,7 +1155,7 @@ public sealed class MachineQueryPlanContractTests
         ];
     }
 
-    private static AsyncBinderFixture AsyncCapability()
+    private static AsyncBinderFixture AsyncCapability(bool rendererProducesItsBytes = false)
     {
         var events = new List<string>();
         var rendererProfileBytes = Encoding.UTF8.GetBytes("renderer-profile/1\n");
@@ -1133,7 +1222,9 @@ public sealed class MachineQueryPlanContractTests
             rendererSourceRef,
             Target,
             PostBody,
-            events);
+            events,
+            rendererProducesItsBytes ? rendererProfileBytes : null,
+            rendererProducesItsBytes ? rendererSourceBytes : null);
         var capability = MachineQueryBinder.BindForSend(plan, planRef, input, renderer);
         var externalArtifacts = new Dictionary<SourceArtifactRef, byte[]>
         {
@@ -1145,6 +1236,7 @@ public sealed class MachineQueryPlanContractTests
         };
         return new AsyncBinderFixture(
             capability,
+            plan,
             planRef,
             input,
             rendererProfileRef,
@@ -1313,6 +1405,7 @@ public sealed class MachineQueryPlanContractTests
 
     private sealed record AsyncBinderFixture(
         BoundMachineRequest Capability,
+        MachineQueryPlan Plan,
         SourceArtifactRef PlanRef,
         MachineQueryInputArtifact Input,
         SourceArtifactRef RendererProfileRef,
@@ -1329,11 +1422,38 @@ public sealed class MachineQueryPlanContractTests
         SourceArtifactRef rendererSourceRef,
         string requestedUri,
         byte[] body,
-        List<string> events) : IMachineQueryRenderer
+        List<string> events,
+        byte[]? profileBytes = null,
+        byte[]? sourceBytes = null) : IMachineQueryRenderer
     {
         public SourceArtifactRef RendererProfileRef { get; } = rendererProfileRef;
 
         public SourceArtifactRef RendererSourceRef { get; } = rendererSourceRef;
+
+        // Written as statements, not as "profileBytes is null ? null : new ReadOnlyMemory<byte>(
+        // profileBytes)". That expression compiles and is wrong: measured in both Debug and
+        // Release here, it hands the binder a present, empty memory when profileBytes is null, so
+        // a renderer that produces nothing is read as producing zero bytes. Every conversion into
+        // ReadOnlyMemory<byte>? in this change is spelled out for that reason.
+        public ReadOnlyMemory<byte>? CopyRendererProfileBytes()
+        {
+            if (profileBytes is null)
+            {
+                return null;
+            }
+
+            return new ReadOnlyMemory<byte>(profileBytes);
+        }
+
+        public ReadOnlyMemory<byte>? CopyRendererSourceBytes()
+        {
+            if (sourceBytes is null)
+            {
+                return null;
+            }
+
+            return new ReadOnlyMemory<byte>(sourceBytes);
+        }
 
         public int RenderCount { get; private set; }
 
@@ -1351,11 +1471,17 @@ public sealed class MachineQueryPlanContractTests
         IReadOnlyDictionary<SourceArtifactRef, byte[]> externalArtifacts,
         List<string> events,
         SourceArtifactRef? missingRef = null,
-        SourceArtifactRef? corruptRef = null) : IMachineQueryArtifactResolver
+        SourceArtifactRef? corruptRef = null,
+        IReadOnlyCollection<SourceArtifactRef>? absentRefs = null) : IMachineQueryArtifactResolver
     {
         private readonly List<SourceArtifactRef> _openedReferences = new();
 
+        private readonly List<SourceArtifactRef> _retainedReferences = new();
+
         internal IReadOnlyList<SourceArtifactRef> OpenedReferences => _openedReferences;
+
+        /// <summary>The references this run put under its own custody rather than assumed.</summary>
+        internal IReadOnlyList<SourceArtifactRef> RetainedReferences => _retainedReferences;
 
         public Task<ReadOnlyMemory<byte>> RetainAndReopenAsync(
             SourceArtifactRef reference,
@@ -1364,6 +1490,7 @@ public sealed class MachineQueryPlanContractTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             Record(reference);
+            _retainedReferences.Add(reference);
             return Task.FromResult(producerBytes);
         }
 
@@ -1373,8 +1500,10 @@ public sealed class MachineQueryPlanContractTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             Record(reference);
-            if (reference == missingRef)
+            if (reference == missingRef ||
+                (absentRefs is not null && absentRefs.Contains(reference)))
             {
+                // What a real content-addressed store does for an artifact this run never held.
                 throw new FileNotFoundException("The requested fixture artifact is absent.");
             }
 

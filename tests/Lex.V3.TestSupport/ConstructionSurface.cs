@@ -114,9 +114,28 @@ public static class ConstructionSurface
                 BindingFlags.Public | BindingFlags.NonPublic
                 | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
             {
-                if (field.FieldType == guarded)
+                // Carries rather than an exact match. A hoisted local of a wrapped type, a Task of
+                // the guarded type or an array of it, is storage exactly as a bare field is, and an
+                // exact comparison made it vanish from this sweep while the exact lists already
+                // skipped it: it would have been in neither, which is the one outcome a guard must
+                // never produce.
+                if (Carries(field.FieldType, guarded))
                 {
-                    found.Add($"{(field.IsStatic ? "static" : "instance")} {(field.IsPublic ? "public" : "non-public")} {type.FullName}");
+                    // Tagged structurally, by asking the type system whether the field is a
+                    // delegate, so the collective assertion can tell a cached lambda, whose method
+                    // is pinned exactly elsewhere, from storage carrying the guarded type itself.
+                    // The first version reported the type's name and let the assertion match it
+                    // against "Func`", "Action`" and "Action". That is name filtering inside a
+                    // guard: a custom delegate would have failed it, and any type that happened to
+                    // be called Action would have passed. It is the shape this guard exists to
+                    // remove, so it cannot be the shape the guard is written in.
+                    var kind = typeof(Delegate).IsAssignableFrom(field.FieldType)
+                        ? "delegate"
+                        : "storage";
+                    found.Add(
+                        $"{(field.IsStatic ? "static" : "instance")} "
+                        + $"{(field.IsPublic ? "public" : "non-public")} "
+                        + $"{type.FullName} : {kind}");
                 }
             }
         }

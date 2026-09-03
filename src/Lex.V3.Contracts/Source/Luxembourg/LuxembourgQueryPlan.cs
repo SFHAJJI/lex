@@ -303,12 +303,12 @@ internal static class LuxembourgQueryPageBinder
         LuxembourgQueryCursor? lastCursor,
         long expectedPartitionRowCount,
         SourceArtifactRef expectedPartitionRowCountEvidenceRef,
-        SourceArtifactRef rendererSourceRef)
+        MachineQueryRendererSource rendererSource)
     {
         ArgumentNullException.ThrowIfNull(invariantPlan);
         ArgumentNullException.ThrowIfNull(partition);
         ArgumentNullException.ThrowIfNull(expectedPartitionRowCountEvidenceRef);
-        ArgumentNullException.ThrowIfNull(rendererSourceRef);
+        ArgumentNullException.ThrowIfNull(rendererSource);
         var definition = invariantPlan.SetDefinitions.SingleOrDefault(value => value.SetId == setId)
             ?? throw new ArgumentException("The set identity is not in the LU plan.", nameof(setId));
         if (definition.Acquisition != LuxembourgQuerySetAcquisition.PublisherQuery ||
@@ -354,7 +354,7 @@ internal static class LuxembourgQueryPageBinder
             LuxembourgQueryRequestKind.Page,
             response,
             parameters,
-            rendererSourceRef);
+            rendererSource);
         return new LuxembourgBoundQueryPage(
             bound.InvariantPlanRef,
             bound.MachinePlan,
@@ -371,11 +371,11 @@ internal static class LuxembourgQueryPageBinder
         string setId,
         LuxembourgQueryPass pass,
         LuxembourgQueryPartitionRange partition,
-        SourceArtifactRef rendererSourceRef)
+        MachineQueryRendererSource rendererSource)
     {
         ArgumentNullException.ThrowIfNull(invariantPlan);
         ArgumentNullException.ThrowIfNull(partition);
-        ArgumentNullException.ThrowIfNull(rendererSourceRef);
+        ArgumentNullException.ThrowIfNull(rendererSource);
         _ = invariantPlan.PageLimitFor(pass);
         var definition = invariantPlan.SetDefinitions.SingleOrDefault(value => value.SetId == setId)
             ?? throw new ArgumentException("The set identity is not in the LU plan.", nameof(setId));
@@ -404,7 +404,7 @@ internal static class LuxembourgQueryPageBinder
             response,
             SelectionParameters(partition, invariantPlanRef)
                 .Append(Integer("pass_id", (int)pass, invariantPlanRef)),
-            rendererSourceRef));
+            rendererSource));
     }
 
     private static LuxembourgBoundMachineTuple BindMachine(
@@ -418,7 +418,7 @@ internal static class LuxembourgQueryPageBinder
         LuxembourgQueryRequestKind kind,
         MachineResponseCardinality response,
         IEnumerable<MachineQueryParameter> parameters,
-        SourceArtifactRef rendererSourceRef)
+        MachineQueryRendererSource rendererSource)
     {
         var queryFamily = new SourceRegistryMemberRef(
             invariantPlanRef,
@@ -431,7 +431,7 @@ internal static class LuxembourgQueryPageBinder
             parameters.ToArray());
         var renderer = new LuxembourgSparqlRenderer(
             invariantPlanRef,
-            rendererSourceRef,
+            rendererSource,
             invariantPlan,
             template,
             kind);
@@ -442,7 +442,7 @@ internal static class LuxembourgQueryPageBinder
             MachineQueryPlan.SchemaId,
             queryFamily,
             invariantPlanRef,
-            rendererSourceRef,
+            rendererSource.Reference,
             HttpRequestMethod.Post,
             invariantPlan.DatasetGraphIdentity.Endpoint,
             targetBytes.LongLength,
@@ -517,6 +517,8 @@ internal static class LuxembourgQueryPageBinder
 
 internal sealed class LuxembourgSparqlRenderer : IMachineQueryRenderer
 {
+    private readonly MachineQueryRendererSource _rendererSource;
+    private readonly byte[] _rendererProfileBytes;
     private readonly LuxembourgQueryTemplate _template;
     private readonly LuxembourgQueryRequestKind _kind;
     private readonly uint _pass1PageLimit;
@@ -524,7 +526,7 @@ internal sealed class LuxembourgSparqlRenderer : IMachineQueryRenderer
 
     public LuxembourgSparqlRenderer(
         SourceArtifactRef rendererProfileRef,
-        SourceArtifactRef rendererSourceRef,
+        MachineQueryRendererSource rendererSource,
         LuxembourgQueryPlan invariantPlan,
         LuxembourgQueryTemplate template,
         LuxembourgQueryRequestKind kind)
@@ -532,8 +534,13 @@ internal sealed class LuxembourgSparqlRenderer : IMachineQueryRenderer
         ArgumentNullException.ThrowIfNull(invariantPlan);
         LuxembourgQueryPlan.EnsureClosed(invariantPlan);
         LuxembourgQueryPlanIdentity.Validate(rendererProfileRef, invariantPlan);
+        ArgumentNullException.ThrowIfNull(rendererSource);
         RendererProfileRef = rendererProfileRef;
-        RendererSourceRef = rendererSourceRef;
+        _rendererSource = rendererSource;
+
+        // Produced from the invariant plan this constructor just validated the profile reference
+        // against, so the bytes and the digest cannot drift apart between here and the send.
+        _rendererProfileBytes = LuxembourgQueryPlanIdentity.GetCanonicalBytes(invariantPlan).ToArray();
         _template = template;
         _kind = kind;
         _pass1PageLimit = invariantPlan.Pass1PageLimit;
@@ -541,7 +548,14 @@ internal sealed class LuxembourgSparqlRenderer : IMachineQueryRenderer
     }
 
     public SourceArtifactRef RendererProfileRef { get; }
-    public SourceArtifactRef RendererSourceRef { get; }
+
+    public SourceArtifactRef RendererSourceRef => _rendererSource.Reference;
+
+    /// <inheritdoc />
+    public ReadOnlyMemory<byte>? CopyRendererProfileBytes() => _rendererProfileBytes.ToArray();
+
+    /// <inheritdoc />
+    public ReadOnlyMemory<byte>? CopyRendererSourceBytes() => _rendererSource.CopyBytes();
 
     public MachineQueryRenderOutput Render(
         MachineQueryPlan plan,
@@ -953,7 +967,7 @@ public sealed record LuxembourgQueryPlan
         LuxembourgQueryCursor? lastCursor,
         long expectedPartitionRowCount,
         SourceArtifactRef expectedPartitionRowCountEvidenceRef,
-        SourceArtifactRef rendererSourceRef) => LuxembourgQueryPageBinder.Bind(
+        MachineQueryRendererSource rendererSource) => LuxembourgQueryPageBinder.Bind(
         this,
         queryPlanResourceId,
         machinePlanResourceId,
@@ -964,7 +978,7 @@ public sealed record LuxembourgQueryPlan
         lastCursor,
         expectedPartitionRowCount,
         expectedPartitionRowCountEvidenceRef,
-        rendererSourceRef);
+        rendererSource);
 
     public LuxembourgBoundQueryCount BindCount(
         string queryPlanResourceId,
@@ -973,7 +987,7 @@ public sealed record LuxembourgQueryPlan
         string setId,
         LuxembourgQueryPass pass,
         LuxembourgQueryPartitionRange partition,
-        SourceArtifactRef rendererSourceRef) => LuxembourgQueryPageBinder.BindCount(
+        MachineQueryRendererSource rendererSource) => LuxembourgQueryPageBinder.BindCount(
         this,
         queryPlanResourceId,
         machinePlanResourceId,
@@ -981,7 +995,7 @@ public sealed record LuxembourgQueryPlan
         setId,
         pass,
         partition,
-        rendererSourceRef);
+        rendererSource);
 
     public RepeatedEnumerationInterpretationProfile CreateDeliveryProfile(
         string queryPlanResourceId,

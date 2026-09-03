@@ -2,6 +2,7 @@ using System.Net;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using Lex.V3.Artifacts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Http;
@@ -189,6 +190,11 @@ public sealed class RoutedHttpRequestPolicyAuditTests
         var countEvidenceRef = Artifact(
             "urn:uuid:16882425-39e8-4ddb-a61e-c32a3a33b304",
             countEvidenceBytes);
+        // The pair, not the bare reference: the binder now requires whoever names the renderer
+        // source to be holding it.
+        var rendererSource = MachineQueryRendererSource.Open(
+            rendererSourceRef,
+            rendererSourceBytes);
         var partition = new LuxembourgQueryPartitionRange(
             "subjects-http",
             new LuxembourgQueryCursor(
@@ -202,7 +208,7 @@ public sealed class RoutedHttpRequestPolicyAuditTests
             "S",
             LuxembourgQueryPass.Pass1,
             partition,
-            rendererSourceRef);
+            rendererSource);
         var page = invariantPlan.BindPage(
             invariantPlanResourceId,
             "urn:uuid:0c79fc78-29d5-468a-a544-a39fe0b3b19b",
@@ -213,7 +219,7 @@ public sealed class RoutedHttpRequestPolicyAuditTests
             lastCursor: null,
             expectedPartitionRowCount: 1,
             countEvidenceRef,
-            rendererSourceRef);
+            rendererSource);
         var custody = new MemoryCustodyStore();
         await custody.CreateAsync(
             invariantPlanBytes,
@@ -268,6 +274,107 @@ public sealed class RoutedHttpRequestPolicyAuditTests
             page.InvariantPlanRef,
             rendererSourceRef,
             countEvidenceRef);
+    }
+
+    [TestMethod]
+    public async Task LuxembourgCountSendsAgainstAFreshRealStoreHoldingNothing()
+    {
+        // Decision 75, and the only test shape that can show it. Every other machine-send test
+        // runs against a store that was handed the send closure first, either by a double that
+        // answers from a table of fixture bytes or by three CreateAsync calls before the session
+        // starts. Under that arrangement a run that merely names its dependencies is
+        // indistinguishable from one that holds them, which is how the product route stayed green
+        // here for as long as it did while failing against a real FileSystemCustodyStore with
+        // "the content-addressed artifact is not retained by this store".
+        //
+        // So: a real store, on an empty directory, with nothing put in it. The count closure is
+        // exactly the receipt, the machine plan, the ordered parameter set, the invariant plan and
+        // the renderer source. The first three the binder produces. The last two the renderer now
+        // produces, which is the change. Nothing in this closure is anyone else's to have
+        // retained, so the run either holds all of it or does not send.
+        var profile = OfficialMachineQuerySourceProfile.LuxembourgSparql();
+        var scopeRef = Artifact(
+            "urn:uuid:1f7f4e26-1a4e-4a6d-9d3e-5c1c4a1d2f60",
+            "bounded Luxembourg acquisition scope"u8);
+        var invariantPlan = LuxembourgQueryPlan.CreateDefaultGraph(profile.ArtifactRef, scopeRef);
+        var rendererSourceBytes = "Luxembourg SPARQL renderer source"u8.ToArray();
+        var rendererSource = MachineQueryRendererSource.Open(
+            Artifact("urn:uuid:2c9a4b70-0f5e-4a51-8a53-6b0f2e7c9a11", rendererSourceBytes),
+            rendererSourceBytes);
+        var count = invariantPlan.BindCount(
+            "urn:uuid:3d8b5c81-1a6f-4b62-9b64-7c1f3f8daa22",
+            "urn:uuid:4e9c6d92-2b70-4c73-8c75-8d2a4a9ebb33",
+            "urn:uuid:5fad7ea3-3c81-4d84-9d86-9e3b5bafcc44",
+            "S",
+            LuxembourgQueryPass.Pass1,
+            new LuxembourgQueryPartitionRange(
+                "subjects-fresh-store",
+                new LuxembourgQueryCursor(
+                    "http://data.legilux.public.lu/resource/a", "", "", "", "", ""),
+                new LuxembourgQueryCursor(
+                    "http://data.legilux.public.lu/resource/z", "", "", "", "", "")),
+            rendererSource);
+
+        var root = Path.Combine(
+            Path.GetTempPath(),
+            "lex-fresh-store-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var custody = new FileSystemCustodyStore(root);
+            var productSends = 0;
+            var handler = new CountingHandler((ordinal, request) =>
+            {
+                if (ordinal == 0)
+                {
+                    return Response(request, HttpStatusCode.OK, "User-agent: *\nAllow: /\n");
+                }
+
+                Interlocked.Increment(ref productSends);
+                Assert.AreEqual(
+                    LuxembourgQueryPlan.PublisherEndpoint,
+                    request.RequestUri?.AbsoluteUri);
+                return Response(request, HttpStatusCode.OK, "42");
+            });
+            using var session = Session(count.Request, handler, custody);
+            var started = await BootstrapAsync(session);
+            Assert.AreEqual(OfficialHttpAcquisitionOutcomeKind.ExecutedObservation, started.Kind);
+
+            var attempt = await session.OpenPlanItem(count.Request)
+                .ExecuteNextAttemptAsync(CancellationToken.None);
+
+            Assert.AreEqual(
+                OfficialHttpAcquisitionOutcomeKind.ExecutedObservation,
+                attempt.Kind,
+                "a run that produces its own send closure needs nothing already in the store");
+            Assert.AreEqual(1, productSends);
+            AssertOpenedClosure(
+                MachinePolicyFor(session, count.MachinePlanRef),
+                5,
+                count.MachinePlanRef,
+                count.InputArtifact.ArtifactRef,
+                count.InvariantPlanRef,
+                rendererSource.Reference);
+
+            // Readable back out of the store by digest, which is the difference between having
+            // retained an artifact and having named one. A store that never held these would have
+            // failed the send above; this says the send did not pass by holding something else.
+            foreach (var digest in new[]
+                {
+                    count.InvariantPlanRef.Sha256,
+                    rendererSource.Reference.Sha256,
+                })
+            {
+                var reopened = await custody.ReadByDigestAsync(digest, CancellationToken.None);
+                Assert.AreEqual(
+                    digest,
+                    Convert.ToHexString(SHA256.HashData(reopened.Span)).ToLowerInvariant());
+            }
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
     }
 
     [TestMethod]
