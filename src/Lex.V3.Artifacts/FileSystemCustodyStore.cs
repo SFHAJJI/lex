@@ -162,6 +162,88 @@ public sealed class FileSystemCustodyStore : ICustodyStore
         }
     }
 
+    public async Task<ReadOnlyMemory<byte>> ReadByDigestAsync(
+        string contentSha256,
+        CancellationToken cancellationToken)
+    {
+        if (!CustodyDigest.IsLowercaseSha256(contentSha256))
+        {
+            throw new ArgumentException(
+                "A content-addressed reopen requires one lowercase SHA-256.",
+                nameof(contentSha256));
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        ReadOnlyMemory<byte>? selected = null;
+        foreach (var custodyClass in Enum.GetValues<CustodyClass>())
+        {
+            var directory = Path.Combine(_root, ClassSegment(custodyClass));
+            var path = Path.Combine(directory, contentSha256);
+            if (!Directory.Exists(directory) || !File.Exists(path))
+            {
+                continue;
+            }
+
+            EnsureLaneDirectory(directory, create: false);
+            RejectOccupiedNonFileOrReparsePoint(path);
+            try
+            {
+                await using var stream = new FileStream(
+                    path,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.Read,
+                    bufferSize: 64 * 1024,
+                    FileOptions.Asynchronous | FileOptions.SequentialScan);
+                if (stream.Length > CustodyBounds.MaxObjectBytes)
+                {
+                    throw new CustodyIntegrityException(
+                        "The content-addressed artifact exceeds the custody bound.");
+                }
+
+                var bytes = GC.AllocateUninitializedArray<byte>(checked((int)stream.Length));
+                try
+                {
+                    await stream.ReadExactlyAsync(bytes, cancellationToken).ConfigureAwait(false);
+                }
+                catch (EndOfStreamException exception)
+                {
+                    throw new CustodyIntegrityException(
+                        "The content-addressed artifact ended during readback.", exception);
+                }
+
+                if (await HasAnotherByteAsync(stream, cancellationToken).ConfigureAwait(false) ||
+                    !string.Equals(
+                        CustodyDigest.Of(bytes, cancellationToken),
+                        contentSha256,
+                        StringComparison.Ordinal))
+                {
+                    throw new CustodyIntegrityException(
+                        "The retained artifact bytes differ from their content address.");
+                }
+
+                if (selected is { } prior && !prior.Span.SequenceEqual(bytes))
+                {
+                    throw new CustodyIntegrityException(
+                        "One content address resolved to different bytes across custody classes.");
+                }
+
+                selected ??= bytes;
+            }
+            catch (Exception exception)
+                when (exception is FileNotFoundException or DirectoryNotFoundException)
+            {
+                throw new CustodyIntegrityException(
+                    "An enumerated content-addressed artifact disappeared before readback.",
+                    exception);
+            }
+        }
+
+        return selected
+            ?? throw new CustodyIntegrityException(
+                "The content-addressed artifact is not retained by this store.");
+    }
+
     private static async Task<bool> HasAnotherByteAsync(
         Stream stream,
         CancellationToken cancellationToken)

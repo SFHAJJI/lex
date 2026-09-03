@@ -36,12 +36,14 @@ public sealed class OfficialMachineQuerySourceProfileTests
 
         var publicMethods = typeof(OfficialMachineQuerySourceProfiles)
             .GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
-        Assert.AreEqual(1, publicMethods.Length);
-        Assert.AreEqual(nameof(OfficialMachineQuerySourceProfiles.ResolveFor), publicMethods[0].Name);
+        Assert.AreEqual(2, publicMethods.Length);
+        Assert.IsTrue(publicMethods.All(static method =>
+            method.Name == nameof(OfficialMachineQuerySourceProfiles.ResolveFor)));
         CollectionAssert.AreEqual(
-            new[] { typeof(BoundMachineRequest) },
-            publicMethods[0].GetParameters()
-                .Select(static parameter => parameter.ParameterType)
+            new[] { typeof(BoundMachineRequestIdentity), typeof(OpenedMachineRequest) },
+            publicMethods
+                .Select(static method => method.GetParameters().Single().ParameterType)
+                .OrderBy(static type => type.Name, StringComparer.Ordinal)
                 .ToArray());
     }
 
@@ -130,7 +132,8 @@ public sealed class OfficialMachineQuerySourceProfileTests
             "network_failure",
             "publisher_server_failure",
             "robots_policy_expired",
-            "source_profile_stale");
+            "source_profile_stale",
+            "custody_unavailable");
 
         Assert.IsFalse(
             Enum.GetValues<OfficialHttpOperationalFailureReason>()
@@ -170,31 +173,55 @@ public sealed class OfficialMachineQuerySourceProfileTests
     }
 
     [TestMethod]
-    public void BoundRequestDerivesItsProfileAndCannotSelectAnotherChannel()
+    public void AuthenticatedIdentityAndReopenedRequestsDeriveTheirProfileAndCannotSelectAnotherChannel()
     {
-        var resolveFor = typeof(OfficialMachineQuerySourceProfiles).GetMethod(
-            nameof(OfficialMachineQuerySourceProfiles.ResolveFor));
+        var identityResolveFor = typeof(OfficialMachineQuerySourceProfiles).GetMethod(
+            nameof(OfficialMachineQuerySourceProfiles.ResolveFor),
+            [typeof(BoundMachineRequestIdentity)]);
         CollectionAssert.AreEqual(
-            new[] { typeof(BoundMachineRequest) },
-            resolveFor!.GetParameters().Select(static parameter => parameter.ParameterType).ToArray());
+            new[] { typeof(BoundMachineRequestIdentity) },
+            identityResolveFor!.GetParameters()
+                .Select(static parameter => parameter.ParameterType)
+                .ToArray());
+        var openedResolveFor = typeof(OfficialMachineQuerySourceProfiles).GetMethod(
+            nameof(OfficialMachineQuerySourceProfiles.ResolveFor),
+            [typeof(OpenedMachineRequest)]);
+        CollectionAssert.AreEqual(
+            new[] { typeof(OpenedMachineRequest) },
+            openedResolveFor!.GetParameters()
+                .Select(static parameter => parameter.ParameterType)
+                .ToArray());
 
         Assert.AreEqual(
             OfficialMachineQuerySourceProfileId.LuxembourgSparql,
-            OfficialMachineQuerySourceProfiles.ResolveFor(BoundPost(
+            OfficialMachineQuerySourceProfiles.ResolveFor(MachineQueryBinder.OpenIdentity(
+                BoundPost(
+                    "https://data.legilux.public.lu/sparqlendpoint",
+                    "application/x-www-form-urlencoded"))).Id);
+        Assert.AreEqual(
+            OfficialMachineQuerySourceProfileId.EuropeanUnionSparql,
+            OfficialMachineQuerySourceProfiles.ResolveFor(MachineQueryBinder.OpenIdentity(
+                BoundPost(
+                    "https://publications.europa.eu/webapi/rdf/sparql",
+                    "application/sparql-query"))).Id);
+
+        Assert.AreEqual(
+            OfficialMachineQuerySourceProfileId.LuxembourgSparql,
+            OfficialMachineQuerySourceProfiles.ResolveFor(OpenedPost(
                 "https://data.legilux.public.lu/sparqlendpoint",
                 "application/x-www-form-urlencoded")).Id);
         Assert.AreEqual(
             OfficialMachineQuerySourceProfileId.EuropeanUnionSparql,
-            OfficialMachineQuerySourceProfiles.ResolveFor(BoundPost(
+            OfficialMachineQuerySourceProfiles.ResolveFor(OpenedPost(
                 "https://publications.europa.eu/webapi/rdf/sparql",
                 "application/sparql-query")).Id);
 
         Assert.ThrowsExactly<ArgumentException>(() =>
-            OfficialMachineQuerySourceProfiles.ResolveFor(BoundPost(
+            OfficialMachineQuerySourceProfiles.ResolveFor(OpenedPost(
                 "https://publications.europa.eu/webapi/rdf/sparql",
                 "application/x-www-form-urlencoded")));
         Assert.ThrowsExactly<ArgumentException>(() =>
-            OfficialMachineQuerySourceProfiles.ResolveFor(BoundPost(
+            OfficialMachineQuerySourceProfiles.ResolveFor(OpenedPost(
                 "https://legilux.public.lu/filestore/example.xml",
                 "application/x-www-form-urlencoded")));
     }
@@ -216,43 +243,65 @@ public sealed class OfficialMachineQuerySourceProfileTests
         Assert.AreEqual(2, profile.RobotsRoute.Steps.Count);
 
         var publicSurface = typeof(OfficialMachineQuerySourceProfile)
-            .GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
-            .Where(static member => member.MemberType is MemberTypes.Property or MemberTypes.Method)
-            .Where(static member => member is not MethodInfo method || !method.IsSpecialName)
-            .Select(static member => member.Name)
-            .OrderBy(static name => name, StringComparer.Ordinal)
+            .GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static |
+                        BindingFlags.DeclaredOnly)
+            .Where(static member => member is not MethodInfo { IsSpecialName: true })
+            .Select(DescribePublicMember)
+            .OrderBy(static description => description, StringComparer.Ordinal)
             .ToArray();
         CollectionAssert.AreEqual(
             new[]
             {
-                "Accept",
-                "ArtifactRef",
-                "CopyCanonicalBytes",
-                "CrawlerUserAgent",
-                "EvaluateRobotsPolicyFreshness",
-                "Id",
-                "InitialRetryDelay",
-                "MaximumAttempts",
-                "MaximumResponseBytes",
-                "MaximumRetryDelay",
-                "MaximumRobotsPolicyAge",
-                "Method",
-                "MinimumRequestInterval",
-                "PacingScope",
-                "ProfileSha256",
-                "RequestCharset",
-                "RequestContentType",
-                "RequestTarget",
-                "RequestTimeout",
-                "RetryConditions",
-                "RobotsFreshnessBasis",
-                "RobotsParserIdentity",
-                "RobotsProductToken",
-                "RobotsRevalidation",
-                "RobotsRoute",
+                "method instance CopyCanonicalBytes(): Byte[]",
+                "method instance EvaluateRobotsPolicyFreshness(DateTimeOffset, DateTimeOffset): RobotsPolicyFreshness",
+                "property instance Accept: String",
+                "property instance ArtifactRef: SourceArtifactRef",
+                "property instance CrawlerUserAgent: String",
+                "property instance FirstProductRequestOrdinal: UInt64",
+                "property instance Id: OfficialMachineQuerySourceProfileId",
+                "property instance InitialRetryDelay: TimeSpan",
+                "property instance MaximumAttempts: Int32",
+                "property instance MaximumResponseBytes: Int64",
+                "property instance MaximumRetryDelay: TimeSpan",
+                "property instance MaximumRobotsPolicyAge: TimeSpan",
+                "property instance Method: HttpRequestMethod",
+                "property instance MinimumRequestInterval: TimeSpan",
+                "property instance PacingScope: OfficialHttpPacingScope",
+                "property instance ProfileSha256: String",
+                "property instance RequestCharset: MachineQueryCharset",
+                "property instance RequestContentType: String",
+                "property instance RequestTarget: String",
+                "property instance RequestTimeout: TimeSpan",
+                "property instance RetryConditions: IReadOnlyList`1",
+                "property instance RobotsFreshnessBasis: String",
+                "property instance RobotsParserIdentity: String",
+                "property instance RobotsProductToken: String",
+                "property instance RobotsRequestOrdinal: UInt64",
+                "property instance RobotsRevalidation: RobotsRevalidationMode",
+                "property instance RobotsRoute: RobotsPolicyRoute",
             },
-            publicSurface);
+            publicSurface,
+            "The exact public surface changed. A compliance or release decision cannot arrive " +
+            "as an unreviewed helper. Observed: " + string.Join(" | ", publicSurface));
     }
+
+    private static string DescribePublicMember(MemberInfo member) => member switch
+    {
+        ConstructorInfo constructor =>
+            $"constructor .ctor({DescribeParameters(constructor)}): Void",
+        MethodInfo method =>
+            $"method {(method.IsStatic ? "static" : "instance")} {method.Name}" +
+            $"({DescribeParameters(method)}): {method.ReturnType.Name}",
+        PropertyInfo property =>
+            $"property {(property.GetMethod?.IsStatic == true ? "static" : "instance")} " +
+            $"{property.Name}: {property.PropertyType.Name}",
+        FieldInfo field =>
+            $"field {(field.IsStatic ? "static" : "instance")} {field.Name}: {field.FieldType.Name}",
+        _ => $"{member.MemberType} {member.Name}",
+    };
+
+    private static string DescribeParameters(MethodBase method) =>
+        string.Join(", ", method.GetParameters().Select(static parameter => parameter.ParameterType.Name));
 
     private static void AssertCommonProfile(
         OfficialMachineQuerySourceProfile profile,
@@ -265,6 +314,8 @@ public sealed class OfficialMachineQuerySourceProfileTests
         Assert.AreEqual(UserAgent, profile.CrawlerUserAgent);
         Assert.AreEqual("Lex", profile.RobotsProductToken);
         Assert.AreEqual(TimeSpan.FromMilliseconds(1500), profile.MinimumRequestInterval);
+        Assert.AreEqual(0UL, profile.RobotsRequestOrdinal);
+        Assert.AreEqual(1UL, profile.FirstProductRequestOrdinal);
         Assert.AreEqual(OfficialHttpPacingScope.ProcessActualNetworkOrigin, profile.PacingScope);
         Assert.AreEqual(4, profile.MaximumAttempts);
         CollectionAssert.AreEqual(
@@ -330,37 +381,91 @@ public sealed class OfficialMachineQuerySourceProfileTests
         }
     }
 
+    private static OpenedMachineRequest OpenedPost(string target, string contentType) =>
+        MachineQueryBinder.OpenForSend(BoundPost(target, contentType));
+
     private static BoundMachineRequest BoundPost(string target, string contentType)
     {
         var body = Encoding.UTF8.GetBytes("ASK{}");
         var targetBytes = Encoding.ASCII.GetBytes(new Uri(target).PathAndQuery);
-        var registry = new SourceArtifactRef(
-            "urn:uuid:00000000-0000-4000-8000-0000000000aa",
-            new string('a', 64));
-        var receipt = new MachineQueryRenderReceipt(
-            MachineQueryRenderReceipt.SchemaId,
-            registry,
+        var queryFamily = new SourceRegistryMemberRef(
+            Artifact("00000000-0000-4000-8000-000000000011", '1'),
+            "profile-test-query");
+        var cardinality = new MachineResponseCardinality(
+            MachineResponseCardinalityKind.OpaqueBody,
+            rowLimit: null,
+            expectedPartitionRowCount: null,
+            expectedPartitionRowCountEvidenceRef: null);
+        var input = MachineQueryInputArtifact.Create(
+            "urn:uuid:00000000-0000-4000-8000-000000000022",
+            queryFamily,
+            "profile-test-partition",
+            cardinality,
+            new[]
+            {
+                new MachineQueryParameter(
+                    "cursor",
+                    MachineQueryParameterKind.PublisherCursor,
+                    integerValue: null,
+                    textValue: "start",
+                    Artifact("00000000-0000-4000-8000-000000000033", '3')),
+            });
+        var rendererProfile = Artifact("00000000-0000-4000-8000-000000000044", '4');
+        var rendererSource = Artifact("00000000-0000-4000-8000-000000000055", '5');
+        var plan = new MachineQueryPlan(
             MachineQueryPlan.SchemaId,
-            registry,
-            registry,
-            registry,
-            new SourceRegistryMemberRef(registry, contentType),
-            MachineQueryCharset.Utf8,
-            MachineQueryInputMode.RendererInputs,
+            queryFamily,
+            rendererProfile,
+            rendererSource,
             HttpRequestMethod.Post,
+            target,
             targetBytes.LongLength,
             Sha256(targetBytes),
+            cardinality,
+            new SourceRegistryMemberRef(
+                Artifact("00000000-0000-4000-8000-000000000066", '6'),
+                contentType),
+            MachineQueryCharset.Utf8,
+            MachineQueryInputMode.RendererInputs,
+            input.ArtifactRef,
+            input.PartitionBinding,
             body.LongLength,
             Sha256(body));
-        return new BoundMachineRequest(target, body, receipt);
+        var planRef = MachineQueryPlanIdentity.Create(
+            "urn:uuid:00000000-0000-4000-8000-000000000077",
+            plan);
+        return MachineQueryBinder.BindForSend(
+            plan,
+            planRef,
+            input,
+            new ProfileRenderer(rendererProfile, rendererSource, target, body));
+    }
+
+    private static SourceArtifactRef Artifact(string id, char digestFill) => new(
+        $"urn:uuid:{id}",
+        new string(digestFill, 64));
+
+    private sealed class ProfileRenderer(
+        SourceArtifactRef rendererProfileRef,
+        SourceArtifactRef rendererSourceRef,
+        string target,
+        byte[] body) : IMachineQueryRenderer
+    {
+        public SourceArtifactRef RendererProfileRef { get; } = rendererProfileRef;
+
+        public SourceArtifactRef RendererSourceRef { get; } = rendererSourceRef;
+
+        public MachineQueryRenderOutput Render(
+            MachineQueryPlan plan,
+            MachineQueryInputArtifact orderedParameterSet) => new(target, body);
     }
 
     private static string ExpectedProfileSha256(OfficialMachineQuerySourceProfileId id) => id switch
     {
         OfficialMachineQuerySourceProfileId.LuxembourgSparql =>
-            "7cec68b0c435654506188a7c20ba55a77dddaf8c170741fdf0f292af439052e3",
+            "ed71dfc0c8014d96cde668f5af53bc6300d1bf6dc2c4b7dc70ca00d2bd90b3ca",
         OfficialMachineQuerySourceProfileId.EuropeanUnionSparql =>
-            "69ce2949fc1e0c19acb841fe60c14cc9cad93bfd2480b8e7fdd2d4238ce22418",
+            "b600156709cdc5009974f5420539232b649ce9bc2baaa6a147d5975931fdc877",
         _ => throw new ArgumentOutOfRangeException(nameof(id)),
     };
 

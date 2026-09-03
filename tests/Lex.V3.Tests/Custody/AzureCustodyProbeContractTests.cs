@@ -654,6 +654,11 @@ public sealed class AzureCustodyProbeContractTests
             LastReadReference = reference;
             return Task.FromResult(restored ?? ReadOnlyMemory<byte>.Empty);
         }
+
+        public Task<ReadOnlyMemory<byte>> ReadByDigestAsync(
+            string contentSha256,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 
     private enum WriteReceiptMismatch
@@ -683,6 +688,11 @@ public sealed class AzureCustodyProbeContractTests
 
         public Task<ReadOnlyMemory<byte>> ReadAsync(
             DurableBlobRef reference,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<ReadOnlyMemory<byte>> ReadByDigestAsync(
+            string contentSha256,
             CancellationToken cancellationToken) =>
             throw new NotSupportedException();
     }

@@ -370,6 +370,11 @@ public sealed class CustodyRestoreTests
 
             return Task.FromResult(_bytes);
         }
+
+        public Task<ReadOnlyMemory<byte>> ReadByDigestAsync(
+            string contentSha256,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 
     private sealed class CancellingMemoryManager : MemoryManager<byte>

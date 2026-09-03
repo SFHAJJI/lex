@@ -32,6 +32,15 @@ public interface ICustodyStore
     Task<ReadOnlyMemory<byte>> ReadAsync(
         DurableBlobRef reference,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Restores content-addressed evidence using its lowercase SHA-256 identity alone. This path
+    /// is for artifact fields whose contract carries a digest rather than a durable reference.
+    /// Implementations must not require a custody class, length, provider locator, or catalog row.
+    /// </summary>
+    Task<ReadOnlyMemory<byte>> ReadByDigestAsync(
+        string contentSha256,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -45,6 +54,11 @@ public static class CustodyBounds
 
 public static class CustodyDigest
 {
+    public static bool IsLowercaseSha256(string? value) =>
+        value is { Length: 64 } &&
+        value.All(static character =>
+            character is (>= '0' and <= '9') or (>= 'a' and <= 'f'));
+
     public static string Of(ReadOnlySpan<byte> bytes) =>
         Convert.ToHexStringLower(SHA256.HashData(bytes));
 
@@ -86,6 +100,13 @@ public static class CustodyRestore
             throw;
         }
         catch (Exception exception)
+            when (exception is FileNotFoundException or DirectoryNotFoundException)
+        {
+            throw new CustodyIntegrityException(
+                "The artifact reference names custody bytes that are missing.",
+                exception);
+        }
+        catch (Exception exception)
             when (exception is not (CustodyRequiredException
                 or CustodyIntegrityException
                 or CustodyPolicyException))
@@ -112,6 +133,73 @@ public static class CustodyRestore
         {
             throw new CustodyIntegrityException(
                 "The restored bytes do not match their durable reference.");
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return verified;
+    }
+
+    /// <summary>
+    /// Opens an artifact whose digest is its complete external identity, then verifies that the
+    /// bytes returned by the store actually carry that identity.
+    /// </summary>
+    public static async Task<ReadOnlyMemory<byte>> ReadByDigestCheckedAsync(
+        ICustodyStore store,
+        string contentSha256,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        if (!CustodyDigest.IsLowercaseSha256(contentSha256))
+        {
+            throw new ArgumentException(
+                "A content-addressed reopen requires one lowercase SHA-256.",
+                nameof(contentSha256));
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        ReadOnlyMemory<byte> returned;
+        try
+        {
+            returned = await store.ReadByDigestAsync(contentSha256, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+            when (exception is FileNotFoundException or DirectoryNotFoundException)
+        {
+            throw new CustodyIntegrityException(
+                "The artifact reference names custody bytes that are missing.",
+                exception);
+        }
+        catch (Exception exception)
+            when (exception is not (CustodyRequiredException
+                or CustodyIntegrityException
+                or CustodyPolicyException))
+        {
+            throw new CustodyRequiredException(
+                "The content-addressed artifact could not be restored.", exception);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        if (returned.Length > CustodyBounds.MaxObjectBytes)
+        {
+            throw new CustodyIntegrityException(
+                "The content-addressed artifact exceeds the custody bound.");
+        }
+
+        // The adapter may expose provider-owned mutable memory. Freeze first, then hash and return
+        // only the same copy so the verified artifact cannot change underneath its reader.
+        var verified = returned.ToArray();
+        if (!string.Equals(
+                CustodyDigest.Of(verified, cancellationToken),
+                contentSha256,
+                StringComparison.Ordinal))
+        {
+            throw new CustodyIntegrityException(
+                "The restored artifact does not match its content address.");
         }
 
         cancellationToken.ThrowIfCancellationRequested();

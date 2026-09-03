@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text.Json;
-using Lex.V3.Contracts;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Http;
 
@@ -10,7 +9,7 @@ namespace Lex.V3.Ingest.Tests;
 public sealed class HttpAcquisitionReasonRegistryTests
 {
     private const string ExpectedSha256 =
-        "7648f04492573e9a748a167d27c42841da0cfba1a8735070d2b322c39a242197";
+        "803ed00fc952d30e66984c21e045dc79dd39c2d555f81df159b7045e32dbbc89";
 
     [TestMethod]
     public void CanonicalArtifactBindsThePinnedIdentityAndClosedVocabulary()
@@ -18,6 +17,7 @@ public sealed class HttpAcquisitionReasonRegistryTests
         var bytes = HttpAcquisitionReasonRegistry.CanonicalBytes.ToArray();
         var digest = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
 
+        Assert.AreEqual(1112, bytes.Length);
         Assert.AreEqual(ExpectedSha256, digest);
         Assert.AreEqual(ExpectedSha256, HttpAcquisitionReasonRegistry.RegistryRef.Sha256);
         CollectionAssert.AreEqual(
@@ -29,7 +29,9 @@ public sealed class HttpAcquisitionReasonRegistryTests
         using var document = JsonDocument.Parse(bytes);
         var members = document.RootElement.GetProperty("members")
             .EnumerateArray()
-            .Select(member => $"{member.GetProperty("member_key").GetString()}:{member.GetProperty("stage").GetString()}")
+            .Select(member =>
+                $"{member.GetProperty("member_key").GetString()}:" +
+                member.GetProperty("stage").GetString())
             .ToArray();
         CollectionAssert.AreEqual(
             new[]
@@ -40,15 +42,20 @@ public sealed class HttpAcquisitionReasonRegistryTests
                 "caller_cancelled_after_headers:entity_transfer",
                 "declared_length_short_read:entity_transfer",
                 "header_deadline:before_response_headers",
+                "invalid_content_length:completion_unproven",
                 "missing_completion_proof:completion_unproven",
+                "revalidation_request_not_admitted:response_semantics",
+                "status_content_forbidden:response_semantics",
+                "status_framing_conflict:response_semantics",
                 "transfer_coding_conflict:completion_unproven",
                 "transport_before_headers:before_response_headers",
+                "unsupported_transfer_coding:completion_unproven",
             },
             members);
     }
 
     [TestMethod]
-    public void TypedMembersRoundTripAndRejectWrongStageOrForeignRegistry()
+    public void TypedMembersRoundTripAndRejectTheOtherAcquisitionStages()
     {
         foreach (var reason in Enum.GetValues<HttpPartialBodyReason>())
         {
@@ -56,6 +63,8 @@ public sealed class HttpAcquisitionReasonRegistryTests
             Assert.AreEqual(reason, HttpAcquisitionReasonRegistry.RequirePartial(member));
             Assert.ThrowsExactly<ArgumentException>(() =>
                 HttpAcquisitionReasonRegistry.RequireCompletionUnproven(member));
+            Assert.ThrowsExactly<ArgumentException>(() =>
+                HttpAcquisitionReasonRegistry.RequireResponseSemantics(member));
             Assert.ThrowsExactly<ArgumentException>(() =>
                 HttpAcquisitionReasonRegistry.RequireBeforeHeaders(member));
         }
@@ -69,24 +78,40 @@ public sealed class HttpAcquisitionReasonRegistryTests
             Assert.ThrowsExactly<ArgumentException>(() =>
                 HttpAcquisitionReasonRegistry.RequirePartial(member));
             Assert.ThrowsExactly<ArgumentException>(() =>
+                HttpAcquisitionReasonRegistry.RequireResponseSemantics(member));
+            Assert.ThrowsExactly<ArgumentException>(() =>
                 HttpAcquisitionReasonRegistry.RequireBeforeHeaders(member));
         }
 
-        foreach (var failure in Enum.GetValues<HttpPreHeaderFailureClass>())
+        foreach (var reason in Enum.GetValues<HttpPreHeaderFailureClass>())
         {
-            var member = HttpAcquisitionReasonRegistry.Member(failure);
-            Assert.AreEqual(failure, HttpAcquisitionReasonRegistry.RequireBeforeHeaders(member));
+            var member = HttpAcquisitionReasonRegistry.Member(reason);
+            Assert.AreEqual(reason, HttpAcquisitionReasonRegistry.RequireBeforeHeaders(member));
             Assert.ThrowsExactly<ArgumentException>(() =>
                 HttpAcquisitionReasonRegistry.RequirePartial(member));
             Assert.ThrowsExactly<ArgumentException>(() =>
                 HttpAcquisitionReasonRegistry.RequireCompletionUnproven(member));
+            Assert.ThrowsExactly<ArgumentException>(() =>
+                HttpAcquisitionReasonRegistry.RequireResponseSemantics(member));
+        }
+
+        foreach (var reason in Enum.GetValues<HttpResponseSemanticsReason>())
+        {
+            var member = HttpAcquisitionReasonRegistry.Member(reason);
+            Assert.AreEqual(
+                reason,
+                HttpAcquisitionReasonRegistry.RequireResponseSemantics(member));
+            Assert.ThrowsExactly<ArgumentException>(() =>
+                HttpAcquisitionReasonRegistry.RequirePartial(member));
+            Assert.ThrowsExactly<ArgumentException>(() =>
+                HttpAcquisitionReasonRegistry.RequireCompletionUnproven(member));
+            Assert.ThrowsExactly<ArgumentException>(() =>
+                HttpAcquisitionReasonRegistry.RequireBeforeHeaders(member));
         }
 
         var valid = HttpAcquisitionReasonRegistry.Member(HttpPartialBodyReason.BodyDeadline);
         var foreign = new SourceRegistryMemberRef(
-            new SourceArtifactRef(
-                valid.RegistryRef.ResourceId,
-                new string('f', 64)),
+            new SourceArtifactRef(valid.RegistryRef.ResourceId, new string('f', 64)),
             valid.MemberKey);
         Assert.ThrowsExactly<ArgumentException>(() =>
             HttpAcquisitionReasonRegistry.RequirePartial(foreign));
@@ -96,74 +121,44 @@ public sealed class HttpAcquisitionReasonRegistryTests
     }
 
     [TestMethod]
-    public void ObservationConstructorsRejectReasonsFromTheWrongAcquisitionStage()
+    public void EveryReasonKeepsItsPinnedNumericIdentity()
     {
-        var request = RequestEvidence();
-        var metadata = EmptyMetadata();
-
-        Assert.ThrowsExactly<ArgumentException>(() => new ResponsePartialBodyObservation(
-            HttpObservationSchemaIds.HttpObservation,
-            "urn:uuid:00000000-0000-0000-0000-000000000010",
-            request,
-            request.RequestedUri,
-            200,
-            HttpStatusClassifier.Classify(200, metadata),
-            metadata,
-            receivedEncodedEntityByteCount: 0,
-            admittedEncodedEntityByteLimit: 1024,
-            HttpAcquisitionReasonRegistry.Member(HttpPreHeaderFailureClass.HeaderDeadline),
-            durableWriteReceipt: null));
-
-        Assert.ThrowsExactly<ArgumentException>(() => new ResponsePartialBodyObservation(
-            HttpObservationSchemaIds.HttpObservation,
-            "urn:uuid:00000000-0000-0000-0000-000000000012",
-            request,
-            request.RequestedUri,
-            200,
-            HttpStatusClassifier.Classify(200, metadata),
-            metadata,
-            receivedEncodedEntityByteCount: 0,
-            admittedEncodedEntityByteLimit: 1024,
-            HttpAcquisitionReasonRegistry.Member(
-                HttpCompletionUnprovenReason.MissingCompletionProof),
-            durableWriteReceipt: null));
-
-        Assert.ThrowsExactly<ArgumentException>(() => new ResponseCompletionUnprovenObservation(
-            HttpObservationSchemaIds.HttpObservation,
-            "urn:uuid:00000000-0000-0000-0000-000000000013",
-            request,
-            request.RequestedUri,
-            200,
-            HttpStatusClassifier.Classify(200, metadata),
-            metadata,
-            receivedEncodedEntityByteCount: 0,
-            admittedEncodedEntityByteLimit: 1024,
-            HttpAcquisitionReasonRegistry.Member(HttpPartialBodyReason.BodyDeadline),
-            durableWriteReceipt: null));
-
-        Assert.ThrowsExactly<ArgumentException>(() => new TransportFailureBeforeBodyObservation(
-            HttpObservationSchemaIds.HttpObservation,
-            "urn:uuid:00000000-0000-0000-0000-000000000011",
-            request,
-            HttpAcquisitionReasonRegistry.Member(HttpPartialBodyReason.BodyDeadline),
-            elapsedMilliseconds: 1));
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "BodyDeadline=1",
+                "BodyReadFailure=2",
+                "ByteBoundPreventedCompletion=3",
+                "CallerCancelledAfterHeaders=4",
+                "DeclaredLengthShortRead=5",
+            },
+            NumericIdentities<HttpPartialBodyReason>());
+        CollectionAssert.AreEqual(
+            new[] { "HeaderDeadline=1", "TransportBeforeHeaders=2" },
+            NumericIdentities<HttpPreHeaderFailureClass>());
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "InvalidContentLength=3",
+                "MissingCompletionProof=1",
+                "TransferCodingConflict=2",
+                "UnsupportedTransferCoding=4",
+            },
+            NumericIdentities<HttpCompletionUnprovenReason>());
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "RevalidationRequestNotAdmitted=1",
+                "StatusContentForbidden=2",
+                "StatusFramingConflict=3",
+            },
+            NumericIdentities<HttpResponseSemanticsReason>());
     }
 
-    private static HttpResponseMetadata EmptyMetadata() => new(
-        new AbsentHttpHeader(),
-        new AbsentHttpHeader(),
-        new AbsentHttpHeader(),
-        new AbsentHttpHeader(),
-        new AbsentHttpHeader(),
-        new AbsentHttpHeader(),
-        new AbsentHttpHeader(),
-        new AbsentHttpHeader(),
-        new AbsentHttpHeader(),
-        new AbsentHttpHeader(),
-        new AbsentHttpHeader(),
-        new AbsentHttpHeader(),
-        new AbsentHttpHeader());
-
-    private static HttpRequestEvidence RequestEvidence() =>
-        MachineQueryEvidenceFixture.Evidence();
+    private static string[] NumericIdentities<TEnum>()
+        where TEnum : struct, Enum =>
+        Enum.GetValues<TEnum>()
+            .Select(static value => $"{value}={Convert.ToInt32(value)}")
+            .OrderBy(static identity => identity, StringComparer.Ordinal)
+            .ToArray();
 }

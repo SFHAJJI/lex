@@ -135,7 +135,8 @@ public sealed class LuxembourgQueryPlanTests
             page.InputArtifact.OrderedParameters.Select(static value => value.Name).ToArray());
         Assert.IsFalse(page.InputArtifact.OrderedParameters.Any(
             static value => value.Name == "page_limit"));
-        var body = Encoding.UTF8.GetString(page.Request.CopyVerifiedRequestBody());
+        var body = Encoding.UTF8.GetString(
+            MachineQueryBinder.OpenForSend(page.Request).CopyRequestBody());
         StringAssert.StartsWith(body, "query=");
         var query = Uri.UnescapeDataString(body["query=".Length..]);
         StringAssert.Contains(query, "LIMIT 997");
@@ -171,7 +172,8 @@ public sealed class LuxembourgQueryPlanTests
             },
             count.InputArtifact.OrderedParameters.Select(static value => value.Name).ToArray());
         var query = Uri.UnescapeDataString(
-            Encoding.UTF8.GetString(count.Request.CopyVerifiedRequestBody())["query=".Length..]);
+            Encoding.UTF8.GetString(
+                MachineQueryBinder.OpenForSend(count.Request).CopyRequestBody())["query=".Length..]);
         StringAssert.Contains(query, "SELECT (COUNT(*) AS ?count)");
         StringAssert.Contains(query, "VALUES ?lex_pass_id { 2 }");
         Assert.IsFalse(query.Contains("LIMIT", StringComparison.Ordinal));

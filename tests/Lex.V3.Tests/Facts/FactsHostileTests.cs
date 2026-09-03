@@ -651,7 +651,7 @@ public sealed class FactsHostileTests
 
     /// <summary>
     /// The observation identity is opaque and required. There is no timestamp to validate here
-    /// any more, because a Fact no longer carries one: http_observation/1 owns the instant, and a
+    /// any more, because a Fact no longer carries one: lex-license-http-evidence/4 owns the instant, and a
     /// second copy in a Fact could disagree with it.
     /// </summary>
     [TestMethod]

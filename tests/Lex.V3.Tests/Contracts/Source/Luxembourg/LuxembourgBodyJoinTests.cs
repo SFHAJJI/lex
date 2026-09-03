@@ -297,7 +297,7 @@ public sealed class LuxembourgBodyJoinTests
         LuxembourgBodyBlockerCode.TextPublicNotCleared,
         LuxembourgBodyBlockerCode.LicenceContractResultMissing,
         LuxembourgBodyBlockerCode.RobotsEvidenceUnbound,
-        LuxembourgBodyBlockerCode.HttpObservationUnbound,
+        LuxembourgBodyBlockerCode.HttpEvidenceUnbound,
         LuxembourgBodyBlockerCode.DerivationUnverified,
         LuxembourgBodyBlockerCode.IntegrityUnverified,
     ];
