@@ -7,6 +7,55 @@ using Lex.V3.Contracts.Source.Core;
 namespace Lex.V3.Contracts.Source.Europe;
 
 /// <summary>
+/// The lexical shapes of <c>cmr:lastModificationDate</c> whose order semantics a bounded
+/// observation has frozen, plus the one member for everything else. Closed.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This vocabulary is an evidence boundary, not an ordering repair. Ordinal comparison of strings
+/// is a total order, and it is the same relation the endpoint applies under <c>ORDER BY STR</c>
+/// whatever shapes the values take, so the traversal and the cursor stay consistent across every
+/// shape with no classification at all. What the classification decides is narrower: whether a
+/// bounded observation has established order semantics for the shape in front of us, which is what
+/// R3 requires of a witness before it may be used.
+/// </para>
+/// <para>
+/// The measurement of 2026-09-03 found both admitted members at scale in this predicate:
+/// 35,918,112 values with fractional seconds and a <c>+02:00</c> offset, 28,357,736 with
+/// fractional seconds and <c>+01:00</c>, and 61,169 with no fractional seconds at all, the most
+/// recent of those from that same day. Sign and offset minutes do not change the ordering
+/// relation, so the admitted members are stated by shape rather than by the two offset tokens that
+/// happened to be observed.
+/// </para>
+/// </remarks>
+public enum EuWatermarkLexicalShape
+{
+    /// <summary>
+    /// A shape no bounded observation covers: an absent offset, a <c>Z</c> terminator, a variable
+    /// width field, or anything else. Concretely, <c>Z</c> is 0x5A and sorts above both the
+    /// fraction's <c>.</c> at 0x2E and the offset's <c>+</c> at 0x2B, so such a value would land in
+    /// a position nothing has observed. That is the illustration; the reason to refuse is that
+    /// nothing has been observed.
+    /// </summary>
+    [JsonStringEnumMemberName("outside_the_measured_set")]
+    OutsideTheMeasuredSet = 0,
+
+    /// <summary>
+    /// <c>yyyy-MM-ddTHH:mm:ss.f{1,n}</c> followed by a signed <c>hh:mm</c> offset. The bulk of the
+    /// predicate, under both observed offsets.
+    /// </summary>
+    [JsonStringEnumMemberName("fractional_seconds_signed_offset")]
+    FractionalSecondsSignedOffset = 1,
+
+    /// <summary>
+    /// <c>yyyy-MM-ddTHH:mm:ss</c> followed by a signed <c>hh:mm</c> offset, with no fractional
+    /// part. Still being emitted, mixed in with the fractional values.
+    /// </summary>
+    [JsonStringEnumMemberName("whole_seconds_signed_offset")]
+    WholeSecondsSignedOffset = 2,
+}
+
+/// <summary>
 /// Why the Cellar last-modification witness plan refused to freeze, or refused to render a page
 /// for a position. Closed.
 /// </summary>
@@ -33,9 +82,9 @@ public enum EuWatermarkPlanRefusal
     PredicateNotTheWatermarkPredicate = 2,
 
     /// <summary>
-    /// A page limit below <see cref="EuWatermarkWitnessPlan.MinimumPageLimit"/>. The inclusive
-    /// reread spends the head of every page re-delivering the boundary tie group, so a one-row
-    /// page can never carry a row beyond the boundary and the traversal can never advance.
+    /// A page limit below <see cref="EuWatermarkWitnessPlan.MinimumPageLimit"/>. Every page begins
+    /// by re-delivering the boundary position itself, so a one row page is spent entirely on a row
+    /// already delivered and can never carry a successor.
     /// </summary>
     [JsonStringEnumMemberName("page_limit_below_minimum")]
     PageLimitBelowMinimum = 3,
@@ -49,25 +98,25 @@ public enum EuWatermarkPlanRefusal
     PageLimitAboveSortedResultWindow = 4,
 
     /// <summary>
-    /// The start position's watermark has no readable fixed-width lexical shape, so no ordering
-    /// relation can be frozen from it.
+    /// The start position's watermark has a shape no bounded observation covers, so the channel has
+    /// supplied no frozen order semantics for it and R3 does not let the witness proceed on it.
     /// </summary>
-    [JsonStringEnumMemberName("start_position_not_lexically_orderable")]
-    StartPositionNotLexicallyOrderable = 5,
+    [JsonStringEnumMemberName("start_position_shape_without_frozen_order_semantics")]
+    StartPositionShapeWithoutFrozenOrderSemantics = 5,
 
     /// <summary>
-    /// The position offered to the renderer does not share the plan's frozen lexical profile, so
-    /// the order the endpoint would apply and the order the cursor compares in are no longer the
-    /// same relation.
+    /// The position offered to the renderer has a shape no bounded observation covers. Same cause
+    /// as the start position, reached from the other entry point.
     /// </summary>
-    [JsonStringEnumMemberName("position_not_in_plan_lexical_profile")]
-    PositionNotInPlanLexicalProfile = 6,
+    [JsonStringEnumMemberName("position_shape_without_frozen_order_semantics")]
+    PositionShapeWithoutFrozenOrderSemantics = 6,
 }
 
 /// <summary>
 /// The frozen query plan half of <c>cellar_last_modification_witness/1</c>: the exact endpoint,
-/// predicate, ordering tuple, boundary rule and page limit of the bounded SPARQL traversal that
-/// R3 permits as an EU positive-change witness when no official feed URI is selected.
+/// predicate, ordering tuple, boundary rule, admitted watermark shapes and page limit of the
+/// bounded SPARQL traversal that R3 permits as an EU positive-change witness when no official feed
+/// URI is selected.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -76,22 +125,22 @@ public enum EuWatermarkPlanRefusal
 /// date-only continuation cannot be expressed at all.
 /// </para>
 /// <para>
-/// The traversal orders lexically, not chronologically, and that is deliberate. The bounded
-/// observation of 2026-09-03 recorded <c>cmr:lastModificationDate</c> as an <c>xsd:dateTime</c>
-/// with millisecond precision and an explicit <c>+02:00</c> offset, not UTC-normalised. Ordering
-/// the typed value orders instants; the cursor compares the retained lexical bytes ordinally.
-/// Those two relations disagree whenever the offset or the fractional precision varies, and a
-/// traversal whose publisher order differs from its cursor order skips or re-delivers rows without
-/// reporting anything. So the query binds <c>STR()</c> of the watermark and orders that, which
-/// makes the publisher's order and the cursor's order one relation by construction. The cost is
-/// that the lower boundary is a lexical boundary rather than an instant: this witness must never
-/// be described as everything that changed since instant T.
+/// The traversal orders lexically, not chronologically, and that is deliberate. The cursor compares
+/// the publisher's retained bytes ordinally, so the query binds <c>STR()</c> of the watermark and
+/// orders that. The endpoint accepts <c>ORDER BY STR</c> and reports the result ordered, measured
+/// on 2026-09-03. Ordinal comparison of strings is a total order, so the publisher's order and the
+/// cursor's order are one relation whatever lexical shapes the values take, and the traversal
+/// cannot skip or re-deliver a row through a disagreement between them.
 /// </para>
 /// <para>
-/// Lexical order equals chronological order only within one fixed lexical profile, so the plan
-/// freezes the profile it saw and <see cref="SharesLexicalProfile"/> refuses anything else. At a
-/// daylight-saving transition the publisher's offset changes and this fails closed, once, with a
-/// named cause, rather than silently dropping the entries whose lexical order inverted.
+/// The cost of that choice is real and larger than it first looked. 28,357,736 values in this
+/// predicate carry <c>+01:00</c> against 35,918,112 carrying <c>+02:00</c>, so the two offsets are
+/// 44 and 56 percent of the corpus rather than one boundary crossing a year. Across a transition
+/// the two orders genuinely diverge: <c>2026-03-29T01:52:39.176+01:00</c> and the same local text
+/// under <c>+02:00</c> sort in that order lexically while the second names the instant an hour
+/// earlier. So the lower boundary of this witness is a position in a string order, never a moment.
+/// Nothing here may be worded as what changed since an instant, and nothing on this contract can
+/// express one.
 /// </para>
 /// <para>
 /// What this type deliberately does not do. It does not intersect entries with the 82-seed root
@@ -116,8 +165,9 @@ public sealed class EuWatermarkWitnessPlan
         "http://publications.europa.eu/ontology/cdm/cmr#lastModificationDate";
 
     /// <summary>
-    /// Below this the traversal can never advance, because the inclusive reread always spends the
-    /// first row on the boundary position itself.
+    /// Below this no page can advance. Every page re-reads the boundary position itself, so a one
+    /// row page is spent on a row already delivered. This is a property of the boundary rule and
+    /// holds for every corpus; it is not a claim that two rows are enough.
     /// </summary>
     public const int MinimumPageLimit = 2;
 
@@ -138,8 +188,9 @@ public sealed class EuWatermarkWitnessPlan
 
     /// <summary>
     /// The boundary rule, named for the receipt. Each page reads from the boundary watermark
-    /// inclusively, so the whole tie group is seen again and <see cref="EuBoundaryCrossing"/> can
-    /// say afterwards that none of it was skipped or delivered twice.
+    /// inclusively, so the whole group sharing that exact lexical value is seen again and
+    /// <see cref="EuBoundaryCrossing"/> can say afterwards that none of it was skipped or delivered
+    /// twice.
     /// </summary>
     public const string BoundaryRuleIdentity = "inclusive_watermark_reread/1";
 
@@ -153,8 +204,7 @@ public sealed class EuWatermarkWitnessPlan
         string predicateIri,
         int pageLimit,
         EuWatermarkCursor startPosition,
-        int watermarkFractionalDigits,
-        string watermarkOffsetToken,
+        EuWatermarkLexicalShape startPositionShape,
         string template,
         string queryPlanIdentityDigest)
     {
@@ -162,11 +212,21 @@ public sealed class EuWatermarkWitnessPlan
         PredicateIri = predicateIri;
         PageLimit = pageLimit;
         StartPosition = startPosition;
-        WatermarkFractionalDigits = watermarkFractionalDigits;
-        WatermarkOffsetToken = watermarkOffsetToken;
+        StartPositionShape = startPositionShape;
         _template = template;
         QueryPlanIdentityDigest = queryPlanIdentityDigest;
     }
+
+    /// <summary>
+    /// The watermark shapes this plan admits, in ascending member order. A shape outside this set
+    /// has no frozen order semantics and stops the witness with a named cause.
+    /// </summary>
+    public static IReadOnlyList<EuWatermarkLexicalShape> AdmittedShapes { get; } =
+        Array.AsReadOnly(new[]
+        {
+            EuWatermarkLexicalShape.FractionalSecondsSignedOffset,
+            EuWatermarkLexicalShape.WholeSecondsSignedOffset,
+        });
 
     /// <summary>The official Cellar SPARQL endpoint this witness runs against.</summary>
     public string Endpoint { get; }
@@ -187,26 +247,22 @@ public sealed class EuWatermarkWitnessPlan
     public EuWatermarkCursor StartPosition { get; }
 
     /// <summary>
-    /// Fractional second digits in the frozen lexical profile. Three at the bounded observation of
-    /// 2026-09-03.
+    /// Which admitted shape the start position carries. R3 asks the witness to bind the watermark's
+    /// precision, and this is that field: a name from a closed vocabulary rather than a digit
+    /// count, because the corpus carries more than one precision at once.
     /// </summary>
-    public int WatermarkFractionalDigits { get; }
-
-    /// <summary>
-    /// The exact offset token in the frozen lexical profile, such as <c>+02:00</c> or <c>Z</c>.
-    /// Retained as the publisher's own bytes and never normalised.
-    /// </summary>
-    public string WatermarkOffsetToken { get; }
+    public EuWatermarkLexicalShape StartPositionShape { get; }
 
     /// <summary>
     /// SHA-256 over the plan's query identity: endpoint, predicate, ordering tuple, boundary rule,
-    /// page limit and the unbound query template.
+    /// admitted shapes, page limit and the unbound query template.
     /// </summary>
     /// <remarks>
     /// Deliberately not a function of <see cref="StartPosition"/>. The query plan is the thing that
     /// stays fixed while cuts advance; folding this cut's boundary into it would produce a new
     /// query-plan identity every run and make the digest useless for saying that two cuts used the
-    /// same plan. The boundary is bound by the witness receipt beside the digest, not inside it.
+    /// same plan. The admitted shape set is bound, because widening it is a different frozen
+    /// order-semantics claim and must be a different plan.
     /// </remarks>
     public string QueryPlanIdentityDigest { get; }
 
@@ -253,9 +309,10 @@ public sealed class EuWatermarkWitnessPlan
             return null;
         }
 
-        if (!TryReadLexicalProfile(startPosition.WatermarkLexical, out var digits, out var offset))
+        var shape = ClassifyShape(startPosition.WatermarkLexical);
+        if (shape == EuWatermarkLexicalShape.OutsideTheMeasuredSet)
         {
-            refusal = EuWatermarkPlanRefusal.StartPositionNotLexicallyOrderable;
+            refusal = EuWatermarkPlanRefusal.StartPositionShapeWithoutFrozenOrderSemantics;
             return null;
         }
 
@@ -266,8 +323,7 @@ public sealed class EuWatermarkWitnessPlan
             predicateIri,
             pageLimit,
             startPosition,
-            digits,
-            offset,
+            shape,
             template,
             QueryPlanDigest(endpoint, predicateIri, pageLimit, template));
     }
@@ -277,7 +333,9 @@ public sealed class EuWatermarkWitnessPlan
     /// </summary>
     /// <remarks>
     /// The first page of a cut is this method applied to <see cref="StartPosition"/>. There is no
-    /// separate unbounded first page, because an unbounded one would not be a change witness.
+    /// separate unbounded first page, because an unbounded one would not be a change witness, and
+    /// no separate first-page rule: the previous cut ended at that position and retained the group
+    /// sharing its watermark, so the first page of a cut is an ordinary boundary crossing.
     /// </remarks>
     /// <param name="position">Where to read from, inclusive of its whole tie group.</param>
     /// <param name="refusal">Why no query text exists, when none does.</param>
@@ -285,9 +343,10 @@ public sealed class EuWatermarkWitnessPlan
     {
         ArgumentNullException.ThrowIfNull(position);
 
-        if (!SharesLexicalProfile(position.WatermarkLexical))
+        if (ClassifyShape(position.WatermarkLexical) ==
+            EuWatermarkLexicalShape.OutsideTheMeasuredSet)
         {
-            refusal = EuWatermarkPlanRefusal.PositionNotInPlanLexicalProfile;
+            refusal = EuWatermarkPlanRefusal.PositionShapeWithoutFrozenOrderSemantics;
             return null;
         }
 
@@ -299,104 +358,79 @@ public sealed class EuWatermarkWitnessPlan
     }
 
     /// <summary>
-    /// Whether a watermark shares this plan's frozen lexical profile, which is the condition under
-    /// which ordinal comparison of the lexical form agrees with the order of the instants.
+    /// Reads which measured shape a watermark carries, or
+    /// <see cref="EuWatermarkLexicalShape.OutsideTheMeasuredSet"/> when it carries none of them.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Two concrete disagreements, which is why this is a check rather than a comment. A changed
-    /// offset: <c>2026-10-25T02:30:00.000+02:00</c> is the earlier instant than
-    /// <c>2026-10-25T02:00:00.000+01:00</c> but the later string. A changed precision, with
-    /// <c>Z</c> as the offset: <c>...:17.6Z</c> is the earlier instant than <c>...:17.61Z</c> but
-    /// the later string, because <c>Z</c> sorts above the digits.
+    /// The fixed-width date and time fields are required, not merely conventional: a variable width
+    /// year or an unpadded month is a shape nothing has observed, and classifying an unobserved
+    /// shape anyway would be exactly the frozen order semantics R3 says the channel has not
+    /// supplied.
     /// </para>
     /// <para>
-    /// The profile is read from the retained bytes and the bytes are never reformatted, because a
-    /// round trip through a date type normalises precision the endpoint did not.
+    /// The value is read and never reformatted. A round trip through a date type normalises
+    /// precision the endpoint did not, and this predicate demonstrably carries two precisions at
+    /// once.
     /// </para>
     /// </remarks>
-    public bool SharesLexicalProfile(string watermarkLexical)
+    public static EuWatermarkLexicalShape ClassifyShape(string watermarkLexical)
     {
         ArgumentNullException.ThrowIfNull(watermarkLexical);
-        return TryReadLexicalProfile(watermarkLexical, out var digits, out var offset)
-            && digits == WatermarkFractionalDigits
-            && string.Equals(offset, WatermarkOffsetToken, StringComparison.Ordinal);
-    }
 
-    /// <summary>
-    /// Reads the ordering-relevant shape of an <c>xsd:dateTime</c> lexical form: how many
-    /// fractional digits it carries and which offset token it ends with.
-    /// </summary>
-    /// <remarks>
-    /// The fixed-width date and time fields are required, not merely conventional. A variable width
-    /// year or an unpadded month puts the lexical order out of step with the chronological one just
-    /// as surely as a changed offset does, and xsd:dateTime permits both.
-    /// </remarks>
-    private static bool TryReadLexicalProfile(
-        string lexical,
-        out int fractionalDigits,
-        out string offsetToken)
-    {
-        fractionalDigits = 0;
-        offsetToken = string.Empty;
-
-        // yyyy-MM-ddTHH:mm:ss is 19 characters, and an offset token is at least one more.
-        if (lexical.Length < 20)
+        // yyyy-MM-ddTHH:mm:ss is 19 characters and a signed offset is six more, which is the
+        // shortest admitted shape.
+        if (watermarkLexical.Length < 25)
         {
-            return false;
+            return EuWatermarkLexicalShape.OutsideTheMeasuredSet;
         }
 
         ReadOnlySpan<int> digitPositions = [0, 1, 2, 3, 5, 6, 8, 9, 11, 12, 14, 15, 17, 18];
         foreach (var position in digitPositions)
         {
-            if (!char.IsAsciiDigit(lexical[position]))
+            if (!char.IsAsciiDigit(watermarkLexical[position]))
             {
-                return false;
+                return EuWatermarkLexicalShape.OutsideTheMeasuredSet;
             }
         }
 
-        if (lexical[4] != '-' || lexical[7] != '-' || lexical[10] != 'T' ||
-            lexical[13] != ':' || lexical[16] != ':')
+        if (watermarkLexical[4] != '-' || watermarkLexical[7] != '-' ||
+            watermarkLexical[10] != 'T' || watermarkLexical[13] != ':' ||
+            watermarkLexical[16] != ':')
         {
-            return false;
+            return EuWatermarkLexicalShape.OutsideTheMeasuredSet;
         }
 
         var index = 19;
-        if (lexical[index] == '.')
+        var shape = EuWatermarkLexicalShape.WholeSecondsSignedOffset;
+        if (watermarkLexical[index] == '.')
         {
             index++;
             var start = index;
-            while (index < lexical.Length && char.IsAsciiDigit(lexical[index]))
+            while (index < watermarkLexical.Length && char.IsAsciiDigit(watermarkLexical[index]))
             {
                 index++;
             }
 
-            fractionalDigits = index - start;
-            if (fractionalDigits == 0)
+            if (index == start)
             {
-                return false;
+                return EuWatermarkLexicalShape.OutsideTheMeasuredSet;
             }
+
+            shape = EuWatermarkLexicalShape.FractionalSecondsSignedOffset;
         }
 
-        var offset = lexical[index..];
-        if (string.Equals(offset, "Z", StringComparison.Ordinal))
-        {
-            offsetToken = offset;
-            return true;
-        }
-
-        // An absent offset is a valid xsd:dateTime and an unusable watermark: it names no instant,
-        // and mixing it with offset-bearing values breaks the lexical order too, because the
-        // shorter string is a prefix of the longer one and sorts below every offset token.
+        // A signed hh:mm offset, which is what both admitted shapes end with. An absent offset and
+        // a Z terminator are the two other forms xsd:dateTime allows, and neither was observed.
+        var offset = watermarkLexical[index..];
         if (offset.Length != 6 || (offset[0] != '+' && offset[0] != '-') || offset[3] != ':' ||
             !char.IsAsciiDigit(offset[1]) || !char.IsAsciiDigit(offset[2]) ||
             !char.IsAsciiDigit(offset[4]) || !char.IsAsciiDigit(offset[5]))
         {
-            return false;
+            return EuWatermarkLexicalShape.OutsideTheMeasuredSet;
         }
 
-        offsetToken = offset;
-        return true;
+        return shape;
     }
 
     /// <summary>
@@ -439,6 +473,7 @@ public sealed class EuWatermarkWitnessPlan
             "predicate=" + predicateIri,
             "ordering_tuple=" + OrderingTupleIdentity,
             "boundary_rule=" + BoundaryRuleIdentity,
+            "admitted_shapes=" + string.Join(',', AdmittedShapes),
             "page_limit=" + pageLimit.ToString(CultureInfo.InvariantCulture),
             "template=" + template,
         ]));
@@ -464,19 +499,19 @@ public enum EuWatermarkStepRefusal
     CrossingCursorNotInRetainedTieSet = 1,
 
     /// <summary>
-    /// The page carries more rows than the plan asked for, so the endpoint did not honour the
-    /// LIMIT and no page-shaped reasoning about it holds.
+    /// The page carries more rows than the plan asked for, so the endpoint did not honour the LIMIT
+    /// and no page-shaped reasoning about it holds.
     /// </summary>
     [JsonStringEnumMemberName("page_exceeds_plan_limit")]
     PageExceedsPlanLimit = 2,
 
     /// <summary>
-    /// A watermark on this page, or on the crossing's own cursor, does not share the plan's frozen
-    /// lexical profile. The publisher's order and the cursor's order are no longer one relation,
-    /// so neither the boundary nor the advance can be reasoned about.
+    /// A watermark on this page, or on the crossing's own cursor, has a shape no bounded
+    /// observation covers. The channel has supplied no frozen order semantics for it, so the
+    /// traversal stops here with a named cause and the recovery is the next cut, not a retry.
     /// </summary>
-    [JsonStringEnumMemberName("watermark_not_in_plan_lexical_profile")]
-    WatermarkNotInPlanLexicalProfile = 3,
+    [JsonStringEnumMemberName("watermark_shape_without_frozen_order_semantics")]
+    WatermarkShapeWithoutFrozenOrderSemantics = 3,
 
     /// <summary>
     /// The page is not strictly ascending in the ordering tuple. Either the endpoint did not apply
@@ -502,9 +537,9 @@ public enum EuWatermarkStepRefusal
     CrossingDoesNotDescribeThisPage = 6,
 
     /// <summary>
-    /// A full page carrying nothing above the boundary watermark. The tie group at that watermark
-    /// is at least as large as the page, so the inclusive reread returns the same rows for ever
-    /// and the traversal is stalled rather than finished.
+    /// A full page carrying nothing above the boundary watermark. The group sharing that watermark
+    /// is at least as large as the page, so the inclusive reread returns the same rows for ever and
+    /// the traversal is stalled rather than finished.
     /// </summary>
     [JsonStringEnumMemberName("traversal_cannot_advance")]
     TraversalCannotAdvance = 7,
@@ -519,10 +554,20 @@ public enum EuWatermarkStepRefusal
 /// The division of labour is deliberate. <see cref="EuBoundaryCrossing"/> proves that the entries
 /// sharing the boundary watermark were carried across it exactly once. This type proves the two
 /// things a crossing cannot see: that the crossing was computed from this page rather than from a
-/// neighbouring one, and that the page actually moved the traversal forward. The second matters
-/// because the inclusive reread creates its own stall. The tie groups observed on 2026-09-03 held
-/// three to five entries each, so a page limit smaller than a tie group re-delivers the same rows
-/// for ever while every individual page still looks well formed.
+/// neighbouring one, and that the page actually moved the traversal forward.
+/// </para>
+/// <para>
+/// The second exists because no page limit can be shown to be large enough. The inclusive reread
+/// re-delivers the whole group sharing the boundary watermark before anything new, so a group at
+/// least as large as the page stalls the traversal while every individual page still looks well
+/// formed. Group size is not a constant to design against: two bounded observations of the same
+/// predicate on the same day, over the same top window, recorded groups of three to five and groups
+/// of 41 to 49. So the stall is detected when it happens rather than prevented by choosing a
+/// number.
+/// </para>
+/// <para>
+/// A group here is the set of entries sharing an exact lexical watermark, not an instant. Two
+/// entries naming the same moment under different offsets are two watermarks and are not tied.
 /// </para>
 /// <para>
 /// What it does not decide. A page carrying nothing beyond the boundary and fewer rows than the
@@ -537,12 +582,14 @@ public sealed class EuWatermarkTraversalStep
         EuWatermarkWitnessPlan plan,
         EuBoundaryCrossing crossing,
         IReadOnlyList<EuWatermarkCursor> deliveredPage,
+        IReadOnlyList<EuWatermarkCursor> newlyDelivered,
         EuWatermarkCursor? nextPosition,
         int rowsBeyondBoundary)
     {
         Plan = plan;
         Crossing = crossing;
         DeliveredPage = deliveredPage;
+        NewlyDelivered = newlyDelivered;
         NextPosition = nextPosition;
         RowsBeyondBoundary = rowsBeyondBoundary;
     }
@@ -557,6 +604,16 @@ public sealed class EuWatermarkTraversalStep
     public IReadOnlyList<EuWatermarkCursor> DeliveredPage { get; }
 
     /// <summary>
+    /// The rows this page delivered that the incoming crossing had not already retained, in
+    /// publisher order. What the cut newly learned from this request.
+    /// </summary>
+    /// <remarks>
+    /// The complement of the inclusive reread. Accumulating this across a traversal is how a cut
+    /// reaches each entry exactly once while every page still re-reads its boundary group.
+    /// </remarks>
+    public IReadOnlyList<EuWatermarkCursor> NewlyDelivered { get; }
+
+    /// <summary>
     /// Where the next page reads from, or null when this page carried nothing beyond the boundary
     /// and is therefore consistent with the end of the traversal.
     /// </summary>
@@ -568,7 +625,7 @@ public sealed class EuWatermarkTraversalStep
     /// <summary>
     /// The only path that mints a step.
     /// </summary>
-    /// <param name="plan">The frozen plan, for its page limit and lexical profile.</param>
+    /// <param name="plan">The frozen plan, for its page limit and admitted shapes.</param>
     /// <param name="crossing">The boundary crossing reconciled from this page.</param>
     /// <param name="deliveredPage">The page as delivered, in publisher order.</param>
     /// <param name="refusal">Why no step exists, when none does.</param>
@@ -609,10 +666,9 @@ public sealed class EuWatermarkTraversalStep
             return null;
         }
 
-        if (!plan.SharesLexicalProfile(boundaryWatermark) ||
-            Array.Exists(page, row => !plan.SharesLexicalProfile(row.WatermarkLexical)))
+        if (Outside(boundaryWatermark) || Array.Exists(page, row => Outside(row.WatermarkLexical)))
         {
-            refusal = EuWatermarkStepRefusal.WatermarkNotInPlanLexicalProfile;
+            refusal = EuWatermarkStepRefusal.WatermarkShapeWithoutFrozenOrderSemantics;
             return null;
         }
 
@@ -644,7 +700,8 @@ public sealed class EuWatermarkTraversalStep
 
         // TryCross already proved the retained set is a subset of the reread, so the reread it
         // reconciled is exactly the retained set together with what it carried forward.
-        var reread = new HashSet<string>(crossing.RetainedTieSet, StringComparer.Ordinal);
+        var retained = new HashSet<string>(crossing.RetainedTieSet, StringComparer.Ordinal);
+        var reread = new HashSet<string>(retained, StringComparer.Ordinal);
         reread.UnionWith(crossing.CarriedForward);
         if (!atBoundary.SetEquals(reread))
         {
@@ -659,12 +716,23 @@ public sealed class EuWatermarkTraversalStep
             return null;
         }
 
+        var newlyDelivered = page
+            .Where(row => !string.Equals(
+                    row.WatermarkLexical, boundaryWatermark, StringComparison.Ordinal)
+                || !retained.Contains(row.CanonicalEntryKey))
+            .ToArray();
+
         refusal = EuWatermarkStepRefusal.None;
         return new EuWatermarkTraversalStep(
             plan,
             crossing,
             Array.AsReadOnly(page),
+            Array.AsReadOnly(newlyDelivered),
             beyond > 0 ? page[^1] : null,
             beyond);
     }
+
+    private static bool Outside(string watermarkLexical) =>
+        EuWatermarkWitnessPlan.ClassifyShape(watermarkLexical) ==
+        EuWatermarkLexicalShape.OutsideTheMeasuredSet;
 }
