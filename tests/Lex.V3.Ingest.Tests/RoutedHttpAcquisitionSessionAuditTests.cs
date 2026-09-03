@@ -1098,8 +1098,7 @@ public sealed class RoutedHttpAcquisitionSessionAuditTests
                 receipt = issued;
             }
 
-            return Convert.ToHexStringLower(
-                SHA256.HashData(Encoding.UTF8.GetBytes(ContractJson.Serialize(receipt))));
+            return DurableBlobWriteReceiptDigest.Of(receipt);
         }
 
         public Task<DurableBlobWriteReceipt> CreateAsync(

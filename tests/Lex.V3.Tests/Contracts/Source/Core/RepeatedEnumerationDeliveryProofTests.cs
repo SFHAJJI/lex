@@ -223,7 +223,6 @@ public sealed class RepeatedEnumerationDeliveryProofTests
     [DataRow(HttpBindingMutation.TerminalRequestUri)]
     [DataRow(HttpBindingMutation.IncompleteRoute)]
     [DataRow(HttpBindingMutation.NonDerivableStatus200)]
-    [DataRow(HttpBindingMutation.CustodyReceiptDigest)]
     [DataRow(HttpBindingMutation.CustodyReference)]
     [DataRow(HttpBindingMutation.UnenforcedCustody)]
     [DataRow(HttpBindingMutation.PayloadLength)]
@@ -233,6 +232,26 @@ public sealed class RepeatedEnumerationDeliveryProofTests
     public void FactoryRejectsEveryBrokenHttpAndCustodyBinding(HttpBindingMutation mutation) =>
         Assert.ThrowsExactly<ArgumentException>(() =>
             new Fixture(httpBindingMutation: mutation).Create("a,b", "a,b"));
+
+    /// <summary>
+    /// Decision 80 fold-in: <see cref="RoutedHttpEvidence.Create"/>'s own receipt gate would refuse
+    /// this exact corruption at the door (the fixture's hopWriteReceipts dictionary always carries
+    /// the true receipt), which would make this mutation pass this test for the wrong reason -- a
+    /// door-level <see cref="ArgumentException"/> whose message is Create's, not
+    /// <see cref="EnumerationDeliveryComparison"/>'s. The fixture mints this hop's evidence through
+    /// the receipt-free internal door instead (the same one a resolver reconstructing evidence from
+    /// storage would use), so the corrupted digest survives to reach and is caught by
+    /// <see cref="EnumerationDeliveryComparison"/>'s own independent cross-check between a
+    /// resolver's separately returned receipt and the hop's claim.
+    /// </summary>
+    [TestMethod]
+    public void FactoryCatchesACustodyReceiptDigestMismatchTheDoorWasBypassedFor()
+    {
+        var exception = Assert.ThrowsExactly<ArgumentException>(() =>
+            new Fixture(httpBindingMutation: HttpBindingMutation.CustodyReceiptDigest)
+                .Create("a,b", "a,b"));
+        StringAssert.Contains(exception.Message, "does not bind");
+    }
 
     [TestMethod]
     public void LuxembourgHttpEvidenceCannotHideUnderAEuropeanPlanAndProfile() =>
@@ -914,7 +933,7 @@ public sealed class RepeatedEnumerationDeliveryProofTests
             RoutedHttpCompletion completion = _chunkedCompletion
                 ? new PinnedHandlerChunkedEofHttpCompletion(Artifact(911).Sha256)
                 : new DeclaredContentLengthHttpCompletion((ulong)bytes.Length);
-            var writeReceiptDigest = Sha(Encoding.UTF8.GetBytes(ContractJson.Serialize(write)));
+            var writeReceiptDigest = DurableBlobWriteReceiptDigest.Of(write);
             if (_httpBindingMutation == HttpBindingMutation.CustodyReceiptDigest && seed == 1)
             {
                 writeReceiptDigest = Artifact(999).Sha256;
@@ -973,7 +992,7 @@ public sealed class RepeatedEnumerationDeliveryProofTests
                     new DeclaredContentLengthHttpCompletion(0),
                     0,
                     Sha([]),
-                    Artifact(913).Sha256,
+                    WriteReceiptDigest(Sha([]), 0),
                     0,
                     Sha([])));
             }
@@ -982,16 +1001,53 @@ public sealed class RepeatedEnumerationDeliveryProofTests
             var routeOutcome = _httpBindingMutation == HttpBindingMutation.IncompleteRoute && seed == 1
                 ? new IncompleteHttpRouteOutcome(HttpRouteIncompleteReason.SourceProfileStale)
                 : (RoutedHttpRouteOutcome)new CompleteHttpRouteOutcome();
-            var httpEvidence = RoutedHttpEvidence.Create(
-                _httpBindingMutation == HttpBindingMutation.DifferentRun && seed == 2
-                    ? Artifact(931)
-                    : Artifact(930),
-                _httpBindingMutation == HttpBindingMutation.DuplicateRequestOrdinal && seed == 2
-                    ? 1UL
-                    : (ulong)seed,
-                0,
-                hops,
-                routeOutcome);
+            // Decision 80: the terminal hop's genuine receipt is `write`, whose canonical digest
+            // `writeReceiptDigest` was computed above (and, under CustodyReceiptDigest, deliberately
+            // replaced with an unrelated one). This dictionary always carries the true `write`; it is
+            // still what a genuine resolver would separately return for
+            // EnumerationDeliveryComparison to cross-check. It is not what RoutedHttpEvidence.Create
+            // sees for the CustodyReceiptDigest case below, which mints through the receipt-free door
+            // instead precisely so this mutation is proven downstream, not only at the door.
+            var hopWriteReceipts = new Dictionary<string, DurableBlobWriteReceipt>(StringComparer.Ordinal)
+            {
+                [observationId] = write,
+            };
+            if (redirectIntoOfficial)
+            {
+                hopWriteReceipts[redirectObservationId] = WriteReceiptFor(Sha([]), 0);
+            }
+
+            var runIdentityForEvidence = _httpBindingMutation == HttpBindingMutation.DifferentRun && seed == 2
+                ? Artifact(931)
+                : Artifact(930);
+            var requestOrdinalForEvidence = _httpBindingMutation == HttpBindingMutation.DuplicateRequestOrdinal && seed == 2
+                ? 1UL
+                : (ulong)seed;
+
+            // Decision 80 fold-in: RoutedHttpEvidence.Create's own RequireHopWriteReceipts would
+            // refuse this exact corruption at the door, since hopWriteReceipts above always carries
+            // the true `write` receipt -- so it can no longer drive
+            // RepeatedEnumerationDeliveryProof's independent cross-check between a resolver's
+            // separately returned DurableWriteReceipt and the hop's claimed digest. That check is
+            // not redundant with the door (a resolver may reconstruct HttpEvidence through the
+            // receipt-free ParseAndVerify/CreateFromVerifiedHops path and DurableWriteReceipt
+            // separately), so it stays; the fixture instead mints through the same internal,
+            // receipt-unchecked door a storage-reconstructing resolver would use, exactly so this
+            // mutation reaches that check instead of being caught earlier for the wrong reason.
+            var httpEvidence = _httpBindingMutation == HttpBindingMutation.CustodyReceiptDigest && seed == 1
+                ? RoutedHttpEvidence.CreateFromVerifiedHops(
+                    runIdentityForEvidence,
+                    requestOrdinalForEvidence,
+                    0,
+                    hops,
+                    routeOutcome)
+                : RoutedHttpEvidence.Create(
+                    runIdentityForEvidence,
+                    requestOrdinalForEvidence,
+                    0,
+                    hops,
+                    routeOutcome,
+                    hopWriteReceipts);
             var httpEvidenceRef = Reference(seed + 160, httpEvidence.CopyCanonicalBytes());
             if (_badRequestRef && seed == 1)
             {
@@ -1053,6 +1109,32 @@ public sealed class RepeatedEnumerationDeliveryProofTests
         private static string Timestamp(DateTimeOffset value) =>
             value.ToString("yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'", System.Globalization.CultureInfo.InvariantCulture);
         private static string Sha(ReadOnlySpan<byte> value) => Convert.ToHexString(SHA256.HashData(value)).ToLowerInvariant();
+
+        /// <summary>
+        /// A genuine, internally consistent <see cref="DurableBlobWriteReceipt"/> for exactly the
+        /// given content digest and length, so a hop built from it satisfies Decision 80's receipt
+        /// check at <see cref="RoutedHttpEvidence.Create"/>.
+        /// </summary>
+        private static DurableBlobWriteReceipt WriteReceiptFor(string contentSha256, ulong length)
+        {
+            var reference = new DurableBlobRef(
+                CustodySchemaIds.DurableBlobRef,
+                contentSha256,
+                checked((long)length),
+                CustodyClass.NightlyFloor90d);
+            var policy = new CustodyPolicyEvidence(
+                CustodySchemaIds.CustodyPolicyEvidence,
+                reference,
+                CustodyVerificationProfile.FileSystemUnenforced1,
+                policyKey: null,
+                CustodyProtection.NotEnforced,
+                new DateTimeOffset(2026, 9, 2, 19, 0, 0, TimeSpan.Zero),
+                protectedUntil: null);
+            return new DurableBlobWriteReceipt(CustodySchemaIds.DurableBlobWriteReceipt, reference, policy);
+        }
+
+        private static string WriteReceiptDigest(string contentSha256, ulong length) =>
+            DurableBlobWriteReceiptDigest.Of(WriteReceiptFor(contentSha256, length));
         private sealed class Renderer(SourceArtifactRef rendererProfileRef, SourceArtifactRef rendererSourceRef, string requestTarget, byte[] requestBody) : IMachineQueryRenderer
         {
             private readonly byte[] _requestBody = requestBody.ToArray();

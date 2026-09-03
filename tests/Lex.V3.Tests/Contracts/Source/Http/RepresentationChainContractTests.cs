@@ -1,3 +1,7 @@
+using System.Security.Cryptography;
+using System.Text;
+using Lex.V3.Contracts;
+using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Http;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -82,7 +86,7 @@ public sealed class RepresentationChainContractTests
         var revalidation = RoutedHttpHop.Create(
             0, Uuid("reval"), null, RequestDigest(request), EffectiveUri, 304,
             Headers(), Time(0), Time(1),
-            new Revalidation304HttpCompletion(), 0, EmptyDigest, Digest('c'), 0, EmptyDigest);
+            new Revalidation304HttpCompletion(), 0, EmptyDigest, WriteReceiptDigest(EmptyDigest, 0), 0, EmptyDigest);
         var appended = MustAppend(
             chain, RepresentationChainObservation.FromRoute(EvidenceFor(revalidation), request));
 
@@ -105,7 +109,7 @@ public sealed class RepresentationChainContractTests
             0, Uuid("partial"), null, RequestDigest(request), EffectiveUri, 200,
             Headers(contentLength: "10"), Time(0), Time(1),
             new IncompleteHttpCompletion(HttpAcquisitionReasonRegistry.Member(HttpPartialBodyReason.DeclaredLengthShortRead)),
-            5, Digest('d'), Digest('c'), 5, Digest('d'));
+            5, Digest('d'), WriteReceiptDigest(Digest('d'), 5), 5, Digest('d'));
         var evidence = EvidenceFor(
             [partial], new IncompleteHttpRouteOutcome(HttpRouteIncompleteReason.HopIncomplete));
         var observation = RepresentationChainObservation.FromRoute(evidence, request);
@@ -126,7 +130,7 @@ public sealed class RepresentationChainContractTests
         var empty = RoutedHttpHop.Create(
             0, Uuid("empty"), null, RequestDigest(request), EffectiveUri, 200,
             Headers(contentLength: "0"), Time(0), Time(1),
-            new DeclaredContentLengthHttpCompletion(0), 0, EmptyDigest, Digest('c'), 0, EmptyDigest);
+            new DeclaredContentLengthHttpCompletion(0), 0, EmptyDigest, WriteReceiptDigest(EmptyDigest, 0), 0, EmptyDigest);
         var observation = RepresentationChainObservation.FromRoute(EvidenceFor(empty), request);
 
         Assert.IsTrue(observation.IsCompleteBodyTransfer);
@@ -144,7 +148,7 @@ public sealed class RepresentationChainContractTests
         var ranged = RoutedHttpHop.Create(
             0, Uuid("ranged"), null, RequestDigest(request), EffectiveUri, 206,
             Headers(contentLength: "3", contentRange: "bytes 0-2/9"), Time(0), Time(1),
-            new DeclaredContentLengthHttpCompletion(3), 3, Digest('a'), Digest('c'), 3, Digest('a'));
+            new DeclaredContentLengthHttpCompletion(3), 3, Digest('a'), WriteReceiptDigest(Digest('a'), 3), 3, Digest('a'));
         var appended = MustAppend(
             chain, RepresentationChainObservation.FromRoute(EvidenceFor(ranged), request));
         Assert.AreEqual(RepresentationChainAppendDisposition.AppendedAsEvidenceOnly, appended.Disposition);
@@ -160,7 +164,7 @@ public sealed class RepresentationChainContractTests
             0, Uuid("redirect"), null, RequestDigest(request), EffectiveUri, 301,
             Headers(contentLength: "0", location: "https://data.legilux.public.lu/other"),
             Time(0), Time(1),
-            new DeclaredContentLengthHttpCompletion(0), 0, EmptyDigest, Digest('c'), 0, EmptyDigest);
+            new DeclaredContentLengthHttpCompletion(0), 0, EmptyDigest, WriteReceiptDigest(EmptyDigest, 0), 0, EmptyDigest);
         var evidence = EvidenceFor(
             [redirect],
             new RedirectTargetUnobservedHttpRouteOutcome(RequestDigest(request), Time(0)));
@@ -180,7 +184,7 @@ public sealed class RepresentationChainContractTests
         var errorBody = RoutedHttpHop.Create(
             0, Uuid("error"), null, RequestDigest(request), EffectiveUri, 500,
             Headers(contentLength: "9"), Time(0), Time(1),
-            new DeclaredContentLengthHttpCompletion(9), 9, Digest('e'), Digest('c'), 9, Digest('e'));
+            new DeclaredContentLengthHttpCompletion(9), 9, Digest('e'), WriteReceiptDigest(Digest('e'), 9), 9, Digest('e'));
         var appended = MustAppend(
             chain, RepresentationChainObservation.FromRoute(EvidenceFor(errorBody), request));
 
@@ -282,7 +286,7 @@ public sealed class RepresentationChainContractTests
         var hop = RoutedHttpHop.Create(
             0, Uuid("post"), null, RequestDigest(request), EffectiveUri, 200,
             Headers(contentLength: "3"), Time(0), Time(1),
-            new DeclaredContentLengthHttpCompletion(3), 3, Digest('a'), Digest('c'), 3, Digest('a'));
+            new DeclaredContentLengthHttpCompletion(3), 3, Digest('a'), WriteReceiptDigest(Digest('a'), 3), 3, Digest('a'));
 
         Assert.ThrowsExactly<ArgumentException>(
             () => RepresentationChainObservation.FromRoute(EvidenceFor(hop), request));
@@ -301,7 +305,7 @@ public sealed class RepresentationChainContractTests
         var hop = RoutedHttpHop.Create(
             0, Uuid("mismatched"), null, RequestDigest(request), EffectiveUri, 200,
             Headers(contentLength: "3"), Time(0), Time(1),
-            new DeclaredContentLengthHttpCompletion(3), 3, Digest('a'), Digest('c'), 3, Digest('a'));
+            new DeclaredContentLengthHttpCompletion(3), 3, Digest('a'), WriteReceiptDigest(Digest('a'), 3), 3, Digest('a'));
 
         Assert.ThrowsExactly<ArgumentException>(
             () => RepresentationChainObservation.FromRoute(EvidenceFor(hop), otherRequest));
@@ -382,7 +386,7 @@ public sealed class RepresentationChainContractTests
             0, observationId, null, RequestDigest(request), EffectiveUri, 200,
             Headers(contentLength: length.ToString(System.Globalization.CultureInfo.InvariantCulture)),
             Time(0), Time(1),
-            new DeclaredContentLengthHttpCompletion(length), length, digest, Digest('c'), length, digest);
+            new DeclaredContentLengthHttpCompletion(length), length, digest, WriteReceiptDigest(digest, length), length, digest);
         var observation = RepresentationChainObservation.FromRoute(EvidenceFor(hop), request);
         Assert.IsTrue(observation.QualifiesAsTrustedBaselineCandidate());
         return observation;
@@ -447,7 +451,7 @@ public sealed class RepresentationChainContractTests
         RoutedHttpHop.Create(
             0, Uuid("single"), null, RequestDigest(request), request.Uri, 200,
             Headers(contentLength: "3"), Time(0), Time(1),
-            new DeclaredContentLengthHttpCompletion(3), 3, Digest('a'), Digest('c'), 3, Digest('a'));
+            new DeclaredContentLengthHttpCompletion(3), 3, Digest('a'), WriteReceiptDigest(Digest('a'), 3), 3, Digest('a'));
 
     private static RoutedHttpEvidence EvidenceFor(
         RoutedHttpHop[] hops, RoutedHttpRouteOutcome? outcome = null) =>
@@ -456,7 +460,61 @@ public sealed class RepresentationChainContractTests
             1,
             0,
             hops,
-            outcome ?? new CompleteHttpRouteOutcome());
+            outcome ?? new CompleteHttpRouteOutcome(),
+            ReceiptsFor(hops));
+
+    /// <summary>
+    /// A genuine, internally consistent <see cref="DurableBlobWriteReceipt"/> for exactly the given
+    /// content digest and length, so a hop built from it satisfies Decision 80's receipt check at
+    /// <see cref="RoutedHttpEvidence.Create"/>. Mirrors the helper of the same name in
+    /// RoutedHttpEvidenceContractTests.cs; kept local rather than shared so each contract test file
+    /// depends only on the Contracts types it already imports.
+    /// </summary>
+    private static string WriteReceiptDigest(string contentSha256, ulong length)
+    {
+        var reference = new DurableBlobRef(
+            CustodySchemaIds.DurableBlobRef,
+            contentSha256,
+            checked((long)length),
+            CustodyClass.NightlyFloor90d);
+        var policy = new CustodyPolicyEvidence(
+            CustodySchemaIds.CustodyPolicyEvidence,
+            reference,
+            CustodyVerificationProfile.FileSystemUnenforced1,
+            policyKey: null,
+            CustodyProtection.NotEnforced,
+            new DateTimeOffset(2026, 9, 2, 19, 0, 0, TimeSpan.Zero),
+            protectedUntil: null);
+        var receipt = new DurableBlobWriteReceipt(CustodySchemaIds.DurableBlobWriteReceipt, reference, policy);
+        return Convert.ToHexString(
+                SHA256.HashData(Encoding.UTF8.GetBytes(ContractJson.Serialize(receipt))))
+            .ToLowerInvariant();
+    }
+
+    private static Dictionary<string, DurableBlobWriteReceipt> ReceiptsFor(IEnumerable<RoutedHttpHop> hops)
+    {
+        var receipts = new Dictionary<string, DurableBlobWriteReceipt>(StringComparer.Ordinal);
+        foreach (var hop in hops)
+        {
+            var reference = new DurableBlobRef(
+                CustodySchemaIds.DurableBlobRef,
+                hop.Sha256,
+                checked((long)hop.Length),
+                CustodyClass.NightlyFloor90d);
+            var policy = new CustodyPolicyEvidence(
+                CustodySchemaIds.CustodyPolicyEvidence,
+                reference,
+                CustodyVerificationProfile.FileSystemUnenforced1,
+                policyKey: null,
+                CustodyProtection.NotEnforced,
+                new DateTimeOffset(2026, 9, 2, 19, 0, 0, TimeSpan.Zero),
+                protectedUntil: null);
+            receipts[hop.ObservationId] =
+                new DurableBlobWriteReceipt(CustodySchemaIds.DurableBlobWriteReceipt, reference, policy);
+        }
+
+        return receipts;
+    }
 
     private static RoutedHttpEvidence EvidenceFor(params RoutedHttpHop[] hops) =>
         EvidenceFor(hops, outcome: null);
@@ -475,11 +533,11 @@ public sealed class RepresentationChainContractTests
         var first = RoutedHttpHop.Create(
             0, firstHopId, null, digest, firstUri, 301,
             Headers(contentLength: "0", location: terminalUri), Time(0), Time(1),
-            new DeclaredContentLengthHttpCompletion(0), 0, EmptyDigest, Digest('c'), 0, EmptyDigest);
+            new DeclaredContentLengthHttpCompletion(0), 0, EmptyDigest, WriteReceiptDigest(EmptyDigest, 0), 0, EmptyDigest);
         var terminal = RoutedHttpHop.Create(
             1, Uuid("redirect-terminal-" + firstUri + terminalUri), firstHopId, digest, terminalUri, 200,
             Headers(contentLength: "3"), Time(2), Time(3),
-            new DeclaredContentLengthHttpCompletion(3), 3, Digest('a'), Digest('c'), 3, Digest('a'));
+            new DeclaredContentLengthHttpCompletion(3), 3, Digest('a'), WriteReceiptDigest(Digest('a'), 3), 3, Digest('a'));
         return (EvidenceFor(first, terminal), request);
     }
 }

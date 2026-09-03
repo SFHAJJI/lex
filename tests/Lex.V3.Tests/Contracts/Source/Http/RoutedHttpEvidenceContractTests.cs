@@ -1,5 +1,9 @@
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Lex.V3.Artifacts;
+using Lex.V3.Contracts;
+using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Http;
 
@@ -35,7 +39,12 @@ public sealed class RoutedHttpEvidenceContractTests
             "\"request_started_at\":\"2026-09-02T20:00:00.0000000Z\"," +
             "\"terminal_observed_at\":\"2026-09-02T20:00:01.0000000Z\"," +
             "\"completion\":{\"kind\":\"declared_content_length_complete\",\"declared_length\":3}," +
-            $"\"length\":3,\"sha256\":\"{Digest('a')}\",\"durable_write_receipt_sha256\":\"{Digest('b')}\"," +
+            // Decision 80: the write-receipt digest a hop carries must reproduce from a genuine
+            // receipt, so it can no longer be a bare filler literal like the other Digest(...)
+            // fields here; it is computed the same way Evidence(...) computes the one it checks
+            // against, from the same (content digest, length) pair this hop retains.
+            $"\"length\":3,\"sha256\":\"{Digest('a')}\"," +
+            $"\"durable_write_receipt_sha256\":\"{WriteReceiptFor(Digest('a'), 3).Sha256}\"," +
             $"\"readback_byte_length\":3,\"readback_sha256\":\"{Digest('a')}\"}}]," +
             "\"outcome\":{\"kind\":\"complete\"}}\n";
         CollectionAssert.AreEqual(Encoding.UTF8.GetBytes(expected), bytes);
@@ -66,6 +75,161 @@ public sealed class RoutedHttpEvidenceContractTests
         var reopened = RoutedHttpEvidence.ParseAndVerify(bytes);
         CollectionAssert.AreEqual(bytes, reopened.CopyCanonicalBytes());
         Assert.AreEqual(HttpStatusDisposition.DerivableStatus, reopened.Hops[0].StatusDisposition);
+    }
+
+    /// <summary>
+    /// Decision 80: <see cref="RoutedHttpEvidence.Create"/> refuses a hop with no custody write
+    /// receipt at all. The dictionary is well-formed and empty, not null, so this proves the
+    /// per-hop lookup itself, not <see cref="ArgumentNullException"/> on the parameter.
+    /// </summary>
+    [TestMethod]
+    public void CreateRefusesAHopWithNoWriteReceipt()
+    {
+        var hop = CompleteHop();
+        var exception = Assert.ThrowsExactly<ArgumentException>(() => RoutedHttpEvidence.Create(
+            new SourceArtifactRef("urn:uuid:11111111-1111-4111-8111-111111111111", Digest('1')),
+            requestOrdinal: 7,
+            attemptOrdinal: 2,
+            [hop],
+            new CompleteHttpRouteOutcome(),
+            new Dictionary<string, DurableBlobWriteReceipt>(StringComparer.Ordinal)));
+        StringAssert.Contains(exception.Message, "has none");
+    }
+
+    /// <summary>
+    /// Decision 80: a receipt built independently of the hop, for bytes of a different digest and
+    /// length than the hop retains, is refused even though it is itself a completely genuine,
+    /// internally consistent receipt. This is "a receipt for other bytes", not a corrupted one.
+    /// </summary>
+    [TestMethod]
+    public void CreateRefusesAReceiptForOtherBytes()
+    {
+        var hop = CompleteHop();
+        var otherBytesReceipt = WriteReceiptFor(Digest('e'), 999).Receipt;
+        var exception = Assert.ThrowsExactly<ArgumentException>(() => RoutedHttpEvidence.Create(
+            new SourceArtifactRef("urn:uuid:11111111-1111-4111-8111-111111111111", Digest('1')),
+            requestOrdinal: 7,
+            attemptOrdinal: 2,
+            [hop],
+            new CompleteHttpRouteOutcome(),
+            new Dictionary<string, DurableBlobWriteReceipt>(StringComparer.Ordinal)
+            {
+                [hop.ObservationId] = otherBytesReceipt,
+            }));
+        StringAssert.Contains(exception.Message, "names other bytes");
+    }
+
+    /// <summary>
+    /// Decision 80: a receipt whose reference names the exact hop bytes, but that is not the exact
+    /// receipt the hop's own <see cref="RoutedHttpHop.DurableWriteReceiptSha256"/> was computed
+    /// from, is refused. Built independently (a different custody class over the same content
+    /// digest and length), not derived from the hop's claimed digest, so this is a genuine readback
+    /// mismatch rather than a self-comparison.
+    /// </summary>
+    [TestMethod]
+    public void CreateRefusesAReceiptWhoseDigestDoesNotReproduceTheHopsReadback()
+    {
+        var hop = CompleteHop();
+        var reference = new DurableBlobRef(
+            CustodySchemaIds.DurableBlobRef, hop.Sha256, checked((long)hop.Length), CustodyClass.LegalHoldEvidence);
+        var mismatchedReceipt = new DurableBlobWriteReceipt(
+            CustodySchemaIds.DurableBlobWriteReceipt,
+            reference,
+            new CustodyPolicyEvidence(
+                CustodySchemaIds.CustodyPolicyEvidence,
+                reference,
+                CustodyVerificationProfile.ImmutableObject1,
+                Guid.NewGuid(),
+                CustodyProtection.ActiveLegalHold,
+                new DateTimeOffset(2026, 9, 2, 19, 0, 0, TimeSpan.Zero),
+                protectedUntil: null));
+        Assert.AreEqual(hop.Sha256, mismatchedReceipt.Reference.ContentSha256);
+        Assert.AreEqual(checked((long)hop.Length), mismatchedReceipt.Reference.ByteLength);
+        var exception = Assert.ThrowsExactly<ArgumentException>(() => RoutedHttpEvidence.Create(
+            new SourceArtifactRef("urn:uuid:11111111-1111-4111-8111-111111111111", Digest('1')),
+            requestOrdinal: 7,
+            attemptOrdinal: 2,
+            [hop],
+            new CompleteHttpRouteOutcome(),
+            new Dictionary<string, DurableBlobWriteReceipt>(StringComparer.Ordinal)
+            {
+                [hop.ObservationId] = mismatchedReceipt,
+            }));
+        StringAssert.Contains(exception.Message, "does not reproduce");
+    }
+
+    /// <summary>
+    /// End to end against a fresh real <see cref="FileSystemCustodyStore"/>, not the in-memory
+    /// recording double every other test in this file uses: a hop whose receipt was genuinely
+    /// produced by that store's own <c>CreateAsync</c> is accepted, and a receipt copy-pasted from a
+    /// different real custody write for different bytes is refused, even though both receipts are
+    /// completely genuine store output.
+    /// </summary>
+    [TestMethod]
+    public async Task RealFileSystemCustodyStoreProvesAGenuineReceiptAndRefusesACrossWriteReceipt()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "lex-evidence-receipt-gate-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var store = new FileSystemCustodyStore(root);
+            var bodyA = Encoding.UTF8.GetBytes("Decision 80 real custody body A");
+            var bodyB = Encoding.UTF8.GetBytes("a completely different real custody body B, longer");
+            var receiptA = await store.CreateAsync(bodyA, CustodyClass.NightlyFloor90d, CancellationToken.None);
+            var receiptB = await store.CreateAsync(bodyB, CustodyClass.NightlyFloor90d, CancellationToken.None);
+            Assert.AreNotEqual(receiptA.Reference.ContentSha256, receiptB.Reference.ContentSha256);
+
+            var receiptASha256 = DurableBlobWriteReceiptDigest.Of(receiptA);
+            var hopA = RoutedHttpHop.Create(
+                0,
+                Observation0,
+                null,
+                Digest('9'),
+                "https://publications.europa.eu/resource/cellar",
+                200,
+                Headers(contentLength: bodyA.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                "2026-09-02T20:00:00.0000000Z",
+                "2026-09-02T20:00:01.0000000Z",
+                new DeclaredContentLengthHttpCompletion((ulong)bodyA.Length),
+                (ulong)bodyA.Length,
+                receiptA.Reference.ContentSha256,
+                receiptASha256,
+                (ulong)bodyA.Length,
+                receiptA.Reference.ContentSha256);
+            var runIdentity = new SourceArtifactRef(
+                "urn:uuid:11111111-1111-4111-8111-111111111111", Digest('1'));
+
+            // A hop whose receipt was genuinely produced by this store's own CreateAsync for its
+            // exact bytes passes.
+            var evidence = RoutedHttpEvidence.Create(
+                runIdentity,
+                requestOrdinal: 7,
+                attemptOrdinal: 2,
+                [hopA],
+                new CompleteHttpRouteOutcome(),
+                new Dictionary<string, DurableBlobWriteReceipt>(StringComparer.Ordinal)
+                {
+                    [hopA.ObservationId] = receiptA,
+                });
+            Assert.AreEqual(receiptA.Reference.ContentSha256, evidence.Hops[0].Sha256);
+
+            // receiptB is completely genuine store output, just for different bytes. Copy-pasted
+            // onto hopA, which claims bodyA's digest and length, it must still be refused.
+            Assert.ThrowsExactly<ArgumentException>(() => RoutedHttpEvidence.Create(
+                runIdentity,
+                requestOrdinal: 7,
+                attemptOrdinal: 2,
+                [hopA],
+                new CompleteHttpRouteOutcome(),
+                new Dictionary<string, DurableBlobWriteReceipt>(StringComparer.Ordinal)
+                {
+                    [hopA.ObservationId] = receiptB,
+                }));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
     }
 
     [TestMethod]
@@ -771,19 +935,21 @@ public sealed class RoutedHttpEvidenceContractTests
                 HttpAcquisitionReasonRegistry.Member(HttpPartialBodyReason.BodyReadFailure))));
         Assert.ThrowsExactly<ArgumentException>(() => new IncompleteHttpCompletion(
             HttpAcquisitionReasonRegistry.Member(HttpPreHeaderFailureClass.HeaderDeadline)));
+        var sevenHops = Enumerable.Range(0, 7).Select(index => CompleteHop(
+            ordinal: (ulong)index,
+            observationId: $"urn:uuid:00000000-0000-4000-8000-{index + 1:D12}",
+            antecedent: index == 0
+                ? null
+                : $"urn:uuid:00000000-0000-4000-8000-{index:D12}")).ToArray();
         Assert.ThrowsExactly<ArgumentException>(() => RoutedHttpEvidence.Create(
             new SourceArtifactRef(
                 "urn:uuid:11111111-1111-4111-8111-111111111111",
                 Digest('1')),
             7,
             2,
-            Enumerable.Range(0, 7).Select(index => CompleteHop(
-                ordinal: (ulong)index,
-                observationId: $"urn:uuid:00000000-0000-4000-8000-{index + 1:D12}",
-                antecedent: index == 0
-                    ? null
-                    : $"urn:uuid:00000000-0000-4000-8000-{index:D12}")).ToArray(),
-            new CompleteHttpRouteOutcome()));
+            sevenHops,
+            new CompleteHttpRouteOutcome(),
+            ReceiptsFor(sevenHops)));
     }
 
     [TestMethod]
@@ -857,7 +1023,8 @@ public sealed class RoutedHttpEvidenceContractTests
             requestOrdinal,
             attemptOrdinal: 2,
             hops,
-            outcome ?? new CompleteHttpRouteOutcome());
+            outcome ?? new CompleteHttpRouteOutcome(),
+            ReceiptsFor(hops));
 
     private static RoutedHttpHop CompleteHop(
         ulong ordinal = 0,
@@ -870,8 +1037,10 @@ public sealed class RoutedHttpEvidenceContractTests
         string? digest = null,
         RoutedHttpCompletion? completion = null,
         string requestStartedAt = "2026-09-02T20:00:00.0000000Z",
-        string terminalObservedAt = "2026-09-02T20:00:01.0000000Z") =>
-        RoutedHttpHop.Create(
+        string terminalObservedAt = "2026-09-02T20:00:01.0000000Z")
+    {
+        var contentSha256 = digest ?? Digest('a');
+        return RoutedHttpHop.Create(
             ordinal,
             observationId,
             antecedent,
@@ -883,10 +1052,54 @@ public sealed class RoutedHttpEvidenceContractTests
             terminalObservedAt,
             completion ?? new DeclaredContentLengthHttpCompletion(3),
             length,
-            digest ?? Digest('a'),
-            Digest('b'),
+            contentSha256,
+            WriteReceiptFor(contentSha256, length).Sha256,
             length,
-            digest ?? Digest('a'));
+            contentSha256);
+    }
+
+    /// <summary>
+    /// A genuine, internally consistent <see cref="DurableBlobWriteReceipt"/> for exactly the given
+    /// content digest and length, plus the SHA-256 of its own canonical serialization: the same
+    /// digest a hop must carry as <see cref="RoutedHttpHop.DurableWriteReceiptSha256"/> under
+    /// Decision 80. Deterministic in its inputs so a fixture built from a hop's own retained digest
+    /// and length always reproduces the exact receipt <see cref="Evidence"/> supplies for it.
+    /// </summary>
+    private static (DurableBlobWriteReceipt Receipt, string Sha256) WriteReceiptFor(
+        string contentSha256, ulong length)
+    {
+        var reference = new DurableBlobRef(
+            CustodySchemaIds.DurableBlobRef,
+            contentSha256,
+            checked((long)length),
+            CustodyClass.NightlyFloor90d);
+        var policy = new CustodyPolicyEvidence(
+            CustodySchemaIds.CustodyPolicyEvidence,
+            reference,
+            CustodyVerificationProfile.FileSystemUnenforced1,
+            policyKey: null,
+            CustodyProtection.NotEnforced,
+            new DateTimeOffset(2026, 9, 2, 19, 0, 0, TimeSpan.Zero),
+            protectedUntil: null);
+        var receipt = new DurableBlobWriteReceipt(CustodySchemaIds.DurableBlobWriteReceipt, reference, policy);
+        return (receipt, DurableBlobWriteReceiptDigest.Of(receipt));
+    }
+
+    /// <summary>
+    /// The genuine receipt dictionary <see cref="RoutedHttpEvidence.Create"/> now requires, one
+    /// entry per hop keyed by its <see cref="RoutedHttpHop.ObservationId"/>, each reproduced from
+    /// that exact hop's own retained digest and length via <see cref="WriteReceiptFor"/>.
+    /// </summary>
+    private static Dictionary<string, DurableBlobWriteReceipt> ReceiptsFor(IEnumerable<RoutedHttpHop> hops)
+    {
+        var receipts = new Dictionary<string, DurableBlobWriteReceipt>(StringComparer.Ordinal);
+        foreach (var hop in hops)
+        {
+            receipts[hop.ObservationId] = WriteReceiptFor(hop.Sha256, hop.Length).Receipt;
+        }
+
+        return receipts;
+    }
 
     private static RoutedHttpResponseHeaders Headers(
         string? contentLength = null,

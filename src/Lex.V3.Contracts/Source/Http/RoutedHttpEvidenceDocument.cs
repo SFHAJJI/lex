@@ -333,6 +333,20 @@ public sealed class RoutedHttpHop
 /// <summary>
 /// Canonical /4 route evidence data. Only the private runtime adapter may mint transport authority.
 /// </summary>
+/// <remarks>
+/// Decision 80 (coordination/EVENTS.md, item 2b ruling): <see cref="Create"/> stays the single
+/// public door onto this type, but visibility alone proves nothing, so it now demands the exact
+/// custody write receipt of each hop body and checks it against that hop's own claimed
+/// <see cref="RoutedHttpHop.Sha256"/>, <see cref="RoutedHttpHop.Length"/> and
+/// <see cref="RoutedHttpHop.DurableWriteReceiptSha256"/> before it will mint evidence, reproducing
+/// at the door exactly what the session's own <c>HoldAsync</c>/<c>RegisterRetainedHop</c> pair
+/// already proved privately (Decision 71: only a receipt can say where bytes are actually held).
+/// <see cref="ParseAndVerify"/> is a different door with a different job: it re-derives a typed
+/// value from bytes that are already the canonical output of some earlier <see cref="Create"/> call
+/// and proves only that the bytes are that value's exact canonical form, so it does not and cannot
+/// re-demand receipts the wire format never carries (OBS-01 005 section 2: "canonical JSON can
+/// carry evidence data but cannot mint a production capability").
+/// </remarks>
 public sealed class RoutedHttpEvidence
 {
     public const string SchemaId = "lex-license-http-evidence/4";
@@ -366,7 +380,104 @@ public sealed class RoutedHttpEvidence
 
     public RoutedHttpRouteOutcome Outcome { get; }
 
+    /// <summary>
+    /// Mints /4 route evidence. Decision 80: for every hop, the caller must present the exact
+    /// <see cref="DurableBlobWriteReceipt"/> that custody issued for that hop's body, keyed by the
+    /// hop's own <see cref="RoutedHttpHop.ObservationId"/>. Construction refuses a hop with no
+    /// receipt, a receipt naming other bytes, or a receipt whose own canonical digest does not
+    /// reproduce the hop's claimed <see cref="RoutedHttpHop.DurableWriteReceiptSha256"/>.
+    /// </summary>
+    /// <remarks>
+    /// This is consistency evidence, not unforgeable evidence, and it stays that way plainly on
+    /// purpose. <see cref="DurableBlobWriteReceipt"/>, <see cref="DurableBlobRef"/> and
+    /// <see cref="CustodyPolicyEvidence"/> all have public constructors and no runtime pin refuses
+    /// a caller who builds one directly (Decision 71: the two concrete stores that legitimately
+    /// mint them live in other assemblies, so Contracts cannot constructor-seal these types against
+    /// callers it must still let those stores reach). What this check proves is that a presented
+    /// receipt is exactly the one the hop itself claims -- a caller who fabricates both a receipt
+    /// and a hop consistent with each other, without ever touching custody, still passes. The gap
+    /// that opens is fenced structurally instead, by pinning the closed, reviewed set of real
+    /// producers of these three types: the JSON constructor plus the genuine custody stores in
+    /// Lex.V3.Artifacts and Lex.V3.Custody.Azure, and nothing else in Contracts or Ingest. A new,
+    /// unreviewed producer breaks that pin rather than passing silently.
+    /// </remarks>
     public static RoutedHttpEvidence Create(
+        SourceArtifactRef runIdentity,
+        ulong requestOrdinal,
+        ulong attemptOrdinal,
+        IReadOnlyList<RoutedHttpHop> hops,
+        RoutedHttpRouteOutcome outcome,
+        IReadOnlyDictionary<string, DurableBlobWriteReceipt> hopWriteReceiptsByObservationId)
+    {
+        ArgumentNullException.ThrowIfNull(hops);
+        ArgumentNullException.ThrowIfNull(hopWriteReceiptsByObservationId);
+        RequireHopWriteReceipts(hops, hopWriteReceiptsByObservationId);
+        return CreateFromVerifiedHops(runIdentity, requestOrdinal, attemptOrdinal, hops, outcome);
+    }
+
+    /// <summary>
+    /// Every predicate <see cref="Create"/> can check without a live custody store: exactly what
+    /// <c>RoutedHttpAcquisitionSession.HoldAsync</c> and <c>RegisterRetainedHop</c> already prove
+    /// privately for the one caller today, reproduced here so any caller of the public door proves
+    /// it too. A hostile receipt built independently of the hop (not derived from it) is refused by
+    /// one of these three checks, never by a check that only compares the hop to a copy of itself.
+    /// </summary>
+    private static void RequireHopWriteReceipts(
+        IReadOnlyList<RoutedHttpHop> hops,
+        IReadOnlyDictionary<string, DurableBlobWriteReceipt> hopWriteReceiptsByObservationId)
+    {
+        foreach (var hop in hops)
+        {
+            if (hop is null)
+            {
+                // A null hop is refused by CreateFromVerifiedHops's own null check below with a
+                // message about the hop list; it is not this method's finding to report.
+                continue;
+            }
+
+            if (!hopWriteReceiptsByObservationId.TryGetValue(hop.ObservationId, out var receipt) ||
+                receipt is null)
+            {
+                throw new ArgumentException(
+                    "Every routed HTTP hop requires the exact custody write receipt that held its "
+                    + "body; this hop's observation ID has none.",
+                    nameof(hopWriteReceiptsByObservationId));
+            }
+
+            if (!string.Equals(receipt.Reference.ContentSha256, hop.Sha256, StringComparison.Ordinal) ||
+                receipt.Reference.ByteLength != checked((long)hop.Length))
+            {
+                throw new ArgumentException(
+                    "A hop's write receipt names other bytes: its reference digest or length does "
+                    + "not equal the hop's own retained digest and length.",
+                    nameof(hopWriteReceiptsByObservationId));
+            }
+
+            var receiptSha256 = DurableBlobWriteReceiptDigest.Of(receipt);
+            if (!string.Equals(receiptSha256, hop.DurableWriteReceiptSha256, StringComparison.Ordinal))
+            {
+                // This hashes the presented receipt's own canonical bytes and compares that hash to
+                // the hop's claimed digest; it says nothing about ReadbackSha256/ReadbackByteLength
+                // (those equal Sha256/Length by construction, enforced in RoutedHttpHop.Create, and
+                // are not examined here).
+                throw new ArgumentException(
+                    "A hop's durable write receipt digest does not reproduce: hashing the exact "
+                    + "receipt presented for this observation ID does not equal the hop's own claimed "
+                    + "durable write receipt SHA-256.",
+                    nameof(hopWriteReceiptsByObservationId));
+            }
+        }
+    }
+
+    /// <summary>
+    /// The shape and causality checks that do not depend on a live custody store. Used by the
+    /// receipt-checked public <see cref="Create"/> after <see cref="RequireHopWriteReceipts"/>
+    /// passes, and by <see cref="RoutedHttpCanonicalJson.ParseEvidence"/> to reconstruct an already
+    /// self-consistent value from its own canonical bytes for the round-trip byte comparison; a
+    /// receipt is not carried in those bytes; see the type-level remarks for why that reconstruction
+    /// is not a second unguarded production door.
+    /// </summary>
+    internal static RoutedHttpEvidence CreateFromVerifiedHops(
         SourceArtifactRef runIdentity,
         ulong requestOrdinal,
         ulong attemptOrdinal,
@@ -909,7 +1020,7 @@ internal static partial class RoutedHttpCanonicalJson
                 throw new ArgumentException("HTTP route hops must be an array.", nameof(canonicalBytes));
             }
 
-            var rebuilt = RoutedHttpEvidence.Create(
+            var rebuilt = RoutedHttpEvidence.CreateFromVerifiedHops(
                 ParseArtifactRef(root.GetProperty("run_identity"), nameof(canonicalBytes)),
                 root.GetProperty("request_ordinal").GetUInt64(),
                 root.GetProperty("attempt_ordinal").GetUInt64(),

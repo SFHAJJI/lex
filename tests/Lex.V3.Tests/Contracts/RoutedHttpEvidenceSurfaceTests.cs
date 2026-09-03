@@ -9,18 +9,25 @@ namespace Lex.V3.Tests.Contracts;
 ///
 /// <para>
 /// Why this type and not another. Evidence is the object every capability, receipt and closure in
-/// the transport layer ultimately carries, and <see cref="RoutedHttpEvidence.Create"/> is public
-/// and validates shape only: hop count, nulls and the ordinal chain. Nothing in it ties those hops
-/// to anything retained, so well-formed evidence describing a fetch that never happened is
-/// constructible from any assembly referencing Contracts.
+/// the transport layer ultimately carries. <see cref="RoutedHttpEvidence.Create"/> is public because
+/// every producer lives in Lex.V3.Ingest, a different assembly, and Contracts grants friend access
+/// only to the two test assemblies (making Create internal would break the only legitimate caller,
+/// and Decision 80 refused moving the door into a separate assembly as the same hole moved rather
+/// than closed). Visibility alone was tried and rejected as the guard: an earlier design attempted
+/// to make this door internal-plus-InternalsVisibleTo(Ingest), and the reviewer ruled it out because
+/// that grant is assembly-wide and would have reopened the D1-Core guard that keeps Contracts from
+/// ever handing Ingest blanket internal access. Decision 80 instead demands evidence of genuine
+/// construction: <see cref="RoutedHttpEvidence.Create"/> now requires, for every hop, the exact
+/// custody write receipt that held its body, checked against that hop's own retained digest, length
+/// and claimed write-receipt digest before it will mint anything. A caller who never called custody
+/// cannot fabricate a matching receipt for free; it must reproduce every one of those equalities.
 /// </para>
 /// <para>
-/// It is not closed, and the reason is structural rather than a preference: every producer lives in
-/// Lex.V3.Ingest, a different assembly, and Contracts grants friend access only to the two test
-/// assemblies. Making Create internal would break the only legitimate caller. What replaces closure
-/// is this pin plus the acceptance path: evidence entering a receipt goes through ParseAndVerify
-/// against retained bytes, so unretained evidence is refused where it matters rather than at
-/// construction.
+/// <see cref="RoutedHttpEvidence.CreateFromVerifiedHops"/> exists only because the receipt is proof
+/// of construction, not wire data: the canonical JSON round trip has no receipt to hand back, so
+/// <c>RoutedHttpCanonicalJson.ParseEvidence</c> reconstructs through this internal, receipt-free path
+/// instead of the public door. It is deliberately visible here rather than hidden, so that path is
+/// reviewed exactly like any other producer, not assumed safe by omission.
 /// </para>
 /// <para>
 /// So the pin's job is to make a new producer a visible diff. A method returning evidence, a
@@ -35,7 +42,7 @@ public sealed class RoutedHttpEvidenceSurfaceTests
     private const string Core = "Lex.V3.Contracts.Source.Core.";
 
     [TestMethod]
-    public void EvidenceIsMintedByExactlyTwoDeclaredPaths()
+    public void EvidenceIsMintedByExactlyFourDeclaredPaths()
     {
         CollectionAssert.AreEqual(
             new[]
@@ -44,10 +51,23 @@ public sealed class RoutedHttpEvidenceSurfaceTests
                 + Core + "SourceArtifactRef, System.UInt64, System.UInt64, "
                 + "Lex.V3.Contracts.Source.Http.RoutedHttpHop[], "
                 + "Lex.V3.Contracts.Source.Http.RoutedHttpRouteOutcome) -> " + Evidence,
-                "method public static " + Evidence + "::Create("
+                // Internal, not a second unguarded production door: it carries no receipt parameter
+                // because it has none to check, and its only callers are Create (after the receipt
+                // check passes) and ParseEvidence (reconstructing an already-canonical value for a
+                // round trip, per the type's own remarks on why that is not evidence-minting).
+                "method internal static " + Evidence + "::CreateFromVerifiedHops("
                 + Core + "SourceArtifactRef, System.UInt64, System.UInt64, "
                 + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Http.RoutedHttpHop>, "
                 + "Lex.V3.Contracts.Source.Http.RoutedHttpRouteOutcome) -> " + Evidence,
+                // Decision 80: the receipt-checked public door. RequireHopWriteReceipts runs first
+                // and CreateFromVerifiedHops is reached only once every hop's receipt has already
+                // been proven, so this new sixth parameter is where the door's whole strength lives.
+                "method public static " + Evidence + "::Create("
+                + Core + "SourceArtifactRef, System.UInt64, System.UInt64, "
+                + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Http.RoutedHttpHop>, "
+                + "Lex.V3.Contracts.Source.Http.RoutedHttpRouteOutcome, "
+                + "System.Collections.Generic.IReadOnlyDictionary<System.String, "
+                + "Lex.V3.Contracts.Custody.DurableBlobWriteReceipt>) -> " + Evidence,
                 "method public static " + Evidence + "::ParseAndVerify(System.ReadOnlySpan<System.Byte>) -> " + Evidence,
             },
             ConstructionSurface.Of(typeof(RoutedHttpEvidence)).ToArray(),
