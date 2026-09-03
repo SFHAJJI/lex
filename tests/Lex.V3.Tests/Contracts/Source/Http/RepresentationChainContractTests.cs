@@ -1,3 +1,4 @@
+using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Http;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -77,11 +78,13 @@ public sealed class RepresentationChainContractTests
         var chain = OpenChain();
         var baseline = MustAppend(chain, CandidateObservation(Observation("baseline"), digest: Digest('a'), length: 3));
 
+        var request = LogicalRequestFor(EffectiveUri);
         var revalidation = RoutedHttpHop.Create(
-            0, Uuid("reval"), null, Digest('9'), EffectiveUri, 304,
+            0, Uuid("reval"), null, RequestDigest(request), EffectiveUri, 304,
             Headers(), Time(0), Time(1),
             new Revalidation304HttpCompletion(), 0, EmptyDigest, Digest('c'), 0, EmptyDigest);
-        var appended = MustAppend(chain, RepresentationChainObservation.FromHop(revalidation));
+        var appended = MustAppend(
+            chain, RepresentationChainObservation.FromRoute(EvidenceFor(revalidation), request));
 
         Assert.AreEqual(RepresentationChainAppendDisposition.AppendedAsEvidenceOnly, appended.Disposition);
         Assert.AreSame(baseline, chain.CurrentTrustedBaseline);
@@ -97,12 +100,15 @@ public sealed class RepresentationChainContractTests
         // looks at status and Content-Range. Qualification must also check the completion shape,
         // not status alone, or a short read would be able to mint or move a trusted baseline.
         var chain = OpenChain();
+        var request = LogicalRequestFor(EffectiveUri);
         var partial = RoutedHttpHop.Create(
-            0, Uuid("partial"), null, Digest('9'), EffectiveUri, 200,
+            0, Uuid("partial"), null, RequestDigest(request), EffectiveUri, 200,
             Headers(contentLength: "10"), Time(0), Time(1),
             new IncompleteHttpCompletion(HttpAcquisitionReasonRegistry.Member(HttpPartialBodyReason.DeclaredLengthShortRead)),
             5, Digest('d'), Digest('c'), 5, Digest('d'));
-        var observation = RepresentationChainObservation.FromHop(partial);
+        var evidence = EvidenceFor(
+            [partial], new IncompleteHttpRouteOutcome(HttpRouteIncompleteReason.HopIncomplete));
+        var observation = RepresentationChainObservation.FromRoute(evidence, request);
 
         Assert.IsFalse(observation.QualifiesAsTrustedBaselineCandidate());
         var appended = MustAppend(chain, observation);
@@ -116,11 +122,12 @@ public sealed class RepresentationChainContractTests
         // Also derivable_status, also a complete framed transfer (Content-Length: 0), and R3.4
         // still names this a non-qualifying zero-octet outcome.
         var chain = OpenChain();
+        var request = LogicalRequestFor(EffectiveUri);
         var empty = RoutedHttpHop.Create(
-            0, Uuid("empty"), null, Digest('9'), EffectiveUri, 200,
+            0, Uuid("empty"), null, RequestDigest(request), EffectiveUri, 200,
             Headers(contentLength: "0"), Time(0), Time(1),
             new DeclaredContentLengthHttpCompletion(0), 0, EmptyDigest, Digest('c'), 0, EmptyDigest);
-        var observation = RepresentationChainObservation.FromHop(empty);
+        var observation = RepresentationChainObservation.FromRoute(EvidenceFor(empty), request);
 
         Assert.IsTrue(observation.IsCompleteBodyTransfer);
         Assert.IsFalse(observation.QualifiesAsTrustedBaselineCandidate());
@@ -133,11 +140,13 @@ public sealed class RepresentationChainContractTests
     public void ARangedResponseNeverQualifies()
     {
         var chain = OpenChain();
+        var request = LogicalRequestFor(EffectiveUri);
         var ranged = RoutedHttpHop.Create(
-            0, Uuid("ranged"), null, Digest('9'), EffectiveUri, 206,
+            0, Uuid("ranged"), null, RequestDigest(request), EffectiveUri, 206,
             Headers(contentLength: "3", contentRange: "bytes 0-2/9"), Time(0), Time(1),
             new DeclaredContentLengthHttpCompletion(3), 3, Digest('a'), Digest('c'), 3, Digest('a'));
-        var appended = MustAppend(chain, RepresentationChainObservation.FromHop(ranged));
+        var appended = MustAppend(
+            chain, RepresentationChainObservation.FromRoute(EvidenceFor(ranged), request));
         Assert.AreEqual(RepresentationChainAppendDisposition.AppendedAsEvidenceOnly, appended.Disposition);
         Assert.IsNull(chain.CurrentTrustedBaseline);
     }
@@ -146,12 +155,17 @@ public sealed class RepresentationChainContractTests
     public void ARedirectResponseNeverQualifies()
     {
         var chain = OpenChain();
+        var request = LogicalRequestFor(EffectiveUri);
         var redirect = RoutedHttpHop.Create(
-            0, Uuid("redirect"), null, Digest('9'), EffectiveUri, 301,
+            0, Uuid("redirect"), null, RequestDigest(request), EffectiveUri, 301,
             Headers(contentLength: "0", location: "https://data.legilux.public.lu/other"),
             Time(0), Time(1),
             new DeclaredContentLengthHttpCompletion(0), 0, EmptyDigest, Digest('c'), 0, EmptyDigest);
-        var appended = MustAppend(chain, RepresentationChainObservation.FromHop(redirect));
+        var evidence = EvidenceFor(
+            [redirect],
+            new RedirectTargetUnobservedHttpRouteOutcome(RequestDigest(request), Time(0)));
+        var appended = MustAppend(
+            chain, RepresentationChainObservation.FromRoute(evidence, request));
         Assert.AreEqual(RepresentationChainAppendDisposition.AppendedAsEvidenceOnly, appended.Disposition);
         Assert.IsNull(chain.CurrentTrustedBaseline);
     }
@@ -162,11 +176,13 @@ public sealed class RepresentationChainContractTests
         var chain = OpenChain();
         var baseline = MustAppend(chain, CandidateObservation(Observation("baseline"), digest: Digest('a'), length: 3));
 
+        var request = LogicalRequestFor(EffectiveUri);
         var errorBody = RoutedHttpHop.Create(
-            0, Uuid("error"), null, Digest('9'), EffectiveUri, 500,
+            0, Uuid("error"), null, RequestDigest(request), EffectiveUri, 500,
             Headers(contentLength: "9"), Time(0), Time(1),
             new DeclaredContentLengthHttpCompletion(9), 9, Digest('e'), Digest('c'), 9, Digest('e'));
-        var appended = MustAppend(chain, RepresentationChainObservation.FromHop(errorBody));
+        var appended = MustAppend(
+            chain, RepresentationChainObservation.FromRoute(EvidenceFor(errorBody), request));
 
         Assert.AreEqual(RepresentationChainAppendDisposition.AppendedAsEvidenceOnly, appended.Disposition);
         Assert.AreSame(baseline, chain.CurrentTrustedBaseline);
@@ -176,7 +192,10 @@ public sealed class RepresentationChainContractTests
     [TestMethod]
     public void AnOpenRepresentationRequestKeyNeverEstablishesATrustedBaseline()
     {
-        var key = RepresentationChainKey.Create(RequestedUri, EffectiveUri, Digest64);
+        // Same URI both roles, matching the single-hop no-redirect fixtures CandidateObservation
+        // builds throughout this file; the requested-versus-effective distinction is exercised
+        // separately by the two redirect isolation tests.
+        var key = RepresentationChainKey.Create(EffectiveUri, EffectiveUri, Digest64);
         var chain = RepresentationChain.Open(key, isClosedRepresentationRequestKey: false);
 
         var first = MustAppend(chain, CandidateObservation(Observation("first"), digest: Digest('a'), length: 3));
@@ -204,20 +223,88 @@ public sealed class RepresentationChainContractTests
     }
 
     [TestMethod]
-    public void AnObservationFromAnotherUriIsRefused()
+    public void ARouteThatStartedAtTheKeysUriButEndedElsewhereIsRefusedOnTheEffectiveUri()
     {
-        var chain = OpenChain();
-        var foreignHop = RoutedHttpHop.Create(
-            0, Uuid("foreign"), null, Digest('9'), OtherUri, 200,
-            Headers(contentLength: "3"), Time(0), Time(1),
-            new DeclaredContentLengthHttpCompletion(3), 3, Digest('a'), Digest('c'), 3, Digest('a'));
-        var observation = RepresentationChainObservation.FromHop(foreignHop);
+        // Two hops, so RequestedUri and EffectiveUri genuinely differ: the route started exactly
+        // where this chain's key says, and ended somewhere else. Isolates EffectiveUriMismatch
+        // from RequestedUriMismatch; a single-hop foreign URI cannot do this, because a
+        // single-hop route's RequestedUri and EffectiveUri are the same value by construction, so
+        // it would always trip both checks at once and never prove which one actually fired.
+        var chain = OpenRedirectChain();
+        var (evidence, request) = RedirectRoute(RequestedUri, OtherUri);
 
+        var observation = RepresentationChainObservation.FromRoute(evidence, request);
         var appended = chain.TryAppend(observation, out var refusal);
+
         Assert.IsNull(appended);
         Assert.AreEqual(RepresentationChainAppendRefusal.EffectiveUriMismatch, refusal);
         Assert.AreEqual(0, chain.History.Count);
         Assert.IsNull(chain.CurrentTrustedBaseline);
+    }
+
+    [TestMethod]
+    public void ARouteThatEndedAtTheKeysUriButStartedElsewhereIsRefusedOnTheRequestedUri()
+    {
+        // The paired isolation: the route ended exactly where this chain's key says, but started
+        // somewhere else. Before this fix RepresentationChainKey.RequestedUri was the caller's
+        // own claim, never checked against anything, so a route with the right ending and the
+        // wrong beginning passed silently.
+        var chain = OpenRedirectChain();
+        var (evidence, request) = RedirectRoute(OtherUri, EffectiveUri);
+
+        var observation = RepresentationChainObservation.FromRoute(evidence, request);
+        var appended = chain.TryAppend(observation, out var refusal);
+
+        Assert.IsNull(appended);
+        Assert.AreEqual(RepresentationChainAppendRefusal.RequestedUriMismatch, refusal);
+        Assert.AreEqual(0, chain.History.Count);
+        Assert.IsNull(chain.CurrentTrustedBaseline);
+    }
+
+    [TestMethod]
+    public void APostEvidenceDocumentIsRefusedAtMintRatherThanEnteringAGetOnlyChain()
+    {
+        // R3.4 defines no POST chain. Before this fix, an observation minted from a bare
+        // RoutedHttpHop carried no method at all, so nothing stopped a POST route's evidence from
+        // being minted into a chain declared GET-only; the method was the caller's claim via
+        // RepresentationChainKey, never the hop's own proof. FromRoute closes this at the door:
+        // refused before a chain is ever involved.
+        var request = HttpLogicalRequest.Create(
+            EffectiveUri,
+            HttpRequestMethod.Post,
+            [
+                new HttpLogicalRequestHeader("user-agent", "Lex/0.1 (+https://github.com/SFHAJJI/lex)"),
+                new HttpLogicalRequestHeader("content-type", "application/sparql-query"),
+            ],
+            new HttpLogicalRequestBody(3, Digest('a')),
+            Digest('1'),
+            Digest('2'));
+        var hop = RoutedHttpHop.Create(
+            0, Uuid("post"), null, RequestDigest(request), EffectiveUri, 200,
+            Headers(contentLength: "3"), Time(0), Time(1),
+            new DeclaredContentLengthHttpCompletion(3), 3, Digest('a'), Digest('c'), 3, Digest('a'));
+
+        Assert.ThrowsExactly<ArgumentException>(
+            () => RepresentationChainObservation.FromRoute(EvidenceFor(hop), request));
+    }
+
+    [TestMethod]
+    public void ARequestThatIsNotTheOneTheTerminalHopActuallySentIsRefusedAtMint()
+    {
+        // The digest check, isolated from the method check: a GET request object that simply
+        // does not correspond to the hop it is paired with. Equal method alone would have let a
+        // caller pair any GET request with any hop's evidence; only the digest ties the two
+        // together, and this is the test that would fail if FromRoute compared methods instead
+        // of hashing CopyCanonicalBytes.
+        var request = LogicalRequestFor(EffectiveUri);
+        var otherRequest = LogicalRequestFor(OtherUri);
+        var hop = RoutedHttpHop.Create(
+            0, Uuid("mismatched"), null, RequestDigest(request), EffectiveUri, 200,
+            Headers(contentLength: "3"), Time(0), Time(1),
+            new DeclaredContentLengthHttpCompletion(3), 3, Digest('a'), Digest('c'), 3, Digest('a'));
+
+        Assert.ThrowsExactly<ArgumentException>(
+            () => RepresentationChainObservation.FromRoute(EvidenceFor(hop), otherRequest));
     }
 
     [TestMethod]
@@ -245,17 +332,31 @@ public sealed class RepresentationChainContractTests
     }
 
     [TestMethod]
-    public void OpenAndFromHopRejectNullArguments()
+    public void OpenAndFromRouteRejectNullArguments()
     {
         var key = RepresentationChainKey.Create(RequestedUri, EffectiveUri, Digest64);
+        var request = LogicalRequestFor(EffectiveUri);
         Assert.ThrowsExactly<ArgumentNullException>(() =>
             RepresentationChain.Open(null!, isClosedRepresentationRequestKey: true));
-        Assert.ThrowsExactly<ArgumentNullException>(() => RepresentationChainObservation.FromHop(null!));
+        Assert.ThrowsExactly<ArgumentNullException>(() =>
+            RepresentationChainObservation.FromRoute(null!, request));
+        Assert.ThrowsExactly<ArgumentNullException>(() =>
+            RepresentationChainObservation.FromRoute(EvidenceFor(SingleHop(request)), null!));
         Assert.ThrowsExactly<ArgumentNullException>(() =>
             RepresentationChain.Open(key, isClosedRepresentationRequestKey: true).TryAppend(null!, out _));
     }
 
     private static RepresentationChain OpenChain()
+    {
+        // Same URI both roles; see AnOpenRepresentationRequestKeyNeverEstablishesATrustedBaseline
+        // for why. RequestedUri and EffectiveUri as two distinct constants exist for the redirect
+        // isolation tests, which open their own chain against RequestedUri directly.
+        var key = RepresentationChainKey.Create(EffectiveUri, EffectiveUri, Digest64);
+        return RepresentationChain.Open(key, isClosedRepresentationRequestKey: true);
+    }
+
+    /// <summary>The (RequestedUri, EffectiveUri) pair, for the two redirect isolation tests.</summary>
+    private static RepresentationChain OpenRedirectChain()
     {
         var key = RepresentationChainKey.Create(RequestedUri, EffectiveUri, Digest64);
         return RepresentationChain.Open(key, isClosedRepresentationRequestKey: true);
@@ -276,12 +377,13 @@ public sealed class RepresentationChainContractTests
         string digest,
         ulong length)
     {
+        var request = LogicalRequestFor(EffectiveUri);
         var hop = RoutedHttpHop.Create(
-            0, observationId, null, Digest('9'), EffectiveUri, 200,
+            0, observationId, null, RequestDigest(request), EffectiveUri, 200,
             Headers(contentLength: length.ToString(System.Globalization.CultureInfo.InvariantCulture)),
             Time(0), Time(1),
             new DeclaredContentLengthHttpCompletion(length), length, digest, Digest('c'), length, digest);
-        var observation = RepresentationChainObservation.FromHop(hop);
+        var observation = RepresentationChainObservation.FromRoute(EvidenceFor(hop), request);
         Assert.IsTrue(observation.QualifiesAsTrustedBaselineCandidate());
         return observation;
     }
@@ -326,5 +428,58 @@ public sealed class RepresentationChainContractTests
         var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(tag));
         var guid = new Guid(hash[..16]);
         return "urn:uuid:" + guid.ToString("D");
+    }
+
+    private static HttpLogicalRequest LogicalRequestFor(string uri) =>
+        HttpLogicalRequest.Create(
+            uri,
+            HttpRequestMethod.Get,
+            [new HttpLogicalRequestHeader("user-agent", "Lex/0.1 (+https://github.com/SFHAJJI/lex)")],
+            new HttpLogicalRequestBody(0, EmptyDigest),
+            Digest('1'),
+            Digest('2'));
+
+    private static string RequestDigest(HttpLogicalRequest request) =>
+        Convert.ToHexString(
+            System.Security.Cryptography.SHA256.HashData(request.CopyCanonicalBytes())).ToLowerInvariant();
+
+    private static RoutedHttpHop SingleHop(HttpLogicalRequest request) =>
+        RoutedHttpHop.Create(
+            0, Uuid("single"), null, RequestDigest(request), request.Uri, 200,
+            Headers(contentLength: "3"), Time(0), Time(1),
+            new DeclaredContentLengthHttpCompletion(3), 3, Digest('a'), Digest('c'), 3, Digest('a'));
+
+    private static RoutedHttpEvidence EvidenceFor(
+        RoutedHttpHop[] hops, RoutedHttpRouteOutcome? outcome = null) =>
+        RoutedHttpEvidence.Create(
+            new SourceArtifactRef(Uuid("run-identity"), Digest('1')),
+            1,
+            0,
+            hops,
+            outcome ?? new CompleteHttpRouteOutcome());
+
+    private static RoutedHttpEvidence EvidenceFor(params RoutedHttpHop[] hops) =>
+        EvidenceFor(hops, outcome: null);
+
+    /// <summary>
+    /// A genuine two-hop route: <paramref name="firstUri"/> answers 301 to
+    /// <paramref name="terminalUri"/>, which then answers 200. Both hops share one logical
+    /// request digest, since neither the redirect nor the terminal changes what was asked for.
+    /// </summary>
+    private static (RoutedHttpEvidence Evidence, HttpLogicalRequest Request) RedirectRoute(
+        string firstUri, string terminalUri)
+    {
+        var request = LogicalRequestFor(terminalUri);
+        var digest = RequestDigest(request);
+        var firstHopId = Uuid("redirect-first-" + firstUri + terminalUri);
+        var first = RoutedHttpHop.Create(
+            0, firstHopId, null, digest, firstUri, 301,
+            Headers(contentLength: "0", location: terminalUri), Time(0), Time(1),
+            new DeclaredContentLengthHttpCompletion(0), 0, EmptyDigest, Digest('c'), 0, EmptyDigest);
+        var terminal = RoutedHttpHop.Create(
+            1, Uuid("redirect-terminal-" + firstUri + terminalUri), firstHopId, digest, terminalUri, 200,
+            Headers(contentLength: "3"), Time(2), Time(3),
+            new DeclaredContentLengthHttpCompletion(3), 3, Digest('a'), Digest('c'), 3, Digest('a'));
+        return (EvidenceFor(first, terminal), request);
     }
 }

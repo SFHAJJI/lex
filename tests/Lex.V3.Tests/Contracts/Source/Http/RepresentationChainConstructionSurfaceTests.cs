@@ -8,12 +8,15 @@ namespace Lex.V3.Tests.Contracts.Source.Http;
 /// The construction surface of the R3.4 representation chain types.
 ///
 /// <para>
-/// <see cref="RepresentationChainObservation.FromHop"/> is the whole reason
+/// <see cref="RepresentationChainObservation.FromRoute"/> is the whole reason
 /// <see cref="RepresentationChainObservation"/> is worth more than a handful of loose fields: a
 /// <see cref="RoutedHttpHop"/> cannot exist unless <see cref="RoutedHttpHop.Create"/> already ran
-/// every framing, status and durability check the routed evidence v4 machinery has. If a second
-/// producer of an observation ever appears anywhere in this assembly, an observation can describe
-/// bytes nothing actually retained, and this pin is where that shows up.
+/// every framing, status and durability check the routed evidence v4 machinery has, and
+/// <see cref="RepresentationChainObservation.FromRoute"/> further requires the paired
+/// <c>HttpLogicalRequest</c> to be the exact request the terminal hop names. If a second producer
+/// of an observation ever appears anywhere in this assembly, an observation can describe bytes
+/// nothing actually retained, or a method and a requested URI nothing proved, and this pin is
+/// where that shows up.
 /// </para>
 /// <para>
 /// The two nested types, <see cref="RepresentationChain.AppendedObservation"/> and
@@ -44,16 +47,18 @@ public sealed class RepresentationChainConstructionSurfaceTests
     }
 
     [TestMethod]
-    public void AnObservationHasExactlyOneCheckedDoorAndItRequiresARealHop()
+    public void AnObservationHasExactlyOneCheckedDoorAndItRequiresARealRoute()
     {
         CollectionAssert.AreEqual(
             new[]
             {
                 "constructor private instance " + N + "RepresentationChainObservation::.ctor("
-                + "System.String, System.String, " + N + "HttpStatusDisposition, System.Boolean, "
-                + "System.UInt64, System.String, System.String) -> " + N + "RepresentationChainObservation",
-                "method public static " + N + "RepresentationChainObservation::FromHop("
-                + N + "RoutedHttpHop) -> " + N + "RepresentationChainObservation",
+                + "System.String, System.String, System.String, " + N + "HttpStatusDisposition, "
+                + "System.Boolean, System.UInt64, System.String, System.String) -> "
+                + N + "RepresentationChainObservation",
+                "method public static " + N + "RepresentationChainObservation::FromRoute("
+                + N + "RoutedHttpEvidence, " + N + "HttpLogicalRequest) -> "
+                + N + "RepresentationChainObservation",
             },
             ConstructionSurface.Of(typeof(RepresentationChainObservation)).ToArray());
     }

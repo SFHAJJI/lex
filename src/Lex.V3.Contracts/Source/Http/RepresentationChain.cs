@@ -1,4 +1,6 @@
+using System.Security.Cryptography;
 using System.Text.Json.Serialization;
+using Lex.V3.Contracts.Source.Core;
 
 namespace Lex.V3.Contracts.Source.Http;
 
@@ -73,17 +75,32 @@ public sealed class RepresentationChainKey : IEquatable<RepresentationChainKey>
 /// HTTP hop, and nothing else.
 /// </summary>
 /// <remarks>
-/// The only path that mints one is <see cref="FromHop"/>, and it takes a real
-/// <see cref="RoutedHttpHop"/>: a value that only exists after <see cref="RoutedHttpHop.Create"/>
-/// has already run every framing, status and durability check in
+/// <para>
+/// The only path that mints one is <see cref="FromRoute"/>, and it takes a real
+/// <see cref="RoutedHttpEvidence"/> together with the <see cref="HttpLogicalRequest"/> that
+/// produced it: values that only exist after <see cref="RoutedHttpHop.Create"/> has already run
+/// every framing, status and durability check in
 /// <c>RoutedHttpValidation.RequireCompletionFacts</c>. An observation describing bytes that were
 /// never actually retained therefore cannot reach this type; it can only restate a fact the hop
 /// already proved.
+/// </para>
+/// <para>
+/// A prior version minted from a bare <see cref="RoutedHttpHop"/> alone, which could not check
+/// the request's method or its requested URI: nothing stopped a caller from minting a POST
+/// evidence document into a chain declared GET-only, or from asserting a requested URI the route
+/// never actually started at, since <see cref="RepresentationChainKey"/>'s <c>requested_uri</c>
+/// and <c>method</c> were the caller's claim rather than the hop's proof. <see cref="FromRoute"/>
+/// closes both: it refuses unless <paramref name="request"/>'s own canonical bytes hash to the
+/// terminal hop's <c>LogicalRequestSha256</c>, which is what makes the method a proven fact
+/// rather than an unchecked parameter, and it takes <see cref="RequestedUri"/> from the route's
+/// own first hop rather than from a caller-supplied string.
+/// </para>
 /// </remarks>
 public sealed class RepresentationChainObservation
 {
     private RepresentationChainObservation(
         string observationId,
+        string requestedUri,
         string effectiveUri,
         HttpStatusDisposition statusDisposition,
         bool isCompleteBodyTransfer,
@@ -92,6 +109,7 @@ public sealed class RepresentationChainObservation
         string observedAt)
     {
         ObservationId = observationId;
+        RequestedUri = requestedUri;
         EffectiveUri = effectiveUri;
         StatusDisposition = statusDisposition;
         IsCompleteBodyTransfer = isCompleteBodyTransfer;
@@ -101,6 +119,13 @@ public sealed class RepresentationChainObservation
     }
 
     public string ObservationId { get; }
+
+    /// <summary>
+    /// The URI this route actually started at: the first hop's own <c>request_uri</c>, never a
+    /// caller-supplied string. A route that redirects carries a different value here than in
+    /// <see cref="EffectiveUri"/>; a route with no redirect carries the same value in both.
+    /// </summary>
+    public string RequestedUri { get; }
 
     /// <summary>The URI this hop actually observed, i.e. its own <c>request_uri</c>.</summary>
     public string EffectiveUri { get; }
@@ -121,17 +146,55 @@ public sealed class RepresentationChainObservation
 
     public string ObservedAt { get; }
 
-    public static RepresentationChainObservation FromHop(RoutedHttpHop hop)
+    /// <summary>
+    /// The only path that mints an observation. <paramref name="evidence"/> supplies the route's
+    /// hops, of which the terminal hop is what this observation reports; <paramref name="request"/>
+    /// is the logical request that route was actually sent under, and it must be the request the
+    /// terminal hop itself names, not merely one that happens to share a URI with it.
+    /// </summary>
+    public static RepresentationChainObservation FromRoute(
+        RoutedHttpEvidence evidence, HttpLogicalRequest request)
     {
-        ArgumentNullException.ThrowIfNull(hop);
+        ArgumentNullException.ThrowIfNull(evidence);
+        ArgumentNullException.ThrowIfNull(request);
+        if (evidence.Hops.Count == 0)
+        {
+            throw new ArgumentException(
+                "A route with no hops observed nothing to mint.", nameof(evidence));
+        }
+
+        // Not method equality alone: the request must be the exact bytes the terminal hop
+        // committed to, digest for digest. Method equality would let a caller pair a GET-shaped
+        // request object with a hop that actually sent something else the request never proved
+        // it corresponds to; only the digest ties the two together.
+        var terminalHop = evidence.Hops[^1];
+        var requestDigest = Convert.ToHexString(
+            SHA256.HashData(request.CopyCanonicalBytes())).ToLowerInvariant();
+        if (!string.Equals(requestDigest, terminalHop.LogicalRequestSha256, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "The logical request is not the one the terminal hop actually sent.",
+                nameof(request));
+        }
+
+        if (request.Method != HttpRequestMethod.Get)
+        {
+            throw new ArgumentException(
+                "A representation chain observation can only be minted from a GET; R3.4 defines "
+                + "no POST chain.",
+                nameof(request));
+        }
+
         return new RepresentationChainObservation(
-            hop.ObservationId,
-            hop.RequestUri,
-            hop.StatusDisposition,
-            hop.Completion is DeclaredContentLengthHttpCompletion or PinnedHandlerChunkedEofHttpCompletion,
-            hop.Length,
-            hop.Sha256,
-            hop.TerminalObservedAt);
+            terminalHop.ObservationId,
+            evidence.Hops[0].RequestUri,
+            terminalHop.RequestUri,
+            terminalHop.StatusDisposition,
+            terminalHop.Completion is DeclaredContentLengthHttpCompletion
+                or PinnedHandlerChunkedEofHttpCompletion,
+            terminalHop.Length,
+            terminalHop.Sha256,
+            terminalHop.TerminalObservedAt);
     }
 
     /// <summary>
@@ -204,6 +267,15 @@ public enum RepresentationChainAppendRefusal
     /// </summary>
     [JsonStringEnumMemberName("effective_uri_mismatch")]
     EffectiveUriMismatch = 2,
+
+    /// <summary>
+    /// The observation's own requested URI, the route's first hop, does not match the chain it
+    /// was offered to. The same reasoning as <see cref="EffectiveUriMismatch"/> applied to the
+    /// other half of the key: a route that started somewhere else cannot be filed under this
+    /// chain's requested_uri merely because it happened to end at this chain's effective_uri.
+    /// </summary>
+    [JsonStringEnumMemberName("requested_uri_mismatch")]
+    RequestedUriMismatch = 3,
 }
 
 /// <summary>
@@ -279,6 +351,12 @@ public sealed class RepresentationChain
         out RepresentationChainAppendRefusal refusal)
     {
         ArgumentNullException.ThrowIfNull(observation);
+
+        if (!string.Equals(observation.RequestedUri, Key.RequestedUri, StringComparison.Ordinal))
+        {
+            refusal = RepresentationChainAppendRefusal.RequestedUriMismatch;
+            return null;
+        }
 
         if (!string.Equals(observation.EffectiveUri, Key.EffectiveUri, StringComparison.Ordinal))
         {
