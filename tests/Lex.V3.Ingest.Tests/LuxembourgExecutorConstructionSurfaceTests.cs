@@ -49,7 +49,10 @@ public sealed class LuxembourgExecutorConstructionSurfaceTests
             {
                 // Every one of these is somewhere a refusal detail is CARRIED, not made: the two
                 // private per-step outcome records inside the executor and their compiler-generated
-                // deconstructors, and the run result's own accessor.
+                // deconstructors, the run result's own accessor, and (added by D1-04) the
+                // per-family enumeration outcome's own accessor, which carries the executor's
+                // refusal detail exactly as the run result already does when the executor itself
+                // refuses before delivering.
                 "by-ref-method public instance " + N + "LuxembourgRepeatedEnumerationExecutor+ObserveOutcome"
                 + "::Deconstruct(out " + Contracts + "LuxembourgObservedTransport&, "
                 + "out System.Nullable<System.UInt64>&, out "
@@ -59,11 +62,15 @@ public sealed class LuxembourgExecutorConstructionSurfaceTests
                 + N + "LuxembourgEnumerationRefusalDetail&) -> System.Void",
                 "field private instance " + N + "LuxembourgEnumerationRunResult::<Refusal>k__BackingField -> "
                 + N + "LuxembourgEnumerationRefusalDetail",
+                "field private instance " + N + "LuxembourgFamilyEnumerationOutcome"
+                + "::<ExecutorRefusal>k__BackingField -> " + N + "LuxembourgEnumerationRefusalDetail",
                 "field private instance " + N + "LuxembourgRepeatedEnumerationExecutor+ObserveOutcome"
                 + "::<Refusal>k__BackingField -> " + N + "LuxembourgEnumerationRefusalDetail",
                 "field private instance " + N + "LuxembourgRepeatedEnumerationExecutor+PassOutcome"
                 + "::<Refusal>k__BackingField -> " + N + "LuxembourgEnumerationRefusalDetail",
                 "property public instance " + N + "LuxembourgEnumerationRunResult::Refusal() -> "
+                + N + "LuxembourgEnumerationRefusalDetail",
+                "property public instance " + N + "LuxembourgFamilyEnumerationOutcome::ExecutorRefusal() -> "
                 + N + "LuxembourgEnumerationRefusalDetail",
                 "property public instance " + N + "LuxembourgRepeatedEnumerationExecutor+ObserveOutcome"
                 + "::Refusal() -> " + N + "LuxembourgEnumerationRefusalDetail",

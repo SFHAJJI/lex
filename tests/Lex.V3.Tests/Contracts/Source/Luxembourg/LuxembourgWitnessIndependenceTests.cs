@@ -23,15 +23,18 @@ namespace Lex.V3.Tests.Contracts.Source.Luxembourg;
 /// on condition the profile records witness independence as single_publisher_store.
 /// </para>
 /// <para>
-/// RESIDUE, recorded here rather than in prose somewhere: there is nowhere to record it yet.
-/// <see cref="RepeatedEnumerationInterpretationProfile"/> has no witness-independence member, and
-/// <c>SourceProfileTopology</c>, which carries the <c>single_publisher_store</c> vocabulary, is
-/// constructed nowhere in <c>src</c> outside Core's own tests. Inventing a field here would be
-/// inventing a contract; the declaration belongs on the LU source profile through Core's topology
-/// record, which is carried condition D1-04 and another lane's task. Until it lands, this file is
-/// the only place the honest reading is written down and checked, and the check is structural
-/// rather than a comment: it fails if anyone ever makes the two templates independent, at which
-/// point the claim can change and this test with it.
+/// RESOLVED by D1-04 (lex-event-20260903T192615392Z-b13dee192bd84cea970b71cd8ffd4b89):
+/// <see cref="LuxembourgSourceProfileTopology"/> now mints the <c>SourceProfileTopology</c> that
+/// carries <c>single_publisher_store</c>, bound to the LU source profile's own identity
+/// (<see cref="VerifiedLuxembourgSourceProfile.ScopeBinding"/>'s <c>SourceProfileRef</c>), exactly
+/// as R3.2 requires. <see cref="RepeatedEnumerationInterpretationProfile"/> deliberately still has
+/// no witness-independence member: R3.2 places <c>source_profile_topology/1</c> on the source
+/// profile, not on the per-set delivery/interpretation profile the repeated-enumeration executor
+/// binds, so the two-pass reconciliation this file's first test verifies stays exactly what it was
+/// (evidence over one publisher store), and the honest "not independent" declaration lives beside
+/// the profile identity instead. The second test below used to assert the field was missing
+/// everywhere; it now asserts the topology exists, names the right member, and is bound to the
+/// right profile, which is what its own comment said would replace it once D1-04 landed.
 /// </para>
 /// </summary>
 [TestClass]
@@ -82,11 +85,16 @@ public sealed class LuxembourgWitnessIndependenceTests
     }
 
     [TestMethod]
-    public void NothingInTheDeliveryProfileRecordsWitnessIndependenceYet()
+    public void TheDeliveryProfileStillCarriesNoWitnessIndependenceMemberBecauseTopologyLivesOnTheSourceProfile()
     {
-        // The residue, asserted rather than described, so it stops being true loudly. When D1-04
-        // gives the LU profile a place to declare single_publisher_store, this test fails and is
-        // replaced by one that reads the declared value.
+        // R3.2 places source_profile_topology/1 on the LU SOURCE profile
+        // (VerifiedLuxembourgSourceProfile), not on the per-set delivery/interpretation profile the
+        // repeated-enumeration executor binds per query template. This test keeps proving the half
+        // of the old residue that stays true on purpose: RepeatedEnumerationInterpretationProfile
+        // gained no field for it, and could not correctly do so, because one interpretation profile
+        // exists per query set (ten of them) while there is exactly one LU source-profile identity.
+        // A member here would have to be repeated identically ten times or attached to the wrong
+        // object; neither is what R3.2 asked for.
         var plan = LuxembourgQueryPlan.CreateDefaultGraph(Artifact('1'), Artifact('2'));
         var setId = plan.SetDefinitions
             .First(static definition => definition.Acquisition == LuxembourgQuerySetAcquisition.PublisherQuery)
@@ -97,10 +105,6 @@ public sealed class LuxembourgWitnessIndependenceTests
             .GetProperties()
             .Select(static property => property.Name)
             .ToArray();
-        // Pinned to the exact current member set rather than filtered by a guessed keyword
-        // substring: a real single_publisher_store member would not contain "Witness", "Topology"
-        // or "Independen" and would have slipped straight past the old filter. Any change to this
-        // set, added or removed, is the signal this test exists to catch.
         var expectedMembers = new[]
         {
             nameof(RepeatedEnumerationInterpretationProfile.Schema),
@@ -124,10 +128,43 @@ public sealed class LuxembourgWitnessIndependenceTests
         CollectionAssert.AreEquivalent(
             expectedMembers,
             members,
-            "the interpretation profile's member set changed. If it gained single_publisher_store, "
-            + "record it here, then replace this test with one that reads the declared value; "
-            + "otherwise update expectedMembers to match the real change.");
+            "the interpretation profile's member set changed. If it gained a witness-independence "
+            + "field, that is a design change beyond D1-04's ruled placement on the source profile "
+            + "and needs its own review; otherwise update expectedMembers to match the real change.");
         Assert.IsNotNull(profile);
+    }
+
+    [TestMethod]
+    public void TheLuSourceProfileNowMintsSinglePublisherStoreTopology()
+    {
+        // The other half: the declared value now exists, on the object R3.2 actually names. Built
+        // from the same minimal complete snapshot LuxembourgSourceProfileTests uses elsewhere.
+        var observationRef = new SourceArtifactRef(
+            "urn:uuid:10dd0a6e-3fa4-468d-a2aa-570a93ec4bf0", new string('1', 64));
+        var enumerationRef = new SourceArtifactRef(
+            "urn:uuid:3f60c78d-6e8a-4208-9146-43b634db9bbc", new string('2', 64));
+        var snapshot = new LuxembourgVocabularySnapshot(
+            observationRef,
+            enumerationRef,
+            VerifiedLuxembourgSourceProfile.RequiredIriVocabulary,
+            []);
+        var profile = VerifiedLuxembourgSourceProfile.Open(snapshot);
+
+        var topology = LuxembourgSourceProfileTopology.Mint(profile);
+
+        Assert.AreEqual(Lex.V3.Contracts.Source.Core.SourceCoreSchemaIds.SourceProfileTopology, topology.Schema);
+        Assert.AreEqual(
+            LuxembourgSourceProfileTopology.SinglePublisherStoreMemberKey,
+            topology.Topology.MemberKey);
+        Assert.AreEqual(profile.ScopeBinding.SourceProfileRef, topology.IdentityProfileRef);
+        Assert.AreEqual(LuxembourgSourceProfileTopology.RegistryRef, topology.Topology.RegistryRef);
+
+        // Two profiles built from the same complete vocabulary share a source-profile identity
+        // (VerifiedLuxembourgSourceProfile.Open is a pure function of its snapshot), so minting
+        // twice must be stable, not merely equal by accident of a shared instance.
+        var second = LuxembourgSourceProfileTopology.Mint(VerifiedLuxembourgSourceProfile.Open(snapshot));
+        Assert.AreEqual(topology.IdentityProfileRef, second.IdentityProfileRef);
+        Assert.AreEqual(topology.Topology, second.Topology);
     }
 
     private static SourceArtifactRef Artifact(char fill) =>
