@@ -1,4 +1,5 @@
 using Lex.V3.Contracts.Source.Absence;
+using Lex.V3.Contracts.Source.Core;
 using Lex.V3.TestSupport;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -96,8 +97,15 @@ public sealed class AbsenceConstructionSurfaceTests
             ConstructionSurface.Of(typeof(AbsenceFamilyObservation)).ToArray());
     }
 
+    /// <summary>
+    /// A cut has one checked door per completion state and no other. Only
+    /// <c>TryCreateComplete</c> reaches <see cref="AbsenceRunCompletion.EnumerationComplete"/>, and
+    /// its parameter list is the guarantee: it takes enumeration proofs, and the completion state
+    /// is not a parameter of either door. A third factory, or a completion parameter reappearing on
+    /// one of these, would put the declared completeness back and is a line in this diff.
+    /// </summary>
     [TestMethod]
-    public void ACutHasExactlyOneCheckedDoor()
+    public void ACutHasOneCheckedDoorPerCompletionStateAndCompletionIsNeverAParameter()
     {
         CollectionAssert.AreEqual(
             new[]
@@ -105,16 +113,118 @@ public sealed class AbsenceConstructionSurfaceTests
                 "constructor private instance " + N + "AbsenceCut::.ctor(System.String, "
                 + N + "AbsenceRunCompletion, " + N + "AbsenceApplicableSet, "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "AbsenceFamilyObservation>, "
+                + "System.Collections.Generic.IReadOnlyList<" + N + "AbsenceFamilyEnumerationProof>, "
                 + Core + "SourceArtifactRef, " + Core + "SourceArtifactRef, "
                 + "System.Collections.Generic.HashSet<System.String>) -> " + N + "AbsenceCut",
-                "method public static " + N + "AbsenceCut::TryCreate(System.String, "
+                "method private static " + N + "AbsenceCut::Create(System.String, "
                 + N + "AbsenceRunCompletion, " + N + "AbsenceApplicableSet, "
+                + "System.Collections.Generic.IReadOnlyList<" + N + "AbsenceFamilyObservation>, "
+                + "System.Collections.Generic.IReadOnlyList<" + N + "AbsenceFamilyEnumerationProof>, "
+                + Core + "SourceArtifactRef, " + Core + "SourceArtifactRef, "
+                + "System.Collections.Generic.IReadOnlyList<System.String>, "
+                + "out " + N + "AbsenceCutRefusal&) -> " + N + "AbsenceCut",
+                "method public static " + N + "AbsenceCut::TryCreateComplete(System.String, "
+                + N + "AbsenceApplicableSet, "
+                + "System.Collections.Generic.IReadOnlyList<" + N + "AbsenceFamilyObservation>, "
+                + "System.Collections.Generic.IReadOnlyList<" + N + "AbsenceFamilyEnumerationProof>, "
+                + Core + "SourceArtifactRef, " + Core + "SourceArtifactRef, "
+                + "System.Collections.Generic.IReadOnlyList<System.String>, "
+                + "out " + N + "AbsenceCutRefusal&) -> " + N + "AbsenceCut",
+                "method public static " + N + "AbsenceCut::TryCreatePartial(System.String, "
+                + N + "AbsenceApplicableSet, "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "AbsenceFamilyObservation>, "
                 + Core + "SourceArtifactRef, " + Core + "SourceArtifactRef, "
                 + "System.Collections.Generic.IReadOnlyList<System.String>, "
                 + "out " + N + "AbsenceCutRefusal&) -> " + N + "AbsenceCut",
             },
             ConstructionSurface.Of(typeof(AbsenceCut)).ToArray());
+    }
+
+    /// <summary>
+    /// A family enumeration proof has exactly one checked door, and its only evidence parameter is
+    /// a <c>Source.Core</c> delivery comparison. A second door taking a boolean, a row count or a
+    /// digest would be a way to hold a proof nothing verified.
+    /// </summary>
+    [TestMethod]
+    public void AFamilyEnumerationProofHasExactlyOneCheckedDoor()
+    {
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + N + "AbsenceFamilyEnumerationProof::.ctor("
+                + "System.String, " + Core + "SourceArtifactRef, " + Core + "SourceArtifactRef, "
+                + Core + "SourceArtifactRef, System.Int64, System.String) -> "
+                + N + "AbsenceFamilyEnumerationProof",
+                "method public static " + N + "AbsenceFamilyEnumerationProof::TryCreate("
+                + "System.String, " + Core + "EnumerationDeliveryComparison, out "
+                + N + "AbsenceFamilyEnumerationProofRefusal&) -> "
+                + N + "AbsenceFamilyEnumerationProof",
+            },
+            ConstructionSurface.Of(typeof(AbsenceFamilyEnumerationProof)).ToArray());
+
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                // The auto-property's backing field is named rather than filtered out by a
+                // substring test. Filtering it was the same defect the neighbouring test removed
+                // from this file two tests up, reintroduced for the analogous case: a pin whose
+                // whole purpose is that a new holder appears as a visible diff cannot decide what
+                // to look at by matching a name. Storage inside the cut is legitimate; saying so
+                // by naming it costs one line and keeps the diff honest.
+                "field private instance " + N + "AbsenceCut::<EnumerationProofs>k__BackingField -> "
+                + "System.Collections.Generic.IReadOnlyList<" + N + "AbsenceFamilyEnumerationProof>",
+                "property public instance " + N + "AbsenceCut::EnumerationProofs() -> "
+                + "System.Collections.Generic.IReadOnlyList<" + N + "AbsenceFamilyEnumerationProof>",
+            },
+            ConstructionSurface.ProducersIn(
+                typeof(AbsenceCut).Assembly,
+                typeof(AbsenceFamilyEnumerationProof),
+                true).ToArray(),
+            "a family enumeration proof reached a new holder in Contracts");
+    }
+
+    /// <summary>
+    /// The load-bearing assumption of the whole binding, asserted rather than assumed.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="AbsenceFamilyEnumerationProof"/> is only worth more than a boolean because a
+    /// <c>Source.Core</c> delivery comparison cannot be obtained without the verification its
+    /// factory performs against resolved retained evidence. If a second producer of one ever
+    /// appears, in <c>Source.Core</c> or anywhere else in Contracts, then completeness is declared
+    /// again through a longer route and this pin is where that shows up. It is asserted from here,
+    /// beside the contract that depends on it, so the dependency is visible from the dependent
+    /// side; <c>Source.Core</c> is another lane's file and keeps its own guards.
+    /// </remarks>
+    [TestMethod]
+    public void ADeliveryComparisonIsMintedOnlyByItsOwnVerifyingFactory()
+    {
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + Core + "EnumerationDeliveryComparison::.ctor("
+                + Core + "SourceArtifactRef, " + Core + "SourceArtifactRef, "
+                + Core + "SourceArtifactRef, System.String, "
+                + Core + "RepeatedEnumerationThresholdAssessment, "
+                + Core + "RepeatedEnumerationEvidenceRefs, " + Core + "EnumerationPageSetRefs, "
+                + Core + "RepeatedEnumerationEvidenceRefs, " + Core + "EnumerationPageSetRefs, "
+                + Core + "EnumerationObservationTimes, System.Int64, System.Int64, "
+                + "System.Collections.Generic.IReadOnlyList<" + Core + "RepeatedEnumerationRow>, "
+                + "System.Collections.Generic.IReadOnlyList<" + Core + "RepeatedEnumerationRow>) -> "
+                + Core + "EnumerationDeliveryComparison",
+                "method public static " + Core + "EnumerationDeliveryComparison::Create("
+                + Core + "RepeatedEnumerationInterpretationProfile, " + Core + "SourceArtifactRef, "
+                + Core + "RepeatedEnumerationEvidenceRefs, " + Core + "EnumerationPageSetRefs, "
+                + Core + "RepeatedEnumerationEvidenceRefs, " + Core + "EnumerationPageSetRefs, "
+                + Core + "IRepeatedEnumerationEvidenceResolver) -> "
+                + Core + "EnumerationDeliveryComparison",
+            },
+            ConstructionSurface.Of(typeof(EnumerationDeliveryComparison)).ToArray());
+
+        CollectionAssert.AreEqual(
+            Array.Empty<string>(),
+            ConstructionSurface.ProducersIn(
+                typeof(AbsenceCut).Assembly, typeof(EnumerationDeliveryComparison), true).ToArray(),
+            "something in Contracts now hands out a delivery comparison it did not have to verify");
     }
 
     [TestMethod]

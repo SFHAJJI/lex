@@ -165,28 +165,30 @@ public sealed class AbsenceCutTests
     [TestMethod]
     public void ACutRefusesAnEmptyOrRepeatedObservationList()
     {
-        Assert.IsNull(AbsenceCut.TryCreate(
-            "run", AbsenceRunCompletion.EnumerationComplete, AbsenceApplicableSet.ObservedRootSet,
-            [], AbsenceFixtures.Artifact('e'), AbsenceFixtures.ObservedSet("1"),
+        Assert.IsNull(AbsenceCut.TryCreateComplete(
+            "run", AbsenceApplicableSet.ObservedRootSet,
+            [], [], AbsenceFixtures.Artifact('e'), AbsenceFixtures.ObservedSet("1"),
             [AbsenceFixtures.OtherUri], out var empty));
         Assert.AreEqual(AbsenceCutRefusal.ObservationsEmpty, empty);
 
-        Assert.IsNull(AbsenceCut.TryCreate(
-            "run", AbsenceRunCompletion.EnumerationComplete, AbsenceApplicableSet.ObservedRootSet,
+        Assert.IsNull(AbsenceCut.TryCreateComplete(
+            "run", AbsenceApplicableSet.ObservedRootSet,
             [
                 AbsenceFixtures.Observation("obs", AbsenceFixtures.Base, "family-a"),
                 AbsenceFixtures.Observation("obs", AbsenceFixtures.Base, "family-b"),
             ],
+            [AbsenceFixtures.Proof("family-a"), AbsenceFixtures.Proof("family-b")],
             AbsenceFixtures.Artifact('e'), AbsenceFixtures.ObservedSet("1"),
             [AbsenceFixtures.OtherUri], out var duplicateId));
         Assert.AreEqual(AbsenceCutRefusal.DuplicateObservationId, duplicateId);
 
-        Assert.IsNull(AbsenceCut.TryCreate(
-            "run", AbsenceRunCompletion.EnumerationComplete, AbsenceApplicableSet.ObservedRootSet,
+        Assert.IsNull(AbsenceCut.TryCreateComplete(
+            "run", AbsenceApplicableSet.ObservedRootSet,
             [
                 AbsenceFixtures.Observation("obs-a", AbsenceFixtures.Base, "family"),
                 AbsenceFixtures.Observation("obs-b", AbsenceFixtures.Base, "family"),
             ],
+            [AbsenceFixtures.Proof("family")],
             AbsenceFixtures.Artifact('e'), AbsenceFixtures.ObservedSet("1"),
             [AbsenceFixtures.OtherUri], out var duplicateFamily));
         Assert.AreEqual(AbsenceCutRefusal.DuplicateFamilyKey, duplicateFamily);
@@ -209,23 +211,18 @@ public sealed class AbsenceCutTests
     [TestMethod]
     public void ACutRefusesAnUnboundedRunIdentityOrAnUndefinedVocabularyMember()
     {
-        Assert.IsNull(AbsenceCut.TryCreate(
-            "  ", AbsenceRunCompletion.EnumerationComplete, AbsenceApplicableSet.ObservedRootSet,
+        Assert.IsNull(AbsenceCut.TryCreateComplete(
+            "  ", AbsenceApplicableSet.ObservedRootSet,
             [AbsenceFixtures.Observation("obs", AbsenceFixtures.Base)],
+            [AbsenceFixtures.Proof()],
             AbsenceFixtures.Artifact('e'), AbsenceFixtures.ObservedSet("1"),
             [AbsenceFixtures.OtherUri], out var runId));
         Assert.AreEqual(AbsenceCutRefusal.RunIdInvalid, runId);
 
-        Assert.IsNull(AbsenceCut.TryCreate(
-            "run", (AbsenceRunCompletion)77, AbsenceApplicableSet.ObservedRootSet,
+        Assert.IsNull(AbsenceCut.TryCreateComplete(
+            "run", (AbsenceApplicableSet)77,
             [AbsenceFixtures.Observation("obs", AbsenceFixtures.Base)],
-            AbsenceFixtures.Artifact('e'), AbsenceFixtures.ObservedSet("1"),
-            [AbsenceFixtures.OtherUri], out var completion));
-        Assert.AreEqual(AbsenceCutRefusal.CompletionUndefined, completion);
-
-        Assert.IsNull(AbsenceCut.TryCreate(
-            "run", AbsenceRunCompletion.EnumerationComplete, (AbsenceApplicableSet)77,
-            [AbsenceFixtures.Observation("obs", AbsenceFixtures.Base)],
+            [AbsenceFixtures.Proof()],
             AbsenceFixtures.Artifact('e'), AbsenceFixtures.ObservedSet("1"),
             [AbsenceFixtures.OtherUri], out var applicableSet));
         Assert.AreEqual(AbsenceCutRefusal.ApplicableSetUndefined, applicableSet);
@@ -234,16 +231,18 @@ public sealed class AbsenceCutTests
     [TestMethod]
     public void ACutRefusesAnObservedKeyThatIsNotACanonicalPublisherUri()
     {
-        Assert.IsNull(AbsenceCut.TryCreate(
-            "run", AbsenceRunCompletion.EnumerationComplete, AbsenceApplicableSet.ObservedRootSet,
+        Assert.IsNull(AbsenceCut.TryCreateComplete(
+            "run", AbsenceApplicableSet.ObservedRootSet,
             [AbsenceFixtures.Observation("obs", AbsenceFixtures.Base)],
+            [AbsenceFixtures.Proof()],
             AbsenceFixtures.Artifact('e'), AbsenceFixtures.ObservedSet("1"),
             ["not a uri"], out var invalid));
         Assert.AreEqual(AbsenceCutRefusal.ObservedKeyInvalid, invalid);
 
-        Assert.IsNull(AbsenceCut.TryCreate(
-            "run", AbsenceRunCompletion.EnumerationComplete, AbsenceApplicableSet.ObservedRootSet,
+        Assert.IsNull(AbsenceCut.TryCreateComplete(
+            "run", AbsenceApplicableSet.ObservedRootSet,
             [AbsenceFixtures.Observation("obs", AbsenceFixtures.Base)],
+            [AbsenceFixtures.Proof()],
             AbsenceFixtures.Artifact('e'), AbsenceFixtures.ObservedSet("1"),
             [AbsenceFixtures.OtherUri, AbsenceFixtures.OtherUri], out var duplicate));
         Assert.AreEqual(AbsenceCutRefusal.DuplicateObservedKey, duplicate);
