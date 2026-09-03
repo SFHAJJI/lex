@@ -2,6 +2,7 @@ using System.Text.Json;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
+using Lex.V3.TestSupport;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Lex.V3.Tests.Contracts.Source.Luxembourg;
@@ -14,16 +15,23 @@ namespace Lex.V3.Tests.Contracts.Source.Luxembourg;
 /// Every cardinality and token below is transcribed from Decision 65's text and from the
 /// already-merged <c>VerifiedLuxembourgSourceProfile.BuildRequiredVocabulary</c>'s
 /// <c>AssertionPredicate</c> rows, not computed from the enum under test.
+/// <see cref="CrossCheckAgainstTheMergedSourceProfileTests"/> is the executed form of that
+/// cross-check, reading the profile's real <c>RequiredIriVocabulary</c> output rather than a
+/// hand-transcribed comment.
 /// </summary>
 [TestClass]
 public sealed class LuxembourgAssertionVocabularyTests
 {
+    private const string N = "Lex.V3.Contracts.Source.Luxembourg.";
+    private const string Core = "Lex.V3.Contracts.Source.Core.";
+
     [TestMethod]
     public void TheAssertionVocabularyHasExactlyTwentySixMembers()
     {
         Assert.AreEqual(26, LuxembourgAssertionVocabulary.Predicates.Count);
         Assert.AreEqual(2, LuxembourgAssertionVocabulary.ActForceDatePredicates.Count);
         Assert.AreEqual(2, LuxembourgAssertionVocabulary.ConsolidationApplicabilityDatePredicates.Count);
+        Assert.AreEqual(10, Enum.GetValues<LuxembourgAssertionFactKind>().Length);
     }
 
     [TestMethod]
@@ -42,10 +50,10 @@ public sealed class LuxembourgAssertionVocabularyTests
         AssertTokens<LuxembourgActForceDatePredicate>("dateEntryInForce", "dateNoLongerInForce");
         AssertTokens<LuxembourgConsolidationApplicabilityDatePredicate>(
             "dateApplicability", "dateEndApplicability");
-        AssertTokens<LuxembourgActForceStatus>(
-            "in-force", "no-longer-in-force", "not-yet-in-force", "no-longer-in-force-implicit");
-        AssertTokens<LuxembourgConsolidationApplicabilityStatus>(
-            "applicable", "not-applicable", "not-yet-applicable");
+        AssertTokens<LuxembourgAssertionFactKind>(
+            "act_force", "consolidation_applicability", "descriptive_date", "act_identity",
+            "resource_type", "wemi_structural", "expression_language_or_title",
+            "manifestation_format", "legal_value_assertion", "rights_and_provenance");
     }
 
     [TestMethod]
@@ -54,8 +62,6 @@ public sealed class LuxembourgAssertionVocabularyTests
         AssertRoundTrip<LuxembourgAssertionPredicate>();
         AssertRoundTrip<LuxembourgActForceDatePredicate>();
         AssertRoundTrip<LuxembourgConsolidationApplicabilityDatePredicate>();
-        AssertRoundTrip<LuxembourgActForceStatus>();
-        AssertRoundTrip<LuxembourgConsolidationApplicabilityStatus>();
         AssertRoundTrip<LuxembourgAssertionFactKind>();
     }
 
@@ -65,31 +71,16 @@ public sealed class LuxembourgAssertionVocabularyTests
         AssertScopeDrift<LuxembourgAssertionPredicate>("dateEntryIntoForce");
         AssertScopeDrift<LuxembourgActForceDatePredicate>("dateApplicability");
         AssertScopeDrift<LuxembourgConsolidationApplicabilityDatePredicate>("dateEntryInForce");
-        AssertScopeDrift<LuxembourgActForceStatus>("applicable");
-        AssertScopeDrift<LuxembourgConsolidationApplicabilityStatus>("in-force");
-    }
-
-    [TestMethod]
-    public void ActForceAndConsolidationApplicabilityStatusVocabulariesShareNoToken()
-    {
-        var actTokens = Enum.GetValues<LuxembourgActForceStatus>()
-            .Select(value => ContractJson.Serialize(value))
-            .ToHashSet(StringComparer.Ordinal);
-        var consolidationTokens = Enum.GetValues<LuxembourgConsolidationApplicabilityStatus>()
-            .Select(value => ContractJson.Serialize(value))
-            .ToHashSet(StringComparer.Ordinal);
-
-        Assert.IsFalse(
-            actTokens.Overlaps(consolidationTokens),
-            "an Act force-status token collided with a Consolidation applicability-status token");
+        AssertScopeDrift<LuxembourgAssertionFactKind>("ActForce");
     }
 
     [TestMethod]
     public void EveryAssertionPredicateHasAPinnedFactKindDrivenThroughConstruction()
     {
-        // The 44-member census requirement, for this file's twenty-six: FactKindOf is total (no
-        // default arm; the build fails if a member is missed) and every predicate can build a real
-        // disposition carrying that exact pinned kind.
+        // The census requirement, for this file's twenty-six: FactKindOf fails closed (a default
+        // arm throws ArgumentOutOfRangeException for anything unmapped; C# cannot make an enum
+        // switch compiler-exhaustive over named members alone) and every predicate can build a
+        // real disposition carrying that exact pinned kind.
         foreach (var predicate in LuxembourgAssertionVocabulary.Predicates)
         {
             var kind = LuxembourgAssertionVocabulary.FactKindOf(predicate);
@@ -262,17 +253,192 @@ public sealed class LuxembourgAssertionVocabularyTests
     [TestMethod]
     public void ADeserialisedWrongFactKindIsRefusedOnTheDispositionWireToo()
     {
-        Assert.ThrowsExactly<JsonException>(
+        // Before LuxembourgAssertionFactKind carried wire tokens, "act_force" was an unknown enum
+        // value, so this test passed because deserialisation failed before ever reaching
+        // LuxembourgAssertionFactDisposition's own pinned-fact-kind guard -- the same shape as a
+        // test that passes for the wrong reason everywhere else in this project. Now that ActForce
+        // carries "act_force" as its real wire token, this document's members deserialise
+        // successfully and the guard itself refuses it: dateApplicability is pinned to
+        // ConsolidationApplicability, not ActForce. The inner exception's message proves the real
+        // guard fired rather than a generic deserialisation failure.
+        var thrown = Assert.ThrowsExactly<JsonException>(
             () => ContractJson.Deserialize<LuxembourgAssertionFactDisposition>(
                 """
                 {"predicate":"dateApplicability","fact_kind":"act_force","evidence_ref":{"resource_id":"urn:uuid:00000000-0000-4000-8000-000000000029","sha256":"9999999999999999999999999999999999999999999999999999999999999999"}}
                 """));
+        Assert.IsInstanceOfType<ArgumentException>(thrown.InnerException);
+        StringAssert.Contains(thrown.InnerException!.Message, "is pinned to");
+    }
+
+    [TestMethod]
+    public void AContradictingUnderlyingPredicateIsRefusedOnTheActForceDateFactWire()
+    {
+        // UnderlyingPredicate is always re-derivable from Predicate alone
+        // (LuxembourgAssertionVocabulary.UnderlyingPredicate is a pure function of it), so the
+        // constructor parameter is optional: a normal document need not carry a redundant,
+        // always-derivable field. Before this fix the property had no constructor parameter at
+        // all -- it was serialised on write and silently dropped on read, so a document whose
+        // underlying_predicate contradicted its own predicate was accepted with no complaint.
+        var fact = new LuxembourgActForceDateFact(
+            LuxembourgActForceDatePredicate.DateEntryInForce,
+            "2020-05-29",
+            "http://www.w3.org/2001/XMLSchema#date",
+            Evidence("30"));
+        Assert.AreEqual(LuxembourgAssertionPredicate.DateEntryInForce, fact.UnderlyingPredicate);
+
+        var withoutIt = "{\"predicate\":\"dateEntryInForce\",\"raw_lexical_value\":\"2020-05-29\","
+            + "\"datatype_iri\":\"http://www.w3.org/2001/XMLSchema#date\",\"evidence_ref\":"
+            + EvidenceRefJson("30") + "}";
+        var parsedWithoutIt = ContractJson.Deserialize<LuxembourgActForceDateFact>(withoutIt);
+        Assert.AreEqual(LuxembourgAssertionPredicate.DateEntryInForce, parsedWithoutIt.UnderlyingPredicate);
+
+        var agreeing = "{\"predicate\":\"dateEntryInForce\",\"raw_lexical_value\":\"2020-05-29\","
+            + "\"datatype_iri\":\"http://www.w3.org/2001/XMLSchema#date\",\"evidence_ref\":"
+            + EvidenceRefJson("30") + ",\"underlying_predicate\":\"dateEntryInForce\"}";
+        var parsedAgreeing = ContractJson.Deserialize<LuxembourgActForceDateFact>(agreeing);
+        Assert.AreEqual(LuxembourgAssertionPredicate.DateEntryInForce, parsedAgreeing.UnderlyingPredicate);
+
+        // A document whose derived slot contradicts its own predicate is explicitly refused, not
+        // silently accepted with the wrong value dropped.
+        var contradicting = "{\"predicate\":\"dateEntryInForce\",\"raw_lexical_value\":\"2020-05-29\","
+            + "\"datatype_iri\":\"http://www.w3.org/2001/XMLSchema#date\",\"evidence_ref\":"
+            + EvidenceRefJson("30") + ",\"underlying_predicate\":\"dateNoLongerInForce\"}";
+        var thrown = Assert.ThrowsExactly<JsonException>(
+            () => ContractJson.Deserialize<LuxembourgActForceDateFact>(contradicting));
+        Assert.IsInstanceOfType<ArgumentException>(thrown.InnerException);
+        StringAssert.Contains(thrown.InnerException!.Message, "does not match");
+    }
+
+    [TestMethod]
+    public void AContradictingUnderlyingPredicateIsRefusedOnTheConsolidationApplicabilityDateFactWire()
+    {
+        var fact = new LuxembourgConsolidationApplicabilityDateFact(
+            LuxembourgConsolidationApplicabilityDatePredicate.DateApplicability,
+            "2023-08-22",
+            "http://www.w3.org/2001/XMLSchema#date",
+            Evidence("31"));
+        Assert.AreEqual(LuxembourgAssertionPredicate.DateApplicability, fact.UnderlyingPredicate);
+
+        var agreeing = "{\"predicate\":\"dateApplicability\",\"raw_lexical_value\":\"2023-08-22\","
+            + "\"datatype_iri\":\"http://www.w3.org/2001/XMLSchema#date\",\"evidence_ref\":"
+            + EvidenceRefJson("31") + ",\"underlying_predicate\":\"dateApplicability\"}";
+        var parsedAgreeing = ContractJson.Deserialize<LuxembourgConsolidationApplicabilityDateFact>(agreeing);
+        Assert.AreEqual(LuxembourgAssertionPredicate.DateApplicability, parsedAgreeing.UnderlyingPredicate);
+
+        var contradicting = "{\"predicate\":\"dateApplicability\",\"raw_lexical_value\":\"2023-08-22\","
+            + "\"datatype_iri\":\"http://www.w3.org/2001/XMLSchema#date\",\"evidence_ref\":"
+            + EvidenceRefJson("31") + ",\"underlying_predicate\":\"dateEndApplicability\"}";
+        var thrown = Assert.ThrowsExactly<JsonException>(
+            () => ContractJson.Deserialize<LuxembourgConsolidationApplicabilityDateFact>(contradicting));
+        Assert.IsInstanceOfType<ArgumentException>(thrown.InnerException);
+        StringAssert.Contains(thrown.InnerException!.Message, "does not match");
+    }
+
+    [TestMethod]
+    public void CrossCheckAgainstTheMergedSourceProfileTests()
+    {
+        // Fold-in: replaces a hand-transcribed comment claiming this vocabulary matches
+        // VerifiedLuxembourgSourceProfile's own rows with an executed comparison against that
+        // profile's real RequiredIriVocabulary output, so an edit to either list is caught
+        // automatically instead of silently drifting.
+        const string prefix = "http://data.legilux.public.lu/resource/ontology/jolux#";
+        const string rdfTypeIri = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+        var profileLocalNames = VerifiedLuxembourgSourceProfile.RequiredIriVocabulary
+            .Where(value => value.Kind == LuxembourgVocabularyKind.AssertionPredicate)
+            .Select(value =>
+            {
+                if (string.Equals(value.FullIri, rdfTypeIri, StringComparison.Ordinal))
+                {
+                    return "rdf:type";
+                }
+
+                Assert.IsTrue(
+                    value.FullIri.StartsWith(prefix, StringComparison.Ordinal),
+                    $"{value.FullIri} is neither rdf:type nor a JOLux local predicate");
+                return value.FullIri[prefix.Length..];
+            })
+            .ToHashSet(StringComparer.Ordinal);
+
+        var enumLocalNames = LuxembourgAssertionVocabulary.Predicates
+            .Select(predicate => ContractJson.Serialize(predicate).Trim('"'))
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.AreEqual(
+            profileLocalNames.Count,
+            enumLocalNames.Count,
+            "LuxembourgAssertionPredicate and VerifiedLuxembourgSourceProfile.RequiredIriVocabulary " +
+            "disagree on how many assertion predicates are settled");
+        CollectionAssert.AreEquivalent(
+            profileLocalNames.ToArray(),
+            enumLocalNames.ToArray(),
+            "LuxembourgAssertionPredicate and VerifiedLuxembourgSourceProfile.RequiredIriVocabulary " +
+            "name a different set of assertion predicates");
+    }
+
+    [TestMethod]
+    public void AnActForceDateFactHasExactlyOneCheckedDoor()
+    {
+        // Transcribed from ConstructionSurface.Of's actual output, per this project's
+        // print-then-transcribe technique (see LuxembourgConstructionSurfaceTests.cs's remarks).
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + N + "LuxembourgActForceDateFact::.ctor("
+                + N + "LuxembourgActForceDateFact) -> " + N + "LuxembourgActForceDateFact",
+                "constructor public instance " + N + "LuxembourgActForceDateFact::.ctor("
+                + N + "LuxembourgActForceDatePredicate, System.String, System.String, "
+                + Core + "SourceArtifactRef, System.Nullable<" + N + "LuxembourgAssertionPredicate>) -> "
+                + N + "LuxembourgActForceDateFact",
+                "method public instance " + N + "LuxembourgActForceDateFact::<Clone>$() -> "
+                + N + "LuxembourgActForceDateFact",
+            },
+            ConstructionSurface.Of(typeof(LuxembourgActForceDateFact)).ToArray());
+    }
+
+    [TestMethod]
+    public void AConsolidationApplicabilityDateFactHasExactlyOneCheckedDoor()
+    {
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + N + "LuxembourgConsolidationApplicabilityDateFact::.ctor("
+                + N + "LuxembourgConsolidationApplicabilityDateFact) -> "
+                + N + "LuxembourgConsolidationApplicabilityDateFact",
+                "constructor public instance " + N + "LuxembourgConsolidationApplicabilityDateFact::.ctor("
+                + N + "LuxembourgConsolidationApplicabilityDatePredicate, System.String, System.String, "
+                + Core + "SourceArtifactRef, System.Nullable<" + N + "LuxembourgAssertionPredicate>) -> "
+                + N + "LuxembourgConsolidationApplicabilityDateFact",
+                "method public instance " + N + "LuxembourgConsolidationApplicabilityDateFact::<Clone>$() -> "
+                + N + "LuxembourgConsolidationApplicabilityDateFact",
+            },
+            ConstructionSurface.Of(typeof(LuxembourgConsolidationApplicabilityDateFact)).ToArray());
+    }
+
+    [TestMethod]
+    public void AnAssertionFactDispositionHasExactlyOneCheckedDoor()
+    {
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + N + "LuxembourgAssertionFactDisposition::.ctor("
+                + N + "LuxembourgAssertionFactDisposition) -> " + N + "LuxembourgAssertionFactDisposition",
+                "constructor public instance " + N + "LuxembourgAssertionFactDisposition::.ctor("
+                + N + "LuxembourgAssertionPredicate, " + N + "LuxembourgAssertionFactKind, "
+                + Core + "SourceArtifactRef) -> " + N + "LuxembourgAssertionFactDisposition",
+                "method public instance " + N + "LuxembourgAssertionFactDisposition::<Clone>$() -> "
+                + N + "LuxembourgAssertionFactDisposition",
+            },
+            ConstructionSurface.Of(typeof(LuxembourgAssertionFactDisposition)).ToArray());
     }
 
     private static SourceArtifactRef Evidence(string digitPair) =>
         new(
             "urn:uuid:00000000-0000-4000-8000-0000000000" + digitPair,
             new string(digitPair[0], 64));
+
+    private static string EvidenceRefJson(string digitPair) =>
+        "{\"resource_id\":\"urn:uuid:00000000-0000-4000-8000-0000000000" + digitPair
+        + "\",\"sha256\":\"" + new string(digitPair[0], 64) + "\"}";
 
     private static void AssertTokens<TEnum>(params string[] expected)
         where TEnum : struct, Enum

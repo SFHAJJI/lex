@@ -111,6 +111,14 @@ public enum LuxembourgAssertionPredicate
 /// predicate has exactly one kind, fixed by <see cref="LuxembourgAssertionVocabulary.FactKindOf"/>,
 /// never chosen by whoever writes a row.
 /// </summary>
+/// <remarks>
+/// Every member carries a <c>[JsonStringEnumMemberName]</c> wire token: before this fix, this was
+/// the one new enum in this slice with no wire form of its own, so its wire form was its C# member
+/// name (<c>"ActForce"</c>, not <c>"act_force"</c>), and a wire test named for the disposition
+/// guard passed only because the untokenised member name was an unknown value that failed
+/// deserialisation before the guard was ever reached
+/// (<c>LuxembourgAssertionVocabularyTests.ADeserialisedWrongFactKindIsRefusedOnTheDispositionWireToo</c>).
+/// </remarks>
 public enum LuxembourgAssertionFactKind
 {
     /// <summary>
@@ -119,6 +127,7 @@ public enum LuxembourgAssertionFactKind
     /// of <see cref="LuxembourgAssertionPredicate.InForceStatus"/>. Never populated from a
     /// Consolidation's applicability interval.
     /// </summary>
+    [JsonStringEnumMemberName("act_force")]
     ActForce = 1,
 
     /// <summary>
@@ -128,6 +137,7 @@ public enum LuxembourgAssertionFactKind
     /// Consolidation-scoped reading of <see cref="LuxembourgAssertionPredicate.InForceStatus"/>.
     /// Documentation without legal effect (Decision 58 preamble); never an act-force claim.
     /// </summary>
+    [JsonStringEnumMemberName("consolidation_applicability")]
     ConsolidationApplicability = 2,
 
     /// <summary>
@@ -135,18 +145,21 @@ public enum LuxembourgAssertionFactKind
     /// <see cref="LuxembourgAssertionPredicate.DateDocument"/>,
     /// <see cref="LuxembourgAssertionPredicate.PublicationDate"/>.
     /// </summary>
+    [JsonStringEnumMemberName("descriptive_date")]
     DescriptiveDate = 3,
 
     /// <summary>
     /// An Act's own non-temporal identity: <see cref="LuxembourgAssertionPredicate.HistoricalLegalId"/>,
     /// <see cref="LuxembourgAssertionPredicate.ResponsibilityOf"/>.
     /// </summary>
+    [JsonStringEnumMemberName("act_identity")]
     ActIdentity = 4,
 
     /// <summary>
     /// Resource classification: <see cref="LuxembourgAssertionPredicate.RdfType"/>,
     /// <see cref="LuxembourgAssertionPredicate.TypeDocument"/>.
     /// </summary>
+    [JsonStringEnumMemberName("resource_type")]
     ResourceType = 5,
 
     /// <summary>
@@ -157,6 +170,7 @@ public enum LuxembourgAssertionFactKind
     /// <see cref="LuxembourgAssertionPredicate.IsExemplifiedBy"/>,
     /// <see cref="LuxembourgAssertionPredicate.PreviousIsExemplifiedBy"/>.
     /// </summary>
+    [JsonStringEnumMemberName("wemi_structural")]
     WemiStructural = 6,
 
     /// <summary>
@@ -164,15 +178,18 @@ public enum LuxembourgAssertionFactKind
     /// <see cref="LuxembourgAssertionPredicate.Title"/>,
     /// <see cref="LuxembourgAssertionPredicate.TitleShort"/>.
     /// </summary>
+    [JsonStringEnumMemberName("expression_language_or_title")]
     ExpressionLanguageOrTitle = 7,
 
     /// <summary>A Manifestation's format: <see cref="LuxembourgAssertionPredicate.UserFormat"/>.</summary>
+    [JsonStringEnumMemberName("manifestation_format")]
     ManifestationFormat = 8,
 
     /// <summary>
     /// A Manifestation's or Expression's own legal-value assertion:
     /// <see cref="LuxembourgAssertionPredicate.LegalValue"/>.
     /// </summary>
+    [JsonStringEnumMemberName("legal_value_assertion")]
     LegalValueAssertion = 9,
 
     /// <summary>
@@ -182,6 +199,7 @@ public enum LuxembourgAssertionFactKind
     /// <see cref="LuxembourgAssertionPredicate.RightsHolder"/>,
     /// <see cref="LuxembourgAssertionPredicate.Publisher"/>.
     /// </summary>
+    [JsonStringEnumMemberName("rights_and_provenance")]
     RightsAndProvenance = 10,
 }
 
@@ -215,47 +233,6 @@ public enum LuxembourgConsolidationApplicabilityDatePredicate
 }
 
 /// <summary>
-/// The exact literal <c>jolux:inForceStatus</c> tokens observed on a <c>jolux:Act</c>. Four, per
-/// review/22-research-relations.md's endpoint-wide census (in-force 119,395; no-longer-in-force
-/// 30,852; not-yet-in-force 230; no-longer-in-force-implicit 50). A deliberately different closed
-/// set from <see cref="LuxembourgConsolidationApplicabilityStatus"/> even though both ride the same
-/// publisher predicate: Legilux itself uses disjoint vocabularies for the two subjects.
-/// </summary>
-public enum LuxembourgActForceStatus
-{
-    [JsonStringEnumMemberName("in-force")]
-    InForce = 1,
-
-    [JsonStringEnumMemberName("no-longer-in-force")]
-    NoLongerInForce = 2,
-
-    [JsonStringEnumMemberName("not-yet-in-force")]
-    NotYetInForce = 3,
-
-    [JsonStringEnumMemberName("no-longer-in-force-implicit")]
-    NoLongerInForceImplicit = 4,
-}
-
-/// <summary>
-/// The exact literal <c>jolux:inForceStatus</c> tokens observed on a <c>jolux:Consolidation</c>.
-/// Three, per review/22-research-relations.md (not-applicable 3,423; applicable 1,164;
-/// not-yet-applicable 39). None of these three strings collides with any of
-/// <see cref="LuxembourgActForceStatus"/>'s four: a superseded consolidation is "not-applicable",
-/// which is not a claim that the act is out of force.
-/// </summary>
-public enum LuxembourgConsolidationApplicabilityStatus
-{
-    [JsonStringEnumMemberName("applicable")]
-    Applicable = 1,
-
-    [JsonStringEnumMemberName("not-applicable")]
-    NotApplicable = 2,
-
-    [JsonStringEnumMemberName("not-yet-applicable")]
-    NotYetApplicable = 3,
-}
-
-/// <summary>
 /// One Act-force date fact. Can only be built from <see cref="LuxembourgActForceDatePredicate"/>:
 /// there is no constructor overload, cast, or implicit conversion from
 /// <see cref="LuxembourgConsolidationApplicabilityDatePredicate"/> or from the flat
@@ -270,12 +247,25 @@ public sealed record LuxembourgActForceDateFact
         LuxembourgActForceDatePredicate predicate,
         string rawLexicalValue,
         string datatypeIri,
-        SourceArtifactRef evidenceRef)
+        SourceArtifactRef evidenceRef,
+        LuxembourgAssertionPredicate? underlyingPredicate = null)
     {
         Predicate = ContractValidation.RequireDefined(predicate, nameof(predicate));
         RawLexicalValue = ContractValidation.RequireIdentifier(rawLexicalValue, nameof(rawLexicalValue));
         DatatypeIri = ContractValidation.RequireIdentifier(datatypeIri, nameof(datatypeIri));
         EvidenceRef = evidenceRef ?? throw new ArgumentNullException(nameof(evidenceRef));
+
+        var derived = LuxembourgAssertionVocabulary.UnderlyingPredicate(Predicate);
+        if (underlyingPredicate is not null && underlyingPredicate.Value != derived)
+        {
+            throw new ArgumentException(
+                $"{underlyingPredicate} does not match {derived}, the underlying predicate " +
+                $"{Predicate} derives to; underlying_predicate is always re-derived and can " +
+                "never disagree with it.",
+                nameof(underlyingPredicate));
+        }
+
+        UnderlyingPredicate = derived;
     }
 
     public LuxembourgActForceDatePredicate Predicate { get; }
@@ -287,8 +277,20 @@ public sealed record LuxembourgActForceDateFact
 
     public SourceArtifactRef EvidenceRef { get; }
 
-    public LuxembourgAssertionPredicate UnderlyingPredicate =>
-        LuxembourgAssertionVocabulary.UnderlyingPredicate(Predicate);
+    /// <summary>
+    /// Always exactly <see cref="LuxembourgAssertionVocabulary.UnderlyingPredicate(LuxembourgActForceDatePredicate)"/>
+    /// of <see cref="Predicate"/>, never an independently trusted wire value: after construction
+    /// this is never actually <see langword="null"/>, only nullable-typed because System.Text.Json
+    /// requires a constructor parameter's type to match the property it binds. The constructor's
+    /// <c>underlyingPredicate</c> parameter is optional (a normal document need not carry a
+    /// redundant, always-derivable field at all), but when a document does supply one, it must
+    /// agree with the derivation or the document is refused. Before this fix the property had no
+    /// constructor parameter at all: it was serialised on write and silently dropped on read, so a
+    /// document whose <c>underlying_predicate</c> contradicted its own <c>predicate</c> was
+    /// accepted with no complaint. See
+    /// <c>LuxembourgAssertionVocabularyTests.AContradictingUnderlyingPredicateIsRefusedOnTheActForceDateFactWire</c>.
+    /// </summary>
+    public LuxembourgAssertionPredicate? UnderlyingPredicate { get; }
 }
 
 /// <summary>
@@ -304,12 +306,25 @@ public sealed record LuxembourgConsolidationApplicabilityDateFact
         LuxembourgConsolidationApplicabilityDatePredicate predicate,
         string rawLexicalValue,
         string datatypeIri,
-        SourceArtifactRef evidenceRef)
+        SourceArtifactRef evidenceRef,
+        LuxembourgAssertionPredicate? underlyingPredicate = null)
     {
         Predicate = ContractValidation.RequireDefined(predicate, nameof(predicate));
         RawLexicalValue = ContractValidation.RequireIdentifier(rawLexicalValue, nameof(rawLexicalValue));
         DatatypeIri = ContractValidation.RequireIdentifier(datatypeIri, nameof(datatypeIri));
         EvidenceRef = evidenceRef ?? throw new ArgumentNullException(nameof(evidenceRef));
+
+        var derived = LuxembourgAssertionVocabulary.UnderlyingPredicate(Predicate);
+        if (underlyingPredicate is not null && underlyingPredicate.Value != derived)
+        {
+            throw new ArgumentException(
+                $"{underlyingPredicate} does not match {derived}, the underlying predicate " +
+                $"{Predicate} derives to; underlying_predicate is always re-derived and can " +
+                "never disagree with it.",
+                nameof(underlyingPredicate));
+        }
+
+        UnderlyingPredicate = derived;
     }
 
     public LuxembourgConsolidationApplicabilityDatePredicate Predicate { get; }
@@ -320,8 +335,13 @@ public sealed record LuxembourgConsolidationApplicabilityDateFact
 
     public SourceArtifactRef EvidenceRef { get; }
 
-    public LuxembourgAssertionPredicate UnderlyingPredicate =>
-        LuxembourgAssertionVocabulary.UnderlyingPredicate(Predicate);
+    /// <summary>
+    /// Always exactly the derived predicate for <see cref="Predicate"/>, never an independently
+    /// trusted wire value; the same rule, and the same reason for the nullable type, as
+    /// <see cref="LuxembourgActForceDateFact.UnderlyingPredicate"/>. See
+    /// <c>LuxembourgAssertionVocabularyTests.AContradictingUnderlyingPredicateIsRefusedOnTheConsolidationApplicabilityDateFactWire</c>.
+    /// </summary>
+    public LuxembourgAssertionPredicate? UnderlyingPredicate { get; }
 }
 
 /// <summary>
