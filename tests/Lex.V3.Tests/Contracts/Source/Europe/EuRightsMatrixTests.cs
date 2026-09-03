@@ -27,10 +27,13 @@ public sealed class EuRightsMatrixTests
 
         foreach (var contentClass in Enum.GetValues<EuContentClass>())
         {
+            // Not the basis: EuRightsDisposition's constructor already refuses any other, so no
+            // disposition carrying a different one exists to reach a matrix. What the matrix
+            // decides is which class each entry answers for.
             Assert.AreEqual(
-                EuRightsDisposition.BasisFor(contentClass),
-                matrix.For(contentClass).Basis,
-                $"{contentClass} must carry the basis read from the notice");
+                contentClass,
+                matrix.For(contentClass).ContentClass,
+                $"For({contentClass}) must answer for that class");
         }
 
         foreach (var channel in Enum.GetValues<EuRightsExceptionChannel>())

@@ -14,10 +14,12 @@ public enum EuFormexPackageRefusal
     None = 0,
 
     /// <summary>
-    /// The item set names a work the manifestation's own expression does not.
+    /// The manifestation is not one of this expression's own. Named for what is compared: the
+    /// manifestation's parent key against the expression's key. It is not a statement about the
+    /// CELEX, which no key in this type carries.
     /// </summary>
-    [JsonStringEnumMemberName("work_disagreement")]
-    WorkDisagreement = 1,
+    [JsonStringEnumMemberName("expression_disagreement")]
+    ExpressionDisagreement = 1,
 
     /// <summary>
     /// The item set names a language other than the one this package was opened for. Language is
@@ -86,7 +88,14 @@ public sealed class EuFormexPackage
     /// <summary>The classified items, main text present by construction.</summary>
     public EuFormexItemSet Items { get; }
 
-    /// <summary>The base act CELEX every item agreed with, carried verbatim.</summary>
+    /// <summary>
+    /// The base act CELEX every item agreed with, carried verbatim from the item set.
+    /// </summary>
+    /// <remarks>
+    /// Carried, not proven here. Nothing in this type ties a CELEX to the Cellar work UUID,
+    /// because that link lives in the notice rather than in any key, so no member of this type is
+    /// evidence that this package belongs to that CELEX beyond the items agreeing among themselves.
+    /// </remarks>
     public string WorkCelex { get; }
 
     /// <summary>The two letter expression language.</summary>
@@ -139,11 +148,12 @@ public sealed class EuFormexPackage
         // another manifestation of the same work. The boundary proves the parent chain; comparing
         // the keys here is what ties this package's two references to each other rather than each
         // to the registry separately.
-        if (manifestation.ParentKeyRef is null
-            || !string.Equals(manifestation.ParentKeyRef.CanonicalKey, expression.CanonicalKey,
+        // ParentKeyRef is non-null here: boundary.Require above throws on a manifestation with no
+        // parent, so a null guard would be unreachable and read as coverage.
+        if (!string.Equals(manifestation.ParentKeyRef!.CanonicalKey, expression.CanonicalKey,
                 StringComparison.Ordinal))
         {
-            refusal = EuFormexPackageRefusal.WorkDisagreement;
+            refusal = EuFormexPackageRefusal.ExpressionDisagreement;
             return null;
         }
 
@@ -152,8 +162,10 @@ public sealed class EuFormexPackage
         // agreement about work and language is exactly what a sibling package has.
         foreach (var item in items.Items)
         {
-            if (item.ItemRef.ParentKeyRef is null
-                || !string.Equals(item.ItemRef.ParentKeyRef.CanonicalKey, manifestation.CanonicalKey,
+            // Likewise non-null: EuFormexItem's constructor admitted this ref through the same
+            // boundary with the Item role. Unreachable by agreement between the two types, and a
+            // tripwire needs a mutation that can reach it, which none can.
+            if (!string.Equals(item.ItemRef.ParentKeyRef!.CanonicalKey, manifestation.CanonicalKey,
                     StringComparison.Ordinal))
             {
                 refusal = EuFormexPackageRefusal.ManifestationDisagreement;

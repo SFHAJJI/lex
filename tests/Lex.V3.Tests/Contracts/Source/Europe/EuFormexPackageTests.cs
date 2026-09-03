@@ -83,7 +83,7 @@ public sealed class EuFormexPackageTests
             Object(OtherExpression, EuWemiRole.Expression), Items(Manifestation), "EN", out var refusal);
 
         Assert.IsNull(package);
-        Assert.AreEqual(EuFormexPackageRefusal.WorkDisagreement, refusal);
+        Assert.AreEqual(EuFormexPackageRefusal.ExpressionDisagreement, refusal);
     }
 
     [TestMethod]
@@ -125,7 +125,7 @@ public sealed class EuFormexPackageTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "\"none\"", "\"work_disagreement\"", "\"language_disagreement\"",
+                "\"none\"", "\"expression_disagreement\"", "\"language_disagreement\"",
                 "\"manifestation_disagreement\"",
             },
             Enum.GetValues<EuFormexPackageRefusal>().Select(ContractJson.Serialize).ToArray());
