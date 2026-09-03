@@ -56,6 +56,9 @@ public enum OfficialHttpOperationalFailureReason
 
     [JsonStringEnumMemberName("source_profile_stale")]
     SourceProfileStale = 4,
+
+    [JsonStringEnumMemberName("custody_unavailable")]
+    CustodyUnavailable = 5,
 }
 
 public enum OfficialHttpPacingScope
@@ -109,7 +112,7 @@ public sealed record RobotsPolicyRouteStep
         int expectedStatusCode,
         string? expectedLocation)
     {
-        RequestedUri = HttpRequestEvidence.RequireCanonicalRequestUri(
+        RequestedUri = RoutedHttpValidation.RequireAbsoluteHttpsUri(
             requestedUri,
             nameof(requestedUri));
         if (expectedStatusCode is not (200 or 301))
@@ -127,7 +130,7 @@ public sealed record RobotsPolicyRouteStep
         ExpectedStatusCode = expectedStatusCode;
         ExpectedLocation = expectedLocation is null
             ? null
-            : HttpRequestEvidence.RequireCanonicalRequestUri(
+            : RoutedHttpValidation.RequireAbsoluteHttpsUri(
                 expectedLocation,
                 nameof(expectedLocation));
     }
@@ -141,7 +144,9 @@ public sealed record RobotsPolicyRouteStep
 
 public sealed class RobotsPolicyRoute
 {
-    internal RobotsPolicyRoute(HttpOrigin initialAuthority, params RobotsPolicyRouteStep[] steps)
+    internal RobotsPolicyRoute(
+        RoutedHttpNetworkOrigin initialAuthority,
+        params RobotsPolicyRouteStep[] steps)
     {
         InitialAuthority = initialAuthority ?? throw new ArgumentNullException(nameof(initialAuthority));
         ArgumentNullException.ThrowIfNull(steps);
@@ -188,7 +193,7 @@ public sealed class RobotsPolicyRoute
         Steps = Array.AsReadOnly(snapshot);
     }
 
-    public HttpOrigin InitialAuthority { get; }
+    public RoutedHttpNetworkOrigin InitialAuthority { get; }
 
     public IReadOnlyList<RobotsPolicyRouteStep> Steps { get; }
 }
@@ -256,6 +261,15 @@ public sealed class OfficialMachineQuerySourceProfile
 
     public TimeSpan MinimumRequestInterval => TimeSpan.FromMilliseconds(1_500);
 
+    /// <summary>
+    /// Every run's private acquisition plan reserves item zero for the robots policy request.
+    /// Product requests begin at one, so one request ordinal has one meaning throughout the run.
+    /// The reserved item can never mint a held legal-resource receipt.
+    /// </summary>
+    public ulong RobotsRequestOrdinal => 0;
+
+    public ulong FirstProductRequestOrdinal => 1;
+
     public OfficialHttpPacingScope PacingScope =>
         OfficialHttpPacingScope.ProcessActualNetworkOrigin;
 
@@ -315,7 +329,7 @@ public sealed class OfficialMachineQuerySourceProfile
         "https://data.legilux.public.lu/sparqlendpoint",
         "application/x-www-form-urlencoded",
         new RobotsPolicyRoute(
-            new HttpOrigin("https", "data.legilux.public.lu", 443),
+            new RoutedHttpNetworkOrigin("data.legilux.public.lu", 443),
             new RobotsPolicyRouteStep(
                 "https://data.legilux.public.lu/robots.txt",
                 200,
@@ -327,7 +341,7 @@ public sealed class OfficialMachineQuerySourceProfile
         "https://publications.europa.eu/webapi/rdf/sparql",
         "application/sparql-query",
         new RobotsPolicyRoute(
-            new HttpOrigin("https", "publications.europa.eu", 443),
+            new RoutedHttpNetworkOrigin("publications.europa.eu", 443),
             new RobotsPolicyRouteStep(
                 "https://publications.europa.eu/robots.txt",
                 301,
@@ -356,6 +370,8 @@ public sealed class OfficialMachineQuerySourceProfile
             $"robots_maximum_age_ms={MaximumRobotsPolicyAge.TotalMilliseconds.ToString("0", CultureInfo.InvariantCulture)}",
             $"robots_revalidation=full_get_without_validators",
             $"minimum_request_interval_ms={MinimumRequestInterval.TotalMilliseconds.ToString("0", CultureInfo.InvariantCulture)}",
+            $"robots_request_ordinal={RobotsRequestOrdinal.ToString(CultureInfo.InvariantCulture)}",
+            $"first_product_request_ordinal={FirstProductRequestOrdinal.ToString(CultureInfo.InvariantCulture)}",
             $"pacing_scope=process_actual_network_origin",
             $"maximum_attempts={MaximumAttempts.ToString(CultureInfo.InvariantCulture)}",
             $"initial_retry_delay_ms={InitialRetryDelay.TotalMilliseconds.ToString("0", CultureInfo.InvariantCulture)}",
@@ -413,13 +429,29 @@ public static class OfficialMachineQuerySourceProfiles
         };
 
     /// <summary>
-    /// Derives the only matching profile from a fully bound query request. A caller never selects
-    /// a broader regional policy or supplies request-authority facts.
+    /// Derives the only matching profile from the binder-authenticated identity projection without
+    /// invoking its renderer. The owned sender still reopens every bound artifact before projecting
+    /// or sending the request.
     /// </summary>
-    public static OfficialMachineQuerySourceProfile ResolveFor(BoundMachineRequest request)
+    public static OfficialMachineQuerySourceProfile ResolveFor(BoundMachineRequestIdentity request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var profile = request.RequestedUri switch
+        return ResolveFor(request.RequestedUri, request.RenderReceipt, nameof(request));
+    }
+
+    /// <summary>Re-resolves the profile from the sender's artifact-reopened snapshot.</summary>
+    public static OfficialMachineQuerySourceProfile ResolveFor(OpenedMachineRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return ResolveFor(request.RequestedUri, request.RenderReceipt, nameof(request));
+    }
+
+    private static OfficialMachineQuerySourceProfile ResolveFor(
+        string requestedUri,
+        MachineQueryRenderReceipt receipt,
+        string parameterName)
+    {
+        var profile = requestedUri switch
         {
             "https://data.legilux.public.lu/sparqlendpoint" =>
                 Resolve(OfficialMachineQuerySourceProfileId.LuxembourgSparql),
@@ -427,11 +459,9 @@ public static class OfficialMachineQuerySourceProfiles
                 Resolve(OfficialMachineQuerySourceProfileId.EuropeanUnionSparql),
             _ => throw new ArgumentException(
                 "The bound machine request does not target an admitted official query channel.",
-                nameof(request)),
+                parameterName),
         };
 
-        _ = request.CopyVerifiedRequestBody();
-        var receipt = request.RenderReceipt;
         if (receipt.Method != profile.Method ||
             receipt.Charset != profile.RequestCharset ||
             !string.Equals(
@@ -441,7 +471,7 @@ public static class OfficialMachineQuerySourceProfiles
         {
             throw new ArgumentException(
                 "The bound machine request representation differs from its exact source profile.",
-                nameof(request));
+                parameterName);
         }
 
         return profile;

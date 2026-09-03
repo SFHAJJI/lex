@@ -99,9 +99,9 @@ public sealed class RepeatedEnumerationDeliveryProofTests
     [TestMethod]
     public void ComparisonExposesExactlyTheContentBoundPublicApi()
     {
-        CollectionAssert.AreEquivalent(new[] { "InterpretationProfileRef", "PartitionKey", "ThresholdAssessment", "CountA", "PagesA", "CountB", "PagesB", "ObservationTimes", "SelectedRowCountA", "SelectedRowCountB", "DeliveredRowCountA", "DeliveredRowCountB", "CanonicalRowDigestA", "CanonicalRowDigestB", "CanonicalKeyDigestA", "CanonicalKeyDigestB", "CursorDigestA", "CursorDigestB", "Outcome" }, typeof(EnumerationDeliveryComparison).GetProperties().Select(static property => property.Name).ToArray());
+        CollectionAssert.AreEquivalent(new[] { "InterpretationProfileRef", "SourceProfileRef", "RunIdentity", "PartitionKey", "ThresholdAssessment", "CountA", "PagesA", "CountB", "PagesB", "ObservationTimes", "SelectedRowCountA", "SelectedRowCountB", "DeliveredRowCountA", "DeliveredRowCountB", "CanonicalRowDigestA", "CanonicalRowDigestB", "CanonicalKeyDigestA", "CanonicalKeyDigestB", "CursorDigestA", "CursorDigestB", "Outcome" }, typeof(EnumerationDeliveryComparison).GetProperties().Select(static property => property.Name).ToArray());
         CollectionAssert.AreEquivalent(new[] { "Create", "AssessThreshold" }, typeof(EnumerationDeliveryComparison).GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.DeclaredOnly).Where(static method => !method.IsSpecialName).Select(static method => method.Name).ToArray());
-        CollectionAssert.AreEquivalent(new[] { "QueryPlanRef", "QueryInputRef", "RenderReceiptRef", "RequestEvidenceRef", "ObservationRef" }, typeof(RepeatedEnumerationEvidenceRefs).GetProperties().Select(static property => property.Name).ToArray());
+        CollectionAssert.AreEquivalent(new[] { "QueryPlanRef", "QueryInputRef", "RenderReceiptRef", "LogicalRequestRef", "HttpEvidenceRef" }, typeof(RepeatedEnumerationEvidenceRefs).GetProperties().Select(static property => property.Name).ToArray());
     }
 
     [TestMethod]
@@ -112,7 +112,12 @@ public sealed class RepeatedEnumerationDeliveryProofTests
 
         Assert.AreEqual(EnumerationDeliveryOutcome.EqualSelections, proof.Outcome);
         Assert.AreEqual(2, proof.DeliveredRowCountA);
-        Assert.AreEqual(proof.CountA.ObservationRef, fixture.FirstObservationRef);
+        Assert.AreEqual(proof.CountA.HttpEvidenceRef, fixture.FirstHttpEvidenceRef);
+        Assert.AreEqual(
+            OfficialMachineQuerySourceProfiles.Resolve(
+                OfficialMachineQuerySourceProfileId.EuropeanUnionSparql).ArtifactRef,
+            proof.SourceProfileRef);
+        Assert.AreEqual(Fixture.Artifact(930), proof.RunIdentity);
         Assert.AreEqual(4, fixture.ResolveCalls);
 
         var changed = new Fixture().Create("a|same,b|old", "a|same,b|new");
@@ -192,7 +197,7 @@ public sealed class RepeatedEnumerationDeliveryProofTests
     }
 
     [TestMethod]
-    public void FactoryRejectsLyingRequestReferenceAndChangedPayloadBackingBytes()
+    public void FactoryRejectsLyingLogicalRequestReferenceAndChangedPayloadBackingBytes()
     {
         Assert.ThrowsExactly<ArgumentException>(() => new Fixture(badRequestRef: true).Create("a,b", "a,b"));
         Assert.ThrowsExactly<ArgumentException>(() => new Fixture(mutatePayload: true).Create("a,b", "a,b"));
@@ -208,9 +213,80 @@ public sealed class RepeatedEnumerationDeliveryProofTests
     [DataRow(RefMutation.Plan)]
     [DataRow(RefMutation.Input)]
     [DataRow(RefMutation.Receipt)]
-    [DataRow(RefMutation.Observation)]
+    [DataRow(RefMutation.LogicalRequest)]
+    [DataRow(RefMutation.HttpEvidence)]
     public void FactoryRejectsEveryMismatchedRetainedReference(RefMutation mutation) =>
         Assert.ThrowsExactly<ArgumentException>(() => new Fixture(mutation: mutation).Create("a,b", "a,b"));
+
+    [TestMethod]
+    [DataRow(HttpBindingMutation.TerminalLogicalRequestDigest)]
+    [DataRow(HttpBindingMutation.TerminalRequestUri)]
+    [DataRow(HttpBindingMutation.IncompleteRoute)]
+    [DataRow(HttpBindingMutation.NonDerivableStatus200)]
+    [DataRow(HttpBindingMutation.CustodyReceiptDigest)]
+    [DataRow(HttpBindingMutation.CustodyReference)]
+    [DataRow(HttpBindingMutation.UnenforcedCustody)]
+    [DataRow(HttpBindingMutation.PayloadLength)]
+    [DataRow(HttpBindingMutation.LogicalRequestMethod)]
+    [DataRow(HttpBindingMutation.LogicalRequestBody)]
+    [DataRow(HttpBindingMutation.LogicalRequestHeaders)]
+    public void FactoryRejectsEveryBrokenHttpAndCustodyBinding(HttpBindingMutation mutation) =>
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            new Fixture(httpBindingMutation: mutation).Create("a,b", "a,b"));
+
+    [TestMethod]
+    public void LuxembourgHttpEvidenceCannotHideUnderAEuropeanPlanAndProfile() =>
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            new Fixture(
+                httpBindingMutation: HttpBindingMutation.LuxembourgEvidenceUnderEuropeanPlan)
+                .Create("a,b", "a,b"));
+
+    [TestMethod]
+    public void EveryCountAndPageMustBelongToOneExactRun() =>
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            new Fixture(httpBindingMutation: HttpBindingMutation.DifferentRun)
+                .Create("a,b", "a,b"));
+
+    [TestMethod]
+    public void ARetryOfOneRequestCannotImpersonateTwoEnumerationObservations() =>
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            new Fixture(httpBindingMutation: HttpBindingMutation.DuplicateRequestOrdinal)
+                .Create("a,b", "a,b"));
+
+    [TestMethod]
+    public void AMachineQueryCannotArriveThroughARedirectFromAnotherOrigin() =>
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            new Fixture(httpBindingMutation: HttpBindingMutation.RedirectIntoOfficialSource)
+                .Create("a,b", "a,b"));
+
+    [TestMethod]
+    public void LuxembourgEvidenceDerivesTheLuxembourgSourceProfile()
+    {
+        var proof = new Fixture(
+            dialect: RepeatedEnumerationSparqlJsonDialect.LuxembourgVirtuoso)
+            .Create("a,b", "a,b");
+
+        Assert.AreEqual(
+            OfficialMachineQuerySourceProfiles.Resolve(
+                OfficialMachineQuerySourceProfileId.LuxembourgSparql).ArtifactRef,
+            proof.SourceProfileRef);
+    }
+
+    [TestMethod]
+    public void AnInterpretationDialectCannotBeAppliedToAnotherOfficialSource() =>
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            new Fixture(
+                dialect: RepeatedEnumerationSparqlJsonDialect.LuxembourgVirtuoso,
+                sourceProfileId: OfficialMachineQuerySourceProfileId.EuropeanUnionSparql)
+                .Create("a,b", "a,b"));
+
+    [TestMethod]
+    public void BothAdmittedHttpCompletionProofsCanCarryRepeatedEnumeration()
+    {
+        Assert.AreEqual(
+            EnumerationDeliveryOutcome.EqualSelections,
+            new Fixture(chunkedCompletion: true).Create("a,b", "a,b").Outcome);
+    }
 
     [TestMethod]
     public void FactoryRejectsRendererDriftSelectionLiesAndInvalidPageChains()
@@ -442,6 +518,8 @@ public sealed class RepeatedEnumerationDeliveryProofTests
         private readonly bool _badRequestRef;
         private readonly bool _mutatePayload;
         private readonly RefMutation _mutation;
+        private readonly HttpBindingMutation _httpBindingMutation;
+        private readonly bool _chunkedCompletion;
         private readonly bool _rendererDrift;
         private readonly bool _selectionLie;
         private readonly bool _brokenContinuation;
@@ -472,16 +550,19 @@ public sealed class RepeatedEnumerationDeliveryProofTests
         private readonly string? _rawRowsA;
         private readonly string? _rawRowsB;
         private readonly RepeatedEnumerationTerminalPagePolicy _terminalPagePolicy;
+        private readonly OfficialMachineQuerySourceProfileId? _sourceProfileId;
         private List<RepeatedEnumerationPageRef>? _passToMutate;
         private readonly SourceRegistryMemberRef _countFamily = new(Artifact(905), "count-query");
         private readonly SourceRegistryMemberRef _pageFamily = new(Artifact(905), "page-query");
         public int ResolveCalls { get; private set; }
-        public SourceArtifactRef? FirstObservationRef { get; private set; }
+        public SourceArtifactRef? FirstHttpEvidenceRef { get; private set; }
 
         public Fixture(
             bool badRequestRef = false,
             bool mutatePayload = false,
             RefMutation mutation = RefMutation.None,
+            HttpBindingMutation httpBindingMutation = HttpBindingMutation.None,
+            bool chunkedCompletion = false,
             bool rendererDrift = false,
             bool selectionLie = false,
             bool brokenContinuation = false,
@@ -512,11 +593,14 @@ public sealed class RepeatedEnumerationDeliveryProofTests
             string? rawRowsA = null,
             string? rawRowsB = null,
             RepeatedEnumerationTerminalPagePolicy terminalPagePolicy =
-                RepeatedEnumerationTerminalPagePolicy.ShortPageTerminal)
+                RepeatedEnumerationTerminalPagePolicy.ShortPageTerminal,
+            OfficialMachineQuerySourceProfileId? sourceProfileId = null)
         {
             _badRequestRef = badRequestRef;
             _mutatePayload = mutatePayload;
             _mutation = mutation;
+            _httpBindingMutation = httpBindingMutation;
+            _chunkedCompletion = chunkedCompletion;
             _rendererDrift = rendererDrift;
             _selectionLie = selectionLie;
             _brokenContinuation = brokenContinuation;
@@ -547,6 +631,7 @@ public sealed class RepeatedEnumerationDeliveryProofTests
             _rawRowsA = rawRowsA;
             _rawRowsB = rawRowsB;
             _terminalPagePolicy = terminalPagePolicy;
+            _sourceProfileId = sourceProfileId;
         }
 
         public RepeatedEnumerationInterpretationProfile ProfileForTest => Profile();
@@ -554,9 +639,9 @@ public sealed class RepeatedEnumerationDeliveryProofTests
         public EnumerationDeliveryComparison Create(string rowsA, string rowsB)
         {
             var countA = Add(1, _rawCount ?? CountJson(_expectedCount), _expectedCount, Artifact(301), _reverseTimes ? DateTimeOffset.UnixEpoch.AddSeconds(5) : DateTimeOffset.UnixEpoch, true);
-            var pageA = Add(2, _rawRowsA ?? _rawRows ?? RowsJson(rowsA), _expectedCount, countA.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(1), false);
+            var pageA = Add(2, _rawRowsA ?? _rawRows ?? RowsJson(rowsA), _expectedCount, countA.HttpEvidenceRef, DateTimeOffset.UnixEpoch.AddSeconds(1), false);
             var countB = Add(3, _rawCount ?? CountJson(_expectedCount), _expectedCount, Artifact(303), DateTimeOffset.UnixEpoch.AddSeconds(2), true);
-            var pageB = Add(4, _rawRowsB ?? _rawRows ?? RowsJson(rowsB), _expectedCount, countB.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(3), false, rowLimit: _samePageLimit ? 10 : 7);
+            var pageB = Add(4, _rawRowsB ?? _rawRows ?? RowsJson(rowsB), _expectedCount, countB.HttpEvidenceRef, DateTimeOffset.UnixEpoch.AddSeconds(3), false, rowLimit: _samePageLimit ? 10 : 7);
             countA = Mutate(countA);
             var profile = Profile();
             var profileRef = RepeatedEnumerationInterpretationProfileIdentity.Create(Artifact(920).ResourceId, profile);
@@ -576,11 +661,11 @@ public sealed class RepeatedEnumerationDeliveryProofTests
             var sequence = new[] { "a", "b", "c", "d", "e", "f", "g", "h", "i", pageOneLastCursor, pageTwoCursor };
             var ten = string.Join(',', sequence.Take(10));
             var countA = Add(1, CountJson(11), 11, Artifact(301), DateTimeOffset.UnixEpoch, true);
-            var pageA1 = Add(2, RowsJson(ten), 11, countA.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(1), false);
-            var pageA2 = Add(5, RowsJson(pageTwoCursor), 11, countA.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(2), false, pageOneLastCursor);
+            var pageA1 = Add(2, RowsJson(ten), 11, countA.HttpEvidenceRef, DateTimeOffset.UnixEpoch.AddSeconds(1), false);
+            var pageA2 = Add(5, RowsJson(pageTwoCursor), 11, countA.HttpEvidenceRef, DateTimeOffset.UnixEpoch.AddSeconds(2), false, pageOneLastCursor);
             var countB = Add(3, CountJson(11), 11, Artifact(303), DateTimeOffset.UnixEpoch.AddSeconds(3), true);
-            var pageB1 = Add(4, RowsJson(string.Join(',', sequence.Take(6))), 11, countB.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(4), false, rowLimit: 6);
-            var pageB2 = Add(6, RowsJson(string.Join(',', sequence.Skip(6))), 11, countB.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(5), false, "f", 6);
+            var pageB1 = Add(4, RowsJson(string.Join(',', sequence.Take(6))), 11, countB.HttpEvidenceRef, DateTimeOffset.UnixEpoch.AddSeconds(4), false, rowLimit: 6);
+            var pageB2 = Add(6, RowsJson(string.Join(',', sequence.Skip(6))), 11, countB.HttpEvidenceRef, DateTimeOffset.UnixEpoch.AddSeconds(5), false, "f", 6);
             var profile = Profile();
             return EnumerationDeliveryComparison.Create(
                 profile, RepeatedEnumerationInterpretationProfileIdentity.Create(Artifact(920).ResourceId, profile), countA, new([new(0, pageA1), new(1, pageA2)]),
@@ -590,16 +675,16 @@ public sealed class RepeatedEnumerationDeliveryProofTests
         public EnumerationDeliveryComparison CreateShortThenEmpty(bool pageAfterEmpty = false)
         {
             var countA = Add(1, CountJson(2), 2, Artifact(301), DateTimeOffset.UnixEpoch, true);
-            var pageA1 = Add(2, RowsJson("a,b"), 2, countA.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(1), false);
-            var pageA2 = Add(5, EmptyRowsJson(), 2, countA.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(2), false, "b");
+            var pageA1 = Add(2, RowsJson("a,b"), 2, countA.HttpEvidenceRef, DateTimeOffset.UnixEpoch.AddSeconds(1), false);
+            var pageA2 = Add(5, EmptyRowsJson(), 2, countA.HttpEvidenceRef, DateTimeOffset.UnixEpoch.AddSeconds(2), false, "b");
             var countB = Add(3, CountJson(2), 2, Artifact(303), DateTimeOffset.UnixEpoch.AddSeconds(3), true);
-            var pageB1 = Add(4, RowsJson("a,b"), 2, countB.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(4), false, rowLimit: 7);
-            var pageB2 = Add(6, EmptyRowsJson(), 2, countB.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(5), false, "b", 7);
+            var pageB1 = Add(4, RowsJson("a,b"), 2, countB.HttpEvidenceRef, DateTimeOffset.UnixEpoch.AddSeconds(4), false, rowLimit: 7);
+            var pageB2 = Add(6, EmptyRowsJson(), 2, countB.HttpEvidenceRef, DateTimeOffset.UnixEpoch.AddSeconds(5), false, "b", 7);
             var pagesA = new List<RepeatedEnumerationPageRef> { new(0, pageA1), new(1, pageA2) };
             var pagesB = new List<RepeatedEnumerationPageRef> { new(0, pageB1), new(1, pageB2) };
             if (pageAfterEmpty)
             {
-                pagesA.Add(new(2, Add(7, EmptyRowsJson(), 2, countA.ObservationRef,
+                pagesA.Add(new(2, Add(7, EmptyRowsJson(), 2, countA.HttpEvidenceRef,
                     DateTimeOffset.UnixEpoch.AddSeconds(6), false, "b", passId: 1)));
             }
 
@@ -619,13 +704,13 @@ public sealed class RepeatedEnumerationDeliveryProofTests
         public EnumerationDeliveryComparison CreateShortThenNonemptyThenEmpty()
         {
             var countA = Add(1, CountJson(3), 3, Artifact(301), DateTimeOffset.UnixEpoch, true);
-            var pageA1 = Add(2, RowsJson("a,b"), 3, countA.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(1), false);
-            var pageA2 = Add(5, RowsJson("c"), 3, countA.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(2), false, "b");
-            var pageA3 = Add(7, EmptyRowsJson(), 3, countA.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(3), false, "c", passId: 1);
+            var pageA1 = Add(2, RowsJson("a,b"), 3, countA.HttpEvidenceRef, DateTimeOffset.UnixEpoch.AddSeconds(1), false);
+            var pageA2 = Add(5, RowsJson("c"), 3, countA.HttpEvidenceRef, DateTimeOffset.UnixEpoch.AddSeconds(2), false, "b");
+            var pageA3 = Add(7, EmptyRowsJson(), 3, countA.HttpEvidenceRef, DateTimeOffset.UnixEpoch.AddSeconds(3), false, "c", passId: 1);
             var countB = Add(3, CountJson(3), 3, Artifact(303), DateTimeOffset.UnixEpoch.AddSeconds(4), true);
-            var pageB1 = Add(4, RowsJson("a,b"), 3, countB.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(5), false, rowLimit: 7);
-            var pageB2 = Add(6, RowsJson("c"), 3, countB.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(6), false, "b", 7);
-            var pageB3 = Add(8, EmptyRowsJson(), 3, countB.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(7), false, "c", 7, passId: 2);
+            var pageB1 = Add(4, RowsJson("a,b"), 3, countB.HttpEvidenceRef, DateTimeOffset.UnixEpoch.AddSeconds(5), false, rowLimit: 7);
+            var pageB2 = Add(6, RowsJson("c"), 3, countB.HttpEvidenceRef, DateTimeOffset.UnixEpoch.AddSeconds(6), false, "b", 7);
+            var pageB3 = Add(8, EmptyRowsJson(), 3, countB.HttpEvidenceRef, DateTimeOffset.UnixEpoch.AddSeconds(7), false, "c", 7, passId: 2);
             var profile = Profile();
             return EnumerationDeliveryComparison.Create(
                 profile,
@@ -642,12 +727,12 @@ public sealed class RepeatedEnumerationDeliveryProofTests
         public EnumerationDeliveryComparison CreateFullThenEmptyAgainstFullShortEmpty()
         {
             var countA = Add(11, CountJson(10), 10, Artifact(311), DateTimeOffset.UnixEpoch, true, passId: 1);
-            var pageA1 = Add(12, RowsJson("a,b,c,d,e,f,g,h,i,j"), 10, countA.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(1), false, passId: 1);
-            var pageA2 = Add(13, EmptyRowsJson(), 10, countA.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(2), false, "j", passId: 1);
+            var pageA1 = Add(12, RowsJson("a,b,c,d,e,f,g,h,i,j"), 10, countA.HttpEvidenceRef, DateTimeOffset.UnixEpoch.AddSeconds(1), false, passId: 1);
+            var pageA2 = Add(13, EmptyRowsJson(), 10, countA.HttpEvidenceRef, DateTimeOffset.UnixEpoch.AddSeconds(2), false, "j", passId: 1);
             var countB = Add(14, CountJson(10), 10, Artifact(314), DateTimeOffset.UnixEpoch.AddSeconds(3), true, passId: 2);
-            var pageB1 = Add(15, RowsJson("a,b,c,d,e,f,g"), 10, countB.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(4), false, rowLimit: 7, passId: 2);
-            var pageB2 = Add(16, RowsJson("h,i,j"), 10, countB.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(5), false, "g", 7, passId: 2);
-            var pageB3 = Add(17, EmptyRowsJson(), 10, countB.ObservationRef, DateTimeOffset.UnixEpoch.AddSeconds(6), false, "j", 7, passId: 2);
+            var pageB1 = Add(15, RowsJson("a,b,c,d,e,f,g"), 10, countB.HttpEvidenceRef, DateTimeOffset.UnixEpoch.AddSeconds(4), false, rowLimit: 7, passId: 2);
+            var pageB2 = Add(16, RowsJson("h,i,j"), 10, countB.HttpEvidenceRef, DateTimeOffset.UnixEpoch.AddSeconds(5), false, "g", 7, passId: 2);
+            var pageB3 = Add(17, EmptyRowsJson(), 10, countB.HttpEvidenceRef, DateTimeOffset.UnixEpoch.AddSeconds(6), false, "j", 7, passId: 2);
             var profile = Profile();
             return EnumerationDeliveryComparison.Create(
                 profile,
@@ -668,12 +753,18 @@ public sealed class RepeatedEnumerationDeliveryProofTests
             {
                 _passToMutate!.Clear();
             }
-            var value = _resolved[references.ObservationRef];
+            var value = _resolved[references.HttpEvidenceRef];
             if (_mutatePayload && ResolveCalls == 1)
             {
-                _payloads[references.ObservationRef][0] = (byte)'9';
+                _payloads[references.HttpEvidenceRef][0] = (byte)'9';
             }
-            return value;
+
+            return _httpBindingMutation == HttpBindingMutation.PayloadLength && ResolveCalls == 1
+                ? value with
+                {
+                    RetainedPayloadBytes = value.RetainedPayloadBytes[..^1],
+                }
+                : value;
         }
 
         private RepeatedEnumerationEvidenceRefs Add(int seed, string text, long count, SourceArtifactRef countRef, DateTimeOffset time, bool countQuery, string cursor = "start", long rowLimit = 10, long? passId = null)
@@ -714,40 +805,222 @@ public sealed class RepeatedEnumerationDeliveryProofTests
                 ? "other-laws"
                 : _partitionKey;
             var input = MachineQueryInputArtifact.Create(Artifact(seed + 100).ResourceId, family, partitionMemberKey, cardinality, parameters);
-            var target = Encoding.ASCII.GetBytes("/feed");
-            var plan = new MachineQueryPlan(MachineQueryPlan.SchemaId, input.QueryFamilyRef, Artifact(907), Artifact(908), HttpRequestMethod.Get, "https://publisher.example/feed", target.Length, Sha(target), cardinality, null, null, MachineQueryInputMode.RendererInputs, input.ArtifactRef, input.PartitionBinding, null, null);
+            var sourceProfile = SourceProfile();
+            var requestTarget = sourceProfile.RequestTarget;
+            var target = Encoding.ASCII.GetBytes(new Uri(requestTarget).PathAndQuery);
+            var requestBody = Encoding.UTF8.GetBytes("ASK{}");
+            var contentType = new SourceRegistryMemberRef(Artifact(907), sourceProfile.RequestContentType);
+            var plan = new MachineQueryPlan(MachineQueryPlan.SchemaId, input.QueryFamilyRef, Artifact(907), Artifact(908), HttpRequestMethod.Post, requestTarget, target.Length, Sha(target), cardinality, contentType, MachineQueryCharset.Utf8, MachineQueryInputMode.RendererInputs, input.ArtifactRef, input.PartitionBinding, requestBody.LongLength, Sha(requestBody));
             var planRef = MachineQueryPlanIdentity.Create(Artifact(seed + 110).ResourceId, plan);
-            var renderer = new Renderer(plan.RendererProfileRef, plan.RendererSourceRef);
+            var renderer = new Renderer(plan.RendererProfileRef, plan.RendererSourceRef, requestTarget, requestBody);
             var receipt = MachineQueryBinder.BindForSend(plan, planRef, input, renderer).RenderReceipt;
             if (_rendererDrift && seed == 1)
             {
                 renderer.Drift = true;
             }
             var receiptRef = MachineQueryRenderReceiptIdentity.Create(Artifact(seed + 120).ResourceId, receipt);
-            var execution = Artifact(seed + 130);
-            var request = HttpRequestEvidence.CreateAtSend(new HttpRequestTemplate("https://publisher.example/feed", HttpRequestMethod.Get, execution, Artifact(909), Artifact(910), Artifact(911), new(OutboundCrawlerIdentity.Schema, OutboundCrawlerIdentity.Token), new("https", "publisher.example", 443), receipt), time);
             var observationId = Artifact(seed + 140).ResourceId;
             var digest = Sha(bytes);
             var blob = new DurableBlobRef(CustodySchemaIds.DurableBlobRef, digest, bytes.Length, CustodyClass.NightlyFloor90d);
             var policy = new CustodyPolicyEvidence(CustodySchemaIds.CustodyPolicyEvidence, blob, CustodyVerificationProfile.ImmutableObject1, Guid.NewGuid(), CustodyProtection.LockedTime, time, time.AddDays(91));
             var write = new DurableBlobWriteReceipt(CustodySchemaIds.DurableBlobWriteReceipt, blob, policy);
-            var absent = new AbsentHttpHeader();
-            var metadata = new HttpResponseMetadata(new SingleHttpHeader(_mediaType), absent, new SingleHttpHeader(bytes.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)), absent, absent, absent, absent, absent, absent, absent, absent, absent, absent);
-            var completion = new DeclaredContentLengthCompleteEvidence(TransferCompletionSchemaIds.TransferCompletionEvidence, request.AdapterIdentity, observationId, digest, bytes.Length);
-            var statusDisposition = HttpStatusClassifier.Classify(_statusCode, metadata);
-            var observation = new ResponseCompleteBodyObservation(HttpObservationSchemaIds.HttpObservation, observationId, request, "https://publisher.example/feed", _statusCode, statusDisposition, metadata, completion, write);
-            var observationRef = HttpObservationIdentity.Create(observation);
-            var requestEvidence = MachineRequestEvidence.FromReceipt(planRef, receiptRef, receipt, observationRef);
-            var requestRef = _badRequestRef && seed == 1 ? Artifact(999) : MachineRequestEvidenceIdentity.Create(Artifact(seed + 150).ResourceId, requestEvidence);
-            var refs = new RepeatedEnumerationEvidenceRefs(planRef, input.ArtifactRef, receiptRef, requestRef, observationRef);
-            FirstObservationRef ??= observationRef;
-            _resolved.Add(observationRef, new(plan, input, receipt, renderer, requestEvidence, observation, bytes));
-            _payloads.Add(observationRef, bytes);
+            if (_httpBindingMutation == HttpBindingMutation.CustodyReference && seed == 1)
+            {
+                var legalHoldBlob = new DurableBlobRef(
+                    CustodySchemaIds.DurableBlobRef,
+                    digest,
+                    bytes.Length,
+                    CustodyClass.LegalHoldEvidence);
+                write = new DurableBlobWriteReceipt(
+                    CustodySchemaIds.DurableBlobWriteReceipt,
+                    legalHoldBlob,
+                    new CustodyPolicyEvidence(
+                        CustodySchemaIds.CustodyPolicyEvidence,
+                        legalHoldBlob,
+                        CustodyVerificationProfile.ImmutableObject1,
+                        Guid.NewGuid(),
+                        CustodyProtection.ActiveLegalHold,
+                        time,
+                        null));
+            }
+            else if (_httpBindingMutation == HttpBindingMutation.UnenforcedCustody && seed == 1)
+            {
+                write = new DurableBlobWriteReceipt(
+                    CustodySchemaIds.DurableBlobWriteReceipt,
+                    blob,
+                    new CustodyPolicyEvidence(
+                        CustodySchemaIds.CustodyPolicyEvidence,
+                        blob,
+                        CustodyVerificationProfile.FileSystemUnenforced1,
+                        null,
+                        CustodyProtection.NotEnforced,
+                        time,
+                        null));
+            }
+
+            var logicalSourceProfile = _httpBindingMutation == HttpBindingMutation.LuxembourgEvidenceUnderEuropeanPlan && seed == 1
+                ? OfficialMachineQuerySourceProfiles.Resolve(OfficialMachineQuerySourceProfileId.LuxembourgSparql)
+                : sourceProfile;
+            var logicalRequestBody = _httpBindingMutation == HttpBindingMutation.LogicalRequestMethod && seed == 1
+                ? Array.Empty<byte>()
+                : _httpBindingMutation == HttpBindingMutation.LogicalRequestBody && seed == 1
+                    ? Encoding.UTF8.GetBytes("ASK{?s ?p ?o}")
+                    : requestBody;
+            var logicalMethod = _httpBindingMutation == HttpBindingMutation.LogicalRequestMethod && seed == 1
+                ? HttpRequestMethod.Get
+                : HttpRequestMethod.Post;
+            var logicalHeaders = logicalMethod == HttpRequestMethod.Get
+                ? new[] { new HttpLogicalRequestHeader("user-agent", logicalSourceProfile.CrawlerUserAgent) }
+                : new[]
+                {
+                    new HttpLogicalRequestHeader("user-agent", logicalSourceProfile.CrawlerUserAgent),
+                    new HttpLogicalRequestHeader(
+                        "accept",
+                        _httpBindingMutation == HttpBindingMutation.LogicalRequestHeaders && seed == 1
+                            ? "application/json"
+                            : logicalSourceProfile.Accept),
+                    new HttpLogicalRequestHeader(
+                        "content-type",
+                        $"{logicalSourceProfile.RequestContentType}; charset=utf-8"),
+                };
+            var logicalRequest = HttpLogicalRequest.Create(
+                logicalSourceProfile.RequestTarget,
+                logicalMethod,
+                logicalHeaders,
+                new HttpLogicalRequestBody(
+                    checked((ulong)logicalRequestBody.LongLength),
+                    Sha(logicalRequestBody)),
+                Artifact(909).Sha256,
+                Artifact(910).Sha256);
+            var logicalRequestRef = Reference(seed + 150, logicalRequest.CopyCanonicalBytes());
+            var absent = new RoutedHttpAbsentHeader();
+            var headers = new RoutedHttpResponseHeaders(
+                new RoutedHttpSingleHeader(_mediaType),
+                _chunkedCompletion ? absent : new RoutedHttpSingleHeader(bytes.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                absent,
+                _chunkedCompletion ? new RoutedHttpSingleHeader("chunked") : absent,
+                _httpBindingMutation == HttpBindingMutation.NonDerivableStatus200 && seed == 1
+                    ? new RoutedHttpSingleHeader(
+                        $"bytes 0-{(bytes.Length - 1).ToString(System.Globalization.CultureInfo.InvariantCulture)}/{bytes.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)}")
+                    : absent,
+                absent,
+                absent,
+                absent,
+                absent,
+                absent,
+                absent,
+                absent,
+                absent);
+            RoutedHttpCompletion completion = _chunkedCompletion
+                ? new PinnedHandlerChunkedEofHttpCompletion(Artifact(911).Sha256)
+                : new DeclaredContentLengthHttpCompletion((ulong)bytes.Length);
+            var writeReceiptDigest = Sha(Encoding.UTF8.GetBytes(ContractJson.Serialize(write)));
+            if (_httpBindingMutation == HttpBindingMutation.CustodyReceiptDigest && seed == 1)
+            {
+                writeReceiptDigest = Artifact(999).Sha256;
+            }
+
+            var redirectObservationId = Artifact(seed + 170).ResourceId;
+            var redirectIntoOfficial =
+                _httpBindingMutation == HttpBindingMutation.RedirectIntoOfficialSource && seed == 1;
+            var hop = RoutedHttpHop.Create(
+                redirectIntoOfficial ? 1UL : 0UL,
+                observationId,
+                redirectIntoOfficial ? redirectObservationId : null,
+                _httpBindingMutation == HttpBindingMutation.TerminalLogicalRequestDigest && seed == 1
+                    ? Artifact(999).Sha256
+                    : logicalRequestRef.Sha256,
+                _httpBindingMutation == HttpBindingMutation.TerminalRequestUri && seed == 1
+                    ? "https://foreign.example/other"
+                    : logicalRequest.Uri,
+                _statusCode,
+                headers,
+                Timestamp(time),
+                Timestamp(time.AddMilliseconds(1)),
+                completion,
+                (ulong)bytes.Length,
+                digest,
+                writeReceiptDigest,
+                (ulong)bytes.Length,
+                digest);
+            var hops = new List<RoutedHttpHop>();
+            if (redirectIntoOfficial)
+            {
+                var redirectHeaders = new RoutedHttpResponseHeaders(
+                    absent,
+                    new RoutedHttpSingleHeader("0"),
+                    absent,
+                    absent,
+                    absent,
+                    absent,
+                    absent,
+                    new RoutedHttpSingleHeader(logicalRequest.Uri),
+                    absent,
+                    absent,
+                    absent,
+                    absent,
+                    absent);
+                hops.Add(RoutedHttpHop.Create(
+                    0,
+                    redirectObservationId,
+                    null,
+                    Artifact(912).Sha256,
+                    "https://foreign.example/start",
+                    301,
+                    redirectHeaders,
+                    Timestamp(time.AddMilliseconds(-2)),
+                    Timestamp(time.AddMilliseconds(-1)),
+                    new DeclaredContentLengthHttpCompletion(0),
+                    0,
+                    Sha([]),
+                    Artifact(913).Sha256,
+                    0,
+                    Sha([])));
+            }
+
+            hops.Add(hop);
+            var routeOutcome = _httpBindingMutation == HttpBindingMutation.IncompleteRoute && seed == 1
+                ? new IncompleteHttpRouteOutcome(HttpRouteIncompleteReason.SourceProfileStale)
+                : (RoutedHttpRouteOutcome)new CompleteHttpRouteOutcome();
+            var httpEvidence = RoutedHttpEvidence.Create(
+                _httpBindingMutation == HttpBindingMutation.DifferentRun && seed == 2
+                    ? Artifact(931)
+                    : Artifact(930),
+                _httpBindingMutation == HttpBindingMutation.DuplicateRequestOrdinal && seed == 2
+                    ? 1UL
+                    : (ulong)seed,
+                0,
+                hops,
+                routeOutcome);
+            var httpEvidenceRef = Reference(seed + 160, httpEvidence.CopyCanonicalBytes());
+            if (_badRequestRef && seed == 1)
+            {
+                logicalRequestRef = Artifact(999);
+            }
+
+            var refs = new RepeatedEnumerationEvidenceRefs(
+                planRef,
+                input.ArtifactRef,
+                receiptRef,
+                logicalRequestRef,
+                httpEvidenceRef);
+            FirstHttpEvidenceRef ??= httpEvidenceRef;
+            _resolved.Add(
+                httpEvidenceRef,
+                new(plan, input, receipt, renderer, logicalRequest, httpEvidence, write, bytes));
+            _payloads.Add(httpEvidenceRef, bytes);
             return refs;
         }
 
         private RepeatedEnumerationInterpretationProfile Profile() => new(
             RepeatedEnumerationInterpretationProfile.SchemaId, _dialect, "application/sparql-results+json", EnumerationCursorEnvelope.Identity, _maximumDeliverableRows, "enumeration-row-threshold/1", _countFamily, _pageFamily, "count", ["id", "cursor", "value"], ["id"], ["cursor"], ["scope"], "pass_id", ["cursor"], "has_cursor", _terminalPagePolicy);
+
+        private OfficialMachineQuerySourceProfile SourceProfile() =>
+            OfficialMachineQuerySourceProfiles.Resolve(
+                _sourceProfileId ??
+                (_dialect == RepeatedEnumerationSparqlJsonDialect.LuxembourgVirtuoso
+                    ? OfficialMachineQuerySourceProfileId.LuxembourgSparql
+                    : OfficialMachineQuerySourceProfileId.EuropeanUnionSparql));
 
         private string CountJson(long count) { var type = _dialect == RepeatedEnumerationSparqlJsonDialect.LuxembourgVirtuoso ? "typed-literal" : "literal"; return $"{{\"head\":{{\"link\":[],\"vars\":[\"count\"]}},\"results\":{{\"distinct\":false,\"ordered\":true,\"bindings\":[{{\"count\":{{\"type\":\"{type}\",\"datatype\":\"http://www.w3.org/2001/XMLSchema#integer\",\"value\":\"{count}\"}}}}]}}}}"; }
         public string OfficialCountJson(long count) => CountJson(count);
@@ -761,28 +1034,35 @@ public sealed class RepeatedEnumerationDeliveryProofTests
                 RefMutation.Plan => value with { QueryPlanRef = bad },
                 RefMutation.Input => value with { QueryInputRef = bad },
                 RefMutation.Receipt => value with { RenderReceiptRef = bad },
-                RefMutation.Observation => MutateObservation(value, bad),
+                RefMutation.LogicalRequest => value with { LogicalRequestRef = bad },
+                RefMutation.HttpEvidence => MutateHttpEvidence(value, bad),
                 _ => value,
             };
         }
 
-        private RepeatedEnumerationEvidenceRefs MutateObservation(RepeatedEnumerationEvidenceRefs value, SourceArtifactRef bad)
+        private RepeatedEnumerationEvidenceRefs MutateHttpEvidence(RepeatedEnumerationEvidenceRefs value, SourceArtifactRef bad)
         {
-            _resolved.Add(bad, _resolved[value.ObservationRef]);
-            _payloads.Add(bad, _payloads[value.ObservationRef]);
-            return value with { ObservationRef = bad };
+            _resolved.Add(bad, _resolved[value.HttpEvidenceRef]);
+            _payloads.Add(bad, _payloads[value.HttpEvidenceRef]);
+            return value with { HttpEvidenceRef = bad };
         }
 
         internal static SourceArtifactRef Artifact(int seed) => new($"urn:uuid:00000000-0000-4000-8000-{seed:D12}", seed.ToString("x64"));
+        private static SourceArtifactRef Reference(int seed, ReadOnlySpan<byte> bytes) =>
+            new(Artifact(seed).ResourceId, Sha(bytes));
+        private static string Timestamp(DateTimeOffset value) =>
+            value.ToString("yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'", System.Globalization.CultureInfo.InvariantCulture);
         private static string Sha(ReadOnlySpan<byte> value) => Convert.ToHexString(SHA256.HashData(value)).ToLowerInvariant();
-        private sealed class Renderer(SourceArtifactRef rendererProfileRef, SourceArtifactRef rendererSourceRef) : IMachineQueryRenderer
+        private sealed class Renderer(SourceArtifactRef rendererProfileRef, SourceArtifactRef rendererSourceRef, string requestTarget, byte[] requestBody) : IMachineQueryRenderer
         {
+            private readonly byte[] _requestBody = requestBody.ToArray();
             public SourceArtifactRef RendererProfileRef { get; } = rendererProfileRef;
             public SourceArtifactRef RendererSourceRef { get; } = rendererSourceRef;
             public bool Drift { get; set; }
-            public MachineQueryRenderOutput Render(MachineQueryPlan plan, MachineQueryInputArtifact orderedParameterSet) => new(Drift ? "https://publisher.example/changed" : "https://publisher.example/feed", []);
+            public MachineQueryRenderOutput Render(MachineQueryPlan plan, MachineQueryInputArtifact orderedParameterSet) => new(Drift ? "https://publisher.example/changed" : requestTarget, _requestBody);
         }
     }
 
-    public enum RefMutation { None, Plan, Input, Receipt, Observation }
+    public enum RefMutation { None, Plan, Input, Receipt, LogicalRequest, HttpEvidence }
+    public enum HttpBindingMutation { None, TerminalLogicalRequestDigest, TerminalRequestUri, IncompleteRoute, NonDerivableStatus200, CustodyReceiptDigest, CustodyReference, UnenforcedCustody, PayloadLength, LuxembourgEvidenceUnderEuropeanPlan, LogicalRequestMethod, LogicalRequestBody, LogicalRequestHeaders, DifferentRun, DuplicateRequestOrdinal, RedirectIntoOfficialSource }
 }

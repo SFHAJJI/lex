@@ -16,6 +16,8 @@ public enum HttpCompletionUnprovenReason
 {
     MissingCompletionProof = 1,
     TransferCodingConflict = 2,
+    InvalidContentLength = 3,
+    UnsupportedTransferCoding = 4,
 }
 
 public enum HttpPreHeaderFailureClass
@@ -24,15 +26,22 @@ public enum HttpPreHeaderFailureClass
     TransportBeforeHeaders = 2,
 }
 
+public enum HttpResponseSemanticsReason
+{
+    RevalidationRequestNotAdmitted = 1,
+    StatusContentForbidden = 2,
+    StatusFramingConflict = 3,
+}
+
 public static class HttpAcquisitionReasonRegistry
 {
     public const string Schema = "http_acquisition_reason_registry/1";
     public const string ResourceId = "urn:uuid:f9eb3136-c855-44f5-b84f-6c28353b592d";
     public const string Sha256 =
-        "7648f04492573e9a748a167d27c42841da0cfba1a8735070d2b322c39a242197";
+        "803ed00fc952d30e66984c21e045dc79dd39c2d555f81df159b7045e32dbbc89";
 
     private const string CanonicalArtifact =
-        "{\"schema\":\"http_acquisition_reason_registry/1\",\"registry_id\":\"urn:uuid:f9eb3136-c855-44f5-b84f-6c28353b592d\",\"members\":[{\"member_key\":\"body_deadline\",\"stage\":\"entity_transfer\"},{\"member_key\":\"body_read_failure\",\"stage\":\"entity_transfer\"},{\"member_key\":\"byte_bound_prevented_completion\",\"stage\":\"entity_transfer\"},{\"member_key\":\"caller_cancelled_after_headers\",\"stage\":\"entity_transfer\"},{\"member_key\":\"declared_length_short_read\",\"stage\":\"entity_transfer\"},{\"member_key\":\"header_deadline\",\"stage\":\"before_response_headers\"},{\"member_key\":\"missing_completion_proof\",\"stage\":\"completion_unproven\"},{\"member_key\":\"transfer_coding_conflict\",\"stage\":\"completion_unproven\"},{\"member_key\":\"transport_before_headers\",\"stage\":\"before_response_headers\"}]}\n";
+        "{\"schema\":\"http_acquisition_reason_registry/1\",\"registry_id\":\"urn:uuid:f9eb3136-c855-44f5-b84f-6c28353b592d\",\"members\":[{\"member_key\":\"body_deadline\",\"stage\":\"entity_transfer\"},{\"member_key\":\"body_read_failure\",\"stage\":\"entity_transfer\"},{\"member_key\":\"byte_bound_prevented_completion\",\"stage\":\"entity_transfer\"},{\"member_key\":\"caller_cancelled_after_headers\",\"stage\":\"entity_transfer\"},{\"member_key\":\"declared_length_short_read\",\"stage\":\"entity_transfer\"},{\"member_key\":\"header_deadline\",\"stage\":\"before_response_headers\"},{\"member_key\":\"invalid_content_length\",\"stage\":\"completion_unproven\"},{\"member_key\":\"missing_completion_proof\",\"stage\":\"completion_unproven\"},{\"member_key\":\"revalidation_request_not_admitted\",\"stage\":\"response_semantics\"},{\"member_key\":\"status_content_forbidden\",\"stage\":\"response_semantics\"},{\"member_key\":\"status_framing_conflict\",\"stage\":\"response_semantics\"},{\"member_key\":\"transfer_coding_conflict\",\"stage\":\"completion_unproven\"},{\"member_key\":\"transport_before_headers\",\"stage\":\"before_response_headers\"},{\"member_key\":\"unsupported_transfer_coding\",\"stage\":\"completion_unproven\"}]}\n";
 
     private static readonly byte[] CanonicalArtifactBytes = Encoding.UTF8.GetBytes(CanonicalArtifact);
 
@@ -58,6 +67,8 @@ public static class HttpAcquisitionReasonRegistry
         {
             HttpCompletionUnprovenReason.MissingCompletionProof => "missing_completion_proof",
             HttpCompletionUnprovenReason.TransferCodingConflict => "transfer_coding_conflict",
+            HttpCompletionUnprovenReason.InvalidContentLength => "invalid_content_length",
+            HttpCompletionUnprovenReason.UnsupportedTransferCoding => "unsupported_transfer_coding",
             _ => throw new ArgumentOutOfRangeException(nameof(reason)),
         });
 
@@ -68,6 +79,17 @@ public static class HttpAcquisitionReasonRegistry
             HttpPreHeaderFailureClass.HeaderDeadline => "header_deadline",
             HttpPreHeaderFailureClass.TransportBeforeHeaders => "transport_before_headers",
             _ => throw new ArgumentOutOfRangeException(nameof(failureClass)),
+        });
+
+    public static SourceRegistryMemberRef Member(HttpResponseSemanticsReason reason) => new(
+        RegistryRef,
+        SourceCoreValidation.RequireDefined(reason, nameof(reason)) switch
+        {
+            HttpResponseSemanticsReason.RevalidationRequestNotAdmitted =>
+                "revalidation_request_not_admitted",
+            HttpResponseSemanticsReason.StatusContentForbidden => "status_content_forbidden",
+            HttpResponseSemanticsReason.StatusFramingConflict => "status_framing_conflict",
+            _ => throw new ArgumentOutOfRangeException(nameof(reason)),
         });
 
     public static HttpPartialBodyReason RequirePartial(SourceRegistryMemberRef member)
@@ -96,6 +118,10 @@ public static class HttpAcquisitionReasonRegistry
                 HttpCompletionUnprovenReason.MissingCompletionProof,
             "transfer_coding_conflict" =>
                 HttpCompletionUnprovenReason.TransferCodingConflict,
+            "invalid_content_length" =>
+                HttpCompletionUnprovenReason.InvalidContentLength,
+            "unsupported_transfer_coding" =>
+                HttpCompletionUnprovenReason.UnsupportedTransferCoding,
             _ => throw new ArgumentException(
                 "The acquisition reason is not a completion-unproven member.",
                 nameof(member)),
@@ -111,6 +137,22 @@ public static class HttpAcquisitionReasonRegistry
             "transport_before_headers" => HttpPreHeaderFailureClass.TransportBeforeHeaders,
             _ => throw new ArgumentException(
                 "The acquisition reason is not a before-response-headers member.",
+                nameof(member)),
+        };
+    }
+
+    public static HttpResponseSemanticsReason RequireResponseSemantics(
+        SourceRegistryMemberRef member)
+    {
+        RequireRegistry(member);
+        return member.MemberKey switch
+        {
+            "revalidation_request_not_admitted" =>
+                HttpResponseSemanticsReason.RevalidationRequestNotAdmitted,
+            "status_content_forbidden" => HttpResponseSemanticsReason.StatusContentForbidden,
+            "status_framing_conflict" => HttpResponseSemanticsReason.StatusFramingConflict,
+            _ => throw new ArgumentException(
+                "The acquisition reason is not a response-semantics member.",
                 nameof(member)),
         };
     }

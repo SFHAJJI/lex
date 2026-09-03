@@ -16,7 +16,7 @@ public sealed class SourceSchemaTests
     private static readonly string CanonicalKeyDigest = Sha256("cellar:work:example");
 
     [TestMethod]
-    public void ExporterPublishesExactlySixDeterministicDraft202012Schemas()
+    public void ExporterPublishesExactlyFiveDeterministicDraft202012Schemas()
     {
         CollectionAssert.AreEqual(
             new[]
@@ -26,7 +26,6 @@ public sealed class SourceSchemaTests
                 SourceCoreSchemaIds.SourceProfileTopology,
                 SourceCoreSchemaIds.MachineQueryPlan,
                 SourceCoreSchemaIds.MachineQueryRenderReceipt,
-                SourceCoreSchemaIds.MachineRequestEvidence,
             },
             SourceCoreSchemaExporter.AllSchemaIds.ToArray());
 
@@ -56,7 +55,6 @@ public sealed class SourceSchemaTests
         Assert.AreEqual("source-profile-topology.schema.json", SourceCoreSchemaExporter.FileNameFor(SourceCoreSchemaIds.SourceProfileTopology));
         Assert.AreEqual("machine-query-plan.schema.json", SourceCoreSchemaExporter.FileNameFor(SourceCoreSchemaIds.MachineQueryPlan));
         Assert.AreEqual("machine-query-render-receipt.schema.json", SourceCoreSchemaExporter.FileNameFor(SourceCoreSchemaIds.MachineQueryRenderReceipt));
-        Assert.AreEqual("machine-request-evidence.schema.json", SourceCoreSchemaExporter.FileNameFor(SourceCoreSchemaIds.MachineRequestEvidence));
         Assert.ThrowsExactly<ArgumentException>(() => SourceCoreSchemaExporter.FileNameFor("unknown/1"));
         Assert.ThrowsExactly<ArgumentException>(() => SourceCoreSchemaExporter.ExportUtf8("unknown/1"));
     }
@@ -90,20 +88,11 @@ public sealed class SourceSchemaTests
             "urn:uuid:55555555-5555-4555-8555-555555555555",
             plan);
         var receipt = CreateRenderReceipt(plan, planRef);
-        var receiptRef = MachineQueryRenderReceiptIdentity.Create(
-            "urn:uuid:66666666-6666-4666-8666-666666666666",
-            receipt);
-        var evidence = MachineRequestEvidence.FromReceipt(
-            planRef,
-            receiptRef,
-            receipt,
-            Artifact("77777777-7777-4777-8777-777777777777"));
 
         Assert.IsTrue(Evaluate(SourceCoreSchemaIds.SourceObjectRef, objectRef, registry).IsValid);
         Assert.IsTrue(Evaluate(SourceCoreSchemaIds.SourceProfileTopology, topology, registry).IsValid);
         Assert.IsTrue(Evaluate(SourceCoreSchemaIds.MachineQueryPlan, plan, registry).IsValid);
         Assert.IsTrue(Evaluate(SourceCoreSchemaIds.MachineQueryRenderReceipt, receipt, registry).IsValid);
-        Assert.IsTrue(Evaluate(SourceCoreSchemaIds.MachineRequestEvidence, evidence, registry).IsValid);
     }
 
     [TestMethod]

@@ -9,7 +9,7 @@ namespace Lex.V3.Contracts.Facts;
 /// Candidate rounds three through seven carried a <c>SourceObservationReference</c> holding an
 /// identity and an <c>observed_at</c>. The accepted ruling is that Facts carry exactly
 /// <c>source_observation_id</c>, and the timestamp was a second projection of a record this
-/// package does not own: <c>http_observation/1</c> holds the authoritative instant, so a Fact
+/// package does not own: <c>lex-license-http-evidence/4</c> holds the authoritative instant, so a Fact
 /// repeating it can contradict it, and nothing here could detect the contradiction. Removing the
 /// byte reference and keeping the timestamp closed half the hole and left the half that can
 /// disagree with the publisher record.

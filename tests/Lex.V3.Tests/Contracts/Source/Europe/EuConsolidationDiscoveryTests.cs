@@ -171,7 +171,8 @@ public sealed class EuConsolidationDiscoveryTests
             bound.InputArtifact.OrderedParameters[0].Kind);
         Assert.AreEqual(BaseCelex, bound.InputArtifact.OrderedParameters[0].TextValue);
 
-        var query = System.Text.Encoding.UTF8.GetString(bound.Request.CopyVerifiedRequestBody());
+        var query = System.Text.Encoding.UTF8.GetString(
+            MachineQueryBinder.OpenForSend(bound.Request).CopyRequestBody());
         StringAssert.Contains(query,
             "\"32016R0679\"^^<http://www.w3.org/2001/XMLSchema#string>");
         Assert.IsFalse(query.Contains(
@@ -250,7 +251,7 @@ public sealed class EuConsolidationDiscoveryTests
                     "urn:uuid:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
                     Artifact('c'));
                 var query = System.Text.Encoding.UTF8.GetString(
-                    bound.Request.CopyVerifiedRequestBody());
+                    MachineQueryBinder.OpenForSend(bound.Request).CopyRequestBody());
 
                 Assert.IsFalse(query.Contains(":uint}", StringComparison.Ordinal),
                     $"{set} left an integer renderer slot");
@@ -284,7 +285,7 @@ public sealed class EuConsolidationDiscoveryTests
             Artifact('c'));
 
         var query = System.Text.Encoding.UTF8.GetString(
-            bound.Request.CopyVerifiedRequestBody());
+            MachineQueryBinder.OpenForSend(bound.Request).CopyRequestBody());
         StringAssert.Contains(query,
             "tab\\tline\\nreturn\\rback\\bform\\fdel\\u007Fquote\\\"slash\\\\");
         Assert.IsFalse(query.Contains(hostile, StringComparison.Ordinal));
@@ -636,6 +637,7 @@ public sealed class EuConsolidationDiscoveryTests
             EuConsolidationDiscoveryPlan.Create();
         private readonly SourceArtifactRef _rendererSourceRef = Artifact(700);
         private int _seed = 100;
+        private ulong _requestOrdinal;
 
         internal TemporalDeliveryFixture(
             TemporalDeliveryMutation mutation = TemporalDeliveryMutation.None)
@@ -678,7 +680,7 @@ public sealed class EuConsolidationDiscoveryTests
 
         public RepeatedEnumerationResolvedEvidence Resolve(
             RepeatedEnumerationEvidenceRefs references) =>
-            _evidence.TryGetValue(references.ObservationRef, out var value)
+            _evidence.TryGetValue(references.HttpEvidenceRef, out var value)
                 ? value
                 : throw new ArgumentException("The retained S9 evidence is missing.",
                     nameof(references));
@@ -705,7 +707,7 @@ public sealed class EuConsolidationDiscoveryTests
                 pass,
                 null,
                 count,
-                countRefs.ObservationRef,
+                countRefs.HttpEvidenceRef,
                 Artifact(++_seed).ResourceId,
                 Artifact(++_seed).ResourceId,
                 _rendererSourceRef);
@@ -725,7 +727,7 @@ public sealed class EuConsolidationDiscoveryTests
                 pass,
                 cursor,
                 count,
-                countRefs.ObservationRef,
+                countRefs.HttpEvidenceRef,
                 Artifact(++_seed).ResourceId,
                 Artifact(++_seed).ResourceId,
                 _rendererSourceRef);
@@ -746,24 +748,34 @@ public sealed class EuConsolidationDiscoveryTests
             bool isPage)
         {
             var bytes = Encoding.UTF8.GetBytes(payload);
-            var receipt = bound.Request.RenderReceipt;
+            var opened = MachineQueryBinder.OpenForSend(bound.Request);
+            var receipt = opened.RenderReceipt;
             var receiptRef = MachineQueryRenderReceiptIdentity.Create(
                 Artifact(++_seed).ResourceId,
                 receipt);
-            var request = HttpRequestEvidence.CreateAtSend(
-                new HttpRequestTemplate(
-                    bound.Request.RequestedUri,
-                    HttpRequestMethod.Post,
-                    Artifact(702),
-                    Artifact(703),
-                    Artifact(704),
-                    Artifact(705),
-                    new OutboundCrawlerIdentityEvidence(
-                        OutboundCrawlerIdentity.Schema,
-                        OutboundCrawlerIdentity.Token),
-                    new HttpOrigin("https", "publications.europa.eu", 443),
-                    receipt),
-                DateTimeOffset.UnixEpoch.AddSeconds(_seed));
+            var sourceProfile = OfficialMachineQuerySourceProfiles.ResolveFor(opened);
+            var requestBody = opened.CopyRequestBody();
+            var logicalRequest = HttpLogicalRequest.Create(
+                opened.RequestedUri,
+                sourceProfile.Method,
+                new[]
+                {
+                    new HttpLogicalRequestHeader(
+                        "user-agent",
+                        sourceProfile.CrawlerUserAgent),
+                    new HttpLogicalRequestHeader("accept", sourceProfile.Accept),
+                    new HttpLogicalRequestHeader(
+                        "content-type",
+                        $"{sourceProfile.RequestContentType}; charset=utf-8"),
+                },
+                new HttpLogicalRequestBody(
+                    checked((ulong)requestBody.LongLength),
+                    Sha(requestBody)),
+                Artifact(702).Sha256,
+                Artifact(703).Sha256);
+            var logicalRequestRef = Reference(
+                ++_seed,
+                logicalRequest.CopyCanonicalBytes());
             var digest = Sha(bytes);
             var blob = new DurableBlobRef(
                 CustodySchemaIds.DurableBlobRef,
@@ -783,39 +795,48 @@ public sealed class EuConsolidationDiscoveryTests
                 CustodySchemaIds.DurableBlobWriteReceipt,
                 blob,
                 policy);
-            var absent = new AbsentHttpHeader();
-            var metadata = new HttpResponseMetadata(
-                new SingleHttpHeader(ResponseMediaType),
-                absent,
-                new SingleHttpHeader(bytes.LongLength.ToString(
+            var absent = new RoutedHttpAbsentHeader();
+            var headers = new RoutedHttpResponseHeaders(
+                new RoutedHttpSingleHeader(ResponseMediaType),
+                new RoutedHttpSingleHeader(bytes.LongLength.ToString(
                     System.Globalization.CultureInfo.InvariantCulture)),
-                absent, absent, absent, absent, absent, absent, absent, absent, absent, absent);
+                absent,
+                absent,
+                absent,
+                absent,
+                absent,
+                absent,
+                absent,
+                absent,
+                absent,
+                absent,
+                absent);
             var observationId = Artifact(++_seed).ResourceId;
-            var completion = new DeclaredContentLengthCompleteEvidence(
-                TransferCompletionSchemaIds.TransferCompletionEvidence,
-                request.AdapterIdentity,
+            var hop = RoutedHttpHop.Create(
+                ordinal: 0,
                 observationId,
+                antecedentHopObservationId: null,
+                logicalRequestRef.Sha256,
+                logicalRequest.Uri,
+                status: 200,
+                headers,
+                Timestamp(instant),
+                Timestamp(instant.AddMilliseconds(1)),
+                new DeclaredContentLengthHttpCompletion(checked((ulong)bytes.LongLength)),
+                checked((ulong)bytes.LongLength),
                 digest,
-                bytes.LongLength);
-            var observation = new ResponseCompleteBodyObservation(
-                HttpObservationSchemaIds.HttpObservation,
-                observationId,
-                request,
-                bound.Request.RequestedUri,
-                200,
-                HttpStatusClassifier.Classify(200, metadata),
-                metadata,
-                completion,
-                write);
-            var observationRef = HttpObservationIdentity.Create(observation);
-            var requestEvidence = MachineRequestEvidence.FromReceipt(
-                bound.MachinePlanRef,
-                receiptRef,
-                receipt,
-                observationRef);
-            var requestEvidenceRef = MachineRequestEvidenceIdentity.Create(
-                Artifact(++_seed).ResourceId,
-                requestEvidence);
+                Sha(Encoding.UTF8.GetBytes(ContractJson.Serialize(write))),
+                checked((ulong)bytes.LongLength),
+                digest);
+            var httpEvidence = RoutedHttpEvidence.Create(
+                Artifact(704),
+                ++_requestOrdinal,
+                attemptOrdinal: 0,
+                new[] { hop },
+                new CompleteHttpRouteOutcome());
+            var httpEvidenceRef = Reference(
+                ++_seed,
+                httpEvidence.CopyCanonicalBytes());
             var renderer = new EuConsolidationSparqlRenderer(
                 _plan,
                 _plan.Definition(EuConsolidationQuerySet.TemporalFacts),
@@ -825,15 +846,16 @@ public sealed class EuConsolidationDiscoveryTests
                 bound.MachinePlanRef,
                 bound.InputArtifact.ArtifactRef,
                 receiptRef,
-                requestEvidenceRef,
-                observationRef);
-            _evidence.Add(observationRef, new RepeatedEnumerationResolvedEvidence(
+                logicalRequestRef,
+                httpEvidenceRef);
+            _evidence.Add(httpEvidenceRef, new RepeatedEnumerationResolvedEvidence(
                 bound.MachinePlan,
                 bound.InputArtifact,
                 receipt,
                 renderer,
-                requestEvidence,
-                observation,
+                logicalRequest,
+                httpEvidence,
+                write,
                 bytes));
             return refs;
         }
@@ -949,6 +971,14 @@ public sealed class EuConsolidationDiscoveryTests
         private static SourceArtifactRef Artifact(int seed) => new(
             $"urn:uuid:00000000-0000-4000-8000-{seed:D12}",
             seed.ToString("x64", System.Globalization.CultureInfo.InvariantCulture));
+
+        private static SourceArtifactRef Reference(int seed, ReadOnlySpan<byte> bytes) =>
+            new(Artifact(seed).ResourceId, Sha(bytes));
+
+        private static string Timestamp(DateTimeOffset value) =>
+            value.ToString(
+                "yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'",
+                System.Globalization.CultureInfo.InvariantCulture);
 
         private static string Sha(ReadOnlySpan<byte> value) =>
             Convert.ToHexString(SHA256.HashData(value)).ToLowerInvariant();

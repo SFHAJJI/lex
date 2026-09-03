@@ -29,8 +29,8 @@ public enum LuxembourgBodyBlockerCode
     [JsonStringEnumMemberName("robots_evidence_unbound")]
     RobotsEvidenceUnbound = 5,
 
-    [JsonStringEnumMemberName("http_observation_unbound")]
-    HttpObservationUnbound = 6,
+    [JsonStringEnumMemberName("http_evidence_unbound")]
+    HttpEvidenceUnbound = 6,
 
     [JsonStringEnumMemberName("derivation_unverified")]
     DerivationUnverified = 7,
@@ -141,7 +141,7 @@ public static class LuxembourgBodyJoin
             LuxembourgBodyBlockerCode.TextPublicNotCleared,
             LuxembourgBodyBlockerCode.LicenceContractResultMissing,
             LuxembourgBodyBlockerCode.RobotsEvidenceUnbound,
-            LuxembourgBodyBlockerCode.HttpObservationUnbound,
+            LuxembourgBodyBlockerCode.HttpEvidenceUnbound,
             LuxembourgBodyBlockerCode.DerivationUnverified,
             LuxembourgBodyBlockerCode.IntegrityUnverified,
         });

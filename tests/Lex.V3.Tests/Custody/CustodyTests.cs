@@ -574,5 +574,10 @@ public sealed class CustodyTests
             DurableBlobRef reference,
             CancellationToken cancellationToken) =>
             throw new NotSupportedException();
+
+        public Task<ReadOnlyMemory<byte>> ReadByDigestAsync(
+            string contentSha256,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 }
