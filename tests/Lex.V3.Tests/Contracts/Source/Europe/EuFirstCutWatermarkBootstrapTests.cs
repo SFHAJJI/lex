@@ -58,6 +58,29 @@ public sealed class EuFirstCutWatermarkBootstrapTests
     }
 
     [TestMethod]
+    public void ATieAtTheMaximumWatermarkKeepsTheLargerKeyEvenWhenItIsEncounteredFirst()
+    {
+        // ATieAtTheMaximumWatermarkBreaksOnTheEntryKeyOrdinally above always puts the larger key
+        // second in iteration order, so it cannot tell a correct strict "cursor.CompareTo(maximum) >
+        // 0" comparison apart from a naive "last one wins" implementation: both would return the same
+        // (later, larger) key. Putting the larger key first and a smaller one after is the case that
+        // tells them apart -- a naive last-wins implementation would return the smaller, later key,
+        // while the real strict-greater-than comparison keeps the first (larger) one, because the
+        // second cursor never compares greater than it.
+        var observations = new (string, string)[]
+        {
+            ("2026-09-03T00:00:00.000+02:00", "zzz"),
+            ("2026-09-03T00:00:00.000+02:00", "aaa"),
+        };
+
+        var result = EuFirstCutWatermarkBootstrap.TryComputeStartPosition(observations, out var refusal);
+
+        Assert.IsNotNull(result);
+        Assert.AreEqual(EuFirstCutWatermarkBootstrapRefusal.None, refusal);
+        Assert.AreEqual("zzz", result!.CanonicalEntryKey);
+    }
+
+    [TestMethod]
     public void ASingleEntryCensusReturnsThatEntry()
     {
         var result = EuFirstCutWatermarkBootstrap.TryComputeStartPosition(

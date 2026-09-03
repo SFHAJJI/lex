@@ -112,7 +112,6 @@ public static class EuScopeSnapshotReduction
                 "authority, and a mixed set is a snapshot defect, not a reduction choice.");
         }
 
-        SourceRegistryMemberRef? ontologyAuthorityRef = null;
         if (authority == EuRelationAuthority.OntologyAuthorizedInverse)
         {
             // EuRelationFamilyDisposition requires an ontology authority reference for this
@@ -127,11 +126,14 @@ public static class EuScopeSnapshotReduction
                 "snapshot before calling Reduce, rather than have this function invent one.");
         }
 
+        // The one authority that would need an ontology-registry reference always throws above
+        // before reaching here, so every edge that reaches this call has none to supply: the
+        // argument below is not a local this function could ever compute something else for.
         return new EuRelationFamilyDisposition(
             observation.Family,
             authority,
             observation.Acquisition,
             observation.CompletionEvidenceRef,
-            ontologyAuthorityRef);
+            ontologyAuthorityRef: null);
     }
 }

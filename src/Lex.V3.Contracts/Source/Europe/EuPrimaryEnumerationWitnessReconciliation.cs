@@ -71,7 +71,15 @@ public sealed class EuPrimaryEnumerationWitnessReconciliation
     /// <summary>The witness binding this reconciliation checked.</summary>
     public EuFeedRootIntersection Witness { get; }
 
-    /// <summary>How many terminations were reconciled.</summary>
+    /// <summary>
+    /// How many terminations this reconciliation was given, not how many were actually checked
+    /// against the primary enumeration. <see cref="TryReconcile"/> only ever compares an in-pack or
+    /// mixed-scope terminal's <see cref="EuFeedEntryTermination.InPack"/> roots; an out-of-pack or
+    /// unresolved-or-ambiguous terminal is skipped entirely (R3/R7: neither carries a membership
+    /// claim to corroborate) and still counts here. This is a total over the supplied rows, mirroring
+    /// <see cref="EuFeedTerminalReconciliation.CanonicalEntryCount"/>'s own role one level up, never a
+    /// count of rows this type actually validated.
+    /// </summary>
     public int CheckedTerminationCount { get; }
 
     /// <summary>The only path that mints a reconciliation.</summary>

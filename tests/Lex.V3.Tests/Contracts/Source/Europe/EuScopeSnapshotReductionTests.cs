@@ -3,6 +3,7 @@ using System.Text;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Europe;
+using Lex.V3.Contracts.Source.Scope;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Lex.V3.Tests.Contracts.Source.Europe;
@@ -226,6 +227,58 @@ public sealed class EuScopeSnapshotReductionTests
 
         Assert.ThrowsExactly<NotSupportedException>(
             () => EuScopeSnapshotReduction.Reduce(Snapshot(relations: relations)));
+    }
+
+    // ---- Fold-in: carry a null language disposition all the way through
+    // EuScopeProfile.BuildScopeInput, proving the full pipeline integration (snapshot -> reduction ->
+    // scope/1 input), not only this file's own reduction step in isolation. --------------------------
+
+    [TestMethod]
+    public void ANotObservedLanguageSurvivesReductionAndBuildScopeInputAsPublisherValueAbsent()
+    {
+        var language = new EuLanguageExpressionObservation(
+            EuOfficialLanguage.German, EuExpressionObservationState.NotObserved,
+            "eu_language.absent", "rule.language", Artifact("lang"));
+
+        // Starts at the snapshot: a language Expression the closure query never asked about at all.
+        var dispositions = EuScopeSnapshotReduction.Reduce(Snapshot(language: language));
+        Assert.IsNull(dispositions.LanguageDisposition);
+
+        // Carries through EuScopeProfile.BuildScopeInput, the now-merged item-5 type: the missing
+        // language disposition above must publish PublisherValueAbsent on the wire, not
+        // SelectorNotApplicable, which is what a missing format or missing rights basis publish
+        // instead (EuScopeProfileTests drives that distinction directly against a hand-built
+        // EuScopeObjectDispositions; this test drives the same wire fact end to end from a real
+        // snapshot reduction, which is the integration no test before this fold-in exercised).
+        var profile = EuScopeProfile.BuildBinding();
+        // The relation axis is "present" here, not "not applicable": Snapshot()'s default relation
+        // observations are every read family marked Unacquired rather than omitted, and
+        // EuScopeSnapshotReduction still reduces an unacquired family to a disposition entry (see
+        // EuScopeSnapshotReductionTests.AMinimalSnapshotReducesToAllNullOptionalAxesAndUnacquiredRelations),
+        // so RelationDispositions is non-empty and its selector cites RelationEvidenceRef.
+        var evidenceRefs = new[]
+            {
+                dispositions.RecordEvidenceRef,
+                dispositions.ChannelDisposition.EvidenceRef,
+                dispositions.RelationEvidenceRef,
+            }
+            .Distinct()
+            .OrderBy(static value => value.ResourceId, StringComparer.Ordinal)
+            .ThenBy(static value => value.Sha256, StringComparer.Ordinal)
+            .ToArray();
+        var evidenceOrdinals = evidenceRefs
+            .Select(static (value, ordinal) => (value, ordinal))
+            .ToDictionary(static value => value.value, static value => value.ordinal);
+
+        var input = EuScopeProfile.BuildScopeInput(profile, dispositions, evidenceOrdinals);
+        var languageSelector = input.Selectors[2];
+
+        Assert.AreEqual(ScopeSelectorState.PublisherValueAbsent, languageSelector.State);
+        Assert.AreEqual(
+            ScopeSelectorEvidenceKind.CompleteObservationAbsence,
+            languageSelector.EvidenceKind);
+        Assert.IsEmpty(languageSelector.CanonicalValues);
+        Assert.IsNull(languageSelector.RuleOrdinal);
     }
 
     [TestMethod]

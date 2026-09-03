@@ -222,6 +222,75 @@ public sealed class EuCellarObjectSnapshotTests
             Artifact("x")));
     }
 
+    // ---- Fold-in: Decision 64's "not observed" versus "observed absent" distinction is the whole
+    // reason this enum has three members rather than two, and nothing before this fold-in ever
+    // constructed the third one or a genuinely value-bearing ObservedPresent -- so the distinction
+    // the type exists to make was unproven. Each state is driven here on its own, plus the blank-
+    // value guard ObservedPresent's own values must satisfy. -----------------------------------------
+
+    [TestMethod]
+    public void AnObservedAbsentPredicateConstructsCleanlyWithNoValues()
+    {
+        // Asked, and the observation completed with nothing found: a real, complete, negative
+        // observation, never confused with NotObserved's coverage gap.
+        var observation = new EuPredicateObservation(
+            EuCdmPredicate.ResourceLegalIdCelex,
+            EuPredicateObservationState.ObservedAbsent,
+            [],
+            Artifact("x"));
+        Assert.AreEqual(EuPredicateObservationState.ObservedAbsent, observation.State);
+        Assert.IsEmpty(observation.Values);
+    }
+
+    [TestMethod]
+    public void AGenuinelyValidObservedPresentPredicateCarriesItsValueThrough()
+    {
+        // The happy path Decision 64 actually names: asked, and the publisher supplied a value.
+        // Every other test touching ObservedPresent before this fold-in drove only its refusals.
+        var observation = new EuPredicateObservation(
+            EuCdmPredicate.ResourceLegalIdCelex,
+            EuPredicateObservationState.ObservedPresent,
+            ["32016R0679"],
+            Artifact("x"));
+        Assert.AreEqual(EuPredicateObservationState.ObservedPresent, observation.State);
+        CollectionAssert.AreEqual(new[] { "32016R0679" }, observation.Values.ToArray());
+    }
+
+    [TestMethod]
+    public void AnObservedPresentPredicateWithABlankValueAmongRealOnesThrows()
+    {
+        // The blank-value guard is a second, separate check from the empty-values guard
+        // APredicateObservedPresentWithNoValuesThrows already drives: a non-empty list that still
+        // contains a blank entry must be refused too, not only a wholly empty one.
+        Assert.ThrowsExactly<ArgumentException>(() => new EuPredicateObservation(
+            EuCdmPredicate.ResourceLegalIdCelex,
+            EuPredicateObservationState.ObservedPresent,
+            ["32016R0679", "   "],
+            Artifact("x")));
+    }
+
+    [TestMethod]
+    public void ASnapshotCarriesAnObservedAbsentPredicateThroughItsAccessor()
+    {
+        // The distinction survives the whole snapshot, not only the leaf record: a predicate
+        // observed-absent on one object reads back as ObservedAbsent through Predicate(), never
+        // silently folded into NotObserved's own default the rest of this file's fixtures use.
+        var predicates = AllPredicatesNotObserved()
+            .Select(p => p.Predicate == EuCdmPredicate.ResourceLegalIdCelex
+                ? new EuPredicateObservation(
+                    p.Predicate, EuPredicateObservationState.ObservedAbsent, [], p.EvidenceRef)
+                : p)
+            .ToArray();
+
+        var snapshot = Build(out var refusal, predicates: predicates);
+
+        Assert.IsNotNull(snapshot);
+        Assert.AreEqual(EuCellarObjectSnapshotRefusal.None, refusal);
+        Assert.AreEqual(
+            EuPredicateObservationState.ObservedAbsent,
+            snapshot!.Predicate(EuCdmPredicate.ResourceLegalIdCelex).State);
+    }
+
     [TestMethod]
     public void AnUnacquiredRelationFamilyWithEdgesThrows()
     {

@@ -17,6 +17,8 @@ public sealed class EuPrimaryEnumerationWitnessReconciliationTests
 
     private static string SeedA => EuAppendixASeedMap.PackRoots[0];
     private static string SeedB => EuAppendixASeedMap.PackRoots[1];
+    private static string NotASeed =>
+        "http://publications.europa.eu/resource/cellar/00000000-0000-0000-0000-000000000000";
 
     private static SourceArtifactRef PrimaryPlanRef() =>
         new("urn:uuid:00000000-0000-4000-8000-0000000000c1", new string('7', 64));
@@ -161,6 +163,83 @@ public sealed class EuPrimaryEnumerationWitnessReconciliationTests
         Assert.AreEqual(
             EuPrimaryWitnessReconciliationRefusal.WitnessInPackRootMissingFromPrimaryEnumeration,
             refusal);
+    }
+
+    // ---- Fold-in: MixedScope and UnresolvedOrAmbiguous terminations are never reconciled by any
+    // test before this fold-in, and dropping MixedScope from TryReconcile's own termination-selecting
+    // condition (`row.Terminal is not (InPack or MixedScope)`) fails nothing that existed -- verified
+    // by inspection: every prior test here drives only InPack and OutOfPack terminals. The two tests
+    // below genuinely drive both cases through TryReconcile, and the second is the one that would fail
+    // if MixedScope were ever dropped from that condition. -------------------------------------------
+
+    [TestMethod]
+    public void AMixedScopeTerminalCorroboratedByThePrimaryEnumerationReconcilesCleanly()
+    {
+        var witness = Witness(new[] { SeedA });
+        var primary = Primary(new[] { SeedA });
+        var entry = Cursor(4);
+        var entries = EntrySetOf(entry);
+        var observation = EuFeedEntryObservation.TryObserve(
+            entry, identityResolutionClosed: true, new[] { SeedA, NotASeed },
+            Array.Empty<EuFeedFamilyProjection>(), out _)!;
+        var termination = witness.Classify(observation, entries);
+        Assert.AreEqual(EuFeedTerminal.MixedScope, termination.Terminal);
+
+        var reconciliation = EuPrimaryEnumerationWitnessReconciliation.TryReconcile(
+            primary, witness, new[] { termination }, out var refusal);
+
+        Assert.IsNotNull(reconciliation);
+        Assert.AreEqual(EuPrimaryWitnessReconciliationRefusal.None, refusal);
+        Assert.AreEqual(1, reconciliation!.CheckedTerminationCount);
+    }
+
+    [TestMethod]
+    public void AMixedScopeTerminalsInPackRootMissingFromThePrimaryEnumerationRefusesReconciliation()
+    {
+        // Same shape as AWitnessInPackRootThePrimaryEnumerationNeverDiscoveredRefusesReconciliation
+        // above, but for a MixedScope terminal rather than InPack: this is the exact case that would
+        // start passing silently if MixedScope were ever dropped from TryReconcile's own condition,
+        // since the loop would then skip this row entirely rather than refusing it.
+        var witness = Witness(new[] { SeedA });
+        var primary = Primary(new[] { SeedB });
+        var entry = Cursor(5);
+        var entries = EntrySetOf(entry);
+        var observation = EuFeedEntryObservation.TryObserve(
+            entry, identityResolutionClosed: true, new[] { SeedA, NotASeed },
+            Array.Empty<EuFeedFamilyProjection>(), out _)!;
+        var termination = witness.Classify(observation, entries);
+        Assert.AreEqual(EuFeedTerminal.MixedScope, termination.Terminal);
+
+        var reconciliation = EuPrimaryEnumerationWitnessReconciliation.TryReconcile(
+            primary, witness, new[] { termination }, out var refusal);
+
+        Assert.IsNull(reconciliation);
+        Assert.AreEqual(
+            EuPrimaryWitnessReconciliationRefusal.WitnessInPackRootMissingFromPrimaryEnumeration,
+            refusal);
+    }
+
+    [TestMethod]
+    public void AnUnresolvedOrAmbiguousTerminalNeverNeedsPrimaryEnumerationCorroboration()
+    {
+        // The primary enumeration below discovered nothing at all -- stronger than the OutOfPack
+        // test below, which still gives primary a real seed -- to show an unresolved terminal is
+        // skipped by TryReconcile's own condition regardless of what the primary enumeration found.
+        var witness = Witness(new[] { SeedA });
+        var primary = Primary(Array.Empty<string>());
+        var entry = Cursor(6);
+        var entries = EntrySetOf(entry);
+        var observation = EuFeedEntryObservation.TryObserve(
+            entry, identityResolutionClosed: false, Array.Empty<string>(),
+            Array.Empty<EuFeedFamilyProjection>(), out _)!;
+        var termination = witness.Classify(observation, entries);
+        Assert.AreEqual(EuFeedTerminal.UnresolvedOrAmbiguous, termination.Terminal);
+
+        var reconciliation = EuPrimaryEnumerationWitnessReconciliation.TryReconcile(
+            primary, witness, new[] { termination }, out var refusal);
+
+        Assert.IsNotNull(reconciliation);
+        Assert.AreEqual(EuPrimaryWitnessReconciliationRefusal.None, refusal);
     }
 
     [TestMethod]

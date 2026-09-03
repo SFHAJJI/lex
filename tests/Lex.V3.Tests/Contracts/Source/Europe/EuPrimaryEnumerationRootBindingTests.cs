@@ -103,6 +103,27 @@ public sealed class EuPrimaryEnumerationRootBindingTests
         Assert.AreEqual(EuPrimaryEnumerationRefusal.ResolvedRootOutsideAppendixAPack, refusal);
     }
 
+    // --- Fold-in: pin the binding digest's wire form with a hand-transcribed literal, never merely
+    // a self-comparison. TheDigestIsSensitiveToTheDiscoveredRootsAndStableAcrossInputOrder below only
+    // ever compares one computed digest against another computed digest, which can never catch the
+    // wire form itself silently changing (a different join character, a reordered field, a different
+    // hash) as long as both sides of every comparison still agree with each other. -------------------
+
+    [TestMethod]
+    public void TheBindingIdentityDigestIsPinnedToAFixedLiteralWireForm()
+    {
+        var binding = EuPrimaryEnumerationRootBinding.TryBind(PlanRef(), new[] { SeedA, SeedB }, out _)!;
+
+        // Print-actual-then-transcribe: this is the exact SHA-256 BindingDigest computes today over
+        // "eu_primary_enumeration_root_binding/1", this fixture's own PlanRef resource id and sha256,
+        // and the two sorted discovered roots, newline joined. A change to the wire form (the schema
+        // label, the join character, the field order, or the hash itself) is expected to change this
+        // literal, which is exactly what makes it a pin rather than a tautology.
+        Assert.AreEqual(
+            "286339ed1ed391996b48a84b92556df915c5b33b453d8394fff2b4f1ee9f1e2f",
+            binding.BindingIdentityDigest);
+    }
+
     [TestMethod]
     public void TheDigestIsSensitiveToTheDiscoveredRootsAndStableAcrossInputOrder()
     {
