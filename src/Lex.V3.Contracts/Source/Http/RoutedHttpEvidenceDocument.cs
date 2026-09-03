@@ -366,7 +366,7 @@ public sealed class RoutedHttpEvidence
 
     public RoutedHttpRouteOutcome Outcome { get; }
 
-    public static RoutedHttpEvidence Create(
+    internal static RoutedHttpEvidence Create(
         SourceArtifactRef runIdentity,
         ulong requestOrdinal,
         ulong attemptOrdinal,

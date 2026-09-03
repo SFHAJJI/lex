@@ -9,18 +9,20 @@ namespace Lex.V3.Tests.Contracts;
 ///
 /// <para>
 /// Why this type and not another. Evidence is the object every capability, receipt and closure in
-/// the transport layer ultimately carries, and <see cref="RoutedHttpEvidence.Create"/> is public
-/// and validates shape only: hop count, nulls and the ordinal chain. Nothing in it ties those hops
-/// to anything retained, so well-formed evidence describing a fetch that never happened is
-/// constructible from any assembly referencing Contracts.
+/// the transport layer ultimately carries, and <see cref="RoutedHttpEvidence.Create"/> validates
+/// shape only: hop count, nulls and the ordinal chain. Nothing in it ties those hops to anything
+/// retained, so well-formed evidence describing a fetch that never happened would be constructible
+/// from any assembly the door is opened to.
 /// </para>
 /// <para>
-/// It is not closed, and the reason is structural rather than a preference: every producer lives in
-/// Lex.V3.Ingest, a different assembly, and Contracts grants friend access only to the two test
-/// assemblies. Making Create internal would break the only legitimate caller. What replaces closure
-/// is this pin plus the acceptance path: evidence entering a receipt goes through ParseAndVerify
-/// against retained bytes, so unretained evidence is refused where it matters rather than at
-/// construction.
+/// Closed by InternalsVisibleTo rather than by ConstructionSurface alone: Create is internal, and
+/// Contracts grants friend access only to Lex.V3.Ingest, the one assembly holding every legitimate
+/// producer, plus the two test assemblies. The pin below still matters because InternalsVisibleTo is
+/// assembly-wide and silent; it does not itself say which members a friend assembly actually uses,
+/// so a second producer opened here would be invisible without this list. The acceptance path is
+/// unchanged and stays load-bearing regardless: evidence entering a receipt goes through
+/// ParseAndVerify against retained bytes, so unretained evidence is refused where it matters rather
+/// than only at construction.
 /// </para>
 /// <para>
 /// So the pin's job is to make a new producer a visible diff. A method returning evidence, a
@@ -44,7 +46,7 @@ public sealed class RoutedHttpEvidenceSurfaceTests
                 + Core + "SourceArtifactRef, System.UInt64, System.UInt64, "
                 + "Lex.V3.Contracts.Source.Http.RoutedHttpHop[], "
                 + "Lex.V3.Contracts.Source.Http.RoutedHttpRouteOutcome) -> " + Evidence,
-                "method public static " + Evidence + "::Create("
+                "method internal static " + Evidence + "::Create("
                 + Core + "SourceArtifactRef, System.UInt64, System.UInt64, "
                 + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Http.RoutedHttpHop>, "
                 + "Lex.V3.Contracts.Source.Http.RoutedHttpRouteOutcome) -> " + Evidence,
