@@ -207,7 +207,10 @@ public static class EuScopeProfile
         // selector cites RelationEvidenceRef, the supporting selector cites SupportingEvidenceRef,
         // and the channel/language/format/rights selectors each cite their own disposition's own
         // EvidenceRef rather than a batched "body" evidence that does not correspond to what any one
-        // of them actually observed.
+        // of them actually observed. The one exception is a missing language expression: there is no
+        // per-language observation to cite when none exists, so that case cites RecordEvidenceRef,
+        // the one evidence this type always carries for the object itself, rather than inventing a
+        // second per-object reference for exactly one selector.
         var selectors = new[]
         {
             Present(
@@ -223,7 +226,12 @@ public static class EuScopeProfile
                     [LanguageToken(language.Language)],
                     language.EvidenceRef,
                     evidenceOrdinals)
-                : NotApplicable(profile, ScopeAxis.Body),
+                // R1's closed selector vocabulary is ScopeSelectorState; "no Expression was observed
+                // at all" is PublisherValueAbsent, not SelectorNotApplicable -- the state a missing
+                // format or missing rights basis uses below. Collapsing all three into one state
+                // would leave the R1 distinction living only on which axis happened to be named,
+                // rather than on the wire.
+                : PublisherAbsent(dispositions.RecordEvidenceRef, evidenceOrdinals),
             dispositions.FormatDisposition is { } format
                 ? Present(
                     [FormatToken(format.Format)],
@@ -348,9 +356,11 @@ public static class EuScopeProfile
     /// <para>
     /// A missing <see cref="EuScopeObjectDispositions.LanguageDisposition"/> is not the same fact as
     /// an observed one that is not a body candidate, and this method does not collapse them the way
-    /// an earlier revision did. R1's four-state selector vocabulary reserves
-    /// <c>publisher_expression_absent</c> for "no Expression was observed at all", which this file
-    /// reads as <c>typed_quarantine</c> -- a gap pending observation, the same answer a missing format
+    /// an earlier revision did. R1's closed selector vocabulary is
+    /// <see cref="ScopeSelectorState"/>, and the language selector now publishes
+    /// <see cref="ScopeSelectorState.PublisherValueAbsent"/> for "no Expression was observed at
+    /// all" (see <see cref="BuildScopeInput"/>); the body join below reads that same fact as
+    /// <c>typed_quarantine</c> -- a gap pending observation, the same answer a missing format
     /// gets from <see cref="FormatBodyContribution"/> -- and keeps distinct from <c>point</c>, which
     /// means an Expression was observed and this scope deliberately does not hold its body
     /// (<see cref="EuLanguageBodyState.BodyNotHeldPoint"/>). Folding the two into one <c>point</c>
@@ -372,12 +382,13 @@ public static class EuScopeProfile
         channel.MayGraduate() ? ScopeDisposition.AcceptedSelected : ScopeDisposition.Point;
 
     /// <summary>
-    /// The language's own contribution to the body join. A missing disposition is
-    /// <c>publisher_expression_absent</c> per R1 -- no Expression was observed at all -- and is a
-    /// typed gap (<c>typed_quarantine</c>), the same answer <see cref="FormatBodyContribution"/>
-    /// gives a missing format; an observed expression whose body this scope does not hold is
-    /// <c>point</c>, unchanged. The two are deliberately not the same outcome: one is an open
-    /// question pending observation, the other is a reviewed exclusion.
+    /// The language's own contribution to the body join. A missing disposition is published on the
+    /// wire as <see cref="ScopeSelectorState.PublisherValueAbsent"/> (see
+    /// <see cref="BuildScopeInput"/>) -- no Expression was observed at all -- and this join reads
+    /// that as a typed gap (<c>typed_quarantine</c>), the same answer
+    /// <see cref="FormatBodyContribution"/> gives a missing format; an observed expression whose
+    /// body this scope does not hold is <c>point</c>, unchanged. The two are deliberately not the
+    /// same outcome: one is an open question pending observation, the other is a reviewed exclusion.
     /// </summary>
     private static ScopeDisposition LanguageBodyContribution(EuLanguageBodyDisposition? language)
     {
@@ -422,8 +433,10 @@ public static class EuScopeProfile
         left > right ? left : right;
 
     /// <summary>
-    /// The relation axis is not applicable when an object carries no relation edges at all (a
-    /// dossier or NIM record, for instance), and otherwise collapses to
+    /// The relation axis resolves to <see cref="ScopeDisposition.Point"/> when an object carries no
+    /// relation edges at all (a dossier or NIM record, for instance) -- <c>ScopeDisposition</c> has
+    /// no member named "not applicable"; that word names a different, selector-level fact
+    /// (<see cref="ScopeSelectorState.SelectorNotApplicable"/>) -- and otherwise collapses to
     /// <see cref="ScopeDisposition.TypedQuarantine"/> whenever any bound family's acquisition has
     /// not completed. Decision 64 is explicit that only a completed bounded observation of one exact
     /// family can support an answer for it; an incomplete family therefore cannot be silently
@@ -443,10 +456,10 @@ public static class EuScopeProfile
     }
 
     /// <summary>
-    /// The supporting-document axis. An object with no supporting content class is itself the legal
-    /// text or its own metadata record, not a supporting document of anything, mirroring
-    /// Luxembourg's own "not applicable to Act or Consolidation" rule. Candidate 2's ACCEPTED
-    /// explanatory row is exactly <see cref="EuContentClass.Summary"/>
+    /// The supporting-document axis resolves to <see cref="ScopeDisposition.Point"/> when an object
+    /// carries no supporting content class: it is itself the legal text or its own metadata record,
+    /// not a supporting document of anything, mirroring Luxembourg's own rule for the same case.
+    /// Candidate 2's ACCEPTED explanatory row is exactly <see cref="EuContentClass.Summary"/>
     /// (<c>cdm:summary_legislation_eu</c>, "never legal evidence"); editorial content shares that
     /// answer. The remaining content classes are body-content classes, never a supporting-document
     /// shape, so a caller naming one here is a construction error this axis quarantines rather than
@@ -483,6 +496,22 @@ public static class EuScopeProfile
             null,
             RuleOrdinal(profile, axis),
             null);
+
+    /// <summary>
+    /// A selector whose value was sought and found absent by a complete observation --
+    /// <see cref="ScopeSelectorState.PublisherValueAbsent"/>, R1's distinct state for "we looked and
+    /// there was nothing", never to be confused with <see cref="NotApplicable"/>'s "this selector
+    /// does not apply to this object at all".
+    /// </summary>
+    private static ScopeSelectorEvidence PublisherAbsent(
+        SourceArtifactRef evidenceRef,
+        IReadOnlyDictionary<SourceArtifactRef, int> evidenceOrdinals) => new(
+        ScopeSelectorState.PublisherValueAbsent,
+        [],
+        ScopeSelectorEvidenceKind.CompleteObservationAbsence,
+        evidenceOrdinals[evidenceRef],
+        null,
+        null);
 
     private static ScopeRuleEvaluation Projection(
         ScopeProfileBinding profile,
@@ -580,6 +609,50 @@ public static class EuScopeProfile
             nameof(contentClass), contentClass, "Unknown EU content class."),
     };
 
+    /// <summary>
+    /// The wire token <see cref="EuChannelDisposition.PolicyFor"/>'s admission answer publishes,
+    /// per <see cref="EuChannelAdmission"/>'s own <c>JsonStringEnumMemberName</c>. Hashed instead
+    /// of the C# identifier so a rename of <see cref="EuChannelAdmission.Admitted"/> or
+    /// <see cref="EuChannelAdmission.Excluded"/> that leaves the wire token untouched cannot change
+    /// the published profile digest, and a wire-token change cannot hide behind an unchanged digest.
+    /// </summary>
+    private static string ChannelAdmissionToken(EuChannelAdmission admission) => admission switch
+    {
+        EuChannelAdmission.Admitted => "admitted",
+        EuChannelAdmission.Excluded => "excluded",
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(admission), admission, "Unknown EU channel admission."),
+    };
+
+    /// <summary>
+    /// The wire token <see cref="EuRightsDisposition.BasisFor"/>'s reuse-basis answer publishes,
+    /// per <see cref="EuReuseBasis"/>'s own <c>JsonStringEnumMemberName</c>, for the same
+    /// rename-safety reason as <see cref="ChannelAdmissionToken"/>.
+    /// </summary>
+    private static string ReuseBasisToken(EuReuseBasis basis) => basis switch
+    {
+        EuReuseBasis.Cc0 => "cc0",
+        EuReuseBasis.CcBy40 => "cc_by_4_0",
+        EuReuseBasis.EurLexLegalNoticePermission => "eur_lex_legal_notice_permission",
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(basis), basis, "Unknown EU reuse basis."),
+    };
+
+    /// <summary>
+    /// The wire token <see cref="ScopeAxis"/> publishes, per its own <c>JsonStringEnumMemberName</c>.
+    /// Hashed into <see cref="SelectorTableSha256"/> instead of the numeric ordinal so a future
+    /// renumbering of the shared <c>scope/1</c> axis enum -- which changes nothing on the wire --
+    /// cannot silently change the published selector-table identity.
+    /// </summary>
+    private static string ScopeAxisToken(ScopeAxis axis) => axis switch
+    {
+        ScopeAxis.Record => "record",
+        ScopeAxis.Body => "body",
+        ScopeAxis.Relation => "relation",
+        ScopeAxis.SupportingDocument => "supporting_document",
+        _ => throw new ArgumentOutOfRangeException(nameof(axis), axis, "Unknown scope axis."),
+    };
+
     private static string RelationFamilyToken(EuRelationFamily family) => family switch
     {
         EuRelationFamily.Amends => "resource_legal_amends_resource_legal",
@@ -649,7 +722,7 @@ public static class EuScopeProfile
         {
             Append(hash, "channel");
             Append(hash, ChannelToken(channel));
-            Append(hash, EuChannelDisposition.PolicyFor(channel).ToString());
+            Append(hash, ChannelAdmissionToken(EuChannelDisposition.PolicyFor(channel)));
         }
 
         Append(hash, "languages");
@@ -684,7 +757,7 @@ public static class EuScopeProfile
         {
             Append(hash, "content_class");
             Append(hash, ContentClassToken(contentClass));
-            Append(hash, EuRightsDisposition.BasisFor(contentClass).ToString());
+            Append(hash, ReuseBasisToken(EuRightsDisposition.BasisFor(contentClass)));
         }
 
         Append(hash, "relation_families");
@@ -703,6 +776,17 @@ public static class EuScopeProfile
     /// projection-rule keys. Internal for the same sensitivity-testing reason as
     /// <see cref="ComputeProfileSha256"/>.
     /// </summary>
+    /// <remarks>
+    /// The two sections are domain separated: each is preceded by its own literal section label
+    /// and entry count, and each entry inside a section carries its own leaf label too. Without
+    /// this, the two sections shared one undifferentiated byte stream through
+    /// <see cref="Append"/>'s length-prefixed framing: a selector key that happened to equal a
+    /// projection rule's axis token, followed by the rest of that rule's key, could hash identically
+    /// to a shorter selector-key list plus a longer projection-rule list, so two different closed
+    /// tables could publish one digest. The section label and count close that: a selector key can
+    /// never be mistaken for the start of the projection-rules section, because the projection-rules
+    /// section header only ever appears once, at the true boundary between the two.
+    /// </remarks>
     internal static string ComputeSelectorTableSha256(
         IReadOnlyList<string> selectorKeys,
         IReadOnlyList<(ScopeAxis Axis, string Key)> projectionRules)
@@ -712,14 +796,21 @@ public static class EuScopeProfile
 
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         Append(hash, "lex-v3-eu-scope-projection/1");
+
+        Append(hash, "selector_keys");
+        Append(hash, selectorKeys.Count.ToString(CultureInfo.InvariantCulture));
         foreach (var selector in selectorKeys)
         {
+            Append(hash, "selector_key");
             Append(hash, selector);
         }
 
+        Append(hash, "projection_rules");
+        Append(hash, projectionRules.Count.ToString(CultureInfo.InvariantCulture));
         foreach (var rule in projectionRules)
         {
-            Append(hash, ((int)rule.Axis).ToString(CultureInfo.InvariantCulture));
+            Append(hash, "projection_rule");
+            Append(hash, ScopeAxisToken(rule.Axis));
             Append(hash, rule.Key);
         }
 

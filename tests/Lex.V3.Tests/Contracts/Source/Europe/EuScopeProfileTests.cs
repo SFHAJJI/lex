@@ -54,10 +54,40 @@ public sealed class EuScopeProfileTests
         Assert.AreNotEqual(
             "urn:uuid:72fdaf8b-e367-43c5-8b34-e22a99bfdbe7",
             binding.SelectorTableRef.ResourceId);
+
+        // The Union's own two identities, pinned literally rather than only proven distinct from
+        // Luxembourg's: distinctness alone would still pass if these constants were accidentally
+        // swapped with each other, or edited to some other UUID nobody reviewed.
+        Assert.AreEqual(
+            "urn:uuid:49fe8a39-4d46-4c94-b82c-12e6c8a639ef",
+            binding.SourceProfileRef.ResourceId);
+        Assert.AreEqual(
+            "urn:uuid:57e32290-68a8-4a34-b7a8-226886bc11a2",
+            binding.SelectorTableRef.ResourceId);
         foreach (var member in binding.OrderedMembers)
         {
             StringAssert.StartsWith(member.MemberKey, "eu_");
         }
+    }
+
+    [TestMethod]
+    public void ScopeDispositionsNumberingMatchesTheWorstWinsPrecedenceThisFileDependsOn()
+    {
+        // Worst() in EuScopeProfile.cs is a plain "left > right" comparison over ScopeDisposition's
+        // declared enum values, not a table this file controls: ScopeManifest.cs owns that numbering,
+        // outside this file's path claim, and a future renumbering there would silently change which
+        // of two contributions "wins" a body-join tie without touching a single line here. Read back
+        // through reflection (Enum.GetNames/GetValues) rather than a direct literal-to-cast
+        // comparison, so the compiler cannot fold this into a tautology the way
+        // "Assert.AreEqual(1, (int)ScopeDisposition.AcceptedSelected)" would.
+        var pairs = Enum.GetNames<ScopeDisposition>()
+            .Zip(
+                Enum.GetValues<ScopeDisposition>().Cast<int>(),
+                static (name, value) => $"{name}={value}")
+            .ToArray();
+        CollectionAssert.AreEqual(
+            new[] { "AcceptedSelected=1", "TypedQuarantine=2", "Point=3", "NeverIngest=4" },
+            pairs);
     }
 
     [TestMethod]
@@ -90,10 +120,10 @@ public sealed class EuScopeProfileTests
         // either input is expected to change these literals, which is exactly what the sensitivity
         // tests below drive on purpose.
         Assert.AreEqual(
-            "626abd3390bf4c94d0f2878a93a78ff4ba4bf951bab72dbc5e67f4d2267da0a3",
+            "0438e3d2ec9d99c0b1190c20b1b93d500508a1a3e4bb91c068a95f8d6fee0e0d",
             binding.SourceProfileRef.Sha256);
         Assert.AreEqual(
-            "a5065035a6c2c813fe0a5f816977f121442a64d55a53616be800d366187d072d",
+            "b4fb1a17408b4fab4b6ab5080f34b847813460230327f4770f3a3febaf4e41a5",
             binding.SelectorTableRef.Sha256);
     }
 
@@ -574,9 +604,78 @@ public sealed class EuScopeProfileTests
         Assert.AreEqual(ScopeRuleEffect.ExactDenial, body.Effect);
     }
 
-    // Channel and language cannot disagree in severity: both contribute only AcceptedSelected or
-    // Point, so there is no ordering between them for a worst-wins join to get wrong, and no test
-    // is written for that pair.
+    // The "channel and language cannot disagree" claim this comment used to make stopped being
+    // true once a missing LanguageDisposition was split out as its own TypedQuarantine contribution
+    // (distinct from an observed expression whose body is not held, which stays Point): channel
+    // contributes only AcceptedSelected or Point, but language can now also contribute
+    // TypedQuarantine, so the two can disagree. The three tests below drive the previously undriven
+    // competing pairs, including that exact one.
+
+    [TestMethod]
+    public void AnExcludedChannelBeatsAMissingLanguageExpressionsTypedQuarantine()
+    {
+        // The pair the stale comment above used to claim could never disagree: an excluded channel
+        // contributes Point, a missing language expression contributes TypedQuarantine, and Point
+        // is the higher-precedence (worse) of the two, so the join must pick Point.
+        var profile = EuScopeProfile.BuildBinding();
+        var dispositions = Baseline(
+            profile,
+            "excluded-channel-missing-expression",
+            channel: Channel(EuChannel.EurLexPortal),
+            language: null,
+            format: Format(EuManifestationFormat.Formex4, EuFormatBodyAdmission.BodyAdmitted),
+            rights: Rights(EuContentClass.OriginalLegalText));
+
+        var verified = ReduceOne(profile, dispositions);
+        var body = ScopeReducer.ReduceRequest(verified, dispositions.ObjectRef, [ScopeAxis.Body])
+            .AllAxisResults.Single(r => r.Axis == ScopeAxis.Body);
+        Assert.AreEqual(ScopeDisposition.Point, body.Disposition);
+    }
+
+    [TestMethod]
+    public void AMissingLanguageExpressionDoesNotHideAPrintFormatsNeverIngest()
+    {
+        // Same defect shape as the confirmed bug and its language/BodyNotHeldPoint sibling above,
+        // now for a missing expression: TypedQuarantine must not hide a Print format's NeverIngest.
+        var profile = EuScopeProfile.BuildBinding();
+        var dispositions = Baseline(
+            profile,
+            "missing-expression-print-format",
+            channel: Channel(EuChannel.CellarSparqlEndpoint),
+            language: null,
+            format: Format(EuManifestationFormat.Print, EuFormatBodyAdmission.BodyNotAdmitted),
+            rights: Rights(EuContentClass.OriginalLegalText));
+
+        var verified = ReduceOne(profile, dispositions);
+        var body = ScopeReducer.ReduceRequest(verified, dispositions.ObjectRef, [ScopeAxis.Body])
+            .AllAxisResults.Single(r => r.Axis == ScopeAxis.Body);
+        Assert.AreEqual(ScopeDisposition.NeverIngest, body.Disposition);
+        Assert.AreEqual(ScopeRuleEffect.ExactDenial, body.Effect);
+    }
+
+    [TestMethod]
+    public void AMissingFormatAloneQuarantinesAnOtherwiseAcceptedBody()
+    {
+        // The mirror of NoRightsDispositionYetLeavesAnOtherwiseReadyBodyQuarantined below: there,
+        // a missing rights basis is the sole reason the join lands on TypedQuarantine; here, an
+        // otherwise-accepted channel, language and rights leave a missing format as the one
+        // contribution that actually decides the axis, rather than merely riding along behind a
+        // channel exclusion the way AnExcludedChannelStillCapsAtPointAgainstAMerelyQuarantinedMissingFormat
+        // exercises above.
+        var profile = EuScopeProfile.BuildBinding();
+        var dispositions = Baseline(
+            profile,
+            "missing-format-alone",
+            channel: Channel(EuChannel.CellarSparqlEndpoint),
+            language: Language(EuOfficialLanguage.English, EuLanguageBodyState.BodyCandidate),
+            format: null,
+            rights: Rights(EuContentClass.OriginalLegalText));
+
+        var verified = ReduceOne(profile, dispositions);
+        var body = ScopeReducer.ReduceRequest(verified, dispositions.ObjectRef, [ScopeAxis.Body])
+            .AllAxisResults.Single(r => r.Axis == ScopeAxis.Body);
+        Assert.AreEqual(ScopeDisposition.TypedQuarantine, body.Disposition);
+    }
 
     [TestMethod]
     public void AnAcceptedBodyCandidateReducesToAcceptedOnRecordBodyAndRelation()
@@ -700,9 +799,9 @@ public sealed class EuScopeProfileTests
         Assert.AreEqual(ScopeDisposition.TypedQuarantine, body.Disposition);
     }
 
-    // --- Newly folded-in objection: a missing language Expression (publisher_expression_absent per
-    // R1) must not collapse into the same Point outcome as an observed Expression whose body this
-    // scope does not hold. -----------------------------------------------------------------------
+    // --- Newly folded-in objection: a missing language Expression
+    // (ScopeSelectorState.PublisherValueAbsent per R1) must not collapse into the same Point outcome
+    // as an observed Expression whose body this scope does not hold. -------------------------------
 
     [TestMethod]
     public void AMissingLanguageExpressionIsTypedQuarantineNotPointAtTheBodyAxis()
@@ -754,6 +853,44 @@ public sealed class EuScopeProfileTests
         Assert.AreEqual(ScopeDisposition.TypedQuarantine, missing);
         Assert.AreEqual(ScopeDisposition.Point, notHeld);
         Assert.AreNotEqual(missing, notHeld);
+    }
+
+    [TestMethod]
+    public void AMissingLanguageExpressionPublishesPublisherValueAbsentUnlikeAMissingFormatOrRights()
+    {
+        // THE WIRE-VOCABULARY BUG: before this fold-in, a missing language expression, a missing
+        // format and a missing rights basis all published the identical
+        // ScopeSelectorState.SelectorNotApplicable entry for ScopeAxis.Body, so R1's "no Expression
+        // was observed at all" distinction lived only on which axis a reader happened to be looking
+        // at, never on the selector's own state. Driving all three absences on one object proves the
+        // language selector alone now differs.
+        var profile = EuScopeProfile.BuildBinding();
+        var dispositions = Baseline(
+            profile,
+            "all-three-absent",
+            channel: Channel(EuChannel.CellarSparqlEndpoint),
+            language: null,
+            format: null,
+            rights: null);
+
+        var verified = ReduceOne(profile, dispositions);
+        var selectors = verified.Manifest.Rows.Single().Selectors;
+        var languageSelector = selectors[2];
+        var formatSelector = selectors[3];
+        var rightsSelector = selectors[4];
+
+        Assert.AreEqual(ScopeSelectorState.PublisherValueAbsent, languageSelector.State);
+        Assert.AreEqual(
+            ScopeSelectorEvidenceKind.CompleteObservationAbsence,
+            languageSelector.EvidenceKind);
+        Assert.IsEmpty(languageSelector.CanonicalValues);
+        Assert.IsNotNull(languageSelector.EvidenceArtifactOrdinal);
+        Assert.IsNull(languageSelector.RuleOrdinal);
+
+        Assert.AreEqual(ScopeSelectorState.SelectorNotApplicable, formatSelector.State);
+        Assert.AreEqual(ScopeSelectorState.SelectorNotApplicable, rightsSelector.State);
+        Assert.AreNotEqual(languageSelector.State, formatSelector.State);
+        Assert.AreNotEqual(languageSelector.State, rightsSelector.State);
     }
 
     [TestMethod]
@@ -826,7 +963,7 @@ public sealed class EuScopeProfileTests
     }
 
     [TestMethod]
-    public void NoRelationsAtAllIsNotApplicableRatherThanQuarantined()
+    public void NoRelationsAtAllIsPointRatherThanQuarantined()
     {
         var profile = EuScopeProfile.BuildBinding();
         var dispositions = new EuScopeObjectDispositions(
@@ -939,6 +1076,98 @@ public sealed class EuScopeProfileTests
             Artifact("15151515-1515-4515-8515-151515151515")));
     }
 
+    // --- Fold-in: each present selector's evidence ordinal must resolve to its own disposition's
+    // distinct resource id, not merely to some ref the code happened to use. ReduceOne's ExactResolver
+    // harness above builds its evidence table by asking BuildScopeInput which refs it used and
+    // keeping only those, so a bug that swapped two selectors' evidence refs (say, the channel
+    // selector citing the format disposition's own ref) would still resolve to *some* member of the
+    // same used-ref table and none of the tests above would notice. This test fixes the full
+    // candidate table up front, independently of what the code emits. --------------------------------
+
+    [TestMethod]
+    public void EachPresentSelectorsEvidenceOrdinalResolvesToItsOwnDispositionsDistinctResourceId()
+    {
+        var profile = EuScopeProfile.BuildBinding();
+        var recordEvidence = Artifact("e0e0e0e0-0000-4000-8000-000000000001");
+        var channelEvidence = Artifact("e0e0e0e0-0000-4000-8000-000000000002");
+        var languageEvidence = Artifact("e0e0e0e0-0000-4000-8000-000000000003");
+        var formatEvidence = Artifact("e0e0e0e0-0000-4000-8000-000000000004");
+        var rightsEvidence = Artifact("e0e0e0e0-0000-4000-8000-000000000005");
+        var relationEvidence = Artifact("e0e0e0e0-0000-4000-8000-000000000006");
+        var supportingEvidence = Artifact("e0e0e0e0-0000-4000-8000-000000000007");
+        var completionEvidence = Artifact("e0e0e0e0-0000-4000-8000-000000000008");
+
+        var dispositions = new EuScopeObjectDispositions(
+            ObjectRef("distinct-evidence"),
+            EuActForm.Regulation,
+            recordEvidence,
+            new EuChannelDisposition(
+                EuChannel.CellarSparqlEndpoint,
+                EuChannelDisposition.PolicyFor(EuChannel.CellarSparqlEndpoint),
+                "test_channel_reason",
+                "test_channel_rule",
+                channelEvidence),
+            new EuLanguageBodyDisposition(
+                EuOfficialLanguage.English,
+                EuLanguageBodyState.BodyCandidate,
+                "test_language_reason",
+                "test_language_rule",
+                languageEvidence),
+            new EuFormatDisposition(
+                EuManifestationFormat.Formex4,
+                EuFormatBodyAdmission.BodyAdmitted,
+                "test_format_reason",
+                formatEvidence),
+            new EuRightsDisposition(
+                EuContentClass.OriginalLegalText,
+                EuRightsDisposition.BasisFor(EuContentClass.OriginalLegalText),
+                rightsEvidence),
+            [
+                new EuRelationFamilyDisposition(
+                    EuRelationFamily.Amends,
+                    EuRelationAuthority.PublisherAsserted,
+                    EuRelationAcquisitionState.Complete,
+                    completionEvidence,
+                    null),
+            ],
+            relationEvidence,
+            EuContentClass.Summary,
+            supportingEvidence);
+
+        // The full candidate table, fixed up front and independent of anything BuildScopeInput
+        // decides to use -- the opposite of ReduceOne's adaptive probe-then-narrow harness above.
+        var allRefs = new[]
+        {
+            recordEvidence, channelEvidence, languageEvidence, formatEvidence,
+            rightsEvidence, relationEvidence, supportingEvidence, completionEvidence,
+        }
+        .OrderBy(static value => value.ResourceId, StringComparer.Ordinal)
+        .ThenBy(static value => value.Sha256, StringComparer.Ordinal)
+        .ToArray();
+        Assert.HasCount(8, allRefs.Distinct().ToArray(), "the eight seed artifacts must be pairwise distinct.");
+        var ordinals = allRefs
+            .Select(static (value, ordinal) => (value, ordinal))
+            .ToDictionary(static value => value.value, static value => value.ordinal);
+
+        var input = EuScopeProfile.BuildScopeInput(profile, dispositions, ordinals);
+
+        Assert.AreEqual(recordEvidence, allRefs[input.Selectors[0].EvidenceArtifactOrdinal!.Value]);
+        Assert.AreEqual(channelEvidence, allRefs[input.Selectors[1].EvidenceArtifactOrdinal!.Value]);
+        Assert.AreEqual(languageEvidence, allRefs[input.Selectors[2].EvidenceArtifactOrdinal!.Value]);
+        Assert.AreEqual(formatEvidence, allRefs[input.Selectors[3].EvidenceArtifactOrdinal!.Value]);
+        Assert.AreEqual(rightsEvidence, allRefs[input.Selectors[4].EvidenceArtifactOrdinal!.Value]);
+        Assert.AreEqual(relationEvidence, allRefs[input.Selectors[5].EvidenceArtifactOrdinal!.Value]);
+        Assert.AreEqual(supportingEvidence, allRefs[input.Selectors[6].EvidenceArtifactOrdinal!.Value]);
+
+        // Not just each individually correct: pairwise distinct, so no two selectors that are
+        // supposed to cite different dispositions' evidence could have been silently swapped for a
+        // pair that happens to still look individually plausible.
+        var resolvedRefs = input.Selectors
+            .Select(selector => allRefs[selector.EvidenceArtifactOrdinal!.Value])
+            .ToArray();
+        Assert.HasCount(7, resolvedRefs.Distinct().ToArray());
+    }
+
     // --- Fold-in: pin EuScopeObjectDispositions' own construction surface, and that EuScopeProfile's
     // two producer methods are exactly the recognised external producers they claim to be. -----------
 
@@ -970,30 +1199,68 @@ public sealed class EuScopeProfileTests
     [TestMethod]
     public void BuildBindingAndBuildScopeInputAreRecognisedProducersOfTheSharedScopeTypes()
     {
+        // Exact set, not membership: a Contains check only proves EuScopeProfile's own two doors
+        // exist and says nothing about every other door into these two shared types across the
+        // whole Contracts assembly (Luxembourg's own binding and input producers, and the shared
+        // ScopeManifest/ScopeManifestCanonicalWriter/OpenCanonicalScopePass holders and openers
+        // among them). Print-actual-then-transcribe: this is the exact, sorted list
+        // ConstructionSurface.ProducersIn(assembly, ..., includeNonPublic: true) returns today for
+        // each guarded type, so a new, unreviewed door into either shared type -- in this file or
+        // anywhere else in the assembly -- fails this test rather than passing silently because it
+        // happened to also contain the one string a Contains check looked for.
         const string N = "Lex.V3.Contracts.Source.Europe.";
+        const string Lu = "Lex.V3.Contracts.Source.Luxembourg.";
+        const string Sc = "Lex.V3.Contracts.Source.Scope.";
+        const string Co = "Lex.V3.Contracts.Source.Core.";
         var assembly = typeof(EuScopeProfile).Assembly;
 
-        var bindingProducers = ConstructionSurface.ProducersIn(
-            assembly, typeof(ScopeProfileBinding), includeNonPublic: true);
-        Assert.IsTrue(
-            bindingProducers.Contains(
-                "method public static " + N + "EuScopeProfile::BuildBinding() -> "
-                + "Lex.V3.Contracts.Source.Scope.ScopeProfileBinding"),
-            "EuScopeProfile.BuildBinding is expected to be a recognised external producer of " +
-            "ScopeProfileBinding.");
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "field private instance " + Lu + "VerifiedLuxembourgSourceProfile::<ScopeBinding>k__BackingField -> "
+                    + Sc + "ScopeProfileBinding",
+                "field private instance " + Sc + "ScopeManifest::<Profile>k__BackingField -> "
+                    + Sc + "ScopeProfileBinding",
+                "method private static " + Lu + "VerifiedLuxembourgSourceProfile::BuildScopeBinding("
+                    + Co + "SourceArtifactRef, " + Co + "SourceArtifactRef) -> System.ValueTuple<"
+                    + Sc + "ScopeProfileBinding, System.Collections.Generic.IReadOnlyDictionary<"
+                    + "System.String, System.Int32>>",
+                "method public static " + N + "EuScopeProfile::BuildBinding() -> " + Sc + "ScopeProfileBinding",
+                "property public instance " + Lu + "VerifiedLuxembourgSourceProfile::ScopeBinding() -> "
+                    + Sc + "ScopeProfileBinding",
+                "property public instance " + Sc + "ScopeManifest::Profile() -> " + Sc + "ScopeProfileBinding",
+            },
+            ConstructionSurface.ProducersIn(assembly, typeof(ScopeProfileBinding), includeNonPublic: true)
+                .ToArray(),
+            "the exact set of producers of ScopeProfileBinding across Lex.V3.Contracts.");
 
-        var inputProducers = ConstructionSurface.ProducersIn(
-            assembly, typeof(ScopeObjectReductionInput), includeNonPublic: true);
-        Assert.IsTrue(
-            inputProducers.Contains(
-                "method public static " + N + "EuScopeProfile::BuildScopeInput("
-                + "Lex.V3.Contracts.Source.Scope.ScopeProfileBinding, "
-                + N + "EuScopeObjectDispositions, "
-                + "System.Collections.Generic.IReadOnlyDictionary<"
-                + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, System.Int32>) -> "
-                + "Lex.V3.Contracts.Source.Scope.ScopeObjectReductionInput"),
-            "EuScopeProfile.BuildScopeInput is expected to be a recognised external producer of " +
-            "ScopeObjectReductionInput.");
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "field private instance " + Lu + "LuxembourgProfileResolution+Resolved::<ScopeInputs>k__BackingField -> "
+                    + "System.Collections.Generic.IReadOnlyList<" + Sc + "ScopeObjectReductionInput>",
+                "method private static " + Lu + "LuxembourgScopeResolver::BuildScopeInput("
+                    + Lu + "VerifiedLuxembourgSourceProfile, " + Lu + "LuxembourgResourceObservation, "
+                    + "Lex.V3.Contracts.LuScopeDimensions, System.Collections.Generic.IReadOnlyList<"
+                    + Lu + "LuxembourgResolvedRelation>, " + Lu + "LuxembourgWemiTopologyResolution, "
+                    + Lu + "LuxembourgBodyJoinResolution, System.Collections.Generic.IReadOnlyDictionary<"
+                    + Co + "SourceArtifactRef, System.Int32>) -> " + Sc + "ScopeObjectReductionInput",
+                "method private static " + Sc + "ScopeManifestCanonicalWriter::OpenSnapshot("
+                    + Sc + "OpenCanonicalScopePass, System.Threading.CancellationToken) -> "
+                    + "System.Collections.Generic.IEnumerator<" + Sc + "ScopeObjectReductionInput>",
+                "method public instance " + Sc + "OpenCanonicalScopePass::EndInvoke(System.IAsyncResult) -> "
+                    + "System.Collections.Generic.IEnumerable<" + Sc + "ScopeObjectReductionInput>",
+                "method public instance " + Sc + "OpenCanonicalScopePass::Invoke(System.Threading.CancellationToken) -> "
+                    + "System.Collections.Generic.IEnumerable<" + Sc + "ScopeObjectReductionInput>",
+                "method public static " + N + "EuScopeProfile::BuildScopeInput(" + Sc + "ScopeProfileBinding, "
+                    + N + "EuScopeObjectDispositions, System.Collections.Generic.IReadOnlyDictionary<"
+                    + Co + "SourceArtifactRef, System.Int32>) -> " + Sc + "ScopeObjectReductionInput",
+                "property public instance " + Lu + "LuxembourgProfileResolution+Resolved::ScopeInputs() -> "
+                    + "System.Collections.Generic.IReadOnlyList<" + Sc + "ScopeObjectReductionInput>",
+            },
+            ConstructionSurface.ProducersIn(assembly, typeof(ScopeObjectReductionInput), includeNonPublic: true)
+                .ToArray(),
+            "the exact set of producers of ScopeObjectReductionInput across Lex.V3.Contracts.");
     }
 
     // --- Fold-in: the evidence gate can actually refuse -- proven with a fixed admitted set that is
@@ -1040,6 +1307,67 @@ public sealed class EuScopeProfileTests
             [dispositions.ObjectRef],
             [input],
             new AllRefusedResolver()));
+    }
+
+    [TestMethod]
+    public void AResolverWithAFixedNonEmptyButIncompleteAdmittedSetStillRefuses()
+    {
+        // Neither of the two resolvers above can show this shape: AllRefusedResolver admits
+        // nothing at all, so it can never distinguish "the gate checks every binding" from "the
+        // gate just checks whether anything was admitted"; ExactResolver self-derives a complete
+        // admitted set from the exact reduction under test, so it can never demonstrate a refusal.
+        // This resolver's admitted set is fixed, non-empty, and genuinely incomplete: it admits
+        // exactly one real, correctly computed selector-observation binding (the record selector's)
+        // and nothing else, independent of what the rest of the reduction needs. The gate must
+        // still refuse, because the channel/language/format/rights/relation/supporting selectors,
+        // every rule evaluation, and the complete-enumeration binding are all outside that fixed
+        // set.
+        var profile = EuScopeProfile.BuildBinding();
+        var dispositions = Baseline(
+            profile,
+            "fixed-partial-admission",
+            channel: Channel(EuChannel.CellarSparqlEndpoint),
+            language: Language(EuOfficialLanguage.English, EuLanguageBodyState.BodyCandidate),
+            format: Format(EuManifestationFormat.Formex4, EuFormatBodyAdmission.BodyAdmitted),
+            rights: Rights(EuContentClass.OriginalLegalText));
+        var evidenceRefs = new[]
+        {
+            dispositions.RecordEvidenceRef,
+            dispositions.ChannelDisposition.EvidenceRef,
+            dispositions.LanguageDisposition!.EvidenceRef,
+            dispositions.FormatDisposition!.EvidenceRef,
+            dispositions.RightsDisposition!.EvidenceRef,
+            dispositions.RelationEvidenceRef,
+            dispositions.SupportingEvidenceRef,
+        }
+        .Distinct()
+        .OrderBy(static value => value.ResourceId, StringComparer.Ordinal)
+        .ThenBy(static value => value.Sha256, StringComparer.Ordinal)
+        .ToArray();
+        var evidenceOrdinals = evidenceRefs
+            .Select(static (value, ordinal) => (value, ordinal))
+            .ToDictionary(static value => value.value, static value => value.ordinal);
+        var input = EuScopeProfile.BuildScopeInput(profile, dispositions, evidenceOrdinals);
+
+        const int recordSelectorOrdinal = 0;
+        var recordSelector = input.Selectors[recordSelectorOrdinal];
+        var admitted = new ScopeSelectorObservationBinding(
+            recordSelector.EvidenceKind!.Value,
+            ScopeManifestCanonicalWriter.ComputeObjectRefSha256(input.ObjectRef),
+            recordSelectorOrdinal,
+            profile.OrderedMembers[profile.OrderedSelectorMemberOrdinals[recordSelectorOrdinal]],
+            profile.SourceProfileRef,
+            profile.SelectorTableRef,
+            evidenceRefs[recordSelector.EvidenceArtifactOrdinal!.Value],
+            ScopeManifestCanonicalWriter.ComputeSelectorEvidenceSha256(
+                profile, evidenceRefs, recordSelectorOrdinal, recordSelector));
+
+        Assert.ThrowsExactly<InvalidOperationException>(() => ScopeReducer.Reduce(
+            profile,
+            evidenceRefs,
+            [dispositions.ObjectRef],
+            [input],
+            new PartiallyAdmittedResolver(admitted)));
     }
 
     private static EuScopeObjectDispositions Baseline(
@@ -1196,6 +1524,37 @@ public sealed class EuScopeProfileTests
             new("urn:uuid:f0f0f0f0-0000-4000-8000-0000000000ff", Digest);
 
         public bool IsSelectorObservationAdmitted(ScopeSelectorObservationBinding binding) => false;
+
+        public bool IsSelectorNotApplicableAdmitted(ScopeSelectorNotApplicableBinding binding) => false;
+
+        public bool IsRuleEvaluationAdmitted(ScopeRuleEvaluationBinding binding) => false;
+
+        public bool IsCompleteEnumerationAdmitted(ScopeCompleteEnumerationBinding binding) => false;
+    }
+
+    /// <summary>
+    /// A resolver whose admitted set is a fixed, non-empty, deliberately incomplete literal: exactly
+    /// one real selector-observation binding, computed once by the caller and never re-derived from
+    /// whatever a reduction under test happens to need. Distinct from <see cref="AllRefusedResolver"/>
+    /// (admits nothing) and <see cref="ExactResolver"/> (self-derives a complete admitted set from
+    /// the same computation under test), so it can show what neither of those can: that the gate
+    /// refuses a reduction whose bindings are only partially covered, not merely one with zero
+    /// coverage.
+    /// </summary>
+    private sealed class PartiallyAdmittedResolver : IScopeReductionEvidenceResolver
+    {
+        private readonly ScopeSelectorObservationBinding _admitted;
+
+        public PartiallyAdmittedResolver(ScopeSelectorObservationBinding admitted)
+        {
+            _admitted = admitted;
+        }
+
+        public SourceArtifactRef CompleteEnumerationRef { get; } =
+            new("urn:uuid:f0f0f0f0-0000-4000-8000-0000000000fe", Digest);
+
+        public bool IsSelectorObservationAdmitted(ScopeSelectorObservationBinding binding) =>
+            binding == _admitted;
 
         public bool IsSelectorNotApplicableAdmitted(ScopeSelectorNotApplicableBinding binding) => false;
 
