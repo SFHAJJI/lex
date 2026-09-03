@@ -358,3 +358,95 @@ public sealed record EuPartitionWindow
 
     public int LastYear { get; }
 }
+
+/// <summary>
+/// Why a selector row set is not the accounted scope. Closed.
+/// </summary>
+public enum EuSelectionRowSetRefusal
+{
+    /// <summary>No refusal: the set was admitted.</summary>
+    [JsonStringEnumMemberName("none")]
+    None = 0,
+
+    /// <summary>Two rows decide the same selector.</summary>
+    [JsonStringEnumMemberName("duplicate_selector")]
+    DuplicateSelector = 1,
+
+    /// <summary>
+    /// A selector in the closed set has no row. The set is an inventory of what was accounted
+    /// for, so a gap is a missing decision rather than an implicit exclusion.
+    /// </summary>
+    [JsonStringEnumMemberName("selector_undecided")]
+    SelectorUndecided = 2,
+}
+
+/// <summary>
+/// The accounted exclusion scope: exactly one reviewed disposition for every selector.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <see cref="EuSelectionDisposition"/> keeps one row honest by refusing a policy the reviewed
+/// inventory did not give that selector. It cannot say anything about the rows that are absent,
+/// and an absent row is the dangerous direction: a partial set reads as an accounted scope while
+/// the classes it omits are silently unexcluded, which is the shape that turns a scope decision
+/// into a scope accident.
+/// </para>
+/// <para>
+/// So totality lives here and is enforced against <see cref="Enum.GetValues{TEnum}"/> rather than
+/// a written count. A thirteenth selector added to the enum makes every previously complete set
+/// refuse as <see cref="EuSelectionRowSetRefusal.SelectorUndecided"/> until someone decides it,
+/// which is the correct failure: unknown vocabulary fails closed as scope drift.
+/// </para>
+/// </remarks>
+public sealed class EuSelectionRowSet
+{
+    private readonly Dictionary<EuExcludedSelector, EuSelectionDisposition> _rows;
+
+    private EuSelectionRowSet(Dictionary<EuExcludedSelector, EuSelectionDisposition> rows)
+    {
+        _rows = rows;
+    }
+
+    /// <summary>Every accounted selector, in the order the closed enum declares them.</summary>
+    public IReadOnlyList<EuSelectionDisposition> Rows =>
+        Enum.GetValues<EuExcludedSelector>().Select(selector => _rows[selector]).ToArray();
+
+    /// <summary>The reviewed disposition for one selector. Present for every member.</summary>
+    public EuSelectionDisposition For(EuExcludedSelector selector) =>
+        _rows[ContractValidation.RequireDefined(selector, nameof(selector))];
+
+    /// <summary>
+    /// The only path that mints an accounted scope. Returns null with a typed refusal, because a
+    /// set that is not total is a reviewable state to record rather than a programming error.
+    /// </summary>
+    public static EuSelectionRowSet? TryAdmit(
+        IReadOnlyList<EuSelectionDisposition> rows,
+        out EuSelectionRowSetRefusal refusal)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        refusal = default;
+
+        var bySelector = new Dictionary<EuExcludedSelector, EuSelectionDisposition>();
+        foreach (var row in rows)
+        {
+            ArgumentNullException.ThrowIfNull(row);
+            if (!bySelector.TryAdd(row.Selector, row))
+            {
+                refusal = EuSelectionRowSetRefusal.DuplicateSelector;
+                return null;
+            }
+        }
+
+        foreach (var selector in Enum.GetValues<EuExcludedSelector>())
+        {
+            if (!bySelector.ContainsKey(selector))
+            {
+                refusal = EuSelectionRowSetRefusal.SelectorUndecided;
+                return null;
+            }
+        }
+
+        refusal = EuSelectionRowSetRefusal.None;
+        return new EuSelectionRowSet(bySelector);
+    }
+}
