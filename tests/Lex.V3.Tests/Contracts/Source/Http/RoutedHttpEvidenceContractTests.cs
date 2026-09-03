@@ -179,9 +179,7 @@ public sealed class RoutedHttpEvidenceContractTests
             var receiptB = await store.CreateAsync(bodyB, CustodyClass.NightlyFloor90d, CancellationToken.None);
             Assert.AreNotEqual(receiptA.Reference.ContentSha256, receiptB.Reference.ContentSha256);
 
-            var receiptASha256 = Convert.ToHexString(
-                    SHA256.HashData(Encoding.UTF8.GetBytes(ContractJson.Serialize(receiptA))))
-                .ToLowerInvariant();
+            var receiptASha256 = DurableBlobWriteReceiptDigest.Of(receiptA);
             var hopA = RoutedHttpHop.Create(
                 0,
                 Observation0,
@@ -1084,10 +1082,7 @@ public sealed class RoutedHttpEvidenceContractTests
             new DateTimeOffset(2026, 9, 2, 19, 0, 0, TimeSpan.Zero),
             protectedUntil: null);
         var receipt = new DurableBlobWriteReceipt(CustodySchemaIds.DurableBlobWriteReceipt, reference, policy);
-        var sha256 = Convert.ToHexString(
-                SHA256.HashData(Encoding.UTF8.GetBytes(ContractJson.Serialize(receipt))))
-            .ToLowerInvariant();
-        return (receipt, sha256);
+        return (receipt, DurableBlobWriteReceiptDigest.Of(receipt));
     }
 
     /// <summary>

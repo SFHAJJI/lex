@@ -387,6 +387,20 @@ public sealed class RoutedHttpEvidence
     /// receipt, a receipt naming other bytes, or a receipt whose own canonical digest does not
     /// reproduce the hop's claimed <see cref="RoutedHttpHop.DurableWriteReceiptSha256"/>.
     /// </summary>
+    /// <remarks>
+    /// This is consistency evidence, not unforgeable evidence, and it stays that way plainly on
+    /// purpose. <see cref="DurableBlobWriteReceipt"/>, <see cref="DurableBlobRef"/> and
+    /// <see cref="CustodyPolicyEvidence"/> all have public constructors and no runtime pin refuses
+    /// a caller who builds one directly (Decision 71: the two concrete stores that legitimately
+    /// mint them live in other assemblies, so Contracts cannot constructor-seal these types against
+    /// callers it must still let those stores reach). What this check proves is that a presented
+    /// receipt is exactly the one the hop itself claims -- a caller who fabricates both a receipt
+    /// and a hop consistent with each other, without ever touching custody, still passes. The gap
+    /// that opens is fenced structurally instead, by pinning the closed, reviewed set of real
+    /// producers of these three types: the JSON constructor plus the genuine custody stores in
+    /// Lex.V3.Artifacts and Lex.V3.Custody.Azure, and nothing else in Contracts or Ingest. A new,
+    /// unreviewed producer breaks that pin rather than passing silently.
+    /// </remarks>
     public static RoutedHttpEvidence Create(
         SourceArtifactRef runIdentity,
         ulong requestOrdinal,
@@ -439,15 +453,17 @@ public sealed class RoutedHttpEvidence
                     nameof(hopWriteReceiptsByObservationId));
             }
 
-            var receiptSha256 = Convert.ToHexString(
-                    System.Security.Cryptography.SHA256.HashData(
-                        Encoding.UTF8.GetBytes(ContractJson.Serialize(receipt))))
-                .ToLowerInvariant();
+            var receiptSha256 = DurableBlobWriteReceiptDigest.Of(receipt);
             if (!string.Equals(receiptSha256, hop.DurableWriteReceiptSha256, StringComparison.Ordinal))
             {
+                // This hashes the presented receipt's own canonical bytes and compares that hash to
+                // the hop's claimed digest; it says nothing about ReadbackSha256/ReadbackByteLength
+                // (those equal Sha256/Length by construction, enforced in RoutedHttpHop.Create, and
+                // are not examined here).
                 throw new ArgumentException(
-                    "A hop's durable write receipt digest does not reproduce from the exact receipt "
-                    + "supplied for it: the claimed readback does not match the presented receipt.",
+                    "A hop's durable write receipt digest does not reproduce: hashing the exact "
+                    + "receipt presented for this observation ID does not equal the hop's own claimed "
+                    + "durable write receipt SHA-256.",
                     nameof(hopWriteReceiptsByObservationId));
             }
         }

@@ -336,7 +336,6 @@ public sealed class EnumerationDeliveryComparison
         var payload = value.RetainedPayloadBytes.ToArray();
         var isCount = family == profile.CountQueryFamilyRef;
         var terminal = value.HttpEvidence.Hops[^1];
-        var custodyBytes = Encoding.UTF8.GetBytes(ContractJson.Serialize(value.DurableWriteReceipt));
         if (value.QueryPlan.QueryFamilyRef != family ||
             value.QueryInput.QueryFamilyRef != family ||
             value.QueryInput.ArtifactRef != refs.QueryInputRef ||
@@ -351,7 +350,13 @@ public sealed class EnumerationDeliveryComparison
             terminal.Status != 200 ||
             terminal.StatusDisposition != HttpStatusDisposition.DerivableStatus ||
             terminal.Completion is not (DeclaredContentLengthHttpCompletion or PinnedHandlerChunkedEofHttpCompletion) ||
-            terminal.DurableWriteReceiptSha256 != Sha(custodyBytes) ||
+            // Not redundant with RoutedHttpEvidence.Create's own receipt-gate check: that check
+            // only ever sees the receipt a caller presented at the moment evidence was minted. A
+            // resolver here can legitimately reconstruct HttpEvidence and DurableWriteReceipt from
+            // storage independently of each other (RoutedHttpEvidence.ParseAndVerify is exactly the
+            // receipt-free reconstruction door for that), so this is the one place that still
+            // proves the two independently resolved artifacts agree.
+            terminal.DurableWriteReceiptSha256 != DurableBlobWriteReceiptDigest.Of(value.DurableWriteReceipt) ||
             value.DurableWriteReceipt.Reference.CustodyClass != CustodyClass.NightlyFloor90d ||
             value.DurableWriteReceipt.PolicyEvidence.VerificationProfile !=
                 CustodyVerificationProfile.ImmutableObject1 ||

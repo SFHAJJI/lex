@@ -1013,8 +1013,7 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                 "The HTTP evidence receipt does not bind the exact retained bytes.");
         }
 
-        var receiptBytes = Encoding.UTF8.GetBytes(ContractJson.Serialize(receipt));
-        var receiptSha256 = Hash(receiptBytes);
+        var (receiptBytes, receiptSha256) = DurableBlobWriteReceiptDigest.Canonicalize(receipt);
         try
         {
             await RetainArtifactAsync(receiptBytes, receiptSha256, deadline.Token)
