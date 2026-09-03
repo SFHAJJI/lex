@@ -65,6 +65,13 @@ public static class ConstructionSurface
     /// false only producers reachable from outside the assembly remain: a public member whose every
     /// enclosing type is public, since a public method on an internal type is internal in effect.
     /// </summary>
+    /// <summary>
+    /// True for a compiler-generated async state machine, identified by the interface the compiler
+    /// makes it implement rather than by its mangled name, so no name filter is introduced.
+    /// </summary>
+    private static bool IsAsyncStateMachine(Type type) =>
+        typeof(System.Runtime.CompilerServices.IAsyncStateMachine).IsAssignableFrom(type);
+
     public static IReadOnlyList<string> ProducersIn(Assembly assembly, Type guarded, bool includeNonPublic)
     {
         ArgumentNullException.ThrowIfNull(assembly);
@@ -74,6 +81,21 @@ public static class ConstructionSurface
         foreach (var type in AllTypes(assembly))
         {
             if (own.Contains(type))
+            {
+                continue;
+            }
+
+            // A compiler-generated async state machine is not a construction path. Its fields are
+            // the compiler's storage for hoisted locals and for `this`; nobody can drive one to
+            // obtain a guarded value. They are also not stable: a hoisted local that Debug keeps
+            // as a field, Release can drop entirely, so pinning them makes the guard pass in one
+            // configuration and fail in the other. That is not a hypothetical: it is how this
+            // guard first reached CI, green on Debug and red on Release.
+            //
+            // Deliberately narrow. Compiler-generated members on real types, a record's clone
+            // method and its copy constructor above all, are exactly what this guard exists to
+            // see and are not excluded here.
+            if (IsAsyncStateMachine(type))
             {
                 continue;
             }
