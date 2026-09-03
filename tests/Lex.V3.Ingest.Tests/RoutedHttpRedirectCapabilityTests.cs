@@ -35,7 +35,10 @@ public sealed class RoutedHttpRedirectCapabilityTests
         // The lease's whole construction surface, every scope and nested type, pinned entry by
         // entry: one private constructor, the two internal factories, and the async state machines
         // that hold the lease they run on. State machines carry their compiler ordinal, so adding
-        // a member to the lease renumbers them and this pin changes under review.
+        // a member to the lease or the session renumbers them and this pin changes under review.
+        // When only an ordinal moved, the change is churn and the pin is updated to the new
+        // number; a reviewer looks for any other line in the diff of this list, because that one
+        // is the finding.
         const string Session = "Lex.V3.Ingest.RoutedHttpAcquisitionSession";
         const string Lease = Session + "+SendLease";
         const string Common =

@@ -43,11 +43,15 @@ public sealed class RoutedHttpAcquisitionSessionTests
             .ToArray();
 
         // The session itself accepts none. What remains are the internal result types, which
-        // carry the evidence the session produced out to its caller rather than accepting any in
-        // (a forged result reaches nobody but its forger), and the abstract post-header rejection,
-        // whose private protected constructor is reachable only by a same-assembly subtype and
-        // whose sole minter is pinned by the audit tests. Each is listed here so that a new entry
-        // is a visible change, not a silent one.
+        // carry the evidence the session produced out to its caller rather than accepting any in,
+        // and the abstract post-header rejection, whose private protected constructor is reachable
+        // only by a same-assembly subtype and whose sole minter is pinned by the audit tests. The
+        // result factories cannot be closed by visibility: an enclosing type has no access to a
+        // nested type's private members, so private factories would break the session's own
+        // calls. What the pin tolerates is not nothing: same-assembly code, a test or a later
+        // pipeline step, can mint a result and assert on it as though it were observed, against
+        // the rule that evidence is minted only by its observer. Each is listed here so that a
+        // new entry is a visible change, not a silent one.
         CollectionAssert.AreEqual(
             new[]
             {
