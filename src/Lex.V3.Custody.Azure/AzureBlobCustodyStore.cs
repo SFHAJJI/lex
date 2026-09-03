@@ -147,6 +147,89 @@ public sealed class AzureBlobCustodyStore : ICustodyStore
         }
     }
 
+    public async Task<ReadOnlyMemory<byte>> ReadByDigestAsync(
+        string contentSha256,
+        CancellationToken cancellationToken)
+    {
+        if (!CustodyDigest.IsLowercaseSha256(contentSha256))
+        {
+            throw new ArgumentException(
+                "A content-addressed reopen requires one lowercase SHA-256.",
+                nameof(contentSha256));
+        }
+
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ReadOnlyMemory<byte>? selected = null;
+            foreach (var custodyClass in Enum.GetValues<CustodyClass>())
+            {
+                var container = DurableContainer(custodyClass);
+                var names = await ListGenerationNamesAsync(
+                        container, contentSha256, cancellationToken)
+                    .ConfigureAwait(false);
+                foreach (var name in names)
+                {
+                    var blob = container.GetBlockBlobClient(name);
+                    var properties = (await blob.GetPropertiesAsync(
+                            conditions: null, cancellationToken)
+                        .ConfigureAwait(false)).Value;
+                    if (properties.ContentLength < 0 ||
+                        properties.ContentLength > CustodyBounds.MaxObjectBytes)
+                    {
+                        throw new CustodyIntegrityException(
+                            "The content-addressed Azure artifact exceeds the custody bound.");
+                    }
+
+                    var reference = new DurableBlobRef(
+                        CustodySchemaIds.DurableBlobRef,
+                        contentSha256,
+                        properties.ContentLength,
+                        custodyClass);
+                    var observation = await ReadExactAsync(
+                            blob,
+                            reference,
+                            expectedETag: null,
+                            retainBytes: true,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                    if (selected is { } prior && !prior.Span.SequenceEqual(observation.Bytes.Span))
+                    {
+                        throw new CustodyIntegrityException(
+                            "One content address resolved to different Azure custody bytes.");
+                    }
+
+                    selected ??= observation.Bytes;
+                }
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            return selected
+                ?? throw new CustodyIntegrityException(
+                    "The content-addressed Azure artifact is not retained.");
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (RequestFailedException exception) when (exception.Status == 404)
+        {
+            throw new CustodyIntegrityException(
+                "An enumerated content-addressed Azure artifact disappeared before verification.",
+                exception);
+        }
+        catch (Exception exception)
+            when (exception is not (CustodyRequiredException
+                or CustodyIntegrityException
+                or CustodyPolicyException
+                or ArgumentException))
+        {
+            throw new CustodyRequiredException(
+                "Azure custody was unavailable while reopening content-addressed evidence.",
+                exception);
+        }
+    }
+
     private async Task<DurableBlobWriteReceipt> CreateCoreAsync(
         ReadOnlyMemory<byte> bytes,
         CustodyClass custodyClass,

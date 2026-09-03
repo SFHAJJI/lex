@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Http;
 
 namespace Lex.V3.Contracts.Source.Core;
@@ -174,25 +175,18 @@ public static class RepeatedEnumerationInterpretationProfileIdentity
     public static void Validate(SourceArtifactRef reference, RepeatedEnumerationInterpretationProfile profile) { if (reference != Create(reference.ResourceId, profile)) throw new ArgumentException("The interpretation profile reference does not bind.", nameof(reference)); }
 }
 
-public sealed record RepeatedEnumerationEvidenceRefs(SourceArtifactRef QueryPlanRef, SourceArtifactRef QueryInputRef, SourceArtifactRef RenderReceiptRef, SourceArtifactRef RequestEvidenceRef, SourceArtifactRef ObservationRef);
+public sealed record RepeatedEnumerationEvidenceRefs(SourceArtifactRef QueryPlanRef, SourceArtifactRef QueryInputRef, SourceArtifactRef RenderReceiptRef, SourceArtifactRef LogicalRequestRef, SourceArtifactRef HttpEvidenceRef);
 public sealed record RepeatedEnumerationPageRef(int Ordinal, RepeatedEnumerationEvidenceRefs Evidence);
 public sealed record EnumerationPageSetRefs(IReadOnlyList<RepeatedEnumerationPageRef> Pages);
-public sealed record RepeatedEnumerationResolvedEvidence(MachineQueryPlan QueryPlan, MachineQueryInputArtifact QueryInput, MachineQueryRenderReceipt RenderReceipt, IMachineQueryRenderer Renderer, MachineRequestEvidence RequestEvidence, ResponseCompleteBodyObservation Observation, ReadOnlyMemory<byte> RetainedPayloadBytes);
+public sealed record RepeatedEnumerationResolvedEvidence(MachineQueryPlan QueryPlan, MachineQueryInputArtifact QueryInput, MachineQueryRenderReceipt RenderReceipt, IMachineQueryRenderer Renderer, HttpLogicalRequest LogicalRequest, RoutedHttpEvidence HttpEvidence, DurableBlobWriteReceipt DurableWriteReceipt, ReadOnlyMemory<byte> RetainedPayloadBytes);
 public sealed record EnumerationObservationTimes(string CountA, IReadOnlyList<string> PagesA, string CountB, IReadOnlyList<string> PagesB);
 public interface IRepeatedEnumerationEvidenceResolver { RepeatedEnumerationResolvedEvidence Resolve(RepeatedEnumerationEvidenceRefs references); }
 
-public static class MachineRequestEvidenceIdentity
-{
-    public const string CanonicalizationIdentity = "machine-request-evidence-canonical-json/1";
-    public static SourceArtifactRef Create(string resourceId, MachineRequestEvidence evidence) => new(resourceId, MachineQueryValidation.Sha256(ContractCanonicalizer.Canonicalize(evidence, CanonicalizationIdentity, 128)));
-    public static void Validate(SourceArtifactRef reference, MachineRequestEvidence evidence) { if (reference != Create(reference.ResourceId, evidence)) throw new ArgumentException("The request evidence reference does not bind.", nameof(reference)); }
-}
-
 public sealed class EnumerationDeliveryComparison
 {
-    private EnumerationDeliveryComparison(SourceArtifactRef profileRef, string partitionKey, RepeatedEnumerationThresholdAssessment thresholdAssessment, RepeatedEnumerationEvidenceRefs countA, EnumerationPageSetRefs pagesA, RepeatedEnumerationEvidenceRefs countB, EnumerationPageSetRefs pagesB, EnumerationObservationTimes observationTimes, long selectedA, long selectedB, IReadOnlyList<RepeatedEnumerationRow> rowsA, IReadOnlyList<RepeatedEnumerationRow> rowsB)
+    private EnumerationDeliveryComparison(SourceArtifactRef profileRef, SourceArtifactRef sourceProfileRef, SourceArtifactRef runIdentity, string partitionKey, RepeatedEnumerationThresholdAssessment thresholdAssessment, RepeatedEnumerationEvidenceRefs countA, EnumerationPageSetRefs pagesA, RepeatedEnumerationEvidenceRefs countB, EnumerationPageSetRefs pagesB, EnumerationObservationTimes observationTimes, long selectedA, long selectedB, IReadOnlyList<RepeatedEnumerationRow> rowsA, IReadOnlyList<RepeatedEnumerationRow> rowsB)
     {
-        InterpretationProfileRef = profileRef; PartitionKey = partitionKey; CountA = countA; PagesA = Snapshot(pagesA); CountB = countB; PagesB = Snapshot(pagesB);
+        InterpretationProfileRef = profileRef; SourceProfileRef = sourceProfileRef; RunIdentity = runIdentity; PartitionKey = partitionKey; CountA = countA; PagesA = Snapshot(pagesA); CountB = countB; PagesB = Snapshot(pagesB);
         ThresholdAssessment = thresholdAssessment;
         ObservationTimes = new(observationTimes.CountA, Array.AsReadOnly(observationTimes.PagesA.ToArray()), observationTimes.CountB, Array.AsReadOnly(observationTimes.PagesB.ToArray()));
         SelectedRowCountA = selectedA; SelectedRowCountB = selectedB; DeliveredRowCountA = rowsA.Count; DeliveredRowCountB = rowsB.Count;
@@ -212,6 +206,12 @@ public sealed class EnumerationDeliveryComparison
             CursorDigestB);
     }
     public SourceArtifactRef InterpretationProfileRef { get; }
+
+    /// <summary>The one official source profile derived from every bound request.</summary>
+    public SourceArtifactRef SourceProfileRef { get; }
+
+    /// <summary>The one acquisition run shared by both counts and every page.</summary>
+    public SourceArtifactRef RunIdentity { get; }
 
     /// <summary>The partition member key shared by every verified count and page input.</summary>
     /// <remarks>
@@ -247,14 +247,21 @@ public sealed class EnumerationDeliveryComparison
         RequireDistinct(countA, frozenPagesA, countB, frozenPagesB);
         var evidenceA = new[] { aCount }.Concat(aPages).ToArray();
         var evidenceB = new[] { bCount }.Concat(bPages).ToArray();
+        var sourceProfileRef = RequireSameSourceProfile(evidenceA.Concat(evidenceB), profile);
+        var runIdentity = RequireSameRun(evidenceA.Concat(evidenceB));
+        RequireDistinctRequestOrdinals(evidenceA.Concat(evidenceB));
         RequireSameSelection(evidenceA.Concat(evidenceB), profile);
         var partitionKey = RequireSamePartition(evidenceA.Concat(evidenceB));
         RequireDistinctPasses(evidenceA, evidenceB, profile);
         RequireDifferentPageLimits(aPages, bPages);
         var selectedA = ParseCount(aCount.RetainedPayloadBytes.Span, profile); var selectedB = ParseCount(bCount.RetainedPayloadBytes.Span, profile);
-        var rowsA = VerifyPages(aPages, countA.ObservationRef, selectedA, profile); var rowsB = VerifyPages(bPages, countB.ObservationRef, selectedB, profile);
-        var times = new EnumerationObservationTimes(aCount.Observation.Request.ObservedAtUtc, aPages.Select(static page => page.Observation.Request.ObservedAtUtc).ToArray(), bCount.Observation.Request.ObservedAtUtc, bPages.Select(static page => page.Observation.Request.ObservedAtUtc).ToArray());
-        return new(profileRef, partitionKey, AssessThreshold(Math.Max(selectedA, selectedB), profile), countA, frozenPagesA, countB, frozenPagesB, times, selectedA, selectedB, rowsA, rowsB);
+        var rowsA = VerifyPages(aPages, countA.HttpEvidenceRef, selectedA, profile); var rowsB = VerifyPages(bPages, countB.HttpEvidenceRef, selectedB, profile);
+        var times = new EnumerationObservationTimes(
+            TerminalHop(aCount).RequestStartedAt,
+            aPages.Select(static page => TerminalHop(page).RequestStartedAt).ToArray(),
+            TerminalHop(bCount).RequestStartedAt,
+            bPages.Select(static page => TerminalHop(page).RequestStartedAt).ToArray());
+        return new(profileRef, sourceProfileRef, runIdentity, partitionKey, AssessThreshold(Math.Max(selectedA, selectedB), profile), countA, frozenPagesA, countB, frozenPagesB, times, selectedA, selectedB, rowsA, rowsB);
     }
     public static RepeatedEnumerationThresholdAssessment AssessThreshold(long count, RepeatedEnumerationInterpretationProfile profile) { if (count < 0) throw new ArgumentOutOfRangeException(nameof(count)); ArgumentNullException.ThrowIfNull(profile); return count < profile.MaximumDeliverableRows ? RepeatedEnumerationThresholdAssessment.BelowMaximum : RepeatedEnumerationThresholdAssessment.PartitionRequired; }
 
@@ -305,24 +312,107 @@ public sealed class EnumerationDeliveryComparison
         }
     }
 
-    private static RepeatedEnumerationResolvedEvidence Resolve(RepeatedEnumerationEvidenceRefs refs, RepeatedEnumerationInterpretationProfile profile, SourceRegistryMemberRef family, IRepeatedEnumerationEvidenceResolver resolver)
+    private static VerifiedRepeatedEnumerationEvidence Resolve(RepeatedEnumerationEvidenceRefs refs, RepeatedEnumerationInterpretationProfile profile, SourceRegistryMemberRef family, IRepeatedEnumerationEvidenceResolver resolver)
     {
         var value = resolver.Resolve(refs) ?? throw new ArgumentException("Retained evidence is missing.", nameof(resolver));
-        MachineQueryPlanIdentity.Validate(refs.QueryPlanRef, value.QueryPlan); MachineQueryRenderReceiptIdentity.Validate(refs.RenderReceiptRef, value.RenderReceipt); HttpObservationIdentity.Validate(refs.ObservationRef, value.Observation); MachineRequestEvidenceIdentity.Validate(refs.RequestEvidenceRef, value.RequestEvidence);
-        MachineRequestEvidenceBundle.ValidateRetained(value.QueryPlan, refs.QueryPlanRef, value.RenderReceipt, refs.RenderReceiptRef, value.Observation, value.RequestEvidence); MachineQueryBinder.VerifyOffline(value.QueryPlan, refs.QueryPlanRef, value.QueryInput, value.RenderReceipt, value.Renderer);
+        MachineQueryPlanIdentity.Validate(refs.QueryPlanRef, value.QueryPlan);
+        MachineQueryRenderReceiptIdentity.Validate(refs.RenderReceiptRef, value.RenderReceipt);
+        RequireArtifactBinding(refs.LogicalRequestRef, value.LogicalRequest.CopyCanonicalBytes());
+        RequireArtifactBinding(refs.HttpEvidenceRef, value.HttpEvidence.CopyCanonicalBytes());
+        var reproducedRequest = MachineQueryBinder.ReproduceForEvidence(
+            value.QueryPlan,
+            refs.QueryPlanRef,
+            value.QueryInput,
+            value.Renderer);
+        if (reproducedRequest.RenderReceipt != value.RenderReceipt)
+        {
+            throw new ArgumentException(
+                "The retained render receipt differs from the offline rerender.",
+                nameof(refs));
+        }
+
+        var sourceProfile = OfficialMachineQuerySourceProfiles.ResolveFor(reproducedRequest);
+        var requestBody = reproducedRequest.CopyRequestBody();
         var payload = value.RetainedPayloadBytes.ToArray();
         var isCount = family == profile.CountQueryFamilyRef;
-        if (value.QueryPlan.QueryFamilyRef != family || value.QueryInput.QueryFamilyRef != family || value.QueryInput.ArtifactRef != refs.QueryInputRef || value.QueryPlan.OrderedParameterSet != refs.QueryInputRef || isCount && value.QueryPlan.ResponseCardinality.Kind != MachineResponseCardinalityKind.OpaqueBody || !isCount && value.QueryPlan.ResponseCardinality.Kind != MachineResponseCardinalityKind.BoundedRowSetPage || value.Observation.StatusCode != 200 || value.Observation.StatusDisposition != HttpStatusDisposition.DerivableStatus || value.Observation.DurableBlobRef().ByteLength != payload.Length || value.Observation.DurableBlobRef().ContentSha256 != Sha(payload) || value.Observation.ResponseMetadata.ContentType is not SingleHttpHeader contentType || contentType.Value != profile.ExpectedMediaType) throw new ArgumentException("The retained SPARQL evidence tuple does not bind.", nameof(refs));
+        var terminal = value.HttpEvidence.Hops[^1];
+        var custodyBytes = Encoding.UTF8.GetBytes(ContractJson.Serialize(value.DurableWriteReceipt));
+        if (value.QueryPlan.QueryFamilyRef != family ||
+            value.QueryInput.QueryFamilyRef != family ||
+            value.QueryInput.ArtifactRef != refs.QueryInputRef ||
+            value.QueryPlan.OrderedParameterSet != refs.QueryInputRef ||
+            !LogicalRequestMatches(value.LogicalRequest, reproducedRequest, sourceProfile, requestBody) ||
+            isCount && value.QueryPlan.ResponseCardinality.Kind != MachineResponseCardinalityKind.OpaqueBody ||
+            !isCount && value.QueryPlan.ResponseCardinality.Kind != MachineResponseCardinalityKind.BoundedRowSetPage ||
+            value.HttpEvidence.Hops.Count != 1 ||
+            value.HttpEvidence.Outcome is not CompleteHttpRouteOutcome ||
+            terminal.LogicalRequestSha256 != refs.LogicalRequestRef.Sha256 ||
+            terminal.RequestUri != value.LogicalRequest.Uri ||
+            terminal.Status != 200 ||
+            terminal.StatusDisposition != HttpStatusDisposition.DerivableStatus ||
+            terminal.Completion is not (DeclaredContentLengthHttpCompletion or PinnedHandlerChunkedEofHttpCompletion) ||
+            terminal.DurableWriteReceiptSha256 != Sha(custodyBytes) ||
+            value.DurableWriteReceipt.Reference.CustodyClass != CustodyClass.NightlyFloor90d ||
+            value.DurableWriteReceipt.PolicyEvidence.VerificationProfile !=
+                CustodyVerificationProfile.ImmutableObject1 ||
+            value.DurableWriteReceipt.PolicyEvidence.Protection != CustodyProtection.LockedTime ||
+            value.DurableWriteReceipt.Reference.ByteLength != payload.LongLength ||
+            value.DurableWriteReceipt.Reference.ByteLength != checked((long)terminal.Length) ||
+            value.DurableWriteReceipt.Reference.ContentSha256 != Sha(payload) ||
+            value.DurableWriteReceipt.Reference.ContentSha256 != terminal.Sha256 ||
+            terminal.ReadbackByteLength != terminal.Length ||
+            terminal.ReadbackSha256 != terminal.Sha256 ||
+            terminal.Headers.ContentType is not RoutedHttpSingleHeader contentType ||
+            contentType.Value != profile.ExpectedMediaType)
+        {
+            throw new ArgumentException("The retained SPARQL evidence tuple does not bind.", nameof(refs));
+        }
+
         RequireInputRoleShape(value.QueryInput, profile, isCount);
-        return value with { RetainedPayloadBytes = payload };
+        return new(
+            value with { RetainedPayloadBytes = payload },
+            sourceProfile.ArtifactRef);
     }
-    private static IReadOnlyList<RepeatedEnumerationResolvedEvidence> ResolvePages(EnumerationPageSetRefs pageSet, RepeatedEnumerationInterpretationProfile profile, IRepeatedEnumerationEvidenceResolver resolver)
+
+    private static bool LogicalRequestMatches(
+        HttpLogicalRequest logicalRequest,
+        OpenedMachineRequest reproducedRequest,
+        OfficialMachineQuerySourceProfile sourceProfile,
+        ReadOnlySpan<byte> requestBody)
+    {
+        var expectedHeaders = new[]
+        {
+            new HttpLogicalRequestHeader("user-agent", sourceProfile.CrawlerUserAgent),
+            new HttpLogicalRequestHeader("accept", sourceProfile.Accept),
+            new HttpLogicalRequestHeader(
+                "content-type",
+                $"{sourceProfile.RequestContentType}; charset=utf-8"),
+        };
+        return string.Equals(logicalRequest.Uri, reproducedRequest.RequestedUri, StringComparison.Ordinal) &&
+            logicalRequest.Method == sourceProfile.Method &&
+            logicalRequest.Headers.SequenceEqual(expectedHeaders) &&
+            logicalRequest.Body.Length == checked((ulong)requestBody.Length) &&
+            string.Equals(logicalRequest.Body.Sha256, Sha(requestBody), StringComparison.Ordinal);
+    }
+
+    private static RoutedHttpHop TerminalHop(VerifiedRepeatedEnumerationEvidence value) =>
+        value.HttpEvidence.Hops[^1];
+
+    private static void RequireArtifactBinding(SourceArtifactRef reference, ReadOnlySpan<byte> canonicalBytes)
+    {
+        ArgumentNullException.ThrowIfNull(reference);
+        if (!string.Equals(reference.Sha256, Sha(canonicalBytes), StringComparison.Ordinal))
+        {
+            throw new ArgumentException("A retained HTTP artifact reference does not bind its exact canonical bytes.", nameof(reference));
+        }
+    }
+    private static IReadOnlyList<VerifiedRepeatedEnumerationEvidence> ResolvePages(EnumerationPageSetRefs pageSet, RepeatedEnumerationInterpretationProfile profile, IRepeatedEnumerationEvidenceResolver resolver)
     {
         var pages = pageSet.Pages?.ToArray() ?? throw new ArgumentNullException(nameof(pageSet.Pages));
         if (pages.Length is < 1 or > 1_000_000 || pages.Select((page, index) => page is null || page.Ordinal != index).Any(static invalid => invalid)) throw new ArgumentException("Pages require bounded contiguous ordinals.", nameof(pageSet));
         return pages.Select(page => Resolve(page.Evidence, profile, profile.PageQueryFamilyRef, resolver)).ToArray();
     }
-    private static IReadOnlyList<RepeatedEnumerationRow> VerifyPages(IReadOnlyList<RepeatedEnumerationResolvedEvidence> pages, SourceArtifactRef countRef, long count, RepeatedEnumerationInterpretationProfile profile)
+    private static IReadOnlyList<RepeatedEnumerationRow> VerifyPages(IReadOnlyList<VerifiedRepeatedEnumerationEvidence> pages, SourceArtifactRef countRef, long count, RepeatedEnumerationInterpretationProfile profile)
     {
         var all = new List<RepeatedEnumerationRow>(); long? limit = null; IReadOnlyList<RepeatedEnumerationRow>? prior = null;
         foreach (var page in pages)
@@ -471,7 +561,7 @@ public sealed class EnumerationDeliveryComparison
     }
     private static void Object(JsonElement element, string name, IReadOnlyList<string> allowed) { if (element.ValueKind != JsonValueKind.Object) throw new ArgumentException($"{name} must be an object."); var names = element.EnumerateObject().Select(static property => property.Name).ToArray(); if (names.Distinct(StringComparer.Ordinal).Count() != names.Length || names.Any(property => !allowed.Contains(property, StringComparer.Ordinal)) || allowed.Any(required => !names.Contains(required, StringComparer.Ordinal))) throw new ArgumentException($"{name} has duplicate, missing or unknown members."); }
     private static IReadOnlyList<RepeatedEnumerationRdfTerm> Pick(RepeatedEnumerationRdfTerm[] terms, IReadOnlyList<string> projection, IReadOnlyList<string> selected) => Array.AsReadOnly(selected.Select(variable => terms[projection.IndexOf(variable)]).ToArray());
-    private static void RequireSameSelection(IEnumerable<RepeatedEnumerationResolvedEvidence> values, RepeatedEnumerationInterpretationProfile profile) { var selected = values.Select(value => SelectionParameters(value.QueryInput, profile.SelectionParameterNames)).ToArray(); if (selected.Skip(1).Any(value => !value.SequenceEqual(selected[0]))) throw new ArgumentException("Selection parameters differ."); }
+    private static void RequireSameSelection(IEnumerable<VerifiedRepeatedEnumerationEvidence> values, RepeatedEnumerationInterpretationProfile profile) { var selected = values.Select(value => SelectionParameters(value.QueryInput, profile.SelectionParameterNames)).ToArray(); if (selected.Skip(1).Any(value => !value.SequenceEqual(selected[0]))) throw new ArgumentException("Selection parameters differ."); }
     private static MachineQueryParameter[] SelectionParameters(MachineQueryInputArtifact input, IReadOnlyList<string> names) => names.Select(name => { var matches = input.OrderedParameters.Where(parameter => parameter.Name == name).ToArray(); if (matches.Length != 1) throw new ArgumentException("A required selection parameter is missing."); return matches[0]; }).ToArray();
     private static long IntegerParameter(MachineQueryInputArtifact input, string name) { var matches = input.OrderedParameters.Where(parameter => parameter.Name == name).ToArray(); if (matches.Length != 1 || matches[0].Kind != MachineQueryParameterKind.BoundedInteger || matches[0].IntegerValue is null) throw new ArgumentException("A required bounded page-state parameter is missing."); return matches[0].IntegerValue.GetValueOrDefault(); }
     private static void RequireInputRoleShape(MachineQueryInputArtifact input, RepeatedEnumerationInterpretationProfile profile, bool isCount)
@@ -489,14 +579,14 @@ public sealed class EnumerationDeliveryComparison
     private static int Compare(IReadOnlyList<RepeatedEnumerationRdfTerm> left, IReadOnlyList<RepeatedEnumerationRdfTerm> right) { for (var i = 0; i < Math.Min(left.Count, right.Count); i++) { var comparison = EnumerationCursorEnvelope.CompareRaw(left[i].Value!, right[i].Value!); if (comparison != 0) return comparison; } return left.Count.CompareTo(right.Count); }
     private static string Digest(string schema, IEnumerable<IReadOnlyList<RepeatedEnumerationRdfTerm>> tuples) { var document = new CanonicalTupleDocument(schema, tuples.Select(static tuple => tuple.ToArray()).ToArray()); return Sha(ContractCanonicalizer.Canonicalize(document, schema + "-canonical-json", 64)); }
     private static EnumerationPageSetRefs Snapshot(EnumerationPageSetRefs pageSet) => new(Array.AsReadOnly(pageSet.Pages.Select(page => new RepeatedEnumerationPageRef(page.Ordinal, page.Evidence)).ToArray()));
-    private static void RequireDistinct(RepeatedEnumerationEvidenceRefs countA, EnumerationPageSetRefs pagesA, RepeatedEnumerationEvidenceRefs countB, EnumerationPageSetRefs pagesB) { var all = new[] { countA }.Concat(pagesA.Pages.Select(static page => page.Evidence)).Append(countB).Concat(pagesB.Pages.Select(static page => page.Evidence)).ToArray(); if (new Func<RepeatedEnumerationEvidenceRefs, SourceArtifactRef>[] { static value => value.QueryInputRef, static value => value.RenderReceiptRef, static value => value.RequestEvidenceRef, static value => value.ObservationRef }.Any(selector => all.Select(selector).Distinct().Count() != all.Length)) throw new ArgumentException("The retained request and observation identities must be distinct."); }
-    private static void RequireDistinctPasses(IReadOnlyList<RepeatedEnumerationResolvedEvidence> evidenceA, IReadOnlyList<RepeatedEnumerationResolvedEvidence> evidenceB, RepeatedEnumerationInterpretationProfile profile)
+    private static void RequireDistinct(RepeatedEnumerationEvidenceRefs countA, EnumerationPageSetRefs pagesA, RepeatedEnumerationEvidenceRefs countB, EnumerationPageSetRefs pagesB) { var all = new[] { countA }.Concat(pagesA.Pages.Select(static page => page.Evidence)).Append(countB).Concat(pagesB.Pages.Select(static page => page.Evidence)).ToArray(); if (new Func<RepeatedEnumerationEvidenceRefs, SourceArtifactRef>[] { static value => value.QueryInputRef, static value => value.RenderReceiptRef, static value => value.LogicalRequestRef, static value => value.HttpEvidenceRef }.Any(selector => all.Select(selector).Distinct().Count() != all.Length)) throw new ArgumentException("The retained request and HTTP evidence identities must be distinct."); }
+    private static void RequireDistinctPasses(IReadOnlyList<VerifiedRepeatedEnumerationEvidence> evidenceA, IReadOnlyList<VerifiedRepeatedEnumerationEvidence> evidenceB, RepeatedEnumerationInterpretationProfile profile)
     {
         var passA = evidenceA.Select(value => IntegerParameter(value.QueryInput, profile.PassParameterName)).Distinct().ToArray();
         var passB = evidenceB.Select(value => IntegerParameter(value.QueryInput, profile.PassParameterName)).Distinct().ToArray();
         if (passA.Length != 1 || passB.Length != 1 || passA[0] == passB[0]) throw new ArgumentException("The two evidence sets must use distinct internally consistent pass values.");
     }
-    private static string RequireSamePartition(IEnumerable<RepeatedEnumerationResolvedEvidence> evidence)
+    private static string RequireSamePartition(IEnumerable<VerifiedRepeatedEnumerationEvidence> evidence)
     {
         var partitions = evidence
             .Select(static value => value.QueryInput.PartitionBinding.MemberKey)
@@ -505,7 +595,52 @@ public sealed class EnumerationDeliveryComparison
         if (partitions.Length != 1) throw new ArgumentException("The retained evidence sets must bind the same partition.");
         return partitions[0];
     }
-    private static void RequireDifferentPageLimits(IReadOnlyList<RepeatedEnumerationResolvedEvidence> evidenceA, IReadOnlyList<RepeatedEnumerationResolvedEvidence> evidenceB)
+    private static SourceArtifactRef RequireSameSourceProfile(
+        IEnumerable<VerifiedRepeatedEnumerationEvidence> evidence,
+        RepeatedEnumerationInterpretationProfile interpretationProfile)
+    {
+        var profiles = evidence.Select(static value => value.SourceProfileRef).Distinct().ToArray();
+        var expected = OfficialMachineQuerySourceProfiles.Resolve(
+            interpretationProfile.Dialect switch
+            {
+                RepeatedEnumerationSparqlJsonDialect.LuxembourgVirtuoso =>
+                    OfficialMachineQuerySourceProfileId.LuxembourgSparql,
+                RepeatedEnumerationSparqlJsonDialect.EuropeanUnionVirtuoso =>
+                    OfficialMachineQuerySourceProfileId.EuropeanUnionSparql,
+                _ => throw new ArgumentOutOfRangeException(nameof(interpretationProfile)),
+            }).ArtifactRef;
+        if (profiles.Length != 1 || profiles[0] != expected)
+        {
+            throw new ArgumentException(
+                "Every retained request must derive the exact official source profile for its interpretation dialect.");
+        }
+
+        return profiles[0];
+    }
+
+    private static SourceArtifactRef RequireSameRun(IEnumerable<VerifiedRepeatedEnumerationEvidence> evidence)
+    {
+        var runs = evidence.Select(static value => value.HttpEvidence.RunIdentity).Distinct().ToArray();
+        if (runs.Length != 1)
+        {
+            throw new ArgumentException("Both counts and every page must belong to one exact acquisition run.");
+        }
+
+        return runs[0];
+    }
+
+    private static void RequireDistinctRequestOrdinals(
+        IEnumerable<VerifiedRepeatedEnumerationEvidence> evidence)
+    {
+        var ordinals = evidence.Select(static value => value.HttpEvidence.RequestOrdinal).ToArray();
+        if (ordinals.Distinct().Count() != ordinals.Length)
+        {
+            throw new ArgumentException(
+                "Each repeated enumeration observation must belong to a distinct logical request.");
+        }
+    }
+
+    private static void RequireDifferentPageLimits(IReadOnlyList<VerifiedRepeatedEnumerationEvidence> evidenceA, IReadOnlyList<VerifiedRepeatedEnumerationEvidence> evidenceB)
     {
         var limitA = evidenceA[0].QueryPlan.ResponseCardinality.RowLimit;
         var limitB = evidenceB[0].QueryPlan.ResponseCardinality.RowLimit;
@@ -513,6 +648,15 @@ public sealed class EnumerationDeliveryComparison
     }
     private static string Sha(ReadOnlySpan<byte> value) => Convert.ToHexString(SHA256.HashData(value)).ToLowerInvariant();
     private sealed record CanonicalTupleDocument(string Schema, IReadOnlyList<IReadOnlyList<RepeatedEnumerationRdfTerm>> Tuples);
+    private sealed record VerifiedRepeatedEnumerationEvidence(
+        RepeatedEnumerationResolvedEvidence Retained,
+        SourceArtifactRef SourceProfileRef)
+    {
+        public MachineQueryPlan QueryPlan => Retained.QueryPlan;
+        public MachineQueryInputArtifact QueryInput => Retained.QueryInput;
+        public RoutedHttpEvidence HttpEvidence => Retained.HttpEvidence;
+        public ReadOnlyMemory<byte> RetainedPayloadBytes => Retained.RetainedPayloadBytes;
+    }
 }
 
 internal static class RepeatedEnumerationListExtensions { public static int IndexOf<T>(this IReadOnlyList<T> source, T value) { for (var i = 0; i < source.Count; i++) if (EqualityComparer<T>.Default.Equals(source[i], value)) return i; return -1; } }

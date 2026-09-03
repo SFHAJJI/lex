@@ -1,9 +1,8 @@
 using System.Globalization;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Source.Core;
 
@@ -99,6 +98,333 @@ public sealed class MachineQueryPlanContractTests
         var escaped = bound.CopyRequestBody();
         escaped[0] ^= 0xff;
         CollectionAssert.AreEqual(PostBody, bound.CopyRequestBody());
+    }
+
+    [TestMethod]
+    public void BinderCapabilityAndOpenedSnapshotHaveOneClosedPublicBoundary()
+    {
+        Assert.IsTrue(typeof(BoundMachineRequest).IsAbstract);
+        var capabilityConstructor = typeof(BoundMachineRequest)
+            .GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            .Single();
+        Assert.IsTrue(capabilityConstructor.IsFamilyAndAssembly);
+        Assert.AreEqual(0, capabilityConstructor.GetParameters().Length);
+
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "method instance CopyRequestBody(): Byte[]",
+                "property instance RenderReceipt: MachineQueryRenderReceipt",
+                "property instance RequestedUri: String",
+            },
+            PublicSurface(typeof(BoundMachineRequest)));
+
+        Assert.IsTrue(typeof(OpenedMachineRequest).IsSealed);
+        Assert.AreEqual(0, typeof(OpenedMachineRequest).GetConstructors().Length);
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "method instance CopyOrderedParameterSetCanonicalBytes(): Byte[]",
+                "method instance CopyQueryPlanCanonicalBytes(): Byte[]",
+                "method instance CopyRenderReceiptCanonicalBytes(): Byte[]",
+                "method instance CopyRequestBody(): Byte[]",
+                "property instance OrderedParameterSetRef: SourceArtifactRef",
+                "property instance QueryPlanRef: SourceArtifactRef",
+                "property instance RenderReceipt: MachineQueryRenderReceipt",
+                "property instance RenderReceiptRef: SourceArtifactRef",
+                "property instance RequestedUri: String",
+            },
+            PublicSurface(typeof(OpenedMachineRequest)));
+
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "method static OpenForSend(BoundMachineRequest): OpenedMachineRequest",
+                "method static OpenForSendAsync(BoundMachineRequest, IMachineQueryArtifactResolver, CancellationToken): Task`1",
+                "method static OpenIdentity(BoundMachineRequest): BoundMachineRequestIdentity",
+                "method static VerifyOffline(MachineQueryPlan, SourceArtifactRef, MachineQueryInputArtifact, MachineQueryRenderReceipt, IMachineQueryRenderer): Void",
+            },
+            PublicSurface(typeof(MachineQueryBinder)));
+        Assert.IsTrue(typeof(BoundMachineRequestIdentity).IsSealed);
+        Assert.AreEqual(0, typeof(BoundMachineRequestIdentity).GetConstructors().Length);
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "property instance QueryPlanRef: SourceArtifactRef",
+                "property instance RenderReceipt: MachineQueryRenderReceipt",
+                "property instance RequestedUri: String",
+            },
+            PublicSurface(typeof(BoundMachineRequestIdentity)));
+        var identityFixture = StableCapability();
+        var renderCountBeforeIdentityOpen = identityFixture.Renderer.RenderCount;
+        var identity = MachineQueryBinder.OpenIdentity(identityFixture.Capability);
+        Assert.AreEqual(identityFixture.Capability.RequestedUri, identity.RequestedUri);
+        Assert.AreEqual(identityFixture.Capability.RenderReceipt, identity.RenderReceipt);
+        Assert.AreEqual(identityFixture.PlanRef, identity.QueryPlanRef);
+        Assert.AreEqual(renderCountBeforeIdentityOpen, identityFixture.Renderer.RenderCount);
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "method instance ReopenAsync(SourceArtifactRef, CancellationToken): Task`1",
+                "method instance RetainAndReopenAsync(SourceArtifactRef, ReadOnlyMemory`1, CancellationToken): Task`1",
+            },
+            PublicSurface(typeof(IMachineQueryArtifactResolver)));
+        Assert.IsFalse(typeof(MachineQueryBinder).GetMethod(
+            nameof(MachineQueryBinder.BindForSend),
+            BindingFlags.Public | BindingFlags.Static) is not null);
+
+        var concreteCapabilities = typeof(MachineQueryBinder)
+            .GetNestedTypes(BindingFlags.NonPublic)
+            .Where(type => typeof(BoundMachineRequest).IsAssignableFrom(type))
+            .ToArray();
+        Assert.AreEqual(1, concreteCapabilities.Length);
+        Assert.IsTrue(concreteCapabilities[0].IsNestedPrivate);
+        Assert.IsTrue(concreteCapabilities[0].IsSealed);
+    }
+
+    [TestMethod]
+    public async Task AsyncOpenReopensAllEightTransitiveArtifactsBeforeRendering()
+    {
+        var fixture = AsyncCapability();
+        fixture.Events.Clear();
+        var resolver = new RecordingArtifactResolver(fixture.ExternalArtifacts, fixture.Events);
+
+        var opened = await MachineQueryBinder.OpenForSendAsync(
+            fixture.Capability,
+            resolver,
+            CancellationToken.None);
+
+        Assert.AreEqual(2, fixture.Renderer.RenderCount);
+        CollectionAssert.AreEqual(
+            Enumerable.Repeat("open", 8).Append("render").ToArray(),
+            fixture.Events);
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                opened.RenderReceiptRef,
+                fixture.PlanRef,
+                fixture.Input.ArtifactRef,
+                fixture.RendererProfileRef,
+                fixture.RendererSourceRef,
+                fixture.ContentTypeRegistryRef,
+                fixture.QueryRegistryRef,
+                fixture.ParameterProvenanceRef,
+            },
+            resolver.OpenedReferences.ToArray());
+    }
+
+    [TestMethod]
+    public async Task MissingLastTransitiveArtifactFailsBeforeRendering()
+    {
+        var fixture = AsyncCapability();
+        fixture.Events.Clear();
+        var resolver = new RecordingArtifactResolver(
+            fixture.ExternalArtifacts,
+            fixture.Events,
+            missingRef: fixture.ParameterProvenanceRef);
+
+        await Assert.ThrowsExactlyAsync<FileNotFoundException>(() =>
+            MachineQueryBinder.OpenForSendAsync(
+                fixture.Capability,
+                resolver,
+                CancellationToken.None));
+
+        Assert.AreEqual(1, fixture.Renderer.RenderCount);
+        Assert.IsFalse(fixture.Events.Contains("render", StringComparer.Ordinal));
+        Assert.AreEqual(8, resolver.OpenedReferences.Count);
+    }
+
+    [TestMethod]
+    public async Task CorruptLastTransitiveArtifactFailsBeforeRendering()
+    {
+        var fixture = AsyncCapability();
+        fixture.Events.Clear();
+        var resolver = new RecordingArtifactResolver(
+            fixture.ExternalArtifacts,
+            fixture.Events,
+            corruptRef: fixture.ParameterProvenanceRef);
+
+        await Assert.ThrowsExactlyAsync<ArgumentException>(() =>
+            MachineQueryBinder.OpenForSendAsync(
+                fixture.Capability,
+                resolver,
+                CancellationToken.None));
+
+        Assert.AreEqual(1, fixture.Renderer.RenderCount);
+        Assert.IsFalse(fixture.Events.Contains("render", StringComparer.Ordinal));
+        Assert.AreEqual(8, resolver.OpenedReferences.Count);
+    }
+
+    [TestMethod]
+    public void ExactBinderCapabilityOpensAndReturnedArraysCannotChangeFutureOpens()
+    {
+        var plan = PostPlan();
+        var planRef = MachineQueryPlanIdentity.Create(PlanResourceId, plan);
+        var input = Parameters();
+        var renderer = Renderer(plan, Target, PostBody);
+        var capability = MachineQueryBinder.BindForSend(plan, planRef, input, renderer);
+
+        var escapedCapabilityBody = capability.CopyRequestBody();
+        escapedCapabilityBody[0] ^= 0xff;
+        var first = MachineQueryBinder.OpenForSend(capability);
+        var escapedOpenedBody = first.CopyRequestBody();
+        escapedOpenedBody[0] ^= 0xff;
+        var second = MachineQueryBinder.OpenForSend(capability);
+
+        Assert.AreEqual(3, renderer.RenderCount);
+        Assert.AreEqual(Target, first.RequestedUri);
+        Assert.AreEqual(planRef, first.QueryPlanRef);
+        Assert.AreEqual(input.ArtifactRef, first.OrderedParameterSetRef);
+        Assert.AreEqual(capability.RenderReceipt, first.RenderReceipt);
+        CollectionAssert.AreEqual(PostBody, first.CopyRequestBody());
+        CollectionAssert.AreEqual(PostBody, second.CopyRequestBody());
+    }
+
+    [TestMethod]
+    public void FriendConstructedCapabilityWithAnExactPublicTupleCannotOpen()
+    {
+        var plan = PostPlan();
+        var genuine = MachineQueryBinder.BindForSend(
+            plan,
+            MachineQueryPlanIdentity.Create(PlanResourceId, plan),
+            Parameters(),
+            Renderer(plan, Target, PostBody));
+        var fake = new FakeBoundMachineRequest(
+            genuine.RequestedUri,
+            genuine.CopyRequestBody(),
+            genuine.RenderReceipt);
+
+        Assert.ThrowsExactly<ArgumentException>(() => MachineQueryBinder.OpenIdentity(fake));
+        Assert.ThrowsExactly<ArgumentException>(() => MachineQueryBinder.OpenForSend(fake));
+    }
+
+    [TestMethod]
+    public void ReopeningRefusesPlanInputRendererAndReceiptSubstitution()
+    {
+        var planRefSubstitution = StableCapability();
+        SetRetainedProperty(
+            planRefSubstitution.Capability,
+            "QueryPlanRef",
+            new SourceArtifactRef(
+                planRefSubstitution.PlanRef.ResourceId,
+                new string('f', 64)));
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            MachineQueryBinder.OpenForSend(planRefSubstitution.Capability));
+
+        var planBytesSubstitution = StableCapability();
+        MutateRetainedBytes(planBytesSubstitution.Capability, "_planCanonicalBytes");
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            MachineQueryBinder.OpenForSend(planBytesSubstitution.Capability));
+
+        var inputRefSubstitution = StableCapability();
+        SetRetainedProperty(
+            inputRefSubstitution.Capability,
+            "OrderedParameterSetRef",
+            new SourceArtifactRef(
+                inputRefSubstitution.Input.ArtifactRef.ResourceId,
+                new string('e', 64)));
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            MachineQueryBinder.OpenForSend(inputRefSubstitution.Capability));
+
+        var inputBytesSubstitution = StableCapability();
+        MutateRetainedBytes(inputBytesSubstitution.Capability, "_inputCanonicalBytes");
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            MachineQueryBinder.OpenForSend(inputBytesSubstitution.Capability));
+
+        var frozenTargetSubstitution = StableCapability();
+        SetRetainedProperty(
+            frozenTargetSubstitution.Capability,
+            "RequestedUri",
+            "https://evil.example/sparql");
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            MachineQueryBinder.OpenForSend(frozenTargetSubstitution.Capability));
+
+        var frozenBodySubstitution = StableCapability();
+        MutateRetainedBytes(frozenBodySubstitution.Capability, "_requestBody");
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            MachineQueryBinder.OpenForSend(frozenBodySubstitution.Capability));
+
+        var rendererProfileSubstitution = MutableCapability();
+        rendererProfileSubstitution.Renderer.RendererProfileRef = Artifact(
+            rendererProfileSubstitution.Renderer.RendererProfileRef.ResourceId,
+            new string('d', 64));
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            MachineQueryBinder.OpenForSend(rendererProfileSubstitution.Capability));
+
+        var rendererSourceSubstitution = MutableCapability();
+        rendererSourceSubstitution.Renderer.RendererSourceRef = Artifact(
+            rendererSourceSubstitution.Renderer.RendererSourceRef.ResourceId,
+            new string('c', 64));
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            MachineQueryBinder.OpenForSend(rendererSourceSubstitution.Capability));
+
+        var contentTypeRegistrySubstitution = StableCapability();
+        var receipt = contentTypeRegistrySubstitution.Capability.RenderReceipt;
+        SetRetainedProperty(
+            contentTypeRegistrySubstitution.Capability,
+            "RenderReceipt",
+            new MachineQueryRenderReceipt(
+                receipt.Schema,
+                receipt.QueryPlanRef,
+                receipt.QueryPlanSchema,
+                receipt.RendererProfileRef,
+                receipt.RendererSourceRef,
+                receipt.OrderedParameterSetRef,
+                new SourceRegistryMemberRef(
+                    Artifact("99999999-9999-4999-8999-999999999999", '9'),
+                    receipt.ContentType!.MemberKey),
+                receipt.Charset,
+                receipt.InputMode,
+                receipt.Method,
+                receipt.RequestTargetLength,
+                receipt.RequestTargetSha256,
+                receipt.RequestBodyLength,
+                receipt.RequestBodySha256));
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            MachineQueryBinder.OpenForSend(contentTypeRegistrySubstitution.Capability));
+    }
+
+    [TestMethod]
+    public void ReopeningRefusesStatefulRendererOutputDrift()
+    {
+        var bodyDrift = MutableCapability();
+        bodyDrift.Renderer.RequestBody = Encoding.UTF8.GetBytes("query=changed");
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            MachineQueryBinder.OpenForSend(bodyDrift.Capability));
+
+        var targetDrift = MutableCapability();
+        targetDrift.Renderer.RequestedUri = "https://evil.example/sparql";
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            MachineQueryBinder.OpenForSend(targetDrift.Capability));
+    }
+
+    [TestMethod]
+    public void OfflineVerificationReproducesEvidenceButCannotMintSendCapability()
+    {
+        var plan = PostPlan();
+        var planRef = MachineQueryPlanIdentity.Create(PlanResourceId, plan);
+        var input = Parameters();
+        var firstRenderer = Renderer(plan, Target, PostBody);
+        var receipt = MachineQueryBinder.BindForSend(
+            plan,
+            planRef,
+            input,
+            firstRenderer).RenderReceipt;
+        var verifier = typeof(MachineQueryBinder).GetMethod(
+            nameof(MachineQueryBinder.VerifyOffline),
+            BindingFlags.Public | BindingFlags.Static)!;
+
+        Assert.AreEqual(typeof(void), verifier.ReturnType);
+        MachineQueryBinder.VerifyOffline(
+            plan,
+            planRef,
+            input,
+            receipt,
+            Renderer(plan, Target, PostBody));
+        Assert.AreEqual(
+            1,
+            typeof(MachineQueryBinder).GetMethods(BindingFlags.Public | BindingFlags.Static)
+                .Count(static method => method.ReturnType == typeof(OpenedMachineRequest)));
     }
 
     [TestMethod]
@@ -220,46 +546,6 @@ public sealed class MachineQueryPlanContractTests
             Partition(),
             1,
             Sha256([1])));
-    }
-
-    [TestMethod]
-    public void FinalEvidenceReferencesRatherThanEmbedsTheReceiptAndObservation()
-    {
-        var plan = PostPlan();
-        var planRef = MachineQueryPlanIdentity.Create(PlanResourceId, plan);
-        var receipt = MachineQueryBinder.BindForSend(
-            plan,
-            planRef,
-            Parameters(),
-            Renderer(plan, Target, PostBody)).RenderReceipt;
-        var evidence = MachineRequestEvidence.FromReceipt(
-            planRef,
-            ReceiptRef(receipt),
-            receipt,
-            ObservationRef());
-
-        using var document = JsonDocument.Parse(ContractJson.Serialize(evidence));
-        CollectionAssert.AreEquivalent(
-            new[]
-            {
-                "schema",
-                "query_plan_ref",
-                "query_plan_schema",
-                "rerender_receipt_ref",
-                "request_target_length",
-                "request_target_sha256",
-                "request_body_length",
-                "request_body_sha256",
-                "http_observation_ref",
-            },
-            document.RootElement.EnumerateObject().Select(static property => property.Name).ToArray());
-        Assert.IsFalse(document.RootElement.GetRawText().Contains("SELECT", StringComparison.Ordinal));
-        Assert.AreEqual(evidence, ContractJson.Deserialize<MachineRequestEvidence>(
-            document.RootElement.GetRawText()));
-        var invalid = JsonNode.Parse(ContractJson.Serialize(evidence))!.AsObject();
-        invalid["request_body_length"] = 0;
-        Assert.ThrowsExactly<JsonException>(() =>
-            ContractJson.Deserialize<MachineRequestEvidence>(invalid.ToJsonString()));
     }
 
     [TestMethod]
@@ -577,7 +863,6 @@ public sealed class MachineQueryPlanContractTests
                 attribute.AssemblyName.StartsWith("Lex.V3.Ingest,", StringComparison.Ordinal) ||
                 string.Equals(attribute.AssemblyName, "Lex.V3.Ingest", StringComparison.Ordinal)));
         Assert.AreEqual(0, typeof(BoundMachineRequest).GetConstructors().Length);
-        Assert.AreEqual(0, typeof(MachineRequestEvidence).GetConstructors().Length);
     }
 
     [TestMethod]
@@ -657,6 +942,94 @@ public sealed class MachineQueryPlanContractTests
             vectors[0]);
     }
 
+    private static string[] PublicSurface(Type type) => type
+        .GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static |
+                    BindingFlags.DeclaredOnly)
+        .Where(static member => member is not MethodInfo { IsSpecialName: true })
+        .Select(DescribePublicMember)
+        .OrderBy(static description => description, StringComparer.Ordinal)
+        .ToArray();
+
+    private static string DescribePublicMember(MemberInfo member) => member switch
+    {
+        ConstructorInfo constructor =>
+            $"constructor .ctor({DescribeParameters(constructor)}): Void",
+        MethodInfo method =>
+            $"method {(method.IsStatic ? "static" : "instance")} {method.Name}" +
+            $"({DescribeParameters(method)}): {method.ReturnType.Name}",
+        PropertyInfo property =>
+            $"property {(property.GetMethod?.IsStatic == true ? "static" : "instance")} " +
+            $"{property.Name}: {property.PropertyType.Name}",
+        FieldInfo field =>
+            $"field {(field.IsStatic ? "static" : "instance")} {field.Name}: {field.FieldType.Name}",
+        _ => $"{member.MemberType} {member.Name}",
+    };
+
+    private static string DescribeParameters(MethodBase method) => string.Join(
+        ", ",
+        method.GetParameters().Select(static parameter => parameter.ParameterType.Name));
+
+    private static (
+        BoundMachineRequest Capability,
+        MachineQueryPlan Plan,
+        SourceArtifactRef PlanRef,
+        MachineQueryInputArtifact Input,
+        StubRenderer Renderer) StableCapability()
+    {
+        var plan = PostPlan();
+        var planRef = MachineQueryPlanIdentity.Create(PlanResourceId, plan);
+        var input = Parameters();
+        var renderer = Renderer(plan, Target, PostBody);
+        return (
+            MachineQueryBinder.BindForSend(plan, planRef, input, renderer),
+            plan,
+            planRef,
+            input,
+            renderer);
+    }
+
+    private static (
+        BoundMachineRequest Capability,
+        MutableRenderer Renderer) MutableCapability()
+    {
+        var plan = PostPlan();
+        var renderer = new MutableRenderer(
+            plan.RendererProfileRef,
+            plan.RendererSourceRef,
+            Target,
+            PostBody);
+        return (
+            MachineQueryBinder.BindForSend(
+                plan,
+                MachineQueryPlanIdentity.Create(PlanResourceId, plan),
+                Parameters(),
+                renderer),
+            renderer);
+    }
+
+    private static void SetRetainedProperty(
+        BoundMachineRequest capability,
+        string propertyName,
+        object value)
+    {
+        var field = capability.GetType().GetField(
+            $"<{propertyName}>k__BackingField",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.IsNotNull(field, $"The binder must retain {propertyName} independently.");
+        field.SetValue(capability, value);
+    }
+
+    private static void MutateRetainedBytes(BoundMachineRequest capability, string fieldName)
+    {
+        var field = capability.GetType().GetField(
+            fieldName,
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.IsNotNull(field, $"The binder must retain exact bytes in {fieldName}.");
+        var bytes = field.GetValue(capability) as byte[];
+        Assert.IsNotNull(bytes);
+        bytes[0] ^= 0xff;
+    }
+
     private static string[] CreateIdentityVector()
     {
         var postPlan = PostPlan();
@@ -691,6 +1064,97 @@ public sealed class MachineQueryPlanContractTests
             getPlanRef.Sha256,
             getReceiptRef.Sha256,
         ];
+    }
+
+    private static AsyncBinderFixture AsyncCapability()
+    {
+        var events = new List<string>();
+        var rendererProfileBytes = Encoding.UTF8.GetBytes("renderer-profile/1\n");
+        var rendererSourceBytes = Encoding.UTF8.GetBytes("renderer-source/1\n");
+        var contentTypeRegistryBytes = Encoding.UTF8.GetBytes("content-type-registry/1\n");
+        var queryRegistryBytes = Encoding.UTF8.GetBytes("query-registry/1\n");
+        var parameterProvenanceBytes = Encoding.UTF8.GetBytes("parameter-provenance/1\n");
+        var rendererProfileRef = ArtifactBytes(
+            "urn:uuid:10000000-0000-4000-8000-000000000001",
+            rendererProfileBytes);
+        var rendererSourceRef = ArtifactBytes(
+            "urn:uuid:10000000-0000-4000-8000-000000000002",
+            rendererSourceBytes);
+        var contentTypeRegistryRef = ArtifactBytes(
+            "urn:uuid:10000000-0000-4000-8000-000000000003",
+            contentTypeRegistryBytes);
+        var queryRegistryRef = ArtifactBytes(
+            "urn:uuid:10000000-0000-4000-8000-000000000004",
+            queryRegistryBytes);
+        var parameterProvenanceRef = ArtifactBytes(
+            "urn:uuid:10000000-0000-4000-8000-000000000005",
+            parameterProvenanceBytes);
+        var queryFamilyRef = new SourceRegistryMemberRef(queryRegistryRef, "eu-test-query");
+        var cardinality = new MachineResponseCardinality(
+            MachineResponseCardinalityKind.OpaqueBody,
+            rowLimit: null,
+            expectedPartitionRowCount: null,
+            expectedPartitionRowCountEvidenceRef: null);
+        var input = MachineQueryInputArtifact.Create(
+            "urn:uuid:10000000-0000-4000-8000-000000000006",
+            queryFamilyRef,
+            "eu-test-partition",
+            cardinality,
+            [
+                new MachineQueryParameter(
+                    "limit",
+                    MachineQueryParameterKind.BoundedInteger,
+                    integerValue: 1,
+                    textValue: null,
+                    parameterProvenanceRef),
+            ]);
+        var plan = new MachineQueryPlan(
+            MachineQueryPlan.SchemaId,
+            queryFamilyRef,
+            rendererProfileRef,
+            rendererSourceRef,
+            HttpRequestMethod.Post,
+            Target,
+            RequestTargetBytes(Target).LongLength,
+            Sha256(RequestTargetBytes(Target)),
+            cardinality,
+            new SourceRegistryMemberRef(contentTypeRegistryRef, "application/sparql-query"),
+            MachineQueryCharset.Utf8,
+            MachineQueryInputMode.RendererInputs,
+            input.ArtifactRef,
+            input.PartitionBinding,
+            PostBody.LongLength,
+            Sha256(PostBody));
+        var planRef = MachineQueryPlanIdentity.Create(
+            "urn:uuid:10000000-0000-4000-8000-000000000007",
+            plan);
+        var renderer = new ObservedRenderer(
+            rendererProfileRef,
+            rendererSourceRef,
+            Target,
+            PostBody,
+            events);
+        var capability = MachineQueryBinder.BindForSend(plan, planRef, input, renderer);
+        var externalArtifacts = new Dictionary<SourceArtifactRef, byte[]>
+        {
+            [rendererProfileRef] = rendererProfileBytes,
+            [rendererSourceRef] = rendererSourceBytes,
+            [contentTypeRegistryRef] = contentTypeRegistryBytes,
+            [queryRegistryRef] = queryRegistryBytes,
+            [parameterProvenanceRef] = parameterProvenanceBytes,
+        };
+        return new AsyncBinderFixture(
+            capability,
+            planRef,
+            input,
+            rendererProfileRef,
+            rendererSourceRef,
+            contentTypeRegistryRef,
+            queryRegistryRef,
+            parameterProvenanceRef,
+            externalArtifacts,
+            renderer,
+            events);
     }
 
     private const string PlanResourceId = "urn:uuid:55555555-5555-4555-8555-555555555555";
@@ -823,6 +1287,10 @@ public sealed class MachineQueryPlanContractTests
             : "urn:uuid:" + resourceId,
         digest);
 
+    private static SourceArtifactRef ArtifactBytes(
+        string resourceId,
+        ReadOnlySpan<byte> canonicalBytes) => new(resourceId, Sha256(canonicalBytes));
+
     private static string Sha256(ReadOnlySpan<byte> value) =>
         Convert.ToHexString(SHA256.HashData(value)).ToLowerInvariant();
 
@@ -840,6 +1308,89 @@ public sealed class MachineQueryPlanContractTests
         {
             RenderCount++;
             return new MachineQueryRenderOutput(RequestedUri, Body);
+        }
+    }
+
+    private sealed record AsyncBinderFixture(
+        BoundMachineRequest Capability,
+        SourceArtifactRef PlanRef,
+        MachineQueryInputArtifact Input,
+        SourceArtifactRef RendererProfileRef,
+        SourceArtifactRef RendererSourceRef,
+        SourceArtifactRef ContentTypeRegistryRef,
+        SourceArtifactRef QueryRegistryRef,
+        SourceArtifactRef ParameterProvenanceRef,
+        IReadOnlyDictionary<SourceArtifactRef, byte[]> ExternalArtifacts,
+        ObservedRenderer Renderer,
+        List<string> Events);
+
+    private sealed class ObservedRenderer(
+        SourceArtifactRef rendererProfileRef,
+        SourceArtifactRef rendererSourceRef,
+        string requestedUri,
+        byte[] body,
+        List<string> events) : IMachineQueryRenderer
+    {
+        public SourceArtifactRef RendererProfileRef { get; } = rendererProfileRef;
+
+        public SourceArtifactRef RendererSourceRef { get; } = rendererSourceRef;
+
+        public int RenderCount { get; private set; }
+
+        public MachineQueryRenderOutput Render(
+            MachineQueryPlan plan,
+            MachineQueryInputArtifact orderedParameterSet)
+        {
+            RenderCount++;
+            events.Add("render");
+            return new MachineQueryRenderOutput(requestedUri, body);
+        }
+    }
+
+    private sealed class RecordingArtifactResolver(
+        IReadOnlyDictionary<SourceArtifactRef, byte[]> externalArtifacts,
+        List<string> events,
+        SourceArtifactRef? missingRef = null,
+        SourceArtifactRef? corruptRef = null) : IMachineQueryArtifactResolver
+    {
+        private readonly List<SourceArtifactRef> _openedReferences = new();
+
+        internal IReadOnlyList<SourceArtifactRef> OpenedReferences => _openedReferences;
+
+        public Task<ReadOnlyMemory<byte>> RetainAndReopenAsync(
+            SourceArtifactRef reference,
+            ReadOnlyMemory<byte> producerBytes,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Record(reference);
+            return Task.FromResult(producerBytes);
+        }
+
+        public Task<ReadOnlyMemory<byte>> ReopenAsync(
+            SourceArtifactRef reference,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Record(reference);
+            if (reference == missingRef)
+            {
+                throw new FileNotFoundException("The requested fixture artifact is absent.");
+            }
+
+            var bytes = externalArtifacts[reference].ToArray();
+            if (reference == corruptRef)
+            {
+                bytes[0] ^= 0xff;
+            }
+
+            return Task.FromResult<ReadOnlyMemory<byte>>(bytes);
+        }
+
+        private void Record(SourceArtifactRef reference)
+        {
+            _openedReferences.Add(reference);
+            events.Add("open");
         }
     }
 
@@ -862,6 +1413,38 @@ public sealed class MachineQueryPlanContractTests
                 pageSize.ToString(CultureInfo.InvariantCulture));
             return new MachineQueryRenderOutput(RequestedUri, body);
         }
+    }
+
+    private sealed class MutableRenderer(
+        SourceArtifactRef rendererProfileRef,
+        SourceArtifactRef rendererSourceRef,
+        string requestedUri,
+        byte[] requestBody) : IMachineQueryRenderer
+    {
+        public SourceArtifactRef RendererProfileRef { get; set; } = rendererProfileRef;
+
+        public SourceArtifactRef RendererSourceRef { get; set; } = rendererSourceRef;
+
+        public string RequestedUri { get; set; } = requestedUri;
+
+        public byte[] RequestBody { get; set; } = requestBody.ToArray();
+
+        public MachineQueryRenderOutput Render(
+            MachineQueryPlan plan,
+            MachineQueryInputArtifact orderedParameterSet) =>
+            new(RequestedUri, RequestBody);
+    }
+
+    private sealed class FakeBoundMachineRequest(
+        string requestedUri,
+        byte[] requestBody,
+        MachineQueryRenderReceipt renderReceipt) : BoundMachineRequest
+    {
+        public override string RequestedUri { get; } = requestedUri;
+
+        public override MachineQueryRenderReceipt RenderReceipt { get; } = renderReceipt;
+
+        public override byte[] CopyRequestBody() => requestBody.ToArray();
     }
 
     private sealed class ChangingParameterList(

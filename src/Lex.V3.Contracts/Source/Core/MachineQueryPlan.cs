@@ -440,114 +440,6 @@ public sealed record MachineQueryRenderReceipt
     public string? RequestBodySha256 { get; }
 }
 
-[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record MachineRequestEvidence
-{
-    public const string SchemaId = SourceCoreSchemaIds.MachineRequestEvidence;
-
-    [JsonConstructor]
-    private MachineRequestEvidence(
-        string schema,
-        SourceArtifactRef queryPlanRef,
-        string queryPlanSchema,
-        SourceArtifactRef rerenderReceiptRef,
-        long requestTargetLength,
-        string requestTargetSha256,
-        long? requestBodyLength,
-        string? requestBodySha256,
-        SourceArtifactRef httpObservationRef)
-    {
-        if (!string.Equals(schema, SchemaId, StringComparison.Ordinal))
-        {
-            throw new ArgumentException($"Machine request evidence must declare {SchemaId}.", nameof(schema));
-        }
-
-        if (!string.Equals(queryPlanSchema, MachineQueryPlan.SchemaId, StringComparison.Ordinal))
-        {
-            throw new ArgumentException(
-                $"Machine request evidence must reference {MachineQueryPlan.SchemaId}.",
-                nameof(queryPlanSchema));
-        }
-
-        if (requestTargetLength is < 1 or > MachineQueryValidation.MaximumRequestTargetBytes)
-        {
-            throw new ArgumentOutOfRangeException(nameof(requestTargetLength));
-        }
-
-        if (requestBodyLength is <= 0 or > MachineQueryValidation.MaximumRequestBodyBytes)
-        {
-            throw new ArgumentOutOfRangeException(nameof(requestBodyLength));
-        }
-
-        Schema = schema;
-        QueryPlanRef = queryPlanRef ?? throw new ArgumentNullException(nameof(queryPlanRef));
-        QueryPlanSchema = queryPlanSchema;
-        RerenderReceiptRef = rerenderReceiptRef
-            ?? throw new ArgumentNullException(nameof(rerenderReceiptRef));
-        RequestTargetLength = requestTargetLength;
-        RequestTargetSha256 = SourceCoreValidation.RequireSha256(
-            requestTargetSha256,
-            nameof(requestTargetSha256));
-        RequestBodyLength = requestBodyLength;
-        RequestBodySha256 = requestBodySha256 is null
-            ? null
-            : SourceCoreValidation.RequireSha256(requestBodySha256, nameof(requestBodySha256));
-        HttpObservationRef = httpObservationRef
-            ?? throw new ArgumentNullException(nameof(httpObservationRef));
-
-        if ((RequestBodyLength is null) != (RequestBodySha256 is null))
-        {
-            throw new ArgumentException(
-                "Machine request body length and digest must be present or absent together.");
-        }
-    }
-
-    public string Schema { get; }
-
-    public SourceArtifactRef QueryPlanRef { get; }
-
-    public string QueryPlanSchema { get; }
-
-    public SourceArtifactRef RerenderReceiptRef { get; }
-
-    public long RequestTargetLength { get; }
-
-    public string RequestTargetSha256 { get; }
-
-    public long? RequestBodyLength { get; }
-
-    public string? RequestBodySha256 { get; }
-
-    public SourceArtifactRef HttpObservationRef { get; }
-
-    internal static MachineRequestEvidence FromReceipt(
-        SourceArtifactRef queryPlanRef,
-        SourceArtifactRef rerenderReceiptRef,
-        MachineQueryRenderReceipt receipt,
-        SourceArtifactRef httpObservationRef)
-    {
-        ArgumentNullException.ThrowIfNull(receipt);
-        if (receipt.QueryPlanRef != queryPlanRef)
-        {
-            throw new ArgumentException(
-                "The query-plan reference differs from the rerender receipt.",
-                nameof(queryPlanRef));
-        }
-
-        MachineQueryRenderReceiptIdentity.Validate(rerenderReceiptRef, receipt);
-        return new MachineRequestEvidence(
-            SchemaId,
-            queryPlanRef,
-            receipt.QueryPlanSchema,
-            rerenderReceiptRef,
-            receipt.RequestTargetLength,
-            receipt.RequestTargetSha256,
-            receipt.RequestBodyLength,
-            receipt.RequestBodySha256,
-            httpObservationRef);
-    }
-}
-
 public sealed class MachineQueryInputArtifact
 {
     private readonly byte[] _canonicalBytes;
@@ -709,6 +601,23 @@ public interface IMachineQueryRenderer
         MachineQueryInputArtifact orderedParameterSet);
 }
 
+/// <summary>
+/// Sender-owned bridge that makes every artifact used by a machine-query projection prove its
+/// content address. Binder-produced bytes are retained before reopening; externally produced
+/// renderer and registry artifacts must already be reopenable.
+/// </summary>
+public interface IMachineQueryArtifactResolver
+{
+    Task<ReadOnlyMemory<byte>> RetainAndReopenAsync(
+        SourceArtifactRef reference,
+        ReadOnlyMemory<byte> producerBytes,
+        CancellationToken cancellationToken);
+
+    Task<ReadOnlyMemory<byte>> ReopenAsync(
+        SourceArtifactRef reference,
+        CancellationToken cancellationToken);
+}
+
 public sealed class MachineQueryRenderOutput
 {
     private readonly byte[] _requestBody;
@@ -725,17 +634,37 @@ public sealed class MachineQueryRenderOutput
     public byte[] CopyRequestBody() => _requestBody.ToArray();
 }
 
-public sealed class BoundMachineRequest
+/// <summary>
+/// Opaque live capability minted only by <see cref="MachineQueryBinder"/>. Its public projection is
+/// diagnostic data, not provenance. A sender authenticates its non-rendering identity with
+/// <see cref="MachineQueryBinder.OpenIdentity"/> and trusts request bytes only after
+/// <see cref="MachineQueryBinder.OpenForSendAsync"/> reopens the complete artifact closure.
+/// </summary>
+public abstract class BoundMachineRequest
 {
-    private readonly byte[] _requestBody;
+    private protected BoundMachineRequest()
+    {
+    }
 
-    internal BoundMachineRequest(
+    public abstract string RequestedUri { get; }
+
+    public abstract MachineQueryRenderReceipt RenderReceipt { get; }
+
+    public abstract byte[] CopyRequestBody();
+}
+
+/// <summary>
+/// Non-authoritative identity projection opened only from the binder's private concrete
+/// capability. It lets an owned transport select a source and reserve a plan item without
+/// rendering or accepting the copyable public projection as proof of provenance.
+/// </summary>
+public sealed class BoundMachineRequestIdentity
+{
+    internal BoundMachineRequestIdentity(
         string requestedUri,
-        byte[] requestBody,
         MachineQueryRenderReceipt renderReceipt)
     {
         RequestedUri = requestedUri;
-        _requestBody = requestBody.ToArray();
         RenderReceipt = renderReceipt;
     }
 
@@ -743,41 +672,374 @@ public sealed class BoundMachineRequest
 
     public MachineQueryRenderReceipt RenderReceipt { get; }
 
-    public byte[] CopyRequestBody() => _requestBody.ToArray();
+    public SourceArtifactRef QueryPlanRef => RenderReceipt.QueryPlanRef;
+}
 
-    public byte[] CopyVerifiedRequestBody()
+/// <summary>
+/// Reproduced immutable request data. This is not send authority; the transport accepts the opaque
+/// <see cref="BoundMachineRequest"/> and performs the open itself immediately before use.
+/// </summary>
+public sealed class OpenedMachineRequest
+{
+    private readonly byte[] _requestBody;
+    private readonly byte[] _queryPlanCanonicalBytes;
+    private readonly byte[] _orderedParameterSetCanonicalBytes;
+    private readonly byte[] _renderReceiptCanonicalBytes;
+
+    internal OpenedMachineRequest(
+        string requestedUri,
+        ReadOnlySpan<byte> requestBody,
+        MachineQueryRenderReceipt renderReceipt,
+        ReadOnlySpan<byte> queryPlanCanonicalBytes,
+        ReadOnlySpan<byte> orderedParameterSetCanonicalBytes,
+        SourceArtifactRef? retainedRenderReceiptRef = null,
+        byte[]? retainedRenderReceiptCanonicalBytes = null)
     {
-        var requestedUri = MachineQueryValidation.RequireRenderedRequestTarget(
-            RequestedUri,
-            nameof(RequestedUri));
-        var targetBytes = Encoding.ASCII.GetBytes(new Uri(requestedUri).PathAndQuery);
-        var body = CopyRequestBody();
-        if (RenderReceipt.Charset == MachineQueryCharset.Utf8)
-        {
-            MachineQueryValidation.RequireStrictUtf8(body, nameof(RenderReceipt));
-        }
+        RequestedUri = requestedUri;
+        _requestBody = requestBody.ToArray();
+        RenderReceipt = renderReceipt;
+        _queryPlanCanonicalBytes = queryPlanCanonicalBytes.ToArray();
+        _orderedParameterSetCanonicalBytes = orderedParameterSetCanonicalBytes.ToArray();
 
-        var bodyLength = body.Length == 0 ? (long?)null : body.LongLength;
-        var bodySha256 = body.Length == 0 ? null : MachineQueryValidation.Sha256(body);
-        if (RenderReceipt.RequestTargetLength != targetBytes.LongLength ||
-            !string.Equals(
-                RenderReceipt.RequestTargetSha256,
-                MachineQueryValidation.Sha256(targetBytes),
-                StringComparison.Ordinal) ||
-            RenderReceipt.RequestBodyLength != bodyLength ||
-            !string.Equals(RenderReceipt.RequestBodySha256, bodySha256, StringComparison.Ordinal))
+        var reproducedReceiptBytes = MachineQueryRenderReceiptIdentity.GetCanonicalBytes(renderReceipt);
+        if ((retainedRenderReceiptRef is null) != (retainedRenderReceiptCanonicalBytes is null))
         {
             throw new ArgumentException(
-                "The bound machine-request target or body differs from its render receipt.");
+                "A retained render receipt requires both its artifact reference and canonical bytes.",
+                nameof(retainedRenderReceiptRef));
         }
 
-        return body;
+        if (retainedRenderReceiptRef is null)
+        {
+            RenderReceiptRef = MachineQueryRenderReceiptIdentity.Create(
+                $"urn:uuid:{Guid.NewGuid():D}",
+                renderReceipt);
+            _renderReceiptCanonicalBytes = reproducedReceiptBytes;
+        }
+        else
+        {
+            MachineQueryRenderReceiptIdentity.Validate(retainedRenderReceiptRef, renderReceipt);
+            if (!reproducedReceiptBytes.AsSpan().SequenceEqual(retainedRenderReceiptCanonicalBytes))
+            {
+                throw new ArgumentException(
+                    "The retained render-receipt bytes differ from the typed receipt.",
+                    nameof(retainedRenderReceiptCanonicalBytes));
+            }
+
+            RenderReceiptRef = retainedRenderReceiptRef;
+            _renderReceiptCanonicalBytes = retainedRenderReceiptCanonicalBytes!.ToArray();
+        }
     }
+
+    public string RequestedUri { get; }
+
+    public MachineQueryRenderReceipt RenderReceipt { get; }
+
+    public SourceArtifactRef RenderReceiptRef { get; }
+
+    public SourceArtifactRef QueryPlanRef => RenderReceipt.QueryPlanRef;
+
+    public SourceArtifactRef OrderedParameterSetRef => RenderReceipt.OrderedParameterSetRef;
+
+    public byte[] CopyRequestBody() => _requestBody.ToArray();
+
+    public byte[] CopyQueryPlanCanonicalBytes() => _queryPlanCanonicalBytes.ToArray();
+
+    public byte[] CopyOrderedParameterSetCanonicalBytes() =>
+        _orderedParameterSetCanonicalBytes.ToArray();
+
+    public byte[] CopyRenderReceiptCanonicalBytes() => _renderReceiptCanonicalBytes.ToArray();
 }
 
 public static class MachineQueryBinder
 {
-    public static BoundMachineRequest BindForSend(
+    internal static BoundMachineRequest BindForSend(
+        MachineQueryPlan plan,
+        SourceArtifactRef queryPlanRef,
+        MachineQueryInputArtifact orderedParameterSet,
+        IMachineQueryRenderer renderer)
+    {
+        var reproduced = ValidateAndRender(
+            plan,
+            queryPlanRef,
+            orderedParameterSet,
+            renderer);
+        return new MintedBoundMachineRequest(
+            plan,
+            queryPlanRef,
+            MachineQueryPlanIdentity.GetCanonicalBytes(plan),
+            orderedParameterSet.ArtifactRef,
+            orderedParameterSet.CopyCanonicalBytes(),
+            renderer,
+            renderer.RendererProfileRef,
+            renderer.RendererSourceRef,
+            reproduced);
+    }
+
+    /// <summary>
+    /// Authenticates the binder-private capability and exposes only its immutable identity. This
+    /// does not render, reopen artifacts or grant send authority.
+    /// </summary>
+    public static BoundMachineRequestIdentity OpenIdentity(BoundMachineRequest capability)
+    {
+        ArgumentNullException.ThrowIfNull(capability);
+        if (capability is not MintedBoundMachineRequest minted)
+        {
+            throw new ArgumentException(
+                "Only the binder's private concrete capability has an identity projection.",
+                nameof(capability));
+        }
+
+        var receiptBytes = MachineQueryRenderReceiptIdentity.GetCanonicalBytes(minted.RenderReceipt);
+        if (!receiptBytes.AsSpan().SequenceEqual(minted.CopyRenderReceiptCanonicalBytes()))
+        {
+            throw new ArgumentException(
+                "The bound render-receipt identity changed after capability minting.",
+                nameof(capability));
+        }
+
+        MachineQueryRenderReceiptIdentity.Validate(minted.RenderReceiptRef, minted.RenderReceipt);
+        return new BoundMachineRequestIdentity(minted.RequestedUri, minted.RenderReceipt);
+    }
+
+    public static OpenedMachineRequest OpenForSend(BoundMachineRequest capability)
+    {
+        ArgumentNullException.ThrowIfNull(capability);
+        if (capability is not MintedBoundMachineRequest minted)
+        {
+            throw new ArgumentException(
+                "Only the binder's private concrete capability can be opened for send.",
+                nameof(capability));
+        }
+
+        var currentPlanBytes = MachineQueryPlanIdentity.GetCanonicalBytes(minted.Plan);
+        if (!currentPlanBytes.AsSpan().SequenceEqual(minted.CopyPlanCanonicalBytes()))
+        {
+            throw new ArgumentException(
+                "The bound machine-query plan changed after capability minting.",
+                nameof(capability));
+        }
+
+        MachineQueryPlanIdentity.Validate(minted.QueryPlanRef, minted.Plan);
+        var input = MachineQueryInputArtifact.ParseAndVerify(
+            minted.OrderedParameterSetRef,
+            minted.CopyInputCanonicalBytes());
+        if (minted.Renderer.RendererProfileRef != minted.RendererProfileRef ||
+            minted.Renderer.RendererSourceRef != minted.RendererSourceRef)
+        {
+            throw new ArgumentException(
+                "The bound renderer identity changed after capability minting.",
+                nameof(capability));
+        }
+
+        var reproduced = ValidateAndRender(
+            minted.Plan,
+            minted.QueryPlanRef,
+            input,
+            minted.Renderer);
+        if (!string.Equals(reproduced.RequestedUri, minted.RequestedUri, StringComparison.Ordinal) ||
+            !reproduced.CopyRequestBody().AsSpan().SequenceEqual(minted.CopyFrozenRequestBody()) ||
+            reproduced.RenderReceipt != minted.RenderReceipt)
+        {
+            throw new ArgumentException(
+                "The machine request cannot be reproduced exactly from its retained typed inputs.",
+                nameof(capability));
+        }
+
+        return new OpenedMachineRequest(
+            reproduced.RequestedUri,
+            reproduced.CopyRequestBody(),
+            reproduced.RenderReceipt,
+            minted.CopyPlanCanonicalBytes(),
+            minted.CopyInputCanonicalBytes(),
+            minted.RenderReceiptRef,
+            minted.CopyRenderReceiptCanonicalBytes());
+    }
+
+    /// <summary>
+    /// Reopens the complete transport-owned artifact set before reproducing the request. The
+    /// resolver is not authority: every returned byte sequence is independently hashed and every
+    /// binder-produced artifact must equal the frozen canonical bytes retained by the capability.
+    /// </summary>
+    public static async Task<OpenedMachineRequest> OpenForSendAsync(
+        BoundMachineRequest capability,
+        IMachineQueryArtifactResolver resolver,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(capability);
+        ArgumentNullException.ThrowIfNull(resolver);
+        if (capability is not MintedBoundMachineRequest minted)
+        {
+            throw new ArgumentException(
+                "Only the binder's private concrete capability can be opened for send.",
+                nameof(capability));
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        var receiptBytes = await resolver.RetainAndReopenAsync(
+                minted.RenderReceiptRef,
+                minted.CopyRenderReceiptCanonicalBytes(),
+                cancellationToken)
+            .ConfigureAwait(false);
+        RequireExactArtifact(
+            minted.RenderReceiptRef,
+            receiptBytes.Span,
+            minted.CopyRenderReceiptCanonicalBytes(),
+            "render receipt");
+        MachineQueryRenderReceiptIdentity.Validate(minted.RenderReceiptRef, minted.RenderReceipt);
+
+        var planBytes = await resolver.RetainAndReopenAsync(
+                minted.QueryPlanRef,
+                minted.CopyPlanCanonicalBytes(),
+                cancellationToken)
+            .ConfigureAwait(false);
+        RequireExactArtifact(
+            minted.QueryPlanRef,
+            planBytes.Span,
+            minted.CopyPlanCanonicalBytes(),
+            "query plan");
+        MachineQueryPlanIdentity.Validate(minted.QueryPlanRef, minted.Plan);
+
+        var inputBytes = await resolver.RetainAndReopenAsync(
+                minted.OrderedParameterSetRef,
+                minted.CopyInputCanonicalBytes(),
+                cancellationToken)
+            .ConfigureAwait(false);
+        RequireExactArtifact(
+            minted.OrderedParameterSetRef,
+            inputBytes.Span,
+            minted.CopyInputCanonicalBytes(),
+            "ordered parameter set");
+        var input = MachineQueryInputArtifact.ParseAndVerify(
+            minted.OrderedParameterSetRef,
+            inputBytes.Span);
+
+        foreach (var (reference, artifactName) in ExternalArtifactReferences(minted, input))
+        {
+            _ = await ReopenExternalAsync(
+                    resolver,
+                    reference,
+                    cancellationToken,
+                    artifactName)
+                .ConfigureAwait(false);
+        }
+
+        if (minted.Renderer.RendererProfileRef != minted.RendererProfileRef ||
+            minted.Renderer.RendererSourceRef != minted.RendererSourceRef)
+        {
+            throw new ArgumentException(
+                "The bound renderer identity changed after capability minting.",
+                nameof(capability));
+        }
+
+        var reproduced = ValidateAndRender(
+            minted.Plan,
+            minted.QueryPlanRef,
+            input,
+            minted.Renderer);
+        if (!string.Equals(reproduced.RequestedUri, minted.RequestedUri, StringComparison.Ordinal) ||
+            !reproduced.CopyRequestBody().AsSpan().SequenceEqual(minted.CopyFrozenRequestBody()) ||
+            reproduced.RenderReceipt != minted.RenderReceipt)
+        {
+            throw new ArgumentException(
+                "The machine request cannot be reproduced exactly from its reopened artifacts.",
+                nameof(capability));
+        }
+
+        return new OpenedMachineRequest(
+            reproduced.RequestedUri,
+            reproduced.CopyRequestBody(),
+            reproduced.RenderReceipt,
+            planBytes.Span,
+            inputBytes.Span,
+            minted.RenderReceiptRef,
+            receiptBytes.ToArray());
+    }
+
+    private static async Task<ReadOnlyMemory<byte>> ReopenExternalAsync(
+        IMachineQueryArtifactResolver resolver,
+        SourceArtifactRef reference,
+        CancellationToken cancellationToken,
+        string artifactName)
+    {
+        var bytes = await resolver.ReopenAsync(reference, cancellationToken).ConfigureAwait(false);
+        RequireExactArtifact(reference, bytes.Span, expectedBytes: null, artifactName);
+        return bytes.ToArray();
+    }
+
+    private static IReadOnlyList<(SourceArtifactRef Reference, string Name)>
+        ExternalArtifactReferences(
+            MintedBoundMachineRequest minted,
+            MachineQueryInputArtifact input)
+    {
+        var ordered = new List<(SourceArtifactRef Reference, string Name)>();
+        var seen = new HashSet<SourceArtifactRef>();
+        Add(minted.RendererProfileRef, "renderer profile");
+        Add(minted.RendererSourceRef, "renderer source");
+        Add(minted.RenderReceipt.ContentType?.RegistryRef, "content-type registry");
+        Add(minted.Plan.QueryFamilyRef.RegistryRef, "query-family registry");
+        Add(
+            minted.Plan.ResponseCardinality.ExpectedPartitionRowCountEvidenceRef,
+            "partition row-count evidence");
+        foreach (var parameter in input.OrderedParameters)
+        {
+            Add(parameter.ProvenanceRef, $"parameter provenance '{parameter.Name}'");
+        }
+
+        return ordered;
+
+        void Add(SourceArtifactRef? reference, string name)
+        {
+            if (reference is not null && seen.Add(reference))
+            {
+                ordered.Add((reference, name));
+            }
+        }
+    }
+
+    private static void RequireExactArtifact(
+        SourceArtifactRef reference,
+        ReadOnlySpan<byte> actualBytes,
+        byte[]? expectedBytes,
+        string artifactName)
+    {
+        if (!string.Equals(
+                MachineQueryValidation.Sha256(actualBytes),
+                reference.Sha256,
+                StringComparison.Ordinal) ||
+            expectedBytes is { } expected && !actualBytes.SequenceEqual(expected))
+        {
+            throw new ArgumentException(
+                $"The reopened {artifactName} does not match its exact retained identity.",
+                nameof(actualBytes));
+        }
+    }
+
+    public static void VerifyOffline(
+        MachineQueryPlan plan,
+        SourceArtifactRef queryPlanRef,
+        MachineQueryInputArtifact orderedParameterSet,
+        MachineQueryRenderReceipt receipt,
+        IMachineQueryRenderer renderer)
+    {
+        ArgumentNullException.ThrowIfNull(receipt);
+        var rerendered = ValidateAndRender(plan, queryPlanRef, orderedParameterSet, renderer);
+        if (rerendered.RenderReceipt != receipt)
+        {
+            throw new ArgumentException(
+                "The retained render receipt differs from the offline rerender.",
+                nameof(receipt));
+        }
+    }
+
+    internal static OpenedMachineRequest ReproduceForEvidence(
+        MachineQueryPlan plan,
+        SourceArtifactRef queryPlanRef,
+        MachineQueryInputArtifact orderedParameterSet,
+        IMachineQueryRenderer renderer) =>
+        ValidateAndRender(plan, queryPlanRef, orderedParameterSet, renderer);
+
+    private static OpenedMachineRequest ValidateAndRender(
         MachineQueryPlan plan,
         SourceArtifactRef queryPlanRef,
         MachineQueryInputArtifact orderedParameterSet,
@@ -857,24 +1119,75 @@ public static class MachineQueryBinder
             MachineQueryValidation.Sha256(targetBytes),
             bodyLength,
             bodyDigest);
-        return new BoundMachineRequest(target, body, receipt);
+        return new OpenedMachineRequest(
+            target,
+            body,
+            receipt,
+            MachineQueryPlanIdentity.GetCanonicalBytes(plan),
+            orderedParameterSet.CopyCanonicalBytes());
     }
 
-    public static void VerifyOffline(
-        MachineQueryPlan plan,
-        SourceArtifactRef queryPlanRef,
-        MachineQueryInputArtifact orderedParameterSet,
-        MachineQueryRenderReceipt receipt,
-        IMachineQueryRenderer renderer)
+    private sealed class MintedBoundMachineRequest : BoundMachineRequest
     {
-        ArgumentNullException.ThrowIfNull(receipt);
-        var rerendered = BindForSend(plan, queryPlanRef, orderedParameterSet, renderer);
-        if (rerendered.RenderReceipt != receipt)
+        private readonly byte[] _planCanonicalBytes;
+        private readonly byte[] _inputCanonicalBytes;
+        private readonly byte[] _requestBody;
+        private readonly byte[] _renderReceiptCanonicalBytes;
+
+        internal MintedBoundMachineRequest(
+            MachineQueryPlan plan,
+            SourceArtifactRef queryPlanRef,
+            ReadOnlySpan<byte> planCanonicalBytes,
+            SourceArtifactRef orderedParameterSetRef,
+            ReadOnlySpan<byte> inputCanonicalBytes,
+            IMachineQueryRenderer renderer,
+            SourceArtifactRef rendererProfileRef,
+            SourceArtifactRef rendererSourceRef,
+            OpenedMachineRequest reproduced)
         {
-            throw new ArgumentException(
-                "The retained render receipt differs from the offline rerender.",
-                nameof(receipt));
+            Plan = plan;
+            QueryPlanRef = queryPlanRef;
+            _planCanonicalBytes = planCanonicalBytes.ToArray();
+            OrderedParameterSetRef = orderedParameterSetRef;
+            _inputCanonicalBytes = inputCanonicalBytes.ToArray();
+            Renderer = renderer;
+            RendererProfileRef = rendererProfileRef;
+            RendererSourceRef = rendererSourceRef;
+            RequestedUri = reproduced.RequestedUri;
+            _requestBody = reproduced.CopyRequestBody();
+            RenderReceipt = reproduced.RenderReceipt;
+            RenderReceiptRef = reproduced.RenderReceiptRef;
+            _renderReceiptCanonicalBytes = reproduced.CopyRenderReceiptCanonicalBytes();
         }
+
+        internal MachineQueryPlan Plan { get; }
+
+        internal SourceArtifactRef QueryPlanRef { get; }
+
+        internal SourceArtifactRef OrderedParameterSetRef { get; }
+
+        internal IMachineQueryRenderer Renderer { get; }
+
+        internal SourceArtifactRef RendererProfileRef { get; }
+
+        internal SourceArtifactRef RendererSourceRef { get; }
+
+        public override string RequestedUri { get; }
+
+        public override MachineQueryRenderReceipt RenderReceipt { get; }
+
+        internal SourceArtifactRef RenderReceiptRef { get; }
+
+        public override byte[] CopyRequestBody() => _requestBody.ToArray();
+
+        internal byte[] CopyPlanCanonicalBytes() => _planCanonicalBytes.ToArray();
+
+        internal byte[] CopyInputCanonicalBytes() => _inputCanonicalBytes.ToArray();
+
+        internal byte[] CopyRenderReceiptCanonicalBytes() =>
+            _renderReceiptCanonicalBytes.ToArray();
+
+        internal byte[] CopyFrozenRequestBody() => _requestBody.ToArray();
     }
 }
 

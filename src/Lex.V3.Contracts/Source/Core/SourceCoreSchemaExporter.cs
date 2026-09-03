@@ -16,7 +16,6 @@ public static class SourceCoreSchemaExporter
             [SourceCoreSchemaIds.SourceProfileTopology] = typeof(SourceProfileTopology),
             [SourceCoreSchemaIds.MachineQueryPlan] = typeof(MachineQueryPlan),
             [SourceCoreSchemaIds.MachineQueryRenderReceipt] = typeof(MachineQueryRenderReceipt),
-            [SourceCoreSchemaIds.MachineRequestEvidence] = typeof(MachineRequestEvidence),
         });
 
     private static readonly ReadOnlyDictionary<string, string> SchemaFiles =
@@ -27,7 +26,6 @@ public static class SourceCoreSchemaExporter
             [SourceCoreSchemaIds.SourceProfileTopology] = "source-profile-topology.schema.json",
             [SourceCoreSchemaIds.MachineQueryPlan] = "machine-query-plan.schema.json",
             [SourceCoreSchemaIds.MachineQueryRenderReceipt] = "machine-query-render-receipt.schema.json",
-            [SourceCoreSchemaIds.MachineRequestEvidence] = "machine-request-evidence.schema.json",
         });
 
     private static readonly ReadOnlyDictionary<string, Type> CommonDefinitionTypes =
@@ -46,7 +44,6 @@ public static class SourceCoreSchemaExporter
             SourceCoreSchemaIds.SourceProfileTopology,
             SourceCoreSchemaIds.MachineQueryPlan,
             SourceCoreSchemaIds.MachineQueryRenderReceipt,
-            SourceCoreSchemaIds.MachineRequestEvidence,
         });
 
     public static string FileNameFor(string schemaId) =>
@@ -138,8 +135,7 @@ internal static class SourceCoreSchemaHardener
     public static void Apply(string schemaId, JsonObject root)
     {
         PinConst(root, "schema", schemaId);
-        if (string.Equals(schemaId, SourceCoreSchemaIds.MachineQueryRenderReceipt, StringComparison.Ordinal) ||
-            string.Equals(schemaId, SourceCoreSchemaIds.MachineRequestEvidence, StringComparison.Ordinal))
+        if (string.Equals(schemaId, SourceCoreSchemaIds.MachineQueryRenderReceipt, StringComparison.Ordinal))
         {
             PinConst(root, "query_plan_schema", MachineQueryPlan.SchemaId);
         }
@@ -325,15 +321,6 @@ internal static class SourceCoreSchemaHardener
             }
 
             root["allOf"] = conditions;
-        }
-        else if (string.Equals(
-                     schemaId,
-                     SourceCoreSchemaIds.MachineRequestEvidence,
-                     StringComparison.Ordinal))
-        {
-            root["oneOf"] = new JsonArray(
-                BodyPair(bodyPresent: false),
-                BodyPair(bodyPresent: true));
         }
     }
 

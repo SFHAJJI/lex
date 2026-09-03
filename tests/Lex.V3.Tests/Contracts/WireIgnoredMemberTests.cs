@@ -11,7 +11,6 @@ using Lex.V3.Contracts.Source.Http;
 using Lex.V3.Contracts.Source.Scope;
 using Lex.V3.Tests.Contracts.Source.Europe;
 using Lex.V3.Tests.Facts;
-using Lex.V3.Tests.Ingest;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Lex.V3.Tests.Contracts;
@@ -107,29 +106,8 @@ public sealed class WireIgnoredMemberTests
             null),
         new("DurableBlobWriteReceipt", "VerifiedAt", "verified_at",
             "\"2026-09-02T00:00:00+00:00\"",
-            static () => HttpObservationUnionTests.Complete().DurableWriteReceipt,
+            static () => WriteReceipt(),
             null),
-        new("HttpResponseMetadata", "BlocksDerivation", "blocks_derivation", "true",
-            static () => HttpObservationContractTests.EmptyResponseMetadata(),
-            null),
-        new("ResponseCompleteBodyObservation", "DurableBlobRef", "durable_blob_ref", "{}",
-            static () => HttpObservationUnionTests.Complete(), null),
-        new("ResponseCompleteBodyObservation", "TransportByteSha256", "transport_byte_sha256",
-            "\"" + Digest + "\"",
-            static () => HttpObservationUnionTests.Complete(), null),
-        new("ResponseCompleteBodyObservation", "ReceivedEncodedEntityByteCount",
-            "received_encoded_entity_byte_count", "99",
-            static () => HttpObservationUnionTests.Complete(), null),
-        new("ResponsePartialBodyObservation", "DurableBlobRef", "durable_blob_ref", "{}",
-            static () => HttpObservationUnionTests.Partial(), null),
-        new("ResponsePartialBodyObservation", "TransportByteSha256", "transport_byte_sha256",
-            "\"" + Digest + "\"",
-            static () => HttpObservationUnionTests.Partial(), null),
-        new("ResponseCompletionUnprovenObservation", "DurableBlobRef", "durable_blob_ref", "{}",
-            static () => HttpObservationUnionTests.CompletionUnproven(), null),
-        new("ResponseCompletionUnprovenObservation", "TransportByteSha256",
-            "transport_byte_sha256", "\"" + Digest + "\"",
-            static () => HttpObservationUnionTests.CompletionUnproven(), null),
         new("SyntheticSliceScope", "CanonicalDescriptor", "canonical_descriptor", "\"x\"",
             static () => SyntheticSliceScope.CompleteLu,
             "v3-synthetic-preview/synthetic-slice-control.schema.json"),
@@ -191,19 +169,11 @@ public sealed class WireIgnoredMemberTests
                 "EuAcquisitionProfile.AdmittedChannels",
                 "EuChannelDisposition.MayGraduate",
                 "EuLanguageBodyDisposition.CarriesBody",
-                "HttpResponseMetadata.BlocksDerivation",
                 "OfficialIdentifier.CelexSector",
                 "OfficialIdentifier.ProvesCase",
                 "OfficialIdentitySet.IsCase",
                 "RelationFact.CarriedTarget",
                 "RelationFact.TargetEcli",
-                "ResponseCompleteBodyObservation.DurableBlobRef",
-                "ResponseCompleteBodyObservation.ReceivedEncodedEntityByteCount",
-                "ResponseCompleteBodyObservation.TransportByteSha256",
-                "ResponseCompletionUnprovenObservation.DurableBlobRef",
-                "ResponseCompletionUnprovenObservation.TransportByteSha256",
-                "ResponsePartialBodyObservation.DurableBlobRef",
-                "ResponsePartialBodyObservation.TransportByteSha256",
                 "ScopeAccountingSet.Count",
                 "SyntheticResolveRequestContract.CanonicalDescriptor",
                 "SyntheticSliceScope.CanonicalDescriptor",
@@ -212,7 +182,7 @@ public sealed class WireIgnoredMemberTests
                 .Select(static vector => vector.DeclaringType + "." + vector.Member)
                 .OrderBy(static name => name, StringComparer.Ordinal)
                 .ToArray(),
-            "the corpus no longer covers exactly the twenty members the repair converted");
+            "the corpus no longer covers exactly the surviving converted members");
     }
 
     /// <summary>
@@ -324,18 +294,31 @@ public sealed class WireIgnoredMemberTests
                 "EuLanguageBodyDisposition.CarriesBody",
                 "EuAcquisitionProfile.AdmittedChannels",
                 "DurableBlobWriteReceipt.VerifiedAt",
-                "HttpResponseMetadata.BlocksDerivation",
-                "ResponseCompleteBodyObservation.DurableBlobRef",
-                "ResponseCompleteBodyObservation.TransportByteSha256",
-                "ResponseCompleteBodyObservation.ReceivedEncodedEntityByteCount",
-                "ResponsePartialBodyObservation.DurableBlobRef",
-                "ResponsePartialBodyObservation.TransportByteSha256",
-                "ResponseCompletionUnprovenObservation.DurableBlobRef",
-                "ResponseCompletionUnprovenObservation.TransportByteSha256",
             },
             unschemaed.ToArray(),
             "the set of members with no emitted schema changed, so the reader is now the only " +
             "proof for a different set than this test records");
+    }
+
+    private static DurableBlobWriteReceipt WriteReceipt()
+    {
+        var reference = new DurableBlobRef(
+            CustodySchemaIds.DurableBlobRef,
+            Digest,
+            1,
+            CustodyClass.NightlyFloor90d);
+        var policy = new CustodyPolicyEvidence(
+            CustodySchemaIds.CustodyPolicyEvidence,
+            reference,
+            CustodyVerificationProfile.FileSystemUnenforced1,
+            policyKey: null,
+            CustodyProtection.NotEnforced,
+            new DateTimeOffset(2026, 9, 2, 0, 0, 0, TimeSpan.Zero),
+            protectedUntil: null);
+        return new DurableBlobWriteReceipt(
+            CustodySchemaIds.DurableBlobWriteReceipt,
+            reference,
+            policy);
     }
 
     private static object? Deserialize(Type type, string json)
