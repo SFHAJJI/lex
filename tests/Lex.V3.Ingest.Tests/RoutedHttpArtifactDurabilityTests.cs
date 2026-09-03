@@ -3,6 +3,7 @@ using System.Net;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using Lex.V3.Artifacts;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
@@ -360,6 +361,64 @@ public sealed class RoutedHttpArtifactDurabilityTests
 
         Assert.AreEqual(OfficialHttpAcquisitionOutcomeKind.IntegrityFailure, result.Kind);
         Assert.AreEqual(0, handler.SendCount);
+    }
+
+    [TestMethod]
+    public async Task AnUnenforcedStoreYieldsNoFlooredMemberAndTheRunSaysSo()
+    {
+        // The direction the other fixture cannot show. Its custody double issues immutable-object
+        // receipts, so it can only prove the classifier does not understate a floored member. The
+        // real filesystem adapter publishes FileSystemUnenforced1 with NotEnforced for every class,
+        // which is the pairing that must never be counted as floored: a run there has custody of
+        // its dependencies and no protection over them, and saying "durable" would be the false
+        // claim the split exists to prevent.
+        var root = Path.Combine(Path.GetTempPath(), "lex-unenforced-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var boundRequest = MachineRequestTestFixture.EuropeanUnionRequest();
+            var custody = new FileSystemCustodyStore(root);
+            var handler = new SequenceHandler((ordinal, request) => ordinal switch
+            {
+                0 => DeclaredResponse(
+                    request,
+                    HttpStatusCode.MovedPermanently,
+                    "redirect body",
+                    location: "https://op.europa.eu/robots.txt"),
+                1 => DeclaredResponse(
+                    request,
+                    HttpStatusCode.OK,
+                    "User-agent: *\nAllow: /\n",
+                    contentType: "text/plain;charset=UTF-8"),
+                2 => DeclaredResponse(request, HttpStatusCode.OK, "publisher body"),
+                _ => throw new AssertFailedException("The session sent an unexpected request."),
+            });
+
+            IReadOnlyDictionary<string, CustodyMembership> membership;
+            using (var session = Session(boundRequest, handler, custody))
+            {
+                // The robots route alone, deliberately. It retains the same send closure through
+                // the same path, which is what this test is about. The product attempt against a
+                // real FileSystemCustodyStore returns IntegrityFailure for a reason that predates
+                // this candidate and is masked by the recording double every other test uses; that
+                // is reported as its own finding rather than worked around here.
+                var started = await BootstrapAsync(session);
+                Assert.AreEqual(OfficialHttpAcquisitionOutcomeKind.ExecutedObservation, started.Kind);
+                membership = session.CopyArtifactMembership();
+            }
+
+            Assert.IsTrue(membership.Count > 0, "the run retained dependencies to classify");
+            Assert.IsFalse(
+                membership.Values.Contains(CustodyMembership.Floored),
+                "an unenforced store yields no floored member, and the run must not claim one");
+            Assert.IsTrue(
+                membership.Values.All(value => value == CustodyMembership.RetainedUnenforced),
+                "every member written to an unenforced store is retained-unenforced");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
     }
 
     private static RoutedHttpAcquisitionSession Session(

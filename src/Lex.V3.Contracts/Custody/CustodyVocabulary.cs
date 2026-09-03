@@ -93,7 +93,12 @@ public sealed class CustodyPolicyException : Exception
 /// </remarks>
 public enum CustodyMembership
 {
-    /// <summary>Reopened by digest and verified. No receipt, and so no custody claim.</summary>
+    /// <summary>
+    /// Reopened by digest and verified. No receipt, and so no custody claim. The session produces
+    /// none of these, because every reopen it performs now goes through the retaining path; the
+    /// member exists for a reader that opens a digest without writing it, which is what the
+    /// repeated-enumeration executor does when it verifies evidence it did not retain.
+    /// </summary>
     [JsonStringEnumMemberName("read_once")]
     ReadOnce = 0,
 

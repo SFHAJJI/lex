@@ -1213,13 +1213,15 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
 
     /// <summary>
     /// What a receipt establishes about where the bytes are held. Decision 71: the floor is a
-    /// property of the store observed after write and readback, so only a receipt can say it, and
-    /// only the immutable-object profile validates a class floor at all.
+    /// property of the store observed after write and readback, so only a receipt can say it.
+    /// Keyed on the observed protection rather than the profile that implies it today: the policy
+    /// evidence constructor already proved the class floor for every protection except
+    /// NotEnforced, so a profile added later cannot misclassify through this switch.
     /// </summary>
     private static CustodyMembership ClassifyMembership(DurableBlobWriteReceipt receipt) =>
-        receipt.PolicyEvidence.VerificationProfile == CustodyVerificationProfile.ImmutableObject1
-            ? CustodyMembership.Floored
-            : CustodyMembership.RetainedUnenforced;
+        receipt.PolicyEvidence.Protection == CustodyProtection.NotEnforced
+            ? CustodyMembership.RetainedUnenforced
+            : CustodyMembership.Floored;
 
     /// <summary>
     /// What this run can say about each closure member. Never derived from the digest alone.

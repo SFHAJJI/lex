@@ -1,6 +1,6 @@
-using System.Reflection;
 
 using Lex.V3.Contracts.Source.Http;
+using Lex.V3.TestSupport;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Lex.V3.Tests.Contracts.Source.Http;
@@ -11,6 +11,8 @@ namespace Lex.V3.Tests.Contracts.Source.Http;
 [TestClass]
 public sealed class RoutedHttpNetworkOriginTests
 {
+    private const string Origin = "Lex.V3.Contracts.Source.Http.RoutedHttpNetworkOrigin";
+
     [TestMethod]
     public void AnOriginIsDerivedFromAUriRatherThanAsserted()
     {
@@ -18,13 +20,17 @@ public sealed class RoutedHttpNetworkOriginTests
         // enforces, so a caller could state a host that no URI would ever produce and a port that
         // did not belong to it. Both literal call sites in the source profile now derive from the
         // robots URI the same route already states, so host and port cannot drift from it.
-        var type = typeof(RoutedHttpNetworkOrigin);
-        var constructors = type.GetConstructors(
-            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-        Assert.IsTrue(constructors.Length > 0);
-        Assert.IsTrue(
-            constructors.All(constructor => constructor.IsPrivate),
-            "an assembly-visible constructor bypasses the URI grammar the factory enforces");
+        // Pinned through the shared guard rather than hand-rolled reflection: four separate
+        // surface tests in this repository were each wrong about a different scope before it
+        // existed, and this one was written in the same shape.
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + Origin + "::.ctor(System.String, System.UInt16) -> " + Origin,
+                "method internal static " + Origin + "::FromUri(System.String) -> " + Origin,
+            },
+            ConstructionSurface.Of(typeof(RoutedHttpNetworkOrigin)).ToArray(),
+            "an origin may only be derived from a URI, never asserted as a host and a port");
     }
 
 }

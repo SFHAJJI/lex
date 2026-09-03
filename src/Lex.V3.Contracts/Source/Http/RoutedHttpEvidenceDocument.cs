@@ -1409,7 +1409,9 @@ internal static partial class RoutedHttpCanonicalJson
 
 internal static partial class RoutedHttpValidation
 {
-    public const ulong MaximumCompleteEntityLength = 268_435_455;
+    // One below the retained bound, derived rather than restated: an entity at the
+    // retained bound is the cap sentinel and therefore never a complete entity.
+    public const ulong MaximumCompleteEntityLength = MaximumRetainedEntityLength - 1;
     // Derived, not restated. The session caps the read at the profile's MaximumResponseBytes,
     // which is CustodyBounds.MaxObjectBytes, and the loop returns its cap sentinel at exactly
     // that length; this constant admits the sentinel. Two independent literals meant a
