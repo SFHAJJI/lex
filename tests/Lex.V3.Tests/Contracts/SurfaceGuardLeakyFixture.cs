@@ -102,6 +102,33 @@ public static class SurfaceGuardLeakyFixture
     }
 
     /// <summary>
+    /// A producer whose own type is not the guarded type. A definition that looks for members "of
+    /// the guarded type" does not match a delegate that returns one.
+    /// </summary>
+    public static class Indirect
+    {
+        public static Func<string, LeakyThing> Factory { get; } = LeakyThing.Adopt;
+    }
+
+    /// <summary>
+    /// A producer reachable only through an interface. The implementation is explicit, so it does
+    /// not appear among the type's public methods and carries a compiler-mangled name.
+    /// </summary>
+    public interface ILeakyOpener
+    {
+        LeakyThing OpenOne(string value);
+    }
+
+    /// <summary>
+    /// Implements <see cref="ILeakyOpener"/> explicitly. A caller with the interface in hand can
+    /// produce a guarded value; a guard enumerating public members of either type sees nothing.
+    /// </summary>
+    public sealed class ExplicitOpener : ILeakyOpener
+    {
+        LeakyThing ILeakyOpener.OpenOne(string value) => LeakyThing.Adopt(value);
+    }
+
+    /// <summary>
     /// Door: the base type's constructor is protected, so any type deriving from
     /// <see cref="LeakyThing"/>'s base can produce a value of the base's shape, and a guard that
     /// only inspects the guarded type never looks here.
