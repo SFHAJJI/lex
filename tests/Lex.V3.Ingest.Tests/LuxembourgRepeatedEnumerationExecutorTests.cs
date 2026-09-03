@@ -1070,6 +1070,107 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
     }
 
     // ---------------------------------------------------------------------------------------
+    // Residual from the third refreeze verdict: the same escape as objection 2 above, but one
+    // guard earlier. results.TryGetProperty("bindings", ...) ran in both parsers on whichever
+    // JsonElement root.TryGetProperty("results", ...) returned, unchecked, so a body such as
+    // {"results":5} or {"results":[]} threw InvalidOperationException past both catch filters and
+    // the outer catch instead of refusing. Plus the term-kind guard the second refreeze added but
+    // never drove.
+    // ---------------------------------------------------------------------------------------
+
+    [TestMethod]
+    [DataRow("5", DisplayName = "results is a number")]
+    [DataRow("[]", DisplayName = "results is an array")]
+    public async Task ACountResultsThatIsNotAnObjectRefusesRatherThanThrowing(string resultsLiteral)
+    {
+        // Before this, results.TryGetProperty("bindings", ...) in ParseStrictCount ran unchecked on
+        // whichever JsonElement root.TryGetProperty("results", ...) returned.
+        //
+        // The mutation that kills this: delete the `results.ValueKind != JsonValueKind.Object`
+        // check from ParseStrictCount. Confirmed: the run then throws InvalidOperationException out
+        // of RunPartitionAsync instead of refusing CountNotOneNonNegativeInteger.
+        var (request, witness) = BuildRequest();
+        var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
+        var nonObjectResultsCount =
+            "{\"head\":{\"link\":[],\"vars\":[\"count\"]},\"results\":" + resultsLiteral + "}";
+        var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((_, req) =>
+            JsonResponse(req, nonObjectResultsCount));
+
+        var result = await Run(store, request, witness, handler);
+
+        Assert.IsNull(result.Receipt);
+        Assert.IsNotNull(result.Refusal);
+        Assert.AreEqual(LuxembourgEnumerationRefusal.CountNotOneNonNegativeInteger, result.Refusal.Code);
+        Assert.AreEqual(2, handler.SendCount, "robots and the count only");
+    }
+
+    [TestMethod]
+    [DataRow("5", DisplayName = "results is a number")]
+    [DataRow("[]", DisplayName = "results is an array")]
+    public async Task APageResultsThatIsNotAnObjectRefusesRatherThanThrowing(string resultsLiteral)
+    {
+        // Before this, results.TryGetProperty("bindings", ...) in ParseStrictRows ran unchecked on
+        // whichever JsonElement root.TryGetProperty("results", ...) returned.
+        //
+        // The mutation that kills this: delete the `results.ValueKind != JsonValueKind.Object`
+        // check from ParseStrictRows. Confirmed: the run then throws InvalidOperationException out
+        // of RunPartitionAsync instead of refusing PageBodyMalformed.
+        var (request, witness) = BuildRequest();
+        var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
+        var nonObjectResultsPage = "{\"head\":{\"link\":[],\"vars\":[]},\"results\":" + resultsLiteral + "}";
+        var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, req) => ordinal switch
+        {
+            1 => JsonResponse(req, LuxembourgAcquisitionTestFixture.CountJson(1)),
+            2 => JsonResponse(req, nonObjectResultsPage),
+            _ => throw new AssertFailedException("No further sends after a page whose results is not an object."),
+        });
+
+        var result = await Run(store, request, witness, handler);
+
+        Assert.IsNull(result.Receipt);
+        Assert.IsNotNull(result.Refusal);
+        Assert.AreEqual(LuxembourgEnumerationRefusal.PageBodyMalformed, result.Refusal.Code);
+    }
+
+    [TestMethod]
+    public async Task AKeyTermThatIsAStringRatherThanAnObjectRefusesRatherThanThrowing()
+    {
+        // ParseStrictRows' key loop checks `term.ValueKind != JsonValueKind.Object` before calling
+        // term.TryGetProperty("value", ...), added alongside the row-not-an-object and
+        // results-not-an-object guards above, but no test drove this exact branch: every existing
+        // malformed-row test either omits a key_N entirely (TryGetProperty returns false, a
+        // different branch of the same condition) or gives it a well-formed object whose "value" is
+        // wrong. This drives the case where key_1 is present but is a bare JSON string, not an
+        // object, so TryGetProperty succeeds and the ValueKind check is the one that has to catch
+        // it.
+        //
+        // The mutation that kills this: delete the `term.ValueKind != JsonValueKind.Object` check
+        // from ParseStrictRows' key loop. Confirmed: the run then throws InvalidOperationException
+        // out of term.TryGetProperty("value", ...) instead of refusing PageBodyMalformed.
+        var (request, witness) = BuildRequest();
+        var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
+        var stringKeyTermRow =
+            "{\"head\":{\"link\":[],\"vars\":[\"key_1\",\"key_2\",\"key_3\",\"key_4\",\"key_5\",\"key_6\"]},"
+            + "\"results\":{\"distinct\":false,\"ordered\":true,\"bindings\":[{"
+            + "\"key_1\":\"a\","
+            + "\"key_2\":{\"type\":\"literal\",\"value\":\"\"},\"key_3\":{\"type\":\"literal\",\"value\":\"\"},"
+            + "\"key_4\":{\"type\":\"literal\",\"value\":\"\"},\"key_5\":{\"type\":\"literal\",\"value\":\"\"},"
+            + "\"key_6\":{\"type\":\"literal\",\"value\":\"\"}}]}}";
+        var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, req) => ordinal switch
+        {
+            1 => JsonResponse(req, LuxembourgAcquisitionTestFixture.CountJson(1)),
+            2 => JsonResponse(req, stringKeyTermRow),
+            _ => throw new AssertFailedException("No further sends after a row whose key_1 term is a string."),
+        });
+
+        var result = await Run(store, request, witness, handler);
+
+        Assert.IsNull(result.Receipt);
+        Assert.IsNotNull(result.Refusal);
+        Assert.AreEqual(LuxembourgEnumerationRefusal.PageBodyMalformed, result.Refusal.Code);
+    }
+
+    // ---------------------------------------------------------------------------------------
     // Objection 3: successors for the preserved RED tests at f33a82f3 that had none.
     // ---------------------------------------------------------------------------------------
 

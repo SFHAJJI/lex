@@ -836,6 +836,7 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         var root = document.RootElement;
         if (root.ValueKind != System.Text.Json.JsonValueKind.Object ||
             !root.TryGetProperty("results", out var results) ||
+            results.ValueKind != System.Text.Json.JsonValueKind.Object ||
             !results.TryGetProperty("bindings", out var bindings) ||
             bindings.ValueKind != System.Text.Json.JsonValueKind.Array ||
             bindings.GetArrayLength() != 1)
@@ -851,13 +852,16 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         }
 
         // ValueKind is checked before every TryGetProperty/GetString call on a value this parser
-        // does not already know the shape of. JsonElement.TryGetProperty throws
-        // InvalidOperationException on a non-object element, and GetString throws it on a
-        // non-string, non-null element; neither is a FormatException or JsonException, so neither
-        // was caught by RunPassAsync's catch filter, and both used to escape RunPartitionAsync and
-        // RunCoverAsync as an unhandled exception rather than a typed refusal. A count body whose
-        // one binding value is not itself an object (`{"count":"1"}`) hit the first of these; a
-        // term whose "type" or "datatype" exists but is not a string hit the second.
+        // does not already know the shape of, including the results.TryGetProperty("bindings")
+        // call above. JsonElement.TryGetProperty throws InvalidOperationException on a non-object
+        // element, and GetString throws it on a non-string, non-null element; neither is a
+        // FormatException or JsonException, so neither was caught by RunPassAsync's catch filter,
+        // and all three used to escape RunPartitionAsync and RunCoverAsync as an unhandled
+        // exception rather than a typed refusal. A count body whose "results" is itself not an
+        // object (`{"results":5}` or `{"results":[]}`) hit the results.TryGetProperty("bindings")
+        // call above; one whose one binding value is not itself an object (`{"count":"1"}`) hit the
+        // first of these below; a term whose "type" or "datatype" exists but is not a string hit
+        // the second.
         var term = binding.EnumerateObject().First().Value;
         if (term.ValueKind != System.Text.Json.JsonValueKind.Object ||
             !term.TryGetProperty("type", out var type) ||
@@ -914,6 +918,7 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         var root = document.RootElement;
         if (root.ValueKind != System.Text.Json.JsonValueKind.Object ||
             !root.TryGetProperty("results", out var results) ||
+            results.ValueKind != System.Text.Json.JsonValueKind.Object ||
             !results.TryGetProperty("bindings", out var bindings) ||
             bindings.ValueKind != System.Text.Json.JsonValueKind.Array)
         {
