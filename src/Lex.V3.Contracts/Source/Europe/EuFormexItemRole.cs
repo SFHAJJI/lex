@@ -49,6 +49,19 @@ public enum EuFormexRoleRefusal
     /// <summary>The set carries no main text, so there is no body to acquire.</summary>
     [JsonStringEnumMemberName("main_text_absent")]
     MainTextAbsent = 6,
+
+    /// <summary>
+    /// The stream name disagrees with the work identity the caller opened it against.
+    /// </summary>
+    [JsonStringEnumMemberName("work_identity_disagreement")]
+    WorkIdentityDisagreement = 7,
+
+    /// <summary>
+    /// Items in one set carry different package stems, so they are states of different
+    /// consolidations rather than one manifestation.
+    /// </summary>
+    [JsonStringEnumMemberName("stem_disagreement")]
+    StemDisagreement = 8,
 }
 
 /// <summary>
@@ -83,28 +96,51 @@ public sealed class EuFormexStreamName
         System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     /// <summary>
-    /// Consolidated legislation is CELEX sector 3. The sector is derived from the admitted
-    /// grammar rather than read out of the stream name, which carries no sector, so the grammar
-    /// must stay narrow enough that the derivation cannot silently widen.
+    /// The year, type letter and number a CELEX carries after its sector digit. Used to check a
+    /// stream name against an identity the caller already holds, never to build one.
     /// </summary>
-    private const string ConsolidatedSector = "3";
+    private static readonly System.Text.RegularExpressions.Regex CelexCore = new(
+        @"^\d(?<year>\d{4})(?<type>[A-Z])(?<number>\d{4})",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant
+            | System.Text.RegularExpressions.RegexOptions.ExplicitCapture);
 
     private EuFormexStreamName(
         string value,
+        string stem,
         string workCelex,
         string language,
         EuFormexItemRole role)
     {
         Value = value;
+        Stem = stem;
         WorkCelex = workCelex;
         Language = language;
         Role = role;
     }
 
+    /// <summary>
+    /// Everything before the extension, for example <c>CL2016R0679EN0000020.0001</c>. Two items
+    /// belong to one consolidation package only if their stems agree: the production sequence and
+    /// increment are what distinguish one consolidation state from another.
+    /// </summary>
+    public string Stem { get; }
+
     /// <summary>The exact publisher stream name, unmodified.</summary>
     public string Value { get; }
 
-    /// <summary>The work CELEX derived from the grammar, for example <c>32016R0679</c>.</summary>
+    /// <summary>
+    /// The work identity this name was opened against and agrees with, verbatim as the caller
+    /// supplied it.
+    /// </summary>
+    /// <remarks>
+    /// Verified, never derived. An earlier version of this type built a CELEX by prefixing sector
+    /// 3, on the reasoning that consolidated legislation is sector 3. The publisher falsifies
+    /// that: <c>CL1998A0403EN0010010.0001.xml</c> is a real consolidated package whose base act is
+    /// <c>21998A0403(01)</c>, an international agreement in sector 2. The derivation produced
+    /// <c>31998A0403</c>, which names a different sector and silently drops the parenthetical the
+    /// grammar cannot carry. A stream name is evidence about an identity the Cellar notice already
+    /// states; it is not authority to mint one.
+    /// </remarks>
     public string WorkCelex { get; }
 
     /// <summary>The two letter expression language carried by the name.</summary>
@@ -128,13 +164,15 @@ public sealed class EuFormexStreamName
     /// throwing, because an unclassifiable item is an expected publisher outcome to record, not a
     /// programming error.
     /// </summary>
-    public static EuFormexStreamName? TryParse(string value, out EuFormexRoleRefusal refusal)
+    public static EuFormexStreamName? TryParse(
+        string value,
+        string expectedWorkCelex,
+        out EuFormexRoleRefusal refusal)
     {
-        refusal = default;
+        refusal = EuFormexRoleRefusal.UnrecognisedStreamName;
 
-        if (string.IsNullOrEmpty(value))
+        if (string.IsNullOrEmpty(value) || string.IsNullOrEmpty(expectedWorkCelex))
         {
-            refusal = EuFormexRoleRefusal.UnrecognisedStreamName;
             return null;
         }
 
@@ -147,19 +185,27 @@ public sealed class EuFormexStreamName
             return null;
         }
 
+        // The name must agree with the identity the caller already holds. Year, type and number
+        // are what the two share; the sector and any parenthetical live only in the CELEX, which
+        // is why the CELEX is carried through rather than rebuilt from the name.
+        var expected = CelexCore.Match(expectedWorkCelex);
+        if (!expected.Success
+            || expected.Groups["year"].Value != match.Groups["year"].Value
+            || expected.Groups["type"].Value != match.Groups["type"].Value
+            || expected.Groups["number"].Value != match.Groups["number"].Value)
+        {
+            refusal = EuFormexRoleRefusal.WorkIdentityDisagreement;
+            return null;
+        }
+
         var role = match.Groups["extension"].Value == ".doc.xml"
             ? EuFormexItemRole.Descriptor
             : EuFormexItemRole.MainText;
 
-        var workCelex = string.Concat(
-            ConsolidatedSector,
-            match.Groups["year"].Value,
-            match.Groups["type"].Value,
-            match.Groups["number"].Value);
-
         return new EuFormexStreamName(
             value,
-            workCelex,
+            value[..^match.Groups["extension"].Value.Length],
+            expectedWorkCelex,
             match.Groups["language"].Value,
             role);
     }
@@ -273,6 +319,17 @@ public sealed class EuFormexItemSet
         if (works.Length != 1)
         {
             refusal = EuFormexRoleRefusal.WorkDisagreement;
+            return null;
+        }
+
+        // Same work and same language still admits two different consolidation states. The stem
+        // carries the production sequence and increment, which is what actually distinguishes one
+        // package from another, so a main text and a descriptor from different states would
+        // otherwise pair as one manifestation.
+        var stems = items.Select(item => item.StreamName.Stem).Distinct(StringComparer.Ordinal).ToArray();
+        if (stems.Length != 1)
+        {
+            refusal = EuFormexRoleRefusal.StemDisagreement;
             return null;
         }
 

@@ -23,19 +23,20 @@ public sealed class EuFormexItemRoleTests
     private const string ConsolidatedMain = "CL2016R0679EN0000020.0001.xml";
     private const string ConsolidatedDescriptor = "CL2016R0679EN0000020.0001.doc.xml";
     private const string OriginalActMain = "L_2016119EN.01000101.xml";
+    private const string Gdpr = "32016R0679";
     private const string Manifestation = "5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0022.01";
 
     [TestMethod]
     public void TheGrammarIsReadOffMeasuredPublisherNamesRatherThanAFixture()
     {
-        var main = EuFormexStreamName.TryParse(ConsolidatedMain, out _);
+        var main = EuFormexStreamName.TryParse(ConsolidatedMain, Gdpr, out _);
         Assert.IsNotNull(main);
         Assert.AreEqual(EuFormexItemRole.MainText, main.Role);
         Assert.AreEqual("32016R0679", main.WorkCelex, "the work CELEX is derived from the grammar");
         Assert.AreEqual("EN", main.Language);
         Assert.AreEqual(ConsolidatedMain, main.Value, "the publisher name is retained unmodified");
 
-        var descriptor = EuFormexStreamName.TryParse(ConsolidatedDescriptor, out _);
+        var descriptor = EuFormexStreamName.TryParse(ConsolidatedDescriptor, Gdpr, out _);
         Assert.IsNotNull(descriptor);
         Assert.AreEqual(EuFormexItemRole.Descriptor, descriptor.Role);
         Assert.AreEqual("32016R0679", descriptor.WorkCelex);
@@ -46,10 +47,10 @@ public sealed class EuFormexItemRoleTests
     {
         // Point-in-time law is served from consolidations, so this shape is out of scope rather
         // than unrecognised. The distinction matters: one is a decision, the other is a gap.
-        Assert.IsNull(EuFormexStreamName.TryParse(OriginalActMain, out var refusal));
+        Assert.IsNull(EuFormexStreamName.TryParse(OriginalActMain, Gdpr, out var refusal));
         Assert.AreEqual(EuFormexRoleRefusal.OriginalActNaming, refusal);
 
-        Assert.IsNull(EuFormexStreamName.TryParse("L_2016119EN.01000101.doc.xml", out var paired));
+        Assert.IsNull(EuFormexStreamName.TryParse("L_2016119EN.01000101.doc.xml", Gdpr, out var paired));
         Assert.AreEqual(EuFormexRoleRefusal.OriginalActNaming, paired);
     }
 
@@ -68,7 +69,7 @@ public sealed class EuFormexItemRoleTests
         })
         {
             Assert.IsNull(
-                EuFormexStreamName.TryParse(name, out var refusal),
+                EuFormexStreamName.TryParse(name, Gdpr, out var refusal),
                 $"'{name}' must not parse");
             Assert.AreEqual(
                 EuFormexRoleRefusal.UnrecognisedStreamName,
@@ -130,7 +131,7 @@ public sealed class EuFormexItemRoleTests
         var languages = new[]
         {
             Item(ConsolidatedMain, 1),
-            Item("CL2016R0679FR0000020.0001.doc.xml", 2),
+            Item("CL2016R0679FR0000020.0001.doc.xml", 2, Gdpr),
         };
         Assert.IsNull(EuFormexItemSet.TryAdmit(languages, out var languageRefusal));
         Assert.AreEqual(EuFormexRoleRefusal.LanguageDisagreement, languageRefusal);
@@ -138,7 +139,7 @@ public sealed class EuFormexItemRoleTests
         var works = new[]
         {
             Item(ConsolidatedMain, 1),
-            Item("CL2019R0947EN0000020.0001.doc.xml", 2),
+            Item("CL2019R0947EN0000020.0001.doc.xml", 2, "32019R0947"),
         };
         Assert.IsNull(EuFormexItemSet.TryAdmit(works, out var workRefusal));
         Assert.AreEqual(EuFormexRoleRefusal.WorkDisagreement, workRefusal);
@@ -147,7 +148,7 @@ public sealed class EuFormexItemRoleTests
     [TestMethod]
     public void AnItemRefIsAdmittedAsAnExactCellarItemRoleRatherThanAccepted()
     {
-        var streamName = EuFormexStreamName.TryParse(ConsolidatedMain, out _)!;
+        var streamName = EuFormexStreamName.TryParse(ConsolidatedMain, Gdpr, out _)!;
 
         // A real Cellar object of the wrong role. No bare member key authorizes an item role.
         Assert.ThrowsExactly<ArgumentException>(
@@ -168,18 +169,27 @@ public sealed class EuFormexItemRoleTests
     {
         var type = typeof(EuFormexStreamName);
 
-        Assert.AreEqual(
-            0,
-            type.GetConstructors(BindingFlags.Public | BindingFlags.Instance).Length,
-            "a public constructor would let a caller mint a role the grammar never admitted");
+        // Every constructor private, not merely no public one: Lex.V3.Contracts grants
+        // InternalsVisibleTo to both test assemblies, so an internal constructor is a friend door
+        // that "zero public constructors" would not see.
+        var constructors = type.GetConstructors(
+            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.IsTrue(constructors.Length > 0);
+        Assert.IsTrue(
+            constructors.All(constructor => constructor.IsPrivate),
+            "a non-private constructor would let a caller mint a role the grammar never admitted");
 
-        // Kind, scope, parameters and return, not bare names: a guard that pins names alone passes
-        // while the surface underneath it changes.
+        // Kind, scope, parameters and return, not bare names. Filtering on the return type alone
+        // misses the idiomatic escape hatch, a bool-returning TryX with an out parameter of the
+        // guarded type, so by-ref parameters are enumerated too.
         var factories = type
             .GetMethods(BindingFlags.Public | BindingFlags.NonPublic
                 | BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly)
             .Where(method => method.ReturnType == type
-                || (method.ReturnType.IsByRef && method.ReturnType.GetElementType() == type))
+                || (method.ReturnType.IsByRef && method.ReturnType.GetElementType() == type)
+                || method.GetParameters().Any(parameter =>
+                    parameter.ParameterType.IsByRef
+                    && parameter.ParameterType.GetElementType() == type))
             .Select(method => $"{(method.IsStatic ? "static" : "instance")} {method}")
             .OrderBy(signature => signature, StringComparer.Ordinal)
             .ToArray();
@@ -188,7 +198,8 @@ public sealed class EuFormexItemRoleTests
             new[]
             {
                 "static Lex.V3.Contracts.Source.Europe.EuFormexStreamName TryParse"
-                + "(System.String, Lex.V3.Contracts.Source.Europe.EuFormexRoleRefusal ByRef)",
+                + "(System.String, System.String, "
+                + "Lex.V3.Contracts.Source.Europe.EuFormexRoleRefusal ByRef)",
             },
             factories);
 
@@ -196,6 +207,42 @@ public sealed class EuFormexItemRoleTests
             0,
             type.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static).Length,
             "a public field is a construction surface too");
+    }
+
+    [TestMethod]
+    public void TheWorkIdentityIsVerifiedAgainstTheCallerRatherThanDerivedFromTheName()
+    {
+        // Measured by the peer reviewer against live publisher bytes: this is a real consolidated
+        // package whose base act is an international agreement in sector 2, not legislation in
+        // sector 3. An earlier version of this type derived "31998A0403" here, which named a
+        // different sector and dropped the parenthetical the grammar cannot carry.
+        const string Agreement = "CL1998A0403EN0010010.0001.xml";
+
+        var parsed = EuFormexStreamName.TryParse(Agreement, "21998A0403(01)", out var refusal);
+        Assert.IsNotNull(parsed, $"refused as {refusal}");
+        Assert.AreEqual("21998A0403(01)", parsed.WorkCelex, "the caller's identity is carried, not rebuilt");
+        Assert.AreEqual(EuFormexItemRole.MainText, parsed.Role);
+
+        // The same bytes opened against the wrong work are refused rather than silently accepted.
+        Assert.IsNull(EuFormexStreamName.TryParse(Agreement, Gdpr, out var mismatch));
+        Assert.AreEqual(EuFormexRoleRefusal.WorkIdentityDisagreement, mismatch);
+        Assert.IsNull(EuFormexStreamName.TryParse(ConsolidatedMain, "21998A0403(01)", out var other));
+        Assert.AreEqual(EuFormexRoleRefusal.WorkIdentityDisagreement, other);
+    }
+
+    [TestMethod]
+    public void ItemsFromDifferentConsolidationStatesDoNotPairAsOneManifestation()
+    {
+        // Same work, same language, different production sequence and increment: two states of the
+        // same act, not one package. Nothing above the stem distinguishes them.
+        var items = new[]
+        {
+            Item(ConsolidatedMain, 1),
+            Item("CL2016R0679EN0000021.0002.doc.xml", 2),
+        };
+
+        Assert.IsNull(EuFormexItemSet.TryAdmit(items, out var refusal));
+        Assert.AreEqual(EuFormexRoleRefusal.StemDisagreement, refusal);
     }
 
     private static EuFormexItemSet Admit(params (string Name, long Order)[] items)
@@ -207,9 +254,9 @@ public sealed class EuFormexItemRoleTests
         return set;
     }
 
-    private static EuFormexItem Item(string streamName, long order)
+    private static EuFormexItem Item(string streamName, long order, string? work = null)
     {
-        var parsed = EuFormexStreamName.TryParse(streamName, out var refusal);
+        var parsed = EuFormexStreamName.TryParse(streamName, work ?? Gdpr, out var refusal);
         Assert.IsNotNull(parsed, $"'{streamName}' was refused as {refusal}");
         return new EuFormexItem(Boundary(), parsed, ItemRef("DOC_" + order), order);
     }
