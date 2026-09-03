@@ -10,12 +10,19 @@ namespace Lex.V3.Tests.Contracts.Source.Core;
 [TestClass]
 public sealed class CutReleaseGateTests
 {
+    private const string CutId = "cut-1";
+    private const string OtherCutId = "cut-2";
+    private const string EnumerationKey = "enumeration_evidence";
+    private const string AcquisitionKey = "public_corpus";
+
     private static readonly SourceArtifactRef WrongRegistryRef =
         new("urn:uuid:00000000-0000-4000-8000-000000000001", new string('7', 64));
 
-    private static CutCompletionClaim Complete(string id = "completion-1") => new(id, isComplete: true);
+    private static CutCompletionClaim Complete(string cutId = CutId, string id = "completion-1") =>
+        new(cutId, id, isComplete: true);
 
-    private static CutCompletionClaim Incomplete(string id = "completion-1") => new(id, isComplete: false);
+    private static CutCompletionClaim Incomplete(string cutId = CutId, string id = "completion-1") =>
+        new(cutId, id, isComplete: false);
 
     /// <summary>All twelve families at zero, matching an empty ledger. The uncontested eligible shape.</summary>
     private static List<GlobalBlockerFamilyCountEntry> AllZeroVector() =>
@@ -38,16 +45,59 @@ public sealed class CutReleaseGateTests
             "\"cut_release_blocked\"", ContractJson.Serialize(CutReleaseVerdict.CutReleaseBlocked));
     }
 
+    [TestMethod]
+    public void EveryReleaseArtifactKindWireTokenIsTheAcceptedTextsOwnWord()
+    {
+        // R3 lines 400 to 401's exact words, one assertion per kind, transcribed rather than
+        // derived from ReleaseArtifactKindRegistry.WireKeyOf itself.
+        Assert.AreEqual(
+            "\"enumeration_evidence\"", ContractJson.Serialize(ReleaseArtifactKind.EnumerationEvidence));
+        Assert.AreEqual("\"public_corpus\"", ContractJson.Serialize(ReleaseArtifactKind.PublicCorpus));
+        Assert.AreEqual("\"index\"", ContractJson.Serialize(ReleaseArtifactKind.Index));
+        Assert.AreEqual("\"body\"", ContractJson.Serialize(ReleaseArtifactKind.Body));
+        Assert.AreEqual("\"metadata\"", ContractJson.Serialize(ReleaseArtifactKind.Metadata));
+        Assert.AreEqual("\"relation\"", ContractJson.Serialize(ReleaseArtifactKind.Relation));
+        Assert.AreEqual("\"gap\"", ContractJson.Serialize(ReleaseArtifactKind.Gap));
+        Assert.AreEqual("\"absence\"", ContractJson.Serialize(ReleaseArtifactKind.Absence));
+        Assert.AreEqual("\"withdrawal\"", ContractJson.Serialize(ReleaseArtifactKind.Withdrawal));
+        Assert.AreEqual(
+            "\"capability_release\"", ContractJson.Serialize(ReleaseArtifactKind.CapabilityRelease));
+    }
+
+    [TestMethod]
+    public void DeriveReleaseClassIsTheAcceptedTextsMappingForEveryKind()
+    {
+        Assert.AreEqual(
+            ReleaseClass.EnumerationEvidenceOnly,
+            CutReleaseGate.DeriveReleaseClass(ReleaseArtifactKind.EnumerationEvidence));
+        foreach (var kind in new[]
+                 {
+                     ReleaseArtifactKind.PublicCorpus, ReleaseArtifactKind.Index,
+                     ReleaseArtifactKind.Body, ReleaseArtifactKind.Metadata,
+                     ReleaseArtifactKind.Relation, ReleaseArtifactKind.Gap,
+                     ReleaseArtifactKind.Absence, ReleaseArtifactKind.Withdrawal,
+                     ReleaseArtifactKind.CapabilityRelease,
+                 })
+        {
+            Assert.AreEqual(
+                ReleaseClass.AcquisitionOrProduct,
+                CutReleaseGate.DeriveReleaseClass(kind),
+                $"{kind} must derive AcquisitionOrProduct");
+        }
+    }
+
     // ---- Positive controls -------------------------------------------------------------------
 
     [TestMethod]
     public void EnumerationEvidenceOnlyIsEligibleWhenEverythingBinds()
     {
-        var gate = CutReleaseGate.EvaluateEnumerationEvidenceOnly(
-            "cut-1", Complete(), GlobalBlockerRegistry.RegistryRef, AllZeroVector(), EmptyRecompute());
+        var gate = CutReleaseGate.TryEvaluate(
+            CutId, EnumerationKey, Complete(), null,
+            GlobalBlockerRegistry.RegistryRef, AllZeroVector(), EmptyRecompute());
 
         Assert.AreEqual(CutReleaseVerdict.CutReleaseEligible, gate.Verdict);
         Assert.AreEqual(CutReleaseBlockReason.None, gate.Reason);
+        Assert.AreEqual(ReleaseArtifactKind.EnumerationEvidence, gate.ArtifactKind);
         Assert.AreEqual(ReleaseClass.EnumerationEvidenceOnly, gate.ReleaseClass);
         Assert.IsNull(gate.AcquisitionCompletion, "enumeration_evidence_only never carries an acquisition claim");
     }
@@ -55,13 +105,87 @@ public sealed class CutReleaseGateTests
     [TestMethod]
     public void AcquisitionOrProductIsEligibleWhenBothCompletionsAndTheVectorBind()
     {
-        var gate = CutReleaseGate.EvaluateAcquisitionOrProduct(
-            "cut-1", Complete("enum"), Complete("acq"),
+        var gate = CutReleaseGate.TryEvaluate(
+            CutId, AcquisitionKey, Complete(id: "enum"), Complete(id: "acq"),
             GlobalBlockerRegistry.RegistryRef, AllZeroVector(), EmptyRecompute());
 
         Assert.AreEqual(CutReleaseVerdict.CutReleaseEligible, gate.Verdict);
         Assert.AreEqual(CutReleaseBlockReason.None, gate.Reason);
+        Assert.AreEqual(ReleaseArtifactKind.PublicCorpus, gate.ArtifactKind);
         Assert.AreEqual(ReleaseClass.AcquisitionOrProduct, gate.ReleaseClass);
+    }
+
+    /// <summary>
+    /// The note this refreeze also folds in: one gate-level positive control exercising all
+    /// twelve registered families at once, each carrying a real occurrence the recomputation
+    /// agrees with, rather than every other test in this file touching at most one or two
+    /// families each. This is the shape that would catch a family the per-family tests never
+    /// happen to combine with another.
+    /// </summary>
+    [TestMethod]
+    public void AllTwelveFamiliesPopulatedAtOnceStillReconcilesAndBlocksOnNonzero()
+    {
+        var occurrences = new[]
+        {
+            new GlobalBlockerOccurrence("manifest_selector_conflict", "s1"),
+            new GlobalBlockerOccurrence("manifest_boundary_drift", "s2"),
+            new GlobalBlockerOccurrence("root_definition_conflict", "s3"),
+            new GlobalBlockerOccurrence("duplicate_closure", "s4"),
+            new GlobalBlockerOccurrence("missing_closure", "s5"),
+            new GlobalBlockerOccurrence("closure_reconciliation_conflict", "s6"),
+            new GlobalBlockerOccurrence("witness_reconciliation_conflict", "s7"),
+            new GlobalBlockerOccurrence("paging_partition_or_truncation_conflict", "s8"),
+            new GlobalBlockerOccurrence("robots_policy_conflict", "s9"),
+            new GlobalBlockerOccurrence("positive_feed_reconciliation_conflict", "s10"),
+            new GlobalBlockerOccurrence("implementation_error", "s11"),
+            new GlobalBlockerOccurrence("a_key_no_package_declares", "s12"),
+        };
+        var recomputed = GlobalBlockerCountVector.Recompute(occurrences);
+        var vector = GlobalBlockerRegistry.Families
+            .Select(family => new GlobalBlockerFamilyCountEntry(
+                family, 1, recomputed.SubtypeCounts(family).ToDictionary(
+                    static pair => pair.Key, static pair => pair.Value)))
+            .ToList();
+        Assert.AreEqual(12, vector.Count, "one entry per registered family, none omitted or doubled");
+
+        var gate = CutReleaseGate.TryEvaluate(
+            CutId, EnumerationKey, Complete(), null,
+            GlobalBlockerRegistry.RegistryRef, vector, recomputed);
+
+        // Ledger-coherent for every family (would fail earlier on CountLedgerMismatch if not),
+        // and blocked on NonzeroBlockerCount only because every family truly is nonzero here.
+        Assert.AreEqual(CutReleaseVerdict.CutReleaseBlocked, gate.Verdict);
+        Assert.AreEqual(CutReleaseBlockReason.NonzeroBlockerCount, gate.Reason);
+    }
+
+    // ---- Artifact kind: unknown key, and the class it would have derived -------------------------
+
+    [TestMethod]
+    public void AnUnrecognizedArtifactKindKeyIsBlockedWithNoDerivedClass()
+    {
+        var gate = CutReleaseGate.TryEvaluate(
+            CutId, "a_kind_no_accepted_text_names", Complete(), null,
+            GlobalBlockerRegistry.RegistryRef, AllZeroVector(), EmptyRecompute());
+
+        Assert.AreEqual(CutReleaseVerdict.CutReleaseBlocked, gate.Verdict);
+        Assert.AreEqual(CutReleaseBlockReason.UnknownArtifactKindOrReleaseClass, gate.Reason);
+        Assert.IsNull(gate.ArtifactKind);
+        Assert.IsNull(gate.ReleaseClass);
+    }
+
+    [TestMethod]
+    public void ANullOrEmptyArtifactKindKeyIsAlsoUnknown()
+    {
+        Assert.AreEqual(
+            CutReleaseBlockReason.UnknownArtifactKindOrReleaseClass,
+            CutReleaseGate.TryEvaluate(
+                CutId, "", Complete(), null,
+                GlobalBlockerRegistry.RegistryRef, AllZeroVector(), EmptyRecompute()).Reason);
+        Assert.AreEqual(
+            CutReleaseBlockReason.UnknownArtifactKindOrReleaseClass,
+            CutReleaseGate.TryEvaluate(
+                CutId, null!, Complete(), null,
+                GlobalBlockerRegistry.RegistryRef, AllZeroVector(), EmptyRecompute()).Reason);
     }
 
     // ---- Completion state: false or missing, both release classes -------------------------------
@@ -69,13 +193,15 @@ public sealed class CutReleaseGateTests
     [TestMethod]
     public void MissingEnumerationCompletionBlocksBothReleaseClasses()
     {
-        var enumerationOnly = CutReleaseGate.EvaluateEnumerationEvidenceOnly(
-            "cut-1", null, GlobalBlockerRegistry.RegistryRef, AllZeroVector(), EmptyRecompute());
+        var enumerationOnly = CutReleaseGate.TryEvaluate(
+            CutId, EnumerationKey, null, null,
+            GlobalBlockerRegistry.RegistryRef, AllZeroVector(), EmptyRecompute());
         Assert.AreEqual(CutReleaseVerdict.CutReleaseBlocked, enumerationOnly.Verdict);
         Assert.AreEqual(CutReleaseBlockReason.EnumerationCompletionFalseOrMissing, enumerationOnly.Reason);
 
-        var product = CutReleaseGate.EvaluateAcquisitionOrProduct(
-            "cut-1", null, Complete(), GlobalBlockerRegistry.RegistryRef, AllZeroVector(), EmptyRecompute());
+        var product = CutReleaseGate.TryEvaluate(
+            CutId, AcquisitionKey, null, Complete(),
+            GlobalBlockerRegistry.RegistryRef, AllZeroVector(), EmptyRecompute());
         Assert.AreEqual(CutReleaseVerdict.CutReleaseBlocked, product.Verdict);
         Assert.AreEqual(CutReleaseBlockReason.EnumerationCompletionFalseOrMissing, product.Reason);
     }
@@ -83,20 +209,38 @@ public sealed class CutReleaseGateTests
     [TestMethod]
     public void AFalseEnumerationCompletionBlocksBothReleaseClasses()
     {
-        var enumerationOnly = CutReleaseGate.EvaluateEnumerationEvidenceOnly(
-            "cut-1", Incomplete(), GlobalBlockerRegistry.RegistryRef, AllZeroVector(), EmptyRecompute());
+        var enumerationOnly = CutReleaseGate.TryEvaluate(
+            CutId, EnumerationKey, Incomplete(), null,
+            GlobalBlockerRegistry.RegistryRef, AllZeroVector(), EmptyRecompute());
         Assert.AreEqual(CutReleaseBlockReason.EnumerationCompletionFalseOrMissing, enumerationOnly.Reason);
 
-        var product = CutReleaseGate.EvaluateAcquisitionOrProduct(
-            "cut-1", Incomplete(), Complete(), GlobalBlockerRegistry.RegistryRef, AllZeroVector(), EmptyRecompute());
+        var product = CutReleaseGate.TryEvaluate(
+            CutId, AcquisitionKey, Incomplete(), Complete(),
+            GlobalBlockerRegistry.RegistryRef, AllZeroVector(), EmptyRecompute());
         Assert.AreEqual(CutReleaseBlockReason.EnumerationCompletionFalseOrMissing, product.Reason);
+    }
+
+    [TestMethod]
+    public void AnEnumerationCompletionForAnotherCutIsTreatedAsMissing()
+    {
+        // The objection this closes: before this fix CutCompletionClaim carried no cut identity,
+        // so a completion proven for a different cut passed as if it were this cut's own. No new
+        // reason: line 401's "for the same cut" is a condition on whether the claim applies here
+        // at all, so a foreign claim reads exactly like a missing one.
+        var gate = CutReleaseGate.TryEvaluate(
+            CutId, EnumerationKey, Complete(cutId: OtherCutId), null,
+            GlobalBlockerRegistry.RegistryRef, AllZeroVector(), EmptyRecompute());
+
+        Assert.AreEqual(CutReleaseVerdict.CutReleaseBlocked, gate.Verdict);
+        Assert.AreEqual(CutReleaseBlockReason.EnumerationCompletionFalseOrMissing, gate.Reason);
     }
 
     [TestMethod]
     public void MissingAcquisitionCompletionBlocksOnlyAcquisitionOrProduct()
     {
-        var gate = CutReleaseGate.EvaluateAcquisitionOrProduct(
-            "cut-1", Complete("enum"), null, GlobalBlockerRegistry.RegistryRef, AllZeroVector(), EmptyRecompute());
+        var gate = CutReleaseGate.TryEvaluate(
+            CutId, AcquisitionKey, Complete(id: "enum"), null,
+            GlobalBlockerRegistry.RegistryRef, AllZeroVector(), EmptyRecompute());
 
         Assert.AreEqual(CutReleaseVerdict.CutReleaseBlocked, gate.Verdict);
         Assert.AreEqual(CutReleaseBlockReason.AcquisitionCompletionFalseOrMissing, gate.Reason);
@@ -105,10 +249,21 @@ public sealed class CutReleaseGateTests
     [TestMethod]
     public void AFalseAcquisitionCompletionBlocksAcquisitionOrProduct()
     {
-        var gate = CutReleaseGate.EvaluateAcquisitionOrProduct(
-            "cut-1", Complete("enum"), Incomplete("acq"),
+        var gate = CutReleaseGate.TryEvaluate(
+            CutId, AcquisitionKey, Complete(id: "enum"), Incomplete(id: "acq"),
             GlobalBlockerRegistry.RegistryRef, AllZeroVector(), EmptyRecompute());
 
+        Assert.AreEqual(CutReleaseBlockReason.AcquisitionCompletionFalseOrMissing, gate.Reason);
+    }
+
+    [TestMethod]
+    public void AnAcquisitionCompletionForAnotherCutIsTreatedAsMissing()
+    {
+        var gate = CutReleaseGate.TryEvaluate(
+            CutId, AcquisitionKey, Complete(id: "enum"), Complete(cutId: OtherCutId, id: "acq"),
+            GlobalBlockerRegistry.RegistryRef, AllZeroVector(), EmptyRecompute());
+
+        Assert.AreEqual(CutReleaseVerdict.CutReleaseBlocked, gate.Verdict);
         Assert.AreEqual(CutReleaseBlockReason.AcquisitionCompletionFalseOrMissing, gate.Reason);
     }
 
@@ -117,8 +272,9 @@ public sealed class CutReleaseGateTests
     [TestMethod]
     public void AWrongRegistryReferenceBlocksWithADigestMismatch()
     {
-        var gate = CutReleaseGate.EvaluateEnumerationEvidenceOnly(
-            "cut-1", Complete(), WrongRegistryRef, AllZeroVector(), EmptyRecompute());
+        var gate = CutReleaseGate.TryEvaluate(
+            CutId, EnumerationKey, Complete(), null,
+            WrongRegistryRef, AllZeroVector(), EmptyRecompute());
 
         Assert.AreEqual(CutReleaseVerdict.CutReleaseBlocked, gate.Verdict);
         Assert.AreEqual(CutReleaseBlockReason.RegistryDigestMismatch, gate.Reason);
@@ -133,8 +289,9 @@ public sealed class CutReleaseGateTests
         vector.RemoveAll(entry => entry.Family == GlobalBlockerFamily.RobotsPolicyConflict);
         Assert.AreEqual(11, vector.Count);
 
-        var gate = CutReleaseGate.EvaluateEnumerationEvidenceOnly(
-            "cut-1", Complete(), GlobalBlockerRegistry.RegistryRef, vector, EmptyRecompute());
+        var gate = CutReleaseGate.TryEvaluate(
+            CutId, EnumerationKey, Complete(), null,
+            GlobalBlockerRegistry.RegistryRef, vector, EmptyRecompute());
 
         Assert.AreEqual(CutReleaseVerdict.CutReleaseBlocked, gate.Verdict);
         Assert.AreEqual(CutReleaseBlockReason.MissingFamily, gate.Reason);
@@ -152,8 +309,9 @@ public sealed class CutReleaseGateTests
             GlobalBlockerFamily.ManifestSelectorConflict, 0, new Dictionary<string, int>()));
         vector.RemoveAll(entry => entry.Family == GlobalBlockerFamily.RobotsPolicyConflict);
 
-        var gate = CutReleaseGate.EvaluateEnumerationEvidenceOnly(
-            "cut-1", Complete(), GlobalBlockerRegistry.RegistryRef, vector, EmptyRecompute());
+        var gate = CutReleaseGate.TryEvaluate(
+            CutId, EnumerationKey, Complete(), null,
+            GlobalBlockerRegistry.RegistryRef, vector, EmptyRecompute());
 
         Assert.AreEqual(CutReleaseVerdict.CutReleaseBlocked, gate.Verdict);
         Assert.AreEqual(CutReleaseBlockReason.DuplicateFamily, gate.Reason);
@@ -171,8 +329,9 @@ public sealed class CutReleaseGateTests
         vector[index] = new GlobalBlockerFamilyCountEntry(
             GlobalBlockerFamily.DuplicateClosure, 5, new Dictionary<string, int> { ["some-subtype"] = 1 });
 
-        var gate = CutReleaseGate.EvaluateEnumerationEvidenceOnly(
-            "cut-1", Complete(), GlobalBlockerRegistry.RegistryRef, vector, EmptyRecompute());
+        var gate = CutReleaseGate.TryEvaluate(
+            CutId, EnumerationKey, Complete(), null,
+            GlobalBlockerRegistry.RegistryRef, vector, EmptyRecompute());
 
         Assert.AreEqual(CutReleaseVerdict.CutReleaseBlocked, gate.Verdict);
         Assert.AreEqual(CutReleaseBlockReason.EvaluationError, gate.Reason);
@@ -192,8 +351,9 @@ public sealed class CutReleaseGateTests
         vector[index] = new GlobalBlockerFamilyCountEntry(
             GlobalBlockerFamily.DuplicateClosure, 1, new Dictionary<string, int> { ["ghost"] = 1 });
 
-        var gate = CutReleaseGate.EvaluateEnumerationEvidenceOnly(
-            "cut-1", Complete(), GlobalBlockerRegistry.RegistryRef, vector, EmptyRecompute());
+        var gate = CutReleaseGate.TryEvaluate(
+            CutId, EnumerationKey, Complete(), null,
+            GlobalBlockerRegistry.RegistryRef, vector, EmptyRecompute());
 
         Assert.AreEqual(CutReleaseVerdict.CutReleaseBlocked, gate.Verdict);
         Assert.AreEqual(CutReleaseBlockReason.CountLedgerMismatch, gate.Reason);
@@ -214,8 +374,9 @@ public sealed class CutReleaseGateTests
         vector[index] = new GlobalBlockerFamilyCountEntry(
             GlobalBlockerFamily.DuplicateClosure, 1, new Dictionary<string, int> { ["renamed-subtype"] = 1 });
 
-        var gate = CutReleaseGate.EvaluateEnumerationEvidenceOnly(
-            "cut-1", Complete(), GlobalBlockerRegistry.RegistryRef, vector, recomputed);
+        var gate = CutReleaseGate.TryEvaluate(
+            CutId, EnumerationKey, Complete(), null,
+            GlobalBlockerRegistry.RegistryRef, vector, recomputed);
 
         Assert.AreEqual(CutReleaseVerdict.CutReleaseBlocked, gate.Verdict);
         Assert.AreEqual(CutReleaseBlockReason.CountLedgerMismatch, gate.Reason);
@@ -237,8 +398,8 @@ public sealed class CutReleaseGateTests
             1,
             new Dictionary<string, int> { ["planned-url-not-covered"] = 1 });
 
-        var gate = CutReleaseGate.EvaluateAcquisitionOrProduct(
-            "cut-1", Complete("enum"), Complete("acq"),
+        var gate = CutReleaseGate.TryEvaluate(
+            CutId, AcquisitionKey, Complete(id: "enum"), Complete(id: "acq"),
             GlobalBlockerRegistry.RegistryRef, vector, recomputed);
 
         Assert.AreEqual(CutReleaseVerdict.CutReleaseBlocked, gate.Verdict);
@@ -264,8 +425,9 @@ public sealed class CutReleaseGateTests
         vector[index] = new GlobalBlockerFamilyCountEntry(
             GlobalBlockerFamily.UnclassifiedGlobalBlocker, 1, new Dictionary<string, int> { ["mystery"] = 1 });
 
-        var gate = CutReleaseGate.EvaluateEnumerationEvidenceOnly(
-            "cut-1", Complete(), GlobalBlockerRegistry.RegistryRef, vector, recomputed);
+        var gate = CutReleaseGate.TryEvaluate(
+            CutId, EnumerationKey, Complete(), null,
+            GlobalBlockerRegistry.RegistryRef, vector, recomputed);
 
         Assert.AreEqual(CutReleaseVerdict.CutReleaseBlocked, gate.Verdict);
         Assert.AreEqual(CutReleaseBlockReason.NonzeroBlockerCount, gate.Reason);
@@ -276,21 +438,25 @@ public sealed class CutReleaseGateTests
     [TestMethod]
     public void EvaluateThrowsOnNullOrWhitespaceCutId()
     {
-        Assert.ThrowsExactly<ArgumentException>(() => CutReleaseGate.EvaluateEnumerationEvidenceOnly(
-            "  ", Complete(), GlobalBlockerRegistry.RegistryRef, AllZeroVector(), EmptyRecompute()));
+        Assert.ThrowsExactly<ArgumentException>(() => CutReleaseGate.TryEvaluate(
+            "  ", EnumerationKey, Complete(), null,
+            GlobalBlockerRegistry.RegistryRef, AllZeroVector(), EmptyRecompute()));
     }
 
     [TestMethod]
     public void EvaluateThrowsOnNullRequiredReferences()
     {
-        Assert.ThrowsExactly<ArgumentNullException>(() => CutReleaseGate.EvaluateEnumerationEvidenceOnly(
-            "cut-1", Complete(), null!, AllZeroVector(), EmptyRecompute()));
-        Assert.ThrowsExactly<ArgumentNullException>(() => CutReleaseGate.EvaluateEnumerationEvidenceOnly(
-            "cut-1", Complete(), GlobalBlockerRegistry.RegistryRef, null!, EmptyRecompute()));
-        Assert.ThrowsExactly<ArgumentNullException>(() => CutReleaseGate.EvaluateEnumerationEvidenceOnly(
-            "cut-1", Complete(), GlobalBlockerRegistry.RegistryRef, AllZeroVector(), null!));
-        Assert.ThrowsExactly<ArgumentNullException>(() => CutReleaseGate.EvaluateEnumerationEvidenceOnly(
-            "cut-1", Complete(), GlobalBlockerRegistry.RegistryRef, [null!], EmptyRecompute()));
+        Assert.ThrowsExactly<ArgumentNullException>(() => CutReleaseGate.TryEvaluate(
+            CutId, EnumerationKey, Complete(), null, null!, AllZeroVector(), EmptyRecompute()));
+        Assert.ThrowsExactly<ArgumentNullException>(() => CutReleaseGate.TryEvaluate(
+            CutId, EnumerationKey, Complete(), null,
+            GlobalBlockerRegistry.RegistryRef, null!, EmptyRecompute()));
+        Assert.ThrowsExactly<ArgumentNullException>(() => CutReleaseGate.TryEvaluate(
+            CutId, EnumerationKey, Complete(), null,
+            GlobalBlockerRegistry.RegistryRef, AllZeroVector(), null!));
+        Assert.ThrowsExactly<ArgumentNullException>(() => CutReleaseGate.TryEvaluate(
+            CutId, EnumerationKey, Complete(), null,
+            GlobalBlockerRegistry.RegistryRef, [null!], EmptyRecompute()));
     }
 
     [TestMethod]
@@ -303,9 +469,20 @@ public sealed class CutReleaseGateTests
     }
 
     [TestMethod]
+    public void AFamilyCountEntryRejectsAnUndefinedFamilyAndAMalformedSubtypeKey()
+    {
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new GlobalBlockerFamilyCountEntry(
+            (GlobalBlockerFamily)999, 0, new Dictionary<string, int>()));
+        Assert.ThrowsExactly<ArgumentException>(() => new GlobalBlockerFamilyCountEntry(
+            GlobalBlockerFamily.ImplementationError, 1, new Dictionary<string, int> { [""] = 1 }));
+    }
+
+    [TestMethod]
     public void ACompletionClaimRejectsAnEmptyIdentity()
     {
-        Assert.ThrowsExactly<ArgumentException>(() => new CutCompletionClaim("", true));
-        Assert.ThrowsExactly<ArgumentException>(() => new CutCompletionClaim("   ", true));
+        Assert.ThrowsExactly<ArgumentException>(() => new CutCompletionClaim(CutId, "", true));
+        Assert.ThrowsExactly<ArgumentException>(() => new CutCompletionClaim(CutId, "   ", true));
+        Assert.ThrowsExactly<ArgumentException>(() => new CutCompletionClaim("", "completion-1", true));
+        Assert.ThrowsExactly<ArgumentException>(() => new CutCompletionClaim("   ", "completion-1", true));
     }
 }

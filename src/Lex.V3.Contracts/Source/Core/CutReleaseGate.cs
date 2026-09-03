@@ -13,6 +13,83 @@ public enum ReleaseClass
     AcquisitionOrProduct = 2,
 }
 
+/// <summary>
+/// R3 lines 400 to 401's closed artifact-kind table, named in the source text's own words. Distinct
+/// from any custody-layer artifact kind: this is what a released row IS, not how its bytes are held.
+/// </summary>
+/// <remarks>
+/// Line 400 names one kind for <see cref="ReleaseClass.EnumerationEvidenceOnly"/>: enumeration
+/// evidence itself, which "cannot carry a public payload, absence claim, corpus row, index row, or
+/// product capability". Line 401 names nine for <see cref="ReleaseClass.AcquisitionOrProduct"/>:
+/// "every public corpus, index, body, metadata, relation, gap, absence, withdrawal, or capability
+/// release". Ten kinds, closed, and <see cref="CutReleaseGate.DeriveReleaseClass"/> is the one total
+/// mapping from a kind to its class.
+/// </remarks>
+public enum ReleaseArtifactKind
+{
+    [JsonStringEnumMemberName("enumeration_evidence")]
+    EnumerationEvidence = 1,
+
+    [JsonStringEnumMemberName("public_corpus")]
+    PublicCorpus = 2,
+
+    [JsonStringEnumMemberName("index")]
+    Index = 3,
+
+    [JsonStringEnumMemberName("body")]
+    Body = 4,
+
+    [JsonStringEnumMemberName("metadata")]
+    Metadata = 5,
+
+    [JsonStringEnumMemberName("relation")]
+    Relation = 6,
+
+    [JsonStringEnumMemberName("gap")]
+    Gap = 7,
+
+    [JsonStringEnumMemberName("absence")]
+    Absence = 8,
+
+    [JsonStringEnumMemberName("withdrawal")]
+    Withdrawal = 9,
+
+    [JsonStringEnumMemberName("capability_release")]
+    CapabilityRelease = 10,
+}
+
+/// <summary>
+/// Classifies an open wire key into <see cref="ReleaseArtifactKind"/>. A caller can lie about the
+/// key exactly as it could lie about a factory choice; binding a key to what an artifact actually
+/// is belongs to whatever later component asserts row identity, not to this classifier. What this
+/// closes is different: once a key is given, the release class it produces is never a second choice
+/// the caller also makes.
+/// </summary>
+public static class ReleaseArtifactKindRegistry
+{
+    private static readonly IReadOnlyDictionary<string, ReleaseArtifactKind> ByWireKey =
+        Enum.GetValues<ReleaseArtifactKind>().ToDictionary(
+            static kind => WireKeyOf(kind), StringComparer.Ordinal);
+
+    public static ReleaseArtifactKind? Classify(string wireKey) =>
+        !string.IsNullOrEmpty(wireKey) && ByWireKey.TryGetValue(wireKey, out var kind) ? kind : null;
+
+    public static string WireKeyOf(ReleaseArtifactKind kind) => kind switch
+    {
+        ReleaseArtifactKind.EnumerationEvidence => "enumeration_evidence",
+        ReleaseArtifactKind.PublicCorpus => "public_corpus",
+        ReleaseArtifactKind.Index => "index",
+        ReleaseArtifactKind.Body => "body",
+        ReleaseArtifactKind.Metadata => "metadata",
+        ReleaseArtifactKind.Relation => "relation",
+        ReleaseArtifactKind.Gap => "gap",
+        ReleaseArtifactKind.Absence => "absence",
+        ReleaseArtifactKind.Withdrawal => "withdrawal",
+        ReleaseArtifactKind.CapabilityRelease => "capability_release",
+        _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+    };
+}
+
 /// <summary>R3 line 398: "It emits exactly cut_release_eligible or cut_release_blocked".</summary>
 public enum CutReleaseVerdict
 {
@@ -23,24 +100,32 @@ public enum CutReleaseVerdict
     CutReleaseBlocked = 2,
 }
 
-/// <summary>
-/// Why a cut was blocked. Closed, and restricted to the reasons this contract can actually reach;
-/// see the remarks on <see cref="CutReleaseGate"/> for the "unknown artifact kind or release class"
-/// reason R3 line 403 names that this enum deliberately omits, and why.
-/// </summary>
+/// <summary>Why a cut was blocked. Closed.</summary>
 public enum CutReleaseBlockReason
 {
     /// <summary>No block: the verdict is <see cref="CutReleaseVerdict.CutReleaseEligible"/>.</summary>
     [JsonStringEnumMemberName("none")]
     None = 0,
 
-    /// <summary>The enumeration completion claim was null or declared itself incomplete.</summary>
+    /// <summary>
+    /// The wire artifact-kind key did not classify under <see cref="ReleaseArtifactKindRegistry"/>,
+    /// so no <see cref="ReleaseClass"/> could be derived. R3 line 403's "unknown artifact kind or
+    /// release class" named as one reason, because there is no release class to fail against
+    /// separately once the kind itself is unrecognized.
+    /// </summary>
+    [JsonStringEnumMemberName("unknown_artifact_kind_or_release_class")]
+    UnknownArtifactKindOrReleaseClass = 9,
+
+    /// <summary>
+    /// The enumeration completion claim was null, declared itself incomplete, or named a different
+    /// cut than the one being evaluated.
+    /// </summary>
     [JsonStringEnumMemberName("enumeration_completion_false_or_missing")]
     EnumerationCompletionFalseOrMissing = 1,
 
     /// <summary>
     /// For <see cref="ReleaseClass.AcquisitionOrProduct"/> only: the acquisition completion claim
-    /// was null or declared itself incomplete.
+    /// was null, declared itself incomplete, or named a different cut than the one being evaluated.
     /// </summary>
     [JsonStringEnumMemberName("acquisition_completion_false_or_missing")]
     AcquisitionCompletionFalseOrMissing = 2,
@@ -74,7 +159,7 @@ public enum CutReleaseBlockReason
 }
 
 /// <summary>
-/// A supplied claim that one of R3's two completion states holds for a cut.
+/// A supplied claim that one of R3's two completion states holds for exactly one cut.
 /// </summary>
 /// <remarks>
 /// This contract does not itself verify the six <c>enumeration_complete</c> conditions or the
@@ -82,17 +167,25 @@ public enum CutReleaseBlockReason
 /// per-axis equations, witnesses, paging controls, and manifest and policy digest bindings belong
 /// to a separate completion contract this task does not build. <see cref="CutReleaseGate"/>
 /// therefore treats completion as evidence handed to it, and can refuse only a claim that is
-/// missing or that declares itself incomplete, which is exactly what R3 line 403 itself names: "a
-/// false or missing applicable completion state ... yields cut_release_blocked".
+/// missing, that declares itself incomplete, or that names a cut other than the one being
+/// evaluated, which is exactly what R3 line 403 and line 401 together name: "a false or missing
+/// applicable completion state ... yields cut_release_blocked", for "the same cut" line 401
+/// requires. A claim for cut B offered to cut A's evaluation is not evidence for cut A, so it is
+/// treated as missing applicable evidence rather than given a reason of its own.
 /// </remarks>
 public sealed record CutCompletionClaim
 {
-    public CutCompletionClaim(string completionId, bool isComplete)
+    public CutCompletionClaim(string cutId, string completionId, bool isComplete)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(cutId);
         ArgumentException.ThrowIfNullOrWhiteSpace(completionId);
+        CutId = cutId;
         CompletionId = completionId;
         IsComplete = isComplete;
     }
+
+    /// <summary>The cut this claim is evidence for. Checked against the cut being evaluated.</summary>
+    public string CutId { get; }
 
     public string CompletionId { get; }
 
@@ -153,32 +246,30 @@ public sealed record GlobalBlockerFamilyCountEntry
 /// <remarks>
 /// <para>
 /// <b>release_class is not a parameter.</b> Line 398 requires it to be "derived from a closed
-/// artifact-kind table" and states it "cannot be selected by a caller, producer, or row". The
-/// source text names the two release classes themselves in full (lines 400 to 401) but nowhere
-/// gives the artifact-kind table that maps a concrete artifact to one of them; no accepted text in
-/// this repository defines it, and inventing that table was rejected as a term the accepted text
-/// does not itself define. Instead this type structurally removes the selection:
-/// <see cref="EvaluateEnumerationEvidenceOnly"/> and <see cref="EvaluateAcquisitionOrProduct"/> are
-/// the only two entry points, each hard-codes its own <see cref="ReleaseClass"/>, and neither takes
-/// a release-class parameter a caller could set. This is the same technique
-/// <c>AbsenceCut.TryCreateComplete</c> and <c>TryCreatePartial</c> already use in this codebase for
-/// <c>Completion</c>. Closing the real gap -- deriving which entry point a concrete artifact should
-/// reach -- needs the accepted artifact-kind table; until it exists, a caller must already know
-/// which release class its artifact is, exactly as it must already know whether its run enumerated
-/// completely before calling <c>TryCreateComplete</c>.
+/// artifact-kind table" and states it "cannot be selected by a caller, producer, or row". Lines 400
+/// to 401 state what each class covers, in the source text's own words, and that is the closed
+/// derivation by artifact effect: <see cref="ReleaseArtifactKind"/> names the ten kinds and
+/// <see cref="DeriveReleaseClass"/> is the one total mapping from a kind to a class. The single
+/// entry point, <see cref="TryEvaluate"/>, takes an open wire key, classifies it through
+/// <see cref="ReleaseArtifactKindRegistry"/>, and derives the class itself; no caller-visible
+/// parameter of type <see cref="Core.ReleaseClass"/> exists anywhere on this type. A caller can lie
+/// about which key names its artifact exactly as it could lie about which factory to call; binding
+/// a key to what an artifact actually is belongs to whichever component later asserts row identity,
+/// not to this classifier.
 /// </para>
 /// <para>
-/// Consequently the "unknown artifact kind or release class" reason line 403 names cannot be
-/// reached and is not a member of <see cref="CutReleaseBlockReason"/>: there is no artifact-kind
-/// input to be unknown, and release_class is always exactly one of the two values a method
-/// signature already fixed at compile time. A reason with no reachable branch is a defect this
-/// codebase treats as worse than an admitted narrowing (a refusal with no driving test is a known
-/// failure mode here), so it is left out rather than added unreachable.
+/// The "unknown artifact kind or release class" reason line 403 names is
+/// <see cref="CutReleaseBlockReason.UnknownArtifactKindOrReleaseClass"/>, reached when the wire key
+/// does not classify: the gate still returns a verdict, always blocked, with no derivable
+/// <see cref="Core.ReleaseClass"/> to report.
 /// </para>
 /// <para>
 /// The completion states are likewise consumed as supplied evidence rather than re-derived: see
 /// the remarks on <see cref="CutCompletionClaim"/>. What this gate enforces is R3 line 403's own
-/// words about that evidence, not the six or four conditions behind it.
+/// words about that evidence, not the six or four conditions behind it. Line 401's "for the same
+/// cut" is enforced by checking each claim's own <see cref="CutCompletionClaim.CutId"/> against the
+/// cut being evaluated; a claim for a different cut is not evidence for this one and is treated as
+/// missing under the existing reason, not given a reason of its own.
 /// </para>
 /// <para>
 /// The supplied count vector is checked against an independent recomputation
@@ -201,7 +292,8 @@ public sealed class CutReleaseGate
 {
     private CutReleaseGate(
         string cutId,
-        ReleaseClass releaseClass,
+        ReleaseArtifactKind? artifactKind,
+        ReleaseClass? releaseClass,
         CutReleaseVerdict verdict,
         CutReleaseBlockReason reason,
         CutCompletionClaim? enumerationCompletion,
@@ -210,6 +302,7 @@ public sealed class CutReleaseGate
         IReadOnlyList<GlobalBlockerFamilyCountEntry> suppliedCountVector)
     {
         CutId = cutId;
+        ArtifactKind = artifactKind;
         ReleaseClass = releaseClass;
         Verdict = verdict;
         Reason = reason;
@@ -221,7 +314,11 @@ public sealed class CutReleaseGate
 
     public string CutId { get; }
 
-    public ReleaseClass ReleaseClass { get; }
+    /// <summary>Null exactly when <see cref="Reason"/> is <see cref="CutReleaseBlockReason.UnknownArtifactKindOrReleaseClass"/>.</summary>
+    public ReleaseArtifactKind? ArtifactKind { get; }
+
+    /// <summary>Null exactly when <see cref="Reason"/> is <see cref="CutReleaseBlockReason.UnknownArtifactKindOrReleaseClass"/>.</summary>
+    public ReleaseClass? ReleaseClass { get; }
 
     public CutReleaseVerdict Verdict { get; }
 
@@ -237,50 +334,33 @@ public sealed class CutReleaseGate
     public IReadOnlyList<GlobalBlockerFamilyCountEntry> SuppliedCountVector { get; }
 
     /// <summary>
-    /// The only path to an <see cref="Core.ReleaseClass.EnumerationEvidenceOnly"/> verdict. R3 line
-    /// 400: this class "requires enumeration_complete and cannot carry a public payload, absence
-    /// claim, corpus row, index row, or product capability" -- reflected here by there being no
-    /// acquisition-completion parameter for one to ride in on.
+    /// R3 lines 400 to 401's own words as one total mapping. Every <see cref="ReleaseArtifactKind"/>
+    /// member is handled by name, not by a default branch, so a new kind added to the enum without a
+    /// case here is a compiler error rather than a silent misclassification.
     /// </summary>
-    public static CutReleaseGate EvaluateEnumerationEvidenceOnly(
-        string cutId,
-        CutCompletionClaim? enumerationCompletion,
-        SourceArtifactRef suppliedRegistryRef,
-        IReadOnlyList<GlobalBlockerFamilyCountEntry> suppliedCountVector,
-        GlobalBlockerCountVector recomputedCountVector) =>
-        Evaluate(
-            cutId,
-            ReleaseClass.EnumerationEvidenceOnly,
-            enumerationCompletion,
-            acquisitionCompletion: null,
-            suppliedRegistryRef,
-            suppliedCountVector,
-            recomputedCountVector);
+    public static ReleaseClass DeriveReleaseClass(ReleaseArtifactKind kind) => kind switch
+    {
+        ReleaseArtifactKind.EnumerationEvidence => Core.ReleaseClass.EnumerationEvidenceOnly,
+        ReleaseArtifactKind.PublicCorpus
+            or ReleaseArtifactKind.Index
+            or ReleaseArtifactKind.Body
+            or ReleaseArtifactKind.Metadata
+            or ReleaseArtifactKind.Relation
+            or ReleaseArtifactKind.Gap
+            or ReleaseArtifactKind.Absence
+            or ReleaseArtifactKind.Withdrawal
+            or ReleaseArtifactKind.CapabilityRelease => Core.ReleaseClass.AcquisitionOrProduct,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+    };
 
     /// <summary>
-    /// The only path to an <see cref="Core.ReleaseClass.AcquisitionOrProduct"/> verdict. R3 line
-    /// 401: this class "requires both enumeration_complete and acquisition_complete for the same
-    /// cut".
+    /// The only entry point. <paramref name="artifactKindWireKey"/> is classified through
+    /// <see cref="ReleaseArtifactKindRegistry"/> and its <see cref="Core.ReleaseClass"/> derived from
+    /// that classification alone; nothing here takes a release-class parameter a caller could set.
     /// </summary>
-    public static CutReleaseGate EvaluateAcquisitionOrProduct(
+    public static CutReleaseGate TryEvaluate(
         string cutId,
-        CutCompletionClaim? enumerationCompletion,
-        CutCompletionClaim? acquisitionCompletion,
-        SourceArtifactRef suppliedRegistryRef,
-        IReadOnlyList<GlobalBlockerFamilyCountEntry> suppliedCountVector,
-        GlobalBlockerCountVector recomputedCountVector) =>
-        Evaluate(
-            cutId,
-            ReleaseClass.AcquisitionOrProduct,
-            enumerationCompletion,
-            acquisitionCompletion,
-            suppliedRegistryRef,
-            suppliedCountVector,
-            recomputedCountVector);
-
-    private static CutReleaseGate Evaluate(
-        string cutId,
-        ReleaseClass releaseClass,
+        string artifactKindWireKey,
         CutCompletionClaim? enumerationCompletion,
         CutCompletionClaim? acquisitionCompletion,
         SourceArtifactRef suppliedRegistryRef,
@@ -296,7 +376,24 @@ public sealed class CutReleaseGate
             ArgumentNullException.ThrowIfNull(entry);
         }
 
+        var kind = ReleaseArtifactKindRegistry.Classify(artifactKindWireKey);
+        if (kind is null)
+        {
+            return new CutReleaseGate(
+                cutId,
+                artifactKind: null,
+                releaseClass: null,
+                CutReleaseVerdict.CutReleaseBlocked,
+                CutReleaseBlockReason.UnknownArtifactKindOrReleaseClass,
+                enumerationCompletion,
+                acquisitionCompletion,
+                suppliedRegistryRef,
+                suppliedCountVector);
+        }
+
+        var releaseClass = DeriveReleaseClass(kind.Value);
         var reason = DetermineBlockReason(
+            cutId,
             releaseClass,
             enumerationCompletion,
             acquisitionCompletion,
@@ -306,6 +403,7 @@ public sealed class CutReleaseGate
 
         return new CutReleaseGate(
             cutId,
+            kind,
             releaseClass,
             reason is null ? CutReleaseVerdict.CutReleaseEligible : CutReleaseVerdict.CutReleaseBlocked,
             reason ?? CutReleaseBlockReason.None,
@@ -325,6 +423,7 @@ public sealed class CutReleaseGate
     /// to compare numerically, so later checks are never reached for it.
     /// </summary>
     private static CutReleaseBlockReason? DetermineBlockReason(
+        string cutId,
         ReleaseClass releaseClass,
         CutCompletionClaim? enumerationCompletion,
         CutCompletionClaim? acquisitionCompletion,
@@ -332,13 +431,20 @@ public sealed class CutReleaseGate
         IReadOnlyList<GlobalBlockerFamilyCountEntry> suppliedCountVector,
         GlobalBlockerCountVector recomputedCountVector)
     {
-        if (enumerationCompletion is null || !enumerationCompletion.IsComplete)
+        // A claim for a different cut is not evidence for this one. Checked alongside null and
+        // IsComplete, under the same reason: line 401's "for the same cut" is a condition on
+        // whether the claim applies here at all, not a new way completion can be false.
+        if (enumerationCompletion is null ||
+            !enumerationCompletion.IsComplete ||
+            !string.Equals(enumerationCompletion.CutId, cutId, StringComparison.Ordinal))
         {
             return CutReleaseBlockReason.EnumerationCompletionFalseOrMissing;
         }
 
-        if (releaseClass == ReleaseClass.AcquisitionOrProduct &&
-            (acquisitionCompletion is null || !acquisitionCompletion.IsComplete))
+        if (releaseClass == Core.ReleaseClass.AcquisitionOrProduct &&
+            (acquisitionCompletion is null ||
+                !acquisitionCompletion.IsComplete ||
+                !string.Equals(acquisitionCompletion.CutId, cutId, StringComparison.Ordinal)))
         {
             return CutReleaseBlockReason.AcquisitionCompletionFalseOrMissing;
         }
