@@ -29,6 +29,7 @@ public sealed class AbsenceConstructionSurfaceTests
 {
     private const string N = "Lex.V3.Contracts.Source.Absence.";
     private const string Core = "Lex.V3.Contracts.Source.Core.";
+    private const string Lu = "Lex.V3.Contracts.Source.Luxembourg.";
 
     [TestMethod]
     public void ASubjectHasExactlyOneCheckedDoor()
@@ -173,6 +174,19 @@ public sealed class AbsenceConstructionSurfaceTests
                 // by naming it costs one line and keeps the diff honest.
                 "field private instance " + N + "AbsenceCut::<EnumerationProofs>k__BackingField -> "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "AbsenceFamilyEnumerationProof>",
+
+                // The Luxembourg adapter's bridge, and the second producer this pin was written to
+                // catch. It is admitted, not tolerated: it takes the family key and reads
+                // LuxembourgEnumerationDeliveryReceipt.RequireFlooredRun, so it can only mint a
+                // proof from a comparison this repository's own verifying factory produced AND
+                // whose every custody member is floored. A producer that read the receipt's plain
+                // Delivery property instead would satisfy this pin's shape while dropping the
+                // durability half, so the pin is not the whole guard here; the LU-side test
+                // AGenuineDeliveryReceiptMintsACompleteAbsenceCut and its unfloored twin are.
+                "method public instance " + Lu + "LuxembourgEnumerationDeliveryReceipt"
+                + "::TryProveFamilyEnumeration(System.String, out "
+                + N + "AbsenceFamilyEnumerationProofRefusal&) -> "
+                + N + "AbsenceFamilyEnumerationProof",
                 "property public instance " + N + "AbsenceCut::EnumerationProofs() -> "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "AbsenceFamilyEnumerationProof>",
             },
@@ -221,7 +235,21 @@ public sealed class AbsenceConstructionSurfaceTests
             ConstructionSurface.Of(typeof(EnumerationDeliveryComparison)).ToArray());
 
         CollectionAssert.AreEqual(
-            Array.Empty<string>(),
+            new[]
+            {
+                // All three are the Luxembourg delivery receipt holding the comparison it was
+                // minted from. None of them is a second way to OBTAIN one: the receipt's only door
+                // takes a comparison as a parameter, so nothing here can exist without
+                // EnumerationDeliveryComparison.Create having already run above. Delivery hands it
+                // back asserting nothing, RequireFlooredRun hands the same object back only when
+                // every custody member is floored.
+                "field private instance " + Lu + "LuxembourgEnumerationDeliveryReceipt"
+                + "::<Delivery>k__BackingField -> " + Core + "EnumerationDeliveryComparison",
+                "method public instance " + Lu + "LuxembourgEnumerationDeliveryReceipt"
+                + "::RequireFlooredRun() -> " + Core + "EnumerationDeliveryComparison",
+                "property public instance " + Lu + "LuxembourgEnumerationDeliveryReceipt"
+                + "::Delivery() -> " + Core + "EnumerationDeliveryComparison",
+            },
             ConstructionSurface.ProducersIn(
                 typeof(AbsenceCut).Assembly, typeof(EnumerationDeliveryComparison), true).ToArray(),
             "something in Contracts now hands out a delivery comparison it did not have to verify");

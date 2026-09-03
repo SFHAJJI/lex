@@ -94,10 +94,17 @@ public sealed class CustodyPolicyException : Exception
 public enum CustodyMembership
 {
     /// <summary>
-    /// Reopened by digest and verified. No receipt, and so no custody claim. The session produces
-    /// none of these, because every reopen it performs now goes through the retaining path; the
-    /// member exists for a reader that opens a digest without writing it, which is what the
-    /// repeated-enumeration executor does when it verifies evidence it did not retain.
+    /// No receipt, and so no custody claim: presence and digest without proof of where or how the
+    /// bytes are held. <see cref="CustodyMembershipClassifier"/> never answers this value, because
+    /// it classifies only a real write receipt and every write receipt implies one of the other two
+    /// members; a repeated-enumeration executor that once verified evidence it read but did not
+    /// retain was the reader this member described, and that read-without-write path was deleted.
+    /// The member is reserved for a caller-supplied membership claim built some other way. Nothing
+    /// in this codebase currently builds one: every consumer that receives a claimed membership
+    /// (for example <c>Lex.V3.Contracts.Source.Luxembourg.LuxembourgEnumerationReceiptRefusal
+    /// .MembershipIsNotReceiptDerived</c>) refuses this value outright rather than accept it as a
+    /// floor, because a membership that establishes no custody at all has no defensible floor
+    /// answer.
     /// </summary>
     [JsonStringEnumMemberName("read_once")]
     ReadOnce = 0,
@@ -109,4 +116,25 @@ public enum CustodyMembership
     /// <summary>Written and receipted under a profile that validates the class floor.</summary>
     [JsonStringEnumMemberName("floored")]
     Floored = 2,
+}
+
+/// <summary>
+/// What a receipt establishes about where the bytes are held. The one rule, in one place, so a
+/// reader and every acquisition session classify identically and cannot drift apart.
+/// </summary>
+/// <remarks>
+/// Keyed on the observed protection rather than the profile that implies it: the policy-evidence
+/// constructor already proved the class floor for every protection except <see
+/// cref="CustodyProtection.NotEnforced"/> (see the switch in <see cref="CustodyPolicyEvidence"/>'s
+/// constructor), so a verification profile added later cannot misclassify through this switch.
+/// </remarks>
+public static class CustodyMembershipClassifier
+{
+    public static CustodyMembership Classify(DurableBlobWriteReceipt receipt)
+    {
+        ArgumentNullException.ThrowIfNull(receipt);
+        return receipt.PolicyEvidence.Protection == CustodyProtection.NotEnforced
+            ? CustodyMembership.RetainedUnenforced
+            : CustodyMembership.Floored;
+    }
 }

@@ -57,6 +57,16 @@ public sealed class RoutedHttpAcquisitionSessionTests
             {
                 "AttemptResult::Executed(RoutedHttpEvidence evidence)",
                 "PostHeaderRejection::.ctor(String durableWriteReceiptSha256)",
+                // The one internal door that takes a transport and a clock, added deliberately.
+                // LuxembourgRepeatedEnumerationExecutor used to reach the private constructor and
+                // the private robots bootstrap by reflection FROM PRODUCTION SOURCE, which this
+                // pin could not see at all: reflection names no parameter types. Trading that for
+                // a named internal entry makes the widening visible here and makes a rename a
+                // compile error rather than a run-time surprise. Internal is narrower than public
+                // in exactly the way that matters: nothing outside this assembly can reach it, and
+                // inside it the one caller is the LU executor's own test-handler seam.
+                "RoutedHttpAcquisitionSession::StartWithTestTransportAsync(HttpMessageHandler handler)",
+                "RoutedHttpAcquisitionSession::StartWithTestTransportAsync(TimeProvider timeProvider)",
                 "StartResult::Integrity(RoutedHttpEvidence evidence)",
                 "StartResult::Operational(RoutedHttpEvidence evidence)",
                 "StartResult::PublisherDenied(RoutedHttpEvidence evidence)",

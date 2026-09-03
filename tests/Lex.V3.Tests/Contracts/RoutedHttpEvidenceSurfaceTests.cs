@@ -78,8 +78,12 @@ public sealed class RoutedHttpEvidenceSurfaceTests
     public void EveryOtherHolderOfEvidenceInContractsIsPinned()
     {
         // One producer outside the type, the canonical JSON parser that ParseAndVerify delegates
-        // to, and four holders that carry evidence without minting it. A fifth line here is the
-        // finding.
+        // to, and six holders that carry evidence without minting it: the four original,
+        // plus LuxembourgObservedTransport's compiler-generated Deconstruct, backing field and
+        // property (Lex.V3.Ingest's executor design synthesis, D1-03) - one record carrying the
+        // evidence for one delivery observation alongside the request and receipt it belongs with,
+        // never minting evidence itself. A ninth line here is the finding.
+        const string Luxembourg = "Lex.V3.Contracts.Source.Luxembourg.";
         CollectionAssert.AreEqual(
             new[]
             {
@@ -89,10 +93,16 @@ public sealed class RoutedHttpEvidenceSurfaceTests
                 + "out Lex.V3.Contracts.Source.Http.HttpLogicalRequest&, out " + Evidence + "&, "
                 + "out Lex.V3.Contracts.Custody.DurableBlobWriteReceipt&, "
                 + "out System.ReadOnlyMemory<System.Byte>&) -> System.Void",
+                "by-ref-method public instance " + Luxembourg + "LuxembourgObservedTransport::Deconstruct("
+                + "out Lex.V3.Contracts.Source.Http.HttpLogicalRequest&, out " + Evidence + "&, "
+                + "out Lex.V3.Contracts.Custody.DurableBlobWriteReceipt&, "
+                + "out System.ReadOnlyMemory<System.Byte>&) -> System.Void",
                 "field private instance " + Core + "RepeatedEnumerationResolvedEvidence::<HttpEvidence>k__BackingField -> " + Evidence,
+                "field private instance " + Luxembourg + "LuxembourgObservedTransport::<HttpEvidence>k__BackingField -> " + Evidence,
                 "method public static Lex.V3.Contracts.Source.Http.RoutedHttpCanonicalJson::ParseEvidence(System.ReadOnlySpan<System.Byte>) -> " + Evidence,
                 "property public instance " + Core + "EnumerationDeliveryComparison+VerifiedRepeatedEnumerationEvidence::HttpEvidence() -> " + Evidence,
                 "property public instance " + Core + "RepeatedEnumerationResolvedEvidence::HttpEvidence() -> " + Evidence,
+                "property public instance " + Luxembourg + "LuxembourgObservedTransport::HttpEvidence() -> " + Evidence,
             },
             ConstructionSurface.ProducersIn(typeof(RoutedHttpEvidence).Assembly, typeof(RoutedHttpEvidence), true).ToArray());
     }

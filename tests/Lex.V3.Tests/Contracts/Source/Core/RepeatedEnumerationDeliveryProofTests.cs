@@ -530,7 +530,12 @@ public sealed class RepeatedEnumerationDeliveryProofTests
         cursorEnvelopeIdentity, maximumDeliverableRows, thresholdDetectorIdentity,
         new(Fixture.Artifact(905), "count"), new(Fixture.Artifact(905), "page"), "count", ["id", "cursor", "value"], ["id"], ["cursor"], ["scope"], "pass_id", ["cursor"], "has_cursor", terminalPagePolicy);
 
-    private sealed class Fixture : IRepeatedEnumerationEvidenceResolver
+    // internal rather than private: the Luxembourg receipt/cover contract tests
+    // (tests/Lex.V3.Tests/Contracts/Source/Luxembourg/) build LuxembourgEnumerationDeliveryReceipt
+    // and LuxembourgPartitionCover fixtures from real, fully-validated EnumerationDeliveryComparison
+    // instances rather than hand-rolling a second copy of this plumbing. Neither type cares which
+    // dialect minted the comparison it is given.
+    internal sealed class Fixture : IRepeatedEnumerationEvidenceResolver
     {
         private readonly Dictionary<SourceArtifactRef, RepeatedEnumerationResolvedEvidence> _resolved = [];
         private readonly Dictionary<SourceArtifactRef, byte[]> _payloads = [];
@@ -570,6 +575,7 @@ public sealed class RepeatedEnumerationDeliveryProofTests
         private readonly string? _rawRowsB;
         private readonly RepeatedEnumerationTerminalPagePolicy _terminalPagePolicy;
         private readonly OfficialMachineQuerySourceProfileId? _sourceProfileId;
+        private readonly int _runIdentitySeed;
         private List<RepeatedEnumerationPageRef>? _passToMutate;
         private readonly SourceRegistryMemberRef _countFamily = new(Artifact(905), "count-query");
         private readonly SourceRegistryMemberRef _pageFamily = new(Artifact(905), "page-query");
@@ -613,7 +619,13 @@ public sealed class RepeatedEnumerationDeliveryProofTests
             string? rawRowsB = null,
             RepeatedEnumerationTerminalPagePolicy terminalPagePolicy =
                 RepeatedEnumerationTerminalPagePolicy.ShortPageTerminal,
-            OfficialMachineQuerySourceProfileId? sourceProfileId = null)
+            OfficialMachineQuerySourceProfileId? sourceProfileId = null,
+            // Every observation's run identity is Artifact(930) unless overridden here. Exposed so
+            // the Luxembourg partition-cover tests can build two independently-valid comparisons
+            // that differ in exactly one respect (their run), which one comparison alone cannot do:
+            // Core's own RequireSameRun refuses a single comparison spanning two runs before it is
+            // ever returned.
+            int runIdentitySeed = 930)
         {
             _badRequestRef = badRequestRef;
             _mutatePayload = mutatePayload;
@@ -651,6 +663,7 @@ public sealed class RepeatedEnumerationDeliveryProofTests
             _rawRowsB = rawRowsB;
             _terminalPagePolicy = terminalPagePolicy;
             _sourceProfileId = sourceProfileId;
+            _runIdentitySeed = runIdentitySeed;
         }
 
         public RepeatedEnumerationInterpretationProfile ProfileForTest => Profile();
@@ -1017,9 +1030,12 @@ public sealed class RepeatedEnumerationDeliveryProofTests
                 hopWriteReceipts[redirectObservationId] = WriteReceiptFor(Sha([]), 0);
             }
 
+            // _runIdentitySeed defaults to 930 (see constructor); the Luxembourg partition-cover
+            // tests override it so two independently-valid comparisons can differ in exactly one
+            // respect (their run), which one comparison alone cannot do.
             var runIdentityForEvidence = _httpBindingMutation == HttpBindingMutation.DifferentRun && seed == 2
                 ? Artifact(931)
-                : Artifact(930);
+                : Artifact(_runIdentitySeed);
             var requestOrdinalForEvidence = _httpBindingMutation == HttpBindingMutation.DuplicateRequestOrdinal && seed == 2
                 ? 1UL
                 : (ulong)seed;

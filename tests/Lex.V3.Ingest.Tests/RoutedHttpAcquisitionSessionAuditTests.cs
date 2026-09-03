@@ -1053,7 +1053,10 @@ public sealed class RoutedHttpAcquisitionSessionAuditTests
         }
     }
 
-    private sealed class RecordingCustodyStore : ICustodyStore
+    // internal rather than private: the Luxembourg executor and evidence-set tests
+    // (LuxembourgDeliveryEvidenceSetTests, LuxembourgRepeatedEnumerationExecutorTests) share this
+    // as their flooring double for happy-path runs, per the executor design synthesis.
+    internal sealed class RecordingCustodyStore : ICustodyStore
     {
         private readonly object _gate = new();
         private readonly Dictionary<string, byte[]> _objects = new(StringComparer.Ordinal);
@@ -1062,6 +1065,22 @@ public sealed class RoutedHttpAcquisitionSessionAuditTests
         private int _createCount;
 
         internal byte[]? FailOnExactBytes { get; init; }
+
+        /// <summary>
+        /// When true this double answers reads ONLY from what it was actually written, with no
+        /// recourse to the shared fixture lookup table below. Item 1b deleted exactly this shape
+        /// from the product path ("a path nothing production exercises... left in place it would
+        /// fail exactly the way it did before: quietly, against a recording test double, until the
+        /// day a real unseeded store meets it"), and a test double that keeps it can hide the same
+        /// defect from the test that was supposed to catch it. Every Luxembourg executor test sets
+        /// this, so a run that only NAMES a dependency is distinguishable from one that holds it.
+        /// </summary>
+        internal bool RefuseFallback { get; init; }
+
+        /// <summary>How many reads this store answered from the shared fixture table.</summary>
+        internal int FallbackHits => Volatile.Read(ref _fallbackHits);
+
+        private int _fallbackHits;
 
         internal bool ContainsExact(ReadOnlySpan<byte> expected)
         {
@@ -1173,10 +1192,12 @@ public sealed class RoutedHttpAcquisitionSessionAuditTests
             {
                 if (!_objects.TryGetValue(contentSha256, out var bytes))
                 {
-                    if (MachineRequestTestFixture.TryReopenPreexistingArtifact(
+                    if (!RefuseFallback &&
+                        MachineRequestTestFixture.TryReopenPreexistingArtifact(
                             contentSha256,
                             out var preexisting))
                     {
+                        _ = Interlocked.Increment(ref _fallbackHits);
                         return Task.FromResult(preexisting);
                     }
 
