@@ -1,7 +1,9 @@
+using System.Globalization;
 using System.Net;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using Lex.V3.Artifacts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
@@ -276,6 +278,146 @@ public sealed class RoutedHttpRequestPolicyAuditTests
             rendererSourceRef,
             countEvidenceRef);
     }
+
+    [TestMethod]
+    public async Task TheRetainedRequestPolicyHasAPinnedCanonicalForm()
+    {
+        // Every other assertion about these bytes says a particular line is present. None of them
+        // can see a line that was added, and none can see one that was removed unless somebody
+        // remembered to assert it. The retained policy is what a verifier reads to learn the terms
+        // a request was sent under, so a silent change to its shape is a silent change to what the
+        // evidence means. This pins the whole form: the digest, and the ordered list of keys that
+        // produced it so a failure says which line moved rather than only that something did.
+        // Bound freshly for each run from identical inputs, not bound once and sent twice. That
+        // distinction is the whole measurement: binding is where the render receipt is minted, so
+        // sending one bound request twice would compare a run with itself and report agreement it
+        // had not earned. The first version of this test did exactly that and reported zero
+        // differences.
+        static LuxembourgBoundQueryCount BindFresh()
+        {
+            var profile = OfficialMachineQuerySourceProfile.LuxembourgSparql();
+            var invariantPlan = LuxembourgQueryPlan.CreateDefaultGraph(
+                profile.ArtifactRef,
+                Artifact("urn:uuid:6a1d3e55-8c2b-4f19-9a77-0d5e2b8c4f31", "pinned scope"u8));
+            var rendererSourceBytes = "pinned renderer source"u8.ToArray();
+            return invariantPlan.BindCount(
+                "urn:uuid:7b2e4f66-9d3c-4a2b-8b88-1e6f3c9d5a42",
+                "urn:uuid:8c3f5a77-ae4d-4b3c-9c99-2f7a4dae6b53",
+                "urn:uuid:9d4a6b88-bf5e-4c4d-8daa-3a8b5ebf7c64",
+                "S",
+                LuxembourgQueryPass.Pass1,
+                new LuxembourgQueryPartitionRange(
+                    "subjects-pinned",
+                    new LuxembourgQueryCursor(
+                        "http://data.legilux.public.lu/resource/a", "", "", "", "", ""),
+                    new LuxembourgQueryCursor(
+                        "http://data.legilux.public.lu/resource/z", "", "", "", "", "")),
+                MachineQueryRendererSource.Open(
+                    Artifact("urn:uuid:ae5b7c99-c06f-4d5e-9ebb-4b9c6fca8d75", rendererSourceBytes),
+                    rendererSourceBytes));
+        }
+
+        var first = await RetainedPolicyTextAsync(BindFresh());
+        var second = await RetainedPolicyTextAsync(BindFresh());
+        var bytes = Encoding.UTF8.GetBytes(first);
+        var keys = Encoding.UTF8.GetString(bytes)
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(static line => line.Split('=', 2)[0])
+            .ToArray();
+
+        // The key list carries repeats where the form repeats a key, so a removed uri or header
+        // line changes it. It is the readable half; the digest below is the half that cannot be
+        // satisfied by a line that merely keeps its key while changing its value.
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                // The first two carry no "=" at all: the schema line and the request kind. They
+                // are the form's own identity and are listed exactly as they appear.
+                "lex-http-request-policy/1", "machine_query_post",
+                "source_profile", "adapter_execution", "adapter_execution_bytes_sha256",
+                "reason_registry", "method", "requested_http_version", "version_policy",
+                "request_timeout_ticks", "minimum_request_interval_ticks", "maximum_attempts",
+                "initial_retry_delay_ticks", "maximum_retry_delay_ticks",
+                "maximum_response_bytes", "allow_auto_redirect", "automatic_decompression",
+                "activity_headers_propagator", "max_response_drain_size", "cookies", "proxy",
+                "http_client_timeout",
+                "retry", "retry", "retry", "retry", "retry", "retry", "retry", "retry",
+                "uri", "header", "header", "header", "body",
+                "render_receipt", "query_plan", "ordered_parameter_set", "renderer_profile",
+                "renderer_source", "content_type_registry", "content_type_member",
+                "opened_artifact", "opened_artifact", "opened_artifact", "opened_artifact",
+                "opened_artifact",
+            },
+            keys,
+            "the retained policy's shape changed; a line was added, removed or reordered");
+
+        // Two fresh binds of one request under one set of terms must produce byte-identical
+        // retained policies. Before Decision 77 they did not: the binder minted the render
+        // receipt's resource id with Guid.NewGuid, so two lines differed, the receipt's own and
+        // its opened_artifact echo, with identical content digests on both. That was not a
+        // cosmetic defect. The policy digest is a member of the R3.3 absence key tuple, so the
+        // absence key changed at every cut, three consecutive absent cuts could never share a key,
+        // and an absence history could never advance. Nothing would have failed; absence would
+        // simply never have become provable.
+        //
+        // Compared line by line rather than by digest alone, so a failure names the line.
+        var firstLines = first.Split('\n');
+        var secondLines = second.Split('\n');
+        Assert.AreEqual(
+            firstLines.Length,
+            secondLines.Length,
+            "two binds of one request produced policies of different length");
+
+        var differing = Enumerable.Range(0, firstLines.Length)
+            .Where(index => !string.Equals(
+                firstLines[index], secondLines[index], StringComparison.Ordinal))
+            .Select(index => $"line {index}: {firstLines[index]} versus {secondLines[index]}")
+            .ToArray();
+
+        Assert.AreEqual(
+            0,
+            differing.Length,
+            "two binds of one request under one set of terms must agree exactly, and an "
+            + "identifier minted per bind is the way that stops being true: "
+            + string.Join(" | ", differing));
+
+        Assert.AreEqual(
+            PinnedLuxembourgCountPolicySha256,
+            Sha256(bytes),
+            "the retained policy's canonical bytes changed for a fixed fixture");
+    }
+
+    /// <summary>
+    /// Sends the bound count once through a fresh session and returns the retained request policy
+    /// as text. Every run gets its own session and its own store, because two runs sharing either
+    /// would be one run observed twice.
+    /// </summary>
+    private static async Task<string> RetainedPolicyTextAsync(LuxembourgBoundQueryCount count)
+    {
+        var handler = new CountingHandler((ordinal, request) => ordinal == 0
+            ? Response(request, HttpStatusCode.OK, "User-agent: *\nAllow: /\n")
+            : Response(request, HttpStatusCode.OK, "7"));
+        using var session = Session(count.Request, handler, new MemoryCustodyStore());
+        Assert.AreEqual(
+            OfficialHttpAcquisitionOutcomeKind.ExecutedObservation,
+            (await BootstrapAsync(session)).Kind);
+        Assert.AreEqual(
+            OfficialHttpAcquisitionOutcomeKind.ExecutedObservation,
+            (await session.OpenPlanItem(count.Request)
+                .ExecuteNextAttemptAsync(CancellationToken.None)).Kind);
+        return Encoding.UTF8.GetString(
+            PolicyBytes(MachinePolicyFor(session, count.MachinePlanRef)));
+    }
+
+    /// <summary>
+    /// The digest of the retained request policy for the fixture above, transcribed from a run
+    /// rather than computed by the test, so that recomputing it the way the code does could not
+    /// make this agree with itself. It is the raw bytes, not a normalised form: since Decision 77
+    /// every identifier reaching a retained policy is derived from the content it names, so two
+    /// binds of one request agree exactly and there is nothing left to normalise away.
+    /// </summary>
+    private const string PinnedLuxembourgCountPolicySha256 =
+        "f74d443c54efca057f310df7b8392ac7d87802547ae8f469303456ad3688db7e";
 
     [TestMethod]
     public async Task LuxembourgCountSendsAgainstAFreshRealStoreHoldingNothing()
