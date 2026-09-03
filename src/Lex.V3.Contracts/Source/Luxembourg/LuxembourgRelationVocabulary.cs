@@ -201,11 +201,30 @@ public enum LuxembourgRelationAcquisitionState
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record LuxembourgLocalInboundView
 {
+    /// <summary>
+    /// Every wire token a real publisher predicate carries, across both closed vocabularies. Built
+    /// once from the enums themselves (not a second hand-transcribed list) so an addition to either
+    /// vocabulary is picked up automatically rather than left for this guard to fall behind.
+    /// </summary>
+    private static readonly IReadOnlySet<string> PublisherPredicateTokens = BuildPublisherPredicateTokens();
+
     [JsonConstructor]
     public LuxembourgLocalInboundView(LuxembourgRelationPredicate derivedFrom, string inverseLabel)
     {
         DerivedFrom = ContractValidation.RequireDefined(derivedFrom, nameof(derivedFrom));
         InverseLabel = ContractValidation.RequireIdentifier(inverseLabel, nameof(inverseLabel));
+
+        // Fold-in: RequireIdentifier only bounds the label to printable ASCII, so
+        // new LuxembourgLocalInboundView(Cites, "modifies") constructed even though this type's own
+        // documentation says a label is never a publisher predicate. A label equal to any relation
+        // or assertion wire token is refused here instead of merely being documented as wrong.
+        if (PublisherPredicateTokens.Contains(InverseLabel))
+        {
+            throw new ArgumentException(
+                $"\"{InverseLabel}\" is a real publisher predicate token; a locally derived " +
+                "inbound view's label must never collide with one.",
+                nameof(inverseLabel));
+        }
     }
 
     /// <summary>The exact one publisher-asserted family this view is the transpose of.</summary>
@@ -213,6 +232,22 @@ public sealed record LuxembourgLocalInboundView
 
     /// <summary>A local descriptive label. Never a publisher predicate token.</summary>
     public string InverseLabel { get; }
+
+    private static IReadOnlySet<string> BuildPublisherPredicateTokens()
+    {
+        var tokens = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var predicate in Enum.GetValues<LuxembourgRelationPredicate>())
+        {
+            tokens.Add(ContractJson.Serialize(predicate).Trim('"'));
+        }
+
+        foreach (var predicate in Enum.GetValues<LuxembourgAssertionPredicate>())
+        {
+            tokens.Add(ContractJson.Serialize(predicate).Trim('"'));
+        }
+
+        return tokens;
+    }
 }
 
 /// <summary>

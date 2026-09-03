@@ -289,6 +289,13 @@ public sealed record LuxembourgActForceDateFact
     /// document whose <c>underlying_predicate</c> contradicted its own <c>predicate</c> was
     /// accepted with no complaint. See
     /// <c>LuxembourgAssertionVocabularyTests.AContradictingUnderlyingPredicateIsRefusedOnTheActForceDateFactWire</c>.
+    /// A bare <c>[JsonIgnore]</c> on this property was tried and rejected as the fix: it does stop
+    /// the property from round-tripping, but <see cref="ContractJson"/>'s
+    /// <c>JsonUnmappedMemberHandling.Disallow</c> only rejects a document field with no matching
+    /// property at all, and an ignored property's own name still matches one, so a document field
+    /// named <c>underlying_predicate</c> would have kept deserialising and been silently dropped
+    /// rather than rejected. The constructor cross-validation above is what actually closes that
+    /// gap.
     /// </summary>
     public LuxembourgAssertionPredicate? UnderlyingPredicate { get; }
 }

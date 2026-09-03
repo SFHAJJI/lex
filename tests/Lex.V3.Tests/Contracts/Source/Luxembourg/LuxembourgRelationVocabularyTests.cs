@@ -299,6 +299,25 @@ public sealed class LuxembourgRelationVocabularyTests
     }
 
     [TestMethod]
+    public void ALocalInboundViewIsRefusedWhenItsLabelCollidesWithAPublisherPredicateToken()
+    {
+        // Fold-in: the inbound label was checked only by RequireIdentifier (bounded printable
+        // ASCII), so new LuxembourgLocalInboundView(Cites, "modifies") constructed even though this
+        // type's own documentation says a label is never a publisher predicate, and
+        // InverseLabelsNeverShareAPublisherPredicate below checked only a single literal
+        // ("cited_by") against the two enums rather than driving the refusal. Driven here with one
+        // relation-predicate token and one assertion-predicate token, so both vocabularies are
+        // actually exercised as rejected labels, not just asserted absent from a hard-coded string.
+        var relationTokenThrown = Assert.ThrowsExactly<ArgumentException>(
+            () => new LuxembourgLocalInboundView(LuxembourgRelationPredicate.Cites, "modifies"));
+        StringAssert.Contains(relationTokenThrown.Message, "modifies");
+
+        var assertionTokenThrown = Assert.ThrowsExactly<ArgumentException>(
+            () => new LuxembourgLocalInboundView(LuxembourgRelationPredicate.Cites, "dateApplicability"));
+        StringAssert.Contains(assertionTokenThrown.Message, "dateApplicability");
+    }
+
+    [TestMethod]
     public void InverseLabelsNeverShareAPublisherPredicate()
     {
         // "cited_by" is a local descriptive label, never a publisher predicate. Checked against
@@ -363,17 +382,43 @@ public sealed class LuxembourgRelationVocabularyTests
     {
         // Transcribed from ConstructionSurface.Of's actual output, per this project's
         // print-then-transcribe technique (see LuxembourgConstructionSurfaceTests.cs's remarks).
+        // The static constructor is the type initializer for the fold-in's
+        // PublisherPredicateTokens field (built once from both closed vocabularies), the same shape
+        // LuxembourgDeliveryObservation already pins in the sibling file for the same reason: a
+        // static field initializer.
         CollectionAssert.AreEqual(
             new[]
             {
                 "constructor private instance " + N + "LuxembourgLocalInboundView::.ctor("
                 + N + "LuxembourgLocalInboundView) -> " + N + "LuxembourgLocalInboundView",
+                "constructor private static " + N + "LuxembourgLocalInboundView::.cctor() -> "
+                + N + "LuxembourgLocalInboundView",
                 "constructor public instance " + N + "LuxembourgLocalInboundView::.ctor("
                 + N + "LuxembourgRelationPredicate, System.String) -> " + N + "LuxembourgLocalInboundView",
                 "method public instance " + N + "LuxembourgLocalInboundView::<Clone>$() -> "
                 + N + "LuxembourgLocalInboundView",
             },
             ConstructionSurface.Of(typeof(LuxembourgLocalInboundView)).ToArray());
+
+        // Fold-in, paired the way the sibling Luxembourg pin file
+        // (LuxembourgConstructionSurfaceTests.cs) pairs every ConstructionSurface.Of pin with a
+        // ProducersIn assertion: the disposition's own InboundView property (and its compiler-
+        // generated backing field) is the one place elsewhere in Contracts that hands out an
+        // already-constructed view, and it only ever re-exposes a view this type's own constructor
+        // already checked.
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "field private instance " + N + "LuxembourgRelationFamilyDisposition::<InboundView>k__BackingField -> "
+                + N + "LuxembourgLocalInboundView",
+                "property public instance " + N + "LuxembourgRelationFamilyDisposition::InboundView() -> "
+                + N + "LuxembourgLocalInboundView",
+            },
+            ConstructionSurface.ProducersIn(
+                typeof(LuxembourgLocalInboundView).Assembly,
+                typeof(LuxembourgLocalInboundView),
+                true).ToArray(),
+            "something other than the disposition that already validated a view now hands one out");
     }
 
     [TestMethod]
@@ -392,6 +437,16 @@ public sealed class LuxembourgRelationVocabularyTests
                 + N + "LuxembourgRelationFamilyDisposition",
             },
             ConstructionSurface.Of(typeof(LuxembourgRelationFamilyDisposition)).ToArray());
+
+        // Fold-in: paired the way the sibling Luxembourg pin file pairs every Of pin with a
+        // ProducersIn assertion. Nothing else in Contracts hands out a disposition.
+        CollectionAssert.AreEqual(
+            Array.Empty<string>(),
+            ConstructionSurface.ProducersIn(
+                typeof(LuxembourgRelationFamilyDisposition).Assembly,
+                typeof(LuxembourgRelationFamilyDisposition),
+                true).ToArray(),
+            "something in Contracts now hands out a disposition it did not have to construct");
     }
 
     private static SourceArtifactRef Evidence(string digitPair) =>

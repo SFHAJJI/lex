@@ -310,6 +310,35 @@ public sealed class LuxembourgAssertionVocabularyTests
     }
 
     [TestMethod]
+    public void AContradictingUnderlyingPredicateIsRefusedOnTheActForceDateFactWireForItsSecondMember()
+    {
+        // Fold-in: every test above that actually constructs a LuxembourgActForceDateFact used only
+        // DateEntryInForce, so DateNoLongerInForce's arm of UnderlyingPredicate's cross-validation
+        // switch never ran. Drive it exactly as the first member is driven above: a plain
+        // construction, an agreeing wire document, and a contradicting one.
+        var fact = new LuxembourgActForceDateFact(
+            LuxembourgActForceDatePredicate.DateNoLongerInForce,
+            "2024-01-15",
+            "http://www.w3.org/2001/XMLSchema#date",
+            Evidence("32"));
+        Assert.AreEqual(LuxembourgAssertionPredicate.DateNoLongerInForce, fact.UnderlyingPredicate);
+
+        var agreeing = "{\"predicate\":\"dateNoLongerInForce\",\"raw_lexical_value\":\"2024-01-15\","
+            + "\"datatype_iri\":\"http://www.w3.org/2001/XMLSchema#date\",\"evidence_ref\":"
+            + EvidenceRefJson("32") + ",\"underlying_predicate\":\"dateNoLongerInForce\"}";
+        var parsedAgreeing = ContractJson.Deserialize<LuxembourgActForceDateFact>(agreeing);
+        Assert.AreEqual(LuxembourgAssertionPredicate.DateNoLongerInForce, parsedAgreeing.UnderlyingPredicate);
+
+        var contradicting = "{\"predicate\":\"dateNoLongerInForce\",\"raw_lexical_value\":\"2024-01-15\","
+            + "\"datatype_iri\":\"http://www.w3.org/2001/XMLSchema#date\",\"evidence_ref\":"
+            + EvidenceRefJson("32") + ",\"underlying_predicate\":\"dateEntryInForce\"}";
+        var thrown = Assert.ThrowsExactly<JsonException>(
+            () => ContractJson.Deserialize<LuxembourgActForceDateFact>(contradicting));
+        Assert.IsInstanceOfType<ArgumentException>(thrown.InnerException);
+        StringAssert.Contains(thrown.InnerException!.Message, "does not match");
+    }
+
+    [TestMethod]
     public void AContradictingUnderlyingPredicateIsRefusedOnTheConsolidationApplicabilityDateFactWire()
     {
         var fact = new LuxembourgConsolidationApplicabilityDateFact(
@@ -328,6 +357,34 @@ public sealed class LuxembourgAssertionVocabularyTests
         var contradicting = "{\"predicate\":\"dateApplicability\",\"raw_lexical_value\":\"2023-08-22\","
             + "\"datatype_iri\":\"http://www.w3.org/2001/XMLSchema#date\",\"evidence_ref\":"
             + EvidenceRefJson("31") + ",\"underlying_predicate\":\"dateEndApplicability\"}";
+        var thrown = Assert.ThrowsExactly<JsonException>(
+            () => ContractJson.Deserialize<LuxembourgConsolidationApplicabilityDateFact>(contradicting));
+        Assert.IsInstanceOfType<ArgumentException>(thrown.InnerException);
+        StringAssert.Contains(thrown.InnerException!.Message, "does not match");
+    }
+
+    [TestMethod]
+    public void AContradictingUnderlyingPredicateIsRefusedOnTheConsolidationApplicabilityDateFactWireForItsSecondMember()
+    {
+        // Fold-in: the mirror gap on the consolidation side. Every test above that actually
+        // constructs a LuxembourgConsolidationApplicabilityDateFact used only DateApplicability, so
+        // DateEndApplicability's arm never ran.
+        var fact = new LuxembourgConsolidationApplicabilityDateFact(
+            LuxembourgConsolidationApplicabilityDatePredicate.DateEndApplicability,
+            "2024-06-30",
+            "http://www.w3.org/2001/XMLSchema#date",
+            Evidence("33"));
+        Assert.AreEqual(LuxembourgAssertionPredicate.DateEndApplicability, fact.UnderlyingPredicate);
+
+        var agreeing = "{\"predicate\":\"dateEndApplicability\",\"raw_lexical_value\":\"2024-06-30\","
+            + "\"datatype_iri\":\"http://www.w3.org/2001/XMLSchema#date\",\"evidence_ref\":"
+            + EvidenceRefJson("33") + ",\"underlying_predicate\":\"dateEndApplicability\"}";
+        var parsedAgreeing = ContractJson.Deserialize<LuxembourgConsolidationApplicabilityDateFact>(agreeing);
+        Assert.AreEqual(LuxembourgAssertionPredicate.DateEndApplicability, parsedAgreeing.UnderlyingPredicate);
+
+        var contradicting = "{\"predicate\":\"dateEndApplicability\",\"raw_lexical_value\":\"2024-06-30\","
+            + "\"datatype_iri\":\"http://www.w3.org/2001/XMLSchema#date\",\"evidence_ref\":"
+            + EvidenceRefJson("33") + ",\"underlying_predicate\":\"dateApplicability\"}";
         var thrown = Assert.ThrowsExactly<JsonException>(
             () => ContractJson.Deserialize<LuxembourgConsolidationApplicabilityDateFact>(contradicting));
         Assert.IsInstanceOfType<ArgumentException>(thrown.InnerException);
@@ -393,6 +450,16 @@ public sealed class LuxembourgAssertionVocabularyTests
                 + N + "LuxembourgActForceDateFact",
             },
             ConstructionSurface.Of(typeof(LuxembourgActForceDateFact)).ToArray());
+
+        // Fold-in: paired the way the sibling Luxembourg pin file pairs every Of pin with a
+        // ProducersIn assertion. Nothing else in Contracts hands out an Act-force date fact.
+        CollectionAssert.AreEqual(
+            Array.Empty<string>(),
+            ConstructionSurface.ProducersIn(
+                typeof(LuxembourgActForceDateFact).Assembly,
+                typeof(LuxembourgActForceDateFact),
+                true).ToArray(),
+            "something in Contracts now hands out an Act-force date fact it did not have to construct");
     }
 
     [TestMethod]
@@ -412,6 +479,18 @@ public sealed class LuxembourgAssertionVocabularyTests
                 + N + "LuxembourgConsolidationApplicabilityDateFact",
             },
             ConstructionSurface.Of(typeof(LuxembourgConsolidationApplicabilityDateFact)).ToArray());
+
+        // Fold-in: paired the way the sibling Luxembourg pin file pairs every Of pin with a
+        // ProducersIn assertion. Nothing else in Contracts hands out a consolidation-applicability
+        // date fact.
+        CollectionAssert.AreEqual(
+            Array.Empty<string>(),
+            ConstructionSurface.ProducersIn(
+                typeof(LuxembourgConsolidationApplicabilityDateFact).Assembly,
+                typeof(LuxembourgConsolidationApplicabilityDateFact),
+                true).ToArray(),
+            "something in Contracts now hands out a consolidation-applicability date fact it did " +
+            "not have to construct");
     }
 
     [TestMethod]
@@ -429,6 +508,16 @@ public sealed class LuxembourgAssertionVocabularyTests
                 + N + "LuxembourgAssertionFactDisposition",
             },
             ConstructionSurface.Of(typeof(LuxembourgAssertionFactDisposition)).ToArray());
+
+        // Fold-in: paired the way the sibling Luxembourg pin file pairs every Of pin with a
+        // ProducersIn assertion. Nothing else in Contracts hands out an assertion-fact disposition.
+        CollectionAssert.AreEqual(
+            Array.Empty<string>(),
+            ConstructionSurface.ProducersIn(
+                typeof(LuxembourgAssertionFactDisposition).Assembly,
+                typeof(LuxembourgAssertionFactDisposition),
+                true).ToArray(),
+            "something in Contracts now hands out an assertion-fact disposition it did not have to construct");
     }
 
     private static SourceArtifactRef Evidence(string digitPair) =>
