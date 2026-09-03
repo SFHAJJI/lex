@@ -52,7 +52,9 @@ public sealed class QuarantinePriorCoordinateReproduction
     /// </summary>
     public const int MaximumCoordinates = 2_000_000;
 
-    private const int MaximumReproducerIdentityLength = 256;
+    /// <summary>Internal, not private, only so tests can derive an over-the-bound literal from it
+    /// instead of coupling to a hand-copied number.</summary>
+    internal const int MaximumReproducerIdentityLength = 256;
 
     private QuarantinePriorCoordinateReproduction(
         QuarantineReproducerRole role,

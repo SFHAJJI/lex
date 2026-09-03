@@ -114,7 +114,11 @@ public sealed class NoLawContentCapabilityTests
     /// shapes the old predicate let through -- a bare byte[], and the generic containers around
     /// byte the review named explicitly ("byte spans, lists and enumerables"). Without this, the
     /// two tests above could pass for the wrong reason: nothing left to find, rather than nothing
-    /// wrong.
+    /// wrong. The real-member half of this control (refreeze fold-in 4) goes further and routes
+    /// through <see cref="CollectOffenders"/> itself, against a type that genuinely has a
+    /// byte-shaped offending member, rather than calling <see cref="IsForbidden"/> directly on the
+    /// member's type -- so the traversal that walks constructors, properties, fields and methods
+    /// is what is proven to find the offender, not just the predicate in isolation.
     /// </summary>
     [TestMethod]
     public void ThePredicateFlagsAByteArrayAndEveryOtherByteShapedContainer()
@@ -131,13 +135,22 @@ public sealed class NoLawContentCapabilityTests
         Assert.IsTrue(IsForbidden(typeof(IReadOnlyList<byte>)), "IReadOnlyList<byte> must be flagged");
         Assert.IsTrue(IsForbidden(typeof(Task<byte[]>)), "Task<byte[]> must be flagged");
 
-        // Reflected through an actual member, not just typeof(...), so the control exercises the
-        // exact code path CollectOffenders uses against real types -- precisely the shape the bug
-        // let through: PriorPublicCoordinateSet.CanonicalBytes returns byte[] and, before this fix,
-        // was never flagged by the sweep despite living in the very namespace it polices.
-        var property = typeof(PositiveControlWithByteContent)
-            .GetProperty(nameof(PositiveControlWithByteContent.RawBytes))!;
-        Assert.IsTrue(IsForbidden(property.PropertyType), "a real byte[] property must be flagged");
+        // Routed through CollectOffenders itself, not IsForbidden called directly on a bare
+        // typeof(...): a prior version of this control called IsForbidden(property.PropertyType)
+        // directly, which exercises only the predicate, never the traversal (the constructor,
+        // property, field and method sweep) that the two tests above actually depend on. Calling
+        // CollectOffenders here against a real type with a genuine offending member proves the
+        // traversal itself finds the offender -- precisely the shape the bug let through:
+        // PriorPublicCoordinateSet.CanonicalBytes returns byte[] and, before this fix, was never
+        // flagged by the sweep despite living in the very namespace it polices.
+        var memberOffenders = new List<string>();
+        CollectOffenders(typeof(PositiveControlWithByteContent), includeStateAndReturnTypes: true, memberOffenders);
+        Assert.IsTrue(
+            memberOffenders.Count > 0,
+            "CollectOffenders must find at least one offending member on a type with a real byte[] property");
+        Assert.IsTrue(
+            memberOffenders.Any(offender => offender.Contains(nameof(PositiveControlWithByteContent.RawBytes), StringComparison.Ordinal)),
+            "the offender list must name the RawBytes member: " + string.Join("; ", memberOffenders));
 
         // Negative control: a bare scalar byte (not an array, not a generic argument) carries no
         // content-carrying capability and must not be flagged -- only the element/argument shape

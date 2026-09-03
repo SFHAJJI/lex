@@ -148,13 +148,13 @@ public sealed class QuarantineConstructionSurfaceTests
         CollectionAssert.AreEqual(
             new[]
             {
-                // Not a second mint: ParseAndVerify takes an already-reconciled inventory (the
+                // Not a second mint: VerifySignature takes an already-reconciled inventory (the
                 // private constructor makes any other origin impossible) and returns that same
                 // reference once its signature checks out. ConstructionSurface reads signatures
                 // only, so it cannot see "same instance in, same instance out" and reports this as
                 // a producer exactly as it would a real second door -- pinned here explicitly, per
                 // this test class's own summary, rather than silently exempted.
-                "method public static " + N + "QuarantineInventoryCanonicalizer::ParseAndVerify("
+                "method public static " + N + "QuarantineInventoryCanonicalizer::VerifySignature("
                 + N + "QuarantinedPriorCoordinateInventory, System.Security.Cryptography.ECDsa) -> "
                 + N + "QuarantinedPriorCoordinateInventory",
             },

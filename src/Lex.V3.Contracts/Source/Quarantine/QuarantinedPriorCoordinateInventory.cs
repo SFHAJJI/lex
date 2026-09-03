@@ -115,7 +115,7 @@ public sealed record QuarantineIssuer
 /// V3 independently re-derive coordinates from real V2 bytes -- not signature verification as such.
 /// <c>QuarantineInventoryCanonicalizer</c> beside this type defines exactly which bytes this
 /// signature covers (<c>GetSigningBytes</c>) and can verify a signature against a caller-supplied
-/// public key (<c>ParseAndVerify</c>), so the signable/verifiable form this record's signature is
+/// public key (<c>VerifySignature</c>), so the signable/verifiable form this record's signature is
 /// bound to genuinely exists in V3. What is still deliberately out of scope here is the
 /// trust-store-backed verifier that decides whether a given issuer and key are the pinned review
 /// identity for this purpose: that decision belongs to whichever later package actually consumes a
@@ -204,10 +204,13 @@ public enum QuarantineInventoryRefusal
 /// <see cref="QuarantinePriorCoordinateReproduction"/> beside it -- has no constructor path,
 /// field, or producer that opens a file, a stream, or a network connection. What V3 holds is the
 /// reconciliation gate that turns two already-produced, independently identified reproductions
-/// into one accepted inventory (section 7.3 step 5) and the typed shape that carries the result
-/// (steps 3 and 4) for the future canon/2 alias builder (D3-05) to consume. No verifier for this
-/// inventory exists in V3; see the remarks on <see cref="QuarantineAttestation"/> for why that is
-/// deliberate rather than an oversight.
+/// into one accepted inventory (section 7.3 step 5), the typed shape that carries the result
+/// (steps 3 and 4), and a raw-signature verifier over that shape's own canonical bytes
+/// (<c>QuarantineInventoryCanonicalizer.VerifySignature</c>) for the future canon/2 alias builder
+/// (D3-05) to consume. No trust-store-backed verifier -- the kind that would decide whether a
+/// given issuer and key are the pinned review identity for this purpose -- exists in V3; see the
+/// remarks on <see cref="QuarantineAttestation"/> for why that is deliberate rather than an
+/// oversight.
 /// </para>
 /// <para>
 /// "Independent" is enforced two ways, not one, because a check that merely compares a value

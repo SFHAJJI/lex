@@ -1,3 +1,4 @@
+using Lex.V3.Contracts;
 using Lex.V3.Contracts.Source.Quarantine;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -39,7 +40,9 @@ public sealed class QuarantineEvidenceValidationTests
     [TestMethod]
     public void AReceiptVerifierIdentityMustNotExceedTheBound() =>
         Assert.ThrowsExactly<ArgumentException>(() => new QuarantineVerifierReceipt(
-            new string('a', 257), operatedReadOnly: true, producedAtUtc: "2026-09-03T10:00:00Z"));
+            new string('a', ContractValidation.MaximumIdentifierLength + 1),
+            operatedReadOnly: true,
+            producedAtUtc: "2026-09-03T10:00:00Z"));
 
     [TestMethod]
     public void AReceiptVerifierIdentityRejectsControlCharacters() =>
@@ -101,7 +104,9 @@ public sealed class QuarantineEvidenceValidationTests
     [TestMethod]
     public void AnIssuerIdMustNotExceedTheBound() =>
         Assert.ThrowsExactly<ArgumentException>(() => new QuarantineIssuer(
-            QuarantineIssuer.ExpectedRole, new string('a', 257), "key-1"));
+            QuarantineIssuer.ExpectedRole,
+            new string('a', ContractValidation.MaximumIdentifierLength + 1),
+            "key-1"));
 
     [TestMethod]
     [DataRow("")]
@@ -113,7 +118,9 @@ public sealed class QuarantineEvidenceValidationTests
     [TestMethod]
     public void AKeyIdMustNotExceedTheBound() =>
         Assert.ThrowsExactly<ArgumentException>(() => new QuarantineIssuer(
-            QuarantineIssuer.ExpectedRole, "quarantine-reviewer-1", new string('a', 257)));
+            QuarantineIssuer.ExpectedRole,
+            "quarantine-reviewer-1",
+            new string('a', ContractValidation.MaximumIdentifierLength + 1)));
 
     [TestMethod]
     public void AnIssuerAcceptsASpaceInEitherIdentifier()

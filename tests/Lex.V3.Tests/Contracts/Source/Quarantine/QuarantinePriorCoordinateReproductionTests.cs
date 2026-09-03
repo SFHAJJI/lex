@@ -55,7 +55,7 @@ public sealed class QuarantinePriorCoordinateReproductionTests
     {
         var reproduction = QuarantinePriorCoordinateReproduction.TryCreate(
             QuarantineReproducerRole.Primary,
-            new string('a', 257),
+            new string('a', QuarantinePriorCoordinateReproduction.MaximumReproducerIdentityLength + 1),
             QuarantineFixtures.CoordinateSet(),
             out var refusal);
 
