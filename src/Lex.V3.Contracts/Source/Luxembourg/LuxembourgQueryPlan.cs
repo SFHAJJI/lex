@@ -236,18 +236,16 @@ internal static class LuxembourgQueryText
 
 public sealed class LuxembourgBoundQueryPage
 {
-    internal LuxembourgBoundQueryPage(
-        SourceArtifactRef invariantPlanRef,
-        MachineQueryPlan machinePlan,
-        SourceArtifactRef machinePlanRef,
-        MachineQueryInputArtifact inputArtifact,
-        BoundMachineRequest request)
+    private readonly IMachineQueryRenderer _renderer;
+
+    internal LuxembourgBoundQueryPage(LuxembourgBoundMachineTuple bound)
     {
-        InvariantPlanRef = invariantPlanRef;
-        MachinePlan = machinePlan;
-        MachinePlanRef = machinePlanRef;
-        InputArtifact = inputArtifact;
-        Request = request;
+        InvariantPlanRef = bound.InvariantPlanRef;
+        MachinePlan = bound.MachinePlan;
+        MachinePlanRef = bound.MachinePlanRef;
+        InputArtifact = bound.InputArtifact;
+        Request = bound.Request;
+        _renderer = bound.Renderer;
     }
 
     public SourceArtifactRef InvariantPlanRef { get; }
@@ -255,10 +253,15 @@ public sealed class LuxembourgBoundQueryPage
     public SourceArtifactRef MachinePlanRef { get; }
     public MachineQueryInputArtifact InputArtifact { get; }
     public BoundMachineRequest Request { get; }
+
+    /// <summary>Returns the exact renderer retained when this request was bound.</summary>
+    public IMachineQueryRenderer OpenEvidenceRenderer() => _renderer;
 }
 
 public sealed class LuxembourgBoundQueryCount
 {
+    private readonly IMachineQueryRenderer _renderer;
+
     internal LuxembourgBoundQueryCount(LuxembourgBoundMachineTuple bound)
     {
         InvariantPlanRef = bound.InvariantPlanRef;
@@ -266,6 +269,7 @@ public sealed class LuxembourgBoundQueryCount
         MachinePlanRef = bound.MachinePlanRef;
         InputArtifact = bound.InputArtifact;
         Request = bound.Request;
+        _renderer = bound.Renderer;
     }
 
     public SourceArtifactRef InvariantPlanRef { get; }
@@ -273,6 +277,9 @@ public sealed class LuxembourgBoundQueryCount
     public SourceArtifactRef MachinePlanRef { get; }
     public MachineQueryInputArtifact InputArtifact { get; }
     public BoundMachineRequest Request { get; }
+
+    /// <summary>Returns the exact renderer retained when this request was bound.</summary>
+    public IMachineQueryRenderer OpenEvidenceRenderer() => _renderer;
 }
 
 internal sealed record LuxembourgBoundMachineTuple(
@@ -280,7 +287,8 @@ internal sealed record LuxembourgBoundMachineTuple(
     MachineQueryPlan MachinePlan,
     SourceArtifactRef MachinePlanRef,
     MachineQueryInputArtifact InputArtifact,
-    BoundMachineRequest Request);
+    BoundMachineRequest Request,
+    IMachineQueryRenderer Renderer);
 
 internal enum LuxembourgQueryRequestKind
 {
@@ -355,12 +363,7 @@ internal static class LuxembourgQueryPageBinder
             response,
             parameters,
             rendererSourceRef);
-        return new LuxembourgBoundQueryPage(
-            bound.InvariantPlanRef,
-            bound.MachinePlan,
-            bound.MachinePlanRef,
-            bound.InputArtifact,
-            bound.Request);
+        return new LuxembourgBoundQueryPage(bound);
     }
 
     public static LuxembourgBoundQueryCount BindCount(
@@ -462,7 +465,8 @@ internal static class LuxembourgQueryPageBinder
             machinePlan,
             machinePlanRef,
             input,
-            request);
+            request,
+            renderer);
     }
 
     private static (SourceArtifactRef InvariantPlanRef, LuxembourgQueryTemplate Template) Resolve(

@@ -182,6 +182,61 @@ public sealed record RepeatedEnumerationResolvedEvidence(MachineQueryPlan QueryP
 public sealed record EnumerationObservationTimes(string CountA, IReadOnlyList<string> PagesA, string CountB, IReadOnlyList<string> PagesB);
 public interface IRepeatedEnumerationEvidenceResolver { RepeatedEnumerationResolvedEvidence Resolve(RepeatedEnumerationEvidenceRefs references); }
 
+/// <summary>
+/// A non-authoritative traversal projection from one strictly parsed SPARQL result page.
+/// Completion and delivery standing are established only by <see cref="EnumerationDeliveryComparison"/>.
+/// </summary>
+public sealed class RepeatedEnumerationTraversalPage
+{
+    internal RepeatedEnumerationTraversalPage(
+        long rowCount,
+        IReadOnlyList<string> firstCursorParts,
+        IReadOnlyList<string> finalCursorParts)
+    {
+        RowCount = rowCount;
+        FirstCursorParts = Array.AsReadOnly(firstCursorParts.ToArray());
+        FinalCursorParts = Array.AsReadOnly(finalCursorParts.ToArray());
+    }
+
+    public long RowCount { get; }
+
+    public IReadOnlyList<string> FirstCursorParts { get; }
+
+    public IReadOnlyList<string> FinalCursorParts { get; }
+}
+
+/// <summary>
+/// Reads the same strict count and page projections used by the repeated-enumeration verifier.
+/// </summary>
+public static class RepeatedEnumerationTraversalReader
+{
+    public static long ReadCount(
+        ReadOnlySpan<byte> bytes,
+        RepeatedEnumerationInterpretationProfile profile) =>
+        EnumerationDeliveryComparison.ReadTraversalCount(bytes, profile);
+
+    public static RepeatedEnumerationTraversalPage ReadPage(
+        ReadOnlySpan<byte> bytes,
+        RepeatedEnumerationInterpretationProfile profile,
+        long rowLimit)
+    {
+        var parsed = EnumerationDeliveryComparison.ReadTraversalPage(bytes, profile, rowLimit);
+        var firstCursor = parsed.Rows.Count == 0
+            ? Array.Empty<string>()
+            : parsed.Rows[0].Cursor.Select(static term => term.Value!).ToArray();
+        var finalCursor = parsed.Rows.Count == 0
+            ? Array.Empty<string>()
+            : parsed.Rows[^1].Cursor.Select(static term => term.Value!).ToArray();
+        return new RepeatedEnumerationTraversalPage(
+            parsed.Rows.Count,
+            firstCursor,
+            finalCursor);
+    }
+}
+
+internal sealed record ParsedRepeatedEnumerationTraversalPage(
+    IReadOnlyList<RepeatedEnumerationRow> Rows);
+
 public sealed class EnumerationDeliveryComparison
 {
     private EnumerationDeliveryComparison(SourceArtifactRef profileRef, SourceArtifactRef sourceProfileRef, SourceArtifactRef runIdentity, string partitionKey, RepeatedEnumerationThresholdAssessment thresholdAssessment, RepeatedEnumerationEvidenceRefs countA, EnumerationPageSetRefs pagesA, RepeatedEnumerationEvidenceRefs countB, EnumerationPageSetRefs pagesB, EnumerationObservationTimes observationTimes, long selectedA, long selectedB, IReadOnlyList<RepeatedEnumerationRow> rowsA, IReadOnlyList<RepeatedEnumerationRow> rowsB)
@@ -254,7 +309,7 @@ public sealed class EnumerationDeliveryComparison
         var partitionKey = RequireSamePartition(evidenceA.Concat(evidenceB));
         RequireDistinctPasses(evidenceA, evidenceB, profile);
         RequireDifferentPageLimits(aPages, bPages);
-        var selectedA = ParseCount(aCount.RetainedPayloadBytes.Span, profile); var selectedB = ParseCount(bCount.RetainedPayloadBytes.Span, profile);
+        var selectedA = ReadTraversalCount(aCount.RetainedPayloadBytes.Span, profile); var selectedB = ReadTraversalCount(bCount.RetainedPayloadBytes.Span, profile);
         var rowsA = VerifyPages(aPages, countA.HttpEvidenceRef, selectedA, profile); var rowsB = VerifyPages(bPages, countB.HttpEvidenceRef, selectedB, profile);
         var times = new EnumerationObservationTimes(
             TerminalHop(aCount).RequestStartedAt,
@@ -418,7 +473,11 @@ public sealed class EnumerationDeliveryComparison
         foreach (var page in pages)
         {
             var card = page.QueryPlan.ResponseCardinality; if (card.Kind != MachineResponseCardinalityKind.BoundedRowSetPage || card.ExpectedPartitionRowCount != count || card.ExpectedPartitionRowCountEvidenceRef != countRef || limit is not null && card.RowLimit != limit) throw new ArgumentException("The page cardinality does not bind the preceding count."); limit ??= card.RowLimit;
-            var rows = ParseRows(page.RetainedPayloadBytes.Span, profile); if (rows.Count > limit) throw new ArgumentException("The page exceeds its row limit.");
+            var rows = ReadTraversalPage(
+                page.RetainedPayloadBytes.Span,
+                profile,
+                limit ?? throw new InvalidOperationException("The page limit was not established."))
+                .Rows;
             var hasCursor = IntegerParameter(page.QueryInput, profile.HasCursorParameterName);
             if (prior is null)
             {
@@ -449,8 +508,6 @@ public sealed class EnumerationDeliveryComparison
                         "A successor after a short page must be empty.");
                 }
             }
-            if (rows.SelectMany(static row => row.Cursor).Any(static term => term.Kind != RepeatedEnumerationRdfTermKind.Literal || term.Datatype is not null || term.Language is not null)) throw new ArgumentException("Cursor projections must be plain literals matching the query comparator.");
-            if (rows.SelectMany(static row => row.CanonicalKey).Any(static term => term.Kind is RepeatedEnumerationRdfTermKind.Unbound or RepeatedEnumerationRdfTermKind.BlankNode)) throw new ArgumentException("Canonical-key components must be bound and stable.");
             all.AddRange(rows); prior = rows;
         }
         var validTerminalPage = profile.TerminalPagePolicy switch
@@ -467,9 +524,61 @@ public sealed class EnumerationDeliveryComparison
         var keys = new HashSet<string>(); for (var i = 0; i < all.Count; i++) if (!keys.Add(Digest("repeated_enumeration_key/1", [all[i].CanonicalKey])) || i > 0 && Compare(all[i - 1].Cursor, all[i].Cursor) >= 0) throw new ArgumentException("Keys must be unique and cursors strictly increase.");
         return all;
     }
-    private static long ParseCount(ReadOnlySpan<byte> bytes, RepeatedEnumerationInterpretationProfile profile)
+    internal static long ReadTraversalCount(ReadOnlySpan<byte> bytes, RepeatedEnumerationInterpretationProfile profile)
     {
+        ArgumentNullException.ThrowIfNull(profile);
         var rows = Parse(bytes, [profile.CountVariable], profile.Dialect); if (rows.Count != 1 || CountWireType(bytes) != (profile.Dialect == RepeatedEnumerationSparqlJsonDialect.LuxembourgVirtuoso ? "typed-literal" : "literal")) throw new ArgumentException("The count response does not match its explicit Virtuoso dialect."); var term = rows[0][0]; if (term.Kind != RepeatedEnumerationRdfTermKind.Literal || term.Datatype != "http://www.w3.org/2001/XMLSchema#integer" || term.Language is not null || !long.TryParse(term.Value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var count) || count < 0) throw new ArgumentException("The count binding is not one typed nonnegative integer literal."); return count;
+    }
+
+    internal static ParsedRepeatedEnumerationTraversalPage ReadTraversalPage(
+        ReadOnlySpan<byte> bytes,
+        RepeatedEnumerationInterpretationProfile profile,
+        long rowLimit)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        if (rowLimit <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(rowLimit));
+        }
+
+        var rows = ParseRows(bytes, profile);
+        if (rows.Count > rowLimit)
+        {
+            throw new ArgumentException("The page exceeds its row limit.", nameof(bytes));
+        }
+
+        if (rows.SelectMany(static row => row.Cursor).Any(static term =>
+                term.Kind != RepeatedEnumerationRdfTermKind.Literal ||
+                term.Datatype is not null ||
+                term.Language is not null))
+        {
+            throw new ArgumentException(
+                "Cursor projections must be plain literals matching the query comparator.",
+                nameof(bytes));
+        }
+
+        if (rows.SelectMany(static row => row.CanonicalKey).Any(static term =>
+                term.Kind is RepeatedEnumerationRdfTermKind.Unbound or
+                    RepeatedEnumerationRdfTermKind.BlankNode))
+        {
+            throw new ArgumentException(
+                "Canonical-key components must be bound and stable.",
+                nameof(bytes));
+        }
+
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+        for (var index = 0; index < rows.Count; index++)
+        {
+            if (!keys.Add(Digest("repeated_enumeration_key/1", [rows[index].CanonicalKey])) ||
+                index > 0 && Compare(rows[index - 1].Cursor, rows[index].Cursor) >= 0)
+            {
+                throw new ArgumentException(
+                    "Keys must be unique and cursors strictly increase.",
+                    nameof(bytes));
+            }
+        }
+
+        return new ParsedRepeatedEnumerationTraversalPage(rows);
     }
     private static IReadOnlyList<RepeatedEnumerationRow> ParseRows(ReadOnlySpan<byte> bytes, RepeatedEnumerationInterpretationProfile profile)
     {
