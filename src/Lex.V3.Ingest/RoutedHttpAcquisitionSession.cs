@@ -1496,6 +1496,24 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
     private static string Hash(ReadOnlySpan<byte> bytes) =>
         Convert.ToHexStringLower(SHA256.HashData(bytes));
 
+    /// <summary>
+    /// An operational failure is discriminated by exactly one of a transport reason or a
+    /// post-header rejection. Enforced at construction so the pair cannot collapse into a result
+    /// whose kind says failure and whose reason says nothing, or one that claims both.
+    /// </summary>
+    private static void RequireExactlyOneOperationalReasonShape(
+        OfficialHttpAcquisitionOutcomeKind kind,
+        OfficialHttpOperationalFailureReason? operationalReason,
+        PostHeaderRejection? postHeaderRejection)
+    {
+        if (kind == OfficialHttpAcquisitionOutcomeKind.OperationalFailure &&
+            (operationalReason is null) == (postHeaderRejection is null))
+        {
+            throw new InvalidOperationException(
+                "An operational failure carries exactly one of a transport reason or a post-header rejection.");
+        }
+    }
+
     internal sealed class StartResult
     {
         private StartResult(
@@ -1506,6 +1524,7 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             OfficialHttpOperationalFailureReason? operationalReason,
             PostHeaderRejection? postHeaderRejection)
         {
+            RequireExactlyOneOperationalReasonShape(kind, operationalReason, postHeaderRejection);
             Kind = kind;
             Session = session;
             Evidence = evidence;
@@ -1747,6 +1766,7 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             HttpPreHeaderFailureClass? preHeaderFailureClass,
             PostHeaderRejection? postHeaderRejection)
         {
+            RequireExactlyOneOperationalReasonShape(kind, operationalReason, postHeaderRejection);
             Kind = kind;
             Evidence = evidence;
             OperationalReason = operationalReason;
@@ -1829,11 +1849,39 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
     /// <see cref="ContentSha256"/> with write receipt <see cref="DurableWriteReceiptSha256"/>,
     /// and every hop observed before it is retained verbatim.
     /// </summary>
-    internal sealed record PostHeaderRejection(
-        PostHeaderFailureClass FailureClass,
-        IReadOnlyList<RoutedHttpHop> PriorHops,
-        string ContentSha256,
-        string DurableWriteReceiptSha256);
+    // An abstract class with a private protected constructor rather than a record: a record's
+    // public constructor would let any friend assembly mint evidence of a rejected response with
+    // arbitrary digests. The only concrete implementation is nested inside the private
+    // PostHeaderFailure below, so the session's own route execution is the sole minter by
+    // construction, and private protected does not extend across InternalsVisibleTo.
+    internal abstract class PostHeaderRejection
+    {
+        private protected PostHeaderRejection(
+            PostHeaderFailureClass failureClass,
+            IReadOnlyList<RoutedHttpHop> priorHops,
+            string contentSha256,
+            string durableWriteReceiptSha256)
+        {
+            ArgumentNullException.ThrowIfNull(priorHops);
+            ArgumentException.ThrowIfNullOrEmpty(contentSha256);
+            ArgumentException.ThrowIfNullOrEmpty(durableWriteReceiptSha256);
+            FailureClass = failureClass;
+            PriorHops = priorHops;
+            ContentSha256 = contentSha256;
+            DurableWriteReceiptSha256 = durableWriteReceiptSha256;
+        }
+
+        internal PostHeaderFailureClass FailureClass { get; }
+
+        /// <summary>Every hop observed before the rejected response, retained verbatim.</summary>
+        internal IReadOnlyList<RoutedHttpHop> PriorHops { get; }
+
+        /// <summary>The custody content digest of the rejected entity.</summary>
+        internal string ContentSha256 { get; }
+
+        /// <summary>The digest of the durable write receipt issued for that entity.</summary>
+        internal string DurableWriteReceiptSha256 { get; }
+    }
 
     private sealed record PostHeaderFailure(
         PostHeaderFailureClass FailureClass,
@@ -1844,11 +1892,18 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
         string ContentSha256,
         string DurableWriteReceiptSha256)
     {
-        public PostHeaderRejection ToRejection() => new(
+        public PostHeaderRejection ToRejection() => new MintedPostHeaderRejection(
             FailureClass,
             PriorHops,
             ContentSha256,
             DurableWriteReceiptSha256);
+
+        private sealed class MintedPostHeaderRejection(
+            PostHeaderFailureClass failureClass,
+            IReadOnlyList<RoutedHttpHop> priorHops,
+            string contentSha256,
+            string durableWriteReceiptSha256)
+            : PostHeaderRejection(failureClass, priorHops, contentSha256, durableWriteReceiptSha256);
     }
 
     private sealed record HopCustodyKey(

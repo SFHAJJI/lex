@@ -275,6 +275,76 @@ public sealed class RoutedHttpAcquisitionSessionAuditTests
         Assert.AreEqual(sendsAfterRejection, handler.SendCount);
     }
 
+    [TestMethod]
+    public void PostHeaderRejectionCanOnlyBeMintedByTheSessionsOwnRouteExecution()
+    {
+        // The rejection is evidence: it asserts that specific bytes sit in custody under a specific
+        // digest after specific hops. A construction path outside the route execution would let a
+        // friend assembly forge that claim, so the surface is pinned by kind, scope and nesting.
+        var rejectionType = typeof(RoutedHttpAcquisitionSession).GetNestedType(
+            "PostHeaderRejection",
+            BindingFlags.NonPublic)
+            ?? throw new AssertFailedException("The post-header rejection type is missing.");
+        Assert.IsTrue(rejectionType.IsAbstract);
+        Assert.IsTrue(rejectionType.IsNestedAssembly);
+
+        var constructors = rejectionType.GetConstructors(
+            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.AreEqual(1, constructors.Length);
+        Assert.IsTrue(
+            constructors[0].IsFamilyAndAssembly,
+            "the base constructor must be private protected, which InternalsVisibleTo cannot reach");
+        Assert.AreEqual(
+            0,
+            rejectionType.GetMethods(
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.DeclaredOnly)
+                .Count(method => rejectionType.IsAssignableFrom(method.ReturnType) ||
+                    method.GetParameters().Any(parameter =>
+                        parameter.ParameterType.IsByRef &&
+                        rejectionType.IsAssignableFrom(parameter.ParameterType.GetElementType()))),
+            "no static factory or out parameter may mint a rejection");
+
+        var concrete = typeof(RoutedHttpAcquisitionSession).Assembly.GetTypes()
+            .Where(type => !type.IsAbstract && rejectionType.IsAssignableFrom(type))
+            .ToArray();
+        Assert.AreEqual(1, concrete.Length, "exactly one concrete rejection exists");
+        Assert.IsTrue(concrete[0].IsNestedPrivate, "and it is private to its minter");
+        Assert.AreEqual("PostHeaderFailure", concrete[0].DeclaringType?.Name);
+    }
+
+    [TestMethod]
+    public void AnOperationalFailureCarriesExactlyOneOfATransportReasonOrAPostHeaderRejection()
+    {
+        foreach (var resultType in new[] { "StartResult", "AttemptResult" })
+        {
+            var type = typeof(RoutedHttpAcquisitionSession).GetNestedType(resultType, BindingFlags.NonPublic)
+                ?? throw new AssertFailedException($"The {resultType} type is missing.");
+            var constructor = type.GetConstructors(BindingFlags.NonPublic | BindingFlags.Instance).Single();
+            var parameters = constructor.GetParameters();
+            var reasonIndex = Array.FindIndex(parameters, static p => p.ParameterType == typeof(OfficialHttpOperationalFailureReason?));
+            var rejectionIndex = Array.FindIndex(parameters, static p => p.ParameterType.Name == "PostHeaderRejection");
+            Assert.IsTrue(reasonIndex >= 0 && rejectionIndex >= 0, $"{resultType} lost one of its reason shapes");
+
+            // Kind says failure, both shapes absent: refused.
+            var neither = new object?[parameters.Length];
+            neither[0] = OfficialHttpAcquisitionOutcomeKind.OperationalFailure;
+            var refusal = Assert.ThrowsExactly<TargetInvocationException>(() => constructor.Invoke(neither));
+            Assert.IsInstanceOfType<InvalidOperationException>(refusal.InnerException, $"{resultType} accepted a reasonless failure");
+
+            // Kind says failure, transport reason present: admitted. Proves the check is reachable
+            // and not simply refusing every construction.
+            var one = new object?[parameters.Length];
+            one[0] = OfficialHttpAcquisitionOutcomeKind.OperationalFailure;
+            one[reasonIndex] = OfficialHttpOperationalFailureReason.NetworkFailure;
+            Assert.IsNotNull(constructor.Invoke(one));
+
+            // A non-failure kind with neither shape is fine; the invariant is scoped to failures.
+            var executed = new object?[parameters.Length];
+            executed[0] = OfficialHttpAcquisitionOutcomeKind.ExecutedObservation;
+            Assert.IsNotNull(constructor.Invoke(executed));
+        }
+    }
+
     private static async Task AssertRobotsPostHeaderRejectionAsync(
         Func<HttpRequestMessage, byte[], HttpResponseMessage> terminalRobotsResponse,
         OfficialHttpAcquisitionOutcomeKind expectedKind,
