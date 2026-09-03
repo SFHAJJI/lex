@@ -619,7 +619,84 @@ public sealed class VerifiedScopeManifest
         Manifest = manifest;
     }
 
-    internal ScopeManifest Manifest { get; }
+    /// <summary>
+    /// The verified manifest's own content: the profile binding, the observed-object table, every
+    /// row's selector evidence and matched rule outcomes, the sixteen accounting partitions and the
+    /// body-candidate projection. Reading it needs no InternalsVisibleTo (Decision 80); holding an
+    /// instance is itself the evidence that <see cref="ScopeReducer.Reduce"/>,
+    /// <see cref="ScopeReducer.VerifyAndOpen"/> or <see cref="ParseAndVerify"/> ran every check to
+    /// completion, because the constructor above is the only door onto this type and it stays
+    /// internal.
+    /// </summary>
+    public ScopeManifest Manifest { get; }
+
+    /// <summary>
+    /// The reader door for a scope manifest previously durably written by
+    /// <see cref="ScopeManifestCanonicalWriter.Write"/> or
+    /// <see cref="ScopeManifestCanonicalWriter.WriteStreaming"/>. Parses
+    /// <paramref name="canonicalBytes"/> strictly, requires them to reproduce
+    /// <paramref name="artifactRef"/>'s own pinned digest before doing any expensive work (the
+    /// evidence of construction, Decision 80, exactly as
+    /// <see cref="Source.Http.RoutedHttpEvidence.ParseAndVerify"/> requires a hop's custody receipt),
+    /// then runs the same <see cref="ScopeReducer.VerifyAndOpen"/> pass a live reduction runs against
+    /// <paramref name="observationResolver"/> so every one of the fourteen
+    /// <see cref="ScopeManifestReaderOnlyInvariant"/> checks holds, and finally requires the verified
+    /// manifest's own canonical re-serialization to reproduce <paramref name="canonicalBytes"/>
+    /// byte for byte. Only then is the content public through <see cref="Manifest"/>. No
+    /// InternalsVisibleTo is granted for this door; production Ingest previously had no way to turn
+    /// durable bytes back into a <see cref="VerifiedScopeManifest"/> at all.
+    /// </summary>
+    public static VerifiedScopeManifest ParseAndVerify(
+        SourceArtifactRef artifactRef,
+        ReadOnlySpan<byte> canonicalBytes,
+        IScopeReductionEvidenceResolver observationResolver)
+    {
+        ArgumentNullException.ThrowIfNull(artifactRef);
+        ArgumentNullException.ThrowIfNull(observationResolver);
+
+        if (!string.Equals(
+                ScopeManifestCanonicalWriter.ComputeManifestSha256(canonicalBytes),
+                artifactRef.Sha256,
+                StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "The scope manifest bytes do not match their artifact reference.",
+                nameof(canonicalBytes));
+        }
+
+        // ContractJson's shared JsonSerializerOptions does not set MaxDepth, so this deserialization
+        // uses System.Text.Json's framework default of 64 nested objects/arrays. A scope manifest's
+        // deepest path (observed_objects[].object_ref.parent_key_ref.entity_kind.registry_ref, or
+        // rows[].matched_evaluations[].role_member_ordinals[]) is well under ten levels, so the
+        // default bound is already far more headroom than this schema can ever use; it is
+        // deliberately left unset rather than narrowed.
+        var json = ScopeValidation.DecodeStrictUtf8(canonicalBytes, nameof(canonicalBytes));
+        ScopeManifest manifest;
+        try
+        {
+            manifest = ContractJson.Deserialize<ScopeManifest>(json);
+        }
+        catch (JsonException exception)
+        {
+            throw new ArgumentException(
+                "The scope manifest bytes are not one valid typed canonical document.",
+                nameof(canonicalBytes),
+                exception);
+        }
+
+        var verified = ScopeReducer.VerifyAndOpen(manifest, observationResolver);
+
+        using var rebuilt = new MemoryStream();
+        ScopeManifestCanonicalWriter.Write(rebuilt, verified);
+        if (!canonicalBytes.SequenceEqual(rebuilt.ToArray()))
+        {
+            throw new ArgumentException(
+                "The scope manifest is not its exact canonical typed representation.",
+                nameof(canonicalBytes));
+        }
+
+        return verified;
+    }
 }
 
 public sealed class ScopeManifestWriteReceipt
@@ -1167,6 +1244,20 @@ public static class ScopeManifestCanonicalWriter
             writer.Flush();
         }
 
+        return hashing.GetHashAndReset();
+    }
+
+    /// <summary>
+    /// The exact digest <see cref="Write"/> and <see cref="WriteStreaming"/> return for their own
+    /// output, recomputed directly from durable bytes so a reader can check them against a pinned
+    /// artifact reference before doing any parsing. <paramref name="canonicalBytes"/> must be exactly
+    /// what one of those two methods wrote, trailing newline included; this does not itself prove
+    /// canonical form, only that the bytes in hand are the ones a matching digest was minted from.
+    /// </summary>
+    internal static string ComputeManifestSha256(ReadOnlySpan<byte> canonicalBytes)
+    {
+        using var hashing = new HashingWriteStream(Stream.Null, ManifestDomain);
+        hashing.Write(canonicalBytes);
         return hashing.GetHashAndReset();
     }
 
@@ -1867,6 +1958,27 @@ internal static class ScopeValidation
 
     public static TEnum RequireDefined<TEnum>(TEnum value, string parameterName)
         where TEnum : struct, Enum => SourceCoreValidation.RequireDefined(value, parameterName);
+
+    /// <summary>
+    /// Strict UTF-8 decode for a reader taking raw bytes off the wire: no substitutions, no lone
+    /// surrogates, no overlong forms. A decode failure is the caller's argument, not a server fault,
+    /// so it surfaces as <see cref="ArgumentException"/> rather than propagating the decoder's own
+    /// exception type.
+    /// </summary>
+    public static string DecodeStrictUtf8(ReadOnlySpan<byte> value, string parameterName)
+    {
+        try
+        {
+            return StrictUtf8.GetString(value);
+        }
+        catch (DecoderFallbackException exception)
+        {
+            throw new ArgumentException(
+                "A scope manifest must contain exact valid UTF-8 bytes.",
+                parameterName,
+                exception);
+        }
+    }
 
     public static int RequireOrdinal(int value, string parameterName)
     {
