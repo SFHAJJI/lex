@@ -9,8 +9,19 @@ name: heartbeat
 # fires: no run, no failure, no issue. The site keeps serving a stale index that still reports
 # "signature valid", and the first person to notice is a visitor reading last month's law.
 #
-# This job runs from a DIFFERENT repository to the one being watched, so it survives the thing
-# it is watching for, and asks one question: has lex-ops recorded a nightly run recently?
+# It asks one question: is the index the site is serving still advancing?
+#
+# It used to ask a second one, whether lex-ops had recorded a nightly fleet run recently, by
+# reading that repository's fleet-status branch. That branch stopped at 2026-08-31T02:39:45Z
+# because the V2 nightly fleet was deliberately retired, and lex-ops now carries ops-v3.yml and
+# v3-preview.yml with no schedule between them and no status branch to read. A check watching a
+# thing that was removed on purpose fires every single day and teaches the reader to ignore the
+# alarm, which costs more than the check was ever worth. It is deleted rather than repointed,
+# because there is nothing yet to point it at: a heartbeat over a V3 fleet has to wait for a V3
+# fleet that emits a signal.
+#
+# What survives is the half that watches production directly, which was always the stronger half:
+# it observes the answer a visitor receives rather than a proxy for the machinery behind it.
 on:
   schedule:
     - cron: "0 9 * * *"      # 09:00 UTC — hours after the 02:17 nightly, so a slow run is not a false alarm
@@ -24,30 +35,6 @@ jobs:
   freshness:
     runs-on: ubuntu-latest
     steps:
-      - name: check that the fleet reported recently
-        id: check
-        env:
-          # lex-ops is public; the repository-scoped token avoids a separate expiring PAT.
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -uo pipefail
-          # Generated status has its own fast-forward-only branch. Main changes only when the
-          # pipeline itself changes and therefore cannot prove the nightly fleet ran.
-          last=$(gh api repos/SFHAJJI/lex-ops/commits/fleet-status \
-            --jq '.commit.committer.date' 2>/dev/null || echo "")
-          if [ -z "$last" ]; then
-            echo "reason=Could not read the public lex-ops fleet-status branch." >> "$GITHUB_OUTPUT"
-            echo "stale=true" >> "$GITHUB_OUTPUT"; exit 0
-          fi
-          age=$(( ( $(date -u +%s) - $(date -u -d "$last" +%s) ) / 3600 ))
-          echo "last lex-ops commit: $last (${age}h ago)"
-          if [ "$age" -gt 30 ]; then
-            echo "reason=No nightly status has been committed for ${age} hours (last: $last)." >> "$GITHUB_OUTPUT"
-            echo "stale=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "stale=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: check that the served index is not stale
         id: served
         run: |
@@ -85,7 +72,7 @@ jobs:
           fi
 
       - name: raise or update the alarm
-        if: steps.check.outputs.stale == 'true' || steps.served.outputs.stale == 'true'
+        if: steps.served.outputs.stale == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -93,13 +80,14 @@ jobs:
           title="heartbeat: the nightly pipeline has gone quiet"
           body="The dead-man's check fired.
 
-          - fleet: ${{ steps.check.outputs.reason }}
           - served index: ${{ steps.served.outputs.reason }}
 
-          Silence is the one failure the fleet cannot report on its own. Likely causes, in order:
-          GitHub disabled the schedule after 60 days of repository inactivity; Actions is paused;
-          or the public fleet-status branch stopped advancing. Re-run \`nightly-fleet\` manually
-          to confirm.
+          Silence is the one failure a pipeline cannot report on its own. Likely causes, in order:
+          the promotion that publishes a new index stopped running; Actions is paused or its
+          schedule was disabled after 60 days of repository inactivity; or the site is serving a
+          revision that was never promoted. Check the running revision, then request the live
+          route yourself: a workflow's own success proves its smoke tests, not the answer a
+          visitor receives.
 
           Checked at $(date -u +%FT%TZ)."
           # One issue, reopened and updated — not one per day.
