@@ -13,6 +13,9 @@ namespace Lex.V3.Tests.Contracts.Source.Absence;
 /// </remarks>
 internal static class AbsenceFixtures
 {
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<
+        (string FamilyKey, int RunSeed), AbsenceFamilyEnumerationProof> Proofs = new();
+
     public const string RootUri = "https://data.legilux.public.lu/eli/etat/leg/loi/2004/11/12/n1";
     public const string OtherUri = "https://data.legilux.public.lu/eli/etat/leg/loi/2005/01/01/n2";
     public const string ThirdUri = "https://data.legilux.public.lu/eli/etat/leg/rgd/2006/02/02/n3";
@@ -95,6 +98,28 @@ internal static class AbsenceFixtures
         return observation;
     }
 
+    /// <summary>
+    /// A real proof that one family's enumeration was delivered whole, built from a verified
+    /// delivery comparison rather than stubbed. Memoized because assembling one costs four
+    /// canonicalized evidence tuples and the ledger tests build many cuts; the objects are
+    /// immutable, so sharing one across cuts changes nothing a test can observe.
+    /// </summary>
+    public static AbsenceFamilyEnumerationProof Proof(
+        string familyKey = "lu_root_family", int runSeed = 930) =>
+        Proofs.GetOrAdd((familyKey, runSeed), static key =>
+        {
+            var proof = AbsenceFamilyEnumerationProof.TryCreate(
+                key.FamilyKey,
+                AbsenceEnumerationProofFixture.Delivery(key.FamilyKey, key.RunSeed),
+                out var refusal);
+            if (proof is null)
+            {
+                throw new InvalidOperationException($"fixture proof refused as {refusal}");
+            }
+
+            return proof;
+        });
+
     public static AbsenceCut Cut(
         string runId,
         DateTimeOffset at,
@@ -104,15 +129,25 @@ internal static class AbsenceFixtures
         string? observedSetTail = null,
         IReadOnlyList<AbsenceFamilyObservation>? observations = null)
     {
-        var cut = AbsenceCut.TryCreate(
-            runId,
-            completion,
-            applicableSet,
-            observations ?? [Observation(runId + "-obs-1", at)],
-            Artifact('e'),
-            ObservedSet(observedSetTail ?? "1"),
-            observedKeys,
-            out var refusal);
+        var members = observations ?? [Observation(runId + "-obs-1", at)];
+        var cut = completion == AbsenceRunCompletion.EnumerationComplete
+            ? AbsenceCut.TryCreateComplete(
+                runId,
+                applicableSet,
+                members,
+                members.Select(static member => Proof(member.FamilyKey)).ToArray(),
+                Artifact('e'),
+                ObservedSet(observedSetTail ?? "1"),
+                observedKeys,
+                out var refusal)
+            : AbsenceCut.TryCreatePartial(
+                runId,
+                applicableSet,
+                members,
+                Artifact('e'),
+                ObservedSet(observedSetTail ?? "1"),
+                observedKeys,
+                out refusal);
         if (cut is null)
         {
             throw new InvalidOperationException($"fixture cut refused as {refusal}");

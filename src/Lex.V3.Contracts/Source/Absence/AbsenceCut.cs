@@ -218,33 +218,53 @@ public enum AbsenceCutRefusal
     [JsonStringEnumMemberName("run_id_invalid")]
     RunIdInvalid = 1,
 
-    /// <summary>The completion state is not a member of the closed vocabulary.</summary>
-    [JsonStringEnumMemberName("completion_undefined")]
-    CompletionUndefined = 2,
-
     /// <summary>The applicable-set axis is not a member of the closed vocabulary.</summary>
     [JsonStringEnumMemberName("applicable_set_undefined")]
-    ApplicableSetUndefined = 3,
+    ApplicableSetUndefined = 2,
 
     /// <summary>The observation list is empty, so the cut has no temporal evidence at all.</summary>
     [JsonStringEnumMemberName("observations_empty")]
-    ObservationsEmpty = 4,
+    ObservationsEmpty = 3,
 
     /// <summary>Two observations share an identity.</summary>
     [JsonStringEnumMemberName("duplicate_observation_id")]
-    DuplicateObservationId = 5,
+    DuplicateObservationId = 4,
 
     /// <summary>Two observations cover the same family, so the list is not per-family.</summary>
     [JsonStringEnumMemberName("duplicate_family_key")]
-    DuplicateFamilyKey = 6,
+    DuplicateFamilyKey = 5,
 
     /// <summary>An observed key is not an exact canonical publisher URI.</summary>
     [JsonStringEnumMemberName("observed_key_invalid")]
-    ObservedKeyInvalid = 7,
+    ObservedKeyInvalid = 6,
 
     /// <summary>The same observed key appears twice.</summary>
     [JsonStringEnumMemberName("duplicate_observed_key")]
-    DuplicateObservedKey = 8,
+    DuplicateObservedKey = 7,
+
+    /// <summary>Two enumeration proofs prove the same family.</summary>
+    [JsonStringEnumMemberName("duplicate_enumeration_proof_family")]
+    DuplicateEnumerationProofFamily = 8,
+
+    /// <summary>
+    /// An enumeration proof names a family this run made no observation of. The proof may be
+    /// perfectly good; it is evidence about a run this is not.
+    /// </summary>
+    [JsonStringEnumMemberName("enumeration_proof_family_not_observed")]
+    EnumerationProofFamilyNotObserved = 9,
+
+    /// <summary>
+    /// An observed family carries no enumeration proof, so the run's coverage of that family is
+    /// asserted rather than demonstrated.
+    /// </summary>
+    [JsonStringEnumMemberName("family_enumeration_proof_missing")]
+    FamilyEnumerationProofMissing = 10,
+
+    /// <summary>
+    /// The proofs name more than one acquisition run, so they are not evidence about one cut.
+    /// </summary>
+    [JsonStringEnumMemberName("enumeration_proofs_span_more_than_one_run")]
+    EnumerationProofsSpanMoreThanOneRun = 11,
 }
 
 /// <summary>
@@ -270,6 +290,39 @@ public enum AbsenceCutRefusal
 /// seen, so a key outside it is unknown rather than absent. One field with a reading fixed by the
 /// completion state, rather than two fields that could disagree.
 /// </para>
+/// <para>
+/// <see cref="Completion"/> is derived from which factory minted the cut and is not a parameter of
+/// either. It used to be a value a caller passed, which made "this enumeration was complete" a
+/// declaration; R3.3 conditions advancement on a cut that proves complete enumeration, so a
+/// declaration was the one place an incomplete run could advance an absence history with nothing
+/// reporting it. <see cref="TryCreateComplete"/> is now the only path to
+/// <see cref="AbsenceRunCompletion.EnumerationComplete"/> and it requires one
+/// <see cref="AbsenceFamilyEnumerationProof"/> per observed family, which in turn cannot exist
+/// without a verified <c>EnumerationDeliveryComparison</c>. A caller holding no proof cannot
+/// construct a complete cut at all.
+/// </para>
+/// <para>
+/// What that binding leaves declared, said plainly because the point of the change is that claims
+/// match code. The proofs demonstrate that <em>each observed family</em> was enumerated whole.
+/// They do not demonstrate that the observed families are <em>all</em> the families of the
+/// applicable set: that is <see cref="ScopeManifestRef"/>'s question, and this contract cannot
+/// check a manifest it has no reader for. Nor do they bind <see cref="ObservedKeys"/> to the rows
+/// the enumeration delivered, for the reason given on
+/// <see cref="AbsenceFamilyEnumerationProof"/>. So a complete cut now proves per-family delivery
+/// and still asserts family coverage and key extraction.
+/// </para>
+/// <para>
+/// A third thing stays declared, written here beside the other two rather than only in a report.
+/// <see cref="RunId"/> and a proof's <c>AcquisitionRunRef</c> are different naming systems: the
+/// first is this contract's identifier for the run, the second an artifact reference minted by the
+/// acquisition session. Every proof on a cut must name the same acquisition run as every other,
+/// and that is checked. That it is the run <see cref="RunId"/> names is not, because nothing here
+/// can map one naming system onto the other. The consequence is bounded and worth stating exactly:
+/// proofs from two runs cannot be mixed into one cut, but a cut could carry a coherent set of
+/// proofs from a run other than the one it is labelled with. Closing it needs whatever mints
+/// <see cref="RunId"/> to derive it from the acquisition run reference, which is the executor's
+/// decision to make and not this contract's.
+/// </para>
 /// </remarks>
 public sealed class AbsenceCut
 {
@@ -280,6 +333,7 @@ public sealed class AbsenceCut
         AbsenceRunCompletion completion,
         AbsenceApplicableSet applicableSet,
         IReadOnlyList<AbsenceFamilyObservation> observations,
+        IReadOnlyList<AbsenceFamilyEnumerationProof> enumerationProofs,
         SourceArtifactRef scopeManifestRef,
         SourceArtifactRef observedSetRef,
         HashSet<string> observedKeys)
@@ -288,6 +342,7 @@ public sealed class AbsenceCut
         Completion = completion;
         ApplicableSet = applicableSet;
         Observations = observations;
+        EnumerationProofs = enumerationProofs;
         ScopeManifestRef = scopeManifestRef;
         ObservedSetRef = observedSetRef;
         _observedKeys = observedKeys;
@@ -295,11 +350,21 @@ public sealed class AbsenceCut
 
     public string RunId { get; }
 
+    /// <summary>
+    /// Whether this run enumerated its applicable set completely. Derived from the factory that
+    /// minted the cut, never supplied.
+    /// </summary>
     public AbsenceRunCompletion Completion { get; }
 
     public AbsenceApplicableSet ApplicableSet { get; }
 
     public IReadOnlyList<AbsenceFamilyObservation> Observations { get; }
+
+    /// <summary>
+    /// One proof per observed family for a complete cut, empty for a partial one. Retained as the
+    /// evidence behind <see cref="Completion"/>.
+    /// </summary>
+    public IReadOnlyList<AbsenceFamilyEnumerationProof> EnumerationProofs { get; }
 
     /// <summary>The complete scope-manifest identity and digest. Evidence, never comparison.</summary>
     public SourceArtifactRef ScopeManifestRef { get; }
@@ -307,12 +372,69 @@ public sealed class AbsenceCut
     /// <summary>The complete observed-set identity and digest. Evidence, never comparison.</summary>
     public SourceArtifactRef ObservedSetRef { get; }
 
-    /// <summary>The only path that mints a cut.</summary>
-    public static AbsenceCut? TryCreate(
+    /// <summary>
+    /// The only path to a cut whose enumeration was complete. Every observed family must carry a
+    /// proof of its own enumeration, and every proof must be about a family this run observed.
+    /// </summary>
+    /// <remarks>
+    /// The bijection is both directions on purpose. A missing proof would let an unproven family
+    /// ride along inside an otherwise proven cut, which is the declared completeness this replaces
+    /// wearing a smaller coat. A proof for a family the run never observed is evidence about some
+    /// other run, and admitting it would let a caller pad the list until it looked complete.
+    /// </remarks>
+    public static AbsenceCut? TryCreateComplete(
+        string runId,
+        AbsenceApplicableSet applicableSet,
+        IReadOnlyList<AbsenceFamilyObservation> observations,
+        IReadOnlyList<AbsenceFamilyEnumerationProof> enumerationProofs,
+        SourceArtifactRef scopeManifestRef,
+        SourceArtifactRef observedSetRef,
+        IReadOnlyList<string> observedKeys,
+        out AbsenceCutRefusal refusal)
+    {
+        ArgumentNullException.ThrowIfNull(enumerationProofs);
+        return Create(
+            runId,
+            AbsenceRunCompletion.EnumerationComplete,
+            applicableSet,
+            observations,
+            enumerationProofs,
+            scopeManifestRef,
+            observedSetRef,
+            observedKeys,
+            out refusal);
+    }
+
+    /// <summary>
+    /// The only path to a partial cut. It takes no proofs, because a partial run's silences prove
+    /// nothing whatever its families delivered, and a partial cut carrying proofs would invite a
+    /// reader to weigh them.
+    /// </summary>
+    public static AbsenceCut? TryCreatePartial(
+        string runId,
+        AbsenceApplicableSet applicableSet,
+        IReadOnlyList<AbsenceFamilyObservation> observations,
+        SourceArtifactRef scopeManifestRef,
+        SourceArtifactRef observedSetRef,
+        IReadOnlyList<string> observedKeys,
+        out AbsenceCutRefusal refusal) =>
+        Create(
+            runId,
+            AbsenceRunCompletion.Partial,
+            applicableSet,
+            observations,
+            [],
+            scopeManifestRef,
+            observedSetRef,
+            observedKeys,
+            out refusal);
+
+    private static AbsenceCut? Create(
         string runId,
         AbsenceRunCompletion completion,
         AbsenceApplicableSet applicableSet,
         IReadOnlyList<AbsenceFamilyObservation> observations,
+        IReadOnlyList<AbsenceFamilyEnumerationProof> enumerationProofs,
         SourceArtifactRef scopeManifestRef,
         SourceArtifactRef observedSetRef,
         IReadOnlyList<string> observedKeys,
@@ -327,12 +449,6 @@ public sealed class AbsenceCut
         if (!AbsenceValidation.IsIdentifier(runId))
         {
             refusal = AbsenceCutRefusal.RunIdInvalid;
-            return null;
-        }
-
-        if (!Enum.IsDefined(completion))
-        {
-            refusal = AbsenceCutRefusal.CompletionUndefined;
             return null;
         }
 
@@ -366,6 +482,50 @@ public sealed class AbsenceCut
             }
         }
 
+        var provenFamilies = new HashSet<string>(StringComparer.Ordinal);
+        SourceArtifactRef? acquisitionRun = null;
+        foreach (var proof in enumerationProofs)
+        {
+            ArgumentNullException.ThrowIfNull(proof);
+            if (!provenFamilies.Add(proof.FamilyKey))
+            {
+                refusal = AbsenceCutRefusal.DuplicateEnumerationProofFamily;
+                return null;
+            }
+
+            if (!seenFamilyKeys.Contains(proof.FamilyKey))
+            {
+                refusal = AbsenceCutRefusal.EnumerationProofFamilyNotObserved;
+                return null;
+            }
+
+            // Compared against the first proof rather than accumulated into a set, so the refusal
+            // is reached on the proof that disagrees.
+            if (acquisitionRun is null)
+            {
+                acquisitionRun = proof.AcquisitionRunRef;
+            }
+            else if (proof.AcquisitionRunRef != acquisitionRun)
+            {
+                refusal = AbsenceCutRefusal.EnumerationProofsSpanMoreThanOneRun;
+                return null;
+            }
+        }
+
+        // The condition is not decoration: a partial cut carries no proofs, so without it every
+        // partial cut would refuse on its first observation.
+        if (completion == AbsenceRunCompletion.EnumerationComplete)
+        {
+            foreach (var observation in observations)
+            {
+                if (!provenFamilies.Contains(observation.FamilyKey))
+                {
+                    refusal = AbsenceCutRefusal.FamilyEnumerationProofMissing;
+                    return null;
+                }
+            }
+        }
+
         var keys = new HashSet<string>(StringComparer.Ordinal);
         foreach (var key in observedKeys)
         {
@@ -389,6 +549,7 @@ public sealed class AbsenceCut
             completion,
             applicableSet,
             observations.ToArray(),
+            enumerationProofs.ToArray(),
             scopeManifestRef,
             observedSetRef,
             keys);

@@ -345,9 +345,14 @@ public sealed class AbsenceKeyTests
                 "AbsenceComparisonPolicyRefusal: none, duplicate_member, member_undecided, "
                 + "digest_not_sha256, member_undefined",
                 "AbsenceCoordinateFieldKind: stable_publisher_field, family_rule, publisher_date",
-                "AbsenceCutRefusal: none, run_id_invalid, completion_undefined, "
-                + "applicable_set_undefined, observations_empty, duplicate_observation_id, "
-                + "duplicate_family_key, observed_key_invalid, duplicate_observed_key",
+                "AbsenceCutRefusal: none, run_id_invalid, applicable_set_undefined, "
+                + "observations_empty, duplicate_observation_id, duplicate_family_key, "
+                + "observed_key_invalid, duplicate_observed_key, "
+                + "duplicate_enumeration_proof_family, enumeration_proof_family_not_observed, "
+                + "family_enumeration_proof_missing, enumeration_proofs_span_more_than_one_run",
+                "AbsenceFamilyEnumerationProofRefusal: none, family_key_invalid, "
+                + "partition_is_not_this_family, passes_delivered_different_selections, "
+                + "selection_reached_the_row_cap",
                 "AbsenceFamilyObservationRefusal: none, observation_id_invalid, family_key_invalid, "
                 + "timestamp_not_utc, precision_undefined, "
                 + "timestamp_finer_than_declared_precision, clock_source_invalid, "
@@ -402,7 +407,7 @@ public sealed class AbsenceKeyTests
         var absenceEnums = AbsenceEnums();
 
         Assert.AreEqual(
-            20,
+            21,
             absenceEnums.Length,
             "the absence vocabulary changed size, so this sweep no longer covers what it claims");
 
