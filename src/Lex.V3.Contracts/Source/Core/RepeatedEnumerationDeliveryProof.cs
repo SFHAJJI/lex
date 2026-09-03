@@ -255,7 +255,7 @@ public sealed class EnumerationDeliveryComparison
         RequireDistinctPasses(evidenceA, evidenceB, profile);
         RequireDifferentPageLimits(aPages, bPages);
         var selectedA = ParseCount(aCount.RetainedPayloadBytes.Span, profile); var selectedB = ParseCount(bCount.RetainedPayloadBytes.Span, profile);
-        var rowsA = VerifyPages(aPages, countA.HttpEvidenceRef, selectedA, profile); var rowsB = VerifyPages(bPages, countB.HttpEvidenceRef, selectedB, profile);
+        var rowsA = VerifyPages(aPages.Select(static page => page.Retained).ToArray(), countA.HttpEvidenceRef, selectedA, profile); var rowsB = VerifyPages(bPages.Select(static page => page.Retained).ToArray(), countB.HttpEvidenceRef, selectedB, profile);
         var times = new EnumerationObservationTimes(
             TerminalHop(aCount).RequestStartedAt,
             aPages.Select(static page => TerminalHop(page).RequestStartedAt).ToArray(),
@@ -417,7 +417,17 @@ public sealed class EnumerationDeliveryComparison
         if (pages.Length is < 1 or > 1_000_000 || pages.Select((page, index) => page is null || page.Ordinal != index).Any(static invalid => invalid)) throw new ArgumentException("Pages require bounded contiguous ordinals.", nameof(pageSet));
         return pages.Select(page => Resolve(page.Evidence, profile, profile.PageQueryFamilyRef, resolver)).ToArray();
     }
-    private static IReadOnlyList<RepeatedEnumerationRow> VerifyPages(IReadOnlyList<VerifiedRepeatedEnumerationEvidence> pages, SourceArtifactRef countRef, long count, RepeatedEnumerationInterpretationProfile profile)
+    /// <summary>
+    /// Internal rather than private (Decision 80: same-assembly reuse inside Lex.V3.Contracts, never
+    /// InternalsVisibleTo) so <see cref="VerifiedRepeatedEnumerationRows.TryOpen"/> can re-verify a
+    /// page chain read back from custody without a second copy of this logic. The parameter type is
+    /// <see cref="RepeatedEnumerationResolvedEvidence"/> itself, already public, rather than the
+    /// private <see cref="VerifiedRepeatedEnumerationEvidence"/> wrapper this method's own caller
+    /// happens to hold: nothing in this method ever reads that wrapper's extra
+    /// <c>SourceProfileRef</c> field, so widening the parameter to what it actually uses is the
+    /// smaller change, not a second signature to keep in sync.
+    /// </summary>
+    internal static IReadOnlyList<RepeatedEnumerationRow> VerifyPages(IReadOnlyList<RepeatedEnumerationResolvedEvidence> pages, SourceArtifactRef countRef, long count, RepeatedEnumerationInterpretationProfile profile)
     {
         var all = new List<RepeatedEnumerationRow>(); long? limit = null; IReadOnlyList<RepeatedEnumerationRow>? prior = null;
         foreach (var page in pages)
@@ -582,7 +592,14 @@ public sealed class EnumerationDeliveryComparison
     }
     private static string[] Parameters(MachineQueryInputArtifact input, IReadOnlyList<string> names) => names.Select(name => { var matches = input.OrderedParameters.Where(parameter => parameter.Name == name).ToArray(); if (matches.Length != 1 || matches[0].Kind != MachineQueryParameterKind.PublisherCursor || matches[0].TextValue is not { } encoded) throw new ArgumentException("A required typed parameter is missing."); return EnumerationCursorEnvelope.Decode(encoded); }).ToArray();
     private static int Compare(IReadOnlyList<RepeatedEnumerationRdfTerm> left, IReadOnlyList<RepeatedEnumerationRdfTerm> right) { for (var i = 0; i < Math.Min(left.Count, right.Count); i++) { var comparison = EnumerationCursorEnvelope.CompareRaw(left[i].Value!, right[i].Value!); if (comparison != 0) return comparison; } return left.Count.CompareTo(right.Count); }
-    private static string Digest(string schema, IEnumerable<IReadOnlyList<RepeatedEnumerationRdfTerm>> tuples) { var document = new CanonicalTupleDocument(schema, tuples.Select(static tuple => tuple.ToArray()).ToArray()); return Sha(ContractCanonicalizer.Canonicalize(document, schema + "-canonical-json", 64)); }
+    /// <summary>
+    /// Internal rather than private for the same reason as <see cref="VerifyPages"/>: this is the
+    /// exact canonicalization <see cref="CanonicalKeyDigestA"/>/<see cref="CanonicalKeyDigestB"/> and
+    /// their row and cursor siblings were computed with, and <see cref="VerifiedRepeatedEnumerationRows.TryOpen"/>
+    /// must re-derive a digest to compare against a proof's claim with the identical algorithm, not a
+    /// second copy that could silently drift from it.
+    /// </summary>
+    internal static string Digest(string schema, IEnumerable<IReadOnlyList<RepeatedEnumerationRdfTerm>> tuples) { var document = new CanonicalTupleDocument(schema, tuples.Select(static tuple => tuple.ToArray()).ToArray()); return Sha(ContractCanonicalizer.Canonicalize(document, schema + "-canonical-json", 64)); }
     private static EnumerationPageSetRefs Snapshot(EnumerationPageSetRefs pageSet) => new(Array.AsReadOnly(pageSet.Pages.Select(page => new RepeatedEnumerationPageRef(page.Ordinal, page.Evidence)).ToArray()));
     private static void RequireDistinct(RepeatedEnumerationEvidenceRefs countA, EnumerationPageSetRefs pagesA, RepeatedEnumerationEvidenceRefs countB, EnumerationPageSetRefs pagesB) { var all = new[] { countA }.Concat(pagesA.Pages.Select(static page => page.Evidence)).Append(countB).Concat(pagesB.Pages.Select(static page => page.Evidence)).ToArray(); if (new Func<RepeatedEnumerationEvidenceRefs, SourceArtifactRef>[] { static value => value.QueryInputRef, static value => value.RenderReceiptRef, static value => value.LogicalRequestRef, static value => value.HttpEvidenceRef }.Any(selector => all.Select(selector).Distinct().Count() != all.Length)) throw new ArgumentException("The retained request and HTTP evidence identities must be distinct."); }
     private static void RequireDistinctPasses(IReadOnlyList<VerifiedRepeatedEnumerationEvidence> evidenceA, IReadOnlyList<VerifiedRepeatedEnumerationEvidence> evidenceB, RepeatedEnumerationInterpretationProfile profile)
