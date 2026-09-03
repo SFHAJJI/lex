@@ -748,9 +748,38 @@ public sealed class RoutedHttpAcquisitionSessionTests
         typeof(RoutedHttpAcquisitionSession).GetMethod(name, BindingFlags.NonPublic | scope)
         ?? throw new AssertFailedException($"The runtime seam '{name}' is missing.");
 
+    [TestMethod]
+    public void AMachineRequestMissingARequiredArtifactRoleIsRefusedBeforeAPolicyIsMinted()
+    {
+        // The role-membership guard in ForMachineQuery is a tripwire between two components: the
+        // binder in Contracts decides what it reopens, the policy in Ingest decides what it
+        // requires, and they agree today. This drops the render receipt from an otherwise genuine
+        // reopened closure so the guard is exercised rather than trusted.
+        var request = EuropeanUnionRequest();
+        using var session = Session(
+            request,
+            new SequenceHandler(static (_, _) => throw new AssertFailedException("No send expected.")),
+            new MultiObjectCustodyStore(),
+            new ShortDelayTimeProvider(),
+            usesPinnedHandler: false);
+
+        var refusal = Assert.ThrowsExactly<TargetInvocationException>(() =>
+            PrivateMethod("CreateMachineRequest", BindingFlags.Instance).Invoke(
+                session,
+                [ResolveMachineRequest(session, request, dropRenderReceipt: true)]));
+        Assert.IsInstanceOfType<ArgumentException>(refusal.InnerException);
+        StringAssert.Contains(refusal.InnerException!.Message, "required artifact role");
+
+        // The complete closure still mints, so the refusal above is the guard and not the seam.
+        Assert.IsNotNull(PrivateMethod("CreateMachineRequest", BindingFlags.Instance).Invoke(
+            session,
+            [ResolveMachineRequest(session, request)]));
+    }
+
     private static object ResolveMachineRequest(
         RoutedHttpAcquisitionSession session,
-        BoundMachineRequest request)
+        BoundMachineRequest request,
+        bool dropRenderReceipt = false)
     {
         var resolverType = typeof(RoutedHttpAcquisitionSession).GetNestedType(
             "SessionMachineArtifactResolver",
@@ -769,6 +798,21 @@ public sealed class RoutedHttpAcquisitionSessionTests
             "CopyResolvedArtifacts",
             BindingFlags.Instance | BindingFlags.NonPublic)?.Invoke(resolver, null)
             ?? throw new AssertFailedException("The resolver exposed no reopened artifacts.");
+        if (dropRenderReceipt)
+        {
+            // The element type is private to the session, so the closure is filtered through
+            // reflection and rebuilt as a typed array the private constructor accepts.
+            var all = ((System.Collections.IEnumerable)artifacts).Cast<object>().ToArray();
+            var elementType = all[0].GetType();
+            var reference = elementType.GetProperty("Reference", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                ?? throw new AssertFailedException("The reopened artifact carries no reference.");
+            var kept = all.Where(artifact => !Equals(reference.GetValue(artifact), opened.RenderReceiptRef)).ToArray();
+            Assert.AreEqual(all.Length - 1, kept.Length, "exactly the render receipt was dropped");
+            var typed = Array.CreateInstance(elementType, kept.Length);
+            Array.Copy(kept, typed, kept.Length);
+            artifacts = typed;
+        }
+
         var resolvedType = typeof(RoutedHttpAcquisitionSession).GetNestedType(
             "ResolvedMachineRequest",
             BindingFlags.NonPublic)

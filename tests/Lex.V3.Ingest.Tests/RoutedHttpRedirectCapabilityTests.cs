@@ -223,14 +223,26 @@ public sealed class RoutedHttpRedirectCapabilityTests
             new TestCustodyStore(),
             new IsolatedTimeProvider());
         var fixture = await CreateAntecedentAsync(session);
-        RegisterAntecedent(session, fixture.CustodyKey, fixture.Hop);
-
         const string forgedTarget = "https://example.invalid/robots.txt";
         var forgedHop = CopyHopWithLocation(fixture.Hop, forgedTarget);
-        AssertPrivateOperationRefuses(() =>
+
+        // Forged first, with nothing registered yet: refused on the causal facts retained at hold
+        // time, as a custody integrity failure. This is the branch the old test could not reach,
+        // because it registered the genuine hop first and so only ever saw the duplicate branch.
+        AssertPrivateOperationRefusesWith<CustodyIntegrityException>(() =>
             RegisterAntecedent(session, fixture.CustodyKey, forgedHop));
 
+        // The genuine hop registers; registering it again is the duplicate branch, and only that.
+        RegisterAntecedent(session, fixture.CustodyKey, fixture.Hop);
+        AssertPrivateOperationRefusesWith<InvalidOperationException>(() =>
+            RegisterAntecedent(session, fixture.CustodyKey, fixture.Hop));
+
         var capability = OpenAntecedent(session, fixture.CustodyKey);
+
+        // Minting the antecedent capability frees the registry slot but not the custody record,
+        // so without its own guard the same genuine hop could register and mint a second time.
+        AssertPrivateOperationRefusesWith<InvalidOperationException>(() =>
+            RegisterAntecedent(session, fixture.CustodyKey, fixture.Hop));
         AssertFactoryRefuses(() => FromRedirect(
             session,
             CreateNextRequest(session, uri: forgedTarget),
@@ -474,7 +486,14 @@ public sealed class RoutedHttpRedirectCapabilityTests
         var observationId = $"urn:uuid:{Guid.NewGuid():D}";
         var holdTask = (Task)(SessionMethod("HoldAndResolveAsync").Invoke(
             session,
-            [new ReadOnlyMemory<byte>(bytes), 0UL, 0UL, 0UL, observationId])
+            [
+                new ReadOnlyMemory<byte>(bytes),
+                0UL,
+                0UL,
+                0UL,
+                observationId,
+                CausalFacts(request.Uri, 301, Sha256(request.CopyCanonicalBytes()), "https://op.europa.eu/robots.txt"),
+            ])
             ?? throw new AssertFailedException("The antecedent custody operation was not started."));
         await holdTask;
         var heldPair = holdTask.GetType().GetProperty("Result")?.GetValue(holdTask)
@@ -734,6 +753,23 @@ public sealed class RoutedHttpRedirectCapabilityTests
     private sealed record AntecedentFixture(
         RoutedHttpHop Hop,
         object CustodyKey);
+
+    // The facts the session retains when bytes enter custody, built the way the session builds
+    // them so the fixture's hop is registered against what was "observed" for it.
+    private static object CausalFacts(string requestUri, int status, string logicalRequestSha256, params string[] location)
+    {
+        var type = typeof(RoutedHttpAcquisitionSession).GetNestedType("HeldCausalFacts", BindingFlags.NonPublic)
+            ?? throw new AssertFailedException("The session retains no causal facts at hold time.");
+        return Activator.CreateInstance(type, [requestUri, status, logicalRequestSha256, location])
+            ?? throw new AssertFailedException("The causal facts could not be constructed.");
+    }
+
+    private static void AssertPrivateOperationRefusesWith<TException>(Action action)
+        where TException : Exception
+    {
+        var wrapper = Assert.ThrowsExactly<TargetInvocationException>(action);
+        Assert.IsInstanceOfType<TException>(wrapper.InnerException);
+    }
 
     private sealed class CountingHandler(
         Func<int, HttpRequestMessage, HttpResponseMessage> response) : HttpMessageHandler

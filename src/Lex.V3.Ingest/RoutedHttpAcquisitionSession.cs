@@ -61,6 +61,7 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
     private readonly HashSet<SourceArtifactRef> _openedQueryPlanRefs = [];
     private readonly ConcurrentDictionary<HopCustodyKey, HeldBodyReceipt> _heldBodies = new();
     private readonly ConcurrentDictionary<HopCustodyKey, RoutedHttpHop> _retainedHops = new();
+    private readonly ConcurrentDictionary<HopCustodyKey, byte> _openedAntecedents = new();
     private readonly object _durableArtifactLock = new();
     private readonly HashSet<string> _durableArtifactDigests = new(StringComparer.Ordinal);
     private long? _robotsStartedTimestamp;
@@ -974,7 +975,7 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
     private static IncompleteHttpCompletion Incomplete(HttpResponseSemanticsReason reason) =>
         new(HttpAcquisitionReasonRegistry.Member(reason));
 
-    private async Task<HeldBodyReceipt> HoldAsync(ReadOnlyMemory<byte> bytes)
+    private async Task<HeldBodyReceipt> HoldAsync(ReadOnlyMemory<byte> bytes, HeldCausalFacts causal)
     {
         var frozen = new ReadOnlyMemory<byte>(bytes.ToArray());
         using var deadline = new CancellationTokenSource(_profile.RequestTimeout, _timeProvider);
@@ -1023,7 +1024,7 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                 exception);
         }
 
-        return new HeldBodyReceipt(receipt, receiptSha256);
+        return new HeldBodyReceipt(receipt, receiptSha256, causal);
     }
 
     private async Task<ReadOnlyMemory<byte>> RetainArtifactAsync(
@@ -1260,6 +1261,17 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
 
     private void RegisterRetainedHop(HopCustodyKey key, RoutedHttpHop hop)
     {
+        if (_openedAntecedents.ContainsKey(key))
+        {
+            // The custody record outlives the antecedent capability because the send reopens the
+            // body through it, so the key alone cannot say "already used". This does.
+            throw new InvalidOperationException(
+                "A hop that already minted its redirect antecedent capability cannot be registered again.");
+        }
+
+        // The causal facts were retained when the bytes entered custody. A hop that reuses a real
+        // custody key with a different target, status or request is refused below, not merely
+        // ordered behind the genuine one.
         if (!_heldBodies.TryGetValue(key, out var held) ||
             key.RunIdentity != _runIdentity ||
             key.HopOrdinal != hop.Ordinal ||
@@ -1271,7 +1283,14 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             !string.Equals(
                 held.Receipt.Reference.ContentSha256,
                 hop.Sha256,
-                StringComparison.Ordinal))
+                StringComparison.Ordinal) ||
+            !string.Equals(held.Causal.RequestUri, hop.RequestUri, StringComparison.Ordinal) ||
+            held.Causal.Status != hop.Status ||
+            !string.Equals(
+                held.Causal.LogicalRequestSha256,
+                hop.LogicalRequestSha256,
+                StringComparison.Ordinal) ||
+            !HeaderFieldMatches(held.Causal.Location, hop.Headers.Location))
         {
             throw new CustodyIntegrityException(
                 "A routed hop does not bind the exact body custody record that preceded it.");
@@ -1283,6 +1302,16 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
         }
     }
 
+    private static bool HeaderFieldMatches(IReadOnlyList<string> observed, RoutedHttpHeaderField projected) =>
+        projected switch
+        {
+            RoutedHttpAbsentHeader => observed.Count == 0,
+            RoutedHttpSingleHeader single =>
+                observed.Count == 1 && string.Equals(observed[0], single.Value, StringComparison.Ordinal),
+            RoutedHttpMultipleHeader multiple => observed.SequenceEqual(multiple.Values, StringComparer.Ordinal),
+            _ => false,
+        };
+
     private RedirectAntecedentCapability OpenRedirectAntecedent(HopCustodyKey key)
     {
         if (!_retainedHops.TryRemove(key, out var hop))
@@ -1291,6 +1320,7 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                 "A redirect antecedent must come once from the exact retained hop produced by this session.");
         }
 
+        _openedAntecedents.TryAdd(key, 0);
         return new RedirectAntecedentCapability(this, key, hop);
     }
 
@@ -1299,9 +1329,10 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
         ulong requestOrdinal,
         ulong attemptOrdinal,
         ulong hopOrdinal,
-        string observationId)
+        string observationId,
+        HeldCausalFacts causal)
     {
-        var held = await HoldAsync(bytes).ConfigureAwait(false);
+        var held = await HoldAsync(bytes, causal).ConfigureAwait(false);
         var key = new HopCustodyKey(
             _runIdentity,
             requestOrdinal,
@@ -1826,9 +1857,21 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
         PreHeaderFailure? PreHeaderFailure,
         PostHeaderFailure? PostHeaderFailure);
 
+    /// <summary>
+    /// What the session observed about a response at the moment its bytes entered custody. A hop
+    /// registered later is checked against these, not against its own claims, so a caller cannot
+    /// attach a target, a status or a request the session never observed to a real custody key.
+    /// </summary>
+    private sealed record HeldCausalFacts(
+        string RequestUri,
+        int Status,
+        string LogicalRequestSha256,
+        IReadOnlyList<string> Location);
+
     private sealed record HeldBodyReceipt(
         DurableBlobWriteReceipt Receipt,
-        string ReceiptSha256);
+        string ReceiptSha256,
+        HeldCausalFacts Causal);
 
     private sealed record ResolvedHeldBody(
         DurableBlobWriteReceipt Receipt,
@@ -2488,7 +2531,8 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                     antecedent.ObservationId,
                     antecedentCustodyKey,
                     antecedent.DurableWriteReceiptSha256,
-                    antecedentRedirectPolicySha256),
+                    antecedentRedirectPolicySha256,
+                    location.Value),
                 startsRobotsGeneration: false);
         }
 
@@ -2680,11 +2724,17 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             }
         }
 
+        // OBS-01 5.4 names four things the capability must contain: the observation id, the
+        // retained absolute target, the route-policy identity and the next logical request
+        // identity. RetainedTarget is containment, not a check: a later reader can see from the
+        // capability alone which destination this authorization was bound to, without trusting
+        // that the mint-time comparison ran.
         private sealed record RedirectAntecedent(
             string ObservationId,
             HopCustodyKey CustodyKey,
             string ReceiptSha256,
-            string RedirectPolicySha256);
+            string RedirectPolicySha256,
+            string RetainedTarget);
 
         private static HttpRequestMessage BuildOutboundRequest(
             HttpLogicalRequest request,
@@ -2754,6 +2804,11 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
     {
         private int _consumed;
 
+        // Tripwires, not reachable guards: there is one mint site and one consume site, both
+        // inside RetainAndSendAsync behind the lease's own one-use exchange, so neither the
+        // second-consume clause nor the wrong-lease clause can fire today. They stay because the
+        // durable-set gate they sit beside is what would catch the retain sequence and the closure
+        // list drifting apart, and a caller added tomorrow outside that path hits these first.
         internal void Consume(SendLease expectedLease)
         {
             if (Interlocked.Exchange(ref _consumed, 1) != 0 ||
@@ -2904,7 +2959,12 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                 requestOrdinal,
                 attemptOrdinal,
                 hopOrdinal,
-                observationId).ConfigureAwait(false);
+                observationId,
+                new HeldCausalFacts(
+                    currentRequest.Uri,
+                    status,
+                    logicalRequestSha256,
+                    rawHeaders.Location)).ConfigureAwait(false);
 
             if (response.Version != HttpVersion.Version11 || status is < 200 or > 599)
             {
@@ -3148,7 +3208,11 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             RegisterRetainedHop(custodyKey, hop);
             var antecedentCapability = OpenRedirectAntecedent(custodyKey);
             // The antecedent's own route policy is passed from currentRequest, which is still the
-            // request that produced the hop being redirected from, not the successor.
+            // request that produced the hop being redirected from, not the successor. In every
+            // route today the two digests are equal, because one redirect policy governs a whole
+            // route; the parameter exists so a future per-hop or per-target policy cannot pass
+            // unnoticed, and it is not redundant even though nothing in the corpus can make it
+            // differ yet.
             lease = SendLease.FromRedirect(
                 this,
                 nextRequest,

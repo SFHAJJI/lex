@@ -222,12 +222,9 @@ public sealed class FileSystemCustodyStore : ICustodyStore
                         "The retained artifact bytes differ from their content address.");
                 }
 
-                if (selected is { } prior && !prior.Span.SequenceEqual(bytes))
-                {
-                    throw new CustodyIntegrityException(
-                        "One content address resolved to different bytes across custody classes.");
-                }
-
+                // Every lane holding the digest is read and verified against it above, so two
+                // lanes can only both pass if their bytes are identical; a cross-lane byte
+                // comparison here could fire only on a SHA-256 collision and is not kept.
                 selected ??= bytes;
             }
             catch (Exception exception)
