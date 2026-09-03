@@ -49,6 +49,8 @@ public sealed class EuWatermarkWitnessPlanTests
     private const string KeyY = "http://publications.europa.eu/resource/cellar/yyyyyyyy";
     private const string KeyZ = "http://publications.europa.eu/resource/cellar/zzzzzzzz";
 
+    private const string N = "Lex.V3.Contracts.Source.Europe.";
+
     [TestMethod]
     public void AFrozenPlanRendersTheExactWitnessQuery()
     {
@@ -528,7 +530,6 @@ public sealed class EuWatermarkWitnessPlanTests
             .ToArray();
 
         CollectionAssert.AreEqual(new[] { KeyC, KeyX, KeyY, KeyZ }, learned);
-        Assert.AreEqual(learned.Length, learned.Distinct(StringComparer.Ordinal).Count());
 
         // Winter and Diverge sat on one accepted page under different offsets, and the pair whose
         // instants run the other way was carried without a refusal.
@@ -705,26 +706,88 @@ public sealed class EuWatermarkWitnessPlanTests
         Assert.AreEqual(2, unchanged.RetainedTieSet.Count);
     }
 
+    /// <summary>
+    /// All four types the tie-safety guarantee rests on, pinned the same way through
+    /// <see cref="ConstructionSurface.Of"/> rather than a bespoke reflection filter: the cursor and
+    /// the crossing it is built from, and the plan and the step that use them. A second door onto
+    /// any one of the four would hold a value none of R3's tie-safety checks ran against.
+    /// </summary>
+    [TestMethod]
+    public void TheCursorHasExactlyOneConstructionPath()
+    {
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + N + "EuWatermarkCursor::.ctor(System.String, "
+                + "System.String) -> " + N + "EuWatermarkCursor",
+                "method public static " + N + "EuWatermarkCursor::TryOpen(System.String, "
+                + "System.String, out " + N + "EuWatermarkRefusal&) -> " + N + "EuWatermarkCursor",
+            },
+            ConstructionSurface.Of(typeof(EuWatermarkCursor)).ToArray());
+    }
+
+    [TestMethod]
+    public void TheCrossingHasExactlyOneConstructionPath()
+    {
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + N + "EuBoundaryCrossing::.ctor(" + N
+                + "EuWatermarkCursor, System.Collections.Generic.IReadOnlyList<System.String>, "
+                + "System.Collections.Generic.IReadOnlyList<System.String>) -> " + N
+                + "EuBoundaryCrossing",
+                "method public static " + N + "EuBoundaryCrossing::TryCross(" + N
+                + "EuWatermarkCursor, System.Collections.Generic.IReadOnlyList<System.String>, "
+                + "System.Collections.Generic.IReadOnlyList<System.String>, " + N
+                + "EuWatermarkCursor, out " + N + "EuWatermarkRefusal&) -> " + N
+                + "EuBoundaryCrossing",
+            },
+            ConstructionSurface.Of(typeof(EuBoundaryCrossing)).ToArray());
+    }
+
     [TestMethod]
     public void ThePlanHasExactlyOneConstructionPath()
     {
-        AssertOneConstructionPath(
-            typeof(EuWatermarkWitnessPlan),
-            "static Lex.V3.Contracts.Source.Europe.EuWatermarkWitnessPlan TryFreeze"
-            + "(System.String, System.String, Int32, Lex.V3.Contracts.Source.Europe."
-            + "EuWatermarkCursor, Lex.V3.Contracts.Source.Europe.EuWatermarkPlanRefusal ByRef)");
+        // The plan alone among the four carries this fourth line: its private static readonly
+        // UTF8Encoding and its AdmittedShapes initializer both need a type initializer, which the
+        // compiler emits as a static constructor. It cannot itself hand out a plan (the runtime
+        // calls it once, automatically, and it returns nothing), but ConstructionSurface pins every
+        // constructor the type declares without distinguishing instance from static, so it is
+        // pinned here rather than filtered, exactly as the fixture in ConstructionSurfaceTests
+        // demonstrates for LeakyThing.
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + N + "EuWatermarkWitnessPlan::.ctor(System.String"
+                + ", System.String, System.Int32, " + N + "EuWatermarkCursor, " + N
+                + "EuWatermarkLexicalShape, System.String, System.String) -> " + N
+                + "EuWatermarkWitnessPlan",
+                "constructor private static " + N + "EuWatermarkWitnessPlan::.cctor() -> " + N
+                + "EuWatermarkWitnessPlan",
+                "method public static " + N + "EuWatermarkWitnessPlan::TryFreeze(System.String, "
+                + "System.String, System.Int32, " + N + "EuWatermarkCursor, out " + N
+                + "EuWatermarkPlanRefusal&) -> " + N + "EuWatermarkWitnessPlan",
+            },
+            ConstructionSurface.Of(typeof(EuWatermarkWitnessPlan)).ToArray());
     }
 
     [TestMethod]
     public void TheStepHasExactlyOneConstructionPath()
     {
-        AssertOneConstructionPath(
-            typeof(EuWatermarkTraversalStep),
-            "static Lex.V3.Contracts.Source.Europe.EuWatermarkTraversalStep TryAdvance"
-            + "(Lex.V3.Contracts.Source.Europe.EuWatermarkWitnessPlan, Lex.V3.Contracts.Source."
-            + "Europe.EuBoundaryCrossing, System.Collections.Generic.IReadOnlyList`1"
-            + "[Lex.V3.Contracts.Source.Europe.EuWatermarkCursor], Lex.V3.Contracts.Source.Europe."
-            + "EuWatermarkStepRefusal ByRef)");
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + N + "EuWatermarkTraversalStep::.ctor(" + N
+                + "EuWatermarkWitnessPlan, " + N + "EuBoundaryCrossing, System.Collections.Generic"
+                + ".IReadOnlyList<" + N + "EuWatermarkCursor>, System.Collections.Generic"
+                + ".IReadOnlyList<" + N + "EuWatermarkCursor>, " + N + "EuWatermarkCursor, "
+                + "System.Int32) -> " + N + "EuWatermarkTraversalStep",
+                "method public static " + N + "EuWatermarkTraversalStep::TryAdvance(" + N
+                + "EuWatermarkWitnessPlan, " + N + "EuBoundaryCrossing, System.Collections.Generic"
+                + ".IReadOnlyList<" + N + "EuWatermarkCursor>, out " + N + "EuWatermarkStepRefusal&)"
+                + " -> " + N + "EuWatermarkTraversalStep",
+            },
+            ConstructionSurface.Of(typeof(EuWatermarkTraversalStep)).ToArray());
     }
 
     [TestMethod]
@@ -866,45 +929,6 @@ public sealed class EuWatermarkWitnessPlanTests
 
                 break;
         }
-    }
-
-    private static void AssertOneConstructionPath(Type type, string expectedFactory)
-    {
-        // Every constructor private, not merely no public one: this assembly grants
-        // InternalsVisibleTo to both test assemblies, so an internal constructor is a friend door.
-        var constructors = type.GetConstructors(
-            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-        Assert.IsTrue(constructors.Length > 0);
-        Assert.IsTrue(
-            constructors.All(constructor => constructor.IsPrivate),
-            "a non-private constructor would mint a value that was never checked");
-
-        // By-ref parameters too, or a bool-returning TryX with an out parameter of the guarded type
-        // is invisible to a filter that only reads return types.
-        var factories = type
-            .GetMethods(BindingFlags.Public | BindingFlags.NonPublic
-                | BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly)
-            .Where(method => method.ReturnType == type
-                || (method.ReturnType.IsByRef && method.ReturnType.GetElementType() == type)
-                || method.GetParameters().Any(parameter =>
-                    parameter.ParameterType.IsByRef
-                    && parameter.ParameterType.GetElementType() == type))
-            .Select(method => $"{(method.IsStatic ? "static" : "instance")} {method}")
-            .OrderBy(signature => signature, StringComparer.Ordinal)
-            .ToArray();
-
-        CollectionAssert.AreEqual(new[] { expectedFactory }, factories);
-
-        // A public field carrying the guarded type is a construction surface too. The plan's public
-        // constants are fields as far as reflection is concerned, so the filter is on what a field
-        // can hold rather than on the count.
-        var fields = type
-            .GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
-            .Where(field => ConstructionSurface.Carries(field.FieldType, type))
-            .Select(field => field.Name)
-            .ToArray();
-
-        CollectionAssert.AreEqual(Array.Empty<string>(), fields);
     }
 
     private static EuWatermarkTraversalStep Step(
