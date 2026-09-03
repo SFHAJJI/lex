@@ -233,7 +233,15 @@ internal sealed class AbsenceEnumerationProofFixture : IRepeatedEnumerationEvide
             (ulong)bytes.Length,
             digest);
         var httpEvidence = RoutedHttpEvidence.Create(
-            Artifact(_runSeed), (ulong)seed, 0, [hop], new CompleteHttpRouteOutcome());
+            Artifact(_runSeed),
+            (ulong)seed,
+            0,
+            [hop],
+            new CompleteHttpRouteOutcome(),
+            new Dictionary<string, DurableBlobWriteReceipt>(StringComparer.Ordinal)
+            {
+                [hop.ObservationId] = write,
+            });
         var httpEvidenceRef = new SourceArtifactRef(
             Artifact(seed + 160).ResourceId, Sha(httpEvidence.CopyCanonicalBytes()));
         _resolved.Add(

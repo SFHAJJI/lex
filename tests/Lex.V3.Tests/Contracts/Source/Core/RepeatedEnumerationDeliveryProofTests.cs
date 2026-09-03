@@ -973,7 +973,7 @@ public sealed class RepeatedEnumerationDeliveryProofTests
                     new DeclaredContentLengthHttpCompletion(0),
                     0,
                     Sha([]),
-                    Artifact(913).Sha256,
+                    WriteReceiptDigest(Sha([]), 0),
                     0,
                     Sha([])));
             }
@@ -982,6 +982,19 @@ public sealed class RepeatedEnumerationDeliveryProofTests
             var routeOutcome = _httpBindingMutation == HttpBindingMutation.IncompleteRoute && seed == 1
                 ? new IncompleteHttpRouteOutcome(HttpRouteIncompleteReason.SourceProfileStale)
                 : (RoutedHttpRouteOutcome)new CompleteHttpRouteOutcome();
+            // Decision 80: the terminal hop's genuine receipt is `write`, whose canonical digest
+            // `writeReceiptDigest` was computed above (and, under CustodyReceiptDigest, deliberately
+            // replaced with an unrelated one); this dictionary always carries the true `write`, so
+            // that mutation is still proven at the door rather than only downstream.
+            var hopWriteReceipts = new Dictionary<string, DurableBlobWriteReceipt>(StringComparer.Ordinal)
+            {
+                [observationId] = write,
+            };
+            if (redirectIntoOfficial)
+            {
+                hopWriteReceipts[redirectObservationId] = WriteReceiptFor(Sha([]), 0);
+            }
+
             var httpEvidence = RoutedHttpEvidence.Create(
                 _httpBindingMutation == HttpBindingMutation.DifferentRun && seed == 2
                     ? Artifact(931)
@@ -991,7 +1004,8 @@ public sealed class RepeatedEnumerationDeliveryProofTests
                     : (ulong)seed,
                 0,
                 hops,
-                routeOutcome);
+                routeOutcome,
+                hopWriteReceipts);
             var httpEvidenceRef = Reference(seed + 160, httpEvidence.CopyCanonicalBytes());
             if (_badRequestRef && seed == 1)
             {
@@ -1053,6 +1067,32 @@ public sealed class RepeatedEnumerationDeliveryProofTests
         private static string Timestamp(DateTimeOffset value) =>
             value.ToString("yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'", System.Globalization.CultureInfo.InvariantCulture);
         private static string Sha(ReadOnlySpan<byte> value) => Convert.ToHexString(SHA256.HashData(value)).ToLowerInvariant();
+
+        /// <summary>
+        /// A genuine, internally consistent <see cref="DurableBlobWriteReceipt"/> for exactly the
+        /// given content digest and length, so a hop built from it satisfies Decision 80's receipt
+        /// check at <see cref="RoutedHttpEvidence.Create"/>.
+        /// </summary>
+        private static DurableBlobWriteReceipt WriteReceiptFor(string contentSha256, ulong length)
+        {
+            var reference = new DurableBlobRef(
+                CustodySchemaIds.DurableBlobRef,
+                contentSha256,
+                checked((long)length),
+                CustodyClass.NightlyFloor90d);
+            var policy = new CustodyPolicyEvidence(
+                CustodySchemaIds.CustodyPolicyEvidence,
+                reference,
+                CustodyVerificationProfile.FileSystemUnenforced1,
+                policyKey: null,
+                CustodyProtection.NotEnforced,
+                new DateTimeOffset(2026, 9, 2, 19, 0, 0, TimeSpan.Zero),
+                protectedUntil: null);
+            return new DurableBlobWriteReceipt(CustodySchemaIds.DurableBlobWriteReceipt, reference, policy);
+        }
+
+        private static string WriteReceiptDigest(string contentSha256, ulong length) =>
+            Sha(Encoding.UTF8.GetBytes(ContractJson.Serialize(WriteReceiptFor(contentSha256, length))));
         private sealed class Renderer(SourceArtifactRef rendererProfileRef, SourceArtifactRef rendererSourceRef, string requestTarget, byte[] requestBody) : IMachineQueryRenderer
         {
             private readonly byte[] _requestBody = requestBody.ToArray();

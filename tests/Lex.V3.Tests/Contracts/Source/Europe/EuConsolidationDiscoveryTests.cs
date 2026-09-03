@@ -888,7 +888,11 @@ public sealed class EuConsolidationDiscoveryTests
                 ++_requestOrdinal,
                 attemptOrdinal: 0,
                 new[] { hop },
-                new CompleteHttpRouteOutcome());
+                new CompleteHttpRouteOutcome(),
+                new Dictionary<string, DurableBlobWriteReceipt>(StringComparer.Ordinal)
+                {
+                    [hop.ObservationId] = write,
+                });
             var httpEvidenceRef = Reference(
                 ++_seed,
                 httpEvidence.CopyCanonicalBytes());

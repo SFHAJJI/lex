@@ -1346,6 +1346,40 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
         }
     }
 
+    /// <summary>
+    /// Decision 80: the exact receipt this run already holds for every hop about to be sealed into
+    /// evidence, keyed as <see cref="RoutedHttpEvidence.Create"/> now requires. Every hop reaching
+    /// this point was minted by <see cref="HoldAndResolveAsync"/>, which already added its custody
+    /// key to <see cref="_heldBodies"/> before the hop itself was built, so a missing entry here
+    /// means this run's own bookkeeping disagrees with the hop list it is about to seal and must
+    /// never be papered over.
+    /// </summary>
+    private Dictionary<string, DurableBlobWriteReceipt> BuildHopWriteReceipts(
+        ulong requestOrdinal,
+        ulong attemptOrdinal,
+        IReadOnlyList<RoutedHttpHop> hops)
+    {
+        var receipts = new Dictionary<string, DurableBlobWriteReceipt>(StringComparer.Ordinal);
+        foreach (var hop in hops)
+        {
+            var key = new HopCustodyKey(
+                _runIdentity,
+                requestOrdinal,
+                attemptOrdinal,
+                hop.Ordinal,
+                hop.ObservationId);
+            if (!_heldBodies.TryGetValue(key, out var held))
+            {
+                throw new CustodyIntegrityException(
+                    "A hop reached evidence sealing without this run's own custody record for it.");
+            }
+
+            receipts[hop.ObservationId] = held.Receipt;
+        }
+
+        return receipts;
+    }
+
     private static bool HeaderFieldMatches(IReadOnlyList<string> observed, RoutedHttpHeaderField projected) =>
         projected switch
         {
@@ -2982,7 +3016,8 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                         hops,
                         new RedirectTargetUnobservedHttpRouteOutcome(
                             logicalRequestSha256,
-                            send.RequestStartedAt)),
+                            send.RequestStartedAt),
+                        BuildHopWriteReceipts(requestOrdinal, attemptOrdinal, hops)),
                     null,
                     null,
                     null);
@@ -3137,7 +3172,8 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                         requestOrdinal,
                         attemptOrdinal,
                         hops,
-                        new IncompleteHttpRouteOutcome(HttpRouteIncompleteReason.HopIncomplete)),
+                        new IncompleteHttpRouteOutcome(HttpRouteIncompleteReason.HopIncomplete),
+                        BuildHopWriteReceipts(requestOrdinal, attemptOrdinal, hops)),
                     custodyKey,
                     null,
                     null);
@@ -3159,7 +3195,8 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                             new IncompleteHttpRouteOutcome(
                                 status <= 499
                                     ? HttpRouteIncompleteReason.RobotsPolicyUnavailable
-                                    : HttpRouteIncompleteReason.PublisherServerFailure)),
+                                    : HttpRouteIncompleteReason.PublisherServerFailure),
+                            BuildHopWriteReceipts(requestOrdinal, attemptOrdinal, hops)),
                         custodyKey,
                         null,
                         null);
@@ -3176,7 +3213,8 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                             requestOrdinal,
                             attemptOrdinal,
                             hops,
-                            new IncompleteHttpRouteOutcome(HttpRouteIncompleteReason.SourceProfileStale)),
+                            new IncompleteHttpRouteOutcome(HttpRouteIncompleteReason.SourceProfileStale),
+                            BuildHopWriteReceipts(requestOrdinal, attemptOrdinal, hops)),
                         custodyKey,
                         null,
                         null);
@@ -3188,7 +3226,8 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                         requestOrdinal,
                         attemptOrdinal,
                         hops,
-                        new CompleteHttpRouteOutcome()),
+                        new CompleteHttpRouteOutcome(),
+                        BuildHopWriteReceipts(requestOrdinal, attemptOrdinal, hops)),
                     custodyKey,
                     null,
                     null);
@@ -3202,7 +3241,8 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                         requestOrdinal,
                         attemptOrdinal,
                         hops,
-                        new IncompleteHttpRouteOutcome(HttpRouteIncompleteReason.RedirectRefused)),
+                        new IncompleteHttpRouteOutcome(HttpRouteIncompleteReason.RedirectRefused),
+                        BuildHopWriteReceipts(requestOrdinal, attemptOrdinal, hops)),
                     custodyKey,
                     null,
                     null);
@@ -3218,7 +3258,8 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                         requestOrdinal,
                         attemptOrdinal,
                         hops,
-                        new IncompleteHttpRouteOutcome(HttpRouteIncompleteReason.RedirectLoop)),
+                        new IncompleteHttpRouteOutcome(HttpRouteIncompleteReason.RedirectLoop),
+                        BuildHopWriteReceipts(requestOrdinal, attemptOrdinal, hops)),
                     custodyKey,
                     null,
                     null);
@@ -3232,7 +3273,8 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                         requestOrdinal,
                         attemptOrdinal,
                         hops,
-                        new IncompleteHttpRouteOutcome(HttpRouteIncompleteReason.RedirectLimitExceeded)),
+                        new IncompleteHttpRouteOutcome(HttpRouteIncompleteReason.RedirectLimitExceeded),
+                        BuildHopWriteReceipts(requestOrdinal, attemptOrdinal, hops)),
                     custodyKey,
                     null,
                     null);
@@ -3253,7 +3295,8 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                         requestOrdinal,
                         attemptOrdinal,
                         hops,
-                        new IncompleteHttpRouteOutcome(HttpRouteIncompleteReason.SourceProfileStale)),
+                        new IncompleteHttpRouteOutcome(HttpRouteIncompleteReason.SourceProfileStale),
+                        BuildHopWriteReceipts(requestOrdinal, attemptOrdinal, hops)),
                     custodyKey,
                     null,
                     null);
