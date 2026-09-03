@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Scope;
 
@@ -54,9 +57,12 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// <c>LuxembourgScopeResolver.ResolveDimensions</c>) is out of this slice's reach: it would require
 /// an EU per-object RDF-assertion snapshot type this repository does not have yet, and producing one
 /// is exactly the still-open D1-05 EU query-plan and witness work (queue items 3 and 4), not this
-/// binding slice. What this file provides instead is real and provable now: given an object's
-/// already-computed, already-reviewed EU dispositions, produce the exact <c>scope/1</c>
-/// four-axis reduction input for it, and a profile binding real enough that
+/// binding slice. The per-object watermark seed map and its closure digests are part of that same
+/// D1-05 deliverable and are not bound anywhere in this file either; this file consumes
+/// already-produced dispositions and says nothing about how the underlying per-object RDF snapshot,
+/// its seed map, or its closure evidence were produced. What this file provides instead is real and
+/// provable now: given an object's already-computed, already-reviewed EU dispositions, produce the
+/// exact <c>scope/1</c> four-axis reduction input for it, and a profile binding real enough that
 /// <see cref="ScopeReducer.Reduce"/> accepts it end to end.
 /// </para>
 /// </remarks>
@@ -68,15 +74,17 @@ public static class EuScopeProfile
     /// <summary>The Union's own <see cref="ScopeProfileBinding.SelectorTableRef"/> identity.</summary>
     private const string SelectorTableResourceId = "urn:uuid:57e32290-68a8-4a34-b7a8-226886bc11a2";
 
-    // The EU profile and selector-table artifacts are structural identities for this binding, not
-    // an observed publisher census the way Luxembourg's vocabulary snapshot is. Their content
-    // digest is therefore a fixed constant over the closed vocabularies this file binds, not a
-    // hash of runtime input. A future revision of the bound vocabulary is a new digest and a new
-    // schema ruling, exactly as ScopeManifest's own header documents for a changed root definition.
-    private const string ProfileSha256 =
-        "a814c4b78f42bce29beaf1cead2d188bff86473e6f599140e0c5695b5ed3fb10";
-    private const string SelectorTableSha256 =
-        "025bddab62e3a25dcf45519577ace992abeb4968d4c1e28516b9063c4310502c";
+    /// <summary>
+    /// The accepted <c>D1-EU-SCOPE-MANIFEST-INVENTORY-CANDIDATE-4</c> digest
+    /// (<c>coordination/measurements/D1-EU-SCOPE-MANIFEST-INVENTORY-CANDIDATE-4-2026-08-31.md</c>,
+    /// issue 331, Decision 73), the SHA-256 of that file's exact bytes, folded into
+    /// <see cref="ProfileSha256"/> exactly as
+    /// <see cref="Luxembourg.VerifiedLuxembourgSourceProfile"/> folds in its own accepted Candidate
+    /// 6 digest. A future revision of the accepted candidate is a new digest and a new schema
+    /// ruling, not an edit to this constant.
+    /// </summary>
+    private const string Candidate4Sha256 =
+        "052a3223d0f95caa491225c0d5420a164217eb3c370eb3478673fb39413ab4f1";
 
     private static readonly string[] SelectorKeys =
     {
@@ -100,10 +108,55 @@ public static class EuScopeProfile
     private const string BodyCandidateRoleKey = "eu_role.body_candidate";
 
     /// <summary>
+    /// The Union's <c>scope/1</c> profile identity digest.
+    /// </summary>
+    /// <remarks>
+    /// Computed, not a literal placeholder: it hashes the closed EU vocabularies and rule tables
+    /// this binding actually encodes (every act form; every channel with its
+    /// <see cref="EuChannelDisposition.PolicyFor"/> admission; every official language with whether
+    /// <see cref="EuLanguageBodyDisposition.BodyCandidateLanguages"/> admits its body; every
+    /// manifestation format with whether <see cref="EuManifestationScope.FormatsThatCanNeverCarryABody"/>
+    /// excludes it; every content class with its <see cref="EuRightsDisposition.BasisFor"/> reuse
+    /// basis; every relation family), folding in <see cref="Candidate4Sha256"/> the same way
+    /// <see cref="Luxembourg.VerifiedLuxembourgSourceProfile"/> folds in its own accepted candidate
+    /// digest. This is not an observed publisher census the way Luxembourg's vocabulary snapshot is
+    /// -- the bound vocabulary is closed and fixed rather than supplied per call -- so the digest is
+    /// computed once from that fixed input rather than once per resolved object. It is still a real
+    /// digest of the real encoded policy: <see cref="ComputeProfileSha256"/> is exposed internally
+    /// so a test can vary that input and observe the output change.
+    /// </remarks>
+    private static readonly string ProfileSha256 = ComputeProfileSha256(
+        EuScopeVocabulary.ActForms,
+        EuScopeVocabulary.Channels,
+        EuScopeVocabulary.OfficialLanguages,
+        Enum.GetValues<EuManifestationFormat>(),
+        Enum.GetValues<EuContentClass>(),
+        EuScopeVocabulary.RelationFamilies,
+        Candidate4Sha256);
+
+    /// <summary>
+    /// The Union's <c>scope/1</c> selector-table identity digest, computed over this file's own
+    /// closed selector and projection-rule keys, mirroring
+    /// <see cref="Luxembourg.VerifiedLuxembourgSourceProfile"/>'s selector-table digest.
+    /// </summary>
+    private static readonly string SelectorTableSha256 =
+        ComputeSelectorTableSha256(SelectorKeys, ProjectionRules);
+
+    /// <summary>
     /// The Union's <c>scope/1</c> profile binding: one selector table covering the closed EU
     /// vocabulary already merged in <see cref="EuScopeVocabulary"/> and
     /// <see cref="EuManifestationScope"/>, and exactly one projection rule per axis.
     /// </summary>
+    /// <remarks>
+    /// The member sort below (registry-ref resource id, then sha256, then member key) is not a free
+    /// choice: <see cref="ScopeProfileBinding"/>'s own constructor requires exactly this canonical
+    /// order and throws on anything else. <see cref="ProfileResourceId"/> sorting ahead of
+    /// <see cref="SelectorTableResourceId"/> under that order -- which is why the Union's one
+    /// profile-owned member lands before every table-owned member below -- follows from which UUID
+    /// happens to sort first; that relationship is pinned by
+    /// <c>EuScopeProfileTests.ProfileResourceSortsBeforeSelectorTableResourceUnderTheSharedCanonicalOrder</c>
+    /// so a future change to either UUID cannot silently reorder the table without a failing test.
+    /// </remarks>
     public static ScopeProfileBinding BuildBinding()
     {
         var profileRef = new SourceArtifactRef(ProfileResourceId, ProfileSha256);
@@ -149,6 +202,12 @@ public static class EuScopeProfile
         var relation = ReduceRelation(dispositions);
         var supporting = ReduceSupportingDocument(dispositions);
 
+        // Every selector below cites the evidence reference of the exact disposition it reads,
+        // never a shared stand-in: the record selector cites RecordEvidenceRef, the relation
+        // selector cites RelationEvidenceRef, the supporting selector cites SupportingEvidenceRef,
+        // and the channel/language/format/rights selectors each cite their own disposition's own
+        // EvidenceRef rather than a batched "body" evidence that does not correspond to what any one
+        // of them actually observed.
         var selectors = new[]
         {
             Present(
@@ -157,24 +216,24 @@ public static class EuScopeProfile
                 evidenceOrdinals),
             Present(
                 [ChannelToken(dispositions.ChannelDisposition.Channel)],
-                dispositions.BodyEvidenceRef,
+                dispositions.ChannelDisposition.EvidenceRef,
                 evidenceOrdinals),
             dispositions.LanguageDisposition is { } language
                 ? Present(
                     [LanguageToken(language.Language)],
-                    dispositions.BodyEvidenceRef,
+                    language.EvidenceRef,
                     evidenceOrdinals)
                 : NotApplicable(profile, ScopeAxis.Body),
             dispositions.FormatDisposition is { } format
                 ? Present(
                     [FormatToken(format.Format)],
-                    dispositions.BodyEvidenceRef,
+                    format.EvidenceRef,
                     evidenceOrdinals)
                 : NotApplicable(profile, ScopeAxis.Body),
             dispositions.RightsDisposition is { } rights
                 ? Present(
                     [ContentClassToken(rights.ContentClass)],
-                    dispositions.BodyEvidenceRef,
+                    rights.EvidenceRef,
                     evidenceOrdinals)
                 : NotApplicable(profile, ScopeAxis.Body),
             dispositions.RelationDispositions.Count > 0
@@ -197,7 +256,11 @@ public static class EuScopeProfile
 
         var evaluations = new[]
         {
-            Projection(profile, ScopeAxis.Record, ScopeDisposition.AcceptedSelected, isBodyCandidate: false),
+            Projection(
+                profile,
+                ScopeAxis.Record,
+                ReduceRecord(dispositions.RecordForm),
+                isBodyCandidate: false),
             Projection(profile, ScopeAxis.Body, body, isBodyCandidate: body == ScopeDisposition.AcceptedSelected),
             Projection(profile, ScopeAxis.Relation, relation, isBodyCandidate: false),
             Projection(
@@ -211,54 +274,152 @@ public static class EuScopeProfile
     }
 
     /// <summary>
-    /// The body axis is "worst wins" over acquisition channel, held language, held format, and
-    /// established rights basis, exactly the precedence D1-01 Candidate 5 R1 fixes for composing a
-    /// concrete multi-axis request: <c>never_ingest &gt; point &gt; typed_quarantine &gt;
-    /// accepted_selected</c>.
+    /// The record axis for every discovered object: accepted, derived as a rule over the closed act
+    /// form vocabulary rather than a constant.
     /// </summary>
     /// <remarks>
-    /// A format in <see cref="EuManifestationScope.FormatsThatCanNeverCarryABody"/> is the one input
-    /// that reaches <see cref="ScopeDisposition.NeverIngest"/> here, because that set is itself
-    /// closed to a physical manifestation (print) that can never be read as digital text; every
-    /// other body-not-admitted format is a typed gap pending a reviewed profile
-    /// (<c>typed_quarantine</c>), not a permanent exclusion. Everything else in this composition is
-    /// spelled out in Candidate 2's "Languages" and "Formats" sections and in
-    /// <see cref="EuRightsDisposition"/>'s own doc comment: an excluded acquisition channel, a
-    /// language whose body this scope does not hold, or a content class with no established reuse
-    /// basis all stop a datum graduating past its respective disposition.
+    /// <see cref="EuActForm"/>'s own doc comment is explicit that the twelve members are "closed at
+    /// twelve, and the twelve sum exactly to the version headline, so a thirteenth is a scope change
+    /// rather than an omission": the reviewed scope's act-form census already equals the full
+    /// accepted set, and no EU disposition type (<see cref="EuChannelDisposition"/>,
+    /// <see cref="EuLanguageBodyDisposition"/>, <see cref="EuFormatDisposition"/>,
+    /// <see cref="EuRightsDisposition"/>, <see cref="EuRelationFamilyDisposition"/>) carries an
+    /// act-form-level exclusion concept the way <see cref="EuChannelDisposition.PolicyFor"/> excludes
+    /// a channel or <see cref="EuManifestationScope.FormatsThatCanNeverCarryABody"/> excludes a
+    /// format. So the record axis is not a filtered subset the way body is: it is every member of the
+    /// closed set, written out exactly once each so the rule is provable and a thirteenth form fails
+    /// closed instead of silently inheriting an answer decided for a different one, the same
+    /// discipline <see cref="RecordFormToken"/> already applies to the same vocabulary.
     /// </remarks>
-    private static ScopeDisposition ReduceBody(EuScopeObjectDispositions dispositions)
+    private static ScopeDisposition ReduceRecord(EuActForm form) => form switch
     {
-        if (!dispositions.ChannelDisposition.MayGraduate())
-        {
-            return ScopeDisposition.Point;
-        }
+        EuActForm.Directive => ScopeDisposition.AcceptedSelected,
+        EuActForm.Regulation => ScopeDisposition.AcceptedSelected,
+        EuActForm.DelegatedRegulation => ScopeDisposition.AcceptedSelected,
+        EuActForm.ImplementingRegulation => ScopeDisposition.AcceptedSelected,
+        EuActForm.Treaty => ScopeDisposition.AcceptedSelected,
+        EuActForm.Corrigendum => ScopeDisposition.AcceptedSelected,
+        EuActForm.DelegatedDirective => ScopeDisposition.AcceptedSelected,
+        EuActForm.ImplementingDecision => ScopeDisposition.AcceptedSelected,
+        EuActForm.Decision => ScopeDisposition.AcceptedSelected,
+        EuActForm.DecisionEntscheid => ScopeDisposition.AcceptedSelected,
+        EuActForm.ImplementingDirective => ScopeDisposition.AcceptedSelected,
+        EuActForm.DelegatedDecision => ScopeDisposition.AcceptedSelected,
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(form),
+            form,
+            "This act form carries no reviewed record disposition. The twelve accepted forms sum " +
+            "exactly to the reviewed scope's version headline, so every member of the closed set " +
+            "is accepted by construction and a thirteenth is a scope change to be re-reviewed, " +
+            "never an inherited default."),
+    };
 
-        if (dispositions.LanguageDisposition is not { } language ||
-            !language.CarriesBody())
-        {
-            return ScopeDisposition.Point;
-        }
+    /// <summary>
+    /// The body axis is the worst-wins join over four independently evaluated contributions --
+    /// acquisition channel, held language, held format, and established rights basis -- under the
+    /// total order D1-01 Candidate 5 R1 fixes for composing a concrete multi-axis request:
+    /// <c>never_ingest &gt; point &gt; typed_quarantine &gt; accepted_selected</c>. Each contribution
+    /// is computed independently of the other three, and the axis result is the worst of the four --
+    /// never the first one an ordered check happens to reach.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This was an ordered early-return chain before this file's refreeze, and the order
+    /// contradicted the precedence stated above: an excluded channel returned <c>point</c> before an
+    /// unreached format check could ever return <c>never_ingest</c> for a <c>print</c> manifestation,
+    /// silently hiding the stronger exclusion behind the weaker one whenever both applied to the same
+    /// object, confirmed at runtime. <see cref="ScopeDisposition"/>'s own declared member order
+    /// (<c>accepted_selected &lt; typed_quarantine &lt; point &lt; never_ingest</c>) already matches
+    /// the stated precedence, so the join below is a plain pairwise "worse wins" reduction over the
+    /// four contributions, and every pair of contributions that can disagree is driven by a test.
+    /// </para>
+    /// <para>
+    /// A format in <see cref="EuManifestationScope.FormatsThatCanNeverCarryABody"/> is the one input
+    /// that reaches <see cref="ScopeDisposition.NeverIngest"/>, because that set is itself closed to
+    /// a physical manifestation (print) that can never be read as digital text; every other
+    /// body-not-admitted format, and a format not yet observed at all, is a typed gap pending a
+    /// reviewed profile (<c>typed_quarantine</c>), not a permanent exclusion. An excluded acquisition
+    /// channel, or an observed language expression whose body this scope does not hold, each cap
+    /// their own contribution at <c>point</c>; a content class with no established reuse basis caps
+    /// its contribution at <c>typed_quarantine</c>. Candidate 2's "Languages" and "Formats" sections
+    /// and <see cref="EuRightsDisposition"/>'s own doc comment spell out each of these individually;
+    /// this method's only job is to join the four rather than pick whichever the caller wrote first.
+    /// </para>
+    /// <para>
+    /// A missing <see cref="EuScopeObjectDispositions.LanguageDisposition"/> is not the same fact as
+    /// an observed one that is not a body candidate, and this method does not collapse them the way
+    /// an earlier revision did. R1's four-state selector vocabulary reserves
+    /// <c>publisher_expression_absent</c> for "no Expression was observed at all", which this file
+    /// reads as <c>typed_quarantine</c> -- a gap pending observation, the same answer a missing format
+    /// gets from <see cref="FormatBodyContribution"/> -- and keeps distinct from <c>point</c>, which
+    /// means an Expression was observed and this scope deliberately does not hold its body
+    /// (<see cref="EuLanguageBodyState.BodyNotHeldPoint"/>). Folding the two into one <c>point</c>
+    /// answer would silently claim every unobserved language expression as a reviewed exclusion
+    /// rather than an open question.
+    /// </para>
+    /// </remarks>
+    private static ScopeDisposition ReduceBody(EuScopeObjectDispositions dispositions) =>
+        Worst(
+            Worst(
+                ChannelBodyContribution(dispositions.ChannelDisposition),
+                LanguageBodyContribution(dispositions.LanguageDisposition)),
+            Worst(
+                FormatBodyContribution(dispositions.FormatDisposition),
+                RightsBodyContribution(dispositions.RightsDisposition)));
 
-        if (dispositions.FormatDisposition is not { } format)
+    /// <summary>The channel's own contribution to the body join: point when excluded.</summary>
+    private static ScopeDisposition ChannelBodyContribution(EuChannelDisposition channel) =>
+        channel.MayGraduate() ? ScopeDisposition.AcceptedSelected : ScopeDisposition.Point;
+
+    /// <summary>
+    /// The language's own contribution to the body join. A missing disposition is
+    /// <c>publisher_expression_absent</c> per R1 -- no Expression was observed at all -- and is a
+    /// typed gap (<c>typed_quarantine</c>), the same answer <see cref="FormatBodyContribution"/>
+    /// gives a missing format; an observed expression whose body this scope does not hold is
+    /// <c>point</c>, unchanged. The two are deliberately not the same outcome: one is an open
+    /// question pending observation, the other is a reviewed exclusion.
+    /// </summary>
+    private static ScopeDisposition LanguageBodyContribution(EuLanguageBodyDisposition? language)
+    {
+        if (language is not { } value)
         {
             return ScopeDisposition.TypedQuarantine;
         }
 
-        if (EuManifestationScope.FormatsThatCanNeverCarryABody.Contains(format.Format))
+        return value.CarriesBody() ? ScopeDisposition.AcceptedSelected : ScopeDisposition.Point;
+    }
+
+    /// <summary>
+    /// The format's own contribution to the body join: never-ingest for a physical manifestation,
+    /// typed-quarantine for a format not yet observed or observed but not admitted as a body source.
+    /// </summary>
+    private static ScopeDisposition FormatBodyContribution(EuFormatDisposition? format)
+    {
+        if (format is not { } value)
+        {
+            return ScopeDisposition.TypedQuarantine;
+        }
+
+        if (EuManifestationScope.FormatsThatCanNeverCarryABody.Contains(value.Format))
         {
             return ScopeDisposition.NeverIngest;
         }
 
-        if (format.Admission != EuFormatBodyAdmission.BodyAdmitted)
-        {
-            return ScopeDisposition.TypedQuarantine;
-        }
-
-        return dispositions.RightsDisposition is null
-            ? ScopeDisposition.TypedQuarantine
-            : ScopeDisposition.AcceptedSelected;
+        return value.Admission == EuFormatBodyAdmission.BodyAdmitted
+            ? ScopeDisposition.AcceptedSelected
+            : ScopeDisposition.TypedQuarantine;
     }
+
+    /// <summary>The rights basis's own contribution to the body join: typed-quarantine when absent.</summary>
+    private static ScopeDisposition RightsBodyContribution(EuRightsDisposition? rights) =>
+        rights is null ? ScopeDisposition.TypedQuarantine : ScopeDisposition.AcceptedSelected;
+
+    /// <summary>
+    /// The worse (higher-precedence) of two body contributions, under
+    /// <c>ScopeDisposition</c>'s own declared order.
+    /// </summary>
+    private static ScopeDisposition Worst(ScopeDisposition left, ScopeDisposition right) =>
+        left > right ? left : right;
 
     /// <summary>
     /// The relation axis is not applicable when an object carries no relation edges at all (a
@@ -440,6 +601,139 @@ public static class EuScopeProfile
         _ => throw new ArgumentOutOfRangeException(
             nameof(family), family, "Unknown EU relation family."),
     };
+
+    /// <summary>
+    /// Computes <see cref="ProfileSha256"/> from the closed EU vocabularies this binding encodes,
+    /// folding in the accepted scope-manifest candidate digest.
+    /// </summary>
+    /// <remarks>
+    /// Internal, not private, purely so a test can call it with a deliberately different candidate
+    /// digest or a deliberately mutated vocabulary list and observe that the output changes: proof
+    /// this is a real digest of its stated inputs rather than a placeholder value that happens to
+    /// look like one. Production always calls it with the full closed vocabularies, so a test
+    /// varying the input is exercising a capability the production call site does not use, not a
+    /// caller-choice a real object could exploit.
+    /// </remarks>
+    internal static string ComputeProfileSha256(
+        IReadOnlyList<EuActForm> actForms,
+        IReadOnlyList<EuChannel> channels,
+        IReadOnlyList<EuOfficialLanguage> languages,
+        IReadOnlyList<EuManifestationFormat> formats,
+        IReadOnlyList<EuContentClass> contentClasses,
+        IReadOnlyList<EuRelationFamily> relationFamilies,
+        string candidate4Sha256)
+    {
+        ArgumentNullException.ThrowIfNull(actForms);
+        ArgumentNullException.ThrowIfNull(channels);
+        ArgumentNullException.ThrowIfNull(languages);
+        ArgumentNullException.ThrowIfNull(formats);
+        ArgumentNullException.ThrowIfNull(contentClasses);
+        ArgumentNullException.ThrowIfNull(relationFamilies);
+        SourceCoreValidation.RequireSha256(candidate4Sha256, nameof(candidate4Sha256));
+
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        Append(hash, "lex-v3-eu-source-profile/1");
+        Append(hash, candidate4Sha256);
+
+        Append(hash, "act_forms");
+        Append(hash, actForms.Count.ToString(CultureInfo.InvariantCulture));
+        foreach (var form in actForms)
+        {
+            Append(hash, "act_form");
+            Append(hash, RecordFormToken(form));
+        }
+
+        Append(hash, "channels");
+        Append(hash, channels.Count.ToString(CultureInfo.InvariantCulture));
+        foreach (var channel in channels)
+        {
+            Append(hash, "channel");
+            Append(hash, ChannelToken(channel));
+            Append(hash, EuChannelDisposition.PolicyFor(channel).ToString());
+        }
+
+        Append(hash, "languages");
+        Append(hash, languages.Count.ToString(CultureInfo.InvariantCulture));
+        foreach (var language in languages)
+        {
+            Append(hash, "language");
+            Append(hash, LanguageToken(language));
+            Append(
+                hash,
+                EuLanguageBodyDisposition.BodyCandidateLanguages.Contains(language)
+                    ? "body_candidate"
+                    : "body_not_held_point");
+        }
+
+        Append(hash, "formats");
+        Append(hash, formats.Count.ToString(CultureInfo.InvariantCulture));
+        foreach (var format in formats)
+        {
+            Append(hash, "format");
+            Append(hash, FormatToken(format));
+            Append(
+                hash,
+                EuManifestationScope.FormatsThatCanNeverCarryABody.Contains(format)
+                    ? "never_carries_body"
+                    : "may_carry_body");
+        }
+
+        Append(hash, "content_classes");
+        Append(hash, contentClasses.Count.ToString(CultureInfo.InvariantCulture));
+        foreach (var contentClass in contentClasses)
+        {
+            Append(hash, "content_class");
+            Append(hash, ContentClassToken(contentClass));
+            Append(hash, EuRightsDisposition.BasisFor(contentClass).ToString());
+        }
+
+        Append(hash, "relation_families");
+        Append(hash, relationFamilies.Count.ToString(CultureInfo.InvariantCulture));
+        foreach (var family in relationFamilies)
+        {
+            Append(hash, "relation_family");
+            Append(hash, RelationFamilyToken(family));
+        }
+
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
+    }
+
+    /// <summary>
+    /// Computes <see cref="SelectorTableSha256"/> from this file's own closed selector and
+    /// projection-rule keys. Internal for the same sensitivity-testing reason as
+    /// <see cref="ComputeProfileSha256"/>.
+    /// </summary>
+    internal static string ComputeSelectorTableSha256(
+        IReadOnlyList<string> selectorKeys,
+        IReadOnlyList<(ScopeAxis Axis, string Key)> projectionRules)
+    {
+        ArgumentNullException.ThrowIfNull(selectorKeys);
+        ArgumentNullException.ThrowIfNull(projectionRules);
+
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        Append(hash, "lex-v3-eu-scope-projection/1");
+        foreach (var selector in selectorKeys)
+        {
+            Append(hash, selector);
+        }
+
+        foreach (var rule in projectionRules)
+        {
+            Append(hash, ((int)rule.Axis).ToString(CultureInfo.InvariantCulture));
+            Append(hash, rule.Key);
+        }
+
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
+    }
+
+    private static void Append(IncrementalHash hash, string value)
+    {
+        var bytes = Encoding.UTF8.GetBytes(value);
+        Span<byte> length = stackalloc byte[4];
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(length, bytes.Length);
+        hash.AppendData(length);
+        hash.AppendData(bytes);
+    }
 }
 
 /// <summary>
@@ -464,7 +758,6 @@ public sealed class EuScopeObjectDispositions
         EuLanguageBodyDisposition? languageDisposition,
         EuFormatDisposition? formatDisposition,
         EuRightsDisposition? rightsDisposition,
-        SourceArtifactRef bodyEvidenceRef,
         IReadOnlyList<EuRelationFamilyDisposition> relationDispositions,
         SourceArtifactRef relationEvidenceRef,
         EuContentClass? supportingContentClass,
@@ -479,7 +772,6 @@ public sealed class EuScopeObjectDispositions
         LanguageDisposition = languageDisposition;
         FormatDisposition = formatDisposition;
         RightsDisposition = rightsDisposition;
-        BodyEvidenceRef = bodyEvidenceRef ?? throw new ArgumentNullException(nameof(bodyEvidenceRef));
         RelationDispositions = (relationDispositions
             ?? throw new ArgumentNullException(nameof(relationDispositions))).ToArray();
         if (RelationDispositions.Select(static value => value.Family).Distinct().Count() !=
@@ -512,8 +804,6 @@ public sealed class EuScopeObjectDispositions
     public EuFormatDisposition? FormatDisposition { get; }
 
     public EuRightsDisposition? RightsDisposition { get; }
-
-    public SourceArtifactRef BodyEvidenceRef { get; }
 
     public IReadOnlyList<EuRelationFamilyDisposition> RelationDispositions { get; }
 
