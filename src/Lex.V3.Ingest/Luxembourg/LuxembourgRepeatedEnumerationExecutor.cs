@@ -415,12 +415,22 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
                 runner.CopyArtifactMembership(), executorWrittenMembership, out var receiptRefusal);
             if (receipt is null)
             {
-                // receiptRefusal was computed and thrown away here, so five distinguishable
-                // receipt refusals (a send-closure member not held, a membership disagreement, a
-                // membership no receipt can produce, and the Core comparison's own refusal) all
-                // reached the caller as one undifferentiated delivery_proof_refused with a null
-                // detail whenever Core itself had not thrown. It is carried now: Core's verbatim
-                // message when there is one, the receipt refusal's own name when there is not.
+                // receiptRefusal was computed and thrown away here. It is carried now: Core's
+                // verbatim message when there is one, the receipt refusal's own name when there
+                // is not.
+                //
+                // Measured, not assumed: DeliveryComparisonRefused is the only one of the four
+                // receipt refusals a well-behaved session can actually produce here, so the right
+                // operand of the ?? is defensive rather than driven end to end, and no executor
+                // test kills a mutation that removes it. The reason is that every input this
+                // executor hands the receipt comes from one map per kind, and Source/Core's own
+                // tuple check (RepeatedEnumerationDeliveryProof.cs, "The retained SPARQL evidence
+                // tuple does not bind") already refuses any observation whose body receipt is not
+                // ImmutableObject1 and LockedTime, so a body cannot reach the receipt carrying a
+                // membership that would refuse there. The three refusals are driven where they
+                // ARE reachable, on LuxembourgEnumerationDeliveryReceipt.TryCreate itself, which
+                // is public and takes caller-stated membership. Carrying the value costs one
+                // string and stops "unreachable today" being written down as "unreachable".
                 return LuxembourgEnumerationRunResult.Refused(
                     new LuxembourgEnumerationRefusalDetail(
                         LuxembourgEnumerationRefusal.DeliveryProofRefused,

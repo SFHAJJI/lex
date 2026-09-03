@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Http;
 using Lex.V3.Contracts.Source.Luxembourg;
 
 namespace Lex.V3.Ingest.Tests;
@@ -90,6 +91,76 @@ public sealed class LuxembourgDeliveryEvidenceSetTests
         Assert.IsNull(receipt);
         Assert.AreEqual(LuxembourgEnumerationReceiptRefusal.DeliveryComparisonRefused, refusal);
         Assert.IsNotNull(set.LastCoreRefusalMessage);
+    }
+
+    [TestMethod]
+    public async Task AWriteReceiptForOtherBytesCannotClassifyThisBody()
+    {
+        // The guard objection 4 made load-bearing, driven. An observation classifies its response
+        // body's custody from the write receipt the hop names. Matching that receipt BY DIGEST is
+        // not enough: the receipt must also be a receipt ABOUT these bytes, or the body's floor
+        // would be read off some other object's protection.
+        //
+        // Reachable because LuxembourgObservedTransport is a caller-supplied record and
+        // ForCount/ForPage exist to validate one. Here the evidence names a different payload
+        // digest than the receipt describes, with every other binding intact, which is precisely
+        // the substitution the check exists for.
+        //
+        // The mutation: delete the Reference.ContentSha256 comparison from
+        // LuxembourgDeliveryObservation.Create. Confirmed to make this test pass a wrong
+        // observation back instead of throwing.
+        var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
+        var (invariantPlan, invariantPlanResourceId, _) = LuxembourgAcquisitionTestFixture.BuildInvariantPlan();
+        var rendererSource = LuxembourgAcquisitionTestFixture.BuildRendererSource();
+        var partition = LuxembourgAcquisitionTestFixture.FullRange();
+        var profile = invariantPlan.CreateDeliveryProfile(
+            invariantPlanResourceId, LuxembourgAcquisitionTestFixture.SubjectsSetId);
+        var witness = invariantPlan.BindCount(
+            invariantPlanResourceId, $"urn:uuid:{Guid.NewGuid():D}", $"urn:uuid:{Guid.NewGuid():D}",
+            LuxembourgAcquisitionTestFixture.SubjectsSetId, LuxembourgQueryPass.Pass1, partition,
+            rendererSource);
+        var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((_, request) =>
+            LuxembourgAcquisitionTestFixture.JsonResponse(
+                request, LuxembourgAcquisitionTestFixture.CountJson(2)));
+        using var session = await LuxembourgAcquisitionTestFixture.StartedSessionAsync(
+                witness.Request, handler, store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider())
+            .ConfigureAwait(false);
+        var (bound, genuine) = await LuxembourgAcquisitionTestFixture.ObserveOneCountAsync(
+                session, store, invariantPlan, invariantPlanResourceId,
+                LuxembourgAcquisitionTestFixture.SubjectsSetId, partition, rendererSource)
+            .ConfigureAwait(false);
+        var terminal = genuine.HttpEvidence.Hops[0];
+        Assert.AreEqual(
+            terminal.Sha256,
+            genuine.DurableWriteReceipt.Reference.ContentSha256,
+            "the fixture's own transport must be genuinely bound before this test substitutes anything");
+
+        // Different bytes, and an evidence document that names their digest in place of the real
+        // one. Nothing else changes: the same logical request, the same write receipt, the same
+        // digest for it.
+        var otherBytes = System.Text.Encoding.UTF8.GetBytes("{\"head\":{},\"results\":{\"bindings\":[]}}");
+        var otherDigest = Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(otherBytes));
+        Assert.AreNotEqual(terminal.Sha256, otherDigest);
+
+        var rewritten = System.Text.Encoding.UTF8.GetString(genuine.HttpEvidence.CopyCanonicalBytes())
+            .Replace(terminal.Sha256, otherDigest, StringComparison.Ordinal);
+        var substituted = RoutedHttpEvidence.ParseAndVerify(
+            System.Text.Encoding.UTF8.GetBytes(rewritten));
+        Assert.AreEqual(otherDigest, substituted.Hops[0].Sha256);
+        Assert.AreEqual(
+            terminal.DurableWriteReceiptSha256,
+            substituted.Hops[0].DurableWriteReceiptSha256,
+            "the write receipt this hop names must be untouched, or a different guard fires first");
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(() =>
+            LuxembourgDeliveryObservation.ForCount(
+                bound,
+                LuxembourgObservationIdentity.NewObservation(),
+                new LuxembourgObservedTransport(
+                    genuine.LogicalRequest, substituted, genuine.DurableWriteReceipt, otherBytes),
+                profile));
+        StringAssert.Contains(thrown.Message, "receipt for different bytes");
     }
 
     private static (

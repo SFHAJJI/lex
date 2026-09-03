@@ -177,33 +177,32 @@ public sealed class LuxembourgEnumerationDeliveryReceipt
                     return null;
                 }
 
-                if (!Admit(membership, out refusal))
+                if (!Record(retained, digest, membership, out refusal))
                 {
                     return null;
                 }
-
-                retained[digest] = membership;
             }
 
             // The response body, classified from the write receipt the store issued for those exact
             // bytes. LuxembourgDeliveryObservation.Create has already refused unless that receipt's
             // Reference.ContentSha256 is this body's digest, so this is the body's own membership
             // and not some other object's.
-            if (!Admit(observation.ResponseBodyMembership, out refusal))
-            {
-                return null;
-            }
-
-            if ((sessionArtifactMembership.TryGetValue(observation.ResponseBodySha256, out var sessionBody) &&
-                    sessionBody != observation.ResponseBodyMembership) ||
-                (executorWrittenMembership.TryGetValue(observation.ResponseBodySha256, out var executorBody) &&
-                    executorBody != observation.ResponseBodyMembership))
+            //
+            // Two observations CAN name the same body digest: a publisher that answers two passes
+            // identically sends byte-identical bodies, and an empty terminal page is the common
+            // case. If they disagree about its custody, that is the same disagreement this method
+            // already refuses between the two input maps, and it refuses here for the same reason.
+            if (Disagrees(sessionArtifactMembership, observation.ResponseBodySha256, observation.ResponseBodyMembership) ||
+                Disagrees(executorWrittenMembership, observation.ResponseBodySha256, observation.ResponseBodyMembership))
             {
                 refusal = LuxembourgEnumerationReceiptRefusal.MembershipDisagreesOnADigest;
                 return null;
             }
 
-            retained[observation.ResponseBodySha256] = observation.ResponseBodyMembership;
+            if (!Record(retained, observation.ResponseBodySha256, observation.ResponseBodyMembership, out refusal))
+            {
+                return null;
+            }
 
             if (!executorWrittenMembership.TryGetValue(
                     references.HttpEvidenceRef.Sha256,
@@ -222,12 +221,10 @@ public sealed class LuxembourgEnumerationDeliveryReceipt
                 return null;
             }
 
-            if (!Admit(evidenceMembership, out refusal))
+            if (!Record(retained, references.HttpEvidenceRef.Sha256, evidenceMembership, out refusal))
             {
                 return null;
             }
-
-            retained[references.HttpEvidenceRef.Sha256] = evidenceMembership;
         }
 
         var floor = CustodyMembership.Floored;
@@ -268,20 +265,38 @@ public sealed class LuxembourgEnumerationDeliveryReceipt
         AbsenceFamilyEnumerationProof.TryCreate(familyKey, RequireFlooredRun(), out refusal);
 
     /// <summary>
-    /// Refuses a membership no write receipt can produce, so no such value ever reaches
-    /// <see cref="Weakest"/>. See <see cref="LuxembourgEnumerationReceiptRefusal.MembershipIsNotReceiptDerived"/>.
+    /// The single place a digest becomes a member. It refuses a membership no write receipt can
+    /// produce (so no such value ever reaches <see cref="Weakest"/>), and it refuses a second,
+    /// different membership for a digest already recorded, which is the same one-object-one-floor
+    /// rule this method applies between its two input maps. Every member goes through here, so
+    /// there is no kind of member for which the rule quietly does not hold.
     /// </summary>
-    private static bool Admit(CustodyMembership membership, out LuxembourgEnumerationReceiptRefusal refusal)
+    private static bool Record(
+        Dictionary<string, CustodyMembership> retained,
+        string digest,
+        CustodyMembership membership,
+        out LuxembourgEnumerationReceiptRefusal refusal)
     {
-        if (membership is CustodyMembership.RetainedUnenforced or CustodyMembership.Floored)
+        if (membership is not (CustodyMembership.RetainedUnenforced or CustodyMembership.Floored))
         {
-            refusal = LuxembourgEnumerationReceiptRefusal.None;
-            return true;
+            refusal = LuxembourgEnumerationReceiptRefusal.MembershipIsNotReceiptDerived;
+            return false;
         }
 
-        refusal = LuxembourgEnumerationReceiptRefusal.MembershipIsNotReceiptDerived;
-        return false;
+        if (Disagrees(retained, digest, membership))
+        {
+            refusal = LuxembourgEnumerationReceiptRefusal.MembershipDisagreesOnADigest;
+            return false;
+        }
+
+        retained[digest] = membership;
+        refusal = LuxembourgEnumerationReceiptRefusal.None;
+        return true;
     }
+
+    private static bool Disagrees(
+        IReadOnlyDictionary<string, CustodyMembership> map, string digest, CustodyMembership membership) =>
+        map.TryGetValue(digest, out var recorded) && recorded != membership;
 
     /// <summary>
     /// The weakest of two memberships, by an explicit comparison rather than <c>Enum.Min</c>, so a

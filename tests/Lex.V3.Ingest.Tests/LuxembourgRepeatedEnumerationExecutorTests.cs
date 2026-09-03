@@ -946,9 +946,15 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
         // ParseStrictCount's term check. Confirmed: the run then proceeds to bind a page.
         var (request, witness) = BuildRequest();
         var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
+        // "literal", not "typed-literal", but carrying the correct xsd:integer datatype. That
+        // isolates the wire-type check: a bare plain literal would also be refused, but by the
+        // datatype check beside it, so a mutation removing the wire-type comparison survived that
+        // version of this test. This is the non-Virtuoso dialect shape the preserved RED test
+        // ReadCountRejectsTheWrongLuxembourgLiteralWireType named.
         var plainLiteralCount =
             "{\"head\":{\"link\":[],\"vars\":[\"count\"]},\"results\":{\"distinct\":false,\"ordered\":true,"
-            + "\"bindings\":[{\"count\":{\"type\":\"literal\",\"value\":\"1\"}}]}}";
+            + "\"bindings\":[{\"count\":{\"type\":\"literal\",\"value\":\"1\","
+            + "\"datatype\":\"http://www.w3.org/2001/XMLSchema#integer\"}}]}}";
         var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((_, req) =>
             JsonResponse(req, plainLiteralCount));
 

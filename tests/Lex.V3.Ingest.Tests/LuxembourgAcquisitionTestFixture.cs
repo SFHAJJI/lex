@@ -164,6 +164,29 @@ internal static class LuxembourgAcquisitionTestFixture
         return deliveryPass;
     }
 
+    /// <summary>
+    /// One genuine count observation: bound, sent, and folded into the transport an observation is
+    /// built from. Used by the tests that then substitute one member of that transport to drive a
+    /// binding guard, which is the only way those guards are reachable.
+    /// </summary>
+    internal static async Task<(LuxembourgBoundQueryCount Bound, LuxembourgObservedTransport Transport)>
+        ObserveOneCountAsync(
+            RoutedHttpAcquisitionSession session,
+            ICustodyStore custodyStore,
+            LuxembourgQueryPlan invariantPlan,
+            string invariantPlanResourceId,
+            string setId,
+            LuxembourgQueryPartitionRange partition,
+            MachineQueryRendererSource rendererSource)
+    {
+        var bound = invariantPlan.BindCount(
+            invariantPlanResourceId, NewUrn(), NewUrn(), setId, LuxembourgQueryPass.Pass1, partition,
+            rendererSource);
+        var observed = await ObserveAsync(session, custodyStore, bound.Request).ConfigureAwait(false);
+        var transport = await BuildTransportAsync(session, custodyStore, observed).ConfigureAwait(false);
+        return (bound, transport);
+    }
+
     private static async Task<(RoutedHttpEvidence Attempt, byte[] Body)> ObserveAsync(
         RoutedHttpAcquisitionSession session,
         ICustodyStore custodyStore,

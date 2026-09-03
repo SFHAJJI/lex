@@ -295,6 +295,38 @@ public sealed class LuxembourgEnumerationDeliveryReceiptTests
         Assert.AreEqual(AbsenceFamilyEnumerationProofRefusal.PartitionIsNotThisFamily, refusal);
     }
 
+    [TestMethod]
+    public void TwoObservationsCannotDisagreeAboutOneResponseBodysCustody()
+    {
+        // Found by a surviving mutation, and a defect rather than only a test gap. Two
+        // observations really can name ONE body digest: a publisher that answers both passes
+        // identically sends byte-identical bodies, and an empty terminal page is the everyday
+        // case. The response-body path checked the two input maps and not what it had already
+        // recorded, so the second observation silently overwrote the first and a run holding one
+        // object under two different floors issued a receipt anyway, against this type's own
+        // stated rule that a membership disagreement on one digest refuses.
+        //
+        // Every member goes through the same Record call now, so there is no kind of member for
+        // which the rule quietly does not hold.
+        var delivery = new RepeatedEnumerationDeliveryProofTests.Fixture().Create("a,b", "a,b");
+        var (session, executor) = FullMembership(delivery, CustodyMembership.Floored);
+        var custody = Custody(delivery);
+        var shared = custody[0].ResponseBodySha256;
+
+        // The same body, twice, under two different floors.
+        custody[1] = custody[1] with
+        {
+            ResponseBodySha256 = shared,
+            ResponseBodyMembership = CustodyMembership.RetainedUnenforced,
+        };
+
+        var receipt = LuxembourgEnumerationDeliveryReceipt.TryCreate(
+            delivery, session, executor, custody, out var refusal);
+
+        Assert.IsNull(receipt);
+        Assert.AreEqual(LuxembourgEnumerationReceiptRefusal.MembershipDisagreesOnADigest, refusal);
+    }
+
     /// <summary>
     /// One custody entry per observation, with a body digest and a write-receipt digest derived
     /// from the observation's own evidence digest so every entry is distinct and reproducible.
