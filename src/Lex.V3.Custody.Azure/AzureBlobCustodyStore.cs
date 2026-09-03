@@ -193,12 +193,9 @@ public sealed class AzureBlobCustodyStore : ICustodyStore
                             retainBytes: true,
                             cancellationToken)
                         .ConfigureAwait(false);
-                    if (selected is { } prior && !prior.Span.SequenceEqual(observation.Bytes.Span))
-                    {
-                        throw new CustodyIntegrityException(
-                            "One content address resolved to different Azure custody bytes.");
-                    }
-
+                    // ReadExactAsync verified this copy against the digest, and every lane's copy
+                    // is read and verified the same way, so a cross-lane byte comparison could
+                    // fire only on a SHA-256 collision and is not kept.
                     selected ??= observation.Bytes;
                 }
             }

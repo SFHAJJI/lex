@@ -5,6 +5,7 @@ using System.Text;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Http;
+using Lex.V3.TestSupport;
 
 namespace Lex.V3.Ingest.Tests;
 
@@ -31,23 +32,63 @@ public sealed class RoutedHttpRedirectCapabilityTests
         Assert.IsTrue(leaseType.IsNestedPrivate);
         Assert.IsTrue(retainedType.IsNestedPrivate);
         Assert.IsTrue(antecedentType.IsNestedPrivate);
-        Assert.IsTrue(leaseType.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
-            .All(static constructor => constructor.IsPrivate));
-        Assert.IsFalse(leaseType.GetConstructors(BindingFlags.Instance | BindingFlags.Public).Any());
+        // The lease's whole construction surface, every scope and nested type, pinned entry by
+        // entry: one private constructor, the two internal factories, and the async state machines
+        // that hold the lease they run on. State machines carry their compiler ordinal, so adding
+        // a member to the lease or the session renumbers them and this pin changes under review.
+        // When only an ordinal moved, the change is churn and the pin is updated to the new
+        // number; a reviewer looks for any other line in the diff of this list, because that one
+        // is the finding.
+        const string Session = "Lex.V3.Ingest.RoutedHttpAcquisitionSession";
+        const string Lease = Session + "+SendLease";
+        const string Common =
+            Session + ", Lex.V3.Contracts.Source.Http.HttpLogicalRequest, " +
+            "System.ReadOnlyMemory<System.Byte>, System.UInt64, System.UInt64";
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + Lease + "::.ctor(" + Common + ", System.UInt64, System.String, " + Lease + "+RedirectAntecedent, System.Boolean) -> " + Lease,
+                "method internal static " + Lease + "::FromRedirect(" + Common + ", System.UInt64, System.String, " + Session + "+RedirectAntecedentCapability) -> " + Lease,
+                "method internal static " + Lease + "::Initial(" + Common + ", System.Boolean) -> " + Lease,
+            },
+            ConstructionSurface.Of(leaseType).ToArray());
 
-        var factories = leaseType.GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
-            .Where(method => method.ReturnType == leaseType)
-            .Select(static method => method.Name)
-            .Order(StringComparer.Ordinal)
-            .ToArray();
-        CollectionAssert.AreEqual(new[] { "FromRedirect", "Initial" }, factories);
+        // The compiler's own storage, asserted collectively rather than pinned. Each is a field of
+        // the lease on a compiler-generated type inside the session's hierarchy, and none is
+        // public static, which is the property that matters: storage cannot be driven to obtain a
+        // lease. Exact names and ordinals are deliberately absent, because a hoisted local exists
+        // as a field only when it is live across an await and Debug hoists them all, so pinning
+        // them made this suite pass locally and fail in CI.
+        foreach (var holder in ConstructionSurface.CompilerGeneratedHolders(
+            leaseType.Assembly, leaseType))
+        {
+            StringAssert.StartsWith(
+                holder, "instance ", "compiler storage of a lease is never static");
+            StringAssert.Contains(
+                holder,
+                "Lex.V3.Ingest.RoutedHttpAcquisitionSession",
+                "a lease may only be held inside the session's own hierarchy");
+        }
+
+        // Outside the lease, the assembly holds one but never mints one: the route loop's local,
+        // the retention capability's field, and the retention state machine's parameter.
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "field private instance " + Session + "+RetainedSendArtifacts::<lease>P -> " + Lease,
+            },
+            ConstructionSurface.ProducersIn(typeof(RoutedHttpAcquisitionSession).Assembly, leaseType, includeNonPublic: true).ToArray());
         var redirectFactory = leaseType.GetMethod(
             "FromRedirect",
             BindingFlags.Static | BindingFlags.NonPublic)
             ?? throw new AssertFailedException("The redirect capability factory is missing.");
         var redirectParameters = redirectFactory.GetParameters();
-        Assert.AreEqual(7, redirectParameters.Length);
+        Assert.AreEqual(8, redirectParameters.Length);
         Assert.AreEqual(antecedentType, redirectParameters[^1].ParameterType);
+        // The antecedent's route-policy digest is a separate input from the successor request,
+        // which is what lets the mint-time comparison fail; it sits beside the capability.
+        Assert.AreEqual(typeof(string), redirectParameters[^2].ParameterType);
+        Assert.AreEqual("antecedentRedirectPolicySha256", redirectParameters[^2].Name);
         Assert.IsFalse(redirectParameters.Any(static parameter =>
             parameter.ParameterType == typeof(RoutedHttpHop)));
 
@@ -219,14 +260,26 @@ public sealed class RoutedHttpRedirectCapabilityTests
             new TestCustodyStore(),
             new IsolatedTimeProvider());
         var fixture = await CreateAntecedentAsync(session);
-        RegisterAntecedent(session, fixture.CustodyKey, fixture.Hop);
-
         const string forgedTarget = "https://example.invalid/robots.txt";
         var forgedHop = CopyHopWithLocation(fixture.Hop, forgedTarget);
-        AssertPrivateOperationRefuses(() =>
+
+        // Forged first, with nothing registered yet: refused on the causal facts retained at hold
+        // time, as a custody integrity failure. This is the branch the old test could not reach,
+        // because it registered the genuine hop first and so only ever saw the duplicate branch.
+        AssertPrivateOperationRefusesWith<CustodyIntegrityException>(() =>
             RegisterAntecedent(session, fixture.CustodyKey, forgedHop));
 
+        // The genuine hop registers; registering it again is the duplicate branch, and only that.
+        RegisterAntecedent(session, fixture.CustodyKey, fixture.Hop);
+        AssertPrivateOperationRefusesWith<InvalidOperationException>(() =>
+            RegisterAntecedent(session, fixture.CustodyKey, fixture.Hop));
+
         var capability = OpenAntecedent(session, fixture.CustodyKey);
+
+        // Minting the antecedent capability frees the registry slot but not the custody record,
+        // so without its own guard the same genuine hop could register and mint a second time.
+        AssertPrivateOperationRefusesWith<InvalidOperationException>(() =>
+            RegisterAntecedent(session, fixture.CustodyKey, fixture.Hop));
         AssertFactoryRefuses(() => FromRedirect(
             session,
             CreateNextRequest(session, uri: forgedTarget),
@@ -234,6 +287,57 @@ public sealed class RoutedHttpRedirectCapabilityTests
             requestOrdinal: 0,
             attemptOrdinal: 0,
             nextHopOrdinal: 1));
+        Assert.AreEqual(0, handler.SendCount);
+    }
+
+    [TestMethod]
+    public async Task ASuccessorMustCarryItsAntecedentsExactRoutePolicy()
+    {
+        // The antecedent's route-policy digest comes from the request that produced the hop being
+        // redirected from, not from the successor, so the comparison has two sources and can
+        // fail. Both directions are refused: a successor with another registered policy, and a
+        // caller claiming the antecedent ran under a policy the successor does not carry.
+        var request = MachineRequestTestFixture.EuropeanUnionRequest();
+        var handler = new CountingHandler(static (_, _) =>
+            throw new AssertFailedException("No send expected."));
+        using var session = Session(
+            request,
+            handler,
+            new TestCustodyStore(),
+            new IsolatedTimeProvider());
+        var noRedirect = RedirectPolicySha256(session, "_noRedirectPolicy");
+        var robots = RedirectPolicySha256(session, "_robotsRedirectPolicy");
+        Assert.AreNotEqual(robots, noRedirect);
+
+        var successorDiffers = await CreateOpenedAntecedentAsync(session);
+        AssertFactoryRefuses(() => FromRedirect(
+            session,
+            CreateNextRequest(session, redirectPolicySha256: noRedirect),
+            successorDiffers,
+            requestOrdinal: 0,
+            attemptOrdinal: 0,
+            nextHopOrdinal: 1));
+
+        var antecedentClaimDiffers = await CreateOpenedAntecedentAsync(session);
+        AssertFactoryRefuses(() => FromRedirect(
+            session,
+            CreateNextRequest(session),
+            antecedentClaimDiffers,
+            requestOrdinal: 0,
+            attemptOrdinal: 0,
+            nextHopOrdinal: 1,
+            antecedentRedirectPolicySha256: noRedirect));
+
+        // The agreeing pair still mints, so the refusals above are not a factory that refuses all.
+        var agreeing = await CreateOpenedAntecedentAsync(session);
+        Assert.IsNotNull(FromRedirect(
+            session,
+            CreateNextRequest(session),
+            agreeing,
+            requestOrdinal: 0,
+            attemptOrdinal: 0,
+            nextHopOrdinal: 1,
+            antecedentRedirectPolicySha256: robots));
         Assert.AreEqual(0, handler.SendCount);
     }
 
@@ -419,7 +523,14 @@ public sealed class RoutedHttpRedirectCapabilityTests
         var observationId = $"urn:uuid:{Guid.NewGuid():D}";
         var holdTask = (Task)(SessionMethod("HoldAndResolveAsync").Invoke(
             session,
-            [new ReadOnlyMemory<byte>(bytes), 0UL, 0UL, 0UL, observationId])
+            [
+                new ReadOnlyMemory<byte>(bytes),
+                0UL,
+                0UL,
+                0UL,
+                observationId,
+                CausalFacts(request.Uri, 301, Sha256(request.CopyCanonicalBytes()), "https://op.europa.eu/robots.txt"),
+            ])
             ?? throw new AssertFailedException("The antecedent custody operation was not started."));
         await holdTask;
         var heldPair = holdTask.GetType().GetProperty("Result")?.GetValue(holdTask)
@@ -546,7 +657,8 @@ public sealed class RoutedHttpRedirectCapabilityTests
         object antecedentCapability,
         ulong requestOrdinal,
         ulong attemptOrdinal,
-        ulong nextHopOrdinal)
+        ulong nextHopOrdinal,
+        string? antecedentRedirectPolicySha256 = null)
     {
         var leaseType = typeof(RoutedHttpAcquisitionSession).GetNestedType(
             "SendLease",
@@ -565,8 +677,20 @@ public sealed class RoutedHttpRedirectCapabilityTests
                 requestOrdinal,
                 attemptOrdinal,
                 nextHopOrdinal,
+                antecedentRedirectPolicySha256 ?? RedirectPolicySha256(session, "_robotsRedirectPolicy"),
                 antecedentCapability,
             ]) ?? throw new AssertFailedException("The redirect capability was not minted.");
+    }
+
+    private static string RedirectPolicySha256(RoutedHttpAcquisitionSession session, string field)
+    {
+        var policy = typeof(RoutedHttpAcquisitionSession)
+            .GetField(field, BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(session)
+            ?? throw new AssertFailedException($"The session has no {field} policy.");
+        return (string)(policy.GetType().GetProperty(
+            "Sha256",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(policy)
+            ?? throw new AssertFailedException($"The {field} policy has no digest."));
     }
 
     private static async Task<object> RetainAndSendAsync(object lease)
@@ -666,6 +790,23 @@ public sealed class RoutedHttpRedirectCapabilityTests
     private sealed record AntecedentFixture(
         RoutedHttpHop Hop,
         object CustodyKey);
+
+    // The facts the session retains when bytes enter custody, built the way the session builds
+    // them so the fixture's hop is registered against what was "observed" for it.
+    private static object CausalFacts(string requestUri, int status, string logicalRequestSha256, params string[] location)
+    {
+        var type = typeof(RoutedHttpAcquisitionSession).GetNestedType("HeldCausalFacts", BindingFlags.NonPublic)
+            ?? throw new AssertFailedException("The session retains no causal facts at hold time.");
+        return Activator.CreateInstance(type, [requestUri, status, logicalRequestSha256, location])
+            ?? throw new AssertFailedException("The causal facts could not be constructed.");
+    }
+
+    private static void AssertPrivateOperationRefusesWith<TException>(Action action)
+        where TException : Exception
+    {
+        var wrapper = Assert.ThrowsExactly<TargetInvocationException>(action);
+        Assert.IsInstanceOfType<TException>(wrapper.InnerException);
+    }
 
     private sealed class CountingHandler(
         Func<int, HttpRequestMessage, HttpResponseMessage> response) : HttpMessageHandler

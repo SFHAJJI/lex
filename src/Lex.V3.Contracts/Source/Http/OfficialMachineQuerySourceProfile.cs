@@ -329,7 +329,7 @@ public sealed class OfficialMachineQuerySourceProfile
         "https://data.legilux.public.lu/sparqlendpoint",
         "application/x-www-form-urlencoded",
         new RobotsPolicyRoute(
-            new RoutedHttpNetworkOrigin("data.legilux.public.lu", 443),
+            RoutedHttpNetworkOrigin.FromUri("https://data.legilux.public.lu/robots.txt"),
             new RobotsPolicyRouteStep(
                 "https://data.legilux.public.lu/robots.txt",
                 200,
@@ -341,7 +341,7 @@ public sealed class OfficialMachineQuerySourceProfile
         "https://publications.europa.eu/webapi/rdf/sparql",
         "application/sparql-query",
         new RobotsPolicyRoute(
-            new RoutedHttpNetworkOrigin("publications.europa.eu", 443),
+            RoutedHttpNetworkOrigin.FromUri("https://publications.europa.eu/robots.txt"),
             new RobotsPolicyRouteStep(
                 "https://publications.europa.eu/robots.txt",
                 301,

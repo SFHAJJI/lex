@@ -74,8 +74,12 @@ public sealed class AzureContentAddressedCustodyReopeningTests
     }
 
     [TestMethod]
-    public async Task AConflictingSecondCopyCannotBeHiddenByTheFirst()
+    public async Task ACorruptSecondLaneIsRefusedByItsOwnDigestCheckAfterAValidFirstLane()
     {
+        // What this proves: every lane is read and verified, so a valid first copy does not
+        // short-circuit a corrupt second one, and the corrupt copy refuses on its own digest. It
+        // does not prove a cross-lane byte comparison, which could fire only on a SHA-256
+        // collision and no longer exists.
         var harness = new ExistingAzureHarness();
         var digest = CustodyDigest.Of(Artifact);
         harness.AddGeneration("nightly", digest, Artifact, 'f');

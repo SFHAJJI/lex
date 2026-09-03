@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Http;
+using Lex.V3.TestSupport;
 
 namespace Lex.V3.Tests.Contracts.Source.Http;
 
@@ -13,25 +14,44 @@ public sealed class HeldAcquisitionReceiptContractTests
     [TestMethod]
     public void ReceiptHasNoPublicConstructionParsingOrFactoryBoundaryBeforeTheVerifiedProducerExists()
     {
-        Assert.AreEqual(
-            0,
-            typeof(HeldAcquisitionReceipt).GetConstructors(
-                BindingFlags.Public | BindingFlags.Instance).Length);
-        Assert.AreEqual(
-            0,
-            typeof(HeldAcquisitionReceipt).GetMethods(
-                    BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)
-                .Length);
+        // The whole construction surface of the receipt, every scope, by-ref parameters included,
+        // pinned entry by entry: one private constructor and two internal producers.
+        const string Receipt = "Lex.V3.Contracts.Source.Http.HeldAcquisitionReceipt";
+        const string Arguments =
+            "Lex.V3.Contracts.Source.Http.HeldAcquisitionPublisher, " +
+            "Lex.V3.Contracts.Source.Core.SourceArtifactRef, System.UInt64, System.UInt64, " +
+            "Lex.V3.Contracts.Source.Http.HeldAcquisitionCoordinate, " +
+            "Lex.V3.Contracts.Source.Http.HeldAcquisitionRequestBinding, " +
+            "Lex.V3.Contracts.Source.Http.HeldAcquisitionTransportBinding, " +
+            "Lex.V3.Contracts.Source.Http.HeldAcquisitionPayload, System.String";
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + Receipt + "::.ctor(" + Arguments + ") -> " + Receipt,
+                "method internal static " + Receipt + "::Create(" + Arguments + ") -> " + Receipt,
+                "method internal static " + Receipt + "::ParseAndVerify(System.ReadOnlySpan<System.Byte>) -> " + Receipt,
+            },
+            ConstructionSurface.Of(typeof(HeldAcquisitionReceipt)).ToArray());
 
-        var exportedFactories = typeof(HeldAcquisitionReceipt).Assembly
-            .GetExportedTypes()
-            .SelectMany(static type => type.GetMethods(
-                BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
-            .Where(static method => ReturnsHeldReceipt(method.ReturnType))
-            .Select(static method => $"{method.DeclaringType!.FullName}.{method.Name}")
-            .OrderBy(static identity => identity, StringComparer.Ordinal)
-            .ToArray();
-        CollectionAssert.AreEqual(Array.Empty<string>(), exportedFactories);
+        // Nothing public on the receipt beyond its readers: no public static member at all.
+        Assert.AreEqual(
+            0,
+            ConstructionSurface.DeclaredMembersTransitive(typeof(HeldAcquisitionReceipt))
+                .OfType<MethodBase>()
+                .Count(static member => member.IsPublic && member.IsStatic));
+
+        // The one producer elsewhere in the assembly is the canonical parser on an internal type;
+        // nothing reachable from outside the assembly yields a receipt, directly or wrapped.
+        var assembly = typeof(HeldAcquisitionReceipt).Assembly;
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "method public static Lex.V3.Contracts.Source.Http.RoutedHttpCanonicalJson::ParseHeldReceipt(System.ReadOnlySpan<System.Byte>) -> " + Receipt,
+            },
+            ConstructionSurface.ProducersIn(assembly, typeof(HeldAcquisitionReceipt), includeNonPublic: true).ToArray());
+        Assert.AreEqual(
+            0,
+            ConstructionSurface.ProducersIn(assembly, typeof(HeldAcquisitionReceipt), includeNonPublic: false).Count);
     }
 
     [TestMethod]
@@ -214,10 +234,6 @@ public sealed class HeldAcquisitionReceiptContractTests
         "2026-09-02T20:00:02.0000000Z");
 
     private static string Digest(char value) => new(value, 64);
-
-    private static bool ReturnsHeldReceipt(Type type) =>
-        type == typeof(HeldAcquisitionReceipt) ||
-        type.IsGenericType && type.GetGenericArguments().Any(ReturnsHeldReceipt);
 
     private sealed class CultureScope : IDisposable
     {

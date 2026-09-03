@@ -132,6 +132,30 @@ public sealed class ContentAddressedCustodyReopeningTests
         CollectionAssert.AreEqual(bytes, restored.ToArray());
     }
 
+    [TestMethod]
+    public async Task FileSystemStoreRefusesACorruptSecondLaneOnItsOwnDigestAfterAValidFirstLane()
+    {
+        // The filesystem twin of the Azure property: every lane holding the digest is read and
+        // verified, so a corrupt copy in the second lane refuses even though the first lane's copy
+        // was valid. Corruption is applied to the retained file on disk, not through the store.
+        byte[] bytes = [0xde, 0xad, 0xbe, 0xef];
+        var digest = Sha256(bytes);
+        using var directory = new TemporaryDirectory();
+        var store = new FileSystemCustodyStore(directory.Root);
+        _ = await store.CreateAsync(bytes, CustodyClass.NightlyFloor90d, CancellationToken.None);
+        _ = await store.CreateAsync(bytes, CustodyClass.LegalHoldEvidence, CancellationToken.None);
+
+        var copies = Directory.GetFiles(directory.Root, digest, SearchOption.AllDirectories);
+        Assert.AreEqual(2, copies.Length, "both lanes hold the digest");
+        var legalHold = copies.Single(path => path.Contains("legal-hold", StringComparison.Ordinal));
+        var corrupt = bytes.ToArray();
+        corrupt[0] ^= 0xff;
+        await File.WriteAllBytesAsync(legalHold, corrupt);
+
+        await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() =>
+            store.ReadByDigestAsync(digest, CancellationToken.None));
+    }
+
     private static string Sha256(ReadOnlySpan<byte> bytes) =>
         Convert.ToHexStringLower(SHA256.HashData(bytes));
 

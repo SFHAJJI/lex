@@ -81,3 +81,32 @@ public sealed class CustodyPolicyException : Exception
     {
     }
 }
+
+/// <summary>
+/// What a run can say about a dependency it holds. Decision 71.
+/// </summary>
+/// <remarks>
+/// A read establishes presence and digest and says nothing about protection, so it is never
+/// membership. A receipt says where the bytes are held; only the immutable-object profile
+/// validates a class floor, and the filesystem adapter publishes no enforcement for any class, so
+/// a filesystem deployment holds no floored member and must say so rather than claim durability.
+/// </remarks>
+public enum CustodyMembership
+{
+    /// <summary>
+    /// Reopened by digest and verified. No receipt, and so no custody claim. The session produces
+    /// none of these, because every reopen it performs now goes through the retaining path; the
+    /// member exists for a reader that opens a digest without writing it, which is what the
+    /// repeated-enumeration executor does when it verifies evidence it did not retain.
+    /// </summary>
+    [JsonStringEnumMemberName("read_once")]
+    ReadOnce = 0,
+
+    /// <summary>Written and receipted, with the store enforcing no protection.</summary>
+    [JsonStringEnumMemberName("retained_unenforced")]
+    RetainedUnenforced = 1,
+
+    /// <summary>Written and receipted under a profile that validates the class floor.</summary>
+    [JsonStringEnumMemberName("floored")]
+    Floored = 2,
+}

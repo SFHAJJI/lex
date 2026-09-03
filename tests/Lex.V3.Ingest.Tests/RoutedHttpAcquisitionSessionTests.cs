@@ -6,6 +6,7 @@ using System.Text;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Http;
+using Lex.V3.TestSupport;
 
 namespace Lex.V3.Ingest.Tests;
 
@@ -18,35 +19,64 @@ public sealed class RoutedHttpAcquisitionSessionTests
     [TestMethod]
     public void ProductionSurfaceAcceptsNoCallerAuthoredTransportFacts()
     {
-        var surface = typeof(RoutedHttpAcquisitionSession)
-            .GetMembers(BindingFlags.Public | BindingFlags.NonPublic |
-                BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
-            .Where(static member => member switch
-            {
-                ConstructorInfo constructor => !constructor.IsPrivate,
-                MethodInfo method => !method.IsPrivate && !method.IsSpecialName,
-                _ => false,
-            })
-            .SelectMany(static member => member switch
-            {
-                ConstructorInfo constructor => constructor.GetParameters(),
-                MethodInfo method => method.GetParameters(),
-                _ => [],
-            })
-            .ToArray();
-
+        // Every non-private constructor or method the session declares, on itself or on any
+        // nested type a caller can name (nothing inside a private nested type is reachable), with
+        // every parameter that names a transport fact by type or by name.
         var forbiddenTypes = new[]
         {
             typeof(HttpMessageHandler), typeof(HttpClient), typeof(HttpRequestMessage),
             typeof(TimeProvider), typeof(DateTimeOffset), typeof(RoutedHttpEvidence),
             typeof(HeldAcquisitionReceipt),
         };
-        Assert.IsFalse(surface.Any(parameter => forbiddenTypes.Contains(parameter.ParameterType)));
-        Assert.IsFalse(surface.Any(parameter =>
-            parameter.Name?.Contains("attempt", StringComparison.OrdinalIgnoreCase) == true ||
-            parameter.Name?.Contains("ordinal", StringComparison.OrdinalIgnoreCase) == true ||
-            parameter.Name?.Contains("timestamp", StringComparison.OrdinalIgnoreCase) == true ||
-            parameter.Name?.Contains("receipt", StringComparison.OrdinalIgnoreCase) == true));
+        var forbiddenNames = new[] { "attempt", "ordinal", "timestamp", "receipt" };
+        var offenders = ConstructionSurface.DeclaredMembersTransitive(typeof(RoutedHttpAcquisitionSession))
+            .OfType<MethodBase>()
+            .Where(static member => !member.IsPrivate && !ReachesAPrivateNesting(member.DeclaringType!))
+            .Where(static member => member is ConstructorInfo || member is MethodInfo { IsSpecialName: false })
+            .SelectMany(member => member.GetParameters()
+                .Where(parameter =>
+                    forbiddenTypes.Contains(parameter.ParameterType) ||
+                    forbiddenNames.Any(name => parameter.Name?.Contains(name, StringComparison.OrdinalIgnoreCase) == true))
+                .Select(parameter =>
+                    $"{member.DeclaringType!.Name}::{member.Name}({parameter.ParameterType.Name} {parameter.Name})"))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        // The session itself accepts none. What remains are the internal result types, which
+        // carry the evidence the session produced out to its caller rather than accepting any in,
+        // and the abstract post-header rejection, whose private protected constructor is reachable
+        // only by a same-assembly subtype and whose sole minter is pinned by the audit tests. The
+        // result factories cannot be closed by visibility: an enclosing type has no access to a
+        // nested type's private members, so private factories would break the session's own
+        // calls. What the pin tolerates is not nothing: same-assembly code, a test or a later
+        // pipeline step, can mint a result and assert on it as though it were observed, against
+        // the rule that evidence is minted only by its observer. Each is listed here so that a
+        // new entry is a visible change, not a silent one.
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "AttemptResult::Executed(RoutedHttpEvidence evidence)",
+                "PostHeaderRejection::.ctor(String durableWriteReceiptSha256)",
+                "StartResult::Integrity(RoutedHttpEvidence evidence)",
+                "StartResult::Operational(RoutedHttpEvidence evidence)",
+                "StartResult::PublisherDenied(RoutedHttpEvidence evidence)",
+                "StartResult::Refused(RoutedHttpEvidence evidence)",
+                "StartResult::Started(RoutedHttpEvidence evidence)",
+            },
+            offenders);
+    }
+
+    private static bool ReachesAPrivateNesting(Type type)
+    {
+        for (var enclosing = type; enclosing is not null; enclosing = enclosing.DeclaringType)
+        {
+            if (enclosing.IsNestedPrivate)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     [TestMethod]
@@ -168,15 +198,14 @@ public sealed class RoutedHttpAcquisitionSessionTests
     [TestMethod]
     public void RuntimeCannotMintAHeldAcquisitionReceiptFromHttpAlone()
     {
-        var returnTypes = typeof(RoutedHttpAcquisitionSession)
-            .GetMethods(BindingFlags.Public | BindingFlags.NonPublic |
-                BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
-            .Select(static method => method.ReturnType)
-            .ToArray();
-
-        Assert.IsFalse(returnTypes.Any(static type =>
-            type == typeof(HeldAcquisitionReceipt) ||
-            type.IsGenericType && type.GetGenericArguments().Contains(typeof(HeldAcquisitionReceipt))));
+        // No type in the runtime assembly, at any scope, mints, returns, holds or hands out a
+        // held receipt: not the session, not a nested type, not a state machine, not by out or ref.
+        CollectionAssert.AreEqual(
+            Array.Empty<string>(),
+            ConstructionSurface.ProducersIn(
+                typeof(RoutedHttpAcquisitionSession).Assembly,
+                typeof(HeldAcquisitionReceipt),
+                includeNonPublic: true).ToArray());
     }
 
     [TestMethod]
@@ -748,9 +777,38 @@ public sealed class RoutedHttpAcquisitionSessionTests
         typeof(RoutedHttpAcquisitionSession).GetMethod(name, BindingFlags.NonPublic | scope)
         ?? throw new AssertFailedException($"The runtime seam '{name}' is missing.");
 
+    [TestMethod]
+    public void AMachineRequestMissingARequiredArtifactRoleIsRefusedBeforeAPolicyIsMinted()
+    {
+        // The role-membership guard in ForMachineQuery is a tripwire between two components: the
+        // binder in Contracts decides what it reopens, the policy in Ingest decides what it
+        // requires, and they agree today. This drops the render receipt from an otherwise genuine
+        // reopened closure so the guard is exercised rather than trusted.
+        var request = EuropeanUnionRequest();
+        using var session = Session(
+            request,
+            new SequenceHandler(static (_, _) => throw new AssertFailedException("No send expected.")),
+            new MultiObjectCustodyStore(),
+            new ShortDelayTimeProvider(),
+            usesPinnedHandler: false);
+
+        var refusal = Assert.ThrowsExactly<TargetInvocationException>(() =>
+            PrivateMethod("CreateMachineRequest", BindingFlags.Instance).Invoke(
+                session,
+                [ResolveMachineRequest(session, request, dropRenderReceipt: true)]));
+        Assert.IsInstanceOfType<ArgumentException>(refusal.InnerException);
+        StringAssert.Contains(refusal.InnerException!.Message, "required artifact role");
+
+        // The complete closure still mints, so the refusal above is the guard and not the seam.
+        Assert.IsNotNull(PrivateMethod("CreateMachineRequest", BindingFlags.Instance).Invoke(
+            session,
+            [ResolveMachineRequest(session, request)]));
+    }
+
     private static object ResolveMachineRequest(
         RoutedHttpAcquisitionSession session,
-        BoundMachineRequest request)
+        BoundMachineRequest request,
+        bool dropRenderReceipt = false)
     {
         var resolverType = typeof(RoutedHttpAcquisitionSession).GetNestedType(
             "SessionMachineArtifactResolver",
@@ -769,6 +827,21 @@ public sealed class RoutedHttpAcquisitionSessionTests
             "CopyResolvedArtifacts",
             BindingFlags.Instance | BindingFlags.NonPublic)?.Invoke(resolver, null)
             ?? throw new AssertFailedException("The resolver exposed no reopened artifacts.");
+        if (dropRenderReceipt)
+        {
+            // The element type is private to the session, so the closure is filtered through
+            // reflection and rebuilt as a typed array the private constructor accepts.
+            var all = ((System.Collections.IEnumerable)artifacts).Cast<object>().ToArray();
+            var elementType = all[0].GetType();
+            var reference = elementType.GetProperty("Reference", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                ?? throw new AssertFailedException("The reopened artifact carries no reference.");
+            var kept = all.Where(artifact => !Equals(reference.GetValue(artifact), opened.RenderReceiptRef)).ToArray();
+            Assert.AreEqual(all.Length - 1, kept.Length, "exactly the render receipt was dropped");
+            var typed = Array.CreateInstance(elementType, kept.Length);
+            Array.Copy(kept, typed, kept.Length);
+            artifacts = typed;
+        }
+
         var resolvedType = typeof(RoutedHttpAcquisitionSession).GetNestedType(
             "ResolvedMachineRequest",
             BindingFlags.NonPublic)

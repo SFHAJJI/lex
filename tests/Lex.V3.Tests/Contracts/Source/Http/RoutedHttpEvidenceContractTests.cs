@@ -810,6 +810,42 @@ public sealed class RoutedHttpEvidenceContractTests
     private static readonly string EmptyDigest =
         Convert.ToHexString(System.Security.Cryptography.SHA256.HashData([])).ToLowerInvariant();
 
+    [TestMethod]
+    public void OrdinalZeroRefusesARedirectTargetItAdmittedWithoutObserving()
+    {
+        // The reservation covered every URI the route fetched. A robots route that terminates
+        // unobserved has a Location this run accepted as its next target and never requested, so
+        // leaving it unchecked let ordinal zero admit a non-robots destination in exactly the case
+        // where nothing observed it.
+        var offRoute = CompleteHop(
+            uri: "https://publications.europa.eu/robots.txt",
+            status: 301,
+            headers: Headers(contentLength: "3", location: "https://publications.europa.eu/resource/cellar"));
+
+        Assert.ThrowsExactly<ArgumentException>(
+            () => Evidence(
+                [offRoute],
+                new RedirectTargetUnobservedHttpRouteOutcome(Digest('4'), "2026-09-02T20:00:00.0000000Z"),
+                requestOrdinal: 0),
+            "an unobserved target off the robots path must not be admitted at ordinal zero");
+
+        // A robots target is admitted, so the guard is not simply refusing every unobserved route.
+        var onRoute = CompleteHop(
+            uri: "https://publications.europa.eu/robots.txt",
+            status: 301,
+            headers: Headers(contentLength: "3", location: "https://op.europa.eu/robots.txt"));
+        _ = Evidence(
+            [onRoute],
+            new RedirectTargetUnobservedHttpRouteOutcome(Digest('4'), "2026-09-02T20:00:00.0000000Z"),
+            requestOrdinal: 0);
+
+        // And away from ordinal zero the reservation does not apply at all.
+        _ = Evidence(
+            [offRoute],
+            new RedirectTargetUnobservedHttpRouteOutcome(Digest('4'), "2026-09-02T20:00:00.0000000Z"),
+            requestOrdinal: 7);
+    }
+
     private static RoutedHttpEvidence Evidence(
         IReadOnlyList<RoutedHttpHop> hops,
         RoutedHttpRouteOutcome? outcome = null,

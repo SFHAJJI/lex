@@ -973,7 +973,20 @@ public static class MachineQueryBinder
             MachineQueryInputArtifact input)
     {
         var ordered = new List<(SourceArtifactRef Reference, string Name)>();
-        var seen = new HashSet<SourceArtifactRef>();
+
+        // Seeded with the three the binder produced, so "external" means external rather than
+        // merely listed elsewhere. A caller can alias them: BindPage and BindCount take the
+        // renderer source from the caller while the input's own ref is derived from values that do
+        // not depend on it, so binding twice yields two identical opened_artifact lines for one
+        // artifact. Nothing is forged by that, and both lines name a true reference, but a distinct
+        // count over the policy's opened lines then reads as a property of the code when it is a
+        // property of the fixture.
+        var seen = new HashSet<SourceArtifactRef>
+        {
+            minted.RenderReceiptRef,
+            minted.QueryPlanRef,
+            minted.OrderedParameterSetRef,
+        };
         Add(minted.RendererProfileRef, "renderer profile");
         Add(minted.RendererSourceRef, "renderer source");
         Add(minted.RenderReceipt.ContentType?.RegistryRef, "content-type registry");
