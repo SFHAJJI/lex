@@ -26,6 +26,14 @@ public sealed class EuFeedRootIntersectionTests
     private const string RootAlsoIn = "http://publications.europa.eu/resource/celex/32019R0452";
     private const string RootOut = "http://publications.europa.eu/resource/celex/99999999";
 
+    // D1-01 Candidate 5 Appendix A, CELEX 12012E/TXT, the first line of the frozen 82-seed map:
+    // exactly the lexical form Appendix A freezes, and an https spelling of the same seed that
+    // EuWemiIdentityBoundary already treats as the same Cellar origin.
+    private const string AppendixASeedCanonical =
+        "http://publications.europa.eu/resource/cellar/ccccda77-8ac2-4a25-8e66-a5827ecd3459";
+    private const string AppendixASeedHttps =
+        "https://publications.europa.eu/resource/cellar/ccccda77-8ac2-4a25-8e66-a5827ecd3459";
+
     [TestMethod]
     public void TheBindingHasExactlyOneConstructionPath()
     {
@@ -183,8 +191,22 @@ public sealed class EuFeedRootIntersectionTests
                 "\"pack_root_blank\"",
                 "\"pack_root_repeated\"",
                 "\"discovered_family_row_outside_the_pack\"",
+                "\"pack_root_not_canonical\"",
             },
             Enum.GetValues<EuFeedIntersectionRefusal>()
+                .Select(value => ContractJson.Serialize(value)).ToArray());
+
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "\"none\"",
+                "\"root_uri_unparseable\"",
+                "\"root_scheme_not_http_or_https\"",
+                "\"root_uri_has_query\"",
+                "\"root_uri_has_fragment\"",
+                "\"root_uri_has_double_slash\"",
+            },
+            Enum.GetValues<EuPackRootCanonicalFormRefusal>()
                 .Select(value => ContractJson.Serialize(value)).ToArray());
 
         CollectionAssert.AreEqual(
@@ -205,6 +227,7 @@ public sealed class EuFeedRootIntersectionTests
                 "\"resolved_work_root_repeated\"",
                 "\"unresolved_observation_carries_resolution_output\"",
                 "\"projection_key_blank\"",
+                "\"resolved_work_root_not_canonical\"",
             },
             Enum.GetValues<EuFeedObservationRefusal>()
                 .Select(value => ContractJson.Serialize(value)).ToArray());
@@ -268,6 +291,64 @@ public sealed class EuFeedRootIntersectionTests
 
         Assert.IsNull(binding);
         Assert.AreEqual(EuFeedIntersectionRefusal.DiscoveredFamilyRowOutsideThePack, refusal);
+    }
+
+    [TestMethod]
+    public void APackRootThatCannotBeCanonicalizedIsRefused()
+    {
+        // Not http or https at all, so no equivalence EuWemiIdentityBoundary already grants
+        // applies; this must be refused, not silently admitted and not read as simply outside the
+        // pack.
+        var binding = EuFeedRootIntersection.TryBind(
+            SeedMapRef(), ClosureMatrixRef(), IdentityBindingRef(),
+            [RootIn, "ftp://publications.europa.eu/resource/cellar/not-http"], [],
+            out var refusal);
+
+        Assert.IsNull(binding);
+        Assert.AreEqual(EuFeedIntersectionRefusal.PackRootNotCanonical, refusal);
+    }
+
+    [TestMethod]
+    public void ADiscoveredFamilyRowSourceRootThatCannotBeCanonicalizedIsRefused()
+    {
+        var binding = EuFeedRootIntersection.TryBind(
+            SeedMapRef(), ClosureMatrixRef(), IdentityBindingRef(),
+            [RootIn],
+            [new EuFeedFamilyProjection("not a uri at all", "family-a", "projected-key-1")],
+            out var refusal);
+
+        Assert.IsNull(binding);
+        Assert.AreEqual(EuFeedIntersectionRefusal.PackRootNotCanonical, refusal);
+    }
+
+    [TestMethod]
+    public void AnHttpsSpelledPackRootIsCanonicalizedAndTreatedAsTheHttpSeed()
+    {
+        // Two spellings of the one Appendix A seed are supplied; the pack must end up with the
+        // single canonical http form, not two rows, because after canonicalization they name one
+        // identity.
+        var binding = EuFeedRootIntersection.TryBind(
+            SeedMapRef(), ClosureMatrixRef(), IdentityBindingRef(),
+            [AppendixASeedHttps], [], out var refusal);
+        Assert.IsNotNull(binding, $"refused as {refusal}");
+
+        CollectionAssert.AreEqual(
+            new[] { AppendixASeedCanonical }, binding.DiscoveredPackRoots.ToArray());
+        Assert.IsTrue(binding.PackContains(AppendixASeedCanonical));
+        Assert.IsTrue(binding.PackContains(AppendixASeedHttps));
+    }
+
+    [TestMethod]
+    public void AnHttpAndAnHttpsSpellingOfTheSameSeedAsTwoPackRootsIsARepeat()
+    {
+        // Before canonicalization these are two different ordinal strings; after, they are one.
+        // The repeat check must see the collision, or P would silently hold the same seed twice.
+        var binding = EuFeedRootIntersection.TryBind(
+            SeedMapRef(), ClosureMatrixRef(), IdentityBindingRef(),
+            [AppendixASeedCanonical, AppendixASeedHttps], [], out var refusal);
+
+        Assert.IsNull(binding);
+        Assert.AreEqual(EuFeedIntersectionRefusal.PackRootRepeated, refusal);
     }
 
     [TestMethod]
@@ -444,6 +525,71 @@ public sealed class EuFeedRootIntersectionTests
     }
 
     [TestMethod]
+    public void AResolvedWorkRootThatCannotBeCanonicalizedIsRefused()
+    {
+        // Never OutOfPack: a root this contract cannot even identify must not reach Classify at
+        // all, let alone be reported as a normal negative classification.
+        var observation = EuFeedEntryObservation.TryObserve(
+            At(1), identityResolutionClosed: true, ["not a uri at all"], [], out var refusal);
+
+        Assert.IsNull(observation);
+        Assert.AreEqual(EuFeedObservationRefusal.ResolvedWorkRootNotCanonical, refusal);
+    }
+
+    [TestMethod]
+    public void AResolvedWorkRootWithASchemeThatIsNeitherHttpNorHttpsIsRefused()
+    {
+        var observation = EuFeedEntryObservation.TryObserve(
+            At(1),
+            identityResolutionClosed: true,
+            ["ftp://publications.europa.eu/resource/cellar/not-http"],
+            [],
+            out var refusal);
+
+        Assert.IsNull(observation);
+        Assert.AreEqual(EuFeedObservationRefusal.ResolvedWorkRootNotCanonical, refusal);
+    }
+
+    [TestMethod]
+    public void AProjectionSourceWorkRootThatCannotBeCanonicalizedIsRefused()
+    {
+        var observation = EuFeedEntryObservation.TryObserve(
+            At(1),
+            identityResolutionClosed: true,
+            [RootIn],
+            [new EuFeedFamilyProjection("not a uri at all", "family-a", "projected-key-1")],
+            out var refusal);
+
+        Assert.IsNull(observation);
+        Assert.AreEqual(EuFeedObservationRefusal.ResolvedWorkRootNotCanonical, refusal);
+    }
+
+    [TestMethod]
+    public void AnHttpAndAnHttpsSpellingOfTheSameResolvedRootIsARepeat()
+    {
+        var observation = EuFeedEntryObservation.TryObserve(
+            At(1),
+            identityResolutionClosed: true,
+            [AppendixASeedCanonical, AppendixASeedHttps],
+            [],
+            out var refusal);
+
+        Assert.IsNull(observation);
+        Assert.AreEqual(EuFeedObservationRefusal.ResolvedWorkRootRepeated, refusal);
+    }
+
+    [TestMethod]
+    public void AnHttpsResolvedWorkRootIsCanonicalizedToTheHttpForm()
+    {
+        var observation = EuFeedEntryObservation.TryObserve(
+            At(1), identityResolutionClosed: true, [AppendixASeedHttps], [], out var refusal);
+
+        Assert.IsNotNull(observation, $"refused as {refusal}");
+        CollectionAssert.AreEqual(
+            new[] { AppendixASeedCanonical }, observation.ResolvedWorkRoots.ToArray());
+    }
+
+    [TestMethod]
     public void AWellFormedObservationSortsRootsAndProjections()
     {
         var observation = EuFeedEntryObservation.TryObserve(
@@ -476,6 +622,29 @@ public sealed class EuFeedRootIntersectionTests
 
         Assert.AreEqual(EuFeedTerminal.InPack, termination.Terminal);
         CollectionAssert.AreEqual(new[] { RootIn }, termination.InPack.ToArray());
+        Assert.AreEqual(0, termination.OutOfPack.Count);
+        Assert.AreEqual(EuFeedOutOfPackReason.None, termination.OutOfPackReason);
+    }
+
+    [TestMethod]
+    public void AnHttpsSpelledAppendixASeedIsInPackNotOutOfPack()
+    {
+        // Decision 81's canonical-form finding, end to end: the pack is bound from the exact
+        // Appendix A lexical form (http), the entry's identity resolution normalized the same
+        // seed to https - which EuWemiIdentityBoundary already treats as the same Cellar origin -
+        // and Classify must still land on InPack. Before this fix, exact ordinal pack-root
+        // matching sent this straight to OutOfPack, silently: the cut still completed and the
+        // terminal-count equation still balanced, it just reported a genuine in-pack seed as
+        // absent from the pack.
+        var entries = CloseEntries(Plan(2), 1);
+        var binding = Binding([AppendixASeedCanonical], []);
+        var observation = Observed(At(1), [AppendixASeedHttps]);
+
+        var termination = binding.Classify(observation, entries);
+
+        Assert.AreEqual(EuFeedTerminal.InPack, termination.Terminal);
+        CollectionAssert.AreEqual(
+            new[] { AppendixASeedCanonical }, termination.InPack.ToArray());
         Assert.AreEqual(0, termination.OutOfPack.Count);
         Assert.AreEqual(EuFeedOutOfPackReason.None, termination.OutOfPackReason);
     }
@@ -811,6 +980,127 @@ public sealed class EuFeedRootIntersectionTests
         Assert.AreEqual(
             0, reconciliation.ConflictCounts[EuFeedReconciliationConflict.UnresolvedOrAmbiguousTerminal]);
         Assert.IsTrue(reconciliation.MakesTheCutIncomplete);
+    }
+
+    // ---- EuPackRootCanonicalForm.TryCanonicalize, in isolation from the binding. ----
+
+    [TestMethod]
+    public void AnAlreadyCanonicalRootCanonicalizesToItselfUnchanged()
+    {
+        var canonical = EuPackRootCanonicalForm.TryCanonicalize(
+            AppendixASeedCanonical, out var refusal);
+
+        Assert.AreEqual(AppendixASeedCanonical, canonical);
+        Assert.AreEqual(EuPackRootCanonicalFormRefusal.None, refusal);
+    }
+
+    [TestMethod]
+    public void AnHttpsRootCanonicalizesToTheHttpForm()
+    {
+        var canonical = EuPackRootCanonicalForm.TryCanonicalize(
+            AppendixASeedHttps, out var refusal);
+
+        Assert.AreEqual(AppendixASeedCanonical, canonical);
+        Assert.AreEqual(EuPackRootCanonicalFormRefusal.None, refusal);
+    }
+
+    [TestMethod]
+    public void ATrailingSlashIsStrippedFromTheCanonicalForm()
+    {
+        var canonical = EuPackRootCanonicalForm.TryCanonicalize(
+            AppendixASeedHttps + "/", out var refusal);
+
+        Assert.AreEqual(AppendixASeedCanonical, canonical);
+        Assert.AreEqual(EuPackRootCanonicalFormRefusal.None, refusal);
+    }
+
+    [TestMethod]
+    public void AnUnparseableRootRefusesAsUnparseable()
+    {
+        var canonical = EuPackRootCanonicalForm.TryCanonicalize(
+            "not a uri at all", out var refusal);
+
+        Assert.IsNull(canonical);
+        Assert.AreEqual(EuPackRootCanonicalFormRefusal.RootUriUnparseable, refusal);
+    }
+
+    [TestMethod]
+    public void ASchemeThatIsNeitherHttpNorHttpsRefusesAsWrongScheme()
+    {
+        // A valid absolute URI, so this drives the scheme branch specifically rather than the
+        // parse-failure branch that AnUnparseableRootRefusesAsUnparseable already drives.
+        var canonical = EuPackRootCanonicalForm.TryCanonicalize(
+            "ftp://publications.europa.eu/resource/cellar/ccccda77-8ac2-4a25-8e66-a5827ecd3459",
+            out var refusal);
+
+        Assert.IsNull(canonical);
+        Assert.AreEqual(EuPackRootCanonicalFormRefusal.RootSchemeNotHttpOrHttps, refusal);
+    }
+
+    [TestMethod]
+    public void ASchemeSpelledWithDifferentCasingRefusesRatherThanBeingGuessedAt()
+    {
+        // Uri parses "HTTP://..." as scheme "http" (it lowercases internally), but the ordinal
+        // lexical form Appendix A freezes is exactly "http://". Trusting Uri's own normalization
+        // here would admit a spelling nobody reviewed as equivalent.
+        var canonical = EuPackRootCanonicalForm.TryCanonicalize(
+            "HTTP://publications.europa.eu/resource/cellar/ccccda77-8ac2-4a25-8e66-a5827ecd3459",
+            out var refusal);
+
+        Assert.IsNull(canonical);
+        Assert.AreEqual(EuPackRootCanonicalFormRefusal.RootSchemeNotHttpOrHttps, refusal);
+    }
+
+    [TestMethod]
+    public void ARootWithAQueryStringIsRefused()
+    {
+        // A Cellar Work root never carries a query. Before this refusal existed, a trailing
+        // slash inside the query value (here, "1/") would have been silently stripped by the
+        // trailing-slash trim, corrupting a query this function otherwise retains byte for byte.
+        var canonical = EuPackRootCanonicalForm.TryCanonicalize(
+            AppendixASeedCanonical + "?query=1/", out var refusal);
+
+        Assert.IsNull(canonical);
+        Assert.AreEqual(EuPackRootCanonicalFormRefusal.RootUriHasQuery, refusal);
+    }
+
+    [TestMethod]
+    public void ARootWithAFragmentIsRefused()
+    {
+        // Same corruption risk as the query case, but for a fragment (here, "section/").
+        var canonical = EuPackRootCanonicalForm.TryCanonicalize(
+            AppendixASeedCanonical + "#section/", out var refusal);
+
+        Assert.IsNull(canonical);
+        Assert.AreEqual(EuPackRootCanonicalFormRefusal.RootUriHasFragment, refusal);
+    }
+
+    [TestMethod]
+    public void ARootWithTwoTrailingSlashesIsRefusedRatherThanCollapsedToOne()
+    {
+        // Before this refusal existed, TrimEnd('/') stripped every trailing slash, so this root
+        // and AppendixASeedCanonical + "/" (one trailing slash, which
+        // ATrailingSlashIsStrippedFromTheCanonicalForm shows canonicalizes cleanly) would both
+        // have canonicalized to the identical string - two distinct inputs, one output, breaking
+        // injectivity. It must be refused instead.
+        var canonical = EuPackRootCanonicalForm.TryCanonicalize(
+            AppendixASeedCanonical + "//", out var refusal);
+
+        Assert.IsNull(canonical);
+        Assert.AreEqual(EuPackRootCanonicalFormRefusal.RootUriHasDoubleSlash, refusal);
+    }
+
+    [TestMethod]
+    public void ARootWithADoubledSlashInTheMiddleOfThePathIsRefused()
+    {
+        // The doubled-slash refusal is not limited to the trailing position: a Cellar Work root
+        // never carries a repeated slash anywhere in its authority-plus-path.
+        var canonical = EuPackRootCanonicalForm.TryCanonicalize(
+            "http://publications.europa.eu/resource//cellar/ccccda77-8ac2-4a25-8e66-a5827ecd3459",
+            out var refusal);
+
+        Assert.IsNull(canonical);
+        Assert.AreEqual(EuPackRootCanonicalFormRefusal.RootUriHasDoubleSlash, refusal);
     }
 
     // ---- Fixtures. ----

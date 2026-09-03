@@ -153,6 +153,170 @@ public enum EuFeedIntersectionRefusal
     /// </summary>
     [JsonStringEnumMemberName("discovered_family_row_outside_the_pack")]
     DiscoveredFamilyRowOutsideThePack = 4,
+
+    /// <summary>
+    /// A pack root, or a discovered family row's source Work root, could not be reduced to
+    /// Appendix A's exact lexical form (see <see cref="EuPackRootCanonicalForm"/>). This is
+    /// refused rather than admitted as written and rather than silently excluded from the pack:
+    /// the binding fixes <c>P</c> once, and a string this contract cannot even identify must not
+    /// be allowed to stand for a root that Appendix A did, or did not, freeze.
+    /// </summary>
+    [JsonStringEnumMemberName("pack_root_not_canonical")]
+    PackRootNotCanonical = 5,
+}
+
+/// <summary>
+/// Why a Work-root string could not be reduced to Appendix A's exact lexical form: <c>http</c>
+/// scheme, no query, no fragment, no doubled slash, and exactly one trailing slash removed if
+/// present - otherwise byte for byte as supplied. Closed.
+/// </summary>
+public enum EuPackRootCanonicalFormRefusal
+{
+    /// <summary>No refusal.</summary>
+    [JsonStringEnumMemberName("none")]
+    None = 0,
+
+    /// <summary>The root is not a well formed absolute URI.</summary>
+    [JsonStringEnumMemberName("root_uri_unparseable")]
+    RootUriUnparseable = 1,
+
+    /// <summary>
+    /// The root's scheme is neither <c>http</c> nor <c>https</c> - the only two
+    /// <see cref="EuWemiIdentityBoundary"/> already admits as naming the same Cellar origin.
+    /// </summary>
+    [JsonStringEnumMemberName("root_scheme_not_http_or_https")]
+    RootSchemeNotHttpOrHttps = 2,
+
+    /// <summary>
+    /// The root carries a query string. A Cellar Work root never has one, and without this
+    /// refusal the trailing-slash trim below would silently remove a slash that happens to sit at
+    /// the end of the query's own value, which <see cref="EuPackRootCanonicalForm"/> otherwise
+    /// retains byte for byte.
+    /// </summary>
+    [JsonStringEnumMemberName("root_uri_has_query")]
+    RootUriHasQuery = 3,
+
+    /// <summary>
+    /// The root carries a fragment. A Cellar Work root never has one, and without this refusal
+    /// the trailing-slash trim below would silently remove a slash that happens to sit at the end
+    /// of the fragment itself, which <see cref="EuPackRootCanonicalForm"/> otherwise retains byte
+    /// for byte.
+    /// </summary>
+    [JsonStringEnumMemberName("root_uri_has_fragment")]
+    RootUriHasFragment = 4,
+
+    /// <summary>
+    /// The root's authority-plus-path carries two or more consecutive slashes. A Cellar Work root
+    /// never has one, and without this refusal two distinct lexical forms - differing only in how
+    /// many slashes they repeat, at the end or in the middle - would canonicalize to the same
+    /// string, which is exactly the injectivity this refusal exists to preserve.
+    /// </summary>
+    [JsonStringEnumMemberName("root_uri_has_double_slash")]
+    RootUriHasDoubleSlash = 5,
+}
+
+/// <summary>
+/// The one place a Work-root string is reduced to Appendix A's exact lexical form.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Deliberately narrower than a general URI normalizer. It repeats exactly the one equivalence
+/// <see cref="EuWemiIdentityBoundary"/> already grants - an <c>http</c> and an <c>https</c>
+/// spelling of the same origin name the same Cellar object - and nothing else: no host casing, no
+/// percent-decoding, no port folding. Those are axes EuWemiIdentityBoundary's own ordinal
+/// comparison does not treat as one identity either (<c>RequirePublisherUriNamesTheKey</c> is
+/// exact <see cref="StringComparison.Ordinal"/> against two literal origins), and inventing
+/// tolerance for them here would let two genuinely different publisher URIs collapse into one
+/// pack root.
+/// </para>
+/// <para>
+/// A trailing slash is stripped rather than refused: Appendix A's frozen form never carries one,
+/// and removing exactly one - never more - is unambiguous. A query, a fragment, and a doubled
+/// slash anywhere in the authority-plus-path are refused rather than reduced: a Cellar Work root
+/// never carries any of the three, and admitting one would either let the trailing-slash trim
+/// silently corrupt a query or fragment that happens to end in a slash - which this function
+/// otherwise retains byte for byte - or let two distinct lexical forms that differ only in how
+/// many slashes they repeat canonicalize to the same string. Everything this cannot reduce
+/// deterministically is refused instead of guessed at - an unparseable string, a scheme that is
+/// not http or https, a query, a fragment, or a doubled slash - so that the caller of
+/// <see cref="TryCanonicalize"/> can tell "not this identity" from "not identified at all" apart.
+/// </para>
+/// </remarks>
+public static class EuPackRootCanonicalForm
+{
+    private const string HttpScheme = "http://";
+    private const string HttpsScheme = "https://";
+
+    /// <summary>The only path that canonicalizes a Work-root string.</summary>
+    /// <param name="rootUri">The Work-root string a caller resolved or discovered.</param>
+    /// <param name="refusal">Why no canonical form exists, when none does.</param>
+    public static string? TryCanonicalize(string rootUri, out EuPackRootCanonicalFormRefusal refusal)
+    {
+        ArgumentNullException.ThrowIfNull(rootUri);
+
+        // A parse gate ahead of the ordinal scheme check, so a string that is not a URI at all -
+        // blank, containing whitespace, missing an authority - is refused as unparseable rather
+        // than falling through to the scheme check and being refused for the wrong reason.
+        if (!Uri.TryCreate(rootUri, UriKind.Absolute, out _))
+        {
+            refusal = EuPackRootCanonicalFormRefusal.RootUriUnparseable;
+            return null;
+        }
+
+        string afterScheme;
+        if (rootUri.StartsWith(HttpScheme, StringComparison.Ordinal))
+        {
+            afterScheme = rootUri[HttpScheme.Length..];
+        }
+        else if (rootUri.StartsWith(HttpsScheme, StringComparison.Ordinal))
+        {
+            afterScheme = rootUri[HttpsScheme.Length..];
+        }
+        else
+        {
+            // Ordinal, not Uri.Scheme: a scheme spelled with different casing round-trips through
+            // Uri as "http" too, and admitting it here would accept a lexical form Appendix A does
+            // not freeze on the strength of a library normalization nobody reviewed.
+            refusal = EuPackRootCanonicalFormRefusal.RootSchemeNotHttpOrHttps;
+            return null;
+        }
+
+        // A Cellar Work root carries none of these three, so each is refused rather than reduced.
+        // Checked on afterScheme (never on the literal scheme prefix, which cannot contain any of
+        // them), and in this order so a query or fragment is reported as itself rather than as a
+        // doubled slash that happens to occur inside it.
+        if (afterScheme.Contains('?'))
+        {
+            refusal = EuPackRootCanonicalFormRefusal.RootUriHasQuery;
+            return null;
+        }
+
+        if (afterScheme.Contains('#'))
+        {
+            refusal = EuPackRootCanonicalFormRefusal.RootUriHasFragment;
+            return null;
+        }
+
+        if (afterScheme.Contains("//", StringComparison.Ordinal))
+        {
+            refusal = EuPackRootCanonicalFormRefusal.RootUriHasDoubleSlash;
+            return null;
+        }
+
+        // Exactly one trailing slash is removed, never more. The double-slash refusal above
+        // already guarantees afterScheme cannot end in two or more, so this could equivalently be
+        // TrimEnd('/'); it is written as a single-character removal instead so that guarantee is
+        // enforced at this line too, rather than only relied upon from the check above it.
+        var trimmed = afterScheme.EndsWith('/') ? afterScheme[..^1] : afterScheme;
+
+        // No empty-remainder case reaches here: Uri.TryCreate(rootUri, UriKind.Absolute, out _)
+        // above already rejects every http/https string whose authority is empty (an http or
+        // https URI requires a host), and afterScheme trims to empty only when the entire
+        // authority-plus-path was made of slashes, i.e. the authority was empty. There is
+        // therefore no rootUri that both parses as absolute and produces an empty trimmed.
+        refusal = EuPackRootCanonicalFormRefusal.None;
+        return HttpScheme + trimmed;
+    }
 }
 
 /// <summary>Why a canonical entry set was refused. Closed.</summary>
@@ -208,6 +372,17 @@ public enum EuFeedObservationRefusal
     /// </summary>
     [JsonStringEnumMemberName("projection_key_blank")]
     ProjectionKeyBlank = 4,
+
+    /// <summary>
+    /// A resolved Work root, or a projection's source Work root, could not be reduced to Appendix
+    /// A's exact lexical form (see <see cref="EuPackRootCanonicalForm"/>). Refused here rather
+    /// than left to reach <see cref="EuFeedRootIntersection.Classify"/>, because Classify is total
+    /// and would otherwise have to report "could not tell" as the OutOfPack terminal - a normal,
+    /// well-formed negative result that a genuinely unidentifiable root must never be mistaken
+    /// for.
+    /// </summary>
+    [JsonStringEnumMemberName("resolved_work_root_not_canonical")]
+    ResolvedWorkRootNotCanonical = 5,
 }
 
 /// <summary>
@@ -468,6 +643,29 @@ public sealed class EuFeedEntryObservation
             return null;
         }
 
+        // Appendix A's exact lexical form is the only one that reaches Classify's pack-membership
+        // comparison. A caller's identity resolution is free to normalize a root to https - R3
+        // never says it may not - so that variant is reduced to the canonical form here, ahead of
+        // the repeat check below, rather than compared against the pack byte for byte later. This
+        // also means an http and an https spelling of the same root now collide at the repeat
+        // check instead of silently doubling W.
+        for (var i = 0; i < roots.Length; i++)
+        {
+            // TryCanonicalize's own refusal reason is discarded here: ResolvedWorkRootNotCanonical
+            // is the one member this observation's closed refusal vocabulary has for "could not be
+            // reduced to Appendix A's exact lexical form" (it covers this loop and the projection-
+            // source loop below alike), and an observation refusal only needs to say that, not
+            // which of TryCanonicalize's own reasons produced it.
+            var canonicalRoot = EuPackRootCanonicalForm.TryCanonicalize(roots[i], out _);
+            if (canonicalRoot is null)
+            {
+                refusal = EuFeedObservationRefusal.ResolvedWorkRootNotCanonical;
+                return null;
+            }
+
+            roots[i] = canonicalRoot;
+        }
+
         var distinct = new HashSet<string>(roots, StringComparer.Ordinal);
         if (distinct.Count != roots.Length)
         {
@@ -485,6 +683,24 @@ public sealed class EuFeedEntryObservation
         {
             refusal = EuFeedObservationRefusal.ProjectionKeyBlank;
             return null;
+        }
+
+        // A projection's source Work root is compared against the pack too (Classify splits
+        // InPackProjections/OutOfPackProjections by it, and the reconciliation looks it up in the
+        // discovered family index), so it is canonicalized on the same terms as W itself.
+        for (var i = 0; i < rows.Length; i++)
+        {
+            // Same discard as the resolved-root loop above: ResolvedWorkRootNotCanonical does not
+            // distinguish which of TryCanonicalize's reasons fired.
+            var canonicalSource = EuPackRootCanonicalForm.TryCanonicalize(
+                rows[i].SourceWorkRoot, out _);
+            if (canonicalSource is null)
+            {
+                refusal = EuFeedObservationRefusal.ResolvedWorkRootNotCanonical;
+                return null;
+            }
+
+            rows[i] = rows[i] with { SourceWorkRoot = canonicalSource };
         }
 
         refusal = EuFeedObservationRefusal.None;
@@ -720,6 +936,41 @@ public sealed class EuFeedRootIntersection
             return null;
         }
 
+        // Appendix A's exact lexical form is the only one that reaches the pack-membership
+        // comparisons below and in Classify. This also means two spellings of the same seed (one
+        // http, one https) now collide at the repeat check below instead of silently doubling P.
+        for (var i = 0; i < roots.Length; i++)
+        {
+            // TryCanonicalize's own refusal reason is discarded here: PackRootNotCanonical is the
+            // one member this binding's closed refusal vocabulary has for "could not be reduced to
+            // Appendix A's exact lexical form" (it covers this loop and the family-row loop below
+            // alike), and a binding refusal only needs to say that, not which of TryCanonicalize's
+            // own reasons produced it.
+            var canonicalRoot = EuPackRootCanonicalForm.TryCanonicalize(roots[i], out _);
+            if (canonicalRoot is null)
+            {
+                refusal = EuFeedIntersectionRefusal.PackRootNotCanonical;
+                return null;
+            }
+
+            roots[i] = canonicalRoot;
+        }
+
+        for (var i = 0; i < rows.Length; i++)
+        {
+            // Same discard as the pack-root loop above: PackRootNotCanonical does not distinguish
+            // which of TryCanonicalize's reasons fired.
+            var canonicalSource = EuPackRootCanonicalForm.TryCanonicalize(
+                rows[i].SourceWorkRoot, out _);
+            if (canonicalSource is null)
+            {
+                refusal = EuFeedIntersectionRefusal.PackRootNotCanonical;
+                return null;
+            }
+
+            rows[i] = rows[i] with { SourceWorkRoot = canonicalSource };
+        }
+
         var packRoots = new HashSet<string>(roots, StringComparer.Ordinal);
         if (packRoots.Count != roots.Length)
         {
@@ -753,17 +1004,38 @@ public sealed class EuFeedRootIntersection
     }
 
     /// <summary>True when a Work root is a member of the discovered pack.</summary>
+    /// <remarks>
+    /// The argument is canonicalized before the comparison (see
+    /// <see cref="EuPackRootCanonicalForm"/>), so an http and an https spelling of the same Cellar
+    /// origin answer alike here too, not only through <see cref="Classify"/>. A root that cannot
+    /// be canonicalized is not a member: nothing this method returns claims to have identified it.
+    /// </remarks>
     public bool PackContains(string workRoot)
     {
         ArgumentNullException.ThrowIfNull(workRoot);
-        return _packRoots.Contains(workRoot);
+        // TryCanonicalize's refusal reason is discarded here, deliberately and unlike the two
+        // TryX doors above: this method's contract is a plain membership bool, which has nowhere
+        // to carry a refusal, and every reason TryCanonicalize can report answers "not a member"
+        // alike (see the remarks above).
+        var canonical = EuPackRootCanonicalForm.TryCanonicalize(workRoot, out _);
+        return canonical is not null && _packRoots.Contains(canonical);
     }
 
     /// <summary>True when a projection occurs in the cut's discovered family index.</summary>
+    /// <remarks>
+    /// The projection's source Work root is canonicalized before the comparison, on the same
+    /// terms as <see cref="PackContains"/>, so the family index - itself built from canonicalized
+    /// rows in <see cref="TryBind"/> - is not searched for a spelling it never stores.
+    /// </remarks>
     public bool DiscoveredFamilyContains(EuFeedFamilyProjection projection)
     {
         ArgumentNullException.ThrowIfNull(projection);
-        return _discoveredFamilyRows.Contains(projection);
+        // Same discard as PackContains: a plain membership bool has nowhere to carry a refusal
+        // reason, and every reason TryCanonicalize can report answers "not a member" alike.
+        var canonicalSource = EuPackRootCanonicalForm.TryCanonicalize(
+            projection.SourceWorkRoot, out _);
+        return canonicalSource is not null &&
+            _discoveredFamilyRows.Contains(projection with { SourceWorkRoot = canonicalSource });
     }
 
     /// <summary>
