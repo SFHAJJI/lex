@@ -110,7 +110,7 @@ public sealed class LuxembourgQueryPlanTests
                 "http://data.legilux.public.lu/a", "same", "x", "9", "", ""),
             24,
             Artifact("cccccccc-cccc-4ccc-8ccc-cccccccccccc", 'c'),
-            Artifact("88888888-8888-4888-8888-888888888888", '8'));
+            RendererSource());
 
         Assert.AreEqual(LuxembourgQueryPlan.PublisherEndpoint, page.Request.RequestedUri);
         Assert.AreEqual(HttpRequestMethod.Post, page.MachinePlan.Method);
@@ -159,7 +159,7 @@ public sealed class LuxembourgQueryPlanTests
             "A",
             LuxembourgQueryPass.Pass2,
             new LuxembourgQueryPartitionRange("assertions", Cursor("a"), Cursor("z")),
-            Artifact("88888888-8888-4888-8888-888888888888", '8'));
+            RendererSource());
 
         Assert.AreEqual(MachineResponseCardinalityKind.OpaqueBody, count.MachinePlan.ResponseCardinality.Kind);
         CollectionAssert.AreEqual(
@@ -215,7 +215,7 @@ public sealed class LuxembourgQueryPlanTests
                 definition.SetId,
                 LuxembourgQueryPass.Pass1,
                 partition,
-                Artifact("88888888-8888-4888-8888-888888888888", '8'));
+                RendererSource());
             var page = plan.BindPage(
                 planResourceId,
                 "urn:uuid:99999999-9999-4999-8999-999999999999",
@@ -226,7 +226,7 @@ public sealed class LuxembourgQueryPlanTests
                 lastCursor: null,
                 expectedPartitionRowCount: 0,
                 Artifact("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", 'b'),
-                Artifact("cccccccc-cccc-4ccc-8ccc-cccccccccccc", 'c'));
+                RendererSource());
             var continuedPage = plan.BindPage(
                 planResourceId,
                 "urn:uuid:99999999-9999-4999-8999-999999999998",
@@ -237,7 +237,7 @@ public sealed class LuxembourgQueryPlanTests
                 Cursor("m"),
                 expectedPartitionRowCount: 1,
                 Artifact("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbc", 'd'),
-                Artifact("cccccccc-cccc-4ccc-8ccc-cccccccccccd", 'e'));
+                RendererSource());
 
             Assert.AreEqual(
                 RepeatedEnumerationSparqlJsonDialect.LuxembourgVirtuoso,
@@ -395,7 +395,7 @@ public sealed class LuxembourgQueryPlanTests
             "subjects-a",
             Cursor("a"),
             Cursor("z"));
-        var renderer = Artifact("88888888-8888-4888-8888-888888888888", '8');
+        var renderer = RendererSource();
         var first = plan.BindPage(
             "urn:uuid:55555555-5555-4555-8555-555555555555",
             "urn:uuid:66666666-6666-4666-8666-666666666666",
@@ -643,7 +643,22 @@ public sealed class LuxembourgQueryPlanTests
         cursor,
         10,
         Artifact("cccccccc-cccc-4ccc-8ccc-cccccccccccc", 'c'),
-        Artifact("88888888-8888-4888-8888-888888888888", '8'));
+        RendererSource());
+
+    /// <summary>
+    /// A renderer source the binder will accept: a reference minted from real bytes, and those
+    /// bytes. The filler-digest Artifact helper cannot serve here by construction, which is the
+    /// point of the pair type: a reference whose bytes nobody holds is exactly what a send used to
+    /// be allowed to name.
+    /// </summary>
+    private static MachineQueryRendererSource RendererSource()
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes("lu-sparql-renderer-source/1");
+        return MachineQueryRendererSource.Open(
+            new SourceArtifactRef(
+                "urn:uuid:88888888-8888-4888-8888-888888888888", Sha256(bytes)),
+            bytes);
+    }
 
     private static SourceArtifactRef Artifact(string id, char digest) =>
         new($"urn:uuid:{id}", new string(digest, 64));

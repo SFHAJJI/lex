@@ -596,6 +596,31 @@ public interface IMachineQueryRenderer
 
     SourceArtifactRef RendererSourceRef { get; }
 
+    /// <summary>
+    /// The exact bytes <see cref="RendererProfileRef"/> names, when this renderer can produce
+    /// them. Null when it cannot.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Decision 75: a run holds what it depends on rather than inheriting someone else's custody.
+    /// The four external artifacts of a send closure are versioned constants of the code that
+    /// runs, and the frozen plan already names each by digest, so the digest is the authority and
+    /// these bytes are its witness. The binder verifies them against the reference at bind time,
+    /// and retention refuses bytes that do not hash to the digest, so supplying them can only
+    /// place under our own custody the exact bytes the reference already named.
+    /// </para>
+    /// <para>
+    /// Optional rather than required, and deliberately so. A renderer that returns null keeps the
+    /// reopen-by-reference path, which requires the artifact to already be in the store. That
+    /// path is scheduled for deletion once every renderer produces its bytes; it exists now only
+    /// so one adapter can close while another has not yet.
+    /// </para>
+    /// </remarks>
+    ReadOnlyMemory<byte>? CopyRendererProfileBytes() => null;
+
+    /// <summary>The exact bytes <see cref="RendererSourceRef"/> names, or null.</summary>
+    ReadOnlyMemory<byte>? CopyRendererSourceBytes() => null;
+
     MachineQueryRenderOutput Render(
         MachineQueryPlan plan,
         MachineQueryInputArtifact orderedParameterSet);
@@ -764,6 +789,15 @@ public static class MachineQueryBinder
             queryPlanRef,
             orderedParameterSet,
             renderer);
+        // Verified here, at the one place that holds both the reference and the bytes. A caller
+        // cannot pair a true reference with other bytes, and retention refuses anything that does
+        // not hash to the digest, so the two checks together mean supplying bytes can only place
+        // under our custody what the frozen reference already named.
+        var profileBytes = RequireNamedBytes(
+            renderer.CopyRendererProfileBytes(), renderer.RendererProfileRef, "renderer profile");
+        var sourceBytes = RequireNamedBytes(
+            renderer.CopyRendererSourceBytes(), renderer.RendererSourceRef, "renderer source");
+
         return new MintedBoundMachineRequest(
             plan,
             queryPlanRef,
@@ -773,7 +807,34 @@ public static class MachineQueryBinder
             renderer,
             renderer.RendererProfileRef,
             renderer.RendererSourceRef,
-            reproduced);
+            reproduced,
+            profileBytes,
+            sourceBytes);
+    }
+
+    /// <summary>
+    /// Bytes offered for a reference must hash to it. Absent bytes are permitted and keep the
+    /// reopen-by-reference path; wrong bytes are never permitted.
+    /// </summary>
+    private static ReadOnlyMemory<byte>? RequireNamedBytes(
+        ReadOnlyMemory<byte>? offered,
+        SourceArtifactRef reference,
+        string artifactName)
+    {
+        if (offered is not { } bytes)
+        {
+            return null;
+        }
+
+        var digest = Convert.ToHexString(SHA256.HashData(bytes.Span)).ToLowerInvariant();
+        if (!string.Equals(digest, reference.Sha256, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                $"The {artifactName} bytes do not carry the digest their reference names.",
+                nameof(reference));
+        }
+
+        return bytes;
     }
 
     /// <summary>
@@ -914,11 +975,13 @@ public static class MachineQueryBinder
             minted.OrderedParameterSetRef,
             inputBytes.Span);
 
-        foreach (var (reference, artifactName) in ExternalArtifactReferences(minted, input))
+        foreach (var (reference, artifactName, offeredBytes) in
+            ExternalArtifactReferences(minted, input))
         {
             _ = await ReopenExternalAsync(
                     resolver,
                     reference,
+                    offeredBytes,
                     cancellationToken,
                     artifactName)
                 .ConfigureAwait(false);
@@ -956,23 +1019,50 @@ public static class MachineQueryBinder
             receiptBytes.ToArray());
     }
 
+    /// <summary>
+    /// Reopens one external artifact, retaining it first when this run can produce its bytes.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Decision 75: a run holds what it depends on. When the offered bytes are present the
+    /// resolver retains them and reopens what it retained, so the run's own custody covers the
+    /// artifact and a fresh store is sufficient. The bytes were verified against the reference at
+    /// bind time and retention verifies them again, so the digest stays the authority.
+    /// </para>
+    /// <para>
+    /// When they are absent this falls back to reopen by reference, which requires the artifact to
+    /// already exist in the store. That fallback is temporary and its deletion is item 1b: it is
+    /// what lets one adapter close while another has not yet, and a route relying on it is not
+    /// proven against a fresh store. Deleting it is the only thing that stops a temporary path
+    /// becoming a permanent one.
+    /// </para>
+    /// </remarks>
     private static async Task<ReadOnlyMemory<byte>> ReopenExternalAsync(
         IMachineQueryArtifactResolver resolver,
         SourceArtifactRef reference,
+        ReadOnlyMemory<byte>? offeredBytes,
         CancellationToken cancellationToken,
         string artifactName)
     {
-        var bytes = await resolver.ReopenAsync(reference, cancellationToken).ConfigureAwait(false);
+        var bytes = offeredBytes is { } carried
+            ? await resolver.RetainAndReopenAsync(reference, carried, cancellationToken)
+                .ConfigureAwait(false)
+            : await resolver.ReopenAsync(reference, cancellationToken).ConfigureAwait(false);
+
+        // expectedBytes stays null even when this run carried them. The reference is the
+        // authority and the resolver's answer is checked against it; checking the resolver's
+        // answer against the same array we just handed it would be a check that cannot fail.
         RequireExactArtifact(reference, bytes.Span, expectedBytes: null, artifactName);
         return bytes.ToArray();
     }
 
-    private static IReadOnlyList<(SourceArtifactRef Reference, string Name)>
+    private static IReadOnlyList<(SourceArtifactRef Reference, string Name, ReadOnlyMemory<byte>? Bytes)>
         ExternalArtifactReferences(
             MintedBoundMachineRequest minted,
             MachineQueryInputArtifact input)
     {
-        var ordered = new List<(SourceArtifactRef Reference, string Name)>();
+        var ordered =
+            new List<(SourceArtifactRef Reference, string Name, ReadOnlyMemory<byte>? Bytes)>();
 
         // Seeded with the three the binder produced, so "external" means external rather than
         // merely listed elsewhere. A caller can alias them: BindPage and BindCount take the
@@ -987,8 +1077,8 @@ public static class MachineQueryBinder
             minted.QueryPlanRef,
             minted.OrderedParameterSetRef,
         };
-        Add(minted.RendererProfileRef, "renderer profile");
-        Add(minted.RendererSourceRef, "renderer source");
+        Add(minted.RendererProfileRef, "renderer profile", minted.CopyRendererProfileBytes());
+        Add(minted.RendererSourceRef, "renderer source", minted.CopyRendererSourceBytes());
         Add(minted.RenderReceipt.ContentType?.RegistryRef, "content-type registry");
         Add(minted.Plan.QueryFamilyRef.RegistryRef, "query-family registry");
         Add(
@@ -1001,11 +1091,11 @@ public static class MachineQueryBinder
 
         return ordered;
 
-        void Add(SourceArtifactRef? reference, string name)
+        void Add(SourceArtifactRef? reference, string name, ReadOnlyMemory<byte>? bytes = null)
         {
             if (reference is not null && seen.Add(reference))
             {
-                ordered.Add((reference, name));
+                ordered.Add((reference, name, bytes));
             }
         }
     }
@@ -1147,6 +1237,18 @@ public static class MachineQueryBinder
         private readonly byte[] _requestBody;
         private readonly byte[] _renderReceiptCanonicalBytes;
 
+        // Held as the nullable memory itself, never as a byte[] that a conditional or an implicit
+        // conversion has to turn back into one. ReadOnlyMemory<byte> has an implicit conversion
+        // from byte[] that accepts null and yields an empty memory, so any expression whose best
+        // common type lands on byte[] converts "no bytes" into "zero bytes" without a warning.
+        // That is not a cosmetic difference here: zero bytes is a present offer, and the send
+        // would retain an empty artifact under a true digest rather than fall back to reopening
+        // the real one. Both spellings that reintroduce it are pinned by
+        // RendererWithoutBytesIsReopenedRatherThanRetained.
+        private readonly ReadOnlyMemory<byte>? _rendererProfileBytes;
+
+        private readonly ReadOnlyMemory<byte>? _rendererSourceBytes;
+
         internal MintedBoundMachineRequest(
             MachineQueryPlan plan,
             SourceArtifactRef queryPlanRef,
@@ -1156,8 +1258,19 @@ public static class MachineQueryBinder
             IMachineQueryRenderer renderer,
             SourceArtifactRef rendererProfileRef,
             SourceArtifactRef rendererSourceRef,
-            OpenedMachineRequest reproduced)
+            OpenedMachineRequest reproduced,
+            ReadOnlyMemory<byte>? rendererProfileBytes,
+            ReadOnlyMemory<byte>? rendererSourceBytes)
         {
+            if (rendererProfileBytes is { } profile)
+            {
+                _rendererProfileBytes = profile.ToArray();
+            }
+
+            if (rendererSourceBytes is { } source)
+            {
+                _rendererSourceBytes = source.ToArray();
+            }
             Plan = plan;
             QueryPlanRef = queryPlanRef;
             _planCanonicalBytes = planCanonicalBytes.ToArray();
@@ -1184,6 +1297,15 @@ public static class MachineQueryBinder
         internal SourceArtifactRef RendererProfileRef { get; }
 
         internal SourceArtifactRef RendererSourceRef { get; }
+
+        /// <summary>
+        /// The renderer's own bytes when it produced them, verified at bind time against the
+        /// reference that names them. Null keeps the reopen-by-reference path.
+        /// </summary>
+        internal ReadOnlyMemory<byte>? CopyRendererProfileBytes() => _rendererProfileBytes;
+
+        /// <summary>The renderer source bytes, same contract.</summary>
+        internal ReadOnlyMemory<byte>? CopyRendererSourceBytes() => _rendererSourceBytes;
 
         public override string RequestedUri { get; }
 

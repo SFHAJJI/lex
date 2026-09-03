@@ -62,12 +62,24 @@ public sealed class RoutedHttpRedirectCapabilityTests
         foreach (var holder in ConstructionSurface.CompilerGeneratedHolders(
             leaseType.Assembly, leaseType))
         {
-            StringAssert.StartsWith(
-                holder, "instance ", "compiler storage of a lease is never static");
             StringAssert.Contains(
                 holder,
                 "Lex.V3.Ingest.RoutedHttpAcquisitionSession",
                 "a lease may only be held inside the session's own hierarchy");
+
+            // Every holder is an instance field, asserted rather than assumed. Two earlier
+            // versions of this line admitted a static holder when it looked like a cached lambda,
+            // first by matching the type's name against Func and Action, then by a structural
+            // delegate tag. Both were dead: the sweep reports no static holder at all in either
+            // configuration, so a mutation tagging every holder as storage killed nothing, which
+            // is the proof that the branch could not fail. What can fail is the measured fact.
+            // If the compiler ever caches a lambda into a static field, this fires and the
+            // admission becomes a decision someone makes deliberately, with the delegate tag in
+            // the message to inform it, instead of a shape admitted in advance for a case that
+            // does not exist.
+            Assert.IsTrue(
+                holder.StartsWith("instance ", StringComparison.Ordinal),
+                $"a lease is held only in instance state today; this static holder is new: {holder}");
         }
 
         // Outside the lease, the assembly holds one but never mints one: the route loop's local,
