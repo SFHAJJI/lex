@@ -148,6 +148,12 @@ public sealed class EuLegalNoticeEvidence
             routedEvidenceSha256,
             nameof(routedEvidenceSha256));
         EffectiveUri = RoutedHttpValidation.RequireAbsoluteHttpsUri(effectiveUri, nameof(effectiveUri));
+        // The four null guards below are defensive, not reachable through either caller of this
+        // private constructor: FromRoute always supplies a real RoutedHttpSingleHeader (matched by
+        // pattern from the terminal hop) and real RoutedHttpHeaderField union instances (never a null
+        // reference, only the closed Absent/Single/Multiple cases), and ParseAndVerify's
+        // ParseHeaderField and the mediaTypeElement branch likewise always return a non-null instance
+        // or throw first. Left as documented guards rather than assumptions.
         MediaType = mediaType ?? throw new ArgumentNullException(nameof(mediaType));
         ObservedDate = observedDate ?? throw new ArgumentNullException(nameof(observedDate));
         PolicyEffectiveDate =
@@ -250,6 +256,10 @@ public sealed class EuLegalNoticeEvidence
     {
         ArgumentNullException.ThrowIfNull(evidence);
         ArgumentNullException.ThrowIfNull(request);
+        // Defensive, not reachable through any current producer: RoutedHttpEvidence.Create already
+        // refuses to mint an evidence object with fewer than one hop ("HTTP /4 evidence must retain
+        // one to six route hops"), so no real RoutedHttpEvidence this method can be called with ever
+        // has an empty Hops list. Left in place as a documented guard rather than an assumption.
         if (evidence.Hops.Count == 0)
         {
             throw new ArgumentException(
@@ -486,6 +496,10 @@ public sealed class EuLegalNoticeEvidence
                 writer.Raw("]}");
                 return;
             default:
+                // Defensive, not reachable while RoutedHttpHeaderField stays a closed union of
+                // exactly Absent/Single/Multiple: the compiler already refuses any other case in the
+                // switch above. Left as a documented guard against a future subtype being added here
+                // without a matching write branch, not an assumption that one exists today.
                 throw new ArgumentException("The HTTP header field union is not closed.", nameof(value));
         }
     }

@@ -132,6 +132,23 @@ public sealed class EuLegalNoticeEvidenceTests
     }
 
     [TestMethod]
+    public void LanguageSelectionIsStructurallyTiedToTheRequestedUrisLocaleQueryParameter()
+    {
+        // LanguageSelection is stated as the fixed constant "en", but the type remarks claim this
+        // is a structural fact of the pinned RequestedUri, not an independent claim nothing checks.
+        // Prove the tie by actually parsing "en" out of RequestedUri's own locale= query parameter,
+        // rather than merely asserting the constant equals a copy of itself.
+        var uri = new Uri(EuLegalNoticeEvidence.RequestedUri);
+        var locale = uri.Query
+            .TrimStart('?')
+            .Split('&', StringSplitOptions.RemoveEmptyEntries)
+            .Select(static pair => pair.Split('=', 2))
+            .Single(static parts => parts[0] == "locale")[1];
+
+        Assert.AreEqual(EuLegalNoticeEvidence.LanguageSelection, locale);
+    }
+
+    [TestMethod]
     public void ParseAndVerifyRoundTripsAPresentPolicyEffectiveDateAndSourcePolicyVersion()
     {
         // The typed-absence union's other branch, driven the same way the existing schema/media-type
@@ -236,8 +253,233 @@ public sealed class EuLegalNoticeEvidenceTests
     }
 
     [TestMethod]
-    public void FromRouteAndParseAndVerifyRejectNullArguments()
+    public void ParseAndVerifyRefusesBytesThatAreNotStrictUtf8()
     {
+        // Drives RoutedHttpValidation.DecodeStrictUtf8's own refusal, the first thing ParseAndVerify
+        // does, before any JSON parsing is even attempted.
+        byte[] malformed = [0xFF, 0xFE, 0x7B, 0x7D]; // 0xFF is never a valid UTF-8 lead byte.
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(
+            () => EuLegalNoticeEvidence.ParseAndVerify(malformed));
+        StringAssert.Contains(thrown.Message, "strict UTF-8");
+    }
+
+    [TestMethod]
+    public void ParseAndVerifyRefusesBytesThatAreNotValidJson()
+    {
+        var malformed = Encoding.UTF8.GetBytes("{not valid json");
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(
+            () => EuLegalNoticeEvidence.ParseAndVerify(malformed));
+        StringAssert.Contains(thrown.Message, "not one valid closed canonical object");
+    }
+
+    [TestMethod]
+    public void ParseAndVerifyRefusesARootObjectMissingADeclaredProperty()
+    {
+        // Drives the root RoutedHttpValidation.RequireExactPropertyNames refusal, distinct from the
+        // media type object's own exact-property-names check below.
+        var (evidence, request) = RealRoute();
+        var json = Encoding.UTF8.GetString(EuLegalNoticeEvidence.FromRoute(evidence, request).CopyCanonicalBytes());
+        var tampered = Encoding.UTF8.GetBytes(
+            json.Replace(
+                $",\"captured_at\":\"{RealCapturedAt}\"}}\n",
+                "}\n",
+                StringComparison.Ordinal));
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(
+            () => EuLegalNoticeEvidence.ParseAndVerify(tampered));
+        StringAssert.Contains(thrown.Message, "missing, extra, duplicate, or reordered fields");
+    }
+
+    [TestMethod]
+    public void ParseAndVerifyRefusesAMediaTypeObjectWithAnExtraProperty()
+    {
+        // Drives the media type object's own RequireExactPropertyNames refusal. The existing
+        // "not a single observed header value" test above keeps this object's two-property shape
+        // intact and instead tampers the value of "kind", so it never reaches this branch.
+        var (evidence, request) = RealRoute();
+        var json = Encoding.UTF8.GetString(EuLegalNoticeEvidence.FromRoute(evidence, request).CopyCanonicalBytes());
+        var tampered = Encoding.UTF8.GetBytes(
+            json.Replace(
+                "\"media_type\":{\"kind\":\"single\",\"value\":\"text/html; charset=UTF-8\"}",
+                "\"media_type\":{\"kind\":\"single\",\"value\":\"text/html; charset=UTF-8\",\"extra\":\"x\"}",
+                StringComparison.Ordinal));
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(
+            () => EuLegalNoticeEvidence.ParseAndVerify(tampered));
+        StringAssert.Contains(thrown.Message, "missing, extra, duplicate, or reordered fields");
+    }
+
+    [TestMethod]
+    public void ParseAndVerifyRefusesAnEffectiveUriThatIsNotAnAbsoluteHttpsUri()
+    {
+        // Drives RoutedHttpValidation.RequireAbsoluteHttpsUri, reached only through the private
+        // constructor ParseAndVerify calls once its own checks pass; FromRoute can never itself
+        // supply an invalid EffectiveUri, since that value is always a hop's own already-validated
+        // RequestUri.
+        var (evidence, request) = RealRoute();
+        var json = Encoding.UTF8.GetString(EuLegalNoticeEvidence.FromRoute(evidence, request).CopyCanonicalBytes());
+        var tampered = Encoding.UTF8.GetBytes(
+            json.Replace(
+                "\"effective_uri\":\"https://eur-lex.europa.eu/content/legal-notice/legal-notice.html?locale=en\"",
+                "\"effective_uri\":\"http://not-https.example\"",
+                StringComparison.Ordinal));
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(
+            () => EuLegalNoticeEvidence.ParseAndVerify(tampered));
+        StringAssert.Contains(thrown.Message, "absolute HTTPS spelling");
+    }
+
+    [TestMethod]
+    public void ParseAndVerifyRefusesASha256ThatIsNotExactHexadecimal()
+    {
+        // Drives RoutedHttpValidation.RequireSha256 for the "sha256" property specifically, reached
+        // only through the private constructor.
+        var (evidence, request) = RealRoute();
+        var json = Encoding.UTF8.GetString(EuLegalNoticeEvidence.FromRoute(evidence, request).CopyCanonicalBytes());
+        var tampered = Encoding.UTF8.GetBytes(
+            json.Replace(
+                $"\"sha256\":\"{RealSha256}\"",
+                "\"sha256\":\"not-a-digest\"",
+                StringComparison.Ordinal));
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(
+            () => EuLegalNoticeEvidence.ParseAndVerify(tampered));
+        StringAssert.Contains(thrown.Message, "64 lowercase hexadecimal");
+    }
+
+    [TestMethod]
+    public void ParseAndVerifyRefusesADurableWriteReceiptSha256ThatIsNotExactHexadecimal()
+    {
+        // Drives RoutedHttpValidation.RequireSha256 for "durable_write_receipt_sha256" specifically.
+        var (evidence, request) = RealRoute();
+        var json = Encoding.UTF8.GetString(EuLegalNoticeEvidence.FromRoute(evidence, request).CopyCanonicalBytes());
+        var realReceiptDigest = WriteReceiptDigest(RealSha256, RealByteLength);
+        var tampered = Encoding.UTF8.GetBytes(
+            json.Replace(
+                $"\"durable_write_receipt_sha256\":\"{realReceiptDigest}\"",
+                "\"durable_write_receipt_sha256\":\"not-a-digest\"",
+                StringComparison.Ordinal));
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(
+            () => EuLegalNoticeEvidence.ParseAndVerify(tampered));
+        StringAssert.Contains(thrown.Message, "64 lowercase hexadecimal");
+    }
+
+    [TestMethod]
+    public void ParseAndVerifyRefusesARoutedEvidenceSha256ThatIsNotExactHexadecimal()
+    {
+        // Drives RoutedHttpValidation.RequireSha256 for "routed_evidence_sha256" specifically.
+        var (evidence, request) = RealRoute();
+        var notice = EuLegalNoticeEvidence.FromRoute(evidence, request);
+        var json = Encoding.UTF8.GetString(notice.CopyCanonicalBytes());
+        var tampered = Encoding.UTF8.GetBytes(
+            json.Replace(
+                $"\"routed_evidence_sha256\":\"{notice.RoutedEvidenceSha256}\"",
+                "\"routed_evidence_sha256\":\"not-a-digest\"",
+                StringComparison.Ordinal));
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(
+            () => EuLegalNoticeEvidence.ParseAndVerify(tampered));
+        StringAssert.Contains(thrown.Message, "64 lowercase hexadecimal");
+    }
+
+    [TestMethod]
+    public void ParseAndVerifyRefusesACapturedAtThatIsNotTheExactSevenDigitUtcForm()
+    {
+        // Drives RoutedHttpValidation.RequireTimestamp, reached only through the private
+        // constructor.
+        var (evidence, request) = RealRoute();
+        var json = Encoding.UTF8.GetString(EuLegalNoticeEvidence.FromRoute(evidence, request).CopyCanonicalBytes());
+        var tampered = Encoding.UTF8.GetBytes(
+            json.Replace(
+                $"\"captured_at\":\"{RealCapturedAt}\"",
+                "\"captured_at\":\"2026-09-03T16:55:19Z\"",
+                StringComparison.Ordinal));
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(
+            () => EuLegalNoticeEvidence.ParseAndVerify(tampered));
+        StringAssert.Contains(thrown.Message, "seven-digit UTC");
+    }
+
+    [TestMethod]
+    public void ParseAndVerifyRefusesAZeroByteLengthThroughTheConstructorsRangeCheck()
+    {
+        // Drives the constructor's byteLength==0 range check, reached only through parse: the JSON
+        // value 0 is a perfectly well-formed uint64, so nothing earlier in ParseAndVerify refuses it
+        // before the private constructor's own ArgumentOutOfRangeException does. Distinct from
+        // ParseAndVerifyRefusesBytesThatAreNotTheExactCanonicalEncoding above, which drives the
+        // canonical round-trip mismatch instead, never this constructor validator.
+        var (evidence, request) = RealRoute();
+        var json = Encoding.UTF8.GetString(EuLegalNoticeEvidence.FromRoute(evidence, request).CopyCanonicalBytes());
+        var tampered = Encoding.UTF8.GetBytes(
+            json.Replace("\"byte_length\":135428", "\"byte_length\":0", StringComparison.Ordinal));
+
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => EuLegalNoticeEvidence.ParseAndVerify(tampered));
+    }
+
+    [TestMethod]
+    public void ParseAndVerifyRefusesAMultipleHeaderWhoseValuesIsNotAnArray()
+    {
+        // Drives ParseHeaderField's "multiple" branch specifically: the kind is the well-formed
+        // string "multiple", but "values" is not the JSON array that branch requires.
+        var (evidence, request) = RealRoute();
+        var json = Encoding.UTF8.GetString(EuLegalNoticeEvidence.FromRoute(evidence, request).CopyCanonicalBytes());
+        var tampered = Encoding.UTF8.GetBytes(
+            json.Replace(
+                "\"observed_date\":{\"kind\":\"single\",\"value\":\"Thu, 03 Sep 2026 16:55:19 GMT\"}",
+                "\"observed_date\":{\"kind\":\"multiple\",\"values\":\"not-an-array\"}",
+                StringComparison.Ordinal));
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(
+            () => EuLegalNoticeEvidence.ParseAndVerify(tampered));
+        StringAssert.Contains(thrown.Message, "must be an array");
+    }
+
+    [TestMethod]
+    public void ParseAndVerifyRefusesAPolicyEffectiveDateWithAnUnknownHeaderKind()
+    {
+        // Drives ParseHeaderField's default case: the header-field kind union is closed to
+        // absent/single/multiple, and nothing else is valid.
+        var (evidence, request) = RealRoute();
+        var json = Encoding.UTF8.GetString(EuLegalNoticeEvidence.FromRoute(evidence, request).CopyCanonicalBytes());
+        var tampered = Encoding.UTF8.GetBytes(
+            json.Replace(
+                "\"policy_effective_date\":{\"kind\":\"absent\"}",
+                "\"policy_effective_date\":{\"kind\":\"bogus\"}",
+                StringComparison.Ordinal));
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(
+            () => EuLegalNoticeEvidence.ParseAndVerify(tampered));
+        StringAssert.Contains(thrown.Message, "kind is not closed");
+    }
+
+    [TestMethod]
+    public void ParseAndVerifyRefusesASourcePolicyVersionSingleHeaderWithAnExtraProperty()
+    {
+        // Drives ParseHeaderField's own RequireExactPropertyNames for the "single" kind, distinct
+        // from the root object's and the media type object's exact-property-names checks above.
+        var (evidence, request) = RealRoute();
+        var json = Encoding.UTF8.GetString(EuLegalNoticeEvidence.FromRoute(evidence, request).CopyCanonicalBytes());
+        var tampered = Encoding.UTF8.GetBytes(
+            json.Replace(
+                "\"source_policy_version\":{\"kind\":\"absent\"}",
+                "\"source_policy_version\":{\"kind\":\"single\",\"value\":\"2011/833/EU\",\"extra\":\"x\"}",
+                StringComparison.Ordinal));
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(
+            () => EuLegalNoticeEvidence.ParseAndVerify(tampered));
+        StringAssert.Contains(thrown.Message, "missing, extra, duplicate, or reordered fields");
+    }
+
+    [TestMethod]
+    public void FromRouteRejectsNullArguments()
+    {
+        // Renamed from FromRouteAndParseAndVerifyRejectNullArguments: ParseAndVerify takes a
+        // ReadOnlySpan<byte>, which is not a nullable reference type and has no null to reject, so
+        // the old name claimed coverage this method never had. This tests FromRoute only.
         var (evidence, request) = RealRoute();
         Assert.ThrowsExactly<ArgumentNullException>(
             () => EuLegalNoticeEvidence.FromRoute(null!, request));
@@ -298,6 +540,41 @@ public sealed class EuLegalNoticeEvidenceTests
 
         var thrown = Assert.ThrowsExactly<ArgumentException>(
             () => EuLegalNoticeEvidence.FromRoute(EvidenceFor(hop), request));
+        StringAssert.Contains(thrown.Message, "exact R8 URI");
+    }
+
+    [TestMethod]
+    public void FromRouteAcceptsATwoHopRouteWhoseEffectiveUriGenuinelyDiffersFromThePinnedRequestedUri()
+    {
+        // Every fixture route above has exactly one hop, so Hops[0] and Hops[^1] are the same
+        // object by construction and EffectiveUri can never be observed to actually differ from
+        // RequestedUri. This is a genuine two-hop redirect, the same technique
+        // RepresentationChainContractTests.RedirectRoute uses for item 9's own redirect-isolation
+        // pair: the first hop is exactly the pinned R8 URI and 301s to a second, different URI that
+        // then answers 200.
+        var terminalUri =
+            "https://eur-lex.europa.eu/content/legal-notice/legal-notice.html?locale=en&session=abc123";
+        var (evidence, request) = TwoHopRoute(EuLegalNoticeEvidence.RequestedUri, terminalUri);
+
+        var notice = EuLegalNoticeEvidence.FromRoute(evidence, request);
+
+        Assert.AreEqual(terminalUri, notice.EffectiveUri);
+        Assert.AreNotEqual(EuLegalNoticeEvidence.RequestedUri, notice.EffectiveUri);
+    }
+
+    [TestMethod]
+    public void FromRouteRefusesATwoHopRouteWhoseFirstHopIsNotThePinnedUriEvenWhenTheTerminalHopIs()
+    {
+        // Paired with the acceptance above, the same way item 9's two redirect-isolation tests
+        // pair with each other: the route is otherwise perfectly self-consistent and its terminal
+        // hop even lands on the pinned R8 URI, but the page it actually started at is a different
+        // one. Proves the pinned-URI check is on Hops[0] specifically, never on the terminal hop or
+        // on "any hop in the chain".
+        var firstUri = "https://eur-lex.europa.eu/content/legal-notice/other-notice.html?locale=en";
+        var (evidence, request) = TwoHopRoute(firstUri, EuLegalNoticeEvidence.RequestedUri);
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(
+            () => EuLegalNoticeEvidence.FromRoute(evidence, request));
         StringAssert.Contains(thrown.Message, "exact R8 URI");
     }
 
@@ -423,6 +700,24 @@ public sealed class EuLegalNoticeEvidenceTests
     }
 
     [TestMethod]
+    public void ToArtifactRefsDigestIsAThirdDigestDistinctFromBothRoutedEvidenceSha256AndSha256()
+    {
+        // Three genuinely distinct digests over three distinct byte spans must never collapse into
+        // two: the routed evidence's own canonical bytes (RoutedEvidenceSha256), the captured
+        // notice's response bytes (Sha256), and this evidence object's own canonical bytes
+        // (ToArtifactRef's digest, via CanonicalSha256). The test above already proves the artifact
+        // digest differs from Sha256; this proves it also differs from RoutedEvidenceSha256,
+        // guarding against a construction that accidentally reused that digest instead.
+        var (evidence, request) = RealRoute();
+        var notice = EuLegalNoticeEvidence.FromRoute(evidence, request);
+        var reference = notice.ToArtifactRef("urn:uuid:00000000-0000-4000-8000-0000000000cc");
+
+        Assert.AreNotEqual(notice.RoutedEvidenceSha256, reference.Sha256);
+        Assert.AreNotEqual(notice.Sha256, reference.Sha256);
+        Assert.AreNotEqual(notice.RoutedEvidenceSha256, notice.Sha256);
+    }
+
+    [TestMethod]
     public void TheProducedReferenceConstructsARealRightsDispositionAgainstTheCapture()
     {
         // The gap this type closes, made concrete: EuRightsDisposition already declares a
@@ -458,6 +753,30 @@ public sealed class EuLegalNoticeEvidenceTests
             new DeclaredContentLengthHttpCompletion(RealByteLength), RealByteLength, RealSha256,
             WriteReceiptDigest(RealSha256, RealByteLength), RealByteLength, RealSha256);
         return (EvidenceForOrdinal(requestOrdinal, hop), request);
+    }
+
+    /// <summary>
+    /// A genuine two-hop route: <paramref name="firstUri"/> answers 301 to
+    /// <paramref name="terminalUri"/>, which then answers 200. Mirrors
+    /// RepresentationChainContractTests.RedirectRoute, the fixture item 9 built specifically
+    /// because a single-hop route's RequestedUri and EffectiveUri are always the same value by
+    /// construction and so can never separate the two checks.
+    /// </summary>
+    private static (RoutedHttpEvidence Evidence, HttpLogicalRequest Request) TwoHopRoute(
+        string firstUri, string terminalUri)
+    {
+        var request = LogicalRequestFor(terminalUri);
+        var digest = RequestDigest(request);
+        var firstHopId = Uuid("two-hop-first-" + firstUri + terminalUri);
+        var first = RoutedHttpHop.Create(
+            0, firstHopId, null, digest, firstUri, 301,
+            Headers(contentLength: "0", location: terminalUri), Time(0), Time(1),
+            new DeclaredContentLengthHttpCompletion(0), 0, EmptyDigest, WriteReceiptDigest(EmptyDigest, 0), 0, EmptyDigest);
+        var terminal = RoutedHttpHop.Create(
+            1, Uuid("two-hop-terminal-" + firstUri + terminalUri), firstHopId, digest, terminalUri, 200,
+            Headers(contentType: RealMediaType, contentLength: "3"), Time(2), Time(3),
+            new DeclaredContentLengthHttpCompletion(3), 3, Digest('a'), WriteReceiptDigest(Digest('a'), 3), 3, Digest('a'));
+        return (EvidenceFor(first, terminal), request);
     }
 
     private static RoutedHttpResponseHeaders Headers(
