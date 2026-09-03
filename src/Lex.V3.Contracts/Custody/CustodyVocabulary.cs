@@ -110,3 +110,24 @@ public enum CustodyMembership
     [JsonStringEnumMemberName("floored")]
     Floored = 2,
 }
+
+/// <summary>
+/// What a receipt establishes about where the bytes are held. The one rule, in one place, so a
+/// reader and every acquisition session classify identically and cannot drift apart.
+/// </summary>
+/// <remarks>
+/// Keyed on the observed protection rather than the profile that implies it: the policy-evidence
+/// constructor already proved the class floor for every protection except <see
+/// cref="CustodyProtection.NotEnforced"/> (see the switch in <see cref="CustodyPolicyEvidence"/>'s
+/// constructor), so a verification profile added later cannot misclassify through this switch.
+/// </remarks>
+public static class CustodyMembershipClassifier
+{
+    public static CustodyMembership Classify(DurableBlobWriteReceipt receipt)
+    {
+        ArgumentNullException.ThrowIfNull(receipt);
+        return receipt.PolicyEvidence.Protection == CustodyProtection.NotEnforced
+            ? CustodyMembership.RetainedUnenforced
+            : CustodyMembership.Floored;
+    }
+}

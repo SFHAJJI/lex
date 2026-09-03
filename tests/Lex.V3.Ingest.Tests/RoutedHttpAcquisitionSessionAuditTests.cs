@@ -1053,7 +1053,10 @@ public sealed class RoutedHttpAcquisitionSessionAuditTests
         }
     }
 
-    private sealed class RecordingCustodyStore : ICustodyStore
+    // internal rather than private: the Luxembourg executor and evidence-set tests
+    // (LuxembourgDeliveryEvidenceSetTests, LuxembourgRepeatedEnumerationExecutorTests) share this
+    // as their flooring double for happy-path runs, per the executor design synthesis.
+    internal sealed class RecordingCustodyStore : ICustodyStore
     {
         private readonly object _gate = new();
         private readonly Dictionary<string, byte[]> _objects = new(StringComparer.Ordinal);
