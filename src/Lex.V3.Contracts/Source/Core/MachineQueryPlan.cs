@@ -736,8 +736,14 @@ public sealed class OpenedMachineRequest
 
         if (retainedRenderReceiptRef is null)
         {
+            // Decision 77: derived from the receipt's own canonical bytes, never minted fresh.
+            // A random name here reached the retained request policy, whose digest is a member of
+            // the R3.3 absence key tuple, so the absence key changed at every cut and an absence
+            // history could never advance. Nothing failed; absence simply never became provable.
             RenderReceiptRef = MachineQueryRenderReceiptIdentity.Create(
-                $"urn:uuid:{Guid.NewGuid():D}",
+                ContentDerivedIdentity.DeriveUuidUrn(
+                    ContentDerivedIdentity.RenderReceiptScope,
+                    reproducedReceiptBytes),
                 renderReceipt);
             _renderReceiptCanonicalBytes = reproducedReceiptBytes;
         }
