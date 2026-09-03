@@ -353,7 +353,8 @@ public sealed record LuxembourgConsolidatesShape
              !TargetClasses.SequenceEqual(
                  [VerifiedLuxembourgSourceProfile.JoluxPrefix + "Act"]) ||
              !SubjectTypeDocuments.SequenceEqual(
-                 [VerifiedLuxembourgSourceProfile.TypeDocumentPrefix + "TC"]) ||
+                 [VerifiedLuxembourgSourceProfile.TypeDocumentPrefix +
+                  VerifiedLuxembourgSourceProfile.PriorityCandidateTypeTc]) ||
              TargetTypeDocuments.Count != 1 ||
              SubjectTypeCardinality != LuxembourgSelectorCardinality.Single ||
              TargetTypeCardinality != LuxembourgSelectorCardinality.Single ||

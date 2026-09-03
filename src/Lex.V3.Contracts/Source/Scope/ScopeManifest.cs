@@ -326,6 +326,24 @@ public sealed record ScopeCompleteEnumerationBinding(
     int ObservedObjectCount,
     string ObservedObjectSequenceSha256);
 
+/// <summary>
+/// Admits or refuses one scope-reduction binding at a time, so <see cref="ScopeReducer"/> and
+/// <see cref="VerifiedScopeManifest.ParseAndVerify"/> never have to trust an admission decision they
+/// cannot re-derive. No production implementation of this interface exists anywhere in this
+/// codebase as of the D1-04 refreeze (lex-event-20260903T221036088Z-963c186c93cc4c898eec91ee9f2b91e9,
+/// fold-in two): every implementation today is a test fixture (for example
+/// <c>LuxembourgQueryExecutionAdapterTests.PermissiveEvidenceResolver</c>, which admits anything
+/// structurally well-formed, and its sibling <c>FixedAdmittedSetEvidenceResolver</c>, which admits a
+/// fixed, hand-transcribed set). The real resolver -- one that checks a binding's evidence against
+/// what a run's own custody actually holds, the way
+/// <see cref="Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProof"/> and this file's own
+/// <c>VerifiedScopeManifest.ParseAndVerify</c> do for the artifacts they cover -- is
+/// expected to come from whichever slice wires a live acquisition run's held evidence into
+/// <see cref="VerifiedLuxembourgSourceProfile.ReduceScope"/> for the first time; nothing in <c>src</c>
+/// calls <c>ReduceScope</c> outside a test today (see the residue note on
+/// <c>LuxembourgQueryExecutionAdapter.RunAsync</c> for the adjacent, still-open observation-decoding
+/// gap that slice will also need to close).
+/// </summary>
 public interface IScopeReductionEvidenceResolver
 {
     SourceArtifactRef CompleteEnumerationRef { get; }

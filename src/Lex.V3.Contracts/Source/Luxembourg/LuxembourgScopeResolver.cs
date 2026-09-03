@@ -25,7 +25,10 @@ internal static class LuxembourgScopeResolver
     private static readonly HashSet<string> QuarantinedTypes = Values("DIV", "PA");
     private static readonly HashSet<string> PointTypes = Values("RECUEIL", "CODE_RECUEIL");
     private static readonly HashSet<string> RegulatorTypes = Values("RCSF", "RBCL", "RILR");
-    private static readonly HashSet<string> PriorityCandidateTypes = Values("TC", "RECT", "ACC");
+    private static readonly HashSet<string> PriorityCandidateTypes = Values(
+        VerifiedLuxembourgSourceProfile.PriorityCandidateTypeTc,
+        VerifiedLuxembourgSourceProfile.PriorityCandidateTypeRect,
+        VerifiedLuxembourgSourceProfile.PriorityCandidateTypeAcc);
     private static readonly HashSet<string> OrdinaryCandidateTypes = Values(
         "A", "AGC", "AGD", "AMIN",
         "ARGD", "CODE", "Constitution", "CONV", "LOI", "ORD", "PROT", "REG", "RGC",
@@ -934,7 +937,8 @@ internal static class LuxembourgScopeResolver
                         ? LuxembourgConsolidatesShapeState.TypedQuarantineSubjectTypeMultiple
                         : !string.Equals(
                             sourceTypes[0],
-                            VerifiedLuxembourgSourceProfile.TypeDocumentPrefix + "TC",
+                            VerifiedLuxembourgSourceProfile.TypeDocumentPrefix +
+                            VerifiedLuxembourgSourceProfile.PriorityCandidateTypeTc,
                             StringComparison.Ordinal)
                             ? LuxembourgConsolidatesShapeState.TypedQuarantineSubjectTypeNotTc
                             : !targetFound
@@ -982,7 +986,8 @@ internal static class LuxembourgScopeResolver
         string type) =>
         string.Equals(
             type,
-            VerifiedLuxembourgSourceProfile.TypeDocumentPrefix + "TC",
+            VerifiedLuxembourgSourceProfile.TypeDocumentPrefix +
+            VerifiedLuxembourgSourceProfile.PriorityCandidateTypeTc,
             StringComparison.Ordinal) ||
         (OrdinaryCandidateTypes.Contains(type) && IsAsPublishedOriginalQualified(target, type)) ||
         (RegulatorTypes.Contains(type) && IsRegulatorQualified(target, type));
