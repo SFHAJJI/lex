@@ -404,6 +404,154 @@ public sealed class RoutedHttpAcquisitionSessionTests
         }
     }
 
+    // The robots verdict is the gate that decides whether this run may open a socket to a legal
+    // publisher. The six tests below are the only ones in which robots ever says no, so they are
+    // what makes the product token and the witness path arguments load-bearing: swapping either
+    // for a constant keeps every allow-everything fixture green and fails one of these.
+
+    [TestMethod]
+    public async Task RobotsDisallowForEveryAgentDeniesTheWitnessPathAndOpensNoProductSocket()
+    {
+        var request = EuropeanUnionRequest();
+        var handler = EuRobotsHandler("User-agent: *\nDisallow: /webapi/\n");
+        using var session = Session(
+            request,
+            handler,
+            new MultiObjectCustodyStore(),
+            new ShortDelayTimeProvider(),
+            usesPinnedHandler: false);
+
+        var result = await BootstrapAsync(session);
+
+        Assert.AreEqual(OfficialHttpAcquisitionOutcomeKind.PublisherDenial, result.Kind);
+        Assert.IsNull(result.Session);
+        Assert.IsNull(result.LocalSafetyReason);
+        Assert.IsNull(result.OperationalReason);
+        Assert.IsNull(result.PostHeaderRejection);
+        Assert.IsNotNull(result.Evidence);
+        Assert.AreEqual(2, result.Evidence.Hops.Count);
+        Assert.IsInstanceOfType<CompleteHttpRouteOutcome>(result.Evidence.Outcome);
+        CollectionAssert.AreEqual(
+            new[] { "https://publications.europa.eu/robots.txt", "https://op.europa.eu/robots.txt" },
+            handler.Requests.Select(static sent => sent.RequestUri?.AbsoluteUri).ToArray());
+        // A denial grants nothing: the run is already disposed, so no plan item can be opened and
+        // the socket count cannot move.
+        Assert.ThrowsExactly<ObjectDisposedException>(() => session.OpenPlanItem(request));
+        Assert.AreEqual(2, handler.SendCount);
+    }
+
+    [TestMethod]
+    public async Task RobotsLexGroupDenialOutranksAWildcardAllow()
+    {
+        // The only shape in which the product-token argument decides the outcome: evaluating the
+        // wildcard group instead of the Lex group would allow this run.
+        var request = EuropeanUnionRequest();
+        var handler = EuRobotsHandler("User-agent: *\nAllow: /\n\nUser-agent: Lex\nDisallow: /\n");
+        using var session = Session(
+            request,
+            handler,
+            new MultiObjectCustodyStore(),
+            new ShortDelayTimeProvider(),
+            usesPinnedHandler: false);
+
+        var result = await BootstrapAsync(session);
+
+        Assert.AreEqual(OfficialHttpAcquisitionOutcomeKind.PublisherDenial, result.Kind);
+        Assert.IsNull(result.Session);
+        Assert.AreEqual(2, handler.SendCount);
+    }
+
+    [TestMethod]
+    public async Task RobotsLexGroupAllowOutranksAWildcardDisallow()
+    {
+        // The positive twin of the test above: the same argument swap would deny this run.
+        var request = EuropeanUnionRequest();
+        var handler = EuRobotsHandler("User-agent: Lex\nAllow: /\n\nUser-agent: *\nDisallow: /\n");
+        using var session = Session(
+            request,
+            handler,
+            new MultiObjectCustodyStore(),
+            new ShortDelayTimeProvider(),
+            usesPinnedHandler: false);
+
+        var result = await BootstrapAsync(session);
+
+        Assert.AreEqual(OfficialHttpAcquisitionOutcomeKind.ExecutedObservation, result.Kind);
+        Assert.AreSame(session, result.Session);
+        Assert.AreEqual(2, handler.SendCount);
+    }
+
+    [TestMethod]
+    public async Task RobotsDisallowOfANeighbouringPathDoesNotDenyTheExactWitnessPath()
+    {
+        // Pins the path argument: the witness path is allowed while a one-character neighbour and
+        // an unrelated tree are not, so evaluating any constant in place of the witness path
+        // cannot reproduce this verdict together with the denial above.
+        var request = EuropeanUnionRequest();
+        var handler = EuRobotsHandler(
+            "User-agent: *\nDisallow: /webapi/rdf/sparql/\nDisallow: /other/\n");
+        using var session = Session(
+            request,
+            handler,
+            new MultiObjectCustodyStore(),
+            new ShortDelayTimeProvider(),
+            usesPinnedHandler: false);
+
+        var result = await BootstrapAsync(session);
+
+        Assert.AreEqual(OfficialHttpAcquisitionOutcomeKind.ExecutedObservation, result.Kind);
+        Assert.AreSame(session, result.Session);
+        Assert.AreEqual(2, handler.SendCount);
+    }
+
+    [TestMethod]
+    public async Task RobotsUninterpretableApplicableGroupIsALocalSafetyRefusal()
+    {
+        // A disallow value without a leading slash or wildcard is not a rule RFC 9309 defines, so
+        // the applicable group cannot be interpreted and Lex refuses locally rather than guessing.
+        var request = EuropeanUnionRequest();
+        var handler = EuRobotsHandler("User-agent: *\nDisallow: webapi\n");
+        using var session = Session(
+            request,
+            handler,
+            new MultiObjectCustodyStore(),
+            new ShortDelayTimeProvider(),
+            usesPinnedHandler: false);
+
+        var result = await BootstrapAsync(session);
+
+        Assert.AreEqual(OfficialHttpAcquisitionOutcomeKind.LocalSafetyRefusal, result.Kind);
+        Assert.AreEqual(
+            OfficialMachineQueryLocalSafetyReason.ApplicableRobotsGroupUninterpretable,
+            result.LocalSafetyReason);
+        Assert.IsNull(result.Session);
+        Assert.IsNull(result.OperationalReason);
+        Assert.IsNotNull(result.Evidence);
+        Assert.AreEqual(2, handler.SendCount);
+    }
+
+    [TestMethod]
+    public async Task RobotsUninterpretableGroupForAnotherAgentDoesNotRefuseTheRun()
+    {
+        // Only the applicable group's interpretability matters; a broken group for some other
+        // product must not turn an explicit wildcard allow into a refusal.
+        var request = EuropeanUnionRequest();
+        var handler = EuRobotsHandler(
+            "User-agent: Other\nDisallow: webapi\n\nUser-agent: *\nAllow: /\n");
+        using var session = Session(
+            request,
+            handler,
+            new MultiObjectCustodyStore(),
+            new ShortDelayTimeProvider(),
+            usesPinnedHandler: false);
+
+        var result = await BootstrapAsync(session);
+
+        Assert.AreEqual(OfficialHttpAcquisitionOutcomeKind.ExecutedObservation, result.Kind);
+        Assert.AreSame(session, result.Session);
+        Assert.AreEqual(2, handler.SendCount);
+    }
+
     [TestMethod]
     public async Task FourRetryableAttemptsUseFreshRequestsAndAFifthCannotSend()
     {
@@ -531,6 +679,22 @@ public sealed class RoutedHttpAcquisitionSessionTests
 
     private static BoundMachineRequest EuropeanUnionRequest()
         => MachineRequestTestFixture.EuropeanUnionRequest();
+
+    private static SequenceHandler EuRobotsHandler(string policy) => new((ordinal, outbound) => ordinal switch
+    {
+        0 => DeclaredResponse(
+            outbound,
+            HttpStatusCode.MovedPermanently,
+            "moved",
+            location: "https://op.europa.eu/robots.txt"),
+        1 => DeclaredResponse(
+            outbound,
+            HttpStatusCode.OK,
+            policy,
+            contentType: "text/plain;charset=UTF-8"),
+        _ => throw new AssertFailedException(
+            "The robots verdict must decide the run before any product send."),
+    });
 
     private static SequenceHandler EuSuccessHandler() => new((ordinal, outbound) => ordinal switch
     {

@@ -239,10 +239,11 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
 
             if (route.PostHeaderFailure is not null)
             {
+                // The publisher answered and its bytes are in custody; only /4 cannot encode the
+                // response. Reporting that as a pre-header transport loss would erase the
+                // distinction a later auditor needs, so the typed rejection travels on the result.
                 Dispose();
-                return StartResult.Operational(
-                    OfficialHttpOperationalFailureReason.NetworkFailure,
-                    evidence: null);
+                return StartResult.PostHeaderRejected(route.PostHeaderFailure.ToRejection());
             }
 
             var evidence = route.Evidence
@@ -1502,13 +1503,15 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             RoutedHttpAcquisitionSession? session,
             RoutedHttpEvidence? evidence,
             OfficialMachineQueryLocalSafetyReason? localSafetyReason,
-            OfficialHttpOperationalFailureReason? operationalReason)
+            OfficialHttpOperationalFailureReason? operationalReason,
+            PostHeaderRejection? postHeaderRejection)
         {
             Kind = kind;
             Session = session;
             Evidence = evidence;
             LocalSafetyReason = localSafetyReason;
             OperationalReason = operationalReason;
+            PostHeaderRejection = postHeaderRejection;
         }
 
         internal OfficialHttpAcquisitionOutcomeKind Kind { get; }
@@ -1517,6 +1520,13 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
         internal OfficialMachineQueryLocalSafetyReason? LocalSafetyReason { get; }
         internal OfficialHttpOperationalFailureReason? OperationalReason { get; }
 
+        /// <summary>
+        /// Present exactly when the robots response reached header completion and was then
+        /// rejected as unrepresentable in /4. Its bytes are in custody and its prior hops are
+        /// retained; <see cref="OperationalReason"/> is null because no transport reason applies.
+        /// </summary>
+        internal PostHeaderRejection? PostHeaderRejection { get; }
+
         internal static StartResult Started(
             RoutedHttpAcquisitionSession session,
             RoutedHttpEvidence evidence) => new(
@@ -1524,12 +1534,14 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                 session,
                 evidence,
                 null,
+                null,
                 null);
 
         internal static StartResult PublisherDenied(RoutedHttpEvidence evidence) => new(
             OfficialHttpAcquisitionOutcomeKind.PublisherDenial,
             null,
             evidence,
+            null,
             null,
             null);
 
@@ -1540,6 +1552,7 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                 null,
                 evidence,
                 reason,
+                null,
                 null);
 
         internal static StartResult Operational(
@@ -1549,12 +1562,24 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                 null,
                 evidence,
                 null,
-                reason);
+                reason,
+                null);
+
+        internal static StartResult PostHeaderRejected(PostHeaderRejection rejection) => new(
+            rejection.FailureClass == PostHeaderFailureClass.AdapterIdentityRejected
+                ? OfficialHttpAcquisitionOutcomeKind.IntegrityFailure
+                : OfficialHttpAcquisitionOutcomeKind.OperationalFailure,
+            null,
+            null,
+            null,
+            null,
+            rejection);
 
         internal static StartResult Integrity(RoutedHttpEvidence? evidence) => new(
             OfficialHttpAcquisitionOutcomeKind.IntegrityFailure,
             null,
             evidence,
+            null,
             null,
             null);
     }
@@ -1632,9 +1657,9 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                                 OfficialHttpOperationalFailureReason.NetworkFailure,
                                 route.PreHeaderFailure.FailureClass)
                             : AttemptResult.PostHeaderRejected(
-                                route.PostHeaderFailure?.FailureClass ??
+                                (route.PostHeaderFailure ??
                                 throw new InvalidOperationException(
-                                    "A response-less route lost its typed failure."));
+                                    "A response-less route lost its typed failure.")).ToRejection());
                     _mayAttempt = IsRetryable(result) &&
                         _nextAttemptOrdinal < (ulong)_session._profile.MaximumAttempts;
                     return result;
@@ -1719,12 +1744,14 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             OfficialHttpAcquisitionOutcomeKind kind,
             RoutedHttpEvidence? evidence,
             OfficialHttpOperationalFailureReason? operationalReason,
-            HttpPreHeaderFailureClass? preHeaderFailureClass)
+            HttpPreHeaderFailureClass? preHeaderFailureClass,
+            PostHeaderRejection? postHeaderRejection)
         {
             Kind = kind;
             Evidence = evidence;
             OperationalReason = operationalReason;
             PreHeaderFailureClass = preHeaderFailureClass;
+            PostHeaderRejection = postHeaderRejection;
         }
 
         internal OfficialHttpAcquisitionOutcomeKind Kind { get; }
@@ -1732,27 +1759,37 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
         internal OfficialHttpOperationalFailureReason? OperationalReason { get; }
         internal HttpPreHeaderFailureClass? PreHeaderFailureClass { get; }
 
+        /// <summary>
+        /// Present exactly when the product response reached header completion and was then
+        /// rejected as unrepresentable in /4. The same vocabulary as
+        /// <see cref="StartResult.PostHeaderRejection"/>, so the two paths cannot drift.
+        /// </summary>
+        internal PostHeaderRejection? PostHeaderRejection { get; }
+
         internal static AttemptResult Executed(RoutedHttpEvidence evidence) => new(
             OfficialHttpAcquisitionOutcomeKind.ExecutedObservation,
             evidence,
+            null,
             null,
             null);
 
         internal static AttemptResult Operational(
             OfficialHttpOperationalFailureReason reason,
             HttpPreHeaderFailureClass? preHeaderFailureClass = null) =>
-            new(OfficialHttpAcquisitionOutcomeKind.OperationalFailure, null, reason, preHeaderFailureClass);
+            new(OfficialHttpAcquisitionOutcomeKind.OperationalFailure, null, reason, preHeaderFailureClass, null);
 
-        internal static AttemptResult PostHeaderRejected(PostHeaderFailureClass failureClass) => new(
-            failureClass == PostHeaderFailureClass.AdapterIdentityRejected
+        internal static AttemptResult PostHeaderRejected(PostHeaderRejection rejection) => new(
+            rejection.FailureClass == PostHeaderFailureClass.AdapterIdentityRejected
                 ? OfficialHttpAcquisitionOutcomeKind.IntegrityFailure
                 : OfficialHttpAcquisitionOutcomeKind.OperationalFailure,
             null,
             null,
-            null);
+            null,
+            rejection);
 
         internal static AttemptResult IntegrityFailure() => new(
             OfficialHttpAcquisitionOutcomeKind.IntegrityFailure,
+            null,
             null,
             null,
             null);
@@ -1786,12 +1823,33 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
         AdapterIdentityRejected = 4,
     }
 
+    /// <summary>
+    /// A response that completed its headers and was then refused representation in /4. It is
+    /// neither a transport loss nor evidence: the rejected entity is already in custody under
+    /// <see cref="ContentSha256"/> with write receipt <see cref="DurableWriteReceiptSha256"/>,
+    /// and every hop observed before it is retained verbatim.
+    /// </summary>
+    internal sealed record PostHeaderRejection(
+        PostHeaderFailureClass FailureClass,
+        IReadOnlyList<RoutedHttpHop> PriorHops,
+        string ContentSha256,
+        string DurableWriteReceiptSha256);
+
     private sealed record PostHeaderFailure(
         PostHeaderFailureClass FailureClass,
         string LogicalRequestSha256,
         string RequestStartedAt,
         HopCustodyKey CustodyKey,
-        IReadOnlyList<RoutedHttpHop> PriorHops);
+        IReadOnlyList<RoutedHttpHop> PriorHops,
+        string ContentSha256,
+        string DurableWriteReceiptSha256)
+    {
+        public PostHeaderRejection ToRejection() => new(
+            FailureClass,
+            PriorHops,
+            ContentSha256,
+            DurableWriteReceiptSha256);
+    }
 
     private sealed record HopCustodyKey(
         SourceArtifactRef RunIdentity,
@@ -2782,7 +2840,9 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                         logicalRequestSha256,
                         send.RequestStartedAt,
                         custodyKey,
-                        hops.ToArray()));
+                        hops.ToArray(),
+                        held.Receipt.Reference.ContentSha256,
+                        held.ReceiptSha256));
             }
 
             RoutedHttpResponseHeaders headers;
@@ -2801,7 +2861,9 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                         logicalRequestSha256,
                         send.RequestStartedAt,
                         custodyKey,
-                        hops.ToArray()));
+                        hops.ToArray(),
+                        held.Receipt.Reference.ContentSha256,
+                        held.ReceiptSha256));
             }
 
             RoutedHttpCompletion completion;
@@ -2822,7 +2884,9 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                         logicalRequestSha256,
                         send.RequestStartedAt,
                         custodyKey,
-                        hops.ToArray()));
+                        hops.ToArray(),
+                        held.Receipt.Reference.ContentSha256,
+                        held.ReceiptSha256));
             }
 
             var hop = RoutedHttpHop.Create(

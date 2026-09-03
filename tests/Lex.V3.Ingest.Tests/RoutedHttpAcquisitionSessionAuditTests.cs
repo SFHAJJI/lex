@@ -3,6 +3,7 @@ using System.Net;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Http;
@@ -138,6 +139,7 @@ public sealed class RoutedHttpAcquisitionSessionAuditTests
         Assert.AreEqual(OfficialHttpAcquisitionOutcomeKind.OperationalFailure, result.Kind);
         Assert.AreEqual(OfficialHttpOperationalFailureReason.NetworkFailure, result.OperationalReason);
         Assert.IsNull(result.LocalSafetyReason);
+        Assert.IsNull(result.PostHeaderRejection, "A loss before headers is not a post-header rejection.");
         Assert.IsNull(result.Session);
         var evidence = result.Evidence
             ?? throw new AssertFailedException("The observed redirect antecedent was discarded.");
@@ -194,6 +196,120 @@ public sealed class RoutedHttpAcquisitionSessionAuditTests
             (HttpStatusCode)199,
             RoutedHttpAcquisitionSession.PostHeaderFailureClass.UnsupportedStatus,
             "unsupported final status");
+    }
+
+    // The four tests below assert on the StartResult the bootstrap actually returns, one layer
+    // above the private route execution the two tests above inspect. A robots response that
+    // arrived, entered custody and was then refused representation in /4 must be told apart from
+    // a transport loss that never reached the publisher, on the surface a caller can see.
+
+    [TestMethod]
+    public async Task RobotsResponseWithUnsupportedProtocolIsAPostHeaderRejectionNotANetworkFailure()
+    {
+        await AssertRobotsPostHeaderRejectionAsync(
+            static (outbound, body) => DeclaredResponse(outbound, HttpStatusCode.OK, body, new Version(2, 0)),
+            OfficialHttpAcquisitionOutcomeKind.OperationalFailure,
+            RoutedHttpAcquisitionSession.PostHeaderFailureClass.UnsupportedNegotiatedProtocol);
+    }
+
+    [TestMethod]
+    public async Task RobotsResponseWithUnsupportedStatusIsAPostHeaderRejectionNotANetworkFailure()
+    {
+        await AssertRobotsPostHeaderRejectionAsync(
+            static (outbound, body) => DeclaredResponse(outbound, (HttpStatusCode)199, body),
+            OfficialHttpAcquisitionOutcomeKind.OperationalFailure,
+            RoutedHttpAcquisitionSession.PostHeaderFailureClass.UnsupportedStatus);
+    }
+
+    [TestMethod]
+    public async Task RobotsResponseWithUnprojectableHeadersIsAPostHeaderRejectionNotANetworkFailure()
+    {
+        await AssertRobotsPostHeaderRejectionAsync(
+            static (outbound, body) => ResponseWithTooManyHeaderValues(outbound, body),
+            OfficialHttpAcquisitionOutcomeKind.OperationalFailure,
+            RoutedHttpAcquisitionSession.PostHeaderFailureClass.HeaderProjectionRejected);
+    }
+
+    [TestMethod]
+    public async Task RobotsResponseRejectedByAdapterIdentityIsAnIntegrityFailureWithItsBytesHeld()
+    {
+        // An injected handler can never warrant chunked EOF, so the robots bootstrap must route
+        // this exactly as the product path does: integrity, not operational, and never network.
+        await AssertRobotsPostHeaderRejectionAsync(
+            static (outbound, body) => ChunkedResponse(outbound, HttpStatusCode.OK, body),
+            OfficialHttpAcquisitionOutcomeKind.IntegrityFailure,
+            RoutedHttpAcquisitionSession.PostHeaderFailureClass.AdapterIdentityRejected);
+    }
+
+    [TestMethod]
+    public async Task ProductResponseRejectedAfterHeadersCarriesItsTypedClassOnTheAttempt()
+    {
+        var request = EuropeanUnionRequest();
+        var body = Encoding.UTF8.GetBytes("product bytes that /4 cannot encode");
+        var custody = new RecordingCustodyStore();
+        var handler = EuSequence((_, outbound, _) => Task.FromResult(
+            DeclaredResponse(outbound, HttpStatusCode.OK, body, new Version(2, 0))));
+        using var session = Session(request, handler, custody, new ManualTimeProvider());
+        await StartSuccessfullyAsync(session);
+        var item = session.OpenPlanItem(request);
+
+        var result = await item.ExecuteNextAttemptAsync(CancellationToken.None);
+
+        Assert.AreEqual(OfficialHttpAcquisitionOutcomeKind.OperationalFailure, result.Kind);
+        Assert.IsNull(result.OperationalReason, "A response that arrived carries no transport reason.");
+        Assert.IsNull(result.PreHeaderFailureClass);
+        Assert.IsNull(result.Evidence);
+        var rejection = result.PostHeaderRejection
+            ?? throw new AssertFailedException("The product post-header rejection lost its typed class.");
+        Assert.AreEqual(
+            RoutedHttpAcquisitionSession.PostHeaderFailureClass.UnsupportedNegotiatedProtocol,
+            rejection.FailureClass);
+        Assert.AreEqual(0, rejection.PriorHops.Count);
+        Assert.AreEqual(Convert.ToHexStringLower(SHA256.HashData(body)), rejection.ContentSha256);
+        Assert.AreEqual(custody.DurableWriteReceiptSha256For(body), rejection.DurableWriteReceiptSha256);
+        Assert.IsTrue(custody.ContainsExact(body));
+        // A post-header rejection is not a retryable transport state: the item cannot send again.
+        var sendsAfterRejection = handler.SendCount;
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(
+            () => item.ExecuteNextAttemptAsync(CancellationToken.None));
+        Assert.AreEqual(sendsAfterRejection, handler.SendCount);
+    }
+
+    private static async Task AssertRobotsPostHeaderRejectionAsync(
+        Func<HttpRequestMessage, byte[], HttpResponseMessage> terminalRobotsResponse,
+        OfficialHttpAcquisitionOutcomeKind expectedKind,
+        RoutedHttpAcquisitionSession.PostHeaderFailureClass expectedFailure)
+    {
+        var request = EuropeanUnionRequest();
+        var body = Encoding.UTF8.GetBytes("robots bytes that /4 cannot encode");
+        var custody = new RecordingCustodyStore();
+        var handler = new AsyncSequenceHandler((ordinal, outbound, _) => ordinal switch
+        {
+            0 => Task.FromResult(EuBootstrapResponse(ordinal, outbound)),
+            1 => Task.FromResult(terminalRobotsResponse(outbound, body)),
+            _ => throw new AssertFailedException("A rejected robots response must open no product socket."),
+        });
+        using var session = Session(request, handler, custody, new ManualTimeProvider());
+
+        var result = await BootstrapAsync(session);
+
+        Assert.AreEqual(expectedKind, result.Kind);
+        Assert.IsNull(
+            result.OperationalReason,
+            "A robots response that arrived and entered custody was reported as a transport loss.");
+        Assert.IsNull(result.LocalSafetyReason);
+        Assert.IsNull(result.Session);
+        Assert.IsNull(result.Evidence, "No /4 document can represent this response.");
+        var rejection = result.PostHeaderRejection
+            ?? throw new AssertFailedException("The robots post-header rejection lost its typed class.");
+        Assert.AreEqual(expectedFailure, rejection.FailureClass);
+        Assert.AreEqual(1, rejection.PriorHops.Count, "The observed redirect hop was discarded.");
+        Assert.AreEqual(301, rejection.PriorHops[0].Status);
+        Assert.AreEqual(Convert.ToHexStringLower(SHA256.HashData(body)), rejection.ContentSha256);
+        Assert.AreEqual(custody.DurableWriteReceiptSha256For(body), rejection.DurableWriteReceiptSha256);
+        Assert.IsTrue(custody.ContainsExact(body));
+        Assert.AreEqual(2, handler.SendCount);
+        Assert.ThrowsExactly<ObjectDisposedException>(() => session.OpenPlanItem(request));
     }
 
     [TestMethod]
@@ -787,6 +903,7 @@ public sealed class RoutedHttpAcquisitionSessionAuditTests
     {
         private readonly object _gate = new();
         private readonly Dictionary<string, byte[]> _objects = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, DurableBlobWriteReceipt> _receipts = new(StringComparer.Ordinal);
         private readonly List<byte[]> _writes = [];
         private int _createCount;
 
@@ -806,6 +923,29 @@ public sealed class RoutedHttpAcquisitionSessionAuditTests
 
                 return false;
             }
+        }
+
+        /// <summary>
+        /// The digest of the exact write receipt this store issued for <paramref name="bytes"/>,
+        /// computed the way the session computes it, so a test compares against what the store
+        /// actually returned rather than against a shape.
+        /// </summary>
+        internal string DurableWriteReceiptSha256For(ReadOnlySpan<byte> bytes)
+        {
+            var digest = Convert.ToHexStringLower(SHA256.HashData(bytes));
+            DurableBlobWriteReceipt receipt;
+            lock (_gate)
+            {
+                if (!_receipts.TryGetValue(digest, out var issued))
+                {
+                    throw new AssertFailedException("The store issued no write receipt for those bytes.");
+                }
+
+                receipt = issued;
+            }
+
+            return Convert.ToHexStringLower(
+                SHA256.HashData(Encoding.UTF8.GetBytes(ContractJson.Serialize(receipt))));
         }
 
         public Task<DurableBlobWriteReceipt> CreateAsync(
@@ -843,10 +983,16 @@ public sealed class RoutedHttpAcquisitionSessionAuditTests
                 CustodyProtection.LockedTime,
                 observed,
                 observed.AddDays(91));
-            return Task.FromResult(new DurableBlobWriteReceipt(
+            var receipt = new DurableBlobWriteReceipt(
                 CustodySchemaIds.DurableBlobWriteReceipt,
                 reference,
-                policy));
+                policy);
+            lock (_gate)
+            {
+                _receipts[digest] = receipt;
+            }
+
+            return Task.FromResult(receipt);
         }
 
         public Task<ReadOnlyMemory<byte>> ReadAsync(
