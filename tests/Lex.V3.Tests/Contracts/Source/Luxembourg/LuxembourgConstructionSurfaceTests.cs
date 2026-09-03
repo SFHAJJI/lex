@@ -241,6 +241,45 @@ public sealed class LuxembourgConstructionSurfaceTests
     }
 
     /// <summary>
+    /// Pinned and explicitly OPEN, and the reason is the point of the type.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="LuxembourgObservedTransport"/> is the four transport facts a caller hands
+    /// <see cref="LuxembourgDeliveryObservation"/> to be checked. Closing it would be closing the
+    /// wrong door: the whole design is that an observation VALIDATES a caller-supplied transport
+    /// against the hop it claims to describe, so a transport nobody can assemble wrongly would
+    /// make those checks untestable, and the tests that assemble a deliberately wrong one are the
+    /// only drivers those checks have. Holding one of these is evidence of nothing, which is why
+    /// nothing in this repository treats it as evidence.
+    /// </remarks>
+    [TestMethod]
+    public void AnObservedTransportIsAnOpenInputRecordByDesign()
+    {
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + N + "LuxembourgObservedTransport::.ctor("
+                + N + "LuxembourgObservedTransport) -> " + N + "LuxembourgObservedTransport",
+                "constructor public instance " + N + "LuxembourgObservedTransport::.ctor("
+                + "Lex.V3.Contracts.Source.Http.HttpLogicalRequest, "
+                + "Lex.V3.Contracts.Source.Http.RoutedHttpEvidence, "
+                + Custody + "DurableBlobWriteReceipt, System.ReadOnlyMemory<System.Byte>) -> "
+                + N + "LuxembourgObservedTransport",
+                "method public instance " + N + "LuxembourgObservedTransport::<Clone>$() -> "
+                + N + "LuxembourgObservedTransport",
+            },
+            ConstructionSurface.Of(typeof(LuxembourgObservedTransport)).ToArray());
+
+        CollectionAssert.AreEqual(
+            Array.Empty<string>(),
+            ConstructionSurface.ProducersIn(
+                typeof(LuxembourgObservedTransport).Assembly,
+                typeof(LuxembourgObservedTransport),
+                true).ToArray(),
+            "something in Contracts now hands out a transport rather than checking one");
+    }
+
+    /// <summary>
     /// Pinned and explicitly OPEN, which is a different claim from the six above and is stated
     /// here rather than left for a reader to infer.
     /// </summary>
