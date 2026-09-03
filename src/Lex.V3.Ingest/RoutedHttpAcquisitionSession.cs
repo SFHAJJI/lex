@@ -141,6 +141,40 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
         return session.BootstrapRobotsAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// The one internal door that starts a session on a caller-supplied transport and clock, for a
+    /// same-assembly driver whose own tests must run without a network. It is internal, never
+    /// public: <c>ProductionSurfaceAcceptsNoCallerAuthoredTransportFacts</c> lists it explicitly
+    /// for exactly that reason, so a second such door is a line in a diff rather than a habit.
+    /// </summary>
+    /// <remarks>
+    /// This exists because the alternative was worse, not because the surface wanted widening.
+    /// <c>LuxembourgRepeatedEnumerationExecutor</c> reached the private constructor and the private
+    /// <c>BootstrapRobotsAsync</c> by reflection from production source, where a rename would have
+    /// compiled cleanly and failed at run time. A door the compiler checks is narrower than a
+    /// reflection call that can reach every private member this type has.
+    /// <para>
+    /// <c>usesPinnedHandler: false</c> is not negotiable here and is not a parameter: it is what
+    /// keeps a test session out of the production handler's active generation, so nothing started
+    /// through this door can be mistaken for a run against the real publisher.
+    /// </para>
+    /// </remarks>
+    internal static Task<StartResult> StartWithTestTransportAsync(
+        BoundMachineRequest sourceWitness,
+        ICustodyStore custodyStore,
+        HttpMessageHandler handler,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        var session = new RoutedHttpAcquisitionSession(
+            sourceWitness,
+            custodyStore,
+            handler,
+            timeProvider,
+            usesPinnedHandler: false);
+        return session.BootstrapRobotsAsync(cancellationToken);
+    }
+
     internal IPlanItem OpenPlanItem(BoundMachineRequest request)
     {
         ThrowIfDisposed();

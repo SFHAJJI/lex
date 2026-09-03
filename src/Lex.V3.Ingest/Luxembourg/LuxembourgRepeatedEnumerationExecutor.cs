@@ -58,6 +58,19 @@ public enum LuxembourgEnumerationRefusal
 
     [JsonStringEnumMemberName("delivery_proof_refused")]
     DeliveryProofRefused = 13,
+
+    /// <summary>
+    /// A page body admitted by status and media type is not a SPARQL results document this
+    /// executor can read at all: not JSON, or JSON without the results/bindings array. Distinct
+    /// from <see cref="DeliveredKeyNotRepresentable"/> on purpose. That one says the publisher
+    /// answered the question and one delivered key was too large to carry; this one says the
+    /// publisher did not answer the question. Reading them as the same refusal would let a broken
+    /// endpoint be reported as an oversized key, and the body digest carried on the refusal would
+    /// then be looked at for the wrong reason.
+    /// </summary>
+    [JsonStringEnumMemberName("page_body_malformed")]
+    PageBodyMalformed = 14,
+
 }
 
 public sealed class LuxembourgEnumerationRefusalDetail
@@ -73,6 +86,10 @@ public sealed class LuxembourgEnumerationRefusalDetail
         IReadOnlyList<string> unenforcedDigests,
         string? coreRefusalDetail)
     {
+        // Reachable, and driven: the constructor is internal, so same-assembly code and this
+        // assembly's tests can both reach it, and a detail whose code says "none" would report a
+        // refusal that did not happen. Driven by
+        // ARefusalDetailCannotCarryTheNoneCode.
         if (code == LuxembourgEnumerationRefusal.None)
         {
             throw new ArgumentOutOfRangeException(nameof(code), "A refusal detail requires a real refusal code.");
@@ -123,11 +140,14 @@ public sealed class LuxembourgEnumerationRunResult
         LuxembourgEnumerationRefusalDetail? refusal,
         int productRequestCount)
     {
-        if ((receipt is null) == (refusal is null))
-        {
-            throw new ArgumentException("A run result is delivered or refused, never both and never neither.");
-        }
-
+        // There is deliberately no "delivered or refused, never both and never neither" check
+        // here. It cannot fail: this constructor is private and its only two callers are
+        // Delivered and Refused below, each of which null-checks its one argument and passes null
+        // for the other. A check that no caller can trip is not defense, it is a claim that reads
+        // as defense; what actually holds the invariant is that no third door exists, which
+        // LuxembourgConstructionSurfaceTests pins by making a third door a line in a diff.
+        //
+        // The count check below is different: both public factories take it from a caller.
         if (productRequestCount < 0)
         {
             throw new ArgumentOutOfRangeException(nameof(productRequestCount));
@@ -180,6 +200,19 @@ public sealed class LuxembourgEnumerationBudget
         ArgumentNullException.ThrowIfNull(plan);
         return new(plan.Pass1PageLimit, plan.Pass2PageLimit);
     }
+
+    /// <summary>
+    /// The LIMIT the pass's own rendered query carries, and so the most rows one page of it may
+    /// deliver. Read from the same two plan values <see cref="MaximumPagesFor"/> divides by, so
+    /// the page count and the per-page ceiling cannot describe different pagings. Exposed for the
+    /// tests that drive a publisher past it; the parser does not enforce it, Source/Core does.
+    /// </summary>
+    public uint PageRowLimitFor(LuxembourgQueryPass pass) => pass switch
+    {
+        LuxembourgQueryPass.Pass1 => _pass1Limit,
+        LuxembourgQueryPass.Pass2 => _pass2Limit,
+        _ => throw new ArgumentOutOfRangeException(nameof(pass)),
+    };
 
     /// <summary>
     /// Exact, not a guess. Under EmptySuccessorAfterShortPage a non-terminal short page requires an
@@ -402,31 +435,18 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
     }
 
     /// <summary>
-    /// Reaches the session's own private constructor and private <c>BootstrapRobotsAsync</c> by
-    /// reflection, exactly as the session's existing tests already do (see
-    /// RoutedHttpRequestPolicyAuditTests.Session/BootstrapAsync), rather than adding a new named
-    /// overload to RoutedHttpAcquisitionSession itself: that surface is deliberately pinned closed
-    /// by RoutedHttpAcquisitionSessionTests.ProductionSurfaceAcceptsNoCallerAuthoredTransportFacts,
-    /// which forbids any non-private member of the session from accepting a caller-supplied
-    /// HttpMessageHandler or TimeProvider. This path is reachable only when
-    /// <see cref="_testHandlerOverride"/> is non-null, which the public constructor can never set.
+    /// Starts a session on the injected test transport through the session's own internal door,
+    /// <see cref="RoutedHttpAcquisitionSession.StartWithTestTransportAsync"/>. This used to reach
+    /// the session's private constructor and private bootstrap by reflection, from production
+    /// source, which meant renaming either one broke this file at run time rather than at compile
+    /// time and no build could tell anyone. Reachable only when <see cref="_testHandlerOverride"/>
+    /// is non-null, which the public constructor can never set.
     /// </summary>
-    private async Task<RoutedHttpAcquisitionSession.StartResult> StartWithTestHandlerAsync(
+    private Task<RoutedHttpAcquisitionSession.StartResult> StartWithTestHandlerAsync(
         BoundMachineRequest sourceWitness,
-        CancellationToken cancellationToken)
-    {
-        var constructor = typeof(RoutedHttpAcquisitionSession).GetConstructors(
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).Single();
-        var session = (RoutedHttpAcquisitionSession)constructor.Invoke(
-            [sourceWitness, _custodyStore, _testHandlerOverride, _timeProvider, false]);
-        var bootstrap = (Task<RoutedHttpAcquisitionSession.StartResult>)(typeof(RoutedHttpAcquisitionSession)
-                .GetMethod(
-                    "BootstrapRobotsAsync",
-                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
-                ?.Invoke(session, [cancellationToken])
-            ?? throw new InvalidOperationException("The session's robots bootstrap returned no task."));
-        return await bootstrap.ConfigureAwait(false);
-    }
+        CancellationToken cancellationToken) =>
+        RoutedHttpAcquisitionSession.StartWithTestTransportAsync(
+            sourceWitness, _custodyStore, _testHandlerOverride!, _timeProvider, cancellationToken);
 
     /// <summary>
     /// Every leaf of one chain in ONE session, so the cover's one-run requirement holds by
@@ -520,8 +540,14 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         {
             selected = ParseStrictCount(countOutcome.Transport!.RetainedPayloadBytes.Span);
         }
-        catch (FormatException)
+        catch (Exception exception) when (exception is FormatException or System.Text.Json.JsonException)
         {
+            // JsonException as well as FormatException: JsonDocument.Parse throws it on a body
+            // that is not JSON at all, and it used to escape this method uncaught, out of
+            // RunPassAsync and out of RunPartitionAsync, so a publisher serving an HTML error page
+            // under a JSON content type crashed the run instead of refusing it. Both land on the
+            // same refusal here because the count route has one bucket for the whole question:
+            // this body did not deliver one nonnegative integer.
             return new PassOutcome(
                 null,
                 new LuxembourgEnumerationRefusalDetail(
@@ -578,12 +604,18 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
             {
                 rows = ParseStrictRows(transport.RetainedPayloadBytes.Span);
             }
-            catch (FormatException exception) when (exception.Data.Contains("oversizedKey"))
+            catch (Exception exception) when (exception is FormatException or System.Text.Json.JsonException)
             {
+                // The classification is decided INSIDE the catch, not in a `when` filter. It used
+                // to be `catch (FormatException e) when (e.Data.Contains("oversizedKey"))`, and
+                // every other refusal ParseStrictRows can raise therefore escaped the executor
+                // entirely: a body that is not JSON (JsonException), a body with no bindings array,
+                // and a row missing a key all left RunPartitionAsync as an exception rather than a
+                // typed result. A filter that names one case silently promotes the rest to crashes.
                 return new PassOutcome(
                     null,
                     new LuxembourgEnumerationRefusalDetail(
-                        LuxembourgEnumerationRefusal.DeliveredKeyNotRepresentable,
+                        ClassifyPageParseFailure(exception),
                         pageOutcome.RequestOrdinal, null, transport.HttpEvidence.Hops[0].Status,
                         transport.HttpEvidence.Hops[0].Sha256, null, null, [], null));
             }
@@ -755,6 +787,32 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         return new ObserveOutcome(transport, item.RequestOrdinal, null);
     }
 
+    /// <summary>
+    /// Which typed refusal a page-parse failure is. Keyed on the tag <see cref="ParseStrictRows"/>
+    /// attaches at each throw site rather than on the message text, so a reworded message cannot
+    /// silently reclassify a refusal.
+    /// </summary>
+    private static LuxembourgEnumerationRefusal ClassifyPageParseFailure(Exception exception) =>
+        exception.Data[PageParseFailureKey] switch
+        {
+            nameof(LuxembourgEnumerationRefusal.DeliveredKeyNotRepresentable) =>
+                LuxembourgEnumerationRefusal.DeliveredKeyNotRepresentable,
+
+            // Untagged: either a JsonException from JsonDocument.Parse, or a shape failure this
+            // parser raises about the document rather than about one delivered value.
+            _ => LuxembourgEnumerationRefusal.PageBodyMalformed,
+        };
+
+    private const string PageParseFailureKey = "lu.pageParseFailure";
+
+    private static FormatException PageFailure(
+        string message, LuxembourgEnumerationRefusal refusal, Exception? inner = null)
+    {
+        var exception = new FormatException(message, inner);
+        exception.Data[PageParseFailureKey] = refusal.ToString();
+        return exception;
+    }
+
     private static long ParseStrictCount(ReadOnlySpan<byte> bytes)
     {
         using var document = System.Text.Json.JsonDocument.Parse(bytes.ToArray());
@@ -786,12 +844,15 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
             throw new FormatException("The count term is not one typed nonnegative integer literal.");
         }
 
+        // NumberStyles.None admits no sign, so a successful parse is nonnegative by construction
+        // and there is no "or count < 0" disjunct here. There used to be one; it could not fire,
+        // and it made the strictness look like it came from a range check rather than from the
+        // parse style, which is the thing a reader would need to preserve.
         if (!long.TryParse(
                 value.GetString(),
                 System.Globalization.NumberStyles.None,
                 System.Globalization.CultureInfo.InvariantCulture,
-                out var count) ||
-            count < 0)
+                out var count))
         {
             throw new FormatException("The count value is not one nonnegative integer.");
         }
@@ -799,6 +860,26 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         return count;
     }
 
+    /// <summary>
+    /// The six-part cursor rows of one page, read only as far as the executor's own driving needs:
+    /// enough to advance the cursor, bound the partition and decide termination.
+    /// </summary>
+    /// <remarks>
+    /// It deliberately does NOT re-check what Source/Core already checks over the same retained
+    /// bytes when it resolves them. Two of these were tried here and removed: the per-page row
+    /// limit (<c>RepeatedEnumerationDeliveryProof.VerifyPages</c>, "The page exceeds its row
+    /// limit") and the plain-literal cursor rule (same method, "Cursor projections must be plain
+    /// literals matching the query comparator"). Both are real rules and both are enforced; a
+    /// second copy here would be a second place for one invariant to drift, and it would have
+    /// reclassified refusals Core owns into refusals this executor invented. What that costs is
+    /// visible and accepted: a publisher breaking either rule is refused after the pass completes
+    /// rather than mid-pass, so the run spends the remaining requests of that pass first.
+    /// <para>
+    /// Every failure raised here is tagged with the refusal it means, so the caller classifies
+    /// without reading messages; nothing throws untagged except <c>JsonDocument.Parse</c> itself
+    /// and the document-shape check, which are both the same answer: this is not a page.
+    /// </para>
+    /// </remarks>
     private static IReadOnlyList<LuxembourgQueryCursor> ParseStrictRows(ReadOnlySpan<byte> bytes)
     {
         using var document = System.Text.Json.JsonDocument.Parse(bytes.ToArray());
@@ -834,9 +915,10 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
             }
             catch (ArgumentException exception)
             {
-                var formatted = new FormatException("A delivered key component is not representable.", exception);
-                formatted.Data["oversizedKey"] = true;
-                throw formatted;
+                throw PageFailure(
+                    "A delivered key component is not representable.",
+                    LuxembourgEnumerationRefusal.DeliveredKeyNotRepresentable,
+                    exception);
             }
         }
 

@@ -108,6 +108,10 @@ public sealed class LuxembourgDeliveryEvidenceSetTests
                 session[digest] = CustodyMembership.Floored;
             }
 
+            // The body's durable write receipt is retained by the session too (HoldAsync routes it
+            // through the same RetainArtifactAsync path), so it belongs in the session map, not
+            // outside the floor. Objection 4.
+            session[observation.DurableWriteReceiptSha256] = CustodyMembership.Floored;
             executor[observation.HttpEvidenceRef.Sha256] = CustodyMembership.Floored;
         }
 

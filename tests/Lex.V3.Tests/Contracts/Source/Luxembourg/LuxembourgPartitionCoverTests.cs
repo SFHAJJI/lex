@@ -250,9 +250,11 @@ public sealed class LuxembourgPartitionCoverTests
         var (rightSession, rightExecutor) = LuxembourgEnumerationDeliveryReceiptTests.FullMembership(
             rightDelivery, CustodyMembership.RetainedUnenforced);
         var left = LuxembourgEnumerationDeliveryReceipt.TryCreate(
-            leftDelivery, leftSession, leftExecutor, [], out _)!;
+            leftDelivery, leftSession, leftExecutor,
+            LuxembourgEnumerationDeliveryReceiptTests.Custody(leftDelivery), out _)!;
         var right = LuxembourgEnumerationDeliveryReceipt.TryCreate(
-            rightDelivery, rightSession, rightExecutor, [], out _)!;
+            rightDelivery, rightSession, rightExecutor,
+            Unfloored(LuxembourgEnumerationDeliveryReceiptTests.Custody(rightDelivery)), out _)!;
         Assert.AreEqual(CustodyMembership.Floored, left.RetainedFloor);
         Assert.AreEqual(CustodyMembership.RetainedUnenforced, right.RetainedFloor);
 
@@ -263,6 +265,15 @@ public sealed class LuxembourgPartitionCoverTests
         Assert.AreEqual(CustodyMembership.RetainedUnenforced, cover.RetainedFloor);
     }
 
+    /// <summary>The custody list restated at the weaker membership, to match an unfloored run.</summary>
+    private static List<LuxembourgObservationCustody> Unfloored(List<LuxembourgObservationCustody> custody) =>
+        custody
+            .Select(static entry => entry with
+            {
+                ResponseBodyMembership = CustodyMembership.RetainedUnenforced,
+            })
+            .ToList();
+
     private static LuxembourgPartitionChain TwoLeafChain() =>
         LuxembourgPartitionChain.Root(Range("root", "a", "z"))
             .SplitLeaf("root", Cursor("m"), "left", "right");
@@ -271,7 +282,9 @@ public sealed class LuxembourgPartitionCoverTests
     {
         var (session, executor) = LuxembourgEnumerationDeliveryReceiptTests.FullMembership(
             delivery, CustodyMembership.Floored);
-        return LuxembourgEnumerationDeliveryReceipt.TryCreate(delivery, session, executor, [], out var refusal)
+        return LuxembourgEnumerationDeliveryReceipt.TryCreate(
+            delivery, session, executor,
+            LuxembourgEnumerationDeliveryReceiptTests.Custody(delivery), out var refusal)
             ?? throw new AssertFailedException($"The fixture's own receipt was refused: {refusal}.");
     }
 

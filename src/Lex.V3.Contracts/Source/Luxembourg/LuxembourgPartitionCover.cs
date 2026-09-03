@@ -267,7 +267,13 @@ public sealed class LuxembourgPartitionCover
             }
 
             sum = checked(sum + delivery.DeliveredRowCountA);
-            floor = floor is null ? receipt.RetainedFloor : Weaker(floor.Value, receipt.RetainedFloor);
+            // One rule, one place. This used to be a second copy of the receipt's own switch, which
+            // is two places for one invariant and was the reason both copies carried the same dead
+            // ReadOnce case. Every leaf floor here was produced by that same rule, so it is already
+            // one of the two values Weakest is total over.
+            floor = floor is null
+                ? receipt.RetainedFloor
+                : LuxembourgEnumerationDeliveryReceipt.Weakest(floor.Value, receipt.RetainedFloor);
         }
 
         if (rootReceipt is not null)
@@ -298,23 +304,4 @@ public sealed class LuxembourgPartitionCover
             floor!.Value);
     }
 
-    /// <summary>
-    /// The weakest membership across leaves, by an explicit switch rather than <c>Enum.Min</c>, so
-    /// a renumbering of <see cref="CustodyMembership"/> cannot silently invert which value reads as
-    /// weaker.
-    /// </summary>
-    private static CustodyMembership Weaker(CustodyMembership left, CustodyMembership right)
-    {
-        if (left == CustodyMembership.ReadOnce || right == CustodyMembership.ReadOnce)
-        {
-            return CustodyMembership.ReadOnce;
-        }
-
-        if (left == CustodyMembership.RetainedUnenforced || right == CustodyMembership.RetainedUnenforced)
-        {
-            return CustodyMembership.RetainedUnenforced;
-        }
-
-        return CustodyMembership.Floored;
-    }
 }

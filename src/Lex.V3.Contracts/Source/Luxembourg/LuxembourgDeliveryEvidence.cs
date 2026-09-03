@@ -60,6 +60,24 @@ public sealed record LuxembourgObservedTransport(
     ReadOnlyMemory<byte> RetainedPayloadBytes);
 
 /// <summary>
+/// What one observation contributes to a run's custody beyond the five references Core names.
+/// </summary>
+/// <remarks>
+/// It exists so <see cref="LuxembourgEnumerationDeliveryReceipt.TryCreate"/> can require the
+/// response body of every observation without knowing anything about SPARQL or about Luxembourg:
+/// the receipt walks the refs the comparison exposes and looks each one up here, so an
+/// observation whose body was left out is a refusal rather than a silently narrower floor. The
+/// membership is a stated fact like the two membership maps beside it; what makes the statement
+/// true is that <see cref="LuxembourgDeliveryEvidenceSet.TryCompareAndReceipt"/> is the only
+/// producer that fills it in, from a write receipt already bound to those exact bytes.
+/// </remarks>
+public sealed record LuxembourgObservationCustody(
+    RepeatedEnumerationEvidenceRefs References,
+    string ResponseBodySha256,
+    CustodyMembership ResponseBodyMembership,
+    string DurableWriteReceiptSha256);
+
+/// <summary>
 /// One admitted observation. It cannot exist without both the bound request and the routed
 /// evidence for it: the evidence is a constructor parameter, never a later check.
 /// </summary>
@@ -73,14 +91,18 @@ public sealed class LuxembourgDeliveryObservation
         SourceArtifactRef runIdentity,
         ulong requestOrdinal,
         IReadOnlyList<string> sessionRetainedDigests,
-        IReadOnlyList<string> readOnlyDigests)
+        string responseBodySha256,
+        CustodyMembership responseBodyMembership,
+        string durableWriteReceiptSha256)
     {
         References = references;
         HttpEvidenceRef = httpEvidenceRef;
         RunIdentity = runIdentity;
         RequestOrdinal = requestOrdinal;
         SessionRetainedDigests = sessionRetainedDigests;
-        ReadOnlyDigests = readOnlyDigests;
+        ResponseBodySha256 = responseBodySha256;
+        ResponseBodyMembership = responseBodyMembership;
+        DurableWriteReceiptSha256 = durableWriteReceiptSha256;
     }
 
     /// <summary>The refs Core will resolve. Minted here; never hand-built by a caller.</summary>
@@ -95,8 +117,30 @@ public sealed class LuxembourgDeliveryObservation
     /// <summary>The four digests the acquisition session retained for this observation.</summary>
     public IReadOnlyList<string> SessionRetainedDigests { get; }
 
-    /// <summary>The digests this observation reopened without writing: payload and write receipt.</summary>
-    public IReadOnlyList<string> ReadOnlyDigests { get; }
+    /// <summary>
+    /// The terminal response body's own digest. The session wrote these bytes and holds a receipt
+    /// for them, so this is a retained member of the run like any other, not a bare read.
+    /// </summary>
+    public string ResponseBodySha256 { get; }
+
+    /// <summary>
+    /// The membership of <see cref="ResponseBodySha256"/>, classified from the write receipt the
+    /// store issued for those exact bytes rather than asserted. That receipt is bound to this body
+    /// twice before it is trusted: by digest, because the hop names it, and by content, because
+    /// <c>Create</c> refuses a receipt whose <c>Reference.ContentSha256</c> is not this body's.
+    /// </summary>
+    public CustodyMembership ResponseBodyMembership { get; }
+
+    /// <summary>
+    /// The digest of the body's durable write receipt. The session retains this too (through
+    /// <c>RoutedHttpAcquisitionSession.RetainArtifactAsync</c>), so its membership comes from the
+    /// session's own map beside the other four.
+    /// </summary>
+    public string DurableWriteReceiptSha256 { get; }
+
+    /// <summary>This observation's contribution to the run's custody, for the receipt to require.</summary>
+    public LuxembourgObservationCustody Custody => new(
+        References, ResponseBodySha256, ResponseBodyMembership, DurableWriteReceiptSha256);
 
     public static LuxembourgDeliveryObservation ForCount(
         LuxembourgBoundQueryCount bound,
@@ -182,6 +226,20 @@ public sealed class LuxembourgDeliveryObservation
                 nameof(transport));
         }
 
+        // Load-bearing, and not implied by the digest check above. That one proves these bytes are
+        // the receipt the hop names; this one proves the receipt is ABOUT this body. Without it the
+        // body's custody membership below would be read off a receipt for some other object, which
+        // is exactly the substitution a floor claim must not admit.
+        if (!string.Equals(
+                transport.DurableWriteReceipt.Reference.ContentSha256,
+                terminal.Sha256,
+                StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "The transport's write receipt is a receipt for different bytes than the retained body.",
+                nameof(transport));
+        }
+
         // The binder mints the render receipt's resource id internally at bind time; OpenForSend
         // is the only public door that echoes it back rather than minting a second, different id.
         var opened = MachineQueryBinder.OpenForSend(request);
@@ -205,15 +263,15 @@ public sealed class LuxembourgDeliveryObservation
             opened.RenderReceiptRef.Sha256,
             logicalRequestRef.Sha256,
         };
-        var readOnlyDigests = new[] { terminal.Sha256, terminal.DurableWriteReceiptSha256 };
-
         return new LuxembourgDeliveryObservation(
             references,
             httpEvidenceRef,
             transport.HttpEvidence.RunIdentity,
             transport.HttpEvidence.RequestOrdinal,
             Array.AsReadOnly(sessionRetainedDigests),
-            Array.AsReadOnly(readOnlyDigests));
+            terminal.Sha256,
+            CustodyMembershipClassifier.Classify(transport.DurableWriteReceipt),
+            terminal.DurableWriteReceiptSha256);
     }
 
     private static string Sha256(ReadOnlySpan<byte> bytes) =>
@@ -278,8 +336,10 @@ public sealed class LuxembourgDeliveryPass
 /// The materialized resolver, and the only door to a Core comparison for Luxembourg.
 /// </summary>
 /// <remarks>
-/// Every artifact it hands Core is read back out of custody by digest and re-parsed or re-derived.
-/// The renderer is REBUILT from the reopened invariant plan and its template rather than carried
+/// Every artifact it hands Core is read back out of custody by digest. Most are then re-parsed or
+/// re-derived; the LU invariant plan is the one exception, and is digest-bound rather than
+/// re-parsed (see the comment at its reopen for exactly what that does and does not establish).
+/// The renderer is REBUILT from the digest-bound invariant plan and its template rather than carried
 /// from the bind, so <c>MachineQueryBinder.ReproduceForEvidence</c> is an independent reproduction
 /// of the request target and body digests and can genuinely fail. The two artifacts with no
 /// independent re-derivation (<see cref="MachineQueryPlan"/>, <see cref="MachineQueryRenderReceipt"/>)
@@ -344,19 +404,22 @@ public sealed class LuxembourgDeliveryEvidenceSet : IRepeatedEnumerationEvidence
         // sequence from LuxembourgQueryPlan.GetWireBytes; ParseAndVerify expects the latter, so the
         // reopened bytes are byte-compared against the given plan's own canonicalization instead of
         // being deserialized through ParseAndVerify's wire-format path.
+        // Digest-bound, not re-parsed, and the difference matters. ReadByDigestCheckedAsync fails
+        // unless the store returns bytes that hash to invariantPlanRef.Sha256, and that digest is
+        // SHA-256 over LuxembourgQueryPlanIdentity.GetCanonicalBytes(invariantPlan) (see
+        // LuxembourgQueryPlanIdentity.Create). So a successful reopen already proves custody holds
+        // this exact plan's canonicalization; the in-memory object below is that same plan, bound
+        // to those bytes by digest rather than deserialized out of them. A byte comparison here
+        // would only restate what the digest check established, so there is not one: an assertion
+        // that cannot fail is worse than none, because it reads as defense.
         var invariantPlanRef = LuxembourgQueryPlanIdentity.Create(invariantPlanResourceId, invariantPlan);
-        var invariantPlanBytes = await CustodyRestore.ReadByDigestCheckedAsync(
+        _ = await CustodyRestore.ReadByDigestCheckedAsync(
                 custodyStore, invariantPlanRef.Sha256, cancellationToken)
             .ConfigureAwait(false);
-        if (!invariantPlanBytes.Span.SequenceEqual(LuxembourgQueryPlanIdentity.GetCanonicalBytes(invariantPlan)))
-        {
-            throw new CustodyIntegrityException(
-                "The retained invariant plan bytes do not match the given plan's canonicalization.");
-        }
 
-        var reopenedInvariantPlan = invariantPlan;
+        var digestBoundInvariantPlan = invariantPlan;
 
-        var definition = reopenedInvariantPlan.SetDefinitions.SingleOrDefault(value => value.SetId == setId)
+        var definition = digestBoundInvariantPlan.SetDefinitions.SingleOrDefault(value => value.SetId == setId)
             ?? throw new ArgumentException("The set identity is not in the reopened LU plan.", nameof(setId));
         if (definition.Acquisition != LuxembourgQuerySetAcquisition.PublisherQuery || definition.TemplateId is null)
         {
@@ -365,7 +428,7 @@ public sealed class LuxembourgDeliveryEvidenceSet : IRepeatedEnumerationEvidence
                 nameof(setId));
         }
 
-        var template = reopenedInvariantPlan.QueryTemplates.Single(value => value.TemplateId == definition.TemplateId);
+        var template = digestBoundInvariantPlan.QueryTemplates.Single(value => value.TemplateId == definition.TemplateId);
 
         // The renderer source bytes: reopened by the reference the invariant plan names, never
         // trusted from the caller's in-memory copy.
@@ -376,9 +439,9 @@ public sealed class LuxembourgDeliveryEvidenceSet : IRepeatedEnumerationEvidence
             rendererSource.Reference, rendererSourceBytes.Span);
 
         var countRenderer = new LuxembourgSparqlRenderer(
-            invariantPlanRef, reopenedRendererSource, reopenedInvariantPlan, template, LuxembourgQueryRequestKind.Count);
+            invariantPlanRef, reopenedRendererSource, digestBoundInvariantPlan, template, LuxembourgQueryRequestKind.Count);
         var pageRenderer = new LuxembourgSparqlRenderer(
-            invariantPlanRef, reopenedRendererSource, reopenedInvariantPlan, template, LuxembourgQueryRequestKind.Page);
+            invariantPlanRef, reopenedRendererSource, digestBoundInvariantPlan, template, LuxembourgQueryRequestKind.Page);
 
         var resolved = new Dictionary<string, RepeatedEnumerationResolvedEvidence>(StringComparer.Ordinal);
         foreach (var observation in passA.AllObservations().Concat(passB.AllObservations()))
@@ -605,17 +668,12 @@ public sealed class LuxembourgDeliveryEvidenceSet : IRepeatedEnumerationEvidence
             return null;
         }
 
-        var readOnlyDigests = _passA.AllObservations()
-            .Concat(_passB.AllObservations())
-            .SelectMany(static observation => observation.ReadOnlyDigests)
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-
         return LuxembourgEnumerationDeliveryReceipt.TryCreate(
             delivery,
             sessionArtifactMembership,
             executorWrittenMembership,
-            readOnlyDigests,
+            _passA.AllObservations().Concat(_passB.AllObservations())
+                .Select(static observation => observation.Custody).ToArray(),
             out refusal);
     }
 }

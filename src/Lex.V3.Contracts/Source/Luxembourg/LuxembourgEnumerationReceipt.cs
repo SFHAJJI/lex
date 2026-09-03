@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Custody;
+using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
 
 namespace Lex.V3.Contracts.Source.Luxembourg;
@@ -27,6 +28,18 @@ public enum LuxembourgEnumerationReceiptRefusal
     /// <summary>The Core comparison threw. Its message is carried on the executor result.</summary>
     [JsonStringEnumMemberName("delivery_comparison_refused")]
     DeliveryComparisonRefused = 3,
+
+    /// <summary>
+    /// A supplied membership value is one no write receipt can produce. <see
+    /// cref="CustodyMembershipClassifier"/> answers only <see
+    /// cref="CustodyMembership.RetainedUnenforced"/> or <see cref="CustodyMembership.Floored"/>,
+    /// so <see cref="CustodyMembership.ReadOnce"/> arriving here means the caller's map was not
+    /// built from receipts. Refused rather than folded, because the floor rule below has no
+    /// defensible answer for a membership that establishes no custody at all, and answering
+    /// <see cref="CustodyMembership.Floored"/> for it would be the strongest possible wrong answer.
+    /// </summary>
+    [JsonStringEnumMemberName("membership_is_not_receipt_derived")]
+    MembershipIsNotReceiptDerived = 4,
 }
 
 /// <summary>
@@ -36,19 +49,16 @@ public enum LuxembourgEnumerationReceiptRefusal
 public sealed class LuxembourgEnumerationDeliveryReceipt
 {
     private readonly IReadOnlyDictionary<string, CustodyMembership> _retainedMembership;
-    private readonly IReadOnlyList<string> _verifiedWithoutCustodyClaim;
     private readonly IReadOnlyList<string> _unenforcedMemberDigests;
 
     private LuxembourgEnumerationDeliveryReceipt(
         EnumerationDeliveryComparison delivery,
         IReadOnlyDictionary<string, CustodyMembership> retainedMembership,
-        IReadOnlyList<string> verifiedWithoutCustodyClaim,
         CustodyMembership retainedFloor,
         IReadOnlyList<string> unenforcedMemberDigests)
     {
         Delivery = delivery;
         _retainedMembership = retainedMembership;
-        _verifiedWithoutCustodyClaim = verifiedWithoutCustodyClaim;
         RetainedFloor = retainedFloor;
         _unenforcedMemberDigests = unenforcedMemberDigests;
     }
@@ -60,20 +70,23 @@ public sealed class LuxembourgEnumerationDeliveryReceipt
     public EnumerationDeliveryComparison Delivery { get; }
 
     /// <summary>
-    /// Per-digest membership for every artifact this run WROTE and receipted, keyed by lowercase
-    /// SHA-256: the session's four retained binder and logical-request artifacts per observation,
-    /// plus the evidence documents the executor retained. Frozen.
+    /// Per-digest membership for every artifact this run wrote and receipted, keyed by lowercase
+    /// SHA-256. Per observation that is: the session's four retained binder and logical-request
+    /// artifacts, the response body, the body's durable write receipt, and the HTTP evidence
+    /// document the executor retained. Frozen.
     /// </summary>
+    /// <remarks>
+    /// The response body and its write receipt are in here rather than beside it. An earlier shape
+    /// listed them as verified-without-a-custody-claim, on the reasoning that this run reads them
+    /// rather than writing them. That reasoning was wrong about who wrote them: the acquisition
+    /// session writes both, holds a receipt for both, and the digests are reachable from those
+    /// receipts, so classifying them costs nothing. Leaving them outside the floor let
+    /// <see cref="RequireFlooredRun"/> pass while the publisher's own response bytes, the only
+    /// artifact whose loss cannot be repaired by re-deriving anything, sat unfloored.
+    /// </remarks>
     public IReadOnlyDictionary<string, CustodyMembership> RetainedMembership => _retainedMembership;
 
-    /// <summary>
-    /// Digests this run opened and verified but did not write: the response payloads and their
-    /// durable write receipts. A read is not a custody weakness, so these are reported beside the
-    /// floor rather than folded into it.
-    /// </summary>
-    public IReadOnlyList<string> VerifiedWithoutCustodyClaim => _verifiedWithoutCustodyClaim;
-
-    /// <summary>The weakest membership over the WRITTEN members. Never stronger than the worst of them.</summary>
+    /// <summary>The weakest membership over every member. Never stronger than the worst of them.</summary>
     public CustodyMembership RetainedFloor { get; }
 
     /// <summary>Every written digest whose store published no enforcement. Empty iff Floored.</summary>
@@ -96,51 +109,104 @@ public sealed class LuxembourgEnumerationDeliveryReceipt
     }
 
     /// <summary>
-    /// Minted only from a comparison. There is no other input from which a receipt can be built,
-    /// and <see cref="EnumerationDeliveryComparison"/> has a private constructor whose only door is
-    /// <c>Create</c>. Holding one is the evidence.
+    /// Minted only from a comparison and the exact observations that produced it. There is no
+    /// other input from which a receipt can be built: <see cref="EnumerationDeliveryComparison"/>
+    /// has a private constructor whose only door is <c>Create</c>, and
+    /// <see cref="LuxembourgDeliveryObservation"/> has a private constructor whose only doors
+    /// require a transport already bound to a real terminal hop. Holding one is the evidence.
     /// </summary>
+    /// <param name="observationCustody">
+    /// One entry per observation behind <paramref name="delivery"/>, in any order. Every reference
+    /// set the delivery names must appear here with an identical <c>References</c> tuple, so a
+    /// caller cannot pair one run's comparison with another run's bodies and cannot leave a body
+    /// out to keep it off the floor; either refuses
+    /// <see cref="LuxembourgEnumerationReceiptRefusal.SendClosureMemberNotHeld"/>.
+    /// </param>
     public static LuxembourgEnumerationDeliveryReceipt? TryCreate(
         EnumerationDeliveryComparison delivery,
         IReadOnlyDictionary<string, CustodyMembership> sessionArtifactMembership,
         IReadOnlyDictionary<string, CustodyMembership> executorWrittenMembership,
-        IReadOnlyList<string> readOnlyDigests,
+        IReadOnlyList<LuxembourgObservationCustody> observationCustody,
         out LuxembourgEnumerationReceiptRefusal refusal)
     {
         ArgumentNullException.ThrowIfNull(delivery);
         ArgumentNullException.ThrowIfNull(sessionArtifactMembership);
         ArgumentNullException.ThrowIfNull(executorWrittenMembership);
-        ArgumentNullException.ThrowIfNull(readOnlyDigests);
+        ArgumentNullException.ThrowIfNull(observationCustody);
+
+        var byEvidenceDigest = new Dictionary<string, LuxembourgObservationCustody>(StringComparer.Ordinal);
+        foreach (var custody in observationCustody)
+        {
+            ArgumentNullException.ThrowIfNull(custody);
+            byEvidenceDigest[custody.References.HttpEvidenceRef.Sha256] = custody;
+        }
 
         var retained = new Dictionary<string, CustodyMembership>(StringComparer.Ordinal);
-        foreach (var observation in AllObservations(delivery))
+        foreach (var references in AllObservations(delivery))
         {
-            foreach (var reference in new[]
+            if (!byEvidenceDigest.TryGetValue(references.HttpEvidenceRef.Sha256, out var observation) ||
+                observation.References != references)
+            {
+                refusal = LuxembourgEnumerationReceiptRefusal.SendClosureMemberNotHeld;
+                return null;
+            }
+
+            // Everything the acquisition session retained for this observation: the four send
+            // dependencies it binds, plus the durable write receipt it wrote for the response body
+            // (RoutedHttpAcquisitionSession.HoldAsync retains that receipt through the same
+            // RetainArtifactAsync path as the other four, so its membership is in the same map).
+            foreach (var digest in new[]
                      {
-                         observation.QueryPlanRef,
-                         observation.QueryInputRef,
-                         observation.RenderReceiptRef,
-                         observation.LogicalRequestRef,
+                         references.QueryPlanRef.Sha256,
+                         references.QueryInputRef.Sha256,
+                         references.RenderReceiptRef.Sha256,
+                         references.LogicalRequestRef.Sha256,
+                         observation.DurableWriteReceiptSha256,
                      })
             {
-                if (!sessionArtifactMembership.TryGetValue(reference.Sha256, out var membership))
+                if (!sessionArtifactMembership.TryGetValue(digest, out var membership))
                 {
                     refusal = LuxembourgEnumerationReceiptRefusal.SendClosureMemberNotHeld;
                     return null;
                 }
 
-                if (executorWrittenMembership.TryGetValue(reference.Sha256, out var conflicting) &&
+                if (executorWrittenMembership.TryGetValue(digest, out var conflicting) &&
                     conflicting != membership)
                 {
                     refusal = LuxembourgEnumerationReceiptRefusal.MembershipDisagreesOnADigest;
                     return null;
                 }
 
-                retained[reference.Sha256] = membership;
+                if (!Admit(membership, out refusal))
+                {
+                    return null;
+                }
+
+                retained[digest] = membership;
             }
 
+            // The response body, classified from the write receipt the store issued for those exact
+            // bytes. LuxembourgDeliveryObservation.Create has already refused unless that receipt's
+            // Reference.ContentSha256 is this body's digest, so this is the body's own membership
+            // and not some other object's.
+            if (!Admit(observation.ResponseBodyMembership, out refusal))
+            {
+                return null;
+            }
+
+            if ((sessionArtifactMembership.TryGetValue(observation.ResponseBodySha256, out var sessionBody) &&
+                    sessionBody != observation.ResponseBodyMembership) ||
+                (executorWrittenMembership.TryGetValue(observation.ResponseBodySha256, out var executorBody) &&
+                    executorBody != observation.ResponseBodyMembership))
+            {
+                refusal = LuxembourgEnumerationReceiptRefusal.MembershipDisagreesOnADigest;
+                return null;
+            }
+
+            retained[observation.ResponseBodySha256] = observation.ResponseBodyMembership;
+
             if (!executorWrittenMembership.TryGetValue(
-                    observation.HttpEvidenceRef.Sha256,
+                    references.HttpEvidenceRef.Sha256,
                     out var evidenceMembership))
             {
                 refusal = LuxembourgEnumerationReceiptRefusal.SendClosureMemberNotHeld;
@@ -148,7 +214,7 @@ public sealed class LuxembourgEnumerationDeliveryReceipt
             }
 
             if (sessionArtifactMembership.TryGetValue(
-                    observation.HttpEvidenceRef.Sha256,
+                    references.HttpEvidenceRef.Sha256,
                     out var conflictingEvidence) &&
                 conflictingEvidence != evidenceMembership)
             {
@@ -156,7 +222,12 @@ public sealed class LuxembourgEnumerationDeliveryReceipt
                 return null;
             }
 
-            retained[observation.HttpEvidenceRef.Sha256] = evidenceMembership;
+            if (!Admit(evidenceMembership, out refusal))
+            {
+                return null;
+            }
+
+            retained[references.HttpEvidenceRef.Sha256] = evidenceMembership;
         }
 
         var floor = CustodyMembership.Floored;
@@ -168,37 +239,61 @@ public sealed class LuxembourgEnumerationDeliveryReceipt
                 unenforced.Add(digest);
             }
 
-            floor = Weaker(floor, membership);
+            floor = Weakest(floor, membership);
         }
 
         refusal = LuxembourgEnumerationReceiptRefusal.None;
         return new LuxembourgEnumerationDeliveryReceipt(
             delivery,
             retained,
-            Array.AsReadOnly(readOnlyDigests.ToArray()),
             floor,
             Array.AsReadOnly(unenforced.ToArray()));
     }
 
     /// <summary>
-    /// The weakest of two memberships, by an explicit switch rather than <c>Enum.Min</c>, so a
-    /// renumbering of <see cref="CustodyMembership"/> cannot silently invert which value reads as
-    /// weaker.
+    /// The only Luxembourg path from a delivery receipt to an absence enumeration proof, and so the
+    /// only LU path to <see cref="AbsenceCut.TryCreateComplete"/>, which admits no family without
+    /// one. It reads <see cref="RequireFlooredRun"/>, never <see cref="Delivery"/>: a run holding
+    /// any member without an enforced floor cannot mint a proof at all, because a proof of complete
+    /// enumeration whose evidence may not survive ninety days is a claim nobody can go back and
+    /// check. That is a throw rather than a typed refusal because the caller asked for durability
+    /// by calling this at all, and the digests that lack it are named in the message.
     /// </summary>
-    private static CustodyMembership Weaker(CustodyMembership left, CustodyMembership right)
+    /// <exception cref="InvalidOperationException">
+    /// Any member of this run is held without an enforced retention floor.
+    /// </exception>
+    public AbsenceFamilyEnumerationProof? TryProveFamilyEnumeration(
+        string familyKey,
+        out AbsenceFamilyEnumerationProofRefusal refusal) =>
+        AbsenceFamilyEnumerationProof.TryCreate(familyKey, RequireFlooredRun(), out refusal);
+
+    /// <summary>
+    /// Refuses a membership no write receipt can produce, so no such value ever reaches
+    /// <see cref="Weakest"/>. See <see cref="LuxembourgEnumerationReceiptRefusal.MembershipIsNotReceiptDerived"/>.
+    /// </summary>
+    private static bool Admit(CustodyMembership membership, out LuxembourgEnumerationReceiptRefusal refusal)
     {
-        if (left == CustodyMembership.ReadOnce || right == CustodyMembership.ReadOnce)
+        if (membership is CustodyMembership.RetainedUnenforced or CustodyMembership.Floored)
         {
-            return CustodyMembership.ReadOnce;
+            refusal = LuxembourgEnumerationReceiptRefusal.None;
+            return true;
         }
 
-        if (left == CustodyMembership.RetainedUnenforced || right == CustodyMembership.RetainedUnenforced)
-        {
-            return CustodyMembership.RetainedUnenforced;
-        }
-
-        return CustodyMembership.Floored;
+        refusal = LuxembourgEnumerationReceiptRefusal.MembershipIsNotReceiptDerived;
+        return false;
     }
+
+    /// <summary>
+    /// The weakest of two memberships, by an explicit comparison rather than <c>Enum.Min</c>, so a
+    /// renumbering of <see cref="CustodyMembership"/> cannot silently invert which value reads as
+    /// weaker. Total over the two values <see cref="Admit"/> lets through, and over nothing else:
+    /// there is deliberately no <see cref="CustodyMembership.ReadOnce"/> case here, because a case
+    /// no caller can reach is a case no test can kill.
+    /// </summary>
+    internal static CustodyMembership Weakest(CustodyMembership left, CustodyMembership right) =>
+        left == CustodyMembership.Floored && right == CustodyMembership.Floored
+            ? CustodyMembership.Floored
+            : CustodyMembership.RetainedUnenforced;
 
     private static IEnumerable<RepeatedEnumerationEvidenceRefs> AllObservations(
         EnumerationDeliveryComparison delivery) =>
