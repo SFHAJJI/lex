@@ -23,7 +23,12 @@ internal static class MachineRequestTestFixture
     private static readonly SourceArtifactRef RendererSource = Artifact(
         "00000000-0000-4000-8000-0000000000ac",
         RendererSourceCanonicalBytes);
-    private static readonly SourceArtifactRef ContentTypeRegistry = Artifact(
+    /// <summary>
+    /// internal rather than private: the one digest a test can use to prove that
+    /// RecordingCustodyStore.RefuseFallback really refuses this table rather than merely not
+    /// reaching it (TheFallbackFreeDoubleRefusesTheSharedFixtureTable).
+    /// </summary>
+    internal static readonly SourceArtifactRef ContentTypeRegistry = Artifact(
         "00000000-0000-4000-8000-0000000000b0",
         ContentTypeRegistryCanonicalBytes);
     private static readonly SourceArtifactRef QueryRegistry = Artifact(

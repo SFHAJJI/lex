@@ -19,7 +19,7 @@ public sealed class LuxembourgDeliveryEvidenceSetTests
     [TestMethod]
     public async Task TheRebuiltRendererReproducesTheFrozenDigests()
     {
-        var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore();
+        var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
         var run = await RunTwoPassAsync(store).ConfigureAwait(false);
 
         var set = await LuxembourgDeliveryEvidenceSet.MaterializeAsync(
@@ -44,9 +44,9 @@ public sealed class LuxembourgDeliveryEvidenceSetTests
         // Seeding the empty store to make this pass destroys the test: the whole point is that a
         // resolver holding only in-memory objects (never reopened) cannot be told apart from a
         // correct one unless something forces a real reopen, and a fresh, empty store is that force.
-        var writingStore = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore();
+        var writingStore = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
         var run = await RunTwoPassAsync(writingStore).ConfigureAwait(false);
-        var emptyStore = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore();
+        var emptyStore = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
 
         // The executor's own catch (step 6) treats CustodyIntegrityException and
         // CustodyRequiredException identically (both become custody_member_missing): which of the
@@ -73,7 +73,7 @@ public sealed class LuxembourgDeliveryEvidenceSetTests
         // is minted from what MaterializeAsync was given, so it disagrees with the retained plan
         // and Source/Core's ReproduceForEvidence refuses. A renderer carried from the original bind
         // would still hold the correct, original identity and would not notice.
-        var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore();
+        var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
         var run = await RunTwoPassAsync(store).ConfigureAwait(false);
 
         var wrongResourceId = $"urn:uuid:{Guid.NewGuid():D}";

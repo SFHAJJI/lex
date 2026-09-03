@@ -415,10 +415,17 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
                 runner.CopyArtifactMembership(), executorWrittenMembership, out var receiptRefusal);
             if (receipt is null)
             {
+                // receiptRefusal was computed and thrown away here, so five distinguishable
+                // receipt refusals (a send-closure member not held, a membership disagreement, a
+                // membership no receipt can produce, and the Core comparison's own refusal) all
+                // reached the caller as one undifferentiated delivery_proof_refused with a null
+                // detail whenever Core itself had not thrown. It is carried now: Core's verbatim
+                // message when there is one, the receipt refusal's own name when there is not.
                 return LuxembourgEnumerationRunResult.Refused(
                     new LuxembourgEnumerationRefusalDetail(
                         LuxembourgEnumerationRefusal.DeliveryProofRefused,
-                        null, null, null, null, null, null, [], set.LastCoreRefusalMessage),
+                        null, null, null, null, null, null, [],
+                        set.LastCoreRefusalMessage ?? receiptRefusal.ToString()),
                     productRequestCount);
             }
 

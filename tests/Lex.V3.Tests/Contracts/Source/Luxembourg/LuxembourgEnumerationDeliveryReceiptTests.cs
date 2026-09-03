@@ -1,4 +1,5 @@
 using Lex.V3.Contracts.Custody;
+using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Tests.Contracts.Source.Core;
@@ -237,6 +238,61 @@ public sealed class LuxembourgEnumerationDeliveryReceiptTests
 
         Assert.IsNull(receipt);
         Assert.AreEqual(LuxembourgEnumerationReceiptRefusal.MembershipIsNotReceiptDerived, refusal);
+    }
+
+    [TestMethod]
+    public void AFlooredReceiptIsTheOnlyKindThatMintsAnAbsenceEnumerationProof()
+    {
+        // Objection 1(b)'s mutation, at the level where the rule lives. The delivered run itself
+        // is proven end to end by the executor's AGenuineDeliveryReceiptMintsACompleteAbsenceCut,
+        // which takes a genuine LU receipt all the way to AbsenceCut.TryCreateComplete. This is
+        // the other half: a receipt whose custody is not floored cannot mint a proof at all, so it
+        // cannot reach a complete cut either, because TryCreateComplete admits no family without
+        // one.
+        //
+        // The mutation this kills: change TryProveFamilyEnumeration to read Delivery instead of
+        // RequireFlooredRun. Confirmed to make this test pass a proof back instead of throwing,
+        // while every other test in this file and the executor's own still pass, which is what
+        // makes this the load-bearing assertion for that one line.
+        var delivery = new RepeatedEnumerationDeliveryProofTests.Fixture().Create("a,b", "a,b");
+        var familyKey = delivery.PartitionKey;
+
+        var (floored, flooredExecutor) = FullMembership(delivery, CustodyMembership.Floored);
+        var flooredReceipt = LuxembourgEnumerationDeliveryReceipt.TryCreate(
+            delivery, floored, flooredExecutor, Custody(delivery), out _)!;
+        Assert.AreEqual(CustodyMembership.Floored, flooredReceipt.RetainedFloor);
+        var proof = flooredReceipt.TryProveFamilyEnumeration(familyKey, out var proofRefusal);
+        Assert.IsNotNull(proof, $"a floored run must be able to prove its enumeration: {proofRefusal}");
+        Assert.AreEqual(AbsenceFamilyEnumerationProofRefusal.None, proofRefusal);
+        Assert.AreEqual(familyKey, proof.FamilyKey);
+
+        // The same delivery, the same comparison, one member held without an enforced floor.
+        var (session, executor) = FullMembership(delivery, CustodyMembership.Floored);
+        var custody = Custody(delivery);
+        var unflooredBody = custody[0].ResponseBodySha256;
+        custody[0] = custody[0] with { ResponseBodyMembership = CustodyMembership.RetainedUnenforced };
+        var unflooredReceipt = LuxembourgEnumerationDeliveryReceipt.TryCreate(
+            delivery, session, executor, custody, out _)!;
+        Assert.AreEqual(CustodyMembership.RetainedUnenforced, unflooredReceipt.RetainedFloor);
+
+        var thrown = Assert.ThrowsExactly<InvalidOperationException>(() =>
+            unflooredReceipt.TryProveFamilyEnumeration(familyKey, out _));
+        StringAssert.Contains(thrown.Message, unflooredBody);
+    }
+
+    [TestMethod]
+    public void AProofIsRefusedForAFamilyThisDeliveryDidNotEnumerate()
+    {
+        // The bridge passes the caller's family key straight to the Absence factory rather than
+        // reading it off the delivery, so this is the assertion that the factory's own
+        // partition check is reachable through it.
+        var delivery = new RepeatedEnumerationDeliveryProofTests.Fixture().Create("a,b", "a,b");
+        var (session, executor) = FullMembership(delivery, CustodyMembership.Floored);
+        var receipt = LuxembourgEnumerationDeliveryReceipt.TryCreate(
+            delivery, session, executor, Custody(delivery), out _)!;
+
+        Assert.IsNull(receipt.TryProveFamilyEnumeration("some_other_family", out var refusal));
+        Assert.AreEqual(AbsenceFamilyEnumerationProofRefusal.PartitionIsNotThisFamily, refusal);
     }
 
     /// <summary>
