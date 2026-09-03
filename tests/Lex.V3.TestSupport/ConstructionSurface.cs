@@ -48,8 +48,20 @@ public static class ConstructionSurface
         var found = new SortedSet<string>(StringComparer.Ordinal);
         foreach (var type in SelfNestedAndBases(guarded))
         {
+            var compilerGenerated = IsCompilerGenerated(type);
             foreach (var producer in ProducersDeclaredOn(type, guarded, includeBaseConstructors: true))
             {
+                // Same rule as the assembly sweep, and for the same measured reason: a field on a
+                // compiler-generated type nested here is the compiler's storage for a captured
+                // local, it exists only when that local is live across an await, and Debug hoists
+                // them all. CompilerGeneratedHolders asserts them collectively. Methods and
+                // constructors on those types stay exact, because a lambda returning the guarded
+                // type is a real door.
+                if (compilerGenerated && producer.Entry.StartsWith("field ", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
                 found.Add(producer.Entry);
             }
         }
@@ -66,11 +78,51 @@ public static class ConstructionSurface
     /// enclosing type is public, since a public method on an internal type is internal in effect.
     /// </summary>
     /// <summary>
-    /// True for a compiler-generated async state machine, identified by the interface the compiler
-    /// makes it implement rather than by its mangled name, so no name filter is introduced.
+    /// True when the declaring type is compiler generated, tested by attribute rather than by
+    /// name so that no mangled spelling is ever trusted or skipped.
     /// </summary>
-    private static bool IsAsyncStateMachine(Type type) =>
-        typeof(System.Runtime.CompilerServices.IAsyncStateMachine).IsAssignableFrom(type);
+    private static bool IsCompilerGenerated(Type type) =>
+        type.IsDefined(typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute), inherit: false);
+
+    /// <summary>
+    /// Fields of the guarded type declared on compiler-generated types: the storage a lambda
+    /// closure or an async state machine uses for a captured local or for <c>this</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// These are asserted collectively rather than pinned by name, and the reason is measured. The
+    /// compiler hoists an async local into a state-machine field only when it is live across an
+    /// await; Debug hoists them all. So an exact pin of these fields drifts with the build
+    /// configuration, and every local receipt in this repository was a Debug run while CI builds
+    /// Release. That is how a green suite reached a red CI.
+    /// </para>
+    /// <para>
+    /// Methods and constructors on compiler-generated types are <em>not</em> treated this way and
+    /// stay in <see cref="ProducersIn"/> exactly: a lambda in a display class that returns the
+    /// guarded type is a real door, and excluding whole compiler-generated types to fix the drift
+    /// would have hidden it.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<string> CompilerGeneratedHolders(Assembly assembly, Type guarded)
+    {
+        ArgumentNullException.ThrowIfNull(assembly);
+        ArgumentNullException.ThrowIfNull(guarded);
+        var found = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var type in AllTypes(assembly).Where(IsCompilerGenerated))
+        {
+            foreach (var field in type.GetFields(
+                BindingFlags.Public | BindingFlags.NonPublic
+                | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
+            {
+                if (field.FieldType == guarded)
+                {
+                    found.Add($"{(field.IsStatic ? "static" : "instance")} {(field.IsPublic ? "public" : "non-public")} {type.FullName}");
+                }
+            }
+        }
+
+        return found.ToArray();
+    }
 
     public static IReadOnlyList<string> ProducersIn(Assembly assembly, Type guarded, bool includeNonPublic)
     {
@@ -85,24 +137,18 @@ public static class ConstructionSurface
                 continue;
             }
 
-            // A compiler-generated async state machine is not a construction path. Its fields are
-            // the compiler's storage for hoisted locals and for `this`; nobody can drive one to
-            // obtain a guarded value. They are also not stable: a hoisted local that Debug keeps
-            // as a field, Release can drop entirely, so pinning them makes the guard pass in one
-            // configuration and fail in the other. That is not a hypothetical: it is how this
-            // guard first reached CI, green on Debug and red on Release.
-            //
-            // Deliberately narrow. Compiler-generated members on real types, a record's clone
-            // method and its copy constructor above all, are exactly what this guard exists to
-            // see and are not excluded here.
-            if (IsAsyncStateMachine(type))
-            {
-                continue;
-            }
-
             var reachable = ReachableFromOutside(type);
+            var compilerGenerated = IsCompilerGenerated(type);
             foreach (var producer in ProducersDeclaredOn(type, guarded, includeBaseConstructors: false))
             {
+                // A field on a compiler-generated type is storage, not a door, and it drifts with
+                // the build configuration. It is asserted collectively by CompilerGeneratedHolders
+                // instead. Methods and constructors on the same type stay here exactly.
+                if (compilerGenerated && producer.Entry.StartsWith("field ", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
                 if (includeNonPublic || (producer.PublicMember && reachable))
                 {
                     found.Add(producer.Entry);

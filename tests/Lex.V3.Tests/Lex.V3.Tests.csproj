@@ -4,7 +4,7 @@
     <AssemblyName>Lex.V3.Tests</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="../Shared/ConstructionSurface.cs" Link="Shared/ConstructionSurface.cs" />
+    <Compile Include="../Lex.V3.TestSupport/ConstructionSurface.cs" Link="TestSupport/ConstructionSurface.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="JsonSchema.Net" Version="9.4.0" PrivateAssets="all" />

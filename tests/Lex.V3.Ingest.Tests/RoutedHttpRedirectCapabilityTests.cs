@@ -48,12 +48,27 @@ public sealed class RoutedHttpRedirectCapabilityTests
             new[]
             {
                 "constructor private instance " + Lease + "::.ctor(" + Common + ", System.UInt64, System.String, " + Lease + "+RedirectAntecedent, System.Boolean) -> " + Lease,
-                "field public instance " + Lease + "+<ConsumeAndSendCoreAsync>d__22::<>4__this -> " + Lease,
-                "field public instance " + Lease + "+<RetainAndSendAsync>d__21::<>4__this -> " + Lease,
                 "method internal static " + Lease + "::FromRedirect(" + Common + ", System.UInt64, System.String, " + Session + "+RedirectAntecedentCapability) -> " + Lease,
                 "method internal static " + Lease + "::Initial(" + Common + ", System.Boolean) -> " + Lease,
             },
             ConstructionSurface.Of(leaseType).ToArray());
+
+        // The compiler's own storage, asserted collectively rather than pinned. Each is a field of
+        // the lease on a compiler-generated type inside the session's hierarchy, and none is
+        // public static, which is the property that matters: storage cannot be driven to obtain a
+        // lease. Exact names and ordinals are deliberately absent, because a hoisted local exists
+        // as a field only when it is live across an await and Debug hoists them all, so pinning
+        // them made this suite pass locally and fail in CI.
+        foreach (var holder in ConstructionSurface.CompilerGeneratedHolders(
+            leaseType.Assembly, leaseType))
+        {
+            StringAssert.StartsWith(
+                holder, "instance ", "compiler storage of a lease is never static");
+            StringAssert.Contains(
+                holder,
+                "Lex.V3.Ingest.RoutedHttpAcquisitionSession",
+                "a lease may only be held inside the session's own hierarchy");
+        }
 
         // Outside the lease, the assembly holds one but never mints one: the route loop's local,
         // the retention capability's field, and the retention state machine's parameter.
