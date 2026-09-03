@@ -49,7 +49,8 @@ public sealed class EuLegalNoticeEvidenceConstructionSurfaceTests
                 // proven by RoutedHttpEvidence.Create's Decision 80 receipt gate) and the exact
                 // HttpLogicalRequest that produced it. Refuses a non-GET, a request that is not the
                 // one the terminal hop actually sent, a route that did not start at the pinned R8
-                // URI, a non-200 terminal status, and anything but a single text/html media type.
+                // URI, a route whose terminal hop does not share the pinned URI's own host and port,
+                // a non-200 terminal status, and anything but a single text/html media type.
                 "method public static " + N + "::FromRoute("
                 + Http + "RoutedHttpEvidence, " + Http + "HttpLogicalRequest) -> " + N,
                 // Not a second unguarded production door: it re-derives an already-canonical value

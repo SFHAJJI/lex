@@ -92,7 +92,7 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// <b>What one bounded GET proves and what it does not.</b> A single request establishes only what
 /// was observed at one instant: this exact status, these exact bytes, this exact digest. It proves
 /// nothing about whether a second request would return the same bytes. Two independent captures of
-/// this exact URI taken eleven seconds apart on 2026-09-03 in fact returned different bytes and
+/// this exact URI taken 10.6 seconds apart on 2026-09-03 in fact returned different bytes and
 /// different SHA-256 digests, one byte apart in length: the page embeds a per-session analytics
 /// agent id and a per-request CSRF token in three hidden form fields, and both differ between
 /// requests even though the surrounding legal prose did not visibly change between the two captures
@@ -252,7 +252,7 @@ public sealed class EuLegalNoticeEvidence
     /// that happens to share a URI with it. The pinned <see cref="RequestedUri"/> is checked against
     /// the route's own first hop, never against a caller's claim, and the terminal hop's own origin
     /// is checked against that same pinned URI's origin: a route that starts at the pinned URI but
-    /// is redirected to a different host or scheme is refused rather than silently becoming
+    /// is redirected to a different host or port is refused rather than silently becoming
     /// <see cref="EffectiveUri"/>.
     /// </summary>
     public static EuLegalNoticeEvidence FromRoute(RoutedHttpEvidence evidence, HttpLogicalRequest request)
@@ -298,21 +298,35 @@ public sealed class EuLegalNoticeEvidence
         }
 
         // The first-hop pin above only proves where the route started. A route that redirects away
-        // to any other host would still pass it, and that other host's bytes would become
+        // to any other host or port would still pass it, and that other host's bytes would become
         // EffectiveUri and this type's captured evidence: R8 binds an official legal-notice URI at
         // both ends, so the session's admitted-URI set (whatever a caller chose to route through)
         // must not be the only guard between this type and an off-pin redirect target. Refuse unless
-        // the terminal hop terminates on the pinned URI's own origin. RoutedHttpHop.Create already
-        // derives NetworkOrigin from each hop's own RequestUri, so this compares two
+        // the terminal hop terminates on the pinned URI's own host and port. RoutedHttpHop.Create
+        // already derives NetworkOrigin from each hop's own RequestUri, so this compares two
         // already-validated origins, never a caller's separate claim.
+        //
+        // An origin is scheme, host and port. RoutedHttpNetworkOrigin.EffectivePort carries the
+        // third, and a probe during review proved a redirect from the pinned URI to
+        // eur-lex.europa.eu on port 8443 was accepted as notice evidence before this line compared
+        // it; the port is now part of the refusal (see
+        // FromRouteRefusesATwoHopRouteThatRedirectsToTheSameHostOnADifferentPort). Scheme itself is
+        // deliberately not part of the boolean check below: RoutedHttpNetworkOrigin.Scheme is a
+        // hardcoded "https" on every instance (RoutedHttpValidation.RequireAbsoluteHttpsUri already
+        // refuses any URI not spelled "https://" before RoutedHttpNetworkOrigin.FromUri can build one
+        // from it, and both terminalHop.NetworkOrigin and pinnedOrigin are built that way), so
+        // comparing the two Scheme values can never be false and would be exactly the
+        // compares-a-constant-to-itself shape this project refuses to keep. It still appears in the
+        // message below purely as a readable origin string, not as a condition.
         var pinnedOrigin = RoutedHttpNetworkOrigin.FromUri(RequestedUri);
-        if (!string.Equals(terminalHop.NetworkOrigin.Scheme, pinnedOrigin.Scheme, StringComparison.Ordinal) ||
-            !string.Equals(terminalHop.NetworkOrigin.Host, pinnedOrigin.Host, StringComparison.Ordinal))
+        if (!string.Equals(terminalHop.NetworkOrigin.Host, pinnedOrigin.Host, StringComparison.Ordinal) ||
+            terminalHop.NetworkOrigin.EffectivePort != pinnedOrigin.EffectivePort)
         {
             throw new ArgumentException(
                 $"Legal-notice evidence must terminate on the pinned R8 origin " +
-                $"({pinnedOrigin.Scheme}://{pinnedOrigin.Host}); the terminal hop's origin is " +
-                $"{terminalHop.NetworkOrigin.Scheme}://{terminalHop.NetworkOrigin.Host}.",
+                $"({pinnedOrigin.Scheme}://{pinnedOrigin.Host}:{pinnedOrigin.EffectivePort}); the " +
+                $"terminal hop's origin is {terminalHop.NetworkOrigin.Scheme}://" +
+                $"{terminalHop.NetworkOrigin.Host}:{terminalHop.NetworkOrigin.EffectivePort}.",
                 nameof(evidence));
         }
 

@@ -39,7 +39,7 @@ public sealed class EuLegalNoticeEvidenceTests
 
     /// <summary>
     /// The second live capture recorded in
-    /// <c>coordination/measurements/2026-09-03-eu-legal-notice-capture.md</c>, taken eleven seconds
+    /// <c>coordination/measurements/2026-09-03-eu-legal-notice-capture.md</c>, taken 10.6 seconds
     /// after the capture behind <see cref="RealSha256"/>/<see cref="RealByteLength"/>. The
     /// measurement file records only these two facts for capture 2 (its SHA-256 and byte count);
     /// it says explicitly that "this second request captured only the response body, not its
@@ -95,15 +95,25 @@ public sealed class EuLegalNoticeEvidenceTests
     }
 
     [TestMethod]
-    public void Sha256DiffersBetweenTwoRealCapturesOfTheSameUriElevenSecondsApart()
+    public void Sha256IsTheHopsCopiedDigestAndDiffersAcrossTwoRealCapturesTenPointSixSecondsApart()
     {
         // Executable proof of the type-level remarks' churn finding, using the actual measured
         // facts rather than only asserting the claim in prose: two independent captures of the
-        // identical R8 URI, eleven seconds apart, produced two different SHA-256 digests over two
-        // different byte lengths (a per-request CSRF token and analytics session id embedded in the
-        // page differ between requests even though the surrounding legal prose did not). This is
-        // exactly why the type's own documentation says Sha256 must never be read as a stable
-        // content fingerprint or a change-detection key.
+        // identical R8 URI, 10.6 seconds apart (RealCapturedAt 16:55:19.367 to this fixture's second
+        // capture at 16:55:30.000 UTC), produced two different SHA-256 digests over two different
+        // byte lengths (a per-request CSRF token and analytics session id embedded in the page
+        // differ between requests even though the surrounding legal prose did not). This is exactly
+        // why the type's own documentation says Sha256 must never be read as a stable content
+        // fingerprint or a change-detection key.
+        //
+        // What this test does and does not drive: EuLegalNoticeEvidence.Sha256 is a straight copy of
+        // the terminal hop's own already-computed digest (FromRoute reads terminalHop.Sha256
+        // directly; nothing in this type hashes response bytes itself). RealSha256 and
+        // SecondCaptureSha256 below are the real, externally measured digests from the two live
+        // captures, chosen by this test's author and carried into the fixture's hops unchanged, so
+        // this test proves the type carries each one through end to end without corrupting or
+        // conflating it with the other, not that the type independently computed or verified either
+        // hash from response bytes.
         var (evidenceOne, requestOne) = RealRoute();
         var (evidenceTwo, requestTwo) = SecondRealCaptureRoute();
 
@@ -582,7 +592,14 @@ public sealed class EuLegalNoticeEvidenceTests
         CollectionAssert.AreEqual(
             new[] { "Thu, 03 Sep 2026 16:55:19 GMT", "Thu, 03 Sep 2026 16:55:20 GMT" },
             ((RoutedHttpMultipleHeader)reopened.ObservedDate).Values.ToArray());
-        CollectionAssert.AreEqual(tampered, reopened.CopyCanonicalBytes());
+        // No closing CollectionAssert.AreEqual(tampered, reopened.CopyCanonicalBytes()) here:
+        // ParseAndVerify's own canonical round-trip check (the "exact canonical typed
+        // representation" throw near the end of that method) already refuses to return at all
+        // unless canonicalBytes.SequenceEqual(rebuilt._canonicalBytes), so by the time this line
+        // would run, that equality is already a guaranteed precondition of reopened existing. Such
+        // an assertion cannot fail once ParseAndVerify has returned; the two assertions above are
+        // what this test actually drives (the "multiple" parse and write branches), and they are
+        // reached only because ParseAndVerify's internal check already passed.
     }
 
     [TestMethod]
@@ -701,6 +718,26 @@ public sealed class EuLegalNoticeEvidenceTests
         // see. Paired with the same-origin acceptance above, which proves this check is on origin,
         // not on exact URI equality (that test's terminal hop differs by query string alone).
         var terminalUri = "https://not-eur-lex.example/content/legal-notice/legal-notice.html?locale=en";
+        var (evidence, request) = TwoHopRoute(EuLegalNoticeEvidence.RequestedUri, terminalUri);
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(
+            () => EuLegalNoticeEvidence.FromRoute(evidence, request));
+        StringAssert.Contains(thrown.Message, "pinned R8 origin");
+    }
+
+    [TestMethod]
+    public void FromRouteRefusesATwoHopRouteThatRedirectsToTheSameHostOnADifferentPort()
+    {
+        // An origin is scheme, host AND port. The prior version of this check compared only scheme
+        // and host; a probe during review proved a redirect from the pinned URI to
+        // eur-lex.europa.eu on port 8443 was silently accepted as notice evidence, because
+        // RoutedHttpNetworkOrigin.EffectivePort was never compared. This route is otherwise
+        // perfectly self-consistent (matching request digest, a 200 terminal status, text/html, and
+        // the exact pinned scheme and host) and paired with the same-origin acceptance above, which
+        // proves this check is on the full origin, not merely on host equality: only the terminal
+        // hop's port differs from the pinned URI's default 443.
+        var terminalUri =
+            "https://eur-lex.europa.eu:8443/content/legal-notice/legal-notice.html?locale=en";
         var (evidence, request) = TwoHopRoute(EuLegalNoticeEvidence.RequestedUri, terminalUri);
 
         var thrown = Assert.ThrowsExactly<ArgumentException>(
@@ -891,7 +928,7 @@ public sealed class EuLegalNoticeEvidenceTests
     /// measured facts from that second capture; its Date header and exact capture timestamp were
     /// not independently recorded (see the measurement file's own note that only the response body
     /// was captured for this request), so this fixture leaves the Date header absent and uses a
-    /// placeholder captured-at eleven seconds after <see cref="RealCapturedAt"/>, the same way every
+    /// placeholder captured-at 10.6 seconds after <see cref="RealCapturedAt"/>, the same way every
     /// other synthetic hop in this file supplies placeholder values for facts the fixture does not
     /// claim were measured.
     /// </summary>
