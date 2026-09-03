@@ -21,12 +21,10 @@ namespace Lex.V3.Contracts.Source.Quarantine;
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record QuarantineVerifierReceipt
 {
-    private const int MaximumIdentityLength = 256;
-
     [JsonConstructor]
     public QuarantineVerifierReceipt(string verifierIdentity, bool operatedReadOnly, string producedAtUtc)
     {
-        VerifierIdentity = RequireIdentity(verifierIdentity, nameof(verifierIdentity));
+        VerifierIdentity = ContractValidation.RequireIdentifier(verifierIdentity, nameof(verifierIdentity));
         if (!operatedReadOnly)
         {
             throw new ArgumentException(
@@ -46,18 +44,6 @@ public sealed record QuarantineVerifierReceipt
 
     /// <summary>Exact <c>yyyy-MM-ddTHH:mm:ssZ</c> instant.</summary>
     public string ProducedAtUtc { get; }
-
-    private static string RequireIdentity(string value, string parameterName)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
-        if (value.Length > MaximumIdentityLength ||
-            value.Any(static character => character is < '!' or > '~'))
-        {
-            throw new ArgumentException("A verifier identity must be bounded printable ASCII.", parameterName);
-        }
-
-        return value;
-    }
 
     private static string RequireTimestamp(string value, string parameterName)
     {
@@ -84,8 +70,6 @@ public sealed record QuarantineIssuer
 {
     public const string ExpectedRole = "quarantine_reviewer";
 
-    private const int MaximumIdentifierLength = 256;
-
     [JsonConstructor]
     public QuarantineIssuer(string role, string issuerId, string keyId)
     {
@@ -96,8 +80,8 @@ public sealed record QuarantineIssuer
         }
 
         Role = role;
-        IssuerId = RequireIdentifier(issuerId, nameof(issuerId));
-        KeyId = RequireIdentifier(keyId, nameof(keyId));
+        IssuerId = ContractValidation.RequireIdentifier(issuerId, nameof(issuerId));
+        KeyId = ContractValidation.RequireIdentifier(keyId, nameof(keyId));
     }
 
     public string Role { get; }
@@ -105,18 +89,6 @@ public sealed record QuarantineIssuer
     public string IssuerId { get; }
 
     public string KeyId { get; }
-
-    private static string RequireIdentifier(string value, string parameterName)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
-        if (value.Length > MaximumIdentifierLength ||
-            value.Any(static character => character is < ' ' or > '~'))
-        {
-            throw new ArgumentException("Quarantine identifiers must be bounded printable ASCII.", parameterName);
-        }
-
-        return value;
-    }
 }
 
 /// <summary>
@@ -137,14 +109,18 @@ public sealed record QuarantineIssuer
 /// same signature format constant, same base64url-encoded-P1363-pair shape check.
 /// </para>
 /// <para>
-/// This type checks only that the signature is shaped correctly. Nothing here constructs an
-/// <see cref="System.Security.Cryptography.ECDsa"/> or checks the signature against a public key:
-/// that verifier -- like the V2 index reader in section 7.3 -- is deliberately not part of V3.
-/// Backlog Candidate 2 D3-04's own completion evidence says so directly: "verifier absent from
-/// V3." Signature verification for this inventory, if it is ever needed, belongs to whichever
-/// later package actually consumes a signed inventory (D3-05, the canon/2 alias builder; section
-/// 7.3 step 6, "Feed only that signed neutral inventory to the V3 canon/2 alias builder") and is
-/// out of scope here.
+/// This type checks only that the signature is shaped correctly; it does not itself construct an
+/// <see cref="System.Security.Cryptography.ECDsa"/> or check the signature against a key. What
+/// section 7.3 forbids from V3, and what stays absent here, is the V2 index reader that would let
+/// V3 independently re-derive coordinates from real V2 bytes -- not signature verification as such.
+/// <c>QuarantineInventoryCanonicalizer</c> beside this type defines exactly which bytes this
+/// signature covers (<c>GetSigningBytes</c>) and can verify a signature against a caller-supplied
+/// public key (<c>ParseAndVerify</c>), so the signable/verifiable form this record's signature is
+/// bound to genuinely exists in V3. What is still deliberately out of scope here is the
+/// trust-store-backed verifier that decides whether a given issuer and key are the pinned review
+/// identity for this purpose: that decision belongs to whichever later package actually consumes a
+/// signed inventory (D3-05, the canon/2 alias builder; section 7.3 step 6, "Feed only that signed
+/// neutral inventory to the V3 canon/2 alias builder").
 /// </para>
 /// </remarks>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -261,7 +237,11 @@ public sealed class QuarantinedPriorCoordinateInventory
         string priorIndexPairSha256,
         SourceArtifactRef sourceIndexIdentityRef,
         QuarantineVerifierReceipt verifierReceipt,
-        QuarantineAttestation attestation)
+        QuarantineAttestation attestation,
+        QuarantineReproducerRole primaryReproducerRole,
+        string primaryReproducerIdentity,
+        QuarantineReproducerRole independentReviewerReproducerRole,
+        string independentReviewerReproducerIdentity)
     {
         Coordinates = coordinates;
         CoordinateSetSha256 = coordinateSetSha256;
@@ -269,6 +249,10 @@ public sealed class QuarantinedPriorCoordinateInventory
         SourceIndexIdentityRef = sourceIndexIdentityRef;
         VerifierReceipt = verifierReceipt;
         Attestation = attestation;
+        PrimaryReproducerRole = primaryReproducerRole;
+        PrimaryReproducerIdentity = primaryReproducerIdentity;
+        IndependentReviewerReproducerRole = independentReviewerReproducerRole;
+        IndependentReviewerReproducerIdentity = independentReviewerReproducerIdentity;
     }
 
     /// <summary>The complete normalized set of previously public coordinates (section 7.3 step 3).</summary>
@@ -288,6 +272,23 @@ public sealed class QuarantinedPriorCoordinateInventory
 
     /// <summary>The dedicated non-production review identity's attestation (section 7.3 step 4).</summary>
     public QuarantineAttestation Attestation { get; }
+
+    /// <summary>
+    /// The role the primary reproduction declared, taken from that <see cref="QuarantinePriorCoordinateReproduction"/>
+    /// exactly as <see cref="TryReconcile"/> received it. Retained (not discarded) so a consumer of
+    /// this inventory can see which two identities agreed, not merely that two agreed; covered by
+    /// <c>QuarantineInventoryCanonicalizer.GetSigningBytes</c>, so it is under the signature too.
+    /// </summary>
+    public QuarantineReproducerRole PrimaryReproducerRole { get; }
+
+    /// <summary>The primary reproduction's declared identity. See <see cref="PrimaryReproducerRole"/>.</summary>
+    public string PrimaryReproducerIdentity { get; }
+
+    /// <summary>The independent reviewer reproduction's declared role. See <see cref="PrimaryReproducerRole"/>.</summary>
+    public QuarantineReproducerRole IndependentReviewerReproducerRole { get; }
+
+    /// <summary>The independent reviewer reproduction's declared identity. See <see cref="PrimaryReproducerRole"/>.</summary>
+    public string IndependentReviewerReproducerIdentity { get; }
 
     /// <summary>
     /// The only path to a quarantined prior-coordinate inventory. Refuses unless the two supplied
@@ -354,6 +355,10 @@ public sealed class QuarantinedPriorCoordinateInventory
             priorIndexPairSha256,
             sourceIndexIdentityRef,
             verifierReceipt,
-            attestation);
+            attestation,
+            primary.Role,
+            primary.ReproducerIdentity,
+            independentReviewer.Role,
+            independentReviewer.ReproducerIdentity);
     }
 }

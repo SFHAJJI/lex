@@ -114,29 +114,44 @@ internal static class QuarantineCoordinateValidation
 /// before encoding, so two independent walks of the same true V2 index that happened to enumerate
 /// rows in different orders normalize to identical bytes here, while two walks that disagree on
 /// the underlying content do not. Each field is length-prefixed so no pair of adjacent fields can
-/// be re-cut into a different pair that hashes the same way.
+/// be re-cut into a different pair that hashes the same way. There is no separate anchor-presence
+/// flag byte: <see cref="PriorPublicCoordinate.Anchor"/> is either null or a non-empty bounded
+/// token (its own constructor rejects a blank anchor), so the anchor field's own length prefix
+/// already distinguishes a version-level coordinate ("0:|", zero bytes) from a provision-level one
+/// ("N:value|", N &gt;= 1) without a redundant extra byte encoding the same fact twice.
 /// </remarks>
 public static class PriorPublicCoordinateSet
 {
-    public static byte[] CanonicalBytes(IReadOnlyList<PriorPublicCoordinate> coordinates)
+    /// <summary>
+    /// The deterministic (work key, language, valid-from, anchor) ordering both
+    /// <see cref="CanonicalBytes"/> and the inventory-level signable form in
+    /// <c>QuarantineInventoryCanonicalizer</c> iterate coordinates in, exposed so both places sort
+    /// exactly once, the same way, rather than risking two independently written orderings drifting
+    /// apart.
+    /// </summary>
+    internal static IReadOnlyList<PriorPublicCoordinate> Ordered(
+        IReadOnlyList<PriorPublicCoordinate> coordinates)
     {
         ArgumentNullException.ThrowIfNull(coordinates);
-        var ordered = coordinates
+        return coordinates
             .OrderBy(static coordinate => coordinate.WorkKey, StringComparer.Ordinal)
             .ThenBy(static coordinate => coordinate.Language, StringComparer.Ordinal)
             .ThenBy(static coordinate => coordinate.ValidFrom, StringComparer.Ordinal)
             .ThenBy(static coordinate => coordinate.Anchor is null ? 0 : 1)
             .ThenBy(static coordinate => coordinate.Anchor ?? string.Empty, StringComparer.Ordinal)
             .ToArray();
+    }
 
+    public static byte[] CanonicalBytes(IReadOnlyList<PriorPublicCoordinate> coordinates)
+    {
         var builder = new StringBuilder();
-        foreach (var coordinate in ordered)
+        foreach (var coordinate in Ordered(coordinates))
         {
             AppendField(builder, coordinate.WorkKey);
             AppendField(builder, coordinate.Language);
             AppendField(builder, coordinate.ValidFrom);
             AppendField(builder, coordinate.Anchor ?? string.Empty);
-            builder.Append(coordinate.Anchor is null ? '0' : '1').Append('\n');
+            builder.Append('\n');
         }
 
         return Encoding.UTF8.GetBytes(builder.ToString());

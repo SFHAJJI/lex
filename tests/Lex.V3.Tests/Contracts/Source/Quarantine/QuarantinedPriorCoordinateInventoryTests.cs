@@ -36,6 +36,13 @@ public sealed class QuarantinedPriorCoordinateInventoryTests
         Assert.AreEqual(3, inventory.Coordinates.Count);
         Assert.AreEqual(primary.CanonicalSha256, inventory.CoordinateSetSha256);
         Assert.AreEqual(reviewer.CanonicalSha256, inventory.CoordinateSetSha256);
+
+        // Objection 2: both reproducer identities and roles must be retained on the inventory, not
+        // discarded once reconciliation succeeds.
+        Assert.AreEqual(QuarantineReproducerRole.Primary, inventory.PrimaryReproducerRole);
+        Assert.AreEqual("writer-run-2026-09-03a", inventory.PrimaryReproducerIdentity);
+        Assert.AreEqual(QuarantineReproducerRole.IndependentReviewer, inventory.IndependentReviewerReproducerRole);
+        Assert.AreEqual("reviewer-run-2026-09-03b", inventory.IndependentReviewerReproducerIdentity);
     }
 
     /// <summary>
@@ -69,8 +76,16 @@ public sealed class QuarantinedPriorCoordinateInventoryTests
     [TestMethod]
     public void TwoReproductionsUnderTheSameRoleAreRefusedEvenWithDifferentIdentitiesAndContent()
     {
+        // The content must genuinely differ, or this test's own name is false: QuarantineFixtures
+        // .CoordinateSet() always returns the same three coordinates, so reusing it verbatim for
+        // both sides (as this test previously did) left "AndContent" untested -- only the identity
+        // actually differed. alsoPrimary here is a single, distinct coordinate the baseline set
+        // does not contain.
         var primary = MustCreate(QuarantineReproducerRole.Primary, "writer-run-a", QuarantineFixtures.CoordinateSet());
-        var alsoPrimary = MustCreate(QuarantineReproducerRole.Primary, "writer-run-b", QuarantineFixtures.CoordinateSet());
+        var alsoPrimary = MustCreate(
+            QuarantineReproducerRole.Primary,
+            "writer-run-b",
+            new[] { new PriorPublicCoordinate("eu-eurlex:celex:32020R9999", "en", "2022-06-01", null) });
 
         var inventory = QuarantinedPriorCoordinateInventory.TryReconcile(
             primary,
@@ -174,30 +189,54 @@ public sealed class QuarantinedPriorCoordinateInventoryTests
         Assert.AreEqual(QuarantineInventoryRefusal.ReproductionsDisagree, refusal);
     }
 
+    /// <summary>
+    /// Objection 4: the previous version of this test hand-typed two 64-'1'-character strings and
+    /// commented them "66 chars" / "non-hex char", but both were actually 62 characters -- so every
+    /// row failed the length check (!= 64) before the hex-character clause ever ran, leaving that
+    /// clause undriven. Every value here is built with <c>new string(...)</c>/concatenation instead
+    /// of a hand-counted literal, so a length claim can never silently drift from the real length
+    /// again, and the exact-length rows below reach the hex-character clause specifically rather
+    /// than being caught by the length check first.
+    /// </summary>
     [TestMethod]
-    [DataRow("")]
-    [DataRow("not-hex")]
-    [DataRow("11111111111111111111111111111111111111111111111111111111111111")] // 66 chars
-    [DataRow("1111111111111111111111111111111111111111111111111111111111111G")] // non-hex char
-    public void APriorIndexPairHashMustBeExactLowercaseSha256(string priorIndexPairSha256)
+    public void APriorIndexPairHashMustBeAnExactSixtyFourCharacterLowercaseHexString()
     {
         var primary = MustCreate(QuarantineReproducerRole.Primary, "writer-run-a", QuarantineFixtures.CoordinateSet());
         var reviewer = MustCreate(
             QuarantineReproducerRole.IndependentReviewer, "reviewer-run-b", QuarantineFixtures.CoordinateSet());
 
-        var inventory = QuarantinedPriorCoordinateInventory.TryReconcile(
-            primary,
-            reviewer,
-            priorIndexPairSha256,
-            QuarantineFixtures.SourceIndexIdentity(),
-            QuarantineFixtures.Receipt(),
-            QuarantineFixtures.Attestation(),
-            out var refusal);
+        AssertRefused(string.Empty); // too short (0)
+        AssertRefused("not-hex"); // too short (7), and not hex-shaped either
+        AssertRefused(new string('1', 63)); // one short of 64
+        AssertRefused(new string('1', 65)); // one over 64
+        AssertRefused(new string('1', 63) + "G"); // exact length: one uppercase hex digit
+        AssertRefused(new string('1', 63) + "g"); // exact length: one lowercase non-hex letter
+        AssertRefused(new string('A', 64)); // exact length: entirely uppercase hex
 
-        Assert.IsNull(inventory);
-        Assert.AreEqual(QuarantineInventoryRefusal.PriorIndexPairHashInvalid, refusal);
+        void AssertRefused(string priorIndexPairSha256)
+        {
+            var inventory = QuarantinedPriorCoordinateInventory.TryReconcile(
+                primary,
+                reviewer,
+                priorIndexPairSha256,
+                QuarantineFixtures.SourceIndexIdentity(),
+                QuarantineFixtures.Receipt(),
+                QuarantineFixtures.Attestation(),
+                out var refusal);
+
+            Assert.IsNull(inventory, $"expected refusal for a {priorIndexPairSha256.Length}-char value");
+            Assert.AreEqual(
+                QuarantineInventoryRefusal.PriorIndexPairHashInvalid,
+                refusal,
+                $"expected PriorIndexPairHashInvalid for a {priorIndexPairSha256.Length}-char value");
+        }
     }
 
+    /// <summary>
+    /// Objection 4: TryReconcile guards five reference parameters with
+    /// <c>ArgumentNullException.ThrowIfNull</c>, but only the first two (primary, independentReviewer)
+    /// had a test before this branch. This drives all five.
+    /// </summary>
     [TestMethod]
     public void NullArgumentsAreRejectedRatherThanRefused()
     {
@@ -221,6 +260,33 @@ public sealed class QuarantinedPriorCoordinateInventoryTests
             QuarantineFixtures.SourceIndexIdentity(),
             QuarantineFixtures.Receipt(),
             QuarantineFixtures.Attestation(),
+            out _));
+
+        Assert.ThrowsExactly<ArgumentNullException>(() => QuarantinedPriorCoordinateInventory.TryReconcile(
+            primary,
+            reviewer,
+            QuarantineFixtures.PriorIndexPairSha256(),
+            null!,
+            QuarantineFixtures.Receipt(),
+            QuarantineFixtures.Attestation(),
+            out _));
+
+        Assert.ThrowsExactly<ArgumentNullException>(() => QuarantinedPriorCoordinateInventory.TryReconcile(
+            primary,
+            reviewer,
+            QuarantineFixtures.PriorIndexPairSha256(),
+            QuarantineFixtures.SourceIndexIdentity(),
+            null!,
+            QuarantineFixtures.Attestation(),
+            out _));
+
+        Assert.ThrowsExactly<ArgumentNullException>(() => QuarantinedPriorCoordinateInventory.TryReconcile(
+            primary,
+            reviewer,
+            QuarantineFixtures.PriorIndexPairSha256(),
+            QuarantineFixtures.SourceIndexIdentity(),
+            QuarantineFixtures.Receipt(),
+            null!,
             out _));
     }
 

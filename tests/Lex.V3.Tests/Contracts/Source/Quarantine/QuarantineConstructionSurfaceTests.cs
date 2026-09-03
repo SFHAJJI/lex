@@ -133,8 +133,9 @@ public sealed class QuarantineConstructionSurfaceTests
                 "constructor private instance " + N + "QuarantinedPriorCoordinateInventory::.ctor("
                 + "System.Collections.Generic.IReadOnlyList<" + N + "PriorPublicCoordinate>, "
                 + "System.String, System.String, " + Core + "SourceArtifactRef, "
-                + N + "QuarantineVerifierReceipt, " + N + "QuarantineAttestation) -> "
-                + N + "QuarantinedPriorCoordinateInventory",
+                + N + "QuarantineVerifierReceipt, " + N + "QuarantineAttestation, "
+                + N + "QuarantineReproducerRole, System.String, " + N + "QuarantineReproducerRole, "
+                + "System.String) -> " + N + "QuarantinedPriorCoordinateInventory",
                 "method public static " + N + "QuarantinedPriorCoordinateInventory::TryReconcile("
                 + N + "QuarantinePriorCoordinateReproduction, "
                 + N + "QuarantinePriorCoordinateReproduction, System.String, "
@@ -145,12 +146,24 @@ public sealed class QuarantineConstructionSurfaceTests
             ConstructionSurface.Of(typeof(QuarantinedPriorCoordinateInventory)).ToArray());
 
         CollectionAssert.AreEqual(
-            Array.Empty<string>(),
+            new[]
+            {
+                // Not a second mint: ParseAndVerify takes an already-reconciled inventory (the
+                // private constructor makes any other origin impossible) and returns that same
+                // reference once its signature checks out. ConstructionSurface reads signatures
+                // only, so it cannot see "same instance in, same instance out" and reports this as
+                // a producer exactly as it would a real second door -- pinned here explicitly, per
+                // this test class's own summary, rather than silently exempted.
+                "method public static " + N + "QuarantineInventoryCanonicalizer::ParseAndVerify("
+                + N + "QuarantinedPriorCoordinateInventory, System.Security.Cryptography.ECDsa) -> "
+                + N + "QuarantinedPriorCoordinateInventory",
+            },
             ConstructionSurface.ProducersIn(
                     typeof(QuarantinedPriorCoordinateInventory).Assembly,
                     typeof(QuarantinedPriorCoordinateInventory),
                     true)
                 .ToArray(),
-            "nothing else in Contracts may hand out an inventory it did not reconcile");
+            "nothing else in Contracts may hand out an inventory it did not reconcile, except the "
+            + "pass-through verify above");
     }
 }
