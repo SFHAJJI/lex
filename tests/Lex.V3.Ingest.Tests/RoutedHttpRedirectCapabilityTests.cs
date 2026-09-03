@@ -46,8 +46,12 @@ public sealed class RoutedHttpRedirectCapabilityTests
             BindingFlags.Static | BindingFlags.NonPublic)
             ?? throw new AssertFailedException("The redirect capability factory is missing.");
         var redirectParameters = redirectFactory.GetParameters();
-        Assert.AreEqual(7, redirectParameters.Length);
+        Assert.AreEqual(8, redirectParameters.Length);
         Assert.AreEqual(antecedentType, redirectParameters[^1].ParameterType);
+        // The antecedent's route-policy digest is a separate input from the successor request,
+        // which is what lets the mint-time comparison fail; it sits beside the capability.
+        Assert.AreEqual(typeof(string), redirectParameters[^2].ParameterType);
+        Assert.AreEqual("antecedentRedirectPolicySha256", redirectParameters[^2].Name);
         Assert.IsFalse(redirectParameters.Any(static parameter =>
             parameter.ParameterType == typeof(RoutedHttpHop)));
 
@@ -234,6 +238,57 @@ public sealed class RoutedHttpRedirectCapabilityTests
             requestOrdinal: 0,
             attemptOrdinal: 0,
             nextHopOrdinal: 1));
+        Assert.AreEqual(0, handler.SendCount);
+    }
+
+    [TestMethod]
+    public async Task ASuccessorMustCarryItsAntecedentsExactRoutePolicy()
+    {
+        // The antecedent's route-policy digest comes from the request that produced the hop being
+        // redirected from, not from the successor, so the comparison has two sources and can
+        // fail. Both directions are refused: a successor with another registered policy, and a
+        // caller claiming the antecedent ran under a policy the successor does not carry.
+        var request = MachineRequestTestFixture.EuropeanUnionRequest();
+        var handler = new CountingHandler(static (_, _) =>
+            throw new AssertFailedException("No send expected."));
+        using var session = Session(
+            request,
+            handler,
+            new TestCustodyStore(),
+            new IsolatedTimeProvider());
+        var noRedirect = RedirectPolicySha256(session, "_noRedirectPolicy");
+        var robots = RedirectPolicySha256(session, "_robotsRedirectPolicy");
+        Assert.AreNotEqual(robots, noRedirect);
+
+        var successorDiffers = await CreateOpenedAntecedentAsync(session);
+        AssertFactoryRefuses(() => FromRedirect(
+            session,
+            CreateNextRequest(session, redirectPolicySha256: noRedirect),
+            successorDiffers,
+            requestOrdinal: 0,
+            attemptOrdinal: 0,
+            nextHopOrdinal: 1));
+
+        var antecedentClaimDiffers = await CreateOpenedAntecedentAsync(session);
+        AssertFactoryRefuses(() => FromRedirect(
+            session,
+            CreateNextRequest(session),
+            antecedentClaimDiffers,
+            requestOrdinal: 0,
+            attemptOrdinal: 0,
+            nextHopOrdinal: 1,
+            antecedentRedirectPolicySha256: noRedirect));
+
+        // The agreeing pair still mints, so the refusals above are not a factory that refuses all.
+        var agreeing = await CreateOpenedAntecedentAsync(session);
+        Assert.IsNotNull(FromRedirect(
+            session,
+            CreateNextRequest(session),
+            agreeing,
+            requestOrdinal: 0,
+            attemptOrdinal: 0,
+            nextHopOrdinal: 1,
+            antecedentRedirectPolicySha256: robots));
         Assert.AreEqual(0, handler.SendCount);
     }
 
@@ -546,7 +601,8 @@ public sealed class RoutedHttpRedirectCapabilityTests
         object antecedentCapability,
         ulong requestOrdinal,
         ulong attemptOrdinal,
-        ulong nextHopOrdinal)
+        ulong nextHopOrdinal,
+        string? antecedentRedirectPolicySha256 = null)
     {
         var leaseType = typeof(RoutedHttpAcquisitionSession).GetNestedType(
             "SendLease",
@@ -565,8 +621,20 @@ public sealed class RoutedHttpRedirectCapabilityTests
                 requestOrdinal,
                 attemptOrdinal,
                 nextHopOrdinal,
+                antecedentRedirectPolicySha256 ?? RedirectPolicySha256(session, "_robotsRedirectPolicy"),
                 antecedentCapability,
             ]) ?? throw new AssertFailedException("The redirect capability was not minted.");
+    }
+
+    private static string RedirectPolicySha256(RoutedHttpAcquisitionSession session, string field)
+    {
+        var policy = typeof(RoutedHttpAcquisitionSession)
+            .GetField(field, BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(session)
+            ?? throw new AssertFailedException($"The session has no {field} policy.");
+        return (string)(policy.GetType().GetProperty(
+            "Sha256",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(policy)
+            ?? throw new AssertFailedException($"The {field} policy has no digest."));
     }
 
     private static async Task<object> RetainAndSendAsync(object lease)

@@ -2240,8 +2240,10 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             SourceArtifactRef adapterExecutionRef,
             ReadOnlySpan<byte> adapterExecutionBytes)
         {
-            if (!string.Equals(Sha256, Hash(_canonicalBytes), StringComparison.Ordinal) ||
-                !string.Equals(Sha256, request.RequestPolicySha256, StringComparison.Ordinal) ||
+            // Sha256 was assigned as Hash(_canonicalBytes) in the constructor over a private array
+            // nothing writes, so comparing the two here could never be false. The binding that can
+            // fail is the request's digest against this artifact's.
+            if (!string.Equals(Sha256, request.RequestPolicySha256, StringComparison.Ordinal) ||
                 SourceProfileRef != profile.ArtifactRef ||
                 AdapterExecutionRef != adapterExecutionRef ||
                 !string.Equals(AdapterExecutionRef.Sha256, Hash(adapterExecutionBytes), StringComparison.Ordinal) ||
@@ -2334,8 +2336,9 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             HttpLogicalRequest request,
             OfficialMachineQuerySourceProfile profile)
         {
-            if (!string.Equals(Sha256, Hash(_canonicalBytes), StringComparison.Ordinal) ||
-                !string.Equals(Sha256, request.RedirectPolicySha256, StringComparison.Ordinal) ||
+            // As in RequestPolicyArtifact: the constructor's own hash is not re-compared, because
+            // that clause could never be false; the request's digest against this one can.
+            if (!string.Equals(Sha256, request.RedirectPolicySha256, StringComparison.Ordinal) ||
                 SourceProfileRef != profile.ArtifactRef ||
                 !_admittedUris.Contains(request.Uri, StringComparer.Ordinal) ||
                 Kind == RedirectPolicyKind.NoRedirect && request.Method != HttpRequestMethod.Post ||
@@ -2436,6 +2439,7 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             ulong requestOrdinal,
             ulong attemptOrdinal,
             ulong nextHopOrdinal,
+            string antecedentRedirectPolicySha256,
             RedirectAntecedentCapability antecedentCapability)
         {
             var (antecedentCustodyKey, antecedent) = antecedentCapability.Consume(session);
@@ -2457,6 +2461,20 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                     "A redirect send capability must name its exact immediate antecedent hop.");
             }
 
+            // The route policy is bound here, at mint, against the digest the caller took from the
+            // request that produced the antecedent hop: two sources, so the comparison can fail.
+            // It is not re-checked at send, because RetainSendArtifactsAsync validates the
+            // successor's own policy before the send-time tuple check runs, which would make a
+            // second comparison there unreachable by construction.
+            if (!string.Equals(
+                    request.RedirectPolicySha256,
+                    antecedentRedirectPolicySha256,
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "A redirect send capability must carry its antecedent's exact route policy.");
+            }
+
             var logicalRequestSha256 = Hash(request.CopyCanonicalBytes());
             return new SendLease(
                 session,
@@ -2470,7 +2488,7 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                     antecedent.ObservationId,
                     antecedentCustodyKey,
                     antecedent.DurableWriteReceiptSha256,
-                    request.RedirectPolicySha256),
+                    antecedentRedirectPolicySha256),
                 startsRobotsGeneration: false);
         }
 
@@ -2517,11 +2535,7 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                 if (_hopOrdinal == 0 || key.RunIdentity != _runIdentity ||
                     key.RequestOrdinal != _requestOrdinal || key.AttemptOrdinal != _attemptOrdinal ||
                     key.HopOrdinal != _hopOrdinal - 1 ||
-                    !string.Equals(key.ObservationId, _antecedent.ObservationId, StringComparison.Ordinal) ||
-                    !string.Equals(
-                        _request.RedirectPolicySha256,
-                        _antecedent.RedirectPolicySha256,
-                        StringComparison.Ordinal))
+                    !string.Equals(key.ObservationId, _antecedent.ObservationId, StringComparison.Ordinal))
                 {
                     throw new InvalidOperationException(
                         "The redirect send capability does not bind its exact antecedent evidence tuple.");
@@ -3133,6 +3147,8 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             var nextLogicalRequestSha256 = Hash(nextLogicalRequestBytes);
             RegisterRetainedHop(custodyKey, hop);
             var antecedentCapability = OpenRedirectAntecedent(custodyKey);
+            // The antecedent's own route policy is passed from currentRequest, which is still the
+            // request that produced the hop being redirected from, not the successor.
             lease = SendLease.FromRedirect(
                 this,
                 nextRequest,
@@ -3140,6 +3156,7 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                 requestOrdinal,
                 attemptOrdinal,
                 checked((ulong)hops.Count),
+                currentRequest.RedirectPolicySha256,
                 antecedentCapability);
             currentRequest = nextRequest;
             logicalRequestSha256 = nextLogicalRequestSha256;
