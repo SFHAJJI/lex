@@ -60,7 +60,7 @@ public sealed class RoutedHttpRedirectCapabilityTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "field private instance " + Session + "+<ExecuteRouteAsync>d__122::<lease>5__5 -> " + Lease,
+                "field private instance " + Session + "+<ExecuteRouteAsync>d__124::<lease>5__5 -> " + Lease,
                 "field private instance " + Session + "+RetainedSendArtifacts::<lease>P -> " + Lease,
                 "field public instance " + Session + "+<RetainSendArtifactsAsync>d__70::lease -> " + Lease,
             },

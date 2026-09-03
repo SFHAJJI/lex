@@ -1,13 +1,14 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 
 namespace Lex.V3.Contracts.Source.Http;
 
 public sealed class RoutedHttpNetworkOrigin
 {
-    internal RoutedHttpNetworkOrigin(string host, ushort effectivePort)
+    private RoutedHttpNetworkOrigin(string host, ushort effectivePort)
     {
         Host = host;
         EffectivePort = effectivePort;
@@ -165,6 +166,11 @@ public sealed class RoutedHttpHop
         ulong length,
         string sha256,
         string durableWriteReceiptSha256,
+        // OBS-01 005 lines 240 to 241 define these as equal to the reference and the hop, and line
+        // 314 says in as many words that a copied equality is not verification. So this pair is
+        // definitional and not an independent attestation: the readback that matters happened in
+        // custody, and a divergence there throws before a hop is ever built, which is why no hop
+        // can carry a failed readback. A test comparing the two fields here proves nothing.
         ulong readbackByteLength,
         string readbackSha256)
     {
@@ -424,6 +430,20 @@ public sealed class RoutedHttpEvidence
             throw new ArgumentException(
                 "Request ordinal zero is reserved for the run's robots-policy route.",
                 nameof(requestOrdinal));
+        }
+
+        // The reservation covered every URI the route fetched and not the one it admitted without
+        // fetching. A robots route that terminates unobserved has a Location this run accepted as
+        // its next target; leaving it unchecked lets ordinal zero admit a non-robots destination
+        // precisely in the case where nothing observed it.
+        if (requestOrdinal == 0
+            && outcome is RedirectTargetUnobservedHttpRouteOutcome
+            && hopSnapshot[^1].Headers.Location is RoutedHttpSingleHeader zeroTarget
+            && !IsExactRobotsRequest(zeroTarget.Value))
+        {
+            throw new ArgumentException(
+                "Request ordinal zero admitted a redirect target that is not a robots request.",
+                nameof(hops));
         }
 
         ArgumentNullException.ThrowIfNull(outcome);
@@ -1390,7 +1410,12 @@ internal static partial class RoutedHttpCanonicalJson
 internal static partial class RoutedHttpValidation
 {
     public const ulong MaximumCompleteEntityLength = 268_435_455;
-    public const ulong MaximumRetainedEntityLength = 268_435_456;
+    // Derived, not restated. The session caps the read at the profile's MaximumResponseBytes,
+    // which is CustodyBounds.MaxObjectBytes, and the loop returns its cap sentinel at exactly
+    // that length; this constant admits the sentinel. Two independent literals meant a
+    // one-byte edit to either left the whole suite green while a publisher response landing
+    // on the bound threw out of hop construction.
+    public const ulong MaximumRetainedEntityLength = (ulong)CustodyBounds.MaxObjectBytes;
     internal static readonly string EmptyEntitySha256 =
         Convert.ToHexString(System.Security.Cryptography.SHA256.HashData([])).ToLowerInvariant();
 

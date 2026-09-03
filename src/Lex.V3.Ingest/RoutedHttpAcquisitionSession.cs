@@ -63,7 +63,10 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
     private readonly ConcurrentDictionary<HopCustodyKey, RoutedHttpHop> _retainedHops = new();
     private readonly ConcurrentDictionary<HopCustodyKey, byte> _openedAntecedents = new();
     private readonly object _durableArtifactLock = new();
-    private readonly HashSet<string> _durableArtifactDigests = new(StringComparer.Ordinal);
+    // Decision 71. Membership is what the receipt says, not that a digest was seen. A read proves
+    // presence and digest and nothing about protection, so a read never admits anything here.
+    private readonly Dictionary<string, CustodyMembership> _artifactMembership =
+        new(StringComparer.Ordinal);
     private long? _robotsStartedTimestamp;
     private DateTimeOffset? _robotsStartedAt;
     private ulong _nextRequestOrdinal;
@@ -1049,7 +1052,7 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
         bool alreadyRetained;
         lock (_durableArtifactLock)
         {
-            alreadyRetained = _durableArtifactDigests.Contains(expectedSha256);
+            alreadyRetained = _artifactMembership.ContainsKey(expectedSha256);
         }
 
         if (alreadyRetained)
@@ -1069,6 +1072,7 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
         }
 
         ReadOnlyMemory<byte> reopened;
+        DurableBlobWriteReceipt createdReceipt;
         try
         {
             var receipt = await _custodyStore.CreateAsync(
@@ -1087,6 +1091,8 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                 throw new CustodyIntegrityException(
                     "The artifact receipt does not bind the bytes that its digest names.");
             }
+
+            createdReceipt = receipt;
 
             reopened = await CustodyRestore.ReadByDigestCheckedAsync(
                     _custodyStore,
@@ -1116,7 +1122,7 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
 
         lock (_durableArtifactLock)
         {
-            _durableArtifactDigests.Add(expectedSha256);
+            _artifactMembership[expectedSha256] = ClassifyMembership(createdReceipt);
         }
 
         return reopened;
@@ -1188,11 +1194,42 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                 cancellationToken)
             .ConfigureAwait(false);
 
+        // The outbound body. The request policy names it as body={length}	{digest}, so a reader
+        // holding the retained policy can see what was sent and could not open it: the bytes
+        // themselves were the one send dependency never retained. An empty body has nothing to
+        // retain and its absence is not a gap.
+        if (!body.IsEmpty)
+        {
+            await RetainArtifactAsync(body, Hash(body.Span), cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         var closureSha256 = ComputeSendClosureSha256(
             request,
             requestPolicy,
             logicalRequestSha256);
         return new RetainedSendArtifacts(lease, logicalRequestSha256, closureSha256);
+    }
+
+    /// <summary>
+    /// What a receipt establishes about where the bytes are held. Decision 71: the floor is a
+    /// property of the store observed after write and readback, so only a receipt can say it, and
+    /// only the immutable-object profile validates a class floor at all.
+    /// </summary>
+    private static CustodyMembership ClassifyMembership(DurableBlobWriteReceipt receipt) =>
+        receipt.PolicyEvidence.VerificationProfile == CustodyVerificationProfile.ImmutableObject1
+            ? CustodyMembership.Floored
+            : CustodyMembership.RetainedUnenforced;
+
+    /// <summary>
+    /// What this run can say about each closure member. Never derived from the digest alone.
+    /// </summary>
+    internal IReadOnlyDictionary<string, CustodyMembership> CopyArtifactMembership()
+    {
+        lock (_durableArtifactLock)
+        {
+            return new Dictionary<string, CustodyMembership>(_artifactMembership, StringComparer.Ordinal);
+        }
     }
 
     private string ComputeSendClosureSha256(
@@ -1214,10 +1251,15 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
 
         lock (_durableArtifactLock)
         {
-            if (digests.Any(digest => !_durableArtifactDigests.Contains(digest)))
+            // Retention is required; the floor is reported. A dependency this run never wrote
+            // has no membership at all and fails here. One that was written under a store that
+            // enforces nothing is retained-unenforced, which the closure records rather than
+            // silently counts as durable: on the filesystem adapter every member is that.
+            var unretained = digests.Where(digest => !_artifactMembership.ContainsKey(digest)).ToArray();
+            if (unretained.Length > 0)
             {
                 throw new CustodyIntegrityException(
-                    "A send dependency was not durably reopenable before capability minting.");
+                    "A send dependency was not retained by this run before capability minting.");
             }
         }
 
@@ -2041,14 +2083,19 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                     reference.Sha256,
                     cancellationToken)
                 .ConfigureAwait(false);
-            var artifact = new CanonicalArtifactBytes(reference, bytes.Span);
-            lock (session._durableArtifactLock)
-            {
-                session._durableArtifactDigests.Add(reference.Sha256);
-            }
 
-            _resolved.Add(artifact);
-            return bytes;
+            // Through the retaining path, never straight into the set. Reading a digest out of
+            // some lane establishes that those bytes are readable now; the gate this set feeds
+            // says a send dependency was durably reopenable, which is a different claim. Routing
+            // here means this run places what it depends on under its own retention rather than
+            // inheriting someone else's. What that retention guarantees is not asserted: the
+            // floor's semantics wait on an accepted D1-320 candidate, and none is accepted.
+            var retained = await session.RetainArtifactAsync(
+                    bytes, reference.Sha256, cancellationToken)
+                .ConfigureAwait(false);
+
+            _resolved.Add(new CanonicalArtifactBytes(reference, retained.Span));
+            return retained;
         }
 
         internal IReadOnlyList<CanonicalArtifactBytes> CopyResolvedArtifacts() =>
@@ -2131,6 +2178,14 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                 $"source_profile={sourceProfileRef.ResourceId}\t{sourceProfileRef.Sha256}",
                 $"adapter_execution={adapterExecutionRef.ResourceId}\t{adapterExecutionRef.Sha256}",
                 $"adapter_execution_bytes_sha256={Hash(adapterExecutionBytes)}",
+
+                // The reason vocabulary decides how a partial completion is labelled, and it was
+                // retained and bound to the hop while being reachable from no published digest: a
+                // verifier could learn which vocabulary was in force only by trusting the binary.
+                // Named here because these bytes are already retained and already bound.
+                // The closure digest is deliberately not added: the closure is computed from this
+                // policy's digest, so naming it here would be circular.
+                $"reason_registry={HttpAcquisitionReasonRegistry.Sha256}",
                 $"method={method}",
                 $"requested_http_version={HttpLogicalRequest.RequestedHttpVersion}",
                 $"version_policy={HttpLogicalRequest.VersionPolicy}",

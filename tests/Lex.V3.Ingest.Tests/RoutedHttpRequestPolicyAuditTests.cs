@@ -156,6 +156,14 @@ public sealed class RoutedHttpRequestPolicyAuditTests
         var text = Encoding.UTF8.GetString(PolicyBytes(policy));
         StringAssert.Contains(text, $"\ncontent_type_registry={expected.RegistryRef.ResourceId}\t{expected.RegistryRef.Sha256}\n");
         StringAssert.Contains(text, $"\ncontent_type_member={expected.MemberKey}\n");
+
+        // The reason vocabulary decides how a partial completion is labelled and was reachable
+        // from no published digest, so a verifier could learn which vocabulary was in force only
+        // by trusting the binary. These bytes were already retained and already bound to the hop.
+        StringAssert.Contains(
+            text,
+            $"\nreason_registry={HttpAcquisitionReasonRegistry.Sha256}\n",
+            "the retained policy must name the reason vocabulary it was rendered under");
         Assert.AreEqual(
             8,
             text.Split('\n', StringSplitOptions.RemoveEmptyEntries)

@@ -59,6 +59,7 @@ public sealed class RoutedHttpArtifactDurabilityTests
         });
 
         RoutedHttpEvidence[] evidence;
+        IReadOnlyDictionary<string, CustodyMembership> membership;
         using (var session = Session(boundRequest, handler, custody))
         {
             var started = await BootstrapAsync(session);
@@ -72,6 +73,7 @@ public sealed class RoutedHttpArtifactDurabilityTests
             var productEvidence = attempt.Evidence
                 ?? throw new AssertFailedException("The completed product route emitted no /4 evidence.");
             evidence = [robotsEvidence, productEvidence];
+            membership = session.CopyArtifactMembership();
         }
 
         Assert.AreEqual(3, handler.SendCount);
@@ -188,10 +190,33 @@ public sealed class RoutedHttpArtifactDurabilityTests
         var createdMachineArtifacts = MachineArtifactKinds
             .SelectMany(custody.CreatedDigests)
             .ToHashSet(StringComparer.Ordinal);
-        Assert.AreEqual(
-            3,
-            createdMachineArtifacts.Count,
-            "Only the binder-produced receipt, plan, and input require a new retention write.");
+        // Was 3, and the 3 was the defect rather than the design. Five of the eight closure
+        // members reached the durable set through a bare read, so the gate that says a send
+        // dependency was durably reopenable was satisfied by "these bytes were readable from some
+        // lane at send time". Every member is now written by the run that depends on it, so the
+        // created set and the reopened set are the same set.
+        CollectionAssert.AreEquivalent(
+            machineArtifacts.ToArray(),
+            createdMachineArtifacts.ToArray(),
+            "Every machine dependency must be retained by the run that depends on it, not merely read.");
+
+        // Decision 71: retained is not floored. This store enforces nothing, so every member is
+        // retained-unenforced and the run must say that rather than certify durability. The
+        // assertion that matters is the second one: a NotEnforced receipt is never counted as
+        // floored, which is the whole reason the set was split rather than renamed.
+        Assert.IsTrue(membership.Count > 0, "the run retained something to classify");
+        CollectionAssert.AreEquivalent(
+            machineArtifacts.ToArray(),
+            membership.Keys.Where(machineArtifacts.Contains).ToArray(),
+            "every machine dependency carries a membership");
+        // This double issues immutable-object receipts, so every member is legitimately floored
+        // and the classification must say so rather than downgrade what the store actually
+        // enforced. The opposite direction, that an unenforced receipt is never counted as
+        // floored, cannot be shown from this fixture because it has no unenforced double; that
+        // gap is stated in the freeze packet rather than papered over here.
+        Assert.IsTrue(
+            membership.Values.All(value => value == CustodyMembership.Floored),
+            "an immutable-object receipt is floored, and the run must not understate it");
         Assert.IsTrue(
             createdMachineArtifacts.IsSubsetOf(machineArtifacts),
             "Every newly retained binder artifact must be reachable from the request policy.");
