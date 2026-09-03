@@ -100,6 +100,13 @@ internal sealed class EuConsolidationDiscoveryPlan
     private readonly IReadOnlyDictionary<EuConsolidationQuerySet, EuConsolidationQueryDefinition>
         _definitions;
 
+    /// <summary>
+    /// The exact bytes <see cref="ArtifactRef"/> names. Held rather than recomputed: the digest
+    /// is minted from this array in the constructor, so nothing downstream can hand the binder a
+    /// second rendering of the same identity that happens to differ.
+    /// </summary>
+    private readonly byte[] _canonicalIdentityBytes;
+
     private EuConsolidationDiscoveryPlan()
     {
         var templates = BuildTemplates();
@@ -154,6 +161,7 @@ internal sealed class EuConsolidationDiscoveryPlan
             templates.FactsPage,
         }));
         ArtifactRef = new SourceArtifactRef(ResourceId, Sha256(identityBytes));
+        _canonicalIdentityBytes = identityBytes;
 
         _definitions = new Dictionary<EuConsolidationQuerySet, EuConsolidationQueryDefinition>
         {
@@ -177,6 +185,12 @@ internal sealed class EuConsolidationDiscoveryPlan
     internal SourceArtifactRef ArtifactRef { get; }
 
     internal static EuConsolidationDiscoveryPlan Create() => new();
+
+    /// <summary>
+    /// A copy of the exact bytes <see cref="ArtifactRef"/> names, so the held array cannot be
+    /// mutated through what this hands out.
+    /// </summary>
+    internal byte[] CopyCanonicalIdentityBytes() => _canonicalIdentityBytes.ToArray();
 
     internal EuConsolidationQueryDefinition Definition(EuConsolidationQuerySet set) =>
         _definitions.TryGetValue(set, out var value)
@@ -215,7 +229,7 @@ internal sealed class EuConsolidationDiscoveryPlan
         EuConsolidationQueryPass pass,
         string machinePlanResourceId,
         string inputResourceId,
-        SourceArtifactRef rendererSourceRef)
+        MachineQueryRendererSource rendererSource)
     {
         _ = PageLimit(pass);
         var definition = Definition(set);
@@ -233,7 +247,7 @@ internal sealed class EuConsolidationDiscoveryPlan
             response,
             machinePlanResourceId,
             inputResourceId,
-            rendererSourceRef);
+            rendererSource);
     }
 
     internal EuConsolidationBoundQuery BindPage(
@@ -245,7 +259,7 @@ internal sealed class EuConsolidationDiscoveryPlan
         SourceArtifactRef expectedPartitionRowCountEvidenceRef,
         string machinePlanResourceId,
         string inputResourceId,
-        SourceArtifactRef rendererSourceRef)
+        MachineQueryRendererSource rendererSource)
     {
         var definition = Definition(set);
         var response = new MachineResponseCardinality(
@@ -262,7 +276,7 @@ internal sealed class EuConsolidationDiscoveryPlan
             response,
             machinePlanResourceId,
             inputResourceId,
-            rendererSourceRef);
+            rendererSource);
     }
 
     private EuConsolidationBoundQuery Bind(
@@ -274,10 +288,10 @@ internal sealed class EuConsolidationDiscoveryPlan
         MachineResponseCardinality response,
         string machinePlanResourceId,
         string inputResourceId,
-        SourceArtifactRef rendererSourceRef)
+        MachineQueryRendererSource rendererSource)
     {
         RequireCelex(requestedCelex);
-        ArgumentNullException.ThrowIfNull(rendererSourceRef);
+        ArgumentNullException.ThrowIfNull(rendererSource);
         var parameters = new List<MachineQueryParameter>
         {
             new(
@@ -335,7 +349,7 @@ internal sealed class EuConsolidationDiscoveryPlan
             this,
             definition,
             isPage,
-            rendererSourceRef);
+            rendererSource);
         var rendered = renderer.RenderInput(input, response);
         var body = rendered.CopyRequestBody();
         var targetBytes = Encoding.ASCII.GetBytes("/webapi/rdf/sparql");
@@ -343,7 +357,7 @@ internal sealed class EuConsolidationDiscoveryPlan
             MachineQueryPlan.SchemaId,
             family,
             ArtifactRef,
-            rendererSourceRef,
+            rendererSource.Reference,
             HttpRequestMethod.Post,
             PublisherEndpoint,
             targetBytes.LongLength,
@@ -507,6 +521,8 @@ internal sealed class EuConsolidationDiscoveryPlan
 
 internal sealed class EuConsolidationSparqlRenderer : IMachineQueryRenderer
 {
+    private readonly MachineQueryRendererSource _rendererSource;
+    private readonly byte[] _rendererProfileBytes;
     private readonly EuConsolidationQueryDefinition _definition;
     private readonly bool _isPage;
 
@@ -514,16 +530,33 @@ internal sealed class EuConsolidationSparqlRenderer : IMachineQueryRenderer
         EuConsolidationDiscoveryPlan plan,
         EuConsolidationQueryDefinition definition,
         bool isPage,
-        SourceArtifactRef rendererSourceRef)
+        MachineQueryRendererSource rendererSource)
     {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(rendererSource);
         _definition = definition;
         _isPage = isPage;
         RendererProfileRef = plan.ArtifactRef;
-        RendererSourceRef = rendererSourceRef;
+        _rendererSource = rendererSource;
+
+        // Taken from the same plan instance that minted RendererProfileRef, so the bytes and the
+        // digest are two views of one construction rather than two renderings that could drift.
+        _rendererProfileBytes = plan.CopyCanonicalIdentityBytes();
     }
 
     public SourceArtifactRef RendererProfileRef { get; }
-    public SourceArtifactRef RendererSourceRef { get; }
+
+    public SourceArtifactRef RendererSourceRef => _rendererSource.Reference;
+
+    /// <inheritdoc />
+    // Deliberately not written as "_rendererProfileBytes is null ? null : _rendererProfileBytes".
+    // That expression compiles against a ReadOnlyMemory<byte>? target and yields a present, empty
+    // memory rather than null, which would read as a renderer producing zero bytes. Nothing here
+    // is ever null, and the return stays a plain copy for the same reason.
+    public ReadOnlyMemory<byte>? CopyRendererProfileBytes() => _rendererProfileBytes.ToArray();
+
+    /// <inheritdoc />
+    public ReadOnlyMemory<byte>? CopyRendererSourceBytes() => _rendererSource.CopyBytes();
 
     public MachineQueryRenderOutput Render(
         MachineQueryPlan plan,

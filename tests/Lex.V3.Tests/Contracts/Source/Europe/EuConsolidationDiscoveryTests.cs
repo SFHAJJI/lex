@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -23,6 +24,8 @@ public sealed class EuConsolidationDiscoveryTests
     private const string XsdString = "http://www.w3.org/2001/XMLSchema#string";
     private const string XsdInteger = "http://www.w3.org/2001/XMLSchema#integer";
     private const string XsdDate = "http://www.w3.org/2001/XMLSchema#date";
+    private static readonly byte[] RendererSourceBytes = Encoding.UTF8.GetBytes(
+        "eu-consolidation-sparql-renderer-source/1\n");
 
     [TestMethod]
     public void ClosedPlanSeparatesFamilyAndFactDeliveryWithoutErasingMultiplicity()
@@ -151,6 +154,55 @@ public sealed class EuConsolidationDiscoveryTests
     }
 
     [TestMethod]
+    public void TheRendererProducesTheExactBytesItsReferencesName()
+    {
+        var plan = EuConsolidationDiscoveryPlan.Create();
+        var rendererSource = RendererSource();
+        var renderer = new EuConsolidationSparqlRenderer(
+            plan,
+            plan.Definition(EuConsolidationQuerySet.Family),
+            isPage: false,
+            rendererSource);
+
+        var profile = renderer.CopyRendererProfileBytes();
+        var source = renderer.CopyRendererSourceBytes();
+
+        // Present and non-empty first. A renderer that produces nothing must return null, and the
+        // conversion "bytes is null ? null : bytes" against a ReadOnlyMemory<byte>? target hands
+        // back a present, EMPTY memory instead, which a digest assertion alone would not separate
+        // from a genuine absence. Length is asserted before the digest for that reason.
+        Assert.IsNotNull(profile);
+        Assert.IsNotNull(source);
+        Assert.IsTrue(profile.Value.Length > 0, "an empty profile offer is not an absent one");
+        Assert.IsTrue(source.Value.Length > 0, "an empty source offer is not an absent one");
+        Assert.AreEqual(plan.ArtifactRef, renderer.RendererProfileRef);
+        Assert.AreEqual(rendererSource.Reference, renderer.RendererSourceRef);
+        Assert.AreEqual(
+            renderer.RendererProfileRef.Sha256,
+            Convert.ToHexStringLower(SHA256.HashData(profile.Value.Span)),
+            "the profile bytes must carry the digest the profile reference names");
+        Assert.AreEqual(
+            renderer.RendererSourceRef.Sha256,
+            Convert.ToHexStringLower(SHA256.HashData(source.Value.Span)),
+            "the source bytes must carry the digest the source reference names");
+
+        // Aliasing, measured on the memory rather than on ToArray() of it. ToArray copies at the
+        // call site, so an assertion written that way passes whether or not anything was copied.
+        Assert.IsTrue(MemoryMarshal.TryGetArray(
+            renderer.CopyRendererProfileBytes()!.Value, out var first));
+        Assert.IsTrue(MemoryMarshal.TryGetArray(
+            renderer.CopyRendererProfileBytes()!.Value, out var second));
+        Assert.AreNotSame(
+            first.Array,
+            second.Array,
+            "each call must hand back its own array, never the one being held");
+        Assert.AreNotSame(
+            plan.CopyCanonicalIdentityBytes(),
+            plan.CopyCanonicalIdentityBytes(),
+            "the plan's identity bytes are copied out, so a caller cannot edit the held array");
+    }
+
+    [TestMethod]
     public void BinderEmitsAnExactTypedCelexLiteralAndNeverAPlainLiteral()
     {
         var plan = EuConsolidationDiscoveryPlan.Create();
@@ -160,7 +212,7 @@ public sealed class EuConsolidationDiscoveryTests
             EuConsolidationQueryPass.Pass1,
             "urn:uuid:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
             "urn:uuid:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-            Artifact('c'));
+            RendererSource());
 
         Assert.AreEqual(HttpRequestMethod.Post, bound.MachinePlan.Method);
         Assert.AreEqual(
@@ -191,7 +243,7 @@ public sealed class EuConsolidationDiscoveryTests
                 EuConsolidationQueryPass.Pass1,
                 "urn:uuid:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
                 "urn:uuid:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-                Artifact('c')));
+                RendererSource()));
         }
 
         var definition = plan.Definition(EuConsolidationQuerySet.Family);
@@ -212,7 +264,7 @@ public sealed class EuConsolidationDiscoveryTests
                     1, null, plan.ArtifactRef),
             });
         var renderer = new EuConsolidationSparqlRenderer(
-            plan, definition, isPage: false, Artifact('c'));
+            plan, definition, isPage: false, RendererSource());
         Assert.ThrowsExactly<ArgumentException>(() =>
             renderer.RenderInput(replay, response));
     }
@@ -249,7 +301,7 @@ public sealed class EuConsolidationDiscoveryTests
                     countEvidence,
                     "urn:uuid:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
                     "urn:uuid:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-                    Artifact('c'));
+                    RendererSource());
                 var query = System.Text.Encoding.UTF8.GetString(
                     MachineQueryBinder.OpenForSend(bound.Request).CopyRequestBody());
 
@@ -282,7 +334,7 @@ public sealed class EuConsolidationDiscoveryTests
             Artifact('d'),
             "urn:uuid:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
             "urn:uuid:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-            Artifact('c'));
+            RendererSource());
 
         var query = System.Text.Encoding.UTF8.GetString(
             MachineQueryBinder.OpenForSend(bound.Request).CopyRequestBody());
@@ -635,7 +687,10 @@ public sealed class EuConsolidationDiscoveryTests
         private readonly TemporalDeliveryMutation _mutation;
         private readonly EuConsolidationDiscoveryPlan _plan =
             EuConsolidationDiscoveryPlan.Create();
-        private readonly SourceArtifactRef _rendererSourceRef = Artifact(700);
+        private readonly MachineQueryRendererSource _rendererSource =
+            MachineQueryRendererSource.Open(
+                Reference(700, RendererSourceBytes),
+                RendererSourceBytes);
         private int _seed = 100;
         private ulong _requestOrdinal;
 
@@ -699,7 +754,7 @@ public sealed class EuConsolidationDiscoveryTests
                 pass,
                 Artifact(++_seed).ResourceId,
                 Artifact(++_seed).ResourceId,
-                _rendererSourceRef);
+                _rendererSource);
             var countRefs = Add(countBound, CountPayload(count), isPage: false);
             var firstBound = _plan.BindPage(
                 EuConsolidationQuerySet.TemporalFacts,
@@ -710,7 +765,7 @@ public sealed class EuConsolidationDiscoveryTests
                 countRefs.HttpEvidenceRef,
                 Artifact(++_seed).ResourceId,
                 Artifact(++_seed).ResourceId,
-                _rendererSourceRef);
+                _rendererSource);
             var firstRefs = Add(firstBound, rows, isPage: true);
             var cursor = new[]
             {
@@ -730,7 +785,7 @@ public sealed class EuConsolidationDiscoveryTests
                 countRefs.HttpEvidenceRef,
                 Artifact(++_seed).ResourceId,
                 Artifact(++_seed).ResourceId,
-                _rendererSourceRef);
+                _rendererSource);
             var successor = nonemptySuccessor
                 ? FactsPayload(onlyLaterVersion: true)
                 : EmptyFactsPayload();
@@ -841,7 +896,7 @@ public sealed class EuConsolidationDiscoveryTests
                 _plan,
                 _plan.Definition(EuConsolidationQuerySet.TemporalFacts),
                 isPage,
-                _rendererSourceRef);
+                _rendererSource);
             var refs = new RepeatedEnumerationEvidenceRefs(
                 bound.MachinePlanRef,
                 bound.InputArtifact.ArtifactRef,
@@ -987,4 +1042,13 @@ public sealed class EuConsolidationDiscoveryTests
     private static SourceArtifactRef Artifact(char value) => new(
         $"urn:uuid:{value}{value}{value}{value}{value}{value}{value}{value}-{value}{value}{value}{value}-4{value}{value}{value}-8{value}{value}{value}-{new string(value, 12)}",
         new string(value, 64));
+
+    // The renderer source is a pair now, so its fixture reference has to be minted from real
+    // bytes: Artifact('c') named a digest that no artifact carries, which Open refuses.
+    private static MachineQueryRendererSource RendererSource() =>
+        MachineQueryRendererSource.Open(
+            new SourceArtifactRef(
+                Artifact('c').ResourceId,
+                Convert.ToHexStringLower(SHA256.HashData(RendererSourceBytes))),
+            RendererSourceBytes);
 }

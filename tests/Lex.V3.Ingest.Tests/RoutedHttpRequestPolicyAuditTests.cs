@@ -5,6 +5,7 @@ using System.Text;
 using Lex.V3.Artifacts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Europe;
 using Lex.V3.Contracts.Source.Http;
 using Lex.V3.Contracts.Source.Luxembourg;
 
@@ -369,6 +370,126 @@ public sealed class RoutedHttpRequestPolicyAuditTests
                 Assert.AreEqual(
                     digest,
                     Convert.ToHexString(SHA256.HashData(reopened.Span)).ToLowerInvariant());
+            }
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [TestMethod]
+    public async Task EuConsolidationCountSendsAgainstAFreshRealStoreHoldingNothing()
+    {
+        // The EU half of Decision 75, and the same shape as the LU proof above for the same
+        // reason: every other EU machine-send test either uses a recording double that answers
+        // from a table of fixture bytes, or hands the store the closure with CreateAsync before
+        // the session starts. Under either arrangement a run that merely names its renderer
+        // profile and renderer source is indistinguishable from one that holds them.
+        //
+        // A real FileSystemCustodyStore on an empty directory, with nothing put in it. The EU
+        // count closure is exactly the render receipt, the machine plan, the ordered parameter
+        // set, the renderer profile and the renderer source. The first three the binder produces.
+        // The last two the renderer now produces, which is what this change adds. Everything else
+        // the EU count names is the discovery plan's own ArtifactRef again, so it deduplicates
+        // into the profile rather than being a sixth artifact somebody else would have to hold.
+        //
+        // Count, not page. A page additionally names a partition row-count evidence reference,
+        // and that one genuinely is not renderer-produced: it is the http evidence an earlier
+        // count send of the same run wrote. Seeding it here to reach a page would be the exact
+        // defect this change exists to remove, so the page route is left to the run that produces
+        // its own count evidence and is not claimed as proven here.
+        var plan = EuConsolidationDiscoveryPlan.Create();
+        var rendererSourceBytes = "EU consolidation SPARQL renderer source"u8.ToArray();
+        var rendererSource = MachineQueryRendererSource.Open(
+            Artifact("urn:uuid:6b1c2d34-4e5f-4a60-9b71-8c2d3e4f5a61", rendererSourceBytes),
+            rendererSourceBytes);
+        var count = plan.BindCount(
+            EuConsolidationQuerySet.Family,
+            "32016R0679",
+            EuConsolidationQueryPass.Pass1,
+            "urn:uuid:7c2d3e45-5f60-4b71-8c82-9d3e4f5a6b72",
+            "urn:uuid:8d3e4f56-6a71-4c82-9d93-ae4f5a6b7c83",
+            rendererSource);
+
+        var root = Path.Combine(
+            Path.GetTempPath(),
+            "lex-fresh-store-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var custody = new FileSystemCustodyStore(root);
+            var productSends = 0;
+            var handler = new CountingHandler((ordinal, request) => ordinal switch
+            {
+                // The EU robots route is two hops by profile: a 301 off publications.europa.eu
+                // and a 200 on op.europa.eu.
+                0 => Response(
+                    request,
+                    HttpStatusCode.MovedPermanently,
+                    "moved",
+                    "https://op.europa.eu/robots.txt"),
+                1 => Response(request, HttpStatusCode.OK, "User-agent: *\nAllow: /\n"),
+                _ => ProductResponse(request),
+            });
+            using var session = Session(count.Request, handler, custody);
+            var started = await BootstrapAsync(session);
+            Assert.AreEqual(OfficialHttpAcquisitionOutcomeKind.ExecutedObservation, started.Kind);
+
+            var attempt = await session.OpenPlanItem(count.Request)
+                .ExecuteNextAttemptAsync(CancellationToken.None);
+
+            Assert.AreEqual(
+                OfficialHttpAcquisitionOutcomeKind.ExecutedObservation,
+                attempt.Kind,
+                "a run that produces its own send closure needs nothing already in the store");
+            Assert.AreEqual(1, productSends);
+            AssertOpenedClosure(
+                MachinePolicyFor(session, count.MachinePlanRef),
+                5,
+                count.MachinePlanRef,
+                count.InputArtifact.ArtifactRef,
+                plan.ArtifactRef,
+                rendererSource.Reference);
+
+            // Readable back out by digest, which is the difference between having retained an
+            // artifact and having named one. A store that never held these would have refused the
+            // send above; this says the send did not pass by holding something else.
+            foreach (var digest in new[]
+                {
+                    plan.ArtifactRef.Sha256,
+                    rendererSource.Reference.Sha256,
+                })
+            {
+                var reopened = await custody.ReadByDigestAsync(digest, CancellationToken.None);
+                Assert.AreEqual(
+                    digest,
+                    Convert.ToHexString(SHA256.HashData(reopened.Span)).ToLowerInvariant());
+            }
+
+            // The profile artifact is the discovery plan's own canonical identity rather than
+            // some other blob that happens to hash right, so a reader who fetches it by digest
+            // gets the plan back. Asserted on the retained bytes, not on what the renderer
+            // returned, because the point is what the store now holds.
+            var profileBytes = await custody.ReadByDigestAsync(
+                plan.ArtifactRef.Sha256,
+                CancellationToken.None);
+            CollectionAssert.AreEqual(
+                plan.CopyCanonicalIdentityBytes(),
+                profileBytes.ToArray(),
+                "the retained profile artifact must be the plan identity its reference names");
+
+            HttpResponseMessage ProductResponse(HttpRequestMessage request)
+            {
+                Interlocked.Increment(ref productSends);
+                Assert.AreEqual(HttpMethod.Post, request.Method);
+                Assert.AreEqual(
+                    EuConsolidationDiscoveryPlan.PublisherEndpoint,
+                    request.RequestUri?.AbsoluteUri);
+                return Response(
+                    request,
+                    HttpStatusCode.OK,
+                    "{\"head\":{\"vars\":[\"count\"]},\"results\":{\"bindings\":[]}}");
             }
         }
         finally
