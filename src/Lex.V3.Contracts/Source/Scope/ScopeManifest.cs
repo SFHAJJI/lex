@@ -664,6 +664,12 @@ public sealed class VerifiedScopeManifest
                 nameof(canonicalBytes));
         }
 
+        // ContractJson's shared JsonSerializerOptions does not set MaxDepth, so this deserialization
+        // uses System.Text.Json's framework default of 64 nested objects/arrays. A scope manifest's
+        // deepest path (observed_objects[].object_ref.parent_key_ref.entity_kind.registry_ref, or
+        // rows[].matched_evaluations[].role_member_ordinals[]) is well under ten levels, so the
+        // default bound is already far more headroom than this schema can ever use; it is
+        // deliberately left unset rather than narrowed.
         var json = ScopeValidation.DecodeStrictUtf8(canonicalBytes, nameof(canonicalBytes));
         ScopeManifest manifest;
         try
