@@ -37,6 +37,23 @@ public sealed class EuLegalNoticeEvidenceTests
 
     private const ulong RealByteLength = 135_428;
 
+    /// <summary>
+    /// The second live capture recorded in
+    /// <c>coordination/measurements/2026-09-03-eu-legal-notice-capture.md</c>, taken eleven seconds
+    /// after the capture behind <see cref="RealSha256"/>/<see cref="RealByteLength"/>. The
+    /// measurement file records only these two facts for capture 2 (its SHA-256 and byte count);
+    /// it says explicitly that "this second request captured only the response body, not its
+    /// headers, so no independent status line or Date header was recorded for it", and its raw
+    /// page bytes were never saved anywhere in this repository. These two literals are therefore
+    /// real, not fabricated: they are the measured digest and length themselves, exactly the same
+    /// kind of literal <see cref="RealSha256"/>/<see cref="RealByteLength"/> already are (this file
+    /// never holds either capture's actual HTML bytes, only their measured digest and length).
+    /// </summary>
+    private const string SecondCaptureSha256 =
+        "a57cba902fcca17b6c312b3e9b7fd9373ae64e01b630ab92eda16e1b4557690f";
+
+    private const ulong SecondCaptureByteLength = 135_427;
+
     [TestMethod]
     public void ACleanCaptureHasTheExactClosedShapeAndRoundTrips()
     {
@@ -75,6 +92,30 @@ public sealed class EuLegalNoticeEvidenceTests
         var reopened = EuLegalNoticeEvidence.ParseAndVerify(bytes);
         CollectionAssert.AreEqual(bytes, reopened.CopyCanonicalBytes());
         Assert.AreEqual(notice.CanonicalSha256, reopened.CanonicalSha256);
+    }
+
+    [TestMethod]
+    public void Sha256DiffersBetweenTwoRealCapturesOfTheSameUriElevenSecondsApart()
+    {
+        // Executable proof of the type-level remarks' churn finding, using the actual measured
+        // facts rather than only asserting the claim in prose: two independent captures of the
+        // identical R8 URI, eleven seconds apart, produced two different SHA-256 digests over two
+        // different byte lengths (a per-request CSRF token and analytics session id embedded in the
+        // page differ between requests even though the surrounding legal prose did not). This is
+        // exactly why the type's own documentation says Sha256 must never be read as a stable
+        // content fingerprint or a change-detection key.
+        var (evidenceOne, requestOne) = RealRoute();
+        var (evidenceTwo, requestTwo) = SecondRealCaptureRoute();
+
+        var noticeOne = EuLegalNoticeEvidence.FromRoute(evidenceOne, requestOne);
+        var noticeTwo = EuLegalNoticeEvidence.FromRoute(evidenceTwo, requestTwo);
+
+        Assert.AreEqual(RealSha256, noticeOne.Sha256);
+        Assert.AreEqual(SecondCaptureSha256, noticeTwo.Sha256);
+        Assert.AreEqual(RealByteLength, noticeOne.ByteLength);
+        Assert.AreEqual(SecondCaptureByteLength, noticeTwo.ByteLength);
+        Assert.AreNotEqual(noticeOne.Sha256, noticeTwo.Sha256);
+        Assert.AreNotEqual(noticeOne.ByteLength, noticeTwo.ByteLength);
     }
 
     [TestMethod]
@@ -475,6 +516,76 @@ public sealed class EuLegalNoticeEvidenceTests
     }
 
     [TestMethod]
+    public void ParseAndVerifyRefusesAnAbsentPolicyEffectiveDateObjectWithAnExtraProperty()
+    {
+        // Drives ParseHeaderField's own RequireExactPropertyNames for the "absent" kind
+        // specifically: distinct from the "single" kind's own exact-property-names test above and
+        // from the root/media-type exact-property-names checks earlier in this file. Every other
+        // test that parses an absent header field keeps its one-property shape intact, so this
+        // branch's refusal path was otherwise never reached.
+        var (evidence, request) = RealRoute();
+        var json = Encoding.UTF8.GetString(EuLegalNoticeEvidence.FromRoute(evidence, request).CopyCanonicalBytes());
+        var tampered = Encoding.UTF8.GetBytes(
+            json.Replace(
+                "\"policy_effective_date\":{\"kind\":\"absent\"}",
+                "\"policy_effective_date\":{\"kind\":\"absent\",\"extra\":\"x\"}",
+                StringComparison.Ordinal));
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(
+            () => EuLegalNoticeEvidence.ParseAndVerify(tampered));
+        StringAssert.Contains(thrown.Message, "missing, extra, duplicate, or reordered fields");
+    }
+
+    [TestMethod]
+    public void ParseAndVerifyRefusesAMultipleObservedDateObjectWithAnExtraProperty()
+    {
+        // Drives ParseHeaderField's own RequireExactPropertyNames for the "multiple" kind
+        // specifically. Distinct from ParseAndVerifyRefusesAMultipleHeaderWhoseValuesIsNotAnArray
+        // above, which keeps this object's two-property shape intact and instead tampers the type
+        // of "values", so it never reaches this exact-property-names check.
+        var (evidence, request) = RealRoute();
+        var json = Encoding.UTF8.GetString(EuLegalNoticeEvidence.FromRoute(evidence, request).CopyCanonicalBytes());
+        var tampered = Encoding.UTF8.GetBytes(
+            json.Replace(
+                "\"observed_date\":{\"kind\":\"single\",\"value\":\"Thu, 03 Sep 2026 16:55:19 GMT\"}",
+                "\"observed_date\":{\"kind\":\"multiple\",\"values\":[\"Thu, 03 Sep 2026 16:55:19 GMT\"],\"extra\":\"x\"}",
+                StringComparison.Ordinal));
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(
+            () => EuLegalNoticeEvidence.ParseAndVerify(tampered));
+        StringAssert.Contains(thrown.Message, "missing, extra, duplicate, or reordered fields");
+    }
+
+    [TestMethod]
+    public void ParseAndVerifyRoundTripsAMultipleValuedObservedDateThroughTheCanonicalWritePath()
+    {
+        // Drives WriteHeaderField's RoutedHttpMultipleHeader case, otherwise never reached: every
+        // FromRoute-minted instance carries at most one Date value, and every existing "multiple"
+        // parse test above refuses before reaching a successful ParseHeaderField result, so nothing
+        // before this test ever asks WriteCanonicalBytes to serialize a multiple-valued header
+        // field. Tamper observed_date to a genuine two-value multiple header and prove
+        // ParseAndVerify's rebuilt object writes back out to the exact same bytes, which exercises
+        // ParseHeaderField's "multiple" success path and WriteHeaderField's "multiple" case
+        // together.
+        var (evidence, request) = RealRoute();
+        var json = Encoding.UTF8.GetString(EuLegalNoticeEvidence.FromRoute(evidence, request).CopyCanonicalBytes());
+        var tampered = Encoding.UTF8.GetBytes(
+            json.Replace(
+                "\"observed_date\":{\"kind\":\"single\",\"value\":\"Thu, 03 Sep 2026 16:55:19 GMT\"}",
+                "\"observed_date\":{\"kind\":\"multiple\",\"values\":[\"Thu, 03 Sep 2026 16:55:19 GMT\"," +
+                "\"Thu, 03 Sep 2026 16:55:20 GMT\"]}",
+                StringComparison.Ordinal));
+
+        var reopened = EuLegalNoticeEvidence.ParseAndVerify(tampered);
+
+        Assert.IsInstanceOfType<RoutedHttpMultipleHeader>(reopened.ObservedDate);
+        CollectionAssert.AreEqual(
+            new[] { "Thu, 03 Sep 2026 16:55:19 GMT", "Thu, 03 Sep 2026 16:55:20 GMT" },
+            ((RoutedHttpMultipleHeader)reopened.ObservedDate).Values.ToArray());
+        CollectionAssert.AreEqual(tampered, reopened.CopyCanonicalBytes());
+    }
+
+    [TestMethod]
     public void FromRouteRejectsNullArguments()
     {
         // Renamed from FromRouteAndParseAndVerifyRejectNullArguments: ParseAndVerify takes a
@@ -576,6 +687,25 @@ public sealed class EuLegalNoticeEvidenceTests
         var thrown = Assert.ThrowsExactly<ArgumentException>(
             () => EuLegalNoticeEvidence.FromRoute(evidence, request));
         StringAssert.Contains(thrown.Message, "exact R8 URI");
+    }
+
+    [TestMethod]
+    public void FromRouteRefusesATwoHopRouteThatRedirectsToADifferentOrigin()
+    {
+        // The gap the fold-in objection named: the first-hop pin only proves where the route
+        // started. This route is otherwise perfectly self-consistent (matching request digest, a
+        // 200 terminal status, text/html) and its first hop is exactly the pinned R8 URI, but the
+        // redirect lands on a different host entirely. Without a terminal-hop origin check, that
+        // other host's bytes would silently become EffectiveUri and this type's captured evidence;
+        // the session's own admitted-URI set is not, on its own, a guard a reader of R8 evidence can
+        // see. Paired with the same-origin acceptance above, which proves this check is on origin,
+        // not on exact URI equality (that test's terminal hop differs by query string alone).
+        var terminalUri = "https://not-eur-lex.example/content/legal-notice/legal-notice.html?locale=en";
+        var (evidence, request) = TwoHopRoute(EuLegalNoticeEvidence.RequestedUri, terminalUri);
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(
+            () => EuLegalNoticeEvidence.FromRoute(evidence, request));
+        StringAssert.Contains(thrown.Message, "pinned R8 origin");
     }
 
     [TestMethod]
@@ -753,6 +883,31 @@ public sealed class EuLegalNoticeEvidenceTests
             new DeclaredContentLengthHttpCompletion(RealByteLength), RealByteLength, RealSha256,
             WriteReceiptDigest(RealSha256, RealByteLength), RealByteLength, RealSha256);
         return (EvidenceForOrdinal(requestOrdinal, hop), request);
+    }
+
+    /// <summary>
+    /// The second real 2026-09-03 capture, routed the same way <see cref="RealRoute"/> is. Only
+    /// <see cref="SecondCaptureSha256"/> and <see cref="SecondCaptureByteLength"/> are the actual
+    /// measured facts from that second capture; its Date header and exact capture timestamp were
+    /// not independently recorded (see the measurement file's own note that only the response body
+    /// was captured for this request), so this fixture leaves the Date header absent and uses a
+    /// placeholder captured-at eleven seconds after <see cref="RealCapturedAt"/>, the same way every
+    /// other synthetic hop in this file supplies placeholder values for facts the fixture does not
+    /// claim were measured.
+    /// </summary>
+    private static (RoutedHttpEvidence Evidence, HttpLogicalRequest Request) SecondRealCaptureRoute()
+    {
+        const string capturedAt = "2026-09-03T16:55:30.0000000Z";
+        var request = LogicalRequestFor(EuLegalNoticeEvidence.RequestedUri);
+        var hop = RoutedHttpHop.Create(
+            0, Uuid("real-capture-2"), null, RequestDigest(request),
+            EuLegalNoticeEvidence.RequestedUri, 200,
+            Headers(contentType: RealMediaType, contentLength: SecondCaptureByteLength.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            capturedAt, capturedAt,
+            new DeclaredContentLengthHttpCompletion(SecondCaptureByteLength), SecondCaptureByteLength,
+            SecondCaptureSha256, WriteReceiptDigest(SecondCaptureSha256, SecondCaptureByteLength),
+            SecondCaptureByteLength, SecondCaptureSha256);
+        return (EvidenceForOrdinal(2, hop), request);
     }
 
     /// <summary>

@@ -250,7 +250,10 @@ public sealed class EuLegalNoticeEvidence
     /// actually held in custody; <paramref name="request"/> is the logical request that route was
     /// actually sent under, and it must be the exact request the terminal hop names, not merely one
     /// that happens to share a URI with it. The pinned <see cref="RequestedUri"/> is checked against
-    /// the route's own first hop, never against a caller's claim.
+    /// the route's own first hop, never against a caller's claim, and the terminal hop's own origin
+    /// is checked against that same pinned URI's origin: a route that starts at the pinned URI but
+    /// is redirected to a different host or scheme is refused rather than silently becoming
+    /// <see cref="EffectiveUri"/>.
     /// </summary>
     public static EuLegalNoticeEvidence FromRoute(RoutedHttpEvidence evidence, HttpLogicalRequest request)
     {
@@ -291,6 +294,25 @@ public sealed class EuLegalNoticeEvidence
             throw new ArgumentException(
                 $"Legal-notice evidence must route from the exact R8 URI; " +
                 $"{evidence.Hops[0].RequestUri} is not {RequestedUri}.",
+                nameof(evidence));
+        }
+
+        // The first-hop pin above only proves where the route started. A route that redirects away
+        // to any other host would still pass it, and that other host's bytes would become
+        // EffectiveUri and this type's captured evidence: R8 binds an official legal-notice URI at
+        // both ends, so the session's admitted-URI set (whatever a caller chose to route through)
+        // must not be the only guard between this type and an off-pin redirect target. Refuse unless
+        // the terminal hop terminates on the pinned URI's own origin. RoutedHttpHop.Create already
+        // derives NetworkOrigin from each hop's own RequestUri, so this compares two
+        // already-validated origins, never a caller's separate claim.
+        var pinnedOrigin = RoutedHttpNetworkOrigin.FromUri(RequestedUri);
+        if (!string.Equals(terminalHop.NetworkOrigin.Scheme, pinnedOrigin.Scheme, StringComparison.Ordinal) ||
+            !string.Equals(terminalHop.NetworkOrigin.Host, pinnedOrigin.Host, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                $"Legal-notice evidence must terminate on the pinned R8 origin " +
+                $"({pinnedOrigin.Scheme}://{pinnedOrigin.Host}); the terminal hop's origin is " +
+                $"{terminalHop.NetworkOrigin.Scheme}://{terminalHop.NetworkOrigin.Host}.",
                 nameof(evidence));
         }
 
