@@ -751,6 +751,457 @@ public sealed class ScopeManifestContractTests
                 resolver));
     }
 
+    [TestMethod]
+    public void ParseAndVerifyAcceptsExactCanonicalBytesAndExposesContent()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var input = ValidInput(profile, Object("parse-and-verify"));
+        var resolver = ExactResolver.For(profile, evidence, [input]);
+        var verified = ScopeReducer.Reduce(
+            profile,
+            evidence,
+            [input.ObjectRef],
+            [input],
+            resolver);
+        var bytes = CanonicalBytes(verified);
+        var artifactRef = ArtifactRefFor(bytes);
+
+        var reopened = VerifiedScopeManifest.ParseAndVerify(artifactRef, bytes, resolver);
+
+        Assert.HasCount(1, reopened.Manifest.Rows);
+        Assert.AreEqual(
+            input.ObjectRef.CanonicalKey,
+            reopened.Manifest.ObservedObjects[0].ObjectRef.CanonicalKey);
+        CollectionAssert.AreEqual(bytes, CanonicalBytes(reopened));
+    }
+
+    [TestMethod]
+    public void ParseAndVerifyRejectsNullArguments()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var input = ValidInput(profile, Object("null-args"));
+        var resolver = ExactResolver.For(profile, evidence, [input]);
+        var verified = ScopeReducer.Reduce(profile, evidence, [input.ObjectRef], [input], resolver);
+        var bytes = CanonicalBytes(verified);
+        var artifactRef = ArtifactRefFor(bytes);
+
+        Assert.ThrowsExactly<ArgumentNullException>(() =>
+            VerifiedScopeManifest.ParseAndVerify(null!, bytes, resolver));
+        Assert.ThrowsExactly<ArgumentNullException>(() =>
+            VerifiedScopeManifest.ParseAndVerify(artifactRef, bytes, null!));
+    }
+
+    [TestMethod]
+    public void ParseAndVerifyRejectsADigestThatDoesNotReproduce()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var input = ValidInput(profile, Object("wrong-digest"));
+        var resolver = ExactResolver.For(profile, evidence, [input]);
+        var verified = ScopeReducer.Reduce(profile, evidence, [input.ObjectRef], [input], resolver);
+        var bytes = CanonicalBytes(verified);
+        var wrongArtifactRef = new SourceArtifactRef(
+            "urn:uuid:99999999-9999-4999-8999-999999999999",
+            new string('0', 64));
+
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            VerifiedScopeManifest.ParseAndVerify(wrongArtifactRef, bytes, resolver));
+    }
+
+    [TestMethod]
+    public void ParseAndVerifyRejectsInvalidUtf8()
+    {
+        // "{", a lone UTF-8 continuation byte with no lead byte, "}", "\n".
+        byte[] badBytes = [0x7b, 0x80, 0x7d, (byte)'\n'];
+        var artifactRef = ArtifactRefFor(badBytes);
+
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            VerifiedScopeManifest.ParseAndVerify(artifactRef, badBytes, new RejectAllResolver()));
+    }
+
+    [TestMethod]
+    public void ParseAndVerifyRejectsBytesThatAreNotValidCanonicalJson()
+    {
+        var badBytes = Encoding.UTF8.GetBytes(
+            "{\"schema\":\"lex-v3-source-scope-manifest/1\",\n");
+        var artifactRef = ArtifactRefFor(badBytes);
+
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            VerifiedScopeManifest.ParseAndVerify(artifactRef, badBytes, new RejectAllResolver()));
+    }
+
+    [TestMethod]
+    public void ParseAndVerifyRejectsNonCanonicalWhitespace()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var input = ValidInput(profile, Object("noncanonical"));
+        var resolver = ExactResolver.For(profile, evidence, [input]);
+        var verified = ScopeReducer.Reduce(profile, evidence, [input.ObjectRef], [input], resolver);
+        var bytes = CanonicalBytes(verified);
+        Assert.AreEqual((byte)'{', bytes[0]);
+        var withWhitespace = new byte[bytes.Length + 1];
+        withWhitespace[0] = bytes[0];
+        withWhitespace[1] = (byte)' ';
+        Array.Copy(bytes, 1, withWhitespace, 2, bytes.Length - 1);
+        var artifactRef = ArtifactRefFor(withWhitespace);
+
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            VerifiedScopeManifest.ParseAndVerify(artifactRef, withWhitespace, resolver));
+    }
+
+    [TestMethod]
+    public void ParseAndVerifyRejectsAnUnsortedEvidenceArtifactTable()
+    {
+        var profile = Profile();
+        var evidenceA = Artifact("11111111-1111-4111-8111-111111111111");
+        var evidenceB = Artifact("22222222-2222-4222-8222-222222222222");
+        var evidence = new[] { evidenceA, evidenceB };
+        var shared = MemberOrdinal(profile, ProfileRef(), "shared");
+        var input = new ScopeObjectReductionInput(
+            Object("two-evidence-artifacts"),
+            [
+                new ScopeSelectorEvidence(
+                    ScopeSelectorState.PublisherValuePresent,
+                    ["formex"],
+                    ScopeSelectorEvidenceKind.ObservedValueSet,
+                    0,
+                    null,
+                    null),
+                new ScopeSelectorEvidence(
+                    ScopeSelectorState.PublisherValuePresent,
+                    ["FRA"],
+                    ScopeSelectorEvidenceKind.ObservedValueSet,
+                    1,
+                    null,
+                    null),
+            ],
+            [
+                Matched(
+                    0,
+                    ScopeRuleEffect.Positive,
+                    ScopeDisposition.AcceptedSelected,
+                    [MemberOrdinal(profile, ProfileRef(), "record_identity")],
+                    [MemberOrdinal(profile, ProfileRef(), "metadata"), shared]),
+                Matched(
+                    1,
+                    ScopeRuleEffect.Positive,
+                    ScopeDisposition.AcceptedSelected,
+                    [profile.BodyCandidateRoleMemberOrdinal],
+                    [MemberOrdinal(profile, ProfileRef(), "body_text"), shared]),
+                Matched(
+                    2,
+                    ScopeRuleEffect.Positive,
+                    ScopeDisposition.AcceptedSelected,
+                    [MemberOrdinal(profile, ProfileRef(), "relation")],
+                    [shared]),
+                Matched(
+                    3,
+                    ScopeRuleEffect.Positive,
+                    ScopeDisposition.AcceptedSelected,
+                    [MemberOrdinal(profile, ProfileRef(), "supporting_document")],
+                    [shared]),
+                NotMatched(4),
+            ]);
+        var resolver = ExactResolver.For(profile, evidence, [input]);
+        var verified = ScopeReducer.Reduce(profile, evidence, [input.ObjectRef], [input], resolver);
+        var bytes = CanonicalBytes(verified);
+
+        var node = JsonNode.Parse(Encoding.UTF8.GetString(bytes))!.AsObject();
+        var table = node["ordered_evidence_artifacts"]!.AsArray();
+        Assert.HasCount(2, table);
+        var first = table[0]!.DeepClone();
+        var second = table[1]!.DeepClone();
+        table[0] = second;
+        table[1] = first;
+        var swappedBytes = Encoding.UTF8.GetBytes(node.ToJsonString() + "\n");
+        var artifactRef = ArtifactRefFor(swappedBytes);
+
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            VerifiedScopeManifest.ParseAndVerify(artifactRef, swappedBytes, resolver));
+    }
+
+    [TestMethod]
+    public void ParseAndVerifyRejectsARowDigestThatDoesNotRecompute()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var input = ValidInput(profile, Object("bad-row-digest"));
+        var resolver = ExactResolver.For(profile, evidence, [input]);
+        var verified = ScopeReducer.Reduce(profile, evidence, [input.ObjectRef], [input], resolver);
+        var row = verified.Manifest.Rows[0];
+        var tampered = ReplaceRow(
+            verified.Manifest,
+            0,
+            new ScopeManifestRow(
+                row.ObjectOrdinal,
+                row.Selectors,
+                row.RuleMatchBitsBase64Url,
+                row.MatchedEvaluations,
+                row.AxisWinningRuleOrdinals,
+                new string('0', 64)));
+        var bytes = BytesForUnverified(tampered);
+        var artifactRef = ArtifactRefFor(bytes);
+
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            VerifiedScopeManifest.ParseAndVerify(artifactRef, bytes, resolver));
+    }
+
+    [TestMethod]
+    public void ParseAndVerifyRejectsAnAxisWinnerThatDoesNotRecompute()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var input = ValidInput(profile, Object("bad-axis-winner"));
+        var resolver = ExactResolver.For(profile, evidence, [input]);
+        var verified = ScopeReducer.Reduce(profile, evidence, [input.ObjectRef], [input], resolver);
+        var row = verified.Manifest.Rows[0];
+        var tampered = ReplaceRow(
+            verified.Manifest,
+            0,
+            new ScopeManifestRow(
+                row.ObjectOrdinal,
+                row.Selectors,
+                row.RuleMatchBitsBase64Url,
+                row.MatchedEvaluations,
+                [4, .. row.AxisWinningRuleOrdinals.Skip(1)],
+                row.RowSha256));
+        var bytes = BytesForUnverified(tampered);
+        var artifactRef = ArtifactRefFor(bytes);
+
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            VerifiedScopeManifest.ParseAndVerify(artifactRef, bytes, resolver));
+    }
+
+    [TestMethod]
+    public void ParseAndVerifyRejectsMalformedRuleMatchBitPadding()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var input = ValidInput(profile, Object("bad-bit-padding"));
+        var resolver = ExactResolver.For(profile, evidence, [input]);
+        var verified = ScopeReducer.Reduce(profile, evidence, [input.ObjectRef], [input], resolver);
+        var row = verified.Manifest.Rows[0];
+        var tampered = ReplaceRow(
+            verified.Manifest,
+            0,
+            new ScopeManifestRow(
+                row.ObjectOrdinal,
+                row.Selectors,
+                "_w",
+                row.MatchedEvaluations,
+                row.AxisWinningRuleOrdinals,
+                row.RowSha256));
+        var bytes = BytesForUnverified(tampered);
+        var artifactRef = ArtifactRefFor(bytes);
+
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            VerifiedScopeManifest.ParseAndVerify(artifactRef, bytes, resolver));
+    }
+
+    [TestMethod]
+    public void ParseAndVerifyRejectsAnAccountingPartitionThatDoesNotRecompute()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var input = ValidInput(profile, Object("bad-accounting"));
+        var resolver = ExactResolver.For(profile, evidence, [input]);
+        var verified = ScopeReducer.Reduce(profile, evidence, [input.ObjectRef], [input], resolver);
+        var manifest = verified.Manifest;
+        var firstAccounting = manifest.Accounting[0];
+        var tampered = new ScopeManifest(
+            manifest.Schema,
+            manifest.Profile,
+            manifest.CompleteEnumerationRef,
+            manifest.OrderedEvidenceArtifacts,
+            manifest.ObservedObjects,
+            manifest.Rows,
+            [
+                new ScopeAccountingSet(firstAccounting.Axis, firstAccounting.Disposition, []),
+                .. manifest.Accounting.Skip(1),
+            ],
+            manifest.BodyCandidateOrdinals);
+        var bytes = BytesForUnverified(tampered);
+        var artifactRef = ArtifactRefFor(bytes);
+
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            VerifiedScopeManifest.ParseAndVerify(artifactRef, bytes, resolver));
+    }
+
+    [TestMethod]
+    public void ParseAndVerifyRejectsRowsThatDoNotExactlyCoverObservedObjects()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var input = ValidInput(profile, Object("row-coverage"));
+        var resolver = ExactResolver.For(profile, evidence, [input]);
+        var verified = ScopeReducer.Reduce(profile, evidence, [input.ObjectRef], [input], resolver);
+        var manifest = verified.Manifest;
+        var tampered = new ScopeManifest(
+            manifest.Schema,
+            manifest.Profile,
+            manifest.CompleteEnumerationRef,
+            manifest.OrderedEvidenceArtifacts,
+            [],
+            manifest.Rows,
+            manifest.Accounting,
+            manifest.BodyCandidateOrdinals);
+        var bytes = BytesForUnverified(tampered);
+        var artifactRef = ArtifactRefFor(bytes);
+
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            VerifiedScopeManifest.ParseAndVerify(artifactRef, bytes, resolver));
+    }
+
+    [TestMethod]
+    public void ParseAndVerifyRejectsACompleteEnumerationRefTheResolverDoesNotAdmit()
+    {
+        var profile = Profile();
+        SourceArtifactRef[] noEvidence = [];
+        ScopeObjectReductionInput[] noInputs = [];
+        var resolver = ExactResolver.For(profile, noEvidence, noInputs);
+        var verified = ScopeReducer.Reduce(profile, noEvidence, [], noInputs, resolver);
+        var manifest = verified.Manifest;
+        var tampered = new ScopeManifest(
+            manifest.Schema,
+            manifest.Profile,
+            Artifact("44444444-4444-4444-8444-444444444444"),
+            manifest.OrderedEvidenceArtifacts,
+            manifest.ObservedObjects,
+            manifest.Rows,
+            manifest.Accounting,
+            manifest.BodyCandidateOrdinals);
+        var bytes = BytesForUnverified(tampered);
+        var artifactRef = ArtifactRefFor(bytes);
+
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            VerifiedScopeManifest.ParseAndVerify(artifactRef, bytes, resolver));
+    }
+
+    [TestMethod]
+    public void ParseAndVerifyRejectsASelectorValueTheResolverDoesNotAdmit()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var original = ValidInput(profile, Object("forged-selector"));
+        var trustedResolver = ExactResolver.For(profile, evidence, [original]);
+
+        var forgedValueSelectors = original.Selectors.ToArray();
+        forgedValueSelectors[0] = Present(["forged-value-not-in-evidence"]);
+        var forgedValue = Change(original, selectors: forgedValueSelectors);
+        var forgedResult = ScopeReducer.Reduce(
+            profile,
+            evidence,
+            [original.ObjectRef],
+            [forgedValue],
+            ExactResolver.For(profile, evidence, [forgedValue]));
+        var bytes = CanonicalBytes(forgedResult);
+        var artifactRef = ArtifactRefFor(bytes);
+
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            VerifiedScopeManifest.ParseAndVerify(artifactRef, bytes, trustedResolver));
+    }
+
+    [TestMethod]
+    public void ParseAndVerifyRejectsARuleEvaluationTheResolverDoesNotAdmit()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var original = ValidInput(profile, Object("forged-outcome"));
+        var trustedResolver = ExactResolver.For(profile, evidence, [original]);
+
+        var forgedEvaluations = original.RuleEvaluations.ToArray();
+        forgedEvaluations[1] = Matched(
+            1,
+            ScopeRuleEffect.Positive,
+            ScopeDisposition.NeverIngest,
+            [],
+            []);
+        var forgedOutcome = Change(original, evaluations: forgedEvaluations);
+        var forgedResult = ScopeReducer.Reduce(
+            profile,
+            evidence,
+            [original.ObjectRef],
+            [forgedOutcome],
+            ExactResolver.For(profile, evidence, [forgedOutcome]));
+        var bytes = CanonicalBytes(forgedResult);
+        var artifactRef = ArtifactRefFor(bytes);
+
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            VerifiedScopeManifest.ParseAndVerify(artifactRef, bytes, trustedResolver));
+    }
+
+    [TestMethod]
+    public void ParseAndVerifyRejectsAnEvidenceArtifactTableWithAnUnreferencedEntry()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var input = ValidInput(profile, Object("unused-evidence"));
+        var resolver = ExactResolver.For(profile, evidence, [input]);
+        var verified = ScopeReducer.Reduce(profile, evidence, [input.ObjectRef], [input], resolver);
+        var manifest = verified.Manifest;
+        var tampered = new ScopeManifest(
+            manifest.Schema,
+            manifest.Profile,
+            manifest.CompleteEnumerationRef,
+            [.. manifest.OrderedEvidenceArtifacts, Artifact("22222222-2222-4222-8222-222222222222")],
+            manifest.ObservedObjects,
+            manifest.Rows,
+            manifest.Accounting,
+            manifest.BodyCandidateOrdinals);
+        var bytes = BytesForUnverified(tampered);
+        var artifactRef = ArtifactRefFor(bytes);
+
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            VerifiedScopeManifest.ParseAndVerify(artifactRef, bytes, resolver));
+    }
+
+    [TestMethod]
+    public void ParseAndVerifyRejectsARoleOrdinalOutsideTheProfileMemberTable()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var input = ValidInput(profile, Object("bad-role-ordinal"));
+        var resolver = ExactResolver.For(profile, evidence, [input]);
+        var verified = ScopeReducer.Reduce(profile, evidence, [input.ObjectRef], [input], resolver);
+        var row = verified.Manifest.Rows[0];
+        var matched = row.MatchedEvaluations.ToArray();
+        matched[0] = new ScopeMatchedEvaluation(
+            matched[0].RuleOrdinal,
+            matched[0].Effect,
+            matched[0].Disposition,
+            [9_999],
+            matched[0].CapabilityMemberOrdinals);
+        var tampered = ReplaceRow(
+            verified.Manifest,
+            0,
+            new ScopeManifestRow(
+                row.ObjectOrdinal,
+                row.Selectors,
+                row.RuleMatchBitsBase64Url,
+                matched,
+                row.AxisWinningRuleOrdinals,
+                row.RowSha256));
+        var bytes = BytesForUnverified(tampered);
+        var artifactRef = ArtifactRefFor(bytes);
+
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            VerifiedScopeManifest.ParseAndVerify(artifactRef, bytes, resolver));
+    }
+
+    private static SourceArtifactRef ArtifactRefFor(byte[] canonicalBytes) => new(
+        "urn:uuid:99999999-9999-4999-8999-999999999999",
+        ScopeManifestCanonicalWriter.ComputeManifestSha256(canonicalBytes));
+
+    private static byte[] BytesForUnverified(ScopeManifest manifest)
+    {
+        using var output = new MemoryStream();
+        ScopeManifestCanonicalWriter.Write(output, new VerifiedScopeManifest(manifest));
+        return output.ToArray();
+    }
+
     private static ScopeProfileBinding Profile()
     {
         var profileRef = ProfileRef();
