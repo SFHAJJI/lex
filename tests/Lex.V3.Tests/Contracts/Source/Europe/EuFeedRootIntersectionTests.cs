@@ -202,6 +202,9 @@ public sealed class EuFeedRootIntersectionTests
                 "\"none\"",
                 "\"root_uri_unparseable\"",
                 "\"root_scheme_not_http_or_https\"",
+                "\"root_uri_has_query\"",
+                "\"root_uri_has_fragment\"",
+                "\"root_uri_has_double_slash\"",
             },
             Enum.GetValues<EuPackRootCanonicalFormRefusal>()
                 .Select(value => ContractJson.Serialize(value)).ToArray());
@@ -1046,6 +1049,58 @@ public sealed class EuFeedRootIntersectionTests
 
         Assert.IsNull(canonical);
         Assert.AreEqual(EuPackRootCanonicalFormRefusal.RootSchemeNotHttpOrHttps, refusal);
+    }
+
+    [TestMethod]
+    public void ARootWithAQueryStringIsRefused()
+    {
+        // A Cellar Work root never carries a query. Before this refusal existed, a trailing
+        // slash inside the query value (here, "1/") would have been silently stripped by the
+        // trailing-slash trim, corrupting a query this function otherwise retains byte for byte.
+        var canonical = EuPackRootCanonicalForm.TryCanonicalize(
+            AppendixASeedCanonical + "?query=1/", out var refusal);
+
+        Assert.IsNull(canonical);
+        Assert.AreEqual(EuPackRootCanonicalFormRefusal.RootUriHasQuery, refusal);
+    }
+
+    [TestMethod]
+    public void ARootWithAFragmentIsRefused()
+    {
+        // Same corruption risk as the query case, but for a fragment (here, "section/").
+        var canonical = EuPackRootCanonicalForm.TryCanonicalize(
+            AppendixASeedCanonical + "#section/", out var refusal);
+
+        Assert.IsNull(canonical);
+        Assert.AreEqual(EuPackRootCanonicalFormRefusal.RootUriHasFragment, refusal);
+    }
+
+    [TestMethod]
+    public void ARootWithTwoTrailingSlashesIsRefusedRatherThanCollapsedToOne()
+    {
+        // Before this refusal existed, TrimEnd('/') stripped every trailing slash, so this root
+        // and AppendixASeedCanonical + "/" (one trailing slash, which
+        // ATrailingSlashIsStrippedFromTheCanonicalForm shows canonicalizes cleanly) would both
+        // have canonicalized to the identical string - two distinct inputs, one output, breaking
+        // injectivity. It must be refused instead.
+        var canonical = EuPackRootCanonicalForm.TryCanonicalize(
+            AppendixASeedCanonical + "//", out var refusal);
+
+        Assert.IsNull(canonical);
+        Assert.AreEqual(EuPackRootCanonicalFormRefusal.RootUriHasDoubleSlash, refusal);
+    }
+
+    [TestMethod]
+    public void ARootWithADoubledSlashInTheMiddleOfThePathIsRefused()
+    {
+        // The doubled-slash refusal is not limited to the trailing position: a Cellar Work root
+        // never carries a repeated slash anywhere in its authority-plus-path.
+        var canonical = EuPackRootCanonicalForm.TryCanonicalize(
+            "http://publications.europa.eu/resource//cellar/ccccda77-8ac2-4a25-8e66-a5827ecd3459",
+            out var refusal);
+
+        Assert.IsNull(canonical);
+        Assert.AreEqual(EuPackRootCanonicalFormRefusal.RootUriHasDoubleSlash, refusal);
     }
 
     // ---- Fixtures. ----
