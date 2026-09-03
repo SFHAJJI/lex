@@ -29,6 +29,33 @@ public sealed class VerifiedLuxembourgSourceProfile
     internal const string RdfType =
         "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
 
+    /// <summary>
+    /// R5.1's typeDocument assertion predicate, public (unlike <see cref="JoluxPrefix"/> above) so
+    /// a caller outside this assembly can name it directly. D1-04's own adapter
+    /// (<c>LuxembourgQueryExecutionAdapter.BuildCoarseDispositionMarkers</c>, in
+    /// <c>Lex.V3.Ingest</c>) used to search <see cref="RequiredIriVocabulary"/> for the one
+    /// <see cref="LuxembourgVocabularyKind.AssertionPredicate"/> value ending in "typeDocument"
+    /// instead of naming this predicate directly; that search is gone now that this constant is
+    /// the one place both assemblies read it from.
+    /// </summary>
+    public const string TypeDocumentPredicateIri = JoluxPrefix + "typeDocument";
+
+    /// <summary>
+    /// <see cref="LuxembourgScopeResolver"/>'s three "priority candidate" typeDocument suffixes
+    /// (its own <c>PriorityCandidateTypes</c> bucket): accepted through bucket membership only,
+    /// never through a separately verified typed role (item 15 of the D1-04 design-synthesis
+    /// ruling). Public, unlike that internal resolver field, so <c>LuxembourgQueryExecutionAdapter</c>
+    /// in <c>Lex.V3.Ingest</c> reads the same three literals instead of declaring its own copy of
+    /// "TC", "RECT" and "ACC" in a second switch across the assembly boundary.
+    /// </summary>
+    public const string PriorityCandidateTypeTc = "TC";
+
+    /// <summary>See <see cref="PriorityCandidateTypeTc"/>.</summary>
+    public const string PriorityCandidateTypeRect = "RECT";
+
+    /// <summary>See <see cref="PriorityCandidateTypeTc"/>.</summary>
+    public const string PriorityCandidateTypeAcc = "ACC";
+
     // Candidate 6 is the base policy; Decision 65 is bound by the exact canonical predicate rows.
     private const string Candidate6Sha256 =
         "a8e4fc0159127e8a7102f1cc51c76daf617224e1515d1c8d8c92bbb882c9ded9";

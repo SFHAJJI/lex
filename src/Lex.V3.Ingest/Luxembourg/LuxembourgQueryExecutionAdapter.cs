@@ -230,6 +230,27 @@ public enum LuxembourgQueryExecutionRefusal
     /// cannot claim it as held evidence (never bypass the Core floor).
     /// </summary>
     ScopeManifestNotHeld = 2,
+
+    /// <summary>
+    /// One or more <see cref="LuxembourgResourceObservation"/> values were supplied to
+    /// <see cref="LuxembourgQueryExecutionAdapter.RunAsync"/>, but no family this run enumerated
+    /// can attest them: either no resource-observation family was designated at all, or the
+    /// designated family key does not name a family this run proved. The review objection this
+    /// refusal closes: nothing previously tied a caller's <c>observations</c> to what the executor
+    /// actually delivered, so a manifest could be built from a hand-supplied set the run never
+    /// enumerated.
+    /// </summary>
+    ObservationsWithoutProvenCensus = 3,
+
+    /// <summary>
+    /// The designated resource-observation family was proven, but the number of observations
+    /// supplied does not equal the number of rows that family's proof reports as delivered. This
+    /// is a narrower binding than full identity-set equality between the supplied observations and
+    /// the family's delivered canonical keys: see the remark on
+    /// <see cref="LuxembourgQueryExecutionAdapter.RunAsync"/> for why that stronger comparison is
+    /// not available from this assembly today.
+    /// </summary>
+    ObservationCountDoesNotMatchDelivery = 4,
 }
 
 public sealed class LuxembourgQueryExecutionRefusalDetail
@@ -268,6 +289,33 @@ public sealed class LuxembourgQueryExecutionRefusalDetail
     public string? Detail { get; }
 }
 
+/// <summary>
+/// Fold-in one of the D1-04 refreeze: whether a <see cref="LuxembourgQueryExecutionResult.Delivered"/>
+/// result proves every family it enumerated, or is only partial. Nothing about writing and holding
+/// the scope manifest depends on every <see cref="LuxembourgFamilyEnumerationOutcome"/> being
+/// <see cref="LuxembourgFamilyEnumerationOutcomeKind.Proven"/> -- a delivered result with one or more
+/// refused families is legal today and was previously undocumented, which is exactly the shape a
+/// consumer could silently treat as a complete run. There is no setter and no caller-supplied value:
+/// <see cref="LuxembourgQueryExecutionResult.Delivered"/> computes this from the same
+/// <c>familyOutcomes</c> it is given, so a caller cannot declare completeness it did not earn.
+/// </summary>
+public enum LuxembourgQueryExecutionCompletion
+{
+    /// <summary>Every family this run enumerated proved its whole enumeration.</summary>
+    [JsonStringEnumMemberName("all_families_proven")]
+    AllFamiliesProven = 1,
+
+    /// <summary>
+    /// At least one family this run enumerated was refused, whether by the executor itself
+    /// (<see cref="LuxembourgFamilyEnumerationOutcomeKind.ExecutorRefused"/>) or by the completeness
+    /// proof (<see cref="LuxembourgFamilyEnumerationOutcomeKind.ProofRefused"/>). The scope manifest
+    /// and every acquisition state this result carries are still exactly what they say; this value
+    /// only makes explicit that the run's family enumeration, taken as a whole, is not complete.
+    /// </summary>
+    [JsonStringEnumMemberName("partial_family_refused")]
+    PartialFamilyRefused = 2,
+}
+
 /// <summary>Delivered or refused, never both and never neither -- the same shape the executor uses.</summary>
 public sealed class LuxembourgQueryExecutionResult
 {
@@ -278,6 +326,7 @@ public sealed class LuxembourgQueryExecutionResult
         IReadOnlyList<LuxembourgCoarseDispositionMarker> coarseDispositionMarkers,
         DurableBlobWriteReceipt? scopeManifestReceipt,
         string? scopeManifestCanonicalSha256,
+        LuxembourgQueryExecutionCompletion? completion,
         LuxembourgQueryExecutionRefusalDetail? refusal)
     {
         Topology = topology;
@@ -286,6 +335,7 @@ public sealed class LuxembourgQueryExecutionResult
         CoarseDispositionMarkers = coarseDispositionMarkers;
         ScopeManifestReceipt = scopeManifestReceipt;
         ScopeManifestCanonicalSha256 = scopeManifestCanonicalSha256;
+        Completion = completion;
         Refusal = refusal;
     }
 
@@ -300,9 +350,13 @@ public sealed class LuxembourgQueryExecutionResult
         ArgumentNullException.ThrowIfNull(topology);
         ArgumentNullException.ThrowIfNull(scopeManifestReceipt);
         ArgumentException.ThrowIfNullOrWhiteSpace(scopeManifestCanonicalSha256);
+        var completion = familyOutcomes.All(
+            static outcome => outcome.Kind == LuxembourgFamilyEnumerationOutcomeKind.Proven)
+            ? LuxembourgQueryExecutionCompletion.AllFamiliesProven
+            : LuxembourgQueryExecutionCompletion.PartialFamilyRefused;
         return new(
             topology, familyOutcomes, relationFamilyAcquisitions, coarseDispositionMarkers, scopeManifestReceipt,
-            scopeManifestCanonicalSha256, null);
+            scopeManifestCanonicalSha256, completion, null);
     }
 
     public static LuxembourgQueryExecutionResult Refused(
@@ -313,7 +367,7 @@ public sealed class LuxembourgQueryExecutionResult
     {
         ArgumentNullException.ThrowIfNull(topology);
         ArgumentNullException.ThrowIfNull(refusal);
-        return new(topology, familyOutcomes, relationFamilyAcquisitions, [], null, null, refusal);
+        return new(topology, familyOutcomes, relationFamilyAcquisitions, [], null, null, null, refusal);
     }
 
     /// <summary>Always present: minting it cannot fail, and it is useful context on a refusal too.</summary>
@@ -324,6 +378,14 @@ public sealed class LuxembourgQueryExecutionResult
     public IReadOnlyList<LuxembourgRelationFamilyAcquisition> RelationFamilyAcquisitions { get; }
 
     public IReadOnlyList<LuxembourgCoarseDispositionMarker> CoarseDispositionMarkers { get; }
+
+    /// <summary>
+    /// Present if and only if this result is delivered. A consumer that reads
+    /// <see cref="ScopeManifestReceipt"/> without also reading this field cannot tell a run that
+    /// proved every family from one that did not; see the type remarks on
+    /// <see cref="LuxembourgQueryExecutionCompletion"/>.
+    /// </summary>
+    public LuxembourgQueryExecutionCompletion? Completion { get; }
 
     /// <summary>
     /// The custody store's own write receipt for the scope manifest bytes, never a bare
@@ -419,11 +481,52 @@ public sealed class LuxembourgQueryExecutionAdapter
     /// (query-plan set "G") Decision 64 accounting is projected from. Null when this run does not
     /// enumerate relations at all.
     /// </param>
+    /// <param name="resourceObservationFamilyKey">
+    /// Which entry of <paramref name="families"/>, if any, is the LU resource-discovery family
+    /// (query-plan set "S", template "subjects") <paramref name="observations"/> is asserted to be
+    /// the delivered census of. This is the refreeze's answer to the one objection that mattered
+    /// most in review: previously nothing tied a caller's <paramref name="observations"/> to what
+    /// the executor actually enumerated this run, so the scope manifest could classify objects the
+    /// run never saw and omit ones it delivered. When <paramref name="observations"/> is non-empty
+    /// (or this key is non-null), the named family must be among <paramref name="families"/> and
+    /// its enumeration must be <see cref="LuxembourgFamilyEnumerationOutcomeKind.Proven"/>, and the
+    /// number of <paramref name="observations"/> must equal that family's proven
+    /// <see cref="AbsenceFamilyEnumerationProof.DeliveredRowCount"/>; otherwise <c>RunAsync</c>
+    /// refuses with <see cref="LuxembourgQueryExecutionRefusal.ObservationsWithoutProvenCensus"/> or
+    /// <see cref="LuxembourgQueryExecutionRefusal.ObservationCountDoesNotMatchDelivery"/> rather than
+    /// resolving scope over an unattested set.
+    /// <para>
+    /// RESIDUE, named rather than papered over, exactly as the type remarks above name the
+    /// observation-decoding residue. This is a count binding, not the stronger identity-set
+    /// equality the review objection also offered as acceptable ("the supplied observations'
+    /// identity set equals the delivered canonical key set of the resource family"). That stronger
+    /// check is not reachable from this assembly today: <see cref="EnumerationDeliveryComparison"/>
+    /// retains a family's delivered canonical keys only as <c>CanonicalKeyDigestA</c>/<c>B</c>, a
+    /// hash over RDF term tuples canonicalized by <c>ContractCanonicalizer</c>, which is
+    /// <c>internal</c> to <c>Lex.V3.Contracts</c> and granted <c>InternalsVisibleTo</c> only to that
+    /// assembly's own tests, never to <c>Lex.V3.Ingest</c>; and
+    /// <see cref="AbsenceFamilyEnumerationProof"/>'s own remarks say plainly that this digest "does
+    /// not bind the delivered rows to a cut's observed keys... which no list of canonical publisher
+    /// URIs can be checked against from here". Reproducing that digest from this assembly would mean
+    /// duplicating a private canonicalization and the private SPARQL-row parsing that feeds it
+    /// (<c>EnumerationDeliveryComparison.Parse</c>/<c>ParseRows</c>), which is exactly the
+    /// re-implementation this design deliberately avoids elsewhere (see the observation-decoding
+    /// residue above). A durable fix for the stronger comparison is a new public reader door on
+    /// <c>Source.Core</c> analogous to <see cref="Scope.VerifiedScopeManifest.ParseAndVerify"/>
+    /// (Decision 80's precedent for exactly this "production Ingest previously had no way to turn
+    /// durable bytes back into a verified value" shape); that is a cross-cutting change to shared,
+    /// already-merged EU/LU infrastructure and belongs to its own reviewed slice, not bundled into
+    /// this one. The count binding here is the strongest check achievable without it, and it already
+    /// closes the concrete defect the objection's own tests demonstrated: a manifest built from zero
+    /// enumerated families, or from an enumerated family with no matching observations.
+    /// </para>
+    /// </param>
     /// <param name="observations">The resource observations to resolve. See the residue note above.</param>
     /// <param name="evidenceResolver">The evidence resolver the merged R5.1 scope reduction requires.</param>
     public async Task<LuxembourgQueryExecutionResult> RunAsync(
         IReadOnlyList<(LuxembourgPartitionRunRequest PartitionRequest, BoundMachineRequest SourceWitness)> families,
         string? relationAssertionsFamilyKey,
+        string? resourceObservationFamilyKey,
         IReadOnlyList<LuxembourgResourceObservation> observations,
         IScopeReductionEvidenceResolver evidenceResolver,
         CancellationToken cancellationToken)
@@ -486,6 +589,16 @@ public sealed class LuxembourgQueryExecutionAdapter
         var relationAcquisitions = BuildRelationFamilyAcquisitions(
             relationAssertionsFamilyKey, sawRelationFamily, relationProof, relationIncompleteReason);
 
+        // THE OBJECTION this refreeze closes: bind observations to what this run's own family
+        // enumeration actually delivered, rather than trusting a caller-supplied list wholesale.
+        // Refuses before Resolve/ReduceScope ever sees the observations, so an unattested set never
+        // reaches the scope manifest at all.
+        var censusRefusal = CheckObservationCensus(resourceObservationFamilyKey, observations, outcomes);
+        if (censusRefusal is not null)
+        {
+            return LuxembourgQueryExecutionResult.Refused(topology, outcomes, relationAcquisitions, censusRefusal);
+        }
+
         var resolution = _sourceProfile.Resolve(observations);
         if (resolution is LuxembourgProfileResolution.Failed failed)
         {
@@ -528,14 +641,15 @@ public sealed class LuxembourgQueryExecutionAdapter
 
         // Re-verified by reopening the exact digest from the store, not trusted from the write call
         // alone: a receipt names bytes, a reopen proves the store actually holds them.
+        // ReadByDigestCheckedAsync itself already throws CustodyIntegrityException unless the
+        // returned bytes hash to writeReceipt.Reference.ContentSha256, which the store computed
+        // from manifestBytes at CreateAsync above; a follow-on SequenceEqual against manifestBytes
+        // here would only be re-deriving what that digest check already establishes (fold-in seven
+        // of the D1-04 refreeze -- the executor's own delivery proof removed the same redundant
+        // check after a checked read for the same reason).
         var reopened = await CustodyRestore.ReadByDigestCheckedAsync(
                 _custodyStore, writeReceipt.Reference.ContentSha256, cancellationToken)
             .ConfigureAwait(false);
-        if (!reopened.Span.SequenceEqual(manifestBytes))
-        {
-            throw new CustodyIntegrityException(
-                "The reopened scope manifest bytes differ from the bytes this run wrote.");
-        }
 
         // Decision 75's rule, applied to this adapter's own artifact: re-verification re-derives
         // the comparison from custody rather than trusting the in-memory object this run already
@@ -555,6 +669,56 @@ public sealed class LuxembourgQueryExecutionAdapter
         return LuxembourgQueryExecutionResult.Delivered(
             topology, outcomes, relationAcquisitions, coarseMarkers, writeReceipt,
             manifestCanonicalSha256);
+    }
+
+    /// <summary>
+    /// The review objection's mismatch guard, and a mismatch test drives every branch here.
+    /// Returns null (no refusal) only when either nothing was supplied that needs attesting, or
+    /// what was supplied is attested by a family this run actually proved. See the
+    /// <paramref name="resourceObservationFamilyKey"/> remark on <see cref="RunAsync"/> for why this
+    /// is a count binding rather than full identity-set equality.
+    /// </summary>
+    private static LuxembourgQueryExecutionRefusalDetail? CheckObservationCensus(
+        string? resourceObservationFamilyKey,
+        IReadOnlyList<LuxembourgResourceObservation> observations,
+        IReadOnlyList<LuxembourgFamilyEnumerationOutcome> outcomes)
+    {
+        if (resourceObservationFamilyKey is null)
+        {
+            // Symmetric with BuildRelationFamilyAcquisitions' own "did not try this run" case: no
+            // observations and no designation is the ordinary empty run, not a mismatch.
+            return observations.Count == 0
+                ? null
+                : new LuxembourgQueryExecutionRefusalDetail(
+                    LuxembourgQueryExecutionRefusal.ObservationsWithoutProvenCensus,
+                    null,
+                    $"{observations.Count} observation(s) were supplied but no resource-observation " +
+                    "family was designated to attest them.");
+        }
+
+        var outcome = outcomes.FirstOrDefault(
+            candidate => string.Equals(
+                candidate.FamilyKey, resourceObservationFamilyKey, StringComparison.Ordinal));
+        if (outcome is null || outcome.Kind != LuxembourgFamilyEnumerationOutcomeKind.Proven)
+        {
+            return new LuxembourgQueryExecutionRefusalDetail(
+                LuxembourgQueryExecutionRefusal.ObservationsWithoutProvenCensus,
+                null,
+                $"the designated resource-observation family '{resourceObservationFamilyKey}' was " +
+                "not proven by this run's enumeration.");
+        }
+
+        if (observations.Count != outcome.Proof!.DeliveredRowCount)
+        {
+            return new LuxembourgQueryExecutionRefusalDetail(
+                LuxembourgQueryExecutionRefusal.ObservationCountDoesNotMatchDelivery,
+                null,
+                $"{observations.Count} observation(s) were supplied but the proven " +
+                $"resource-observation family '{resourceObservationFamilyKey}' delivered " +
+                $"{outcome.Proof.DeliveredRowCount}.");
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -608,11 +772,11 @@ public sealed class LuxembourgQueryExecutionAdapter
     private static IReadOnlyList<LuxembourgCoarseDispositionMarker> BuildCoarseDispositionMarkers(
         LuxembourgProfileResolution.Resolved resolved)
     {
-        var typeDocumentPredicateIri = VerifiedLuxembourgSourceProfile.RequiredIriVocabulary
-            .First(value =>
-                value.Kind == LuxembourgVocabularyKind.AssertionPredicate &&
-                value.FullIri.EndsWith("typeDocument", StringComparison.Ordinal))
-            .FullIri;
+        // Fold-in six of the D1-04 refreeze: read the predicate directly off the shared public
+        // constant instead of searching RequiredIriVocabulary for the one AssertionPredicate value
+        // ending in "typeDocument". VerifiedLuxembourgSourceProfile.TypeDocumentPredicateIri is the
+        // one place both this assembly and LuxembourgScopeResolver (Lex.V3.Contracts) read it from.
+        var typeDocumentPredicateIri = VerifiedLuxembourgSourceProfile.TypeDocumentPredicateIri;
 
         var markers = new List<LuxembourgCoarseDispositionMarker>();
         foreach (var resource in resolved.Resources)
@@ -640,9 +804,12 @@ public sealed class LuxembourgQueryExecutionAdapter
 
             var gap = LastPathSegment(typeDocumentIri) switch
             {
-                "TC" => LuxembourgCoarseDispositionGap.TcTypedRoleNotDistinguished,
-                "RECT" => LuxembourgCoarseDispositionGap.RectTypedRoleNotDistinguished,
-                "ACC" => LuxembourgCoarseDispositionGap.AccConstitutionalReviewEvidenceGateNotApplied,
+                VerifiedLuxembourgSourceProfile.PriorityCandidateTypeTc =>
+                    LuxembourgCoarseDispositionGap.TcTypedRoleNotDistinguished,
+                VerifiedLuxembourgSourceProfile.PriorityCandidateTypeRect =>
+                    LuxembourgCoarseDispositionGap.RectTypedRoleNotDistinguished,
+                VerifiedLuxembourgSourceProfile.PriorityCandidateTypeAcc =>
+                    LuxembourgCoarseDispositionGap.AccConstitutionalReviewEvidenceGateNotApplied,
                 _ => (LuxembourgCoarseDispositionGap?)null,
             };
             if (gap is { } value)

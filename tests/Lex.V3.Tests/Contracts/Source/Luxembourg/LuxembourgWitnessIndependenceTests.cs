@@ -153,11 +153,20 @@ public sealed class LuxembourgWitnessIndependenceTests
         var topology = LuxembourgSourceProfileTopology.Mint(profile);
 
         Assert.AreEqual(Lex.V3.Contracts.Source.Core.SourceCoreSchemaIds.SourceProfileTopology, topology.Schema);
+
+        // Fold-in four of the D1-04 refreeze: hand-transcribed literals, printed from a throwaway
+        // failing assertion, not the same symbols the mint computed from
+        // (LuxembourgSourceProfileTopology.SinglePublisherStoreMemberKey / .RegistryRef). Comparing
+        // a computed value to a copy of the exact constant that computed it cannot fail no matter
+        // what the mint does; a code change that alters the member key, the registry resource id or
+        // the registry digest is only caught because these three lines are literals.
+        Assert.AreEqual("single_publisher_store", topology.Topology.MemberKey);
         Assert.AreEqual(
-            LuxembourgSourceProfileTopology.SinglePublisherStoreMemberKey,
-            topology.Topology.MemberKey);
+            "urn:uuid:b709709a-2ce9-4090-a030-44241490c7d5", topology.Topology.RegistryRef.ResourceId);
+        Assert.AreEqual(
+            "e5bfd45dc19c02536bf2603408e918d3978590640ca4c277c4c294497162d8b4",
+            topology.Topology.RegistryRef.Sha256);
         Assert.AreEqual(profile.ScopeBinding.SourceProfileRef, topology.IdentityProfileRef);
-        Assert.AreEqual(LuxembourgSourceProfileTopology.RegistryRef, topology.Topology.RegistryRef);
 
         // Two profiles built from the same complete vocabulary share a source-profile identity
         // (VerifiedLuxembourgSourceProfile.Open is a pure function of its snapshot), so minting
