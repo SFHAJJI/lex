@@ -23,6 +23,13 @@ public enum EuFormexItemRole
 /// </summary>
 public enum EuFormexRoleRefusal
 {
+    /// <summary>
+    /// No refusal: the value was admitted. Present so the out parameter is a true statement on
+    /// the success path rather than whichever member happened to be assigned first.
+    /// </summary>
+    [JsonStringEnumMemberName("none")]
+    None = 0,
+
     /// <summary>The stream name matches no admitted grammar.</summary>
     [JsonStringEnumMemberName("unrecognised_stream_name")]
     UnrecognisedStreamName = 1,
@@ -62,6 +69,14 @@ public enum EuFormexRoleRefusal
     /// </summary>
     [JsonStringEnumMemberName("stem_disagreement")]
     StemDisagreement = 8,
+
+    /// <summary>
+    /// The expected identity is not a base act CELEX. A dated consolidation form such as
+    /// <c>02016R0679-20160504</c> or a corrigendum suffix such as <c>32016R0679R(02)</c> names a
+    /// state of a work rather than the work, and the Cellar notice puts those beside each other.
+    /// </summary>
+    [JsonStringEnumMemberName("expected_work_not_a_base_act")]
+    ExpectedWorkNotABaseAct = 9,
 }
 
 /// <summary>
@@ -96,11 +111,13 @@ public sealed class EuFormexStreamName
         System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     /// <summary>
-    /// The year, type letter and number a CELEX carries after its sector digit. Used to check a
-    /// stream name against an identity the caller already holds, never to build one.
+    /// A base act CELEX in full: sector digit, year, type letter, number, optional parenthetical.
+    /// Anchored at both ends on purpose. Matching only the nine characters a stream name shares
+    /// would admit a dated consolidation form or a corrigendum suffix as the work, and those are
+    /// exactly the neighbouring identities a Cellar notice states side by side.
     /// </summary>
     private static readonly System.Text.RegularExpressions.Regex CelexCore = new(
-        @"^\d(?<year>\d{4})(?<type>[A-Z])(?<number>\d{4})",
+        @"^\d(?<year>\d{4})(?<type>[A-Z])(?<number>\d{4})(\(\d{2}\))?$",
         System.Text.RegularExpressions.RegexOptions.CultureInvariant
             | System.Text.RegularExpressions.RegexOptions.ExplicitCapture);
 
@@ -189,8 +206,13 @@ public sealed class EuFormexStreamName
         // are what the two share; the sector and any parenthetical live only in the CELEX, which
         // is why the CELEX is carried through rather than rebuilt from the name.
         var expected = CelexCore.Match(expectedWorkCelex);
-        if (!expected.Success
-            || expected.Groups["year"].Value != match.Groups["year"].Value
+        if (!expected.Success)
+        {
+            refusal = EuFormexRoleRefusal.ExpectedWorkNotABaseAct;
+            return null;
+        }
+
+        if (expected.Groups["year"].Value != match.Groups["year"].Value
             || expected.Groups["type"].Value != match.Groups["type"].Value
             || expected.Groups["number"].Value != match.Groups["number"].Value)
         {
@@ -202,6 +224,7 @@ public sealed class EuFormexStreamName
             ? EuFormexItemRole.Descriptor
             : EuFormexItemRole.MainText;
 
+        refusal = EuFormexRoleRefusal.None;
         return new EuFormexStreamName(
             value,
             value[..^match.Groups["extension"].Value.Length],
@@ -348,6 +371,7 @@ public sealed class EuFormexItemSet
             return null;
         }
 
+        refusal = EuFormexRoleRefusal.None;
         return new EuFormexItemSet(
             items.ToArray(),
             mains[0],

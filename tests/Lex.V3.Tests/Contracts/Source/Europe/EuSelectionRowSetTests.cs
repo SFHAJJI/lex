@@ -67,6 +67,10 @@ public sealed class EuSelectionRowSetTests
         Assert.IsNull(
             EuSelectionRowSet.TryAdmit(Array.Empty<EuSelectionDisposition>(), out var empty));
         Assert.AreEqual(EuSelectionRowSetRefusal.SelectorUndecided, empty);
+
+        // And a true statement on the success path rather than a default that names no member.
+        Assert.IsNotNull(EuSelectionRowSet.TryAdmit(AllRows(), out var admitted));
+        Assert.AreEqual(EuSelectionRowSetRefusal.None, admitted);
     }
 
     [TestMethod]
@@ -100,16 +104,25 @@ public sealed class EuSelectionRowSetTests
     {
         var type = typeof(EuSelectionRowSet);
 
-        Assert.AreEqual(
-            0,
-            type.GetConstructors(BindingFlags.Public | BindingFlags.Instance).Length,
-            "a public constructor would let a caller mint a scope that was never total");
+        // Every constructor private, not merely no public one: this assembly grants
+        // InternalsVisibleTo to both test assemblies, so an internal constructor is a friend door.
+        var constructors = type.GetConstructors(
+            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.IsTrue(constructors.Length > 0);
+        Assert.IsTrue(
+            constructors.All(constructor => constructor.IsPrivate),
+            "a non-private constructor would let a caller mint a scope that was never total");
 
+        // By-ref parameters too, or a bool-returning TryX with an out parameter of the guarded
+        // type is invisible to a filter that only reads return types.
         var factories = type
             .GetMethods(BindingFlags.Public | BindingFlags.NonPublic
                 | BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly)
             .Where(method => method.ReturnType == type
-                || (method.ReturnType.IsByRef && method.ReturnType.GetElementType() == type))
+                || (method.ReturnType.IsByRef && method.ReturnType.GetElementType() == type)
+                || method.GetParameters().Any(parameter =>
+                    parameter.ParameterType.IsByRef
+                    && parameter.ParameterType.GetElementType() == type))
             .Select(method => $"{(method.IsStatic ? "static" : "instance")} {method}")
             .OrderBy(signature => signature, StringComparer.Ordinal)
             .ToArray();
@@ -138,7 +151,7 @@ public sealed class EuSelectionRowSetTests
             .ToArray();
 
         CollectionAssert.AreEqual(
-            new[] { "\"duplicate_selector\"", "\"selector_undecided\"" },
+            new[] { "\"none\"", "\"duplicate_selector\"", "\"selector_undecided\"" },
             tokens);
     }
 

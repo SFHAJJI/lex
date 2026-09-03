@@ -32,7 +32,7 @@ public sealed class EuFormexItemRoleTests
         var main = EuFormexStreamName.TryParse(ConsolidatedMain, Gdpr, out _);
         Assert.IsNotNull(main);
         Assert.AreEqual(EuFormexItemRole.MainText, main.Role);
-        Assert.AreEqual("32016R0679", main.WorkCelex, "the work CELEX is derived from the grammar");
+        Assert.AreEqual("32016R0679", main.WorkCelex, "the caller's identity is carried through");
         Assert.AreEqual("EN", main.Language);
         Assert.AreEqual(ConsolidatedMain, main.Value, "the publisher name is retained unmodified");
 
@@ -228,6 +228,47 @@ public sealed class EuFormexItemRoleTests
         Assert.AreEqual(EuFormexRoleRefusal.WorkIdentityDisagreement, mismatch);
         Assert.IsNull(EuFormexStreamName.TryParse(ConsolidatedMain, "21998A0403(01)", out var other));
         Assert.AreEqual(EuFormexRoleRefusal.WorkIdentityDisagreement, other);
+    }
+
+    [TestMethod]
+    public void OnlyABaseActCelexMayBeOpenedAgainst()
+    {
+        // A dated consolidation form and a corrigendum suffix are states of a work, not the work,
+        // and a Cellar notice states them beside the base act. Verifying only the nine characters
+        // a stream name shares would admit either of them as the work identity.
+        foreach (var notABaseAct in new[]
+        {
+            "02016R0679-20160504",
+            "32016R0679R(02)",
+            "2016R0679",
+            "",
+        })
+        {
+            Assert.IsNull(
+                EuFormexStreamName.TryParse(ConsolidatedMain, notABaseAct, out var refusal),
+                $"'{notABaseAct}' is not a base act CELEX");
+            Assert.AreEqual(
+                notABaseAct.Length == 0
+                    ? EuFormexRoleRefusal.UnrecognisedStreamName
+                    : EuFormexRoleRefusal.ExpectedWorkNotABaseAct,
+                refusal);
+        }
+
+        // The parenthetical form is a base act and must still be admitted.
+        Assert.IsNotNull(
+            EuFormexStreamName.TryParse("CL1998A0403EN0010010.0001.xml", "21998A0403(01)", out _));
+    }
+
+    [TestMethod]
+    public void TheRefusalIsATrueStatementOnTheSuccessPath()
+    {
+        // An out parameter left at whichever member happened to be assigned first is a typed
+        // refusal that is false when read, on the one path a caller is least likely to check.
+        Assert.IsNotNull(EuFormexStreamName.TryParse(ConsolidatedMain, Gdpr, out var parsed));
+        Assert.AreEqual(EuFormexRoleRefusal.None, parsed);
+
+        Assert.IsNotNull(EuFormexItemSet.TryAdmit(new[] { Item(ConsolidatedMain, 1) }, out var set));
+        Assert.AreEqual(EuFormexRoleRefusal.None, set);
     }
 
     [TestMethod]

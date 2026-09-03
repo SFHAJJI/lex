@@ -364,6 +364,10 @@ public sealed record EuPartitionWindow
 /// </summary>
 public enum EuSelectionRowSetRefusal
 {
+    /// <summary>No refusal: the set was admitted.</summary>
+    [JsonStringEnumMemberName("none")]
+    None = 0,
+
     /// <summary>Two rows decide the same selector.</summary>
     [JsonStringEnumMemberName("duplicate_selector")]
     DuplicateSelector = 1,
@@ -442,6 +446,7 @@ public sealed class EuSelectionRowSet
             }
         }
 
+        refusal = EuSelectionRowSetRefusal.None;
         return new EuSelectionRowSet(bySelector);
     }
 }
