@@ -641,6 +641,181 @@ public sealed class RoutedHttpRequestPolicyAuditTests
     }
 
     [TestMethod]
+    public async Task EuConsolidationPageSendsAgainstAFreshRealStoreUsingItsOwnCountEvidence()
+    {
+        // Completes Decision 75 for the EU page route. The count proof above stopped one step
+        // short on purpose: a page bind additionally names ExpectedPartitionRowCountEvidenceRef,
+        // and MachineQueryPlan.ExternalArtifactReferences offers no producer bytes for that
+        // reference ("partition row-count evidence" is added with no bytes argument), so
+        // OpenForSendAsync's fallback requires it already durably reachable by digest before the
+        // page send is admitted. Seeding that digest ahead of time would be exactly the defect
+        // this day of work exists to remove: a run cannot be shown to hold evidence that no run
+        // actually produced.
+        //
+        // So: one session, one fresh FileSystemCustodyStore on an empty directory. The count
+        // sends first, for real, inside this run. Its RoutedHttpEvidence -- the exact bytes this
+        // run observed, not a fixture -- is then placed into the same real store under its own
+        // digest, through the same public content-addressed contract the session's own dependency
+        // retention already uses (RoutedHttpAcquisitionSession never retains the evidence
+        // *document* itself as a side effect of sending; only its response body and its send
+        // dependencies are retained that way). Only then is the page bound against that genuine
+        // reference and sent. Nothing here is handed to the store before this run produced it.
+        var plan = EuConsolidationDiscoveryPlan.Create();
+        var rendererSourceBytes = "EU consolidation SPARQL renderer source"u8.ToArray();
+        var rendererSource = MachineQueryRendererSource.Open(
+            Artifact("urn:uuid:dc4cec16-6805-4ea2-91a9-047f60437523", rendererSourceBytes),
+            rendererSourceBytes);
+        var count = plan.BindCount(
+            EuConsolidationQuerySet.Family,
+            "32016R0679",
+            EuConsolidationQueryPass.Pass1,
+            "urn:uuid:f8d24cab-509a-4291-830c-fba6dba68165",
+            "urn:uuid:83280ec4-d165-457a-9d87-95bce309b7d4",
+            rendererSource);
+
+        var root = Path.Combine(
+            Path.GetTempPath(),
+            "lex-fresh-store-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var custody = new FileSystemCustodyStore(root);
+            var productSends = 0;
+            var handler = new CountingHandler((ordinal, request) => ordinal switch
+            {
+                // The EU robots route is two hops by profile: a 301 off publications.europa.eu
+                // and a 200 on op.europa.eu.
+                0 => Response(
+                    request,
+                    HttpStatusCode.MovedPermanently,
+                    "moved",
+                    "https://op.europa.eu/robots.txt"),
+                1 => Response(request, HttpStatusCode.OK, "User-agent: *\nAllow: /\n"),
+                2 => CountResponse(request),
+                _ => PageResponse(request),
+            });
+            using var session = Session(count.Request, handler, custody);
+            var started = await BootstrapAsync(session);
+            Assert.AreEqual(OfficialHttpAcquisitionOutcomeKind.ExecutedObservation, started.Kind);
+
+            var countAttempt = await session.OpenPlanItem(count.Request)
+                .ExecuteNextAttemptAsync(CancellationToken.None);
+            Assert.AreEqual(
+                OfficialHttpAcquisitionOutcomeKind.ExecutedObservation,
+                countAttempt.Kind,
+                "the count half of this run needs nothing already in the store");
+            var countEvidence = countAttempt.Evidence
+                ?? throw new AssertFailedException(
+                    "An executed observation must carry HTTP evidence.");
+            var countEvidenceBytes = countEvidence.CopyCanonicalBytes();
+
+            // Retain the count's own evidence document under its own digest, in the same real
+            // store, through the same public custody contract a genuine caller has. This is not
+            // seeding: the bytes are exactly what this run's own count send just observed.
+            var evidenceReceipt = await custody.CreateAsync(
+                countEvidenceBytes,
+                CustodyClass.NightlyFloor90d,
+                CancellationToken.None);
+            Assert.AreEqual(
+                Sha256(countEvidenceBytes),
+                evidenceReceipt.Reference.ContentSha256,
+                "the retained receipt must name the exact evidence bytes this run observed");
+            var countEvidenceRef = new SourceArtifactRef(
+                "urn:uuid:0ad9d9de-c607-4004-809d-b66b61a8c8bf",
+                evidenceReceipt.Reference.ContentSha256);
+
+            var page = plan.BindPage(
+                EuConsolidationQuerySet.Family,
+                "32016R0679",
+                EuConsolidationQueryPass.Pass1,
+                null,
+                0,
+                countEvidenceRef,
+                "urn:uuid:a0057fc1-01ca-4ceb-8254-271927b5184a",
+                "urn:uuid:3189d23d-b360-4542-b5d4-20ef5a21cc8f",
+                rendererSource);
+
+            var pageAttempt = await session.OpenPlanItem(page.Request)
+                .ExecuteNextAttemptAsync(CancellationToken.None);
+            Assert.AreEqual(
+                OfficialHttpAcquisitionOutcomeKind.ExecutedObservation,
+                pageAttempt.Kind,
+                "the page send must be admitted once its count evidence is genuinely reachable");
+            Assert.AreEqual(2, productSends);
+
+            AssertOpenedClosure(
+                MachinePolicyFor(session, count.MachinePlanRef),
+                5,
+                count.MachinePlanRef,
+                count.InputArtifact.ArtifactRef,
+                plan.ArtifactRef,
+                rendererSource.Reference);
+            AssertOpenedClosure(
+                MachinePolicyFor(session, page.MachinePlanRef),
+                6,
+                page.MachinePlanRef,
+                page.InputArtifact.ArtifactRef,
+                plan.ArtifactRef,
+                rendererSource.Reference,
+                countEvidenceRef);
+
+            // Readable back out by digest for every artifact either send depended on, which is
+            // the difference between having retained an artifact and having named one.
+            foreach (var digest in new[]
+                {
+                    plan.ArtifactRef.Sha256,
+                    rendererSource.Reference.Sha256,
+                    countEvidenceRef.Sha256,
+                })
+            {
+                var reopened = await custody.ReadByDigestAsync(digest, CancellationToken.None);
+                Assert.AreEqual(
+                    digest,
+                    Convert.ToHexString(SHA256.HashData(reopened.Span)).ToLowerInvariant());
+            }
+
+            var reopenedEvidenceBytes = await custody.ReadByDigestAsync(
+                countEvidenceRef.Sha256,
+                CancellationToken.None);
+            CollectionAssert.AreEqual(
+                countEvidenceBytes,
+                reopenedEvidenceBytes.ToArray(),
+                "the retained evidence artifact must be the exact bytes this run's count observed");
+
+            HttpResponseMessage CountResponse(HttpRequestMessage request)
+            {
+                Interlocked.Increment(ref productSends);
+                Assert.AreEqual(HttpMethod.Post, request.Method);
+                Assert.AreEqual(
+                    EuConsolidationDiscoveryPlan.PublisherEndpoint,
+                    request.RequestUri?.AbsoluteUri);
+                return Response(
+                    request,
+                    HttpStatusCode.OK,
+                    "{\"head\":{\"vars\":[\"count\"]},\"results\":{\"bindings\":[]}}");
+            }
+
+            HttpResponseMessage PageResponse(HttpRequestMessage request)
+            {
+                Interlocked.Increment(ref productSends);
+                Assert.AreEqual(HttpMethod.Post, request.Method);
+                Assert.AreEqual(
+                    EuConsolidationDiscoveryPlan.PublisherEndpoint,
+                    request.RequestUri?.AbsoluteUri);
+                return Response(
+                    request,
+                    HttpStatusCode.OK,
+                    "{\"head\":{\"vars\":[\"base_celex\",\"base\",\"state\",\"family_multiplicity\"," +
+                    "\"state_key\"]},\"results\":{\"bindings\":[]}}");
+            }
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [TestMethod]
     public void AdapterIdentityPinsActivityPropagationAndResponseDrainBehavior()
     {
         var bound = MachineRequestTestFixture.EuropeanUnionRequest();
