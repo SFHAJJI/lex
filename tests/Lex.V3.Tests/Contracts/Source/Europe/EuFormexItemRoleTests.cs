@@ -247,16 +247,28 @@ public sealed class EuFormexItemRoleTests
             Assert.IsNull(
                 EuFormexStreamName.TryParse(ConsolidatedMain, notABaseAct, out var refusal),
                 $"'{notABaseAct}' is not a base act CELEX");
-            Assert.AreEqual(
-                notABaseAct.Length == 0
-                    ? EuFormexRoleRefusal.UnrecognisedStreamName
-                    : EuFormexRoleRefusal.ExpectedWorkNotABaseAct,
-                refusal);
+            // Including the empty identity: what is empty is the identity, so the token must say
+            // so rather than blame the stream name it was opened with.
+            Assert.AreEqual(EuFormexRoleRefusal.ExpectedWorkNotABaseAct, refusal);
         }
 
         // The parenthetical form is a base act and must still be admitted.
         Assert.IsNotNull(
             EuFormexStreamName.TryParse("CL1998A0403EN0010010.0001.xml", "21998A0403(01)", out _));
+    }
+
+    [TestMethod]
+    public void TwoLetterDocumentTypesAreOutOfScopeAndFailClosed()
+    {
+        // 52013XC1214(03) is a real consolidation base with a two letter type. Neither grammar
+        // carries one, so both sides refuse rather than one of them guessing.
+        Assert.IsNull(
+            EuFormexStreamName.TryParse("CL2013XC1214EN0000010.0001.xml", "52013XC1214(03)", out var name));
+        Assert.AreEqual(EuFormexRoleRefusal.UnrecognisedStreamName, name);
+
+        Assert.IsNull(
+            EuFormexStreamName.TryParse(ConsolidatedMain, "52013XC1214(03)", out var identity));
+        Assert.AreEqual(EuFormexRoleRefusal.ExpectedWorkNotABaseAct, identity);
     }
 
     [TestMethod]

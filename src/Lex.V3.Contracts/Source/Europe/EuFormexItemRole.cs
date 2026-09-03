@@ -93,6 +93,13 @@ public enum EuFormexRoleRefusal
 /// Original acts as published use a different naming, <c>L_2016119EN.01000101.xml</c>, and are
 /// refused as <see cref="EuFormexRoleRefusal.OriginalActNaming"/>. That is scope, not a gap.
 /// </para>
+/// <para>
+/// Scope, stated so a reader does not assume otherwise: both grammars carry a single letter
+/// document type. Two letter descriptors exist among real consolidation bases, for example
+/// <c>52013XC1214(03)</c>, and a package of that kind refuses on the name and its identity refuses
+/// on the base act grammar. That is fail closed and deliberate, but it means this type serves
+/// consolidations of single letter types only until the measured two letter forms are added.
+/// </para>
 /// </remarks>
 // A class rather than a record on purpose: a record emits a clone method and a copy
 // constructor, which are a second construction path on a type whose whole point is that only
@@ -188,8 +195,14 @@ public sealed class EuFormexStreamName
     {
         refusal = EuFormexRoleRefusal.UnrecognisedStreamName;
 
-        if (string.IsNullOrEmpty(value) || string.IsNullOrEmpty(expectedWorkCelex))
+        if (string.IsNullOrEmpty(value))
         {
+            return null;
+        }
+
+        if (string.IsNullOrEmpty(expectedWorkCelex))
+        {
+            refusal = EuFormexRoleRefusal.ExpectedWorkNotABaseAct;
             return null;
         }
 
