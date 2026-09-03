@@ -20,22 +20,38 @@ public sealed class RoutedHttpArtifactDurabilityTests
     {
         var opened = MachineQueryBinder.OpenForSend(
             MachineRequestTestFixture.EuropeanUnionRequest());
-        var references = new[]
-        {
-            opened.RenderReceipt.RendererProfileRef,
-            opened.RenderReceipt.RendererSourceRef,
-            opened.RenderReceipt.ContentType?.RegistryRef
-                ?? throw new AssertFailedException("The POST fixture lost its content-type registry."),
-        };
+        var contentTypeRegistryRef = opened.RenderReceipt.ContentType?.RegistryRef
+            ?? throw new AssertFailedException("The POST fixture lost its content-type registry.");
 
-        Assert.AreEqual(3, references.Distinct().Count());
-        foreach (var reference in references)
-        {
-            Assert.IsTrue(MachineRequestTestFixture.TryReopenPreexistingArtifact(
-                reference.Sha256,
-                out var canonicalBytes));
-            Assert.AreEqual(reference.Sha256, Sha256(canonicalBytes.Span));
-        }
+        Assert.AreEqual(
+            3,
+            new[]
+            {
+                opened.RenderReceipt.RendererProfileRef,
+                opened.RenderReceipt.RendererSourceRef,
+                contentTypeRegistryRef,
+            }.Distinct().Count());
+
+        // Only the registry is genuinely external and reopenable by bare reference. Item 1b,
+        // Decision 75's closure: the renderer profile and renderer source used to be answerable
+        // here too, and a mutation restoring either branch to TryReopenPreexistingArtifact is
+        // killed by the two IsFalse assertions below, which this test existed to prove true of
+        // before the closure and now exists to prove false.
+        Assert.IsTrue(MachineRequestTestFixture.TryReopenPreexistingArtifact(
+            contentTypeRegistryRef.Sha256,
+            out var registryBytes));
+        Assert.AreEqual(contentTypeRegistryRef.Sha256, Sha256(registryBytes.Span));
+
+        Assert.IsFalse(
+            MachineRequestTestFixture.TryReopenPreexistingArtifact(
+                opened.RenderReceipt.RendererProfileRef.Sha256,
+                out _),
+            "the renderer profile must no longer be answerable by bare reference");
+        Assert.IsFalse(
+            MachineRequestTestFixture.TryReopenPreexistingArtifact(
+                opened.RenderReceipt.RendererSourceRef.Sha256,
+                out _),
+            "the renderer source must no longer be answerable by bare reference");
     }
 
     [TestMethod]

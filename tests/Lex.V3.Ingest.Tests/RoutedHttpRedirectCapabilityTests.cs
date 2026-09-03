@@ -980,4 +980,70 @@ public sealed class RoutedHttpRedirectCapabilityTests
         public override void SetLength(long value) => throw new NotSupportedException();
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
+
+    [TestMethod]
+    public void RequestAndRedirectPolicyArtifactsHaveExactlyOneConstructionPath()
+    {
+        // Item 2c residue, ordered built by the reviewer: the two artifacts whose digests enter
+        // the R3.3 absence key tuple, pinned by exact parameter list rather than trusted by
+        // inspection. A future parameter carrying a run identity or an observation identity is a
+        // visible diff here; paired with lane E's policy-digest pin, which fails the moment any
+        // per-bind value enters the retained bytes, the two together cover both the construction
+        // door and the content door.
+        var requestType = typeof(RoutedHttpAcquisitionSession).GetNestedType(
+            "RequestPolicyArtifact",
+            BindingFlags.NonPublic)
+            ?? throw new AssertFailedException("The private request policy artifact is missing.");
+        var redirectType = typeof(RoutedHttpAcquisitionSession).GetNestedType(
+            "RedirectPolicyArtifact",
+            BindingFlags.NonPublic)
+            ?? throw new AssertFailedException("The private redirect policy artifact is missing.");
+
+        const string Session = "Lex.V3.Ingest.RoutedHttpAcquisitionSession";
+        const string Core = "Lex.V3.Contracts.Source.Core.";
+        const string Http = "Lex.V3.Contracts.Source.Http.";
+        const string RequestArtifact = Session + "+RequestPolicyArtifact";
+        const string RedirectArtifact = Session + "+RedirectPolicyArtifact";
+
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + RequestArtifact + "::.ctor("
+                + Session + "+RequestPolicyKind, " + Core + "SourceArtifactRef, "
+                + Core + "SourceArtifactRef, System.ReadOnlySpan<System.Byte>, "
+                + "System.Collections.Generic.IReadOnlyList<System.String>, "
+                + Core + "HttpRequestMethod, "
+                + "System.Collections.Generic.IReadOnlyList<" + Http + "HttpLogicalRequestHeader>, "
+                + "System.UInt64, System.String, " + Core + "SourceArtifactRef, "
+                + Core + "SourceArtifactRef, " + Core + "SourceArtifactRef, "
+                + Core + "SourceArtifactRef, " + Core + "SourceArtifactRef, "
+                + Core + "SourceRegistryMemberRef, "
+                + "System.Collections.Generic.IReadOnlyList<" + Session + "+CanonicalArtifactBytes>, "
+                + Http + "OfficialMachineQuerySourceProfile) -> " + RequestArtifact,
+                "method internal static " + RequestArtifact + "::ForMachineQuery("
+                + Http + "OfficialMachineQuerySourceProfile, " + Core + "SourceArtifactRef, "
+                + "System.ReadOnlySpan<System.Byte>, " + Core + "OpenedMachineRequest, "
+                + "System.Collections.Generic.IReadOnlyList<" + Session + "+CanonicalArtifactBytes>, "
+                + "System.Collections.Generic.IReadOnlyList<" + Http + "HttpLogicalRequestHeader>, "
+                + "System.ReadOnlySpan<System.Byte>) -> " + RequestArtifact,
+                "method internal static " + RequestArtifact + "::ForRobots("
+                + Http + "OfficialMachineQuerySourceProfile, " + Core + "SourceArtifactRef, "
+                + "System.ReadOnlySpan<System.Byte>) -> " + RequestArtifact,
+            },
+            ConstructionSurface.Of(requestType).ToArray());
+
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + RedirectArtifact + "::.ctor("
+                + Session + "+RedirectPolicyKind, " + Core + "SourceArtifactRef, "
+                + "System.Byte[], System.Collections.Generic.IReadOnlyList<System.String>) -> "
+                + RedirectArtifact,
+                "method internal static " + RedirectArtifact + "::ForRobots("
+                + Http + "OfficialMachineQuerySourceProfile) -> " + RedirectArtifact,
+                "method internal static " + RedirectArtifact + "::NoRedirect("
+                + Http + "OfficialMachineQuerySourceProfile) -> " + RedirectArtifact,
+            },
+            ConstructionSurface.Of(redirectType).ToArray());
+    }
 }

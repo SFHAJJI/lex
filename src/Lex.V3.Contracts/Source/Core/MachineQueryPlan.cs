@@ -981,13 +981,14 @@ public static class MachineQueryBinder
             minted.OrderedParameterSetRef,
             inputBytes.Span);
 
-        foreach (var (reference, artifactName, offeredBytes) in
+        foreach (var (reference, artifactName, offeredBytes, requiresProducerBytes) in
             ExternalArtifactReferences(minted, input))
         {
             _ = await ReopenExternalAsync(
                     resolver,
                     reference,
                     offeredBytes,
+                    requiresProducerBytes,
                     cancellationToken,
                     artifactName)
                 .ConfigureAwait(false);
@@ -1036,24 +1037,42 @@ public static class MachineQueryBinder
     /// bind time and retention verifies them again, so the digest stays the authority.
     /// </para>
     /// <para>
-    /// When they are absent this falls back to reopen by reference, which requires the artifact to
-    /// already exist in the store. That fallback is temporary and its deletion is item 1b: it is
-    /// what lets one adapter close while another has not yet, and a route relying on it is not
-    /// proven against a fresh store. Deleting it is the only thing that stops a temporary path
-    /// becoming a permanent one.
+    /// Item 1b, Decision 75's closure. An artifact tagged as requiring producer bytes has no
+    /// fallback left: absent bytes refuse the send outright instead of reopening by reference.
+    /// That fallback existed only so the Luxembourg route could close while the European Union
+    /// route had not yet, under the amended ruling that created it; both renderers produce their
+    /// own bytes as of this commit, so leaving the fallback reachable would be a path nothing
+    /// exercises until the day something regresses and silently starts depending on a pre-seeded
+    /// store again. A registry or provenance artifact is never tagged this way: those are
+    /// genuinely external, in the sense the interface's own name still uses, and reopen by
+    /// reference is their only contract, not a temporary one.
     /// </para>
     /// </remarks>
     private static async Task<ReadOnlyMemory<byte>> ReopenExternalAsync(
         IMachineQueryArtifactResolver resolver,
         SourceArtifactRef reference,
         ReadOnlyMemory<byte>? offeredBytes,
+        bool requiresProducerBytes,
         CancellationToken cancellationToken,
         string artifactName)
     {
-        var bytes = offeredBytes is { } carried
-            ? await resolver.RetainAndReopenAsync(reference, carried, cancellationToken)
-                .ConfigureAwait(false)
-            : await resolver.ReopenAsync(reference, cancellationToken).ConfigureAwait(false);
+        ReadOnlyMemory<byte> bytes;
+        if (offeredBytes is { } carried)
+        {
+            bytes = await resolver.RetainAndReopenAsync(reference, carried, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        else if (requiresProducerBytes)
+        {
+            throw new ArgumentException(
+                $"The {artifactName} must produce its own bytes; reopening it by reference "
+                + "alone is refused.",
+                nameof(offeredBytes));
+        }
+        else
+        {
+            bytes = await resolver.ReopenAsync(reference, cancellationToken).ConfigureAwait(false);
+        }
 
         // expectedBytes stays null even when this run carried them. The reference is the
         // authority and the resolver's answer is checked against it; checking the resolver's
@@ -1062,13 +1081,14 @@ public static class MachineQueryBinder
         return bytes.ToArray();
     }
 
-    private static IReadOnlyList<(SourceArtifactRef Reference, string Name, ReadOnlyMemory<byte>? Bytes)>
+    private static IReadOnlyList<
+        (SourceArtifactRef Reference, string Name, ReadOnlyMemory<byte>? Bytes, bool RequiresProducerBytes)>
         ExternalArtifactReferences(
             MintedBoundMachineRequest minted,
             MachineQueryInputArtifact input)
     {
-        var ordered =
-            new List<(SourceArtifactRef Reference, string Name, ReadOnlyMemory<byte>? Bytes)>();
+        var ordered = new List<
+            (SourceArtifactRef Reference, string Name, ReadOnlyMemory<byte>? Bytes, bool RequiresProducerBytes)>();
 
         // Seeded with the three the binder produced, so "external" means external rather than
         // merely listed elsewhere. A caller can alias them: BindPage and BindCount take the
@@ -1083,8 +1103,23 @@ public static class MachineQueryBinder
             minted.QueryPlanRef,
             minted.OrderedParameterSetRef,
         };
-        Add(minted.RendererProfileRef, "renderer profile", minted.CopyRendererProfileBytes());
-        Add(minted.RendererSourceRef, "renderer source", minted.CopyRendererSourceBytes());
+
+        // Item 1b, Decision 75's closure. The renderer profile and renderer source are the two
+        // artifacts a renderer is itself responsible for producing, and both real renderers do so
+        // as of this commit, so both are tagged as requiring producer bytes: no fallback path
+        // remains reachable for them. The registries and provenance below are external in the
+        // original sense and keep the reopen-by-reference contract that was never temporary for
+        // them.
+        Add(
+            minted.RendererProfileRef,
+            "renderer profile",
+            minted.CopyRendererProfileBytes(),
+            requiresProducerBytes: true);
+        Add(
+            minted.RendererSourceRef,
+            "renderer source",
+            minted.CopyRendererSourceBytes(),
+            requiresProducerBytes: true);
         Add(minted.RenderReceipt.ContentType?.RegistryRef, "content-type registry");
         Add(minted.Plan.QueryFamilyRef.RegistryRef, "query-family registry");
         Add(
@@ -1097,11 +1132,15 @@ public static class MachineQueryBinder
 
         return ordered;
 
-        void Add(SourceArtifactRef? reference, string name, ReadOnlyMemory<byte>? bytes = null)
+        void Add(
+            SourceArtifactRef? reference,
+            string name,
+            ReadOnlyMemory<byte>? bytes = null,
+            bool requiresProducerBytes = false)
         {
             if (reference is not null && seen.Add(reference))
             {
-                ordered.Add((reference, name, bytes));
+                ordered.Add((reference, name, bytes, requiresProducerBytes));
             }
         }
     }
