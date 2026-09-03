@@ -4,6 +4,9 @@
     <AssemblyName>Lex.V3.Ingest.Tests</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../Shared/ConstructionSurface.cs" Link="Shared/ConstructionSurface.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="../../src/Lex.V3.Contracts/Lex.V3.Contracts.csproj" />
     <ProjectReference Include="../../src/Lex.V3.Ingest/Lex.V3.Ingest.csproj" />
     <Content Include="../../schemas/v3-source/http/http-acquisition-reason-registry.json"

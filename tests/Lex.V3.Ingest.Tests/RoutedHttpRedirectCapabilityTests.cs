@@ -5,6 +5,7 @@ using System.Text;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Http;
+using Lex.V3.TestSupport;
 
 namespace Lex.V3.Ingest.Tests;
 
@@ -31,16 +32,36 @@ public sealed class RoutedHttpRedirectCapabilityTests
         Assert.IsTrue(leaseType.IsNestedPrivate);
         Assert.IsTrue(retainedType.IsNestedPrivate);
         Assert.IsTrue(antecedentType.IsNestedPrivate);
-        Assert.IsTrue(leaseType.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
-            .All(static constructor => constructor.IsPrivate));
-        Assert.IsFalse(leaseType.GetConstructors(BindingFlags.Instance | BindingFlags.Public).Any());
+        // The lease's whole construction surface, every scope and nested type, pinned entry by
+        // entry: one private constructor, the two internal factories, and the async state machines
+        // that hold the lease they run on. State machines carry their compiler ordinal, so adding
+        // a member to the lease renumbers them and this pin changes under review.
+        const string Session = "Lex.V3.Ingest.RoutedHttpAcquisitionSession";
+        const string Lease = Session + "+SendLease";
+        const string Common =
+            Session + ", Lex.V3.Contracts.Source.Http.HttpLogicalRequest, " +
+            "System.ReadOnlyMemory<System.Byte>, System.UInt64, System.UInt64";
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + Lease + "::.ctor(" + Common + ", System.UInt64, System.String, " + Lease + "+RedirectAntecedent, System.Boolean) -> " + Lease,
+                "field public instance " + Lease + "+<ConsumeAndSendCoreAsync>d__22::<>4__this -> " + Lease,
+                "field public instance " + Lease + "+<RetainAndSendAsync>d__21::<>4__this -> " + Lease,
+                "method internal static " + Lease + "::FromRedirect(" + Common + ", System.UInt64, System.String, " + Session + "+RedirectAntecedentCapability) -> " + Lease,
+                "method internal static " + Lease + "::Initial(" + Common + ", System.Boolean) -> " + Lease,
+            },
+            ConstructionSurface.Of(leaseType).ToArray());
 
-        var factories = leaseType.GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
-            .Where(method => method.ReturnType == leaseType)
-            .Select(static method => method.Name)
-            .Order(StringComparer.Ordinal)
-            .ToArray();
-        CollectionAssert.AreEqual(new[] { "FromRedirect", "Initial" }, factories);
+        // Outside the lease, the assembly holds one but never mints one: the route loop's local,
+        // the retention capability's field, and the retention state machine's parameter.
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "field private instance " + Session + "+<ExecuteRouteAsync>d__122::<lease>5__5 -> " + Lease,
+                "field private instance " + Session + "+RetainedSendArtifacts::<lease>P -> " + Lease,
+                "field public instance " + Session + "+<RetainSendArtifactsAsync>d__70::lease -> " + Lease,
+            },
+            ConstructionSurface.ProducersIn(typeof(RoutedHttpAcquisitionSession).Assembly, leaseType, includeNonPublic: true).ToArray());
         var redirectFactory = leaseType.GetMethod(
             "FromRedirect",
             BindingFlags.Static | BindingFlags.NonPublic)
