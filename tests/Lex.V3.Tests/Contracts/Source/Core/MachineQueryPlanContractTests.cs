@@ -214,35 +214,91 @@ public sealed class MachineQueryPlanContractTests
     }
 
     [TestMethod]
-    public async Task RendererWithoutBytesIsReopenedRatherThanRetained()
+    public async Task RendererWithoutBytesRefusesRatherThanReopeningByReference()
     {
-        var fixture = AsyncCapability();
+        // Item 1b, Decision 75's closure. Before this item a renderer producing nothing fell back
+        // to reopen by reference, which is exactly the path that let the product route stay green
+        // against a recording double while failing against a real, unseeded store. That fallback
+        // is gone: absent renderer bytes now refuse the send outright, so a route that depends on
+        // the fallback fails loudly at open rather than silently depending on custody it never
+        // produced.
+        var fixture = AsyncCapability(rendererProducesItsBytes: false);
+
+        // The fixture's own construction already rendered once, synchronously, to compute the
+        // receipt BindForSend freezes. That render is not the one this test is about; the count
+        // right after construction is the baseline the refusal must not move past.
+        var renderCountBeforeOpen = fixture.Renderer.RenderCount;
         var resolver = new RecordingArtifactResolver(fixture.ExternalArtifacts, fixture.Events);
 
-        _ = await MachineQueryBinder.OpenForSendAsync(
-            fixture.Capability,
-            resolver,
-            CancellationToken.None);
+        var thrown = await Assert.ThrowsExactlyAsync<ArgumentException>(() =>
+            MachineQueryBinder.OpenForSendAsync(
+                fixture.Capability,
+                resolver,
+                CancellationToken.None));
 
-        // A renderer that produces nothing must offer nothing. The failure this pins is not a
-        // missing feature: an offer of zero bytes is a present offer, so the send would retain an
-        // empty artifact under a true digest and the reopen-by-reference path would never run. The
-        // three binder-produced artifacts are retained as they always were.
+        StringAssert.Contains(thrown.Message, "must produce its own bytes");
         CollectionAssert.DoesNotContain(
             resolver.RetainedReferences.ToArray(),
             fixture.RendererProfileRef,
             "a renderer that produces no bytes cannot have any retained on its behalf");
-        CollectionAssert.DoesNotContain(
-            resolver.RetainedReferences.ToArray(),
-            fixture.RendererSourceRef);
         Assert.AreEqual(
-            3,
-            resolver.RetainedReferences.Count,
-            "only the receipt, the plan and the input are the binder's own to retain here");
-        CollectionAssert.Contains(
-            resolver.OpenedReferences.ToArray(),
+            renderCountBeforeOpen,
+            fixture.Renderer.RenderCount,
+            "a refused send must never reach OpenForSendAsync's own render pass");
+    }
+
+    [TestMethod]
+    public async Task ARendererMissingOnlyItsProfileBytesIsRefusedNamingTheProfile()
+    {
+        // Isolates the profile's own requiresProducerBytes tag from the source's. Both
+        // artifacts always being absent or present together, as the two capability-level
+        // fixtures do, cannot tell these two tags apart: whichever is checked first masks the
+        // other. This fixture's ExternalArtifacts dictionary carries real bytes for both
+        // artifacts by reference, so a mutation that stops requiring the profile's own bytes
+        // would silently succeed via bare reopen rather than throwing, which is exactly the
+        // regression this test exists to catch.
+        var fixture = AsyncCapability(rendererProducesItsBytes: true);
+        var renderer = new ObservedRenderer(
             fixture.RendererProfileRef,
-            "it must still be opened, by reference, from a store that already holds it");
+            fixture.RendererSourceRef,
+            Target,
+            PostBody,
+            fixture.Events,
+            profileBytes: null,
+            sourceBytes: fixture.ExternalArtifacts[fixture.RendererSourceRef]);
+        var capability = MachineQueryBinder.BindForSend(
+            fixture.Plan, fixture.PlanRef, fixture.Input, renderer);
+        var resolver = new RecordingArtifactResolver(fixture.ExternalArtifacts, fixture.Events);
+
+        var thrown = await Assert.ThrowsExactlyAsync<ArgumentException>(() =>
+            MachineQueryBinder.OpenForSendAsync(capability, resolver, CancellationToken.None));
+
+        StringAssert.Contains(thrown.Message, "renderer profile");
+        StringAssert.Contains(thrown.Message, "must produce its own bytes");
+    }
+
+    [TestMethod]
+    public async Task ARendererMissingOnlyItsSourceBytesIsRefusedNamingTheSource()
+    {
+        // The paired isolation for the source's own tag.
+        var fixture = AsyncCapability(rendererProducesItsBytes: true);
+        var renderer = new ObservedRenderer(
+            fixture.RendererProfileRef,
+            fixture.RendererSourceRef,
+            Target,
+            PostBody,
+            fixture.Events,
+            profileBytes: fixture.ExternalArtifacts[fixture.RendererProfileRef],
+            sourceBytes: null);
+        var capability = MachineQueryBinder.BindForSend(
+            fixture.Plan, fixture.PlanRef, fixture.Input, renderer);
+        var resolver = new RecordingArtifactResolver(fixture.ExternalArtifacts, fixture.Events);
+
+        var thrown = await Assert.ThrowsExactlyAsync<ArgumentException>(() =>
+            MachineQueryBinder.OpenForSendAsync(capability, resolver, CancellationToken.None));
+
+        StringAssert.Contains(thrown.Message, "renderer source");
+        StringAssert.Contains(thrown.Message, "must produce its own bytes");
     }
 
     [TestMethod]
@@ -1155,7 +1211,11 @@ public sealed class MachineQueryPlanContractTests
         ];
     }
 
-    private static AsyncBinderFixture AsyncCapability(bool rendererProducesItsBytes = false)
+    // Item 1b, Decision 75's closure, flipped this default from false to true: a renderer that
+    // produces nothing now refuses at open rather than falling back to reopen by reference, so
+    // every test that is not specifically exercising that refusal needs a renderer that behaves
+    // the way both real renderers do.
+    private static AsyncBinderFixture AsyncCapability(bool rendererProducesItsBytes = true)
     {
         var events = new List<string>();
         var rendererProfileBytes = Encoding.UTF8.GetBytes("renderer-profile/1\n");

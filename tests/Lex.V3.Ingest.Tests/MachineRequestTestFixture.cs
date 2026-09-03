@@ -83,23 +83,20 @@ internal static class MachineRequestTestFixture
             new FixedRenderer(RendererProfile, RendererSource, EuQueryUri, body));
     }
 
+    /// <summary>
+    /// Item 1b, Decision 75's closure. Renderer profile and renderer source used to be answerable
+    /// here, standing in for what a renderer had not yet been made to produce itself. Both are
+    /// removed: <see cref="FixedRenderer"/> now produces them, so a send retains and reopens what
+    /// it retained rather than ever reaching this table for either. What remains is genuinely
+    /// external in the sense this table's name always claimed: registries and provenance that no
+    /// renderer is responsible for producing, and that a pipeline step ahead of this one is
+    /// expected to have already placed in the store.
+    /// </summary>
     internal static bool TryReopenPreexistingArtifact(
         string contentSha256,
         out ReadOnlyMemory<byte> canonicalBytes)
     {
         ArgumentNullException.ThrowIfNull(contentSha256);
-        if (string.Equals(contentSha256, RendererProfile.Sha256, StringComparison.Ordinal))
-        {
-            canonicalBytes = RendererProfileCanonicalBytes.ToArray();
-            return true;
-        }
-
-        if (string.Equals(contentSha256, RendererSource.Sha256, StringComparison.Ordinal))
-        {
-            canonicalBytes = RendererSourceCanonicalBytes.ToArray();
-            return true;
-        }
-
         if (string.Equals(contentSha256, ContentTypeRegistry.Sha256, StringComparison.Ordinal))
         {
             canonicalBytes = ContentTypeRegistryCanonicalBytes.ToArray();
@@ -137,6 +134,20 @@ internal static class MachineRequestTestFixture
         public SourceArtifactRef RendererProfileRef { get; } = rendererProfileRef;
 
         public SourceArtifactRef RendererSourceRef { get; } = rendererSourceRef;
+
+        // Statement bodies deliberately, not conditional expressions. bytes is null ? null : bytes
+        // compiles and hands back a present, empty ReadOnlyMemory when the array conversion runs
+        // on null, which read as this renderer producing zero bytes rather than declining to
+        // produce any. That exact shape produced a real defect earlier in this project.
+        public ReadOnlyMemory<byte>? CopyRendererProfileBytes()
+        {
+            return RendererProfileCanonicalBytes;
+        }
+
+        public ReadOnlyMemory<byte>? CopyRendererSourceBytes()
+        {
+            return RendererSourceCanonicalBytes;
+        }
 
         public MachineQueryRenderOutput Render(
             MachineQueryPlan plan,
