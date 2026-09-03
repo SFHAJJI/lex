@@ -1085,17 +1085,41 @@ public sealed class ReleaseWorkflowTests
     }
 
     [Fact]
-    public void Heartbeat_reads_generated_fleet_status_and_unwraps_streamable_http()
+    public void Heartbeat_watches_the_served_index_and_no_retired_fleet_branch()
     {
         var workflow = File.ReadAllText(
             Path.Combine(RepoRoot(), ".github", "workflows", "heartbeat.yml"));
 
-        Assert.Contains("repos/SFHAJJI/lex-ops/commits/fleet-status", workflow);
+        // The half that watches production directly, unchanged: it reads the live MCP route and
+        // unwraps the streamable-HTTP framing, which is the reason the two assertions below are
+        // about parsing rather than about a URL.
         Assert.Contains("Accept: application/json, text/event-stream", workflow);
         Assert.Contains("sed -n 's/^data: //p'", workflow);
-        Assert.DoesNotContain("repos/SFHAJJI/lex-ops/commits --jq", workflow);
-        Assert.DoesNotContain("lex-ops is private", workflow);
-        Assert.DoesNotContain("LEX_OPS_TOKEN", workflow);
+
+        // The half that watched lex-ops is gone, and this test now says so rather than requiring
+        // it. That branch last advanced at 2026-08-31T02:39:45Z because the V2 nightly fleet was
+        // retired on purpose, so the check answered "no" every morning against a removal nobody is
+        // going to undo. An alarm that always fires trains its reader to close the issue without
+        // looking, which costs more than the check was worth, and the issue thread it fires into
+        // is where a real outage would appear.
+        //
+        // Asserted over the executable body with comment lines removed. The first version asserted
+        // over the whole file and failed on the paragraph in the workflow that explains why the
+        // check was deleted, which is the opposite of what it should be checking: a workflow that
+        // still calls lex-ops is the defect, a workflow that explains why it stopped is the point.
+        var executable = string.Join(
+            '\n',
+            workflow.Split('\n').Where(static line => !line.TrimStart().StartsWith('#')));
+
+        Assert.DoesNotContain("fleet-status", executable);
+        Assert.DoesNotContain("lex-ops", executable);
+        Assert.DoesNotContain("steps.check", executable);
+        Assert.DoesNotContain("nightly-fleet", executable);
+        Assert.DoesNotContain("LEX_OPS_TOKEN", executable);
+
+        // And the explanation is required, not merely tolerated: the next person to read this file
+        // must find out why the second check is absent without going through the history.
+        Assert.Contains("retired", workflow);
     }
 
     [Fact]
