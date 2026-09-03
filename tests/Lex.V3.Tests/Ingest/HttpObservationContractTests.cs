@@ -14,19 +14,20 @@ public sealed class HttpObservationContractTests
         {
             foreach (var hasContentRange in new[] { false, true })
             {
-                var expected = status == 300
-                    ? HttpStatusDisposition.NegotiationChoiceOffered
-                    : status == 206 || hasContentRange
-                        ? HttpStatusDisposition.RangeNotApproved
-                        : status switch
-                        {
-                            200 => HttpStatusDisposition.DerivableStatus,
-                            301 or 302 or 303 or 307 or 308 =>
-                                HttpStatusDisposition.RedirectObserved,
-                            304 => HttpStatusDisposition.RevalidationReferenceOnly,
-                            204 or 205 => HttpStatusDisposition.SemanticNoEntityStatus,
-                            _ => HttpStatusDisposition.NonDerivableStatus,
-                        };
+                // Header-terminated statuses have no entity to range, so 204 and 304 are decided
+                // before the Content-Range rule, exactly as 300 is. Every other status keeps the
+                // range rule ahead of its own arm, 205 included, because 205 is framed normally.
+                var expected = status switch
+                {
+                    300 => HttpStatusDisposition.NegotiationChoiceOffered,
+                    204 => HttpStatusDisposition.SemanticNoEntityStatus,
+                    304 => HttpStatusDisposition.RevalidationReferenceOnly,
+                    _ when status == 206 || hasContentRange => HttpStatusDisposition.RangeNotApproved,
+                    200 => HttpStatusDisposition.DerivableStatus,
+                    301 or 302 or 303 or 307 or 308 => HttpStatusDisposition.RedirectObserved,
+                    205 => HttpStatusDisposition.SemanticNoEntityStatus,
+                    _ => HttpStatusDisposition.NonDerivableStatus,
+                };
 
                 Assert.AreEqual(
                     expected,
@@ -34,6 +35,13 @@ public sealed class HttpObservationContractTests
                     $"status={status}, content-range={hasContentRange}");
             }
         }
+
+        // The four cells the hoist changes or deliberately leaves alone, stated on their own so a
+        // later edit to the table above cannot quietly move them.
+        Assert.AreEqual(HttpStatusDisposition.SemanticNoEntityStatus, HttpStatusClassifier.Classify(204, hasContentRange: true));
+        Assert.AreEqual(HttpStatusDisposition.RevalidationReferenceOnly, HttpStatusClassifier.Classify(304, hasContentRange: true));
+        Assert.AreEqual(HttpStatusDisposition.RangeNotApproved, HttpStatusClassifier.Classify(205, hasContentRange: true));
+        Assert.AreEqual(HttpStatusDisposition.RangeNotApproved, HttpStatusClassifier.Classify(200, hasContentRange: true));
 
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
             HttpStatusClassifier.Classify(99, hasContentRange: false));

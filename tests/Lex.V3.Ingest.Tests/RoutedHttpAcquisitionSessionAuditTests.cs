@@ -345,6 +345,90 @@ public sealed class RoutedHttpAcquisitionSessionAuditTests
         }
     }
 
+    // Candidate D. The classifier and the validator must agree about what a response is, or a
+    // publisher response that was received and held becomes an escaping exception instead of
+    // evidence. The two inputs below reached that exception at 4f4ca3de.
+
+    [TestMethod]
+    public async Task AShortReadUnderConflictingFramingIsABodyReadFailureNotADeclaredLengthShortRead()
+    {
+        // RFC 9112 section 6.1: a Content-Length beside a Transfer-Encoding has no standing, so a
+        // stream that ends early cannot be measured against it. The honest reason is that the
+        // read failed, and the validator already refuses declared_length_short_read here.
+        var request = EuropeanUnionRequest();
+        var custody = new RecordingCustodyStore();
+        var handler = EuSequence((_, outbound, _) => Task.FromResult(
+            ConflictingFramingResponseEndingEarly(outbound)));
+        using var session = Session(request, handler, custody, new ManualTimeProvider());
+        await StartSuccessfullyAsync(session);
+
+        var result = await session.OpenPlanItem(request)
+            .ExecuteNextAttemptAsync(CancellationToken.None);
+
+        Assert.AreEqual(OfficialHttpAcquisitionOutcomeKind.ExecutedObservation, result.Kind);
+        var hop = result.Evidence?.Hops.Single()
+            ?? throw new AssertFailedException("The conflicting-framing short read produced no /4 hop.");
+        Assert.IsInstanceOfType<RoutedHttpSingleHeader>(hop.Headers.ContentLength);
+        Assert.IsInstanceOfType<RoutedHttpSingleHeader>(hop.Headers.TransferEncoding);
+        var completion = Assert.IsInstanceOfType<IncompleteHttpCompletion>(hop.Completion);
+        Assert.AreEqual(
+            HttpPartialBodyReason.BodyReadFailure,
+            HttpAcquisitionReasonRegistry.RequirePartial(completion.Reason));
+    }
+
+    [TestMethod]
+    public async Task ANoContentResponseCarryingContentRangeIsStillAResponseWithoutBody()
+    {
+        // A header-terminated status has no entity to range. Classifying the Content-Range before
+        // the 204 arm made the response's own completion unrepresentable and threw out of the
+        // attempt; the header is retained as evidence and decides nothing.
+        var request = EuropeanUnionRequest();
+        var custody = new RecordingCustodyStore();
+        var handler = EuSequence((_, outbound, _) => Task.FromResult(
+            NoContentResponseWithContentRange(outbound)));
+        using var session = Session(request, handler, custody, new ManualTimeProvider());
+        await StartSuccessfullyAsync(session);
+
+        var result = await session.OpenPlanItem(request)
+            .ExecuteNextAttemptAsync(CancellationToken.None);
+
+        Assert.AreEqual(OfficialHttpAcquisitionOutcomeKind.ExecutedObservation, result.Kind);
+        var hop = result.Evidence?.Hops.Single()
+            ?? throw new AssertFailedException("The ranged 204 produced no /4 hop.");
+        Assert.AreEqual(204, hop.Status);
+        Assert.AreEqual(HttpStatusDisposition.SemanticNoEntityStatus, hop.StatusDisposition);
+        Assert.IsInstanceOfType<ResponseWithoutBodyHttpCompletion>(hop.Completion);
+        Assert.IsInstanceOfType<RoutedHttpSingleHeader>(hop.Headers.ContentRange, "the header is evidence");
+        Assert.AreEqual(0UL, hop.Length);
+    }
+
+    private static HttpResponseMessage ConflictingFramingResponseEndingEarly(HttpRequestMessage request)
+    {
+        var content = new StreamContent(new ResponseEndedStream());
+        Assert.IsTrue(content.Headers.TryAddWithoutValidation("Content-Length", "100"));
+        var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Version = HttpVersion.Version11,
+            RequestMessage = request,
+            Content = content,
+        };
+        Assert.IsTrue(response.Headers.TryAddWithoutValidation("Transfer-Encoding", "chunked"));
+        return response;
+    }
+
+    private static HttpResponseMessage NoContentResponseWithContentRange(HttpRequestMessage request)
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.NoContent)
+        {
+            Version = HttpVersion.Version11,
+            RequestMessage = request,
+            Content = new ByteArrayContent([]),
+        };
+        response.Content.Headers.ContentLength = null;
+        Assert.IsTrue(response.Content.Headers.TryAddWithoutValidation("Content-Range", "bytes */100"));
+        return response;
+    }
+
     private static async Task AssertRobotsPostHeaderRejectionAsync(
         Func<HttpRequestMessage, byte[], HttpResponseMessage> terminalRobotsResponse,
         OfficialHttpAcquisitionOutcomeKind expectedKind,

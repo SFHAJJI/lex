@@ -35,10 +35,18 @@ public static class HttpStatusClassifier
             throw new ArgumentOutOfRangeException(nameof(statusCode));
         }
 
-        // A 300 is a negotiation response even if it also carries irrelevant range headers.
-        if (statusCode == 300)
+        // Header-terminated statuses are classified before any header-dependent rule: a 300 is a
+        // negotiation response, a 204 has no entity and a 304 is a revalidation reference, even
+        // when they also carry an irrelevant range header. A 205 is framed normally and stays
+        // under the range rule.
+        switch (statusCode)
         {
-            return HttpStatusDisposition.NegotiationChoiceOffered;
+            case 300:
+                return HttpStatusDisposition.NegotiationChoiceOffered;
+            case 204:
+                return HttpStatusDisposition.SemanticNoEntityStatus;
+            case 304:
+                return HttpStatusDisposition.RevalidationReferenceOnly;
         }
 
         if (statusCode == 206 || hasContentRange)
@@ -50,8 +58,7 @@ public static class HttpStatusClassifier
         {
             200 => HttpStatusDisposition.DerivableStatus,
             301 or 302 or 303 or 307 or 308 => HttpStatusDisposition.RedirectObserved,
-            304 => HttpStatusDisposition.RevalidationReferenceOnly,
-            204 or 205 => HttpStatusDisposition.SemanticNoEntityStatus,
+            205 => HttpStatusDisposition.SemanticNoEntityStatus,
             _ => HttpStatusDisposition.NonDerivableStatus,
         };
     }

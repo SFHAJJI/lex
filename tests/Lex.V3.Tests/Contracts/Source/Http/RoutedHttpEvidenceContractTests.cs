@@ -100,6 +100,17 @@ public sealed class RoutedHttpEvidenceContractTests
             headers: Headers(contentLength: "3", contentRange: "bytes 0-2/3"));
         Assert.AreEqual(HttpStatusDisposition.RangeNotApproved, ranged200.StatusDisposition);
 
+        // A header-terminated 204 has no entity to range: the Content-Range is retained as
+        // evidence and the response keeps its own completion arm rather than becoming
+        // unrepresentable.
+        var ranged204 = CompleteHop(
+            status: 204,
+            headers: Headers(contentRange: "bytes */3"),
+            length: 0,
+            digest: EmptyDigest,
+            completion: new ResponseWithoutBodyHttpCompletion());
+        Assert.AreEqual(HttpStatusDisposition.SemanticNoEntityStatus, ranged204.StatusDisposition);
+
         var wrongSecond = CompleteHop(
             ordinal: 1,
             observationId: Observation1,
@@ -641,6 +652,9 @@ public sealed class RoutedHttpEvidenceContractTests
         // Transfer framing determines the retained bytes when both fields exist. A canonical
         // Content-Length remains conflicting evidence regardless of whether it is above or below
         // the retained length, so transfer-coding conflict wins before a length comparison.
+        // OBS-01 successor 005 ranks it that way: an invalid Content-Length is a syntax fault and
+        // stays above the simultaneous-fields conflict; a merely disagreeing one has no standing
+        // beside a Transfer-Encoding (RFC 9112 section 6.1) and ranks below it.
         _ = CompleteHop(
             headers: Headers(contentLength: "4", transferEncoding: "chunked"),
             length: 3,

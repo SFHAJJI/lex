@@ -855,10 +855,17 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                 : Incomplete(HttpResponseSemanticsReason.StatusContentForbidden);
         }
 
+        var hasContentLength = headers.ContentLength is not RoutedHttpAbsentHeader;
+        var hasTransferEncoding = headers.TransferEncoding is not RoutedHttpAbsentHeader;
         var hasValidLength = TryGetDeclaredContentLength(headers.ContentLength, out var declaredLength);
         if (capture.Event == BodyCaptureEvent.ResponseEnded)
         {
-            return hasValidLength && checked((ulong)capture.Bytes.Length) < declaredLength
+            // RFC 9112 section 6.1: a Content-Length beside a Transfer-Encoding has no standing,
+            // so a stream that ended early cannot be measured against it. The validator refuses
+            // declared_length_short_read under a Transfer-Encoding for the same reason; the
+            // honest fact is that the read failed.
+            return hasValidLength && !hasTransferEncoding &&
+                   checked((ulong)capture.Bytes.Length) < declaredLength
                 ? Incomplete(HttpPartialBodyReason.DeclaredLengthShortRead)
                 : Incomplete(HttpPartialBodyReason.BodyReadFailure);
         }
@@ -868,8 +875,6 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             return Incomplete(HttpPartialBodyReason.BodyReadFailure);
         }
 
-        var hasContentLength = headers.ContentLength is not RoutedHttpAbsentHeader;
-        var hasTransferEncoding = headers.TransferEncoding is not RoutedHttpAbsentHeader;
         if (status == 204)
         {
             if (hasContentLength || hasTransferEncoding)
@@ -1841,6 +1846,14 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
         UnsupportedStatus = 2,
         HeaderProjectionRejected = 3,
         AdapterIdentityRejected = 4,
+
+        /// <summary>
+        /// The classified response could not be represented as a /4 hop. This is a drift catch:
+        /// the classifier and the document validator disagreed, which at this head no input
+        /// reaches, so the retained bytes and the route context survive as typed evidence instead
+        /// of escaping as an exception.
+        /// </summary>
+        HopRepresentationRejected = 5,
     }
 
     /// <summary>
@@ -2944,22 +2957,44 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                         held.ReceiptSha256));
             }
 
-            var hop = RoutedHttpHop.Create(
-                hopOrdinal,
-                observationId,
-                antecedentObservationId,
-                logicalRequestSha256,
-                currentRequest.Uri,
-                status,
-                headers,
-                send.RequestStartedAt,
-                terminalObservedAt,
-                completion,
-                checked((ulong)held.Bytes.Length),
-                held.Receipt.Reference.ContentSha256,
-                held.ReceiptSha256,
-                checked((ulong)held.Bytes.Length),
-                Hash(held.Bytes.Span));
+            RoutedHttpHop hop;
+            try
+            {
+                hop = RoutedHttpHop.Create(
+                    hopOrdinal,
+                    observationId,
+                    antecedentObservationId,
+                    logicalRequestSha256,
+                    currentRequest.Uri,
+                    status,
+                    headers,
+                    send.RequestStartedAt,
+                    terminalObservedAt,
+                    completion,
+                    checked((ulong)held.Bytes.Length),
+                    held.Receipt.Reference.ContentSha256,
+                    held.ReceiptSha256,
+                    checked((ulong)held.Bytes.Length),
+                    Hash(held.Bytes.Span));
+            }
+            catch (ArgumentException)
+            {
+                // Custody precedes representation. If the classifier and the validator ever
+                // disagree again, the publisher's bytes and the route context stay typed evidence
+                // rather than an exception that loses both.
+                return new RouteExecution(
+                    null,
+                    custodyKey,
+                    null,
+                    new PostHeaderFailure(
+                        PostHeaderFailureClass.HopRepresentationRejected,
+                        logicalRequestSha256,
+                        send.RequestStartedAt,
+                        custodyKey,
+                        hops.ToArray(),
+                        held.Receipt.Reference.ContentSha256,
+                        held.ReceiptSha256));
+            }
 
             hops.Add(hop);
             antecedentObservationId = observationId;
