@@ -351,4 +351,278 @@ public sealed class EuCellarObjectSnapshotTests
             EuRelationFamily.Amends, EuRelationAuthority.PublisherAsserted, SeedA + "?x=1",
             Artifact("edge")));
     }
+
+    // ---- Fold-in for the D1-05 contracts refreeze (lex-event-20260903T232818026Z-be06bed3108f4128b6de31b5b008c518):
+    // the seven observation records below carried no ConstructionSurface.Of pin anywhere in the tree,
+    // the second half of fold-in five, even though the fold-in five packet said all seven were closed.
+    // Each gets an exact Of pin over its own construction path plus an exact ProducersIn pin over its
+    // external producers across Lex.V3.Contracts, print-actual-then-transcribe, so a new unreviewed
+    // door into any of the seven raw observation types this file's own snapshot restricts predicate,
+    // relation-edge, relation-family, channel, language-expression, format and content-class
+    // observations to fails one of these tests rather than passing silently. ---------------------------
+
+    [TestMethod]
+    public void EuPredicateObservationHasExactlyOneConstructionPath()
+    {
+        const string C = "Lex.V3.Contracts.";
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + N + "EuPredicateObservation::.ctor(" + N
+                    + "EuPredicateObservation) -> " + N + "EuPredicateObservation",
+                "constructor public instance " + N + "EuPredicateObservation::.ctor(" + C
+                    + "EuCdmPredicate, " + N + "EuPredicateObservationState, "
+                    + "System.Collections.Generic.IReadOnlyList<System.String>, "
+                    + "Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> " + N + "EuPredicateObservation",
+                "method public instance " + N + "EuPredicateObservation::<Clone>$() -> " + N
+                    + "EuPredicateObservation",
+            },
+            ConstructionSurface.Of(typeof(EuPredicateObservation)).ToArray());
+    }
+
+    [TestMethod]
+    public void EuCellarObjectSnapshotIsTheOnlyRecognisedExternalProducerOfEuPredicateObservation()
+    {
+        const string C = "Lex.V3.Contracts.";
+        var assembly = typeof(EuCellarObjectSnapshot).Assembly;
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "field private instance " + N + "EuCellarObjectSnapshot::<PredicateObservations>k__BackingField -> "
+                    + "System.Collections.Generic.IReadOnlyList<" + N + "EuPredicateObservation>",
+                "field private instance " + N + "EuCellarObjectSnapshot::_predicateIndex -> "
+                    + "System.Collections.Generic.IReadOnlyDictionary<" + C + "EuCdmPredicate, " + N
+                    + "EuPredicateObservation>",
+                "method public instance " + N + "EuCellarObjectSnapshot::Predicate(" + C
+                    + "EuCdmPredicate) -> " + N + "EuPredicateObservation",
+                "property public instance " + N + "EuCellarObjectSnapshot::PredicateObservations() -> "
+                    + "System.Collections.Generic.IReadOnlyList<" + N + "EuPredicateObservation>",
+            },
+            ConstructionSurface.ProducersIn(assembly, typeof(EuPredicateObservation), includeNonPublic: true)
+                .ToArray(),
+            "the exact set of external producers of EuPredicateObservation across Lex.V3.Contracts.");
+    }
+
+    [TestMethod]
+    public void EuRelationEdgeObservationHasExactlyOneConstructionPath()
+    {
+        const string C = "Lex.V3.Contracts.";
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + N + "EuRelationEdgeObservation::.ctor(" + N
+                    + "EuRelationEdgeObservation) -> " + N + "EuRelationEdgeObservation",
+                "constructor public instance " + N + "EuRelationEdgeObservation::.ctor(" + C
+                    + "EuRelationFamily, " + C + "EuRelationAuthority, System.String, "
+                    + "Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> " + N + "EuRelationEdgeObservation",
+                "method public instance " + N + "EuRelationEdgeObservation::<Clone>$() -> " + N
+                    + "EuRelationEdgeObservation",
+            },
+            ConstructionSurface.Of(typeof(EuRelationEdgeObservation)).ToArray());
+    }
+
+    [TestMethod]
+    public void EuRelationFamilyObservationIsTheOnlyRecognisedExternalProducerOfEuRelationEdgeObservation()
+    {
+        var assembly = typeof(EuCellarObjectSnapshot).Assembly;
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "field private instance " + N + "EuRelationFamilyObservation::<Edges>k__BackingField -> "
+                    + "System.Collections.Generic.IReadOnlyList<" + N + "EuRelationEdgeObservation>",
+                "property public instance " + N + "EuRelationFamilyObservation::Edges() -> "
+                    + "System.Collections.Generic.IReadOnlyList<" + N + "EuRelationEdgeObservation>",
+            },
+            ConstructionSurface.ProducersIn(assembly, typeof(EuRelationEdgeObservation), includeNonPublic: true)
+                .ToArray(),
+            "the exact set of external producers of EuRelationEdgeObservation across Lex.V3.Contracts.");
+    }
+
+    [TestMethod]
+    public void EuRelationFamilyObservationHasExactlyOneConstructionPath()
+    {
+        const string C = "Lex.V3.Contracts.";
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + N + "EuRelationFamilyObservation::.ctor(" + N
+                    + "EuRelationFamilyObservation) -> " + N + "EuRelationFamilyObservation",
+                "constructor public instance " + N + "EuRelationFamilyObservation::.ctor(" + C
+                    + "EuRelationFamily, " + C + "EuRelationAcquisitionState, "
+                    + "System.Collections.Generic.IReadOnlyList<" + N + "EuRelationEdgeObservation>, "
+                    + "Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> " + N + "EuRelationFamilyObservation",
+                "method public instance " + N + "EuRelationFamilyObservation::<Clone>$() -> " + N
+                    + "EuRelationFamilyObservation",
+            },
+            ConstructionSurface.Of(typeof(EuRelationFamilyObservation)).ToArray());
+    }
+
+    [TestMethod]
+    public void EuCellarObjectSnapshotIsTheOnlyRecognisedExternalProducerOfEuRelationFamilyObservation()
+    {
+        const string C = "Lex.V3.Contracts.";
+        var assembly = typeof(EuCellarObjectSnapshot).Assembly;
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "field private instance " + N + "EuCellarObjectSnapshot::<RelationObservations>k__BackingField -> "
+                    + "System.Collections.Generic.IReadOnlyList<" + N + "EuRelationFamilyObservation>",
+                "field private instance " + N + "EuCellarObjectSnapshot::_relationIndex -> "
+                    + "System.Collections.Generic.IReadOnlyDictionary<" + C + "EuRelationFamily, " + N
+                    + "EuRelationFamilyObservation>",
+                "method public instance " + N + "EuCellarObjectSnapshot::Relation(" + C
+                    + "EuRelationFamily) -> " + N + "EuRelationFamilyObservation",
+                "property public instance " + N + "EuCellarObjectSnapshot::RelationObservations() -> "
+                    + "System.Collections.Generic.IReadOnlyList<" + N + "EuRelationFamilyObservation>",
+            },
+            ConstructionSurface.ProducersIn(assembly, typeof(EuRelationFamilyObservation), includeNonPublic: true)
+                .ToArray(),
+            "the exact set of external producers of EuRelationFamilyObservation across Lex.V3.Contracts.");
+    }
+
+    [TestMethod]
+    public void EuChannelObservationHasExactlyOneConstructionPath()
+    {
+        const string C = "Lex.V3.Contracts.";
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + N + "EuChannelObservation::.ctor(" + N
+                    + "EuChannelObservation) -> " + N + "EuChannelObservation",
+                "constructor public instance " + N + "EuChannelObservation::.ctor(" + C
+                    + "EuChannel, System.String, System.String, "
+                    + "Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> " + N + "EuChannelObservation",
+                "method public instance " + N + "EuChannelObservation::<Clone>$() -> " + N
+                    + "EuChannelObservation",
+            },
+            ConstructionSurface.Of(typeof(EuChannelObservation)).ToArray());
+    }
+
+    [TestMethod]
+    public void EuCellarObjectSnapshotIsTheOnlyRecognisedExternalProducerOfEuChannelObservation()
+    {
+        var assembly = typeof(EuCellarObjectSnapshot).Assembly;
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "field private instance " + N + "EuCellarObjectSnapshot::<Channel>k__BackingField -> " + N
+                    + "EuChannelObservation",
+                "property public instance " + N + "EuCellarObjectSnapshot::Channel() -> " + N
+                    + "EuChannelObservation",
+            },
+            ConstructionSurface.ProducersIn(assembly, typeof(EuChannelObservation), includeNonPublic: true)
+                .ToArray(),
+            "the exact set of external producers of EuChannelObservation across Lex.V3.Contracts.");
+    }
+
+    [TestMethod]
+    public void EuLanguageExpressionObservationHasExactlyOneConstructionPath()
+    {
+        const string C = "Lex.V3.Contracts.";
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + N + "EuLanguageExpressionObservation::.ctor(" + N
+                    + "EuLanguageExpressionObservation) -> " + N + "EuLanguageExpressionObservation",
+                "constructor public instance " + N + "EuLanguageExpressionObservation::.ctor(" + C
+                    + "EuOfficialLanguage, " + N + "EuExpressionObservationState, System.String, "
+                    + "System.String, Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> " + N
+                    + "EuLanguageExpressionObservation",
+                "method public instance " + N + "EuLanguageExpressionObservation::<Clone>$() -> " + N
+                    + "EuLanguageExpressionObservation",
+            },
+            ConstructionSurface.Of(typeof(EuLanguageExpressionObservation)).ToArray());
+    }
+
+    [TestMethod]
+    public void EuCellarObjectSnapshotIsTheOnlyRecognisedExternalProducerOfEuLanguageExpressionObservation()
+    {
+        var assembly = typeof(EuCellarObjectSnapshot).Assembly;
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "field private instance " + N + "EuCellarObjectSnapshot::<Language>k__BackingField -> " + N
+                    + "EuLanguageExpressionObservation",
+                "property public instance " + N + "EuCellarObjectSnapshot::Language() -> " + N
+                    + "EuLanguageExpressionObservation",
+            },
+            ConstructionSurface.ProducersIn(assembly, typeof(EuLanguageExpressionObservation), includeNonPublic: true)
+                .ToArray(),
+            "the exact set of external producers of EuLanguageExpressionObservation across Lex.V3.Contracts.");
+    }
+
+    [TestMethod]
+    public void EuFormatObservationHasExactlyOneConstructionPath()
+    {
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + N + "EuFormatObservation::.ctor(" + N
+                    + "EuFormatObservation) -> " + N + "EuFormatObservation",
+                "constructor public instance " + N + "EuFormatObservation::.ctor(" + N
+                    + "EuManifestationFormat, " + N + "EuFormatBodyAdmission, System.String, "
+                    + "Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> " + N + "EuFormatObservation",
+                "method public instance " + N + "EuFormatObservation::<Clone>$() -> " + N
+                    + "EuFormatObservation",
+            },
+            ConstructionSurface.Of(typeof(EuFormatObservation)).ToArray());
+    }
+
+    [TestMethod]
+    public void EuCellarObjectSnapshotIsTheOnlyRecognisedExternalProducerOfEuFormatObservation()
+    {
+        var assembly = typeof(EuCellarObjectSnapshot).Assembly;
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "field private instance " + N + "EuCellarObjectSnapshot::<Format>k__BackingField -> " + N
+                    + "EuFormatObservation",
+                "property public instance " + N + "EuCellarObjectSnapshot::Format() -> " + N
+                    + "EuFormatObservation",
+            },
+            ConstructionSurface.ProducersIn(assembly, typeof(EuFormatObservation), includeNonPublic: true)
+                .ToArray(),
+            "the exact set of external producers of EuFormatObservation across Lex.V3.Contracts.");
+    }
+
+    [TestMethod]
+    public void EuContentClassObservationHasExactlyOneConstructionPath()
+    {
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + N + "EuContentClassObservation::.ctor(" + N
+                    + "EuContentClassObservation) -> " + N + "EuContentClassObservation",
+                "constructor public instance " + N + "EuContentClassObservation::.ctor(" + N
+                    + "EuContentClass, Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> " + N
+                    + "EuContentClassObservation",
+                "method public instance " + N + "EuContentClassObservation::<Clone>$() -> " + N
+                    + "EuContentClassObservation",
+            },
+            ConstructionSurface.Of(typeof(EuContentClassObservation)).ToArray());
+    }
+
+    [TestMethod]
+    public void EuCellarObjectSnapshotIsTheOnlyRecognisedExternalProducerOfEuContentClassObservation()
+    {
+        // Two properties, not one: EuContentClassObservation is the shared leaf type for both the
+        // rights axis (Rights) and the supporting-document axis (Supporting), and both are real,
+        // independent doors onto it.
+        var assembly = typeof(EuCellarObjectSnapshot).Assembly;
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "field private instance " + N + "EuCellarObjectSnapshot::<Rights>k__BackingField -> " + N
+                    + "EuContentClassObservation",
+                "field private instance " + N + "EuCellarObjectSnapshot::<Supporting>k__BackingField -> " + N
+                    + "EuContentClassObservation",
+                "property public instance " + N + "EuCellarObjectSnapshot::Rights() -> " + N
+                    + "EuContentClassObservation",
+                "property public instance " + N + "EuCellarObjectSnapshot::Supporting() -> " + N
+                    + "EuContentClassObservation",
+            },
+            ConstructionSurface.ProducersIn(assembly, typeof(EuContentClassObservation), includeNonPublic: true)
+                .ToArray(),
+            "the exact set of external producers of EuContentClassObservation across Lex.V3.Contracts.");
+    }
 }
