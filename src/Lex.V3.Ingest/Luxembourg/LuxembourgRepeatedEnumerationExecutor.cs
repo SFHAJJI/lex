@@ -850,10 +850,21 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
             throw new FormatException("The count response binding is not exactly one term.");
         }
 
+        // ValueKind is checked before every TryGetProperty/GetString call on a value this parser
+        // does not already know the shape of. JsonElement.TryGetProperty throws
+        // InvalidOperationException on a non-object element, and GetString throws it on a
+        // non-string, non-null element; neither is a FormatException or JsonException, so neither
+        // was caught by RunPassAsync's catch filter, and both used to escape RunPartitionAsync and
+        // RunCoverAsync as an unhandled exception rather than a typed refusal. A count body whose
+        // one binding value is not itself an object (`{"count":"1"}`) hit the first of these; a
+        // term whose "type" or "datatype" exists but is not a string hit the second.
         var term = binding.EnumerateObject().First().Value;
-        if (!term.TryGetProperty("type", out var type) ||
+        if (term.ValueKind != System.Text.Json.JsonValueKind.Object ||
+            !term.TryGetProperty("type", out var type) ||
+            type.ValueKind != System.Text.Json.JsonValueKind.String ||
             type.GetString() != "typed-literal" ||
             !term.TryGetProperty("datatype", out var datatype) ||
+            datatype.ValueKind != System.Text.Json.JsonValueKind.String ||
             datatype.GetString() != "http://www.w3.org/2001/XMLSchema#integer" ||
             !term.TryGetProperty("value", out var value) ||
             value.ValueKind != System.Text.Json.JsonValueKind.String)
@@ -912,11 +923,23 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         var rows = new List<LuxembourgQueryCursor>();
         foreach (var binding in bindings.EnumerateArray())
         {
+            // Checked before TryGetProperty is called on it: a bindings array element that is not
+            // itself an object (a page body such as `"bindings":[[]]`) throws
+            // InvalidOperationException out of binding.TryGetProperty rather than returning false,
+            // and that exception is neither FormatException nor JsonException, so it used to escape
+            // this parser, RunPassAsync's catch filter, and RunPartitionAsync/RunCoverAsync
+            // entirely instead of becoming a typed refusal.
+            if (binding.ValueKind != System.Text.Json.JsonValueKind.Object)
+            {
+                throw new FormatException("The page response row is not an object.");
+            }
+
             var parts = new string[6];
             for (var index = 0; index < 6; index++)
             {
                 var name = $"key_{index + 1}";
                 if (!binding.TryGetProperty(name, out var term) ||
+                    term.ValueKind != System.Text.Json.JsonValueKind.Object ||
                     !term.TryGetProperty("value", out var value) ||
                     value.ValueKind != System.Text.Json.JsonValueKind.String)
                 {

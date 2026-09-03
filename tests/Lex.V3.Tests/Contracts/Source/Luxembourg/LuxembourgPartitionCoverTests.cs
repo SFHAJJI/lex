@@ -62,6 +62,31 @@ public sealed class LuxembourgPartitionCoverTests
     }
 
     [TestMethod]
+    public void ARootProofPairedWithTheWrongRangeIsRefused()
+    {
+        // TryCreate has two LeafPartitionKeyMismatch call sites: one per leaf (driven above by
+        // ALeafProofPairedWithTheWrongRangeIsRefused, which always supplies rootReceipt: null) and
+        // one for the root. Before this test, only the leaf site was driven; a mutation deleting
+        // the root's own `rootReceipt.Delivery.PartitionKey != chain.RootRange.PartitionId` check
+        // survived every test in this file, because every root receipt any of them supplied
+        // already carried the chain's real root key ("root").
+        var chain = TwoLeafChain();
+        var left = Receipt(new RepeatedEnumerationDeliveryProofTests.Fixture(
+            partitionKey: "left", expectedCount: 2).Create("a,b", "a,b"));
+        var right = Receipt(new RepeatedEnumerationDeliveryProofTests.Fixture(
+            partitionKey: "right", expectedCount: 3).Create("a,b,c", "a,b,c"));
+        // A structurally valid root proof, correct in every way except that it claims a partition
+        // key the chain's root range does not have ("root" is TwoLeafChain's actual root key).
+        var wrongRangeRoot = Receipt(new RepeatedEnumerationDeliveryProofTests.Fixture(
+            partitionKey: "not-root", expectedCount: 5).Create("a,b,c,d,e", "a,b,c,d,e"));
+
+        var cover = LuxembourgPartitionCover.TryCreate(chain, [left, right], wrongRangeRoot, out var refusal);
+
+        Assert.IsNull(cover);
+        Assert.AreEqual(LuxembourgPartitionCoverRefusal.LeafPartitionKeyMismatch, refusal);
+    }
+
+    [TestMethod]
     public void TwoPassesThatDisagreeCannotJoinACover()
     {
         var chain = TwoLeafChain();

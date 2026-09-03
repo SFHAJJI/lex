@@ -194,6 +194,13 @@ public static class LuxembourgQueryPlanIdentity
 
 internal static class LuxembourgQueryText
 {
+    /// <summary>
+    /// The bound every delivered key part is checked against, in UTF-8 bytes. Public so a test that
+    /// needs an oversized key derives its length from this value rather than restating it as a
+    /// magic number a future change to the bound would leave stale.
+    /// </summary>
+    internal const int MaximumKeyPartByteLength = 2047;
+
     private static readonly UTF8Encoding StrictUtf8 = new(
         encoderShouldEmitUTF8Identifier: false,
         throwOnInvalidBytes: true);
@@ -211,7 +218,7 @@ internal static class LuxembourgQueryText
             throw new ArgumentException("A query key must be valid UTF-8 text.", parameterName, exception);
         }
 
-        if ((!allowEmpty && bytes.Length == 0) || bytes.Length > 2047)
+        if ((!allowEmpty && bytes.Length == 0) || bytes.Length > MaximumKeyPartByteLength)
         {
             throw new ArgumentException("A query key must be bounded control-free text.", parameterName);
         }

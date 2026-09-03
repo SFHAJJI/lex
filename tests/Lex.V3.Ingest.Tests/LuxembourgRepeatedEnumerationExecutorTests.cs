@@ -14,6 +14,47 @@ namespace Lex.V3.Ingest.Tests;
 /// The Luxembourg repeated-enumeration executor: the driving algorithm of design section 2, one
 /// test per typed refusal in section 3, plus the SR353 structural properties of section 5.
 /// </summary>
+/// <remarks>
+/// The ten RED tests preserved at f33a82f3 (against a <c>RepeatedEnumerationTraversalReader</c>
+/// this executor's design replaced) and their disposition in this tree, so the mapping survives
+/// rather than living only in a review verdict:
+/// <list type="bullet">
+/// <item><c>BoundCountOpensTheRetainedRendererForOfflineVerification</c> - folded into the
+/// source-agnostic <c>OfflineVerificationReproducesEvidenceButCannotMintSendCapability</c>
+/// (tests/Lex.V3.Tests/Contracts/Source/Core/MachineQueryPlanContractTests.cs). LU's
+/// <c>BindCount</c> mints its <c>BoundMachineRequest</c> through
+/// <c>MachineQueryBinder.BindForSend</c>, the same machinery that generic test proves offline
+/// verification over, so the property is proven once for every source rather than once per bound
+/// request shape.</item>
+/// <item><c>BoundPageOpensTheRetainedRendererForOfflineVerification</c> - same successor as above;
+/// <c>BindPage</c> also routes through <c>MachineQueryBinder.BindForSend</c>.</item>
+/// <item><c>ReadCountParsesTheStrictLuxembourgIntegerBinding</c> - successor
+/// <see cref="ACountOneBelowTheCeilingProceedsToPageZero"/>, which asserts
+/// <c>SelectedRowCountA == 999_999</c> off a real <c>ParseStrictCount</c> parse.</item>
+/// <item><c>ReadCountRejectsTheWrongLuxembourgLiteralWireType</c> - successor
+/// <see cref="ACountTermOnTheWrongWireTypeIsRefusedBeforeAnyPageIsBound"/> (already cited in
+/// tree).</item>
+/// <item><c>ReadPageReturnsTheRowCountAndSixPartFinalCursor</c> - successor
+/// <see cref="AWellFormedPassSpendsExactlyItsBudget"/>, a full ten-row page parsed to the right row
+/// count and final cursor across two independently-run passes that then agree.</item>
+/// <item><c>ReadPageReturnsNoCursorForAnInitialEmptyPage</c> - successor
+/// <see cref="ACountOneBelowTheCeilingProceedsToPageZero"/> again: its handler answers every
+/// non-count ordinal with <c>EmptyRowsJson()</c>, so each pass's own first page is empty and
+/// <c>DeliveredRowCountA == 0</c> with no cursor ever established.</item>
+/// <item><c>ReadPageRejectsDuplicateCanonicalKeys</c> - successor
+/// <see cref="TwoRowsSharingAllSixKeyPartsStopTheirOwnPage"/>.</item>
+/// <item><c>ReadPageRejectsNonIncreasingCursors</c> - successor
+/// <see cref="APublisherThatIgnoresTheCursorStopsOnTheSecondPage"/> (the cross-page case;
+/// <c>TwoRowsSharingAllSixKeyPartsStopTheirOwnPage</c> above is the within-one-page case).</item>
+/// <item><c>ReadPageRejectsQualifiedOrNonPlainCursorTerms</c> - successors
+/// <see cref="AQualifiedOrNonPlainCursorTermIsRefusedThroughCore"/> (the datatype and IRI DataRow
+/// cases; already cited in tree) plus <see cref="CoreRefusalsAreCarriedNotReclassified"/> (the
+/// language-tag case).</item>
+/// <item><c>ReadPageRejectsAResponseBeyondTheRowLimit</c> - successor
+/// <see cref="APageDeliveringMoreRowsThanItsLimitIsRefusedThroughCore"/> (already cited in
+/// tree).</item>
+/// </list>
+/// </remarks>
 [TestClass]
 public sealed class LuxembourgRepeatedEnumerationExecutorTests
 {
@@ -205,11 +246,6 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
 
         var result = await Run(store, request, witness, handler);
 
-        // The exact outcome, not "anything but partition_required": an AreNotEqual here passed on
-        // twelve other refusal codes and on a delivered result too, so it proved almost nothing.
-        // A count one below the ceiling is admitted, a page IS bound and sent, and the run then
-        // refuses on the budget, because 999,999 rows cannot arrive inside the pass's page budget
-        // when the publisher answers the first page empty. That is the whole claim, stated.
         // Exact values, not "anything but partition_required". The old assertion here was
         // AreNotEqual(PartitionRequired), which passed on twelve other refusal codes and on a
         // delivered result too, so it could not tell the ceiling comparison from anything else.
@@ -244,7 +280,9 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
     {
         var (request, witness) = BuildRequest();
         var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
-        var oversized = new string('a', 2100);
+        // Derived from the bound the key check actually enforces, not restated as a magic number a
+        // future change to that bound would leave stale.
+        var oversized = new string('a', LuxembourgQueryText.MaximumKeyPartByteLength + 1);
         var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, req) => ordinal switch
         {
             1 => JsonResponse(req, LuxembourgAcquisitionTestFixture.CountJson(1)),
@@ -674,6 +712,13 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
         Assert.AreEqual(3, budget.MaximumPagesFor(LuxembourgQueryPass.Pass1, 998));
         Assert.AreEqual(2, budget.MaximumPagesFor(LuxembourgQueryPass.Pass2, 613));
         Assert.AreEqual(3, budget.MaximumPagesFor(LuxembourgQueryPass.Pass2, 614));
+
+        // The negative guard, previously undriven: no caller in this codebase can reach a negative
+        // selectedRowCount today (ParseStrictCount's NumberStyles.None parse admits no sign), but
+        // MaximumPagesFor is public on a public type and the guard is what stops it silently
+        // dividing a negative count by the page limit instead of refusing the call outright.
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            budget.MaximumPagesFor(LuxembourgQueryPass.Pass1, -1));
     }
 
     [TestMethod]
@@ -928,6 +973,100 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
         Assert.IsNotNull(result.Refusal);
         Assert.AreEqual(LuxembourgEnumerationRefusal.CountNotOneNonNegativeInteger, result.Refusal.Code);
         Assert.AreEqual(2, handler.SendCount, "robots and the count; no page is bound off a count that failed");
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Residual objection 2 from the second refreeze verdict: JsonElement.TryGetProperty and
+    // GetString throw InvalidOperationException on a wrong-kind element, which is neither
+    // FormatException nor JsonException, so it was not covered by RunPassAsync's catch filter and
+    // escaped RunPartitionAsync/RunCoverAsync as an unhandled exception instead of a typed refusal.
+    // One driving test per named shape.
+    // ---------------------------------------------------------------------------------------
+
+    [TestMethod]
+    public async Task APageRowThatIsNotAnObjectRefusesRatherThanThrowing()
+    {
+        // A bindings array element that is not itself an object, e.g. "bindings":[[]]. Before this,
+        // binding.TryGetProperty(name, ...) in ParseStrictRows ran unchecked on a JsonElement whose
+        // ValueKind could be anything.
+        //
+        // The mutation that kills this: delete the `binding.ValueKind != JsonValueKind.Object`
+        // check from ParseStrictRows. Confirmed: the run then throws InvalidOperationException out
+        // of RunPartitionAsync instead of refusing.
+        var (request, witness) = BuildRequest();
+        var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
+        var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, req) => ordinal switch
+        {
+            1 => JsonResponse(req, LuxembourgAcquisitionTestFixture.CountJson(1)),
+            2 => JsonResponse(
+                req,
+                "{\"head\":{\"link\":[],\"vars\":[]},\"results\":{\"distinct\":false,\"ordered\":true,"
+                + "\"bindings\":[[]]}}"),
+            _ => throw new AssertFailedException("No further sends after a row that is not an object."),
+        });
+
+        var result = await Run(store, request, witness, handler);
+
+        Assert.IsNull(result.Receipt);
+        Assert.IsNotNull(result.Refusal);
+        Assert.AreEqual(LuxembourgEnumerationRefusal.PageBodyMalformed, result.Refusal.Code);
+    }
+
+    [TestMethod]
+    public async Task ACountTermThatIsNotAnObjectRefusesRatherThanThrowing()
+    {
+        // A count body whose one binding value is not itself an object, e.g. {"count":"1"}. Before
+        // this, term.TryGetProperty("type", ...) in ParseStrictCount ran unchecked on a JsonElement
+        // whose ValueKind could be anything.
+        //
+        // The mutation that kills this: delete the `term.ValueKind != JsonValueKind.Object` check
+        // from ParseStrictCount. Confirmed: the run then throws InvalidOperationException out of
+        // RunPartitionAsync instead of refusing CountNotOneNonNegativeInteger.
+        var (request, witness) = BuildRequest();
+        var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
+        var nonObjectTermCount =
+            "{\"head\":{\"link\":[],\"vars\":[\"count\"]},\"results\":{\"distinct\":false,\"ordered\":true,"
+            + "\"bindings\":[{\"count\":\"1\"}]}}";
+        var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((_, req) =>
+            JsonResponse(req, nonObjectTermCount));
+
+        var result = await Run(store, request, witness, handler);
+
+        Assert.IsNull(result.Receipt);
+        Assert.IsNotNull(result.Refusal);
+        Assert.AreEqual(LuxembourgEnumerationRefusal.CountNotOneNonNegativeInteger, result.Refusal.Code);
+        Assert.AreEqual(2, handler.SendCount, "robots and the count only");
+    }
+
+    [TestMethod]
+    [DataRow("type", DisplayName = "a non-string type")]
+    [DataRow("datatype", DisplayName = "a non-string datatype")]
+    public async Task ACountTermWithANonStringTypeOrDatatypeRefusesRatherThanThrowing(string field)
+    {
+        // The term is an object and both properties are present, but one of them is a JSON number
+        // rather than a string. Before this, type.GetString()/datatype.GetString() in
+        // ParseStrictCount ran unchecked on whichever JsonElement TryGetProperty returned.
+        //
+        // The mutation that kills this: delete the `type.ValueKind != JsonValueKind.String` (or the
+        // datatype equivalent) check from ParseStrictCount. Confirmed: the run then throws
+        // InvalidOperationException out of RunPartitionAsync instead of refusing.
+        var (request, witness) = BuildRequest();
+        var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
+        var typeLiteral = field == "type" ? "1" : "\"typed-literal\"";
+        var datatypeLiteral = field == "datatype" ? "1" : "\"http://www.w3.org/2001/XMLSchema#integer\"";
+        var nonStringFieldCount =
+            "{\"head\":{\"link\":[],\"vars\":[\"count\"]},\"results\":{\"distinct\":false,\"ordered\":true,"
+            + "\"bindings\":[{\"count\":{\"type\":" + typeLiteral + ",\"datatype\":" + datatypeLiteral
+            + ",\"value\":\"1\"}}]}}";
+        var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((_, req) =>
+            JsonResponse(req, nonStringFieldCount));
+
+        var result = await Run(store, request, witness, handler);
+
+        Assert.IsNull(result.Receipt);
+        Assert.IsNotNull(result.Refusal);
+        Assert.AreEqual(LuxembourgEnumerationRefusal.CountNotOneNonNegativeInteger, result.Refusal.Code);
+        Assert.AreEqual(2, handler.SendCount, "robots and the count only");
     }
 
     // ---------------------------------------------------------------------------------------

@@ -21,44 +21,30 @@ internal static class LuxembourgAcquisitionTestFixture
     internal const string SubjectsSetId = "S";
 
     /// <summary>
-    /// Constructs a session against a test handler and time provider. The session's real
-    /// constructor and robots bootstrap are private (only <see cref="RoutedHttpAcquisitionSession.StartAsync"/>
-    /// is a public door, and it pins a real network handler), so this mirrors the reflection already
-    /// used by RoutedHttpRequestPolicyAuditTests rather than adding a second test-only production
-    /// entry point.
+    /// Constructs and bootstraps a session against a test handler and time provider, through <see
+    /// cref="RoutedHttpAcquisitionSession.StartWithTestTransportAsync"/>, the one internal door a
+    /// same-assembly driver uses to start a session on a caller-supplied transport. This used to
+    /// reach the session's private constructor and private <c>BootstrapRobotsAsync</c> by
+    /// reflection from this fixture, which meant a rename of either one compiled cleanly here and
+    /// failed only at run time. The production executor hit the identical problem and got the
+    /// identical fix first; this fixture now uses the same door rather than keeping a second,
+    /// weaker path to the same session.
     /// </summary>
-    internal static RoutedHttpAcquisitionSession CreateSession(
-        BoundMachineRequest sourceWitness,
-        System.Net.Http.HttpMessageHandler handler,
-        ICustodyStore custodyStore,
-        TimeProvider timeProvider)
-    {
-        var constructor = typeof(RoutedHttpAcquisitionSession).GetConstructors(
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).Single();
-        return (RoutedHttpAcquisitionSession)constructor.Invoke(
-            [sourceWitness, custodyStore, handler, timeProvider, false]);
-    }
-
     internal static async Task<RoutedHttpAcquisitionSession> StartedSessionAsync(
         BoundMachineRequest sourceWitness,
         System.Net.Http.HttpMessageHandler handler,
         ICustodyStore custodyStore,
         TimeProvider timeProvider)
     {
-        var session = CreateSession(sourceWitness, handler, custodyStore, timeProvider);
-        var bootstrap = (Task<RoutedHttpAcquisitionSession.StartResult>)(typeof(RoutedHttpAcquisitionSession).GetMethod(
-            "BootstrapRobotsAsync",
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.Invoke(
-                session,
-                [CancellationToken.None])
-            ?? throw new AssertFailedException("The robots bootstrap returned no task."));
-        var started = await bootstrap.ConfigureAwait(false);
-        if (started.Kind != OfficialHttpAcquisitionOutcomeKind.ExecutedObservation)
+        var started = await RoutedHttpAcquisitionSession.StartWithTestTransportAsync(
+                sourceWitness, custodyStore, handler, timeProvider, CancellationToken.None)
+            .ConfigureAwait(false);
+        if (started.Kind != OfficialHttpAcquisitionOutcomeKind.ExecutedObservation || started.Session is null)
         {
             throw new AssertFailedException($"The fixture's own robots bootstrap did not start: {started.Kind}.");
         }
 
-        return session;
+        return started.Session;
     }
 
     internal static (LuxembourgQueryPlan Plan, string PlanResourceId, SourceArtifactRef PlanRef) BuildInvariantPlan(

@@ -97,13 +97,36 @@ public sealed class LuxembourgWitnessIndependenceTests
             .GetProperties()
             .Select(static property => property.Name)
             .ToArray();
-        Assert.IsFalse(
-            members.Any(static name =>
-                name.Contains("Witness", StringComparison.OrdinalIgnoreCase) ||
-                name.Contains("Topology", StringComparison.OrdinalIgnoreCase) ||
-                name.Contains("Independen", StringComparison.OrdinalIgnoreCase)),
-            "the interpretation profile grew a witness-independence member: record "
-            + "single_publisher_store on it and replace this test with one that reads the value");
+        // Pinned to the exact current member set rather than filtered by a guessed keyword
+        // substring: a real single_publisher_store member would not contain "Witness", "Topology"
+        // or "Independen" and would have slipped straight past the old filter. Any change to this
+        // set, added or removed, is the signal this test exists to catch.
+        var expectedMembers = new[]
+        {
+            nameof(RepeatedEnumerationInterpretationProfile.Schema),
+            nameof(RepeatedEnumerationInterpretationProfile.Dialect),
+            nameof(RepeatedEnumerationInterpretationProfile.ExpectedMediaType),
+            nameof(RepeatedEnumerationInterpretationProfile.CursorEnvelopeIdentity),
+            nameof(RepeatedEnumerationInterpretationProfile.MaximumDeliverableRows),
+            nameof(RepeatedEnumerationInterpretationProfile.ThresholdDetectorIdentity),
+            nameof(RepeatedEnumerationInterpretationProfile.CountQueryFamilyRef),
+            nameof(RepeatedEnumerationInterpretationProfile.PageQueryFamilyRef),
+            nameof(RepeatedEnumerationInterpretationProfile.CountVariable),
+            nameof(RepeatedEnumerationInterpretationProfile.ProjectionVariables),
+            nameof(RepeatedEnumerationInterpretationProfile.CanonicalKeyVariables),
+            nameof(RepeatedEnumerationInterpretationProfile.CursorVariables),
+            nameof(RepeatedEnumerationInterpretationProfile.SelectionParameterNames),
+            nameof(RepeatedEnumerationInterpretationProfile.PassParameterName),
+            nameof(RepeatedEnumerationInterpretationProfile.CursorParameterNames),
+            nameof(RepeatedEnumerationInterpretationProfile.HasCursorParameterName),
+            nameof(RepeatedEnumerationInterpretationProfile.TerminalPagePolicy),
+        };
+        CollectionAssert.AreEquivalent(
+            expectedMembers,
+            members,
+            "the interpretation profile's member set changed. If it gained single_publisher_store, "
+            + "record it here, then replace this test with one that reads the declared value; "
+            + "otherwise update expectedMembers to match the real change.");
         Assert.IsNotNull(profile);
     }
 
