@@ -368,6 +368,7 @@ public sealed class LuxembourgDocumentFetchAddress
     {
         LuxembourgLegalValue.Officiel => "officiel",
         LuxembourgLegalValue.Definitif => "definitif",
+        LuxembourgLegalValue.Unstated => "unstated",
         _ => throw new ArgumentOutOfRangeException(nameof(value)),
     };
 }
