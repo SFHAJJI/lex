@@ -1221,11 +1221,13 @@ public sealed class LuxembourgQueryExecutionAdapter
         var manifestCanonicalSha256 = ScopeManifestCanonicalWriter.Write(manifestStream, manifest);
         var manifestBytes = manifestStream.ToArray();
 
-        var writeReceipt = await _custodyStore.CreateAsync(
-                manifestBytes, CustodyClass.NightlyFloor90d, cancellationToken)
+        // RULING lex-event-20260904T212914634Z-f166f0b9e11b445795efd40c268bfbb8 interpreting Decision 71: held under an enforced floor and held
+        // under a weaker one are both HELD; only a write that errored or bytes that cannot be
+        // reproduced at their own digest are a custody failure.
+        var (manifestReceipt, manifestHoldFailure) = await CustodyHold
+            .TryHoldAsync(_custodyStore, manifestBytes, cancellationToken)
             .ConfigureAwait(false);
-
-        if (CustodyMembershipClassifier.Classify(writeReceipt) != CustodyMembership.Floored)
+        if (manifestReceipt is null)
         {
             return LuxembourgQueryExecutionResult.Refused(
                 topology,
@@ -1234,8 +1236,10 @@ public sealed class LuxembourgQueryExecutionAdapter
                 new LuxembourgQueryExecutionRefusalDetail(
                     LuxembourgQueryExecutionRefusal.ScopeManifestNotHeld,
                     null,
-                    "The scope manifest was written but the store enforced no retention floor on it."));
+                    $"The scope manifest could not be held: {manifestHoldFailure}"));
         }
+
+        var writeReceipt = manifestReceipt;
 
         // Re-verified by reopening the exact digest from the store, not trusted from the write call
         // alone: a receipt names bytes, a reopen proves the store actually holds them.
@@ -1599,16 +1603,24 @@ public sealed class LuxembourgQueryExecutionAdapter
                     var bodyBytes = await CustodyRestore.ReadByDigestCheckedAsync(
                             _custodyStore, evidence.Hops[^1].Sha256, cancellationToken)
                         .ConfigureAwait(false);
-                    var bodyReceipt = await _custodyStore.CreateAsync(
-                            bodyBytes, CustodyClass.NightlyFloor90d, cancellationToken)
+                    // This refused unless the receipt classified as Floored, which meant no body
+                    // could be held outside Azure and stopped the acceptance canary at a wall that
+                    // had nothing to do with the publisher or this route. RULING lex-event-20260904T212914634Z-f166f0b9e11b445795efd40c268bfbb8 interpreting Decision 71:
+                    // a store that wrote the bytes and can reproduce them at their own digest and
+                    // honestly declares NotEnforced did not fail. The membership class is recorded
+                    // rather than gated on: CorpusBodyRecord.Held derives its own Floor from this
+                    // receipt and serialises it, so the record says under which guarantee it holds.
+                    // A GENUINE failure, a write error or bytes that do not reopen at their own
+                    // digest, still refuses here and never softens into a weaker class.
+                    var (bodyReceipt, holdFailure) = await CustodyHold
+                        .TryHoldAsync(_custodyStore, bodyBytes, cancellationToken)
                         .ConfigureAwait(false);
-                    if (CustodyMembershipClassifier.Classify(bodyReceipt) != CustodyMembership.Floored)
+                    if (bodyReceipt is null)
                     {
                         return (null, new LuxembourgQueryExecutionRefusalDetail(
                             LuxembourgQueryExecutionRefusal.DocumentBodyNotHeld,
                             null,
-                            $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): the " +
-                            "document body was fetched but the store enforced no retention floor on it."));
+                            $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): {holdFailure}"));
                     }
 
                     outcomesByOrdinal[rowOrdinal] = CorpusAcquisitionOutcome.Held(bodyReceipt);
