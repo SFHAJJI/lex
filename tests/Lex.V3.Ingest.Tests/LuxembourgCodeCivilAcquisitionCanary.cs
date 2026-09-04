@@ -118,7 +118,8 @@ public sealed class LuxembourgCodeCivilAcquisitionCanary
     /// resolution rather than string match.
     /// </para>
     /// <para>
-    /// THREE TRAPS in this work, recorded for whoever wires the live enumeration. The work carries
+    /// THREE TRAPS in this work, obtained outside this lane with the denominator above and
+    /// asserted by nothing here, recorded for whoever wires the live enumeration. The work carries
     /// an <c>owl:sameAs</c> alias with no trailing date to which ZERO consolidations attach, so
     /// resolving through the alias returns nothing. 18 of the 19 consolidations carry
     /// <c>inForceStatus</c> not-applicable and only 2025-12-26 is applicable, so any filter on
