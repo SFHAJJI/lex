@@ -122,7 +122,7 @@ internal static class LuxembourgAcquisitionTestFixture
             invariantPlanResourceId, NewUrn(), NewUrn(), setId, pass, partition, rendererSource);
         var countObservation = await ObserveAsync(session, custodyStore, countBound.Request)
             .ConfigureAwait(false);
-        var identity = LuxembourgObservationIdentity.NewObservation();
+        var identity = RepeatedEnumerationObservationIdentity.NewObservation();
         var countTransport = await BuildTransportAsync(session, custodyStore, countObservation)
             .ConfigureAwait(false);
         var countDelivery = LuxembourgDeliveryObservation.ForCount(countBound, identity, countTransport, profile);
@@ -139,7 +139,7 @@ internal static class LuxembourgAcquisitionTestFixture
             var pageTransport = await BuildTransportAsync(session, custodyStore, pageAttempt)
                 .ConfigureAwait(false);
             var pageDelivery = LuxembourgDeliveryObservation.ForPage(
-                pageBound, LuxembourgObservationIdentity.NewObservation(), pageTransport, profile);
+                pageBound, RepeatedEnumerationObservationIdentity.NewObservation(), pageTransport, profile);
             deliveryPass = deliveryPass.WithPage(pageDelivery);
             // Parsed from the actually-retained response bytes, not the caller's declared body
             // string, so a handler/fixture mismatch surfaces as a wrong cursor rather than hiding.
@@ -155,7 +155,7 @@ internal static class LuxembourgAcquisitionTestFixture
     /// built from. Used by the tests that then substitute one member of that transport to drive a
     /// binding guard, which is the only way those guards are reachable.
     /// </summary>
-    internal static async Task<(LuxembourgBoundQueryCount Bound, LuxembourgObservedTransport Transport)>
+    internal static async Task<(LuxembourgBoundQueryCount Bound, RepeatedEnumerationObservedTransport Transport)>
         ObserveOneCountAsync(
             RoutedHttpAcquisitionSession session,
             ICustodyStore custodyStore,
@@ -208,7 +208,7 @@ internal static class LuxembourgAcquisitionTestFixture
         return (attempt.Evidence, payload.ToArray());
     }
 
-    private static async Task<LuxembourgObservedTransport> BuildTransportAsync(
+    private static async Task<RepeatedEnumerationObservedTransport> BuildTransportAsync(
         RoutedHttpAcquisitionSession session,
         ICustodyStore custodyStore,
         (RoutedHttpEvidence Attempt, byte[] Body) observed)
@@ -226,7 +226,7 @@ internal static class LuxembourgAcquisitionTestFixture
             Encoding.UTF8.GetString(writeReceiptBytes.Span))
             ?? throw new AssertFailedException("The fixture's own write receipt failed to decode.");
 
-        return new LuxembourgObservedTransport(logicalRequest, observed.Attempt, writeReceipt, observed.Body);
+        return new RepeatedEnumerationObservedTransport(logicalRequest, observed.Attempt, writeReceipt, observed.Body);
     }
 
     private static LuxembourgQueryCursor? LastRowKey(string body)

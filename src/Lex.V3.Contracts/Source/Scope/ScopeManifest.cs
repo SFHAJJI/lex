@@ -339,10 +339,12 @@ public sealed record ScopeCompleteEnumerationBinding(
 /// <see cref="Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProof"/> and this file's own
 /// <c>VerifiedScopeManifest.ParseAndVerify</c> do for the artifacts they cover -- is
 /// expected to come from whichever slice wires a live acquisition run's held evidence into
-/// <see cref="VerifiedLuxembourgSourceProfile.ReduceScope"/> for the first time; nothing in <c>src</c>
-/// calls <c>ReduceScope</c> outside a test today (see the residue note on
-/// <c>LuxembourgQueryExecutionAdapter.RunAsync</c> for the adjacent, still-open observation-decoding
-/// gap that slice will also need to close).
+/// <see cref="VerifiedLuxembourgSourceProfile.ReduceScope"/> for the first time. This is not for
+/// want of a caller: <c>LuxembourgQueryExecutionAdapter.RunAsync</c> already calls
+/// <c>ReduceScope</c> for every run (<c>src</c>, not only a test), and since D1-04b it derives its
+/// own resource observations from held evidence too, through item 17's reader door. What is still
+/// missing is a production implementation of this interface itself over that same held evidence --
+/// every implementation in this codebase today remains a test fixture.
 /// </summary>
 public interface IScopeReductionEvidenceResolver
 {

@@ -33,7 +33,6 @@ public sealed class DurableBlobReceiptFamilySurfaceTests
     private const string Custody = "Lex.V3.Contracts.Custody.";
     private const string Core = "Lex.V3.Contracts.Source.Core.";
     private const string Http = "Lex.V3.Contracts.Source.Http.";
-    private const string Luxembourg = "Lex.V3.Contracts.Source.Luxembourg.";
 
     [TestMethod]
     public void ReceiptIsMintedByExactlyThreeDeclaredPaths()
@@ -84,33 +83,34 @@ public sealed class DurableBlobReceiptFamilySurfaceTests
     [TestMethod]
     public void EveryOtherHolderOfReceiptInContractsIsPinned()
     {
-        // LuxembourgObservedTransport (Lex.V3.Contracts.Source.Luxembourg) joined this list with
-        // the D1-03 repeated-enumeration executor: a record holding the four transport facts of one
-        // observation the executor has already read back out of custody, so it carries the write
-        // receipt beside them the same way RepeatedEnumerationResolvedEvidence does above it. Same
-        // three producer shapes (Deconstruct out-parameter, backing field, property), reviewed and
-        // pinned rather than discovered later.
+        // RepeatedEnumerationObservedTransport (Lex.V3.Contracts.Source.Core; queue item 19: moved
+        // and renamed from Lex.V3.Contracts.Source.Luxembourg.LuxembourgObservedTransport) joined
+        // this list with the D1-03 repeated-enumeration executor: a record holding the four
+        // transport facts of one observation the executor has already read back out of custody, so
+        // it carries the write receipt beside them the same way RepeatedEnumerationResolvedEvidence
+        // does above it. Same three producer shapes (Deconstruct out-parameter, backing field,
+        // property), reviewed and pinned rather than discovered later.
         CollectionAssert.AreEqual(
             new[]
             {
                 "by-ref-method public instance " + Custody + "CustodiedDecode<T>::Deconstruct(out " + Receipt + "&, out T&) -> System.Void",
+                "by-ref-method public instance " + Core + "RepeatedEnumerationObservedTransport::Deconstruct("
+                + "out " + Http + "HttpLogicalRequest&, out " + Http + "RoutedHttpEvidence&, out " + Receipt + "&, "
+                + "out System.ReadOnlyMemory<System.Byte>&) -> System.Void",
                 "by-ref-method public instance " + Core + "RepeatedEnumerationResolvedEvidence::Deconstruct("
                 + "out " + Core + "MachineQueryPlan&, out " + Core + "MachineQueryInputArtifact&, "
                 + "out " + Core + "MachineQueryRenderReceipt&, out " + Core + "IMachineQueryRenderer&, "
                 + "out " + Http + "HttpLogicalRequest&, "
                 + "out " + Http + "RoutedHttpEvidence&, out " + Receipt + "&, "
                 + "out System.ReadOnlyMemory<System.Byte>&) -> System.Void",
-                "by-ref-method public instance " + Luxembourg + "LuxembourgObservedTransport::Deconstruct("
-                + "out " + Http + "HttpLogicalRequest&, out " + Http + "RoutedHttpEvidence&, out " + Receipt + "&, "
-                + "out System.ReadOnlyMemory<System.Byte>&) -> System.Void",
                 "field private instance " + Custody + "CustodiedDecode<T>::<Receipt>k__BackingField -> " + Receipt,
+                "field private instance " + Core + "RepeatedEnumerationObservedTransport::<DurableWriteReceipt>k__BackingField -> " + Receipt,
                 "field private instance " + Core + "RepeatedEnumerationResolvedEvidence::<DurableWriteReceipt>k__BackingField -> " + Receipt,
-                "field private instance " + Luxembourg + "LuxembourgObservedTransport::<DurableWriteReceipt>k__BackingField -> " + Receipt,
                 "method public instance " + Custody + "ICustodyStore::CreateAsync(System.ReadOnlyMemory<System.Byte>, "
                 + Custody + "CustodyClass, System.Threading.CancellationToken) -> System.Threading.Tasks.Task<" + Receipt + ">",
                 "property public instance " + Custody + "CustodiedDecode<T>::Receipt() -> " + Receipt,
+                "property public instance " + Core + "RepeatedEnumerationObservedTransport::DurableWriteReceipt() -> " + Receipt,
                 "property public instance " + Core + "RepeatedEnumerationResolvedEvidence::DurableWriteReceipt() -> " + Receipt,
-                "property public instance " + Luxembourg + "LuxembourgObservedTransport::DurableWriteReceipt() -> " + Receipt,
             },
             ConstructionSurface.ProducersIn(typeof(DurableBlobWriteReceipt).Assembly, typeof(DurableBlobWriteReceipt), true).ToArray());
     }

@@ -54,7 +54,7 @@ public sealed class LuxembourgExecutorConstructionSurfaceTests
                 // refusal detail exactly as the run result already does when the executor itself
                 // refuses before delivering.
                 "by-ref-method public instance " + N + "LuxembourgRepeatedEnumerationExecutor+ObserveOutcome"
-                + "::Deconstruct(out " + Contracts + "LuxembourgObservedTransport&, "
+                + "::Deconstruct(out " + Core + "RepeatedEnumerationObservedTransport&, "
                 + "out System.Nullable<System.UInt64>&, out "
                 + N + "LuxembourgEnumerationRefusalDetail&) -> System.Void",
                 "by-ref-method public instance " + N + "LuxembourgRepeatedEnumerationExecutor+PassOutcome"
@@ -102,11 +102,11 @@ public sealed class LuxembourgExecutorConstructionSurfaceTests
             new[]
             {
                 "constructor private instance " + N + "LuxembourgEnumerationRunResult::.ctor("
-                + Contracts + "LuxembourgEnumerationDeliveryReceipt, "
+                + Core + "RepeatedEnumerationDeliveryReceipt, "
                 + N + "LuxembourgEnumerationRefusalDetail, System.Int32) -> "
                 + N + "LuxembourgEnumerationRunResult",
                 "method public static " + N + "LuxembourgEnumerationRunResult::Delivered("
-                + Contracts + "LuxembourgEnumerationDeliveryReceipt, System.Int32) -> "
+                + Core + "RepeatedEnumerationDeliveryReceipt, System.Int32) -> "
                 + N + "LuxembourgEnumerationRunResult",
                 "method public static " + N + "LuxembourgEnumerationRunResult::Refused("
                 + N + "LuxembourgEnumerationRefusalDetail, System.Int32) -> "
@@ -119,9 +119,13 @@ public sealed class LuxembourgExecutorConstructionSurfaceTests
             {
                 // The three places a run result is returned, and the RunCoverAsync closure that
                 // reports one bootstrap refusal per intended leaf. All of them go through the two
-                // factories above; none is another way to build one.
+                // factories above; none is another way to build one. The closure's own ordinal
+                // shifted from b__8_0 to b__9_0 when queue item 19 replaced ObserveAsync's body with
+                // a call into the shared glue plus the ToObserveOutcome mapping method, which moved
+                // where the compiler numbers this generated method -- not a new way to build a run
+                // result, confirmed by re-printing this exact list after the change.
                 "method internal instance " + N + "LuxembourgRepeatedEnumerationExecutor+<>c"
-                + "::<RunCoverAsync>b__8_0(" + Contracts + "LuxembourgQueryPartitionRange) -> "
+                + "::<RunCoverAsync>b__9_0(" + Contracts + "LuxembourgQueryPartitionRange) -> "
                 + N + "LuxembourgEnumerationRunResult",
                 "method private instance " + N + "LuxembourgRepeatedEnumerationExecutor"
                 + "::RunPartitionOnSessionAsync(" + N + "LuxembourgPartitionRunRequest, "

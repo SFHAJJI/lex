@@ -53,6 +53,18 @@ internal static class LuxembourgScopeResolver
         "Work", "LegalResource", "ComplexWork", "Manifestation", "Expression", "Article",
         "Collection", "Code", "Memorial", "LegalResourceImpact");
 
+    /// <summary>
+    /// The ordinal <see cref="BuildScopeInput"/>'s own <c>selectors</c> array assigns the
+    /// publication-family selector, matching <see cref="VerifiedLuxembourgSourceProfile"/>'s
+    /// "selector.publication_family" member-key position in the same fixed order. Item 18's
+    /// SCOPE_RULING requires a test that needs this exact selector to locate it by this ordinal,
+    /// never by recognising a value shape it expects to see, because
+    /// <see cref="ScopeSelectorEvidence"/> carries no axis or dimension field a test could search
+    /// by, and a value-shape search the resolver itself produced can never fail to be satisfied by
+    /// that same resolver's output.
+    /// </summary>
+    internal const int PublicationFamilySelectorIndex = 3;
+
     internal static LuxembourgProfileResolution Resolve(
         VerifiedLuxembourgSourceProfile profile,
         IReadOnlyList<LuxembourgResourceObservation> observations)
@@ -440,6 +452,30 @@ internal static class LuxembourgScopeResolver
                     _ => "typed_quarantine_role_not_admitted",
                 },
                 "lu_family_exact_type",
+                evidence);
+        }
+
+        // types is empty here (both branches above already ruled out zero and multiple), so an
+        // Act class with no jolux:typeDocument assertion at all is a genuinely absent required
+        // value, not an unrecognised one: R5.1 rule 11 (Candidate 5 line 613) reads this
+        // publisher_value_absent with body typed_quarantine, naming the absent type. The old
+        // catchall below said "unknown_publication_family", which claims a value was observed and
+        // not admitted -- false when no typeDocument assertion exists at all. The resource's class
+        // presence stays visible through its own evidence, the supporting-document selector.
+        //
+        // This branch is checked first and so displaces the two fallbacks immediately below it,
+        // PointSupportClasses and MetadataSupportClasses (or prov#Entity): an Act class with no
+        // typeDocument that also happens to carry a point-support or metadata-support class (for
+        // example jolux:Work) still lands here as TypedQuarantine, never on their Point or
+        // AcceptedMetadata outcomes. That displacement is deliberate -- the conservative reading
+        // of rule 11 for an Act, where an absent typeDocument governs regardless of any other
+        // WEMI-support class also present -- not an oversight of those two fallbacks.
+        if (IsActClass(classes))
+        {
+            return Disposition(
+                LuScopeTerminalState.TypedQuarantine,
+                "typed_quarantine_publication_type_absent",
+                "lu_family_type_absent",
                 evidence);
         }
 
@@ -1303,7 +1339,7 @@ internal static class LuxembourgScopeResolver
                 profile,
                 ScopeAxis.Body,
                 dimensions.PublicationFamily,
-                [.. classes, .. types],
+                types,
                 observation.ObservationRef,
                 evidenceOrdinals),
             Selector(

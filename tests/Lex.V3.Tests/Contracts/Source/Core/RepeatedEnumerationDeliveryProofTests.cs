@@ -530,11 +530,11 @@ public sealed class RepeatedEnumerationDeliveryProofTests
         cursorEnvelopeIdentity, maximumDeliverableRows, thresholdDetectorIdentity,
         new(Fixture.Artifact(905), "count"), new(Fixture.Artifact(905), "page"), "count", ["id", "cursor", "value"], ["id"], ["cursor"], ["scope"], "pass_id", ["cursor"], "has_cursor", terminalPagePolicy);
 
-    // internal rather than private: the Luxembourg receipt/cover contract tests
-    // (tests/Lex.V3.Tests/Contracts/Source/Luxembourg/) build LuxembourgEnumerationDeliveryReceipt
-    // and LuxembourgPartitionCover fixtures from real, fully-validated EnumerationDeliveryComparison
-    // instances rather than hand-rolling a second copy of this plumbing. Neither type cares which
-    // dialect minted the comparison it is given.
+    // internal rather than private: RepeatedEnumerationDeliveryReceiptTests (this directory) and
+    // the Luxembourg cover contract tests (tests/Lex.V3.Tests/Contracts/Source/Luxembourg/) build
+    // RepeatedEnumerationDeliveryReceipt and LuxembourgPartitionCover fixtures from real,
+    // fully-validated EnumerationDeliveryComparison instances rather than hand-rolling a second
+    // copy of this plumbing. Neither type cares which dialect minted the comparison it is given.
     internal sealed class Fixture : IRepeatedEnumerationEvidenceResolver
     {
         private readonly Dictionary<SourceArtifactRef, RepeatedEnumerationResolvedEvidence> _resolved = [];

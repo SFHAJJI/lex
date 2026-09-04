@@ -9,7 +9,7 @@ namespace Lex.V3.Tests.Contracts.Source.Luxembourg;
 /// The reconciliation of a chain's leaves into one coverage claim. Like the receipt it reconciles,
 /// <see cref="LuxembourgPartitionCover"/> is dialect-agnostic, so these tests build its leaf and
 /// root receipts from the same EU-dialect <see cref="RepeatedEnumerationDeliveryProofTests.Fixture"/>
-/// used by <c>LuxembourgEnumerationDeliveryReceiptTests</c>.
+/// used by <c>RepeatedEnumerationDeliveryReceiptTests</c>.
 /// </summary>
 [TestClass]
 public sealed class LuxembourgPartitionCoverTests
@@ -270,16 +270,16 @@ public sealed class LuxembourgPartitionCoverTests
             .Create("a,b", "a,b");
         var rightDelivery = new RepeatedEnumerationDeliveryProofTests.Fixture(partitionKey: "right")
             .Create("c,d", "c,d");
-        var (leftSession, leftExecutor) = LuxembourgEnumerationDeliveryReceiptTests.FullMembership(
+        var (leftSession, leftExecutor) = RepeatedEnumerationDeliveryReceiptTests.FullMembership(
             leftDelivery, CustodyMembership.Floored);
-        var (rightSession, rightExecutor) = LuxembourgEnumerationDeliveryReceiptTests.FullMembership(
+        var (rightSession, rightExecutor) = RepeatedEnumerationDeliveryReceiptTests.FullMembership(
             rightDelivery, CustodyMembership.RetainedUnenforced);
-        var left = LuxembourgEnumerationDeliveryReceipt.TryCreate(
+        var left = RepeatedEnumerationDeliveryReceipt.TryCreate(
             leftDelivery, leftSession, leftExecutor,
-            LuxembourgEnumerationDeliveryReceiptTests.Custody(leftDelivery), out _)!;
-        var right = LuxembourgEnumerationDeliveryReceipt.TryCreate(
+            RepeatedEnumerationDeliveryReceiptTests.Custody(leftDelivery), out _)!;
+        var right = RepeatedEnumerationDeliveryReceipt.TryCreate(
             rightDelivery, rightSession, rightExecutor,
-            Unfloored(LuxembourgEnumerationDeliveryReceiptTests.Custody(rightDelivery)), out _)!;
+            Unfloored(RepeatedEnumerationDeliveryReceiptTests.Custody(rightDelivery)), out _)!;
         Assert.AreEqual(CustodyMembership.Floored, left.RetainedFloor);
         Assert.AreEqual(CustodyMembership.RetainedUnenforced, right.RetainedFloor);
 
@@ -291,7 +291,7 @@ public sealed class LuxembourgPartitionCoverTests
     }
 
     /// <summary>The custody list restated at the weaker membership, to match an unfloored run.</summary>
-    private static List<LuxembourgObservationCustody> Unfloored(List<LuxembourgObservationCustody> custody) =>
+    private static List<RepeatedEnumerationObservationCustody> Unfloored(List<RepeatedEnumerationObservationCustody> custody) =>
         custody
             .Select(static entry => entry with
             {
@@ -303,13 +303,13 @@ public sealed class LuxembourgPartitionCoverTests
         LuxembourgPartitionChain.Root(Range("root", "a", "z"))
             .SplitLeaf("root", Cursor("m"), "left", "right");
 
-    private static LuxembourgEnumerationDeliveryReceipt Receipt(EnumerationDeliveryComparison delivery)
+    private static RepeatedEnumerationDeliveryReceipt Receipt(EnumerationDeliveryComparison delivery)
     {
-        var (session, executor) = LuxembourgEnumerationDeliveryReceiptTests.FullMembership(
+        var (session, executor) = RepeatedEnumerationDeliveryReceiptTests.FullMembership(
             delivery, CustodyMembership.Floored);
-        return LuxembourgEnumerationDeliveryReceipt.TryCreate(
+        return RepeatedEnumerationDeliveryReceipt.TryCreate(
             delivery, session, executor,
-            LuxembourgEnumerationDeliveryReceiptTests.Custody(delivery), out var refusal)
+            RepeatedEnumerationDeliveryReceiptTests.Custody(delivery), out var refusal)
             ?? throw new AssertFailedException($"The fixture's own receipt was refused: {refusal}.");
     }
 
