@@ -103,23 +103,23 @@ public sealed class EuCellarObjectSnapshotTests
                 + "System.Collections.Generic.IReadOnlyList<" + N + "EuPredicateObservation>, "
                 + "System.Collections.Generic.IReadOnlyDictionary<" + C + "EuCdmPredicate, " + N
                 + "EuPredicateObservation>, " + N + "EuChannelObservation, " + N
-                + "EuLanguageExpressionObservation, " + N + "EuFormatObservation, " + N
-                + "EuContentClassObservation, "
+                + "EuLanguageExpressionObservation?, " + N + "EuFormatObservation?, " + N
+                + "EuContentClassObservation?, "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "EuRelationFamilyObservation>, "
                 + "System.Collections.Generic.IReadOnlyDictionary<" + C + "EuRelationFamily, " + N
                 + "EuRelationFamilyObservation>, Lex.V3.Contracts.Source.Core.SourceArtifactRef, " + N
-                + "EuContentClassObservation, Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> " + N
+                + "EuContentClassObservation?, Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> " + N
                 + "EuCellarObjectSnapshot",
                 "method public static " + N + "EuCellarObjectSnapshot::TryObserve("
                 + "Lex.V3.Contracts.Source.Core.SourceObjectRef, System.String, " + C + "EuActForm, "
                 + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "EuPredicateObservation>, " + N
-                + "EuChannelObservation, " + N + "EuLanguageExpressionObservation, " + N
-                + "EuFormatObservation, " + N + "EuContentClassObservation, "
+                + "EuChannelObservation, " + N + "EuLanguageExpressionObservation?, " + N
+                + "EuFormatObservation?, " + N + "EuContentClassObservation?, "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "EuRelationFamilyObservation>, "
-                + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, " + N + "EuContentClassObservation, "
+                + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, " + N + "EuContentClassObservation?, "
                 + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, out " + N
-                + "EuCellarObjectSnapshotRefusal&) -> " + N + "EuCellarObjectSnapshot",
+                + "EuCellarObjectSnapshotRefusal&) -> " + N + "EuCellarObjectSnapshot?",
             },
             ConstructionSurface.Of(typeof(EuCellarObjectSnapshot)).ToArray());
     }
@@ -465,7 +465,7 @@ public sealed class EuCellarObjectSnapshotTests
                 "constructor public instance " + N + "EuRelationFamilyObservation::.ctor(" + C
                     + "EuRelationFamily, " + C + "EuRelationAcquisitionState, "
                     + "System.Collections.Generic.IReadOnlyList<" + N + "EuRelationEdgeObservation>, "
-                    + "Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> " + N + "EuRelationFamilyObservation",
+                    + "Lex.V3.Contracts.Source.Core.SourceArtifactRef?) -> " + N + "EuRelationFamilyObservation",
                 "method public instance " + N + "EuRelationFamilyObservation::<Clone>$() -> " + N
                     + "EuRelationFamilyObservation",
             },
@@ -570,7 +570,7 @@ public sealed class EuCellarObjectSnapshotTests
             new[]
             {
                 "field private instance " + N + "EuCellarObjectSnapshot::<Language>k__BackingField -> " + N
-                    + "EuLanguageExpressionObservation",
+                    + "EuLanguageExpressionObservation?",
                 // D1-05c-1's decode fills the language observation from family X's own rows (queue
                 // item 18's own line: "the language observation filled from X").
                 "method private static " + N + "EuCellarObjectDecode::BuildLanguageObservation("
@@ -579,7 +579,7 @@ public sealed class EuCellarObjectSnapshotTests
                     + "Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> " + N
                     + "EuLanguageExpressionObservation",
                 "property public instance " + N + "EuCellarObjectSnapshot::Language() -> " + N
-                    + "EuLanguageExpressionObservation",
+                    + "EuLanguageExpressionObservation?",
             },
             ConstructionSurface.ProducersIn(assembly, typeof(EuLanguageExpressionObservation), includeNonPublic: true)
                 .ToArray(),
@@ -636,7 +636,7 @@ public sealed class EuCellarObjectSnapshotTests
                 "constructor public instance " + N + "EuFormatObservation::.ctor(" + N
                     + "EuManifestationFormat, " + N + "EuFormatBodyAdmission, System.String, "
                     + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, "
-                    + "System.Collections.Generic.IReadOnlyList<" + N + "EuManifestationFormat>) -> "
+                    + "System.Collections.Generic.IReadOnlyList<" + N + "EuManifestationFormat>?) -> "
                     + N + "EuFormatObservation",
                 "method public instance " + N + "EuFormatObservation::<Clone>$() -> " + N
                     + "EuFormatObservation",
@@ -654,7 +654,7 @@ public sealed class EuCellarObjectSnapshotTests
                 // D1-05d: family M's listing decode is now a real external producer -- it is the
                 // one door that mints a format observation from the office's own listing.
                 "field private instance " + N + "EuCellarObjectSnapshot::<Format>k__BackingField -> " + N
-                    + "EuFormatObservation",
+                    + "EuFormatObservation?",
                 "method public static " + N + "EuManifestationListingDecode::Observe("
                     + "System.Collections.Generic.IReadOnlyCollection<" + N + "EuManifestationFormat>, "
                     + "Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> " + N + "EuFormatObservation",
@@ -670,11 +670,11 @@ public sealed class EuCellarObjectSnapshotTests
                     + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Core.RepeatedEnumerationRow>, "
                     + "Lex.V3.Contracts.Source.Core.RepeatedEnumerationInterpretationProfile, "
                     + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, out " + N
-                    + "EuManifestationListingRefusal&, out System.String&, out System.String&) -> "
+                    + "EuManifestationListingRefusal&, out System.String&?, out System.String&?) -> "
                     + "System.Collections.Generic.IReadOnlyDictionary<System.String, " + N
-                    + "EuFormatObservation>",
+                    + "EuFormatObservation>?",
                 "property public instance " + N + "EuCellarObjectSnapshot::Format() -> " + N
-                    + "EuFormatObservation",
+                    + "EuFormatObservation?",
             },
             ConstructionSurface.ProducersIn(assembly, typeof(EuFormatObservation), includeNonPublic: true)
                 .ToArray(),
@@ -709,13 +709,13 @@ public sealed class EuCellarObjectSnapshotTests
             new[]
             {
                 "field private instance " + N + "EuCellarObjectSnapshot::<Rights>k__BackingField -> " + N
-                    + "EuContentClassObservation",
+                    + "EuContentClassObservation?",
                 "field private instance " + N + "EuCellarObjectSnapshot::<Supporting>k__BackingField -> " + N
-                    + "EuContentClassObservation",
+                    + "EuContentClassObservation?",
                 "property public instance " + N + "EuCellarObjectSnapshot::Rights() -> " + N
-                    + "EuContentClassObservation",
+                    + "EuContentClassObservation?",
                 "property public instance " + N + "EuCellarObjectSnapshot::Supporting() -> " + N
-                    + "EuContentClassObservation",
+                    + "EuContentClassObservation?",
             },
             ConstructionSurface.ProducersIn(assembly, typeof(EuContentClassObservation), includeNonPublic: true)
                 .ToArray(),
@@ -745,17 +745,17 @@ public sealed class EuCellarObjectSnapshotTests
                     + "System.Boolean, System.String, "
                     + "System.Collections.Generic.IReadOnlyList<" + N + "EuCellarObjectDecode+ObjectFactRow>, "
                     + "System.Collections.Generic.IReadOnlyList<" + N + "EuCellarObjectDecode+ExpressionFactRow>, "
-                    + N + "EuFormatObservation, "
+                    + N + "EuFormatObservation?, "
                     + C + "EuActForm, Lex.V3.Contracts.Source.Core.SourceArtifactRef, out " + N
-                    + "EuCellarObjectDecodeRefusal&, out System.String&, out " + N
-                    + "EuCellarObjectSnapshotRefusal&) -> " + N + "EuCellarObjectSnapshot",
+                    + "EuCellarObjectDecodeRefusal&, out System.String&?, out " + N
+                    + "EuCellarObjectSnapshotRefusal&) -> " + N + "EuCellarObjectSnapshot?",
                 "method public static " + N + "EuCellarObjectDecode::TryDecode(System.String, "
                     + RowList + RowList + RowList + RowList
                     + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, " + C + "EuActForm, "
                     + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, out " + N
-                    + "EuCellarObjectDecodeRefusal&, out System.String&, out " + N
+                    + "EuCellarObjectDecodeRefusal&, out System.String&?, out " + N
                     + "EuCellarObjectSnapshotRefusal&, out " + N + "EuManifestationListingRefusal&) -> "
-                    + "System.Collections.Generic.IReadOnlyList<" + N + "EuCellarObjectSnapshot>",
+                    + "System.Collections.Generic.IReadOnlyList<" + N + "EuCellarObjectSnapshot>?",
             },
             ConstructionSurface.ProducersIn(assembly, typeof(EuCellarObjectSnapshot), includeNonPublic: true)
                 .ToArray(),
