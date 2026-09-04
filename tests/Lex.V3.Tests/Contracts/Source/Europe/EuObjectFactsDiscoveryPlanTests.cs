@@ -854,7 +854,7 @@ public sealed class EuObjectFactsDiscoveryPlanTests
     }
 
     [TestMethod]
-    public void TheQuerySetEnumHasExactlyThreeMembers()
+    public void TheQuerySetEnumHasExactlyFourMembers()
     {
         CollectionAssert.AreEqual(
             new[]
@@ -862,6 +862,8 @@ public sealed class EuObjectFactsDiscoveryPlanTests
                 "base-constructor protected instance System.Enum::.ctor() -> System.Enum",
                 "base-constructor protected instance System.ValueType::.ctor() -> System.ValueType",
                 "field public static " + N + "EuObjectFactsQuerySet::ExpressionFacts -> "
+                    + N + "EuObjectFactsQuerySet",
+                "field public static " + N + "EuObjectFactsQuerySet::ManifestationFacts -> "
                     + N + "EuObjectFactsQuerySet",
                 "field public static " + N + "EuObjectFactsQuerySet::ObjectFacts -> "
                     + N + "EuObjectFactsQuerySet",

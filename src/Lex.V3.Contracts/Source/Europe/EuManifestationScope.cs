@@ -690,6 +690,15 @@ public sealed record EuManifestationScope
 /// <summary>
 /// One offered format and whether it may serve as a body source.
 /// </summary>
+/// <remarks>
+/// Two different things are expressed with this one type, and <see cref="OrderedCandidates"/> is
+/// what tells them apart. A CLASS-level row, one per member of the closed
+/// <see cref="EuManifestationFormat"/> vocabulary, is the reviewed profile's standing policy for
+/// that format and carries no candidates. An OBJECT-level row, minted by
+/// <see cref="EuManifestationListingDecode"/> from one Work's own family M listing, carries that
+/// Work's ordered fetch candidates; <see cref="EuFormatBodyAdmission.BodyAdmitted"/> on such a row
+/// means "the office lists a wording format we will attempt", never "this will succeed".
+/// </remarks>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record EuFormatDisposition
 {
@@ -698,12 +707,15 @@ public sealed record EuFormatDisposition
         EuManifestationFormat format,
         EuFormatBodyAdmission admission,
         string reasonCode,
-        SourceArtifactRef evidenceRef)
+        SourceArtifactRef evidenceRef,
+        IReadOnlyList<EuManifestationFormat>? orderedCandidates = null)
     {
         Format = ContractValidation.RequireDefined(format, nameof(format));
         Admission = ContractValidation.RequireDefined(admission, nameof(admission));
         ReasonCode = ContractValidation.RequireIdentifier(reasonCode, nameof(reasonCode));
         EvidenceRef = evidenceRef ?? throw new ArgumentNullException(nameof(evidenceRef));
+        OrderedCandidates = EuManifestationListingDecode.RequireCandidateLadder(
+            orderedCandidates, Format, nameof(orderedCandidates));
     }
 
     public EuManifestationFormat Format { get; }
@@ -713,4 +725,10 @@ public sealed record EuFormatDisposition
     public string ReasonCode { get; }
 
     public SourceArtifactRef EvidenceRef { get; }
+
+    /// <summary>
+    /// This object's own listed fetch candidates in the closed ladder's order, starting with
+    /// <see cref="Format"/>. Empty on a class-level policy row; see this type's own remarks.
+    /// </summary>
+    public IReadOnlyList<EuManifestationFormat> OrderedCandidates { get; }
 }
