@@ -23,7 +23,8 @@ namespace Lex.V3.Tests.Contracts.Source.Europe;
 /// </para>
 /// <para>
 /// Fixtures are hand built directly from review/23-research-temporal.md. <see cref="Gdpr"/>'s CELEX
-/// is quoted throughout the file (e.g. section 3, line 60). <see cref="SchremsIi"/>'s CELEX is
+/// is quoted throughout the file (e.g. section 2, line 42: queries must bind
+/// <c>"32016R0679"^^xsd:string</c>). <see cref="SchremsIi"/>'s CELEX is
 /// quoted at section 5, line 77 ("Case law: 62018CJ0311 has 24 expressions...") and its ECLI at
 /// section 2, line 45 ("`ECLI:EU:C:2020:559` as a literal on `cdm:case-law_ecli`"). The
 /// <c>case-law_interpretes_resource_legal</c> pairing of Schrems II with the GDPR is quoted at
@@ -240,10 +241,16 @@ public sealed class EuCaseLawLinkTests
         Assert.AreEqual(EcliState.EcliPresent, binding.CaseEcliState);
         Assert.AreEqual(SchremsIiEcli, binding.CaseEcli());
 
-        // The consistency check the design objection asked for: this binding's own,
-        // independently derived case-side state must equal RelationFact's own built-in check,
-        // not merely be defined to equal it.
-        Assert.AreEqual(binding.Fact.TargetEcliState, binding.CaseEcliState);
+        // The consistency check the design objection asked for, fixed: the prior version asserted
+        // binding.Fact.TargetEcliState against binding.CaseEcliState, but EuCaseLawLinkBinding.Create
+        // sets both from the identical local (factTargetEcliState is literally caseEcliState
+        // whenever caseSide is Target), so that comparison could never fail no matter what value
+        // the shared computation produced -- it proved agreement between a value and itself, not
+        // correctness. The independent expectation instead: SchremsIi's own identity set literally
+        // carries SchremsIiEcli (see the fixture above), so RelationFact's own target-ECLI invariant
+        // requires exactly EcliPresent here, checked against that literal rather than against
+        // CaseEcliState.
+        Assert.AreEqual(EcliState.EcliPresent, binding.Fact.TargetEcliState);
         Assert.AreEqual(SchremsIiEcli, binding.Fact.TargetEcli());
     }
 
