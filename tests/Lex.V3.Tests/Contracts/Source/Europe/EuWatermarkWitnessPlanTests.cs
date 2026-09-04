@@ -760,7 +760,7 @@ public sealed class EuWatermarkWitnessPlanTests
             {
                 "constructor private instance " + N + "EuWatermarkWitnessPlan::.ctor(System.String"
                 + ", System.String, System.Int32, " + N + "EuWatermarkCursor, " + N
-                + "EuWatermarkLexicalShape, System.String, System.String) -> " + N
+                + "EuWatermarkLexicalShape, System.String, System.String, System.Byte[]) -> " + N
                 + "EuWatermarkWitnessPlan",
                 "constructor private static " + N + "EuWatermarkWitnessPlan::.cctor() -> " + N
                 + "EuWatermarkWitnessPlan",

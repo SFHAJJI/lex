@@ -103,7 +103,7 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
     /// lives in this same assembly (<c>Lex.V3.Ingest</c>), so internal visibility is exactly as reusable
     /// as public would be, without exposing a signature nothing outside this assembly could ever call.
     /// </remarks>
-    internal async Task<ObservationAttemptOutcome> ObserveAsync(
+    internal Task<ObservationAttemptOutcome> ObserveAsync(
         RoutedHttpAcquisitionSession session,
         BoundMachineRequest request,
         RepeatedEnumerationInterpretationProfile profile,
@@ -112,9 +112,36 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
         Action<int> setCount,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(profile);
+        return ObserveAsync(
+            session, request, profile.ExpectedMediaType, executorWrittenMembership, currentCount, setCount,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// The same attempt loop as the <see cref="RepeatedEnumerationInterpretationProfile"/> overload
+    /// above, taking the expected media type directly rather than a whole profile. Added for
+    /// <c>Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor.RunWitnessTraversalAsync</c> (D1-05c-2
+    /// defect 3's own fix): the witness's own <c>EuWatermarkWitnessPlan</c> deliberately does not bind
+    /// to <see cref="RepeatedEnumerationInterpretationProfile"/> at all (that type requires a
+    /// pre-count and a post-count over a partition, which a witness has neither), so a caller sending
+    /// the witness's real HTTP request through this shared attempt loop cannot supply one. The
+    /// original overload above is unchanged in behavior for every existing caller: it now simply
+    /// forwards <c>profile.ExpectedMediaType</c>, the only field of <paramref name="profile"/> this
+    /// method ever read.
+    /// </summary>
+    internal async Task<ObservationAttemptOutcome> ObserveAsync(
+        RoutedHttpAcquisitionSession session,
+        BoundMachineRequest request,
+        string expectedMediaType,
+        Dictionary<string, CustodyMembership> executorWrittenMembership,
+        Func<int> currentCount,
+        Action<int> setCount,
+        CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(profile);
+        ArgumentException.ThrowIfNullOrEmpty(expectedMediaType);
         ArgumentNullException.ThrowIfNull(executorWrittenMembership);
         ArgumentNullException.ThrowIfNull(currentCount);
         ArgumentNullException.ThrowIfNull(setCount);
@@ -166,7 +193,7 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
         }
 
         var observedMediaType = terminal.Headers.ContentType is RoutedHttpSingleHeader single ? single.Value : null;
-        if (observedMediaType != profile.ExpectedMediaType)
+        if (observedMediaType != expectedMediaType)
         {
             return new ObservationAttemptOutcome(
                 null,
@@ -324,7 +351,15 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
     /// <c>ContractCanonicalizer</c> that originally wrote this shape is not, so this decodes the
     /// public envelope directly rather than reaching for that internal type.
     /// </summary>
-    private static T DecodeCanonical<T>(ReadOnlySpan<byte> bytes, string canonicalizationIdentity, string what)
+    /// <remarks>
+    /// Internal rather than private: <see cref="Lex.V3.Ingest.Europe.EuDeliveryEvidenceSet"/>'s own
+    /// <c>ResolveOneAsync</c> (same assembly) reuses this exact decode rather than carrying its own
+    /// duplicate, since the two calls decode the identical canonical-bytes shape over the identical
+    /// artifact types (<c>MachineQueryPlan</c>, <c>MachineQueryRenderReceipt</c>). Not public: nothing
+    /// outside this assembly needs it, and every caller this glue exists for already lives in
+    /// <c>Lex.V3.Ingest</c>.
+    /// </remarks>
+    internal static T DecodeCanonical<T>(ReadOnlySpan<byte> bytes, string canonicalizationIdentity, string what)
     {
         string decoded;
         try
