@@ -454,7 +454,15 @@ public sealed class EnumerationDeliveryComparison
         // comment and this lane enforced it, and there are now two GET-shaped profiles rather than
         // one, so the enforced form is kept. It is behaviour-preserving for every real caller (a
         // SPARQL profile has neither field null, so the guard cannot fire) and turns the otherwise
-        // impossible case into a typed mismatch rather than a null dereference.
+        // impossible case into a typed mismatch rather than an unmatched request.
+        //
+        // D1-06c-LU-2 fold-in one (READY verdict
+        // lex-event-20260904T175623600Z-7d8ea851a9a54278b97e1eb33a0af29e, restated in the
+        // integration event lex-event-20260904T175733566Z-413c3a8f8b344bb3bff4758246241c3e): the
+        // merge kept BOTH this guard and EU's null-coalescing throws below it, and the guard makes
+        // those throws unreachable. They are deleted here; the guard alone decides. The clause
+        // about a null dereference is corrected with them, because with the guard in place no
+        // dereference of either field is ever reached with a null value.
         if (sourceProfile.RequestContentType is null || sourceProfile.Accept is null)
         {
             return false;
@@ -463,16 +471,10 @@ public sealed class EnumerationDeliveryComparison
         var expectedHeaders = new[]
         {
             new HttpLogicalRequestHeader("user-agent", sourceProfile.CrawlerUserAgent),
-            new HttpLogicalRequestHeader(
-                "accept",
-                sourceProfile.Accept
-                    ?? throw new InvalidOperationException(
-                        "A repeated-enumeration source profile must carry a fixed Accept.")),
+            new HttpLogicalRequestHeader("accept", sourceProfile.Accept),
             new HttpLogicalRequestHeader(
                 "content-type",
-                $"{sourceProfile.RequestContentType
-                    ?? throw new InvalidOperationException(
-                        "A repeated-enumeration source profile must carry a fixed request content type.")}; charset=utf-8"),
+                $"{sourceProfile.RequestContentType}; charset=utf-8"),
         };
         return string.Equals(logicalRequest.Uri, reproducedRequest.RequestedUri, StringComparison.Ordinal) &&
             logicalRequest.Method == sourceProfile.Method &&

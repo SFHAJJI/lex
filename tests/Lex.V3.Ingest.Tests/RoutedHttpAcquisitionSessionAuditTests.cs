@@ -877,7 +877,7 @@ public sealed class RoutedHttpAcquisitionSessionAuditTests
         var constructor = typeof(RoutedHttpAcquisitionSession).GetConstructors(
             BindingFlags.Instance | BindingFlags.NonPublic).Single();
         var session = (RoutedHttpAcquisitionSession)constructor.Invoke(
-            [request, custody, handler, timeProvider, false]);
+            [request, custody, handler, timeProvider, false, Array.Empty<string>()]);
         PrivateMethod("ActivateGeneration", BindingFlags.Instance).Invoke(session, null);
         return session;
     }

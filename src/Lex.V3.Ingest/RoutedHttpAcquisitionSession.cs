@@ -54,6 +54,7 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
     private readonly DateTimeOffset _runCreatedAt;
     private readonly bool _usesPinnedHandler;
     private readonly BoundMachineRequestIdentity _sourceWitnessIdentity;
+    private readonly string[] _additionalRobotsPaths;
     private readonly ActiveGenerationState _activeGeneration;
     private readonly object _generationToken = new();
     private readonly object _generationLock = new();
@@ -80,12 +81,22 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
         ICustodyStore custodyStore,
         HttpMessageHandler handler,
         TimeProvider timeProvider,
-        bool usesPinnedHandler)
+        bool usesPinnedHandler,
+        IReadOnlyList<string> additionalRobotsPaths)
     {
         ArgumentNullException.ThrowIfNull(sourceWitness);
         ArgumentNullException.ThrowIfNull(custodyStore);
         ArgumentNullException.ThrowIfNull(handler);
         ArgumentNullException.ThrowIfNull(timeProvider);
+        ArgumentNullException.ThrowIfNull(additionalRobotsPaths);
+
+        _additionalRobotsPaths = additionalRobotsPaths.ToArray();
+        if (_additionalRobotsPaths.Any(static path => string.IsNullOrEmpty(path) || path[0] != '/'))
+        {
+            throw new ArgumentException(
+                "An additional robots path is one absolute path this run supplies from the store.",
+                nameof(additionalRobotsPaths));
+        }
 
         _sourceWitnessIdentity = MachineQueryBinder.OpenIdentity(sourceWitness);
         _profile = OfficialMachineQuerySourceProfiles.ResolveFor(_sourceWitnessIdentity);
@@ -134,6 +145,23 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
     internal static Task<StartResult> StartAsync(
         BoundMachineRequest sourceWitness,
         ICustodyStore custodyStore,
+        CancellationToken cancellationToken) =>
+        StartAsync(sourceWitness, custodyStore, [], cancellationToken);
+
+    /// <summary>
+    /// Starts a run whose robots verdict must also consider paths this run learned from the
+    /// publisher's own store rather than from the request target. RULING
+    /// lex-event-20260904T180444431Z-13c6f8f86ddf4f02857cf4001c202143: every Luxembourg
+    /// manifestation is evaluated against three paths, the fetch path, the page path derived from
+    /// the filestore path, and the act's own ELI page path, refusing when ANY is disallowed. The
+    /// third cannot be derived from the fetch path at all (the loi 2007/01/15/n2 PDF and the rgd
+    /// 1977/11/16/n3 PDF both live under a memorial path outside their own act), so the caller
+    /// supplies it. This can only ever fetch strictly less, never more.
+    /// </summary>
+    internal static Task<StartResult> StartAsync(
+        BoundMachineRequest sourceWitness,
+        ICustodyStore custodyStore,
+        IReadOnlyList<string> additionalRobotsPaths,
         CancellationToken cancellationToken)
     {
         var session = new RoutedHttpAcquisitionSession(
@@ -141,7 +169,8 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             custodyStore,
             CreatePinnedHandler(),
             TimeProvider.System,
-            usesPinnedHandler: true);
+            usesPinnedHandler: true,
+            additionalRobotsPaths);
         return session.BootstrapRobotsAsync(cancellationToken);
     }
 
@@ -168,6 +197,20 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
         ICustodyStore custodyStore,
         HttpMessageHandler handler,
         TimeProvider timeProvider,
+        CancellationToken cancellationToken) =>
+        StartWithTestTransportAsync(
+            sourceWitness, custodyStore, handler, timeProvider, [], cancellationToken);
+
+    /// <summary>
+    /// The same door, for a run that also supplies store-derived robots paths. See the matching
+    /// <see cref="StartAsync(BoundMachineRequest, ICustodyStore, IReadOnlyList{string}, CancellationToken)"/>.
+    /// </summary>
+    internal static Task<StartResult> StartWithTestTransportAsync(
+        BoundMachineRequest sourceWitness,
+        ICustodyStore custodyStore,
+        HttpMessageHandler handler,
+        TimeProvider timeProvider,
+        IReadOnlyList<string> additionalRobotsPaths,
         CancellationToken cancellationToken)
     {
         var session = new RoutedHttpAcquisitionSession(
@@ -175,7 +218,8 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             custodyStore,
             handler,
             timeProvider,
-            usesPinnedHandler: false);
+            usesPinnedHandler: false,
+            additionalRobotsPaths);
         return session.BootstrapRobotsAsync(cancellationToken);
     }
 
@@ -354,11 +398,26 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             // TryDeriveLuxembourgFilestoreEliPagePath), so both the actual fetch path and that
             // derived page path are evaluated here, refusing when either is disallowed. Every
             // other profile derives no second path and is evaluated exactly as before.
+            //
+            // RULING lex-event-20260904T180444431Z-13c6f8f86ddf4f02857cf4001c202143 adds the third
+            // path, and it is not derivable here: the publisher's own robots.txt groups four lines
+            // around loi 2007/01/15/n2 but writes that act's PDF line as
+            // /eli/etat/leg/memorial/2007/8/fr/pdf while the file lives under memorial/2007/a8, so
+            // a literal evaluation of the two derivable paths permits a fetch the publisher plainly
+            // meant to withhold. We do not repair a publisher's file toward intent and we keep no
+            // name list in code. Instead the caller supplies the act's own ELI page path, which it
+            // got from the store (manifestation to expression to work), and that act's /jo page is
+            // disallowed by prefix, so the PDF is refused for the publisher's own stated reason.
+            // The refusal names whichever path matched. This can only ever fetch strictly less.
             var primaryPath = new Uri(_sourceWitnessIdentity.RequestedUri, UriKind.Absolute).PathAndQuery;
             var derivedEliPagePath = TryDeriveLuxembourgFilestoreEliPagePath(_profile.Id, primaryPath);
-            var candidatePaths = derivedEliPagePath is null
-                ? [primaryPath]
-                : new[] { primaryPath, derivedEliPagePath };
+            var candidatePaths = new List<string>(2 + _additionalRobotsPaths.Length) { primaryPath };
+            if (derivedEliPagePath is not null)
+            {
+                candidatePaths.Add(derivedEliPagePath);
+            }
+
+            candidatePaths.AddRange(_additionalRobotsPaths);
 
             string? deniedPath = null;
             var sawUnsafeToInterpret = false;
@@ -519,24 +578,6 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                 nameof(openedRequest));
         }
 
-        if (profile.Id == OfficialMachineQuerySourceProfileId.LuxembourgDocumentFetch)
-        {
-            // D1-06c-LU builds the LU route, its robots bootstrap and its route-level tests only;
-            // sending the actual LU product request is D1-06c-LU-2's job, so this sender is not yet
-            // asked to carry it and says so rather than sending something unreviewed.
-            //
-            // Rebase resolution onto D1-06c-EU's merge 275483f3, and the reason this is keyed on the
-            // profile rather than on a null Accept/RequestContentType as it originally was: this
-            // guard was written when LU's was the only GET-shaped profile in the codebase. EU's
-            // document-fetch profile is also GET and also fixes neither field, so the original
-            // condition matched it too and made the working EU GET branch below unreachable. That
-            // combination never existed on either lane alone: RoutedHttpAcquisitionSession.cs
-            // auto-merged with no textual conflict, and the 18 EU document-fetch tests this broke
-            // are what surfaced it.
-            throw new NotSupportedException(
-                "CreateMachineRequest does not yet support the Luxembourg document-fetch profile.");
-        }
-
         var body = openedRequest.CopyRequestBody();
         if (profile.Method == HttpRequestMethod.Get)
         {
@@ -583,13 +624,23 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
     }
 
     /// <summary>
-    /// Builds the GET logical request for the EU document-fetch channel. The wire target is
-    /// <paramref name="openedRequest"/>'s own <c>RequestedUri</c> -- already the exact, real
-    /// <see cref="EuDocumentFetchAddress.ResourceUri"/>, never rebuilt here -- and the
-    /// <c>Accept</c>/<c>Accept-Language</c> headers are read back from the reopened input artifact's
-    /// two carried parameters, the same door <see cref="EuDocumentFetchPlan"/> used to carry them
-    /// through binding.
+    /// Builds the GET logical request for a document-fetch channel. The wire target is
+    /// <paramref name="openedRequest"/>'s own <c>RequestedUri</c>, already the exact, real address
+    /// and never rebuilt here; the outbound headers come from the reopened input artifact's own
+    /// carried parameters, verified against the route's own declaration.
     /// </summary>
+    /// <remarks>
+    /// D1-06c-LU-2 fold-in three (READY verdict
+    /// lex-event-20260904T175623600Z-7d8ea851a9a54278b97e1eb33a0af29e, design ruled in SCOPE_RULING
+    /// lex-event-20260904T173606578Z-44305cbdf86043ae9a5a502282aebcd5). This method used to name
+    /// <c>EuDocumentFetchPlan</c>'s two parameter-name literals directly and require exactly two
+    /// parameters, so the one generic GET mechanism was EU shaped and a second publisher could only
+    /// arrive as a parallel branch. The ruling refused that duplication: the route declares its own
+    /// expected ordered parameter names (<see cref="DocumentFetchParameterContract"/>) and this
+    /// method verifies the reopened input against that declaration alone. EU keeps its observed
+    /// Accept/Accept-Language pair byte for byte; LU declares one non-header parameter and therefore
+    /// sends neither header, because that route negotiates nothing.
+    /// </remarks>
     private HttpLogicalRequest CreateDocumentFetchRequest(
         OfficialMachineQuerySourceProfile profile,
         OpenedMachineRequest openedRequest,
@@ -601,31 +652,30 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             throw new InvalidOperationException("A document-fetch GET request cannot carry a body.");
         }
 
+        var contract = DocumentFetchParameterContract.For(profile.Id)
+            ?? throw new InvalidOperationException(
+                "A GET machine-query profile must declare a document-fetch parameter contract.");
         var input = MachineQueryInputArtifact.ParseAndVerify(
             openedRequest.OrderedParameterSetRef,
             openedRequest.CopyOrderedParameterSetCanonicalBytes());
-        if (input.OrderedParameters.Count != 2 ||
-            !string.Equals(
-                input.OrderedParameters[0].Name,
-                EuDocumentFetchPlan.AcceptParameterName,
-                StringComparison.Ordinal) ||
-            input.OrderedParameters[0].TextValue is not { } accept ||
-            !string.Equals(
-                input.OrderedParameters[1].Name,
-                EuDocumentFetchPlan.AcceptLanguageParameterName,
-                StringComparison.Ordinal) ||
-            input.OrderedParameters[1].TextValue is not { } acceptLanguage)
+        if (!contract.TryReadDeclaredValues(input, out var declaredValues))
         {
             throw new InvalidOperationException(
-                "The document-fetch input does not carry the accept/accept-language pair this session expects.");
+                "The document-fetch input does not carry the ordered parameters this route declares.");
         }
 
-        var headers = new[]
+        var headers = new List<HttpLogicalRequestHeader>(1 + contract.Parameters.Count)
         {
-            new HttpLogicalRequestHeader("user-agent", profile.CrawlerUserAgent),
-            new HttpLogicalRequestHeader("accept", accept),
-            new HttpLogicalRequestHeader("accept-language", acceptLanguage),
+            new("user-agent", profile.CrawlerUserAgent),
         };
+        for (var index = 0; index < contract.Parameters.Count; index++)
+        {
+            if (contract.Parameters[index].HeaderName is { } headerName)
+            {
+                headers.Add(new HttpLogicalRequestHeader(headerName, declaredValues[index]));
+            }
+        }
+
         var requestPolicy = RequestPolicyArtifact.ForMachineQueryGet(
             profile,
             _adapterExecutionIdentity,
@@ -2783,12 +2833,50 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                 (QueryPlanRef is null || OrderedParameterSetRef is null ||
                  RendererProfileRef is null || RendererSourceRef is null || ContentType is not null ||
                  BodyLength != 0 ||
-                 request.Headers.Count != 3 ||
-                 !string.Equals(request.Headers[2].Name, "accept-language", StringComparison.Ordinal)))
+                 !HeadersMatchDeclaredContract(request.Headers, profile)))
             {
                 throw new InvalidOperationException(
                     "A document-fetch GET request policy lost its exact plan or representation binding.");
             }
+        }
+
+        /// <summary>
+        /// D1-06c-LU-2 fold-in three, second half: this check used to require exactly three headers
+        /// whose third was named "accept-language", which is the EU route's own shape and would have
+        /// refused the Luxembourg route's own valid request. It now reads the same per-route
+        /// declaration <see cref="CreateDocumentFetchRequest"/> builds the headers from, so the two
+        /// cannot disagree: user-agent first, then exactly the declaration's header-bearing
+        /// parameters in their declared order, and nothing else.
+        /// </summary>
+        private static bool HeadersMatchDeclaredContract(
+            IReadOnlyList<HttpLogicalRequestHeader> headers,
+            OfficialMachineQuerySourceProfile profile)
+        {
+            var contract = DocumentFetchParameterContract.For(profile.Id);
+            if (contract is null || headers.Count == 0 ||
+                !string.Equals(headers[0].Name, "user-agent", StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            var expected = contract.Parameters
+                .Where(static parameter => parameter.HeaderName is not null)
+                .Select(static parameter => parameter.HeaderName!)
+                .ToArray();
+            if (headers.Count != expected.Length + 1)
+            {
+                return false;
+            }
+
+            for (var index = 0; index < expected.Length; index++)
+            {
+                if (!string.Equals(headers[index + 1].Name, expected[index], StringComparison.Ordinal))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
     }
 

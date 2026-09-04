@@ -445,7 +445,7 @@ public sealed class RoutedHttpArtifactDurabilityTests
         var constructor = typeof(RoutedHttpAcquisitionSession).GetConstructors(
             BindingFlags.Instance | BindingFlags.NonPublic).Single();
         return (RoutedHttpAcquisitionSession)constructor.Invoke(
-            [request, custody, handler, new ImmediateTimeProvider(), false]);
+            [request, custody, handler, new ImmediateTimeProvider(), false, Array.Empty<string>()]);
     }
 
     private static Task<RoutedHttpAcquisitionSession.StartResult> BootstrapAsync(
