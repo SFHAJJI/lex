@@ -4,28 +4,31 @@ namespace Lex.V3.Contracts.Source.Http;
 
 /// <summary>
 /// D1-06c-LU item 6: closed, named outcomes for one document-fetch GET against
-/// legilux.public.lu, carrying the real observed HTTP status rather than a generic wrapper.
-/// <see cref="RobotsDisallowed"/> is typed per the scope ruling's item 4 ("typed RobotsDisallowed
-/// refusals"), and the numbered outcomes are grounded in live behaviour observed 2026-09-04 with
-/// User-Agent Lex/0.1, GET only (Decision 22: HEAD returns 403 host-wide on this host and is never
-/// used):
+/// legilux.public.lu, carrying the real observed HTTP status rather than a generic wrapper. The
+/// numbered outcomes are grounded in live behaviour observed 2026-09-04 with User-Agent Lex/0.1,
+/// GET only (Decision 22: HEAD returns 403 host-wide on this host and is never used):
 /// <list type="bullet">
 /// <item>a real filestore XML document returned HTTP 200, Content-Type application/xml (SHA-256
 /// 9e43a99e4b9735e383d989989d4005fc9e1676f4094c2633f30b2f056d5e476d, 19,986 bytes retained);</item>
 /// <item>a deliberately nonexistent filestore path returned HTTP 404, Content-Type
 /// application/json, a JSON body {"timestamp","status":404,"error":"Not Found",
-/// "message":"No message available","path":...} (SHA-256
-/// efd7f3ff4dd45f9a9a303fad9353892c244154d940e24db8b1e480b7b8f4312c, 234 bytes retained).</item>
+/// "message":"No message available","path":...}. The observation actually RETAINED in this tree is
+/// 204 bytes, SHA-256 b4e140344eddc8e62e8500c6479fb9b5a2807d47f16fe904e5d0c08204580bab, taken
+/// 2026-09-04T22:20Z, held at tests/Lex.V3.Ingest.Tests/Fixtures/LuDocumentFetch as the 404
+/// body.</item>
 /// </list>
 /// <see cref="Gone"/> and <see cref="RetryExhausted"/> are not directly observed here; they mirror
 /// v2's own already-proven ladder for this exact publisher, reproduced rather than referenced.
 /// <para>
 /// The 404 body's digest is PER FETCH, not a constant: the office's JSON error carries a live
-/// timestamp field, so a fresh fetch of the same nonexistent path produces different bytes and a
-/// different digest. The 234-byte efd7f3ff.. observation above supersedes an earlier 209-byte one
-/// taken minutes before it, which is the same body shape with a shorter timestamp rendering. Never
-/// assert that a fresh fetch reproduces that digest; the retained bytes are evidence of one
-/// observation, not a fixture a live call can be checked against.
+/// timestamp field and echoes the requested path, so a fresh fetch of the same nonexistent path
+/// produces different bytes and a different digest. Three observations of that one endpoint shape
+/// were taken. The first two, 209 bytes and then 234 bytes
+/// (efd7f3ff4dd45f9a9a303fad9353892c244154d940e24db8b1e480b7b8f4312c), were superseded and are NOT
+/// retained: no such bytes exist in this tree, and an earlier revision of this remark wrongly
+/// claimed the 234-byte one was. Only the 204-byte observation named above is retained. Its digest
+/// names THOSE bytes so the fixture cannot be swapped; it is never a claim that a fresh fetch
+/// reproduces it, and no test asserts that.
 /// </para>
 /// </summary>
 public enum LuxembourgDocumentGetOutcomeKind
