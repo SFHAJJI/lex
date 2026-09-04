@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Source.Core;
@@ -821,12 +821,19 @@ public sealed class EuCellarObjectDecodeTests
     }
 
     /// <summary>
-    /// Fix two, at the decode level: an unadmitted manifestation type refuses THAT WORK's format
-    /// observation by name and lets the decode deliver every snapshot, rather than refusing the
-    /// whole call.
+    /// At the decode level: an unadmitted manifestation type is recorded on THAT WORK's own format
+    /// observation and the Work is still laddered on the types the office named that this route
+    /// knows.
     /// </summary>
+    /// <remarks>
+    /// OWNER RULING lex-event-20260904T205636383Z-e92b888b62c24df29fe3f8c1be5016f0. The GDPR's own
+    /// listing plus one invented future token: before the ruling this snapshot carried
+    /// BodyNotAdmitted and no candidates, so the whole object was lost to one token, which is the
+    /// illegitimate refusal the ruling removes. The token is still recorded, and it is still the
+    /// only thing that differs from an ordinary observation.
+    /// </remarks>
     [TestMethod]
-    public void AnUnadmittedManifestationTypeQuarantinesThatWorkRatherThanRefusingTheDecode()
+    public void AnUnadmittedManifestationTypeIsRecordedWithoutCostingTheWorkItsLadder()
     {
         var pRows = RootObjectRows(GdprRoot, GdprCelex);
         var xRows = ExpressionRows(GdprRoot, ExprA, EnglishLanguageAuthorityIri);
@@ -846,14 +853,11 @@ public sealed class EuCellarObjectDecodeTests
         Assert.IsNotNull(snapshots);
         var format = snapshots!.Single().Format;
         Assert.IsNotNull(format);
-        Assert.AreEqual(EuFormatBodyAdmission.BodyNotAdmitted, format!.Admission);
+        Assert.AreEqual(EuFormatBodyAdmission.BodyAdmitted, format!.Admission);
         Assert.AreEqual("listing_type_not_admitted:epub3", format.ReasonCode);
-        Assert.HasCount(0, format.OrderedCandidates);
-        Assert.AreNotEqual(
-            EuManifestationFormat.Print,
-            format.Format,
-            "naming print would send the body axis to never_ingest, which an unread listing does " +
-            "not license.");
+        CollectionAssert.AreEqual(
+            new[] { EuManifestationFormat.Xhtml }, format.OrderedCandidates.ToArray());
+        Assert.AreEqual(EuManifestationFormat.Xhtml, format.Format);
     }
 
     /// <summary>
@@ -863,7 +867,7 @@ public sealed class EuCellarObjectDecodeTests
     /// </summary>
     /// <remarks>
     /// This is a violation of what the call was asked to decode, unlike an unadmitted publisher
-    /// token, which is a fact about the office's vocabulary and is now contained to one Work.
+    /// token, which is a fact about the office's vocabulary and now costs its Work nothing at all.
     /// </remarks>
     [TestMethod]
     public void AManifestationRowOutsideTheClosureRefusesTheWholeDecodeByName()

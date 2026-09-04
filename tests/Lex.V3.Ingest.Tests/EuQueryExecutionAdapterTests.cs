@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Text;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Source.Absence;
@@ -2269,17 +2269,30 @@ public sealed class EuQueryExecutionAdapterTests
     }
 
     /// <summary>
-    /// Fix two at the adapter level: a manifestation type this vocabulary does not know, in one
-    /// Work's listing, quarantines THAT WORK and lets the run deliver.
+    /// A Work listing xhtml PLUS a manifestation type this vocabulary does not know is HELD, end to
+    /// end, through the real decode.
     /// </summary>
     /// <remarks>
-    /// REVIEW_RESULT lex-event-20260904T192428840Z-a6a8ebd26c58436aafd109a55303c12e defect two: this
-    /// used to refuse the whole seed's run, so the day the office lists a new manifestation type
-    /// anywhere in its catalogue, every EU run would have refused. The listing here is the real
-    /// six-token band listing with one invented extra token standing in for that future type.
+    /// <para>
+    /// OWNER RULING lex-event-20260904T205636383Z-e92b888b62c24df29fe3f8c1be5016f0: if a law can be
+    /// legitimately ingested, it is ingested, and unknown is recorded and never a reason. This
+    /// condition has shed two illegitimate refusals. It refused the whole seed's RUN until
+    /// REVIEW_RESULT lex-event-20260904T192428840Z-a6a8ebd26c58436aafd109a55303c12e, so the day the
+    /// office listed a new manifestation type anywhere in its catalogue every EU run would have
+    /// refused; it then quarantined the one WORK, so this exact listing recorded NotHeld with no
+    /// fetch attempted at all, while the office was serving the body over text/html the whole time.
+    /// One odd token in a listing must not cost us a law we can serve.
+    /// </para>
+    /// <para>
+    /// The listing is the real six-token band listing with one invented extra token standing in for
+    /// that future type, so what changes between this test and
+    /// <see cref="ARealPre2004ActRecordsHeldThroughTextHtmlWhereItRecordedNotHeld"/> is exactly the
+    /// unknown token and nothing else. Both must end Held, on the same two attempts, with the same
+    /// held bytes.
+    /// </para>
     /// </remarks>
     [TestMethod]
-    public async Task AnUnadmittedManifestationTypeQuarantinesItsWorkAndTheRunStillDelivers()
+    public async Task AWorkListingXhtmlPlusAnUnknownTypeIsStillHeld()
     {
         var withFutureType = EuAcquisitionTestFixture.RealBandListedTypes
             .Concat(["epub3"])
@@ -2294,17 +2307,62 @@ public sealed class EuQueryExecutionAdapterTests
             $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
         Assert.AreEqual(EuQueryExecutionCompletion.AllFamiliesProven, result.Completion);
 
-        // The Work is quarantined, so nothing is fetched for it and its record is not held.
+        // The known types still earn their ladder: the unknown token is ignored for it, not fatal
+        // to it. Before the ruling this count was zero.
+        Assert.AreEqual(2, handler.DocumentFetchCount, "the ladder must attempt xhtml, then html.");
+        CollectionAssert.AreEqual(
+            new[] { "application/xhtml+xml", "text/html" },
+            handler.DocumentFetchAcceptTokens.ToArray(),
+            "the attempts must be in the closed ladder order, one exact Accept token each.");
+
+        // The body is HELD, with a real receipt over the bytes text/html served.
+        Assert.HasCount(1, result.DocumentAcquisitionOutcomesByOrdinal!);
+        var outcome = result.DocumentAcquisitionOutcomesByOrdinal!.Values.Single();
+        Assert.IsNotNull(outcome.Receipt, "the Work must record Held, not PendingAcquisition.");
+        Assert.IsNull(outcome.Refusal);
         Assert.AreEqual(
-            0, handler.DocumentFetchCount, "a quarantined Work must not be fetched.");
+            Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(WorkingTimeHtmlBody)),
+            outcome.Receipt!.Reference.ContentSha256);
+
+        var record = result.CorpusRecordSet!.Set.Records.Single();
+        Assert.AreEqual(CorpusBodyRecordKind.Held, record.Body.Kind);
+
+        // And the row carries the first candidate's address, exactly as a listing with no unknown
+        // token does. Before the ruling it was NotMinted.
+        var rowAddress = await ReopenSingleRowFetchAddressAsync(result, store);
+        Assert.AreEqual(ScopeManifestFetchAddressStatus.Minted, rowAddress.Status);
+        Assert.AreEqual("application/xhtml+xml", rowAddress.AcceptMediaType);
+    }
+
+    /// <summary>
+    /// The narrowed floor at the adapter level: a listing of print plus an unknown type still fetches
+    /// nothing, and still does not reach never-ingest.
+    /// </summary>
+    /// <remarks>
+    /// This is the other side of the ruling, and it is why the amendment is a narrowing rather than a
+    /// removal. There is genuinely nothing to fetch here: the only type the office named that this
+    /// vocabulary knows is paper. Naming print would assert a PERMANENT exclusion, which an unread
+    /// token does not license, so the observation names
+    /// <c>EuManifestationFormat.NoneAdmitted</c> and the body axis is a typed gap pending a reviewed
+    /// profile. Compare <see cref="AListingOfferingOnlyPrintSendsNoDocumentFetchEither"/>, which
+    /// fetches nothing for the permanent reason.
+    /// </remarks>
+    [TestMethod]
+    public async Task AListingOfPrintPlusAnUnknownTypeFetchesNothingWithoutClaimingNeverIngest()
+    {
+        var (result, handler, _) = await RunWorkingTimeDirectiveAsync(
+            ["print", "epub3"],
+            request => EuAcquisitionTestFixture.BinaryResponse(
+                request, System.Net.HttpStatusCode.OK, [1, 2, 3]));
+
+        Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+        Assert.AreEqual(EuQueryExecutionCompletion.AllFamiliesProven, result.Completion);
+        Assert.AreEqual(
+            0, handler.DocumentFetchCount, "there is no candidate to address, so nothing is asked for.");
         Assert.HasCount(0, result.DocumentAcquisitionOutcomesByOrdinal!);
 
         var record = result.CorpusRecordSet!.Set.Records.Single();
         Assert.AreEqual(CorpusBodyRecordKind.NotHeld, record.Body.Kind);
-
-        // And the row still carries no minted address, because there is no candidate to address.
-        var rowAddress = await ReopenSingleRowFetchAddressAsync(result, store);
-        Assert.AreEqual(ScopeManifestFetchAddressStatus.NotMinted, rowAddress.Status);
     }
 
     private const string WorkingTimeCelex = "32003L0088";
