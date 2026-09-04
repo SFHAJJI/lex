@@ -1263,6 +1263,66 @@ public sealed class EuScopeProfileTests
             "the exact set of producers of ScopeObjectReductionInput across Lex.V3.Contracts.");
     }
 
+    // --- Fold-in: EuScopeSnapshotReduction.Reduce is an unpinned producer of
+    // EuScopeObjectDispositions. There is no pre-existing ProducersIn pin over that type anywhere in
+    // the tree to extend (item 5's own exact ProducersIn sets above cover ScopeProfileBinding and
+    // ScopeObjectReductionInput, never EuScopeObjectDispositions), so this is a new pin, built here
+    // because EuScopeObjectDispositions is declared in this file's own path claim. Print-actual-then-
+    // transcribe: this is the exact, sorted list ConstructionSurface.ProducersIn returns today. ------
+
+    [TestMethod]
+    public void EuScopeSnapshotReductionReduceIsTheOnlyRecognisedExternalProducerOfEuScopeObjectDispositions()
+    {
+        const string N = "Lex.V3.Contracts.Source.Europe.";
+        var assembly = typeof(EuScopeProfile).Assembly;
+
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "method public static " + N + "EuScopeSnapshotReduction::Reduce(" + N
+                    + "EuCellarObjectSnapshot) -> " + N + "EuScopeObjectDispositions",
+            },
+            ConstructionSurface.ProducersIn(assembly, typeof(EuScopeObjectDispositions), includeNonPublic: true)
+                .ToArray(),
+            "the exact set of external producers of EuScopeObjectDispositions across Lex.V3.Contracts; " +
+            "EuScopeObjectDispositions' own constructor is pinned separately by " +
+            "EuScopeObjectDispositionsHasExactlyOneConstructionPath above.");
+    }
+
+    // --- Fold-in: execute TryOpenAsEuManifest once with a manifest produced by the real production
+    // path -- EuScopeProfile's own binding and reduction, ScopeReducer, and the canonical writer --
+    // rather than only against a hand-built ScopeProfileBinding the way EuScopeManifestBindingProofTests
+    // isolates CheckProfileIdentity. ------------------------------------------------------------------
+
+    [TestMethod]
+    public void TryOpenAsEuManifestOpensARealManifestBuiltThroughTheFullProductionPath()
+    {
+        var profile = EuScopeProfile.BuildBinding();
+        var dispositions = Baseline(
+            profile,
+            "end-to-end-real-manifest",
+            channel: Channel(EuChannel.CellarSparqlEndpoint),
+            language: Language(EuOfficialLanguage.English, EuLanguageBodyState.BodyCandidate),
+            format: Format(EuManifestationFormat.Formex4, EuFormatBodyAdmission.BodyAdmitted),
+            rights: Rights(EuContentClass.OriginalLegalText));
+
+        var (verified, _, resolver) = ReduceOneForReopening(profile, dispositions);
+
+        using var canonical = new MemoryStream();
+        var manifestSha256 = ScopeManifestCanonicalWriter.Write(canonical, verified);
+        var artifactRef = new SourceArtifactRef(
+            "urn:uuid:6b1a5a2e-0000-4000-8000-0000000000ab", manifestSha256);
+
+        var manifest = EuScopeManifestBindingProof.TryOpenAsEuManifest(
+            artifactRef, canonical.ToArray(), resolver, out var refusal);
+
+        Assert.IsNotNull(manifest);
+        Assert.AreEqual(EuScopeManifestBindingProofRefusal.None, refusal);
+        Assert.AreEqual(profile.SourceProfileRef, manifest!.Profile.SourceProfileRef);
+        Assert.AreEqual(profile.SelectorTableRef, manifest.Profile.SelectorTableRef);
+        Assert.AreEqual(dispositions.ObjectRef, manifest.ObservedObjects.Single().ObjectRef);
+    }
+
     // --- Fold-in: the evidence gate can actually refuse -- proven with a fixed admitted set that is
     // independent of the input, rather than one self-derived from it. The ExactResolver below (used
     // by every happy-path test above) intentionally derives its admitted set from the same
@@ -1405,6 +1465,22 @@ public sealed class EuScopeProfileTests
 
     private static VerifiedScopeManifest ReduceOne(
         ScopeProfileBinding profile,
+        EuScopeObjectDispositions dispositions) =>
+        ReduceOneForReopening(profile, dispositions).Verified;
+
+    /// <summary>
+    /// The same reduction <see cref="ReduceOne"/> performs, but also returns the evidence table and
+    /// resolver it built along the way. <see cref="ReduceOne"/>'s callers only ever need the verified
+    /// manifest; a caller that means to reopen the manifest's own canonical bytes afterwards (see
+    /// <c>TryOpenAsEuManifestOpensARealManifestBuiltThroughTheFullProductionPath</c> below) needs the
+    /// same resolver again, because <see cref="VerifiedScopeManifest.ParseAndVerify"/> re-verifies
+    /// every binding against it.
+    /// </summary>
+    private static (
+        VerifiedScopeManifest Verified,
+        IReadOnlyList<SourceArtifactRef> UsedRefs,
+        ExactResolver Resolver) ReduceOneForReopening(
+        ScopeProfileBinding profile,
         EuScopeObjectDispositions dispositions)
     {
         // The evidence-artifact table must contain exactly the artifacts a selector actually
@@ -1447,12 +1523,13 @@ public sealed class EuScopeProfileTests
 
         var input = EuScopeProfile.BuildScopeInput(profile, dispositions, evidenceOrdinals);
         var resolver = ExactResolver.For(profile, usedRefs, [input]);
-        return ScopeReducer.Reduce(
+        var verified = ScopeReducer.Reduce(
             profile,
             usedRefs,
             [dispositions.ObjectRef],
             [input],
             resolver);
+        return (verified, usedRefs, resolver);
     }
 
     private static EuChannelDisposition Channel(EuChannel channel) => new(
