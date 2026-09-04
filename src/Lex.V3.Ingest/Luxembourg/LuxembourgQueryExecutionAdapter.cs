@@ -2102,22 +2102,8 @@ public sealed class LuxembourgQueryExecutionAdapter
             IReadOnlyList<LuxembourgObservedAssertion> assertions = assertionsBySubject.TryGetValue(subject, out var list)
                 ? list
                 : [];
-            var objectRef = new SourceObjectRef(
-                SourceCoreSchemaIds.SourceObjectRef,
-                SourceAuthority.Jolux,
-                new SourceRegistryMemberRef(_sourceProfile.ScopeBinding.SourceProfileRef, "legal_resource"),
-                subject,
-                subject,
-                Sha256Hex(subject),
-                _sourceProfile.ScopeBinding.SourceProfileRef,
-                null);
-            observations.Add(new LuxembourgResourceObservation(
-                objectRef,
-                observationRef,
-                assertions,
-                [],
-                new LuxembourgSparqlRightsChannelObservations(observationRef, observationRef, []),
-                new LuxembourgInFileRightsChannelObservations(observationRef, observationRef, [])));
+            observations.Add(BuildResourceObservation(
+                subject, assertions, observationRef, _sourceProfile.ScopeBinding.SourceProfileRef));
         }
 
         var exclusions = exclusionCounts
@@ -2129,6 +2115,118 @@ public sealed class LuxembourgQueryExecutionAdapter
 
         return ResourceObservationBuildResult.Built(observations, exclusions);
     }
+
+    /// <summary>
+    /// One observed resource, with BOTH rights channels attached. Extracted from
+    /// <see cref="BuildResourceObservations"/> so the wiring itself is testable: driving
+    /// <see cref="BuildSparqlRightsRows"/> alone proves the builder and says nothing about whether
+    /// the observation actually carries what it built, which is precisely the gap that let the
+    /// empty channel stand.
+    /// </summary>
+    internal static LuxembourgResourceObservation BuildResourceObservation(
+        string subject,
+        IReadOnlyList<LuxembourgObservedAssertion> assertions,
+        SourceArtifactRef observationRef,
+        SourceArtifactRef scopeProfileRef)
+    {
+        ArgumentNullException.ThrowIfNull(assertions);
+        ArgumentNullException.ThrowIfNull(observationRef);
+        ArgumentNullException.ThrowIfNull(scopeProfileRef);
+
+        var objectRef = new SourceObjectRef(
+            SourceCoreSchemaIds.SourceObjectRef,
+            SourceAuthority.Jolux,
+            new SourceRegistryMemberRef(scopeProfileRef, "legal_resource"),
+            subject,
+            subject,
+            Sha256Hex(subject),
+            scopeProfileRef,
+            null);
+        return new LuxembourgResourceObservation(
+            objectRef,
+            observationRef,
+            assertions,
+            [],
+            // Channel one, populated from this run's own proven family. jolux:license is an
+            // admitted assertion predicate of the very family already reopened and re-verified
+            // before this method is reached, so the licence declaration is held evidence, not a new
+            // query. It used to be an empty list, which made every body candidate fail the rights
+            // blocker for want of a channel nobody had asked for.
+            new LuxembourgSparqlRightsChannelObservations(
+                observationRef, observationRef, BuildSparqlRightsRows(assertions, observationRef)),
+            // Channel two stays genuinely empty. Decision 21's in-file declaration is read out of
+            // the document and cannot precede acquisition, so it resolves to the typed
+            // SecondChannelPending state (D1-04f owns it). Nothing here fabricates a second
+            // evidence ref to manufacture agreement: that is exactly what the channels'
+            // disjointness rule exists to catch.
+            new LuxembourgInFileRightsChannelObservations(observationRef, observationRef, []));
+    }
+
+    /// <summary>
+    /// This object's own <c>jolux:license</c> declarations, one row per manifestation that carries
+    /// one, read from the assertions the proven assertion family delivered.
+    /// </summary>
+    /// <remarks>
+    /// Only licence IRIs the profile's own vocabulary rules are carried, and the reason is a real
+    /// hazard rather than tidiness: <c>LuxembourgScopeResolver.ValidateObservation</c> refuses the
+    /// WHOLE RUN with UnknownVocabularyDrift for any licence IRI on a rights channel that the
+    /// profile does not know, so carrying an unruled one would let a single odd licence anywhere in
+    /// the store kill every run. A manifestation whose licence is unruled therefore gets no channel
+    /// row, which leaves its rights ChannelEnumerationUnproven and its body unselected, the
+    /// conservative answer. Recording an unruled licence as its own typed quarantine with its own
+    /// accounting is D1-04f's, beside the in-file channel; it is named residue, not a silent drop.
+    /// </remarks>
+    internal static IReadOnlyList<LuxembourgRightsChannelObservation> BuildSparqlRightsRows(
+        IReadOnlyList<LuxembourgObservedAssertion> assertions,
+        SourceArtifactRef observationRef)
+    {
+        var licencesByManifestation = new Dictionary<string, SortedSet<string>>(StringComparer.Ordinal);
+        foreach (var assertion in assertions)
+        {
+            if (!string.Equals(assertion.PredicateIri, JoluxLicense, StringComparison.Ordinal) ||
+                assertion.ObjectKind != LuxembourgAssertionObjectKind.Iri ||
+                !Uri.TryCreate(assertion.SubjectIri, UriKind.Absolute, out _))
+            {
+                continue;
+            }
+
+            var licence = assertion.ObjectIriOrLexical;
+            if (!string.Equals(
+                    licence, RuledAdmittingLicence, StringComparison.Ordinal) &&
+                !string.Equals(
+                    licence, RuledNonAdmittingLicenceScl, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (!licencesByManifestation.TryGetValue(assertion.SubjectIri, out var set))
+            {
+                set = new SortedSet<string>(StringComparer.Ordinal);
+                licencesByManifestation[assertion.SubjectIri] = set;
+            }
+
+            set.Add(licence);
+        }
+
+        return licencesByManifestation
+            .OrderBy(static pair => pair.Key, StringComparer.Ordinal)
+            .Select(pair => new LuxembourgRightsChannelObservation(
+                pair.Key, observationRef, observationRef, pair.Value.ToArray()))
+            .ToArray();
+    }
+
+    /// <summary>
+    /// The publisher's own jolux:license predicate, and the two licence IRIs its profile rules.
+    /// Spelled here because the profile's own constants are internal to Contracts, and pinned
+    /// against them by <c>TheRightsChannelPredicateAndLicencesMatchTheProfilesOwnVocabulary</c>.
+    /// </summary>
+    internal const string JoluxLicense =
+        "http://data.legilux.public.lu/resource/ontology/jolux#license";
+
+    internal const string RuledAdmittingLicence = "http://creativecommons.org/licenses/by/4.0/";
+
+    internal const string RuledNonAdmittingLicenceScl =
+        "http://data.legilux.public.lu/resource/authority/license/licenceSCL";
 
     private static void RecordExclusion(
         Dictionary<(string Subject, LuxembourgResourceObservationExclusionCause Cause), int> exclusionCounts,
