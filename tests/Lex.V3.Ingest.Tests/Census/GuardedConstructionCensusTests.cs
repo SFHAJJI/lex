@@ -5,7 +5,7 @@ namespace Lex.V3.Ingest.Tests.Census;
 
 /// <summary>
 /// Every type in the swept assemblies whose declared constructors are all non-public, with the
-/// members that can hand one out. 32 of them when this was written.
+/// members that can hand one out. 33 of them when this was written.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -17,6 +17,14 @@ namespace Lex.V3.Ingest.Tests.Census;
 /// this test.
 /// </para>
 /// <para>
+/// Abstract bases are in, and were not always. This pin once excluded them while its own summary
+/// stated the rule that includes them, and the nine abstract closed-union bases with private
+/// protected constructors were then outside the census and outside its residual at once: the most
+/// tightly guarded shape in the repository, uncounted, behind a sentence that said otherwise.
+/// <see cref="AnAbstractClosedUnionBaseIsInsideThisSweep"/> is the standing check that the shape is
+/// still admitted, so the clause cannot come back without a red test.
+/// </para>
+/// <para>
 /// Why it is a sweep. <see cref="ClosedSurfaceCensus"/> selects on the type declaring at least one
 /// constructor and none of them public. That is a property of the type, so a new guarded type
 /// appears here on its own, and a type that gains a public constructor drops out of the list and
@@ -25,21 +33,23 @@ namespace Lex.V3.Ingest.Tests.Census;
 /// </para>
 /// <para>
 /// What it does not do, stated so nobody cites it for more than it checks. Each door is the
-/// construction surface's own entry with the parameter list and return type cut off, so an existing
-/// door changing its parameters passes here; the exact per-type pins catch that where they exist,
-/// and where they do not that gap is real. Holders are excluded, so a field or property that
-/// carries the type is not a line here. Doors the compiler generated for lambdas are counted rather
-/// than named, because their mangled ordinals move when an unrelated method is added above them,
-/// and a pin that fires on edits that opened no door is a pin people learn to regenerate without
-/// reading.
+/// construction surface's own entry without its parameter list, so an existing door changing its
+/// parameters passes here; the exact per-type pins catch that where they exist, and where they do
+/// not that gap is real. Holders are excluded, so a field or property that carries the type is not
+/// a line here. Doors the compiler generated for lambdas are counted rather than named, because
+/// their mangled ordinals move when an unrelated method is added above them, and a pin that fires
+/// on edits that opened no door is a pin people learn to regenerate without reading.
 /// </para>
 /// <para>
 /// When a real change makes this fail, that is the pin working rather than a defect in it, and the
-/// fix is not to hand edit the array until it matches. Re-derive it: print the sweep's own output
-/// from a throwaway test that writes it somewhere under <c>Path.GetTempPath()</c>, read the diff,
-/// and transcribe the printed lines. Never rebuild the expected side from the sweep inside the
-/// test. It would then agree with whatever the code happens to say, which is the one thing a pin
-/// must not do, and it is how a large array quietly stops being evidence of anything.
+/// fix is not to hand edit the array until it matches. Re-derive it: print
+/// <c>ClosedSurfaceCensus.RenderForTranscription</c> over
+/// <c>ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere)</c>
+/// from a throwaway test, read the diff, and paste the printed block between the braces below.
+/// That renderer emits the exact
+/// wrapping and escaping used here, so the paste is the whole edit. Never build the expected side
+/// from GuardedConstruction inside this test: it would then agree with whatever the code happens to say, which
+/// is the one thing a pin must not do, and it is how a large array quietly stops being evidence.
 /// </para>
 /// </remarks>
 [TestClass]
@@ -277,6 +287,14 @@ public sealed class GuardedConstructionCensusTests
                     + "opyResolvedArtifacts, 1 compiler-generated",
                 "Lex.V3.Ingest.RoutedHttpAcquisitionSession+PlanItem: constructor internal "
                     + "instance Lex.V3.Ingest.RoutedHttpAcquisitionSession+PlanItem::.ctor",
+                "Lex.V3.Ingest.RoutedHttpAcquisitionSession+PostHeaderRejection: constructor "
+                    + "private-protected instance "
+                    + "Lex.V3.Ingest.RoutedHttpAcquisitionSession+PostHeaderRejection::.ctor, "
+                    + "constructor public instance "
+                    + "Lex.V3.Ingest.RoutedHttpAcquisitionSession+PostHeaderFailure+MintedPostHeade"
+                    + "rRejection::.ctor, "
+                    + "method public instance "
+                    + "Lex.V3.Ingest.RoutedHttpAcquisitionSession+PostHeaderFailure::ToRejection",
                 "Lex.V3.Ingest.RoutedHttpAcquisitionSession+RedirectPolicyArtifact: constructor "
                     + "private instance "
                     + "Lex.V3.Ingest.RoutedHttpAcquisitionSession+RedirectPolicyArtifact::.ctor, "
@@ -330,5 +348,38 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.RoutedHttpAcquisitionSession::BootstrapRobotsAsync",
             },
             ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).ToArray());
+    }
+
+    /// <summary>
+    /// The shape the sweep once excluded, checked against the sweep itself rather than described.
+    /// </summary>
+    /// <remarks>
+    /// This runs the real sweep over this test assembly, which holds the fixture below, and asks
+    /// whether an abstract class whose only constructor is private protected comes back. A clause
+    /// excluding abstract types, of the kind this file carried until 2026-09-05, turns this red.
+    /// It is not a sweep of a swept assembly, so it does not replace the pin above; it is the
+    /// guard on the pin's own admission rule.
+    /// </remarks>
+    [TestMethod]
+    public void AnAbstractClosedUnionBaseIsInsideThisSweep()
+    {
+        var swept = ClosedSurfaceCensus.GuardedConstruction(
+            typeof(GuardedConstructionCensusTests).Assembly.GetName().Name!);
+
+        CollectionAssert.Contains(
+            swept.Select(static row => row[..row.IndexOf(':', StringComparison.Ordinal)]).ToArray(),
+            typeof(ClosedUnionBaseProbe).FullName,
+            "an abstract base whose only constructor is private protected left the sweep");
+    }
+
+    /// <summary>
+    /// A closed union base in the shape the source assemblies use: abstract, with the only
+    /// constructor private protected, so every subtype has to be declared here.
+    /// </summary>
+    private abstract class ClosedUnionBaseProbe
+    {
+        private protected ClosedUnionBaseProbe()
+        {
+        }
     }
 }

@@ -213,7 +213,11 @@ public static class ConstructionSurface
         ArgumentNullException.ThrowIfNull(assembly);
         ArgumentNullException.ThrowIfNull(guarded);
         var own = SelfNestedAndBases(guarded).ToHashSet();
-        var named = new SortedSet<string>(StringComparer.Ordinal);
+
+        // Keyed by the full entry, valued by the head. Deduplicating on the head instead would
+        // collapse two overloads of the same factory into one line, and this type's own summary
+        // promises the opposite. A second Create is a second door.
+        var named = new SortedDictionary<string, string>(StringComparer.Ordinal);
         var compilerGenerated = 0;
         foreach (var type in own.Concat(AllTypes(assembly).Where(candidate => !own.Contains(candidate))))
         {
@@ -232,16 +236,17 @@ public static class ConstructionSurface
                     continue;
                 }
 
-                named.Add(producer.Entry);
+                named[producer.Entry] = producer.Head;
             }
         }
 
-        return new(named.ToArray(), compilerGenerated);
+        return new(named.Values.ToArray(), compilerGenerated);
     }
 
     /// <summary>
-    /// The result of <see cref="HandOuts"/>: the hand-outs a person declared, in ordinal order, and
-    /// how many the compiler declared for lambdas and state machines.
+    /// The result of <see cref="HandOuts"/>: the hand-outs a person declared, in ordinal order and
+    /// without their parameter lists, and how many the compiler declared for lambdas and state
+    /// machines.
     /// </summary>
     public readonly record struct HandOutSurface(
         IReadOnlyList<string> Declared,
@@ -306,7 +311,10 @@ public static class ConstructionSurface
             if (isGuardedOrSubtype)
             {
                 yield return new(
-                    Describe("constructor", constructor, type), constructor.IsPublic, HandsOut: true);
+                    Describe("constructor", constructor, type),
+                    constructor.IsPublic,
+                    HandsOut: true,
+                    Head: DescribeHead("constructor", constructor));
             }
             else if (isBase && includeBaseConstructors && !constructor.IsPrivate)
             {
@@ -315,7 +323,8 @@ public static class ConstructionSurface
                 yield return new(
                     Describe("base-constructor", constructor, type),
                     constructor.IsPublic,
-                    HandsOut: true);
+                    HandsOut: true,
+                    Head: DescribeHead("base-constructor", constructor));
             }
         }
 
@@ -339,7 +348,11 @@ public static class ConstructionSurface
                 var kind = method.IsSpecialName && method.Name.StartsWith("op_", StringComparison.Ordinal)
                     ? "operator"
                     : producesByRef && !producesByReturn ? "by-ref-method" : "method";
-                yield return new(Describe(kind, method, method.ReturnType), method.IsPublic, HandsOut: true);
+                yield return new(
+                    Describe(kind, method, method.ReturnType),
+                    method.IsPublic,
+                    HandsOut: true,
+                    Head: DescribeHead(kind, method));
             }
         }
 
@@ -351,7 +364,8 @@ public static class ConstructionSurface
                 yield return new(
                     $"field {Scope(field)} {(field.IsStatic ? "static" : "instance")} {Name(type)}::{field.Name} -> {Name(field.FieldType, fieldNullability)}",
                     field.IsPublic,
-                    HandsOut: false);
+                    HandsOut: false,
+                    Head: string.Empty);
             }
         }
 
@@ -367,7 +381,8 @@ public static class ConstructionSurface
                 yield return new(
                     $"property {scope} {(isStatic ? "static" : "instance")} {Name(type)}::{property.Name}({parameters}) -> {Name(property.PropertyType, propertyNullability)}",
                     accessor?.IsPublic == true,
-                    HandsOut: false);
+                    HandsOut: false,
+                    Head: string.Empty);
             }
         }
 
@@ -378,7 +393,8 @@ public static class ConstructionSurface
                 yield return new(
                     $"event {Name(type)}::{evt.Name} -> {Name(evt.EventHandlerType)}",
                     evt.AddMethod?.IsPublic == true,
-                    HandsOut: false);
+                    HandsOut: false,
+                    Head: string.Empty);
             }
         }
     }
@@ -391,7 +407,26 @@ public static class ConstructionSurface
     /// text of the entry afterwards, because a guard that reads its own rendering is a guard that
     /// can be fooled by a rename.
     /// </summary>
-    private readonly record struct Producer(string Entry, bool PublicMember, bool HandsOut);
+    private readonly record struct Producer(
+        string Entry,
+        bool PublicMember,
+        bool HandsOut,
+        string Head);
+
+    /// <summary>
+    /// The same entry <see cref="Describe"/> renders, stopping before the parameter list and the
+    /// produced type: kind, scope, static or instance, declaring type and member name.
+    /// </summary>
+    /// <remarks>
+    /// Built from the member, never by cutting <see cref="Describe"/>'s output at a bracket. This
+    /// type's own documentation forbids a guard reading its own rendering, and a census that cut
+    /// the string would be doing exactly that one layer up.
+    /// </remarks>
+    private static string DescribeHead(string kind, MethodBase member)
+    {
+        var declaring = member.DeclaringType is null ? "?" : Name(member.DeclaringType);
+        return $"{kind} {Scope(member)} {(member.IsStatic ? "static" : "instance")} {declaring}::{member.Name}";
+    }
 
     private static string Describe(string kind, MethodBase member, Type produced)
     {

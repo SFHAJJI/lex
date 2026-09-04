@@ -26,20 +26,23 @@ namespace Lex.V3.Ingest.Tests.Census;
 /// any swept assembly, in any namespace, at any visibility, nested or not.
 /// </para>
 /// <para>
-/// What it does not do. It pins member names, not wire tokens: the per-type pins that call
+/// What it does not do. It pins member names in <see cref="Enum.GetNames(Type)"/> order, which is
+/// by underlying value, so a renumbering that reorders members fails and a dense renumbering that
+/// preserves the order passes. It pins names, not wire tokens: the per-type pins that call
 /// <c>AssertTokens</c> or read <c>JsonStringEnumMemberNameAttribute</c> own the tokens, and this
 /// does not replace them. It also does not claim a member is reachable, only that it is declared,
 /// which is the other half of the same defect and needs a producer scan rather than a member scan.
-/// The expected array is transcribed from the sweep's own output and not built from the enums
-/// themselves; deriving it would make it agree with whatever the enums say.
 /// </para>
 /// <para>
 /// When a real change makes this fail, that is the pin working rather than a defect in it, and the
-/// fix is not to hand edit the array until it matches. Re-derive it: print the sweep's own output
-/// from a throwaway test that writes it somewhere under <c>Path.GetTempPath()</c>, read the diff,
-/// and transcribe the printed lines. Never rebuild the expected side from the sweep inside the
-/// test. It would then agree with whatever the code happens to say, which is the one thing a pin
-/// must not do, and it is how a large array quietly stops being evidence of anything.
+/// fix is not to hand edit the array until it matches. Re-derive it: print
+/// <c>ClosedSurfaceCensus.RenderForTranscription</c> over
+/// <c>ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere)</c>
+/// from a throwaway test, read the diff, and paste the printed block between the braces below.
+/// That renderer emits the exact
+/// wrapping and escaping used here, so the paste is the whole edit. Never build the expected side
+/// from ClosedVocabularies inside this test: it would then agree with whatever the code happens to say, which
+/// is the one thing a pin must not do, and it is how a large array quietly stops being evidence.
 /// </para>
 /// </remarks>
 [TestClass]
