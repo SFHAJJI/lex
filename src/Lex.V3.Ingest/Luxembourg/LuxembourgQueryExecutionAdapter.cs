@@ -110,57 +110,38 @@ public sealed class LuxembourgRelationFamilyAcquisition
 }
 
 /// <summary>
-/// Item 15 of the D1-04 design-synthesis ruling named the gap this enum marks: "Luxembourg
+/// Item 15 of the D1-04 design-synthesis ruling named the gap this enum used to mark: "Luxembourg
 /// ScopeResolver implements bucket membership only, not R5.1's TC and RECT typed roles nor an ACC
 /// constitutional review evidence gate; that is a defect in the merged resolver and gets its own
 /// slice after D1-04's first freeze names the gap; D1-04 records the coarser disposition with typed
-/// acquisition state so the gap stays visible, never papers over it." Item 15 has since closed that
-/// gap: the resolver now carries R5.1's TC, RECT and ACC roles as their own
-/// <see cref="LuxembourgTypedRoleResolution"/>, separate from and alongside the coarser
-/// <c>PublicationFamily</c> bucket-membership disposition this enum names. What remains true, and
-/// what this enum still marks, is that a resource carrying one of these members was accepted through
-/// bucket membership at this coarse dimension; it is not a claim that the resource's typed role is
-/// unresolved.
+/// acquisition state so the gap stays visible, never papers over it." Item 15 (and, for ACC, the
+/// reviewer RULING lex-event-20260904T002301246Z-7699c8fdd1ad4868a7d94dcb152fbf57) closed that gap:
+/// the resolver now carries R5.1's TC, RECT and ACC roles as their own
+/// <see cref="LuxembourgTypedRoleResolution"/>, exposed on <see cref="LuxembourgResourceResolution.TypedRole"/>.
 /// </summary>
 /// <remarks>
-/// ACC's own member is named for what item 15 actually resolved, not the lane's initial (and
-/// reviewer-corrected) always-refuse reading. The reviewer RULING
-/// lex-event-20260904T002301246Z-7699c8fdd1ad4868a7d94dcb152fbf57 held that R5.1 rule 6's own
-/// evidence is the publisher's typeDocument assertion carrying the exact ACC IRI -- no further
-/// predicate required or substitutable -- so an ACC resource is admitted through
-/// <c>PriorityCandidateTypes</c> bucket membership exactly like TC and RECT, and separately carries
-/// R5.1's <c>constitutional_review_decision</c> role
-/// (<see cref="LuxembourgTypedRoleResolution"/>). The former
-/// <c>AccConstitutionalReviewEvidenceGateNotApplied</c> name described a gate that the ruling
-/// refused as contradicting the accepted text; this member is the same coarse signal TC and RECT
-/// already carry, renamed to match.
+/// D1-04c retired all three members this enum used to carry
+/// (<c>TcTypedRoleNotDistinguished</c>, <c>RectTypedRoleNotDistinguished</c>,
+/// <c>AccTypedRoleNotDistinguished</c>). <see cref="LuxembourgQueryExecutionAdapter.BuildCoarseDispositionMarkers"/>
+/// now consumes <see cref="LuxembourgResourceResolution.TypedRole"/> directly: a resource whose
+/// <see cref="LuScopeDimensions.PublicationFamily"/> reached <c>AcceptedCandidate</c> through
+/// <c>PriorityCandidateTypes</c> bucket membership resolves its <c>TypedRole</c> from the exact same
+/// raw <c>rdf:type</c>/<c>typeDocument</c> assertions (<c>LuxembourgScopeResolver.ResolveDimensions</c>
+/// and <c>ResolveTypedRole</c> both compute <c>classes</c>/<c>types</c> via the identical
+/// <c>IriValues(observation.Assertions, ...)</c> call on the same observation), so every case that
+/// used to earn one of these three coarse gaps now also earns a real, distinguished
+/// <see cref="LuxembourgTypedRoleKind"/> -- the coarse gap is provably unreachable, not merely
+/// unused. Proven by watching it fail: before this retirement, wiring the TypedRole guard into
+/// <c>BuildCoarseDispositionMarkers</c> turned <c>LuxembourgQueryExecutionAdapterTests</c>' own
+/// TC/RECT/ACC marker-count-one assertions into marker-count-zero failures, for exactly this reason,
+/// before those tests were updated to assert the real zero. This enum is kept, empty, as the closed
+/// set item 15 introduced (<see cref="LuxembourgCoarseDispositionMarker"/> still carries one), so a
+/// future coarse gap this bucket-membership dimension might still need has a named home; adding a
+/// member back is a deliberate, reviewed act, not a silent reopening, because
+/// <c>CoarseDispositionGapIsAnEmptyEnum</c> pins it at zero.
 /// </remarks>
 public enum LuxembourgCoarseDispositionGap
 {
-    /// <summary>
-    /// Accepted through <c>PriorityCandidateTypes</c> bucket membership only. R5.1's own TC role
-    /// (its own coordinate, the consolidation-without-legal-effect disclosure, never relabeled as
-    /// its base act) is not separately verified.
-    /// </summary>
-    [JsonStringEnumMemberName("tc_typed_role_not_distinguished")]
-    TcTypedRoleNotDistinguished = 1,
-
-    /// <summary>
-    /// Accepted through <c>PriorityCandidateTypes</c> bucket membership only. R5.1's own RECT role
-    /// (its own coordinate, the corrective-material disclosure, never relabeled as the corrected
-    /// act) is not separately verified.
-    /// </summary>
-    [JsonStringEnumMemberName("rect_typed_role_not_distinguished")]
-    RectTypedRoleNotDistinguished = 2,
-
-    /// <summary>
-    /// Accepted through <c>PriorityCandidateTypes</c> bucket membership only. R5.1's own ACC role
-    /// (its own coordinate, the constitutional-review-decision-never-statutory-text disclosure,
-    /// never treated as statutory text and never entering the legislation timeline) is not
-    /// separately verified at this coarse level.
-    /// </summary>
-    [JsonStringEnumMemberName("acc_typed_role_not_distinguished")]
-    AccTypedRoleNotDistinguished = 3,
 }
 
 /// <summary>
@@ -188,6 +169,122 @@ public enum LuxembourgFamilyEnumerationOutcomeKind
     /// reached the row cap, or the two passes disagreed.
     /// </summary>
     ProofRefused = 3,
+
+    /// <summary>
+    /// D1-04c: the family's own single-partition pass refused <see cref="LuxembourgEnumerationRefusal.PartitionRequired"/>,
+    /// and the caller-supplied cover chain for it reconciled (<see cref="LuxembourgPartitionCover.TryCreate"/>)
+    /// into every leaf's own proven enumeration (see <see cref="LuxembourgFamilyEnumerationOutcome.CoverLeafProofs"/>).
+    /// </summary>
+    CoverProven = 4,
+
+    /// <summary>
+    /// D1-04c: the family's own single-partition pass refused <see cref="LuxembourgEnumerationRefusal.PartitionRequired"/>,
+    /// a cover chain was supplied for it, but the chain could not reconcile into a proven whole
+    /// enumeration (see <see cref="LuxembourgFamilyEnumerationOutcome.CoverRefusal"/>).
+    /// </summary>
+    CoverRefused = 5,
+}
+
+/// <summary>Which stage of a census or assertion family's cover-chain reconciliation refused. Closed.</summary>
+public enum LuxembourgPartitionCoverReconciliationRefusal
+{
+    /// <summary>
+    /// One of the chain's own leaves refused before delivering (see
+    /// <see cref="LuxembourgPartitionCoverReconciliationDetail.LeafExecutorRefusal"/>).
+    /// </summary>
+    LeafExecutorRefused = 1,
+
+    /// <summary>
+    /// A leaf delivered, but its own family-enumeration proof failed (see
+    /// <see cref="LuxembourgPartitionCoverReconciliationDetail.LeafProofRefusal"/>) -- a leaf's own
+    /// delivery proof disagreeing, per the ruling's own wording.
+    /// </summary>
+    LeafProofRefused = 2,
+
+    /// <summary>
+    /// <see cref="LuxembourgPartitionCover.TryCreate"/> itself refused (see
+    /// <see cref="LuxembourgPartitionCoverReconciliationDetail.CoverRefusal"/>).
+    /// </summary>
+    CoverReconciliationRefused = 3,
+}
+
+/// <summary>
+/// D1-04c item 1: why a census or assertion family's cover-chain fallback -- driven when its
+/// single-partition pass refuses <see cref="LuxembourgEnumerationRefusal.PartitionRequired"/> and a
+/// caller-supplied <see cref="LuxembourgPartitionChain"/> exists for it -- could not reconcile into a
+/// proven whole enumeration. Exactly one of <see cref="LeafExecutorRefusal"/>,
+/// <see cref="LeafProofRefusal"/> or <see cref="CoverRefusal"/> is present, matching <see cref="Code"/>.
+/// A chain that cannot reconcile is a typed family refusal, never a raw exception.
+/// </summary>
+public sealed class LuxembourgPartitionCoverReconciliationDetail
+{
+    private LuxembourgPartitionCoverReconciliationDetail(
+        LuxembourgPartitionCoverReconciliationRefusal code,
+        string leafPartitionId,
+        LuxembourgEnumerationRefusalDetail? leafExecutorRefusal,
+        AbsenceFamilyEnumerationProofRefusal? leafProofRefusal,
+        LuxembourgPartitionCoverRefusal? coverRefusal)
+    {
+        Code = code;
+        LeafPartitionId = leafPartitionId;
+        LeafExecutorRefusal = leafExecutorRefusal;
+        LeafProofRefusal = leafProofRefusal;
+        CoverRefusal = coverRefusal;
+    }
+
+    public LuxembourgPartitionCoverReconciliationRefusal Code { get; }
+
+    /// <summary>
+    /// The chain leaf this refusal names. Empty for <see cref="LuxembourgPartitionCoverReconciliationRefusal.CoverReconciliationRefused"/>,
+    /// which is <see cref="LuxembourgPartitionCover.TryCreate"/>'s own refusal: that door reports one
+    /// closed reason for the whole chain, never a specific leaf ordinal.
+    /// </summary>
+    public string LeafPartitionId { get; }
+
+    /// <summary>Present if and only if <see cref="Code"/> is <see cref="LuxembourgPartitionCoverReconciliationRefusal.LeafExecutorRefused"/>.</summary>
+    public LuxembourgEnumerationRefusalDetail? LeafExecutorRefusal { get; }
+
+    /// <summary>Present if and only if <see cref="Code"/> is <see cref="LuxembourgPartitionCoverReconciliationRefusal.LeafProofRefused"/>.</summary>
+    public AbsenceFamilyEnumerationProofRefusal? LeafProofRefusal { get; }
+
+    /// <summary>Present if and only if <see cref="Code"/> is <see cref="LuxembourgPartitionCoverReconciliationRefusal.CoverReconciliationRefused"/>.</summary>
+    public LuxembourgPartitionCoverRefusal? CoverRefusal { get; }
+
+    public static LuxembourgPartitionCoverReconciliationDetail LeafExecutorRefused(
+        string leafPartitionId, LuxembourgEnumerationRefusalDetail refusal)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(leafPartitionId);
+        ArgumentNullException.ThrowIfNull(refusal);
+        return new(
+            LuxembourgPartitionCoverReconciliationRefusal.LeafExecutorRefused,
+            leafPartitionId, refusal, null, null);
+    }
+
+    public static LuxembourgPartitionCoverReconciliationDetail LeafProofRefused(
+        string leafPartitionId, AbsenceFamilyEnumerationProofRefusal refusal)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(leafPartitionId);
+        if (refusal == AbsenceFamilyEnumerationProofRefusal.None)
+        {
+            throw new ArgumentOutOfRangeException(nameof(refusal));
+        }
+
+        return new(
+            LuxembourgPartitionCoverReconciliationRefusal.LeafProofRefused, leafPartitionId, null, refusal, null);
+    }
+
+    public static LuxembourgPartitionCoverReconciliationDetail ReconciliationRefused(
+        LuxembourgPartitionCoverRefusal refusal)
+    {
+        if (refusal == LuxembourgPartitionCoverRefusal.None)
+        {
+            throw new ArgumentOutOfRangeException(nameof(refusal));
+        }
+
+        return new(
+            LuxembourgPartitionCoverReconciliationRefusal.CoverReconciliationRefused,
+            string.Empty, null, null, refusal);
+    }
 }
 
 public sealed class LuxembourgFamilyEnumerationOutcome
@@ -197,13 +294,17 @@ public sealed class LuxembourgFamilyEnumerationOutcome
         LuxembourgFamilyEnumerationOutcomeKind kind,
         AbsenceFamilyEnumerationProof? proof,
         LuxembourgEnumerationRefusalDetail? executorRefusal,
-        AbsenceFamilyEnumerationProofRefusal? proofRefusal)
+        AbsenceFamilyEnumerationProofRefusal? proofRefusal,
+        IReadOnlyList<AbsenceFamilyEnumerationProof>? coverLeafProofs,
+        LuxembourgPartitionCoverReconciliationDetail? coverRefusal)
     {
         FamilyKey = familyKey;
         Kind = kind;
         Proof = proof;
         ExecutorRefusal = executorRefusal;
         ProofRefusal = proofRefusal;
+        CoverLeafProofs = coverLeafProofs;
+        CoverRefusal = coverRefusal;
     }
 
     public string FamilyKey { get; }
@@ -216,17 +317,30 @@ public sealed class LuxembourgFamilyEnumerationOutcome
 
     public AbsenceFamilyEnumerationProofRefusal? ProofRefusal { get; }
 
+    /// <summary>
+    /// Present if and only if <see cref="Kind"/> is <see cref="LuxembourgFamilyEnumerationOutcomeKind.CoverProven"/>:
+    /// one proof per leaf of the reconciled <see cref="LuxembourgPartitionCover"/>, in chain order.
+    /// There is no single family-wide <see cref="AbsenceFamilyEnumerationProof"/> for a cover, because
+    /// <see cref="AbsenceFamilyEnumerationProof.TryCreate"/> requires its family key to equal the
+    /// delivery's own partition key exactly, and each leaf's delivery names its own leaf partition,
+    /// never the root family's.
+    /// </summary>
+    public IReadOnlyList<AbsenceFamilyEnumerationProof>? CoverLeafProofs { get; }
+
+    /// <summary>Present if and only if <see cref="Kind"/> is <see cref="LuxembourgFamilyEnumerationOutcomeKind.CoverRefused"/>.</summary>
+    public LuxembourgPartitionCoverReconciliationDetail? CoverRefusal { get; }
+
     public static LuxembourgFamilyEnumerationOutcome Proven(string familyKey, AbsenceFamilyEnumerationProof proof)
     {
         ArgumentNullException.ThrowIfNull(proof);
-        return new(familyKey, LuxembourgFamilyEnumerationOutcomeKind.Proven, proof, null, null);
+        return new(familyKey, LuxembourgFamilyEnumerationOutcomeKind.Proven, proof, null, null, null, null);
     }
 
     public static LuxembourgFamilyEnumerationOutcome ExecutorRefused(
         string familyKey, LuxembourgEnumerationRefusalDetail refusal)
     {
         ArgumentNullException.ThrowIfNull(refusal);
-        return new(familyKey, LuxembourgFamilyEnumerationOutcomeKind.ExecutorRefused, null, refusal, null);
+        return new(familyKey, LuxembourgFamilyEnumerationOutcomeKind.ExecutorRefused, null, refusal, null, null, null);
     }
 
     public static LuxembourgFamilyEnumerationOutcome ProofRefused(
@@ -237,7 +351,28 @@ public sealed class LuxembourgFamilyEnumerationOutcome
             throw new ArgumentOutOfRangeException(nameof(refusal));
         }
 
-        return new(familyKey, LuxembourgFamilyEnumerationOutcomeKind.ProofRefused, null, null, refusal);
+        return new(familyKey, LuxembourgFamilyEnumerationOutcomeKind.ProofRefused, null, null, refusal, null, null);
+    }
+
+    public static LuxembourgFamilyEnumerationOutcome CoverProven(
+        string familyKey, IReadOnlyList<AbsenceFamilyEnumerationProof> leafProofs)
+    {
+        ArgumentNullException.ThrowIfNull(leafProofs);
+        if (leafProofs.Count == 0)
+        {
+            throw new ArgumentException("A cover-proven family requires at least one leaf proof.", nameof(leafProofs));
+        }
+
+        return new(
+            familyKey, LuxembourgFamilyEnumerationOutcomeKind.CoverProven, null, null, null,
+            Array.AsReadOnly(leafProofs.ToArray()), null);
+    }
+
+    public static LuxembourgFamilyEnumerationOutcome CoverRefused(
+        string familyKey, LuxembourgPartitionCoverReconciliationDetail refusal)
+    {
+        ArgumentNullException.ThrowIfNull(refusal);
+        return new(familyKey, LuxembourgFamilyEnumerationOutcomeKind.CoverRefused, null, null, null, null, refusal);
     }
 }
 
@@ -464,7 +599,9 @@ public sealed class LuxembourgQueryExecutionResult
         ArgumentNullException.ThrowIfNull(scopeManifestReceipt);
         ArgumentException.ThrowIfNullOrWhiteSpace(scopeManifestCanonicalSha256);
         var completion = familyOutcomes.All(
-            static outcome => outcome.Kind == LuxembourgFamilyEnumerationOutcomeKind.Proven)
+            static outcome => outcome.Kind is
+                LuxembourgFamilyEnumerationOutcomeKind.Proven or
+                LuxembourgFamilyEnumerationOutcomeKind.CoverProven)
             ? LuxembourgQueryExecutionCompletion.AllFamiliesProven
             : LuxembourgQueryExecutionCompletion.PartialFamilyRefused;
         return new(
@@ -597,18 +734,18 @@ public sealed class LuxembourgQueryExecutionResult
 /// resolver-layer question this slice does not touch). See <see cref="BuildResourceObservations"/>.
 /// </para>
 /// <para>
-/// This adapter still drives one partition per family
-/// (<see cref="LuxembourgRepeatedEnumerationExecutor.RunPartitionAsync"/>), not a
-/// <see cref="LuxembourgPartitionCover"/> chain: a family whose selection requires repartitioning is
-/// reported as an ordinary refused family outcome rather than silently retried across a chain.
-/// D1-04b measured no live count for either the "subjects" census family or the "assertion-rows"
-/// family against the publisher's 1,000,000-row selection ceiling -- no production crawl has run
-/// under V3 yet, and every count in this file's own tests is a small synthetic fixture value -- and
-/// no such measurement exists anywhere in this repository's coordination record either, so this
-/// slice proceeds on the single-partition assumption for both families, named explicitly here rather
-/// than assumed silently. Driving <see cref="LuxembourgRepeatedEnumerationExecutor.RunCoverAsync"/>
-/// for either family once a real <c>PartitionRequired</c> count is observed remains future work, not
-/// this one's, exactly as the prior ruling already established for the census family alone.
+/// D1-04c closed the cover-chain gap D1-04b named: when the census or assertion family's own
+/// single-partition pass (<see cref="LuxembourgRepeatedEnumerationExecutor.RunPartitionAsync"/>)
+/// refuses <see cref="LuxembourgEnumerationRefusal.PartitionRequired"/> and a caller-supplied
+/// <see cref="LuxembourgPartitionCover"/> chain exists for that family, <c>RunAsync</c> drives
+/// <see cref="LuxembourgRepeatedEnumerationExecutor.RunCoverAsync"/> over it and reconciles the
+/// leaves (see <see cref="LuxembourgFamilyEnumerationOutcomeKind.CoverProven"/> and the
+/// <c>families</c> parameter's own remarks above). No measured live count exists for either family
+/// against the publisher's 1,000,000-row selection ceiling -- no production crawl has run under V3
+/// yet -- and this adapter does not assert one: the cover chain makes the eventual partition depth a
+/// runtime outcome the publisher's own data determines, never a design-time constant this code
+/// assumes. A family with no supplied cover, or whose pass refuses for any other reason, is reported
+/// as an ordinary refused family outcome exactly as before.
 /// </para>
 /// </remarks>
 public sealed class LuxembourgQueryExecutionAdapter
@@ -636,22 +773,41 @@ public sealed class LuxembourgQueryExecutionAdapter
     }
 
     /// <summary>
-    /// Runs one D1-04 slice: enumerates <paramref name="families"/> (one partition request each,
-    /// no cover/chain yet -- see the type remarks above), derives this run's own
+    /// Runs one D1-04 slice: enumerates <paramref name="families"/>, derives this run's own
     /// <see cref="LuxembourgResourceObservation"/> values (see <see cref="BuildResourceObservations"/>),
     /// then reuses the merged R5.1 pipeline exactly once over them.
     /// </summary>
     /// <param name="families">
-    /// One partition request and its already-bound source witness per family to enumerate. Passed
-    /// as a direct parameter rather than bundled into a request record's property: a plain by-value
-    /// parameter of <see cref="LuxembourgRepeatedEnumerationExecutor.RunPartitionAsync"/>'s own
-    /// input type is not a new way to construct or hold one, exactly as that method's own
-    /// <c>request</c> parameter already is not; a record wrapping the same values in a property
-    /// would be (<c>LuxembourgExecutorConstructionSurfaceTests.ARunRequestIsAnOpenInputRecord</c>
-    /// pins that nothing besides construction and that one consuming parameter holds a
+    /// One partition request, its already-bound source witness, and an optional cover chain, per
+    /// family to enumerate. Passed as a direct parameter rather than bundled into a request record's
+    /// property: a plain by-value parameter of
+    /// <see cref="LuxembourgRepeatedEnumerationExecutor.RunPartitionAsync"/>'s own input type is not
+    /// a new way to construct or hold one, exactly as that method's own <c>request</c> parameter
+    /// already is not; a record wrapping the same values in a property would be
+    /// (<c>LuxembourgExecutorConstructionSurfaceTests.ARunRequestIsAnOpenInputRecord</c> pins that
+    /// nothing besides construction and that one consuming parameter holds a
     /// <see cref="LuxembourgPartitionRunRequest"/>). One partition's own <c>Partition.PartitionId</c>
     /// is its family key -- the identifier <see cref="AbsenceFamilyEnumerationProof"/> matches
     /// against -- so there is no separate family-key field to drift from it.
+    /// <para>
+    /// D1-04c: a family's own <c>Cover</c> element is null when this run has no fallback for that
+    /// family's partition saturating (the ordinary case, and the only one before this slice). When
+    /// non-null and that family is the designated census or assertion family
+    /// (<paramref name="resourceObservationFamilyKey"/> or <paramref name="resourceAssertionsFamilyKey"/>)
+    /// and its single-partition pass refuses <see cref="LuxembourgEnumerationRefusal.PartitionRequired"/>,
+    /// <c>RunAsync</c> drives <see cref="LuxembourgRepeatedEnumerationExecutor.RunCoverAsync"/> over the
+    /// supplied chain and reconciles the leaves through <see cref="LuxembourgPartitionCover.TryCreate"/>;
+    /// the family's own rows are then the union of every leaf's own independently reopened and
+    /// re-verified rows (see <see cref="LuxembourgFamilyEnumerationOutcomeKind.CoverProven"/>). This
+    /// adapter never computes a split boundary itself -- no such computation exists anywhere in this
+    /// codebase today (<c>LuxembourgPartitionChain.SplitLeaf</c> takes an explicit caller-supplied
+    /// boundary cursor, and every existing chain in this codebase's own tests is built the same way);
+    /// a chain is exactly as much of a caller-supplied input as <paramref name="families"/> itself,
+    /// never invented here. A cover supplied for a family whose pass does NOT refuse
+    /// <c>PartitionRequired</c>, or for the relation-assertions family, is simply unused: only a
+    /// census or assertion family's own <c>PartitionRequired</c> refusal drives it, per the scope
+    /// ruling this slice implements.
+    /// </para>
     /// </param>
     /// <param name="relationAssertionsFamilyKey">
     /// Which entry of <paramref name="families"/>, if any, is the LU relation-assertions family
@@ -691,7 +847,10 @@ public sealed class LuxembourgQueryExecutionAdapter
     /// </param>
     /// <param name="evidenceResolver">The evidence resolver the merged R5.1 scope reduction requires.</param>
     public async Task<LuxembourgQueryExecutionResult> RunAsync(
-        IReadOnlyList<(LuxembourgPartitionRunRequest PartitionRequest, BoundMachineRequest SourceWitness)> families,
+        IReadOnlyList<(
+            LuxembourgPartitionRunRequest PartitionRequest,
+            BoundMachineRequest SourceWitness,
+            LuxembourgPartitionChain? Cover)> families,
         string? relationAssertionsFamilyKey,
         string? resourceObservationFamilyKey,
         string? resourceAssertionsFamilyKey,
@@ -716,12 +875,10 @@ public sealed class LuxembourgQueryExecutionAdapter
         AbsenceFamilyEnumerationProof? relationProof = null;
         string? relationIncompleteReason = null;
         var sawRelationFamily = false;
-        RepeatedEnumerationDeliveryReceipt? censusReceipt = null;
-        LuxembourgPartitionRunRequest? censusPartitionRequest = null;
-        RepeatedEnumerationDeliveryReceipt? assertionReceipt = null;
-        LuxembourgPartitionRunRequest? assertionPartitionRequest = null;
+        var censusLegs = new List<FamilyRowsLeg>();
+        var assertionLegs = new List<FamilyRowsLeg>();
 
-        foreach (var (partitionRequest, sourceWitness) in families)
+        foreach (var (partitionRequest, sourceWitness, cover) in families)
         {
             ArgumentNullException.ThrowIfNull(partitionRequest);
             var familyKey = partitionRequest.Partition.PartitionId;
@@ -750,14 +907,12 @@ public sealed class LuxembourgQueryExecutionAdapter
 
                     if (isCensusFamily)
                     {
-                        censusReceipt = receipt;
-                        censusPartitionRequest = partitionRequest;
+                        censusLegs.Add(new FamilyRowsLeg(proof, receipt, partitionRequest));
                     }
 
                     if (isAssertionFamily)
                     {
-                        assertionReceipt = receipt;
-                        assertionPartitionRequest = partitionRequest;
+                        assertionLegs.Add(new FamilyRowsLeg(proof, receipt, partitionRequest));
                     }
                 }
                 else
@@ -768,6 +923,33 @@ public sealed class LuxembourgQueryExecutionAdapter
                         sawRelationFamily = true;
                         relationIncompleteReason = $"proof_refused:{proofRefusal}";
                     }
+                }
+            }
+            else if ((isCensusFamily || isAssertionFamily) && cover is not null &&
+                runResult.Refusal!.Code == LuxembourgEnumerationRefusal.PartitionRequired)
+            {
+                // D1-04c item 1: the census or assertion family's own single-partition pass
+                // saturated. A cover chain was supplied for exactly this family, so drive it rather
+                // than accepting the ordinary refusal below.
+                var coverOutcome = await DriveCoverReconciliationAsync(
+                        partitionRequest, cover, sourceWitness, cancellationToken)
+                    .ConfigureAwait(false);
+                if (coverOutcome.Legs is { } legs)
+                {
+                    outcomes.Add(LuxembourgFamilyEnumerationOutcome.CoverProven(familyKey, coverOutcome.LeafProofs!));
+                    if (isCensusFamily)
+                    {
+                        censusLegs.AddRange(legs);
+                    }
+
+                    if (isAssertionFamily)
+                    {
+                        assertionLegs.AddRange(legs);
+                    }
+                }
+                else
+                {
+                    outcomes.Add(LuxembourgFamilyEnumerationOutcome.CoverRefused(familyKey, coverOutcome.Refusal!));
                 }
             }
             else
@@ -801,7 +983,7 @@ public sealed class LuxembourgQueryExecutionAdapter
         else
         {
             var censusOutcome = FindProvenOutcome(outcomes, resourceObservationFamilyKey);
-            if (censusOutcome is null || censusReceipt is null || censusPartitionRequest is null)
+            if (censusOutcome is null || censusLegs.Count == 0)
             {
                 return LuxembourgQueryExecutionResult.Refused(
                     topology,
@@ -815,7 +997,7 @@ public sealed class LuxembourgQueryExecutionAdapter
             }
 
             var assertionOutcome = FindProvenOutcome(outcomes, resourceAssertionsFamilyKey!);
-            if (assertionOutcome is null || assertionReceipt is null || assertionPartitionRequest is null)
+            if (assertionOutcome is null || assertionLegs.Count == 0)
             {
                 return LuxembourgQueryExecutionResult.Refused(
                     topology,
@@ -828,8 +1010,13 @@ public sealed class LuxembourgQueryExecutionAdapter
                         "proven by this run's enumeration."));
             }
 
-            var (censusRows, censusProfile, censusRefusal) = await ReopenAndVerifyFamilyRowsAsync(
-                    censusOutcome.Proof!, censusReceipt, censusPartitionRequest, cancellationToken)
+            // D1-04c: unions across every leg -- one leg for the ordinary single-partition path
+            // (unchanged behavior), or one leg per cover leaf when the family's pass saturated and
+            // reconciled through DriveCoverReconciliationAsync above. Each leg is still reopened and
+            // independently re-verified through the exact same door (ReopenAndVerifyFamilyRowsAsync,
+            // item 17's TryOpen); only the union is new.
+            var (censusRows, censusProfile, censusRefusal) = await ReopenAndVerifyFamilyRowsUnionAsync(
+                    censusLegs, cancellationToken)
                 .ConfigureAwait(false);
             if (censusRows is null)
             {
@@ -844,8 +1031,8 @@ public sealed class LuxembourgQueryExecutionAdapter
                         $"rows did not reverify: {censusRefusal}."));
             }
 
-            var (assertionRows, assertionProfile, assertionRefusal) = await ReopenAndVerifyFamilyRowsAsync(
-                    assertionOutcome.Proof!, assertionReceipt, assertionPartitionRequest, cancellationToken)
+            var (assertionRows, assertionProfile, assertionRefusal) = await ReopenAndVerifyFamilyRowsUnionAsync(
+                    assertionLegs, cancellationToken)
                 .ConfigureAwait(false);
             if (assertionRows is null)
             {
@@ -861,8 +1048,8 @@ public sealed class LuxembourgQueryExecutionAdapter
             }
 
             var buildResult = BuildResourceObservations(
-                censusRows, censusProfile, assertionRows, assertionProfile,
-                assertionPartitionRequest.InvariantPlan.SelectorPredicates);
+                censusRows, censusProfile!, assertionRows, assertionProfile!,
+                assertionLegs[0].PartitionRequest.InvariantPlan.SelectorPredicates);
             if (buildResult.Kind != ResourceObservationBuildOutcomeKind.Built)
             {
                 var refusalCode = buildResult.Kind switch
@@ -968,16 +1155,142 @@ public sealed class LuxembourgQueryExecutionAdapter
 
     /// <summary>
     /// Finds <paramref name="familyKey"/> among <paramref name="outcomes"/>, returning it only when
-    /// it was actually <see cref="LuxembourgFamilyEnumerationOutcomeKind.Proven"/> this run -- a
-    /// missing key and a found-but-not-proven key are both "no usable outcome" to every caller of
-    /// this method, which report the difference themselves (or don't need to).
+    /// it was actually proven this run -- a missing key and a found-but-not-proven key are both "no
+    /// usable outcome" to every caller of this method, which report the difference themselves (or
+    /// don't need to). D1-04c: proven now means <see cref="LuxembourgFamilyEnumerationOutcomeKind.Proven"/>
+    /// (one partition) or <see cref="LuxembourgFamilyEnumerationOutcomeKind.CoverProven"/> (a
+    /// reconciled cover chain) -- both are a whole enumeration this run holds proof for, differing
+    /// only in how many partitions that proof spans.
     /// </summary>
     private static LuxembourgFamilyEnumerationOutcome? FindProvenOutcome(
         IReadOnlyList<LuxembourgFamilyEnumerationOutcome> outcomes, string familyKey)
     {
         var outcome = outcomes.FirstOrDefault(
             candidate => string.Equals(candidate.FamilyKey, familyKey, StringComparison.Ordinal));
-        return outcome is { Kind: LuxembourgFamilyEnumerationOutcomeKind.Proven } ? outcome : null;
+        return outcome is {
+            Kind: LuxembourgFamilyEnumerationOutcomeKind.Proven or LuxembourgFamilyEnumerationOutcomeKind.CoverProven,
+        }
+            ? outcome
+            : null;
+    }
+
+    /// <summary>
+    /// D1-04c: one already-proven leg of a census or assertion family's own rows -- either the
+    /// family's single partition (the ordinary path, exactly one leg), or one cover leaf (one leg per
+    /// leaf of a reconciled <see cref="LuxembourgPartitionCover"/>). <see cref="ReopenAndVerifyFamilyRowsUnionAsync"/>
+    /// reopens every leg through the same door and unions the rows; nothing about a leg's own
+    /// reopening differs by how it was produced.
+    /// </summary>
+    private sealed record FamilyRowsLeg(
+        AbsenceFamilyEnumerationProof Proof,
+        RepeatedEnumerationDeliveryReceipt Receipt,
+        LuxembourgPartitionRunRequest PartitionRequest);
+
+    /// <summary>The result of driving a census or assertion family's cover-chain fallback.</summary>
+    private sealed record CoverReconciliationOutcome(
+        IReadOnlyList<AbsenceFamilyEnumerationProof>? LeafProofs,
+        IReadOnlyList<FamilyRowsLeg>? Legs,
+        LuxembourgPartitionCoverReconciliationDetail? Refusal);
+
+    /// <summary>
+    /// D1-04c item 1: drives <see cref="LuxembourgRepeatedEnumerationExecutor.RunCoverAsync"/> over
+    /// <paramref name="chain"/> (one session for every leaf, per that method's own contract), then
+    /// reconciles the leaves through <see cref="LuxembourgPartitionCover.TryCreate"/> and mints each
+    /// leaf's own <see cref="AbsenceFamilyEnumerationProof"/> by its own leaf partition id -- never the
+    /// root family key, which <see cref="AbsenceFamilyEnumerationProof.TryCreate"/> would refuse
+    /// <c>PartitionIsNotThisFamily</c> against a leaf's own delivery. Every refusal here is checked in
+    /// the order the chain reconciles: a leaf that itself refused, then the cover reconciliation
+    /// itself, then a leaf's own proof. A chain that cannot reconcile at any of these steps is a typed
+    /// family refusal (<see cref="LuxembourgPartitionCoverReconciliationDetail"/>), never a raw
+    /// exception.
+    /// </summary>
+    private async Task<CoverReconciliationOutcome> DriveCoverReconciliationAsync(
+        LuxembourgPartitionRunRequest rootRequest,
+        LuxembourgPartitionChain chain,
+        BoundMachineRequest sourceWitness,
+        CancellationToken cancellationToken)
+    {
+        var leafResults = await _executor.RunCoverAsync(rootRequest, chain, sourceWitness, cancellationToken)
+            .ConfigureAwait(false);
+
+        // RunCoverAsync's own contract: exactly one result per chain leaf, in leaf order, whether or
+        // not it delivered.
+        for (var index = 0; index < leafResults.Count; index++)
+        {
+            if (leafResults[index].Receipt is null)
+            {
+                return new CoverReconciliationOutcome(
+                    null, null,
+                    LuxembourgPartitionCoverReconciliationDetail.LeafExecutorRefused(
+                        chain.Leaves[index].PartitionId, leafResults[index].Refusal!));
+            }
+        }
+
+        var leafReceipts = leafResults.Select(static result => result.Receipt!).ToArray();
+        var cover = LuxembourgPartitionCover.TryCreate(chain, leafReceipts, rootReceipt: null, out var coverRefusal);
+        if (cover is null)
+        {
+            return new CoverReconciliationOutcome(
+                null, null, LuxembourgPartitionCoverReconciliationDetail.ReconciliationRefused(coverRefusal));
+        }
+
+        var leafProofs = new List<AbsenceFamilyEnumerationProof>(chain.Leaves.Count);
+        var legs = new List<FamilyRowsLeg>(chain.Leaves.Count);
+        for (var index = 0; index < chain.Leaves.Count; index++)
+        {
+            var leaf = chain.Leaves[index];
+            var receipt = leafReceipts[index];
+            var proof = receipt.TryProveFamilyEnumeration(leaf.PartitionId, out var leafProofRefusal);
+            if (proof is null)
+            {
+                return new CoverReconciliationOutcome(
+                    null, null,
+                    LuxembourgPartitionCoverReconciliationDetail.LeafProofRefused(
+                        leaf.PartitionId, leafProofRefusal));
+            }
+
+            leafProofs.Add(proof);
+            legs.Add(new FamilyRowsLeg(proof, receipt, rootRequest with { Partition = leaf }));
+        }
+
+        return new CoverReconciliationOutcome(leafProofs, legs, null);
+    }
+
+    /// <summary>
+    /// D1-04c: reopens and independently re-verifies every <paramref name="legs"/> entry through
+    /// <see cref="ReopenAndVerifyFamilyRowsAsync"/> (unchanged: item 19's shared reopen glue, item 17's
+    /// <c>TryOpen</c> door), then returns the UNION of every leg's own verified rows, in leg order --
+    /// the census or assertion family's own rows, whether they came from one ordinary partition (one
+    /// leg) or a reconciled cover chain (one leg per leaf). The identity binding in
+    /// <see cref="BuildResourceObservations"/> below is unchanged either way: it reads a plain row
+    /// list and does not know or care how many partitions it was assembled from.
+    /// </summary>
+    private async Task<(
+        IReadOnlyList<RepeatedEnumerationRow>? Rows,
+        RepeatedEnumerationInterpretationProfile? Profile,
+        string? Refusal)> ReopenAndVerifyFamilyRowsUnionAsync(
+        IReadOnlyList<FamilyRowsLeg> legs,
+        CancellationToken cancellationToken)
+    {
+        var allRows = new List<RepeatedEnumerationRow>();
+        RepeatedEnumerationInterpretationProfile? profile = null;
+        foreach (var leg in legs)
+        {
+            var (rows, legProfile, refusal) = await ReopenAndVerifyFamilyRowsAsync(
+                    leg.Proof, leg.Receipt, leg.PartitionRequest, cancellationToken)
+                .ConfigureAwait(false);
+            if (rows is null)
+            {
+                return (
+                    null, null,
+                    $"leaf '{leg.PartitionRequest.Partition.PartitionId}' did not reverify: {refusal}");
+            }
+
+            profile ??= legProfile;
+            allRows.AddRange(rows);
+        }
+
+        return (allRows, profile, null);
     }
 
     /// <summary>
@@ -1053,11 +1366,16 @@ public sealed class LuxembourgQueryExecutionAdapter
     private const string AssertionDatatypeProjectionVariable = "datatype_iri";
     private const string AssertionLanguageProjectionVariable = "language_tag";
 
-    /// <summary>The three literal values <c>LuxembourgQueryPlan.BuildTemplates</c>' own <c>object_kind</c> BIND can produce.</summary>
-    private const string AssertionObjectKindIri = "iri";
+    // D1-04c: the three object_kind tokens used to be duplicated here as private consts,
+    // independently restating "iri", "literal" and "unsupported_blank_node" from
+    // LuxembourgQueryPlan.BuildTemplates' own SPARQL BIND. Both call sites now read the one
+    // public constant LuxembourgQueryPlan defines, so a future change to a token cannot drift
+    // between the query text that produces it and the adapter code that classifies it.
+    private const string AssertionObjectKindIri = LuxembourgQueryPlan.AssertionObjectKindIri;
 
-    private const string AssertionObjectKindLiteral = "literal";
-    private const string AssertionObjectKindUnsupportedBlankNode = "unsupported_blank_node";
+    private const string AssertionObjectKindLiteral = LuxembourgQueryPlan.AssertionObjectKindLiteral;
+    private const string AssertionObjectKindUnsupportedBlankNode =
+        LuxembourgQueryPlan.AssertionObjectKindUnsupportedBlankNode;
 
     /// <summary>
     /// D1-04b's real derivation, per the reviewer's ruling
@@ -1420,61 +1738,24 @@ public sealed class LuxembourgQueryExecutionAdapter
     }
 
     /// <summary>Item 15: names every resource whose acceptance rests on bucket membership only.</summary>
+    /// <summary>
+    /// D1-04c: always empty now. Item 15's original form of this method matched a resource's own
+    /// accepted <c>typeDocument</c> assertion, by its last IRI path segment, against
+    /// <c>VerifiedLuxembourgSourceProfile.PriorityCandidateTypeTc/Rect/Acc</c> -- a heuristic that
+    /// stood in for R5.1's real typed role until it existed. It now consumes
+    /// <see cref="LuxembourgResourceResolution.TypedRole"/> directly instead: a resource with a
+    /// typed role carries it, so the coarse re-derivation is unneeded and, per the retirement
+    /// documented on <see cref="LuxembourgCoarseDispositionGap"/>'s own remarks, unreachable -- every
+    /// resource that heuristic could have matched now resolves a real
+    /// <see cref="LuxembourgTypedRoleKind"/> instead of <c>NotApplicable</c>. Kept as a named method,
+    /// not inlined to <c>[]</c> at the call site, so a future coarse gap this bucket-membership
+    /// dimension might still need (a case <see cref="LuxembourgTypedRoleResolution"/> does not cover)
+    /// has an obvious, already-wired place to resume filtering <paramref name="resolved"/>.
+    /// </summary>
     private static IReadOnlyList<LuxembourgCoarseDispositionMarker> BuildCoarseDispositionMarkers(
         LuxembourgProfileResolution.Resolved resolved)
     {
-        // Fold-in six of the D1-04 refreeze: read the predicate directly off the shared public
-        // constant instead of searching RequiredIriVocabulary for the one AssertionPredicate value
-        // ending in "typeDocument". VerifiedLuxembourgSourceProfile.TypeDocumentPredicateIri is where
-        // this assembly reads it from; LuxembourgScopeResolver (Lex.V3.Contracts) does not read this
-        // constant at all -- it keeps its own private "TypeDocument" string duplicate
-        // (LuxembourgScopeResolver.cs) rather than sharing this one. That duplicate is a separate,
-        // already-named gap (item 18, lane-w), not fixed here.
-        var typeDocumentPredicateIri = VerifiedLuxembourgSourceProfile.TypeDocumentPredicateIri;
-
-        var markers = new List<LuxembourgCoarseDispositionMarker>();
-        foreach (var resource in resolved.Resources)
-        {
-            if (resource.Dimensions.PublicationFamily.State != LuScopeTerminalState.AcceptedCandidate)
-            {
-                continue;
-            }
-
-            var typeDocumentIri = resource.Assertions
-                .Where(assertion =>
-                    assertion.Disposition == LuxembourgAssertionDisposition.Accepted &&
-                    string.Equals(
-                        assertion.Assertion.PredicateIri, typeDocumentPredicateIri, StringComparison.Ordinal) &&
-                    string.Equals(
-                        assertion.Assertion.SubjectIri,
-                        resource.ObjectRef.PublisherUri,
-                        StringComparison.Ordinal))
-                .Select(static assertion => assertion.Assertion.ObjectIriOrLexical)
-                .FirstOrDefault();
-            if (typeDocumentIri is null)
-            {
-                continue;
-            }
-
-            var gap = LastPathSegment(typeDocumentIri) switch
-            {
-                VerifiedLuxembourgSourceProfile.PriorityCandidateTypeTc =>
-                    LuxembourgCoarseDispositionGap.TcTypedRoleNotDistinguished,
-                VerifiedLuxembourgSourceProfile.PriorityCandidateTypeRect =>
-                    LuxembourgCoarseDispositionGap.RectTypedRoleNotDistinguished,
-                VerifiedLuxembourgSourceProfile.PriorityCandidateTypeAcc =>
-                    LuxembourgCoarseDispositionGap.AccTypedRoleNotDistinguished,
-                _ => (LuxembourgCoarseDispositionGap?)null,
-            };
-            if (gap is { } value)
-            {
-                markers.Add(new LuxembourgCoarseDispositionMarker(
-                    resource.ObjectRef.PublisherUri, typeDocumentIri, value));
-            }
-        }
-
-        return markers;
+        _ = resolved;
+        return [];
     }
-
-    private static string LastPathSegment(string iri) => iri[(iri.LastIndexOf('/') + 1)..];
 }

@@ -35,9 +35,20 @@ public sealed class VerifiedLuxembourgSourceProfile
     /// (<c>LuxembourgQueryExecutionAdapter.BuildCoarseDispositionMarkers</c>, in
     /// <c>Lex.V3.Ingest</c>) used to search <see cref="RequiredIriVocabulary"/> for the one
     /// <see cref="LuxembourgVocabularyKind.AssertionPredicate"/> value ending in "typeDocument"
-    /// instead of naming this predicate directly; that search is gone now that this constant is
-    /// the one place both assemblies read it from.
+    /// instead of naming this predicate directly; that search is gone, and <c>Lex.V3.Ingest</c>
+    /// now reads this constant directly.
     /// </summary>
+    /// <remarks>
+    /// D1-04c verified this claim rather than assuming it, and it is only half true today:
+    /// <see cref="LuxembourgScopeResolver"/> (this same assembly, <c>LuxembourgScopeResolver.cs</c>,
+    /// the private <c>TypeDocument</c> field) still keeps its own independent
+    /// <c>JoluxPrefix + "typeDocument"</c> duplicate rather than reading this constant, so this is
+    /// not yet "the one place both assemblies read it from" -- it is the one place
+    /// <c>Lex.V3.Ingest</c> reads it from, and a second, value-identical definition still stands in
+    /// <c>Lex.V3.Contracts</c> itself. That duplicate is the already-named gap item 18 (lane-w)
+    /// tracks; unifying it is out of D1-04c's own path claim (<c>Ingest/Luxembourg</c> plus this
+    /// file and <c>LuxembourgQueryPlan.cs</c>), not fixed here.
+    /// </remarks>
     public const string TypeDocumentPredicateIri = JoluxPrefix + "typeDocument";
 
     /// <summary>

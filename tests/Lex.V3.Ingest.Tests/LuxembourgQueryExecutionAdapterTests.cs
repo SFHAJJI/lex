@@ -195,7 +195,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         var (partitionRequest, witness) = BuildPartitionRequest(RelationSetId, RelationFamilyKey);
 
         var result = await adapter.RunAsync(
-            [(partitionRequest, witness)], RelationFamilyKey, null, null,
+            [(partitionRequest, witness, null)], RelationFamilyKey, null, null,
             new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
 
         Assert.AreEqual(1, result.FamilyOutcomes.Count);
@@ -221,7 +221,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         var (partitionRequest, witness) = BuildPartitionRequest(RelationSetId, RelationFamilyKey);
 
         var result = await adapter.RunAsync(
-            [(partitionRequest, witness)], RelationFamilyKey, null, null,
+            [(partitionRequest, witness, null)], RelationFamilyKey, null, null,
             new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
 
         Assert.AreEqual(1, result.FamilyOutcomes.Count);
@@ -270,7 +270,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         var (partitionRequest, witness) = BuildPartitionRequest(RelationSetId, RelationFamilyKey);
 
         var result = await adapter.RunAsync(
-            [(partitionRequest, witness)], RelationFamilyKey, null, null,
+            [(partitionRequest, witness, null)], RelationFamilyKey, null, null,
             new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
 
         Assert.AreEqual(1, result.FamilyOutcomes.Count);
@@ -301,7 +301,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         var (partitionRequest, witness) = BuildPartitionRequest(RelationSetId, RelationFamilyKey);
 
         var result = await adapter.RunAsync(
-            [(partitionRequest, witness)], null, null, null,
+            [(partitionRequest, witness, null)], null, null, null,
             new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
@@ -353,7 +353,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         var (partitionRequest, witness) = BuildPartitionRequest(ResourceSetId, ResourceFamilyKey);
 
         var result = await adapter.RunAsync(
-            [(partitionRequest, witness)], null, ResourceFamilyKey, AssertionFamilyKey,
+            [(partitionRequest, witness, null)], null, ResourceFamilyKey, AssertionFamilyKey,
             new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
 
         Assert.AreEqual(LuxembourgFamilyEnumerationOutcomeKind.ProofRefused, result.FamilyOutcomes.Single().Kind);
@@ -412,8 +412,8 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         var adapter = new LuxembourgQueryExecutionAdapter(store, NewExecutor(store, handler), profile);
 
         var result = await adapter.RunAsync(
-            [(relationRequest, relationWitness), (resourceRequest, resourceWitness),
-                (assertionRequest, assertionWitness)],
+            [(relationRequest, relationWitness, null), (resourceRequest, resourceWitness, null),
+                (assertionRequest, assertionWitness, null)],
             RelationFamilyKey, ResourceFamilyKey, AssertionFamilyKey,
             new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
 
@@ -465,7 +465,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
 
         var result = await adapter.RunAsync(
-            [(resourceRequest, resourceWitness), (assertionRequest, assertionWitness)],
+            [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
             null, ResourceFamilyKey, AssertionFamilyKey,
             new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
 
@@ -522,7 +522,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
 
         var result = await adapter.RunAsync(
-            [(resourceRequest, resourceWitness), (assertionRequest, assertionWitness)],
+            [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
             null, ResourceFamilyKey, AssertionFamilyKey,
             new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
 
@@ -570,17 +570,26 @@ public sealed class LuxembourgQueryExecutionAdapterTests
     // the "subjects" family alone carries no assertions, so a genuinely derived resource could never
     // reach AcceptedCandidate through this adapter. The reviewer's ruling on that finding
     // (lex-event-20260904T023842960Z-3b559fba1e3c46dba3ef496e401d96f3) confirmed the "assertion-rows"
-    // family carries the real content D1-04a's original binding never asked for; the two tests below
+    // family carries the real content D1-04a's original binding never asked for; the tests below
     // restore this branch's adapter-level reachability using that family's own real, independently
-    // re-verified rows -- never a hand-built LuxembourgResourceObservation. One gap
-    // (TcTypedRoleNotDistinguished) stands in for the three PriorityCandidateType gaps
-    // BuildCoarseDispositionMarkers' own switch produces: RECT and ACC follow the identical adapter
-    // wiring with a different constant, and each gap's own resolver-level correctness (not
-    // family-sourcing-dependent) is already covered by LuxembourgScopeResolverTests and
-    // LuxembourgSourceProfileTests.
-
+    // re-verified rows -- never a hand-built LuxembourgResourceObservation.
+    //
+    // D1-04c retired all three PriorityCandidateType coarse gaps (TcTypedRoleNotDistinguished,
+    // RectTypedRoleNotDistinguished, AccTypedRoleNotDistinguished -- LuxembourgCoarseDispositionGap
+    // is now a zero-member enum, pinned as such by CoarseDispositionGapIsAnEmptyEnum below).
+    // BuildCoarseDispositionMarkers now skips any resource whose LuxembourgResourceResolution.TypedRole
+    // is already resolved (item 15/18's ResolveTypedRole), and that resolution reads the exact same
+    // rdf:type/typeDocument assertions, over the exact same raw observation, that drove this coarse
+    // AcceptedCandidate state in the first place (LuxembourgScopeResolver.ResolveDimensions and
+    // ResolveTypedRole both call IriValues(observation.Assertions, ...) independently on the same
+    // inputs) -- so every case that used to earn a coarse marker here now also earns a real typed
+    // role, and the coarse marker is unreachable. Proven, not assumed: before this retirement, the
+    // three tests below asserted CoarseDispositionMarkers.Count == 1 with the exact TC/RECT/ACC gap;
+    // wiring TypedRole into the guard (this file's own git history) made all three fail with count 0
+    // instead of 1, which is exactly the predicted unreachability, not an unrelated regression. The
+    // three tests now assert that real, observed 0.
     [TestMethod]
-    public async Task ATcResourceAcceptedByBucketMembershipCarriesTheTypedGapMarkerFromDerivedAssertions()
+    public async Task ATcResourceAcceptedByBucketMembershipCarriesNoCoarseMarkerNowThatTypedRoleDistinguishesIt()
     {
         const string subjectUri = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0";
         var (profile, _, enumerationRef) = BuildProfile();
@@ -598,17 +607,15 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
 
         var result = await adapter.RunAsync(
-            [(resourceRequest, resourceWitness), (assertionRequest, assertionWitness)],
+            [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
             null, ResourceFamilyKey, AssertionFamilyKey,
             new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
         Assert.IsNotNull(result.ScopeManifestReceipt);
-        Assert.AreEqual(1, result.CoarseDispositionMarkers.Count);
-        var marker = result.CoarseDispositionMarkers[0];
-        Assert.AreEqual(subjectUri, marker.PublisherUri);
-        Assert.AreEqual(TypeDocumentPrefix + "TC", marker.ObservedTypeDocumentIri);
-        Assert.AreEqual(LuxembourgCoarseDispositionGap.TcTypedRoleNotDistinguished, marker.Gap);
+        Assert.AreEqual(
+            0, result.CoarseDispositionMarkers.Count,
+            "a TC resource's role is now distinguished by TypedRole, so the coarse gap must not fire");
     }
 
     [TestMethod]
@@ -626,7 +633,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
 
         var result = await adapter.RunAsync(
-            [(resourceRequest, resourceWitness), (assertionRequest, assertionWitness)],
+            [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
             null, ResourceFamilyKey, AssertionFamilyKey,
             new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
 
@@ -636,7 +643,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
     }
 
     [TestMethod]
-    public async Task ARectResourceAcceptedByBucketMembershipCarriesTheTypedGapMarkerFromDerivedAssertions()
+    public async Task ARectResourceAcceptedByBucketMembershipCarriesNoCoarseMarkerNowThatTypedRoleDistinguishesIt()
     {
         const string subjectUri = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0";
         var (profile, _, enumerationRef) = BuildProfile();
@@ -650,21 +657,19 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
 
         var result = await adapter.RunAsync(
-            [(resourceRequest, resourceWitness), (assertionRequest, assertionWitness)],
+            [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
             null, ResourceFamilyKey, AssertionFamilyKey,
             new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
         Assert.IsNotNull(result.ScopeManifestReceipt);
-        Assert.AreEqual(1, result.CoarseDispositionMarkers.Count);
-        var marker = result.CoarseDispositionMarkers[0];
-        Assert.AreEqual(subjectUri, marker.PublisherUri);
-        Assert.AreEqual(TypeDocumentPrefix + "RECT", marker.ObservedTypeDocumentIri);
-        Assert.AreEqual(LuxembourgCoarseDispositionGap.RectTypedRoleNotDistinguished, marker.Gap);
+        Assert.AreEqual(
+            0, result.CoarseDispositionMarkers.Count,
+            "a RECT resource's role is now distinguished by TypedRole, so the coarse gap must not fire");
     }
 
     [TestMethod]
-    public async Task AnAccResourceAcceptedByBucketMembershipCarriesTheTypedGapMarkerFromDerivedAssertions()
+    public async Task AnAccResourceAcceptedByBucketMembershipCarriesNoCoarseMarkerNowThatTypedRoleDistinguishesIt()
     {
         const string subjectUri = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0";
         var (profile, _, enumerationRef) = BuildProfile();
@@ -678,17 +683,15 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
 
         var result = await adapter.RunAsync(
-            [(resourceRequest, resourceWitness), (assertionRequest, assertionWitness)],
+            [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
             null, ResourceFamilyKey, AssertionFamilyKey,
             new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
         Assert.IsNotNull(result.ScopeManifestReceipt);
-        Assert.AreEqual(1, result.CoarseDispositionMarkers.Count);
-        var marker = result.CoarseDispositionMarkers[0];
-        Assert.AreEqual(subjectUri, marker.PublisherUri);
-        Assert.AreEqual(TypeDocumentPrefix + "ACC", marker.ObservedTypeDocumentIri);
-        Assert.AreEqual(LuxembourgCoarseDispositionGap.AccTypedRoleNotDistinguished, marker.Gap);
+        Assert.AreEqual(
+            0, result.CoarseDispositionMarkers.Count,
+            "an ACC resource's role is now distinguished by TypedRole, so the coarse gap must not fire");
     }
 
     [TestMethod]
@@ -717,7 +720,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
 
         var result = await adapter.RunAsync(
-            [(resourceRequest, resourceWitness), (assertionRequest, assertionWitness)],
+            [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
             null, ResourceFamilyKey, AssertionFamilyKey,
             new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
 
@@ -727,6 +730,153 @@ public sealed class LuxembourgQueryExecutionAdapterTests
             0, result.CoarseDispositionMarkers.Count,
             "a TC-typed resource without the Act class must not resolve to AcceptedCandidate, so the " +
             "guard must skip it");
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // D1-04c item 1: the cover chain. The census family's own single-partition pass saturates
+    // (a count at the publisher's exact 1,000,000-row ceiling), and a caller-supplied two-leaf
+    // LuxembourgPartitionChain is driven through RunCoverAsync and reconciled.
+    // ---------------------------------------------------------------------------------------
+
+    [TestMethod]
+    public async Task ACensusFamilyThatSaturatesReconcilesThroughATwoLeafCoverAndUnionsBothLeavesRows()
+    {
+        const string leafASubject = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/b0";
+        const string leafBSubject = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/n0";
+        var (profile, _, enumerationRef) = BuildProfile();
+        var store = new InMemoryCustodyStore();
+        var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
+        var (resourceRequest, resourceWitness) = BuildPartitionRequest(ResourceSetId, ResourceFamilyKey);
+        var chain = LuxembourgPartitionChain.Root(resourceRequest.Partition)
+            .SplitLeaf(
+                ResourceFamilyKey,
+                new LuxembourgQueryCursor(
+                    "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/m", "", "", "", "", ""),
+                "leaf-a",
+                "leaf-b");
+        var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, req) => ordinal switch
+        {
+            // Ordinal 0: robots for the assertion family's own session (auto-answered).
+            // The assertion family delivers zero rows -- a real "no assertions" family, not a
+            // hand-built shortcut, exactly like AnOrdinaryLoiActCarriesNoCoarseDispositionMarker's
+            // own zero-row assertion family.
+            1 or 3 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                req, LuxembourgAcquisitionTestFixture.CountJson(0)),
+            2 or 4 => LuxembourgAcquisitionTestFixture.JsonResponse(req, AssertionRowsJson()),
+            // Ordinal 5: robots for the census family's own root single-partition session.
+            5 or 7 => TextResponse(req, "User-agent: *\nAllow: /\n"),
+            // The root pass's own count sits exactly at the publisher's ceiling: PartitionRequired,
+            // no page sent, exactly as ACountAtThePublisherCeilingRefusesWithoutSendingAPage proves
+            // at the executor level.
+            6 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                req, LuxembourgAcquisitionTestFixture.CountJson(1_000_000)),
+            // Ordinal 7: robots for RunCoverAsync's own one shared session across both leaves.
+            8 or 11 or 14 or 17 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                req, LuxembourgAcquisitionTestFixture.CountJson(1)),
+            9 or 12 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                req, LuxembourgAcquisitionTestFixture.RowsJson(leafASubject)),
+            10 or 13 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                req, LuxembourgAcquisitionTestFixture.EmptyRowsJson()),
+            15 or 18 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                req, LuxembourgAcquisitionTestFixture.RowsJson(leafBSubject)),
+            16 or 19 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                req, LuxembourgAcquisitionTestFixture.EmptyRowsJson()),
+            _ => throw new AssertFailedException($"unexpected ordinal {ordinal}"),
+        });
+        var adapter = new LuxembourgQueryExecutionAdapter(store, NewExecutor(store, handler), profile);
+
+        var result = await adapter.RunAsync(
+            [(assertionRequest, assertionWitness, null), (resourceRequest, resourceWitness, chain)],
+            null, ResourceFamilyKey, AssertionFamilyKey,
+            new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
+
+        Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+        Assert.IsNotNull(result.ScopeManifestReceipt);
+        Assert.AreEqual(
+            LuxembourgQueryExecutionCompletion.AllFamiliesProven, result.Completion,
+            "a reconciled cover is a whole proven enumeration, exactly like a single-partition Proven");
+
+        Assert.AreEqual(2, result.FamilyOutcomes.Count);
+        var censusOutcome = result.FamilyOutcomes.Single(
+            outcome => outcome.FamilyKey == ResourceFamilyKey);
+        Assert.AreEqual(LuxembourgFamilyEnumerationOutcomeKind.CoverProven, censusOutcome.Kind);
+        Assert.IsNotNull(censusOutcome.CoverLeafProofs);
+        Assert.AreEqual(2, censusOutcome.CoverLeafProofs!.Count);
+        Assert.AreEqual("leaf-a", censusOutcome.CoverLeafProofs[0].FamilyKey);
+        Assert.AreEqual("leaf-b", censusOutcome.CoverLeafProofs[1].FamilyKey);
+
+        // The union of both leaves' own verified rows, in leaf order -- never a subset, and never
+        // silently missing the second leaf.
+        CollectionAssert.AreEqual(
+            new[] { leafASubject, leafBSubject }, result.ResourceObservationSubjects.ToArray());
+    }
+
+    [TestMethod]
+    public async Task ATwoLeafCoverWhoseFirstLeafsPassesDisagreeRefusesAsATypedCoverRefusal()
+    {
+        const string leafASubjectPass1 = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/b0";
+        const string leafASubjectPass2 = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/c0";
+        const string leafBSubject = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/n0";
+        var (profile, _, enumerationRef) = BuildProfile();
+        var store = new InMemoryCustodyStore();
+        var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
+        var (resourceRequest, resourceWitness) = BuildPartitionRequest(ResourceSetId, ResourceFamilyKey);
+        var chain = LuxembourgPartitionChain.Root(resourceRequest.Partition)
+            .SplitLeaf(
+                ResourceFamilyKey,
+                new LuxembourgQueryCursor(
+                    "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/m", "", "", "", "", ""),
+                "leaf-a",
+                "leaf-b");
+        var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, req) => ordinal switch
+        {
+            1 or 3 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                req, LuxembourgAcquisitionTestFixture.CountJson(0)),
+            2 or 4 => LuxembourgAcquisitionTestFixture.JsonResponse(req, AssertionRowsJson()),
+            5 or 7 => TextResponse(req, "User-agent: *\nAllow: /\n"),
+            6 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                req, LuxembourgAcquisitionTestFixture.CountJson(1_000_000)),
+            8 or 11 or 14 or 17 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                req, LuxembourgAcquisitionTestFixture.CountJson(1)),
+            // Leaf-a's own two passes deliver DIFFERENT content (b0 on pass 1, c0 on pass 2): the
+            // same disagreement ACountOneBelowTheCeilingProceedsToPageZero proves at the executor
+            // level becomes, one layer up, a cover the reconciliation itself must refuse -- never a
+            // union of whichever pass happened to run first.
+            9 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                req, LuxembourgAcquisitionTestFixture.RowsJson(leafASubjectPass1)),
+            12 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                req, LuxembourgAcquisitionTestFixture.RowsJson(leafASubjectPass2)),
+            10 or 13 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                req, LuxembourgAcquisitionTestFixture.EmptyRowsJson()),
+            15 or 18 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                req, LuxembourgAcquisitionTestFixture.RowsJson(leafBSubject)),
+            16 or 19 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                req, LuxembourgAcquisitionTestFixture.EmptyRowsJson()),
+            _ => throw new AssertFailedException($"unexpected ordinal {ordinal}"),
+        });
+        var adapter = new LuxembourgQueryExecutionAdapter(store, NewExecutor(store, handler), profile);
+
+        var result = await adapter.RunAsync(
+            [(assertionRequest, assertionWitness, null), (resourceRequest, resourceWitness, chain)],
+            null, ResourceFamilyKey, AssertionFamilyKey,
+            new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
+
+        // Refused with a typed detail naming which resource-observation family family key was not
+        // proven -- the same refusal shape an unproven single-partition census produces, not a raw
+        // exception and not a silently accepted partial cover.
+        Assert.IsNotNull(result.Refusal);
+        Assert.AreEqual(
+            LuxembourgQueryExecutionRefusal.ResourceObservationFamilyNotProven, result.Refusal!.Code);
+
+        var censusOutcome = result.FamilyOutcomes.Single(
+            outcome => outcome.FamilyKey == ResourceFamilyKey);
+        Assert.AreEqual(LuxembourgFamilyEnumerationOutcomeKind.CoverRefused, censusOutcome.Kind);
+        Assert.IsNotNull(censusOutcome.CoverRefusal);
+        Assert.AreEqual(
+            LuxembourgPartitionCoverReconciliationRefusal.CoverReconciliationRefused,
+            censusOutcome.CoverRefusal!.Code);
+        Assert.AreEqual(
+            LuxembourgPartitionCoverRefusal.LeafSelectionsDiffer, censusOutcome.CoverRefusal.CoverRefusal);
     }
 
     [TestMethod]
@@ -749,7 +899,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
 
         var result = await adapter.RunAsync(
-            [(resourceRequest, resourceWitness), (assertionRequest, assertionWitness)],
+            [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
             null, ResourceFamilyKey, AssertionFamilyKey,
             new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
 
@@ -784,7 +934,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
 
         var result = await adapter.RunAsync(
-            [(resourceRequest, resourceWitness), (assertionRequest, assertionWitness)],
+            [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
             null, ResourceFamilyKey, AssertionFamilyKey,
             new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
 
@@ -837,7 +987,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
 
         var result = await adapter.RunAsync(
-            [(resourceRequest, resourceWitness), (assertionRequest, assertionWitness)],
+            [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
             null, ResourceFamilyKey, AssertionFamilyKey,
             new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
 
@@ -871,7 +1021,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
 
         var exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => adapter.RunAsync(
-            [(resourceRequest, resourceWitness), (assertionRequest, assertionWitness)],
+            [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
             null, ResourceFamilyKey, AssertionFamilyKey,
             new AlwaysRefusingEvidenceResolver(enumerationRef), CancellationToken.None));
         StringAssert.Contains(exception.Message, "not admitted");
@@ -917,7 +1067,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
             var (resourceRequest, resourceWitness) = BuildPartitionRequest(ResourceSetId, ResourceFamilyKey);
             var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
             return await adapter.RunAsync(
-                [(resourceRequest, resourceWitness), (assertionRequest, assertionWitness)],
+                [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
                 null, ResourceFamilyKey, AssertionFamilyKey, resolver, CancellationToken.None);
         }
 
@@ -979,7 +1129,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
             var (partitionRequest, witness) = BuildPartitionRequest(RelationSetId, RelationFamilyKey);
 
             var result = await adapter.RunAsync(
-                [(partitionRequest, witness)], RelationFamilyKey, null, null,
+                [(partitionRequest, witness, null)], RelationFamilyKey, null, null,
                 new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
 
             Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");

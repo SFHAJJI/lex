@@ -86,26 +86,25 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
     }
 
     /// <summary>
-    /// The third member is renamed, not retired (reviewer RULING
-    /// lex-event-20260904T002301246Z-7699c8fdd1ad4868a7d94dcb152fbf57): ACC is admitted through
-    /// PriorityCandidateTypes bucket membership exactly like TC and RECT, so its own coarse marker
-    /// is the same "typed role not separately distinguished at this coarse level" signal, renamed
-    /// from the refused AccConstitutionalReviewEvidenceGateNotApplied to AccTypedRoleNotDistinguished.
+    /// D1-04c retired all three members this enum used to carry (the third had already been renamed,
+    /// not retired, under reviewer RULING lex-event-20260904T002301246Z-7699c8fdd1ad4868a7d94dcb152fbf57:
+    /// ACC was admitted through PriorityCandidateTypes bucket membership exactly like TC and RECT, so
+    /// its own coarse marker was the same "typed role not separately distinguished at this coarse
+    /// level" signal, renamed from the refused AccConstitutionalReviewEvidenceGateNotApplied to
+    /// AccTypedRoleNotDistinguished). BuildCoarseDispositionMarkers now consumes
+    /// LuxembourgResourceResolution.TypedRole directly instead of this coarse re-derivation, and
+    /// every case that used to produce one of these three members now resolves a real typed role
+    /// instead -- see LuxembourgCoarseDispositionGap's own remarks for how this was proven, not
+    /// assumed. Pinned at zero members so a future reopening is a deliberate, reviewed diff.
     /// </summary>
     [TestMethod]
-    public void CoarseDispositionGapIsAPlainThreeMemberEnum()
+    public void CoarseDispositionGapIsAnEmptyEnum()
     {
         CollectionAssert.AreEqual(
             new[]
             {
                 "base-constructor protected instance System.Enum::.ctor() -> System.Enum",
                 "base-constructor protected instance System.ValueType::.ctor() -> System.ValueType",
-                "field public static " + N + "LuxembourgCoarseDispositionGap::AccTypedRoleNotDistinguished -> "
-                + N + "LuxembourgCoarseDispositionGap",
-                "field public static " + N + "LuxembourgCoarseDispositionGap::RectTypedRoleNotDistinguished -> "
-                + N + "LuxembourgCoarseDispositionGap",
-                "field public static " + N + "LuxembourgCoarseDispositionGap::TcTypedRoleNotDistinguished -> "
-                + N + "LuxembourgCoarseDispositionGap",
             },
             ConstructionSurface.Of(typeof(LuxembourgCoarseDispositionGap)).ToArray());
     }
@@ -128,14 +127,19 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
             ConstructionSurface.Of(typeof(LuxembourgCoarseDispositionMarker)).ToArray());
     }
 
+    /// <summary>D1-04c added CoverProven and CoverRefused to the family, census or assertion cover-chain path.</summary>
     [TestMethod]
-    public void FamilyEnumerationOutcomeKindIsAPlainThreeMemberEnum()
+    public void FamilyEnumerationOutcomeKindIsAPlainFiveMemberEnum()
     {
         CollectionAssert.AreEqual(
             new[]
             {
                 "base-constructor protected instance System.Enum::.ctor() -> System.Enum",
                 "base-constructor protected instance System.ValueType::.ctor() -> System.ValueType",
+                "field public static " + N + "LuxembourgFamilyEnumerationOutcomeKind::CoverProven -> "
+                + N + "LuxembourgFamilyEnumerationOutcomeKind",
+                "field public static " + N + "LuxembourgFamilyEnumerationOutcomeKind::CoverRefused -> "
+                + N + "LuxembourgFamilyEnumerationOutcomeKind",
                 "field public static " + N + "LuxembourgFamilyEnumerationOutcomeKind::ExecutorRefused -> "
                 + N + "LuxembourgFamilyEnumerationOutcomeKind",
                 "field public static " + N + "LuxembourgFamilyEnumerationOutcomeKind::ProofRefused -> "
@@ -146,9 +150,13 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
             ConstructionSurface.Of(typeof(LuxembourgFamilyEnumerationOutcomeKind)).ToArray());
     }
 
-    /// <summary>Three factories (one per <see cref="LuxembourgFamilyEnumerationOutcomeKind"/> member) over one private constructor.</summary>
+    /// <summary>
+    /// Five factories (one per <see cref="LuxembourgFamilyEnumerationOutcomeKind"/> member) over one
+    /// private constructor. D1-04c added CoverProven (a cover chain's own leaf proofs) and
+    /// CoverRefused (a cover chain's own reconciliation detail).
+    /// </summary>
     [TestMethod]
-    public void FamilyEnumerationOutcomeHasExactlyThreeFactoriesOverOnePrivateConstructor()
+    public void FamilyEnumerationOutcomeHasExactlyFiveFactoriesOverOnePrivateConstructor()
     {
         CollectionAssert.AreEqual(
             new[]
@@ -156,8 +164,15 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 "constructor private instance " + N + "LuxembourgFamilyEnumerationOutcome::.ctor(System.String, "
                 + N + "LuxembourgFamilyEnumerationOutcomeKind, " + Absence + "AbsenceFamilyEnumerationProof, "
                 + N + "LuxembourgEnumerationRefusalDetail, "
-                + "System.Nullable<" + Absence + "AbsenceFamilyEnumerationProofRefusal>) -> "
+                + "System.Nullable<" + Absence + "AbsenceFamilyEnumerationProofRefusal>, "
+                + "System.Collections.Generic.IReadOnlyList<" + Absence + "AbsenceFamilyEnumerationProof>, "
+                + N + "LuxembourgPartitionCoverReconciliationDetail) -> "
                 + N + "LuxembourgFamilyEnumerationOutcome",
+                "method public static " + N + "LuxembourgFamilyEnumerationOutcome::CoverProven(System.String, "
+                + "System.Collections.Generic.IReadOnlyList<" + Absence + "AbsenceFamilyEnumerationProof>) -> "
+                + N + "LuxembourgFamilyEnumerationOutcome",
+                "method public static " + N + "LuxembourgFamilyEnumerationOutcome::CoverRefused(System.String, "
+                + N + "LuxembourgPartitionCoverReconciliationDetail) -> " + N + "LuxembourgFamilyEnumerationOutcome",
                 "method public static " + N + "LuxembourgFamilyEnumerationOutcome::ExecutorRefused(System.String, "
                 + N + "LuxembourgEnumerationRefusalDetail) -> " + N + "LuxembourgFamilyEnumerationOutcome",
                 "method public static " + N + "LuxembourgFamilyEnumerationOutcome::ProofRefused(System.String, "
@@ -302,7 +317,8 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
             {
                 "method public instance " + N + "LuxembourgQueryExecutionAdapter::RunAsync("
                 + "System.Collections.Generic.IReadOnlyList<System.ValueTuple<"
-                + N + "LuxembourgPartitionRunRequest, " + Core + "BoundMachineRequest>>, "
+                + N + "LuxembourgPartitionRunRequest, " + Core + "BoundMachineRequest, "
+                + Contracts + "LuxembourgPartitionChain>>, "
                 + "System.String, System.String, System.String, "
                 + "Lex.V3.Contracts.Source.Scope.IScopeReductionEvidenceResolver, "
                 + "System.Threading.CancellationToken) -> System.Threading.Tasks.Task<"
