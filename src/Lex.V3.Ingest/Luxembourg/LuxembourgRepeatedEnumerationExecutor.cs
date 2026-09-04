@@ -556,15 +556,34 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
                 // Measured, not assumed: DeliveryComparisonRefused is the only one of the four
                 // receipt refusals a well-behaved session can actually produce here, so the right
                 // operand of the ?? is defensive rather than driven end to end, and no executor
-                // test kills a mutation that removes it. The reason is that every input this
-                // executor hands the receipt comes from one map per kind, and Source/Core's own
-                // tuple check (RepeatedEnumerationDeliveryProof.cs, "The retained SPARQL evidence
-                // tuple does not bind") already refuses any observation whose body receipt is not
-                // ImmutableObject1 and LockedTime, so a body cannot reach the receipt carrying a
-                // membership that would refuse there. The three refusals are driven where they
-                // ARE reachable, on RepeatedEnumerationDeliveryReceipt.TryCreate itself, which
-                // is public and takes caller-stated membership. Carrying the value costs one
-                // string and stops "unreachable today" being written down as "unreachable".
+                // test kills a mutation that removes it. The reasons are local to this call and do
+                // not rest on the tuple check. SendClosureMemberNotHeld and
+                // MembershipDisagreesOnADigest each need a digest that is missing from a map or
+                // claimed at two floors, and every input this executor hands the receipt comes from
+                // one map per kind. MembershipIsNotReceiptDerived needs a ReadOnce value, and both
+                // maps are built by CustodyMembershipClassifier.Classify (the reopen glue for the
+                // written map, RoutedHttpAcquisitionSession for the session's), which answers only
+                // RetainedUnenforced or Floored.
+                //
+                // This was previously attributed instead to Source/Core's tuple check refusing any
+                // observation whose body receipt was not ImmutableObject1 and LockedTime. That
+                // attribution is withdrawn. Correction
+                // lex-event-20260904T230312457Z-5d1f7352c46b4ca0ac8c71ca6a4aa1fb removes those two
+                // halves from EnumerationDeliveryComparison.Create (lane B's file; the removal
+                // reaches this branch at the rebase) and keeps the anti-forgery comparison of
+                // DurableWriteReceiptSha256 against the resolved receipt's digest and the
+                // NightlyFloor90d class check, so once it lands a body does reach the receipt under
+                // RetainedUnenforced. The removed halves decided nothing on their own either:
+                // CustodyPolicyEvidence pairs profile with protection by construction
+                // (ValidateImmutableProtection admits only NightlyFloor90d with LockedTime and
+                // LegalHoldEvidence with ActiveLegalHold, and FileSystemUnenforced1 admits only
+                // NotEnforced), so the profile half refused no receipt the protection half had not
+                // already refused.
+                //
+                // The three refusals are driven where they ARE reachable, on
+                // RepeatedEnumerationDeliveryReceipt.TryCreate itself, which is public and takes
+                // caller-stated membership. Carrying the value costs one string and stops
+                // "unreachable today" being written down as "unreachable".
                 return LuxembourgEnumerationRunResult.Refused(
                     new LuxembourgEnumerationRefusalDetail(
                         LuxembourgEnumerationRefusal.DeliveryProofRefused,
