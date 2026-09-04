@@ -34,31 +34,23 @@ public enum EuEnumerationRefusal
     [JsonStringEnumMemberName("robots_bootstrap_refused")]
     RobotsBootstrapRefused = 1,
 
-    /// <summary>
-    /// The acquisition run's own bootstrap artifacts are not held under an enforced floor, so this
-    /// store cannot produce a payload receipt Source/Core will bind. Observed from the session's
-    /// membership after robots and before the first product request.
-    /// </summary>
-    [JsonStringEnumMemberName("custody_floor_not_observed")]
-    CustodyFloorNotObserved = 2,
-
     [JsonStringEnumMemberName("observation_not_executed")]
-    ObservationNotExecuted = 3,
+    ObservationNotExecuted = 2,
 
     [JsonStringEnumMemberName("status_not_admitted")]
-    StatusNotAdmitted = 4,
+    StatusNotAdmitted = 3,
 
     [JsonStringEnumMemberName("media_type_not_admitted")]
-    MediaTypeNotAdmitted = 5,
+    MediaTypeNotAdmitted = 4,
 
     [JsonStringEnumMemberName("count_not_one_nonnegative_integer")]
-    CountNotOneNonNegativeInteger = 6,
+    CountNotOneNonNegativeInteger = 5,
 
     [JsonStringEnumMemberName("partition_required")]
-    PartitionRequired = 7,
+    PartitionRequired = 6,
 
     [JsonStringEnumMemberName("delivered_key_not_representable")]
-    DeliveredKeyNotRepresentable = 8,
+    DeliveredKeyNotRepresentable = 7,
 
     /// <summary>
     /// A delivered page row named a batch-selection term (the object-facts/root-watermark families'
@@ -70,26 +62,26 @@ public enum EuEnumerationRefusal
     /// exactly as the range check does for a keyset partition.
     /// </summary>
     [JsonStringEnumMemberName("delivered_row_outside_partition")]
-    DeliveredRowOutsidePartition = 9,
+    DeliveredRowOutsidePartition = 8,
 
     [JsonStringEnumMemberName("cursor_did_not_advance")]
-    CursorDidNotAdvance = 10,
+    CursorDidNotAdvance = 9,
 
     [JsonStringEnumMemberName("page_budget_exhausted")]
-    PageBudgetExhausted = 11,
+    PageBudgetExhausted = 10,
 
     [JsonStringEnumMemberName("custody_member_missing")]
-    CustodyMemberMissing = 12,
+    CustodyMemberMissing = 11,
 
     [JsonStringEnumMemberName("delivery_proof_refused")]
-    DeliveryProofRefused = 13,
+    DeliveryProofRefused = 12,
 
     /// <summary>
     /// A page body admitted by status and media type is not a SPARQL results document this executor
     /// can read at all: not JSON, or JSON without the results/bindings array.
     /// </summary>
     [JsonStringEnumMemberName("page_body_malformed")]
-    PageBodyMalformed = 14,
+    PageBodyMalformed = 13,
 }
 
 public sealed class EuEnumerationRefusalDetail
@@ -895,21 +887,25 @@ public sealed class EuRepeatedEnumerationExecutor
         var productRequestCount = 0;
         try
         {
-            var bootstrapMembership = session.CopyArtifactMembership();
-            var unenforced = bootstrapMembership
-                .Where(static entry => entry.Value != CustodyMembership.Floored)
-                .Select(static entry => entry.Key)
-                .ToArray();
-            if (unenforced.Length > 0)
-            {
-                return EuEnumerationRunResult.Refused(
-                    new EuEnumerationRefusalDetail(
-                        EuEnumerationRefusal.CustodyFloorNotObserved,
-                        null, null, null, null, null, null, null,
-                        string.Join(",", unenforced)),
-                    productRequestCount: 0);
-            }
-
+            // No bootstrap floor pre-emption here, per RULING
+            // lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c. This used to refuse the whole run,
+            // before its first product request, whenever any session artifact came back
+            // RetainedUnenforced, which is why an EU run over a filesystem store could never reach a
+            // publisher at all. The observed membership is RECORDED per artifact instead, and the
+            // run continues: TryCompareAndReceipt below is handed this exact session map alongside
+            // the executor's own, and RepeatedEnumerationDeliveryReceipt records every digest's
+            // membership, carries the weakest of them as its RetainedFloor and names every
+            // unenforced digest. Deleting the pre-emption therefore loses no fact; it stops
+            // discarding one.
+            //
+            // Removed outright rather than re-conditioned onto a genuine custody failure, because at
+            // THIS point every genuine failure already has a typed home. A MISSING custody record
+            // for a hop is RepeatedEnumerationReceiptRefusal.SendClosureMemberNotHeld, raised by
+            // that same builder: an artifact ABSENT from the map is not an artifact PRESENT with a
+            // weak class, and the builder keeps those two apart. A digest mismatch or a failed write
+            // surfaces as CustodyIntegrityException or CustodyRequiredException, which this method's
+            // own catch turns into CustodyMemberMissing. Nothing was left for the removed member to
+            // mean.
             var executorWrittenMembership = new Dictionary<string, CustodyMembership>(StringComparer.Ordinal);
             EuDeliveryPass? passA = null;
             EuDeliveryPass? passB = null;

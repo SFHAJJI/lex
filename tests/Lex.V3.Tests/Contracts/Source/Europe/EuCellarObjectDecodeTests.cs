@@ -1,4 +1,4 @@
-﻿using System.Security.Cryptography;
+using System.Security.Cryptography;
 using System.Text;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Source.Core;

@@ -403,10 +403,25 @@ public sealed class EnumerationDeliveryComparison
             // receipt-free reconstruction door for that), so this is the one place that still
             // proves the two independently resolved artifacts agree.
             terminal.DurableWriteReceiptSha256 != DurableBlobWriteReceiptDigest.Of(value.DurableWriteReceipt) ||
+            // The custody LANE stays: a receipt from another class is evidence about another
+            // holding, and this check refuses it. What is gone is the custody POLICY pair that used
+            // to sit here, VerificationProfile == ImmutableObject1 and Protection == LockedTime.
+            //
+            // RULING lex-event-20260904T230719370Z-54cc701601f1430187d4f172437a84b0. Those two were one gate,
+            // not two: CustodyPolicyEvidence makes ImmutableObject1 require a policy key and admit
+            // only (NightlyFloor90d, LockedTime) or (LegalHoldEvidence, ActiveLegalHold), while
+            // FileSystemUnenforced1 requires NotEnforced, so ImmutableObject1 with NotEnforced is
+            // unconstructible. Admitting the protection half alone would therefore have admitted
+            // nothing, and every filesystem acquisition would still have died on this statement.
+            // The observed class is what CustodyMembershipClassifier reads, and Decision 71's
+            // interpretation records it rather than gating on it; where a floor is genuinely
+            // required is AbsenceCut.TryCreateComplete, the release.
+            //
+            // Nothing here loses its guard. The receipt is still bound to this exact evidence by
+            // the digest cross-check immediately above, which is what stops a forged or swapped
+            // receipt; that is a different property from what protection the store published, and
+            // it is the one this tuple bind exists to establish.
             value.DurableWriteReceipt.Reference.CustodyClass != CustodyClass.NightlyFloor90d ||
-            value.DurableWriteReceipt.PolicyEvidence.VerificationProfile !=
-                CustodyVerificationProfile.ImmutableObject1 ||
-            value.DurableWriteReceipt.PolicyEvidence.Protection != CustodyProtection.LockedTime ||
             value.DurableWriteReceipt.Reference.ByteLength != payload.LongLength ||
             value.DurableWriteReceipt.Reference.ByteLength != checked((long)terminal.Length) ||
             value.DurableWriteReceipt.Reference.ContentSha256 != Sha(payload) ||

@@ -1,4 +1,4 @@
-﻿using System.Security.Cryptography;
+using System.Security.Cryptography;
 using System.Text;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Source.Core;
@@ -654,6 +654,15 @@ public sealed class EuCellarObjectSnapshotTests
                 // D1-05d: family M's listing decode is now a real external producer -- it is the
                 // one door that mints a format observation from the office's own listing.
                 "field private instance " + N + "EuCellarObjectSnapshot::<Format>k__BackingField -> " + N
+                    + "EuFormatObservation?",
+                // The shared ladder-admitted arm both public doors return, extracted so the
+                // ordinary listing and the listing with an unknown token beside it cannot ladder
+                // one Work differently. Private, and listed because this sweep is deliberately
+                // includeNonPublic: a new holder must appear as a visible diff whatever its
+                // accessibility.
+                "method private static " + N + "EuManifestationListingDecode::TryObserveLadder("
+                    + "System.Collections.Generic.IReadOnlySet<" + N + "EuManifestationFormat>, "
+                    + "System.String, Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> " + N
                     + "EuFormatObservation?",
                 "method public static " + N + "EuManifestationListingDecode::Observe("
                     + "System.Collections.Generic.IReadOnlyCollection<" + N + "EuManifestationFormat>, "

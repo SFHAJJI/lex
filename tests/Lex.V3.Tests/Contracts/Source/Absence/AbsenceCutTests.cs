@@ -1,6 +1,8 @@
 using Lex.V3.Contracts.Source.Absence;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+using Lex.V3.Contracts.Custody;
+
 namespace Lex.V3.Tests.Contracts.Source.Absence;
 
 /// <summary>
@@ -261,4 +263,63 @@ public sealed class AbsenceCutTests
             cut.Observed(AbsenceFixtures.RootUri + "/"),
             "membership matched a key that is not the exact canonical URI");
     }
+    /// <summary>
+    /// THE RELEASE GATE. A complete cut refuses a proof whose run is held without an enforced
+    /// retention floor, and admits the identical proof when that run is floored.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// RULING lex-event-20260904T215906714Z-6dadaf27829d4a3aa3c355063754ccd6, and this is where the
+    /// durability requirement now lives. It used to sit in
+    /// <c>RepeatedEnumerationDeliveryReceipt.RequireFlooredRun</c>, which threw so that no proof
+    /// existed at all for an unfloored run; that refused the family, which refused the run, which
+    /// meant a store publishing no enforcement could acquire nothing. Acquisition now records the
+    /// class each artifact observed and continues, and the claim that genuinely depends on
+    /// immutability is the cut.
+    /// </para>
+    /// <para>
+    /// The two halves are the whole assertion. Refusing the unfloored proof alone would pass for a
+    /// cut that refuses everything; admitting the floored one alongside it is what makes the refusal
+    /// about the class rather than about the fixture.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void ACompleteCutRefusesAProofHeldWithoutAnEnforcedFloor()
+    {
+        var observation = AbsenceFixtures.Observation("obs", AbsenceFixtures.Base, "family-a");
+        var unfloored = AbsenceFixtures.UnflooredProof("family-a");
+        Assert.AreEqual(CustodyMembership.RetainedUnenforced, unfloored.RetainedFloor);
+
+        var refused = AbsenceCut.TryCreateComplete(
+            "run",
+            AbsenceApplicableSet.ObservedRootSet,
+            [observation],
+            [unfloored],
+            AbsenceFixtures.Artifact('e'),
+            AbsenceFixtures.ObservedSet("1"),
+            [AbsenceFixtures.OtherUri],
+            out var refusal);
+
+        Assert.IsNull(refused, "a release may not rest on evidence that need not survive.");
+        Assert.AreEqual(AbsenceCutRefusal.EnumerationProofNotFloored, refusal);
+
+        // The identical shape with a floored proof is admitted, so the refusal above is about the
+        // custody class and nothing else.
+        var floored = AbsenceFixtures.Proof("family-a");
+        Assert.AreEqual(CustodyMembership.Floored, floored.RetainedFloor);
+        var admitted = AbsenceCut.TryCreateComplete(
+            "run",
+            AbsenceApplicableSet.ObservedRootSet,
+            [observation],
+            [floored],
+            AbsenceFixtures.Artifact('e'),
+            AbsenceFixtures.ObservedSet("1"),
+            [AbsenceFixtures.OtherUri],
+            out var admittedRefusal);
+
+        Assert.AreEqual(AbsenceCutRefusal.None, admittedRefusal);
+        Assert.IsNotNull(admitted);
+        Assert.AreEqual(AbsenceRunCompletion.EnumerationComplete, admitted!.Completion);
+    }
+
 }

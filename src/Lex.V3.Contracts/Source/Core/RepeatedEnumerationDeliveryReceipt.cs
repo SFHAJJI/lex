@@ -165,8 +165,8 @@ public sealed class RepeatedEnumerationDeliveryReceipt
     /// rather than writing them. That reasoning was wrong about who wrote them: the acquisition
     /// session writes both, holds a receipt for both, and the digests are reachable from those
     /// receipts, so classifying them costs nothing. Leaving them outside the floor let
-    /// <see cref="RequireFlooredRun"/> pass while the publisher's own response bytes, the only
-    /// artifact whose loss cannot be repaired by re-deriving anything, sat unfloored.
+    /// <see cref="RetainedFloor"/> read as Floored while the publisher's own response bytes, the
+    /// only artifact whose loss cannot be repaired by re-deriving anything, sat unfloored.
     /// </remarks>
     public IReadOnlyDictionary<string, CustodyMembership> RetainedMembership => _retainedMembership;
 
@@ -175,22 +175,6 @@ public sealed class RepeatedEnumerationDeliveryReceipt
 
     /// <summary>Every written digest whose store published no enforcement. Empty iff Floored.</summary>
     public IReadOnlyList<string> UnenforcedMemberDigests => _unenforcedMemberDigests;
-
-    /// <summary>
-    /// The comparison, for a consumer that requires a durable run. Throws naming every unenforced
-    /// digest. The only accessor that asserts durability; <see cref="Delivery"/> asserts none.
-    /// </summary>
-    public EnumerationDeliveryComparison RequireFlooredRun()
-    {
-        if (_unenforcedMemberDigests.Count > 0)
-        {
-            throw new InvalidOperationException(
-                "The following digests are held without an enforced retention floor: " +
-                string.Join(", ", _unenforcedMemberDigests));
-        }
-
-        return Delivery;
-    }
 
     /// <summary>
     /// Minted only from a comparison and the exact observations that produced it. There is no
@@ -334,19 +318,35 @@ public sealed class RepeatedEnumerationDeliveryReceipt
     /// <summary>
     /// The only path from a delivery receipt to an absence enumeration proof, and so the only path
     /// to <see cref="AbsenceCut.TryCreateComplete"/>, which admits no family without one. It reads
-    /// <see cref="RequireFlooredRun"/>, never <see cref="Delivery"/>: a run holding any member
-    /// without an enforced floor cannot mint a proof at all, because a proof of complete
-    /// enumeration whose evidence may not survive ninety days is a claim nobody can go back and
-    /// check. That is a throw rather than a typed refusal because the caller asked for durability
-    /// by calling this at all, and the digests that lack it are named in the message.
+    /// <see cref="Delivery"/> and STAMPS the proof with this run's own
+    /// <see cref="RetainedFloor"/>.
     /// </summary>
-    /// <exception cref="InvalidOperationException">
-    /// Any member of this run is held without an enforced retention floor.
-    /// </exception>
+    /// <remarks>
+    /// <para>
+    /// RULING lex-event-20260904T215906714Z-6dadaf27829d4a3aa3c355063754ccd6. This used to read a
+    /// <c>RequireFlooredRun</c> accessor that THREW naming every unenforced digest, so a run holding
+    /// any member without an enforced floor could mint no proof at all. That reasoning was right
+    /// about where durability is required and wrong about where it is checked. Refusing the proof
+    /// refuses the family, and an adapter refuses a run with an unproven family, so an unfloored run
+    /// ended before it ever reduced a manifest: a store that publishes no enforcement could acquire
+    /// nothing, which is exactly what the Decision 71 interpretation removes. Proceeding without a
+    /// proof was no better, since the manifest would then rest on nothing.
+    /// </para>
+    /// <para>
+    /// So the proof is minted and CARRIES ITS CLASS. The run says which of the three each member is,
+    /// and a run whose members are retained unenforced says so rather than saying durable. Durability
+    /// is required at the one place that genuinely depends on it:
+    /// <see cref="AbsenceCut.TryCreateComplete"/>, THE RELEASE, admits only a proof whose
+    /// <see cref="AbsenceFamilyEnumerationProof.RetainedFloor"/> is
+    /// <see cref="CustodyMembership.Floored"/>, and refuses with a typed member rather than throwing.
+    /// The accessor that threw was removed with this change rather than left unreferenced: nothing
+    /// asserts durability by calling it any more.
+    /// </para>
+    /// </remarks>
     public AbsenceFamilyEnumerationProof? TryProveFamilyEnumeration(
         string familyKey,
         out AbsenceFamilyEnumerationProofRefusal refusal) =>
-        AbsenceFamilyEnumerationProof.TryCreate(familyKey, RequireFlooredRun(), out refusal);
+        AbsenceFamilyEnumerationProof.TryCreate(familyKey, Delivery, RetainedFloor, out refusal);
 
     /// <summary>
     /// The single place a digest becomes a member. It refuses a membership no write receipt can

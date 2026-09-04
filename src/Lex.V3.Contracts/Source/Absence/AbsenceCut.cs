@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 
 namespace Lex.V3.Contracts.Source.Absence;
@@ -265,6 +266,22 @@ public enum AbsenceCutRefusal
     /// </summary>
     [JsonStringEnumMemberName("enumeration_proofs_span_more_than_one_run")]
     EnumerationProofsSpanMoreThanOneRun = 11,
+
+    /// <summary>
+    /// An enumeration proof carries a run whose artifacts are held without an enforced retention
+    /// floor. The enumeration may be perfectly complete; what it is not is checkable ninety days
+    /// from now.
+    /// </summary>
+    /// <remarks>
+    /// RULING lex-event-20260904T215906714Z-6dadaf27829d4a3aa3c355063754ccd6. This is where durability is
+    /// required, and, since that ruling, the only place. Acquisition proceeds over a store that
+    /// publishes no enforcement and every artifact records the class it actually observed; the CUT
+    /// is the release, and a release whose evidence may not survive is the one claim that cannot be
+    /// allowed to pass. Reached only from <see cref="AbsenceCut.TryCreateComplete"/>: a partial cut
+    /// carries no proofs and asserts no completeness, so it has nothing to refuse.
+    /// </remarks>
+    [JsonStringEnumMemberName("enumeration_proof_not_floored")]
+    EnumerationProofNotFloored = 12,
 }
 
 /// <summary>
@@ -377,10 +394,19 @@ public sealed class AbsenceCut
     /// proof of its own enumeration, and every proof must be about a family this run observed.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The bijection is both directions on purpose. A missing proof would let an unproven family
     /// ride along inside an otherwise proven cut, which is the declared completeness this replaces
     /// wearing a smaller coat. A proof for a family the run never observed is evidence about some
     /// other run, and admitting it would let a caller pad the list until it looked complete.
+    /// </para>
+    /// <para>
+    /// Every proof must also carry <see cref="CustodyMembership.Floored"/>, per RULING
+    /// lex-event-20260904T215906714Z-6dadaf27829d4a3aa3c355063754ccd6, or this refuses with
+    /// <see cref="AbsenceCutRefusal.EnumerationProofNotFloored"/>. This method is the release, and
+    /// it is now the ONE place a retention floor is required: the acquisition path records the class
+    /// each artifact actually observed and continues, so that requirement had to move somewhere it
+    /// is genuinely load bearing rather than sit in front of the first publisher request.
     /// </remarks>
     public static AbsenceCut? TryCreateComplete(
         string runId,
@@ -496,6 +522,14 @@ public sealed class AbsenceCut
             if (!seenFamilyKeys.Contains(proof.FamilyKey))
             {
                 refusal = AbsenceCutRefusal.EnumerationProofFamilyNotObserved;
+                return null;
+            }
+
+            // THE RELEASE GATE. Every other check in this loop is about which run a proof belongs
+            // to; this one is about whether that run's evidence will still be there to check.
+            if (proof.RetainedFloor != CustodyMembership.Floored)
+            {
+                refusal = AbsenceCutRefusal.EnumerationProofNotFloored;
                 return null;
             }
 

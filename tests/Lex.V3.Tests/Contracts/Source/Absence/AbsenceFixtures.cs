@@ -1,6 +1,8 @@
 using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
 
+using Lex.V3.Contracts.Custody;
+
 namespace Lex.V3.Tests.Contracts.Source.Absence;
 
 /// <summary>
@@ -104,6 +106,26 @@ internal static class AbsenceFixtures
     /// canonicalized evidence tuples and the ledger tests build many cuts; the objects are
     /// immutable, so sharing one across cuts changes nothing a test can observe.
     /// </summary>
+    /// <summary>
+    /// The same real proof, minted for a run whose artifacts are held without an enforced retention
+    /// floor. Not memoized: one caller, and the point is the class it carries.
+    /// </summary>
+    public static AbsenceFamilyEnumerationProof UnflooredProof(
+        string familyKey = "lu_root_family", int runSeed = 930)
+    {
+        var proof = AbsenceFamilyEnumerationProof.TryCreate(
+            familyKey,
+            AbsenceEnumerationProofFixture.Delivery(familyKey, runSeed),
+            CustodyMembership.RetainedUnenforced,
+            out var refusal);
+        if (proof is null)
+        {
+            throw new InvalidOperationException($"fixture proof refused as {refusal}");
+        }
+
+        return proof;
+    }
+
     public static AbsenceFamilyEnumerationProof Proof(
         string familyKey = "lu_root_family", int runSeed = 930) =>
         Proofs.GetOrAdd((familyKey, runSeed), static key =>
@@ -111,6 +133,7 @@ internal static class AbsenceFixtures
             var proof = AbsenceFamilyEnumerationProof.TryCreate(
                 key.FamilyKey,
                 AbsenceEnumerationProofFixture.Delivery(key.FamilyKey, key.RunSeed),
+                CustodyMembership.Floored,
                 out var refusal);
             if (proof is null)
             {

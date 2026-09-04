@@ -54,6 +54,20 @@ public sealed class EuFamilyEnumerationOutcome
     public AbsenceFamilyEnumerationProofRefusal? ProofRefusal { get; }
 
     /// <summary>
+    /// The custody class of the run behind a proven family, read off the proof this outcome carries.
+    /// Null when no proof was minted.
+    /// </summary>
+    /// <remarks>
+    /// RULING lex-event-20260904T215906714Z-6dadaf27829d4a3aa3c355063754ccd6: the session says WHICH of the
+    /// three each member is, so a caller reading this run's outcomes can see that a family proved
+    /// over artifacts held without an enforced floor. Derived from
+    /// <see cref="AbsenceFamilyEnumerationProof.RetainedFloor"/> rather than stored beside it, so the
+    /// two can never disagree. <see cref="AbsenceCut.TryCreateComplete"/> is what refuses such a
+    /// proof at release; this is what makes the class visible before then.
+    /// </remarks>
+    public CustodyMembership? RetainedFloor => Proof?.RetainedFloor;
+
+    /// <summary>
     /// The measured delivered row count against the publisher delivery ceiling
     /// (<see cref="EuConsolidationDiscoveryPlan.PublisherDeliveryCeilingRows"/>, 1,000,000, Decision
     /// 23), when this family proved. D1-05c-2 precision six: a real measured number, never estimated.
@@ -121,8 +135,21 @@ public enum EuQueryExecutionRefusal
     /// </summary>
     ObjectDecodeRefused = 6,
 
-    [JsonStringEnumMemberName("scope_manifest_not_held")]
-    ScopeManifestNotHeld = 7,
+    /// <summary>
+    /// This run's scope manifest could not be retained at all: the custody write failed, or the
+    /// digest-checked reopen handed back bytes that are not the ones the write receipt names.
+    /// </summary>
+    /// <remarks>
+    /// Was <c>ScopeManifestNotHeld</c>, and fired for exactly one condition: the store published no
+    /// retention enforcement. RULING lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c
+    /// removed that condition, since an unenforced manifest is recorded with the class it observed
+    /// and the run continues. Re-conditioned rather than removed, per RULING
+    /// lex-event-20260904T215906714Z-6dadaf27829d4a3aa3c355063754ccd6, because a genuine custody failure
+    /// really can happen here and used to escape <c>RunAsync</c> as an exception. A refusal is a
+    /// statement, never a crash.
+    /// </remarks>
+    [JsonStringEnumMemberName("scope_manifest_not_retained")]
+    ScopeManifestNotRetained = 7,
 
     /// <summary>
     /// The written and reopened manifest did not admit as the Union's own through
@@ -187,14 +214,20 @@ public enum EuQueryExecutionRefusal
     DocumentFetchSessionNotStarted = 16,
 
     /// <summary>
-    /// A document body was fetched successfully (a real, classified 200) but the store enforced no
-    /// retention floor when this run tried to hold its bytes -- the identical floor-check pattern
-    /// <see cref="ScopeManifestNotHeld"/> already applies to the scope manifest's own custody write,
-    /// applied here to one row's own document body. A successful fetch whose receipt's own classified
-    /// floor is below what this run requires is refused, never silently accepted as held.
+    /// A document body was fetched successfully (a real, classified 200) but could not be retained
+    /// at all: the custody write failed, or the digest-checked read of the fetched bytes handed back
+    /// something the routed evidence's own terminal hop digest does not name.
     /// </summary>
-    [JsonStringEnumMemberName("document_body_not_held")]
-    DocumentBodyNotHeld = 17,
+    /// <remarks>
+    /// Was <c>DocumentBodyNotHeld</c>, and fired for exactly one condition: the store published no
+    /// retention enforcement, which refused the WHOLE RUN over one row's body. RULING
+    /// lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c removed that condition, since
+    /// <c>CorpusBodyRecord.Held</c> derives and records the class it observed. Re-conditioned rather
+    /// than removed, per RULING lex-event-20260904T215906714Z-6dadaf27829d4a3aa3c355063754ccd6: a body this
+    /// run cannot retain at all is a real failure, and it used to escape as an exception.
+    /// </remarks>
+    [JsonStringEnumMemberName("document_body_not_retained")]
+    DocumentBodyNotRetained = 17,
 
     /// <summary>
     /// A document-fetch GET completed for real, but its classified outcome has no faithful member in
@@ -226,13 +259,14 @@ public enum EuQueryExecutionRefusal
     /// <summary>
     /// D1-06c-EU fix two (SCOPE_RULING lex-event-20260904T141600712Z-0b823f7143154a608f01ec8f757f9e93
     /// item 2): this run's own corpus/6 record set (<see cref="Lex.V3.Ingest.CorpusRecordSetWriter.WriteAsync"/>,
-    /// called as this run's own last step) was written but the store enforced no retention floor on
-    /// it -- the identical floor-check pattern <see cref="ScopeManifestNotHeld"/> and
-    /// <see cref="DocumentBodyNotHeld"/> already apply to this run's other two custody writes, applied
-    /// here to the record set itself.
+    /// called as this run's own last step) could not be retained at all. Carries
+    /// <see cref="Lex.V3.Ingest.CorpusRecordSetWriteRefusalKind.RecordSetNotRetained"/>'s own detail:
+    /// the write failed, or the reopen handed back bytes the digest does not name. Renamed with that
+    /// writer under RULING lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c, and no longer
+    /// fires because a store published no enforcement.
     /// </summary>
-    [JsonStringEnumMemberName("record_set_not_held")]
-    RecordSetNotHeld = 19,
+    [JsonStringEnumMemberName("record_set_not_retained")]
+    RecordSetNotRetained = 19,
 }
 
 public sealed class EuQueryExecutionRefusalDetail
@@ -473,7 +507,7 @@ public sealed class EuQueryExecutionResult
     /// door's own closed vocabulary can name. Present iff this result is delivered; a row present in
     /// the reopened manifest but absent from this dictionary was never Minted at all -- every Minted
     /// row's own outcome either lands here or refuses the whole run (see
-    /// <see cref="EuQueryExecutionRefusal.DocumentBodyNotHeld"/> and
+    /// <see cref="EuQueryExecutionRefusal.DocumentBodyNotRetained"/> and
     /// <see cref="EuQueryExecutionRefusal.DocumentFetchOutcomeNotRepresentable"/>'s own remarks for
     /// exactly which outcomes cannot be represented and so refuse the run instead of appearing here).
     /// D1-06c-EU fix two: this is exactly the <c>acquisitionOutcomesByOrdinal</c> this run itself
@@ -970,17 +1004,34 @@ public sealed class EuQueryExecutionAdapter
         var manifestCanonicalSha256 = ScopeManifestCanonicalWriter.Write(manifestStream, manifest);
         var manifestBytes = manifestStream.ToArray();
 
-        var writeReceipt = await _custodyStore.CreateAsync(manifestBytes, CustodyClass.NightlyFloor90d, cancellationToken)
+        // RULING lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c: the manifest's observed
+        // membership is recorded and this run continues. It used to refuse whenever the store
+        // published no enforcement, throwing away a manifest that had been written correctly. The
+        // membership is not asserted anywhere: this receipt travels out on
+        // EuQueryExecutionResult.ScopeManifestReceipt, and CustodyMembershipClassifier.Classify is
+        // the one rule that reads a class off it, exactly as CorpusBodyRecord.Held derives rather
+        // than accepts one.
+        //
+        // What still refuses is a GENUINE custody failure, and CustodyHold is the one place that
+        // decides it: it proves the hold by reopening the receipt's own digest through the checked
+        // reader rather than trusting the write, and returns no receipt at all when it cannot, so
+        // "stored under a weaker guarantee" and "failed to store" stay different facts. RULING
+        // lex-event-20260904T222140534Z-4141e26bfe9d4ce18649118d06c4dbd7 routes both publishers through
+        // that single definition rather than each lane writing its own.
+        var (writeReceipt, holdFailure) = await CustodyHold
+            .TryHoldAsync(_custodyStore, manifestBytes, cancellationToken)
             .ConfigureAwait(false);
-        if (CustodyMembershipClassifier.Classify(writeReceipt) != CustodyMembership.Floored)
+        if (writeReceipt is null)
         {
             return EuQueryExecutionResult.Refused(
                 topology, outcomes,
                 new EuQueryExecutionRefusalDetail(
-                    EuQueryExecutionRefusal.ScopeManifestNotHeld,
-                    "The scope manifest was written but the store enforced no retention floor on it."));
+                    EuQueryExecutionRefusal.ScopeManifestNotRetained, holdFailure));
         }
 
+        // Read for the BYTES, which the hold above deliberately discards. Not a second proof: the
+        // hold already established the store reproduces exactly these bytes at this digest, and the
+        // manifest binding below needs the reopened bytes themselves rather than that fact.
         var reopened = await CustodyRestore.ReadByDigestCheckedAsync(
                 _custodyStore, writeReceipt.Reference.ContentSha256, cancellationToken)
             .ConfigureAwait(false);
@@ -1163,7 +1214,7 @@ public sealed class EuQueryExecutionAdapter
             return EuQueryExecutionResult.Refused(
                 topology, outcomes,
                 new EuQueryExecutionRefusalDetail(
-                    EuQueryExecutionRefusal.RecordSetNotHeld, recordSetResult.Refusal.Detail));
+                    EuQueryExecutionRefusal.RecordSetNotRetained, recordSetResult.Refusal.Detail));
         }
 
         return EuQueryExecutionResult.Delivered(
@@ -1330,19 +1381,41 @@ public sealed class EuQueryExecutionAdapter
                 var classified = EuDocumentFetchOutcome.Classify(evidence);
                 if (classified.Refusal is null && classified.ObservedStatus == 200)
                 {
-                    var bodyBytes = await CustodyRestore.ReadByDigestCheckedAsync(
-                            _custodyStore, evidence.Hops[^1].Sha256, cancellationToken)
-                        .ConfigureAwait(false);
-                    var bodyReceipt = await _custodyStore.CreateAsync(
-                            bodyBytes, CustodyClass.NightlyFloor90d, cancellationToken)
-                        .ConfigureAwait(false);
-                    if (CustodyMembershipClassifier.Classify(bodyReceipt) != CustodyMembership.Floored)
+                    // RULING lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c: the body's observed
+                    // membership is recorded on the record this gate produces, and the run
+                    // continues. CorpusBodyRecord.Held(receipt) derives its own Floor through
+                    // CustodyMembershipClassifier, so a body held without an enforced floor is
+                    // recorded as RetainedUnenforced rather than costing the whole run a body the
+                    // office had already served and this run had already written.
+                    // Reading the FETCHED bytes back out of the acquisition session's own
+                    // custody, by the terminal hop's digest. This read is not the hold; it is how
+                    // this loop gets the bytes the route already retained.
+                    ReadOnlyMemory<byte> bodyBytes;
+                    try
+                    {
+                        bodyBytes = await CustodyRestore.ReadByDigestCheckedAsync(
+                                _custodyStore, evidence.Hops[^1].Sha256, cancellationToken)
+                            .ConfigureAwait(false);
+                    }
+                    catch (Exception exception)
+                        when (exception is CustodyIntegrityException or CustodyRequiredException)
                     {
                         return (null, null, new EuQueryExecutionRefusalDetail(
-                            EuQueryExecutionRefusal.DocumentBodyNotHeld,
+                            EuQueryExecutionRefusal.DocumentBodyNotRetained,
                             $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): the " +
-                            "document body was fetched but the store enforced no retention floor " +
-                            "on it."));
+                            $"fetched body could not be reread: {exception.GetType().Name}: " +
+                            $"{exception.Message}"));
+                    }
+
+                    var (bodyReceipt, bodyHoldFailure) = await CustodyHold
+                        .TryHoldAsync(_custodyStore, bodyBytes, cancellationToken)
+                        .ConfigureAwait(false);
+                    if (bodyReceipt is null)
+                    {
+                        return (null, null, new EuQueryExecutionRefusalDetail(
+                            EuQueryExecutionRefusal.DocumentBodyNotRetained,
+                            $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): " +
+                            bodyHoldFailure));
                     }
 
                     rowOutcome = CorpusAcquisitionOutcome.Held(bodyReceipt);

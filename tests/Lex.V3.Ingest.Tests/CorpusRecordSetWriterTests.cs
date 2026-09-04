@@ -283,9 +283,11 @@ public sealed class CorpusRecordSetWriterTests
     [TestMethod]
     public async Task WriteAsyncRefusesWhenTheStoreEnforcesNoFloor()
     {
-        // A bare FileSystemCustodyStore publishes NotEnforced for every write (Decision 71), exactly
-        // the discipline EuQueryExecutionAdapter and LuxembourgQueryExecutionAdapter already apply
-        // to their own scope-manifest write, applied here to this writer's own set write.
+        // A bare FileSystemCustodyStore publishes NotEnforced for every write (Decision 71). It
+        // used to refuse here, which is why no record set could be written anywhere outside Azure.
+        // RULING lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c: the class is RECORDED and
+        // the write completes. This is the acceptance canary's own store, so this test is the
+        // narrowest statement of what that ruling bought.
         var manifest = ManifestFixture();
         var root = Path.Combine(
             Path.GetTempPath(), "lex-corpus-set-writer-unfloored-" + Guid.NewGuid().ToString("N"));
@@ -297,10 +299,15 @@ public sealed class CorpusRecordSetWriterTests
             var result = await writer.WriteAsync(
                 manifest, ManifestRef(), RunIdentity(), null, CancellationToken.None);
 
-            Assert.IsNull(result.SetRef);
-            Assert.IsNull(result.VerifiedSet);
-            Assert.IsNotNull(result.Refusal);
-            Assert.AreEqual(CorpusRecordSetWriteRefusalKind.RecordSetNotHeld, result.Refusal!.Kind);
+            Assert.IsNull(
+                result.Refusal,
+                "an unenforced store held the bytes and said so; that is not a custody failure.");
+            Assert.IsNotNull(result.SetRef);
+            Assert.IsNotNull(result.VerifiedSet);
+            Assert.AreEqual(
+                CustodyMembership.RetainedUnenforced,
+                result.RetainedFloor,
+                "the weaker class must be recorded on the result, not silently upgraded.");
         }
         finally
         {
