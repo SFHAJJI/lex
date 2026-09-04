@@ -91,9 +91,40 @@ public sealed class LuxembourgCodeCivilAcquisitionCanary
     /// <para>
     /// Two facts from that answer decide this canary. Every wording manifestation here is plain
     /// <c>xml</c>, not <c>xml-akomantoso</c>, so the ladder's second token is the one that matters
-    /// on the best known work in the corpus. And NOT ONE of the 76 carries a <c>legalValue</c>,
-    /// which is why the pre-repair code would have dropped every one of them from candidacy and
-    /// held nothing at all for the Code civil.
+    /// on the best known work in the corpus. And <c>legalValue</c> is absent from 57 of the 76,
+    /// with the 19 that carry one being EXACTLY the PDFs, one per consolidation, all
+    /// <c>statut-version/officiel</c>. So the pre-repair drop would have removed every xml, every
+    /// html and every docx, each 100 percent absent, and left the PDFs standing: it would have
+    /// stripped the preferred wording manifestation from all 19 consolidations of the best known
+    /// work in the corpus while still holding a PDF for each.
+    /// </para>
+    /// <para>
+    /// AN EARLIER VERSION OF THIS COMMENT SAID NOT ONE of the 76 carried a legalValue, and that the
+    /// pre-repair code would therefore have held nothing at all for the Code civil. That was wrong,
+    /// and the mechanism is worth more than the number. The closure query behind it selected
+    /// <c>jolux:license</c>, the licence, and never selected <c>jolux:legalValue</c> at all; the
+    /// claim about legalValue was read off the absence of a column that had never been asked for.
+    /// Re-measured with userFormat and legalValue BOTH under OPTIONAL so neither can eat a row, and
+    /// reconciling to 76 (CORRECTION lex-event-20260904T223038388Z-6d7cc6d87c8e446e829c3f7db93dc0b4).
+    /// A held PDF would have made the original sentence look overstated to anyone checking it.
+    /// </para>
+    /// <para>
+    /// AN INDEPENDENT DENOMINATOR, obtained outside this lane before the run so the accepted
+    /// fraction can be checked rather than trusted: 19 consolidations spanning 2016-09-01 to
+    /// 2025-12-26, all dated; 19 expressions, one per consolidation, all French, zero absent
+    /// language; 76 manifestations, exactly four per consolidation, token set exactly docx, pdf,
+    /// html and xml at 19 each, with no unexpected token and no absent bucket; licence 76 of 76
+    /// CC-BY 4.0, one distinct IRI, zero absent. Both canary dates confirmed by point-in-time
+    /// resolution rather than string match.
+    /// </para>
+    /// <para>
+    /// THREE TRAPS in this work, recorded for whoever wires the live enumeration. The work carries
+    /// an <c>owl:sameAs</c> alias with no trailing date to which ZERO consolidations attach, so
+    /// resolving through the alias returns nothing. 18 of the 19 consolidations carry
+    /// <c>inForceStatus</c> not-applicable and only 2025-12-26 is applicable, so any filter on
+    /// in-force status collapses the closure to one row. And raw triple counts inflate roughly
+    /// sixteenfold at the Article layer through graph replication, so counting edges rather than
+    /// distinct subjects there is meaningless.
     /// </para>
     /// </summary>
     private static readonly (string Consolidation, string InForce, string XmlFile)[] Closure =

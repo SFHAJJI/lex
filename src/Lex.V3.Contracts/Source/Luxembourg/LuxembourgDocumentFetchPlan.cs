@@ -104,6 +104,15 @@ public sealed class LuxembourgDocumentFetchPlan
         return new LuxembourgDocumentFetchBoundQuery(machinePlan, machinePlanRef, input, request);
     }
 
+    /// <summary>
+    /// A partition LABEL, never an identity, which is why truncating the digest to 24 hex
+    /// characters is safe here. Identity is carried by the artifact refs the bind produces (the
+    /// address's own ArtifactRef and the input artifact's digest), and those are full SHA-256. This
+    /// key exists to name one partition inside one bound request, and it is bounded because
+    /// MachineQueryValidation.RequireMachineMemberKey caps a member key at 128 characters; 24
+    /// mirrors EuDocumentFetchPlan's own truncation exactly, so the two routes label partitions the
+    /// same width rather than each picking a number.
+    /// </summary>
     private string PartitionKey() =>
         "lu-document-fetch-" + Convert.ToHexString(SHA256.HashData(
                 StrictUtf8.GetBytes(_address.FetchUri.AbsoluteUri + "\n" + _address.ActEliPagePath)))

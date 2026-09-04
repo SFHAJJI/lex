@@ -277,6 +277,73 @@ public sealed class LuxembourgDocumentGetTests
         Assert.AreEqual(0, handler.SendCount, "no session is started at all for an excluded row.");
     }
 
+    /// <summary>
+    /// ONE WRITTEN SET CARRYING BOTH OUTCOMES: a Held record and a PendingAcquisition record, from
+    /// one run over two objects, reopened before anything is asserted. Named in REVIEW_RESULT
+    /// lex-event-20260904T200339509Z-8a3db602c17c41389408981d2fb26535 as the row proof owed once
+    /// rows could accept.
+    /// </summary>
+    /// <remarks>
+    /// The two are proved together rather than in separate tests because the property is that ONE
+    /// object's publisher answer does not decide another's. Both bodies are the publisher's own
+    /// retained bytes: the real Akoma Ntoso document for the one that is held, and the office's
+    /// real 404 JSON for the one that is not.
+    /// </remarks>
+    [TestMethod]
+    public async Task OneSetCarriesAHeldRecordAndAPendingAcquisitionRecordFromOneRun()
+    {
+        var held = Address();
+        var missing = Address(
+            storeUri:
+                "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/2017/03/14/a440/jo/fr/"
+                + "xml/eli-etat-leg-loi-2017-03-14-a440-jo-fr-xml.xml",
+            actPagePath: "/eli/etat/leg/loi/2017/03/14/a440/jo");
+        var xml = LuxembourgDocumentFetchFixtures.XmlBody();
+        var notFound = LuxembourgDocumentFetchFixtures.NotFoundBody();
+
+        var store = new FlooringCustodyStore();
+        var handler = new RobotsThenDocumentHandler((request, _) =>
+            request.RequestUri!.AbsolutePath.Contains("a440", StringComparison.Ordinal)
+                ? BinaryResponse(request, HttpStatusCode.NotFound, notFound)
+                : BinaryResponse(request, HttpStatusCode.OK, xml));
+        var adapter = new LuxembourgQueryExecutionAdapter(
+            store,
+            new LuxembourgRepeatedEnumerationExecutor(
+                store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), handler),
+            BuildProfile());
+
+        var (manifest, manifestRef, refs) = BuildTwoObjectManifest(held, missing);
+        var (outcomes, refusal) = await adapter.RunDocumentAcquisitionAsync(
+            manifest,
+            new Dictionary<SourceObjectRef, LuxembourgDocumentFetchAddress>
+            {
+                [refs[0]] = held,
+                [refs[1]] = missing,
+            },
+            LuxembourgAcquisitionTestFixture.DocumentFetchRendererSource(4242),
+            CancellationToken.None);
+
+        Assert.IsNull(refusal, $"one object's 404 must not refuse the run: {refusal?.Detail}");
+        Assert.HasCount(2, outcomes!);
+
+        var written = await new CorpusRecordSetWriter(store).WriteAsync(
+            manifest, manifestRef, RunIdentityRef(), outcomes, CancellationToken.None);
+        Assert.IsNull(written.Refusal, written.Refusal?.Detail);
+
+        var records = written.VerifiedSet!.Set.Records;
+        Assert.HasCount(2, records);
+        var heldRecord = records.Single(r => r.Body.Kind == CorpusBodyRecordKind.Held);
+        var pendingRecord = records.Single(r => r.Body.Kind == CorpusBodyRecordKind.PendingAcquisition);
+        Assert.AreEqual(
+            LuxembourgDocumentFetchFixtures.XmlBodySha256,
+            heldRecord.Body.Receipt!.Reference.ContentSha256,
+            "the held record names the publisher's own bytes.");
+        Assert.AreEqual(
+            CorpusAcquisitionRefusalReason.NotFound,
+            pendingRecord.Body.PendingAcquisitionReason!.Refusal,
+            "and the other names the publisher's own answer, in the same reopened set.");
+    }
+
     // ---------------------------------------------------------------------------------------
     // The whole-run refusals, driven rather than declared.
     // ---------------------------------------------------------------------------------------
@@ -753,14 +820,16 @@ public sealed class LuxembourgDocumentGetTests
             store);
     }
 
-    private static SourceObjectRef ObjectRef()
+    private static SourceObjectRef ObjectRef() => ObjectRefFor(ObjectPublisherUri);
+
+    private static SourceObjectRef ObjectRefFor(string publisherUri)
     {
-        var canonicalKey = "lu-document-get:" + ObjectPublisherUri;
+        var canonicalKey = "lu-document-get:" + publisherUri;
         return new SourceObjectRef(
             SourceCoreSchemaIds.SourceObjectRef,
             SourceAuthority.Jolux,
             new SourceRegistryMemberRef(CompleteEnumerationRef, "lu_document_get_root"),
-            ObjectPublisherUri,
+            publisherUri,
             canonicalKey,
             Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonicalKey))),
             CompleteEnumerationRef,
@@ -770,6 +839,53 @@ public sealed class LuxembourgDocumentGetTests
     private static SourceArtifactRef RunIdentityRef() => new(
         $"urn:uuid:{Guid.NewGuid():D}",
         Convert.ToHexStringLower(SHA256.HashData("lu-document-get-run"u8.ToArray())));
+
+    /// <summary>Two accepted-body objects in one manifest, for the mixed-outcome row proof.</summary>
+    private static (ScopeManifest Manifest, SourceArtifactRef ManifestRef, SourceObjectRef[] Refs)
+        BuildTwoObjectManifest(
+            LuxembourgDocumentFetchAddress first, LuxembourgDocumentFetchAddress second)
+    {
+        var binding = BuildProfile().ScopeBinding;
+        var refs = new[]
+        {
+            ObjectRef(),
+            ObjectRefFor("http://data.legilux.public.lu/eli/etat/leg/loi/2017/03/14/a440/jo"),
+        };
+        var addresses = new[] { first, second };
+        var inputs = new ScopeObjectReductionInput[refs.Length];
+        for (var index = 0; index < refs.Length; index++)
+        {
+            var selectors = new ScopeSelectorEvidence[binding.OrderedSelectorMemberOrdinals.Count];
+            for (var s2 = 0; s2 < selectors.Length; s2++)
+            {
+                selectors[s2] = NotApplicableSelector(binding, ScopeAxis.Record);
+            }
+
+            inputs[index] = new ScopeObjectReductionInput(
+                refs[index],
+                selectors,
+                new[]
+                {
+                    Evaluation(binding, ScopeAxis.Record, ScopeDisposition.AcceptedSelected),
+                    Evaluation(binding, ScopeAxis.Body, ScopeDisposition.AcceptedSelected),
+                    Evaluation(binding, ScopeAxis.Relation, ScopeDisposition.Point),
+                    Evaluation(binding, ScopeAxis.SupportingDocument, ScopeDisposition.Point),
+                },
+                addresses[index].ToScopeManifestFetchAddress());
+        }
+
+        var verified = ScopeReducer.Reduce(
+            binding, [], refs, inputs, new PermissiveScopeEvidenceResolver(CompleteEnumerationRef));
+        using var buffer = new MemoryStream();
+        var canonical = ScopeManifestCanonicalWriter.Write(buffer, verified);
+        // The reducer sorts observed objects canonically, so the caller's address map must be keyed
+        // by the manifest's own order rather than the order they were passed in.
+        var ordered = verified.Manifest.ObservedObjects.Select(static o => o.ObjectRef).ToArray();
+        return (
+            verified.Manifest,
+            new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", canonical),
+            ordered);
+    }
 
     private static (VerifiedScopeManifest Verified, ScopeManifest Manifest, SourceArtifactRef ManifestRef) BuildManifest(
         LuxembourgDocumentFetchAddress address,
