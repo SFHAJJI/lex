@@ -1,0 +1,282 @@
+using System.Security.Cryptography;
+using System.Text;
+using Lex.V3.Artifacts;
+using Lex.V3.Contracts.Custody;
+using Lex.V3.Contracts.Source.Corpus;
+using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Http;
+using Lex.V3.Contracts.Source.Luxembourg;
+using Lex.V3.Contracts.Source.Scope;
+using Lex.V3.Ingest.Luxembourg;
+
+namespace Lex.V3.Ingest.Tests;
+
+/// <summary>
+/// The Stage 1 acceptance canary for the Luxembourg document route, required by RULING
+/// lex-event-20260904T210132047Z-1abc912084924d498f1d071593688065 and standing on the owner
+/// principle lex-event-20260904T205636383Z-e92b888b62c24df29fe3f8c1be5016f0. Its standard is NOT
+/// parity with the deployed v2 service, which was withdrawn by
+/// lex-event-20260904T210521890Z-c48e8eed3a6c4af5b20eaa5fa7484ccf: every expression in the closure
+/// is either Held with a real receipt or refused for exactly one of the four legitimate reasons,
+/// stated per object, with the accepted fraction reported as a number.
+/// </summary>
+/// <remarks>
+/// OPT IN, AND DELIBERATELY SO. It sends real requests to the publisher, so it is skipped unless
+/// LEX_LU_CANARY=1 is set. A network test that ran by default would make the suite depend on a
+/// third party's uptime and would send traffic nobody asked for.
+/// <para>
+/// It uses the REAL <see cref="FileSystemCustodyStore"/>, never the synthetic one: a canary that
+/// proved bodies were held against a synthetic store would prove nothing, and substituting one is
+/// the exact shape this project keeps catching.
+/// </para>
+/// <para>
+/// WHAT THIS CANARY COVERS AND WHAT IT DOES NOT, stated plainly. It drives the acquisition half for
+/// real: robots fetched and parsed live from legilux.public.lu, the document GET sent through
+/// <c>RoutedHttpAcquisitionSession</c>, bodies written to a local custody store, and the corpus
+/// record set written by <see cref="CorpusRecordSetWriter"/> and REOPENED before anything is
+/// asserted. The manifest it acquires over is built from addresses minted from the publisher's own
+/// SPARQL answers, retained beside this file, rather than from a live enumeration inside the test;
+/// the enumeration half is covered by the adapter's own tests and by the retained closure query.
+/// That boundary is named here rather than blurred.
+/// </para>
+/// <para>
+/// FIRST LIVE RESULT, 2026-09-04, recorded because it is a finding rather than a pass. The fetch
+/// half works end to end: robots was fetched and parsed live, all three evaluated paths were
+/// permitted, and the publisher returned both bodies (20200101, 5,528,052 bytes, SHA-256
+/// c2a66a988209a26657daa4f3f531ffddd7256dfc6e0a9ee3de1204192fbbf4d5; 20251226, 5,413,721 bytes,
+/// SHA-256 0b8b50652ea31f1cad7dcae09b7eda33b19a038dd88af9f67bfcc0bb992c073f; both real Akoma Ntoso
+/// in the AKN 3.0 CSD13 namespace, retained at C:/lex-v3/scratch/probe-lu-canary). The run then
+/// stopped at DocumentBodyNotHeld, and the cause is NOT in the Luxembourg route: Decision 71's
+/// floor check requires the body's receipt to classify as Floored, and
+/// <see cref="FileSystemCustodyStore"/> declares CustodyVerificationProfile.FileSystemUnenforced1
+/// with CustodyProtection.NotEnforced by design, because a local filesystem cannot enforce a WORM
+/// retention floor. Src carries exactly two ICustodyStore implementations, that one and the Azure
+/// one the canary ruling excludes, and both the EU and LU adapters gate on Floored, so the same
+/// wall stands in front of the EU canary. The refusal is correctly typed and is a custody failure
+/// on our side, which IS one of the owner's four legitimate reasons, so the product code behaved
+/// correctly; what cannot both hold is the canary's own pair of constraints, a local filesystem
+/// store and bodies Held. That needs a ruling and must not be resolved by weakening the floor.
+/// </para>
+/// </remarks>
+[TestClass]
+[DoNotParallelize]
+public sealed class LuxembourgCodeCivilAcquisitionCanary
+{
+    private const string EnableVariable = "LEX_LU_CANARY";
+
+    /// <summary>
+    /// The Code civil's own consolidation closure, read live from the publisher's SPARQL endpoint
+    /// (one bounded query, User-Agent Lex/0.1) and retained: 19 consolidations, each
+    /// <c>jolux:isMemberOf</c> the original act <c>loi/1804/03/21/n1</c>, each realized by one
+    /// French expression embodying exactly four manifestations (docx, html, pdf, xml), all 76 with
+    /// an <c>isExemplifiedBy</c> file in the filestore family and all 76 declaring
+    /// <c>http://creativecommons.org/licenses/by/4.0/</c>.
+    /// <para>
+    /// Two facts from that answer decide this canary. Every wording manifestation here is plain
+    /// <c>xml</c>, not <c>xml-akomantoso</c>, so the ladder's second token is the one that matters
+    /// on the best known work in the corpus. And NOT ONE of the 76 carries a <c>legalValue</c>,
+    /// which is why the pre-repair code would have dropped every one of them from candidacy and
+    /// held nothing at all for the Code civil.
+    /// </para>
+    /// </summary>
+    private static readonly (string Consolidation, string InForce, string XmlFile)[] Closure =
+    [
+        ("20200101", "2020-01-01",
+            "http://data.legilux.public.lu/filestore/eli/etat/leg/code/civil/20200101/fr/xml/"
+            + "eli-etat-leg-code-civil-20200101-fr-xml.xml"),
+        ("20251226", "2025-12-26",
+            "http://data.legilux.public.lu/filestore/eli/etat/leg/code/civil/20251226/fr/xml/"
+            + "eli-etat-leg-code-civil-20251226-fr-xml.xml"),
+    ];
+
+    [TestMethod]
+    public async Task TheCodeCivilsTwoCanaryExpressionsAreHeldWithRealReceipts()
+    {
+        if (Environment.GetEnvironmentVariable(EnableVariable) != "1")
+        {
+            Assert.Inconclusive(
+                $"Live publisher canary. Set {EnableVariable}=1 to run it; it is skipped by default "
+                + "so the suite does not depend on a third party's uptime or send unasked traffic.");
+            return;
+        }
+
+        var root = Path.Combine(Path.GetTempPath(), "lex-lu-canary-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var store = new FileSystemCustodyStore(root);
+        var executor = new LuxembourgRepeatedEnumerationExecutor(store, TimeProvider.System);
+        var adapter = new LuxembourgQueryExecutionAdapter(store, executor, BuildProfile());
+
+        var addresses = new Dictionary<SourceObjectRef, LuxembourgDocumentFetchAddress>();
+        var objectRefs = new List<SourceObjectRef>();
+        foreach (var (consolidation, _, xmlFile) in Closure)
+        {
+            var publisherUri =
+                "http://data.legilux.public.lu/eli/etat/leg/code/civil/" + consolidation;
+            var objectRef = ObjectRef(publisherUri);
+            objectRefs.Add(objectRef);
+            addresses[objectRef] = LuxembourgDocumentFetchAddress.Create(
+                LuxembourgFileUri.RequireValid(xmlFile),
+                // Plain xml, exactly what the publisher lists for this work, and Unstated because
+                // the publisher declares no legalValue for any of the 76.
+                LuxembourgUserFormatToken.Xml,
+                LuxembourgLegalValue.Unstated,
+                new Uri(publisherUri, UriKind.Absolute).AbsolutePath);
+        }
+
+        var (manifest, manifestRef) = BuildAcceptedBodyManifest(objectRefs);
+
+        var (outcomes, refusal) = await adapter.RunDocumentAcquisitionAsync(
+            manifest,
+            addresses,
+            LuxembourgAcquisitionTestFixture.DocumentFetchRendererSource(9101),
+            CancellationToken.None);
+
+        Assert.IsNull(refusal, $"whole-run refusal: {refusal?.Code} {refusal?.Detail}");
+        Assert.IsNotNull(outcomes);
+
+        // THE ACCEPTED FRACTION, AS A NUMBER.
+        var held = outcomes!.Count(pair => pair.Value.Receipt is not null);
+        Console.WriteLine($"CANARY accepted fraction: {held} of {manifest.Rows.Count} held");
+        foreach (var (ordinal, outcome) in outcomes.OrderBy(static pair => pair.Key))
+        {
+            Console.WriteLine(
+                $"CANARY row {ordinal}: {(outcome.Receipt is null ? $"REFUSED {outcome.Refusal}" : $"HELD {outcome.Receipt.Reference.ContentSha256} {outcome.Receipt.Reference.ByteLength}b")}");
+        }
+
+        // Every row is Held with a real receipt, or typed. Nothing here is untyped.
+        foreach (var outcome in outcomes.Values)
+        {
+            Assert.IsTrue(
+                outcome.Receipt is not null || outcome.Refusal is not null,
+                "every object is Held or carries a typed refusal, never neither.");
+        }
+
+        Assert.AreEqual(
+            Closure.Length,
+            held,
+            "both canary expressions must be Held with real receipts; a refusal here is only "
+            + "correct if it names one of the four legitimate reasons, which this assertion's "
+            + "failure message must then be read against.");
+
+        // THE REOPENED RECORD SET, not the in-memory one.
+        var written = await new CorpusRecordSetWriter(store).WriteAsync(
+            manifest, manifestRef, RunIdentityRef(), outcomes, CancellationToken.None);
+        Assert.IsNull(written.Refusal, written.Refusal?.Detail);
+        Assert.IsNotNull(written.VerifiedSet);
+
+        var records = written.VerifiedSet!.Set.Records;
+        Assert.HasCount(Closure.Length, records);
+        foreach (var record in records)
+        {
+            Assert.AreEqual(
+                CorpusBodyRecordKind.Held,
+                record.Body.Kind,
+                $"'{record.ObjectRef.PublisherUri}' must be Held in the REOPENED record set.");
+        }
+
+        Console.WriteLine($"CANARY custody root: {root}");
+        Console.WriteLine($"CANARY record set ref: {written.SetRef!.Sha256}");
+    }
+
+    private static (ScopeManifest Manifest, SourceArtifactRef ManifestRef) BuildAcceptedBodyManifest(
+        IReadOnlyList<SourceObjectRef> objectRefs)
+    {
+        var binding = BuildProfile().ScopeBinding;
+        var inputs = objectRefs
+            .Select(objectRef => new ScopeObjectReductionInput(
+                objectRef,
+                Enumerable.Range(0, binding.OrderedSelectorMemberOrdinals.Count)
+                    .Select(_ => new ScopeSelectorEvidence(
+                        ScopeSelectorState.SelectorNotApplicable, [], null, null,
+                        RuleOrdinal(binding, ScopeAxis.Record), null))
+                    .ToArray(),
+                new[]
+                {
+                    Evaluation(binding, ScopeAxis.Record, ScopeDisposition.AcceptedSelected),
+                    Evaluation(binding, ScopeAxis.Body, ScopeDisposition.AcceptedSelected),
+                    Evaluation(binding, ScopeAxis.Relation, ScopeDisposition.Point),
+                    Evaluation(binding, ScopeAxis.SupportingDocument, ScopeDisposition.Point),
+                },
+                ScopeManifestFetchAddress.MintedWithoutNegotiation(
+                    "legilux.public.lu",
+                    new Uri(
+                        "http://data.legilux.public.lu/filestore/eli/etat/leg/code/civil/x/fr/xml/x.xml",
+                        UriKind.Absolute).AbsolutePath)))
+            .ToArray();
+
+        var verified = ScopeReducer.Reduce(
+            binding, [], objectRefs, inputs, new PermissiveResolver(CompleteEnumerationRef));
+        using var buffer = new MemoryStream();
+        var canonical = ScopeManifestCanonicalWriter.Write(buffer, verified);
+        return (verified.Manifest, new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", canonical));
+    }
+
+    private static ScopeRuleEvaluation Evaluation(
+        ScopeProfileBinding binding, ScopeAxis axis, ScopeDisposition disposition) =>
+        new(
+            RuleOrdinal(binding, axis),
+            ScopeRuleEvaluationState.Matched,
+            ScopeRuleEffect.Positive,
+            disposition,
+            axis == ScopeAxis.Body && disposition == ScopeDisposition.AcceptedSelected
+                ? [binding.BodyCandidateRoleMemberOrdinal]
+                : [],
+            []);
+
+    private static int RuleOrdinal(ScopeProfileBinding binding, ScopeAxis axis)
+    {
+        for (var index = 0; index < binding.OrderedRules.Count; index++)
+        {
+            if (binding.OrderedRules[index].Axis == axis)
+            {
+                return index;
+            }
+        }
+
+        throw new AssertFailedException($"no rule for axis {axis}.");
+    }
+
+    private static readonly SourceArtifactRef CompleteEnumerationRef = new(
+        "urn:uuid:3a7c1e05-6b48-4d29-9f13-84be2c05d7a1",
+        Convert.ToHexStringLower(SHA256.HashData("lu-canary-enumeration"u8.ToArray())));
+
+    private static SourceObjectRef ObjectRef(string publisherUri)
+    {
+        var key = "lu-canary:" + publisherUri;
+        return new SourceObjectRef(
+            SourceCoreSchemaIds.SourceObjectRef,
+            SourceAuthority.Jolux,
+            new SourceRegistryMemberRef(CompleteEnumerationRef, "lu_canary_root"),
+            publisherUri,
+            key,
+            Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(key))),
+            CompleteEnumerationRef,
+            null);
+    }
+
+    private static SourceArtifactRef RunIdentityRef() => new(
+        $"urn:uuid:{Guid.NewGuid():D}",
+        Convert.ToHexStringLower(SHA256.HashData("lu-canary-run"u8.ToArray())));
+
+    private static VerifiedLuxembourgSourceProfile BuildProfile() =>
+        VerifiedLuxembourgSourceProfile.Open(new LuxembourgVocabularySnapshot(
+            new SourceArtifactRef("urn:uuid:10dd0a6e-3fa4-468d-a2aa-570a93ec4bf0", new string('1', 64)),
+            CompleteEnumerationRef,
+            VerifiedLuxembourgSourceProfile.RequiredIriVocabulary,
+            []));
+
+    private sealed class PermissiveResolver(SourceArtifactRef completeEnumerationRef)
+        : IScopeReductionEvidenceResolver
+    {
+        public SourceArtifactRef CompleteEnumerationRef { get; } = completeEnumerationRef;
+
+        public bool IsSelectorObservationAdmitted(ScopeSelectorObservationBinding binding) => true;
+
+        public bool IsSelectorNotApplicableAdmitted(ScopeSelectorNotApplicableBinding binding) => true;
+
+        public bool IsRuleEvaluationAdmitted(ScopeRuleEvaluationBinding binding) => true;
+
+        public bool IsCompleteEnumerationAdmitted(ScopeCompleteEnumerationBinding binding) =>
+            binding.CompleteEnumerationRef == CompleteEnumerationRef;
+    }
+}
