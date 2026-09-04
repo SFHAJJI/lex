@@ -785,10 +785,13 @@ public sealed class EuQueryExecutionAdapterTests
         Assert.IsNotNull(result.Refusal, "an unenforced record-set write must refuse the whole run, not deliver silently.");
         Assert.AreEqual(EuQueryExecutionRefusal.RecordSetNotHeld, result.Refusal!.Code);
         StringAssert.Contains(result.Refusal.Detail, "no retention floor");
-        // The one Minted row's own document fetch was never even attempted: TypedQuarantine is not
-        // an accepted body axis, so defect nine's own gate skips it, and this run produces no
-        // document-fetch outcome at all.
-        Assert.IsNull(result.DocumentAcquisitionOutcomesByOrdinal);
+        // No assertion on DocumentAcquisitionOutcomesByOrdinal here on purpose. A refused result
+        // passes null for it unconditionally, so asserting null on this path cannot fail and would
+        // be evidence of nothing (REVIEW_RESULT lex-event-20260904T165317709Z-8282f67ac5234a68a5fa108a76840dfe
+        // item 3 caught exactly that assertion here, and the freeze packet had cited it as proof).
+        // Defect nine's gate is proven through a real RunAsync on the delivered path instead, by
+        // AFullRunOverOneSeedWithNoDiscoveredStatesDeliversWithRealMeasuredCounts's own
+        // Assert.HasCount(0, ...), which fails the moment a quarantined row is fetched again.
     }
 
     /// <summary>
@@ -849,6 +852,68 @@ public sealed class EuQueryExecutionAdapterTests
         var outcome = outcomes[0];
         Assert.IsNull(outcome.Receipt);
         Assert.AreEqual(CorpusAcquisitionRefusalReason.WrongAcceptToken, outcome.Refusal);
+    }
+
+    /// <summary>
+    /// D1-06c-EU defect nine's own fold-in one (REVIEW_RESULT
+    /// lex-event-20260904T165317709Z-8282f67ac5234a68a5fa108a76840dfe item 1): a document fetch that
+    /// completes for real at a terminal status this route has no reviewed reading for is this one
+    /// object's own <see cref="CorpusAcquisitionRefusalReason.UnexpectedPublisherStatus"/> cause, not
+    /// a whole-run refusal. The mapping arm existed from the previous head and was claimed driven in
+    /// that head's freeze packet; it was not, and disabling it failed nothing. This test is that
+    /// missing driver.
+    /// </summary>
+    /// <remarks>
+    /// Unlike every other document-fetch fixture in this file, the 503 here is a SHAPE fixture, not a
+    /// retained canary: the office was never observed answering 503 for a document fetch, so there is
+    /// no real body or digest to reproduce and none is invented. What the test proves is exactly the
+    /// mapping, that a completed response at an unreviewed terminal status reaches this arm and
+    /// becomes this object's own typed cause; it deliberately claims nothing about what a real
+    /// publisher 503 body would contain. An empty body is used for the same reason, so no fabricated
+    /// bytes can be mistaken for an observation.
+    /// </remarks>
+    [TestMethod]
+    public async Task ADocumentFetchAtAnUnreviewedTerminalStatusBecomesAPerObjectRefusalRatherThanRefusingTheWholeRun()
+    {
+        var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
+        var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)
+            ?? throw new AssertFailedException("Appendix A's own seed root failed to canonicalize.");
+
+        var scopeProfile = EuScopeProfile.BuildBinding();
+        var (input, address) = BuildAcceptedBodyReductionInput(rootIri, scopeProfile);
+        var manifest = ScopeReducer.Reduce(
+            scopeProfile,
+            [CompleteEnumerationRef],
+            [input.ObjectRef],
+            [input],
+            new PermissiveEvidenceResolver(CompleteEnumerationRef)).Manifest;
+        var mintedAddressesByObjectRef = new Dictionary<SourceObjectRef, EuDocumentFetchAddress>
+        {
+            [input.ObjectRef] = address,
+        };
+
+        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(
+            new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal),
+            documentFetchResponse: request =>
+                EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.ServiceUnavailable, []));
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var executor = new EuRepeatedEnumerationExecutor(
+            store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
+        var adapter = new EuQueryExecutionAdapter(store, executor);
+
+        var (outcomes, refusal) = await adapter.RunDocumentAcquisitionAsync(
+            manifest,
+            mintedAddressesByObjectRef,
+            EuAcquisitionTestFixture.BuildRendererSource(9301),
+            EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
+            CancellationToken.None);
+
+        Assert.IsNull(refusal, refusal?.Detail);
+        Assert.IsNotNull(outcomes);
+        Assert.HasCount(1, outcomes!);
+        var outcome = outcomes[0];
+        Assert.IsNull(outcome.Receipt);
+        Assert.AreEqual(CorpusAcquisitionRefusalReason.UnexpectedPublisherStatus, outcome.Refusal);
     }
 
     /// <summary>
