@@ -29,6 +29,19 @@ public sealed class EuDateAxiomTests
     private const string XsdGYearMonth = "http://www.w3.org/2001/XMLSchema#gYearMonth";
     private const string Authority = "https://lex.internal.example/authority/eu-date-axiom-binding/v1";
 
+    // Pinned as literals rather than by referencing EuDateQualifierVocabulary's own constants: a
+    // fixture built from the same constant it is later checked against can only fail if
+    // production code stops assigning that constant, never if the constant's own string value
+    // silently changes. These four are the exact CDM predicate IRIs review/23 section 3 quotes.
+    private const string CdmEntryIntoForceAndApplicationPredicateUri =
+        "http://publications.europa.eu/ontology/cdm#resource_legal_date_entry-into-force";
+    private const string CdmDeadlinePredicateUri =
+        "http://publications.europa.eu/ontology/cdm#resource_legal_date_deadline";
+    private const string CdmEndOfValidityPredicateUri =
+        "http://publications.europa.eu/ontology/cdm#resource_legal_date_end-of-validity";
+    private const string CdmSignatureDatePredicateUri =
+        "http://publications.europa.eu/ontology/cdm#resource_legal_date_signature";
+
     // --- Fixtures ---------------------------------------------------------------------------
 
     private static OfficialIdentitySet Gdpr() =>
@@ -176,7 +189,7 @@ public sealed class EuDateAxiomTests
         Assert.AreEqual("2016-05-24", ev.Fact.Date.RawLexicalValue);
         Assert.AreEqual(XsdDate, ev.Fact.Date.DatatypeUri);
         Assert.AreEqual(DatePrecision.YearMonthDay, ev.Fact.Date.Precision);
-        Assert.AreEqual(EuDateQualifierVocabulary.EntryIntoForceAndApplicationPredicateUri, ev.Fact.SourcePredicateUri);
+        Assert.AreEqual(CdmEntryIntoForceAndApplicationPredicateUri, ev.Fact.SourcePredicateUri);
         Assert.AreEqual("axiom:32016r0679-entry-into-force-2016-05-24", ev.Fact.Axiom.RemoteAxiomId);
         Assert.AreSame(ev.Fact.Axiom, ev.Axiom);
         Assert.AreEqual("EV", ev.RawQualifierCode);
@@ -191,7 +204,7 @@ public sealed class EuDateAxiomTests
 
         var ma = Application();
         Assert.AreEqual("2018-05-25", ma.Fact.Date.RawLexicalValue);
-        Assert.AreEqual(EuDateQualifierVocabulary.EntryIntoForceAndApplicationPredicateUri, ma.Fact.SourcePredicateUri);
+        Assert.AreEqual(CdmEntryIntoForceAndApplicationPredicateUri, ma.Fact.SourcePredicateUri);
         Assert.AreEqual("MA", ma.RawQualifierCode);
         Assert.AreEqual("Application", ma.QualifierLabel);
         Assert.IsNull(ma.PublisherComment);
@@ -199,7 +212,7 @@ public sealed class EuDateAxiomTests
 
         var deadline = GdprDeadline();
         Assert.AreEqual("2020-05-25", deadline.Fact.Date.RawLexicalValue);
-        Assert.AreEqual(EuDateQualifierVocabulary.DeadlinePredicateUri, deadline.Fact.SourcePredicateUri);
+        Assert.AreEqual(CdmDeadlinePredicateUri, deadline.Fact.SourcePredicateUri);
         Assert.AreEqual("AU+TARD", deadline.RawQualifierCode);
         Assert.AreEqual("At the latest", deadline.QualifierLabel);
         Assert.AreEqual("ART 97", deadline.PublisherComment);
@@ -208,7 +221,7 @@ public sealed class EuDateAxiomTests
 
         var eovOpen = EndOfValidityOpen();
         Assert.AreEqual("9999-12-31", eovOpen.Fact.Date.RawLexicalValue);
-        Assert.AreEqual(EuDateQualifierVocabulary.EndOfValidityPredicateUri, eovOpen.Fact.SourcePredicateUri);
+        Assert.AreEqual(CdmEndOfValidityPredicateUri, eovOpen.Fact.SourcePredicateUri);
         Assert.IsNull(eovOpen.RawQualifierCode);
         Assert.IsNull(eovOpen.QualifierLabel);
         Assert.AreEqual(DateSemanticRole.EndOfValidity, eovOpen.Fact.SemanticRole);
@@ -221,7 +234,7 @@ public sealed class EuDateAxiomTests
 
         var signature = Signature();
         Assert.AreEqual("2016-04-27", signature.Fact.Date.RawLexicalValue);
-        Assert.AreEqual(EuDateQualifierVocabulary.SignatureDatePredicateUri, signature.Fact.SourcePredicateUri);
+        Assert.AreEqual(CdmSignatureDatePredicateUri, signature.Fact.SourcePredicateUri);
         Assert.IsNull(signature.RawQualifierCode);
         Assert.IsNull(signature.QualifierLabel);
         Assert.AreEqual(DateSemanticRole.SignatureDate, signature.Fact.SemanticRole);
@@ -566,6 +579,17 @@ public sealed class EuDateAxiomTests
     {
         Assert.ThrowsExactly<ArgumentException>(() => new EuDirectiveTranspositionEvidence(
             new OfficialIdentifier(FactsIdentifierFamily.Ecli, "ECLI:EU:C:2020:559")));
+    }
+
+    [TestMethod]
+    public void AMalformedCelexShapedRawValueNeverReachesTheEvidenceConstructorAtAll()
+    {
+        // EuDirectiveTranspositionEvidence takes an already-built OfficialIdentifier, not a raw
+        // string, so a malformed CELEX shape (here: a non-digit at the year position ProfileOf
+        // requires) is refused one layer earlier, by OfficialIdentifier's own IsWellFormed check,
+        // before the family check this evidence type adds is ever reached.
+        Assert.ThrowsExactly<ArgumentException>(() => new EuDirectiveTranspositionEvidence(
+            new OfficialIdentifier(FactsIdentifierFamily.Celex, "3199XL0046")));
     }
 
     [TestMethod]

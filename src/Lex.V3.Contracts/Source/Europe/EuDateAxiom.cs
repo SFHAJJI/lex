@@ -248,8 +248,15 @@ public sealed record EuNalSchemeIdentity
     public const string Fd335Name = "fd_335";
 
     /// <summary>
-    /// The NAL's own Cellar authority-table resource base URI, in the exact shape review/23
-    /// section 8 shows for the sibling <c>dir-eu-legal-act</c> NAL.
+    /// The NAL's own Cellar authority-table resource base URI. <b>Inferred, not directly
+    /// observed for fd_335.</b> review/23-research-temporal.md line 15 gives the general
+    /// production-system resource pattern
+    /// (<c>http://publications.europa.eu/resource/{ps-name}/{ps-id}</c>); section 8 line 97
+    /// spells that pattern out in full only for the sibling <c>dir-eu-legal-act</c> NAL
+    /// (<c>http://publications.europa.eu/resource/authority/dir-eu-legal-act/06202020</c>), and
+    /// in the same sentence lists "date qualifiers fd_335" by name alongside it without ever
+    /// attaching a host to fd_335 itself. This value applies the sibling's pattern to fd_335 by
+    /// analogy; it has not been independently, live-verified for fd_335 specifically.
     /// </summary>
     public const string Fd335AuthorityResourceBaseUri =
         "http://publications.europa.eu/resource/authority/fd_335";
@@ -275,23 +282,26 @@ public sealed record EuNalSchemeIdentity
 /// </summary>
 public static class EuDateQualifierVocabulary
 {
-    private const string Cdm = "http://publications.europa.eu/ontology/cdm#";
+    // The CDM namespace is already pinned as EuConsolidationDiscoveryPlan.Cdm (same assembly,
+    // same namespace); reused here rather than duplicated as a second private constant.
 
     /// <summary>
     /// The one multi-valued predicate review/23 shows carrying both the EV and MA qualifiers.
     /// </summary>
     public const string EntryIntoForceAndApplicationPredicateUri =
-        Cdm + "resource_legal_date_entry-into-force";
+        EuConsolidationDiscoveryPlan.Cdm + "resource_legal_date_entry-into-force";
 
     /// <summary>The predicate review/23 shows carrying the AU+TARD qualifier.</summary>
-    public const string DeadlinePredicateUri = Cdm + "resource_legal_date_deadline";
+    public const string DeadlinePredicateUri =
+        EuConsolidationDiscoveryPlan.Cdm + "resource_legal_date_deadline";
 
     /// <summary>
     /// The predicate review/23 shows carrying the <c>9999-12-31</c> open sentinel, with no
     /// observed qualifier example. Evidences <see cref="DateSemanticRole.EndOfValidity"/> by the
     /// predicate identity alone.
     /// </summary>
-    public const string EndOfValidityPredicateUri = Cdm + "resource_legal_date_end-of-validity";
+    public const string EndOfValidityPredicateUri =
+        EuConsolidationDiscoveryPlan.Cdm + "resource_legal_date_end-of-validity";
 
     /// <summary>
     /// The bare CDM property review/23 section 3's property list names
@@ -300,7 +310,8 @@ public static class EuDateQualifierVocabulary
     /// <see cref="EndOfValidityPredicateUri"/>: the observed predicate inventory is itself the
     /// evidence for both, per the ruling's correction of the original E1 head's narrower reading.
     /// </summary>
-    public const string SignatureDatePredicateUri = Cdm + "resource_legal_date_signature";
+    public const string SignatureDatePredicateUri =
+        EuConsolidationDiscoveryPlan.Cdm + "resource_legal_date_signature";
 
     /// <summary>One pinned fd_335 token's expected predicate, label and role, together.</summary>
     internal sealed record Pin(string PredicateUri, string Label, DateSemanticRole Role);
