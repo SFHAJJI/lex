@@ -1184,9 +1184,9 @@ public sealed class EuScopeProfileTests
                 + R + "EuActForm, "
                 + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, "
                 + R + "EuChannelDisposition, "
-                + R + "EuLanguageBodyDisposition, "
-                + N + "EuFormatDisposition, "
-                + N + "EuRightsDisposition, "
+                + R + "EuLanguageBodyDisposition?, "
+                + N + "EuFormatDisposition?, "
+                + N + "EuRightsDisposition?, "
                 + "System.Collections.Generic.IReadOnlyList<" + R + "EuRelationFamilyDisposition>, "
                 + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, "
                 + "System.Nullable<" + N + "EuContentClass>, "
@@ -1255,7 +1255,7 @@ public sealed class EuScopeProfileTests
                 "method public static " + N + "EuScopeProfile::BuildScopeInput(" + Sc + "ScopeProfileBinding, "
                     + N + "EuScopeObjectDispositions, System.Collections.Generic.IReadOnlyDictionary<"
                     + Co + "SourceArtifactRef, System.Int32>, " + Sc
-                    + "ScopeManifestFetchAddress) -> " + Sc + "ScopeObjectReductionInput",
+                    + "ScopeManifestFetchAddress?) -> " + Sc + "ScopeObjectReductionInput",
                 "property public instance " + Lu + "LuxembourgProfileResolution+Resolved::ScopeInputs() -> "
                     + "System.Collections.Generic.IReadOnlyList<" + Sc + "ScopeObjectReductionInput>",
             },

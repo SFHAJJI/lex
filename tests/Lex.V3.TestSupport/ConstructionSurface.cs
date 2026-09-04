@@ -274,8 +274,9 @@ public static class ConstructionSurface
         {
             if (Carries(field.FieldType, guarded))
             {
+                var fieldNullability = new NullabilityInfoContext().Create(field);
                 yield return new(
-                    $"field {Scope(field)} {(field.IsStatic ? "static" : "instance")} {Name(type)}::{field.Name} -> {Name(field.FieldType)}",
+                    $"field {Scope(field)} {(field.IsStatic ? "static" : "instance")} {Name(type)}::{field.Name} -> {Name(field.FieldType, fieldNullability)}",
                     field.IsPublic);
             }
         }
@@ -288,8 +289,9 @@ public static class ConstructionSurface
                 var scope = accessor is null ? "unknown" : Scope(accessor);
                 var isStatic = accessor?.IsStatic == true;
                 var parameters = string.Join(", ", property.GetIndexParameters().Select(static p => Name(p.ParameterType)));
+                var propertyNullability = new NullabilityInfoContext().Create(property);
                 yield return new(
-                    $"property {scope} {(isStatic ? "static" : "instance")} {Name(type)}::{property.Name}({parameters}) -> {Name(property.PropertyType)}",
+                    $"property {scope} {(isStatic ? "static" : "instance")} {Name(type)}::{property.Name}({parameters}) -> {Name(property.PropertyType, propertyNullability)}",
                     accessor?.IsPublic == true);
             }
         }
@@ -309,10 +311,18 @@ public static class ConstructionSurface
 
     private static string Describe(string kind, MethodBase member, Type produced)
     {
-        var parameters = string.Join(", ", member.GetParameters().Select(static p =>
-            (p.IsOut ? "out " : p.ParameterType.IsByRef ? "ref " : string.Empty) + Name(p.ParameterType)));
+        var nullability = new NullabilityInfoContext();
+        var parameters = string.Join(", ", member.GetParameters().Select(p =>
+            (p.IsOut ? "out " : p.ParameterType.IsByRef ? "ref " : string.Empty)
+            + Name(p.ParameterType, nullability.Create(p))));
         var declaring = member.DeclaringType is null ? "?" : Name(member.DeclaringType);
-        return $"{kind} {Scope(member)} {(member.IsStatic ? "static" : "instance")} {declaring}::{member.Name}({parameters}) -> {Name(produced)}";
+
+        // A constructor's produced type is the type itself, not an annotated member: there is no
+        // ParameterInfo or return parameter for "the instance a constructor produces" to read
+        // nullability from, and `new T()` is never itself annotated nullable in C#. Only a real
+        // method's return parameter carries that metadata.
+        var returnNullability = member is MethodInfo method ? nullability.Create(method.ReturnParameter) : null;
+        return $"{kind} {Scope(member)} {(member.IsStatic ? "static" : "instance")} {declaring}::{member.Name}({parameters}) -> {Name(produced, returnNullability)}";
     }
 
     private static string Scope(MethodBase member) =>
@@ -351,6 +361,49 @@ public static class ConstructionSurface
         }
 
         return type.FullName ?? type.Name;
+    }
+
+    /// <summary>
+    /// Same as <see cref="Name(Type)"/>, with a trailing <c>?</c> appended when
+    /// <paramref name="nullability"/> says the position is annotated as a nullable reference type,
+    /// matching ordinary C# nullable-reference-type surface syntax so a diff reads naturally.
+    /// </summary>
+    /// <remarks>
+    /// Value types are rendered exactly as <see cref="Name(Type)"/> already renders them: a value
+    /// type's own nullability, <c>Nullable&lt;T&gt;</c> included, is already fully visible through
+    /// <see cref="Type"/> itself, so a second marker would be redundant, and
+    /// <see cref="NullabilityInfoContext"/> reports <see cref="NullabilityState.Nullable"/> for
+    /// every <c>Nullable&lt;T&gt;</c> regardless of reference annotations. A by-ref type's own
+    /// reflection <see cref="Type"/> is never a value type even when the type it points to is
+    /// (<c>int?</c> passed <c>out</c> reports <see cref="Type.IsByRef"/> on <c>Nullable&lt;int&gt;&amp;</c>,
+    /// whose own <see cref="Type.IsValueType"/> is <see langword="false"/>), so this looks at the
+    /// pointed-to element for by-ref parameters specifically; arrays and pointers are
+    /// reference-shaped at the very wrapper level <see cref="Name(Type)"/> itself formats, so they
+    /// need no such unwrapping to tell whether the wrapper's own slot is reference typed.
+    /// </remarks>
+    private static string Name(Type type, NullabilityInfo? nullability)
+    {
+        var name = Name(type);
+        if (nullability is null)
+        {
+            return name;
+        }
+
+        var valueTyped = type.IsByRef ? (type.GetElementType() ?? type).IsValueType : type.IsValueType;
+        if (valueTyped)
+        {
+            return name;
+        }
+
+        // A getter-less property reports ReadState as Unknown even when its setter carries a real
+        // annotation, simply because there is nothing to read; this falls back to WriteState only
+        // then. ReadState and WriteState agree for every other producer shape this guard has met:
+        // plain, out and ref parameters, method returns, fields and ordinary properties.
+        // NullabilityState.Unknown otherwise (oblivious code, or a type from an assembly compiled
+        // without nullable annotations) renders the same as NotNull: the gate cannot honestly claim
+        // a distinction reflection itself cannot resolve, so it does not invent a third marker for it.
+        var state = nullability.ReadState != NullabilityState.Unknown ? nullability.ReadState : nullability.WriteState;
+        return state == NullabilityState.Nullable ? name + "?" : name;
     }
 
     private static IEnumerable<Type> SelfNestedAndBases(Type guarded)

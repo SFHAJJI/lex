@@ -37,9 +37,9 @@ public sealed class LuxembourgExecutorConstructionSurfaceTests
             {
                 "constructor internal instance " + N + "LuxembourgEnumerationRefusalDetail::.ctor("
                 + N + "LuxembourgEnumerationRefusal, System.Nullable<System.UInt64>, "
-                + "System.Nullable<System.UInt64>, System.Nullable<System.Int32>, System.String, "
-                + "System.String, System.Nullable<System.Int64>, "
-                + "System.Collections.Generic.IReadOnlyList<System.String>, System.String) -> "
+                + "System.Nullable<System.UInt64>, System.Nullable<System.Int32>, System.String?, "
+                + "System.String?, System.Nullable<System.Int64>, "
+                + "System.Collections.Generic.IReadOnlyList<System.String>, System.String?) -> "
                 + N + "LuxembourgEnumerationRefusalDetail",
             },
             ConstructionSurface.Of(typeof(LuxembourgEnumerationRefusalDetail)).ToArray());
@@ -54,35 +54,35 @@ public sealed class LuxembourgExecutorConstructionSurfaceTests
                 // refusal detail exactly as the run result already does when the executor itself
                 // refuses before delivering.
                 "by-ref-method public instance " + N + "LuxembourgRepeatedEnumerationExecutor+ObserveOutcome"
-                + "::Deconstruct(out " + Core + "RepeatedEnumerationObservedTransport&, "
+                + "::Deconstruct(out " + Core + "RepeatedEnumerationObservedTransport&?, "
                 + "out System.Nullable<System.UInt64>&, out "
-                + N + "LuxembourgEnumerationRefusalDetail&) -> System.Void",
+                + N + "LuxembourgEnumerationRefusalDetail&?) -> System.Void",
                 "by-ref-method public instance " + N + "LuxembourgRepeatedEnumerationExecutor+PassOutcome"
-                + "::Deconstruct(out " + Contracts + "LuxembourgDeliveryPass&, out "
-                + N + "LuxembourgEnumerationRefusalDetail&) -> System.Void",
+                + "::Deconstruct(out " + Contracts + "LuxembourgDeliveryPass&?, out "
+                + N + "LuxembourgEnumerationRefusalDetail&?) -> System.Void",
                 "field private instance " + N + "LuxembourgEnumerationRunResult::<Refusal>k__BackingField -> "
-                + N + "LuxembourgEnumerationRefusalDetail",
+                + N + "LuxembourgEnumerationRefusalDetail?",
                 "field private instance " + N + "LuxembourgFamilyEnumerationOutcome"
-                + "::<ExecutorRefusal>k__BackingField -> " + N + "LuxembourgEnumerationRefusalDetail",
+                + "::<ExecutorRefusal>k__BackingField -> " + N + "LuxembourgEnumerationRefusalDetail?",
                 // D1-04c: LuxembourgPartitionCoverReconciliationDetail carries a leaf's own executor
                 // refusal exactly as LuxembourgFamilyEnumerationOutcome already carries one above --
                 // it does not make a refusal, only names which leaf's own leg refused.
                 "field private instance " + N + "LuxembourgPartitionCoverReconciliationDetail"
-                + "::<LeafExecutorRefusal>k__BackingField -> " + N + "LuxembourgEnumerationRefusalDetail",
+                + "::<LeafExecutorRefusal>k__BackingField -> " + N + "LuxembourgEnumerationRefusalDetail?",
                 "field private instance " + N + "LuxembourgRepeatedEnumerationExecutor+ObserveOutcome"
-                + "::<Refusal>k__BackingField -> " + N + "LuxembourgEnumerationRefusalDetail",
+                + "::<Refusal>k__BackingField -> " + N + "LuxembourgEnumerationRefusalDetail?",
                 "field private instance " + N + "LuxembourgRepeatedEnumerationExecutor+PassOutcome"
-                + "::<Refusal>k__BackingField -> " + N + "LuxembourgEnumerationRefusalDetail",
+                + "::<Refusal>k__BackingField -> " + N + "LuxembourgEnumerationRefusalDetail?",
                 "property public instance " + N + "LuxembourgEnumerationRunResult::Refusal() -> "
-                + N + "LuxembourgEnumerationRefusalDetail",
+                + N + "LuxembourgEnumerationRefusalDetail?",
                 "property public instance " + N + "LuxembourgFamilyEnumerationOutcome::ExecutorRefusal() -> "
-                + N + "LuxembourgEnumerationRefusalDetail",
+                + N + "LuxembourgEnumerationRefusalDetail?",
                 "property public instance " + N + "LuxembourgPartitionCoverReconciliationDetail"
-                + "::LeafExecutorRefusal() -> " + N + "LuxembourgEnumerationRefusalDetail",
+                + "::LeafExecutorRefusal() -> " + N + "LuxembourgEnumerationRefusalDetail?",
                 "property public instance " + N + "LuxembourgRepeatedEnumerationExecutor+ObserveOutcome"
-                + "::Refusal() -> " + N + "LuxembourgEnumerationRefusalDetail",
+                + "::Refusal() -> " + N + "LuxembourgEnumerationRefusalDetail?",
                 "property public instance " + N + "LuxembourgRepeatedEnumerationExecutor+PassOutcome"
-                + "::Refusal() -> " + N + "LuxembourgEnumerationRefusalDetail",
+                + "::Refusal() -> " + N + "LuxembourgEnumerationRefusalDetail?",
             },
             ConstructionSurface.ProducersIn(
                 typeof(LuxembourgEnumerationRefusalDetail).Assembly,
@@ -109,8 +109,8 @@ public sealed class LuxembourgExecutorConstructionSurfaceTests
             new[]
             {
                 "constructor private instance " + N + "LuxembourgEnumerationRunResult::.ctor("
-                + Core + "RepeatedEnumerationDeliveryReceipt, "
-                + N + "LuxembourgEnumerationRefusalDetail, System.Int32) -> "
+                + Core + "RepeatedEnumerationDeliveryReceipt?, "
+                + N + "LuxembourgEnumerationRefusalDetail?, System.Int32) -> "
                 + N + "LuxembourgEnumerationRunResult",
                 "method public static " + N + "LuxembourgEnumerationRunResult::Delivered("
                 + Core + "RepeatedEnumerationDeliveryReceipt, System.Int32) -> "
@@ -136,7 +136,7 @@ public sealed class LuxembourgExecutorConstructionSurfaceTests
                 + N + "LuxembourgEnumerationRunResult",
                 "method private instance " + N + "LuxembourgRepeatedEnumerationExecutor"
                 + "::RunPartitionOnSessionAsync(" + N + "LuxembourgPartitionRunRequest, "
-                + "Lex.V3.Ingest.RoutedHttpAcquisitionSession, " + Core + "SourceArtifactRef, "
+                + "Lex.V3.Ingest.RoutedHttpAcquisitionSession, " + Core + "SourceArtifactRef?, "
                 + "System.Threading.CancellationToken) -> System.Threading.Tasks.Task<"
                 + N + "LuxembourgEnumerationRunResult>",
                 "method public instance " + N + "LuxembourgRepeatedEnumerationExecutor::RunCoverAsync("
@@ -188,7 +188,7 @@ public sealed class LuxembourgExecutorConstructionSurfaceTests
             {
                 "constructor internal instance " + N + "LuxembourgRepeatedEnumerationExecutor::.ctor("
                 + "Lex.V3.Contracts.Custody.ICustodyStore, System.TimeProvider, "
-                + "System.Net.Http.HttpMessageHandler) -> " + N + "LuxembourgRepeatedEnumerationExecutor",
+                + "System.Net.Http.HttpMessageHandler?) -> " + N + "LuxembourgRepeatedEnumerationExecutor",
                 "constructor public instance " + N + "LuxembourgRepeatedEnumerationExecutor::.ctor("
                 + "Lex.V3.Contracts.Custody.ICustodyStore, System.TimeProvider) -> "
                 + N + "LuxembourgRepeatedEnumerationExecutor",

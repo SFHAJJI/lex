@@ -35,12 +35,12 @@ public sealed class CutReleaseGateConstructionSurfaceTests
             {
                 "constructor private instance " + N + "CutReleaseGate::.ctor(System.String, "
                 + "System.Nullable<" + N + "ReleaseArtifactKind>, System.Nullable<" + N + "ReleaseClass>, "
-                + N + "CutReleaseVerdict, " + N + "CutReleaseBlockReason, " + N + "CutCompletionClaim, "
-                + N + "CutCompletionClaim, " + N + "SourceArtifactRef, "
+                + N + "CutReleaseVerdict, " + N + "CutReleaseBlockReason, " + N + "CutCompletionClaim?, "
+                + N + "CutCompletionClaim?, " + N + "SourceArtifactRef, "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "GlobalBlockerFamilyCountEntry>) -> "
                 + N + "CutReleaseGate",
                 "method public static " + N + "CutReleaseGate::TryEvaluate(System.String, System.String, "
-                + N + "CutCompletionClaim, " + N + "CutCompletionClaim, " + N + "SourceArtifactRef, "
+                + N + "CutCompletionClaim?, " + N + "CutCompletionClaim?, " + N + "SourceArtifactRef, "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "GlobalBlockerFamilyCountEntry>, "
                 + N + "GlobalBlockerCountVector) -> " + N + "CutReleaseGate",
             },

@@ -54,8 +54,8 @@ public sealed class LuxembourgConstructionSurfaceTests
                 + N + "LuxembourgPartitionCover",
                 "method public static " + N + "LuxembourgPartitionCover::TryCreate("
                 + N + "LuxembourgPartitionChain, " + List + Core + "RepeatedEnumerationDeliveryReceipt>, "
-                + Core + "RepeatedEnumerationDeliveryReceipt, out "
-                + N + "LuxembourgPartitionCoverRefusal&) -> " + N + "LuxembourgPartitionCover",
+                + Core + "RepeatedEnumerationDeliveryReceipt?, out "
+                + N + "LuxembourgPartitionCoverRefusal&) -> " + N + "LuxembourgPartitionCover?",
             },
             ConstructionSurface.Of(typeof(LuxembourgPartitionCover)).ToArray());
 

@@ -41,7 +41,7 @@ public sealed class QuarantineConstructionSurfaceTests
                 "constructor private instance " + N + "PriorPublicCoordinate::.ctor("
                 + N + "PriorPublicCoordinate) -> " + N + "PriorPublicCoordinate",
                 "constructor public instance " + N + "PriorPublicCoordinate::.ctor(System.String, "
-                + "System.String, System.String, System.String) -> " + N + "PriorPublicCoordinate",
+                + "System.String, System.String, System.String?) -> " + N + "PriorPublicCoordinate",
                 "method public instance " + N + "PriorPublicCoordinate::<Clone>$() -> "
                 + N + "PriorPublicCoordinate",
             },
@@ -62,7 +62,7 @@ public sealed class QuarantineConstructionSurfaceTests
                 + N + "QuarantineReproducerRole, System.String, "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "PriorPublicCoordinate>, "
                 + "out " + N + "QuarantineReproductionRefusal&) -> "
-                + N + "QuarantinePriorCoordinateReproduction",
+                + N + "QuarantinePriorCoordinateReproduction?",
             },
             ConstructionSurface.Of(typeof(QuarantinePriorCoordinateReproduction)).ToArray());
 
@@ -141,7 +141,7 @@ public sealed class QuarantineConstructionSurfaceTests
                 + N + "QuarantinePriorCoordinateReproduction, System.String, "
                 + Core + "SourceArtifactRef, " + N + "QuarantineVerifierReceipt, "
                 + N + "QuarantineAttestation, out " + N + "QuarantineInventoryRefusal&) -> "
-                + N + "QuarantinedPriorCoordinateInventory",
+                + N + "QuarantinedPriorCoordinateInventory?",
             },
             ConstructionSurface.Of(typeof(QuarantinedPriorCoordinateInventory)).ToArray());
 

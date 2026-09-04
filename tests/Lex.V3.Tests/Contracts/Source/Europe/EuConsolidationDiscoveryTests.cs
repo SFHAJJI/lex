@@ -1166,7 +1166,7 @@ public sealed class EuConsolidationDiscoveryTests
                 "method private instance " + SurfaceN + "EuConsolidationDiscoveryPlan::Bind("
                     + SurfaceN + "EuConsolidationQueryDefinition, System.Boolean, System.String, "
                     + SurfaceN + "EuConsolidationQueryPass, "
-                    + "System.Collections.Generic.IReadOnlyList<System.String>, "
+                    + "System.Collections.Generic.IReadOnlyList<System.String>?, "
                     + SurfaceCore + "MachineResponseCardinality, System.String, System.String, "
                     + SurfaceCore + "MachineQueryRendererSource) -> " + SurfaceN + "EuConsolidationBoundQuery",
                 "method public instance " + SurfaceN + "EuConsolidationDiscoveryPlan::BindCount("
@@ -1175,7 +1175,7 @@ public sealed class EuConsolidationDiscoveryTests
                     + SurfaceN + "EuConsolidationBoundQuery",
                 "method public instance " + SurfaceN + "EuConsolidationDiscoveryPlan::BindPage("
                     + SurfaceN + "EuConsolidationQuerySet, System.String, " + SurfaceN + "EuConsolidationQueryPass, "
-                    + "System.Collections.Generic.IReadOnlyList<System.String>, System.Int64, "
+                    + "System.Collections.Generic.IReadOnlyList<System.String>?, System.Int64, "
                     + SurfaceCore + "SourceArtifactRef, System.String, System.String, "
                     + SurfaceCore + "MachineQueryRendererSource) -> " + SurfaceN + "EuConsolidationBoundQuery",
             },

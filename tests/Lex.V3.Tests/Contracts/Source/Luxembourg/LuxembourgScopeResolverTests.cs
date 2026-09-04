@@ -896,7 +896,7 @@ public sealed class LuxembourgScopeResolverTests
             new[]
             {
                 "constructor private instance " + N + "LuxembourgTypedRoleResolution::.ctor("
-                    + N + "LuxembourgTypedRoleKind, System.String, System.String) -> "
+                    + N + "LuxembourgTypedRoleKind, System.String?, System.String?) -> "
                     + N + "LuxembourgTypedRoleResolution",
                 "constructor private instance " + N + "LuxembourgTypedRoleResolution::.ctor("
                     + N + "LuxembourgTypedRoleResolution) -> " + N

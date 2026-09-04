@@ -418,7 +418,7 @@ public sealed class CorpusRecordSetWriterTests
             new[]
             {
                 "constructor private instance Lex.V3.Ingest.CorpusAcquisitionOutcome::.ctor("
-                    + "Lex.V3.Contracts.Custody.DurableBlobWriteReceipt, "
+                    + "Lex.V3.Contracts.Custody.DurableBlobWriteReceipt?, "
                     + "System.Nullable<Lex.V3.Contracts.Source.Corpus.CorpusAcquisitionRefusalReason>) -> "
                     + "Lex.V3.Ingest.CorpusAcquisitionOutcome",
                 "constructor private instance Lex.V3.Ingest.CorpusAcquisitionOutcome::.ctor("

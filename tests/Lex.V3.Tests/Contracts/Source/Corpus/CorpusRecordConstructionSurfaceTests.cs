@@ -179,10 +179,10 @@ public sealed class CorpusRecordConstructionSurfaceTests
                 "constructor private instance " + N + "CorpusBodyRecord::.ctor("
                     + N + "CorpusBodyRecord) -> " + N + "CorpusBodyRecord",
                 "constructor public instance " + N + "CorpusBodyRecord::.ctor("
-                    + N + "CorpusBodyRecordKind, " + Custody + "DurableBlobWriteReceipt, "
+                    + N + "CorpusBodyRecordKind, " + Custody + "DurableBlobWriteReceipt?, "
                     + "System.Nullable<" + Custody + "CustodyMembership>, "
                     + "System.Nullable<" + Scope + "ScopeDisposition>, "
-                    + N + "CorpusBodyPendingAcquisitionReason) -> " + N + "CorpusBodyRecord",
+                    + N + "CorpusBodyPendingAcquisitionReason?) -> " + N + "CorpusBodyRecord",
                 "method public instance " + N + "CorpusBodyRecord::<Clone>$() -> " + N + "CorpusBodyRecord",
                 "method public static " + N + "CorpusBodyRecord::Held(" + Custody + "DurableBlobWriteReceipt) -> "
                     + N + "CorpusBodyRecord",

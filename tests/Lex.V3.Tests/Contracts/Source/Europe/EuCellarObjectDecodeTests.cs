@@ -868,14 +868,14 @@ public sealed class EuCellarObjectDecodeTests
                 + "System.Collections.Generic.IReadOnlyList<" + N + "EuCellarObjectDecode+ObjectFactRow>, "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "EuCellarObjectDecode+ExpressionFactRow>, "
                 + C + "EuActForm, Lex.V3.Contracts.Source.Core.SourceArtifactRef, out " + Refusal
-                + "&, out System.String&, out " + N + "EuCellarObjectSnapshotRefusal&) -> "
-                + N + "EuCellarObjectSnapshot",
+                + "&, out System.String&?, out " + N + "EuCellarObjectSnapshotRefusal&) -> "
+                + N + "EuCellarObjectSnapshot?",
                 "by-ref-method public static " + N + "EuCellarObjectDecode::TryDecode(System.String, "
                 + RowList + RowList + RowList + C + "EuActForm, "
                 + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, out " + Refusal + "&, out "
-                + "System.String&, out " + N
+                + "System.String&?, out " + N
                 + "EuCellarObjectSnapshotRefusal&) -> "
-                + "System.Collections.Generic.IReadOnlyList<" + N + "EuCellarObjectSnapshot>",
+                + "System.Collections.Generic.IReadOnlyList<" + N + "EuCellarObjectSnapshot>?",
             },
             ConstructionSurface.ProducersIn(
                 typeof(EuCellarObjectDecodeRefusal).Assembly, typeof(EuCellarObjectDecodeRefusal), true)

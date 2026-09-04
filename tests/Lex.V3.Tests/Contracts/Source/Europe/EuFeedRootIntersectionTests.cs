@@ -62,7 +62,7 @@ public sealed class EuFeedRootIntersectionTests
                 + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, "
                 + "System.Collections.Generic.IReadOnlyList<System.String>, "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "EuFeedFamilyProjection>, out "
-                + N + "EuFeedIntersectionRefusal&) -> " + N + "EuFeedRootIntersection",
+                + N + "EuFeedIntersectionRefusal&) -> " + N + "EuFeedRootIntersection?",
             },
             ConstructionSurface.Of(typeof(EuFeedRootIntersection)).ToArray());
     }
@@ -79,7 +79,7 @@ public sealed class EuFeedRootIntersectionTests
                 + "EuFeedWatermarkEntrySet",
                 "method public static " + N + "EuFeedWatermarkEntrySet::TryClose("
                 + "System.Collections.Generic.IReadOnlyList<" + N + "EuWatermarkTraversalStep>, "
-                + "out " + N + "EuFeedEntrySetRefusal&) -> " + N + "EuFeedWatermarkEntrySet",
+                + "out " + N + "EuFeedEntrySetRefusal&) -> " + N + "EuFeedWatermarkEntrySet?",
             },
             ConstructionSurface.Of(typeof(EuFeedWatermarkEntrySet)).ToArray());
     }
@@ -99,7 +99,7 @@ public sealed class EuFeedRootIntersectionTests
                 + "EuWatermarkCursor, System.Boolean, "
                 + "System.Collections.Generic.IReadOnlyList<System.String>, "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "EuFeedFamilyProjection>, out "
-                + N + "EuFeedObservationRefusal&) -> " + N + "EuFeedEntryObservation",
+                + N + "EuFeedObservationRefusal&) -> " + N + "EuFeedEntryObservation?",
             },
             ConstructionSurface.Of(typeof(EuFeedEntryObservation)).ToArray());
     }

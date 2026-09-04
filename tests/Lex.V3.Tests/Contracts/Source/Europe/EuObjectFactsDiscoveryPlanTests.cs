@@ -933,7 +933,7 @@ public sealed class EuObjectFactsDiscoveryPlanTests
                 "method private instance " + N + "EuObjectFactsDiscoveryPlan::Bind("
                     + N + "EuObjectFactsQueryDefinition, " + N + "EuObjectFactsQuerySet, System.Boolean, "
                     + "System.Collections.Generic.IReadOnlyList<System.String>, " + N + "EuObjectFactsQueryPass, "
-                    + "System.Collections.Generic.IReadOnlyList<System.String>, "
+                    + "System.Collections.Generic.IReadOnlyList<System.String>?, "
                     + Core + "MachineResponseCardinality, System.String, System.String, "
                     + Core + "MachineQueryRendererSource) -> " + N + "EuObjectFactsBoundQuery",
                 "method public instance " + N + "EuObjectFactsDiscoveryPlan::BindCount("
@@ -942,7 +942,7 @@ public sealed class EuObjectFactsDiscoveryPlanTests
                     + Core + "MachineQueryRendererSource) -> " + N + "EuObjectFactsBoundQuery",
                 "method public instance " + N + "EuObjectFactsDiscoveryPlan::BindPage("
                     + N + "EuObjectFactsQuerySet, System.Collections.Generic.IReadOnlyList<System.String>, "
-                    + N + "EuObjectFactsQueryPass, System.Collections.Generic.IReadOnlyList<System.String>, "
+                    + N + "EuObjectFactsQueryPass, System.Collections.Generic.IReadOnlyList<System.String>?, "
                     + "System.Int64, " + Core + "SourceArtifactRef, System.String, System.String, "
                     + Core + "MachineQueryRendererSource) -> " + N + "EuObjectFactsBoundQuery",
             },
@@ -950,3 +950,4 @@ public sealed class EuObjectFactsDiscoveryPlanTests
                 typeof(EuObjectFactsDiscoveryPlan).Assembly, typeof(EuObjectFactsBoundQuery), true).ToArray());
     }
 }
+

@@ -89,7 +89,7 @@ public sealed class EuPrimaryEnumerationWitnessReconciliationTests
                 + N + "EuPrimaryEnumerationRootBinding, " + N + "EuFeedRootIntersection, "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "EuFeedEntryTermination>, out "
                 + N + "EuPrimaryWitnessReconciliationRefusal&) -> " + N
-                + "EuPrimaryEnumerationWitnessReconciliation",
+                + "EuPrimaryEnumerationWitnessReconciliation?",
             },
             ConstructionSurface.Of(typeof(EuPrimaryEnumerationWitnessReconciliation)).ToArray());
     }

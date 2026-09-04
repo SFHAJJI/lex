@@ -410,9 +410,9 @@ public sealed class LuxembourgRelationVocabularyTests
             new[]
             {
                 "field private instance " + N + "LuxembourgRelationFamilyDisposition::<InboundView>k__BackingField -> "
-                + N + "LuxembourgLocalInboundView",
+                + N + "LuxembourgLocalInboundView?",
                 "property public instance " + N + "LuxembourgRelationFamilyDisposition::InboundView() -> "
-                + N + "LuxembourgLocalInboundView",
+                + N + "LuxembourgLocalInboundView?",
             },
             ConstructionSurface.ProducersIn(
                 typeof(LuxembourgLocalInboundView).Assembly,
@@ -431,8 +431,8 @@ public sealed class LuxembourgRelationVocabularyTests
                 + N + "LuxembourgRelationFamilyDisposition) -> " + N + "LuxembourgRelationFamilyDisposition",
                 "constructor public instance " + N + "LuxembourgRelationFamilyDisposition::.ctor("
                 + N + "LuxembourgRelationPredicate, " + N + "LuxembourgRelationAuthority, "
-                + N + "LuxembourgRelationAcquisitionState, " + Core + "SourceArtifactRef, "
-                + N + "LuxembourgLocalInboundView) -> " + N + "LuxembourgRelationFamilyDisposition",
+                + N + "LuxembourgRelationAcquisitionState, " + Core + "SourceArtifactRef?, "
+                + N + "LuxembourgLocalInboundView?) -> " + N + "LuxembourgRelationFamilyDisposition",
                 "method public instance " + N + "LuxembourgRelationFamilyDisposition::<Clone>$() -> "
                 + N + "LuxembourgRelationFamilyDisposition",
             },
