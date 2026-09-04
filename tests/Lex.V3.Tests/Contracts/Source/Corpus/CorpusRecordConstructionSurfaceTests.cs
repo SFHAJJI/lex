@@ -83,6 +83,52 @@ public sealed class CorpusRecordConstructionSurfaceTests
             ConstructionSurface.Of(typeof(CorpusBodyPendingAcquisitionReasonKind)).ToArray());
     }
 
+    /// <summary>
+    /// D1-06b closed <see cref="CorpusBodyPendingAcquisitionReason"/>'s own free-form
+    /// <c>Refusal</c> string into this fourteen-member vocabulary, one member per cause named in
+    /// <c>Lex.V3.Contracts.Source.Http.HttpAcquisitionReasonRegistry</c> (read, never touched).
+    /// </summary>
+    [TestMethod]
+    public void AcquisitionRefusalReasonIsExactlyItsFourteenMembers()
+    {
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "base-constructor protected instance System.Enum::.ctor() -> System.Enum",
+                "base-constructor protected instance System.ValueType::.ctor() -> System.ValueType",
+                "field public static " + N + "CorpusAcquisitionRefusalReason::BodyDeadline -> "
+                    + N + "CorpusAcquisitionRefusalReason",
+                "field public static " + N + "CorpusAcquisitionRefusalReason::BodyReadFailure -> "
+                    + N + "CorpusAcquisitionRefusalReason",
+                "field public static " + N + "CorpusAcquisitionRefusalReason::ByteBoundPreventedCompletion -> "
+                    + N + "CorpusAcquisitionRefusalReason",
+                "field public static " + N + "CorpusAcquisitionRefusalReason::CallerCancelledAfterHeaders -> "
+                    + N + "CorpusAcquisitionRefusalReason",
+                "field public static " + N + "CorpusAcquisitionRefusalReason::DeclaredLengthShortRead -> "
+                    + N + "CorpusAcquisitionRefusalReason",
+                "field public static " + N + "CorpusAcquisitionRefusalReason::HeaderDeadline -> "
+                    + N + "CorpusAcquisitionRefusalReason",
+                "field public static " + N + "CorpusAcquisitionRefusalReason::InvalidContentLength -> "
+                    + N + "CorpusAcquisitionRefusalReason",
+                "field public static " + N + "CorpusAcquisitionRefusalReason::MissingCompletionProof -> "
+                    + N + "CorpusAcquisitionRefusalReason",
+                "field public static " + N + "CorpusAcquisitionRefusalReason::RevalidationRequestNotAdmitted -> "
+                    + N + "CorpusAcquisitionRefusalReason",
+                "field public static " + N + "CorpusAcquisitionRefusalReason::StatusContentForbidden -> "
+                    + N + "CorpusAcquisitionRefusalReason",
+                "field public static " + N + "CorpusAcquisitionRefusalReason::StatusFramingConflict -> "
+                    + N + "CorpusAcquisitionRefusalReason",
+                "field public static " + N + "CorpusAcquisitionRefusalReason::TransferCodingConflict -> "
+                    + N + "CorpusAcquisitionRefusalReason",
+                "field public static " + N + "CorpusAcquisitionRefusalReason::TransportBeforeHeaders -> "
+                    + N + "CorpusAcquisitionRefusalReason",
+                "field public static " + N + "CorpusAcquisitionRefusalReason::UnsupportedTransferCoding -> "
+                    + N + "CorpusAcquisitionRefusalReason",
+            },
+            ConstructionSurface.Of(typeof(CorpusAcquisitionRefusalReason)).ToArray(),
+            "a fifteenth refusal cause must be justified in review, not discovered later");
+    }
+
     [TestMethod]
     public void PendingAcquisitionReasonHasExactlyItsOwnPublicConstructorAndFactories()
     {
@@ -92,12 +138,13 @@ public sealed class CorpusRecordConstructionSurfaceTests
                 "constructor private instance " + N + "CorpusBodyPendingAcquisitionReason::.ctor("
                     + N + "CorpusBodyPendingAcquisitionReason) -> " + N + "CorpusBodyPendingAcquisitionReason",
                 "constructor public instance " + N + "CorpusBodyPendingAcquisitionReason::.ctor("
-                    + N + "CorpusBodyPendingAcquisitionReasonKind, System.String) -> "
+                    + N + "CorpusBodyPendingAcquisitionReasonKind, "
+                    + "System.Nullable<" + N + "CorpusAcquisitionRefusalReason>) -> "
                     + N + "CorpusBodyPendingAcquisitionReason",
                 "method public instance " + N + "CorpusBodyPendingAcquisitionReason::<Clone>$() -> "
                     + N + "CorpusBodyPendingAcquisitionReason",
-                "method public static " + N + "CorpusBodyPendingAcquisitionReason::AcquisitionRefused(System.String) -> "
-                    + N + "CorpusBodyPendingAcquisitionReason",
+                "method public static " + N + "CorpusBodyPendingAcquisitionReason::AcquisitionRefused("
+                    + N + "CorpusAcquisitionRefusalReason) -> " + N + "CorpusBodyPendingAcquisitionReason",
                 "method public static " + N + "CorpusBodyPendingAcquisitionReason::NotYetAcquired() -> "
                     + N + "CorpusBodyPendingAcquisitionReason",
             },
@@ -182,5 +229,62 @@ public sealed class CorpusRecordConstructionSurfaceTests
         CollectionAssert.AreEqual(
             Array.Empty<string>(),
             ConstructionSurface.Of(typeof(CorpusRecordCanonicalWriter)).ToArray());
+    }
+
+    [TestMethod]
+    public void SetSchemaIdsHasNoConstructionSurface()
+    {
+        CollectionAssert.AreEqual(
+            Array.Empty<string>(),
+            ConstructionSurface.Of(typeof(CorpusRecordSetSchemaIds)).ToArray());
+    }
+
+    [TestMethod]
+    public void RecordSetHasExactlyItsOwnPublicConstructor()
+    {
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + N + "CorpusRecordSet::.ctor("
+                    + N + "CorpusRecordSet) -> " + N + "CorpusRecordSet",
+                "constructor public instance " + N + "CorpusRecordSet::.ctor(System.String, "
+                    + Core + "SourceArtifactRef, " + Core + "SourceArtifactRef, "
+                    + "System.Collections.Generic.IReadOnlyList<" + N + "CorpusRecord>) -> "
+                    + N + "CorpusRecordSet",
+                "method public instance " + N + "CorpusRecordSet::<Clone>$() -> " + N + "CorpusRecordSet",
+            },
+            ConstructionSurface.Of(typeof(CorpusRecordSet)).ToArray());
+    }
+
+    [TestMethod]
+    public void VerifiedRecordSetHasExactlyOneCheckedDoor()
+    {
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor internal instance " + N + "VerifiedCorpusRecordSet::.ctor("
+                    + N + "CorpusRecordSet) -> " + N + "VerifiedCorpusRecordSet",
+                "method public static " + N + "VerifiedCorpusRecordSet::ParseAndVerify("
+                    + Core + "SourceArtifactRef, System.ReadOnlySpan<System.Byte>) -> "
+                    + N + "VerifiedCorpusRecordSet",
+            },
+            ConstructionSurface.Of(typeof(VerifiedCorpusRecordSet)).ToArray());
+
+        CollectionAssert.AreEqual(
+            Array.Empty<string>(),
+            ConstructionSurface.ProducersIn(
+                    typeof(VerifiedCorpusRecordSet).Assembly, typeof(VerifiedCorpusRecordSet), true)
+                .ToArray(),
+            "nothing else in Contracts may hand out a verified corpus record set it did not verify");
+    }
+
+    [TestMethod]
+    public void SetCanonicalWriterHasNoConstructionSurface()
+    {
+        // Every public member returns a digest string or writes bytes; none returns any of this
+        // file's own types.
+        CollectionAssert.AreEqual(
+            Array.Empty<string>(),
+            ConstructionSurface.Of(typeof(CorpusRecordSetCanonicalWriter)).ToArray());
     }
 }
