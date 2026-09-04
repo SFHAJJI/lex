@@ -47,6 +47,29 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
         "{\"head\":{\"link\":[],\"vars\":[\"id\",\"cursor\",\"value\"]},\"results\":{\"distinct\":false,\"ordered\":true,\"bindings\":["
         + "{\"id\":{\"type\":\"uri\"}}]}}"; // a term with no "value" member: the shape Term() refuses.
 
+    /// <summary>
+    /// The same ids and cursors as the fixture's own "a,b" baseline ("urn:row:a"/"a", "urn:row:b"/"b"),
+    /// but with a "value" term now bound where the baseline left it unbound: same canonical key, same
+    /// cursor, different non-key content.
+    /// </summary>
+    private static readonly string NonKeyTermSubstitutedBody =
+        "{\"head\":{\"link\":[],\"vars\":[\"id\",\"cursor\",\"value\"]},\"results\":{\"distinct\":false,\"ordered\":true,\"bindings\":["
+        + "{\"id\":{\"type\":\"uri\",\"value\":\"urn:row:a\"},\"cursor\":{\"type\":\"literal\",\"value\":\"a\"},\"value\":{\"type\":\"literal\",\"value\":\"x\"}},"
+        + "{\"id\":{\"type\":\"uri\",\"value\":\"urn:row:b\"},\"cursor\":{\"type\":\"literal\",\"value\":\"b\"},\"value\":{\"type\":\"literal\",\"value\":\"z\"}}]}}";
+
+    /// <summary>
+    /// The same ids as the baseline, but the second row's cursor moved from "b" to "z": still
+    /// strictly increasing after "a", so <c>VerifyPages</c>' own continuity check never fires.
+    /// </summary>
+    private static readonly string CursorSubstitutedBody =
+        "{\"head\":{\"link\":[],\"vars\":[\"id\",\"cursor\",\"value\"]},\"results\":{\"distinct\":false,\"ordered\":true,\"bindings\":["
+        + "{\"id\":{\"type\":\"uri\",\"value\":\"urn:row:a\"},\"cursor\":{\"type\":\"literal\",\"value\":\"a\"}},"
+        + "{\"id\":{\"type\":\"uri\",\"value\":\"urn:row:b\"},\"cursor\":{\"type\":\"literal\",\"value\":\"z\"}}]}}";
+
+    /// <summary>Fold-in two's hostile shape: a non-string element inside <c>head.vars</c>.</summary>
+    private static readonly string NonStringHeadVarsBody =
+        "{\"head\":{\"link\":[],\"vars\":[\"id\",\"cursor\",5]},\"results\":{\"distinct\":false,\"ordered\":true,\"bindings\":[]}}";
+
     [TestMethod]
     public void ADeliveredFamilysRowsReopenVerifiedFromItsProof()
     {
@@ -60,6 +83,7 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
 
         var rows = VerifiedRepeatedEnumerationRows.TryOpen(
             proof!,
+            delivery,
             fixture.ProfileForTest,
             delivery.InterpretationProfileRef,
             delivery.CountA.HttpEvidenceRef,
@@ -107,6 +131,7 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
 
             var rows = VerifiedRepeatedEnumerationRows.TryOpen(
                 proof!,
+                delivery,
                 fixture.ProfileForTest,
                 delivery.InterpretationProfileRef,
                 delivery.CountA.HttpEvidenceRef,
@@ -136,7 +161,7 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
         var tampered = Tamper(fixture, delivery, NotJson);
 
         var rows = VerifiedRepeatedEnumerationRows.TryOpen(
-            proof!, fixture.ProfileForTest, delivery.InterpretationProfileRef,
+            proof!, delivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,
             delivery.CountA.HttpEvidenceRef, [tampered], out var refusal);
 
         Assert.IsNull(rows);
@@ -160,7 +185,7 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
         var tampered = Tamper(fixture, delivery, ShapeViolation);
 
         var rows = VerifiedRepeatedEnumerationRows.TryOpen(
-            proof!, fixture.ProfileForTest, delivery.InterpretationProfileRef,
+            proof!, delivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,
             delivery.CountA.HttpEvidenceRef, [tampered], out var refusal);
 
         Assert.IsNull(rows);
@@ -186,7 +211,7 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
         var tampered = Tamper(fixture, delivery, OneRowBody);
 
         var rows = VerifiedRepeatedEnumerationRows.TryOpen(
-            proof, fixture.ProfileForTest, delivery.InterpretationProfileRef,
+            proof, delivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,
             delivery.CountA.HttpEvidenceRef, [tampered], out var refusal);
 
         Assert.IsNull(rows);
@@ -209,11 +234,110 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
         var tampered = Tamper(fixture, delivery, TwoDifferentRowsBody);
 
         var rows = VerifiedRepeatedEnumerationRows.TryOpen(
-            proof!, fixture.ProfileForTest, delivery.InterpretationProfileRef,
+            proof!, delivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,
             delivery.CountA.HttpEvidenceRef, [tampered], out var refusal);
 
         Assert.IsNull(rows);
         Assert.AreEqual(RepeatedEnumerationRowsOpenRefusal.CanonicalKeyDigestMismatch, refusal);
+    }
+
+    /// <summary>
+    /// Same canonical key, same cursor, different non-key term: <c>VerifyPages</c> and the count and
+    /// key-digest checks all verify, because none of them ever look past the canonical key. Before
+    /// the door bound <see cref="EnumerationDeliveryComparison.CanonicalRowDigestA"/>, this exact
+    /// shape opened as <see cref="RepeatedEnumerationRowsOpenRefusal.None"/> with the substituted
+    /// "value" term - the gap queue item 17's fold-in closes.
+    /// </summary>
+    [TestMethod]
+    public void ANonKeyTermSubstitutedAtTheSameKeysAndCursorFailsTheRowContentDigest()
+    {
+        var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture();
+        var delivery = fixture.Create("a,b", "a,b");
+        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, out _);
+        Assert.IsNotNull(proof);
+
+        var tampered = Tamper(fixture, delivery, NonKeyTermSubstitutedBody);
+
+        var rows = VerifiedRepeatedEnumerationRows.TryOpen(
+            proof!, delivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,
+            delivery.CountA.HttpEvidenceRef, [tampered], out var refusal);
+
+        Assert.IsNull(rows);
+        Assert.AreEqual(RepeatedEnumerationRowsOpenRefusal.CanonicalRowDigestMismatch, refusal);
+    }
+
+    /// <summary>
+    /// Same canonical keys, one row's cursor substituted: still strictly increasing, so
+    /// <c>VerifyPages</c>' own continuity check never fires, and the canonical-key digest still
+    /// agrees because it never looks at the cursor column. Checked ahead of the row-content digest
+    /// in <see cref="VerifiedRepeatedEnumerationRows.TryOpen"/> for exactly this reason: a cursor
+    /// substitution also changes <see cref="RepeatedEnumerationRow.Terms"/>, so without that
+    /// ordering this shape would always be reported as the wider row-content mismatch instead.
+    /// </summary>
+    [TestMethod]
+    public void ACursorSubstitutedAtTheSameKeysFailsTheCursorDigest()
+    {
+        var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture();
+        var delivery = fixture.Create("a,b", "a,b");
+        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, out _);
+        Assert.IsNotNull(proof);
+
+        var tampered = Tamper(fixture, delivery, CursorSubstitutedBody);
+
+        var rows = VerifiedRepeatedEnumerationRows.TryOpen(
+            proof!, delivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,
+            delivery.CountA.HttpEvidenceRef, [tampered], out var refusal);
+
+        Assert.IsNull(rows);
+        Assert.AreEqual(RepeatedEnumerationRowsOpenRefusal.CursorDigestMismatch, refusal);
+    }
+
+    /// <summary>
+    /// A comparison that is internally valid but did not mint this proof (a different partition
+    /// key) is a caller contract violation, exactly like pairing a proof with the wrong profile:
+    /// nothing about the comparison's own digests can be trusted as this proof's anchor unless the
+    /// comparison is first shown to be the one that actually produced it.
+    /// </summary>
+    [TestMethod]
+    public void AComparisonThatDidNotMintThisProofIsACallerError()
+    {
+        var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture();
+        var delivery = fixture.Create("a,b", "a,b");
+        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, out _);
+        Assert.IsNotNull(proof);
+        var pages = ResolvePages(fixture, delivery);
+
+        var otherDelivery = new RepeatedEnumerationDeliveryProofTests.Fixture(partitionKey: "other")
+            .Create("a,b", "a,b");
+
+        Assert.ThrowsExactly<ArgumentException>(() => VerifiedRepeatedEnumerationRows.TryOpen(
+            proof!, otherDelivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,
+            delivery.CountA.HttpEvidenceRef, pages, out _));
+    }
+
+    /// <summary>
+    /// Fold-in two: a <c>head.vars</c> array element that is not a JSON string throws
+    /// <see cref="InvalidOperationException"/> out of <see cref="System.Text.Json.JsonElement.GetString"/>
+    /// past this door's own catch filter, so the door threw where it promises to refuse. The strict
+    /// parser now checks the element kind before calling <c>GetString</c>, and this test drives that
+    /// exact body.
+    /// </summary>
+    [TestMethod]
+    public void ANonStringHeadVarsElementRefusesRatherThanThrows()
+    {
+        var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture();
+        var delivery = fixture.Create("a,b", "a,b");
+        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, out _);
+        Assert.IsNotNull(proof);
+
+        var tampered = Tamper(fixture, delivery, NonStringHeadVarsBody);
+
+        var rows = VerifiedRepeatedEnumerationRows.TryOpen(
+            proof!, delivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,
+            delivery.CountA.HttpEvidenceRef, [tampered], out var refusal);
+
+        Assert.IsNull(rows);
+        Assert.AreEqual(RepeatedEnumerationRowsOpenRefusal.PageChainInvalid, refusal);
     }
 
     [TestMethod]
@@ -226,19 +350,22 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
         var pages = ResolvePages(fixture, delivery);
 
         Assert.ThrowsExactly<ArgumentNullException>(() => VerifiedRepeatedEnumerationRows.TryOpen(
-            null!, fixture.ProfileForTest, delivery.InterpretationProfileRef,
+            null!, delivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,
             delivery.CountA.HttpEvidenceRef, pages, out _));
         Assert.ThrowsExactly<ArgumentNullException>(() => VerifiedRepeatedEnumerationRows.TryOpen(
-            proof!, null!, delivery.InterpretationProfileRef,
+            proof!, null!, fixture.ProfileForTest, delivery.InterpretationProfileRef,
             delivery.CountA.HttpEvidenceRef, pages, out _));
         Assert.ThrowsExactly<ArgumentNullException>(() => VerifiedRepeatedEnumerationRows.TryOpen(
-            proof!, fixture.ProfileForTest, null!,
+            proof!, delivery, null!, delivery.InterpretationProfileRef,
             delivery.CountA.HttpEvidenceRef, pages, out _));
         Assert.ThrowsExactly<ArgumentNullException>(() => VerifiedRepeatedEnumerationRows.TryOpen(
-            proof!, fixture.ProfileForTest, delivery.InterpretationProfileRef,
+            proof!, delivery, fixture.ProfileForTest, null!,
+            delivery.CountA.HttpEvidenceRef, pages, out _));
+        Assert.ThrowsExactly<ArgumentNullException>(() => VerifiedRepeatedEnumerationRows.TryOpen(
+            proof!, delivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,
             null!, pages, out _));
         Assert.ThrowsExactly<ArgumentNullException>(() => VerifiedRepeatedEnumerationRows.TryOpen(
-            proof!, fixture.ProfileForTest, delivery.InterpretationProfileRef,
+            proof!, delivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,
             delivery.CountA.HttpEvidenceRef, null!, out _));
     }
 
@@ -251,7 +378,7 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
         Assert.IsNotNull(proof);
 
         Assert.ThrowsExactly<ArgumentException>(() => VerifiedRepeatedEnumerationRows.TryOpen(
-            proof!, fixture.ProfileForTest, delivery.InterpretationProfileRef,
+            proof!, delivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,
             delivery.CountA.HttpEvidenceRef, [], out _));
     }
 
@@ -276,12 +403,12 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
 
         // A profile that does not even reproduce the reference handed alongside it.
         Assert.ThrowsExactly<ArgumentException>(() => VerifiedRepeatedEnumerationRows.TryOpen(
-            proof!, otherProfile, delivery.InterpretationProfileRef,
+            proof!, delivery, otherProfile, delivery.InterpretationProfileRef,
             delivery.CountA.HttpEvidenceRef, pages, out _));
 
         // A profile that reproduces its own reference, but is not the one the proof was read under.
         Assert.ThrowsExactly<ArgumentException>(() => VerifiedRepeatedEnumerationRows.TryOpen(
-            proof!, otherProfile, otherProfileRef,
+            proof!, delivery, otherProfile, otherProfileRef,
             delivery.CountA.HttpEvidenceRef, pages, out _));
     }
 

@@ -184,15 +184,42 @@ public interface IRepeatedEnumerationEvidenceResolver { RepeatedEnumerationResol
 
 public sealed class EnumerationDeliveryComparison
 {
+    /// <summary>
+    /// The digest schema for the whole ordered set of a delivery's canonical-key tuples
+    /// (<see cref="CanonicalKeyDigestA"/>/<see cref="CanonicalKeyDigestB"/> and the door's own
+    /// re-derivation of the same claim). One character away from <see cref="CanonicalKeySchema"/>,
+    /// which digests a single row's canonical key for the per-row uniqueness check inside
+    /// <see cref="VerifyPages"/>; both are named constants for exactly that reason; a literal typo
+    /// between "keys" and "key" would silently swap which one two call sites agree on.
+    /// </summary>
+    internal const string CanonicalKeySetSchema = "repeated_enumeration_keys/1";
+
+    /// <summary>The digest schema for one row's own canonical key. See <see cref="CanonicalKeySetSchema"/>.</summary>
+    private const string CanonicalKeySchema = "repeated_enumeration_key/1";
+
+    /// <summary>
+    /// The digest schema for the whole ordered set of a delivery's full row terms
+    /// (<see cref="CanonicalRowDigestA"/>/<see cref="CanonicalRowDigestB"/> and
+    /// <see cref="VerifiedRepeatedEnumerationRows"/>'s own re-derivation of the same claim).
+    /// </summary>
+    internal const string CanonicalRowSetSchema = "repeated_enumeration_rows/1";
+
+    /// <summary>
+    /// The digest schema for the whole ordered set of a delivery's cursors
+    /// (<see cref="CursorDigestA"/>/<see cref="CursorDigestB"/> and
+    /// <see cref="VerifiedRepeatedEnumerationRows"/>'s own re-derivation of the same claim).
+    /// </summary>
+    internal const string CursorSetSchema = "repeated_enumeration_cursors/1";
+
     private EnumerationDeliveryComparison(SourceArtifactRef profileRef, SourceArtifactRef sourceProfileRef, SourceArtifactRef runIdentity, string partitionKey, RepeatedEnumerationThresholdAssessment thresholdAssessment, RepeatedEnumerationEvidenceRefs countA, EnumerationPageSetRefs pagesA, RepeatedEnumerationEvidenceRefs countB, EnumerationPageSetRefs pagesB, EnumerationObservationTimes observationTimes, long selectedA, long selectedB, IReadOnlyList<RepeatedEnumerationRow> rowsA, IReadOnlyList<RepeatedEnumerationRow> rowsB)
     {
         InterpretationProfileRef = profileRef; SourceProfileRef = sourceProfileRef; RunIdentity = runIdentity; PartitionKey = partitionKey; CountA = countA; PagesA = Snapshot(pagesA); CountB = countB; PagesB = Snapshot(pagesB);
         ThresholdAssessment = thresholdAssessment;
         ObservationTimes = new(observationTimes.CountA, Array.AsReadOnly(observationTimes.PagesA.ToArray()), observationTimes.CountB, Array.AsReadOnly(observationTimes.PagesB.ToArray()));
         SelectedRowCountA = selectedA; SelectedRowCountB = selectedB; DeliveredRowCountA = rowsA.Count; DeliveredRowCountB = rowsB.Count;
-        CanonicalRowDigestA = Digest("repeated_enumeration_rows/1", rowsA.Select(static row => row.Terms)); CanonicalRowDigestB = Digest("repeated_enumeration_rows/1", rowsB.Select(static row => row.Terms));
-        CanonicalKeyDigestA = Digest("repeated_enumeration_keys/1", rowsA.Select(static row => row.CanonicalKey)); CanonicalKeyDigestB = Digest("repeated_enumeration_keys/1", rowsB.Select(static row => row.CanonicalKey));
-        CursorDigestA = Digest("repeated_enumeration_cursors/1", rowsA.Select(static row => row.Cursor)); CursorDigestB = Digest("repeated_enumeration_cursors/1", rowsB.Select(static row => row.Cursor));
+        CanonicalRowDigestA = Digest(CanonicalRowSetSchema, rowsA.Select(static row => row.Terms)); CanonicalRowDigestB = Digest(CanonicalRowSetSchema, rowsB.Select(static row => row.Terms));
+        CanonicalKeyDigestA = Digest(CanonicalKeySetSchema, rowsA.Select(static row => row.CanonicalKey)); CanonicalKeyDigestB = Digest(CanonicalKeySetSchema, rowsB.Select(static row => row.CanonicalKey));
+        CursorDigestA = Digest(CursorSetSchema, rowsA.Select(static row => row.Cursor)); CursorDigestB = Digest(CursorSetSchema, rowsB.Select(static row => row.Cursor));
         Outcome = ClassifyOutcome(
             selectedA,
             selectedB,
@@ -479,7 +506,7 @@ public sealed class EnumerationDeliveryComparison
         {
             throw new ArgumentException("The final page does not satisfy the terminal-page policy.");
         }
-        var keys = new HashSet<string>(); for (var i = 0; i < all.Count; i++) if (!keys.Add(Digest("repeated_enumeration_key/1", [all[i].CanonicalKey])) || i > 0 && Compare(all[i - 1].Cursor, all[i].Cursor) >= 0) throw new ArgumentException("Keys must be unique and cursors strictly increase.");
+        var keys = new HashSet<string>(); for (var i = 0; i < all.Count; i++) if (!keys.Add(Digest(CanonicalKeySchema, [all[i].CanonicalKey])) || i > 0 && Compare(all[i - 1].Cursor, all[i].Cursor) >= 0) throw new ArgumentException("Keys must be unique and cursors strictly increase.");
         return all;
     }
     private static long ParseCount(ReadOnlySpan<byte> bytes, RepeatedEnumerationInterpretationProfile profile)
@@ -510,6 +537,7 @@ public sealed class EnumerationDeliveryComparison
 
         var variables = head.GetProperty("vars");
         if (variables.ValueKind != JsonValueKind.Array ||
+            variables.EnumerateArray().Any(static item => item.ValueKind != JsonValueKind.String) ||
             !variables.EnumerateArray()
                 .Select(static item => item.GetString()!)
                 .SequenceEqual(expected))
