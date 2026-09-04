@@ -106,21 +106,6 @@ public sealed class LuxembourgDocumentGetOutcomeTests
     }
 
     [TestMethod]
-    public void RobotsDisallowedCarriesNoWireStatusAndNamesTheRequestedPath()
-    {
-        // Item 4's per-object robots refusal: decided by the real live robots.txt this session
-        // fetched (Disallow: /*.docx, /*.svg, /eli/etat/adm/, and named instances such as
-        // /eli/etat/leg/loi/2007/01/15/n2/jo/fr/xml), never a hardcoded path list here.
-        const string path = "/eli/etat/leg/loi/2007/01/15/n2/jo/fr/xml";
-
-        var outcome = LuxembourgDocumentGetOutcome.RobotsDisallowed(path);
-
-        Assert.AreEqual(LuxembourgDocumentGetOutcomeKind.RobotsDisallowed, outcome.Kind);
-        Assert.AreEqual(0, outcome.ObservedStatus);
-        StringAssert.Contains(outcome.Detail, path);
-    }
-
-    [TestMethod]
     public void OutOfRangeStatusesAreRejected()
     {
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>

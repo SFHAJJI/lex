@@ -140,7 +140,15 @@ public sealed class DocumentFetchRouteContractTests
                 $"the corpus vocabulary must carry a member named '{name}'.");
         }
 
-        Assert.AreEqual(6, Enum.GetValues<LuxembourgDocumentGetOutcomeKind>().Length);
+        // Five, not six. robots_disallowed was removed from this vocabulary: a robots refusal
+        // never reaches a status to classify, so the route names it one level up at
+        // LuxembourgDocumentGetAttemptRefusal.RobotsDisallowed and the adapter maps THAT to the
+        // corpus member of the same name. The corpus member stays and is produced; only the
+        // status-classification member nothing could produce is gone.
+        Assert.AreEqual(5, Enum.GetValues<LuxembourgDocumentGetOutcomeKind>().Length);
+        Assert.IsTrue(
+            Enum.IsDefined(typeof(CorpusAcquisitionRefusalReason), "RobotsDisallowed"),
+            "the corpus refusal member is still there and still produced by the adapter.");
     }
 
     /// <summary>

@@ -1,3 +1,4 @@
+using Lex.V3.Tests.Contracts.Source.Absence;
 using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
@@ -116,6 +117,28 @@ public sealed class LuxembourgDocumentGetTests
             "the retained hop must name the exact bytes the publisher returned.");
         Assert.IsFalse(attempt.RetryAllowanceSpent);
         Assert.AreEqual(2, handler.SendCount, "one robots request and exactly one product GET.");
+
+        // DEFECT TWO (REVIEW_RESULT lex-event-20260904T200339509Z-8a3db602c17c41389408981d2fb26535):
+        // the held format must be recoverable downstream, because the manifest row keeps host and
+        // path only and xml and xml-akomantoso share the path segment. It IS recoverable, and this
+        // asserts it rather than assuming it. The address's canonical identity carries user_format
+        // and legal_value, and the session retains it as a binder artifact before the send, so it
+        // is in custody at its own digest. The finding was a COVERAGE gap rather than a behaviour
+        // one: nothing had ever checked, so nothing would have noticed it stopping.
+        var address = Address();
+        var recovered = await store.ReadByDigestAsync(
+            address.ArtifactRef.Sha256, CancellationToken.None);
+        CollectionAssert.AreEqual(
+            address.CopyCanonicalIdentityBytes(),
+            recovered.ToArray(),
+            "byte for byte, not merely the same length.");
+        var recoveredText = Encoding.UTF8.GetString(recovered.Span);
+        StringAssert.Contains(
+            recoveredText,
+            "user_format=xml-akomantoso",
+            "the EXACT token is recoverable, not a normalised category, which is the whole point "
+            + "given xml and xml-akomantoso share their path segment.");
+        StringAssert.Contains(recoveredText, "legal_value=officiel");
     }
 
     // ---------------------------------------------------------------------------------------
@@ -255,34 +278,305 @@ public sealed class LuxembourgDocumentGetTests
     }
 
     // ---------------------------------------------------------------------------------------
+    // The whole-run refusals, driven rather than declared.
+    // ---------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// A robots bootstrap that never completes is a fact about the RUN, not about this document,
+    /// so it refuses the whole run rather than recording one object as robots-refused. This drives
+    /// both <see cref="LuxembourgDocumentGetAttemptRefusal.RobotsBootstrapNotCompleted"/> and
+    /// <see cref="LuxembourgQueryExecutionRefusal.DocumentFetchSessionNotStarted"/>, which were
+    /// declared and referenced but never asserted by any test.
+    /// </summary>
+    [TestMethod]
+    public async Task ARobotsBootstrapThatNeverCompletesRefusesTheWholeRunRatherThanOneObject()
+    {
+        var handler = new RobotsThenDocumentHandler((request, _) =>
+            BinaryResponse(request, HttpStatusCode.OK, "<akomaNtoso/>"u8.ToArray()))
+        {
+            RobotsStatus = HttpStatusCode.ServiceUnavailable,
+        };
+
+        var (outcomes, refusal, _, _, _) = await AcquireWithHandlerAsync(handler, Address());
+
+        Assert.IsNotNull(refusal, "robots being unreachable is not one object's own refusal.");
+        Assert.AreEqual(LuxembourgQueryExecutionRefusal.DocumentFetchSessionNotStarted, refusal!.Code);
+        StringAssert.Contains(refusal.Detail, "RobotsBootstrapNotCompleted");
+        Assert.IsEmpty(
+            outcomes,
+            "and no object is recorded as robots-disallowed, which would blame the publisher for "
+            + "our own inability to read its rules.");
+    }
+
+    /// <summary>
+    /// A route outcome this route has no reviewed reading for refuses the whole run and names the
+    /// real classified cause, rather than being mapped onto an unrelated corpus member. The
+    /// Luxembourg profile admits no redirect at all, so a 303 leaves the route incomplete for a
+    /// reason the hop-level registry mirror cannot name. Drives
+    /// <see cref="LuxembourgQueryExecutionRefusal.DocumentGetOutcomeNotRepresentable"/>.
+    /// </summary>
+    [TestMethod]
+    public async Task AnUnreadableRouteOutcomeRefusesTheWholeRunAndNamesTheCause()
+    {
+        var (outcomes, refusal, _, _, _) = await AcquireAsync((request, _) =>
+        {
+            var response = BinaryResponse(request, HttpStatusCode.SeeOther, []);
+            response.Headers.TryAddWithoutValidation(
+                "Location", "https://legilux.public.lu/filestore/elsewhere.xml");
+            return response;
+        });
+
+        Assert.IsNotNull(refusal);
+        Assert.AreEqual(
+            LuxembourgQueryExecutionRefusal.DocumentGetOutcomeNotRepresentable, refusal!.Code);
+        StringAssert.Contains(refusal.Detail, "routeOutcome=");
+        Assert.IsEmpty(outcomes);
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // The three retained publisher responses, driven rather than described.
+    // ---------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// The retained fixtures are the publisher's own bytes and still are. The loader re-hashes on
+    /// every load, so this asserts the mechanism as well as the three digests.
+    /// </summary>
+    [TestMethod]
+    public void TheRetainedFixturesCarryThePublisherBytesTheyName()
+    {
+        Assert.HasCount(
+            LuxembourgDocumentFetchFixtures.XmlBodyLength, LuxembourgDocumentFetchFixtures.XmlBody());
+        Assert.HasCount(
+            LuxembourgDocumentFetchFixtures.PdfBodyLength, LuxembourgDocumentFetchFixtures.PdfBody());
+        Assert.HasCount(
+            LuxembourgDocumentFetchFixtures.NotFoundBodyLength,
+            LuxembourgDocumentFetchFixtures.NotFoundBody());
+
+        StringAssert.StartsWith(
+            Encoding.UTF8.GetString(LuxembourgDocumentFetchFixtures.XmlBody().AsSpan(0, 120)),
+            "<?xml",
+            "the 200 fixture is the real Akoma Ntoso document, not a placeholder.");
+        StringAssert.Contains(
+            Encoding.UTF8.GetString(LuxembourgDocumentFetchFixtures.NotFoundBody()),
+            "\"status\":404",
+            "and the 404 fixture is the office's own JSON error body.");
+    }
+
+    /// <summary>
+    /// A REAL publisher body is fetched and held, and the receipt names the publisher's own digest.
+    /// The retained 19,986-byte Akoma Ntoso document of loi 2017/03/14/a439 is served as the
+    /// response, so the digest asserted here is the publisher's, not the test's.
+    /// </summary>
+    [TestMethod]
+    public async Task TheRealAkomaNtosoBodyIsHeldUnderTheReceiptCarryingThePublishersOwnDigest()
+    {
+        var body = LuxembourgDocumentFetchFixtures.XmlBody();
+
+        var (outcomes, refusal, _, _, _) = await AcquireAsync(
+            (request, _) => BinaryResponse(request, HttpStatusCode.OK, body));
+
+        Assert.IsNull(refusal, refusal?.Detail);
+        Assert.HasCount(1, outcomes);
+        var receipt = outcomes.Values.Single().Receipt;
+        Assert.IsNotNull(receipt);
+        Assert.AreEqual(
+            LuxembourgDocumentFetchFixtures.XmlBodySha256,
+            receipt!.Reference.ContentSha256,
+            "the held body is the publisher's bytes, by the publisher's own digest.");
+        Assert.AreEqual(LuxembourgDocumentFetchFixtures.XmlBodyLength, receipt.Reference.ByteLength);
+    }
+
+    /// <summary>
+    /// The PDF-only arm, on the real act that has no XML at all: rgd 1977/11/16/n3, whose single
+    /// pdf manifestation is what the ladder falls through to. Its real 124,932-byte file is served.
+    /// </summary>
+    [TestMethod]
+    public async Task TheRealPdfOnlyActsBodyIsHeldWhenTheLadderFallsThroughToPdf()
+    {
+        var body = LuxembourgDocumentFetchFixtures.PdfBody();
+        var address = Address(
+            token: LuxembourgUserFormatToken.Pdf,
+            storeUri:
+                "http://data.legilux.public.lu/filestore/eli/etat/leg/memorial/1977/a67/fr/pdf/"
+                + "eli-etat-leg-memorial-1977-a67-fr-pdf.pdf",
+            actPagePath: "/eli/etat/leg/rgd/1977/11/16/n3/jo");
+
+        var (outcomes, refusal, _, _, _) = await AcquireAsync(
+            (request, _) => BinaryResponse(request, HttpStatusCode.OK, body), address);
+
+        Assert.IsNull(refusal, refusal?.Detail);
+        var receipt = outcomes.Values.Single().Receipt;
+        Assert.IsNotNull(receipt);
+        Assert.AreEqual(LuxembourgDocumentFetchFixtures.PdfBodySha256, receipt!.Reference.ContentSha256);
+    }
+
+    /// <summary>
+    /// The office's REAL 404 body drives the not-found arm, and the object gets a
+    /// PendingAcquisition record with its typed cause, written by
+    /// <see cref="CorpusRecordSetWriter"/> and REOPENED before anything is asserted.
+    /// </summary>
+    /// <remarks>
+    /// Nothing here asserts that a fresh fetch reproduces the fixture's digest, and nothing may:
+    /// the body carries a live timestamp and echoes the requested path, so it differs every time.
+    /// Three observations of this one shape exist, 209 then 234 then 204 bytes. The fixture is
+    /// evidence of one observation.
+    /// </remarks>
+    [TestMethod]
+    public async Task TheRealNotFoundBodyBecomesAPendingAcquisitionRecordWithItsTypedCause()
+    {
+        var body = LuxembourgDocumentFetchFixtures.NotFoundBody();
+
+        var (outcomes, refusal, manifest, manifestRef, store) = await AcquireAsync(
+            (request, _) => BinaryResponse(request, HttpStatusCode.NotFound, body));
+
+        Assert.IsNull(refusal, refusal?.Detail);
+        Assert.HasCount(1, outcomes);
+        Assert.IsNull(outcomes.Values.Single().Receipt);
+        Assert.AreEqual(CorpusAcquisitionRefusalReason.NotFound, outcomes.Values.Single().Refusal);
+
+        var written = await new CorpusRecordSetWriter(store).WriteAsync(
+            manifest, manifestRef, RunIdentityRef(), outcomes, CancellationToken.None);
+        Assert.IsNull(written.Refusal, written.Refusal?.Detail);
+
+        var record = written.VerifiedSet!.Set.Records.Single();
+        Assert.AreEqual(CorpusBodyRecordKind.PendingAcquisition, record.Body.Kind);
+        Assert.AreEqual(
+            CorpusBodyPendingAcquisitionReasonKind.AcquisitionRefused,
+            record.Body.PendingAcquisitionReason?.Kind,
+            "the record says the acquisition was refused, not that the body was never attempted.");
+        Assert.AreEqual(
+            CorpusAcquisitionRefusalReason.NotFound,
+            record.Body.PendingAcquisitionReason?.Refusal,
+            "and it names the publisher's own answer as the cause.");
+    }
+
+    // ---------------------------------------------------------------------------------------
     // The accepted fraction of a real LU manifest.
     // ---------------------------------------------------------------------------------------
 
     /// <summary>
-    /// The scope ruling asked what fraction of a real LU manifest is accepted on the body axis. The
-    /// answer is zero of N, and it is structural: <c>LuxembourgBodyJoin</c>'s own candidate
-    /// resolution returns Withheld unconditionally, and the resolver's own body projection has no
-    /// accepting arm. Asserted against the production functions themselves rather than against a
-    /// sample run, because a sample could only ever show that no accepted row HAPPENED to appear.
+    /// THE ACCEPTED FRACTION, AS A NUMBER, over a real-shaped manifest reduced by the production
+    /// resolver: zero before the join can reach a wording manifestation, non-zero after.
     /// </summary>
+    /// <remarks>
+    /// THIS TEST PINNED NOTHING. It was named
+    /// <c>TheBodyAxisOfEveryRealLuxembourgManifestAcceptsNothing</c> and its whole body was
+    /// reflection asserting that two method names still existed and that an enum had two members.
+    /// It would have passed unchanged whatever those methods did, including after the accepting arm
+    /// landed, which is exactly the defect this lane keeps finding: a test that reads like a proof
+    /// and proves nothing. Named in REVIEW_RESULT
+    /// lex-event-20260904T200339509Z-8a3db602c17c41389408981d2fb26535 defect four.
+    /// <para>
+    /// Both objects below go through the real path: real assertions, the real rights channel built
+    /// from jolux:license, the real profile resolution behind its proof door, and the real
+    /// ScopeReducer. The only difference between them is what the publisher LISTS, which is the
+    /// thing the body axis is supposed to decide on.
+    /// </para>
+    /// </remarks>
     [TestMethod]
-    public void TheBodyAxisOfEveryRealLuxembourgManifestAcceptsNothing()
+    public void TheAcceptedFractionIsZeroWithoutAWordingManifestationAndOneWithIt()
     {
-        var resolveBody = typeof(VerifiedLuxembourgSourceProfile).Assembly
-            .GetType("Lex.V3.Contracts.Source.Luxembourg.LuxembourgScopeResolver")!
-            .GetMethod("ResolveBody", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-        Assert.IsNotNull(resolveBody, "the body projection this assertion is about must still exist.");
+        var profile = BuildProfile();
+        var observationRef = profile.Snapshot.ObservationRef;
 
-        // Every LuxembourgBodyCandidateResolution the production join can build is Withheld, and a
-        // Withheld candidate is by construction one with at least one blocker (its own constructor
-        // refuses a blocker-free Withheld). So no candidate can ever reach an accepting body arm.
+        var withWording = LuxembourgQueryExecutionAdapter.BuildResourceObservation(
+            WordingAct,
+            ActAssertions(WordingAct, "xml-akomantoso", "xml", observationRef),
+            observationRef,
+            profile.ScopeBinding.SourceProfileRef);
+        var withoutWording = LuxembourgQueryExecutionAdapter.BuildResourceObservation(
+            NoWordingAct,
+            ActAssertions(NoWordingAct, "docx", "docx", observationRef),
+            observationRef,
+            profile.ScopeBinding.SourceProfileRef);
+
+        var manifest = ReduceRealManifest(profile, [withWording, withoutWording]);
+
+        var acceptedOrdinals = manifest.Accounting
+            .Where(static set => set.Axis == ScopeAxis.Body
+                && set.Disposition == ScopeDisposition.AcceptedSelected)
+            .SelectMany(static set => set.ObjectOrdinals)
+            .ToHashSet();
+
         Assert.AreEqual(
-            2,
-            Enum.GetValues<LuxembourgBodyCandidateDisposition>().Length,
-            "the candidate disposition vocabulary this claim reads is exactly Withheld and AcceptedCandidate.");
-        var accepting = typeof(LuxembourgBodyJoin)
-            .GetMethod("ResolveCandidate", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-        Assert.IsNotNull(accepting);
+            2, manifest.Rows.Count, "two objects, so the fraction below is out of two.");
+        Assert.HasCount(
+            1,
+            acceptedOrdinals,
+            "ONE of two: the act whose publisher lists a wording manifestation is selected for "
+            + "acquisition, and the act listing only docx is not. Before the accepting arm this "
+            + "number was zero for every possible manifest.");
+
+        var acceptedUri = manifest.ObservedObjects[acceptedOrdinals.Single()].ObjectRef.PublisherUri;
+        Assert.AreEqual(
+            WordingAct,
+            acceptedUri,
+            "and it is the RIGHT one of the two, not merely the right count.");
+    }
+
+    private const string WordingAct =
+        "http://data.legilux.public.lu/eli/etat/leg/loi/2021/09/09/a676/jo";
+    private const string NoWordingAct =
+        "http://data.legilux.public.lu/eli/etat/leg/loi/2021/09/10/a677/jo";
+
+    /// <summary>
+    /// One act's own publisher assertions: work realized by a French expression which embodies one
+    /// manifestation of the given userFormat, exemplified by a filestore file, declaring CC-BY.
+    /// Shaped exactly as the Code civil's own retained SPARQL answer shows the store shapes them.
+    /// </summary>
+    private static LuxembourgObservedAssertion[] ActAssertions(
+        string act, string token, string pathSegment, SourceArtifactRef observationRef)
+    {
+        const string jolux = "http://data.legilux.public.lu/resource/ontology/jolux#";
+        var expression = act + "/fr";
+        var manifestation = expression + "/" + pathSegment;
+        var file = act.Replace(
+                "http://data.legilux.public.lu/eli/",
+                "http://data.legilux.public.lu/filestore/eli/")
+            + "/fr/" + pathSegment + "/f." + pathSegment;
+        LuxembourgObservedAssertion Iri(string subject, string predicate, string value) =>
+            new(subject, predicate, LuxembourgAssertionObjectKind.Iri, value, string.Empty,
+                string.Empty, observationRef);
+        return
+        [
+            Iri(act, "http://www.w3.org/1999/02/22-rdf-syntax-ns#type", jolux + "Act"),
+            // The publication family is a SEPARATE, EARLIER gate, and this test is not about it.
+            // TC is a priority candidate type, which with an Act class is an accepted family
+            // outright; an ordinary type such as LOI needs consolidation or as-published
+            // qualification the publisher expresses elsewhere, and using one here would have made
+            // this test report zero for a reason that has nothing to do with the body axis. That is
+            // not hypothetical: it did, and the family read typed_quarantine_role_not_admitted while
+            // the body join itself was already producing a candidate with NO blockers.
+            Iri(act, jolux + "typeDocument",
+                "http://data.legilux.public.lu/resource/authority/resource-type/"
+                + VerifiedLuxembourgSourceProfile.PriorityCandidateTypeTc),
+            Iri(act, jolux + "isRealizedBy", expression),
+            Iri(expression, "http://www.w3.org/1999/02/22-rdf-syntax-ns#type", jolux + "Expression"),
+            Iri(expression, jolux + "language",
+                "http://publications.europa.eu/resource/authority/language/FRA"),
+            Iri(expression, jolux + "isEmbodiedBy", manifestation),
+            Iri(manifestation, "http://www.w3.org/1999/02/22-rdf-syntax-ns#type", jolux + "Manifestation"),
+            Iri(manifestation, jolux + "userFormat",
+                "http://data.legilux.public.lu/resource/authority/user-format/" + token),
+            Iri(manifestation, jolux + "isExemplifiedBy", file),
+            Iri(manifestation, jolux + "license", "http://creativecommons.org/licenses/by/4.0/"),
+        ];
+    }
+
+    private static ScopeManifest ReduceRealManifest(
+        VerifiedLuxembourgSourceProfile profile,
+        IReadOnlyList<LuxembourgResourceObservation> observations)
+    {
+        var resolution = profile.Resolve(
+            LuxembourgProvenResourceObservations.RequireProven(
+                AbsenceFixtures.Proof(), observations));
+        var resolved = resolution as LuxembourgProfileResolution.Resolved;
+        Assert.IsNotNull(
+            resolved,
+            $"the observations must resolve: {(resolution as LuxembourgProfileResolution.Failed)?.Failure.Code}");
+        return profile
+            .ReduceScope(resolved!, new PermissiveScopeEvidenceResolver(profile.Snapshot.CompleteEnumerationRef))
+            .Manifest;
     }
 
     // ---------------------------------------------------------------------------------------
@@ -574,6 +868,9 @@ public sealed class LuxembourgDocumentGetTests
 
         internal int SendCount => Volatile.Read(ref _sendCount);
 
+        /// <summary>Lets a test make the robots bootstrap itself fail rather than deny a path.</summary>
+        internal HttpStatusCode RobotsStatus { get; init; } = HttpStatusCode.OK;
+
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
         {
@@ -581,6 +878,16 @@ public sealed class LuxembourgDocumentGetTests
             var ordinal = Interlocked.Increment(ref _sendCount);
             if (request.RequestUri?.AbsolutePath == "/robots.txt")
             {
+                if (RobotsStatus != HttpStatusCode.OK)
+                {
+                    return Task.FromResult(new HttpResponseMessage(RobotsStatus)
+                    {
+                        Version = HttpVersion.Version11,
+                        RequestMessage = request,
+                        Content = new ByteArrayContent([]),
+                    });
+                }
+
                 var bytes = Encoding.UTF8.GetBytes(LuxembourgDocumentFetchRobotsBootstrapTests.RealRobotsTxt);
                 var content = new ByteArrayContent(bytes);
                 content.Headers.TryAddWithoutValidation(
