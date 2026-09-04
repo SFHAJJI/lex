@@ -931,7 +931,12 @@ public sealed class LuxembourgScopeResolverTests
                 "field private instance " + N
                     + "LuxembourgResourceResolution::<TypedRole>k__BackingField -> "
                     + N + "LuxembourgTypedRoleResolution",
-                "method internal instance " + N + "LuxembourgScopeResolver+<>c__DisplayClass24_0"
+                // The display-class ordinal moved from 24 to 27 when D1-06c-LU-2's repair made the
+                // three userFormat sets internal and added KnownUserFormatIris beside them (RULING
+                // lex-event-20260904T194556163Z-dd9191017eaf4c3b83ea04862933006f item three). The
+                // compiler numbers generated types by declaration position; this is not a new way
+                // to hand out a typed-role resolution. Re-printed after the change, not guessed.
+                "method internal instance " + N + "LuxembourgScopeResolver+<>c__DisplayClass27_0"
                     + "::<Resolve>b__3(" + N + "LuxembourgResourceObservation) -> "
                     + "<>f__AnonymousType0<" + N + "LuxembourgResourceObservation, "
                     + "Lex.V3.Contracts.LuScopeDimensions, "

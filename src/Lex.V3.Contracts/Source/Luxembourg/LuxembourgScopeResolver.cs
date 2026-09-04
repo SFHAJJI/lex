@@ -40,9 +40,28 @@ internal static class LuxembourgScopeResolver
         .Concat(OrdinaryCandidateTypes)
         .Concat(RegulatorTypes)
         .ToHashSet(StringComparer.Ordinal);
-    private static readonly HashSet<string> StructuredFormats = Formats("xml", "xml-akomantoso");
-    private static readonly HashSet<string> PointFormats = Formats("pdfa", "pdf", "html");
-    private static readonly HashSet<string> NeverFormats = Formats("doc", "docx", "svg");
+    // D1-06c-LU-2 repair, RULING lex-event-20260904T194556163Z-dd9191017eaf4c3b83ea04862933006f
+    // item three: these three sets ARE this codebase's userFormat vocabulary. They were private,
+    // so the document-fetch route grew a second, hand-written token list beside them, and the two
+    // disagreed without anything noticing: "doc" was in this file all along and absent from that
+    // list, because the census the list was written from joined on jolux:legalValue and every doc
+    // manifestation lacks one. They are internal now so the selection side is cross-checked
+    // against them by test rather than transcribed from a probe. Adding a token here without
+    // teaching the route about it fails that test.
+    internal static readonly HashSet<string> StructuredFormats = Formats("xml", "xml-akomantoso");
+    internal static readonly HashSet<string> PointFormats = Formats("pdfa", "pdf", "html");
+    internal static readonly HashSet<string> NeverFormats = Formats("doc", "docx", "svg");
+
+    /// <summary>
+    /// Every userFormat IRI any rule in this file classifies, in one sorted list. The single
+    /// closed list the route's own admitted-token table is checked against.
+    /// </summary>
+    internal static IReadOnlyList<string> KnownUserFormatIris { get; } = StructuredFormats
+        .Concat(PointFormats)
+        .Concat(NeverFormats)
+        .Distinct(StringComparer.Ordinal)
+        .OrderBy(static value => value, StringComparer.Ordinal)
+        .ToArray();
     private static readonly HashSet<string> PointSupportClasses = Classes(
         "InitialDraft", "OpinionConseilEtat", "DraftDocument", "Amendment",
         "OpinionProfessionalOrganisation", "DraftRelatedDocument", "TreatyDocument",
