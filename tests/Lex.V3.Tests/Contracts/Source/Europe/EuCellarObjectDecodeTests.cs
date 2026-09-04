@@ -459,7 +459,7 @@ public sealed class EuCellarObjectDecodeTests
         var language = snapshots!.Single().Language;
         Assert.IsNotNull(language);
         Assert.AreEqual(EuOfficialLanguage.English, language!.Language);
-        Assert.AreEqual(EuExpressionObservationState.ExpressionObservedBodyHeld, language.State);
+        Assert.AreEqual(EuExpressionObservationState.ExpressionObservedBodyCandidate, language.State);
         Assert.AreEqual(
             "eu_cellar_object_decode.language_english_observed_body_candidate", language.RuleId);
     }
@@ -477,7 +477,7 @@ public sealed class EuCellarObjectDecodeTests
         Assert.IsNotNull(language);
         Assert.AreEqual(EuOfficialLanguage.French, language!.Language);
         // See AnObservedEnglishExpressionIsABodyCandidate for why this is body-candidate from D1-05d.
-        Assert.AreEqual(EuExpressionObservationState.ExpressionObservedBodyHeld, language.State);
+        Assert.AreEqual(EuExpressionObservationState.ExpressionObservedBodyCandidate, language.State);
         Assert.AreEqual(
             "eu_cellar_object_decode.language_french_observed_body_candidate", language.RuleId);
     }

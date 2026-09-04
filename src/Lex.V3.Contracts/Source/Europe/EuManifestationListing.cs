@@ -126,14 +126,16 @@ public static class EuManifestationListingDecode
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Only formats <see cref="EuDocumentFetchAddress.TryMediaTypeFor"/> can address are on it, so a
-    /// rung can never mint a request for an Accept token nobody has observed. That leaves the ruled
-    /// order's PDF/A rung represented by <see cref="EuManifestationFormat.PdfA2a"/> alone and its
-    /// PDF rung unrepresented today; that method's own remarks record exactly why, what was observed
-    /// live for each, and what a reviewer would have to admit to make the fourth rung real. Nothing
-    /// here silently substitutes one PDF profile for another: requesting
-    /// <c>application/pdf;type=pdfa2a</c> because a Work listed <c>pdfa1a</c> would ask for a
-    /// representation the office never said it had.
+    /// All four ruled rungs are here. RULING
+    /// lex-event-20260904T185339315Z-87d1510eccdc42a5947c41d2d8580744 admitted
+    /// <see cref="EuManifestationMediaType.ApplicationPdf"/> as this route's tenth media type, so the
+    /// PDF rung is real; the PDF/A rung is represented by <see cref="EuManifestationFormat.PdfA2a"/>
+    /// alone, because pdfa1a and pdfa1b have never been observed serving and
+    /// <see cref="EuDocumentFetchAddress.TryMediaTypeFor"/>'s own remarks record what was seen for
+    /// each. Only formats that method can address are on the ladder, so a rung can never mint a
+    /// request for an Accept token nobody has observed, and nothing here silently substitutes one
+    /// PDF profile for another: requesting <c>application/pdf;type=pdfa2a</c> because a Work listed
+    /// <c>pdfa1a</c> would ask for a representation the office never said it had.
     /// </para>
     /// <para>
     /// The order is a property of this vocabulary, not of any one Work: a Work's own candidates are
@@ -147,6 +149,7 @@ public static class EuManifestationListingDecode
             EuManifestationFormat.Xhtml,
             EuManifestationFormat.Html,
             EuManifestationFormat.PdfA2a,
+            EuManifestationFormat.Pdf,
         });
 
     /// <summary>

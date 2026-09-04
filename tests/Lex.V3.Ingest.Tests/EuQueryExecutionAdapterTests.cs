@@ -2019,16 +2019,23 @@ public sealed class EuQueryExecutionAdapterTests
                 DatastreamAbsent404Body(WorkingTimeCellarKey)));
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
-        Assert.AreEqual(2, handler.DocumentFetchCount, "every listed candidate must be attempted.");
+        Assert.AreEqual(3, handler.DocumentFetchCount, "every listed candidate must be attempted.");
 
         var outcome = result.DocumentAcquisitionOutcomesByOrdinal!.Values.Single();
         Assert.IsNull(outcome.Receipt);
         Assert.AreEqual(CorpusAcquisitionRefusalReason.RequestedRepresentationNotServed, outcome.Refusal);
 
         // The tried types travel with the refusal: that is the RULING's "the tried types in evidence".
+        // Three of them, because this Work's real listing carries pdf as well, and the ruled ladder's
+        // fourth rung became addressable with RULING
+        // lex-event-20260904T185339315Z-87d1510eccdc42a5947c41d2d8580744.
         var ladder = result.DocumentLadderResultsByOrdinal!.Values.Single();
         CollectionAssert.AreEqual(
-            new[] { EuManifestationMediaType.XhtmlXml, EuManifestationMediaType.TextHtml },
+            new[]
+            {
+                EuManifestationMediaType.XhtmlXml, EuManifestationMediaType.TextHtml,
+                EuManifestationMediaType.ApplicationPdf,
+            },
             ladder.Attempted.ToArray());
         Assert.IsNull(ladder.Served, "nothing was served, so nothing may be named as served.");
     }
@@ -2123,6 +2130,63 @@ public sealed class EuQueryExecutionAdapterTests
         Assert.AreEqual(CorpusAcquisitionRefusalReason.WrongAcceptToken, outcome.Refusal);
         Assert.IsNull(result.DocumentLadderResultsByOrdinal!.Values.Single().Served);
     }
+
+    /// <summary>
+    /// The ruled ladder's FOURTH rung, driven end to end. RULING
+    /// lex-event-20260904T185339315Z-87d1510eccdc42a5947c41d2d8580744 admitted application/pdf as
+    /// this route's tenth media type, so a Work whose listed wording formats are all unservable now
+    /// falls all the way through to PDF and records Held rather than PendingAcquisition.
+    /// </summary>
+    /// <remarks>
+    /// What is observed and what is constructed, stated separately. Every individual response shape
+    /// here was observed live on 2026-09-04: the datastream-absent 404 for a listed-but-unservable
+    /// type (byte-exact, see TheRetainedDatastreamAbsent404BodyIsReproducedByteExactly), and a 200
+    /// to a bare Accept: application/pdf, seen on four separate works of which the largest,
+    /// 32006L0112, is retained at 486,142 bytes with digest
+    /// f73bd86fde543c4d36677b971890c30bf6750fe2f9c4dab166fb75176ec5be8a and the %PDF-1.4 magic. The
+    /// COMBINATION is constructed: no act probed answers 404 to both xhtml and html while serving
+    /// pdf, because in all five an earlier rung served. So this drives the rung with real response
+    /// shapes rather than replaying one real object, and says so rather than implying otherwise.
+    /// </remarks>
+    [TestMethod]
+    public async Task WhenBothWordingRungsAreUnservableTheLadderFallsAllTheWayThroughToPdf()
+    {
+        var (result, handler, _) = await RunWorkingTimeDirectiveAsync(
+            EuAcquisitionTestFixture.RealBandListedTypes,
+            request => request.Headers.Accept.ToString() == "application/pdf"
+                ? EuAcquisitionTestFixture.BinaryResponse(
+                    request, System.Net.HttpStatusCode.OK, PdfBody, "application/pdf;charset=UTF-8")
+                : EuAcquisitionTestFixture.BinaryResponse(
+                    request,
+                    System.Net.HttpStatusCode.NotFound,
+                    DatastreamAbsent404Body(WorkingTimeCellarKey)));
+
+        Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+        Assert.AreEqual(3, handler.DocumentFetchCount, "all three addressable rungs must be tried.");
+        CollectionAssert.AreEqual(
+            new[] { "application/xhtml+xml", "text/html", "application/pdf" },
+            handler.DocumentFetchAcceptTokens.ToArray(),
+            "the attempts must follow the ruled order XHTML, html, PDF/A, PDF.");
+
+        var outcome = result.DocumentAcquisitionOutcomesByOrdinal!.Values.Single();
+        Assert.IsNotNull(outcome.Receipt, "the fourth rung serving must record Held.");
+        Assert.AreEqual(
+            Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(PdfBody)),
+            outcome.Receipt!.Reference.ContentSha256);
+
+        var ladder = result.DocumentLadderResultsByOrdinal!.Values.Single();
+        Assert.AreEqual(EuManifestationMediaType.ApplicationPdf, ladder.Served);
+    }
+
+    /// <summary>
+    /// Stand-in bytes for a served PDF body, carrying the real %PDF-1.4 header the retained
+    /// observation begins with. Deliberately not the real 486,142 bytes: this repository does not
+    /// commit publisher bodies as fixtures, and what this proves is which representation was fetched
+    /// and held. The real 200's own observed facts are pinned in
+    /// <see cref="EuManifestationMediaType.ApplicationPdf"/>'s own remarks.
+    /// </summary>
+    private static readonly byte[] PdfBody =
+        System.Text.Encoding.UTF8.GetBytes("%PDF-1.4\n% served-through-application-pdf\n");
 
     private const string WorkingTimeCelex = "32003L0088";
     private const string CellarResourceOrigin = "http://publications.europa.eu/resource/cellar/";
@@ -2306,7 +2370,7 @@ public sealed class EuQueryExecutionAdapterTests
         // projection, and takes the format disposition family M minted, because the candidate set
         // and its order are that listing's answer rather than this method's own constant. The
         // listing below is the real six-token one 32003L0088 returns live; the ladder it produces is
-        // xhtml then html, in that order, and the manifest row carries the FIRST of them.
+        // xhtml, html, pdf, in the ruled order, and the manifest row carries the FIRST of them.
         var listingRef = new SourceArtifactRef(
             "urn:uuid:00000000-0000-4000-8000-0000000000f2", new string('c', 64));
         var listedDisposition = EuManifestationListingDecode.Observe(
@@ -2328,13 +2392,15 @@ public sealed class EuQueryExecutionAdapterTests
         Assert.AreEqual("cellar/" + canonicalKey, mintedFetchAddress.ResourcePath);
         Assert.AreEqual("application/xhtml+xml", mintedFetchAddress.AcceptMediaType);
         Assert.AreEqual("eng", mintedFetchAddress.AcceptLanguage);
-        Assert.HasCount(2, mintedLadder);
+        Assert.HasCount(3, mintedLadder);
         Assert.AreEqual("cellar", mintedLadder[0].PsName);
         Assert.AreEqual(canonicalKey, mintedLadder[0].PsId);
         Assert.AreEqual(EuManifestationMediaType.XhtmlXml, mintedLadder[0].MediaType);
         Assert.AreEqual(EuDocumentLanguage.Eng, mintedLadder[0].Language);
         Assert.AreEqual(EuManifestationMediaType.TextHtml, mintedLadder[1].MediaType);
         Assert.AreEqual("text/html", mintedLadder[1].Accept);
+        Assert.AreEqual(EuManifestationMediaType.ApplicationPdf, mintedLadder[2].MediaType);
+        Assert.AreEqual("application/pdf", mintedLadder[2].Accept);
         Assert.AreEqual(mintedFetchAddress.AcceptMediaType, mintedLadder[0].Accept,
             "the manifest row's single address must be the ladder's FIRST candidate, not any other.");
 
