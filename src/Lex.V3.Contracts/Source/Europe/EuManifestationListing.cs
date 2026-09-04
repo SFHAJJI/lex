@@ -6,8 +6,33 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// Why <see cref="EuManifestationListingDecode.TryDecode"/> refused to hand back listings. Closed.
 /// </summary>
 /// <remarks>
+/// <para>
 /// No member here drops a row silently: every family M row this door reads is either folded into
-/// one object's listing or is the exact row that produced one of these refusals.
+/// one object's listing, or quarantines the one Work whose listing named it, or is the exact row
+/// that produced one of these refusals.
+/// </para>
+/// <para>
+/// The line every member here sits on is DELIVERY INTEGRITY, not object count. Each one says the
+/// delivered rows are not what the verified interpretation profile promised: a term shape the
+/// projection does not admit (<see cref="ListingRowTermKindMismatch"/>, which families P and X
+/// refuse their own deliveries for too), a row set contradicting the query's own UNION semantics
+/// (<see cref="ListingContradictsItsOwnAbsenceRow"/>), or a row outside what this call was asked to
+/// decode (<see cref="ListingParentNotInClosure"/>). Continuing past any of them would mean reading
+/// rows whose shape nothing has established, so each refuses the whole decode however few objects it
+/// touches.
+/// </para>
+/// <para>
+/// An unadmitted manifestation TYPE is deliberately not a member, because it is categorically
+/// different: the delivery is exactly what the profile promised, and the office simply said
+/// something this closed vocabulary does not know. That is a fact about the publisher, not a defect
+/// in the response, so it quarantines its own Work by name through
+/// <see cref="EuManifestationListingDecode.UnadmittedTypeReasonCode"/> and the run continues, which
+/// is the containment REVIEW_RESULT lex-event-20260904T192428840Z-a6a8ebd26c58436aafd109a55303c12e
+/// required. A member for it was declared here until
+/// lex-event-20260904T203812231Z-0e0dbd80d0e64f3e93e9a9c5f0b7b06f and was never set, never driven
+/// and never pinned; it is gone rather than kept for symmetry, and ordinal 3 belongs to the member
+/// below.
+/// </para>
 /// </remarks>
 public enum EuManifestationListingRefusal
 {
@@ -31,44 +56,11 @@ public enum EuManifestationListingRefusal
     ListingParentNotInClosure = 2,
 
     /// <summary>
-    /// A family M row named a manifestation type outside the closed
-    /// <see cref="EuManifestationFormat"/> vocabulary.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// NOT a whole-decode refusal, and that is the point. The token is still refused BY NAME, per
-    /// SCOPE_RULING lex-event-20260904T173606578Z-9977b89239ed43f98df09972f98a741a precision one
-    /// (silently dropping an unknown type would let the ladder claim it had read the office's whole
-    /// listing while ignoring part of it), but the refusal is scoped to the ONE WORK whose listing
-    /// carried it: that Work's own format observation becomes
-    /// <see cref="EuFormatBodyAdmission.BodyNotAdmitted"/> with the token recorded on its reason
-    /// code, its body axis becomes a typed gap, and every other Work in the same run is decoded
-    /// normally.
-    /// </para>
-    /// <para>
-    /// D1-05d's own REVIEW_RESULT lex-event-20260904T192428840Z-a6a8ebd26c58436aafd109a55303c12e
-    /// found the original blast radius: one unadmitted token anywhere refused the whole seed's run,
-    /// so the day the office lists a new manifestation type on any object, or a case-law xml or AKN
-    /// token enters the closure, every EU run would refuse. This is the same per-object containment
-    /// the EU document-fetch route already went through: one object's problem must never kill the
-    /// run. Whole-decode refusal is now reserved for a row naming a parent outside the closure,
-    /// which is a violation of what this call was asked to decode rather than a fact about the
-    /// publisher's vocabulary.
-    /// </para>
-    /// <para>
-    /// This member therefore never reaches <c>refusal</c> from
-    /// <see cref="EuManifestationListingDecode.TryDecode"/>; it names the condition that
-    /// <see cref="EuManifestationListingDecode.UnadmittedTypeReasonCode"/> records on one Work.
-    /// </para>
-    /// </remarks>
-    ManifestationTypeNotInVocabulary = 3,
-
-    /// <summary>
     /// One object carried both a real listed type and the explicit "the office lists nothing"
     /// absence row. The two are mutually exclusive by construction of family M's own UNION, so this
     /// is a delivery disagreement, never a readable listing.
     /// </summary>
-    ListingContradictsItsOwnAbsenceRow = 4,
+    ListingContradictsItsOwnAbsenceRow = 3,
 }
 
 /// <summary>
@@ -218,7 +210,12 @@ public static class EuManifestationListingDecode
     /// </param>
     /// <param name="refusal">Why no listings were returned, when none were.</param>
     /// <param name="offendingIri">The exact canonical parent IRI a closure refusal names, else null.</param>
-    /// <param name="offendingToken">The exact unknown manifestation type a vocabulary refusal names, else null.</param>
+    /// <param name="offendingToken">
+    /// The first manifestation type outside the closed vocabulary these rows named, or null when
+    /// every listed type was admitted. Reported alongside a SUCCESSFUL decode rather than a refusal:
+    /// an unadmitted type quarantines its own Work and the decode still delivers, so this is how a
+    /// caller learns the office's vocabulary has moved without reading every reason code.
+    /// </param>
     /// <returns>
     /// One entry per object in <paramref name="closure"/> the rows say anything about, keyed by
     /// canonical IRI. An object whose only row is family M's explicit absence row is deliberately
@@ -570,10 +567,40 @@ public static class EuManifestationListingDecode
                     : '_');
         }
 
-        return builder.Length == 0 ? "unnamed" : builder.ToString();
+        // No empty-result arm: ObserveUnreadableListing rejects a null, empty or whitespace token
+        // before this is reached, and every remaining character maps to itself or to an underscore,
+        // so the builder always holds at least one character. An "unnamed" fallback would be an
+        // answer to a case the guard above already makes impossible.
+        return builder.ToString();
     }
 
-    private const int MaximumReasonTokenLength = 64;
+    /// <summary>
+    /// The most token this reason code can carry: exactly what is left of a contract identifier once
+    /// the prefix and its separator are spent.
+    /// </summary>
+    /// <remarks>
+    /// Derived, never chosen. <see cref="ContractValidation.RequireIdentifier"/> caps an identifier
+    /// at <see cref="ContractValidation.MaximumIdentifierLength"/>, and
+    /// <see cref="ObserveUnreadableListing"/> builds its reason as the prefix, a colon, then the
+    /// bounded token, so this is that cap minus what the prefix and colon already occupy. It was a
+    /// bare 64 until REVIEW_RESULT lex-event-20260904T203812231Z-0e0dbd80d0e64f3e93e9a9c5f0b7b06f
+    /// observed that raising it to 4096 broke nothing: a constant no test held and no contract
+    /// explained. A wrong value cannot survive now, because
+    /// <c>AnOddPublisherTokenIsBoundedIntoTheReasonCodeRatherThanThrowing</c> asserts an over-long
+    /// token yields a reason code of exactly
+    /// <see cref="ContractValidation.MaximumIdentifierLength"/> characters: larger and
+    /// <see cref="EuFormatObservation"/>'s own constructor refuses it, smaller and the length falls
+    /// short.
+    /// </remarks>
+    private const int MaximumReasonTokenLength =
+        ContractValidation.MaximumIdentifierLength - UnadmittedTypeReasonCodeLength - 1;
+
+    /// <summary>
+    /// <see cref="UnadmittedTypeReasonCode"/>'s own length, as a constant so
+    /// <see cref="MaximumReasonTokenLength"/> is a compile-time expression rather than a number a
+    /// reader must trust. Held by <c>TheReasonCodeBoundIsDerivedFromTheIdentifierContract</c>.
+    /// </summary>
+    private const int UnadmittedTypeReasonCodeLength = 25;
 
     /// <summary>
     /// The publisher tokens, and only those. <see cref="EuManifestationFormat.NoneAdmitted"/> is

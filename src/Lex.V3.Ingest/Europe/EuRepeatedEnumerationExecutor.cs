@@ -1397,8 +1397,8 @@ public sealed class EuRepeatedEnumerationExecutor
     /// <para>
     /// Read by each cursor variable's own NAME (<paramref name="cursorVariables"/>, taken from
     /// <see cref="RepeatedEnumerationInterpretationProfile.CursorVariables"/>), never by a hardcoded
-    /// <c>key_N</c> positional name: family P, X and W's own cursor variables happen to be literally
-    /// named <c>key_1</c>.. (<see cref="EuObjectFactsDiscoveryPlan"/>'s own choice), but the census
+    /// <c>key_N</c> positional name: family P, X, W and M's own cursor variables happen to be
+    /// literally named <c>key_1</c>.. (<see cref="EuObjectFactsDiscoveryPlan"/>'s own choice), but the census
     /// family's single cursor variable is genuinely named <c>state_key</c>
     /// (<see cref="EuConsolidationDiscoveryPlan"/>'s own page template projects no <c>key_1</c> at
     /// all) -- a real, previously undiscovered defect this fix closes: any nonzero census delivery
