@@ -68,7 +68,19 @@ public enum EuRelationTargetState
 /// 58c50d8c78ab80c9), and the same query on its inverse
 /// <c>cdm:resource_legal_amended_by_resource_legal</c> returns zero (digest 21732a68993ff562).
 /// Only one direction exists in the store, so <see cref="Create"/> refuses the inverse predicate
-/// outright: no edge on it can be a publisher assertion. Decisions 25 and 26.
+/// outright: no edge on it can be a publisher assertion. Decisions 25 and 26. The publisher's own
+/// ontology agrees: it declares the two predicates <c>owl:inverseOf</c> each other while
+/// materialising only the amends direction (probe
+/// <c>lex-event-20260904T191531228Z-116c5e971e374b63a2350b481945b1d6</c>, digest
+/// 2e010919fde5842e).
+/// </para>
+/// <para>
+/// <b>That refusal keys on an exact string</b>, so its correctness depends entirely on
+/// <see cref="EuAmendmentRelationVocabulary.AmendedByPredicateUri"/> being spelled as the
+/// publisher spells it: a wrong spelling means the refusal never fires and says nothing. That
+/// spelling is now grounded in the publisher's own declaration of the property rather than in
+/// prose, and <c>EuAmendmentRelationTests</c> pins it as an independently transcribed literal, so
+/// a silent change to the constant fails the test rather than quietly disarming the guard.
 /// </para>
 /// <para>
 /// <b>The absence claim above is bounded exactly as it was made.</b> It is one predicate, one

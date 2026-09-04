@@ -13,15 +13,32 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// result whose columns are <c>src</c>, <c>tgt</c>, <c>loc</c>, <c>start</c>, <c>linktype</c> and
 /// <c>role</c>. A SELECT returns bound values, never the predicate IRIs that bound them, so the
 /// fixture grounds the <b>values</b> in <see cref="LocationAuthorityListUri"/> and
-/// <see cref="RoleAuthorityListUri"/> exactly, byte for byte, and grounds <b>none</b> of the
-/// predicate or annotation IRIs below. Those come from the canary event
-/// <c>lex-event-20260904T175313280Z-e99a2a04ab2e44fb8bc5a5aa66d14451</c>, which names the five
-/// distinct annotation properties on an amends axiom (its own digest 57e7814db94e13f5) and the
-/// forward and inverse relation predicates (digests 58c50d8c78ab80c9 and 21732a68993ff562), and
-/// from <c>lex-event-20260904T174651520Z-392411cf4e9446e2aa76bd3be3cc2c8a</c>, which names
-/// <c>resource_legal_repeals_resource_legal</c> among the eight axiom-annotated predicates on the
-/// GDPR work (digest daa5ed5518886be6) and reads one repeals axiom in full (digest
-/// 4701a3361ff09048).
+/// <see cref="RoleAuthorityListUri"/> exactly, byte for byte, and grounds none of the predicate or
+/// annotation IRIs below.
+/// </para>
+/// <para>
+/// <b>The two amendment predicates are grounded in bytes.</b> The probe
+/// <c>lex-event-20260904T191531228Z-116c5e971e374b63a2350b481945b1d6</c> read both from the
+/// publisher's own store: <see cref="AmendedByPredicateUri"/> is declared there as an
+/// <c>owl:ObjectProperty</c> (digest 2e010919fde5842e) and <see cref="AmendsPredicateUri"/> is
+/// confirmed as an exact IRI from a real triple (digest 7599b577820d8ba0). Both spellings are
+/// therefore the publisher's own bytes rather than a recollection of them. That probe was run
+/// because this package flagged <see cref="AmendedByPredicateUri"/> as the one bound carrying
+/// teeth: <see cref="EuPublisherRelationEdge.Create"/> refuses on exact string equality against
+/// it, so a wrong spelling would mean the refusal silently never fires.
+/// </para>
+/// <para>
+/// <b>Three relation predicates and the five annotation names still rest on canary prose.</b>
+/// <see cref="RepealsPredicateUri"/> is named in
+/// <c>lex-event-20260904T174651520Z-392411cf4e9446e2aa76bd3be3cc2c8a</c>, among the eight
+/// axiom-annotated predicates on the GDPR work (digest daa5ed5518886be6) and in one repeals axiom
+/// read in full (digest 4701a3361ff09048). <see cref="ConsolidatedBasedOnPredicateUri"/> and
+/// <see cref="ConsolidatedConsolidatesPredicateUri"/> are named in the E4 scope ruling. The five
+/// annotation local names come from
+/// <c>lex-event-20260904T175313280Z-e99a2a04ab2e44fb8bc5a5aa66d14451</c> (digest
+/// 57e7814db94e13f5). None of these is load bearing in the way the amended-by spelling was:
+/// nothing in this package refuses on string equality against any of them, so a wrong spelling
+/// would surface as an unmatched predicate rather than as a guard that silently stops firing.
 /// </para>
 /// <para>
 /// <b>The one deliberately weaker claim.</b> Those events name the annotation properties by local
@@ -86,6 +103,11 @@ public static class EuAmendmentRelationVocabulary
     /// <summary>
     /// The amendment predicate, amender to amended. The only direction the store materialises.
     /// </summary>
+    /// <remarks>
+    /// Confirmed as an exact IRI from a real triple in the publisher's store (probe
+    /// <c>lex-event-20260904T191531228Z-116c5e971e374b63a2350b481945b1d6</c>, digest
+    /// 7599b577820d8ba0).
+    /// </remarks>
     public const string AmendsPredicateUri = CdmNamespace + "resource_legal_amends_resource_legal";
 
     /// <summary>
@@ -95,6 +117,20 @@ public static class EuAmendmentRelationVocabulary
     /// ever be locally derived, which is why <see cref="EuPublisherRelationEdge"/> refuses this
     /// predicate outright.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Declared by the publisher, not inferred.</b> The probe
+    /// <c>lex-event-20260904T191531228Z-116c5e971e374b63a2350b481945b1d6</c> (digest
+    /// 2e010919fde5842e) read this property's own declaration in the store's ontology: an
+    /// <c>owl:ObjectProperty</c>, <c>rdfs:subPropertyOf cdm:amended_by</c>, with
+    /// <c>rdfs:domain</c> and <c>rdfs:range</c> both <c>cdm:resource_legal</c>, and
+    /// <c>owl:inverseOf cdm:resource_legal_amends_resource_legal</c>.
+    /// </para>
+    /// <para>
+    /// This spelling is the one string in the package that a guard keys on, so it is the one whose
+    /// correctness cannot be left to recollection. It is now the publisher's own bytes.
+    /// </para>
+    /// </remarks>
     public const string AmendedByPredicateUri =
         CdmNamespace + "resource_legal_amended_by_resource_legal";
 

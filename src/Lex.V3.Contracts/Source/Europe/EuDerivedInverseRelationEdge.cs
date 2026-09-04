@@ -8,6 +8,23 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// </summary>
 /// <remarks>
 /// <para>
+/// <b>The publisher declares this inverse; we do not invent it.</b> The probe
+/// <c>lex-event-20260904T191531228Z-116c5e971e374b63a2350b481945b1d6</c> (digest
+/// 2e010919fde5842e) read <c>cdm:resource_legal_amended_by_resource_legal</c>'s own declaration in
+/// the store's ontology, and it carries
+/// <c>owl:inverseOf cdm:resource_legal_amends_resource_legal</c>. So the office itself states that
+/// the two predicates are inverses of each other, while only the amends direction is materialised
+/// with triples. That declaration is the authority for why this edge is derivable at all: the
+/// inversion is the publisher's own semantics applied locally, not a relation this package
+/// invented and then labelled.
+/// </para>
+/// <para>
+/// This is firmer ground than Decisions 25 and 26 alone, and it sharpens what the exclusion below
+/// means. REL-002 excludes from evidence bundles an inverse the publisher <b>declares</b> and
+/// declines to materialise, which is a narrower and more defensible statement than excluding an
+/// edge of our own construction.
+/// </para>
+/// <para>
 /// <b>This type does not implement <see cref="IEuFactsEvidenceCarrier"/>, and never will.</b> That
 /// omission is the point of the type, so it is stated here rather than left as a gap a later
 /// reader could tidy away by "making it consistent" with
