@@ -1,13 +1,16 @@
 using System.Collections;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Text;
 
 namespace Lex.V3.TestSupport;
 
 /// <summary>
-/// Sweeps a whole assembly for the three shapes this repository treats as closed: a vocabulary
-/// whose members are the contract, a type whose construction is restricted to a named door, and a
-/// static registry of tokens. Each sweep answers "what is there", so a test can pin the answer.
+/// Sweeps whole assemblies for the shapes this repository treats as closed: a vocabulary whose
+/// members are the contract, a type whose construction is restricted to a named door, and a static
+/// registry of tokens. Each sweep answers "what is there", so a test can pin the answer, and
+/// <see cref="Candidates"/> answers "what did the three sweeps have to account for", so a test can
+/// pin the partition rather than trusting three array lengths.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -20,12 +23,15 @@ namespace Lex.V3.TestSupport;
 /// </para>
 /// <para>
 /// The one rule every sweep here obeys. A sweep is narrowed only by properties the type itself
-/// has: it is an enum; every constructor it declares is non-public; it is a static class holding a
-/// collection or a run of string constants. No sweep is narrowed by the list its caller is about to
-/// compare it against. That mistake was made in this repository on the same day and it is silent:
-/// filter an assembly scan through the names you expect and the scan can only ever return names you
-/// expect, so the test passes forever and reads like coverage. Before changing a predicate below,
-/// ask what addition to the assembly would flip it. If the answer is none, it is not a sweep.
+/// has, and by no clause that its own description does not state. No sweep is narrowed by the list
+/// its caller is about to compare it against. Both mistakes have been made here. The self-narrowed
+/// sweep is silent: filter an assembly scan through the names you expect and it can only return
+/// names you expect. The undocumented clause is worse, because the documentation then reads as
+/// coverage it does not have. This file once excluded <c>IsAbstract</c> while saying its rule was
+/// "declares constructors, none of them public", and nine abstract closed-union bases sat outside
+/// the census and outside its residual at the same time. Before adding a clause below, ask what
+/// addition to an assembly it would hide, and whether the summary above the method still describes
+/// the code under it.
 /// </para>
 /// <para>
 /// What these sweeps cannot see. They read an assembly's metadata, so a vocabulary that is a set of
@@ -61,7 +67,9 @@ public static class ClosedSurfaceCensus
     /// <summary>
     /// Every enum in <paramref name="assemblies"/>, as <c>full name: member, member</c>, ordered by
     /// full name. Nested and non-public enums are included: a closed vocabulary is closed whoever
-    /// can see it.
+    /// can see it. Members are in <see cref="Enum.GetNames(Type)"/> order, which is by underlying
+    /// value, so a renumbering that reorders members moves a row and one that preserves the order
+    /// does not.
     /// </summary>
     public static IReadOnlyList<string> ClosedVocabularies(params string[] assemblies) =>
         Load(assemblies)
@@ -72,10 +80,10 @@ public static class ClosedSurfaceCensus
             .ToArray();
 
     /// <summary>
-    /// Every type in <paramref name="assemblies"/> whose declared constructors are all non-public,
-    /// as <c>full name: hand-out, hand-out</c>, ordered by full name. Each hand-out is
-    /// <see cref="ConstructionSurface.HandOuts"/>'s own entry with the parameter list and return
-    /// type cut off, plus a count of the compiler-generated ones.
+    /// Every type in <paramref name="assemblies"/> that declares at least one constructor and none
+    /// of them public, as <c>full name: hand-out, hand-out</c>, ordered by full name. Each hand-out
+    /// is <see cref="ConstructionSurface.HandOuts"/>'s own entry, which already stops before the
+    /// parameter list, plus a count of the compiler-generated ones.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -84,13 +92,19 @@ public static class ClosedSurfaceCensus
     /// which is what makes it sweepable; "is guarded" as a judgement about intent is not.
     /// </para>
     /// <para>
-    /// The parameter list is cut off because a census over every such type in an assembly is
-    /// otherwise four times the size and stops being read. State plainly what that costs: this
-    /// catches a door added, removed, renamed, moved to another type or given a different scope,
-    /// and it does not catch an existing door's parameters changing. The exact per-type pins built
-    /// on <see cref="ConstructionSurface.Of"/> catch that, for the types that have one. Overloads
-    /// survive the cut because the entries are not deduplicated afterwards, so a second
-    /// <c>Create</c> is a second line.
+    /// Abstract types are in. An abstract base with a private protected constructor is the closed
+    /// union shape this repository uses most, and that constructor is the door every subtype comes
+    /// through, so leaving it out left the most tightly guarded types in the repository uncounted.
+    /// Interfaces and enums declare no instance constructor, so they never match and need no clause
+    /// of their own; the clauses that once excluded them made the rule read narrower than it was.
+    /// </para>
+    /// <para>
+    /// State plainly what the entries cost. They carry no parameter list, so this catches a door
+    /// added, removed, renamed, moved to another type or given a different scope, and it does not
+    /// catch an existing door's parameters changing. The exact per-type pins built on
+    /// <see cref="ConstructionSurface.Of"/> catch that, for the types that have one. Overloads
+    /// survive, because <see cref="ConstructionSurface.HandOuts"/> deduplicates on the full entry
+    /// before the parameters are dropped, so a second <c>Create</c> is a second entry.
     /// </para>
     /// </remarks>
     public static IReadOnlyList<string> GuardedConstruction(params string[] assemblies) =>
@@ -104,56 +118,162 @@ public static class ClosedSurfaceCensus
 
     /// <summary>
     /// Every static class in <paramref name="assemblies"/> that holds a token registry, as
-    /// <c>full name: member=count, const Name</c>, ordered by full name. A registry is a static
-    /// class with at least one static readonly collection or static get-only collection property,
-    /// or with two or more string constants.
+    /// <c>full name: collection=count, const Name, static readonly Name, static property Name</c>,
+    /// ordered by full name. A registry is a static class with at least one static collection
+    /// member, or with two or more string tokens.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// A token is a string a reader sees, and the member carrying it may be <c>const</c>, or
+    /// <c>static readonly</c>, or a static get-only property. Which one is a storage decision, not
+    /// a contract decision. Rendering only <c>const</c> was a hole with a measured shape: a
+    /// <c>public static readonly string</c> added to a schema-id table passed the whole suite,
+    /// while the same token declared <c>const</c> failed it.
+    /// </para>
+    /// <para>
     /// A collection's element count is the pinned part, not its contents: reading the contents of
     /// every registry in an assembly would pin a large amount of publisher text a second time, in a
-    /// place nobody would think to update it. A token added to or removed from a registry moves the
-    /// count. A token swapped for another does not, and the registry's own tests are the control
-    /// for that. A member whose static initializer throws is reported as <c>unreadable</c> rather
-    /// than skipped, because a member that quietly leaves a sweep is the failure this file exists
-    /// to prevent.
+    /// place nobody would think to update it. A token added to or removed from a collection moves
+    /// the count. A token swapped for another does not, and the registry's own tests are the
+    /// control for that. Token members are pinned by name, not by value, for the same reason. A
+    /// member whose static initializer throws is reported as <c>unreadable</c> rather than skipped,
+    /// because a member that quietly leaves a sweep is the failure this file exists to prevent.
+    /// </para>
     /// </remarks>
     public static IReadOnlyList<string> VocabularyRegistries(params string[] assemblies) =>
         Load(assemblies)
             .SelectMany(AllTypes)
-            .Where(IsRegistry)
-            .OrderBy(static type => type.FullName, StringComparer.Ordinal)
-            .Select(static type => type.FullName + ": " + string.Join(", ", RegistryMembers(type)))
+            .Select(static type => (Type: type, Shape: RegistryShape(type)))
+            .Where(static found => found.Shape.IsRegistry)
+            .OrderBy(static found => found.Type.FullName, StringComparer.Ordinal)
+            .Select(static found =>
+                found.Type.FullName + ": " + string.Join(", ", Render(found.Shape)))
             .ToArray();
+
+    /// <summary>
+    /// Every type in <paramref name="assemblies"/> that any of the three sweeps has to account for:
+    /// a closed vocabulary, a construction-restricted type, or a static class holding state.
+    /// Ordered by full name.
+    /// </summary>
+    /// <remarks>
+    /// This is the denominator, in code rather than in a commit message. A caller pins it against
+    /// the three sweeps plus a declared list of types it has decided not to pin, so a type in none
+    /// of the four is a failure rather than a silence. Without it, a static class holding state
+    /// that is not a token registry moves nothing at all, which is how a residual stated once in
+    /// prose stops being true without anybody noticing.
+    /// </remarks>
+    public static IReadOnlyList<string> Candidates(params string[] assemblies) =>
+        Load(assemblies)
+            .SelectMany(AllTypes)
+            .Where(static type =>
+                type.IsEnum || ConstructionIsRestricted(type) || HoldsStaticState(type))
+            .Select(static type => type.FullName!)
+            .OrderBy(static name => name, StringComparer.Ordinal)
+            .ToArray();
+
+    /// <summary>
+    /// The rows rendered as C# array-element source, wrapped and escaped exactly as the pins are
+    /// written, so re-transcribing a pin is pasting a printed block rather than editing by hand.
+    /// </summary>
+    /// <remarks>
+    /// Print this from a throwaway test and paste the result between the braces of the failing
+    /// <c>new[]</c>. Never call it from the test that does the comparing: an expected side rendered
+    /// from the sweep agrees with the sweep by construction, and that is the one thing a pin must
+    /// not do.
+    /// </remarks>
+    public static string RenderForTranscription(
+        IReadOnlyList<string> rows, int indent = 16, int limit = 100)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        var pad = new string(' ', indent);
+        var continuation = new string(' ', indent + 4);
+        var text = new StringBuilder();
+        foreach (var row in rows)
+        {
+            var rest = row.Replace("\\", "\\\\", StringComparison.Ordinal)
+                .Replace("\"", "\\\"", StringComparison.Ordinal);
+            var lines = new List<string>();
+            while (rest.Length > 0)
+            {
+                var prefix = lines.Count == 0 ? pad + "\"" : continuation + "+ \"";
+                var budget = limit - prefix.Length - 1;
+                if (rest.Length <= budget)
+                {
+                    lines.Add(prefix + rest + "\"");
+                    break;
+                }
+
+                var afterComma = rest[..Math.Min(rest.Length, budget + 2)]
+                    .LastIndexOf(", ", StringComparison.Ordinal);
+                int take;
+                if (afterComma > 0)
+                {
+                    take = afterComma + 2;
+                }
+                else
+                {
+                    var space = rest[..Math.Min(rest.Length, budget)].LastIndexOf(' ');
+                    take = space > 0 ? space + 1 : budget;
+                }
+
+                lines.Add(prefix + rest[..take] + "\"");
+                rest = rest[take..];
+            }
+
+            lines[^1] += ",";
+            foreach (var line in lines)
+            {
+                text.Append(line).Append('\n');
+            }
+        }
+
+        return text.ToString();
+    }
 
     private static IEnumerable<Assembly> Load(string[] assemblies)
     {
         ArgumentNullException.ThrowIfNull(assemblies);
-        return assemblies
-            .OrderBy(static name => name, StringComparer.Ordinal)
-            .Select(static name => Assembly.Load(new AssemblyName(name)));
+        return assemblies.Select(static name => Assembly.Load(new AssemblyName(name)));
     }
 
+    /// <summary>
+    /// True when the type declares at least one constructor and none of them is public. There is no
+    /// other clause: see the class remarks on why a clause the summary does not state is the defect
+    /// this file exists to remove.
+    /// </summary>
     private static bool ConstructionIsRestricted(Type type)
     {
-        if (type.IsEnum || type.IsInterface || type.IsAbstract)
-        {
-            return false;
-        }
-
         var declared = type.GetConstructors(
             BindingFlags.Public | BindingFlags.NonPublic
             | BindingFlags.Instance | BindingFlags.DeclaredOnly);
         return declared.Length > 0 && !declared.Any(static constructor => constructor.IsPublic);
     }
 
+    /// <summary>
+    /// True when the type is a static class the compiler did not generate and it declares any
+    /// constant, any static field or any static property. Deliberately wider than
+    /// <see cref="VocabularyRegistries"/>, because this is the denominator a caller partitions.
+    /// </summary>
+    private static bool HoldsStaticState(Type type)
+    {
+        if (!IsStaticClass(type))
+        {
+            return false;
+        }
+
+        return type.GetFields(Everything).Any(static field => field.IsLiteral || field.IsStatic)
+            || type.GetProperties(Everything)
+                .Any(static property => (property.GetMethod ?? property.SetMethod)!.IsStatic);
+    }
+
+    private static bool IsStaticClass(Type type) =>
+        !type.IsEnum && type.IsAbstract && type.IsSealed
+        && !type.IsDefined(typeof(CompilerGeneratedAttribute), inherit: false);
+
     private static string Doors(Assembly assembly, Type guarded)
     {
         var surface = ConstructionSurface.HandOuts(assembly, guarded);
-        var doors = surface.Declared.Select(static entry =>
-        {
-            var cut = entry.IndexOf('(');
-            return cut < 0 ? entry : entry[..cut];
-        }).ToList();
+        var doors = surface.Declared.ToList();
         if (surface.CompilerGenerated > 0)
         {
             doors.Add(surface.CompilerGenerated + " compiler-generated");
@@ -162,30 +282,47 @@ public static class ClosedSurfaceCensus
         return string.Join(", ", doors);
     }
 
-    private static bool IsRegistry(Type type)
+    private readonly record struct RegistryShapeOf(
+        IReadOnlyList<MemberInfo> Collections,
+        IReadOnlyList<(MemberInfo Member, string Kind)> Tokens)
     {
-        if (type.IsEnum || !type.IsAbstract || !type.IsSealed
-            || type.IsDefined(typeof(CompilerGeneratedAttribute), inherit: false))
-        {
-            return false;
-        }
-
-        var stringConstants = type.GetFields(Everything)
-            .Count(static field => field.IsLiteral && field.FieldType == typeof(string));
-        return RegistryCollections(type).Any() || stringConstants >= 2;
+        internal bool IsRegistry => Collections.Count > 0 || Tokens.Count >= 2;
     }
 
-    private static IEnumerable<MemberInfo> RegistryCollections(Type type)
+    /// <summary>
+    /// The registry members of a type, with the reflection walked once. Collections are static
+    /// readonly fields and static get-only properties whose type is a non-string sequence; tokens
+    /// are string constants, static readonly strings and static get-only string properties.
+    /// </summary>
+    private static RegistryShapeOf RegistryShape(Type type)
     {
+        if (!IsStaticClass(type))
+        {
+            return new([], []);
+        }
+
+        var collections = new List<MemberInfo>();
+        var tokens = new List<(MemberInfo, string)>();
+
         foreach (var field in type.GetFields(Everything)
-                     .Where(static field => field.IsStatic && field.IsInitOnly)
-                     .Where(static field =>
-                         !field.IsDefined(typeof(CompilerGeneratedAttribute), inherit: false))
+                     .Where(static field => !field.IsDefined(
+                         typeof(CompilerGeneratedAttribute), inherit: false))
                      .OrderBy(static field => field.Name, StringComparer.Ordinal))
         {
-            if (Collects(field.FieldType))
+            if (field.FieldType == typeof(string))
             {
-                yield return field;
+                if (field.IsLiteral)
+                {
+                    tokens.Add((field, "const"));
+                }
+                else if (field.IsStatic && field.IsInitOnly)
+                {
+                    tokens.Add((field, "static readonly"));
+                }
+            }
+            else if (field.IsStatic && field.IsInitOnly && Collects(field.FieldType))
+            {
+                collections.Add(field);
             }
         }
 
@@ -195,30 +332,34 @@ public static class ClosedSurfaceCensus
                      .Where(static property => property.GetIndexParameters().Length == 0)
                      .OrderBy(static property => property.Name, StringComparer.Ordinal))
         {
-            if (Collects(property.PropertyType))
+            if (property.PropertyType == typeof(string))
             {
-                yield return property;
+                tokens.Add((property, "static property"));
             }
+            else if (Collects(property.PropertyType))
+            {
+                collections.Add(property);
+            }
+        }
+
+        return new(collections, tokens);
+    }
+
+    private static IEnumerable<string> Render(RegistryShapeOf shape)
+    {
+        foreach (var member in shape.Collections)
+        {
+            yield return member.Name + "=" + Count(member);
+        }
+
+        foreach (var (member, kind) in shape.Tokens)
+        {
+            yield return kind + " " + member.Name;
         }
     }
 
     private static bool Collects(Type type) =>
         type != typeof(string) && typeof(IEnumerable).IsAssignableFrom(type);
-
-    private static IEnumerable<string> RegistryMembers(Type type)
-    {
-        foreach (var member in RegistryCollections(type))
-        {
-            yield return member.Name + "=" + Count(member);
-        }
-
-        foreach (var constant in type.GetFields(Everything)
-                     .Where(static field => field.IsLiteral && field.FieldType == typeof(string))
-                     .OrderBy(static field => field.Name, StringComparer.Ordinal))
-        {
-            yield return "const " + constant.Name;
-        }
-    }
 
     private static string Count(MemberInfo member)
     {
