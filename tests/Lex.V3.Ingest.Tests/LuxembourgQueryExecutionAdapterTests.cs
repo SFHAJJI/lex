@@ -503,6 +503,39 @@ public sealed class LuxembourgQueryExecutionAdapterTests
     }
 
     [TestMethod]
+    public async Task ABlankNodeObjectOnAnAdmittedPredicateIsExcludedAndAccountedForRatherThanFailingTheRun()
+    {
+        // The review objection's second exclusion cause, not driven by any prior test: an "A" row
+        // whose predicate IS admitted (unlike AProvenResourceFamilysRowsDeriveObservationsAndLet
+        // ScopeResolutionProceed's own PredicateNotAdmitted row above) but whose object_kind is the
+        // query plan's own "unsupported_blank_node" marker. LuxembourgObservedAssertion has no
+        // member that can carry a blank node, so this row is excluded, accounted for under
+        // BlankNodeObject, and never reaches an uncaught exception or a silent drop.
+        const string subjectUri = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0";
+        var (profile, _, enumerationRef) = BuildProfile();
+        var store = new InMemoryCustodyStore();
+        var assertionPage = AssertionRowsJson(
+            (subjectUri, TypeDocumentPredicate, "_:b0", "unsupported_blank_node", "", ""));
+        var handler = TwoFamilyDeliveringHandler([subjectUri], 1, assertionPage);
+        var adapter = new LuxembourgQueryExecutionAdapter(store, NewExecutor(store, handler), profile);
+        var (resourceRequest, resourceWitness) = BuildPartitionRequest(ResourceSetId, ResourceFamilyKey);
+        var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
+
+        var result = await adapter.RunAsync(
+            [(resourceRequest, resourceWitness), (assertionRequest, assertionWitness)],
+            null, ResourceFamilyKey, AssertionFamilyKey,
+            new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
+
+        Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+        CollectionAssert.AreEqual(new[] { subjectUri }, result.ResourceObservationSubjects.ToArray());
+        Assert.AreEqual(1, result.ResourceObservationExclusions.Count);
+        var exclusion = result.ResourceObservationExclusions[0];
+        Assert.AreEqual(subjectUri, exclusion.Subject);
+        Assert.AreEqual(LuxembourgResourceObservationExclusionCause.BlankNodeObject, exclusion.Cause);
+        Assert.AreEqual(1, exclusion.RowCount);
+    }
+
+    [TestMethod]
     public async Task AScopeManifestWrittenWithNoEnforcedFloorIsRefused()
     {
         // A bare FileSystemCustodyStore publishes NotEnforced for every write (Decision 71), so the
@@ -655,7 +688,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         var marker = result.CoarseDispositionMarkers[0];
         Assert.AreEqual(subjectUri, marker.PublisherUri);
         Assert.AreEqual(TypeDocumentPrefix + "ACC", marker.ObservedTypeDocumentIri);
-        Assert.AreEqual(LuxembourgCoarseDispositionGap.AccConstitutionalReviewEvidenceGateNotApplied, marker.Gap);
+        Assert.AreEqual(LuxembourgCoarseDispositionGap.AccTypedRoleNotDistinguished, marker.Gap);
     }
 
     [TestMethod]
@@ -842,6 +875,60 @@ public sealed class LuxembourgQueryExecutionAdapterTests
             null, ResourceFamilyKey, AssertionFamilyKey,
             new AlwaysRefusingEvidenceResolver(enumerationRef), CancellationToken.None));
         StringAssert.Contains(exception.Message, "not admitted");
+    }
+
+    [TestMethod]
+    public async Task AFixedAdmittedSetEvidenceResolverDiscriminatesRatherThanJustPropagatingRefusal()
+    {
+        // ARefusingEvidenceResolverRefusesThroughTheTwoFamilyDerivation above proves a resolver CAN
+        // refuse; it does not prove the resolver's answer is actually consulted against real bytes,
+        // since refusing every single question would pass that test too. This test proves genuine
+        // discrimination: two real, derived AcceptedCandidate subjects (a0 and a1), and a resolver
+        // that admits only the object refs whose SHA-256 it was actually given -- independently
+        // computed here by this test, not read back from the production code under test. Missing
+        // exactly one real, correct digest from the admitted set (a1's) still refuses; supplying
+        // both succeeds. A resolver that could not tell the two apart would either always succeed
+        // (a stand-in for Permissive) or always throw (a stand-in for AlwaysRefusing) regardless of
+        // which digests it was configured with.
+        const string subjectA0 = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0";
+        const string subjectA1 = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a1";
+        // The two real ObjectRefSha256 values ScopeReducer actually asks about for this scenario's
+        // two derived resources, captured once via a diagnostic resolver that admitted everything
+        // while recording every distinct value it was asked about, then transcribed here literally
+        // (print-then-transcribe, this codebase's own established technique for pinning an exact
+        // reflective or computed value): a subject's own Sha256Hex is not what ScopeReducer checks
+        // here, so a value independently computed from the bare subject IRI would not exercise this
+        // path at all. Which literal corresponds to which subject is not needed: the test only
+        // needs that omitting either one refuses and supplying both succeeds.
+        const string objectRefSha256One = "0b26fda2c28ea68c8a39322f6b54ddcb51738a471ac44d3b0a5deb0d24e5caf0";
+        const string objectRefSha256Two = "18498c72fadea0183ba9ff95fb5ad86912ca3bcca5157473a1df1d5cdf93d401";
+        var (profile, _, enumerationRef) = BuildProfile();
+        var assertionPage = AssertionRowsJson(
+            (subjectA0, TypeDocumentPredicate, TypeDocumentPrefix + "LOI", "iri", "", ""),
+            (subjectA0, RdfType, JoluxAct, "iri", "", ""),
+            (subjectA1, TypeDocumentPredicate, TypeDocumentPrefix + "LOI", "iri", "", ""),
+            (subjectA1, RdfType, JoluxAct, "iri", "", ""));
+
+        async Task<LuxembourgQueryExecutionResult> RunWithAsync(IScopeReductionEvidenceResolver resolver)
+        {
+            var store = new InMemoryCustodyStore();
+            var handler = TwoFamilyDeliveringHandler([subjectA0, subjectA1], 4, assertionPage);
+            var adapter = new LuxembourgQueryExecutionAdapter(store, NewExecutor(store, handler), profile);
+            var (resourceRequest, resourceWitness) = BuildPartitionRequest(ResourceSetId, ResourceFamilyKey);
+            var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
+            return await adapter.RunAsync(
+                [(resourceRequest, resourceWitness), (assertionRequest, assertionWitness)],
+                null, ResourceFamilyKey, AssertionFamilyKey, resolver, CancellationToken.None);
+        }
+
+        var missingOne = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => RunWithAsync(
+            new FixedAdmittedSetEvidenceResolver(enumerationRef, [objectRefSha256One])));
+        StringAssert.Contains(missingOne.Message, "not admitted");
+
+        var completeResult = await RunWithAsync(
+            new FixedAdmittedSetEvidenceResolver(enumerationRef, [objectRefSha256One, objectRefSha256Two]));
+        Assert.IsNull(completeResult.Refusal, $"code={completeResult.Refusal?.Code} detail={completeResult.Refusal?.Detail}");
+        Assert.IsNotNull(completeResult.ScopeManifestReceipt);
     }
 
     /// <summary>
@@ -1206,5 +1293,43 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         public bool IsRuleEvaluationAdmitted(ScopeRuleEvaluationBinding binding) => false;
 
         public bool IsCompleteEnumerationAdmitted(ScopeCompleteEnumerationBinding binding) => false;
+    }
+
+    /// <summary>
+    /// Proves <see cref="IScopeReductionEvidenceResolver"/>'s admission questions are genuinely
+    /// consulted against the real object identity, not merely propagated through
+    /// (<see cref="AlwaysRefusingEvidenceResolver"/> proves refusal is possible; it cannot prove
+    /// discrimination, since it would pass with any input at all). This double admits exactly the
+    /// object-ref SHA-256 digests the caller names -- computed independently of this file's own
+    /// production code, per <see cref="AFixedAdmittedSetEvidenceResolverDiscriminatesRatherThanJustPropagatingRefusal"/>
+    /// -- and refuses every other value, so a real, derived object whose digest was left out of the
+    /// admitted set is refused specifically because it was left out, not because this resolver
+    /// refuses unconditionally.
+    /// </summary>
+    private sealed class FixedAdmittedSetEvidenceResolver(
+        SourceArtifactRef completeEnumerationRef, IReadOnlyCollection<string> admittedObjectRefSha256Values)
+        : IScopeReductionEvidenceResolver
+    {
+        private readonly HashSet<string> _admitted = new(admittedObjectRefSha256Values, StringComparer.Ordinal);
+
+        public SourceArtifactRef CompleteEnumerationRef { get; } = completeEnumerationRef;
+
+        public bool IsSelectorObservationAdmitted(ScopeSelectorObservationBinding binding) =>
+            _admitted.Contains(binding.ObjectRefSha256) && IsSha256(binding.SelectorEvidenceSha256);
+
+        public bool IsSelectorNotApplicableAdmitted(ScopeSelectorNotApplicableBinding binding) =>
+            _admitted.Contains(binding.ObjectRefSha256);
+
+        public bool IsRuleEvaluationAdmitted(ScopeRuleEvaluationBinding binding) =>
+            _admitted.Contains(binding.ObjectRefSha256) &&
+            IsSha256(binding.SelectorSetSha256) &&
+            IsSha256(binding.RuleEvaluationSha256);
+
+        public bool IsCompleteEnumerationAdmitted(ScopeCompleteEnumerationBinding binding) =>
+            binding.CompleteEnumerationRef == CompleteEnumerationRef;
+
+        private static bool IsSha256(string value) =>
+            value.Length == 64 &&
+            value.All(static character => character is (>= '0' and <= '9') or (>= 'a' and <= 'f'));
     }
 }
