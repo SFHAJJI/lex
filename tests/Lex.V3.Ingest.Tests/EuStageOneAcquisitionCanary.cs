@@ -123,7 +123,11 @@ public sealed class EuStageOneAcquisitionCanary
                 $"CANARY|census|{celex}|expressions={expressions}|tokens={string.Join(",", tokens)}");
         }
 
-        var root = Path.Combine(Path.GetTempPath(), "lex-eu-canary-" + Guid.NewGuid().ToString("N"));
+        // Retained where a later slice can read it. LEX_EU_CANARY_ROOT lets a run keep its
+        // custody store somewhere durable; the default stays under the system temp directory so no
+        // path literal is committed.
+        var root = Environment.GetEnvironmentVariable("LEX_EU_CANARY_ROOT")
+            ?? Path.Combine(Path.GetTempPath(), "lex-eu-canary-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
         Console.WriteLine($"CANARY|custodyRoot|{root}");
 
@@ -198,10 +202,23 @@ public sealed class EuStageOneAcquisitionCanary
 
         foreach (var outcome in result.FamilyOutcomes)
         {
+            // Every field of the executor's refusal, because this run's retained evidence is the
+            // only place D1-05f's scoping inputs exist and whoever opens it should not have to
+            // re-run a live enumeration to find out what it is fixing. OffendingKey carries the
+            // cursor that did not advance; ResponseBodySha256 carries the digest of a malformed
+            // page body, whose bytes are under the custody root printed above.
+            var refusal = outcome.ExecutorRefusal;
             Console.WriteLine(
                 $"CANARY|family|{outcome.FamilyKey}|{outcome.Kind}|floor={outcome.RetainedFloor}|"
-                + $"executorRefusal={outcome.ExecutorRefusal?.Code}|"
-                + $"detail={outcome.ExecutorRefusal?.CoreRefusalDetail}|proof={outcome.ProofRefusal}");
+                + $"executorRefusal={refusal?.Code}|proof={outcome.ProofRefusal}|"
+                + $"offendingKey={refusal?.OffendingKey}|"
+                + $"responseBodySha256={refusal?.ResponseBodySha256}|"
+                + $"terminalStatus={refusal?.TerminalStatus}|"
+                + $"observedMediaType={refusal?.ObservedMediaType}|"
+                + $"observedCount={refusal?.ObservedCount}|"
+                + $"requestOrdinal={refusal?.RequestOrdinal}|"
+                + $"attemptOrdinalReached={refusal?.AttemptOrdinalReached}|"
+                + $"detail={refusal?.CoreRefusalDetail}");
         }
 
         if (result.DocumentAcquisitionOutcomesByOrdinal is { } bodies)
