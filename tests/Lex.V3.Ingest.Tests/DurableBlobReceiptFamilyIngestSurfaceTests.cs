@@ -29,6 +29,13 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
     /// </summary>
     private const string QueryExecutionResult = "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult";
 
+    /// <summary>
+    /// D1-05c-2 adds the identical second holder for the Union: <c>EuQueryExecutionResult</c> carries
+    /// its own scope manifest's write receipt through the same no-constructor, <c>ICustodyStore.CreateAsync</c>-only
+    /// pattern <see cref="QueryExecutionResult"/> already established for Luxembourg.
+    /// </summary>
+    private const string EuQueryExecutionResult = "Lex.V3.Ingest.Europe.EuQueryExecutionResult";
+
     [TestMethod]
     public void EveryHolderOfReceiptInIngestIsPinnedAndNoneIsAConstructor()
     {
@@ -39,12 +46,14 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 + "&, out System.String&, out " + Session + "+HeldCausalFacts&) -> System.Void",
                 "by-ref-method public instance " + Session + "+ResolvedHeldBody::Deconstruct(out " + Receipt
                 + "&, out System.ReadOnlyMemory<System.Byte>&, out System.String&) -> System.Void",
+                "field private instance " + EuQueryExecutionResult + "::<ScopeManifestReceipt>k__BackingField -> " + Receipt,
                 "field private instance " + QueryExecutionResult + "::<ScopeManifestReceipt>k__BackingField -> " + Receipt,
                 "field private instance " + Session + "+HeldBodyReceipt::<Receipt>k__BackingField -> " + Receipt,
                 "field private instance " + Session + "+ResolvedHeldBody::<Receipt>k__BackingField -> " + Receipt,
                 "method private instance " + Session + "::BuildHopWriteReceipts(System.UInt64, System.UInt64, "
                 + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Http.RoutedHttpHop>) "
                 + "-> System.Collections.Generic.Dictionary<System.String, " + Receipt + ">",
+                "property public instance " + EuQueryExecutionResult + "::ScopeManifestReceipt() -> " + Receipt,
                 "property public instance " + QueryExecutionResult + "::ScopeManifestReceipt() -> " + Receipt,
                 "property public instance " + Session + "+HeldBodyReceipt::Receipt() -> " + Receipt,
                 "property public instance " + Session + "+ResolvedHeldBody::Receipt() -> " + Receipt,
