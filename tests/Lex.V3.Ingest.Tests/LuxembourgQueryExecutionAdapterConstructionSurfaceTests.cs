@@ -169,18 +169,24 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
     }
 
     [TestMethod]
-    public void QueryExecutionRefusalIsAFiveMemberEnumIncludingNone()
+    public void QueryExecutionRefusalIsAnEightMemberEnumIncludingNone()
     {
         CollectionAssert.AreEqual(
             new[]
             {
                 "base-constructor protected instance System.Enum::.ctor() -> System.Enum",
                 "base-constructor protected instance System.ValueType::.ctor() -> System.ValueType",
+                "field public static " + N + "LuxembourgQueryExecutionRefusal::AssertionRowObjectKindNotRecognised -> "
+                + N + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N + "LuxembourgQueryExecutionRefusal::AssertionRowTermUnbound -> "
+                + N + "LuxembourgQueryExecutionRefusal",
                 "field public static " + N + "LuxembourgQueryExecutionRefusal::None -> "
                 + N + "LuxembourgQueryExecutionRefusal",
-                "field public static " + N + "LuxembourgQueryExecutionRefusal::ObservationCountDoesNotMatchDelivery -> "
+                "field public static " + N + "LuxembourgQueryExecutionRefusal::ObservationSubjectNotInDeliveredCensus -> "
                 + N + "LuxembourgQueryExecutionRefusal",
-                "field public static " + N + "LuxembourgQueryExecutionRefusal::ObservationsWithoutProvenCensus -> "
+                "field public static " + N + "LuxembourgQueryExecutionRefusal::ResourceObservationFamilyNotProven -> "
+                + N + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N + "LuxembourgQueryExecutionRefusal::ResourceObservationRowsNotVerified -> "
                 + N + "LuxembourgQueryExecutionRefusal",
                 "field public static " + N + "LuxembourgQueryExecutionRefusal::ScopeManifestNotHeld -> "
                 + N + "LuxembourgQueryExecutionRefusal",
@@ -188,6 +194,42 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 + N + "LuxembourgQueryExecutionRefusal",
             },
             ConstructionSurface.Of(typeof(LuxembourgQueryExecutionRefusal)).ToArray());
+    }
+
+    /// <summary>D1-04b's reviewer fold-in: a plain two-member enum, the same discipline as <see cref="LuxembourgCoarseDispositionGap"/>.</summary>
+    [TestMethod]
+    public void ResourceObservationExclusionCauseIsAPlainTwoMemberEnum()
+    {
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "base-constructor protected instance System.Enum::.ctor() -> System.Enum",
+                "base-constructor protected instance System.ValueType::.ctor() -> System.ValueType",
+                "field public static " + N + "LuxembourgResourceObservationExclusionCause::BlankNodeObject -> "
+                + N + "LuxembourgResourceObservationExclusionCause",
+                "field public static " + N + "LuxembourgResourceObservationExclusionCause::PredicateNotAdmitted -> "
+                + N + "LuxembourgResourceObservationExclusionCause",
+            },
+            ConstructionSurface.Of(typeof(LuxembourgResourceObservationExclusionCause)).ToArray());
+    }
+
+    /// <summary>D1-04b's reviewer fold-in: an open record, the same shape as <see cref="LuxembourgCoarseDispositionMarker"/> -- an entry never holds evidence, only names a count.</summary>
+    [TestMethod]
+    public void ResourceObservationExclusionAccountingIsAnOpenRecord()
+    {
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + N + "LuxembourgResourceObservationExclusionAccounting::.ctor("
+                + N + "LuxembourgResourceObservationExclusionAccounting) -> "
+                + N + "LuxembourgResourceObservationExclusionAccounting",
+                "constructor public instance " + N + "LuxembourgResourceObservationExclusionAccounting::.ctor("
+                + "System.String, " + N + "LuxembourgResourceObservationExclusionCause, System.Int32) -> "
+                + N + "LuxembourgResourceObservationExclusionAccounting",
+                "method public instance " + N + "LuxembourgResourceObservationExclusionAccounting::<Clone>$() -> "
+                + N + "LuxembourgResourceObservationExclusionAccounting",
+            },
+            ConstructionSurface.Of(typeof(LuxembourgResourceObservationExclusionAccounting)).ToArray());
     }
 
     /// <summary>
@@ -223,6 +265,8 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 + "System.Collections.Generic.IReadOnlyList<" + N + "LuxembourgFamilyEnumerationOutcome>, "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "LuxembourgRelationFamilyAcquisition>, "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "LuxembourgCoarseDispositionMarker>, "
+                + "System.Collections.Generic.IReadOnlyList<System.String>, "
+                + "System.Collections.Generic.IReadOnlyList<" + N + "LuxembourgResourceObservationExclusionAccounting>, "
                 + Custody + "DurableBlobWriteReceipt, System.String, "
                 + "System.Nullable<" + N + "LuxembourgQueryExecutionCompletion>, "
                 + N + "LuxembourgQueryExecutionRefusalDetail) -> " + N + "LuxembourgQueryExecutionResult",
@@ -231,6 +275,8 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 + "System.Collections.Generic.IReadOnlyList<" + N + "LuxembourgFamilyEnumerationOutcome>, "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "LuxembourgRelationFamilyAcquisition>, "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "LuxembourgCoarseDispositionMarker>, "
+                + "System.Collections.Generic.IReadOnlyList<System.String>, "
+                + "System.Collections.Generic.IReadOnlyList<" + N + "LuxembourgResourceObservationExclusionAccounting>, "
                 + Custody + "DurableBlobWriteReceipt, System.String) -> " + N + "LuxembourgQueryExecutionResult",
                 "method public static " + N + "LuxembourgQueryExecutionResult::Refused("
                 + Core + "SourceProfileTopology, "
@@ -239,6 +285,34 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 + N + "LuxembourgQueryExecutionRefusalDetail) -> " + N + "LuxembourgQueryExecutionResult",
             },
             ConstructionSurface.Of(typeof(LuxembourgQueryExecutionResult)).ToArray());
+    }
+
+    /// <summary>
+    /// D1-04b's reviewer fold-in: the review noted the <see cref="ConstructionSurface.Of"/> pin above
+    /// does not catch a change to <c>RunAsync</c>'s own signature or return construction, since that
+    /// method lives on <see cref="LuxembourgQueryExecutionAdapter"/>, not on the result type itself.
+    /// This sweeps the whole assembly for every door onto <see cref="LuxembourgQueryExecutionResult"/>
+    /// outside its own hierarchy: today that is exactly <c>RunAsync</c>, and nothing else.
+    /// </summary>
+    [TestMethod]
+    public void OnlyRunAsyncProducesAQueryExecutionResultFromOutsideItsOwnHierarchy()
+    {
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "method public instance " + N + "LuxembourgQueryExecutionAdapter::RunAsync("
+                + "System.Collections.Generic.IReadOnlyList<System.ValueTuple<"
+                + N + "LuxembourgPartitionRunRequest, " + Core + "BoundMachineRequest>>, "
+                + "System.String, System.String, System.String, "
+                + "Lex.V3.Contracts.Source.Scope.IScopeReductionEvidenceResolver, "
+                + "System.Threading.CancellationToken) -> System.Threading.Tasks.Task<"
+                + N + "LuxembourgQueryExecutionResult>",
+            },
+            ConstructionSurface.ProducersIn(
+                typeof(LuxembourgQueryExecutionResult).Assembly,
+                typeof(LuxembourgQueryExecutionResult),
+                true).ToArray(),
+            "a query execution result reached a new holder in Lex.V3.Ingest");
     }
 
     /// <summary>The adapter itself: exactly one public constructor, no test-only seam (unlike the executor).</summary>
