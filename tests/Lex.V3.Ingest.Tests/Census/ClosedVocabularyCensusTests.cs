@@ -33,6 +33,14 @@ namespace Lex.V3.Ingest.Tests.Census;
 /// The expected array is transcribed from the sweep's own output and not built from the enums
 /// themselves; deriving it would make it agree with whatever the enums say.
 /// </para>
+/// <para>
+/// When a real change makes this fail, that is the pin working rather than a defect in it, and the
+/// fix is not to hand edit the array until it matches. Re-derive it: print the sweep's own output
+/// from a throwaway test that writes it somewhere under <c>Path.GetTempPath()</c>, read the diff,
+/// and transcribe the printed lines. Never rebuild the expected side from the sweep inside the
+/// test. It would then agree with whatever the code happens to say, which is the one thing a pin
+/// must not do, and it is how a large array quietly stops being evidence of anything.
+/// </para>
 /// </remarks>
 [TestClass]
 public sealed class ClosedVocabularyCensusTests
