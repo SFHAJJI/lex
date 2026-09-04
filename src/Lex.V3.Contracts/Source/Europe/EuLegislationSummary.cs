@@ -79,11 +79,11 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// <b>Explanatory, not law: proven structurally, not by convention.</b> SCOPE_RULING precision three
 /// asks for a real exclusion, not a comment. <see cref="IEuFactsEvidenceCarrier"/> is that exclusion,
 /// in production: a pure marker interface, declared in its own file beside this one, that E1's
-/// <see cref="EuDateAxiomBinding"/> and E6's <see cref="EuCaseLawLinkBinding"/> each implement and
-/// that this record does not. Any evidence bundle written against the marker (never against the two
-/// concrete binding types directly) can hold only what implements it, so this record can never be an
-/// element of one, and the exclusion holds for every bundle written from here on, not only for one
-/// hand-built today.
+/// <see cref="EuDateAxiomBinding"/>, E6's <see cref="EuCaseLawLinkBinding"/> and E4's
+/// <see cref="EuRelationEdgeBinding"/> each implement and that this record does not. Any evidence
+/// bundle written against the marker (never against the concrete binding types directly) can hold
+/// only what implements it, so this record can never be an element of one, and the exclusion holds
+/// for every bundle written from here on, not only for one hand-built today.
 /// </para>
 /// <para>
 /// <b>Why this does not trip E1's or E6's own construction-surface guards.</b> An earlier version of
@@ -98,20 +98,22 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// <c>ProducersIn</c>, treats a member's declared type as carrying the guarded type only when that
 /// declared type equals the guarded type or is a <i>subtype</i> of it; a member typed as
 /// <see cref="IEuFactsEvidenceCarrier"/> is typed as a <i>supertype</i> of
-/// <see cref="EuDateAxiomBinding"/> and <see cref="EuCaseLawLinkBinding"/>, which
-/// <c>Carries</c> does not treat as carrying either one. So a future bundle holding a collection of
+/// <see cref="EuDateAxiomBinding"/>, <see cref="EuCaseLawLinkBinding"/> and
+/// <see cref="EuRelationEdgeBinding"/>, which <c>Carries</c> does not treat as carrying any of
+/// them. So a future bundle holding a collection of
 /// <see cref="IEuFactsEvidenceCarrier"/> proves the identical exclusion this record has always
-/// needed, without ever registering as a producer either binding's own guard scans for. This is a
-/// structural property of how <c>Carries</c> is written, not a coincidence of today's two
-/// implementers.
+/// needed, without ever registering as a producer any binding's own guard scans for. This is a
+/// structural property of how <c>Carries</c> is written, not a coincidence of the current set of
+/// implementers, which is why adding E4's binding to that set changed nothing here.
 /// </para>
 /// <para>
 /// <b>Proof, kept here rather than as a hand-built bundle.</b> <c>EuLegislationSummaryTests</c>
 /// reflects over the whole <c>Lex.V3.Contracts</c> assembly for the closed set of
 /// <see cref="IEuFactsEvidenceCarrier"/> implementers (today exactly
-/// <see cref="EuDateAxiomBinding"/> and <see cref="EuCaseLawLinkBinding"/>) and asserts this record
-/// is not assignable to the marker, which is the literal exclusion SCOPE_RULING precision three asks
-/// for, checked by the type system rather than by an example bundle that could go stale.
+/// <see cref="EuDateAxiomBinding"/>, <see cref="EuCaseLawLinkBinding"/> and
+/// <see cref="EuRelationEdgeBinding"/>) and asserts this record is not assignable to the marker,
+/// which is the literal exclusion SCOPE_RULING precision three asks for, checked by the type system
+/// rather than by an example bundle that could go stale.
 /// </para>
 /// </remarks>
 public sealed class EuLegislationSummary
