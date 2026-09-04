@@ -48,7 +48,7 @@ public sealed class RoutedHttpRedirectCapabilityTests
             new[]
             {
                 "constructor private instance " + Lease + "::.ctor(" + Common + ", System.UInt64, System.String, " + Lease + "+RedirectAntecedent, System.Boolean) -> " + Lease,
-                "method internal static " + Lease + "::FromRedirect(" + Common + ", System.UInt64, System.String, " + Session + "+RedirectAntecedentCapability) -> " + Lease,
+                "method internal static " + Lease + "::FromRedirect(" + Common + ", System.UInt64, System.String, System.String, " + Session + "+RedirectAntecedentCapability) -> " + Lease,
                 "method internal static " + Lease + "::Initial(" + Common + ", System.Boolean) -> " + Lease,
             },
             ConstructionSurface.Of(leaseType).ToArray());
@@ -95,12 +95,18 @@ public sealed class RoutedHttpRedirectCapabilityTests
             BindingFlags.Static | BindingFlags.NonPublic)
             ?? throw new AssertFailedException("The redirect capability factory is missing.");
         var redirectParameters = redirectFactory.GetParameters();
-        Assert.AreEqual(8, redirectParameters.Length);
+        Assert.AreEqual(9, redirectParameters.Length);
         Assert.AreEqual(antecedentType, redirectParameters[^1].ParameterType);
         // The antecedent's route-policy digest is a separate input from the successor request,
         // which is what lets the mint-time comparison fail; it sits beside the capability.
         Assert.AreEqual(typeof(string), redirectParameters[^2].ParameterType);
         Assert.AreEqual("antecedentRedirectPolicySha256", redirectParameters[^2].Name);
+        // D1-06c-EU defect 1: the admitted origin this route's own first hop started at, so the
+        // factory can re-derive whether the antecedent's own Location was upgraded from http to
+        // https (RoutedHttpAcquisitionSession.ResolveRedirectTarget) the identical way
+        // TryCreateRedirectRequest already did when it built the successor being checked here.
+        Assert.AreEqual(typeof(string), redirectParameters[^3].ParameterType);
+        Assert.AreEqual("admittedOriginUri", redirectParameters[^3].Name);
         Assert.IsFalse(redirectParameters.Any(static parameter =>
             parameter.ParameterType == typeof(RoutedHttpHop)));
 
@@ -670,7 +676,8 @@ public sealed class RoutedHttpRedirectCapabilityTests
         ulong requestOrdinal,
         ulong attemptOrdinal,
         ulong nextHopOrdinal,
-        string? antecedentRedirectPolicySha256 = null)
+        string? antecedentRedirectPolicySha256 = null,
+        string admittedOriginUri = "https://op.europa.eu/robots.txt")
     {
         var leaseType = typeof(RoutedHttpAcquisitionSession).GetNestedType(
             "SendLease",
@@ -689,6 +696,7 @@ public sealed class RoutedHttpRedirectCapabilityTests
                 requestOrdinal,
                 attemptOrdinal,
                 nextHopOrdinal,
+                admittedOriginUri,
                 antecedentRedirectPolicySha256 ?? RedirectPolicySha256(session, "_robotsRedirectPolicy"),
                 antecedentCapability,
             ]) ?? throw new AssertFailedException("The redirect capability was not minted.");
@@ -1026,6 +1034,12 @@ public sealed class RoutedHttpRedirectCapabilityTests
                 + "System.Collections.Generic.IReadOnlyList<" + Session + "+CanonicalArtifactBytes>, "
                 + "System.Collections.Generic.IReadOnlyList<" + Http + "HttpLogicalRequestHeader>, "
                 + "System.ReadOnlySpan<System.Byte>) -> " + RequestArtifact,
+                "method internal static " + RequestArtifact + "::ForMachineQueryGet("
+                + Http + "OfficialMachineQuerySourceProfile, " + Core + "SourceArtifactRef, "
+                + "System.ReadOnlySpan<System.Byte>, " + Core + "OpenedMachineRequest, "
+                + "System.Collections.Generic.IReadOnlyList<" + Session + "+CanonicalArtifactBytes>, "
+                + "System.Collections.Generic.IReadOnlyList<" + Http + "HttpLogicalRequestHeader>, "
+                + "System.ReadOnlySpan<System.Byte>) -> " + RequestArtifact,
                 "method internal static " + RequestArtifact + "::ForRobots("
                 + Http + "OfficialMachineQuerySourceProfile, " + Core + "SourceArtifactRef, "
                 + "System.ReadOnlySpan<System.Byte>) -> " + RequestArtifact,
@@ -1039,6 +1053,8 @@ public sealed class RoutedHttpRedirectCapabilityTests
                 + Session + "+RedirectPolicyKind, " + Core + "SourceArtifactRef, "
                 + "System.Byte[], System.Collections.Generic.IReadOnlyList<System.String>) -> "
                 + RedirectArtifact,
+                "method internal static " + RedirectArtifact + "::ForDocumentFetch("
+                + Http + "OfficialMachineQuerySourceProfile) -> " + RedirectArtifact,
                 "method internal static " + RedirectArtifact + "::ForRobots("
                 + Http + "OfficialMachineQuerySourceProfile) -> " + RedirectArtifact,
                 "method internal static " + RedirectArtifact + "::NoRedirect("

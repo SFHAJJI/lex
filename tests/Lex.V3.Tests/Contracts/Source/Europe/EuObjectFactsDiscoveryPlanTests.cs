@@ -729,7 +729,7 @@ public sealed class EuObjectFactsDiscoveryPlanTests
                 new[]
                 {
                     new HttpLogicalRequestHeader("user-agent", sourceProfile.CrawlerUserAgent),
-                    new HttpLogicalRequestHeader("accept", sourceProfile.Accept),
+                    new HttpLogicalRequestHeader("accept", sourceProfile.Accept!),
                     new HttpLogicalRequestHeader(
                         "content-type", $"{sourceProfile.RequestContentType}; charset=utf-8"),
                 },

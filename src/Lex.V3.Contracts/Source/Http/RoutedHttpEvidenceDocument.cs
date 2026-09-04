@@ -96,6 +96,18 @@ public enum HttpRouteIncompleteReason
     RedirectTargetUnobserved = 6,
     RobotsPolicyUnavailable = 7,
     PublisherServerFailure = 8,
+
+    /// <summary>
+    /// D1-06c-EU (SCOPE_RULING lex-event-20260904T104723233Z-fa84c4edb4144467a2a63c94ee469cef) item
+    /// 1: "follow the observed 303 chain only to hosts in the route's own closed admitted set, any
+    /// redirect off it is a typed refusal". Distinct from <see cref="RedirectRefused"/>: that member
+    /// requires the redirect target to NOT be a well-formed admitted absolute HTTPS URI at all. This
+    /// member is for the other case -- a well-formed absolute HTTPS redirect target whose origin
+    /// differs from this route's own first hop -- which only the document-fetch channel's own
+    /// same-origin redirect allowance ever reaches; every other channel refuses any redirect at all
+    /// before this distinction could matter.
+    /// </summary>
+    RedirectTargetOriginNotAdmitted = 9,
 }
 
 public abstract class RoutedHttpRouteOutcome
@@ -513,7 +525,7 @@ public sealed class RoutedHttpEvidence
             if (predecessor.Completion is IncompleteHttpCompletion ||
                 predecessor.StatusDisposition != HttpStatusDisposition.RedirectObserved ||
                 predecessor.Headers.Location is not RoutedHttpSingleHeader location ||
-                !string.Equals(location.Value, hop.RequestUri, StringComparison.Ordinal))
+                !LocationCausedHop(location.Value, hop.RequestUri, hopSnapshot[0].RequestUri))
             {
                 throw new ArgumentException(
                     "Every noninitial hop must be caused by its complete redirect predecessor's exact Location.",
@@ -600,7 +612,7 @@ public sealed class RoutedHttpEvidence
                 break;
             case RedirectTargetUnobservedHttpRouteOutcome:
                 if (hasIncompleteHop || !finalIsRedirect || hopSnapshot.Length >= 6 ||
-                    !TryGetAdmittedRedirectTarget(hopSnapshot[^1], out var unobservedTarget) ||
+                    !TryGetAdmittedRedirectTarget(hopSnapshot[^1], hopSnapshot[0].RequestUri, out var unobservedTarget) ||
                     hopSnapshot.Any(hop =>
                         string.Equals(hop.RequestUri, unobservedTarget, StringComparison.Ordinal)))
                 {
@@ -658,7 +670,7 @@ public sealed class RoutedHttpEvidence
             case HttpRouteIncompleteReason.SourceProfileStale:
                 if (IsRobotsStatusFailure(requestOrdinal, terminal) ||
                     finalIsRedirect &&
-                    (!TryGetAdmittedRedirectTarget(terminal, out var staleTarget) ||
+                    (!TryGetAdmittedRedirectTarget(terminal, hops[0].RequestUri, out var staleTarget) ||
                      hops.Any(hop => string.Equals(hop.RequestUri, staleTarget, StringComparison.Ordinal)) ||
                      hops.Count == 6))
                 {
@@ -669,7 +681,7 @@ public sealed class RoutedHttpEvidence
 
                 return;
             case HttpRouteIncompleteReason.RedirectRefused:
-                if (!finalIsRedirect || TryGetAdmittedRedirectTarget(terminal, out _))
+                if (!finalIsRedirect || TryGetAdmittedRedirectTarget(terminal, hops[0].RequestUri, out _))
                 {
                     throw new ArgumentException(
                         "A redirect refusal must terminate at a redirect whose target is not an admitted absolute HTTPS URI.",
@@ -678,7 +690,7 @@ public sealed class RoutedHttpEvidence
 
                 return;
             case HttpRouteIncompleteReason.RedirectLoop:
-                if (!finalIsRedirect || !TryGetAdmittedRedirectTarget(terminal, out var loopTarget) ||
+                if (!finalIsRedirect || !TryGetAdmittedRedirectTarget(terminal, hops[0].RequestUri, out var loopTarget) ||
                     !hops.Any(hop => string.Equals(hop.RequestUri, loopTarget, StringComparison.Ordinal)))
                 {
                     throw new ArgumentException(
@@ -689,11 +701,26 @@ public sealed class RoutedHttpEvidence
                 return;
             case HttpRouteIncompleteReason.RedirectLimitExceeded:
                 if (!finalIsRedirect || hops.Count != 6 ||
-                    !TryGetAdmittedRedirectTarget(terminal, out var excessTarget) ||
+                    !TryGetAdmittedRedirectTarget(terminal, hops[0].RequestUri, out var excessTarget) ||
                     hops.Any(hop => string.Equals(hop.RequestUri, excessTarget, StringComparison.Ordinal)))
                 {
                     throw new ArgumentException(
                         "A redirect-limit outcome requires six observed hops and one further admissible transition.",
+                        nameof(outcome));
+                }
+
+                return;
+            case HttpRouteIncompleteReason.RedirectTargetOriginNotAdmitted:
+                if (!finalIsRedirect ||
+                    !TryGetAdmittedRedirectTarget(terminal, hops[0].RequestUri, out var offOriginTarget) ||
+                    string.Equals(
+                        new Uri(offOriginTarget, UriKind.Absolute).GetLeftPart(UriPartial.Authority),
+                        new Uri(hops[0].RequestUri, UriKind.Absolute).GetLeftPart(UriPartial.Authority),
+                        StringComparison.Ordinal))
+                {
+                    throw new ArgumentException(
+                        "An origin-not-admitted outcome requires a well-formed redirect target whose "
+                        + "origin genuinely differs from this route's own first hop.",
                         nameof(outcome));
                 }
 
@@ -703,7 +730,23 @@ public sealed class RoutedHttpEvidence
         }
     }
 
-    private static bool TryGetAdmittedRedirectTarget(RoutedHttpHop hop, out string target)
+    /// <summary>
+    /// D1-06c-EU defect five (SCOPE_RULING lex-event-20260904T143553601Z-e6842d729c9b41fc8f5a6e76d5750bc2):
+    /// before this fix this method required the raw <c>Location</c> to already be an admitted
+    /// absolute HTTPS URI, so a real observed http Location on the admitted host (the exact shape
+    /// <c>EuDocumentFetchReachabilityTests</c> proves this publisher actually sends, and defect one's
+    /// own send-path fix already upgrades) was reported as "not admitted" here even though the send
+    /// path would have followed it. That made every terminal-classification caller below
+    /// (<see cref="HttpRouteIncompleteReason.RedirectLoop"/>,
+    /// <see cref="HttpRouteIncompleteReason.RedirectLimitExceeded"/>, and the rest) refuse to
+    /// construct evidence for a genuine redirect loop or a six-hop chain whose own terminal Location
+    /// happened to be http on the admitted host, throwing instead of producing the typed refusal the
+    /// route actually observed. Fixed by falling back to
+    /// <see cref="TryUpgradeHttpLocationOnAdmittedHost"/> -- the identical shared decision
+    /// <see cref="LocationCausedHop"/> already applies -- before giving up.
+    /// </summary>
+    private static bool TryGetAdmittedRedirectTarget(
+        RoutedHttpHop hop, string admittedOriginUri, out string target)
     {
         target = string.Empty;
         if (hop.Headers.Location is not RoutedHttpSingleHeader location)
@@ -718,9 +761,66 @@ public sealed class RoutedHttpEvidence
         }
         catch (ArgumentException)
         {
+            // Falls through to the http-on-admitted-host upgrade below.
+        }
+
+        if (TryUpgradeHttpLocationOnAdmittedHost(location.Value, admittedOriginUri, out var upgraded))
+        {
+            target = RoutedHttpValidation.RequireAbsoluteHttpsUri(upgraded, nameof(hop));
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// D1-06c-EU defect five's own shared decision, extracted so <see cref="LocationCausedHop"/> and
+    /// <see cref="TryGetAdmittedRedirectTarget"/> can no longer drift apart on it: whether
+    /// <paramref name="locationValue"/> is a well-formed absolute http URI on
+    /// <paramref name="admittedOriginUri"/>'s own host at its default port. Never throws: anything
+    /// else (a different host, a non-default port, a relative or malformed value, or an already-https
+    /// value) returns <see langword="false"/>.
+    /// </summary>
+    /// <remarks>
+    /// D1-06c-EU defect nine's own fold-in six (REVIEW_RESULT
+    /// lex-event-20260904T153119262Z-e51c74bf8710495fbd972b2706509922): public, not private, so
+    /// <c>Lex.V3.Ingest.RoutedHttpAcquisitionSession.ResolveRedirectTarget</c> calls this exact method
+    /// on the send path instead of carrying its own separately maintained copy of the same decision.
+    /// Ingest already depends on Contracts (never the reverse), so reaching this from Ingest needs no
+    /// <c>InternalsVisibleTo</c>; this method only had to stop being <see langword="private"/>.
+    /// </remarks>
+    public static bool TryUpgradeHttpLocationOnAdmittedHost(
+        string locationValue, string admittedOriginUri, out string upgraded)
+    {
+        upgraded = string.Empty;
+        if (!Uri.TryCreate(locationValue, UriKind.Absolute, out var observedLocation) ||
+            !string.Equals(observedLocation.Scheme, Uri.UriSchemeHttp, StringComparison.Ordinal) ||
+            !observedLocation.IsDefaultPort ||
+            !Uri.TryCreate(admittedOriginUri, UriKind.Absolute, out var admittedOrigin) ||
+            !string.Equals(observedLocation.Host, admittedOrigin.Host, StringComparison.Ordinal))
+        {
             return false;
         }
+
+        upgraded = new UriBuilder(observedLocation) { Scheme = Uri.UriSchemeHttps, Port = -1 }.Uri.AbsoluteUri;
+        return true;
     }
+
+    /// <summary>
+    /// Whether <paramref name="hopRequestUri"/> is exactly what a predecessor hop's own observed
+    /// <c>Location</c> (<paramref name="locationValue"/>) caused: either the identical string, or --
+    /// D1-06c-EU defect 1 (SCOPE_RULING lex-event-20260904T130546972Z-c72fad2da5b34344af802c068d8fbf08
+    /// item 1) -- the https upgrade of an observed http Location on the admitted host
+    /// (<paramref name="admittedOriginUri"/>), through the shared
+    /// <see cref="TryUpgradeHttpLocationOnAdmittedHost"/> decision defect five's own fix extracted.
+    /// <c>Lex.V3.Ingest.RoutedHttpAcquisitionSession.ResolveRedirectTarget</c>'s own send-path upgrade
+    /// calls this exact method too (D1-06c-EU defect nine's own fold-in six), so the send path and
+    /// this evidence validator cannot drift apart on what counts as an upgrade.
+    /// </summary>
+    private static bool LocationCausedHop(string locationValue, string hopRequestUri, string admittedOriginUri) =>
+        string.Equals(locationValue, hopRequestUri, StringComparison.Ordinal) ||
+        (TryUpgradeHttpLocationOnAdmittedHost(locationValue, admittedOriginUri, out var upgraded) &&
+            string.Equals(upgraded, hopRequestUri, StringComparison.Ordinal));
 
     private static bool IsRobotsStatusFailure(ulong requestOrdinal, RoutedHttpHop hop) =>
         requestOrdinal == 0 &&
@@ -1621,6 +1721,7 @@ internal static partial class RoutedHttpValidation
         HttpRouteIncompleteReason.RedirectTargetUnobserved => "redirect_target_unobserved",
         HttpRouteIncompleteReason.RobotsPolicyUnavailable => "robots_policy_unavailable",
         HttpRouteIncompleteReason.PublisherServerFailure => "publisher_server_failure",
+        HttpRouteIncompleteReason.RedirectTargetOriginNotAdmitted => "redirect_target_origin_not_admitted",
         _ => throw new ArgumentOutOfRangeException(nameof(value)),
     };
 
@@ -1635,6 +1736,7 @@ internal static partial class RoutedHttpValidation
             "redirect_target_unobserved" => HttpRouteIncompleteReason.RedirectTargetUnobserved,
             "robots_policy_unavailable" => HttpRouteIncompleteReason.RobotsPolicyUnavailable,
             "publisher_server_failure" => HttpRouteIncompleteReason.PublisherServerFailure,
+            "redirect_target_origin_not_admitted" => HttpRouteIncompleteReason.RedirectTargetOriginNotAdmitted,
             _ => throw new ArgumentException("The HTTP route reason is not closed.", parameterName),
         };
 

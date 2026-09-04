@@ -862,13 +862,14 @@ public sealed class RoutedHttpRequestPolicyAuditTests
         [
             robots,
             new RoutedHttpSingleHeader("https://op.europa.eu/robots.txt"),
+            robots.Uri,
             null,
         ];
         Assert.IsTrue((bool)(typeof(RoutedHttpAcquisitionSession).GetMethod(
             "TryCreateRedirectRequest",
             BindingFlags.Static | BindingFlags.NonPublic)?.Invoke(null, redirectArguments)
             ?? throw new AssertFailedException("The redirect constructor returned no verdict.")));
-        var redirectedRobots = Assert.IsInstanceOfType<HttpLogicalRequest>(redirectArguments[2]);
+        var redirectedRobots = Assert.IsInstanceOfType<HttpLogicalRequest>(redirectArguments[3]);
         Assert.AreEqual(robots.RequestPolicySha256, redirectedRobots.RequestPolicySha256);
         Assert.AreEqual(robots.RedirectPolicySha256, redirectedRobots.RedirectPolicySha256);
 

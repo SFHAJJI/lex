@@ -88,6 +88,27 @@ internal static class EuAcquisitionTestFixture
     /// </summary>
     internal static BoundMachineRequest SourceWitness() => MachineRequestTestFixture.EuropeanUnionRequest();
 
+    /// <summary>
+    /// D1-06c-EU defect 4: the document-fetch profile's own robots-negotiation witness. Distinct from
+    /// <see cref="SourceWitness"/>, which targets the SPARQL POST profile -- a document-fetch GET
+    /// resolves to a genuinely different official profile
+    /// (<c>OfficialMachineQuerySourceProfileId.EuropeanUnionDocumentFetch</c>), so it needs its own
+    /// bound request to resolve against. The exact ps-id here is a fixture placeholder: profile
+    /// resolution depends only on the resource URI's own shape
+    /// (<c>EuDocumentFetchAddress.IsAdmittedResourceUri</c>), never on which real object it names.
+    /// </summary>
+    internal static BoundMachineRequest DocumentFetchSourceWitness()
+    {
+        var address = EuDocumentFetchAddress.TryCreate(
+            "celex", "00000000", EuManifestationMediaType.XhtmlXml, EuDocumentLanguage.Eng, out var refusal)
+            ?? throw new InvalidOperationException($"Fixture document-fetch witness minting refused: {refusal}.");
+        var plan = new EuDocumentFetchPlan(address);
+        return plan.Bind(
+            "urn:uuid:00000000-0000-4000-8000-0000000000f8",
+            "urn:uuid:00000000-0000-4000-8000-0000000000f9",
+            BuildRendererSource(9001)).Request;
+    }
+
     private static string NewUrn() => $"urn:uuid:{Guid.NewGuid():D}";
 
     private static SourceArtifactRef Artifact(string resourceId, ReadOnlySpan<byte> bytes) =>
@@ -370,8 +391,13 @@ internal static class EuAcquisitionTestFixture
     /// interleaving across the several sessions one adapter run opens: robots needs no state at all,
     /// and each family's own occurrence counter is independent of every other family's.
     /// </summary>
-    internal sealed class ClassifyingHandler(IReadOnlyDictionary<string, FamilyScript> scripts) : HttpMessageHandler
+    internal sealed class ClassifyingHandler(
+        IReadOnlyDictionary<string, FamilyScript> scripts,
+        Func<HttpRequestMessage, HttpResponseMessage>? documentFetchResponse = null) : HttpMessageHandler
     {
+        private static readonly Lazy<byte[]> DefaultDocumentFetchBody = new(() => File.ReadAllBytes(
+            Path.Combine(AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", "gdpr-xhtml-200-body.bin")));
+
         private readonly Dictionary<string, int> _occurrence = new(StringComparer.Ordinal);
         private int _sendCount;
 
@@ -405,6 +431,19 @@ internal static class EuAcquisitionTestFixture
                 return TextResponse(request, HttpStatusCode.OK, "User-agent: *\nAllow: /\n");
             }
 
+            // D1-06c-EU defect 4: every family this fixture drives real EU seeds through, so every one
+            // of them mints a real Minted document-fetch address for its own Cellar objects, and the
+            // adapter now actually sends a real GET for each one. A GET carries no request body, so it
+            // must be routed before the family-classifying POST branch below, which requires one.
+            // Callers that do not care about the document-fetch response get a real, admitted 200
+            // (the real GDPR xhtml canary body, Fixtures/EuDocumentFetch/gdpr-xhtml-200-body.bin) by
+            // default; callers that do (this file's own defect-4 tests) supply their own
+            // documentFetchResponse.
+            if (request.Method == HttpMethod.Get)
+            {
+                return (documentFetchResponse ?? DefaultDocumentFetchResponse)(request);
+            }
+
             var body = await request.Content!.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             var family = ClassifyFamily(body);
             lock (_occurrence)
@@ -421,6 +460,37 @@ internal static class EuAcquisitionTestFixture
                 return JsonResponse(request, script.ResponseBodies[index]);
             }
         }
+
+        private static HttpResponseMessage DefaultDocumentFetchResponse(HttpRequestMessage request) =>
+            BinaryResponse(
+                request, HttpStatusCode.OK, DefaultDocumentFetchBody.Value, "application/xhtml+xml;charset=UTF-8");
+    }
+
+    /// <summary>A real-status, real-content-type, real-byte-length response, for a document-fetch GET's own scripted answers.</summary>
+    internal static HttpResponseMessage BinaryResponse(
+        HttpRequestMessage request,
+        HttpStatusCode status,
+        byte[] body,
+        string? contentType = null,
+        string? location = null)
+    {
+        var content = new ByteArrayContent(body);
+        content.Headers.TryAddWithoutValidation("Content-Length", body.Length.ToString(CultureInfo.InvariantCulture));
+        if (contentType is not null)
+        {
+            content.Headers.TryAddWithoutValidation("Content-Type", contentType);
+        }
+
+        var response = new HttpResponseMessage(status)
+        {
+            Version = HttpVersion.Version11, RequestMessage = request, Content = content,
+        };
+        if (location is not null)
+        {
+            response.Headers.TryAddWithoutValidation("Location", location);
+        }
+
+        return response;
     }
 
     internal static HttpResponseMessage JsonResponse(HttpRequestMessage request, string body)
@@ -460,29 +530,72 @@ internal static class EuAcquisitionTestFixture
     /// exactly: a real store this run's own retention floor checks pass against, never a bare
     /// unenforced double.
     /// </summary>
-    internal sealed class EuInMemoryCustodyStore : Lex.V3.Contracts.Custody.ICustodyStore
+    /// <param name="unenforceDigest">
+    /// D1-06c-EU defect 4's own floor-below-run test: when supplied, a write whose own content
+    /// digest matches this predicate publishes <see cref="CustodyProtection.NotEnforced"/> instead of
+    /// <see cref="CustodyProtection.LockedTime"/> -- everything else this run writes (the scope
+    /// manifest, the document-fetch evidence document) stays floored, so only the one write this
+    /// predicate targets is unenforced, never the whole store.
+    /// </param>
+    /// <param name="unenforceCallOrdinal">
+    /// D1-06c-EU defect nine's own fold-in five (REVIEW_RESULT
+    /// lex-event-20260904T153119262Z-e51c74bf8710495fbd972b2706509922): when supplied, the Nth call
+    /// to <see cref="CreateAsync"/> (1-indexed, in real call order) publishes
+    /// <see cref="CustodyProtection.NotEnforced"/> regardless of its own content digest. Targets one
+    /// write by the order a real run makes it rather than by a digest the test cannot predict ahead
+    /// of a real canonical serialization -- exactly what forcing the corpus/6 record set's own write
+    /// (never the scope manifest's) to fail its floor needs.
+    /// </param>
+    internal sealed class EuInMemoryCustodyStore(
+        Func<string, bool>? unenforceDigest = null, int? unenforceCallOrdinal = null)
+        : Lex.V3.Contracts.Custody.ICustodyStore
     {
         private readonly Dictionary<string, byte[]> _byDigest = new(StringComparer.Ordinal);
+        private int _createCallCount;
+
+        /// <summary>
+        /// How many real <see cref="CreateAsync"/> calls this store has answered so far -- used by a
+        /// two-pass test (run once against a plain enforcing store to discover the real total, then
+        /// again with <c>unenforceCallOrdinal</c> set to that total) rather than a hardcoded guess at
+        /// how many custody writes a real run makes before its own last one.
+        /// </summary>
+        internal int CreateCallCount => _createCallCount;
 
         public Task<Lex.V3.Contracts.Custody.DurableBlobWriteReceipt> CreateAsync(
             ReadOnlyMemory<byte> bytes,
             Lex.V3.Contracts.Custody.CustodyClass custodyClass,
             CancellationToken cancellationToken)
         {
+            var callOrdinal = ++_createCallCount;
             var frozen = bytes.ToArray();
             var digest = Lex.V3.Contracts.Custody.CustodyDigest.Of(frozen);
             _byDigest[digest] = frozen;
             var reference = new Lex.V3.Contracts.Custody.DurableBlobRef(
                 Lex.V3.Contracts.Custody.CustodySchemaIds.DurableBlobRef, digest, frozen.LongLength, custodyClass);
             var observedAt = new DateTimeOffset(2026, 9, 4, 0, 0, 0, TimeSpan.Zero);
-            var policy = new Lex.V3.Contracts.Custody.CustodyPolicyEvidence(
-                Lex.V3.Contracts.Custody.CustodySchemaIds.CustodyPolicyEvidence,
-                reference,
-                Lex.V3.Contracts.Custody.CustodyVerificationProfile.ImmutableObject1,
-                Guid.Parse("00000000-0000-0000-0000-0000000000e2"),
-                Lex.V3.Contracts.Custody.CustodyProtection.LockedTime,
-                observedAt,
-                observedAt.AddDays(91));
+            // CustodyPolicyEvidence's own ValidateImmutableProtection admits only two exact pairs
+            // under CustodyVerificationProfile.ImmutableObject1: (NightlyFloor90d, LockedTime) and
+            // (LegalHoldEvidence, ActiveLegalHold). An unenforced write is instead reported the way a
+            // real bare filesystem store does (FileSystemCustodyStore, LuxembourgQueryExecutionAdapterTests
+            // own unfloored test): CustodyVerificationProfile.FileSystemUnenforced1, no policy key, no
+            // protectedUntil.
+            var policy = unenforceDigest?.Invoke(digest) == true || unenforceCallOrdinal == callOrdinal
+                ? new Lex.V3.Contracts.Custody.CustodyPolicyEvidence(
+                    Lex.V3.Contracts.Custody.CustodySchemaIds.CustodyPolicyEvidence,
+                    reference,
+                    Lex.V3.Contracts.Custody.CustodyVerificationProfile.FileSystemUnenforced1,
+                    null,
+                    Lex.V3.Contracts.Custody.CustodyProtection.NotEnforced,
+                    observedAt,
+                    null)
+                : new Lex.V3.Contracts.Custody.CustodyPolicyEvidence(
+                    Lex.V3.Contracts.Custody.CustodySchemaIds.CustodyPolicyEvidence,
+                    reference,
+                    Lex.V3.Contracts.Custody.CustodyVerificationProfile.ImmutableObject1,
+                    Guid.Parse("00000000-0000-0000-0000-0000000000e2"),
+                    Lex.V3.Contracts.Custody.CustodyProtection.LockedTime,
+                    observedAt,
+                    observedAt.AddDays(91));
             return Task.FromResult(new Lex.V3.Contracts.Custody.DurableBlobWriteReceipt(
                 Lex.V3.Contracts.Custody.CustodySchemaIds.DurableBlobWriteReceipt, reference, policy));
         }

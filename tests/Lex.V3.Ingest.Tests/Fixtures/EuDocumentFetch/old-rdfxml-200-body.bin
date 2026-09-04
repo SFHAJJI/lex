@@ -1,0 +1,37 @@
+<rdf:RDF
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:j.0="http://publications.europa.eu/ontology/cdm#"
+    xmlns:owl="http://www.w3.org/2002/07/owl#"
+    xmlns:j.1="http://publications.europa.eu/ontology/annotation#"
+    xmlns:j.2="http://publications.europa.eu/ontology/cdm/cmr#" > 
+  <rdf:Description rdf:about="http://publications.europa.eu/resource/cellar/775a4724-2086-4a06-9213-1a4e6489053b.0008.01/DOC_1">
+    <owl:sameAs rdf:resource="http://publications.europa.eu/resource/celex/31995L0046.ENG.html.31995L0046en.html"/>
+    <owl:sameAs rdf:resource="http://publications.europa.eu/resource/uriserv/OJ.L_.1995.281.01.0031.01.ENG.html.31995L0046en.html"/>
+    <owl:sameAs rdf:resource="http://publications.europa.eu/resource/oj/JOL_1995_281_R_0031_006.ENG.html.31995L0046en.html"/>
+    <j.0:item_belongs_to_manifestation rdf:resource="http://publications.europa.eu/resource/cellar/775a4724-2086-4a06-9213-1a4e6489053b.0008.01"/>
+    <j.0:item_identifier>DOC_1</j.0:item_identifier>
+    <j.2:manifestationMimeType>text/html</j.2:manifestationMimeType>
+    <rdf:type rdf:resource="http://publications.europa.eu/ontology/cdm#item"/>
+    <j.0:belongs_to rdf:resource="http://publications.europa.eu/resource/cellar/775a4724-2086-4a06-9213-1a4e6489053b.0008.01"/>
+    <j.0:identifier>DOC_1</j.0:identifier>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://publications.europa.eu/resource/oj/JOL_1995_281_R_0031_006.ENG.html">
+    <j.0:manifestation_manifests_expression rdf:resource="http://publications.europa.eu/resource/oj/JOL_1995_281_R_0031_006.ENG"/>
+    <j.0:manifestation_source-pool rdf:datatype="http://www.w3.org/2001/XMLSchema#string">src/eurlex/content</j.0:manifestation_source-pool>
+    <j.0:manifestation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">html</j.0:manifestation_type>
+    <j.1:build_info>cdm:CDM_2.1.7  tdm:1523  xslt:3945 saxon:9.0.0.1J JVM:1.6.0_29 metaconvJar:1.2.0 builddate:04/04/2014 16:45:04</j.1:build_info>
+    <rdf:type rdf:resource="http://publications.europa.eu/ontology/cdm#manifestation"/>
+    <j.0:manifests rdf:resource="http://publications.europa.eu/resource/oj/JOL_1995_281_R_0031_006.ENG"/>
+    <j.0:source-pool rdf:datatype="http://www.w3.org/2001/XMLSchema#string">src/eurlex/content</j.0:source-pool>
+    <j.0:type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">html</j.0:type>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://publications.europa.eu/resource/cellar/775a4724-2086-4a06-9213-1a4e6489053b.0008.01">
+    <owl:sameAs rdf:resource="http://publications.europa.eu/resource/uriserv/OJ.L_.1995.281.01.0031.01.ENG.html"/>
+    <owl:sameAs rdf:resource="http://publications.europa.eu/resource/celex/31995L0046.ENG.html"/>
+    <owl:sameAs rdf:resource="http://publications.europa.eu/resource/oj/JOL_1995_281_R_0031_006.ENG.html"/>
+    <j.0:manifestation_has_item rdf:resource="http://publications.europa.eu/resource/cellar/775a4724-2086-4a06-9213-1a4e6489053b.0008.01/DOC_1"/>
+    <j.2:lastModificationDate rdf:datatype="http://www.w3.org/2001/XMLSchema#dateTime">2014-04-05T04:16:05.998+02:00</j.2:lastModificationDate>
+    <rdf:type rdf:resource="http://publications.europa.eu/ontology/cdm#manifestation"/>
+    <j.0:has rdf:resource="http://publications.europa.eu/resource/cellar/775a4724-2086-4a06-9213-1a4e6489053b.0008.01/DOC_1"/>
+  </rdf:Description>
+</rdf:RDF>

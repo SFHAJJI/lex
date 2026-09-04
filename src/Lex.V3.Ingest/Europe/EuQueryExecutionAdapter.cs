@@ -3,7 +3,9 @@ using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Corpus;
 using Lex.V3.Contracts.Source.Europe;
+using Lex.V3.Contracts.Source.Http;
 using Lex.V3.Contracts.Source.Scope;
 
 namespace Lex.V3.Ingest.Europe;
@@ -175,6 +177,62 @@ public enum EuQueryExecutionRefusal
     /// need to exist for.
     /// </summary>
     WitnessTraversalRefused = 15,
+
+    /// <summary>
+    /// D1-06c-EU defect 4 (SCOPE_RULING lex-event-20260904T130546972Z-c72fad2da5b34344af802c068d8fbf08
+    /// item 4): the document-fetch profile's own robots bootstrap did not start a session at all, so
+    /// no Minted row in this run could even attempt its own GET.
+    /// </summary>
+    [JsonStringEnumMemberName("document_fetch_session_not_started")]
+    DocumentFetchSessionNotStarted = 16,
+
+    /// <summary>
+    /// A document body was fetched successfully (a real, classified 200) but the store enforced no
+    /// retention floor when this run tried to hold its bytes -- the identical floor-check pattern
+    /// <see cref="ScopeManifestNotHeld"/> already applies to the scope manifest's own custody write,
+    /// applied here to one row's own document body. A successful fetch whose receipt's own classified
+    /// floor is below what this run requires is refused, never silently accepted as held.
+    /// </summary>
+    [JsonStringEnumMemberName("document_body_not_held")]
+    DocumentBodyNotHeld = 17,
+
+    /// <summary>
+    /// A document-fetch GET completed for real, but its classified outcome has no faithful member in
+    /// D1-06b's own closed <see cref="Lex.V3.Contracts.Source.Corpus.CorpusAcquisitionRefusalReason"/>
+    /// vocabulary to carry into <c>CorpusRecordSetWriter</c>'s acquisition-outcomes door.
+    /// </summary>
+    /// <remarks>
+    /// D1-06c-EU fix one (SCOPE_RULING lex-event-20260904T141600712Z-0b823f7143154a608f01ec8f757f9e93
+    /// item 1) widened that vocabulary with this route's own three named shapes --
+    /// <see cref="EuDocumentFetchRefusal.WrongAcceptToken"/>,
+    /// <see cref="EuDocumentFetchRefusal.RequestedRepresentationNotServed"/> and
+    /// <see cref="Lex.V3.Contracts.Source.Http.HttpRouteIncompleteReason.RedirectTargetOriginNotAdmitted"/>
+    /// -- so each of those three now becomes that one object's own <c>PendingAcquisition</c> cause
+    /// (see <see cref="TryMapDocumentFetchToCorpusAcquisitionRefusal"/>) instead of refusing this
+    /// whole run: a 1995-act-shaped 404 must never block a 2026 act's own record. This refusal is
+    /// reserved for what genuinely remains unrepresentable: every other route-level shape (a
+    /// robots-policy-unavailable outcome, a redirect refused, looped or limit-exceeded, a stale
+    /// profile, or a publisher server failure) that vocabulary's twenty-two members -- fourteen
+    /// mirrored one for one from <see cref="Lex.V3.Contracts.Source.Http.HttpAcquisitionReasonRegistry"/>'s
+    /// own entity-transfer, before-response-headers, completion-unproven and response-semantics
+    /// reasons, plus this route's own three named above, plus five reserved for the LU-2 lane's own
+    /// document-get route -- were never scoped to cover. A route-level cause this narrow still refuses
+    /// the whole run, naming the real classified cause, rather than mapping it to an unrelated
+    /// existing member or silently treating it as held.
+    /// </remarks>
+    [JsonStringEnumMemberName("document_fetch_outcome_not_representable")]
+    DocumentFetchOutcomeNotRepresentable = 18,
+
+    /// <summary>
+    /// D1-06c-EU fix two (SCOPE_RULING lex-event-20260904T141600712Z-0b823f7143154a608f01ec8f757f9e93
+    /// item 2): this run's own corpus/6 record set (<see cref="Lex.V3.Ingest.CorpusRecordSetWriter.WriteAsync"/>,
+    /// called as this run's own last step) was written but the store enforced no retention floor on
+    /// it -- the identical floor-check pattern <see cref="ScopeManifestNotHeld"/> and
+    /// <see cref="DocumentBodyNotHeld"/> already apply to this run's other two custody writes, applied
+    /// here to the record set itself.
+    /// </summary>
+    [JsonStringEnumMemberName("record_set_not_held")]
+    RecordSetNotHeld = 19,
 }
 
 public sealed class EuQueryExecutionRefusalDetail
@@ -236,6 +294,9 @@ public sealed class EuQueryExecutionResult
         IReadOnlyList<EuFeedEntryTermination>? witnessTerminations,
         DurableBlobWriteReceipt? scopeManifestReceipt,
         string? scopeManifestCanonicalSha256,
+        IReadOnlyDictionary<int, CorpusAcquisitionOutcome>? documentAcquisitionOutcomesByOrdinal,
+        SourceArtifactRef? corpusRecordSetRef,
+        VerifiedCorpusRecordSet? corpusRecordSet,
         EuQueryExecutionCompletion? completion,
         EuQueryExecutionRefusalDetail? refusal,
         EuCellarObjectDecodeRefusal? decodeRefusal,
@@ -253,6 +314,9 @@ public sealed class EuQueryExecutionResult
         WitnessTerminations = witnessTerminations;
         ScopeManifestReceipt = scopeManifestReceipt;
         ScopeManifestCanonicalSha256 = scopeManifestCanonicalSha256;
+        DocumentAcquisitionOutcomesByOrdinal = documentAcquisitionOutcomesByOrdinal;
+        CorpusRecordSetRef = corpusRecordSetRef;
+        CorpusRecordSet = corpusRecordSet;
         Completion = completion;
         Refusal = refusal;
         DecodeRefusal = decodeRefusal;
@@ -271,7 +335,10 @@ public sealed class EuQueryExecutionResult
         EuPrimaryEnumerationWitnessReconciliation witnessReconciliation,
         IReadOnlyList<EuFeedEntryTermination> witnessTerminations,
         DurableBlobWriteReceipt scopeManifestReceipt,
-        string scopeManifestCanonicalSha256)
+        string scopeManifestCanonicalSha256,
+        IReadOnlyDictionary<int, CorpusAcquisitionOutcome> documentAcquisitionOutcomesByOrdinal,
+        SourceArtifactRef corpusRecordSetRef,
+        VerifiedCorpusRecordSet corpusRecordSet)
     {
         ArgumentNullException.ThrowIfNull(topology);
         ArgumentNullException.ThrowIfNull(watermarkWitnessPlan);
@@ -280,13 +347,17 @@ public sealed class EuQueryExecutionResult
         ArgumentNullException.ThrowIfNull(witnessTerminations);
         ArgumentNullException.ThrowIfNull(scopeManifestReceipt);
         ArgumentException.ThrowIfNullOrWhiteSpace(scopeManifestCanonicalSha256);
+        ArgumentNullException.ThrowIfNull(documentAcquisitionOutcomesByOrdinal);
+        ArgumentNullException.ThrowIfNull(corpusRecordSetRef);
+        ArgumentNullException.ThrowIfNull(corpusRecordSet);
         var completion = familyOutcomes.All(static outcome => outcome.Kind == EuFamilyEnumerationOutcomeKind.Proven)
             ? EuQueryExecutionCompletion.AllFamiliesProven
             : EuQueryExecutionCompletion.PartialFamilyRefused;
         return new(
             topology, familyOutcomes, observedObjectCount, observedExpressionCount, reductionExclusions,
             watermarkWitnessPlan, rootBinding, witnessReconciliation, witnessTerminations, scopeManifestReceipt,
-            scopeManifestCanonicalSha256, completion, null, null, null, null);
+            scopeManifestCanonicalSha256, documentAcquisitionOutcomesByOrdinal, corpusRecordSetRef, corpusRecordSet,
+            completion, null, null, null, null);
     }
 
     public static EuQueryExecutionResult Refused(
@@ -300,7 +371,7 @@ public sealed class EuQueryExecutionResult
         ArgumentNullException.ThrowIfNull(topology);
         ArgumentNullException.ThrowIfNull(refusal);
         return new(
-            topology, familyOutcomes, 0, 0, [], null, null, null, null, null, null, null, refusal,
+            topology, familyOutcomes, 0, 0, [], null, null, null, null, null, null, null, null, null, null, refusal,
             decodeRefusal, decodeOffendingIri, decodeSnapshotRefusal);
     }
 
@@ -363,6 +434,40 @@ public sealed class EuQueryExecutionResult
 
     public string? ScopeManifestCanonicalSha256 { get; }
 
+    /// <summary>
+    /// D1-06c-EU defect 4: one <see cref="CorpusAcquisitionOutcome"/> per reopened manifest row ordinal
+    /// whose own <see cref="Lex.V3.Contracts.Source.Scope.ScopeManifestFetchAddress.Status"/> is
+    /// <see cref="Lex.V3.Contracts.Source.Scope.ScopeManifestFetchAddressStatus.Minted"/> and whose
+    /// real, classified fetch this run could faithfully represent: <see cref="CorpusAcquisitionOutcome.Held"/>
+    /// with a real receipt for a real 200 whose custody write met this run's own floor, or
+    /// <see cref="CorpusAcquisitionOutcome.Refused"/> for a real transport-incomplete outcome this
+    /// door's own closed vocabulary can name. Present iff this result is delivered; a row present in
+    /// the reopened manifest but absent from this dictionary was never Minted at all -- every Minted
+    /// row's own outcome either lands here or refuses the whole run (see
+    /// <see cref="EuQueryExecutionRefusal.DocumentBodyNotHeld"/> and
+    /// <see cref="EuQueryExecutionRefusal.DocumentFetchOutcomeNotRepresentable"/>'s own remarks for
+    /// exactly which outcomes cannot be represented and so refuse the run instead of appearing here).
+    /// D1-06c-EU fix two: this is exactly the <c>acquisitionOutcomesByOrdinal</c> this run itself
+    /// hands to <c>CorpusRecordSetWriter.WriteAsync</c> as its own last step (see this file's own
+    /// remarks on <see cref="RunAsync"/>); it remains exposed here too because it is useful context on
+    /// its own, not because a caller still needs to relay it anywhere.
+    /// </summary>
+    public IReadOnlyDictionary<int, CorpusAcquisitionOutcome>? DocumentAcquisitionOutcomesByOrdinal { get; }
+
+    /// <summary>
+    /// D1-06c-EU fix two: this run's own written corpus/6 record set artifact reference. Present iff
+    /// this result is delivered.
+    /// </summary>
+    public SourceArtifactRef? CorpusRecordSetRef { get; }
+
+    /// <summary>
+    /// D1-06c-EU fix two: the corpus/6 record set this run wrote, reopened and verified through its
+    /// own checked door (<see cref="Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecordSet.ParseAndVerify"/>)
+    /// by <see cref="Lex.V3.Ingest.CorpusRecordSetWriter.WriteAsync"/> itself, never the in-memory set
+    /// this run built. Present iff this result is delivered.
+    /// </summary>
+    public VerifiedCorpusRecordSet? CorpusRecordSet { get; }
+
     public EuQueryExecutionRefusalDetail? Refusal { get; }
 
     public EuCellarObjectDecodeRefusal? DecodeRefusal { get; }
@@ -384,6 +489,33 @@ public sealed class EuQueryExecutionResult
 /// the frozen plan; see <see cref="EuQueryExecutionResult.WatermarkWitnessPlan"/>'s own remarks).
 /// Follows proposal B's step list, authority the D1-05c synthesis ruling.
 /// </summary>
+/// <remarks>
+/// D1-06c-EU defect 4 (SCOPE_RULING lex-event-20260904T130546972Z-c72fad2da5b34344af802c068d8fbf08
+/// item 4): once the manifest is written, floored and reopened, this run also actually drives the
+/// document-fetch GET for every reopened row whose own <c>FetchAddress</c> is Minted, through
+/// <see cref="EuRepeatedEnumerationExecutor.RunDocumentFetchAsync"/> and
+/// <see cref="EuDocumentFetchOutcome.Classify"/>, and prepares real
+/// <see cref="Lex.V3.Ingest.CorpusAcquisitionOutcome"/> values for the ordinals that outcome can
+/// faithfully represent (see <see cref="EuQueryExecutionResult.DocumentAcquisitionOutcomesByOrdinal"/>).
+/// A route-level or classified refusal on ONE row's own fetch never refuses the whole run by itself
+/// any more (D1-06c-EU fix one, SCOPE_RULING
+/// lex-event-20260904T141600712Z-0b823f7143154a608f01ec8f757f9e93 item 1): the three named shapes
+/// that vocabulary now covers become that one row's own typed cause, and every other row still gets
+/// its own record.
+/// <para>
+/// D1-06c-EU fix two (same SCOPE_RULING, item 2): this run now itself calls
+/// <see cref="Lex.V3.Ingest.CorpusRecordSetWriter.WriteAsync"/> as its own last step, after the
+/// manifest is written and every document fetch above has been attempted and classified. D1-06b's own
+/// writer builds one <c>CorpusRecordSet</c> from the reopened manifest plus this run's own document
+/// acquisition outcomes; before this fix nothing in either the EU or the Luxembourg adapter ever
+/// called it, so no corpus/6 record set was ever durably written by a real run. This run mints its
+/// own <c>RunIdentity</c> paired with real evidence (the manifest's own custody-write digest) and
+/// reuses the identical custody floor (<see cref="CustodyClass.NightlyFloor90d"/>) its own manifest
+/// and document-body writes already require; a floor failure on the record set itself refuses the
+/// whole run (<see cref="EuQueryExecutionRefusal.RecordSetNotHeld"/>), exactly as a floor failure on
+/// the manifest or a document body already does.
+/// </para>
+/// </remarks>
 public sealed class EuQueryExecutionAdapter
 {
     private readonly ICustodyStore _custodyStore;
@@ -420,12 +552,28 @@ public sealed class EuQueryExecutionAdapter
     /// (robots negotiation depends only on that profile, never on which family is about to run), so
     /// this may be the same kind of witness already supplied for census/object-facts families.
     /// </param>
+    /// <param name="documentFetchRendererSource">
+    /// D1-06c-EU defect 4: the renderer-source artifact naming <c>EuDocumentFetchRenderer</c>'s own
+    /// code, held with its bytes exactly as every other Europe bind already requires. Kept distinct
+    /// from every other renderer source this run binds, for the identical reason
+    /// <paramref name="witnessRendererSource"/> is: reusing one would misattribute a real HTTP send to
+    /// code that never rendered it.
+    /// </param>
+    /// <param name="documentFetchSourceWitness">
+    /// The bound robots-negotiation witness each document-fetch GET's own session starts from. Unlike
+    /// <paramref name="witnessSourceWitness"/>, this targets a genuinely different official profile
+    /// (<c>OfficialMachineQuerySourceProfileId.EuropeanUnionDocumentFetch</c>, GET against
+    /// <c>publications.europa.eu/resource/...</c> rather than POST against the SPARQL endpoint), so it
+    /// cannot be the same kind of witness the other parameters here use.
+    /// </param>
     /// <param name="evidenceResolver">The evidence resolver the scope reduction requires.</param>
     public async Task<EuQueryExecutionResult> RunAsync(
         IReadOnlyList<(EuCensusPartitionRunRequest Request, BoundMachineRequest SourceWitness)> censusFamilies,
         IReadOnlyList<(EuObjectFactsPartitionRunRequest Request, BoundMachineRequest SourceWitness)> objectFactsFamilies,
         MachineQueryRendererSource witnessRendererSource,
         BoundMachineRequest witnessSourceWitness,
+        MachineQueryRendererSource documentFetchRendererSource,
+        BoundMachineRequest documentFetchSourceWitness,
         IScopeReductionEvidenceResolver evidenceResolver,
         CancellationToken cancellationToken)
     {
@@ -433,6 +581,8 @@ public sealed class EuQueryExecutionAdapter
         ArgumentNullException.ThrowIfNull(objectFactsFamilies);
         ArgumentNullException.ThrowIfNull(witnessRendererSource);
         ArgumentNullException.ThrowIfNull(witnessSourceWitness);
+        ArgumentNullException.ThrowIfNull(documentFetchRendererSource);
+        ArgumentNullException.ThrowIfNull(documentFetchSourceWitness);
         ArgumentNullException.ThrowIfNull(evidenceResolver);
 
         var topology = MintTopology();
@@ -655,6 +805,12 @@ public sealed class EuQueryExecutionAdapter
         var observedObjects = new List<SourceObjectRef>();
         var reductionInputs = new List<ScopeObjectReductionInput>();
         var exclusions = new List<EuObjectReductionExclusion>();
+        // Defect 4's own fix: the real EuDocumentFetchAddress a Minted row's own manifest projection
+        // (ScopeManifestFetchAddress) cannot carry back (it is deliberately thinner -- plain bounded
+        // strings, not this route's own closed enums; see that type's own remarks), captured here so
+        // the acquisition step below can actually send the GET for a Minted row without re-deriving
+        // it from the publisher-neutral projection's own string fields.
+        var mintedAddressesByObjectRef = new Dictionary<SourceObjectRef, EuDocumentFetchAddress>();
 
         foreach (var snapshot in allSnapshots)
         {
@@ -667,9 +823,15 @@ public sealed class EuQueryExecutionAdapter
             try
             {
                 var dispositions = EuScopeSnapshotReduction.Reduce(snapshot);
-                var input = EuScopeProfile.BuildScopeInput(scopeProfile, dispositions, evidenceOrdinals);
+                var (fetchAddress, mintedAddress) = MintFetchAddress(dispositions.ObjectRef);
+                var input = EuScopeProfile.BuildScopeInput(
+                    scopeProfile, dispositions, evidenceOrdinals, fetchAddress);
                 observedObjects.Add(snapshot.ObjectRef);
                 reductionInputs.Add(input);
+                if (mintedAddress is not null)
+                {
+                    mintedAddressesByObjectRef[dispositions.ObjectRef] = mintedAddress;
+                }
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException
                 or NotSupportedException or KeyNotFoundException)
@@ -730,6 +892,14 @@ public sealed class EuQueryExecutionAdapter
                 _custodyStore, writeReceipt.Reference.ContentSha256, cancellationToken)
             .ConfigureAwait(false);
         var manifestArtifactRef = new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", manifestCanonicalSha256);
+        // D1-06c-EU fix two: this run's own identity for the corpus/6 record set it writes as its
+        // last step (see this method's own remarks below and this class's own remarks on RunAsync).
+        // Paired with real evidence -- this exact run's own manifest custody-write digest, distinct
+        // from manifestArtifactRef's own canonical digest above -- rather than an inert placeholder,
+        // mirroring how every other minted SourceArtifactRef in this method pairs a fresh urn:uuid
+        // with a real digest this run already computed.
+        var runIdentityRef = new SourceArtifactRef(
+            $"urn:uuid:{Guid.NewGuid():D}", writeReceipt.Reference.ContentSha256);
         var reopenedManifest = EuScopeManifestBindingProof.TryOpenAsEuManifest(
             manifestArtifactRef, reopened.Span, evidenceResolver, out var bindingRefusal);
         if (reopenedManifest is null)
@@ -738,6 +908,22 @@ public sealed class EuQueryExecutionAdapter
                 topology, outcomes,
                 new EuQueryExecutionRefusalDetail(
                     EuQueryExecutionRefusal.ManifestBindingRefused, bindingRefusal.ToString()));
+        }
+
+        // ---- Defect 4's own fix, and D1-06c-EU defect nine's own fix (REVIEW_RESULT
+        // lex-event-20260904T153119262Z-e51c74bf8710495fbd972b2706509922): actually drive the fetch
+        // for every reopened row whose own body axis is accepted, through the routed session,
+        // classifying the real response and preparing this run's own CorpusAcquisitionOutcome per
+        // ordinal. Extracted into RunDocumentAcquisitionAsync -- see that method's own remarks for
+        // exactly what lands here versus what refuses the whole run instead, and for why the gate
+        // moved there. ----
+        var (documentAcquisitionOutcomesByOrdinal, acquisitionRefusal) = await RunDocumentAcquisitionAsync(
+                reopenedManifest, mintedAddressesByObjectRef, documentFetchRendererSource,
+                documentFetchSourceWitness, cancellationToken)
+            .ConfigureAwait(false);
+        if (acquisitionRefusal is not null)
+        {
+            return EuQueryExecutionResult.Refused(topology, outcomes, acquisitionRefusal);
         }
 
         // ---- D1-05c-2 precision three: freeze the first-cut watermark witness. ----
@@ -856,6 +1042,36 @@ public sealed class EuQueryExecutionAdapter
                     EuQueryExecutionRefusal.WitnessReconciliationRefused, reconciliationRefusal.ToString()));
         }
 
+        // ---- D1-06c-EU fix two: write this run's whole corpus/6 record set as the last step, after
+        // the manifest (above) and every document fetch this run attempted
+        // (RunDocumentAcquisitionAsync above). Item 2 of SCOPE_RULING
+        // lex-event-20260904T141600712Z-0b823f7143154a608f01ec8f757f9e93: before this fix nothing in
+        // this codebase called CorpusRecordSetWriter.WriteAsync, so no corpus/6 record set was ever
+        // durably written by a real run. Reuses this run's own scope-manifest custody floor
+        // (CustodyClass.NightlyFloor90d), the exact constant CorpusRecordSetWriter itself already
+        // requires.
+        //
+        // Defect nine's own fix (same event as above): documentAcquisitionOutcomesByOrdinal is handed
+        // to the writer unfiltered here, and needs no second filter, because
+        // RunDocumentAcquisitionAsync's own gate already means every key in it names an accepted-
+        // selected body ordinal -- a Minted row this manifest's own body-axis policy excludes gets no
+        // fetch attempt at all now, so it was never a candidate to appear in this dictionary in the
+        // first place. An object minted but excluded from the body axis still gets a real corpus
+        // record: CorpusRecordBuilder's own default path makes it NotHeld, naming the manifest's own
+        // disposition as the reason. ----
+        var recordSetWriter = new CorpusRecordSetWriter(_custodyStore);
+        var recordSetResult = await recordSetWriter.WriteAsync(
+                reopenedManifest, manifestArtifactRef, runIdentityRef, documentAcquisitionOutcomesByOrdinal,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (recordSetResult.Refusal is not null)
+        {
+            return EuQueryExecutionResult.Refused(
+                topology, outcomes,
+                new EuQueryExecutionRefusalDetail(
+                    EuQueryExecutionRefusal.RecordSetNotHeld, recordSetResult.Refusal.Detail));
+        }
+
         return EuQueryExecutionResult.Delivered(
             topology,
             outcomes,
@@ -867,7 +1083,278 @@ public sealed class EuQueryExecutionAdapter
             witnessReconciliation: witnessReconciliation,
             witnessTerminations: terminations,
             scopeManifestReceipt: writeReceipt,
-            scopeManifestCanonicalSha256: manifestCanonicalSha256);
+            scopeManifestCanonicalSha256: manifestCanonicalSha256,
+            documentAcquisitionOutcomesByOrdinal: documentAcquisitionOutcomesByOrdinal!,
+            corpusRecordSetRef: recordSetResult.SetRef!,
+            corpusRecordSet: recordSetResult.VerifiedSet!);
+    }
+
+    /// <summary>
+    /// D1-06c-EU defect nine (REVIEW_RESULT
+    /// lex-event-20260904T153119262Z-e51c74bf8710495fbd972b2706509922): drives the document-fetch GET
+    /// for every reopened manifest row whose own body axis is
+    /// <see cref="ScopeDisposition.AcceptedSelected"/> -- never for a Minted row this manifest's own
+    /// body-axis policy has already excluded (for example <see cref="ScopeDisposition.TypedQuarantine"/>).
+    /// Before this fix the loop attempted a fetch for every Minted row regardless of body axis and
+    /// only filtered the outcomes afterward (right before handing them to
+    /// <see cref="CorpusRecordSetWriter.WriteAsync"/>), so a real run issued one GET per quarantined
+    /// object rather than one GET per accepted object, and every corpus record it wrote was NotHeld
+    /// even though bytes had been fetched into custody. Extracted out of <see cref="RunAsync"/> so a
+    /// test can drive this phase directly against a hand-built manifest.
+    /// </summary>
+    /// <remarks>
+    /// Nothing in this codebase yet derives a real <see cref="EuFormatDisposition"/> for a decoded
+    /// snapshot (<see cref="EuCellarObjectDecode"/> never references <c>Format</c> at all), so
+    /// <see cref="EuScopeSnapshotReduction.Reduce"/>'s own body-axis join can never reach
+    /// <see cref="ScopeDisposition.AcceptedSelected"/> through this codebase's real decode seam until
+    /// D1-05d lands: every real EU run today gates every Minted row shut here and records NotHeld for
+    /// every object. That gap is D1-05d's own scope, not this method's; this method's own job is only
+    /// that when a row's body axis genuinely is accepted, it is fetched, and when it is not, it is
+    /// not.
+    /// </remarks>
+    /// <returns>
+    /// The real per-ordinal outcomes this run's fetches produced, or a whole-run refusal for a route-
+    /// level or classified shape this door's own closed <see cref="CorpusAcquisitionRefusalReason"/>
+    /// vocabulary cannot represent. Never both, never neither.
+    /// </returns>
+    internal async Task<(
+        IReadOnlyDictionary<int, CorpusAcquisitionOutcome>? Outcomes,
+        EuQueryExecutionRefusalDetail? Refusal)> RunDocumentAcquisitionAsync(
+        ScopeManifest reopenedManifest,
+        IReadOnlyDictionary<SourceObjectRef, EuDocumentFetchAddress> mintedAddressesByObjectRef,
+        MachineQueryRendererSource documentFetchRendererSource,
+        BoundMachineRequest documentFetchSourceWitness,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(reopenedManifest);
+        ArgumentNullException.ThrowIfNull(mintedAddressesByObjectRef);
+        ArgumentNullException.ThrowIfNull(documentFetchRendererSource);
+        ArgumentNullException.ThrowIfNull(documentFetchSourceWitness);
+
+        // Defect nine's own fix: the accepted-ordinal set is computed once, here, before the loop,
+        // and gates iteration directly -- it no longer only narrows what gets handed to
+        // CorpusRecordSetWriter.WriteAsync after every row has already been fetched.
+        var bodyAcceptedOrdinals = new HashSet<int>();
+        foreach (var accountingSet in reopenedManifest.Accounting)
+        {
+            if (accountingSet.Axis == ScopeAxis.Body &&
+                accountingSet.Disposition == ScopeDisposition.AcceptedSelected)
+            {
+                foreach (var ordinal in accountingSet.ObjectOrdinals)
+                {
+                    bodyAcceptedOrdinals.Add(ordinal);
+                }
+            }
+        }
+
+        var documentAcquisitionOutcomesByOrdinal = new Dictionary<int, CorpusAcquisitionOutcome>();
+        for (var rowOrdinal = 0; rowOrdinal < reopenedManifest.Rows.Count; rowOrdinal++)
+        {
+            var row = reopenedManifest.Rows[rowOrdinal];
+            if (row.FetchAddress.Status != ScopeManifestFetchAddressStatus.Minted)
+            {
+                continue;
+            }
+
+            // Defect nine's own gate: no fetch attempt at all for a Minted row this manifest's own
+            // body axis already excludes. See this method's own remarks for why every real EU row
+            // takes this branch today.
+            if (!bodyAcceptedOrdinals.Contains(rowOrdinal))
+            {
+                continue;
+            }
+
+            var mintedObjectRef = reopenedManifest.ObservedObjects[rowOrdinal].ObjectRef;
+            if (!mintedAddressesByObjectRef.TryGetValue(mintedObjectRef, out var mintedAddress))
+            {
+                // Unreachable in practice: every Minted row's own object came from this exact run's
+                // own per-snapshot loop, the only path that ever mints one. Refusing the whole run
+                // here, rather than throwing, keeps this method's own "never throws past a typed
+                // refusal" discipline even for a defect this loop cannot itself introduce.
+                return (null, new EuQueryExecutionRefusalDetail(
+                    EuQueryExecutionRefusal.DocumentFetchOutcomeNotRepresentable,
+                    $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}') carries a " +
+                    "Minted fetch address this run never itself minted."));
+            }
+
+            var plan = new EuDocumentFetchPlan(mintedAddress);
+            var bound = plan.Bind(
+                $"urn:uuid:{Guid.NewGuid():D}",
+                $"urn:uuid:{Guid.NewGuid():D}",
+                documentFetchRendererSource);
+            var attempt = await _executor.RunDocumentFetchAsync(
+                    bound.Request, documentFetchSourceWitness, cancellationToken)
+                .ConfigureAwait(false);
+            if (attempt.Evidence is null)
+            {
+                if (attempt.Refusal == EuDocumentFetchAttemptRefusal.RobotsBootstrapRefused)
+                {
+                    // Fold-in three (same REVIEW_RESULT as this method's own summary): a robots-
+                    // bootstrap refusal is this one object's own PendingAcquisition cause, not a
+                    // whole-run refusal -- the identical "a 1995-act-shaped 404 must never block a
+                    // 2026 act's own record" precision fix one already applies to a classified
+                    // business refusal.
+                    documentAcquisitionOutcomesByOrdinal[rowOrdinal] = CorpusAcquisitionOutcome.Refused(
+                        CorpusAcquisitionRefusalReason.RobotsDisallowed);
+                    continue;
+                }
+
+                // Every other attempt-level refusal (today, only ObservationNotExecuted) stays a
+                // whole-run refusal: this run's own document-fetch session never started at all,
+                // which is not a fact about any one object's own document.
+                return (null, new EuQueryExecutionRefusalDetail(
+                    EuQueryExecutionRefusal.DocumentFetchSessionNotStarted,
+                    $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): code=" +
+                    $"{attempt.Refusal} detail={attempt.Detail}."));
+            }
+
+            var evidence = attempt.Evidence;
+            var classified = EuDocumentFetchOutcome.Classify(evidence);
+            if (classified.Refusal is null && classified.ObservedStatus == 200)
+            {
+                var bodyBytes = await CustodyRestore.ReadByDigestCheckedAsync(
+                        _custodyStore, evidence.Hops[^1].Sha256, cancellationToken)
+                    .ConfigureAwait(false);
+                var bodyReceipt = await _custodyStore.CreateAsync(
+                        bodyBytes, CustodyClass.NightlyFloor90d, cancellationToken)
+                    .ConfigureAwait(false);
+                if (CustodyMembershipClassifier.Classify(bodyReceipt) != CustodyMembership.Floored)
+                {
+                    return (null, new EuQueryExecutionRefusalDetail(
+                        EuQueryExecutionRefusal.DocumentBodyNotHeld,
+                        $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): the " +
+                        "document body was fetched but the store enforced no retention floor " +
+                        "on it."));
+                }
+
+                documentAcquisitionOutcomesByOrdinal[rowOrdinal] = CorpusAcquisitionOutcome.Held(bodyReceipt);
+                continue;
+            }
+
+            if (TryMapDocumentFetchToCorpusAcquisitionRefusal(classified, evidence, out var representableRefusal))
+            {
+                // D1-06c-EU fix one: this object's own document-fetch refusal becomes its own
+                // PendingAcquisition cause. The loop continues to the next row: one object's document
+                // being unavailable in this format must never prevent every OTHER object in the same
+                // run from getting its own record.
+                documentAcquisitionOutcomesByOrdinal[rowOrdinal] =
+                    CorpusAcquisitionOutcome.Refused(representableRefusal);
+                continue;
+            }
+
+            // Neither a real 200, nor this route's own three named shapes (fix one), nor a robots-
+            // bootstrap refusal (fold-in three), nor a terminal status this door can name (fold-in
+            // one), nor a transport-incomplete shape D1-06b's own CorpusAcquisitionRefusalReason
+            // vocabulary can name (see EuQueryExecutionRefusal.DocumentFetchOutcomeNotRepresentable's
+            // own remarks): a route-level refusal (robots-policy-unavailable, redirect refused, looped
+            // or limit-exceeded, or a stale profile) that vocabulary was never scoped to cover. The
+            // whole run refuses, naming the real classified cause, rather than mapping it to an
+            // unrelated existing member or silently accepting it as held.
+            var routeOutcomeDetail = evidence.Outcome is IncompleteHttpRouteOutcome incompleteOutcome
+                ? $"{evidence.Outcome.GetType().Name}({incompleteOutcome.Reason})"
+                : evidence.Outcome.GetType().Name;
+            return (null, new EuQueryExecutionRefusalDetail(
+                EuQueryExecutionRefusal.DocumentFetchOutcomeNotRepresentable,
+                $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): classified " +
+                $"refusal={classified.Refusal} observedStatus={classified.ObservedStatus} " +
+                $"routeOutcome={routeOutcomeDetail}."));
+        }
+
+        return (documentAcquisitionOutcomesByOrdinal, null);
+    }
+
+    /// <summary>
+    /// D1-06c-EU fix one: whether a document-fetch's own classified outcome is one of this route's
+    /// three named shapes -- <see cref="EuDocumentFetchRefusal.WrongAcceptToken"/>,
+    /// <see cref="EuDocumentFetchRefusal.RequestedRepresentationNotServed"/> or
+    /// <see cref="HttpRouteIncompleteReason.RedirectTargetOriginNotAdmitted"/> -- or, D1-06c-EU
+    /// defect nine's own fold-in one, a terminal status this route completed at for real but
+    /// <see cref="EuDocumentFetchOutcome.Classify"/> does not name (neither 200 nor its own closed
+    /// 400/404 business vocabulary), that <see cref="CorpusAcquisitionRefusalReason"/> now carries as
+    /// one object's own typed cause, falling back to <see cref="TryMapToCorpusAcquisitionRefusal"/>'s
+    /// own hop-level mirror for everything else.
+    /// </summary>
+    private static bool TryMapDocumentFetchToCorpusAcquisitionRefusal(
+        EuDocumentFetchOutcome classified, RoutedHttpEvidence evidence, out CorpusAcquisitionRefusalReason mapped)
+    {
+        switch (classified.Refusal)
+        {
+            case EuDocumentFetchRefusal.WrongAcceptToken:
+                mapped = CorpusAcquisitionRefusalReason.WrongAcceptToken;
+                return true;
+            case EuDocumentFetchRefusal.RequestedRepresentationNotServed:
+                mapped = CorpusAcquisitionRefusalReason.RequestedRepresentationNotServed;
+                return true;
+        }
+
+        if (evidence.Outcome is IncompleteHttpRouteOutcome
+            { Reason: HttpRouteIncompleteReason.RedirectTargetOriginNotAdmitted })
+        {
+            mapped = CorpusAcquisitionRefusalReason.RedirectTargetOriginNotAdmitted;
+            return true;
+        }
+
+        // Fold-in one (REVIEW_RESULT lex-event-20260904T153119262Z-e51c74bf8710495fbd972b2706509922):
+        // a route that completed for real, at a terminal status this route has no reviewed reading
+        // for (a 500, a 503, a 429 -- anything but 200, 400 or 404), is this one object's own typed
+        // cause: the object's document is unavailable in this publisher response, not a fact about
+        // the run's own document-fetch capability.
+        if (classified.Refusal is null && evidence.Outcome is CompleteHttpRouteOutcome &&
+            classified.ObservedStatus is { } observedStatus && observedStatus != 200)
+        {
+            mapped = CorpusAcquisitionRefusalReason.UnexpectedPublisherStatus;
+            return true;
+        }
+
+        return TryMapToCorpusAcquisitionRefusal(evidence, out mapped);
+    }
+
+    /// <summary>
+    /// Defect 4's own honest boundary: whether a hop-level transport-incomplete outcome has a
+    /// faithful member in D1-06b's own closed <see cref="CorpusAcquisitionRefusalReason"/>
+    /// vocabulary. That vocabulary mirrors <see cref="HttpAcquisitionReasonRegistry"/>'s own fourteen
+    /// entity-transfer, before-response-headers, completion-unproven and response-semantics reasons
+    /// one for one under the identical wire names (both are literally authored against
+    /// <c>schemas/v3-source/http/http-acquisition-reason-registry.json</c>), so a hop's own
+    /// already-checked registry member maps by its wire key alone -- never by re-deriving or guessing
+    /// one. Every other route-level or classified-business shape (see this method's own caller) has no
+    /// member here and returns false.
+    /// </summary>
+    private static bool TryMapToCorpusAcquisitionRefusal(
+        RoutedHttpEvidence evidence, out CorpusAcquisitionRefusalReason mapped)
+    {
+        if (evidence.Outcome is IncompleteHttpRouteOutcome { Reason: HttpRouteIncompleteReason.HopIncomplete } &&
+            evidence.Hops.Count > 0 &&
+            evidence.Hops[^1].Completion is IncompleteHttpCompletion incomplete &&
+            incomplete.Reason.RegistryRef == HttpAcquisitionReasonRegistry.RegistryRef)
+        {
+            var candidate = incomplete.Reason.MemberKey switch
+            {
+                "body_deadline" => CorpusAcquisitionRefusalReason.BodyDeadline,
+                "body_read_failure" => CorpusAcquisitionRefusalReason.BodyReadFailure,
+                "byte_bound_prevented_completion" => CorpusAcquisitionRefusalReason.ByteBoundPreventedCompletion,
+                "caller_cancelled_after_headers" => CorpusAcquisitionRefusalReason.CallerCancelledAfterHeaders,
+                "declared_length_short_read" => CorpusAcquisitionRefusalReason.DeclaredLengthShortRead,
+                "missing_completion_proof" => CorpusAcquisitionRefusalReason.MissingCompletionProof,
+                "transfer_coding_conflict" => CorpusAcquisitionRefusalReason.TransferCodingConflict,
+                "invalid_content_length" => CorpusAcquisitionRefusalReason.InvalidContentLength,
+                "unsupported_transfer_coding" => CorpusAcquisitionRefusalReason.UnsupportedTransferCoding,
+                "header_deadline" => CorpusAcquisitionRefusalReason.HeaderDeadline,
+                "transport_before_headers" => CorpusAcquisitionRefusalReason.TransportBeforeHeaders,
+                "revalidation_request_not_admitted" => CorpusAcquisitionRefusalReason.RevalidationRequestNotAdmitted,
+                "status_content_forbidden" => CorpusAcquisitionRefusalReason.StatusContentForbidden,
+                "status_framing_conflict" => CorpusAcquisitionRefusalReason.StatusFramingConflict,
+                _ => (CorpusAcquisitionRefusalReason?)null,
+            };
+            if (candidate is { } value)
+            {
+                mapped = value;
+                return true;
+            }
+        }
+
+        mapped = default;
+        return false;
     }
 
     /// <summary>
@@ -1255,6 +1742,98 @@ public sealed class EuQueryExecutionAdapter
 
         offendingValue = null;
         return true;
+    }
+
+    /// <summary>
+    /// D1-06c-EU, item 3: "The EU adapter mints a real fetch address for every EU row it produces."
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="EuWemiIdentityBoundary"/>'s own <c>CellarOrigins</c> constant already proves every
+    /// Cellar WEMI object's (work, expression, manifestation, item) <c>PublisherUri</c> is exactly
+    /// <c>{origin}/resource/cellar/{ps-id}</c>. Defect 4's own fix: the ps-id this route needs for
+    /// <c>ps-name=cellar</c> is stripped straight out of that origin-prefixed <c>PublisherUri</c>
+    /// (see <see cref="TryExtractCellarKey"/>), never read off <see cref="SourceObjectRef.CanonicalKey"/>.
+    /// That field is a decode-internal identity for this reduction pipeline's own bookkeeping --
+    /// <see cref="EuCellarObjectDecode"/>'s own <c>BuildObjectRef</c> mints it as
+    /// <c>"eu-consolidation-root:" + rootIri</c> or <c>"eu-consolidation-state:" + stateIri</c>, the
+    /// full IRI with a disambiguating prefix, not the bare Cellar key <see cref="EuWemiIdentityBoundary"/>'s
+    /// own convention assumes. Reading it as a ps-id (the original, unfixed shape of this method)
+    /// always failed <see cref="EuDocumentFetchAddress.TryCreate"/>'s own ps-id shape check -- the
+    /// prefix's embedded <c>:</c> is admitted, but the IRI's own embedded <c>/</c> characters are
+    /// not -- so this method minted <c>NotMinted</c> for every real decoded object, silently, with no
+    /// failing test to say so until defect 4's own end-to-end acquisition test actually looked at
+    /// <see cref="EuQueryExecutionResult.DocumentAcquisitionOutcomesByOrdinal"/> and found it empty.
+    /// </para>
+    /// <para>
+    /// The manifestation media type and language are fixed to the one combination
+    /// <c>review/23-research-temporal.md</c> section 1.2 PROVES reaches a real 200 with actual
+    /// content (<c>Accept: application/xhtml+xml</c>, <c>Accept-Language: en</c>). Choosing a
+    /// different manifestation per object is a later slice's policy decision, not this one's.
+    /// </para>
+    /// <para>
+    /// Never throws: a row this route cannot yet address (wrong authority, a <c>PublisherUri</c> not
+    /// on either admitted Cellar origin, or a shape <see cref="EuDocumentFetchAddress.TryCreate"/>
+    /// refuses) becomes <c>NotMinted</c> rather than failing the whole object's reduction, matching
+    /// this loop's own "reduction never throws" discipline for everything else it calls.
+    /// </para>
+    /// <para>
+    /// Defect 4's own fix also returns the real <see cref="EuDocumentFetchAddress"/> alongside its
+    /// publisher-neutral manifest projection (null exactly when the projection is <c>NotMinted</c>),
+    /// so the caller can actually drive this route's own GET for a Minted row without re-deriving a
+    /// typed address from the projection's own plain bounded-string fields, which
+    /// <see cref="ScopeManifestFetchAddress"/>'s own remarks say it is deliberately too thin to
+    /// support.
+    /// </para>
+    /// </remarks>
+    private static (ScopeManifestFetchAddress Manifest, EuDocumentFetchAddress? Address) MintFetchAddress(
+        SourceObjectRef objectRef)
+    {
+        if (objectRef.Authority != SourceAuthority.Cellar ||
+            !TryExtractCellarKey(objectRef.PublisherUri, out var cellarKey))
+        {
+            return (
+                ScopeManifestFetchAddress.NotMinted(ScopeManifestFetchAddressAbsenceReason.NoPublisherRouteYet),
+                null);
+        }
+
+        var address = EuDocumentFetchAddress.TryCreate(
+            "cellar",
+            cellarKey,
+            EuManifestationMediaType.XhtmlXml,
+            EuDocumentLanguage.Eng,
+            out _);
+        return address is null
+            ? (ScopeManifestFetchAddress.NotMinted(ScopeManifestFetchAddressAbsenceReason.NoPublisherRouteYet), null)
+            : (address.ToManifestFetchAddress(), address);
+    }
+
+    /// <summary>
+    /// The only two origins a Cellar object may be named by, both schemes the publisher answers on --
+    /// the identical pair <see cref="EuWemiIdentityBoundary"/>'s own private <c>CellarOrigins</c>
+    /// constant already checks a <c>PublisherUri</c> against, reproduced here (that constant is
+    /// private to a different type) so this method can recover the suffix, not merely confirm one
+    /// exists.
+    /// </summary>
+    private static readonly string[] CellarOrigins =
+    [
+        "http://publications.europa.eu/resource/cellar/",
+        "https://publications.europa.eu/resource/cellar/",
+    ];
+
+    private static bool TryExtractCellarKey(string publisherUri, out string cellarKey)
+    {
+        foreach (var origin in CellarOrigins)
+        {
+            if (publisherUri.StartsWith(origin, StringComparison.Ordinal))
+            {
+                cellarKey = publisherUri[origin.Length..];
+                return cellarKey.Length > 0;
+            }
+        }
+
+        cellarKey = string.Empty;
+        return false;
     }
 
     /// <summary>

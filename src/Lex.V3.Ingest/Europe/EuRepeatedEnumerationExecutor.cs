@@ -321,6 +321,70 @@ public sealed class EuWitnessTraversalResult
 }
 
 /// <summary>
+/// Why <see cref="EuRepeatedEnumerationExecutor.RunDocumentFetchAsync"/> did not deliver real
+/// evidence for a document-fetch GET. Closed and deliberately narrow: unlike
+/// <see cref="EuWitnessTraversalRefusal"/> or <see cref="EuEnumerationRefusal"/>, this method never
+/// classifies the status or media type of a completed response itself -- that is
+/// <see cref="Lex.V3.Contracts.Source.Europe.EuDocumentFetchOutcome.Classify"/>'s own job, run by the
+/// caller against the real <see cref="RoutedHttpEvidence"/> this type hands back on
+/// <see cref="EuDocumentFetchAttemptResult.Evidence"/>. This vocabulary names only the two ways the
+/// GET could not even be attempted for real: robots refused the session before any product request,
+/// or every retryable attempt this run's own profile allows was spent without a header-complete
+/// response.
+/// </summary>
+public enum EuDocumentFetchAttemptRefusal
+{
+    [JsonStringEnumMemberName("none")]
+    None = 0,
+
+    [JsonStringEnumMemberName("robots_bootstrap_refused")]
+    RobotsBootstrapRefused = 1,
+
+    [JsonStringEnumMemberName("observation_not_executed")]
+    ObservationNotExecuted = 2,
+}
+
+/// <summary>Executed for real (whatever the office answered), or refused before it ever sent. Never both, never neither.</summary>
+public sealed class EuDocumentFetchAttemptResult
+{
+    private EuDocumentFetchAttemptResult(
+        RoutedHttpEvidence? evidence, EuDocumentFetchAttemptRefusal? refusal, string? detail)
+    {
+        Evidence = evidence;
+        Refusal = refusal;
+        Detail = detail;
+    }
+
+    /// <summary>
+    /// The real, retained route evidence for this one GET attempt. Present iff this result is
+    /// <see cref="Executed"/>; the caller (<c>EuQueryExecutionAdapter</c>) classifies it through
+    /// <see cref="Lex.V3.Contracts.Source.Europe.EuDocumentFetchOutcome.Classify"/>, since a completed
+    /// 200, 400 or 404 are all equally "executed" here -- this type draws no line between them.
+    /// </summary>
+    public RoutedHttpEvidence? Evidence { get; }
+
+    public EuDocumentFetchAttemptRefusal? Refusal { get; }
+
+    public string? Detail { get; }
+
+    public static EuDocumentFetchAttemptResult Executed(RoutedHttpEvidence evidence)
+    {
+        ArgumentNullException.ThrowIfNull(evidence);
+        return new(evidence, null, null);
+    }
+
+    public static EuDocumentFetchAttemptResult Refused(EuDocumentFetchAttemptRefusal refusal, string? detail)
+    {
+        if (refusal == EuDocumentFetchAttemptRefusal.None)
+        {
+            throw new ArgumentOutOfRangeException(nameof(refusal));
+        }
+
+        return new(null, refusal, detail);
+    }
+}
+
+/// <summary>
 /// D1-05c-2: the EU repeated-enumeration executor. See the type's own summary above for exactly what
 /// it owns and what it deliberately reuses from item 19 and Core rather than reimplementing.
 /// </summary>
@@ -625,6 +689,97 @@ public sealed class EuRepeatedEnumerationExecutor
             return EuWitnessTraversalResult.Refused(
                 new EuWitnessTraversalRefusalDetail(EuWitnessTraversalRefusal.ObservationNotExecuted, exception.Message),
                 productRequestCount);
+        }
+        finally
+        {
+            session.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// D1-06c-EU defect 4 (SCOPE_RULING lex-event-20260904T130546972Z-c72fad2da5b34344af802c068d8fbf08
+    /// item 4): sends one real document-fetch GET for <paramref name="boundRequest"/> (one
+    /// <c>EuDocumentFetchPlan.Bind</c> result's own <c>Request</c>) and hands back the real, retained
+    /// <see cref="RoutedHttpEvidence"/> for the caller to classify through
+    /// <c>EuDocumentFetchOutcome.Classify</c>. This method itself never inspects the response's own
+    /// status or media type, unlike <see cref="RunWitnessTraversalAsync"/>'s own use of the shared
+    /// <see cref="RepeatedEnumerationDeliveryReopenGlue.ObserveAsync"/> door, which the document-fetch
+    /// channel cannot reuse: that door admits only a byte-exact expected media type, and this route's
+    /// own real responses append a charset parameter (<c>application/xhtml+xml;charset=UTF-8</c>) the
+    /// address a GET was minted for never claims to equal (<c>EuDocumentFetchAddress.Accept</c> is
+    /// exactly <c>application/xhtml+xml</c>, with no charset). One session per call, exactly the same
+    /// pattern every other family here already uses (<see cref="RunCensusPartitionAsync"/>,
+    /// <see cref="RunObjectFactsPartitionAsync"/> and <see cref="RunWitnessTraversalAsync"/> each start
+    /// and dispose their own session too), so a document-fetch GET's own robots negotiation is neither
+    /// shared with nor able to desynchronize from any other channel's.
+    /// </summary>
+    /// <param name="boundRequest">One <c>EuDocumentFetchPlan.Bind</c> result's own <c>Request</c>.</param>
+    /// <param name="sourceWitness">The bound robots-negotiation witness this session starts from.</param>
+    public async Task<EuDocumentFetchAttemptResult> RunDocumentFetchAsync(
+        BoundMachineRequest boundRequest,
+        BoundMachineRequest sourceWitness,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(boundRequest);
+        ArgumentNullException.ThrowIfNull(sourceWitness);
+
+        var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
+        if (session is null)
+        {
+            return EuDocumentFetchAttemptResult.Refused(
+                EuDocumentFetchAttemptRefusal.RobotsBootstrapRefused, null);
+        }
+
+        try
+        {
+            var item = session.OpenPlanItem(boundRequest);
+            var maximumAttempts = session.SourceProfile.MaximumAttempts;
+            var attemptOrdinal = 0;
+            RoutedHttpAcquisitionSession.AttemptResult attempt;
+            while (true)
+            {
+                attempt = await item.ExecuteNextAttemptAsync(cancellationToken).ConfigureAwait(false);
+                attemptOrdinal++;
+                if (attempt.Kind == OfficialHttpAcquisitionOutcomeKind.ExecutedObservation)
+                {
+                    break;
+                }
+
+                // Mirrors RepeatedEnumerationDeliveryReopenGlue.ObserveAsync's identical retry
+                // predicate: the one condition under which the session's own PlanItem allows another
+                // attempt after a non-executed outcome (RoutedHttpAcquisitionSession.cs, PlanItem
+                // .IsRetryable's pre-header branch) is a failure before headers completed.
+                var retryable = attempt.PreHeaderFailureClass is
+                    HttpPreHeaderFailureClass.HeaderDeadline or HttpPreHeaderFailureClass.TransportBeforeHeaders;
+                if (!retryable || attemptOrdinal >= maximumAttempts)
+                {
+                    return EuDocumentFetchAttemptResult.Refused(
+                        EuDocumentFetchAttemptRefusal.ObservationNotExecuted,
+                        $"{attempt.OperationalReason}/{attempt.PreHeaderFailureClass}");
+                }
+            }
+
+            var evidence = attempt.Evidence!;
+
+            // Decision 78 retention: a run holds what it depends on. The evidence document is
+            // written and reopened by digest exactly as RepeatedEnumerationDeliveryReopenGlue
+            // .ObserveAsync already does for every other channel, so a document-fetch attempt's own
+            // evidence is retained custody too, never left to live only in this process's memory.
+            var evidenceBytes = evidence.CopyCanonicalBytes();
+            var evidenceReceipt = await _custodyStore.CreateAsync(
+                    evidenceBytes, CustodyClass.NightlyFloor90d, cancellationToken)
+                .ConfigureAwait(false);
+            var reopenedEvidenceBytes = await CustodyRestore.ReadByDigestCheckedAsync(
+                    _custodyStore, evidenceReceipt.Reference.ContentSha256, cancellationToken)
+                .ConfigureAwait(false);
+            var reopenedEvidence = RoutedHttpEvidence.ParseAndVerify(reopenedEvidenceBytes.Span);
+
+            return EuDocumentFetchAttemptResult.Executed(reopenedEvidence);
+        }
+        catch (Exception exception) when (exception is CustodyIntegrityException or CustodyRequiredException)
+        {
+            return EuDocumentFetchAttemptResult.Refused(
+                EuDocumentFetchAttemptRefusal.ObservationNotExecuted, exception.Message);
         }
         finally
         {

@@ -1,0 +1,77 @@
+User-agent: *
+Allow: /
+# === Sitemap ===
+Sitemap: https://op.europa.eu/documents/d/global/sitemap_index-xml
+ 
+# === Logout and Basket Pages ===
+Disallow: /c/portal/
+Disallow: /*/basket
+
+# === auth and control panel Pages ===
+Disallow: /*/auth/
+Disallow: *control_panel
+
+# === RDF & WebDAV Requests ===
+Disallow: *requestAction=rdf
+Disallow: /webdav/*
+ 
+# === Dataset Version and Wrong URLs ===
+Disallow: /*/eu-vocabularies/dataset/*version
+ 
+# === Short URL & Redirection Blocking ===
+Disallow: /s/*
+Disallow: /*shortUrl$
+ 
+# === Allow Important Public Resources ===
+Allow: *SubjectFilterPortlet
+ 
+# === Dynamic & State-Dependent Pages ===
+# Block dynamic pages that contain session or state parameters
+Disallow: /*p_p_id=
+Disallow: /*p_p_lifecycle=
+Disallow: /*p_p_state=
+Disallow: /*p_p_mode=
+Disallow: /*_publicationDetailsActions_
+Disallow: /*_procurementDetailsActions_
+Disallow: /*WT_mc_id=
+Disallow: /*/portal/logout?*
+Disallow: /*/web/public-procurement/procurement-details?*
+Disallow: /*/publication-detail?*
+Disallow: /*/web/eu-vocabularies/semantic-knowledge-base?*
+Disallow: /*/web/eu-vocabularies/dataset?*
+Disallow: /*/web/eu-vocabularies/concept?*
+Disallow: /*/web/who-is-who/person?*
+
+# === Crawl budget Bing Web Master Tool ===
+Disallow: /flexpaper/
+Disallow: /new-bookshop?
+Disallow: /*.gif$
+
+### The Universal Catch-All /language-*
+# Allow crawling the clean base publication pages for all 24 languages
+# Allow: /*/publication-detail/-/publication/*
+ 
+# Block cross-language trails for all 24 languages across the whole portal
+# Disallow: /*/publication-detail/-/publication/*/language-*
+
+ # === Block other PORTAL websites ===
+Disallow: /*/web/dorie/*
+Disallow: /*/web/style-guide/*
+Disallow: /*/web/comite255/*
+Disallow: /*/web/webanalytics/*
+
+# === Specific User-Agent Rules ===
+User-agent: Sogou web spider
+Disallow: /
+ 
+User-agent: PetalBot
+Disallow: /
+ 
+User-agent: LinkedInBot
+Allow: /
+ 
+User-agent: facebookexternalhit
+Allow: /
+ 
+User-agent: Twitterbot
+Disallow:

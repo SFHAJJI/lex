@@ -13,5 +13,7 @@
     <Content Include="../../schemas/v3-source/http/http-acquisition-reason-registry.json"
              Link="http-acquisition-reason-registry.json"
              CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Fixtures/EuDocumentFetch/*.bin" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Fixtures/EuDocumentFetch/*.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

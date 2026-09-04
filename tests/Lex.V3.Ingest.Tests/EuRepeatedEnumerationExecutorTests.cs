@@ -116,6 +116,79 @@ public sealed class EuRepeatedEnumerationExecutorTests
     }
 
     /// <summary>
+    /// Fold-in from the D1-06c-EU refreeze review (SCOPE_RULING
+    /// lex-event-20260904T143553601Z-e6842d729c9b41fc8f5a6e76d5750bc2):
+    /// <see cref="EuDocumentFetchAttemptRefusal.RobotsBootstrapRefused"/> existed as a real code path
+    /// in <see cref="EuRepeatedEnumerationExecutor.RunDocumentFetchAsync"/> (returned whenever
+    /// <c>RoutedHttpAcquisitionSession.StartAsync</c>'s own bootstrap does not reach
+    /// <c>ExecutedObservation</c>) but no test ever drove it through the real executor -- only a
+    /// robots-policy unit test at the session level exercised the underlying denial itself. This
+    /// drives it end to end: a robots.txt that disallows every path for every agent denies the
+    /// document-fetch source witness's own requested path at bootstrap, so
+    /// <c>RoutedHttpAcquisitionSession.BootstrapRobotsAsync</c> returns
+    /// <c>StartResult.PublisherDenied</c>, <c>StartSessionAsync</c> sees a non-<c>ExecutedObservation</c>
+    /// kind and returns <see langword="null"/>, and <c>RunDocumentFetchAsync</c> reports this refusal
+    /// with no evidence at all -- never reaching the product GET, which this handler would throw for.
+    /// </summary>
+    [TestMethod]
+    public async Task ARobotsDisallowForEveryAgentRefusesTheDocumentFetchAttemptAsRobotsBootstrapRefused()
+    {
+        var handler = new DocumentFetchRobotsDenyingHandler();
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var executor = new EuRepeatedEnumerationExecutor(
+            store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
+
+        var witness = EuAcquisitionTestFixture.DocumentFetchSourceWitness();
+        var result = await executor.RunDocumentFetchAsync(witness, witness, CancellationToken.None);
+
+        Assert.IsNull(result.Evidence);
+        Assert.AreEqual(EuDocumentFetchAttemptRefusal.RobotsBootstrapRefused, result.Refusal);
+    }
+
+    /// <summary>
+    /// Answers the EU robots route with an unconditional <c>Disallow: /</c> for every agent, so
+    /// <see cref="ARobotsDisallowForEveryAgentRefusesTheDocumentFetchAttemptAsRobotsBootstrapRefused"/>
+    /// never reaches a product request; reaching one here is a test defect, so it throws.
+    /// </summary>
+    private sealed class DocumentFetchRobotsDenyingHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.RequestUri!.Host == "publications.europa.eu" && request.RequestUri.AbsolutePath == "/robots.txt")
+            {
+                var body = System.Text.Encoding.UTF8.GetBytes("moved");
+                var content = new ByteArrayContent(body);
+                content.Headers.TryAddWithoutValidation("Content-Type", "text/plain;charset=UTF-8");
+                content.Headers.TryAddWithoutValidation(
+                    "Content-Length", body.Length.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                var response = new HttpResponseMessage(System.Net.HttpStatusCode.MovedPermanently)
+                {
+                    Version = System.Net.HttpVersion.Version11, RequestMessage = request, Content = content,
+                };
+                response.Headers.Location = new Uri("https://op.europa.eu/robots.txt");
+                return Task.FromResult(response);
+            }
+
+            if (request.RequestUri.Host == "op.europa.eu" && request.RequestUri.AbsolutePath == "/robots.txt")
+            {
+                var body = System.Text.Encoding.UTF8.GetBytes("User-agent: *\nDisallow: /\n");
+                var content = new ByteArrayContent(body);
+                content.Headers.TryAddWithoutValidation("Content-Type", "text/plain;charset=UTF-8");
+                content.Headers.TryAddWithoutValidation(
+                    "Content-Length", body.Length.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                {
+                    Version = System.Net.HttpVersion.Version11, RequestMessage = request, Content = content,
+                });
+            }
+
+            throw new InvalidOperationException(
+                $"unreachable: a robots-denied bootstrap must never reach a product request ({request.RequestUri}).");
+        }
+    }
+
+    /// <summary>
     /// Answers the EU robots route (by URI, exactly as <see cref="EuAcquisitionTestFixture.ClassifyingHandler"/>
     /// does), then always returns <paramref name="countBody"/> for every SPARQL POST -- correct for
     /// these two tests because both refuse from the pass's own count response, before any page bind
