@@ -34,6 +34,14 @@ namespace Lex.V3.Ingest.Tests.Census;
 /// say what makes this one real: the sweep is over the assembly, not over a list, and the
 /// first registry added to it becomes an element the empty expectation does not have.
 /// </para>
+/// <para>
+/// When a real change makes this fail, that is the pin working rather than a defect in it, and the
+/// fix is not to hand edit the array until it matches. Re-derive it: print the sweep's own output
+/// from a throwaway test that writes it somewhere under <c>Path.GetTempPath()</c>, read the diff,
+/// and transcribe the printed lines. Never rebuild the expected side from the sweep inside the
+/// test. It would then agree with whatever the code happens to say, which is the one thing a pin
+/// must not do, and it is how a large array quietly stops being evidence of anything.
+/// </para>
 /// </remarks>
 [TestClass]
 public sealed class VocabularyRegistryCensusTests

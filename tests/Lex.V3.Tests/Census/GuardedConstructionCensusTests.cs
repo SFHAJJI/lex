@@ -33,6 +33,14 @@ namespace Lex.V3.Tests.Census;
 /// and a pin that fires on edits that opened no door is a pin people learn to regenerate without
 /// reading.
 /// </para>
+/// <para>
+/// When a real change makes this fail, that is the pin working rather than a defect in it, and the
+/// fix is not to hand edit the array until it matches. Re-derive it: print the sweep's own output
+/// from a throwaway test that writes it somewhere under <c>Path.GetTempPath()</c>, read the diff,
+/// and transcribe the printed lines. Never rebuild the expected side from the sweep inside the
+/// test. It would then agree with whatever the code happens to say, which is the one thing a pin
+/// must not do, and it is how a large array quietly stops being evidence of anything.
+/// </para>
 /// </remarks>
 [TestClass]
 public sealed class GuardedConstructionCensusTests
