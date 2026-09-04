@@ -286,6 +286,100 @@ public sealed class LuxembourgDocumentGetTests
     }
 
     // ---------------------------------------------------------------------------------------
+    // The dangerous direction of the Decision 71 interpretation.
+    // ---------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// A DIGEST MISMATCH IS A CUSTODY FAILURE AND STAYS ONE. RULING
+    /// lex-event-20260904T212914634Z-f166f0b9e11b445795efd40c268bfbb8 with addendum
+    /// lex-event-20260904T213158723Z-699ebe73901142a993731759e1e8e6b7: relaxing the floor lets a
+    /// body be held under a weaker guarantee, and the danger it creates is that "we stored it under
+    /// a weaker guarantee" and "we failed to store it" stop being different facts. Here the store
+    /// accepts the write and then cannot reproduce those exact bytes at their own digest, which is
+    /// a real failure. It must refuse, not record a held body with RetainedUnenforced.
+    /// </summary>
+    [TestMethod]
+    public async Task ADigestMismatchAfterTheWriteRefusesRatherThanHoldingUnderAWeakerClass()
+    {
+        var body = "<akomaNtoso/>"u8.ToArray();
+        var store = new HoldFailingCustodyStore(new FlooringCustodyStore(), body, failWrite: false);
+
+        var (outcomes, refusal, _, _, _) = await AcquireWithHandlerAsync(
+            new RobotsThenDocumentHandler((request, _) =>
+                BinaryResponse(request, HttpStatusCode.OK, body)),
+            Address(),
+            store);
+
+        Assert.IsNotNull(refusal, "a body whose stored bytes do not reopen at their own digest is not held.");
+        Assert.AreEqual(LuxembourgQueryExecutionRefusal.DocumentBodyNotHeld, refusal!.Code);
+        StringAssert.Contains(refusal.Detail, "digest");
+        Assert.IsEmpty(outcomes, "and no held outcome is recorded for it under any custody class.");
+    }
+
+    /// <summary>
+    /// A WRITE ERROR IS A CUSTODY FAILURE AND STAYS ONE. The same addendum, the other half: the
+    /// store never accepted the bytes at all. A held record naming a receipt that does not exist
+    /// would be a false hold, which is worse than the wall the floor relaxation removed.
+    /// </summary>
+    [TestMethod]
+    public async Task AWriteErrorRefusesRatherThanHoldingUnderAWeakerClass()
+    {
+        var body = "<akomaNtoso/>"u8.ToArray();
+        var store = new HoldFailingCustodyStore(new FlooringCustodyStore(), body, failWrite: true);
+
+        var (outcomes, refusal, _, _, _) = await AcquireWithHandlerAsync(
+            new RobotsThenDocumentHandler((request, _) =>
+                BinaryResponse(request, HttpStatusCode.OK, body)),
+            Address(),
+            store);
+
+        Assert.IsNotNull(refusal, "a body the store refused to write is not held.");
+        Assert.AreEqual(LuxembourgQueryExecutionRefusal.DocumentBodyNotHeld, refusal!.Code);
+        StringAssert.Contains(refusal.Detail, "custody write failed");
+        Assert.IsEmpty(outcomes);
+    }
+
+    /// <summary>
+    /// The positive half of the same ruling, so the pair reads as one statement: a store that
+    /// honestly declares NotEnforced holds the body, and the record says so. This is the wall the
+    /// Code civil canary hit, now passable without weakening what a failure means.
+    /// </summary>
+    [TestMethod]
+    public async Task AnUnenforcedStoreHoldsTheBodyAndTheRecordCarriesRetainedUnenforced()
+    {
+        var body = "<akomaNtoso/>"u8.ToArray();
+        var store = new UnenforcedCustodyStore();
+
+        var (outcomes, refusal, manifest, manifestRef, _) = await AcquireWithHandlerAsync(
+            new RobotsThenDocumentHandler((request, _) =>
+                BinaryResponse(request, HttpStatusCode.OK, body)),
+            Address(),
+            store);
+
+        Assert.IsNull(refusal, refusal?.Detail);
+        Assert.HasCount(1, outcomes);
+        var receipt = outcomes.Values.Single().Receipt;
+        Assert.IsNotNull(receipt, "an unenforced store still HOLDS the bytes.");
+        Assert.AreEqual(
+            CustodyMembership.RetainedUnenforced,
+            CustodyMembershipClassifier.Classify(receipt!),
+            "and the class is what the store honestly declared, through the one classifier.");
+
+        // The record-set half is NOT this lane's to change. CorpusRecordSetWriter's own floor gate
+        // is shared with the EU lane and the gate ownership ruling
+        // (lex-event-20260904T214500631Z-2988b4fbae224252b08849326325a2a6) put it in the lane that
+        // merges first, so it still refuses an unenforced store. Asserted as it is, so this test
+        // states the real boundary rather than implying the whole path works.
+        var written = await new CorpusRecordSetWriter(store).WriteAsync(
+            manifest, manifestRef, RunIdentityRef(), outcomes, CancellationToken.None);
+        Assert.IsNotNull(
+            written.Refusal,
+            "until the shared writer's gate lands in the EU lane, the SET still refuses on an "
+            + "unenforced store even though the BODY above is held.");
+        Assert.AreEqual(CorpusRecordSetWriteRefusalKind.RecordSetNotHeld, written.Refusal!.Kind);
+    }
+
+    // ---------------------------------------------------------------------------------------
     // Helpers.
     // ---------------------------------------------------------------------------------------
 
@@ -342,9 +436,10 @@ public sealed class LuxembourgDocumentGetTests
         SourceArtifactRef ManifestRef,
         ICustodyStore Store)> AcquireWithHandlerAsync(
         RobotsThenDocumentHandler handler,
-        LuxembourgDocumentFetchAddress address)
+        LuxembourgDocumentFetchAddress address,
+        ICustodyStore? custodyStore = null)
     {
-        var store = new FlooringCustodyStore();
+        var store = custodyStore ?? new FlooringCustodyStore();
         var adapter = new LuxembourgQueryExecutionAdapter(
             store,
             new LuxembourgRepeatedEnumerationExecutor(
@@ -501,6 +596,97 @@ public sealed class LuxembourgDocumentGetTests
 
             return Task.FromResult(response(request, ordinal));
         }
+    }
+
+    /// <summary>
+    /// Fails ONLY the acquisition's own hold, never the session's retention of the same bytes.
+    /// </summary>
+    /// <remarks>
+    /// The precision matters and cost a first attempt. The routed session retains the response body
+    /// in custody itself, so the same payload is written and read once before the adapter ever
+    /// holds it. A store that failed on the first sight of those bytes broke the SESSION and the
+    /// run refused as DocumentFetchSessionNotStarted, which is a true refusal about a different
+    /// thing and would have made these two tests pass while proving nothing about the hold. So the
+    /// failure is armed only after the payload has been written once, which is exactly the
+    /// adapter's own second write.
+    /// </remarks>
+    private sealed class HoldFailingCustodyStore(
+        ICustodyStore inner, byte[] payload, bool failWrite) : ICustodyStore
+    {
+        private int _writes;
+        private string? _armedDigest;
+
+        public Task<DurableBlobWriteReceipt> CreateAsync(
+            ReadOnlyMemory<byte> bytes, CustodyClass custodyClass, CancellationToken cancellationToken)
+        {
+            if (!bytes.Span.SequenceEqual(payload))
+            {
+                return inner.CreateAsync(bytes, custodyClass, cancellationToken);
+            }
+
+            _writes++;
+            if (_writes < 2)
+            {
+                return inner.CreateAsync(bytes, custodyClass, cancellationToken);
+            }
+
+            if (failWrite)
+            {
+                throw new CustodyRequiredException("the store refused this write.");
+            }
+
+            _armedDigest = CustodyDigest.Of(payload);
+            return inner.CreateAsync(bytes, custodyClass, cancellationToken);
+        }
+
+        public Task<ReadOnlyMemory<byte>> ReadAsync(
+            DurableBlobRef reference, CancellationToken cancellationToken) =>
+            inner.ReadAsync(reference, cancellationToken);
+
+        public Task<ReadOnlyMemory<byte>> ReadByDigestAsync(
+            string contentSha256, CancellationToken cancellationToken) =>
+            string.Equals(contentSha256, _armedDigest, StringComparison.Ordinal)
+                ? Task.FromResult<ReadOnlyMemory<byte>>("not the bytes you stored"u8.ToArray())
+                : inner.ReadByDigestAsync(contentSha256, cancellationToken);
+    }
+
+    /// <summary>
+    /// An honest unenforced store: it really holds the bytes and declares NotEnforced, exactly as
+    /// <c>FileSystemCustodyStore</c> does. Not a failure.
+    /// </summary>
+    private sealed class UnenforcedCustodyStore : ICustodyStore
+    {
+        private readonly Dictionary<string, byte[]> _byDigest = new(StringComparer.Ordinal);
+
+        public Task<DurableBlobWriteReceipt> CreateAsync(
+            ReadOnlyMemory<byte> bytes, CustodyClass custodyClass, CancellationToken cancellationToken)
+        {
+            var frozen = bytes.ToArray();
+            var digest = CustodyDigest.Of(frozen);
+            _byDigest[digest] = frozen;
+            var reference = new DurableBlobRef(
+                CustodySchemaIds.DurableBlobRef, digest, frozen.LongLength, custodyClass);
+            var observedAt = new DateTimeOffset(2026, 9, 4, 0, 0, 0, TimeSpan.Zero);
+            return Task.FromResult(new DurableBlobWriteReceipt(
+                CustodySchemaIds.DurableBlobWriteReceipt,
+                reference,
+                new CustodyPolicyEvidence(
+                    CustodySchemaIds.CustodyPolicyEvidence,
+                    reference,
+                    CustodyVerificationProfile.FileSystemUnenforced1,
+                    null,
+                    CustodyProtection.NotEnforced,
+                    observedAt,
+                    null)));
+        }
+
+        public Task<ReadOnlyMemory<byte>> ReadAsync(
+            DurableBlobRef reference, CancellationToken cancellationToken) =>
+            Task.FromResult<ReadOnlyMemory<byte>>(_byDigest[reference.ContentSha256]);
+
+        public Task<ReadOnlyMemory<byte>> ReadByDigestAsync(
+            string contentSha256, CancellationToken cancellationToken) =>
+            Task.FromResult<ReadOnlyMemory<byte>>(_byDigest[contentSha256]);
     }
 
     /// <summary>An in-memory store whose receipts always classify as Floored.</summary>

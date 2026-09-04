@@ -1472,6 +1472,31 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
         }
     }
 
+    /// <summary>
+    /// Every send dependency must already be retained by this run. An artifact ABSENT from the
+    /// membership map is a genuine custody failure and stays one; an artifact PRESENT under the
+    /// weaker class is held and passes.
+    /// </summary>
+    /// <remarks>
+    /// Internal and named so it can be driven directly. No caller-controlled input can produce an
+    /// absent dependency, because every artifact reaches the map through this session's own
+    /// retention path before a send, so this is an internal-invariant guard; a mutation that turned
+    /// absence into the weaker class survived the whole suite until this method existed to be
+    /// tested against.
+    /// </remarks>
+    internal static void RequireEveryDependencyRetained(
+        IReadOnlyDictionary<string, CustodyMembership> artifactMembership,
+        IEnumerable<string> digests)
+    {
+        ArgumentNullException.ThrowIfNull(artifactMembership);
+        ArgumentNullException.ThrowIfNull(digests);
+        if (digests.Any(digest => !artifactMembership.ContainsKey(digest)))
+        {
+            throw new CustodyIntegrityException(
+                "A send dependency was not retained by this run before capability minting.");
+        }
+    }
+
     private string ComputeSendClosureSha256(
         HttpLogicalRequest request,
         RequestPolicyArtifact requestPolicy,
@@ -1491,16 +1516,19 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
 
         lock (_durableArtifactLock)
         {
-            // Retention is required; the floor is reported. A dependency this run never wrote
-            // has no membership at all and fails here. One that was written under a store that
-            // enforces nothing is retained-unenforced, which the closure records rather than
-            // silently counts as durable: on the filesystem adapter every member is that.
-            var unretained = digests.Where(digest => !_artifactMembership.ContainsKey(digest)).ToArray();
-            if (unretained.Length > 0)
-            {
-                throw new CustodyIntegrityException(
-                    "A send dependency was not retained by this run before capability minting.");
-            }
+            // Retention is required; the class is reported. A dependency this run never wrote has
+            // no membership at all and fails here. One written under a store that enforces nothing
+            // is retained-unenforced, which the closure RECORDS rather than refusing: since the
+            // extended Decision 71 interpretation
+            // (lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c) that weaker class is
+            // held, and on the filesystem adapter every member is that.
+            //
+            // ABSENT AND WEAK ARE NOT THE SAME FACT, and this is the one place that knows the
+            // difference, because only the session knows the expected dependency set. Collapsing
+            // them would be the false hold that ruling's addendum forbids, so the check is a named
+            // method rather than an inline clause: an invariant no caller-controlled input can
+            // reach is still an invariant, and it can at least be driven directly by a test.
+            RequireEveryDependencyRetained(_artifactMembership, digests);
         }
 
         return Hash(Encoding.ASCII.GetBytes(string.Join('\n', digests) + "\n"));

@@ -1,3 +1,4 @@
+using Lex.V3.Contracts.Custody;
 using System.Security.Cryptography;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
@@ -218,4 +219,50 @@ public sealed class LuxembourgSparqlRightsChannelTests
 
     private static LuxembourgObservedAssertion Iri(string subject, string predicate, string value) =>
         new(subject, predicate, LuxembourgAssertionObjectKind.Iri, value, string.Empty, string.Empty, ObservationRef);
+}
+
+/// <summary>
+/// The absent-dependency invariant, which the extended Decision 71 interpretation makes load
+/// bearing: an artifact ABSENT from the session's custody map is a genuine custody failure and
+/// stays a refusal, while one PRESENT under the weaker class is held. RULING
+/// lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c.
+/// </summary>
+/// <remarks>
+/// This test exists because a mutation that turned absence into RetainedUnenforced SURVIVED the
+/// whole suite, unfiltered, 290 of 290 and 2108 of 2108. Nothing reached the guard, because no
+/// caller-controlled input can produce an absent dependency: every artifact is registered by the
+/// session's own retention path before any send. An unreachable-from-outside invariant is still an
+/// invariant, so it is driven directly rather than left uncovered and assumed.
+/// </remarks>
+[TestClass]
+public sealed class SendDependencyRetentionInvariantTests
+{
+    private const string Present = "11111111111111111111111111111111111111111111111111111111111111aa";
+    private const string Absent = "22222222222222222222222222222222222222222222222222222222222222bb";
+
+    [TestMethod]
+    public void AnArtifactHeldUnderTheWeakerClassSatisfiesTheInvariant()
+    {
+        var membership = new Dictionary<string, CustodyMembership>(StringComparer.Ordinal)
+        {
+            [Present] = CustodyMembership.RetainedUnenforced,
+        };
+
+        RoutedHttpAcquisitionSession.RequireEveryDependencyRetained(membership, [Present]);
+    }
+
+    [TestMethod]
+    public void AnArtifactAbsentFromTheMapIsACustodyFailureAndNotAWeakerClass()
+    {
+        var membership = new Dictionary<string, CustodyMembership>(StringComparer.Ordinal)
+        {
+            [Present] = CustodyMembership.Floored,
+        };
+
+        var thrown = Assert.ThrowsExactly<CustodyIntegrityException>(() =>
+            RoutedHttpAcquisitionSession.RequireEveryDependencyRetained(
+                membership, [Present, Absent]));
+
+        StringAssert.Contains(thrown.Message, "not retained");
+    }
 }

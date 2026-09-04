@@ -61,6 +61,17 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 "field private instance " + QueryExecutionResult + "::<ScopeManifestReceipt>k__BackingField -> " + Receipt,
                 "field private instance " + Session + "+HeldBodyReceipt::<Receipt>k__BackingField -> " + Receipt,
                 "field private instance " + Session + "+ResolvedHeldBody::<Receipt>k__BackingField -> " + Receipt,
+                // D1-06c-LU-2: the one place acquisition writes bytes into custody and proves the
+                // store really holds them. It HOLDS a receipt and hands it back; it constructs
+                // none, so the "no constructor of DurableBlobWriteReceipt anywhere in this
+                // assembly" half of this pin is untouched. Added because the custody floor gates
+                // now record the observed membership and continue, which meant the write and its
+                // verification moved into one shared method instead of being inline at each gate
+                // (RULING lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c).
+                "method internal static Lex.V3.Ingest.CustodyHold::TryHoldAsync("
+                + "Lex.V3.Contracts.Custody.ICustodyStore, System.ReadOnlyMemory<System.Byte>, "
+                + "System.Threading.CancellationToken) -> System.Threading.Tasks.Task<"
+                + "System.ValueTuple<" + Receipt + ", System.String>>",
                 "method private instance " + Session + "::BuildHopWriteReceipts(System.UInt64, System.UInt64, "
                 + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Http.RoutedHttpHop>) "
                 + "-> System.Collections.Generic.Dictionary<System.String, " + Receipt + ">",
