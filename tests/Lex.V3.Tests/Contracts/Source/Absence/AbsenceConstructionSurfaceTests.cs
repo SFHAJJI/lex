@@ -175,6 +175,15 @@ public sealed class AbsenceConstructionSurfaceTests
                 "field private instance " + N + "AbsenceCut::<EnumerationProofs>k__BackingField -> "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "AbsenceFamilyEnumerationProof>",
 
+                // D1-06c-LU-2: the Luxembourg proof door. It HOLDS a proof rather than minting one,
+                // which is why it appears here and why that is admitted. Scope resolution and the
+                // body join read observations only through this type, so a caller without a real
+                // family proof cannot reach them at all (RULING
+                // lex-event-20260904T204900861Z-6b737927d58a409dab05149aa28052e5), and it cannot
+                // manufacture a proof: the single checked door pinned above is still the only mint.
+                "field private instance " + Lu + "LuxembourgProvenResourceObservations"
+                + "::<AssertionFamilyProof>k__BackingField -> " + N + "AbsenceFamilyEnumerationProof",
+
                 // The publisher-neutral delivery receipt's bridge (queue item 19: moved and renamed
                 // from Lex.V3.Contracts.Source.Luxembourg.LuxembourgEnumerationDeliveryReceipt), and
                 // the second producer this pin was written to catch. It is admitted, not tolerated:
@@ -191,6 +200,8 @@ public sealed class AbsenceConstructionSurfaceTests
                 + N + "AbsenceFamilyEnumerationProof",
                 "property public instance " + N + "AbsenceCut::EnumerationProofs() -> "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "AbsenceFamilyEnumerationProof>",
+                "property public instance " + Lu + "LuxembourgProvenResourceObservations"
+                + "::AssertionFamilyProof() -> " + N + "AbsenceFamilyEnumerationProof",
             },
             ConstructionSurface.ProducersIn(
                 typeof(AbsenceCut).Assembly,

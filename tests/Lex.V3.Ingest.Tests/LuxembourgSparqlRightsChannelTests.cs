@@ -82,22 +82,34 @@ public sealed class LuxembourgSparqlRightsChannelTests
     }
 
     /// <summary>
-    /// A manifestation whose licence IRI the profile does not rule gets NO row, and the reason is a
-    /// real hazard rather than tidiness: <c>LuxembourgScopeResolver.ValidateObservation</c> refuses
-    /// the WHOLE RUN with UnknownVocabularyDrift for an unruled licence on a rights channel, so
-    /// carrying one would let a single odd licence anywhere in the store kill every run. No row
-    /// means rights stay unproven and the body stays unselected, which is the conservative answer.
-    /// Giving an unruled licence its own typed quarantine is named residue (D1-04f), not a silent
-    /// drop.
+    /// An unruled licence IRI is CARRIED, with the IRI recorded, and it withholds nothing.
     /// </summary>
+    /// <remarks>
+    /// This test asserted the opposite and was named
+    /// <c>AnUnruledLicenceGetsNoChannelRowRatherThanRefusingTheWholeRun</c>. Dropping the row
+    /// avoided a real hazard, that ValidateObservation refused the WHOLE RUN for an unruled licence,
+    /// but it avoided it with the wrong lever: the IRI vanished from the record entirely. The owner
+    /// principle (RULING lex-event-20260904T205636383Z-e92b888b62c24df29fe3f8c1be5016f0) settles
+    /// both halves. The run-level refusal is gone, because one odd licence must never stop every
+    /// Luxembourg run; and the body is still held, because an unruled licence is an UNKNOWN and
+    /// unknown is never a reason to withhold. The rights axis gates serving and derivation under
+    /// Decision 58(a), never holding.
+    /// </remarks>
     [TestMethod]
-    public void AnUnruledLicenceGetsNoChannelRowRatherThanRefusingTheWholeRun()
+    public void AnUnruledLicenceIsCarriedWithItsIriAndWithholdsNothing()
     {
+        const string unruled = "http://example.invalid/licence";
+
         var rows = LuxembourgQueryExecutionAdapter.BuildSparqlRightsRows(
-            [Iri(Manifestation, LuxembourgQueryExecutionAdapter.JoluxLicense, "http://example.invalid/licence")],
+            [Iri(Manifestation, LuxembourgQueryExecutionAdapter.JoluxLicense, unruled)],
             ObservationRef);
 
-        Assert.IsEmpty(rows);
+        Assert.HasCount(1, rows, "the licence the publisher declared is recorded, not dropped.");
+        CollectionAssert.AreEqual(new[] { unruled }, rows[0].LicenceIris.ToArray());
+        Assert.AreEqual(
+            LuxembourgRightsChannelDisposition.TypedQuarantineUnruledLicence,
+            Resolve(unruled).Disposition,
+            "and it resolves to its own typed state rather than to agreement or to a refusal.");
     }
 
     /// <summary>

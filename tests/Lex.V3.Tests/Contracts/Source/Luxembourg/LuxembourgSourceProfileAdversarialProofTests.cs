@@ -1,3 +1,4 @@
+using Lex.V3.Tests.Contracts.Source.Absence;
 using System.Security.Cryptography;
 using System.Reflection;
 using System.Text;
@@ -134,7 +135,12 @@ public sealed class LuxembourgSourceProfileAdversarialProofTests
         Assert.HasCount(ExpectedSelectorKeys.Length, verified.Manifest.Rows.Single().Selectors);
         Assert.HasCount(4, verified.Manifest.Rows.Single().MatchedEvaluations);
         Assert.HasCount(16, verified.Manifest.Accounting);
-        Assert.HasCount(0, verified.Manifest.BodyCandidateOrdinals);
+        // THE ARM, PROVED END TO END THROUGH THE REAL REDUCTION. This asserted zero body candidate
+        // ordinals, which was an accurate description of a Luxembourg manifest that could never
+        // select a body. One ordinal here is the whole point of the repair: the publisher listed a
+        // wording manifestation, none of the four legitimate reasons applies, so it is selected for
+        // acquisition.
+        Assert.HasCount(1, verified.Manifest.BodyCandidateOrdinals);
         Assert.IsTrue(evidence.CompleteEnumerationBindings.Count > 0);
         Assert.IsTrue(evidence.SelectorObservationBindings.Count > 0);
         Assert.IsTrue(evidence.SelectorNotApplicableBindings.Count > 0);
@@ -259,7 +265,7 @@ public sealed class LuxembourgSourceProfileAdversarialProofTests
         ]);
 
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            profile.Resolve([source, target]));
+            profile.Resolve(Proven([source, target])));
         var relation = resolved.Resources.Single(resource =>
             resource.ObjectRef.PublisherUri == RootIri).Relations.Single();
         Assert.IsNotNull(relation.ConsolidatesShape);
@@ -284,6 +290,15 @@ public sealed class LuxembourgSourceProfileAdversarialProofTests
             LuxembourgConsolidatesShapeState.AcceptedTcToCompatibleAct,
             shape.State);
     }
+
+    /// <summary>
+    /// The proof door every scope resolution goes through
+    /// (<see cref="LuxembourgProvenResourceObservations"/>), using a REAL proof from
+    /// <see cref="AbsenceFixtures"/> rather than a relaxed test-only one.
+    /// </summary>
+    private static LuxembourgProvenResourceObservations Proven(
+        params LuxembourgResourceObservation[] observations) =>
+        LuxembourgProvenResourceObservations.RequireProven(AbsenceFixtures.Proof(), observations);
 
     private static LuxembourgConsolidatesShape AcceptedShape(
         IReadOnlyList<string> subjectClasses,
@@ -318,7 +333,7 @@ public sealed class LuxembourgSourceProfileAdversarialProofTests
         VerifiedLuxembourgSourceProfile profile,
         LuxembourgResourceObservation observation) =>
         Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            profile.Resolve([observation]));
+            profile.Resolve(Proven([observation])));
 
     private static LuxembourgResourceObservation RelationObservation(
         IReadOnlyList<LuxembourgObservedAssertion> assertions) => new(

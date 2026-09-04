@@ -6,8 +6,18 @@ namespace Lex.V3.Tests.Contracts.Source.Luxembourg;
 [TestClass]
 public sealed class LuxembourgBodyJoinTests
 {
+    /// <summary>
+    /// THIS TEST ASSERTED THE DEFECT. It was named
+    /// <c>StructurallyConsistentTupleRetainsEveryCurrentMilestoneBlocker</c> and required that a
+    /// structurally consistent tuple whose two rights channels AGREE on the admitting licence was
+    /// still withheld, carrying all eight milestone blockers. That is how the Luxembourg body axis
+    /// came to have no accepting path at all and every real manifest an accepted fraction of zero.
+    /// Under the owner principle
+    /// (RULING lex-event-20260904T205636383Z-e92b888b62c24df29fe3f8c1be5016f0) a law that can
+    /// legitimately be ingested is ingested, so this candidate is accepted.
+    /// </summary>
     [TestMethod]
-    public void StructurallyConsistentTupleRetainsEveryCurrentMilestoneBlocker()
+    public void AStructurallyConsistentTupleWithAgreedRightsIsAccepted()
     {
         var topology = Topology(Candidate(ManifestationFrXml, LanguageFra, FormatXml));
         var result = Join(
@@ -21,14 +31,20 @@ public sealed class LuxembourgBodyJoinTests
             LuxembourgRightsChannelDisposition.AgreedSameRunCcBy,
             candidate.RightsResolution.Disposition);
         Assert.AreEqual(
-            LuxembourgBodyCandidateDisposition.Withheld,
+            LuxembourgBodyCandidateDisposition.AcceptedCandidate,
             candidate.Disposition);
-        CollectionAssert.AreEqual(CurrentMilestoneBlockers, candidate.BlockerCodes.ToArray());
+        Assert.IsEmpty(candidate.BlockerCodes);
         Assert.HasCount(0, result.RootBlockerCodes);
     }
 
+    /// <summary>
+    /// Rights that name another manifestation leave this one's licence UNKNOWN. Unknown is recorded
+    /// and never a reason (owner principle), so the body is still accepted and the unresolved state
+    /// travels on the rights resolution for the answer layer's Decision 58(a) disclosure. The old
+    /// assertion here was that this withheld the body.
+    /// </summary>
     [TestMethod]
-    public void UnrelatedManifestationRightsCannotHelpTheExactTuple()
+    public void UnrelatedManifestationRightsLeaveTheLicenceUnknownWithoutWithholdingTheBody()
     {
         var result = Join(
             Topology(Candidate(ManifestationFrXml, LanguageFra, FormatXml)),
@@ -41,12 +57,10 @@ public sealed class LuxembourgBodyJoinTests
             candidate.RightsResolution.Disposition);
         Assert.IsNull(candidate.RightsResolution.SparqlObservation);
         Assert.IsNull(candidate.RightsResolution.InFileObservation);
-        CollectionAssert.Contains(
-            candidate.BlockerCodes.ToArray(),
-            LuxembourgBodyBlockerCode.RightsChannelsNotAgreed);
-        CollectionAssert.IsSubsetOf(
-            CurrentMilestoneBlockers,
-            candidate.BlockerCodes.ToArray());
+        Assert.IsEmpty(
+            candidate.BlockerCodes,
+            "an unresolved licence is an unknown, and unknown is never a reason to withhold.");
+        Assert.AreEqual(LuxembourgBodyCandidateDisposition.AcceptedCandidate, candidate.Disposition);
     }
 
     [TestMethod]
@@ -71,12 +85,11 @@ public sealed class LuxembourgBodyJoinTests
         Assert.AreEqual(
             LuxembourgRightsChannelDisposition.Conflict,
             candidate.RightsResolution.Disposition);
+        // The quarantined tuple withholds; the licence CONFLICT does not, because a conflict
+        // between two channels is not the publisher marking the object not reusable, it is an
+        // unresolved value, and unknown is never a reason.
         CollectionAssert.AreEqual(
-            CurrentMilestoneBlockers
-                .Append(LuxembourgBodyBlockerCode.WemiTupleTypedQuarantine)
-                .Append(LuxembourgBodyBlockerCode.RightsChannelsNotAgreed)
-                .Order()
-                .ToArray(),
+            new[] { LuxembourgBodyBlockerCode.WemiTupleTypedQuarantine },
             candidate.BlockerCodes.ToArray());
         CollectionAssert.Contains(
             candidate.WemiCandidate.BlockerCodes.ToArray(),
@@ -179,16 +192,25 @@ public sealed class LuxembourgBodyJoinTests
 
         var result = Join(Topology(otherRootCandidate), Sparql(), InFile());
 
+        // WemiObservationRunMismatch is gone with its only producer, which compared a candidate's
+        // own observation ref against the ref the topology had just been resolved with and so could
+        // not fail on any production path. The real binding check is per assertion in
+        // LuxembourgWemiTopology (ObservationMismatch) and still fails here.
         CollectionAssert.Contains(
             result.Candidates.Single().BlockerCodes.ToArray(),
             LuxembourgBodyBlockerCode.WemiRootMismatch);
-        CollectionAssert.Contains(
-            result.Candidates.Single().BlockerCodes.ToArray(),
-            LuxembourgBodyBlockerCode.WemiObservationRunMismatch);
     }
 
+    /// <summary>
+    /// The blocker-free invariant still holds in both directions, and the join CAN now reach it.
+    /// This test was named <c>EmptyBlockersAreExactlyAcceptedButNoPublicJoinPathCanCreateThem</c>
+    /// and its closing assertion required that no public join path could ever produce an accepted
+    /// candidate. That was an accurate description of the defect: the Luxembourg body axis had no
+    /// accepting path at all. The invariant that an accepted candidate carries no blocker, and a
+    /// withheld one carries at least one, is unchanged.
+    /// </summary>
     [TestMethod]
-    public void EmptyBlockersAreExactlyAcceptedButNoPublicJoinPathCanCreateThem()
+    public void EmptyBlockersAreExactlyAcceptedAndTheJoinCanReachThem()
     {
         var wemi = Candidate(ManifestationFrXml, LanguageFra, FormatXml);
         var rights = LuxembourgRightsChannels.Resolve(
@@ -215,12 +237,15 @@ public sealed class LuxembourgBodyJoinTests
                 wemi,
                 rights,
                 LuxembourgBodyCandidateDisposition.AcceptedCandidate,
-                [LuxembourgBodyBlockerCode.IntegrityUnverified]));
+                [LuxembourgBodyBlockerCode.WemiTupleTypedQuarantine]));
         Assert.HasCount(0, typeof(LuxembourgBodyCandidateResolution).GetConstructors());
 
         var joined = Join(Topology(wemi), rights.SparqlObservations, rights.InFileObservations);
-        Assert.IsFalse(joined.Candidates.Any(candidate =>
-            candidate.Disposition == LuxembourgBodyCandidateDisposition.AcceptedCandidate));
+        Assert.IsTrue(
+            joined.Candidates.Any(candidate =>
+                candidate.Disposition == LuxembourgBodyCandidateDisposition.AcceptedCandidate),
+            "a structurally consistent wording manifestation with agreed rights is exactly what "
+            + "the owner principle says must be ingested.");
         Assert.IsFalse(typeof(LuxembourgBodyCandidateResolution)
             .GetProperties()
             .Any(property => property.Name.Contains("Role", StringComparison.OrdinalIgnoreCase)));
@@ -289,18 +314,6 @@ public sealed class LuxembourgBodyJoinTests
     private static string CandidateSignature(LuxembourgBodyCandidateResolution candidate) =>
         $"{Signature(candidate.WemiCandidate)}|{(int)candidate.RightsResolution.Disposition}|" +
         string.Join(',', candidate.BlockerCodes.Select(static code => (int)code));
-
-    private static readonly LuxembourgBodyBlockerCode[] CurrentMilestoneBlockers =
-    [
-        LuxembourgBodyBlockerCode.AssertionEnumerationUnproven,
-        LuxembourgBodyBlockerCode.RightsChannelEnumerationUnproven,
-        LuxembourgBodyBlockerCode.TextPublicNotCleared,
-        LuxembourgBodyBlockerCode.LicenceContractResultMissing,
-        LuxembourgBodyBlockerCode.RobotsEvidenceUnbound,
-        LuxembourgBodyBlockerCode.HttpEvidenceUnbound,
-        LuxembourgBodyBlockerCode.DerivationUnverified,
-        LuxembourgBodyBlockerCode.IntegrityUnverified,
-    ];
 
     private const string Root =
         "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a1/jo";
