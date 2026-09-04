@@ -1,4 +1,3 @@
-using Lex.V3.Tests.Contracts.Source.Absence;
 using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
@@ -10,6 +9,7 @@ using Lex.V3.Contracts.Source.Http;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Contracts.Source.Scope;
 using Lex.V3.Ingest.Luxembourg;
+using Lex.V3.Tests.Contracts.Source.Absence;
 
 namespace Lex.V3.Ingest.Tests;
 
@@ -38,9 +38,10 @@ public sealed class LuxembourgDocumentGetTests
 {
     // The real, live-verified filestore XML manifestation: this exact path returned HTTP 200 with
     // genuine Akoma Ntoso, 19,986 bytes, SHA-256
-    // 9e43a99e4b9735e383d989989d4005fc9e1676f4094c2633f30b2f056d5e476d. The path is real; the body
-    // bytes scripted below are NOT that document (a 19,986-byte fixture buys nothing this test
-    // needs), and nothing here claims they are.
+    // 9e43a99e4b9735e383d989989d4005fc9e1676f4094c2633f30b2f056d5e476d. The path is real. Tests
+    // that need only SOME body script a one-element <akomaNtoso/>, which is NOT that document and
+    // never claims to be; the tests that assert the publisher's own digest load the retained
+    // 19,986 bytes from LuxembourgDocumentFetchFixtures instead.
     private const string StoreXmlUri =
         "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/2017/03/14/a439/jo/fr/xml/"
         + "eli-etat-leg-loi-2017-03-14-a439-jo-fr-xml.xml";
@@ -285,42 +286,75 @@ public sealed class LuxembourgDocumentGetTests
     /// rows could accept.
     /// </summary>
     /// <remarks>
-    /// The two are proved together rather than in separate tests because the property is that ONE
-    /// object's publisher answer does not decide another's. Both bodies are the publisher's own
-    /// retained bytes: the real Akoma Ntoso document for the one that is held, and the office's
-    /// real 404 JSON for the one that is not.
+    /// ATTRIBUTION, NOT COEXISTENCE. An earlier revision selected the two records BY KIND, so it
+    /// proved only that one set can carry one of each; it could not have failed if the two answers
+    /// had been attached to the wrong objects. Each record is now selected by its own object's
+    /// PublisherUri and its kind asserted, which is the property actually claimed: one object's
+    /// publisher answer does not decide another's.
+    /// <para>
+    /// BOTH CANONICAL ORDERS are driven. The reducer sorts observed objects by the OBJECT REF'S
+    /// DIGEST (ScopeReducer, ComputeObjectRefSha256 through ScopeObservedObjectComparer), not by
+    /// act number or publisher URI, and the adapter then walks them by ascending ordinal. For
+    /// these two acts a440 sorts FIRST, measured rather than assumed, so the earlier revision's
+    /// fixed choice of a440 for the 404 drove only the order where the publisher's refusal comes
+    /// BEFORE any successful hold; a 404 arriving after a hold was the case never exercised.
+    /// Both orders now run. The first record's PublisherUri is asserted too, but as a guard on
+    /// THESE TWO CASES rather than on production: record order is fixed by construction in two
+    /// places, ScopeReducer's VerifyObservedObjectTable and the CorpusRecordSet constructor's
+    /// strict ordinal ordering, and both mutations tried against it (reversing the observed
+    /// object comparer, and reversing record emission) were refused there before this
+    /// assertion ran. It exists so a later edit collapsing the two cases into one order could
+    /// not pass as if it had not.
+    /// </para>
+    /// Both bodies are the publisher's own retained bytes: the real Akoma Ntoso document for the
+    /// one that is held, and the office's real 404 JSON for the one that is not.
     /// </remarks>
     [TestMethod]
-    public async Task OneSetCarriesAHeldRecordAndAPendingAcquisitionRecordFromOneRun()
+    [DataRow(false, DisplayName = "the held object sorts first")]
+    [DataRow(true, DisplayName = "the 404 object sorts first")]
+    public async Task OneSetCarriesAHeldRecordAndAPendingAcquisitionRecordFromOneRun(
+        bool notFoundSortsFirst)
     {
-        var held = Address();
-        var missing = Address(
+        const string A440PublisherUri =
+            "http://data.legilux.public.lu/eli/etat/leg/loi/2017/03/14/a440/jo";
+        var a440 = Address(
             storeUri:
                 "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/2017/03/14/a440/jo/fr/"
                 + "xml/eli-etat-leg-loi-2017-03-14-a440-jo-fr-xml.xml",
             actPagePath: "/eli/etat/leg/loi/2017/03/14/a440/jo");
+        // a440 is the object that sorts first, so putting the 404 on it is what drives the
+        // 404-first order and putting the 404 on a439 drives the 404-after-a-hold order.
+        var missing = notFoundSortsFirst ? a440 : Address();
+        var held = notFoundSortsFirst ? Address() : a440;
+        var missingPublisherUri = notFoundSortsFirst ? A440PublisherUri : ObjectPublisherUri;
+        var heldPublisherUri = notFoundSortsFirst ? ObjectPublisherUri : A440PublisherUri;
+
         var xml = LuxembourgDocumentFetchFixtures.XmlBody();
         var notFound = LuxembourgDocumentFetchFixtures.NotFoundBody();
 
         var store = new FlooringCustodyStore();
+        // Keyed off the missing address itself rather than a literal act number, so inverting the
+        // order cannot leave the handler answering 404 for the other object.
+        var missingFetchPath = missing.FetchUri.AbsolutePath;
         var handler = new RobotsThenDocumentHandler((request, _) =>
-            request.RequestUri!.AbsolutePath.Contains("a440", StringComparison.Ordinal)
-                ? BinaryResponse(request, HttpStatusCode.NotFound, notFound)
-                : BinaryResponse(request, HttpStatusCode.OK, xml));
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            return string.Equals(path, missingFetchPath, StringComparison.Ordinal)
+                || path.StartsWith(missing.ActEliPagePath, StringComparison.Ordinal)
+                    ? BinaryResponse(request, HttpStatusCode.NotFound, notFound)
+                    : BinaryResponse(request, HttpStatusCode.OK, xml);
+        });
         var adapter = new LuxembourgQueryExecutionAdapter(
             store,
             new LuxembourgRepeatedEnumerationExecutor(
                 store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), handler),
             BuildProfile());
 
-        var (manifest, manifestRef, refs) = BuildTwoObjectManifest(held, missing);
+        var (manifest, manifestRef, addresses) = BuildTwoObjectManifest(
+            (heldPublisherUri, held), (missingPublisherUri, missing));
         var (outcomes, refusal) = await adapter.RunDocumentAcquisitionAsync(
             manifest,
-            new Dictionary<SourceObjectRef, LuxembourgDocumentFetchAddress>
-            {
-                [refs[0]] = held,
-                [refs[1]] = missing,
-            },
+            addresses,
             LuxembourgAcquisitionTestFixture.DocumentFetchRendererSource(4242),
             CancellationToken.None);
 
@@ -333,8 +367,24 @@ public sealed class LuxembourgDocumentGetTests
 
         var records = written.VerifiedSet!.Set.Records;
         Assert.HasCount(2, records);
-        var heldRecord = records.Single(r => r.Body.Kind == CorpusBodyRecordKind.Held);
-        var pendingRecord = records.Single(r => r.Body.Kind == CorpusBodyRecordKind.PendingAcquisition);
+        Assert.AreEqual(
+            notFoundSortsFirst ? missingPublisherUri : heldPublisherUri,
+            records[0].ObjectRef.PublisherUri,
+            "this case exists to drive that canonical order; if it stops inverting, it proves "
+            + "nothing the other case did not already prove.");
+
+        var heldRecord = records.Single(
+            r => string.Equals(r.ObjectRef.PublisherUri, heldPublisherUri, StringComparison.Ordinal));
+        var pendingRecord = records.Single(
+            r => string.Equals(r.ObjectRef.PublisherUri, missingPublisherUri, StringComparison.Ordinal));
+        Assert.AreEqual(
+            CorpusBodyRecordKind.Held,
+            heldRecord.Body.Kind,
+            "the object whose manifestation the office served is the one holding bytes.");
+        Assert.AreEqual(
+            CorpusBodyRecordKind.PendingAcquisition,
+            pendingRecord.Body.Kind,
+            "and the object the office answered 404 for is the one left pending, in the same set.");
         Assert.AreEqual(
             LuxembourgDocumentFetchFixtures.XmlBodySha256,
             heldRecord.Body.Receipt!.Reference.ContentSha256,
@@ -374,6 +424,34 @@ public sealed class LuxembourgDocumentGetTests
             outcomes,
             "and no object is recorded as robots-disallowed, which would blame the publisher for "
             + "our own inability to read its rules.");
+    }
+
+    /// <summary>
+    /// <see cref="LuxembourgDocumentGetAttemptRefusal.ObservationNotExecuted"/> was declared and
+    /// produced on two paths in <see cref="LuxembourgRepeatedEnumerationExecutor"/> but driven by
+    /// no test. This drives the real one: every attempt fails before any header arrives, so no
+    /// observation is ever executed, the profile's whole retry budget is spent, and the run
+    /// refuses. It must NOT become a per-object PendingAcquisition row. A transport failure on our
+    /// side is unknown, and unknown is not one of the four reasons a law may go unheld, so blaming
+    /// the object would record a cause the publisher never gave.
+    /// </summary>
+    [TestMethod]
+    public async Task ADocumentGetThatNeverExecutesAnObservationRefusesAfterTheWholeRetryBudget()
+    {
+        var (outcomes, refusal, _, _, sendCount) = await AcquireCountingSendsAsync(
+            (_, _) => throw new HttpRequestException(
+                HttpRequestError.ConnectionError, "simulated pre-header failure"));
+
+        Assert.IsNotNull(refusal, "a transport failure is not one object's own refusal.");
+        Assert.AreEqual(LuxembourgQueryExecutionRefusal.DocumentFetchSessionNotStarted, refusal!.Code);
+        StringAssert.Contains(
+            refusal.Detail,
+            nameof(LuxembourgDocumentGetAttemptRefusal.ObservationNotExecuted),
+            "the run's refusal carries the attempt refusal that produced it.");
+        Assert.IsEmpty(
+            outcomes,
+            "and no object is recorded as pending for a cause the publisher never gave.");
+        Assert.AreEqual(1 + 4, sendCount(), "one robots send plus the full MaximumAttempts=4 budget.");
     }
 
     /// <summary>
@@ -766,7 +844,7 @@ public sealed class LuxembourgDocumentGetTests
         ICustodyStore Store)> AcquireAsync(
         Func<HttpRequestMessage, int, HttpResponseMessage> response,
         LuxembourgDocumentFetchAddress? address = null) =>
-        AcquireCoreAsync(response, address ?? Address());
+        AcquireWithHandlerAsync(new RobotsThenDocumentHandler(response), address ?? Address());
 
     private static async Task<(
         IReadOnlyDictionary<int, CorpusAcquisitionOutcome> Outcomes,
@@ -780,16 +858,6 @@ public sealed class LuxembourgDocumentGetTests
         var result = await AcquireWithHandlerAsync(handler, Address());
         return (result.Outcomes, result.Refusal, result.Manifest, result.ManifestRef, () => handler.SendCount);
     }
-
-    private static async Task<(
-        IReadOnlyDictionary<int, CorpusAcquisitionOutcome> Outcomes,
-        LuxembourgQueryExecutionRefusalDetail? Refusal,
-        ScopeManifest Manifest,
-        SourceArtifactRef ManifestRef,
-        ICustodyStore Store)> AcquireCoreAsync(
-        Func<HttpRequestMessage, int, HttpResponseMessage> response,
-        LuxembourgDocumentFetchAddress address) =>
-        await AcquireWithHandlerAsync(new RobotsThenDocumentHandler(response), address);
 
     private static async Task<(
         IReadOnlyDictionary<int, CorpusAcquisitionOutcome> Outcomes,
@@ -841,21 +909,28 @@ public sealed class LuxembourgDocumentGetTests
         $"urn:uuid:{Guid.NewGuid():D}",
         Convert.ToHexStringLower(SHA256.HashData("lu-document-get-run"u8.ToArray())));
 
-    /// <summary>Two accepted-body objects in one manifest, for the mixed-outcome row proof.</summary>
-    private static (ScopeManifest Manifest, SourceArtifactRef ManifestRef, SourceObjectRef[] Refs)
+    /// <summary>
+    /// Two accepted-body objects in one manifest, for the mixed-outcome row proof. Returns the
+    /// address map KEYED BY REF rather than a positional array: the reducer sorts observed objects
+    /// canonically, so pairing the caller's addresses with the returned order by index was correct
+    /// only by the accident that a439 sorts before a440, and would have mispaired silently the
+    /// moment a caller inverted the two.
+    /// </summary>
+    private static (
+        ScopeManifest Manifest,
+        SourceArtifactRef ManifestRef,
+        Dictionary<SourceObjectRef, LuxembourgDocumentFetchAddress> Addresses)
         BuildTwoObjectManifest(
-            LuxembourgDocumentFetchAddress first, LuxembourgDocumentFetchAddress second)
+            (string PublisherUri, LuxembourgDocumentFetchAddress Address) first,
+            (string PublisherUri, LuxembourgDocumentFetchAddress Address) second)
     {
         var binding = BuildProfile().ScopeBinding;
-        var refs = new[]
+        var pairs = new[] { first, second };
+        var refs = new SourceObjectRef[pairs.Length];
+        var inputs = new ScopeObjectReductionInput[pairs.Length];
+        for (var index = 0; index < pairs.Length; index++)
         {
-            ObjectRef(),
-            ObjectRefFor("http://data.legilux.public.lu/eli/etat/leg/loi/2017/03/14/a440/jo"),
-        };
-        var addresses = new[] { first, second };
-        var inputs = new ScopeObjectReductionInput[refs.Length];
-        for (var index = 0; index < refs.Length; index++)
-        {
+            refs[index] = ObjectRefFor(pairs[index].PublisherUri);
             var selectors = new ScopeSelectorEvidence[binding.OrderedSelectorMemberOrdinals.Count];
             for (var s2 = 0; s2 < selectors.Length; s2++)
             {
@@ -872,20 +947,26 @@ public sealed class LuxembourgDocumentGetTests
                     Evaluation(binding, ScopeAxis.Relation, ScopeDisposition.Point),
                     Evaluation(binding, ScopeAxis.SupportingDocument, ScopeDisposition.Point),
                 },
-                addresses[index].ToScopeManifestFetchAddress());
+                pairs[index].Address.ToScopeManifestFetchAddress());
         }
 
         var verified = ScopeReducer.Reduce(
             binding, [], refs, inputs, new PermissiveScopeEvidenceResolver(CompleteEnumerationRef));
         using var buffer = new MemoryStream();
         var canonical = ScopeManifestCanonicalWriter.Write(buffer, verified);
-        // The reducer sorts observed objects canonically, so the caller's address map must be keyed
-        // by the manifest's own order rather than the order they were passed in.
-        var ordered = verified.Manifest.ObservedObjects.Select(static o => o.ObjectRef).ToArray();
+        var addresses = new Dictionary<SourceObjectRef, LuxembourgDocumentFetchAddress>();
+        foreach (var observed in verified.Manifest.ObservedObjects)
+        {
+            addresses[observed.ObjectRef] = pairs
+                .Single(pair => string.Equals(
+                    pair.PublisherUri, observed.ObjectRef.PublisherUri, StringComparison.Ordinal))
+                .Address;
+        }
+
         return (
             verified.Manifest,
             new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", canonical),
-            ordered);
+            addresses);
     }
 
     private static (VerifiedScopeManifest Verified, ScopeManifest Manifest, SourceArtifactRef ManifestRef) BuildManifest(
