@@ -37,6 +37,8 @@ public sealed class LuxembourgQueryExecutionAdapterTests
     private const string AssertionSetId = "A";
     private const string AssertionFamilyKey = "resource-assertions";
     private const string JoluxAct = "http://data.legilux.public.lu/resource/ontology/jolux#Act";
+    private const string JoluxLegalResource =
+        "http://data.legilux.public.lu/resource/ontology/jolux#LegalResource";
     private const string RdfType = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
     private const string TypeDocumentPredicate =
         "http://data.legilux.public.lu/resource/ontology/jolux#typeDocument";
@@ -106,6 +108,38 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         Assert.ThrowsExactly<ArgumentException>(static () =>
             new LuxembourgQueryExecutionRefusalDetail(
                 LuxembourgQueryExecutionRefusal.ScopeResolutionFailed, null, null));
+    }
+
+    [TestMethod]
+    public async Task ACensusFamilyKeyWithNoAssertionFamilyKeyThrows()
+    {
+        // The "both or neither" guard, first direction: S named, A withheld. Thrown before this run
+        // ever touches the executor or the custody store -- a caller-contract violation, not a
+        // domain refusal, so no family enumeration should even be attempted.
+        var (profile, _, enumerationRef) = BuildProfile();
+        var store = new InMemoryCustodyStore();
+        var adapter = new LuxembourgQueryExecutionAdapter(
+            store, NewExecutor(store, NoSendHandler()), profile);
+
+        var exception = await Assert.ThrowsExactlyAsync<ArgumentException>(() => adapter.RunAsync(
+            [], null, ResourceFamilyKey, null, new PermissiveEvidenceResolver(enumerationRef),
+            CancellationToken.None));
+        StringAssert.Contains(exception.Message, "both");
+    }
+
+    [TestMethod]
+    public async Task AnAssertionFamilyKeyWithNoCensusFamilyKeyThrows()
+    {
+        // The other direction: A named, S withheld.
+        var (profile, _, enumerationRef) = BuildProfile();
+        var store = new InMemoryCustodyStore();
+        var adapter = new LuxembourgQueryExecutionAdapter(
+            store, NewExecutor(store, NoSendHandler()), profile);
+
+        var exception = await Assert.ThrowsExactlyAsync<ArgumentException>(() => adapter.RunAsync(
+            [], null, null, AssertionFamilyKey, new PermissiveEvidenceResolver(enumerationRef),
+            CancellationToken.None));
+        StringAssert.Contains(exception.Message, "both");
     }
 
     [TestMethod]
@@ -444,6 +478,28 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         // the derivation actually ran (an unreached derivation would also show zero markers, but would
         // have refused above).
         Assert.AreEqual(0, result.CoarseDispositionMarkers.Count);
+
+        // The exact set of derived subjects, and their count: both census keys, in delivery order,
+        // never a subset or a superset. This is the field the review objection asked for: the only
+        // way a test could previously see "what did this run actually derive" was to reason
+        // backwards from Completion/Refusal being null, which cannot tell "derived the right set"
+        // from "derived nothing and got lucky".
+        CollectionAssert.AreEqual(new[] { subjectA0, subjectA1 }, result.ResourceObservationSubjects.ToArray());
+        Assert.AreEqual(2, result.ResourceObservationSubjects.Count);
+
+        // a0's own empty assertion list is not "no rows seen": it is one real "A" row, actively
+        // excluded because CitesPredicate is a RelationPredicate, not an AssertionPredicate. The new
+        // typed accounting is exactly what makes that distinction inspectable -- without it, a0
+        // would look identical to a1 below, which really did see zero rows.
+        Assert.AreEqual(1, result.ResourceObservationExclusions.Count);
+        var exclusion = result.ResourceObservationExclusions[0];
+        Assert.AreEqual(subjectA0, exclusion.Subject);
+        Assert.AreEqual(LuxembourgResourceObservationExclusionCause.PredicateNotAdmitted, exclusion.Cause);
+        Assert.AreEqual(1, exclusion.RowCount);
+
+        // a1 carries no exclusion entry at all: it never had an "A" row to exclude in the first
+        // place, the other of the two "honest reasons" this test's own derivation must tell apart.
+        Assert.IsFalse(result.ResourceObservationExclusions.Any(e => e.Subject == subjectA1));
     }
 
     [TestMethod]
@@ -544,6 +600,248 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
         Assert.IsNotNull(result.ScopeManifestReceipt);
         Assert.AreEqual(0, result.CoarseDispositionMarkers.Count);
+    }
+
+    [TestMethod]
+    public async Task ARectResourceAcceptedByBucketMembershipCarriesTheTypedGapMarkerFromDerivedAssertions()
+    {
+        const string subjectUri = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0";
+        var (profile, _, enumerationRef) = BuildProfile();
+        var store = new InMemoryCustodyStore();
+        var assertionPage = AssertionRowsJson(
+            (subjectUri, TypeDocumentPredicate, TypeDocumentPrefix + "RECT", "iri", "", ""),
+            (subjectUri, RdfType, JoluxAct, "iri", "", ""));
+        var handler = TwoFamilyDeliveringHandler([subjectUri], 2, assertionPage);
+        var adapter = new LuxembourgQueryExecutionAdapter(store, NewExecutor(store, handler), profile);
+        var (resourceRequest, resourceWitness) = BuildPartitionRequest(ResourceSetId, ResourceFamilyKey);
+        var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
+
+        var result = await adapter.RunAsync(
+            [(resourceRequest, resourceWitness), (assertionRequest, assertionWitness)],
+            null, ResourceFamilyKey, AssertionFamilyKey,
+            new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
+
+        Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+        Assert.IsNotNull(result.ScopeManifestReceipt);
+        Assert.AreEqual(1, result.CoarseDispositionMarkers.Count);
+        var marker = result.CoarseDispositionMarkers[0];
+        Assert.AreEqual(subjectUri, marker.PublisherUri);
+        Assert.AreEqual(TypeDocumentPrefix + "RECT", marker.ObservedTypeDocumentIri);
+        Assert.AreEqual(LuxembourgCoarseDispositionGap.RectTypedRoleNotDistinguished, marker.Gap);
+    }
+
+    [TestMethod]
+    public async Task AnAccResourceAcceptedByBucketMembershipCarriesTheTypedGapMarkerFromDerivedAssertions()
+    {
+        const string subjectUri = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0";
+        var (profile, _, enumerationRef) = BuildProfile();
+        var store = new InMemoryCustodyStore();
+        var assertionPage = AssertionRowsJson(
+            (subjectUri, TypeDocumentPredicate, TypeDocumentPrefix + "ACC", "iri", "", ""),
+            (subjectUri, RdfType, JoluxAct, "iri", "", ""));
+        var handler = TwoFamilyDeliveringHandler([subjectUri], 2, assertionPage);
+        var adapter = new LuxembourgQueryExecutionAdapter(store, NewExecutor(store, handler), profile);
+        var (resourceRequest, resourceWitness) = BuildPartitionRequest(ResourceSetId, ResourceFamilyKey);
+        var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
+
+        var result = await adapter.RunAsync(
+            [(resourceRequest, resourceWitness), (assertionRequest, assertionWitness)],
+            null, ResourceFamilyKey, AssertionFamilyKey,
+            new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
+
+        Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+        Assert.IsNotNull(result.ScopeManifestReceipt);
+        Assert.AreEqual(1, result.CoarseDispositionMarkers.Count);
+        var marker = result.CoarseDispositionMarkers[0];
+        Assert.AreEqual(subjectUri, marker.PublisherUri);
+        Assert.AreEqual(TypeDocumentPrefix + "ACC", marker.ObservedTypeDocumentIri);
+        Assert.AreEqual(LuxembourgCoarseDispositionGap.AccConstitutionalReviewEvidenceGateNotApplied, marker.Gap);
+    }
+
+    [TestMethod]
+    public async Task ATcTypedResourceWithoutTheActClassCarriesNoCoarseMarkerFromDerivedAssertions()
+    {
+        // The AcceptedCandidate guard discriminator D1-04a's own version of this test drove
+        // (ATcObservationWithoutTheActClassCarriesNoCoarseMarker, removed by D1-04b's first pass):
+        // BuildCoarseDispositionMarkers only ever emits a marker for a resource whose PublicationFamily
+        // dimension actually resolved to AcceptedCandidate. Every other TC/RECT/ACC test in this file
+        // supplies the jolux:Act rdf:type assertion IsActClass requires, so the guard's own
+        // "!= AcceptedCandidate" branch is never taken there. Supplying jolux:LegalResource instead of
+        // jolux:Act keeps every other dimension resolvable while failing exactly the IsActClass check
+        // the priority-candidate bucket also requires, landing the resource on TypedQuarantine instead
+        // -- proving the guard actually discriminates rather than always passing once a TC-typed
+        // resource reaches this method, now driven through real derived "A" rows rather than a
+        // hand-built LuxembourgResourceObservation.
+        const string subjectUri = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0";
+        var (profile, _, enumerationRef) = BuildProfile();
+        var store = new InMemoryCustodyStore();
+        var assertionPage = AssertionRowsJson(
+            (subjectUri, TypeDocumentPredicate, TypeDocumentPrefix + "TC", "iri", "", ""),
+            (subjectUri, RdfType, JoluxLegalResource, "iri", "", ""));
+        var handler = TwoFamilyDeliveringHandler([subjectUri], 2, assertionPage);
+        var adapter = new LuxembourgQueryExecutionAdapter(store, NewExecutor(store, handler), profile);
+        var (resourceRequest, resourceWitness) = BuildPartitionRequest(ResourceSetId, ResourceFamilyKey);
+        var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
+
+        var result = await adapter.RunAsync(
+            [(resourceRequest, resourceWitness), (assertionRequest, assertionWitness)],
+            null, ResourceFamilyKey, AssertionFamilyKey,
+            new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
+
+        Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+        Assert.IsNotNull(result.ScopeManifestReceipt);
+        Assert.AreEqual(
+            0, result.CoarseDispositionMarkers.Count,
+            "a TC-typed resource without the Act class must not resolve to AcceptedCandidate, so the " +
+            "guard must skip it");
+    }
+
+    [TestMethod]
+    public async Task AnAssertionRowNamingASubjectAbsentFromTheCensusRefusesNamingThatExactSubject()
+    {
+        // THE discriminating test the review objection asked for: S and A are built from genuinely
+        // DIFFERENT literals, not the same string reused. The census delivers exactly one subject
+        // ("s-only"); the assertion-rows family delivers one row for a completely different subject
+        // ("a-rogue") that the census never named at all -- two independent enumerations over the
+        // same triple store disagreeing about which subjects exist.
+        const string censusSubject = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/s-only";
+        const string rogueSubject = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a-rogue";
+        var (profile, _, enumerationRef) = BuildProfile();
+        var store = new InMemoryCustodyStore();
+        var assertionPage = AssertionRowsJson(
+            (rogueSubject, CitesPredicate, rogueSubject, "iri", "", ""));
+        var handler = TwoFamilyDeliveringHandler([censusSubject], 1, assertionPage);
+        var adapter = new LuxembourgQueryExecutionAdapter(store, NewExecutor(store, handler), profile);
+        var (resourceRequest, resourceWitness) = BuildPartitionRequest(ResourceSetId, ResourceFamilyKey);
+        var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
+
+        var result = await adapter.RunAsync(
+            [(resourceRequest, resourceWitness), (assertionRequest, assertionWitness)],
+            null, ResourceFamilyKey, AssertionFamilyKey,
+            new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
+
+        Assert.IsNull(result.ScopeManifestReceipt);
+        Assert.IsNotNull(result.Refusal);
+        Assert.AreEqual(
+            LuxembourgQueryExecutionRefusal.ObservationSubjectNotInDeliveredCensus, result.Refusal.Code);
+        StringAssert.Contains(result.Refusal.Detail, rogueSubject);
+        Assert.IsFalse(
+            result.Refusal.Detail!.Contains(censusSubject, StringComparison.Ordinal),
+            "the refusal must name the rogue subject, not the census's own subject");
+    }
+
+    [TestMethod]
+    public async Task AnAssertionRowWithAnUnrecognisedObjectKindRefusesInsteadOfThrowing()
+    {
+        // The design objection's other required fix: an object_kind value outside the query plan's
+        // own closed three-value set ("iri", "literal", "unsupported_blank_node") used to throw
+        // InvalidOperationException, even though it is publisher data disagreeing with the query
+        // plan's own shape, not a caller-contract violation. "typo_kind" here is not a value any real
+        // template BIND can produce; AssertionRowsJson's own generic row builder still happily embeds
+        // it as a plain literal, exactly as a real SPARQL endpoint could send if the deployed template
+        // ever drifted from what this adapter still expects.
+        const string subjectUri = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0";
+        var (profile, _, enumerationRef) = BuildProfile();
+        var store = new InMemoryCustodyStore();
+        var assertionPage = AssertionRowsJson(
+            (subjectUri, TypeDocumentPredicate, TypeDocumentPrefix + "LOI", "typo_kind", "", ""));
+        var handler = TwoFamilyDeliveringHandler([subjectUri], 1, assertionPage);
+        var adapter = new LuxembourgQueryExecutionAdapter(store, NewExecutor(store, handler), profile);
+        var (resourceRequest, resourceWitness) = BuildPartitionRequest(ResourceSetId, ResourceFamilyKey);
+        var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
+
+        var result = await adapter.RunAsync(
+            [(resourceRequest, resourceWitness), (assertionRequest, assertionWitness)],
+            null, ResourceFamilyKey, AssertionFamilyKey,
+            new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
+
+        Assert.IsNull(result.ScopeManifestReceipt);
+        Assert.IsNotNull(result.Refusal);
+        Assert.AreEqual(
+            LuxembourgQueryExecutionRefusal.AssertionRowObjectKindNotRecognised, result.Refusal.Code);
+        StringAssert.Contains(result.Refusal.Detail, "typo_kind");
+        StringAssert.Contains(result.Refusal.Detail, subjectUri);
+    }
+
+    // No test drives AssertionRowTermUnbound: real investigation (not merely a failed attempt) found
+    // it unreachable through a family that reached Proven. LuxembourgQueryPlan.CreateDeliveryProfile
+    // binds every LU publisher-query template's CanonicalKeyVariables to its own full
+    // ProjectionVariables list (both the "subjects" census's key_1..key_6 and the "assertion-rows"
+    // family's subject/predicate/object/object_kind/datatype_iri/language_tag/key_1..key_6 alike), and
+    // RepeatedEnumerationDeliveryProof's own page verification already refuses a delivery whose
+    // canonical-key components are not bound -- before this adapter's own family-outcome loop ever
+    // sees it as Proven, and before ReopenAndVerifyFamilyRowsAsync's own reverification could see it
+    // either. An attempt to build this scenario (a row with "language_tag" omitted from its bindings)
+    // reached this file first and reported ResourceObservationFamilyNotProven, confirming the
+    // analysis. See the member's own doc comment for this finding, restated where a reader of the
+    // refusal enum will actually see it.
+
+    [TestMethod]
+    public async Task ACensusSubjectThatIsNotALuxembourgResourceIriRefusesScopeResolution()
+    {
+        // D1-04b's reviewer fold-in: ScopeResolutionFailed used to be driven by a hand-built
+        // observation whose ObservationRef deliberately disagreed with the profile
+        // (AMismatchedObservationEnumerationRefusesScopeResolution, removed by D1-04b's first pass) --
+        // unreachable now that BuildResourceObservations always stamps the profile's own
+        // ObservationRef onto every observation it derives, by construction. Real derived data can
+        // still fail LuxembourgScopeResolver.ValidateObservation's InvalidPublisherIri check, though:
+        // a census row whose own key is an absolute IRI but not one under
+        // "http://data.legilux.public.lu/" is exactly what an unrelated triple in the same store could
+        // deliver, and BuildResourceObservations does not itself validate the census key's shape (that
+        // is ValidateObservation's job, unchanged and out of this slice's path claim). One ordinary
+        // admitted "A" row for that same subject: the identity-set membership check passes trivially
+        // (the row names exactly the one census subject), and InvalidPublisherIri fires before
+        // ValidateObservation's own assertion-content loop ever inspects this row's content, so what
+        // it is does not matter beyond being real, admitted content.
+        const string offSiteSubject = "http://example.org/not-a-legilux-resource";
+        var (profile, _, enumerationRef) = BuildProfile();
+        var store = new InMemoryCustodyStore();
+        var assertionPage = AssertionRowsJson(
+            (offSiteSubject, TypeDocumentPredicate, TypeDocumentPrefix + "LOI", "iri", "", ""));
+        var handler = TwoFamilyDeliveringHandler([offSiteSubject], 1, assertionPage);
+        var adapter = new LuxembourgQueryExecutionAdapter(store, NewExecutor(store, handler), profile);
+        var (resourceRequest, resourceWitness) = BuildPartitionRequest(ResourceSetId, ResourceFamilyKey);
+        var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
+
+        var result = await adapter.RunAsync(
+            [(resourceRequest, resourceWitness), (assertionRequest, assertionWitness)],
+            null, ResourceFamilyKey, AssertionFamilyKey,
+            new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
+
+        Assert.IsNull(result.ScopeManifestReceipt);
+        Assert.IsNotNull(result.Refusal);
+        Assert.AreEqual(LuxembourgQueryExecutionRefusal.ScopeResolutionFailed, result.Refusal.Code);
+        Assert.AreEqual(
+            LuxembourgProfileResolutionFailureCode.InvalidPublisherIri,
+            result.Refusal.ResolutionFailure!.Code);
+    }
+
+    [TestMethod]
+    public async Task ARefusingEvidenceResolverRefusesThroughTheTwoFamilyDerivation()
+    {
+        // D1-04a's own FixedAdmittedSetEvidenceResolver proved IScopeReductionEvidenceResolver can
+        // genuinely refuse; D1-04b's first pass removed it along with the caller-supplied
+        // `observations` parameter its hardcoded digests were transcribed against, and nothing
+        // replaced it -- so nothing proved this over the new two-family derivation path. This test
+        // does not need transcribed digests to prove the same thing: a resolver that refuses every
+        // single admission question ScopeReducer asks it must make ReduceScope throw, over a run
+        // whose observation was genuinely derived from real, independently re-verified rows.
+        const string subjectUri = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0";
+        var (profile, _, enumerationRef) = BuildProfile();
+        var store = new InMemoryCustodyStore();
+        var assertionPage = AssertionRowsJson(
+            (subjectUri, TypeDocumentPredicate, TypeDocumentPrefix + "LOI", "iri", "", ""),
+            (subjectUri, RdfType, JoluxAct, "iri", "", ""));
+        var handler = TwoFamilyDeliveringHandler([subjectUri], 2, assertionPage);
+        var adapter = new LuxembourgQueryExecutionAdapter(store, NewExecutor(store, handler), profile);
+        var (resourceRequest, resourceWitness) = BuildPartitionRequest(ResourceSetId, ResourceFamilyKey);
+        var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
+
+        var exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => adapter.RunAsync(
+            [(resourceRequest, resourceWitness), (assertionRequest, assertionWitness)],
+            null, ResourceFamilyKey, AssertionFamilyKey,
+            new AlwaysRefusingEvidenceResolver(enumerationRef), CancellationToken.None));
+        StringAssert.Contains(exception.Message, "not admitted");
     }
 
     /// <summary>
@@ -882,5 +1180,31 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         private static bool IsSha256(string value) =>
             value.Length == 64 &&
             value.All(static character => character is (>= '0' and <= '9') or (>= 'a' and <= 'f'));
+    }
+
+    /// <summary>
+    /// Proves <see cref="IScopeReductionEvidenceResolver"/> can genuinely refuse, over the new
+    /// two-family derivation path: D1-04a's own <c>FixedAdmittedSetEvidenceResolver</c> proved this
+    /// with hardcoded digests transcribed off a caller-supplied observation shape that no longer
+    /// exists; this double needs no transcription at all, because refusing every single admission
+    /// question is real refusal regardless of what the exact binding contains.
+    /// </summary>
+    private sealed class AlwaysRefusingEvidenceResolver(SourceArtifactRef completeEnumerationRef)
+        : IScopeReductionEvidenceResolver
+    {
+        // Must still match the profile's own snapshot exactly: ReduceScope's own identity check
+        // (LuxembourgSourceProfile.cs) runs before any admission question reaches this resolver at
+        // all, and throws ArgumentException rather than the InvalidOperationException this test
+        // means to prove if it disagrees. Refusing "for real" means refusing the admission
+        // questions themselves, below -- not failing this unrelated identity check first.
+        public SourceArtifactRef CompleteEnumerationRef { get; } = completeEnumerationRef;
+
+        public bool IsSelectorObservationAdmitted(ScopeSelectorObservationBinding binding) => false;
+
+        public bool IsSelectorNotApplicableAdmitted(ScopeSelectorNotApplicableBinding binding) => false;
+
+        public bool IsRuleEvaluationAdmitted(ScopeRuleEvaluationBinding binding) => false;
+
+        public bool IsCompleteEnumerationAdmitted(ScopeCompleteEnumerationBinding binding) => false;
     }
 }
