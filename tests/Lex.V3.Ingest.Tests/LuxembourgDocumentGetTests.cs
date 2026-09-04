@@ -21,15 +21,16 @@ namespace Lex.V3.Ingest.Tests;
 /// <remarks>
 /// WHY THESE DRIVE THE PHASE DIRECTLY RATHER THAN THE WHOLE RunAsync, stated plainly because it is
 /// the honest answer to the scope ruling's own question about the accepted fraction of a real LU
-/// manifest: that fraction is ZERO of N, structurally.
-/// <c>LuxembourgBodyJoin.ResolveCandidate</c> attaches eight unconditional milestone blockers to
-/// every body candidate and returns Withheld on every path, and
-/// <c>LuxembourgScopeResolver.ResolveBody</c> has no AcceptedCandidate branch at all, so the
-/// Body/AcceptedSelected accounting set of every manifest a real LU run can produce is empty and no
-/// GET is attempted. <see cref="TheBodyAxisOfEveryRealLuxembourgManifestAcceptsNothing"/> pins that
-/// rather than leaving it to this comment. A manifest with a genuinely accepted body axis is
-/// therefore built here, exactly as the EU lane's own tests build one, so that the fetch, the
-/// classification and the record set can be exercised for real.
+/// manifest. THAT FRACTION USED TO BE ZERO OF N, structurally, because
+/// <c>LuxembourgBodyJoin.ResolveCandidate</c> attached eight unconditional blockers to every
+/// candidate and <c>LuxembourgScopeResolver.ResolveBody</c> had no accepting branch at all. It is
+/// no longer zero: the owner ingest principle
+/// (lex-event-20260904T205636383Z-e92b888b62c24df29fe3f8c1be5016f0) opened the arm, and
+/// <see cref="TheAcceptedFractionIsZeroWithoutAWordingManifestationAndOneWithIt"/> now measures the
+/// fraction over a real reduction instead of the deleted reflection test that measured nothing.
+/// A manifest with an accepted body axis is still built directly here, as the EU lane's own tests
+/// build one, so the fetch, the classification and the record set can be exercised without also
+/// re-testing the reduction.
 /// </remarks>
 [TestClass]
 [DoNotParallelize]

@@ -551,6 +551,78 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         Assert.AreEqual(1, exclusion.RowCount);
     }
 
+    /// <summary>
+    /// The manifest gate's REFUSAL direction: a genuine custody failure on the manifest bytes still
+    /// refuses with <see cref="LuxembourgQueryExecutionRefusal.ScopeManifestNotHeld"/>, and never
+    /// resolves into a weaker custody class.
+    /// </summary>
+    /// <remarks>
+    /// The gate was re-conditioned so an unenforced store no longer refuses, and only its ACCEPTING
+    /// direction was driven. That is the same asymmetry that let the absent-artifact mutation
+    /// survive 290 of 290 earlier in this lane: a guard whose refusal side nothing exercises is a
+    /// guard proven by nothing. Here the store accepts the manifest write and then cannot reproduce
+    /// those bytes at their own digest, which is a real failure rather than a weaker guarantee.
+    /// </remarks>
+    [TestMethod]
+    public async Task AScopeManifestThatCannotBeReproducedAtItsOwnDigestStillRefuses()
+    {
+        var (profile, _, enumerationRef) = BuildProfile();
+        var root = Path.Combine(Path.GetTempPath(), "lex-lu-manifest-hold-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var store = new ManifestHoldFailingCustodyStore(new FileSystemCustodyStore(root));
+            var adapter = new LuxembourgQueryExecutionAdapter(
+                store, NewExecutor(store, NoSendHandler()), profile);
+
+            var result = await adapter.RunAsync(
+                [], null, null, null, new PermissiveEvidenceResolver(enumerationRef),
+                DocumentFetchRendererSource(), CancellationToken.None);
+
+            Assert.IsNotNull(result.Refusal);
+            Assert.AreEqual(
+                LuxembourgQueryExecutionRefusal.ScopeManifestNotHeld,
+                result.Refusal!.Code,
+                "a manifest whose stored bytes do not reopen at their own digest is NOT held.");
+            StringAssert.Contains(result.Refusal.Detail, "digest");
+            Assert.IsNull(
+                result.ScopeManifestReceipt,
+                "and no receipt is reported for it under any custody class.");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// Accepts every write, then refuses to reproduce the SECOND read of any digest. The manifest
+    /// path reads its bytes back once through the hold's own verification, which is the read this
+    /// corrupts; the first read of each digest is left alone so nothing earlier in the run breaks.
+    /// </summary>
+    private sealed class ManifestHoldFailingCustodyStore(ICustodyStore inner) : ICustodyStore
+    {
+        private readonly Dictionary<string, int> _reads = new(StringComparer.Ordinal);
+
+        public Task<DurableBlobWriteReceipt> CreateAsync(
+            ReadOnlyMemory<byte> bytes, CustodyClass custodyClass, CancellationToken cancellationToken) =>
+            inner.CreateAsync(bytes, custodyClass, cancellationToken);
+
+        public Task<ReadOnlyMemory<byte>> ReadAsync(
+            DurableBlobRef reference, CancellationToken cancellationToken) =>
+            inner.ReadAsync(reference, cancellationToken);
+
+        public Task<ReadOnlyMemory<byte>> ReadByDigestAsync(
+            string contentSha256, CancellationToken cancellationToken)
+        {
+            _reads.TryGetValue(contentSha256, out var seen);
+            _reads[contentSha256] = seen + 1;
+            return seen == 0
+                ? Task.FromResult<ReadOnlyMemory<byte>>("not the bytes you stored"u8.ToArray())
+                : inner.ReadByDigestAsync(contentSha256, cancellationToken);
+        }
+    }
+
     [TestMethod]
     public async Task AScopeManifestWrittenWithNoEnforcedFloorIsHeldAndTheRunContinues()
     {
