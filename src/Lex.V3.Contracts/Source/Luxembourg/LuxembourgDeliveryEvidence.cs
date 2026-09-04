@@ -6,76 +6,14 @@ using Lex.V3.Contracts.Source.Http;
 
 namespace Lex.V3.Contracts.Source.Luxembourg;
 
-/// <summary>
-/// The resource identities of one observation, minted together and once. No public constructor, no
-/// setter, so no caller reuses or reorders them. This is what Core's <c>RequireDistinct</c>
-/// (<c>RepeatedEnumerationDeliveryProof.cs:582</c>) defends; here it cannot be reached.
-/// </summary>
-/// <remarks>
-/// There is no <c>RenderReceiptResourceId</c> here. Neither <see cref="LuxembourgQueryPlan.BindCount(string,string,string,string,LuxembourgQueryPass,LuxembourgQueryPartitionRange,MachineQueryRendererSource)"/>
-/// nor <c>BindPage</c> accept a render-receipt resource id: the binder mints one internally
-/// (<c>MachineQueryPlan.cs</c>, inside <c>OpenedMachineRequest</c>'s constructor) and there is no
-/// parameter through which a caller can supply or influence it. The true id is recovered instead by
-/// calling <see cref="MachineQueryBinder.OpenForSend"/> on the bound request, which echoes back the
-/// exact <c>SourceArtifactRef</c> minted at bind time. A field that is never read is worse than no
-/// field: it invites a caller to believe it does something.
-/// </remarks>
-public sealed class LuxembourgObservationIdentity
-{
-    private LuxembourgObservationIdentity(
-        string machinePlanResourceId,
-        string inputResourceId,
-        string logicalRequestResourceId,
-        string httpEvidenceResourceId)
-    {
-        MachinePlanResourceId = machinePlanResourceId;
-        InputResourceId = inputResourceId;
-        LogicalRequestResourceId = logicalRequestResourceId;
-        HttpEvidenceResourceId = httpEvidenceResourceId;
-    }
-
-    public static LuxembourgObservationIdentity NewObservation() => new(
-        NewUrn(), NewUrn(), NewUrn(), NewUrn());
-
-    public string MachinePlanResourceId { get; }
-
-    public string InputResourceId { get; }
-
-    public string LogicalRequestResourceId { get; }
-
-    public string HttpEvidenceResourceId { get; }
-
-    private static string NewUrn() => $"urn:uuid:{Guid.NewGuid():D}";
-}
-
-/// <summary>
-/// The four transport facts of one observation, each already read back out of custody by the
-/// executor. Nothing here is a claim: every member is re-hashed by Source/Core against the
-/// reference minted beside it.
-/// </summary>
-public sealed record LuxembourgObservedTransport(
-    HttpLogicalRequest LogicalRequest,
-    RoutedHttpEvidence HttpEvidence,
-    DurableBlobWriteReceipt DurableWriteReceipt,
-    ReadOnlyMemory<byte> RetainedPayloadBytes);
-
-/// <summary>
-/// What one observation contributes to a run's custody beyond the five references Core names.
-/// </summary>
-/// <remarks>
-/// It exists so <see cref="LuxembourgEnumerationDeliveryReceipt.TryCreate"/> can require the
-/// response body of every observation without knowing anything about SPARQL or about Luxembourg:
-/// the receipt walks the refs the comparison exposes and looks each one up here, so an
-/// observation whose body was left out is a refusal rather than a silently narrower floor. The
-/// membership is a stated fact like the two membership maps beside it; what makes the statement
-/// true is that <see cref="LuxembourgDeliveryEvidenceSet.TryCompareAndReceipt"/> is the only
-/// producer that fills it in, from a write receipt already bound to those exact bytes.
-/// </remarks>
-public sealed record LuxembourgObservationCustody(
-    RepeatedEnumerationEvidenceRefs References,
-    string ResponseBodySha256,
-    CustodyMembership ResponseBodyMembership,
-    string DurableWriteReceiptSha256);
+// Queue item 19: the observation-identity, observed-transport and observation-custody types
+// formerly declared here (LuxembourgObservationIdentity, LuxembourgObservedTransport,
+// LuxembourgObservationCustody) never named Luxembourg or any other publisher in their own fields
+// or logic, so they moved to Lex.V3.Contracts.Source.Core as RepeatedEnumerationObservationIdentity,
+// RepeatedEnumerationObservedTransport and RepeatedEnumerationObservationCustody respectively, for a
+// future EU executor to reuse instead of duplicating. This file keeps only what is genuinely
+// Luxembourg-specific: the binding from LuxembourgBoundQueryCount/LuxembourgBoundQueryPage to those
+// neutral shapes.
 
 /// <summary>
 /// One admitted observation. It cannot exist without both the bound request and the routed
@@ -139,13 +77,13 @@ public sealed class LuxembourgDeliveryObservation
     public string DurableWriteReceiptSha256 { get; }
 
     /// <summary>This observation's contribution to the run's custody, for the receipt to require.</summary>
-    public LuxembourgObservationCustody Custody => new(
+    public RepeatedEnumerationObservationCustody Custody => new(
         References, ResponseBodySha256, ResponseBodyMembership, DurableWriteReceiptSha256);
 
     public static LuxembourgDeliveryObservation ForCount(
         LuxembourgBoundQueryCount bound,
-        LuxembourgObservationIdentity identity,
-        LuxembourgObservedTransport transport,
+        RepeatedEnumerationObservationIdentity identity,
+        RepeatedEnumerationObservedTransport transport,
         RepeatedEnumerationInterpretationProfile profile)
     {
         ArgumentNullException.ThrowIfNull(bound);
@@ -154,8 +92,8 @@ public sealed class LuxembourgDeliveryObservation
 
     public static LuxembourgDeliveryObservation ForPage(
         LuxembourgBoundQueryPage bound,
-        LuxembourgObservationIdentity identity,
-        LuxembourgObservedTransport transport,
+        RepeatedEnumerationObservationIdentity identity,
+        RepeatedEnumerationObservedTransport transport,
         RepeatedEnumerationInterpretationProfile profile)
     {
         ArgumentNullException.ThrowIfNull(bound);
@@ -166,8 +104,8 @@ public sealed class LuxembourgDeliveryObservation
         SourceArtifactRef machinePlanRef,
         SourceArtifactRef inputRef,
         BoundMachineRequest request,
-        LuxembourgObservationIdentity identity,
-        LuxembourgObservedTransport transport,
+        RepeatedEnumerationObservationIdentity identity,
+        RepeatedEnumerationObservedTransport transport,
         RepeatedEnumerationInterpretationProfile profile)
     {
         ArgumentNullException.ThrowIfNull(machinePlanRef);
@@ -371,7 +309,7 @@ public sealed class LuxembourgDeliveryEvidenceSet : IRepeatedEnumerationEvidence
 
     /// <summary>
     /// Core's own message when the most recent <see cref="TryCompareAndReceipt"/> call refused with
-    /// <see cref="LuxembourgEnumerationReceiptRefusal.DeliveryComparisonRefused"/>. Null otherwise.
+    /// <see cref="RepeatedEnumerationReceiptRefusal.DeliveryComparisonRefused"/>. Null otherwise.
     /// </summary>
     public string? LastCoreRefusalMessage { get; private set; }
 
@@ -640,10 +578,10 @@ public sealed class LuxembourgDeliveryEvidenceSet : IRepeatedEnumerationEvidence
     /// stating the run's custody membership. There is deliberately no method returning a bare
     /// <see cref="EnumerationDeliveryComparison"/>.
     /// </summary>
-    public LuxembourgEnumerationDeliveryReceipt? TryCompareAndReceipt(
+    public RepeatedEnumerationDeliveryReceipt? TryCompareAndReceipt(
         IReadOnlyDictionary<string, CustodyMembership> sessionArtifactMembership,
         IReadOnlyDictionary<string, CustodyMembership> executorWrittenMembership,
-        out LuxembourgEnumerationReceiptRefusal refusal)
+        out RepeatedEnumerationReceiptRefusal refusal)
     {
         ArgumentNullException.ThrowIfNull(sessionArtifactMembership);
         ArgumentNullException.ThrowIfNull(executorWrittenMembership);
@@ -664,11 +602,11 @@ public sealed class LuxembourgDeliveryEvidenceSet : IRepeatedEnumerationEvidence
         catch (ArgumentException exception)
         {
             LastCoreRefusalMessage = exception.Message;
-            refusal = LuxembourgEnumerationReceiptRefusal.DeliveryComparisonRefused;
+            refusal = RepeatedEnumerationReceiptRefusal.DeliveryComparisonRefused;
             return null;
         }
 
-        return LuxembourgEnumerationDeliveryReceipt.TryCreate(
+        return RepeatedEnumerationDeliveryReceipt.TryCreate(
             delivery,
             sessionArtifactMembership,
             executorWrittenMembership,

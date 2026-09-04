@@ -1,11 +1,89 @@
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Absence;
-using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Http;
 
-namespace Lex.V3.Contracts.Source.Luxembourg;
+namespace Lex.V3.Contracts.Source.Core;
 
-public enum LuxembourgEnumerationReceiptRefusal
+/// <summary>
+/// The resource identities of one observation, minted together and once. No public constructor, no
+/// setter, so no caller reuses or reorders them. This is what <see cref="EnumerationDeliveryComparison"/>'s
+/// own <c>RequireDistinct</c> defends; here it cannot be reached.
+/// </summary>
+/// <remarks>
+/// Queue item 19: moved here, renamed, from <c>Lex.V3.Contracts.Source.Luxembourg.LuxembourgObservationIdentity</c>.
+/// Nothing about this type ever named Luxembourg or any other publisher: four opaque minted URNs and
+/// a factory, structurally identical for every publisher that reads request/response evidence back
+/// out of custody by digest.
+/// </remarks>
+public sealed class RepeatedEnumerationObservationIdentity
+{
+    private RepeatedEnumerationObservationIdentity(
+        string machinePlanResourceId,
+        string inputResourceId,
+        string logicalRequestResourceId,
+        string httpEvidenceResourceId)
+    {
+        MachinePlanResourceId = machinePlanResourceId;
+        InputResourceId = inputResourceId;
+        LogicalRequestResourceId = logicalRequestResourceId;
+        HttpEvidenceResourceId = httpEvidenceResourceId;
+    }
+
+    public static RepeatedEnumerationObservationIdentity NewObservation() => new(
+        NewUrn(), NewUrn(), NewUrn(), NewUrn());
+
+    public string MachinePlanResourceId { get; }
+
+    public string InputResourceId { get; }
+
+    public string LogicalRequestResourceId { get; }
+
+    public string HttpEvidenceResourceId { get; }
+
+    private static string NewUrn() => $"urn:uuid:{Guid.NewGuid():D}";
+}
+
+/// <summary>
+/// The four transport facts of one observation, each already read back out of custody by the
+/// executor. Nothing here is a claim: every member is re-hashed by this namespace's own delivery
+/// comparison against the reference minted beside it.
+/// </summary>
+/// <remarks>
+/// Queue item 19: moved here, renamed, from <c>Lex.V3.Contracts.Source.Luxembourg.LuxembourgObservedTransport</c>.
+/// </remarks>
+public sealed record RepeatedEnumerationObservedTransport(
+    HttpLogicalRequest LogicalRequest,
+    RoutedHttpEvidence HttpEvidence,
+    DurableBlobWriteReceipt DurableWriteReceipt,
+    ReadOnlyMemory<byte> RetainedPayloadBytes);
+
+/// <summary>
+/// What one observation contributes to a run's custody beyond the five references
+/// <see cref="RepeatedEnumerationEvidenceRefs"/> names.
+/// </summary>
+/// <remarks>
+/// Queue item 19: moved here, renamed, from <c>Lex.V3.Contracts.Source.Luxembourg.LuxembourgObservationCustody</c>.
+/// It exists so <see cref="RepeatedEnumerationDeliveryReceipt.TryCreate"/> can require the response
+/// body of every observation without knowing anything about SPARQL or about any one publisher: the
+/// receipt walks the refs the comparison exposes and looks each one up here, so an observation whose
+/// body was left out is a refusal rather than a silently narrower floor.
+/// </remarks>
+public sealed record RepeatedEnumerationObservationCustody(
+    RepeatedEnumerationEvidenceRefs References,
+    string ResponseBodySha256,
+    CustodyMembership ResponseBodyMembership,
+    string DurableWriteReceiptSha256);
+
+/// <summary>
+/// Why <see cref="RepeatedEnumerationDeliveryReceipt.TryCreate"/> refused to mint a receipt. Closed.
+/// </summary>
+/// <remarks>
+/// Queue item 19: moved here, renamed, from <c>Lex.V3.Contracts.Source.Luxembourg.LuxembourgEnumerationReceiptRefusal</c>.
+/// The wire tokens are unchanged: every <see cref="JsonStringEnumMemberNameAttribute"/> value below
+/// is byte-identical to the retired type's own.
+/// </remarks>
+public enum RepeatedEnumerationReceiptRefusal
 {
     [JsonStringEnumMemberName("none")]
     None = 0,
@@ -43,15 +121,21 @@ public enum LuxembourgEnumerationReceiptRefusal
 }
 
 /// <summary>
-/// One Luxembourg partition's delivery, together with what this run can honestly say about the
+/// One publisher partition's delivery, together with what this run can honestly say about the
 /// custody of every artifact the delivery names.
 /// </summary>
-public sealed class LuxembourgEnumerationDeliveryReceipt
+/// <remarks>
+/// Queue item 19: moved here, renamed, from <c>Lex.V3.Contracts.Source.Luxembourg.LuxembourgEnumerationDeliveryReceipt</c>.
+/// Nothing in this type's fields or logic ever named Luxembourg: every member is
+/// <see cref="EnumerationDeliveryComparison"/>, custody membership maps, or plain digests, so the
+/// same receipt shape now serves every publisher's executor.
+/// </remarks>
+public sealed class RepeatedEnumerationDeliveryReceipt
 {
     private readonly IReadOnlyDictionary<string, CustodyMembership> _retainedMembership;
     private readonly IReadOnlyList<string> _unenforcedMemberDigests;
 
-    private LuxembourgEnumerationDeliveryReceipt(
+    private RepeatedEnumerationDeliveryReceipt(
         EnumerationDeliveryComparison delivery,
         IReadOnlyDictionary<string, CustodyMembership> retainedMembership,
         CustodyMembership retainedFloor,
@@ -111,30 +195,30 @@ public sealed class LuxembourgEnumerationDeliveryReceipt
     /// <summary>
     /// Minted only from a comparison and the exact observations that produced it. There is no
     /// other input from which a receipt can be built: <see cref="EnumerationDeliveryComparison"/>
-    /// has a private constructor whose only door is <c>Create</c>, and
-    /// <see cref="LuxembourgDeliveryObservation"/> has a private constructor whose only doors
-    /// require a transport already bound to a real terminal hop. Holding one is the evidence.
+    /// has a private constructor whose only door is <c>Create</c>, and the caller's own delivery
+    /// observation type has a private constructor whose only doors require a transport already
+    /// bound to a real terminal hop. Holding one is the evidence.
     /// </summary>
     /// <param name="observationCustody">
     /// One entry per observation behind <paramref name="delivery"/>, in any order. Every reference
     /// set the delivery names must appear here with an identical <c>References</c> tuple, so a
     /// caller cannot pair one run's comparison with another run's bodies and cannot leave a body
     /// out to keep it off the floor; either refuses
-    /// <see cref="LuxembourgEnumerationReceiptRefusal.SendClosureMemberNotHeld"/>.
+    /// <see cref="RepeatedEnumerationReceiptRefusal.SendClosureMemberNotHeld"/>.
     /// </param>
-    public static LuxembourgEnumerationDeliveryReceipt? TryCreate(
+    public static RepeatedEnumerationDeliveryReceipt? TryCreate(
         EnumerationDeliveryComparison delivery,
         IReadOnlyDictionary<string, CustodyMembership> sessionArtifactMembership,
         IReadOnlyDictionary<string, CustodyMembership> executorWrittenMembership,
-        IReadOnlyList<LuxembourgObservationCustody> observationCustody,
-        out LuxembourgEnumerationReceiptRefusal refusal)
+        IReadOnlyList<RepeatedEnumerationObservationCustody> observationCustody,
+        out RepeatedEnumerationReceiptRefusal refusal)
     {
         ArgumentNullException.ThrowIfNull(delivery);
         ArgumentNullException.ThrowIfNull(sessionArtifactMembership);
         ArgumentNullException.ThrowIfNull(executorWrittenMembership);
         ArgumentNullException.ThrowIfNull(observationCustody);
 
-        var byEvidenceDigest = new Dictionary<string, LuxembourgObservationCustody>(StringComparer.Ordinal);
+        var byEvidenceDigest = new Dictionary<string, RepeatedEnumerationObservationCustody>(StringComparer.Ordinal);
         foreach (var custody in observationCustody)
         {
             ArgumentNullException.ThrowIfNull(custody);
@@ -147,7 +231,7 @@ public sealed class LuxembourgEnumerationDeliveryReceipt
             if (!byEvidenceDigest.TryGetValue(references.HttpEvidenceRef.Sha256, out var observation) ||
                 observation.References != references)
             {
-                refusal = LuxembourgEnumerationReceiptRefusal.SendClosureMemberNotHeld;
+                refusal = RepeatedEnumerationReceiptRefusal.SendClosureMemberNotHeld;
                 return null;
             }
 
@@ -166,14 +250,14 @@ public sealed class LuxembourgEnumerationDeliveryReceipt
             {
                 if (!sessionArtifactMembership.TryGetValue(digest, out var membership))
                 {
-                    refusal = LuxembourgEnumerationReceiptRefusal.SendClosureMemberNotHeld;
+                    refusal = RepeatedEnumerationReceiptRefusal.SendClosureMemberNotHeld;
                     return null;
                 }
 
                 if (executorWrittenMembership.TryGetValue(digest, out var conflicting) &&
                     conflicting != membership)
                 {
-                    refusal = LuxembourgEnumerationReceiptRefusal.MembershipDisagreesOnADigest;
+                    refusal = RepeatedEnumerationReceiptRefusal.MembershipDisagreesOnADigest;
                     return null;
                 }
 
@@ -184,7 +268,7 @@ public sealed class LuxembourgEnumerationDeliveryReceipt
             }
 
             // The response body, classified from the write receipt the store issued for those exact
-            // bytes. LuxembourgDeliveryObservation.Create has already refused unless that receipt's
+            // bytes. The caller's own delivery observation has already refused unless that receipt's
             // Reference.ContentSha256 is this body's digest, so this is the body's own membership
             // and not some other object's.
             //
@@ -195,7 +279,7 @@ public sealed class LuxembourgEnumerationDeliveryReceipt
             if (Disagrees(sessionArtifactMembership, observation.ResponseBodySha256, observation.ResponseBodyMembership) ||
                 Disagrees(executorWrittenMembership, observation.ResponseBodySha256, observation.ResponseBodyMembership))
             {
-                refusal = LuxembourgEnumerationReceiptRefusal.MembershipDisagreesOnADigest;
+                refusal = RepeatedEnumerationReceiptRefusal.MembershipDisagreesOnADigest;
                 return null;
             }
 
@@ -208,7 +292,7 @@ public sealed class LuxembourgEnumerationDeliveryReceipt
                     references.HttpEvidenceRef.Sha256,
                     out var evidenceMembership))
             {
-                refusal = LuxembourgEnumerationReceiptRefusal.SendClosureMemberNotHeld;
+                refusal = RepeatedEnumerationReceiptRefusal.SendClosureMemberNotHeld;
                 return null;
             }
 
@@ -217,7 +301,7 @@ public sealed class LuxembourgEnumerationDeliveryReceipt
                     out var conflictingEvidence) &&
                 conflictingEvidence != evidenceMembership)
             {
-                refusal = LuxembourgEnumerationReceiptRefusal.MembershipDisagreesOnADigest;
+                refusal = RepeatedEnumerationReceiptRefusal.MembershipDisagreesOnADigest;
                 return null;
             }
 
@@ -239,8 +323,8 @@ public sealed class LuxembourgEnumerationDeliveryReceipt
             floor = Weakest(floor, membership);
         }
 
-        refusal = LuxembourgEnumerationReceiptRefusal.None;
-        return new LuxembourgEnumerationDeliveryReceipt(
+        refusal = RepeatedEnumerationReceiptRefusal.None;
+        return new RepeatedEnumerationDeliveryReceipt(
             delivery,
             retained,
             floor,
@@ -248,10 +332,10 @@ public sealed class LuxembourgEnumerationDeliveryReceipt
     }
 
     /// <summary>
-    /// The only Luxembourg path from a delivery receipt to an absence enumeration proof, and so the
-    /// only LU path to <see cref="AbsenceCut.TryCreateComplete"/>, which admits no family without
-    /// one. It reads <see cref="RequireFlooredRun"/>, never <see cref="Delivery"/>: a run holding
-    /// any member without an enforced floor cannot mint a proof at all, because a proof of complete
+    /// The only path from a delivery receipt to an absence enumeration proof, and so the only path
+    /// to <see cref="AbsenceCut.TryCreateComplete"/>, which admits no family without one. It reads
+    /// <see cref="RequireFlooredRun"/>, never <see cref="Delivery"/>: a run holding any member
+    /// without an enforced floor cannot mint a proof at all, because a proof of complete
     /// enumeration whose evidence may not survive ninety days is a claim nobody can go back and
     /// check. That is a throw rather than a typed refusal because the caller asked for durability
     /// by calling this at all, and the digests that lack it are named in the message.
@@ -275,22 +359,22 @@ public sealed class LuxembourgEnumerationDeliveryReceipt
         Dictionary<string, CustodyMembership> retained,
         string digest,
         CustodyMembership membership,
-        out LuxembourgEnumerationReceiptRefusal refusal)
+        out RepeatedEnumerationReceiptRefusal refusal)
     {
         if (membership is not (CustodyMembership.RetainedUnenforced or CustodyMembership.Floored))
         {
-            refusal = LuxembourgEnumerationReceiptRefusal.MembershipIsNotReceiptDerived;
+            refusal = RepeatedEnumerationReceiptRefusal.MembershipIsNotReceiptDerived;
             return false;
         }
 
         if (Disagrees(retained, digest, membership))
         {
-            refusal = LuxembourgEnumerationReceiptRefusal.MembershipDisagreesOnADigest;
+            refusal = RepeatedEnumerationReceiptRefusal.MembershipDisagreesOnADigest;
             return false;
         }
 
         retained[digest] = membership;
-        refusal = LuxembourgEnumerationReceiptRefusal.None;
+        refusal = RepeatedEnumerationReceiptRefusal.None;
         return true;
     }
 
@@ -301,9 +385,9 @@ public sealed class LuxembourgEnumerationDeliveryReceipt
     /// <summary>
     /// The weakest of two memberships, by an explicit comparison rather than <c>Enum.Min</c>, so a
     /// renumbering of <see cref="CustodyMembership"/> cannot silently invert which value reads as
-    /// weaker. Total over the two values <see cref="Admit"/> lets through, and over nothing else:
-    /// there is deliberately no <see cref="CustodyMembership.ReadOnce"/> case here, because a case
-    /// no caller can reach is a case no test can kill.
+    /// weaker. Total over the two values <c>Record</c> lets through, and over nothing else: there is
+    /// deliberately no <see cref="CustodyMembership.ReadOnce"/> case here, because a case no caller
+    /// can reach is a case no test can kill.
     /// </summary>
     internal static CustodyMembership Weakest(CustodyMembership left, CustodyMembership right) =>
         left == CustodyMembership.Floored && right == CustodyMembership.Floored

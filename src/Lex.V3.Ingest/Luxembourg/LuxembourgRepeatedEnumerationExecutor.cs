@@ -136,7 +136,7 @@ public sealed class LuxembourgEnumerationRefusalDetail
 public sealed class LuxembourgEnumerationRunResult
 {
     private LuxembourgEnumerationRunResult(
-        LuxembourgEnumerationDeliveryReceipt? receipt,
+        RepeatedEnumerationDeliveryReceipt? receipt,
         LuxembourgEnumerationRefusalDetail? refusal,
         int productRequestCount)
     {
@@ -159,7 +159,7 @@ public sealed class LuxembourgEnumerationRunResult
     }
 
     public static LuxembourgEnumerationRunResult Delivered(
-        LuxembourgEnumerationDeliveryReceipt receipt, int productRequestCount)
+        RepeatedEnumerationDeliveryReceipt receipt, int productRequestCount)
     {
         ArgumentNullException.ThrowIfNull(receipt);
         return new(receipt, null, productRequestCount);
@@ -172,7 +172,7 @@ public sealed class LuxembourgEnumerationRunResult
         return new(null, detail, productRequestCount);
     }
 
-    public LuxembourgEnumerationDeliveryReceipt? Receipt { get; }
+    public RepeatedEnumerationDeliveryReceipt? Receipt { get; }
 
     public LuxembourgEnumerationRefusalDetail? Refusal { get; }
 
@@ -261,6 +261,13 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
     private readonly TimeProvider _timeProvider;
     private readonly System.Net.Http.HttpMessageHandler? _testHandlerOverride;
 
+    /// <summary>
+    /// Queue item 19: the publisher-neutral half of the per-observation routine, constructed from
+    /// this executor's own <see cref="_custodyStore"/> so nothing here holds a second, independent
+    /// custody dependency (Decision 78).
+    /// </summary>
+    private readonly RepeatedEnumerationDeliveryReopenGlue _reopenGlue;
+
     public LuxembourgRepeatedEnumerationExecutor(ICustodyStore custodyStore, TimeProvider timeProvider)
         : this(custodyStore, timeProvider, testHandlerOverride: null)
     {
@@ -280,6 +287,7 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         _custodyStore = custodyStore ?? throw new ArgumentNullException(nameof(custodyStore));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _testHandlerOverride = testHandlerOverride;
+        _reopenGlue = new RepeatedEnumerationDeliveryReopenGlue(_custodyStore);
     }
 
     /// <summary>One partition, one session, two passes.</summary>
@@ -428,7 +436,7 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
                 // tuple does not bind") already refuses any observation whose body receipt is not
                 // ImmutableObject1 and LockedTime, so a body cannot reach the receipt carrying a
                 // membership that would refuse there. The three refusals are driven where they
-                // ARE reachable, on LuxembourgEnumerationDeliveryReceipt.TryCreate itself, which
+                // ARE reachable, on RepeatedEnumerationDeliveryReceipt.TryCreate itself, which
                 // is public and takes caller-stated membership. Carrying the value costs one
                 // string and stops "unreachable today" being written down as "unreachable".
                 return LuxembourgEnumerationRunResult.Refused(
@@ -542,11 +550,11 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         var countBound = request.InvariantPlan.BindCount(
             request.InvariantPlanResourceId, NewUrn(), NewUrn(), request.SetId, pass, request.Partition,
             request.RendererSource);
-        var countIdentity = LuxembourgObservationIdentity.NewObservation();
-        var countOutcome = await ObserveAsync(
+        var countIdentity = RepeatedEnumerationObservationIdentity.NewObservation();
+        var countOutcome = ToObserveOutcome(await _reopenGlue.ObserveAsync(
                 session, countBound.Request, profile, executorWrittenMembership, currentCount, setCount,
                 cancellationToken)
-            .ConfigureAwait(false);
+            .ConfigureAwait(false));
         if (countOutcome.Refusal is not null)
         {
             return new PassOutcome(null, countOutcome.Refusal);
@@ -606,10 +614,10 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
             var pageBound = request.InvariantPlan.BindPage(
                 request.InvariantPlanResourceId, NewUrn(), NewUrn(), request.SetId, pass, request.Partition,
                 cursor, selected, countObservation.HttpEvidenceRef, request.RendererSource);
-            var pageOutcome = await ObserveAsync(
+            var pageOutcome = ToObserveOutcome(await _reopenGlue.ObserveAsync(
                     session, pageBound.Request, profile, executorWrittenMembership, currentCount, setCount,
                     cancellationToken)
-                .ConfigureAwait(false);
+                .ConfigureAwait(false));
             if (pageOutcome.Refusal is not null)
             {
                 return new PassOutcome(null, pageOutcome.Refusal);
@@ -681,7 +689,7 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
             // requires Core to see it as the pass's own last page, not an event this executor
             // merely noticed and stopped on.
             var pageObservation = LuxembourgDeliveryObservation.ForPage(
-                pageBound, LuxembourgObservationIdentity.NewObservation(), transport, profile);
+                pageBound, RepeatedEnumerationObservationIdentity.NewObservation(), transport, profile);
             deliveryPass = deliveryPass.WithPage(pageObservation);
 
             if (rows.Count == 0)
@@ -694,114 +702,46 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
     }
 
     private sealed record ObserveOutcome(
-        LuxembourgObservedTransport? Transport,
+        RepeatedEnumerationObservedTransport? Transport,
         ulong? RequestOrdinal,
         LuxembourgEnumerationRefusalDetail? Refusal);
 
     /// <summary>
-    /// The shared per-observation routine (design section 2, step 9). Executes the plan item,
-    /// admits only a terminal derivable 200 with the expected media type, reads the logical
-    /// request/write receipt/payload back out of custody (never from memory), writes the HTTP
-    /// evidence document, and reopens it by the digest the store returned.
+    /// Queue item 19: the per-observation routine itself (design section 2, step 9) moved to the
+    /// publisher-neutral <see cref="RepeatedEnumerationDeliveryReopenGlue.ObserveAsync"/>, extracted
+    /// so a future EU executor can reuse it instead of duplicating it. This maps its narrower,
+    /// neutral <see cref="ObservationAttemptFailure"/> back into this executor's own unchanged
+    /// <see cref="LuxembourgEnumerationRefusalDetail"/>, reconstructing the exact same field values
+    /// the executor used to build directly, so no behavior visible to a Luxembourg caller changed.
     /// </summary>
-    private async Task<ObserveOutcome> ObserveAsync(
-        RoutedHttpAcquisitionSession session,
-        BoundMachineRequest request,
-        RepeatedEnumerationInterpretationProfile profile,
-        Dictionary<string, CustodyMembership> executorWrittenMembership,
-        Func<int> currentCount,
-        Action<int> setCount,
-        CancellationToken cancellationToken)
+    private static ObserveOutcome ToObserveOutcome(ObservationAttemptOutcome outcome)
     {
-        var item = session.OpenPlanItem(request);
-        var maximumAttempts = session.SourceProfile.MaximumAttempts;
-        var attemptOrdinal = 0;
-        RoutedHttpAcquisitionSession.AttemptResult attempt;
-        while (true)
+        if (outcome.Failure is not { } failure)
         {
-            attempt = await item.ExecuteNextAttemptAsync(cancellationToken).ConfigureAwait(false);
-            attemptOrdinal++;
-            setCount(currentCount() + 1);
-            if (attempt.Kind == OfficialHttpAcquisitionOutcomeKind.ExecutedObservation)
-            {
-                break;
-            }
-
-            // Mirrors the one condition under which the session's own PlanItem allows another
-            // attempt after a non-executed outcome (RoutedHttpAcquisitionSession.cs, PlanItem
-            // .IsRetryable's pre-header branch): a failure before headers completed. Calling again
-            // when this does not hold, or once the session's own attempt budget is spent, would
-            // throw InvalidOperationException from ExecuteNextAttemptAsync itself, which design
-            // section 2 step 9.2 requires never happens; this predicate is why it never does.
-            var retryable = attempt.PreHeaderFailureClass is
-                HttpPreHeaderFailureClass.HeaderDeadline or HttpPreHeaderFailureClass.TransportBeforeHeaders;
-            if (!retryable || attemptOrdinal >= maximumAttempts)
-            {
-                return new ObserveOutcome(
-                    null,
-                    item.RequestOrdinal,
-                    new LuxembourgEnumerationRefusalDetail(
-                        LuxembourgEnumerationRefusal.ObservationNotExecuted,
-                        item.RequestOrdinal, (ulong)attemptOrdinal, null, null, null, null, [],
-                        $"{attempt.OperationalReason}/{attempt.PreHeaderFailureClass}"));
-            }
+            return new ObserveOutcome(outcome.Transport, outcome.RequestOrdinal, null);
         }
 
-        var evidence = attempt.Evidence!;
-        var terminal = evidence.Hops[^1];
-        if (terminal.Status != 200 || terminal.StatusDisposition != HttpStatusDisposition.DerivableStatus)
+        var code = failure.Kind switch
         {
-            return new ObserveOutcome(
+            ObservationAttemptFailureKind.NotExecuted => LuxembourgEnumerationRefusal.ObservationNotExecuted,
+            ObservationAttemptFailureKind.StatusNotAdmitted => LuxembourgEnumerationRefusal.StatusNotAdmitted,
+            ObservationAttemptFailureKind.MediaTypeNotAdmitted => LuxembourgEnumerationRefusal.MediaTypeNotAdmitted,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(outcome), $"Unreachable: an unhandled {nameof(ObservationAttemptFailureKind)} '{failure.Kind}'."),
+        };
+        return new ObserveOutcome(
+            null,
+            outcome.RequestOrdinal,
+            new LuxembourgEnumerationRefusalDetail(
+                code,
+                outcome.RequestOrdinal,
+                failure.AttemptOrdinalReached,
+                failure.TerminalStatus,
+                failure.ResponseBodySha256,
+                failure.ObservedMediaType,
                 null,
-                item.RequestOrdinal,
-                new LuxembourgEnumerationRefusalDetail(
-                    LuxembourgEnumerationRefusal.StatusNotAdmitted,
-                    item.RequestOrdinal, null, terminal.Status, terminal.Sha256, null, null, [], null));
-        }
-
-        var observedMediaType = terminal.Headers.ContentType is RoutedHttpSingleHeader single ? single.Value : null;
-        if (observedMediaType != profile.ExpectedMediaType)
-        {
-            return new ObserveOutcome(
-                null,
-                item.RequestOrdinal,
-                new LuxembourgEnumerationRefusalDetail(
-                    LuxembourgEnumerationRefusal.MediaTypeNotAdmitted,
-                    item.RequestOrdinal, null, terminal.Status, terminal.Sha256, observedMediaType, null, [], null));
-        }
-
-        var logicalRequestBytes = await CustodyRestore.ReadByDigestCheckedAsync(
-                _custodyStore, terminal.LogicalRequestSha256, cancellationToken)
-            .ConfigureAwait(false);
-        var logicalRequest = HttpLogicalRequest.ParseAndVerify(logicalRequestBytes.Span);
-
-        var writeReceiptBytes = await CustodyRestore.ReadByDigestCheckedAsync(
-                _custodyStore, terminal.DurableWriteReceiptSha256, cancellationToken)
-            .ConfigureAwait(false);
-        var writeReceipt = ContractJson.Deserialize<DurableBlobWriteReceipt>(
-            new UTF8Encoding(false, true).GetString(writeReceiptBytes.Span))
-            ?? throw new CustodyIntegrityException("The retained write receipt decoded to nothing.");
-
-        var payload = await CustodyRestore.ReadByDigestCheckedAsync(
-                _custodyStore, terminal.Sha256, cancellationToken)
-            .ConfigureAwait(false);
-
-        // Write the evidence document, then take the digest FROM THE STORE'S OWN RECEIPT rather
-        // than from a value this run computed itself, and reopen exactly that digest before
-        // trusting it.
-        var evidenceBytes = evidence.CopyCanonicalBytes();
-        var evidenceReceipt = await _custodyStore.CreateAsync(
-                evidenceBytes, CustodyClass.NightlyFloor90d, cancellationToken)
-            .ConfigureAwait(false);
-        var evidenceDigest = evidenceReceipt.Reference.ContentSha256;
-        var reopenedEvidenceBytes = await CustodyRestore.ReadByDigestCheckedAsync(
-                _custodyStore, evidenceDigest, cancellationToken)
-            .ConfigureAwait(false);
-        var reopenedEvidence = RoutedHttpEvidence.ParseAndVerify(reopenedEvidenceBytes.Span);
-        executorWrittenMembership[evidenceDigest] = CustodyMembershipClassifier.Classify(evidenceReceipt);
-
-        var transport = new LuxembourgObservedTransport(logicalRequest, reopenedEvidence, writeReceipt, payload);
-        return new ObserveOutcome(transport, item.RequestOrdinal, null);
+                [],
+                failure.OperationalDetail));
     }
 
     /// <summary>

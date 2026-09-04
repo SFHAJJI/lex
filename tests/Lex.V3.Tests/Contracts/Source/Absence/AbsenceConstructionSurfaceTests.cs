@@ -175,15 +175,17 @@ public sealed class AbsenceConstructionSurfaceTests
                 "field private instance " + N + "AbsenceCut::<EnumerationProofs>k__BackingField -> "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "AbsenceFamilyEnumerationProof>",
 
-                // The Luxembourg adapter's bridge, and the second producer this pin was written to
-                // catch. It is admitted, not tolerated: it takes the family key and reads
-                // LuxembourgEnumerationDeliveryReceipt.RequireFlooredRun, so it can only mint a
-                // proof from a comparison this repository's own verifying factory produced AND
-                // whose every custody member is floored. A producer that read the receipt's plain
-                // Delivery property instead would satisfy this pin's shape while dropping the
-                // durability half, so the pin is not the whole guard here; the LU-side test
-                // AGenuineDeliveryReceiptMintsACompleteAbsenceCut and its unfloored twin are.
-                "method public instance " + Lu + "LuxembourgEnumerationDeliveryReceipt"
+                // The publisher-neutral delivery receipt's bridge (queue item 19: moved and renamed
+                // from Lex.V3.Contracts.Source.Luxembourg.LuxembourgEnumerationDeliveryReceipt), and
+                // the second producer this pin was written to catch. It is admitted, not tolerated:
+                // it takes the family key and reads RepeatedEnumerationDeliveryReceipt
+                // .RequireFlooredRun, so it can only mint a proof from a comparison this
+                // repository's own verifying factory produced AND whose every custody member is
+                // floored. A producer that read the receipt's plain Delivery property instead would
+                // satisfy this pin's shape while dropping the durability half, so the pin is not the
+                // whole guard here; the LU-side test AGenuineDeliveryReceiptMintsACompleteAbsenceCut
+                // and its unfloored twin are.
+                "method public instance " + Core + "RepeatedEnumerationDeliveryReceipt"
                 + "::TryProveFamilyEnumeration(System.String, out "
                 + N + "AbsenceFamilyEnumerationProofRefusal&) -> "
                 + N + "AbsenceFamilyEnumerationProof",
@@ -237,17 +239,18 @@ public sealed class AbsenceConstructionSurfaceTests
         CollectionAssert.AreEqual(
             new[]
             {
-                // All three are the Luxembourg delivery receipt holding the comparison it was
-                // minted from. None of them is a second way to OBTAIN one: the receipt's only door
-                // takes a comparison as a parameter, so nothing here can exist without
-                // EnumerationDeliveryComparison.Create having already run above. Delivery hands it
-                // back asserting nothing, RequireFlooredRun hands the same object back only when
-                // every custody member is floored.
-                "field private instance " + Lu + "LuxembourgEnumerationDeliveryReceipt"
+                // All three are the publisher-neutral delivery receipt (queue item 19: moved and
+                // renamed from Lex.V3.Contracts.Source.Luxembourg.LuxembourgEnumerationDeliveryReceipt)
+                // holding the comparison it was minted from. None of them is a second way to OBTAIN
+                // one: the receipt's only door takes a comparison as a parameter, so nothing here
+                // can exist without EnumerationDeliveryComparison.Create having already run above.
+                // Delivery hands it back asserting nothing, RequireFlooredRun hands the same object
+                // back only when every custody member is floored.
+                "field private instance " + Core + "RepeatedEnumerationDeliveryReceipt"
                 + "::<Delivery>k__BackingField -> " + Core + "EnumerationDeliveryComparison",
-                "method public instance " + Lu + "LuxembourgEnumerationDeliveryReceipt"
+                "method public instance " + Core + "RepeatedEnumerationDeliveryReceipt"
                 + "::RequireFlooredRun() -> " + Core + "EnumerationDeliveryComparison",
-                "property public instance " + Lu + "LuxembourgEnumerationDeliveryReceipt"
+                "property public instance " + Core + "RepeatedEnumerationDeliveryReceipt"
                 + "::Delivery() -> " + Core + "EnumerationDeliveryComparison",
             },
             ConstructionSurface.ProducersIn(
