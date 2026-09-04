@@ -1,5 +1,4 @@
 using System.Linq;
-using System.Reflection;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Facts;
 using Lex.V3.Contracts.Source.Europe;
@@ -305,7 +304,7 @@ public sealed class EuLegislationSummaryTests
     }
 
     [TestMethod]
-    public void ThePublicPropertySurfaceIsExactlyTheseNine()
+    public void ThePublicPropertySurfaceIsExactlyTheseTen()
     {
         CollectionAssert.AreEqual(
             new[]
@@ -320,257 +319,31 @@ public sealed class EuLegislationSummaryTests
                 .ToArray());
     }
 
-    // --- The exclusion proof: SCOPE_RULING precision three -------------------------------------------
+    // --- The exclusion proof: SCOPE_RULING precision three, structurally enforced ------------------
 
     /// <summary>
-    /// The positive half of the proof: both of the bundle's admitted variants, from E1's and E6's
-    /// own real binding types, actually construct and actually enter the bundle.
+    /// SCOPE_RULING precision three's real exclusion, proven by reflection over the whole
+    /// <c>Lex.V3.Contracts</c> assembly rather than by a hand-built example bundle:
+    /// <see cref="IEuFactsEvidenceCarrier"/>'s implementers are exactly E1's own
+    /// <see cref="EuDateAxiomBinding"/> and E6's own <see cref="EuCaseLawLinkBinding"/>, and this
+    /// record is not assignable to the marker. A third implementer added later would change the
+    /// expected array here too, so the closed set cannot silently widen; see the type remarks on
+    /// <see cref="EuLegislationSummary"/> and on <see cref="IEuFactsEvidenceCarrier"/> for why a
+    /// marker-typed bundle member trips neither E1's nor E6's own construction-surface guard.
     /// </summary>
     [TestMethod]
-    public void TheBundleAdmitsBothE1sDateAxiomEvidenceAndE6sCaseLawEvidence()
+    public void TheEvidenceCarrierMarkerIsImplementedByExactlyE1sAndE6sBindingsAndNotByThisRecord()
     {
-        var dateAxiom = EuDateAxiomBinding.Create(
-            work: Gdpr(),
-            rawLexicalValue: "2016-05-24",
-            datatypeUri: "http://www.w3.org/2001/XMLSchema#date",
-            precision: DatePrecision.YearMonthDay,
-            sourcePredicateUri: "http://publications.europa.eu/ontology/cdm#resource_legal_date_entry-into-force",
-            axiom: new QualifiedAxiom(
-                "axiom:32016r0679-entry-into-force-2016-05-24",
-                [new AxiomQualifier(
-                    "http://publications.europa.eu/ontology/annotation#type_of_date", "EV")]),
-            rawQualifierCode: "EV",
-            qualifierLabel: "Entry into force",
-            publisherComment: null,
-            parsedByAuthority: "https://lex.internal.example/authority/eu-legislation-summary-bundle-test/v1",
-            sourceObservationId: "obs:bundle-date-axiom");
-
-        var caseLawLink = EuCaseLawLinkBinding.Create(
-            source: new OfficialIdentitySet(
-                PublisherId.EuEurLex,
-                [
-                    new OfficialIdentifier(FactsIdentifierFamily.Celex, "62018CJ0311"),
-                    new OfficialIdentifier(FactsIdentifierFamily.Ecli, "ECLI:EU:C:2020:559"),
-                ]),
-            target: Gdpr(),
-            predicateUri: EuCaseLawPredicateVocabulary.CaseLawInterpretesResourceLegalPredicateUri,
-            targetBodyScope: TargetBodyScope.BodyInScopeHeld,
-            qualifiedAxioms: [],
-            sourceObservationId: "obs:bundle-case-law");
-
-        var bundle = EuFactsEvidenceBundle.Create(
-        [
-            EuFactsEvidenceBundleItem.OfDateAxiom(dateAxiom),
-            EuFactsEvidenceBundleItem.OfCaseLawLink(caseLawLink),
-        ]);
-
-        Assert.AreEqual(2, bundle.Items.Count);
-    }
-
-    [TestMethod]
-    public void ANullItemInTheBundleIsRefused()
-    {
-        Assert.ThrowsExactly<ArgumentException>(() =>
-            EuFactsEvidenceBundle.Create([null!]));
-    }
-
-    [TestMethod]
-    public void ANullItemsListIsRefused()
-    {
-        Assert.ThrowsExactly<ArgumentNullException>(() => EuFactsEvidenceBundle.Create(null!));
-    }
-
-    /// <summary>
-    /// The negative half of the proof, and the literal attempt SCOPE_RULING precision three asks
-    /// for. <c>EuFactsEvidenceBundleItem.OfLegislationSummary(GdprSummary())</c> does not exist, so
-    /// that call does not compile if written. Proven here instead by walking every constructor and
-    /// every static method <see cref="EuFactsEvidenceBundleItem"/> and its two nested variants
-    /// declare: none accepts a <see cref="EuLegislationSummary"/> parameter, so no call through this
-    /// type's own surface could ever produce an item wrapping one.
-    /// </summary>
-    [TestMethod]
-    public void NoMemberOfEuFactsEvidenceBundleItemCanProduceOneFromALegislationSummary()
-    {
-        var members = typeof(EuFactsEvidenceBundleItem)
-            .GetNestedTypes(BindingFlags.Public | BindingFlags.NonPublic)
-            .Append(typeof(EuFactsEvidenceBundleItem))
-            .SelectMany(type => type
-                .GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-                .Cast<MethodBase>()
-                .Concat(type.GetMethods(
-                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static
-                    | BindingFlags.DeclaredOnly)))
+        var implementers = typeof(EuLegislationSummary).Assembly.GetTypes()
+            .Where(type => type != typeof(IEuFactsEvidenceCarrier) &&
+                           typeof(IEuFactsEvidenceCarrier).IsAssignableFrom(type))
+            .OrderBy(type => type.FullName, StringComparer.Ordinal)
             .ToArray();
 
-        // Sanity: the walk actually found the two known factories and the two known nested
-        // constructors, so an empty or broken walk cannot pass this test by accident.
-        Assert.IsTrue(members.Length >= 4);
-        Assert.IsTrue(members.Any(m => m.Name == nameof(EuFactsEvidenceBundleItem.OfDateAxiom)));
-        Assert.IsTrue(members.Any(m => m.Name == nameof(EuFactsEvidenceBundleItem.OfCaseLawLink)));
-
-        Assert.IsFalse(members.Any(member =>
-            member.GetParameters().Any(p => p.ParameterType == typeof(EuLegislationSummary))));
-    }
-
-    [TestMethod]
-    public void EuFactsEvidenceBundleItemHasExactlyTheTwoNamedFactoriesAndNoOtherProducerInTheAssembly()
-    {
-        // Transcribed from ConstructionSurface.Of's actual output, per this project's
-        // print-then-transcribe technique. The bundle types live in this test assembly (see the
-        // remarks on EuFactsEvidenceBundleItem below for why), so their own reflected names carry
-        // the test namespace while the binding parameter types they wrap keep the production one.
-        const string N = "Lex.V3.Tests.Contracts.Source.Europe.";
-        const string ContractsN = "Lex.V3.Contracts.Source.Europe.";
         CollectionAssert.AreEqual(
-            new[]
-            {
-                "constructor internal instance " + N
-                + "EuFactsEvidenceBundleItem+CaseLawItem::.ctor(" + ContractsN
-                + "EuCaseLawLinkBinding) -> " + N + "EuFactsEvidenceBundleItem+CaseLawItem",
-                "constructor internal instance " + N
-                + "EuFactsEvidenceBundleItem+DateAxiomItem::.ctor(" + ContractsN
-                + "EuDateAxiomBinding) -> " + N + "EuFactsEvidenceBundleItem+DateAxiomItem",
-                "constructor private instance " + N + "EuFactsEvidenceBundleItem::.ctor() -> "
-                + N + "EuFactsEvidenceBundleItem",
-                "method public static " + N + "EuFactsEvidenceBundleItem::OfCaseLawLink(" + ContractsN
-                + "EuCaseLawLinkBinding) -> " + N + "EuFactsEvidenceBundleItem",
-                "method public static " + N + "EuFactsEvidenceBundleItem::OfDateAxiom(" + ContractsN
-                + "EuDateAxiomBinding) -> " + N + "EuFactsEvidenceBundleItem",
-            },
-            ConstructionSurface.Of(typeof(EuFactsEvidenceBundleItem)).ToArray());
+            new[] { typeof(EuCaseLawLinkBinding), typeof(EuDateAxiomBinding) },
+            implementers);
 
-        // The only other place in this assembly that can hand back an already-built item is
-        // EuFactsEvidenceBundle's own Items property (and its compiler-generated backing field):
-        // reading a list back out, never manufacturing a new item from anything, let alone from a
-        // EuLegislationSummary. Transcribed from ConstructionSurface.ProducersIn's actual output.
-        CollectionAssert.AreEqual(
-            new[]
-            {
-                "field private instance " + N
-                + "EuFactsEvidenceBundle::<Items>k__BackingField -> "
-                + "System.Collections.Generic.IReadOnlyList<" + N + "EuFactsEvidenceBundleItem>",
-                "property public instance " + N + "EuFactsEvidenceBundle::Items() -> "
-                + "System.Collections.Generic.IReadOnlyList<" + N + "EuFactsEvidenceBundleItem>",
-            },
-            ConstructionSurface.ProducersIn(
-                typeof(EuFactsEvidenceBundleItem).Assembly, typeof(EuFactsEvidenceBundleItem), true)
-                .ToArray());
-    }
-
-    /// <summary>
-    /// This test also proves the bundle types cannot be seen from E1's or E6's own production-assembly
-    /// construction-surface guards: their scans are assembly-scoped, and the bundle lives in this
-    /// test assembly, never in <c>Lex.V3.Contracts.dll</c>.
-    /// </summary>
-    [TestMethod]
-    public void TheBundleTypesAreInvisibleToTheProductionAssemblysOwnBindingGuards()
-    {
-        Assert.AreNotEqual(
-            typeof(EuCaseLawLinkBinding).Assembly, typeof(EuFactsEvidenceBundleItem).Assembly);
-
-        Assert.IsFalse(ConstructionSurface
-            .ProducersIn(typeof(EuCaseLawLinkBinding).Assembly, typeof(EuCaseLawLinkBinding), true)
-            .Any(entry => entry.Contains("EuFactsEvidenceBundle", StringComparison.Ordinal)));
-        Assert.IsFalse(ConstructionSurface
-            .ProducersIn(typeof(EuDateAxiomBinding).Assembly, typeof(EuDateAxiomBinding), true)
-            .Any(entry => entry.Contains("EuFactsEvidenceBundle", StringComparison.Ordinal)));
-    }
-}
-
-/// <summary>
-/// The closed set of EU Facts-layer bindings admissible into one bundle: E1's own date-axiom
-/// evidence and E6's own case-law evidence, and nothing else. Minted for one purpose -- SCOPE_RULING
-/// precision three, "the explanatory, not law type is proven by a bundle construction that cannot
-/// carry a summary record" -- rather than found already built: see the remarks on
-/// <see cref="EuLegislationSummary"/> for why no pre-existing bundle already spans both.
-/// </summary>
-/// <remarks>
-/// <para>
-/// <see cref="OfDateAxiom"/> and <see cref="OfCaseLawLink"/> are the only two ways to produce an
-/// instance. The constructor is <c>private</c>, not <c>private protected</c>: it is reachable only
-/// from the two nested variant classes declared inside this type, never from any other type in this
-/// assembly, so no third variant -- wrapping <see cref="EuLegislationSummary"/> or anything else --
-/// can ever be added without editing this file.
-/// <see cref="EuLegislationSummaryTests.EuFactsEvidenceBundleItemHasExactlyTheTwoNamedFactoriesAndNoOtherProducerInTheAssembly"/>
-/// pins this reflectively: the only public static methods this type declares are the two named
-/// above, and neither accepts a <see cref="EuLegislationSummary"/>.
-/// </para>
-/// <para>
-/// <b>Why this lives in the test project, not in <c>Lex.V3.Contracts</c>.</b> See the remarks on
-/// <see cref="EuLegislationSummary"/> itself: a production-assembly version of this type held
-/// <see cref="EuDateAxiomBinding"/>/<see cref="EuCaseLawLinkBinding"/> directly and became a new
-/// producer of both under <c>Lex.V3.Contracts.dll</c>'s own reflection scope, breaking E1's and E6's
-/// own already-merged "no other type in the assembly holds or produces a binding" tests. Declaring
-/// it here instead proves the identical exclusion -- E7's own record still cannot enter -- without
-/// that collateral touch, because <see cref="Lex.V3.TestSupport.ConstructionSurface.ProducersIn"/>
-/// scans one assembly at a time and this type's own assembly is <c>Lex.V3.Tests.dll</c>, never
-/// <c>Lex.V3.Contracts.dll</c>.
-/// </para>
-/// </remarks>
-public abstract class EuFactsEvidenceBundleItem
-{
-    private EuFactsEvidenceBundleItem()
-    {
-    }
-
-    /// <summary>Admits one of E1's own date-axiom bindings.</summary>
-    public static EuFactsEvidenceBundleItem OfDateAxiom(EuDateAxiomBinding binding) =>
-        new DateAxiomItem(binding);
-
-    /// <summary>Admits one of E6's own case-law-link bindings.</summary>
-    public static EuFactsEvidenceBundleItem OfCaseLawLink(EuCaseLawLinkBinding binding) =>
-        new CaseLawItem(binding);
-
-    private sealed class DateAxiomItem : EuFactsEvidenceBundleItem
-    {
-        internal DateAxiomItem(EuDateAxiomBinding binding)
-        {
-            Binding = binding ?? throw new ArgumentNullException(nameof(binding));
-        }
-
-        internal EuDateAxiomBinding Binding { get; }
-    }
-
-    private sealed class CaseLawItem : EuFactsEvidenceBundleItem
-    {
-        internal CaseLawItem(EuCaseLawLinkBinding binding)
-        {
-            Binding = binding ?? throw new ArgumentNullException(nameof(binding));
-        }
-
-        internal EuCaseLawLinkBinding Binding { get; }
-    }
-}
-
-/// <summary>
-/// A small, closed bundle of <see cref="EuFactsEvidenceBundleItem"/> members. See the remarks on
-/// <see cref="EuFactsEvidenceBundleItem"/> and on <see cref="EuLegislationSummary"/> for why this
-/// exists, what it proves, and why it lives here rather than in <c>Lex.V3.Contracts</c>.
-/// </summary>
-public sealed class EuFactsEvidenceBundle
-{
-    private EuFactsEvidenceBundle(IReadOnlyList<EuFactsEvidenceBundleItem> items)
-    {
-        Items = items;
-    }
-
-    public IReadOnlyList<EuFactsEvidenceBundleItem> Items { get; }
-
-    /// <summary>
-    /// The only path that mints a bundle. <paramref name="items"/>'s own compile-time type already
-    /// closes the admitted set to <see cref="EuFactsEvidenceBundleItem"/>'s two named variants; a
-    /// null-element check is the only thing left for this door to do.
-    /// </summary>
-    public static EuFactsEvidenceBundle Create(IReadOnlyList<EuFactsEvidenceBundleItem> items)
-    {
-        ArgumentNullException.ThrowIfNull(items);
-        var copy = items.ToArray();
-        if (Array.IndexOf(copy, null) >= 0)
-        {
-            throw new ArgumentException(
-                "An EU facts evidence bundle item cannot be null.", nameof(items));
-        }
-
-        return new EuFactsEvidenceBundle(Array.AsReadOnly(copy));
+        Assert.IsFalse(typeof(IEuFactsEvidenceCarrier).IsAssignableFrom(typeof(EuLegislationSummary)));
     }
 }

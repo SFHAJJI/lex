@@ -77,38 +77,41 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// </para>
 /// <para>
 /// <b>Explanatory, not law: proven structurally, not by convention.</b> SCOPE_RULING precision three
-/// asks for a real exclusion, not a comment. <c>EuFactsEvidenceBundle</c>, declared in
-/// <c>EuLegislationSummaryTests.cs</c> rather than here (see below for why), is that exclusion: a
-/// closed bundle admitting only E1's own <see cref="EuDateAxiomBinding"/> and E6's own
-/// <see cref="EuCaseLawLinkBinding"/> (reused directly, not re-wrapped), through
-/// <c>EuFactsEvidenceBundleItem</c>'s exactly two named factories. No factory taking a
-/// <see cref="EuLegislationSummary"/> exists, and none can be added without editing
-/// <c>EuFactsEvidenceBundleItem</c> itself, because its own constructor is <c>private</c> and
-/// reachable only from its two nested variant classes. This codebase has no pre-existing type that
-/// already aggregates a <see cref="PublisherDateFact"/>-based binding and a
-/// <see cref="RelationFact"/>-based binding together (confirmed by grepping the full repository for
-/// every consumer of both Facts types and every closed-variant registry, including
-/// <c>FactsSchemaExporter.SchemaTypes</c> and <c>PreviewObjectSet</c>; none holds both), so this bundle
-/// is minted for this one purpose, reusing E1's and E6's finished types as its two admitted members
-/// rather than inventing a parallel vocabulary for either. Its own "accepts only closed registered
-/// variants" shape mirrors <c>PreviewObjectSet</c> (<c>Contracts/PreviewPayload.cs</c>), the pattern
-/// this codebase already uses for exactly this kind of proof.
+/// asks for a real exclusion, not a comment. <see cref="IEuFactsEvidenceCarrier"/> is that exclusion,
+/// in production: a pure marker interface, declared in its own file beside this one, that E1's
+/// <see cref="EuDateAxiomBinding"/> and E6's <see cref="EuCaseLawLinkBinding"/> each implement and
+/// that this record does not. Any evidence bundle written against the marker (never against the two
+/// concrete binding types directly) can hold only what implements it, so this record can never be an
+/// element of one, and the exclusion holds for every bundle written from here on, not only for one
+/// hand-built today.
 /// </para>
 /// <para>
-/// <b>Why the bundle lives in the test project, not here.</b> A first version of
-/// <c>EuFactsEvidenceBundleItem</c>/<c>EuFactsEvidenceBundle</c> lived in this file and held
-/// <see cref="EuDateAxiomBinding"/>/<see cref="EuCaseLawLinkBinding"/> directly. That made both types
-/// new producers of those two guarded types under <c>Lex.V3.Contracts.dll</c>'s own reflection scope,
-/// which broke E1's and E6's own already-merged "no other type in the assembly holds or produces a
-/// binding" construction-surface tests
-/// (<c>EuDateAxiomTests.NoOtherTypeInTheAssemblyHoldsOrProducesABinding</c>,
+/// <b>Why this does not trip E1's or E6's own construction-surface guards.</b> An earlier version of
+/// this proof declared a closed bundle holding <see cref="EuDateAxiomBinding"/> and
+/// <see cref="EuCaseLawLinkBinding"/> directly. That made the bundle a new producer of those two
+/// guarded types under reflection, which broke E1's and E6's own already-merged "no other type in the
+/// assembly holds or produces a binding" construction-surface tests
+/// (<c>EuDateAxiomTests.EveryOtherProducerOfABindingInTheAssemblyIsExactlyTheClassificationsOwnHolder</c>,
 /// <c>EuCaseLawLinkTests.NoOtherTypeInTheAssemblyHoldsOrProducesABinding</c>) -- exactly the kind of
-/// collateral touch the scope ruling forbids, since fixing it would have meant editing
-/// <c>EuCaseLawLinkTests.cs</c> beyond its three named items, or <c>EuDateAxiomTests.cs</c> at all.
-/// The proof does not need to live in the shipped Contracts surface:
-/// <c>ConstructionSurface.ProducersIn</c> scans one assembly at a time, so a bundle declared in the
-/// test project can hold both binding types, prove the identical exclusion, and never appear in
-/// either assembly-scoped scan.
+/// collateral touch the scope ruling forbids. The marker interface does not have this problem:
+/// <c>Lex.V3.TestSupport.ConstructionSurface.Carries</c>, which both guards call through
+/// <c>ProducersIn</c>, treats a member's declared type as carrying the guarded type only when that
+/// declared type equals the guarded type or is a <i>subtype</i> of it; a member typed as
+/// <see cref="IEuFactsEvidenceCarrier"/> is typed as a <i>supertype</i> of
+/// <see cref="EuDateAxiomBinding"/> and <see cref="EuCaseLawLinkBinding"/>, which
+/// <c>Carries</c> does not treat as carrying either one. So a future bundle holding a collection of
+/// <see cref="IEuFactsEvidenceCarrier"/> proves the identical exclusion this record has always
+/// needed, without ever registering as a producer either binding's own guard scans for. This is a
+/// structural property of how <c>Carries</c> is written, not a coincidence of today's two
+/// implementers.
+/// </para>
+/// <para>
+/// <b>Proof, kept here rather than as a hand-built bundle.</b> <c>EuLegislationSummaryTests</c>
+/// reflects over the whole <c>Lex.V3.Contracts</c> assembly for the closed set of
+/// <see cref="IEuFactsEvidenceCarrier"/> implementers (today exactly
+/// <see cref="EuDateAxiomBinding"/> and <see cref="EuCaseLawLinkBinding"/>) and asserts this record
+/// is not assignable to the marker, which is the literal exclusion SCOPE_RULING precision three asks
+/// for, checked by the type system rather than by an example bundle that could go stale.
 /// </para>
 /// </remarks>
 public sealed class EuLegislationSummary
@@ -167,8 +170,13 @@ public sealed class EuLegislationSummary
     public TargetBodyScope SummarizedActBodyScope { get; }
 
     /// <summary>
-    /// <c>_drafted_in_language</c>, an ISO 639-3-shaped three-letter code exactly as the publisher
-    /// states it (e.g. <c>ENG</c>, review/23 section 7, line 88).
+    /// <c>_drafted_in_language</c> exactly as the publisher states it: three uppercase ASCII
+    /// letters (e.g. <c>ENG</c>, review/23 section 7, line 88). review/23 evidences the Cellar
+    /// REST <c>Accept-Language</c> header as an ISO 639-3 code (section 1.2, line 15), but never
+    /// states that <c>_drafted_in_language</c> specifically follows that standard, and the one
+    /// worked instance for this field is uppercase where an ISO 639-3 code is conventionally
+    /// lowercase (<c>eng</c>). No standards claim is made for this field beyond the observed
+    /// shape.
     /// </summary>
     public string DraftedInLanguage { get; }
 
@@ -223,7 +231,13 @@ public sealed class EuLegislationSummary
     /// </param>
     /// <param name="summarizedActBodyScope">Whether <paramref name="summarizedAct"/>'s own body is held.</param>
     /// <param name="draftedInLanguage">Three uppercase ASCII letters, e.g. <c>ENG</c>.</param>
-    /// <param name="version">Three dot-separated non-negative integers, e.g. <c>2.0.0</c>.</param>
+    /// <param name="version">
+    /// Three dot-separated non-negative integers, e.g. <c>2.0.0</c>. review/23 proves exactly one
+    /// worked value for this field (<c>2.0.0</c>, section 7, line 88); the three-part grammar
+    /// enforced below generalises from that one observed value, not from a publisher-documented
+    /// versioning scheme, so a legissum record whose real version does not fit this shape would be
+    /// refused rather than accepted on a guessed wider grammar.
+    /// </param>
     /// <param name="obsolete">The publisher's own <c>_obsolete</c> flag, read as a boolean.</param>
     /// <param name="validatedByInstitution">
     /// The publisher's own <c>_validated_by_institution</c> code, e.g. <c>JUST</c>. 1 to 200
@@ -382,6 +396,8 @@ public static class EuLegislationSummaryPredicateVocabulary
         StringComparer.Ordinal);
 }
 
-// The SCOPE_RULING precision three exclusion proof (EuFactsEvidenceBundleItem/EuFactsEvidenceBundle)
-// lives in tests/Lex.V3.Tests/Contracts/Source/Europe/EuLegislationSummaryTests.cs, not here: see
-// the type remarks above, "Why the bundle lives in the test project, not here."
+// The SCOPE_RULING precision three exclusion proof is IEuFactsEvidenceCarrier
+// (EuFactsEvidenceCarrier.cs, beside this file): see the type remarks above, "Explanatory, not
+// law: proven structurally, not by convention" and "Why this does not trip E1's or E6's own
+// construction-surface guards." The reflective closed-set proof itself lives in
+// tests/Lex.V3.Tests/Contracts/Source/Europe/EuLegislationSummaryTests.cs.

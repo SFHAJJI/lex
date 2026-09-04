@@ -23,7 +23,8 @@ namespace Lex.V3.Tests.Contracts.Source.Europe;
 /// </para>
 /// <para>
 /// Fixtures are hand built directly from review/23-research-temporal.md. <see cref="Gdpr"/>'s CELEX
-/// is quoted throughout the file (e.g. section 3, line 60). <see cref="SchremsIi"/>'s CELEX is
+/// is quoted throughout the file (e.g. section 2, line 42: queries must bind
+/// <c>"32016R0679"^^xsd:string</c>). <see cref="SchremsIi"/>'s CELEX is
 /// quoted at section 5, line 77 ("Case law: 62018CJ0311 has 24 expressions...") and its ECLI at
 /// section 2, line 45 ("`ECLI:EU:C:2020:559` as a literal on `cdm:case-law_ecli`"). The
 /// <c>case-law_interpretes_resource_legal</c> pairing of Schrems II with the GDPR is quoted at
