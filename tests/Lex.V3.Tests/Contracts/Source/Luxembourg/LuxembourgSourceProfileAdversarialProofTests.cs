@@ -229,6 +229,7 @@ public sealed class LuxembourgSourceProfileAdversarialProofTests
             typeof(LuxembourgProfileResolutionFailure),
             typeof(LuxembourgProfileResolution.Failed),
             typeof(LuxembourgWemiBlocker),
+            typeof(LuxembourgTypedRoleResolution),
         };
 
         foreach (var type in resolverOnlyTypes)
