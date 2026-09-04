@@ -66,6 +66,9 @@ internal static class EuAcquisitionTestFixture
     internal static readonly string[] CensusFamilyProjection =
         ["base_celex", "base", "state", "family_multiplicity", "state_key"];
 
+    /// <summary>The witness page's own three-column projection: <c>?entry ?entry_key ?watermark</c>.</summary>
+    internal static readonly string[] WitnessProjection = ["entry", "entry_key", "watermark"];
+
     internal static (EuConsolidationDiscoveryPlan Plan, string PlanResourceId) BuildCensusPlan() =>
         (EuConsolidationDiscoveryPlan.Create(), NewUrn());
 
@@ -207,6 +210,82 @@ internal static class EuAcquisitionTestFixture
     internal static string RootWatermarkRowsJson(IReadOnlyList<string> rows) => RowsJson(RootWatermarkProjection, rows);
 
     /// <summary>
+    /// Defect 6's own driving row: a family-W row whose <c>value_kind</c> is <c>"unbound"</c> rather
+    /// than <c>"literal"</c>, mirroring exactly what the real page template's own
+    /// <c>FILTER NOT EXISTS</c> branch emits for a root that carries no <c>cmr:lastModificationDate</c>
+    /// at all -- no <c>value</c> field is bound, exactly as <see cref="ObjectFactRow"/> already omits
+    /// it when its own <c>valueIri</c> is null.
+    /// </summary>
+    internal static string RootWatermarkUnboundRow(string rootIri)
+    {
+        var fields = new List<(string Var, string Term)>
+        {
+            ("object", Iri(rootIri)),
+            ("value_kind", PlainLiteral("unbound")),
+            ("datatype_iri", PlainLiteral("")),
+            ("language_tag", PlainLiteral("")),
+            ("key_1", PlainLiteral(rootIri)),
+            ("key_2", PlainLiteral("unbound")),
+            ("key_3", PlainLiteral("")),
+            ("key_4", PlainLiteral("")),
+            ("key_5", PlainLiteral("")),
+        };
+        return Row(fields);
+    }
+
+    /// <summary>
+    /// One witness page row: one delivered <c>?entry</c> at one <c>?watermark</c>, with
+    /// <c>?entry_key</c> bound to <c>STR(?entry)</c> exactly as the real page template's own
+    /// <c>BIND(STR(?entry) AS ?entry_key)</c> does.
+    /// </summary>
+    internal static string WitnessRow(string entryIri, string watermarkLexical)
+    {
+        var fields = new List<(string Var, string Term)>
+        {
+            ("entry", Iri(entryIri)),
+            ("entry_key", PlainLiteral(entryIri)),
+            ("watermark", PlainLiteral(watermarkLexical)),
+        };
+        return Row(fields);
+    }
+
+    internal static string WitnessRowsJson(IReadOnlyList<string> rows) => RowsJson(WitnessProjection, rows);
+
+    /// <summary>
+    /// The witness's own confirmed-termination script: a page carrying only the boundary's own
+    /// retained entry (nothing beyond it), repeated once so
+    /// <c>EuRepeatedEnumerationExecutor.RunWitnessTraversalAsync</c>'s own empty-successor
+    /// confirmation (see its remarks) observes the identical short page twice and stops.
+    /// </summary>
+    internal static string[] WitnessEmptyTraversalScript(string boundaryEntryIri, string boundaryWatermarkLexical)
+    {
+        var page = WitnessRowsJson([WitnessRow(boundaryEntryIri, boundaryWatermarkLexical)]);
+        return [page, page];
+    }
+
+    /// <summary>
+    /// The witness's own script for a traversal that observes exactly one real entry beyond the
+    /// census bound: the first page rereads the boundary (its own retained entry) and carries one new
+    /// entry beyond it; the second and third pages then confirm the new boundary is terminal (the
+    /// executor's own empty-successor confirmation -- see
+    /// <c>EuRepeatedEnumerationExecutor.RunWitnessTraversalAsync</c>'s own remarks).
+    /// </summary>
+    internal static string[] WitnessOneNewEntryTraversalScript(
+        string boundaryEntryIri,
+        string boundaryWatermarkLexical,
+        string newEntryIri,
+        string newWatermarkLexical)
+    {
+        var firstPage = WitnessRowsJson(
+        [
+            WitnessRow(boundaryEntryIri, boundaryWatermarkLexical),
+            WitnessRow(newEntryIri, newWatermarkLexical),
+        ]);
+        var confirmPage = WitnessRowsJson([WitnessRow(newEntryIri, newWatermarkLexical)]);
+        return [firstPage, confirmPage, confirmPage];
+    }
+
+    /// <summary>
     /// One family row: one discovered consolidated state of one seed's own base Work.
     /// <c>state_key</c> is <c>STR(?state)</c>, mirroring the real page template's own
     /// <c>BIND(STR(?state) AS ?state_key)</c>, so delivering rows whose <c>state</c> IRIs already
@@ -249,15 +328,22 @@ internal static class EuAcquisitionTestFixture
     }
 
     /// <summary>
-    /// Classifies a rendered SPARQL request body by the one CDM predicate substring unique to each of
-    /// the four families this run drives, never by request order: family X is the only one that ever
-    /// asks <c>expression_belongs_to_work</c>, family W the only one that asks
-    /// <c>cmr#lastModificationDate</c>, family P the only one that asks <c>resource_legal_type</c>
-    /// (the census family's own <c>Family</c> set asks none of the three), so an unclassified body is
-    /// the census family by elimination.
+    /// Classifies a rendered SPARQL request body by the one substring unique to each of the five
+    /// shapes this run can drive, never by request order. The witness must be checked before family
+    /// W: both ask <c>cmr#lastModificationDate</c> (the witness's own predicate is that same watermark
+    /// predicate), but only the witness's own template carries <c>isIRI(?entry)</c> -- family W's own
+    /// template asks a VALUES-bound batch of <c>?object</c> and never binds an <c>?entry</c> variable
+    /// at all. Family X is the only one that ever asks <c>expression_belongs_to_work</c>, family P the
+    /// only one that asks <c>resource_legal_type</c> (the census family's own <c>Family</c> set asks
+    /// none of the four), so an unclassified body is the census family by elimination.
     /// </summary>
     private static string ClassifyFamily(string body)
     {
+        if (body.Contains("isIRI(?entry)", StringComparison.Ordinal))
+        {
+            return "Witness";
+        }
+
         if (body.Contains("expression_belongs_to_work", StringComparison.Ordinal))
         {
             return "X";
@@ -290,6 +376,20 @@ internal static class EuAcquisitionTestFixture
         private int _sendCount;
 
         internal int SendCount => Volatile.Read(ref _sendCount);
+
+        /// <summary>
+        /// How many real requests this handler has classified into <paramref name="family"/> and
+        /// answered so far -- real dispatch counts, not test-declared expectations. Used to prove the
+        /// witness query is actually sent over HTTP (<c>OccurrenceCountFor("Witness")</c> must be
+        /// nonzero after a real run) rather than assumed.
+        /// </summary>
+        internal int OccurrenceCountFor(string family)
+        {
+            lock (_occurrence)
+            {
+                return _occurrence.TryGetValue(family, out var value) ? value : 0;
+            }
+        }
 
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)

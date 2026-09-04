@@ -63,6 +63,14 @@ public sealed class EuQueryExecutionAdapterTests
             ["W"] = EuAcquisitionTestFixture.ScriptFor(
                 "W", wRows.Length, wRows,
                 EuAcquisitionTestFixture.RootWatermarkProjection),
+            // Defect 3's own fix drives a real witness traversal from the census bound
+            // (watermarkLexical, this same root) on every delivered run now, not just when a test is
+            // specifically about the witness. Scripted here as a clean confirmed-empty traversal:
+            // nothing changed between the census bound and this run's own send.
+            ["Witness"] = new EuAcquisitionTestFixture.FamilyScript(
+                "Witness",
+                EuAcquisitionTestFixture.WitnessEmptyTraversalScript(
+                    rootIri, watermarkLexical)),
         };
 
         var handler = new EuAcquisitionTestFixture.ClassifyingHandler(scripts);
@@ -99,11 +107,17 @@ public sealed class EuQueryExecutionAdapterTests
                 (xRequest, EuAcquisitionTestFixture.SourceWitness()),
                 (wRequest, EuAcquisitionTestFixture.SourceWitness()),
             ],
+            EuAcquisitionTestFixture.BuildRendererSource(9),
+            EuAcquisitionTestFixture.SourceWitness(),
             evidenceResolver,
             CancellationToken.None);
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail} " +
             $"decode={result.DecodeRefusal} offendingIri={result.DecodeOffendingIri} snapshot={result.DecodeSnapshotRefusal}");
+
+        // Defect 3's own fix, proven here too: the witness endpoint was actually reached, and both
+        // scripted responses (the confirmed-empty traversal) were consumed.
+        Assert.AreEqual(2, handler.OccurrenceCountFor("Witness"), "the witness's own confirmed-empty traversal must send exactly two requests.");
 
         // ---- Precision six: real measured counts, never estimated. ----
         Assert.AreEqual(1, result.ObservedObjectCount, "O must be exactly the one root; no states were discovered.");
@@ -137,7 +151,7 @@ public sealed class EuQueryExecutionAdapterTests
         // ---- Precision three: the witness is frozen at the census bound. ----
         Assert.IsNotNull(result.WatermarkWitnessPlan);
         Assert.AreEqual(watermarkLexical, result.WatermarkWitnessPlan!.StartPosition.WatermarkLexical);
-        Assert.AreEqual("eu-consolidation-root:" + rootIri, result.WatermarkWitnessPlan.StartPosition.CanonicalEntryKey);
+        Assert.AreEqual(rootIri, result.WatermarkWitnessPlan.StartPosition.CanonicalEntryKey);
         Assert.AreEqual(EuWatermarkWitnessPlan.OfficialCellarSparqlEndpoint, result.WatermarkWitnessPlan.Endpoint);
 
         // Defect 3's own driving assertion: the frozen witness is actually reconciled against this
@@ -220,6 +234,8 @@ public sealed class EuQueryExecutionAdapterTests
                 (xRequest, EuAcquisitionTestFixture.SourceWitness()),
                 (wRequest, EuAcquisitionTestFixture.SourceWitness()),
             ],
+            EuAcquisitionTestFixture.BuildRendererSource(80),
+            EuAcquisitionTestFixture.SourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
             CancellationToken.None);
 
@@ -227,6 +243,8 @@ public sealed class EuQueryExecutionAdapterTests
         Assert.IsNotNull(result.Refusal);
         Assert.AreEqual(EuQueryExecutionRefusal.RecordFormNotResolved, result.Refusal!.Code);
         StringAssert.Contains(result.Refusal.Detail, seed.Celex);
+        // This refusal fires before defect 3's witness traversal is ever reached.
+        Assert.AreEqual(0, handler.OccurrenceCountFor("Witness"));
     }
 
     private const string ConsolidatedActResourceType =
@@ -306,6 +324,10 @@ public sealed class EuQueryExecutionAdapterTests
                 "X", xRows.Length, xRows, EuAcquisitionTestFixture.ExpressionFactsProjection),
             ["W"] = EuAcquisitionTestFixture.ScriptFor(
                 "W", wRows.Length, wRows, EuAcquisitionTestFixture.RootWatermarkProjection),
+            ["Witness"] = new EuAcquisitionTestFixture.FamilyScript(
+                "Witness",
+                EuAcquisitionTestFixture.WitnessEmptyTraversalScript(
+                    rootIri, watermarkLexical)),
         };
 
         var handler = new EuAcquisitionTestFixture.ClassifyingHandler(scripts);
@@ -341,11 +363,14 @@ public sealed class EuQueryExecutionAdapterTests
                 (xRequest, EuAcquisitionTestFixture.SourceWitness()),
                 (wRequest, EuAcquisitionTestFixture.SourceWitness()),
             ],
+            EuAcquisitionTestFixture.BuildRendererSource(29),
+            EuAcquisitionTestFixture.SourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
             CancellationToken.None);
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail} " +
             $"decode={result.DecodeRefusal} offendingIri={result.DecodeOffendingIri} snapshot={result.DecodeSnapshotRefusal}");
+        Assert.AreEqual(2, handler.OccurrenceCountFor("Witness"));
 
         // This fixture delivered exactly 2 census rows (state-1 and state-2), 39 P rows, 1 X row and
         // 1 W row and nothing else, so every one of these measured counts -- including the observed
@@ -438,6 +463,8 @@ public sealed class EuQueryExecutionAdapterTests
                 (xRequest, EuAcquisitionTestFixture.SourceWitness()),
                 (wRequest, EuAcquisitionTestFixture.SourceWitness()),
             ],
+            EuAcquisitionTestFixture.BuildRendererSource(35),
+            EuAcquisitionTestFixture.SourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
             CancellationToken.None);
 
@@ -537,6 +564,8 @@ public sealed class EuQueryExecutionAdapterTests
                 (xRequest, EuAcquisitionTestFixture.SourceWitness()),
                 (wRequest, EuAcquisitionTestFixture.SourceWitness()),
             ],
+            EuAcquisitionTestFixture.BuildRendererSource(45),
+            EuAcquisitionTestFixture.SourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
             CancellationToken.None);
 
@@ -594,6 +623,8 @@ public sealed class EuQueryExecutionAdapterTests
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
             [],
+            EuAcquisitionTestFixture.BuildRendererSource(52),
+            EuAcquisitionTestFixture.SourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
             CancellationToken.None);
 
@@ -635,6 +666,8 @@ public sealed class EuQueryExecutionAdapterTests
         var result = await adapter.RunAsync(
             [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
             [],
+            EuAcquisitionTestFixture.BuildRendererSource(62),
+            EuAcquisitionTestFixture.SourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
             CancellationToken.None);
 
@@ -645,6 +678,279 @@ public sealed class EuQueryExecutionAdapterTests
         Assert.AreEqual(EuFamilyEnumerationOutcomeKind.ExecutorRefused, outcome.Kind);
         Assert.IsNotNull(outcome.ExecutorRefusal);
         Assert.AreEqual(EuEnumerationRefusal.PartitionRequired, outcome.ExecutorRefusal!.Code);
+    }
+
+    /// <summary>
+    /// Defect 3's own driving test, half one: proves the frozen witness plan is actually SENT over
+    /// HTTP through the real EU transport rather than reconciled against an assumed-empty result. The
+    /// scripted transport's own witness lane throws (<c>KeyNotFoundException</c> from the dictionary
+    /// indexer inside <see cref="EuAcquisitionTestFixture.ClassifyingHandler"/>) if a witness request
+    /// arrives without a scripted response, so simply not crashing already proves the query reached
+    /// the transport layer; this test also asserts the exact real dispatch count so a silent
+    /// zero-request "success" cannot pass unnoticed. Reverting to the old
+    /// <c>Array.Empty&lt;EuFeedEntryTermination&gt;()</c> shortcut this ticket replaces would send
+    /// nothing to family "Witness" at all, so the assertion below observably fails first: verified by
+    /// temporarily reverting <see cref="EuQueryExecutionAdapter.RunAsync"/>'s own witness section and
+    /// re-running this test, which then fails with
+    /// <c>handler.OccurrenceCountFor("Witness")</c> equal to 0, not 2.
+    /// </summary>
+    [TestMethod]
+    public async Task TheWitnessQueryIsActuallyDispatchedOverHttpRatherThanAssumedEmpty()
+    {
+        var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
+        var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)!;
+        const string expressionIri = "http://publications.europa.eu/resource/cellar/00000000-0000-0000-0000-000000000071.0001.01/DOC_1";
+        const string watermarkLexical = "2026-01-01T00:00:00.0000000+01:00";
+
+        var pOutcomes = EuAcquisitionTestFixture.ObjectAuthorityPredicates
+            .Select(predicate => (
+                PredicateIri: predicate,
+                ValueIri: predicate == EuAcquisitionTestFixture.ResourceLegalType
+                    ? EuAcquisitionTestFixture.RegulationResourceType
+                    : (string?)null))
+            .Concat(EuAcquisitionTestFixture.RelationPredicates.Select(predicate => (predicate, (string?)null)))
+            .ToArray();
+        var pRows = EuAcquisitionTestFixture.SortedObjectFactRows(rootIri, pOutcomes);
+        var xRows = new[] { EuAcquisitionTestFixture.ExpressionFactRow(rootIri, expressionIri) };
+        var wRows = new[] { EuAcquisitionTestFixture.RootWatermarkRow(rootIri, watermarkLexical) };
+
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["Census"] = EuAcquisitionTestFixture.ScriptFor(
+                "Census", 0, [], EuAcquisitionTestFixture.CensusFamilyProjection),
+            ["P"] = EuAcquisitionTestFixture.ScriptFor(
+                "P", pRows.Count, pRows, EuAcquisitionTestFixture.ObjectFactsProjection),
+            ["X"] = EuAcquisitionTestFixture.ScriptFor(
+                "X", xRows.Length, xRows, EuAcquisitionTestFixture.ExpressionFactsProjection),
+            ["W"] = EuAcquisitionTestFixture.ScriptFor(
+                "W", wRows.Length, wRows, EuAcquisitionTestFixture.RootWatermarkProjection),
+            ["Witness"] = new EuAcquisitionTestFixture.FamilyScript(
+                "Witness",
+                EuAcquisitionTestFixture.WitnessEmptyTraversalScript(rootIri, watermarkLexical)),
+        };
+
+        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(scripts);
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var executor = new EuRepeatedEnumerationExecutor(
+            store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
+        var adapter = new EuQueryExecutionAdapter(store, executor);
+
+        var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
+        var censusRequest = new EuCensusPartitionRunRequest(
+            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(701));
+        var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var pRequest = new EuObjectFactsPartitionRunRequest(
+            pPlan, pPlanId, EuObjectFactsQuerySet.ObjectFacts, [rootIri],
+            EuAcquisitionTestFixture.BuildRendererSource(702));
+        var (xPlan, xPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var xRequest = new EuObjectFactsPartitionRunRequest(
+            xPlan, xPlanId, EuObjectFactsQuerySet.ExpressionFacts, [rootIri],
+            EuAcquisitionTestFixture.BuildRendererSource(703));
+        var (wPlan, wPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var wRequest = new EuObjectFactsPartitionRunRequest(
+            wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
+            EuAcquisitionTestFixture.BuildRendererSource(704));
+
+        Assert.AreEqual(0, handler.OccurrenceCountFor("Witness"), "no witness request should have been sent before the run.");
+
+        var result = await adapter.RunAsync(
+            [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
+            [
+                (pRequest, EuAcquisitionTestFixture.SourceWitness()),
+                (xRequest, EuAcquisitionTestFixture.SourceWitness()),
+                (wRequest, EuAcquisitionTestFixture.SourceWitness()),
+            ],
+            EuAcquisitionTestFixture.BuildRendererSource(705),
+            EuAcquisitionTestFixture.SourceWitness(),
+            new PermissiveEvidenceResolver(CompleteEnumerationRef),
+            CancellationToken.None);
+
+        Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+        // The real driving assertion: the witness endpoint was actually reached by a real HTTP-shaped
+        // request through the transport layer, exactly twice (the confirmed-empty traversal's own
+        // first request plus its one empty-successor confirmation), never zero.
+        Assert.AreEqual(2, handler.OccurrenceCountFor("Witness"));
+        Assert.IsNotNull(result.WitnessTerminations);
+        Assert.AreEqual(0, result.WitnessTerminations!.Count, "nothing changed since the census bound in this script.");
+    }
+
+    /// <summary>
+    /// Defect 3's own driving test, half two: proves that a real delivered witness row -- one this
+    /// run's own traversal genuinely observed beyond the census bound -- reconciles honestly as
+    /// <see cref="EuFeedTerminal.UnresolvedOrAmbiguous"/> with
+    /// <see cref="EuFeedUnresolvedCause.IdentityResolutionDidNotClose"/>, because no identity resolver
+    /// exists in this codebase yet (see <see cref="EuFeedEntryObservation"/>'s own remarks). This is
+    /// the honest-non-fabrication behavior this ticket requires: a real row, honestly unresolved,
+    /// never a guessed resolution and never a silently dropped row.
+    /// </summary>
+    [TestMethod]
+    public async Task ADeliveredWitnessRowWithNoIdentityResolutionReconcilesAsHonestlyUnresolved()
+    {
+        var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
+        var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)!;
+        const string expressionIri = "http://publications.europa.eu/resource/cellar/00000000-0000-0000-0000-000000000072.0001.01/DOC_1";
+        const string watermarkLexical = "2026-01-01T00:00:00.0000000+01:00";
+        const string newEntryIri = "http://publications.europa.eu/resource/cellar/22222222-2222-2222-2222-222222222222";
+        const string newWatermarkLexical = "2026-01-02T00:00:00.0000000+01:00";
+
+        var pOutcomes = EuAcquisitionTestFixture.ObjectAuthorityPredicates
+            .Select(predicate => (
+                PredicateIri: predicate,
+                ValueIri: predicate == EuAcquisitionTestFixture.ResourceLegalType
+                    ? EuAcquisitionTestFixture.RegulationResourceType
+                    : (string?)null))
+            .Concat(EuAcquisitionTestFixture.RelationPredicates.Select(predicate => (predicate, (string?)null)))
+            .ToArray();
+        var pRows = EuAcquisitionTestFixture.SortedObjectFactRows(rootIri, pOutcomes);
+        var xRows = new[] { EuAcquisitionTestFixture.ExpressionFactRow(rootIri, expressionIri) };
+        var wRows = new[] { EuAcquisitionTestFixture.RootWatermarkRow(rootIri, watermarkLexical) };
+
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["Census"] = EuAcquisitionTestFixture.ScriptFor(
+                "Census", 0, [], EuAcquisitionTestFixture.CensusFamilyProjection),
+            ["P"] = EuAcquisitionTestFixture.ScriptFor(
+                "P", pRows.Count, pRows, EuAcquisitionTestFixture.ObjectFactsProjection),
+            ["X"] = EuAcquisitionTestFixture.ScriptFor(
+                "X", xRows.Length, xRows, EuAcquisitionTestFixture.ExpressionFactsProjection),
+            ["W"] = EuAcquisitionTestFixture.ScriptFor(
+                "W", wRows.Length, wRows, EuAcquisitionTestFixture.RootWatermarkProjection),
+            ["Witness"] = new EuAcquisitionTestFixture.FamilyScript(
+                "Witness",
+                EuAcquisitionTestFixture.WitnessOneNewEntryTraversalScript(
+                    rootIri, watermarkLexical, newEntryIri, newWatermarkLexical)),
+        };
+
+        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(scripts);
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var executor = new EuRepeatedEnumerationExecutor(
+            store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
+        var adapter = new EuQueryExecutionAdapter(store, executor);
+
+        var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
+        var censusRequest = new EuCensusPartitionRunRequest(
+            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(711));
+        var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var pRequest = new EuObjectFactsPartitionRunRequest(
+            pPlan, pPlanId, EuObjectFactsQuerySet.ObjectFacts, [rootIri],
+            EuAcquisitionTestFixture.BuildRendererSource(712));
+        var (xPlan, xPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var xRequest = new EuObjectFactsPartitionRunRequest(
+            xPlan, xPlanId, EuObjectFactsQuerySet.ExpressionFacts, [rootIri],
+            EuAcquisitionTestFixture.BuildRendererSource(713));
+        var (wPlan, wPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var wRequest = new EuObjectFactsPartitionRunRequest(
+            wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
+            EuAcquisitionTestFixture.BuildRendererSource(714));
+
+        var result = await adapter.RunAsync(
+            [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
+            [
+                (pRequest, EuAcquisitionTestFixture.SourceWitness()),
+                (xRequest, EuAcquisitionTestFixture.SourceWitness()),
+                (wRequest, EuAcquisitionTestFixture.SourceWitness()),
+            ],
+            EuAcquisitionTestFixture.BuildRendererSource(715),
+            EuAcquisitionTestFixture.SourceWitness(),
+            new PermissiveEvidenceResolver(CompleteEnumerationRef),
+            CancellationToken.None);
+
+        Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+        Assert.AreEqual(3, handler.OccurrenceCountFor("Witness"), "one page carrying the new entry plus two confirming empty-successor requests.");
+
+        Assert.IsNotNull(result.WitnessTerminations);
+        Assert.AreEqual(1, result.WitnessTerminations!.Count, "exactly the one real entry this run's own traversal observed beyond the census bound.");
+        var termination = result.WitnessTerminations[0];
+        Assert.AreEqual(newEntryIri, termination.Entry.CanonicalEntryKey);
+        Assert.AreEqual(EuFeedTerminal.UnresolvedOrAmbiguous, termination.Terminal);
+        Assert.AreEqual(EuFeedUnresolvedCause.IdentityResolutionDidNotClose, termination.UnresolvedCause);
+        Assert.AreEqual(0, termination.InPack.Count);
+        Assert.AreEqual(0, termination.OutOfPack.Count);
+
+        Assert.IsNotNull(result.WitnessReconciliation);
+        Assert.AreEqual(1, result.WitnessReconciliation!.CheckedTerminationCount);
+    }
+
+    /// <summary>
+    /// Defect 6's own driving test. Before the fix, a family-W row whose <c>value_kind</c> was not
+    /// <c>"literal"</c> was silently skipped with a bare <c>continue</c>, contradicting defect 2's own
+    /// already-shipped claim that every W row either binds by identity or is refused by name. After
+    /// the fix it is refused, naming both the offending root and the actual non-literal value kind.
+    /// </summary>
+    [TestMethod]
+    public async Task AWRowWithANonLiteralValueKindIsRefusedRatherThanSilentlyDropped()
+    {
+        var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
+        var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)!;
+        const string expressionIri = "http://publications.europa.eu/resource/cellar/00000000-0000-0000-0000-000000000073.0001.01/DOC_1";
+
+        var pOutcomes = EuAcquisitionTestFixture.ObjectAuthorityPredicates
+            .Select(predicate => (
+                PredicateIri: predicate,
+                ValueIri: predicate == EuAcquisitionTestFixture.ResourceLegalType
+                    ? EuAcquisitionTestFixture.RegulationResourceType
+                    : (string?)null))
+            .Concat(EuAcquisitionTestFixture.RelationPredicates.Select(predicate => (predicate, (string?)null)))
+            .ToArray();
+        var pRows = EuAcquisitionTestFixture.SortedObjectFactRows(rootIri, pOutcomes);
+        var xRows = new[] { EuAcquisitionTestFixture.ExpressionFactRow(rootIri, expressionIri) };
+        // Defect 6's own driving row: value_kind "unbound", not "literal" -- the real page template's
+        // own FILTER NOT EXISTS shape for a root that carries no cmr:lastModificationDate at all.
+        var wRows = new[] { EuAcquisitionTestFixture.RootWatermarkUnboundRow(rootIri) };
+
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["Census"] = EuAcquisitionTestFixture.ScriptFor(
+                "Census", 0, [], EuAcquisitionTestFixture.CensusFamilyProjection),
+            ["P"] = EuAcquisitionTestFixture.ScriptFor(
+                "P", pRows.Count, pRows, EuAcquisitionTestFixture.ObjectFactsProjection),
+            ["X"] = EuAcquisitionTestFixture.ScriptFor(
+                "X", xRows.Length, xRows, EuAcquisitionTestFixture.ExpressionFactsProjection),
+            ["W"] = EuAcquisitionTestFixture.ScriptFor(
+                "W", wRows.Length, wRows, EuAcquisitionTestFixture.RootWatermarkProjection),
+        };
+
+        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(scripts);
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var executor = new EuRepeatedEnumerationExecutor(
+            store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
+        var adapter = new EuQueryExecutionAdapter(store, executor);
+
+        var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
+        var censusRequest = new EuCensusPartitionRunRequest(
+            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(721));
+        var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var pRequest = new EuObjectFactsPartitionRunRequest(
+            pPlan, pPlanId, EuObjectFactsQuerySet.ObjectFacts, [rootIri],
+            EuAcquisitionTestFixture.BuildRendererSource(722));
+        var (xPlan, xPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var xRequest = new EuObjectFactsPartitionRunRequest(
+            xPlan, xPlanId, EuObjectFactsQuerySet.ExpressionFacts, [rootIri],
+            EuAcquisitionTestFixture.BuildRendererSource(723));
+        var (wPlan, wPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var wRequest = new EuObjectFactsPartitionRunRequest(
+            wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
+            EuAcquisitionTestFixture.BuildRendererSource(724));
+
+        var result = await adapter.RunAsync(
+            [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
+            [
+                (pRequest, EuAcquisitionTestFixture.SourceWitness()),
+                (xRequest, EuAcquisitionTestFixture.SourceWitness()),
+                (wRequest, EuAcquisitionTestFixture.SourceWitness()),
+            ],
+            EuAcquisitionTestFixture.BuildRendererSource(725),
+            EuAcquisitionTestFixture.SourceWitness(),
+            new PermissiveEvidenceResolver(CompleteEnumerationRef),
+            CancellationToken.None);
+
+        Assert.IsNull(result.ScopeManifestReceipt);
+        Assert.IsNotNull(result.Refusal);
+        Assert.AreEqual(EuQueryExecutionRefusal.RootWatermarkBindingRefused, result.Refusal!.Code);
+        StringAssert.Contains(result.Refusal.Detail, rootIri);
+        StringAssert.Contains(result.Refusal.Detail, "unbound");
+        // This refusal fires before defect 3's witness traversal is ever reached.
+        Assert.AreEqual(0, handler.OccurrenceCountFor("Witness"));
     }
 
     /// <summary>

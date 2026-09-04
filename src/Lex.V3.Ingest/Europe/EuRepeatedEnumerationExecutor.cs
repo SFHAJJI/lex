@@ -204,6 +204,123 @@ public sealed record EuObjectFactsPartitionRunRequest(
     MachineQueryRendererSource RendererSource);
 
 /// <summary>
+/// Why <see cref="EuRepeatedEnumerationExecutor.RunWitnessTraversalAsync"/> did not deliver a real
+/// canonical entry set. Closed, and deliberately narrower than <see cref="EuEnumerationRefusal"/>:
+/// the witness traversal drives none of that enum's two-pass, threshold or keyset-continuation shape
+/// (<see cref="EuWatermarkWitnessPlan"/>'s own remarks: a witness has neither a pre-count nor a
+/// post-count over a partition), so this names only what a single boundary-reread page traversal can
+/// itself observe.
+/// </summary>
+public enum EuWitnessTraversalRefusal
+{
+    [JsonStringEnumMemberName("none")]
+    None = 0,
+
+    [JsonStringEnumMemberName("robots_bootstrap_refused")]
+    RobotsBootstrapRefused = 1,
+
+    /// <summary><see cref="EuWatermarkWitnessPlan.TryBindPage"/> itself refused.</summary>
+    [JsonStringEnumMemberName("bind_refused")]
+    BindRefused = 2,
+
+    [JsonStringEnumMemberName("observation_not_executed")]
+    ObservationNotExecuted = 3,
+
+    [JsonStringEnumMemberName("status_not_admitted")]
+    StatusNotAdmitted = 4,
+
+    [JsonStringEnumMemberName("media_type_not_admitted")]
+    MediaTypeNotAdmitted = 5,
+
+    /// <summary>The delivered page body was not one readable SPARQL JSON results document.</summary>
+    [JsonStringEnumMemberName("page_body_malformed")]
+    PageBodyMalformed = 6,
+
+    /// <summary><see cref="EuBoundaryCrossing.TryCross"/> itself refused.</summary>
+    [JsonStringEnumMemberName("crossing_refused")]
+    CrossingRefused = 7,
+
+    /// <summary><see cref="EuWatermarkTraversalStep.TryAdvance"/> itself refused.</summary>
+    [JsonStringEnumMemberName("step_refused")]
+    StepRefused = 8,
+
+    /// <summary><see cref="EuFeedWatermarkEntrySet.TryClose"/> itself refused.</summary>
+    [JsonStringEnumMemberName("entry_set_refused")]
+    EntrySetRefused = 9,
+
+    /// <summary>
+    /// <see cref="EuRepeatedEnumerationExecutor.MaximumWitnessPageRequests"/> was spent without the
+    /// traversal reaching a confirmed terminal page. A safety bound, not an expected outcome: a first
+    /// cut's own boundary-reread traversal normally confirms termination within one or two requests.
+    /// </summary>
+    [JsonStringEnumMemberName("page_budget_exhausted")]
+    PageBudgetExhausted = 10,
+}
+
+public sealed class EuWitnessTraversalRefusalDetail
+{
+    internal EuWitnessTraversalRefusalDetail(EuWitnessTraversalRefusal code, string? detail)
+    {
+        if (code == EuWitnessTraversalRefusal.None)
+        {
+            throw new ArgumentOutOfRangeException(nameof(code), "A refusal detail requires a real refusal code.");
+        }
+
+        Code = code;
+        Detail = detail;
+    }
+
+    public EuWitnessTraversalRefusal Code { get; }
+
+    public string? Detail { get; }
+}
+
+/// <summary>Delivered or refused, never both and never neither.</summary>
+public sealed class EuWitnessTraversalResult
+{
+    private EuWitnessTraversalResult(
+        EuFeedWatermarkEntrySet? entries,
+        string? deliveryEvidenceSha256,
+        int productRequestCount,
+        EuWitnessTraversalRefusalDetail? refusal)
+    {
+        Entries = entries;
+        DeliveryEvidenceSha256 = deliveryEvidenceSha256;
+        ProductRequestCount = productRequestCount;
+        Refusal = refusal;
+    }
+
+    public static EuWitnessTraversalResult Delivered(
+        EuFeedWatermarkEntrySet entries, string deliveryEvidenceSha256, int productRequestCount)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        ArgumentException.ThrowIfNullOrEmpty(deliveryEvidenceSha256);
+        return new(entries, deliveryEvidenceSha256, productRequestCount, null);
+    }
+
+    public static EuWitnessTraversalResult Refused(EuWitnessTraversalRefusalDetail refusal, int productRequestCount)
+    {
+        ArgumentNullException.ThrowIfNull(refusal);
+        return new(null, null, productRequestCount, refusal);
+    }
+
+    /// <summary>The traversal's real canonical entry set, actually observed. Present iff delivered.</summary>
+    public EuFeedWatermarkEntrySet? Entries { get; }
+
+    /// <summary>
+    /// SHA-256 over the ordered, length-framed concatenation of every page's own retained HTTP
+    /// evidence canonical bytes -- real evidence this run actually observed sending and receiving the
+    /// witness query over HTTP, never a synthetic placeholder. Present iff delivered.
+    /// </summary>
+    public string? DeliveryEvidenceSha256 { get; }
+
+    /// <summary>Publisher requests this traversal spent, robots excluded. Always populated.</summary>
+    public int ProductRequestCount { get; }
+
+    public EuWitnessTraversalRefusalDetail? Refusal { get; }
+}
+
+/// <summary>
 /// D1-05c-2: the EU repeated-enumeration executor. See the type's own summary above for exactly what
 /// it owns and what it deliberately reuses from item 19 and Core rather than reimplementing.
 /// </summary>
@@ -312,6 +429,284 @@ public sealed class EuRepeatedEnumerationExecutor
         {
             session.Dispose();
         }
+    }
+
+    /// <summary>
+    /// Below this a witness traversal refuses rather than looping forever. A first cut's own
+    /// boundary-reread traversal normally confirms termination in one or two requests; this is a
+    /// safety bound against a pathological or misbehaving endpoint, not an expected page count.
+    /// </summary>
+    internal const int MaximumWitnessPageRequests = 64;
+
+    /// <summary>
+    /// D1-05c-2 defect 3's own fix: actually runs the frozen witness plan's boundary-reread traversal
+    /// over the real EU transport -- the identical <see cref="RoutedHttpAcquisitionSession"/>/
+    /// <see cref="RepeatedEnumerationDeliveryReopenGlue"/> plumbing every other family already sends
+    /// through -- rather than assuming an empty result. Not a family in D1-05c-1's own two-pass sense:
+    /// the witness has no pre-count or post-count over a partition, so this drives
+    /// <see cref="EuWatermarkWitnessPlan.TryBindPage"/>, <see cref="EuBoundaryCrossing.TryCross"/> and
+    /// <see cref="EuWatermarkTraversalStep.TryAdvance"/> directly, one page at a time, rather than
+    /// reusing <see cref="RunPassesAsync"/>'s own keyset pass loop, which the plan's own remarks say
+    /// does not fit this shape.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The very first request's own crossing is built from the retained tie set Decision 81 already
+    /// establishes: <see cref="EuWatermarkWitnessPlan.StartPosition"/> IS the one entry this run's
+    /// own census already observed at that exact boundary (the tie-safe maximum
+    /// <see cref="EuFirstCutWatermarkBootstrap"/> computed), so the retained tie set for the first
+    /// page is exactly that one entry key. Every later page's own retained tie set is instead read
+    /// off the PREVIOUS delivered page's own rows at its own next boundary watermark, the same "the
+    /// earlier page retains the group sharing the boundary" rule <see cref="EuBoundaryCrossing"/>'s
+    /// own remarks describe.
+    /// </para>
+    /// <para>
+    /// Termination is confirmed, not merely observed: per <see cref="EuWatermarkTraversalStep"/>'s
+    /// own remarks ("confirming a short page needs an empty successor request, which is the
+    /// executor's business"), a page whose own <see cref="EuWatermarkTraversalStep.NextPosition"/> is
+    /// null is requested again at the identical boundary once; if the confirming request also carries
+    /// nothing beyond the boundary the traversal is done. If it instead finds something new (a row
+    /// arrived at the boundary or beyond it since the first request), the loop folds that in and
+    /// continues normally rather than stopping on stale information.
+    /// </para>
+    /// </remarks>
+    /// <param name="plan">The frozen witness plan (<see cref="EuWatermarkWitnessPlan.TryFreeze"/>).</param>
+    /// <param name="rendererSource">
+    /// The renderer-source artifact naming <c>EuWatermarkWitnessSparqlRenderer</c>'s own code, held
+    /// with its bytes exactly as every other Europe bind already requires.
+    /// </param>
+    /// <param name="sourceWitness">The bound robots-negotiation witness this session starts from.</param>
+    public async Task<EuWitnessTraversalResult> RunWitnessTraversalAsync(
+        EuWatermarkWitnessPlan plan,
+        MachineQueryRendererSource rendererSource,
+        BoundMachineRequest sourceWitness,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(rendererSource);
+        ArgumentNullException.ThrowIfNull(sourceWitness);
+
+        var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
+        if (session is null)
+        {
+            return EuWitnessTraversalResult.Refused(
+                new EuWitnessTraversalRefusalDetail(EuWitnessTraversalRefusal.RobotsBootstrapRefused, null),
+                productRequestCount: 0);
+        }
+
+        var productRequestCount = 0;
+        try
+        {
+            var executorWrittenMembership = new Dictionary<string, CustodyMembership>(StringComparer.Ordinal);
+            var evidenceBytesInOrder = new List<byte[]>();
+
+            var position = plan.StartPosition;
+            IReadOnlyList<string> retainedTieSet = new[] { position.CanonicalEntryKey };
+            var steps = new List<EuWatermarkTraversalStep>();
+            var consecutiveTerminalObservations = 0;
+
+            while (true)
+            {
+                if (productRequestCount >= MaximumWitnessPageRequests)
+                {
+                    return EuWitnessTraversalResult.Refused(
+                        new EuWitnessTraversalRefusalDetail(EuWitnessTraversalRefusal.PageBudgetExhausted, null),
+                        productRequestCount);
+                }
+
+                var bound = plan.TryBindPage(position, NewUrn(), NewUrn(), rendererSource, out var bindRefusal);
+                if (bound is null)
+                {
+                    return EuWitnessTraversalResult.Refused(
+                        new EuWitnessTraversalRefusalDetail(EuWitnessTraversalRefusal.BindRefused, bindRefusal.ToString()),
+                        productRequestCount);
+                }
+
+                var outcome = await _reopenGlue.ObserveAsync(
+                        session, bound.Request, EuWatermarkWitnessPlan.ResponseMediaType, executorWrittenMembership,
+                        () => productRequestCount, count => productRequestCount = count, cancellationToken)
+                    .ConfigureAwait(false);
+                if (outcome.Failure is { } failure)
+                {
+                    var code = failure.Kind switch
+                    {
+                        ObservationAttemptFailureKind.NotExecuted => EuWitnessTraversalRefusal.ObservationNotExecuted,
+                        ObservationAttemptFailureKind.StatusNotAdmitted => EuWitnessTraversalRefusal.StatusNotAdmitted,
+                        ObservationAttemptFailureKind.MediaTypeNotAdmitted => EuWitnessTraversalRefusal.MediaTypeNotAdmitted,
+                        _ => throw new ArgumentOutOfRangeException(
+                            nameof(outcome),
+                            $"Unreachable: an unhandled {nameof(ObservationAttemptFailureKind)} '{failure.Kind}'."),
+                    };
+                    return EuWitnessTraversalResult.Refused(
+                        new EuWitnessTraversalRefusalDetail(code, failure.OperationalDetail),
+                        productRequestCount);
+                }
+
+                var transport = outcome.Transport!;
+                evidenceBytesInOrder.Add(transport.HttpEvidence.CopyCanonicalBytes());
+
+                IReadOnlyList<EuWatermarkCursor> deliveredPage;
+                try
+                {
+                    deliveredPage = ParseWitnessRows(transport.RetainedPayloadBytes.Span);
+                }
+                catch (Exception exception) when (exception is FormatException or System.Text.Json.JsonException)
+                {
+                    return EuWitnessTraversalResult.Refused(
+                        new EuWitnessTraversalRefusalDetail(EuWitnessTraversalRefusal.PageBodyMalformed, exception.Message),
+                        productRequestCount);
+                }
+
+                var boundaryWatermark = position.WatermarkLexical;
+                var rereadAtBoundary = deliveredPage
+                    .Where(row => string.Equals(row.WatermarkLexical, boundaryWatermark, StringComparison.Ordinal))
+                    .Select(static row => row.CanonicalEntryKey)
+                    .ToArray();
+                var firstBeyond = deliveredPage.FirstOrDefault(
+                    row => !string.Equals(row.WatermarkLexical, boundaryWatermark, StringComparison.Ordinal));
+
+                var crossing = EuBoundaryCrossing.TryCross(
+                    position, retainedTieSet, rereadAtBoundary, firstBeyond, out var crossingRefusal);
+                if (crossing is null)
+                {
+                    return EuWitnessTraversalResult.Refused(
+                        new EuWitnessTraversalRefusalDetail(EuWitnessTraversalRefusal.CrossingRefused, crossingRefusal.ToString()),
+                        productRequestCount);
+                }
+
+                var step = EuWatermarkTraversalStep.TryAdvance(plan, crossing, deliveredPage, out var stepRefusal);
+                if (step is null)
+                {
+                    return EuWitnessTraversalResult.Refused(
+                        new EuWitnessTraversalRefusalDetail(EuWitnessTraversalRefusal.StepRefused, stepRefusal.ToString()),
+                        productRequestCount);
+                }
+
+                steps.Add(step);
+
+                if (step.NextPosition is null)
+                {
+                    consecutiveTerminalObservations++;
+                    if (consecutiveTerminalObservations >= 2)
+                    {
+                        break;
+                    }
+
+                    // Confirm with one empty-successor request at the identical boundary, per
+                    // EuWatermarkTraversalStep's own remarks. The retained tie set for that repeat is
+                    // the full boundary group this step just proved (crossing.RetainedTieSet plus
+                    // whatever it carried forward), so a repeat of the identical publisher response
+                    // reconciles cleanly and yields nothing newly delivered.
+                    retainedTieSet = crossing.RetainedTieSet.Concat(crossing.CarriedForward).ToArray();
+                    continue;
+                }
+
+                consecutiveTerminalObservations = 0;
+                position = step.NextPosition;
+                retainedTieSet = deliveredPage
+                    .Where(row => string.Equals(row.WatermarkLexical, position.WatermarkLexical, StringComparison.Ordinal))
+                    .Select(static row => row.CanonicalEntryKey)
+                    .ToArray();
+            }
+
+            var entrySet = EuFeedWatermarkEntrySet.TryClose(steps, out var entrySetRefusal);
+            if (entrySet is null)
+            {
+                return EuWitnessTraversalResult.Refused(
+                    new EuWitnessTraversalRefusalDetail(EuWitnessTraversalRefusal.EntrySetRefused, entrySetRefusal.ToString()),
+                    productRequestCount);
+            }
+
+            return EuWitnessTraversalResult.Delivered(
+                entrySet, CombinedSha256(evidenceBytesInOrder), productRequestCount);
+        }
+        catch (Exception exception) when (exception is CustodyIntegrityException or CustodyRequiredException)
+        {
+            return EuWitnessTraversalResult.Refused(
+                new EuWitnessTraversalRefusalDetail(EuWitnessTraversalRefusal.ObservationNotExecuted, exception.Message),
+                productRequestCount);
+        }
+        finally
+        {
+            session.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Reads the witness page's own three-column projection (<c>?entry ?entry_key ?watermark</c>)
+    /// into real <see cref="EuWatermarkCursor"/> rows. <c>?entry</c> itself is checked present (the
+    /// query's own SELECT projects it) but not otherwise retained: the tie-safe position is the
+    /// watermark and canonical entry key together (<see cref="EuWatermarkCursor"/>'s own remarks), and
+    /// nothing in this traversal needs the raw entry IRI separately.
+    /// </summary>
+    private static IReadOnlyList<EuWatermarkCursor> ParseWitnessRows(ReadOnlySpan<byte> bytes)
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(bytes.ToArray());
+        var root = document.RootElement;
+        if (root.ValueKind != System.Text.Json.JsonValueKind.Object ||
+            !root.TryGetProperty("results", out var results) ||
+            results.ValueKind != System.Text.Json.JsonValueKind.Object ||
+            !results.TryGetProperty("bindings", out var bindings) ||
+            bindings.ValueKind != System.Text.Json.JsonValueKind.Array)
+        {
+            throw new FormatException("The witness page response has no binding array.");
+        }
+
+        var rows = new List<EuWatermarkCursor>();
+        foreach (var binding in bindings.EnumerateArray())
+        {
+            if (binding.ValueKind != System.Text.Json.JsonValueKind.Object)
+            {
+                throw new FormatException("The witness page response row is not an object.");
+            }
+
+            _ = RequireWitnessTermValue(binding, "entry");
+            var entryKey = RequireWitnessTermValue(binding, "entry_key");
+            var watermark = RequireWitnessTermValue(binding, "watermark");
+
+            var cursor = EuWatermarkCursor.TryOpen(watermark, entryKey, out var cursorRefusal);
+            if (cursor is null)
+            {
+                throw new FormatException($"The witness row could not become a tie-safe cursor: {cursorRefusal}.");
+            }
+
+            rows.Add(cursor);
+        }
+
+        return rows;
+    }
+
+    private static string RequireWitnessTermValue(System.Text.Json.JsonElement binding, string name)
+    {
+        if (!binding.TryGetProperty(name, out var term) ||
+            term.ValueKind != System.Text.Json.JsonValueKind.Object ||
+            !term.TryGetProperty("value", out var value) ||
+            value.ValueKind != System.Text.Json.JsonValueKind.String)
+        {
+            throw new FormatException($"The witness page response row is missing {name}.");
+        }
+
+        return value.GetString()!;
+    }
+
+    /// <summary>
+    /// SHA-256 over the ordered, length-framed concatenation of every page's own retained HTTP
+    /// evidence canonical bytes, mirroring <c>EuQueryExecutionAdapter.SingleMemberRegistrySha256</c>'s
+    /// own length-prefixed incremental-hash convention.
+    /// </summary>
+    private static string CombinedSha256(IReadOnlyList<byte[]> orderedParts)
+    {
+        using var hash = System.Security.Cryptography.IncrementalHash.CreateHash(
+            System.Security.Cryptography.HashAlgorithmName.SHA256);
+        Span<byte> length = stackalloc byte[4];
+        foreach (var part in orderedParts)
+        {
+            System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(length, part.Length);
+            hash.AppendData(length);
+            hash.AppendData(part);
+        }
+
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
     }
 
     private async Task<RoutedHttpAcquisitionSession?> StartSessionAsync(

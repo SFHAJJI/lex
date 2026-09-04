@@ -151,10 +151,12 @@ public enum EuQueryExecutionRefusal
     WitnessBindingRefused = 12,
 
     /// <summary>
-    /// <see cref="EuPrimaryEnumerationWitnessReconciliation.TryReconcile"/> itself refused. An empty
-    /// termination list (this run's own case: the first cut has no feed traversal of its own to have
-    /// witnessed yet, per Decision 81) is never a cause of this refusal by construction -- see
-    /// <see cref="EuPrimaryEnumerationWitnessReconciliation.CheckedTerminationCount"/>'s own remarks.
+    /// <see cref="EuPrimaryEnumerationWitnessReconciliation.TryReconcile"/> itself refused. A real
+    /// nonempty termination list from this run's own observed witness traversal
+    /// (<see cref="EuRepeatedEnumerationExecutor.RunWitnessTraversalAsync"/>) is never a cause of this
+    /// refusal on its own -- see <see cref="EuPrimaryEnumerationWitnessReconciliation.CheckedTerminationCount"/>'s
+    /// own remarks -- but a termination naming an in-pack root this run's primary enumeration never
+    /// discovered still refuses here, exactly as it would for any other cut.
     /// </summary>
     WitnessReconciliationRefused = 13,
 
@@ -165,6 +167,14 @@ public enum EuQueryExecutionRefusal
     /// whole-run refusal instead.
     /// </summary>
     ScopeReductionRefused = 14,
+
+    /// <summary>
+    /// Defect 3's own real-execution fix: <see cref="EuRepeatedEnumerationExecutor.RunWitnessTraversalAsync"/>
+    /// itself refused before this run could ever decode a real delivered witness row into a
+    /// termination. Replaces the assumed-empty-result shortcut this refusal code did not previously
+    /// need to exist for.
+    /// </summary>
+    WitnessTraversalRefused = 15,
 }
 
 public sealed class EuQueryExecutionRefusalDetail
@@ -223,6 +233,7 @@ public sealed class EuQueryExecutionResult
         EuWatermarkWitnessPlan? watermarkWitnessPlan,
         EuPrimaryEnumerationRootBinding? rootBinding,
         EuPrimaryEnumerationWitnessReconciliation? witnessReconciliation,
+        IReadOnlyList<EuFeedEntryTermination>? witnessTerminations,
         DurableBlobWriteReceipt? scopeManifestReceipt,
         string? scopeManifestCanonicalSha256,
         EuQueryExecutionCompletion? completion,
@@ -239,6 +250,7 @@ public sealed class EuQueryExecutionResult
         WatermarkWitnessPlan = watermarkWitnessPlan;
         RootBinding = rootBinding;
         WitnessReconciliation = witnessReconciliation;
+        WitnessTerminations = witnessTerminations;
         ScopeManifestReceipt = scopeManifestReceipt;
         ScopeManifestCanonicalSha256 = scopeManifestCanonicalSha256;
         Completion = completion;
@@ -257,6 +269,7 @@ public sealed class EuQueryExecutionResult
         EuWatermarkWitnessPlan watermarkWitnessPlan,
         EuPrimaryEnumerationRootBinding rootBinding,
         EuPrimaryEnumerationWitnessReconciliation witnessReconciliation,
+        IReadOnlyList<EuFeedEntryTermination> witnessTerminations,
         DurableBlobWriteReceipt scopeManifestReceipt,
         string scopeManifestCanonicalSha256)
     {
@@ -264,6 +277,7 @@ public sealed class EuQueryExecutionResult
         ArgumentNullException.ThrowIfNull(watermarkWitnessPlan);
         ArgumentNullException.ThrowIfNull(rootBinding);
         ArgumentNullException.ThrowIfNull(witnessReconciliation);
+        ArgumentNullException.ThrowIfNull(witnessTerminations);
         ArgumentNullException.ThrowIfNull(scopeManifestReceipt);
         ArgumentException.ThrowIfNullOrWhiteSpace(scopeManifestCanonicalSha256);
         var completion = familyOutcomes.All(static outcome => outcome.Kind == EuFamilyEnumerationOutcomeKind.Proven)
@@ -271,7 +285,7 @@ public sealed class EuQueryExecutionResult
             : EuQueryExecutionCompletion.PartialFamilyRefused;
         return new(
             topology, familyOutcomes, observedObjectCount, observedExpressionCount, reductionExclusions,
-            watermarkWitnessPlan, rootBinding, witnessReconciliation, scopeManifestReceipt,
+            watermarkWitnessPlan, rootBinding, witnessReconciliation, witnessTerminations, scopeManifestReceipt,
             scopeManifestCanonicalSha256, completion, null, null, null, null);
     }
 
@@ -286,7 +300,7 @@ public sealed class EuQueryExecutionResult
         ArgumentNullException.ThrowIfNull(topology);
         ArgumentNullException.ThrowIfNull(refusal);
         return new(
-            topology, familyOutcomes, 0, 0, [], null, null, null, null, null, null, refusal,
+            topology, familyOutcomes, 0, 0, [], null, null, null, null, null, null, null, refusal,
             decodeRefusal, decodeOffendingIri, decodeSnapshotRefusal);
     }
 
@@ -308,25 +322,40 @@ public sealed class EuQueryExecutionResult
 
     /// <summary>
     /// D1-05c-2 precision three: the frozen witness, ready to run from the first cut's own census
-    /// bound. Present if and only if this result is delivered. Defect 3: this adapter reconciles it
-    /// against the primary enumeration (see <see cref="WitnessReconciliation"/>) but does not itself
-    /// execute a live SPARQL traversal against <see cref="EuWatermarkWitnessPlan.Endpoint"/> -- the
-    /// first cut has nothing of its own to traverse yet (Decision 81), and a later cut's own
-    /// traversal is this plan's whole reason to be frozen and held rather than run immediately.
+    /// bound. Present if and only if this result is delivered. Defect 3's own fix: this adapter now
+    /// actually executes this plan's own boundary-reread traversal through
+    /// <see cref="EuRepeatedEnumerationExecutor.RunWitnessTraversalAsync"/> before reconciling it
+    /// against the primary enumeration (see <see cref="WitnessReconciliation"/>) -- Decision 81 fixes
+    /// where the first cut's own witness starts (the census bound), it does not say the first cut
+    /// skips the witness. An empty first-cut traversal (nothing changed between the census bound and
+    /// this run's own send) is a real, observed outcome; it is never assumed without having sent the
+    /// query.
     /// </summary>
     public EuWatermarkWitnessPlan? WatermarkWitnessPlan { get; }
 
     public EuPrimaryEnumerationRootBinding? RootBinding { get; }
 
     /// <summary>
-    /// Defect 3: the frozen watermark witness (<see cref="WatermarkWitnessPlan"/>) reconciled against
-    /// this run's own primary enumeration (<see cref="RootBinding"/>). Present if and only if this
-    /// result is delivered. For the first cut this reconciliation's own
-    /// <see cref="EuPrimaryEnumerationWitnessReconciliation.CheckedTerminationCount"/> is zero: see
-    /// that type's own remarks for why an empty reconciliation is a clean pass, never a missing-data
-    /// refusal.
+    /// Defect 3's own fix: the frozen watermark witness (<see cref="WatermarkWitnessPlan"/>), actually
+    /// executed and reconciled against this run's own primary enumeration
+    /// (<see cref="RootBinding"/>). Present if and only if this result is delivered. This
+    /// reconciliation's own <see cref="EuPrimaryEnumerationWitnessReconciliation.CheckedTerminationCount"/>
+    /// is the real count of terminations this run's own traversal classified -- zero when the real,
+    /// sent query genuinely returned no rows, otherwise one per delivered row (every one of them
+    /// honestly <see cref="EuFeedTerminal.UnresolvedOrAmbiguous"/>, since no identity resolver exists
+    /// yet -- see <see cref="EuFeedEntryObservation"/>'s own remarks).
     /// </summary>
     public EuPrimaryEnumerationWitnessReconciliation? WitnessReconciliation { get; }
+
+    /// <summary>
+    /// Every termination this run's own witness traversal classified, in traversal order. Present iff
+    /// this result is delivered. Exposed so a caller (and this ticket's own driving tests) can inspect
+    /// the exact real terminal each delivered row reached -- for the first cut, every one of them
+    /// <see cref="EuFeedTerminal.UnresolvedOrAmbiguous"/> with
+    /// <see cref="EuFeedUnresolvedCause.IdentityResolutionDidNotClose"/>, since no identity resolver
+    /// exists yet -- rather than only the aggregate <see cref="EuPrimaryEnumerationWitnessReconciliation.CheckedTerminationCount"/>.
+    /// </summary>
+    public IReadOnlyList<EuFeedEntryTermination>? WitnessTerminations { get; }
 
     public EuQueryExecutionCompletion? Completion { get; }
 
@@ -376,15 +405,34 @@ public sealed class EuQueryExecutionAdapter
     /// </summary>
     /// <param name="censusFamilies">One D1-05a census-family partition (one admitted seed CELEX) and its bound source witness, per seed this run enumerates.</param>
     /// <param name="objectFactsFamilies">One D1-05c-1 object-facts family batch (P, X or W) and its bound source witness, per batch this run enumerates. Every seed named in <paramref name="censusFamilies"/> must be covered by at least one P batch, one X batch and one W batch (W covering the roots only) for this run to decode anything.</param>
+    /// <param name="witnessRendererSource">
+    /// The renderer-source artifact naming <c>EuWatermarkWitnessSparqlRenderer</c>'s own code
+    /// (SCOPE_RULING lex-event-20260904T092316893Z-6d969a2ba7934aa995907a55914bf3b6), held with its
+    /// bytes exactly as every other Europe family's own renderer source already is. Kept distinct
+    /// from every census/object-facts request's own <c>RendererSource</c>: those name different
+    /// renderer code (<c>EuConsolidationSparqlRenderer</c>, <c>EuObjectFactsSparqlRenderer</c>), and
+    /// reusing one of them here would misattribute the witness's own real HTTP send to code that
+    /// never rendered it.
+    /// </param>
+    /// <param name="witnessSourceWitness">
+    /// The bound robots-negotiation witness the witness traversal's own session starts from. Any
+    /// bound request targeting the EU SPARQL endpoint resolves to the identical official EU profile
+    /// (robots negotiation depends only on that profile, never on which family is about to run), so
+    /// this may be the same kind of witness already supplied for census/object-facts families.
+    /// </param>
     /// <param name="evidenceResolver">The evidence resolver the scope reduction requires.</param>
     public async Task<EuQueryExecutionResult> RunAsync(
         IReadOnlyList<(EuCensusPartitionRunRequest Request, BoundMachineRequest SourceWitness)> censusFamilies,
         IReadOnlyList<(EuObjectFactsPartitionRunRequest Request, BoundMachineRequest SourceWitness)> objectFactsFamilies,
+        MachineQueryRendererSource witnessRendererSource,
+        BoundMachineRequest witnessSourceWitness,
         IScopeReductionEvidenceResolver evidenceResolver,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(censusFamilies);
         ArgumentNullException.ThrowIfNull(objectFactsFamilies);
+        ArgumentNullException.ThrowIfNull(witnessRendererSource);
+        ArgumentNullException.ThrowIfNull(witnessSourceWitness);
         ArgumentNullException.ThrowIfNull(evidenceResolver);
 
         var topology = MintTopology();
@@ -701,7 +749,8 @@ public sealed class EuQueryExecutionAdapter
                 new EuQueryExecutionRefusalDetail(
                     EuQueryExecutionRefusal.RootWatermarkBindingRefused,
                     $"a family-W row named '{offendingWatermarkValue}', which this run's own primary " +
-                    "enumeration did not discover as a root, or which could not be canonicalized at all."));
+                    "enumeration did not discover as a root, could not be canonicalized at all, or did " +
+                    "not carry a literal watermark value."));
         }
 
         var startPosition = EuFirstCutWatermarkBootstrap.TryComputeStartPosition(
@@ -728,25 +777,39 @@ public sealed class EuQueryExecutionAdapter
                     EuQueryExecutionRefusal.WatermarkPlanRefused, watermarkPlanRefusal.ToString()));
         }
 
-        // ---- Defect 3's own fix: reconcile the frozen witness against this run's own primary
-        // enumeration, rather than leaving it frozen with nothing ever run or reconciled. Decision 81
-        // is explicit that the first EU cut's witness "starts at the cut's own census observation
-        // bound" and "never replays history before the first complete cut: every change before that
-        // bound is covered by the census itself" -- and TryComputeStartPosition above has nothing but
-        // THIS run's own census to have computed that bound from, so this run is necessarily that
-        // first cut. It therefore has no feed traversal of its own to have witnessed yet; what it owns
-        // is minting the witness's own structural binding and reconciling it against zero
-        // terminations, which EuPrimaryEnumerationWitnessReconciliation.CheckedTerminationCount's own
-        // remarks describe as an ordinary total over whatever was supplied, never a claim that
-        // anything exists to reconcile. P is bound to the SAME roots this run's own primary
-        // enumeration (rootBinding) just discovered, exactly as EuFeedRootIntersection's own remarks
-        // describe P as "a declared input exactly as EuFeedRootIntersection declares its own W and P".
+        // ---- Defect 3's own fix: actually SEND the frozen witness plan and reconcile the REAL
+        // delivered rows against this run's own primary enumeration, rather than reconciling against
+        // an assumed-empty result the query was never sent for. The peer reviewer's own ruling is
+        // exact: "Decision 81 fixes where the first cut's witness starts (the census bound); it does
+        // not say the first cut skips the witness." So this run -- necessarily the first cut, since
+        // TryComputeStartPosition above has nothing but THIS run's own census to have computed
+        // startPosition from -- still has to run the witness's own traversal from that bound; it is
+        // simply likely, not guaranteed, to observe few or zero rows beyond it.
+        var traversal = await _executor.RunWitnessTraversalAsync(
+                witnessPlan, witnessRendererSource, witnessSourceWitness, cancellationToken)
+            .ConfigureAwait(false);
+        if (traversal.Entries is null)
+        {
+            return EuQueryExecutionResult.Refused(
+                topology, outcomes,
+                new EuQueryExecutionRefusalDetail(
+                    EuQueryExecutionRefusal.WitnessTraversalRefused,
+                    $"code={traversal.Refusal!.Code} detail={traversal.Refusal.Detail}"));
+        }
+
         var witnessClosureMatrixRef = new SourceArtifactRef(
             EuWitnessClosureMatrixResourceId, witnessPlan.QueryPlanIdentityDigest);
+
+        // Coordinator fold-in: this ref used to be minted from a literal domain-hashed placeholder
+        // string ("no_feed_acquisition_in_this_slice") admitting that no feed acquisition had
+        // happened. Real feed acquisition now happens above, so the placeholder must not stand: the
+        // digest is now traversal.DeliveryEvidenceSha256, real evidence this run actually observed
+        // sending and receiving the witness query over HTTP. This still does not claim to be resolved
+        // "identity predicates and canonical projections" content -- no identity resolver exists yet
+        // (EuFeedEntryObservation's own remarks) -- only that the reference now names real, retained
+        // acquisition evidence rather than an inert string.
         var witnessIdentityPredicateBindingRef = new SourceArtifactRef(
-            EuWitnessIdentityPredicateBindingResourceId,
-            SingleMemberRegistrySha256(
-                "lex-v3-eu-witness-identity-predicate-binding/1", "no_feed_acquisition_in_this_slice"));
+            EuWitnessIdentityPredicateBindingResourceId, traversal.DeliveryEvidenceSha256!);
 
         var feedWitness = EuFeedRootIntersection.TryBind(
             EuConsolidationDiscoveryPlan.Create().ArtifactRef,
@@ -763,8 +826,28 @@ public sealed class EuQueryExecutionAdapter
                     EuQueryExecutionRefusal.WitnessBindingRefused, feedWitnessRefusal.ToString()));
         }
 
+        // Every delivered entry, decoded honestly: no identity resolver exists in this codebase yet
+        // (EuFeedEntryObservation's own remarks -- "writing a resolver here would be inventing that
+        // answer"), so every real row this run observed is constructed with
+        // identityResolutionClosed: false and empty resolved roots/projections, which Classify then
+        // correctly and honestly terminates as EuFeedTerminal.UnresolvedOrAmbiguous /
+        // IdentityResolutionDidNotClose. This is a real, already-modeled outcome, not a shortcut.
+        var terminations = new List<EuFeedEntryTermination>(traversal.Entries.Count);
+        foreach (var entry in traversal.Entries.CanonicalEntries)
+        {
+            var observation = EuFeedEntryObservation.TryObserve(
+                entry,
+                identityResolutionClosed: false,
+                Array.Empty<string>(),
+                Array.Empty<EuFeedFamilyProjection>(),
+                out var observationRefusal)
+                ?? throw new InvalidOperationException(
+                    $"unreachable: an honestly-unresolved witness observation cannot itself be refused ({observationRefusal}).");
+            terminations.Add(feedWitness.Classify(observation, traversal.Entries));
+        }
+
         var witnessReconciliation = EuPrimaryEnumerationWitnessReconciliation.TryReconcile(
-            rootBinding, feedWitness, Array.Empty<EuFeedEntryTermination>(), out var reconciliationRefusal);
+            rootBinding, feedWitness, terminations, out var reconciliationRefusal);
         if (witnessReconciliation is null)
         {
             return EuQueryExecutionResult.Refused(
@@ -782,6 +865,7 @@ public sealed class EuQueryExecutionAdapter
             watermarkWitnessPlan: witnessPlan,
             rootBinding: rootBinding,
             witnessReconciliation: witnessReconciliation,
+            witnessTerminations: terminations,
             scopeManifestReceipt: writeReceipt,
             scopeManifestCanonicalSha256: manifestCanonicalSha256);
     }
@@ -796,11 +880,16 @@ public sealed class EuQueryExecutionAdapter
     /// <see cref="EuPrimaryEnumerationWitnessReconciliation.TryReconcile"/>'s own independence check
     /// actually compares against <see cref="EuPrimaryEnumerationRootBinding.ClosureQueryPlanRef"/> --
     /// so only its resource id, not its content digest, is a placeholder.
-    /// <see cref="EuWitnessIdentityPredicateBindingResourceId"/> pairs with a domain-hashed digest
-    /// (<see cref="SingleMemberRegistrySha256"/>) that is fully inert: this run performs no feed
-    /// acquisition, so there is no real identity-predicate binding to reference, and
-    /// <see cref="EuFeedRootIntersection.IdentityPredicateBindingRef"/> is never read by
-    /// <c>TryReconcile</c> at all when, as here, the reconciled termination list is empty.
+    /// <see cref="EuWitnessIdentityPredicateBindingResourceId"/> pairs with
+    /// <c>traversal.DeliveryEvidenceSha256</c>, real evidence this run actually observed from sending
+    /// the witness query over HTTP and receiving its real response (see <see cref="RunAsync"/>'s own
+    /// remarks at that call site). It stood as a fully inert domain-hashed placeholder before defect
+    /// 3's real-execution fix, admitting in its own digest input that no feed acquisition had
+    /// happened; now that real acquisition happens on every run, leaving that placeholder standing
+    /// would misreport a real run as one that performed none. This still is not a claim that
+    /// resolved "identity predicates and canonical projections" content exists -- no identity
+    /// resolver has been built (<see cref="EuFeedEntryObservation"/>'s own remarks) -- only that the
+    /// reference now names real, retained acquisition evidence.
     /// </summary>
     private const string EuWitnessClosureMatrixResourceId = "urn:uuid:7d3a1f2e-4b6c-4a9d-8e5f-1a2b3c4d5e6f";
 
@@ -1090,9 +1179,21 @@ public sealed class EuQueryExecutionAdapter
     /// both conditions were silently dropped here, the exact "skip instead of refuse" shape this
     /// session's review keeps catching on both country adapters.
     /// </summary>
+    /// <remarks>
+    /// Defect 6's own fix. A row whose <c>value_kind</c> is not <c>"literal"</c> (the watermark
+    /// predicate's own explicit-absence shape: <c>EuObjectFactsDiscoveryPlan</c>'s own
+    /// <c>FILTER NOT EXISTS</c> branch emits <c>"unbound"</c> for a root that carries no
+    /// <c>cmr:lastModificationDate</c> at all) used to be silently skipped with a bare
+    /// <c>continue</c>, which contradicted this method's own already-shipped claim (defect 2) that
+    /// every W row either binds by identity or is refused by name: a row could still fall through
+    /// unaccounted for as long as its own value shape, rather than its object identity, was the
+    /// problem. It is now refused here too, naming both the offending root and the actual value kind
+    /// it carried, matching the exact same discipline as every other condition this method checks.
+    /// </remarks>
     /// <param name="offendingValue">
-    /// The exact value this method refused on (the raw, non-canonicalizing object term, or the
-    /// canonical root <paramref name="rootBinding"/> does not contain), when this method returns
+    /// The exact value this method refused on (the raw, non-canonicalizing object term; the canonical
+    /// root <paramref name="rootBinding"/> does not contain; or the canonical root paired with the
+    /// actual non-literal <c>value_kind</c> it carried), when this method returns
     /// <see langword="false"/>; otherwise <see langword="null"/>.
     /// </param>
     private static bool TryCollectRootWatermarkObservations(
@@ -1107,13 +1208,7 @@ public sealed class EuQueryExecutionAdapter
         var valueKindIndex = IndexOf(wProfile, "value_kind");
         foreach (var row in wRows)
         {
-            if (row.Terms[valueKindIndex].Value != "literal")
-            {
-                continue;
-            }
-
             var objectValue = row.Terms[objectIndex].Value;
-            var watermarkValue = row.Terms[valueIndex].Value;
             var canonicalRoot = objectValue is null ? null : EuPackRootCanonicalForm.TryCanonicalize(objectValue, out _);
             if (canonicalRoot is null)
             {
@@ -1127,13 +1222,35 @@ public sealed class EuQueryExecutionAdapter
                 return false;
             }
 
+            var valueKind = row.Terms[valueKindIndex].Value;
+            if (valueKind != "literal")
+            {
+                offendingValue = $"{canonicalRoot} (value_kind={valueKind ?? "(unbound)"})";
+                return false;
+            }
+
+            var watermarkValue = row.Terms[valueIndex].Value;
             if (watermarkValue is null)
             {
                 offendingValue = canonicalRoot;
                 return false;
             }
 
-            into.Add((watermarkValue, "eu-consolidation-root:" + canonicalRoot));
+            // Newly discovered while wiring up defect 3's own real execution (not one of the six
+            // named defects; flagged separately in the fix's own commit and report). This used to be
+            // "eu-consolidation-root:" + canonicalRoot, borrowing EuCellarObjectDecode's own
+            // SourceObjectRef.CanonicalKey prefix convention for a completely different identity: a
+            // witness entry key. EuBoundaryCrossing.TryCross reconciles the first real page's own
+            // delivered entry_key values (STR(?entry) over the live Cellar endpoint -- the plain
+            // canonical root IRI, never "eu-consolidation-root:"-prefixed) against
+            // StartPosition.CanonicalEntryKey as the retained tie set for the very first request. A
+            // prefixed key could never appear in a real STR(?entry) result, so the very first real
+            // boundary crossing would always refuse with BoundaryEntrySkipped once the witness plan
+            // was actually sent over HTTP -- unreachable before defect 3's fix, since nothing executed
+            // this plan for real until now. The plain canonical root IRI is what the witness's own
+            // entry_key column actually carries for this entity, so that is what the bootstrap must
+            // use too.
+            into.Add((watermarkValue, canonicalRoot));
         }
 
         offendingValue = null;

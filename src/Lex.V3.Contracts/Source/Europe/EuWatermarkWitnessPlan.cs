@@ -195,9 +195,31 @@ public sealed class EuWatermarkWitnessPlan
     public const string BoundaryRuleIdentity = "inclusive_watermark_reread/1";
 
     private const string LowerBoundarySlot = "{watermark_lower_boundary}";
+
+    /// <summary>
+    /// The one wire media type this witness's own SPARQL JSON page response is ever admitted under,
+    /// identical to every other EU family (<see cref="EuObjectFactsDiscoveryPlan"/>'s own
+    /// <c>ResponseMediaType</c>, private there because that plan never needed to expose it outside
+    /// its own binder; this one does, since <c>TryBindPage</c>'s real send lives in
+    /// <c>Lex.V3.Ingest.Europe</c>, outside this path claim's normal reach.
+    /// </summary>
+    public const string ResponseMediaType = "application/sparql-results+json";
+
+    /// <summary>
+    /// Fixed resource-id half of <see cref="ArtifactRef"/>, minted the same way every other Europe
+    /// discovery plan's own resource id already is (see <c>EuConsolidationDiscoveryPlan</c>'s and
+    /// <c>EuObjectFactsDiscoveryPlan</c>'s own private <c>ResourceId</c> constants): a fixed literal
+    /// naming this plan's own structural domain, never a claim about an observation nobody has taken.
+    /// </summary>
+    private const string WitnessPlanResourceId = "urn:uuid:3b6e1a4c-8f2d-4c7b-9a1e-5d6f7c8b9a0e";
+
+    private const string WitnessPageFamilyMemberKey = "witness.page";
+
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
 
     private readonly string _template;
+    private readonly byte[] _canonicalIdentityBytes;
+    private readonly SourceRegistryMemberRef _witnessPageFamilyRef;
 
     private EuWatermarkWitnessPlan(
         string endpoint,
@@ -206,7 +228,8 @@ public sealed class EuWatermarkWitnessPlan
         EuWatermarkCursor startPosition,
         EuWatermarkLexicalShape startPositionShape,
         string template,
-        string queryPlanIdentityDigest)
+        string queryPlanIdentityDigest,
+        byte[] canonicalIdentityBytes)
     {
         Endpoint = endpoint;
         PredicateIri = predicateIri;
@@ -215,7 +238,20 @@ public sealed class EuWatermarkWitnessPlan
         StartPositionShape = startPositionShape;
         _template = template;
         QueryPlanIdentityDigest = queryPlanIdentityDigest;
+        _canonicalIdentityBytes = canonicalIdentityBytes;
+        ArtifactRef = new SourceArtifactRef(WitnessPlanResourceId, queryPlanIdentityDigest);
+        _witnessPageFamilyRef = new SourceRegistryMemberRef(ArtifactRef, WitnessPageFamilyMemberKey);
     }
+
+    /// <summary>
+    /// This plan's own content-addressed identity: <see cref="WitnessPlanResourceId"/> paired with
+    /// <see cref="QueryPlanIdentityDigest"/>. Added for <see cref="TryBindPage"/> (SCOPE_RULING
+    /// lex-event-20260904T092316893Z-6d969a2ba7934aa995907a55914bf3b6): a bound
+    /// <see cref="Lex.V3.Contracts.Source.Core.MachineQueryPlan"/> needs a renderer-profile reference
+    /// and a query-family registry member the same way every other Europe discovery plan already
+    /// supplies one from its own <c>ArtifactRef</c>, and this type had none before that ruling.
+    /// </summary>
+    public SourceArtifactRef ArtifactRef { get; }
 
     /// <summary>
     /// The watermark shapes this plan admits, in ascending member order. A shape outside this set
@@ -317,6 +353,8 @@ public sealed class EuWatermarkWitnessPlan
         }
 
         var template = BuildTemplate(predicateIri, pageLimit);
+        var identityBytes = BuildQueryPlanIdentityBytes(endpoint, predicateIri, pageLimit, template);
+        var digest = Convert.ToHexString(SHA256.HashData(identityBytes)).ToLowerInvariant();
         refusal = EuWatermarkPlanRefusal.None;
         return new EuWatermarkWitnessPlan(
             endpoint,
@@ -325,7 +363,8 @@ public sealed class EuWatermarkWitnessPlan
             startPosition,
             shape,
             template,
-            QueryPlanDigest(endpoint, predicateIri, pageLimit, template));
+            digest,
+            identityBytes);
     }
 
     /// <summary>
@@ -342,9 +381,20 @@ public sealed class EuWatermarkWitnessPlan
     public string? RenderPage(EuWatermarkCursor position, out EuWatermarkPlanRefusal refusal)
     {
         ArgumentNullException.ThrowIfNull(position);
+        return RenderForWatermarkLexical(position.WatermarkLexical, out refusal);
+    }
 
-        if (ClassifyShape(position.WatermarkLexical) ==
-            EuWatermarkLexicalShape.OutsideTheMeasuredSet)
+    /// <summary>
+    /// The substitution core of <see cref="RenderPage"/>, factored out so
+    /// <see cref="EuWatermarkWitnessSparqlRenderer"/> can reach the identical query text from a
+    /// watermark lexical value it decoded out of a bound <see cref="MachineQueryInputArtifact"/>'s
+    /// own parameter, rather than from a caller's in-memory <see cref="EuWatermarkCursor"/> the
+    /// renderer cannot have (see <see cref="TryBindPage"/>'s own remarks). <see cref="RenderPage"/>'s
+    /// external behavior is unchanged: same checks, same output, for the same input.
+    /// </summary>
+    internal string? RenderForWatermarkLexical(string watermarkLexical, out EuWatermarkPlanRefusal refusal)
+    {
+        if (ClassifyShape(watermarkLexical) == EuWatermarkLexicalShape.OutsideTheMeasuredSet)
         {
             refusal = EuWatermarkPlanRefusal.PositionShapeWithoutFrozenOrderSemantics;
             return null;
@@ -353,9 +403,135 @@ public sealed class EuWatermarkWitnessPlan
         refusal = EuWatermarkPlanRefusal.None;
         return _template.Replace(
             LowerBoundarySlot,
-            SparqlQueryText.StringLiteral(position.WatermarkLexical),
+            SparqlQueryText.StringLiteral(watermarkLexical),
             StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// Binds one witness page request into a real, sendable <see cref="BoundMachineRequest"/> through
+    /// this codebase's existing <see cref="MachineQueryBinder"/>/<see cref="IMachineQueryRenderer"/>
+    /// send machinery -- the exact same door <c>EuConsolidationDiscoveryPlan.BindPage</c> and
+    /// <c>EuObjectFactsDiscoveryPlan.BindPage</c> already use for the census and object-facts
+    /// families.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// SCOPE_RULING lex-event-20260904T092316893Z-6d969a2ba7934aa995907a55914bf3b6: this is the one
+    /// public bind door this file was widened to add, authorized because defect 3's own fix (actually
+    /// sending the frozen witness plan rather than assuming an empty result) needs the plan to become
+    /// a real HTTP request, and nothing outside <c>Lex.V3.Contracts</c> can construct a
+    /// <see cref="Lex.V3.Contracts.Source.Core.MachineQueryPlan"/>/<see cref="BoundMachineRequest"/>
+    /// pair by hand -- every other Europe discovery plan already mints its own bound queries from
+    /// inside this same assembly, and this witness plan had no such door before this ruling.
+    /// </para>
+    /// <para>
+    /// The response cardinality is deliberately <c>OpaqueBody</c>, never
+    /// <c>BoundedRowSetPage</c>: a bounded row-set page requires an independently measured expected
+    /// partition row count and its own evidence reference (<see cref="MachineResponseCardinality"/>'s
+    /// own constructor), which is exactly the pre-count/post-count shape this plan's own type remarks
+    /// say a witness does not have. Claiming one here would be inventing an observation nobody took,
+    /// the same discipline <see cref="EuFeedEntryObservation"/>'s own remarks apply to identity
+    /// resolution. The page's own row count and boundary crossing are instead checked client-side by
+    /// <see cref="EuWatermarkTraversalStep.TryAdvance"/>, exactly as they already were before this
+    /// binding existed.
+    /// </para>
+    /// <para>
+    /// Only one parameter is bound: the boundary position's own watermark lexical value, carried as a
+    /// <see cref="MachineQueryParameterKind.PublisherCursor"/> (the boundary is a paging position, not
+    /// a publisher-literal IRI). <see cref="EuWatermarkCursor.CanonicalEntryKey"/> is not bound at
+    /// all, because <see cref="RenderForWatermarkLexical"/> -- and so <see cref="RenderPage"/> before
+    /// it -- never reads it; the entry key exists for this plan's own client-side tie-safety
+    /// reasoning, not for the query text.
+    /// </para>
+    /// </remarks>
+    /// <param name="position">Where to read from, inclusive of its whole tie group.</param>
+    /// <param name="machinePlanResourceId">A fresh resource id for the minted machine-query plan.</param>
+    /// <param name="inputResourceId">A fresh resource id for the minted ordered-parameter input.</param>
+    /// <param name="rendererSource">
+    /// The renderer-source artifact naming this file's own <see cref="EuWatermarkWitnessSparqlRenderer"/>
+    /// code, held with its bytes exactly as every other Europe bind already requires.
+    /// </param>
+    /// <param name="refusal">Why no bound query exists, when none does.</param>
+    public EuWatermarkWitnessBoundQuery? TryBindPage(
+        EuWatermarkCursor position,
+        string machinePlanResourceId,
+        string inputResourceId,
+        MachineQueryRendererSource rendererSource,
+        out EuWatermarkPlanRefusal refusal)
+    {
+        ArgumentNullException.ThrowIfNull(position);
+        ArgumentException.ThrowIfNullOrEmpty(machinePlanResourceId);
+        ArgumentException.ThrowIfNullOrEmpty(inputResourceId);
+        ArgumentNullException.ThrowIfNull(rendererSource);
+
+        if (ClassifyShape(position.WatermarkLexical) == EuWatermarkLexicalShape.OutsideTheMeasuredSet)
+        {
+            refusal = EuWatermarkPlanRefusal.PositionShapeWithoutFrozenOrderSemantics;
+            return null;
+        }
+
+        refusal = EuWatermarkPlanRefusal.None;
+
+        var response = new MachineResponseCardinality(MachineResponseCardinalityKind.OpaqueBody, null, null, null);
+        var parameters = new[]
+        {
+            new MachineQueryParameter(
+                BoundaryParameterName,
+                MachineQueryParameterKind.PublisherCursor,
+                null,
+                EnumerationCursorEnvelope.Encode(position.WatermarkLexical),
+                ArtifactRef),
+        };
+        // The renderer (a separate, top-level class in this same file, mirroring
+        // EuObjectFactsSparqlRenderer's own top-level placement) reads this parameter back by name;
+        // BoundaryParameterName is internal for exactly that reason.
+
+        var input = MachineQueryInputArtifact.Create(
+            inputResourceId, _witnessPageFamilyRef, PartitionKeyFor(position), response, parameters);
+        var renderer = new EuWatermarkWitnessSparqlRenderer(this, rendererSource);
+        var rendered = renderer.RenderInput(input);
+        var body = rendered.CopyRequestBody();
+        var targetBytes = Encoding.ASCII.GetBytes("/webapi/rdf/sparql");
+        var machinePlan = new MachineQueryPlan(
+            MachineQueryPlan.SchemaId,
+            _witnessPageFamilyRef,
+            ArtifactRef,
+            rendererSource.Reference,
+            HttpRequestMethod.Post,
+            Endpoint,
+            targetBytes.LongLength,
+            Sha256(targetBytes),
+            response,
+            new SourceRegistryMemberRef(ArtifactRef, "application/sparql-query"),
+            MachineQueryCharset.Utf8,
+            MachineQueryInputMode.RendererInputs,
+            input.ArtifactRef,
+            input.PartitionBinding,
+            body.LongLength,
+            Sha256(body));
+        var machinePlanRef = MachineQueryPlanIdentity.Create(machinePlanResourceId, machinePlan);
+        var request = MachineQueryBinder.BindForSend(machinePlan, machinePlanRef, input, renderer);
+        return new EuWatermarkWitnessBoundQuery(machinePlan, machinePlanRef, input, request);
+    }
+
+    internal const string BoundaryParameterName = "watermark_lower_boundary_param";
+
+    /// <summary>The canonical identity bytes <see cref="ArtifactRef"/>'s digest is over, for the renderer's own <c>CopyRendererProfileBytes</c>.</summary>
+    internal byte[] CopyCanonicalIdentityBytes() => _canonicalIdentityBytes.ToArray();
+
+    /// <summary>
+    /// This page request's own partition/member key: the SHA-256 of the boundary position's own
+    /// tie-safe tuple, truncated to 24 hex characters exactly as
+    /// <c>EuObjectFactsDiscoveryPlan.PartitionKeyFor</c> already truncates its own batch digest, for
+    /// the identical reason given there (96 bits is far past this key space's own collision risk).
+    /// </summary>
+    private static string PartitionKeyFor(EuWatermarkCursor position) =>
+        "eu-watermark-witness-" + Convert.ToHexString(SHA256.HashData(
+            StrictUtf8.GetBytes(position.WatermarkLexical + "\n" + position.CanonicalEntryKey)))
+            .ToLowerInvariant()[..24];
+
+    private static string Sha256(ReadOnlySpan<byte> value) =>
+        Convert.ToHexString(SHA256.HashData(value)).ToLowerInvariant();
 
     /// <summary>
     /// Reads which measured shape a watermark carries, or
@@ -460,13 +636,12 @@ public sealed class EuWatermarkWitnessPlan
             string.Empty,
         ]);
 
-    private static string QueryPlanDigest(
+    private static byte[] BuildQueryPlanIdentityBytes(
         string endpoint,
         string predicateIri,
         int pageLimit,
-        string template)
-    {
-        var identity = StrictUtf8.GetBytes(string.Join('\n',
+        string template) =>
+        StrictUtf8.GetBytes(string.Join('\n',
         [
             SchemaId,
             "endpoint=" + endpoint,
@@ -477,7 +652,74 @@ public sealed class EuWatermarkWitnessPlan
             "page_limit=" + pageLimit.ToString(CultureInfo.InvariantCulture),
             "template=" + template,
         ]));
-        return Convert.ToHexString(SHA256.HashData(identity)).ToLowerInvariant();
+}
+
+/// <summary>The bound witness page query and every artifact that feeds it, for one page request.</summary>
+/// <remarks>
+/// Mirrors <c>EuObjectFactsBoundQuery</c> and <c>EuCensusBoundQuery</c> exactly, added by the same
+/// SCOPE_RULING as <see cref="EuWatermarkWitnessPlan.TryBindPage"/>
+/// (lex-event-20260904T092316893Z-6d969a2ba7934aa995907a55914bf3b6).
+/// </remarks>
+public sealed record EuWatermarkWitnessBoundQuery(
+    MachineQueryPlan MachinePlan,
+    SourceArtifactRef MachinePlanRef,
+    MachineQueryInputArtifact InputArtifact,
+    BoundMachineRequest Request);
+
+/// <summary>
+/// Renders one witness page's exact SPARQL text from a bound <see cref="MachineQueryInputArtifact"/>,
+/// added by the same SCOPE_RULING as <see cref="EuWatermarkWitnessPlan.TryBindPage"/>
+/// (lex-event-20260904T092316893Z-6d969a2ba7934aa995907a55914bf3b6). Mirrors
+/// <c>EuObjectFactsSparqlRenderer</c>'s own shape: every value the render needs is read back out of
+/// <paramref name="orderedParameterSet"/> itself (never from a captured closure value), because
+/// <see cref="MachineQueryBinder.OpenForSend"/> and <c>OpenForSendAsync</c> both re-render from a
+/// reopened input artifact and must reproduce byte-identical output.
+/// </summary>
+internal sealed class EuWatermarkWitnessSparqlRenderer : IMachineQueryRenderer
+{
+    private readonly EuWatermarkWitnessPlan _plan;
+    private readonly MachineQueryRendererSource _rendererSource;
+
+    internal EuWatermarkWitnessSparqlRenderer(EuWatermarkWitnessPlan plan, MachineQueryRendererSource rendererSource)
+    {
+        _plan = plan ?? throw new ArgumentNullException(nameof(plan));
+        _rendererSource = rendererSource ?? throw new ArgumentNullException(nameof(rendererSource));
+        RendererProfileRef = plan.ArtifactRef;
+    }
+
+    public SourceArtifactRef RendererProfileRef { get; }
+
+    public SourceArtifactRef RendererSourceRef => _rendererSource.Reference;
+
+    /// <inheritdoc />
+    public ReadOnlyMemory<byte>? CopyRendererProfileBytes() => _plan.CopyCanonicalIdentityBytes();
+
+    /// <inheritdoc />
+    public ReadOnlyMemory<byte>? CopyRendererSourceBytes() => _rendererSource.CopyBytes();
+
+    public MachineQueryRenderOutput Render(MachineQueryPlan plan, MachineQueryInputArtifact orderedParameterSet) =>
+        RenderInput(orderedParameterSet);
+
+    internal MachineQueryRenderOutput RenderInput(MachineQueryInputArtifact input)
+    {
+        if (input.OrderedParameters.Count != 1)
+        {
+            throw new ArgumentException("A witness page input has exactly one boundary parameter.", nameof(input));
+        }
+
+        var parameter = input.OrderedParameters[0];
+        if (!string.Equals(parameter.Name, EuWatermarkWitnessPlan.BoundaryParameterName, StringComparison.Ordinal) ||
+            parameter.Kind != MachineQueryParameterKind.PublisherCursor ||
+            parameter.TextValue is null)
+        {
+            throw new ArgumentException(
+                "The witness page input does not carry the boundary cursor this renderer expects.", nameof(input));
+        }
+
+        var watermarkLexical = EnumerationCursorEnvelope.Decode(parameter.TextValue);
+        var query = _plan.RenderForWatermarkLexical(watermarkLexical, out var refusal)
+            ?? throw new ArgumentException($"The witness page could not be rendered: {refusal}.", nameof(input));
+        return new MachineQueryRenderOutput(_plan.Endpoint, Encoding.UTF8.GetBytes(query));
     }
 }
 
