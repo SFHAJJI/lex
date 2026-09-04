@@ -85,7 +85,10 @@ public static class EuScopeSnapshotReduction
             return null;
         }
 
-        var bodyState = language.State == EuExpressionObservationState.ExpressionObservedBodyHeld
+        // Unchanged behaviour, honest name: the candidate state maps to BodyCandidate exactly as the
+        // retired ExpressionObservedBodyHeld did, so EuLanguageBodyDisposition.CarriesBody and the
+        // body join it feeds both answer identically to before D1-05d's rename.
+        var bodyState = language.State == EuExpressionObservationState.ExpressionObservedBodyCandidate
             ? EuLanguageBodyState.BodyCandidate
             : EuLanguageBodyState.BodyNotHeldPoint;
 
