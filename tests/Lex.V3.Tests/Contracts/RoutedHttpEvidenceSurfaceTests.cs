@@ -95,7 +95,7 @@ public sealed class RoutedHttpEvidenceSurfaceTests
                 + "out System.ReadOnlyMemory<System.Byte>&) -> System.Void",
                 "by-ref-method public instance " + Core + "RepeatedEnumerationResolvedEvidence::Deconstruct("
                 + "out " + Core + "MachineQueryPlan&, out " + Core + "MachineQueryInputArtifact&, "
-                + "out " + Core + "MachineQueryRenderReceipt&, out " + Core + "IMachineQueryRenderer&, "
+                + "out " + Core + "MachineQueryRenderReceipt&, out " + Core + "IMachineQueryRenderer&?, "
                 + "out Lex.V3.Contracts.Source.Http.HttpLogicalRequest&, out " + Evidence + "&, "
                 + "out Lex.V3.Contracts.Custody.DurableBlobWriteReceipt&, "
                 + "out System.ReadOnlyMemory<System.Byte>&) -> System.Void",

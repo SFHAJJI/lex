@@ -39,11 +39,11 @@ public sealed class AbsenceConstructionSurfaceTests
             {
                 "constructor private instance " + N + "AbsenceSubject::.ctor("
                 + Core + "SourceAuthority, " + Core + "SourceRegistryMemberRef, System.String, "
-                + Core + "SourceObjectKeyRef) -> " + N + "AbsenceSubject",
+                + Core + "SourceObjectKeyRef?) -> " + N + "AbsenceSubject",
                 "method public static " + N + "AbsenceSubject::TryCreate("
                 + Core + "SourceAuthority, " + Core + "SourceRegistryMemberRef, System.String, "
-                + Core + "SourceObjectKeyRef, out " + N + "AbsenceSubjectRefusal&) -> "
-                + N + "AbsenceSubject",
+                + Core + "SourceObjectKeyRef?, out " + N + "AbsenceSubjectRefusal&) -> "
+                + N + "AbsenceSubject?",
             },
             ConstructionSurface.Of(typeof(AbsenceSubject)).ToArray());
     }
@@ -59,7 +59,7 @@ public sealed class AbsenceConstructionSurfaceTests
                 + "System.String) -> " + N + "AbsenceComparisonPolicy",
                 "method public static " + N + "AbsenceComparisonPolicy::TryCreate("
                 + "System.Collections.Generic.IReadOnlyList<" + N + "AbsenceComparisonPolicyDigest>, "
-                + "out " + N + "AbsenceComparisonPolicyRefusal&) -> " + N + "AbsenceComparisonPolicy",
+                + "out " + N + "AbsenceComparisonPolicyRefusal&) -> " + N + "AbsenceComparisonPolicy?",
             },
             ConstructionSurface.Of(typeof(AbsenceComparisonPolicy)).ToArray());
     }
@@ -74,7 +74,7 @@ public sealed class AbsenceConstructionSurfaceTests
                 + N + "AbsenceHistoryGenerationId",
                 "method public static " + N + "AbsenceHistoryGenerationId::TryCreate("
                 + N + "AbsenceSubject, System.Int32, System.String, "
-                + "out " + N + "AbsenceHistoryGenerationIdRefusal&) -> " + N + "AbsenceHistoryGenerationId",
+                + "out " + N + "AbsenceHistoryGenerationIdRefusal&) -> " + N + "AbsenceHistoryGenerationId?",
             },
             ConstructionSurface.Of(typeof(AbsenceHistoryGenerationId)).ToArray());
     }
@@ -93,7 +93,7 @@ public sealed class AbsenceConstructionSurfaceTests
                 + "System.String, System.String, System.DateTimeOffset, "
                 + N + "AbsenceTimestampPrecision, System.String, System.TimeSpan, "
                 + N + "AbsenceObservationProvenance, out " + N + "AbsenceFamilyObservationRefusal&) -> "
-                + N + "AbsenceFamilyObservation",
+                + N + "AbsenceFamilyObservation?",
             },
             ConstructionSurface.Of(typeof(AbsenceFamilyObservation)).ToArray());
     }
@@ -123,20 +123,20 @@ public sealed class AbsenceConstructionSurfaceTests
                 + "System.Collections.Generic.IReadOnlyList<" + N + "AbsenceFamilyEnumerationProof>, "
                 + Core + "SourceArtifactRef, " + Core + "SourceArtifactRef, "
                 + "System.Collections.Generic.IReadOnlyList<System.String>, "
-                + "out " + N + "AbsenceCutRefusal&) -> " + N + "AbsenceCut",
+                + "out " + N + "AbsenceCutRefusal&) -> " + N + "AbsenceCut?",
                 "method public static " + N + "AbsenceCut::TryCreateComplete(System.String, "
                 + N + "AbsenceApplicableSet, "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "AbsenceFamilyObservation>, "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "AbsenceFamilyEnumerationProof>, "
                 + Core + "SourceArtifactRef, " + Core + "SourceArtifactRef, "
                 + "System.Collections.Generic.IReadOnlyList<System.String>, "
-                + "out " + N + "AbsenceCutRefusal&) -> " + N + "AbsenceCut",
+                + "out " + N + "AbsenceCutRefusal&) -> " + N + "AbsenceCut?",
                 "method public static " + N + "AbsenceCut::TryCreatePartial(System.String, "
                 + N + "AbsenceApplicableSet, "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "AbsenceFamilyObservation>, "
                 + Core + "SourceArtifactRef, " + Core + "SourceArtifactRef, "
                 + "System.Collections.Generic.IReadOnlyList<System.String>, "
-                + "out " + N + "AbsenceCutRefusal&) -> " + N + "AbsenceCut",
+                + "out " + N + "AbsenceCutRefusal&) -> " + N + "AbsenceCut?",
             },
             ConstructionSurface.Of(typeof(AbsenceCut)).ToArray());
     }
@@ -159,7 +159,7 @@ public sealed class AbsenceConstructionSurfaceTests
                 "method public static " + N + "AbsenceFamilyEnumerationProof::TryCreate("
                 + "System.String, " + Core + "EnumerationDeliveryComparison, out "
                 + N + "AbsenceFamilyEnumerationProofRefusal&) -> "
-                + N + "AbsenceFamilyEnumerationProof",
+                + N + "AbsenceFamilyEnumerationProof?",
             },
             ConstructionSurface.Of(typeof(AbsenceFamilyEnumerationProof)).ToArray());
 
@@ -188,7 +188,7 @@ public sealed class AbsenceConstructionSurfaceTests
                 "method public instance " + Core + "RepeatedEnumerationDeliveryReceipt"
                 + "::TryProveFamilyEnumeration(System.String, out "
                 + N + "AbsenceFamilyEnumerationProofRefusal&) -> "
-                + N + "AbsenceFamilyEnumerationProof",
+                + N + "AbsenceFamilyEnumerationProof?",
                 "property public instance " + N + "AbsenceCut::EnumerationProofs() -> "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "AbsenceFamilyEnumerationProof>",
             },
@@ -266,11 +266,11 @@ public sealed class AbsenceConstructionSurfaceTests
             {
                 "constructor private instance " + N + "AbsenceHistoryLedger+Generation::.ctor("
                 + N + "AbsenceSubject, " + N + "AbsenceHistoryGenerationId, "
-                + N + "AbsenceHistoryGenerationId, System.Int32, " + N + "AbsenceComparisonPolicy, "
+                + N + "AbsenceHistoryGenerationId?, System.Int32, " + N + "AbsenceComparisonPolicy, "
                 + N + "AbsenceGenerationOpeningEventKind, System.String, "
                 + N + "AbsenceHistoryGenerationCause) -> " + N + "AbsenceHistoryLedger+Generation",
                 "method internal static " + N + "AbsenceHistoryLedger+Generation::Open("
-                + N + "AbsenceSubject, " + N + "AbsenceHistoryLedger+Generation, System.Int32, "
+                + N + "AbsenceSubject, " + N + "AbsenceHistoryLedger+Generation?, System.Int32, "
                 + N + "AbsenceComparisonPolicy, " + N + "AbsenceGenerationOpeningEventKind, "
                 + "System.String, " + N + "AbsenceHistoryGenerationCause) -> "
                 + N + "AbsenceHistoryLedger+Generation",
@@ -289,7 +289,7 @@ public sealed class AbsenceConstructionSurfaceTests
                 + "System.Collections.Generic.List<" + N + "AbsenceHistoryLedger+Generation>",
                 "method public instance " + N + "AbsenceHistoryLedger::TryTransitionComparisonPolicy("
                 + N + "AbsenceComparisonPolicy, System.String, out " + N + "AbsenceLedgerRefusal&) -> "
-                + N + "AbsenceHistoryLedger+Generation",
+                + N + "AbsenceHistoryLedger+Generation?",
                 "property public instance " + N + "AbsenceHistoryLedger::CurrentGeneration() -> "
                 + N + "AbsenceHistoryLedger+Generation",
                 "property public instance " + N + "AbsenceHistoryLedger::Generations() -> "
@@ -313,7 +313,7 @@ public sealed class AbsenceConstructionSurfaceTests
                 + N + "AbsenceHistoryLedger+Generation) -> " + N + "AbsenceHistoryLedger",
                 "method public static " + N + "AbsenceHistoryLedger::TryOpen("
                 + N + "AbsenceSubject, " + N + "AbsenceApplicableSet, " + N + "AbsenceComparisonPolicy, "
-                + "System.String, out " + N + "AbsenceLedgerRefusal&) -> " + N + "AbsenceHistoryLedger",
+                + "System.String, out " + N + "AbsenceLedgerRefusal&) -> " + N + "AbsenceHistoryLedger?",
             },
             ConstructionSurface.Of(typeof(AbsenceHistoryLedger)).ToArray());
     }
@@ -330,7 +330,7 @@ public sealed class AbsenceConstructionSurfaceTests
                 "method public static " + N + "AbsenceReplacementCoordinateProfile::TryCreate("
                 + "System.String, System.Collections.Generic.IReadOnlyList<" + N + "AbsenceCoordinateField>, "
                 + "out " + N + "AbsenceReplacementCoordinateProfileRefusal&) -> "
-                + N + "AbsenceReplacementCoordinateProfile",
+                + N + "AbsenceReplacementCoordinateProfile?",
             },
             ConstructionSurface.Of(typeof(AbsenceReplacementCoordinateProfile)).ToArray());
 
@@ -350,7 +350,7 @@ public sealed class AbsenceConstructionSurfaceTests
                 + "System.Collections.Generic.IReadOnlyList<System.String>, "
                 + "System.Collections.Generic.IReadOnlyList<System.String>, "
                 + "out " + N + "AbsenceReplacementClassificationRefusal&) -> "
-                + N + "AbsenceReplacementClassification",
+                + N + "AbsenceReplacementClassification?",
             },
             ConstructionSurface.Of(typeof(AbsenceReplacementClassification)).ToArray());
     }

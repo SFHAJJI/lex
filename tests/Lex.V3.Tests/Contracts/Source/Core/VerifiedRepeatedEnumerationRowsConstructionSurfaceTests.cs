@@ -62,7 +62,7 @@ public sealed class VerifiedRepeatedEnumerationRowsConstructionSurfaceTests
                 + N + "EnumerationDeliveryComparison, " + N + "RepeatedEnumerationInterpretationProfile, "
                 + N + "SourceArtifactRef, " + N + "SourceArtifactRef, "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "RepeatedEnumerationResolvedEvidence>, "
-                + "out " + N + "RepeatedEnumerationRowsOpenRefusal&) -> " + ReadOnlyRowList,
+                + "out " + N + "RepeatedEnumerationRowsOpenRefusal&) -> " + ReadOnlyRowList + "?",
             },
             ConstructionSurface.ProducersIn(
                 typeof(RepeatedEnumerationRow).Assembly, typeof(RepeatedEnumerationRow), true).ToArray());
@@ -127,7 +127,7 @@ public sealed class VerifiedRepeatedEnumerationRowsConstructionSurfaceTests
                 + N + "EnumerationDeliveryComparison, " + N + "RepeatedEnumerationInterpretationProfile, "
                 + N + "SourceArtifactRef, " + N + "SourceArtifactRef, "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "RepeatedEnumerationResolvedEvidence>, "
-                + "out " + Refusal + "&) -> " + ReadOnlyRowList,
+                + "out " + Refusal + "&) -> " + ReadOnlyRowList + "?",
             },
             ConstructionSurface.ProducersIn(
                 typeof(RepeatedEnumerationRowsOpenRefusal).Assembly,

@@ -42,7 +42,7 @@ public sealed class EuPrimaryEnumerationRootBindingTests
                 "method public static " + N + "EuPrimaryEnumerationRootBinding::TryBind("
                 + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, "
                 + "System.Collections.Generic.IReadOnlyList<System.String>, out "
-                + N + "EuPrimaryEnumerationRefusal&) -> " + N + "EuPrimaryEnumerationRootBinding",
+                + N + "EuPrimaryEnumerationRefusal&) -> " + N + "EuPrimaryEnumerationRootBinding?",
             },
             ConstructionSurface.Of(typeof(EuPrimaryEnumerationRootBinding)).ToArray());
     }

@@ -88,18 +88,18 @@ public sealed class RepresentationChainConstructionSurfaceTests
                 "field private instance " + N + "RepresentationChain+FileReplacedEvent::<Replacement>k__BackingField -> "
                 + N + "RepresentationChain+AppendedObservation",
                 "field private instance " + N + "RepresentationChain::<CurrentTrustedBaseline>k__BackingField -> "
-                + N + "RepresentationChain+AppendedObservation",
+                + N + "RepresentationChain+AppendedObservation?",
                 "field private instance " + N + "RepresentationChain::_history -> "
                 + "System.Collections.Generic.List<" + N + "RepresentationChain+AppendedObservation>",
                 "method public instance " + N + "RepresentationChain::TryAppend("
                 + N + "RepresentationChainObservation, out " + N + "RepresentationChainAppendRefusal&) -> "
-                + N + "RepresentationChain+AppendedObservation",
+                + N + "RepresentationChain+AppendedObservation?",
                 "property public instance " + N + "RepresentationChain+FileReplacedEvent::Predecessor() -> "
                 + N + "RepresentationChain+AppendedObservation",
                 "property public instance " + N + "RepresentationChain+FileReplacedEvent::Replacement() -> "
                 + N + "RepresentationChain+AppendedObservation",
                 "property public instance " + N + "RepresentationChain::CurrentTrustedBaseline() -> "
-                + N + "RepresentationChain+AppendedObservation",
+                + N + "RepresentationChain+AppendedObservation?",
                 "property public instance " + N + "RepresentationChain::History() -> "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "RepresentationChain+AppendedObservation>",
             },

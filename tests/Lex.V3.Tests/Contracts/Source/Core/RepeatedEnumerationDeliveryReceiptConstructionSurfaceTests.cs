@@ -43,7 +43,7 @@ public sealed class RepeatedEnumerationDeliveryReceiptConstructionSurfaceTests
                 + N + "EnumerationDeliveryComparison, " + Membership + ", " + Membership + ", "
                 + List + N + "RepeatedEnumerationObservationCustody>, out "
                 + N + "RepeatedEnumerationReceiptRefusal&) -> "
-                + N + "RepeatedEnumerationDeliveryReceipt",
+                + N + "RepeatedEnumerationDeliveryReceipt?",
             },
             ConstructionSurface.Of(typeof(RepeatedEnumerationDeliveryReceipt)).ToArray());
 
@@ -60,7 +60,7 @@ public sealed class RepeatedEnumerationDeliveryReceiptConstructionSurfaceTests
                 "method public instance " + Lu + "LuxembourgDeliveryEvidenceSet::TryCompareAndReceipt("
                 + Membership + ", " + Membership + ", out "
                 + N + "RepeatedEnumerationReceiptRefusal&) -> "
-                + N + "RepeatedEnumerationDeliveryReceipt",
+                + N + "RepeatedEnumerationDeliveryReceipt?",
                 "property public instance " + Lu + "LuxembourgPartitionCover::LeafReceipts() -> "
                 + List + N + "RepeatedEnumerationDeliveryReceipt>",
             },

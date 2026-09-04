@@ -100,26 +100,26 @@ public sealed class DurableBlobReceiptFamilySurfaceTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "by-ref-method public instance " + Custody + "CustodiedDecode<T>::Deconstruct(out " + Receipt + "&, out T&) -> System.Void",
+                "by-ref-method public instance " + Custody + "CustodiedDecode<T>::Deconstruct(out " + Receipt + "&, out T&?) -> System.Void",
                 "by-ref-method public instance " + Core + "RepeatedEnumerationObservedTransport::Deconstruct("
                 + "out " + Http + "HttpLogicalRequest&, out " + Http + "RoutedHttpEvidence&, out " + Receipt + "&, "
                 + "out System.ReadOnlyMemory<System.Byte>&) -> System.Void",
                 "by-ref-method public instance " + Core + "RepeatedEnumerationResolvedEvidence::Deconstruct("
                 + "out " + Core + "MachineQueryPlan&, out " + Core + "MachineQueryInputArtifact&, "
-                + "out " + Core + "MachineQueryRenderReceipt&, out " + Core + "IMachineQueryRenderer&, "
+                + "out " + Core + "MachineQueryRenderReceipt&, out " + Core + "IMachineQueryRenderer&?, "
                 + "out " + Http + "HttpLogicalRequest&, "
                 + "out " + Http + "RoutedHttpEvidence&, out " + Receipt + "&, "
                 + "out System.ReadOnlyMemory<System.Byte>&) -> System.Void",
                 "field private instance " + Custody + "CustodiedDecode<T>::<Receipt>k__BackingField -> " + Receipt,
                 "field private instance " + Core + "RepeatedEnumerationObservedTransport::<DurableWriteReceipt>k__BackingField -> " + Receipt,
                 "field private instance " + Core + "RepeatedEnumerationResolvedEvidence::<DurableWriteReceipt>k__BackingField -> " + Receipt,
-                "field private instance " + Corpus + "CorpusBodyRecord::<Receipt>k__BackingField -> " + Receipt,
+                "field private instance " + Corpus + "CorpusBodyRecord::<Receipt>k__BackingField -> " + Receipt + "?",
                 "method public instance " + Custody + "ICustodyStore::CreateAsync(System.ReadOnlyMemory<System.Byte>, "
                 + Custody + "CustodyClass, System.Threading.CancellationToken) -> System.Threading.Tasks.Task<" + Receipt + ">",
                 "property public instance " + Custody + "CustodiedDecode<T>::Receipt() -> " + Receipt,
                 "property public instance " + Core + "RepeatedEnumerationObservedTransport::DurableWriteReceipt() -> " + Receipt,
                 "property public instance " + Core + "RepeatedEnumerationResolvedEvidence::DurableWriteReceipt() -> " + Receipt,
-                "property public instance " + Corpus + "CorpusBodyRecord::Receipt() -> " + Receipt,
+                "property public instance " + Corpus + "CorpusBodyRecord::Receipt() -> " + Receipt + "?",
             },
             ConstructionSurface.ProducersIn(typeof(DurableBlobWriteReceipt).Assembly, typeof(DurableBlobWriteReceipt), true).ToArray());
     }

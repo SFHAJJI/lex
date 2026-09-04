@@ -721,7 +721,7 @@ public sealed class EuWatermarkWitnessPlanTests
                 "constructor private instance " + N + "EuWatermarkCursor::.ctor(System.String, "
                 + "System.String) -> " + N + "EuWatermarkCursor",
                 "method public static " + N + "EuWatermarkCursor::TryOpen(System.String, "
-                + "System.String, out " + N + "EuWatermarkRefusal&) -> " + N + "EuWatermarkCursor",
+                + "System.String, out " + N + "EuWatermarkRefusal&) -> " + N + "EuWatermarkCursor?",
             },
             ConstructionSurface.Of(typeof(EuWatermarkCursor)).ToArray());
     }
@@ -739,8 +739,8 @@ public sealed class EuWatermarkWitnessPlanTests
                 "method public static " + N + "EuBoundaryCrossing::TryCross(" + N
                 + "EuWatermarkCursor, System.Collections.Generic.IReadOnlyList<System.String>, "
                 + "System.Collections.Generic.IReadOnlyList<System.String>, " + N
-                + "EuWatermarkCursor, out " + N + "EuWatermarkRefusal&) -> " + N
-                + "EuBoundaryCrossing",
+                + "EuWatermarkCursor?, out " + N + "EuWatermarkRefusal&) -> " + N
+                + "EuBoundaryCrossing?",
             },
             ConstructionSurface.Of(typeof(EuBoundaryCrossing)).ToArray());
     }
@@ -766,7 +766,7 @@ public sealed class EuWatermarkWitnessPlanTests
                 + "EuWatermarkWitnessPlan",
                 "method public static " + N + "EuWatermarkWitnessPlan::TryFreeze(System.String, "
                 + "System.String, System.Int32, " + N + "EuWatermarkCursor, out " + N
-                + "EuWatermarkPlanRefusal&) -> " + N + "EuWatermarkWitnessPlan",
+                + "EuWatermarkPlanRefusal&) -> " + N + "EuWatermarkWitnessPlan?",
             },
             ConstructionSurface.Of(typeof(EuWatermarkWitnessPlan)).ToArray());
     }
@@ -780,12 +780,12 @@ public sealed class EuWatermarkWitnessPlanTests
                 "constructor private instance " + N + "EuWatermarkTraversalStep::.ctor(" + N
                 + "EuWatermarkWitnessPlan, " + N + "EuBoundaryCrossing, System.Collections.Generic"
                 + ".IReadOnlyList<" + N + "EuWatermarkCursor>, System.Collections.Generic"
-                + ".IReadOnlyList<" + N + "EuWatermarkCursor>, " + N + "EuWatermarkCursor, "
+                + ".IReadOnlyList<" + N + "EuWatermarkCursor>, " + N + "EuWatermarkCursor?, "
                 + "System.Int32) -> " + N + "EuWatermarkTraversalStep",
                 "method public static " + N + "EuWatermarkTraversalStep::TryAdvance(" + N
                 + "EuWatermarkWitnessPlan, " + N + "EuBoundaryCrossing, System.Collections.Generic"
                 + ".IReadOnlyList<" + N + "EuWatermarkCursor>, out " + N + "EuWatermarkStepRefusal&)"
-                + " -> " + N + "EuWatermarkTraversalStep",
+                + " -> " + N + "EuWatermarkTraversalStep?",
             },
             ConstructionSurface.Of(typeof(EuWatermarkTraversalStep)).ToArray());
     }

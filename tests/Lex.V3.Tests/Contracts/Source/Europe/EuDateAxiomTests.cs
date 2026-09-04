@@ -680,11 +680,11 @@ public sealed class EuDateAxiomTests
             new[]
             {
                 "constructor private instance " + N + "EuDateAxiomBinding::.ctor("
-                + Facts + "PublisherDateFact, System.String, " + N + "EuNalSchemeIdentity) -> "
+                + Facts + "PublisherDateFact, System.String?, " + N + "EuNalSchemeIdentity) -> "
                 + N + "EuDateAxiomBinding",
                 "method public static " + N + "EuDateAxiomBinding::Create(" + Facts + "OfficialIdentitySet, "
                 + "System.String, System.String, " + Facts + "DatePrecision, System.String, "
-                + Facts + "QualifiedAxiom, System.String, System.String, System.String, System.String, "
+                + Facts + "QualifiedAxiom, System.String?, System.String?, System.String?, System.String, "
                 + "System.String) -> " + N + "EuDateAxiomBinding",
             },
             ConstructionSurface.Of(typeof(EuDateAxiomBinding)).ToArray());
@@ -786,9 +786,9 @@ public sealed class EuDateAxiomTests
             new[]
             {
                 "field private instance " + N + "EuTranspositionDeadlineClassification::"
-                + "<Evidence>k__BackingField -> " + N + "EuDirectiveTranspositionEvidence",
+                + "<Evidence>k__BackingField -> " + N + "EuDirectiveTranspositionEvidence?",
                 "property public instance " + N + "EuTranspositionDeadlineClassification::"
-                + "Evidence() -> " + N + "EuDirectiveTranspositionEvidence",
+                + "Evidence() -> " + N + "EuDirectiveTranspositionEvidence?",
             },
             ConstructionSurface.ProducersIn(
                 typeof(EuDirectiveTranspositionEvidence).Assembly,
@@ -803,10 +803,10 @@ public sealed class EuDateAxiomTests
             {
                 "constructor private instance " + N + "EuTranspositionDeadlineClassification::.ctor("
                 + N + "EuTranspositionDeadlineOutcome, " + N + "EuDateAxiomBinding, " + N
-                + "EuDirectiveTranspositionEvidence, " + Facts + "PublisherDateFact) -> " + N
+                + "EuDirectiveTranspositionEvidence?, " + Facts + "PublisherDateFact?) -> " + N
                 + "EuTranspositionDeadlineClassification",
                 "method public static " + N + "EuTranspositionDeadlineClassification::Classify(" + N
-                + "EuDateAxiomBinding, " + N + "EuDirectiveTranspositionEvidence, "
+                + "EuDateAxiomBinding, " + N + "EuDirectiveTranspositionEvidence?, "
                 + "System.Collections.Generic.IReadOnlyList<" + N + "EuWorkKindAssertion>) -> " + N
                 + "EuTranspositionDeadlineClassification",
             },

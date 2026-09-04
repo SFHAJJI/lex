@@ -21,7 +21,7 @@ public sealed class ConstructionSurfaceTests
             new[]
             {
                 "base-constructor protected instance " + F + "LeakyBase::.ctor(System.String) -> " + F + "LeakyBase",
-                "by-ref-method public static " + Thing + "::TryOpen(System.String, out " + Thing + "&) -> System.Boolean",
+                "by-ref-method public static " + Thing + "::TryOpen(System.String, out " + Thing + "&?) -> System.Boolean",
                 "constructor private instance " + Thing + "::.ctor(System.String) -> " + Thing,
                 "constructor private static " + Thing + "::.cctor() -> " + Thing,
                 "field private static " + Thing + "::_slot -> " + Thing,
@@ -32,7 +32,7 @@ public sealed class ConstructionSurfaceTests
                 "method public static " + Thing + "+Nested::Make(System.String) -> " + Thing,
                 "method public static " + Thing + "::Adopt(System.String) -> " + Thing,
                 "method public static " + Thing + "::Borrow() -> " + Thing + "&",
-                "method public static " + Thing + "::Open(System.String, out System.String&) -> " + Thing,
+                "method public static " + Thing + "::Open(System.String, out System.String&) -> " + Thing + "?",
                 "method public static " + Thing + "::OpenAsync(System.String) -> System.Threading.Tasks.Task<" + Thing + ">",
                 "method public static " + Thing + "::OpenWithNote(System.String) -> System.ValueTuple<" + Thing + ", System.String>",
                 "operator public static " + Thing + "::op_Implicit(System.String) -> " + Thing,
