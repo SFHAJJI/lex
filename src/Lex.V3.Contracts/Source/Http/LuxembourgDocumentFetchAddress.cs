@@ -254,6 +254,13 @@ public static class LuxembourgAuthorityIri
 public sealed class LuxembourgDocumentFetchAddress
 {
     private const string CanonicalizationIdentity = "lu-document-fetch-address/1";
+    /// <summary>
+    /// 512, and not an arbitrary round number: it is exactly
+    /// <c>ScopeManifestFetchAddress</c>'s own MaximumFieldLength, which bounds the host and
+    /// resource path this address projects onto the manifest row. A longer bound here would admit
+    /// an act page path that the manifest itself would then refuse, turning a publisher value this
+    /// route accepted into a reduction failure one layer down.
+    /// </summary>
     private const int MaximumPathLength = 512;
 
     private readonly byte[] _canonicalIdentityBytes;
