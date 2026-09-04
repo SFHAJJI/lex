@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Lex.V3.Contracts.Facts;
 using Lex.V3.Contracts.Source.Core;
 
 namespace Lex.V3.Contracts.Source.Europe;
@@ -320,8 +321,16 @@ public static class EuDoNotIndexTerm
 /// </remarks>
 public static class EuAcquisitionPeriod
 {
-    /// <summary>The open sentinel, which is not a date on which anything happens.</summary>
-    public const string OpenSentinel = "9999-12-31";
+    /// <summary>
+    /// The open sentinel, which is not a date on which anything happens.
+    /// </summary>
+    /// <remarks>
+    /// The same literal <see cref="PublisherDate.OpenEndedLexicalValue"/> already pins in the
+    /// merged Facts date layer (Stage 2 item E1's rework, coordination/EVENTS.md event
+    /// lex-event-20260904T020125653Z-abdc750beb044cac843320c1d256d6e7): one sentinel constant
+    /// rather than two separate literals that happen to agree today.
+    /// </remarks>
+    public const string OpenSentinel = PublisherDate.OpenEndedLexicalValue;
 
     /// <summary>Whether a stated end is the open sentinel rather than a real end.</summary>
     public static bool IsOpenEnded(string validTo) =>
