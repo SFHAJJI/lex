@@ -17,6 +17,19 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// the two predicates are inverses while publishing only one of them.
 /// </para>
 /// <para>
+/// <b>The version this axiom carries is bound to that declaration by bytes.</b> Probe
+/// <c>lex-event-20260904T193110376Z-b18eba465155421cbe2130d622b45cec</c> read the ontology's
+/// identity and <c>owl:versionInfo</c> 4.17.0, and probe
+/// <c>lex-event-20260904T193414533Z-2542714d22dc4ff19302247a7738aefb</c> showed the
+/// <c>owl:inverseOf</c> triple and that <c>owl:versionInfo</c> resolving in the same named graph,
+/// <c>http://publications.europa.eu/ontology/cdm</c> (digests 4f6eed0a205e2c1c and
+/// 069cfe8f658854eb). Without that second probe the axiom would be asserting a version binding
+/// nobody had checked, which is the kind of claim this package exists to avoid making. The caveat
+/// it carries: co-location is what the store reports today, not proof that graph naming is
+/// versioned, so <see cref="EuAmendmentRelationVocabulary.OntologyVersion"/> is the version
+/// observed and the graph name is never read as one.
+/// </para>
+/// <para>
 /// <b>This returns a Facts <see cref="DerivedInverseRelation"/>, not an E4 type.</b> That record
 /// already demands everything an honest inverse needs and enforces it in its own constructor: an
 /// <see cref="ObservedInverseAxiom"/> that authorises exactly this inversion in this direction,

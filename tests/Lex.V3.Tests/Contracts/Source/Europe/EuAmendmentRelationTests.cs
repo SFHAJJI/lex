@@ -18,8 +18,14 @@ namespace Lex.V3.Tests.Contracts.Source.Europe;
 /// date spellings, the one absent <c>start</c> and the <c>MS</c> link type are the publisher's own
 /// bytes. The repeals row is the GDPR repeals axiom from canary
 /// <c>lex-event-20260904T174651520Z-392411cf4e9446e2aa76bd3be3cc2c8a</c> (digest 4701a3361ff09048).
-/// The ontology URI and version are from the probe relayed with digest
-/// <c>6c918b286291c621944ec20b409ac794b25128f53dd39529fc07c55174f4bba9</c>.
+/// The ontology URI and version are from probe
+/// <c>lex-event-20260904T193110376Z-b18eba465155421cbe2130d622b45cec</c> (digest
+/// <c>6c918b286291c621944ec20b409ac794b25128f53dd39529fc07c55174f4bba9</c>), and probe
+/// <c>lex-event-20260904T193414533Z-2542714d22dc4ff19302247a7738aefb</c> established that the
+/// <c>owl:inverseOf</c> declaration and that <c>owl:versionInfo</c> resolve in the same named
+/// graph, which is what lets the axiom below bind its version by bytes instead of by inference.
+/// That probe proves co-location as the store reports it today, not that graph naming is
+/// versioned, so the axiom records the version observed and nothing treats the graph name as one.
 /// </para>
 /// <para>
 /// <b>What is invented, said plainly.</b> Every <c>axiom:...</c> identity and every <c>obs:...</c>

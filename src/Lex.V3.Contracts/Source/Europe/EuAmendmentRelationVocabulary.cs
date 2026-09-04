@@ -25,9 +25,12 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// and <c>rdfs:range</c> both <c>cdm:resource_legal</c>, and carrying
 /// <c>owl:inverseOf cdm:resource_legal_amends_resource_legal</c> (digest 2e010919fde5842e);
 /// <see cref="AmendsPredicateUri"/> is confirmed as an exact IRI from a real triple (digest
-/// 7599b577820d8ba0). A follow-up probe read the ontology itself, giving
-/// <see cref="OntologyUri"/> and <see cref="OntologyVersion"/> (digest
-/// 6c918b286291c621944ec20b409ac794b25128f53dd39529fc07c55174f4bba9).
+/// 7599b577820d8ba0). Two follow-up probes ground the ontology:
+/// <c>lex-event-20260904T193110376Z-b18eba465155421cbe2130d622b45cec</c> read its identity,
+/// giving <see cref="OntologyUri"/> and <see cref="OntologyVersion"/> (digest
+/// 6c918b286291c621944ec20b409ac794b25128f53dd39529fc07c55174f4bba9), and
+/// <c>lex-event-20260904T193414533Z-2542714d22dc4ff19302247a7738aefb</c> established that the
+/// declaration and that version resolve in the same named graph.
 /// </para>
 /// <para>
 /// <b>Three relation predicates and the five annotation names still rest on canary prose.</b>
@@ -115,8 +118,16 @@ public static class EuAmendmentRelationVocabulary
     /// <see cref="EuDerivedAmendmentInverse"/> carries it.
     /// </para>
     /// <para>
-    /// This spelling is one of the two strings in this package that a guard keys on, so its
-    /// correctness cannot be left to recollection. It is now the publisher's own bytes.
+    /// <b>This spelling is no longer load bearing, and that is deliberate.</b> An earlier version
+    /// of E4 refused an inverse-predicate edge by comparing against this exact string, so a
+    /// misspelling here silently disarmed the guard and nothing said a word. The closed
+    /// <see cref="AssertedPredicates"/> set removed that fragility rather than protecting it: an
+    /// unpinned predicate is now refused whatever it is spelled, so no misspelling of this constant
+    /// can open a door. <b>Do not reintroduce a string-equality refusal against this constant</b>;
+    /// that would restore the fragile shape the closed set replaced. The spelling still matters to
+    /// <see cref="Lex.V3.Contracts.Facts.ObservedInverseAxiom"/>, which names it as the predicate
+    /// the inversion maps to, and <c>EuAmendmentRelationTests</c> pins it there as an independently
+    /// transcribed literal.
     /// </para>
     /// </remarks>
     public const string AmendedByPredicateUri =
@@ -150,6 +161,17 @@ public static class EuAmendmentRelationVocabulary
     /// <see cref="EuDerivedAmendmentInverse"/>, as a derived inverse authorised by the publisher's
     /// own <c>owl:inverseOf</c> declaration.
     /// </para>
+    /// <para>
+    /// <b>Closing this set moved which strings are load bearing, and the move is worth stating.</b>
+    /// It removed the amended-by spelling's role in any guard (see its own remarks), and it gave
+    /// one to three spellings that previously had none: <see cref="RepealsPredicateUri"/>,
+    /// <see cref="ConsolidatedBasedOnPredicateUri"/> and
+    /// <see cref="ConsolidatedConsolidatesPredicateUri"/> are now compared by string equality, here
+    /// and in <see cref="EuConstituentStep.Create"/>. All three still rest on canary prose rather
+    /// than on bytes. A wrong spelling in any of them would refuse real publisher data rather than
+    /// admit invented data, which is the safer direction of failure, and it is still a reason E4
+    /// live must confirm the three by bytes before any ingest.
+    /// </para>
     /// </remarks>
     internal static readonly IReadOnlyCollection<string> AssertedPredicates = new HashSet<string>(
         [
@@ -164,13 +186,15 @@ public static class EuAmendmentRelationVocabulary
     /// The CDM ontology the inverse declaration was read from.
     /// </summary>
     /// <remarks>
-    /// Grounded from the store: <c>http://publications.europa.eu/ontology/cdm</c> is an
-    /// <c>owl:Ontology</c> carrying <c>owl:versionInfo</c> 4.17.0, a title of "Common Data Model
-    /// (CDM)" and a date of 2025-11-17 (digest
-    /// 6c918b286291c621944ec20b409ac794b25128f53dd39529fc07c55174f4bba9), which confirms
-    /// review/22's prose in bytes. Note this is the ontology IRI without the trailing hash that
-    /// terminates the term namespace <c>EuConsolidationDiscoveryPlan.Cdm</c>: the ontology is the
-    /// document, the namespace is the prefix its terms hang off.
+    /// Grounded from the store by probe
+    /// <c>lex-event-20260904T193110376Z-b18eba465155421cbe2130d622b45cec</c> (digest
+    /// 6c918b286291c621944ec20b409ac794b25128f53dd39529fc07c55174f4bba9):
+    /// <c>http://publications.europa.eu/ontology/cdm</c> is declared <c>rdf:type owl:Ontology</c>,
+    /// carrying <c>owl:versionInfo</c> 4.17.0, a title of "Common Data Model (CDM)" and a date of
+    /// 2025-11-17, which confirms review/22's prose in bytes. Note this is the ontology IRI without
+    /// the trailing hash that terminates the term namespace
+    /// <c>EuConsolidationDiscoveryPlan.Cdm</c>: the ontology is the document, the namespace is the
+    /// prefix its terms hang off.
     /// </remarks>
     public const string OntologyUri = "http://publications.europa.eu/ontology/cdm";
 
@@ -178,12 +202,30 @@ public static class EuAmendmentRelationVocabulary
     /// The CDM version the <c>owl:inverseOf</c> declaration was observed at.
     /// </summary>
     /// <remarks>
-    /// <b>A version observed, not a version pinned for acceptance.</b> This records the version at
-    /// which the inverse declaration was read, which is what
-    /// <see cref="Lex.V3.Contracts.Facts.ObservedInverseAxiom"/> asks for. Nothing here checks a
-    /// live ontology against it, and nothing should on a contracts-only slice: if the publisher
-    /// ships a later version with the declaration removed, this constant is a record of what was
-    /// true when it was read rather than a claim about today, and E4 live is where it is re-read.
+    /// <para>
+    /// <b>The version is bound to the declaration by bytes, not by inference.</b> Probe
+    /// <c>lex-event-20260904T193414533Z-2542714d22dc4ff19302247a7738aefb</c> ran two GRAPH queries:
+    /// the <c>owl:inverseOf</c> triple resolves in exactly one named graph,
+    /// <c>http://publications.europa.eu/ontology/cdm</c> (digest 4f6eed0a205e2c1c), and the
+    /// ontology's own <c>owl:versionInfo</c> resolves in that same named graph carrying 4.17.0
+    /// (digest 069cfe8f658854eb). One graph holds both the declaration and the version describing
+    /// it, so every part of the axiom's sentence is a byte someone can re-query. An earlier pass
+    /// grounded the two facts separately without connecting them, and said so rather than letting
+    /// the axiom imply a binding nobody had checked.
+    /// </para>
+    /// <para>
+    /// <b>The caveat that travels with that.</b> Co-location is established as the store reports it
+    /// today. It is <b>not</b> established that the store's graph naming is itself versioned, so a
+    /// future CDM release could in principle replace that graph's contents without renaming it.
+    /// This constant therefore records the version <i>observed</i>, and nothing here treats the
+    /// graph name as a version.
+    /// </para>
+    /// <para>
+    /// <b>A version observed, not a version pinned for acceptance.</b> Nothing here checks a live
+    /// ontology against it, and nothing should on a contracts-only slice: if the publisher ships a
+    /// later version with the declaration removed, this constant is a record of what was true when
+    /// it was read rather than a claim about today, and E4 live is where it is re-read.
+    /// </para>
     /// </remarks>
     public const string OntologyVersion = "4.17.0";
 
