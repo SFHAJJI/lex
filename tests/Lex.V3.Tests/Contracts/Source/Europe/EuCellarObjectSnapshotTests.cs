@@ -658,6 +658,13 @@ public sealed class EuCellarObjectSnapshotTests
                 "method public static " + N + "EuManifestationListingDecode::Observe("
                     + "System.Collections.Generic.IReadOnlyCollection<" + N + "EuManifestationFormat>, "
                     + "Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> " + N + "EuFormatObservation",
+                // The unreadable-listing door: a second real producer, added when an unadmitted
+                // manifestation type stopped refusing the whole decode and became one Work's own
+                // typed quarantine.
+                "method public static " + N + "EuManifestationListingDecode::ObserveUnreadableListing("
+                    + "System.Collections.Generic.IReadOnlyCollection<" + N + "EuManifestationFormat>, "
+                    + "System.String, Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> " + N
+                    + "EuFormatObservation",
                 "method public static " + N + "EuManifestationListingDecode::TryDecode("
                     + "System.Collections.Generic.IReadOnlySet<System.String>, "
                     + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Core.RepeatedEnumerationRow>, "
@@ -743,7 +750,8 @@ public sealed class EuCellarObjectSnapshotTests
                     + "EuCellarObjectDecodeRefusal&, out System.String&, out " + N
                     + "EuCellarObjectSnapshotRefusal&) -> " + N + "EuCellarObjectSnapshot",
                 "method public static " + N + "EuCellarObjectDecode::TryDecode(System.String, "
-                    + RowList + RowList + RowList + RowList + C + "EuActForm, "
+                    + RowList + RowList + RowList + RowList
+                    + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, " + C + "EuActForm, "
                     + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, out " + N
                     + "EuCellarObjectDecodeRefusal&, out System.String&, out " + N
                     + "EuCellarObjectSnapshotRefusal&, out " + N + "EuManifestationListingRefusal&) -> "

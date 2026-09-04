@@ -90,7 +90,7 @@ public enum EuQueryExecutionRefusal
     /// <summary>A requested census-family (D1-05a's own <c>Family</c> set) partition did not prove.</summary>
     CensusFamilyNotProven = 1,
 
-    /// <summary>A requested object-facts family (P, X or W) batch did not prove.</summary>
+    /// <summary>A requested object-facts family (P, X, W or M) batch did not prove.</summary>
     ObjectFactsFamilyNotProven = 2,
 
     /// <summary>
@@ -524,7 +524,7 @@ public sealed class EuQueryExecutionResult
 /// <summary>
 /// D1-05c-2: the EU query-execution adapter. Mints the Union <see cref="SourceProfileTopology"/>,
 /// runs and proves every family (D1-05a's own census family <c>S</c>, reused unchanged, plus D1-05c-1's
-/// three object-facts families P, X, W), binds the observed object set to the closure proof by
+/// four object-facts families P, X, W and M), binds the observed object set to the closure proof by
 /// identity, decodes through <see cref="EuCellarObjectDecode"/>, reduces through
 /// <see cref="EuScopeSnapshotReduction"/> and <see cref="EuScopeProfile.BuildScopeInput"/> into
 /// <see cref="ScopeReducer.Reduce"/>, writes and holds the manifest, freezes the first-cut watermark
@@ -580,7 +580,7 @@ public sealed class EuQueryExecutionAdapter
     /// decodes and reduces the closure, and writes the resulting scope manifest as held evidence.
     /// </summary>
     /// <param name="censusFamilies">One D1-05a census-family partition (one admitted seed CELEX) and its bound source witness, per seed this run enumerates.</param>
-    /// <param name="objectFactsFamilies">One D1-05c-1 object-facts family batch (P, X or W) and its bound source witness, per batch this run enumerates. Every seed named in <paramref name="censusFamilies"/> must be covered by at least one P batch, one X batch and one W batch (W covering the roots only) for this run to decode anything.</param>
+    /// <param name="objectFactsFamilies">One object-facts family batch (P, X, W or M) and its bound source witness, per batch this run enumerates. Every seed named in <paramref name="censusFamilies"/> must be covered by at least one P batch, one X batch, one W batch (W covering the roots only) and one M batch for this run to decode anything; the run refuses otherwise.</param>
     /// <param name="witnessRendererSource">
     /// The renderer-source artifact naming <c>EuWatermarkWitnessSparqlRenderer</c>'s own code
     /// (SCOPE_RULING lex-event-20260904T092316893Z-6d969a2ba7934aa995907a55914bf3b6), held with its
@@ -651,12 +651,12 @@ public sealed class EuQueryExecutionAdapter
             }
         }
 
-        // ---- Run and prove every object-facts batch (P, X, W). ----
+        // ---- Run and prove every object-facts batch (P, X, W, M). ----
         // Keyed by (Set, familyKey) rather than familyKey alone: EuObjectFactsDiscoveryPlan.PartitionKeyFor
-        // is a pure function of the batch's own object set, never of which query set (P, X or W) asked
-        // it, so two families sharing one batch of objects (the common case: P, X and W all cover the
-        // same discovered closure) mint the IDENTICAL partition key. A dictionary keyed on that key
-        // alone would silently collapse three proven families into one.
+        // is a pure function of the batch's own object set, never of which query set (P, X, W or M)
+        // asked it, so two families sharing one batch of objects (the common case: P, X, W and M all
+        // cover the same discovered closure) mint the IDENTICAL partition key. A dictionary keyed on
+        // that key alone would silently collapse four proven families into one.
         var objectFactsByKey = new Dictionary<
             (EuObjectFactsQuerySet Set, string FamilyKey),
             (AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationDeliveryReceipt Receipt)>();
@@ -765,6 +765,13 @@ public sealed class EuQueryExecutionAdapter
         // acquired, never a fabricated stand-in.
         var evidenceRef = pFamilies[0].Proof.InterpretationProfileRef;
 
+        // D1-05d, REVIEW_RESULT lex-event-20260904T192428840Z-a6a8ebd26c58436aafd109a55303c12e
+        // defect one: family M's format observations rest on family M's OWN proof, not P's. Before
+        // this fix every format disposition was stamped with the ref above while this one went
+        // unused, so a disposition named a listing it had not been read from and
+        // EuManifestationListingDecode's own parameter doc was contradicted by its only real caller.
+        var manifestationEvidenceRef = mFamilies[0].Proof.InterpretationProfileRef;
+
         // ---- Per seed: derive the closure from the census family's own rows, filter P/X to it, decode. ----
         var allSnapshots = new List<EuCellarObjectSnapshot>();
         var discoveredRoots = new List<string>();
@@ -818,6 +825,7 @@ public sealed class EuQueryExecutionAdapter
                 xProfile,
                 seedMRows,
                 mProfile,
+                manifestationEvidenceRef,
                 recordForm,
                 evidenceRef,
                 out var decodeRefusal,
@@ -856,8 +864,33 @@ public sealed class EuQueryExecutionAdapter
 
         // ---- Reduce every non-excluded snapshot. Precision four: the reduction never throws. ----
         var scopeProfile = EuScopeProfile.BuildBinding();
-        var orderedEvidenceArtifacts = new[] { evidenceRef };
-        var evidenceOrdinals = new Dictionary<SourceArtifactRef, int> { [evidenceRef] = 0 };
+        // Family M's own proof joins the manifest's ordered evidence artifacts, because the format
+        // selector cites it and ScopeReducer resolves every selector's evidence through this list.
+        // Guarded against the two refs coinciding rather than assumed distinct: they are distinct
+        // for every real run (P and M are different query sets with different interpretation
+        // profiles), but a duplicate key here would refuse the whole run, which is a far worse
+        // failure than sharing one ordinal.
+        // ScopeManifest requires this list canonically sorted and unique (ScopeValidation's own
+        // CompareArtifact: resource id, then digest), so the two refs are sorted here and their
+        // ordinals read off the sorted order rather than assumed to be declaration order.
+        // Only artifacts something actually cites may appear: ScopeReducer requires the table to
+        // contain EXACTLY the referenced set, so family M's proof joins it if and only if at least
+        // one snapshot carries a format observation to cite it. A run where the office listed
+        // nothing for every object cites P's proof alone, and that is correct rather than a gap.
+        var anyFormatObserved = allSnapshots.Exists(static snapshot => snapshot.Format is not null);
+        var distinctEvidence = new List<SourceArtifactRef> { evidenceRef };
+        if (anyFormatObserved && CompareEvidenceArtifact(evidenceRef, manifestationEvidenceRef) != 0)
+        {
+            distinctEvidence.Add(manifestationEvidenceRef);
+        }
+
+        distinctEvidence.Sort(CompareEvidenceArtifact);
+        var orderedEvidenceArtifacts = distinctEvidence.ToArray();
+        var evidenceOrdinals = new Dictionary<SourceArtifactRef, int>();
+        for (var index = 0; index < orderedEvidenceArtifacts.Length; index++)
+        {
+            evidenceOrdinals[orderedEvidenceArtifacts[index]] = index;
+        }
         var observedObjects = new List<SourceObjectRef>();
         var reductionInputs = new List<ScopeObjectReductionInput>();
         var exclusions = new List<EuObjectReductionExclusion>();
@@ -1898,6 +1931,18 @@ public sealed class EuQueryExecutionAdapter
     /// support.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// The manifest's own canonical order for evidence artifacts: resource id, then digest, both
+    /// ordinal. Reproduced here rather than reused because <c>ScopeValidation.CompareArtifact</c> is
+    /// internal to Lex.V3.Contracts and this path claim does not extend there; the rule it encodes is
+    /// stated in that method and enforced by <c>ScopeManifest</c>, which refuses an unsorted list.
+    /// </summary>
+    private static int CompareEvidenceArtifact(SourceArtifactRef left, SourceArtifactRef right)
+    {
+        var comparison = string.CompareOrdinal(left.ResourceId, right.ResourceId);
+        return comparison != 0 ? comparison : string.CompareOrdinal(left.Sha256, right.Sha256);
+    }
+
     private static (ScopeManifestFetchAddress Manifest, IReadOnlyList<EuDocumentFetchAddress> Ladder)
         MintFetchAddress(SourceObjectRef objectRef, EuFormatDisposition? formatDisposition)
     {

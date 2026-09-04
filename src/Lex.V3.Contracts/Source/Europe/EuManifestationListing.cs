@@ -32,12 +32,35 @@ public enum EuManifestationListingRefusal
 
     /// <summary>
     /// A family M row named a manifestation type outside the closed
-    /// <see cref="EuManifestationFormat"/> vocabulary. Refused BY NAME (the offending token is
-    /// reported through <c>offendingToken</c>) rather than dropped, per SCOPE_RULING
-    /// lex-event-20260904T173606578Z-9977b89239ed43f98df09972f98a741a precision one: silently
-    /// dropping an unknown type would let the ladder claim it had read the office's whole listing
-    /// while ignoring part of it.
+    /// <see cref="EuManifestationFormat"/> vocabulary.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// NOT a whole-decode refusal, and that is the point. The token is still refused BY NAME, per
+    /// SCOPE_RULING lex-event-20260904T173606578Z-9977b89239ed43f98df09972f98a741a precision one
+    /// (silently dropping an unknown type would let the ladder claim it had read the office's whole
+    /// listing while ignoring part of it), but the refusal is scoped to the ONE WORK whose listing
+    /// carried it: that Work's own format observation becomes
+    /// <see cref="EuFormatBodyAdmission.BodyNotAdmitted"/> with the token recorded on its reason
+    /// code, its body axis becomes a typed gap, and every other Work in the same run is decoded
+    /// normally.
+    /// </para>
+    /// <para>
+    /// D1-05d's own REVIEW_RESULT lex-event-20260904T192428840Z-a6a8ebd26c58436aafd109a55303c12e
+    /// found the original blast radius: one unadmitted token anywhere refused the whole seed's run,
+    /// so the day the office lists a new manifestation type on any object, or a case-law xml or AKN
+    /// token enters the closure, every EU run would refuse. This is the same per-object containment
+    /// the EU document-fetch route already went through: one object's problem must never kill the
+    /// run. Whole-decode refusal is now reserved for a row naming a parent outside the closure,
+    /// which is a violation of what this call was asked to decode rather than a fact about the
+    /// publisher's vocabulary.
+    /// </para>
+    /// <para>
+    /// This member therefore never reaches <c>refusal</c> from
+    /// <see cref="EuManifestationListingDecode.TryDecode"/>; it names the condition that
+    /// <see cref="EuManifestationListingDecode.UnadmittedTypeReasonCode"/> records on one Work.
+    /// </para>
+    /// </remarks>
     ManifestationTypeNotInVocabulary = 3,
 
     /// <summary>
@@ -80,9 +103,11 @@ public enum EuManifestationListingRefusal
 /// The listing is a union over every Expression of the Work, so it can name a format that exists
 /// for some language or edition and not for the one this route requests. Observed on 2026-09-04:
 /// 31995L0046, a 1995 act, lists <c>fmx4</c>, <c>xhtml</c>, <c>pdfa1a</c> and <c>pdfa1b</c> as well
-/// as <c>html</c>, yet answers 404 to every one of those first four on the plain work URI with
-/// <c>Accept-Language: eng</c> and 200 only to <c>text/html</c>. So a listing entry is evidence
-/// that a candidate is worth attempting and nothing more.
+/// as <c>html</c>, yet answers 404 to <c>Accept: application/xhtml+xml</c> on the plain work URI
+/// with <c>Accept-Language: eng</c> and 200 to <c>text/html</c>. Only those two Accept tokens were
+/// probed on that act, so nothing is claimed here about its fmx4, pdfa1a or pdfa1b; one listed type
+/// answering 404 is already enough to establish that a listing entry is evidence a candidate is
+/// worth attempting and nothing more.
 /// </para>
 /// <para>
 /// KEEP, IMPROVE, REFUSE against v2 (<c>src/Lex.Sources.EurLex/EurLexAdapter.cs</c> in the v2
@@ -165,8 +190,9 @@ public static class EuManifestationListingDecode
     /// rename silently change which publisher tokens this door recognises. Seven of the nine were
     /// observed as real listed values on 2026-09-04 (<c>fmx4</c>, <c>xhtml</c>, <c>html</c>,
     /// <c>pdf</c>, <c>pdfa1a</c>, <c>pdfa1b</c>, <c>print</c>); <c>xhtml5</c> and <c>pdfa2a</c> were
-    /// not offered by any of the five acts probed in the 1995 to 2008 band and are admitted on the
-    /// strength of <see cref="EuManifestationFormat"/>'s own closed vocabulary, which review/23
+    /// offered by none of the eight Works whose listings this slice read (31995L0046, 32003L0087,
+    /// 32003L0088, 32003R0001, 32004R0139, 32005L0029, 32006L0112, 32008R0593) and are admitted on
+    /// the strength of <see cref="EuManifestationFormat"/>'s own closed vocabulary, which review/23
     /// section 1.2 grounds, not on an observation this slice took.
     /// </remarks>
     public static IReadOnlyDictionary<string, EuManifestationFormat> ListedTypeTokens { get; } =
@@ -182,7 +208,13 @@ public static class EuManifestationListingDecode
     /// <param name="listingProfile">The interpretation profile <paramref name="listingRows"/> were verified under.</param>
     /// <param name="evidenceRef">
     /// Family M's OWN delivery evidence, per the SCOPE_RULING's second line: every disposition this
-    /// produces names the observation it came from, never a sibling family's.
+    /// produces names the observation it came from, never a sibling family's. The caller must pass
+    /// family M's own interpretation-profile reference here, not the one it uses for families P and
+    /// X; D1-05d's REVIEW_RESULT lex-event-20260904T192428840Z-a6a8ebd26c58436aafd109a55303c12e
+    /// found this doc contradicted by the adapter, which stamped every format observation with
+    /// family P's ref while M's own proof went unused, and
+    /// <c>EuQueryExecutionAdapterTests.AMintedFormatDispositionNamesFamilyMsOwnDeliveryEvidence</c>
+    /// now holds the two apart.
     /// </param>
     /// <param name="refusal">Why no listings were returned, when none were.</param>
     /// <param name="offendingIri">The exact canonical parent IRI a closure refusal names, else null.</param>
@@ -191,7 +223,10 @@ public static class EuManifestationListingDecode
     /// One entry per object in <paramref name="closure"/> the rows say anything about, keyed by
     /// canonical IRI. An object whose only row is family M's explicit absence row is deliberately
     /// ABSENT from the result: the office listing nothing is the typed absence, and inventing an
-    /// observation for it would turn "nobody offers this a body" into "we looked at a format".
+    /// observation for it would turn "nobody offers this a body" into "we looked at a format". An
+    /// object whose listing carried a token outside the closed vocabulary IS present, carrying
+    /// <see cref="ObserveUnreadableListing"/>'s own answer, so the unreadable listing and the empty
+    /// listing stay two distinguishable facts.
     /// </returns>
     public static IReadOnlyDictionary<string, EuFormatObservation>? TryDecode(
         IReadOnlySet<string> closure,
@@ -215,6 +250,7 @@ public static class EuManifestationListingDecode
         }
 
         var listedByParent = new Dictionary<string, SortedSet<EuManifestationFormat>>(StringComparer.Ordinal);
+        var unadmittedTokenByParent = new Dictionary<string, string>(StringComparer.Ordinal);
         var absentParents = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var row in listingRows)
@@ -264,17 +300,26 @@ public static class EuManifestationListingDecode
                 return null;
             }
 
-            if (!ListedTypeTokens.TryGetValue(valueTerm.Value, out var format))
-            {
-                refusal = EuManifestationListingRefusal.ManifestationTypeNotInVocabulary;
-                offendingToken = valueTerm.Value;
-                return null;
-            }
-
             if (!listedByParent.TryGetValue(canonicalParent, out var listed))
             {
                 listed = [];
                 listedByParent[canonicalParent] = listed;
+            }
+
+            if (!ListedTypeTokens.TryGetValue(valueTerm.Value, out var format))
+            {
+                // Fix two: this Work's listing carried a type this vocabulary does not know. Record
+                // it against THIS WORK and carry on; the run must not die because one object's
+                // publisher vocabulary moved. The parent's entry above is created first on purpose,
+                // so a Work whose listing is ENTIRELY unknown tokens is still distinguishable from a
+                // Work the office lists nothing for.
+                offendingToken ??= valueTerm.Value;
+                if (!unadmittedTokenByParent.ContainsKey(canonicalParent))
+                {
+                    unadmittedTokenByParent[canonicalParent] = valueTerm.Value;
+                }
+
+                continue;
             }
 
             listed.Add(format);
@@ -293,7 +338,9 @@ public static class EuManifestationListingDecode
         var observations = new Dictionary<string, EuFormatObservation>(StringComparer.Ordinal);
         foreach (var (parent, listed) in listedByParent)
         {
-            observations[parent] = Observe(listed, evidenceRef);
+            observations[parent] = unadmittedTokenByParent.TryGetValue(parent, out var unadmitted)
+                ? ObserveUnreadableListing(listed, unadmitted, evidenceRef)
+                : Observe(listed, evidenceRef);
         }
 
         refusal = EuManifestationListingRefusal.None;
@@ -445,6 +492,86 @@ public static class EuManifestationListingDecode
 
         return Array.AsReadOnly(candidates.ToArray());
     }
+
+    /// <summary>The reason-code prefix a Work whose listing this route could not fully read carries.</summary>
+    public const string UnadmittedTypeReasonCode = "listing_type_not_admitted";
+
+    /// <summary>
+    /// One Work's observation when its listing named a manifestation type outside the closed
+    /// vocabulary. Never admitted as a body source, so the body axis is a typed gap.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The admission and the reason carry the real fact: this route did not fully read this Work's
+    /// listing, so it will not claim to have chosen a format from it, and it offers no fetch
+    /// candidates. The reason names the exact offending token so a reader can see which one moved.
+    /// </para>
+    /// <para>
+    /// The <see cref="EuFormatObservation.Format"/> field is descriptive only here, and it is chosen
+    /// to avoid two different overclaims. It names the lowest-ordinal format the Work really listed
+    /// EXCLUDING <see cref="EuManifestationFormat.Print"/>, because naming print would send the body
+    /// axis to <c>never_ingest</c> through
+    /// <see cref="EuManifestationScope.FormatsThatCanNeverCarryABody"/>, and a permanent exclusion is
+    /// exactly what an unread listing does not license: the unknown token may well be a body format.
+    /// When the Work listed no known non-print format at all (its listing is print plus unknowns, or
+    /// unknowns alone) there is no honest publisher value left to name, so this names
+    /// <see cref="EuManifestationFormat.Formex4"/>, the vocabulary's own floor, and says so here
+    /// rather than implying it was observed. That branch is unreachable against every real listing
+    /// observed to date, all of which name at least one known non-print format.
+    /// </para>
+    /// </remarks>
+    public static EuFormatObservation ObserveUnreadableListing(
+        IReadOnlyCollection<EuManifestationFormat> knownListedFormats,
+        string unadmittedToken,
+        SourceArtifactRef evidenceRef)
+    {
+        ArgumentNullException.ThrowIfNull(knownListedFormats);
+        ArgumentException.ThrowIfNullOrWhiteSpace(unadmittedToken);
+        ArgumentNullException.ThrowIfNull(evidenceRef);
+
+        var namedFormat = EuManifestationFormat.Formex4;
+        foreach (var candidate in knownListedFormats.OrderBy(static value => value))
+        {
+            ContractValidation.RequireDefined(candidate, nameof(knownListedFormats));
+            if (candidate != EuManifestationFormat.Print)
+            {
+                namedFormat = candidate;
+                break;
+            }
+        }
+
+        return new EuFormatObservation(
+            namedFormat,
+            EuFormatBodyAdmission.BodyNotAdmitted,
+            UnadmittedTypeReasonCode + ":" + BoundTokenForReason(unadmittedToken),
+            evidenceRef);
+    }
+
+    /// <summary>
+    /// The offending token, reduced to something a bounded printable-ASCII contract identifier can
+    /// carry. The exact unreduced token always remains in family M's own retained rows, which are
+    /// what this observation's evidence reference points at.
+    /// </summary>
+    private static string BoundTokenForReason(string token)
+    {
+        var builder = new System.Text.StringBuilder(MaximumReasonTokenLength);
+        foreach (var character in token)
+        {
+            if (builder.Length == MaximumReasonTokenLength)
+            {
+                break;
+            }
+
+            builder.Append(
+                character is (>= 'a' and <= 'z') or (>= 'A' and <= 'Z') or (>= '0' and <= '9') or '-' or '_' or '+' or '.'
+                    ? character
+                    : '_');
+        }
+
+        return builder.Length == 0 ? "unnamed" : builder.ToString();
+    }
+
+    private const int MaximumReasonTokenLength = 64;
 
     private static Dictionary<string, EuManifestationFormat> BuildTokenIndex()
     {

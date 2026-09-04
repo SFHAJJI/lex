@@ -221,6 +221,14 @@ public static class EuCellarObjectDecode
     /// observation. See <see cref="EuManifestationListingDecode"/>.
     /// </param>
     /// <param name="manifestationProfile">The interpretation profile <paramref name="manifestationRows"/> were verified under.</param>
+    /// <param name="manifestationEvidenceRef">
+    /// Family M's OWN delivery evidence, distinct from <paramref name="evidenceRef"/>. Every format
+    /// observation this decode mints names it, so a disposition points at the listing it was read
+    /// from rather than at a sibling family's proof. D1-05d's REVIEW_RESULT
+    /// lex-event-20260904T192428840Z-a6a8ebd26c58436aafd109a55303c12e found the adapter stamping
+    /// family P's ref on every format observation while M's own proof went unused, which is why this
+    /// is a separate parameter rather than a reuse of the one above.
+    /// </param>
     /// <param name="recordForm">
     /// Every object's own act form. Not recoverable from these closures' rows; the caller supplies it
     /// from wherever it independently resolves <c>resource_legal_type</c>. Applied uniformly to every
@@ -264,6 +272,7 @@ public static class EuCellarObjectDecode
         RepeatedEnumerationInterpretationProfile expressionFactProfile,
         IReadOnlyList<RepeatedEnumerationRow> manifestationRows,
         RepeatedEnumerationInterpretationProfile manifestationProfile,
+        SourceArtifactRef manifestationEvidenceRef,
         EuActForm recordForm,
         SourceArtifactRef evidenceRef,
         out EuCellarObjectDecodeRefusal refusal,
@@ -280,6 +289,7 @@ public static class EuCellarObjectDecode
         ArgumentNullException.ThrowIfNull(expressionFactProfile);
         ArgumentNullException.ThrowIfNull(manifestationRows);
         ArgumentNullException.ThrowIfNull(manifestationProfile);
+        ArgumentNullException.ThrowIfNull(manifestationEvidenceRef);
         ContractValidation.RequireDefined(recordForm, nameof(recordForm));
         ArgumentNullException.ThrowIfNull(evidenceRef);
         offendingIri = null;
@@ -489,7 +499,7 @@ public static class EuCellarObjectDecode
         // D1-05d. Family M's rows never grow or shrink O either: a row naming a parent outside this
         // closure is refused, exactly as P's and X's own rows are.
         var formatObservations = EuManifestationListingDecode.TryDecode(
-            closure, manifestationRows, manifestationProfile, evidenceRef,
+            closure, manifestationRows, manifestationProfile, manifestationEvidenceRef,
             out listingRefusal, out var listingOffendingIri, out var listingOffendingToken);
         if (formatObservations is null)
         {
