@@ -19,3 +19,9 @@
 *.ico binary
 *.woff binary
 *.woff2 binary
+
+# D1-06c-LU-2: retained publisher response bodies are EXACT BYTES, never text. Without this,
+# text=auto above detects the Akoma Ntoso XML as text and rewrites its CRLF on staging, which
+# changed its digest from 9e43a99e.. to fc3303d4.. and would have committed a fixture that is not
+# the publisher bytes it names. Scoped to this lane; see the packet for the general *.bin case.
+tests/Lex.V3.Ingest.Tests/Fixtures/LuDocumentFetch/** binary

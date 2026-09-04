@@ -76,8 +76,10 @@ public sealed class LuxembourgDocumentFetchPlan
 
         var input = MachineQueryInputArtifact.Create(
             inputResourceId, _documentFetchFamilyRef, PartitionKey(), response, parameters);
+        // No pre-render here. MachineQueryBinder.BindForSend renders through this same renderer
+        // and validates the result, so calling RenderInput first and discarding it was a step that
+        // could not fail independently of the bind that follows it.
         var renderer = new LuxembourgDocumentFetchRenderer(_address, rendererSource);
-        var rendered = renderer.RenderInput(input);
         var resourceUri = _address.FetchUri.AbsoluteUri;
         var targetBytes = Encoding.ASCII.GetBytes(_address.FetchUri.PathAndQuery);
         var machinePlan = new MachineQueryPlan(
@@ -97,7 +99,6 @@ public sealed class LuxembourgDocumentFetchPlan
             input.PartitionBinding,
             null,
             null);
-        _ = rendered;
         var machinePlanRef = MachineQueryPlanIdentity.Create(machinePlanResourceId, machinePlan);
         var request = MachineQueryBinder.BindForSend(machinePlan, machinePlanRef, input, renderer);
         return new LuxembourgDocumentFetchBoundQuery(machinePlan, machinePlanRef, input, request);
