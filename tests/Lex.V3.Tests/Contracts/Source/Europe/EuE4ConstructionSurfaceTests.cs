@@ -118,6 +118,105 @@ public sealed class EuE4ConstructionSurfaceTests
         CollectionAssert.AreEqual(
             Array.Empty<string>(),
             ConstructionSurface.Of(typeof(EuDerivedAmendmentInverse)).ToArray());
+
+        CollectionAssert.AreEqual(
+            Array.Empty<string>(),
+            ConstructionSurface.ProducersIn(
+                typeof(EuDerivedAmendmentInverse).Assembly,
+                typeof(EuDerivedAmendmentInverse),
+                true).ToArray());
+    }
+
+    /// <summary>
+    /// The vocabulary is the thirteenth public type this lane declares and was the only one
+    /// without a pin. It is a static class, so nothing mints an instance of it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The one entry is the type initializer, which exists because
+    /// <c>EuAmendmentRelationVocabulary.AssertedPredicates</c> is a <c>static readonly</c> set. It
+    /// is not a door: a type initializer runs once and hands nothing to a caller. That is the
+    /// difference from <see cref="EuDerivedAmendmentInverse"/> above, whose surface is empty
+    /// because it holds no static state at all, and the reason this pin is not simply another
+    /// empty array.
+    /// </para>
+    /// <para>
+    /// Pinning it still earns its place. The vocabulary is where the closed predicate set and the
+    /// pinned ontology identity live, so an instance field or a factory appearing on it later
+    /// would mean the pinned vocabulary had acquired mutable per-instance state, and this is where
+    /// that shows up.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void TheVocabularyIsAStaticClassWithNothingButItsTypeInitializer()
+    {
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private static " + N + "EuAmendmentRelationVocabulary::.cctor() -> "
+                    + N + "EuAmendmentRelationVocabulary",
+            },
+            ConstructionSurface.Of(typeof(EuAmendmentRelationVocabulary)).ToArray());
+
+        CollectionAssert.AreEqual(
+            Array.Empty<string>(),
+            ConstructionSurface.ProducersIn(
+                typeof(EuAmendmentRelationVocabulary).Assembly,
+                typeof(EuAmendmentRelationVocabulary),
+                true).ToArray());
+    }
+
+    /// <summary>
+    /// The thirteen public types this lane declares are each pinned above, and each is still public
+    /// and still in the expected namespace.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>What this proves, stated exactly.</b> Every type named here has a pin in this class; each
+    /// is public; each is in <c>Lex.V3.Contracts.Source.Europe</c>; and there are thirteen of them,
+    /// distinct. A pinned type made internal, moved to another namespace, or merged away fails
+    /// here.
+    /// </para>
+    /// <para>
+    /// <b>What it does not prove, which matters more.</b> It cannot detect a fourteenth type this
+    /// lane adds later without pinning it. The first version of this test claimed exactly that, and
+    /// was wrong: it swept the assembly but filtered the sweep through the same name list it then
+    /// compared against, so the filter could only ever return names already in the list and a new
+    /// type was invisible to it. A sweep narrowed by its own expected answer is not a sweep. There
+    /// is no reflective signal for which lane declares a type, and widening the sweep to the whole
+    /// namespace would fail whenever a concurrent lane adds one of its own, which is the collateral
+    /// breakage the E4 scope ruling forbids. So the control for an unpinned new type is the review
+    /// diff check, not this test, and saying so is worth more than a name that implies otherwise.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void TheThirteenPinnedTypesAreStillPublicAndInThisNamespace()
+    {
+        var pinned = new[]
+        {
+            typeof(EuAmendmentRelationVocabulary),
+            typeof(EuAuthorityQualifiedToken),
+            typeof(EuConstituentClosure),
+            typeof(EuConstituentClosureRefusal),
+            typeof(EuConstituentMemberResolution),
+            typeof(EuConstituentStep),
+            typeof(EuDerivedAmendmentInverse),
+            typeof(EuLocatedAmendmentAxiom),
+            typeof(EuRelationEdgeBinding),
+            typeof(EuRepealEdge),
+            typeof(EuStructuralLocation),
+            typeof(EuValidityDate),
+            typeof(EuValidityDateShape),
+        };
+
+        Assert.HasCount(13, pinned);
+        Assert.HasCount(13, pinned.Distinct().ToArray());
+
+        foreach (var type in pinned)
+        {
+            Assert.IsTrue(type.IsPublic, $"{type.Name} is no longer public.");
+            Assert.AreEqual("Lex.V3.Contracts.Source.Europe", type.Namespace, type.Name);
+        }
     }
 
     // --- The two qualifier-carrying facts -------------------------------------------------------

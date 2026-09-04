@@ -2,9 +2,10 @@ namespace Lex.V3.Contracts.Source.Europe;
 
 /// <summary>
 /// Marks a Facts-layer EU binding as admissible evidence for a legal record: implemented by E1's
-/// <see cref="EuDateAxiomBinding"/> and E6's <see cref="EuCaseLawLinkBinding"/>, and by nothing
-/// else in this assembly. A pure marker: it declares no members, so a type opts in only by
-/// naming the interface on its own declaration, never by accident through structural typing.
+/// <see cref="EuDateAxiomBinding"/>, E6's <see cref="EuCaseLawLinkBinding"/> and E4's
+/// <see cref="EuRelationEdgeBinding"/>, and by nothing else in this assembly. A pure marker: it
+/// declares no members, so a type opts in only by naming the interface on its own declaration,
+/// never by accident through structural typing.
 /// </summary>
 /// <remarks>
 /// <para>
