@@ -28,7 +28,7 @@ public sealed class RepeatedEnumerationDeliveryReceiptTests
         Assert.AreSame(delivery, receipt.Delivery);
         Assert.AreEqual(CustodyMembership.Floored, receipt.RetainedFloor);
         Assert.AreEqual(0, receipt.UnenforcedMemberDigests.Count);
-        Assert.AreSame(delivery, receipt.RequireFlooredRun());
+        Assert.AreSame(delivery, receipt.Delivery);
         foreach (var observation in AllObservations(delivery))
         {
             Assert.AreEqual(
@@ -116,7 +116,7 @@ public sealed class RepeatedEnumerationDeliveryReceiptTests
     }
 
     [TestMethod]
-    public void RequireFlooredRunNamesEveryUnenforcedDigest()
+    public void TheReceiptNamesEveryUnenforcedDigestAndStillMintsAProofCarryingThatClass()
     {
         var delivery = new RepeatedEnumerationDeliveryProofTests.Fixture().Create("a,b", "a,b");
         var (session, executor) = FullMembership(delivery, CustodyMembership.Floored);
@@ -131,16 +131,21 @@ public sealed class RepeatedEnumerationDeliveryReceiptTests
         Assert.AreEqual(CustodyMembership.RetainedUnenforced, receipt.RetainedFloor);
         CollectionAssert.Contains(receipt.UnenforcedMemberDigests.ToArray(), unenforcedDigest);
 
-        var thrown = Assert.ThrowsExactly<InvalidOperationException>(() => receipt.RequireFlooredRun());
-        StringAssert.Contains(thrown.Message, unenforcedDigest);
+        // RULING lex-event-20260904T215906714Z-6dadaf27829d4a3aa3c355063754ccd6. The run says WHICH of the
+        // three this member is and carries on. There used to be a RequireFlooredRun accessor here
+        // that threw naming this digest; it lost its last caller with that ruling and was removed
+        // rather than left sitting unreferenced. The class travels on the proof instead.
+        var proof = receipt.TryProveFamilyEnumeration(delivery.PartitionKey, out var proofRefusal);
+        Assert.IsNotNull(proof, $"an unfloored run still proves its enumeration: {proofRefusal}");
+        Assert.AreEqual(CustodyMembership.RetainedUnenforced, proof.RetainedFloor);
     }
 
     [TestMethod]
-    public void AnUnflooredResponseBodyLowersTheFloorAndBlocksTheDurableAccessor()
+    public void AnUnflooredResponseBodyLowersTheFloorAndSoTheProofsClass()
     {
         // Objection 4. The response body and its durable write receipt used to be reported as
-        // "verified without a custody claim", outside RetainedFloor, so RequireFlooredRun could
-        // pass while the publisher's own answer sat unfloored. They are members now.
+        // "verified without a custody claim", outside RetainedFloor, so the floor could read as
+        // Floored while the publisher's own answer sat unfloored. They are members now.
         var delivery = new RepeatedEnumerationDeliveryProofTests.Fixture().Create("a,b", "a,b");
         var (session, executor) = FullMembership(delivery, CustodyMembership.Floored);
         var custody = Custody(delivery);
@@ -154,8 +159,10 @@ public sealed class RepeatedEnumerationDeliveryReceiptTests
         Assert.IsNotNull(receipt);
         Assert.AreEqual(CustodyMembership.RetainedUnenforced, receipt.RetainedFloor);
         CollectionAssert.Contains(receipt.UnenforcedMemberDigests.ToArray(), unflooredBody);
-        var thrown = Assert.ThrowsExactly<InvalidOperationException>(() => receipt.RequireFlooredRun());
-        StringAssert.Contains(thrown.Message, unflooredBody);
+        Assert.AreEqual(
+            CustodyMembership.RetainedUnenforced,
+            receipt.TryProveFamilyEnumeration(delivery.PartitionKey, out _)!.RetainedFloor,
+            "the publisher's own answer sitting unfloored must reach the proof's own class.");
     }
 
     [TestMethod]
@@ -238,20 +245,23 @@ public sealed class RepeatedEnumerationDeliveryReceiptTests
         Assert.AreEqual(RepeatedEnumerationReceiptRefusal.MembershipIsNotReceiptDerived, refusal);
     }
 
+    /// <summary>
+    /// Every receipt mints a proof, and the proof CARRIES the run's custody class. Where that class
+    /// is required is <see cref="AbsenceCut.TryCreateComplete"/>, the release, not here.
+    /// </summary>
+    /// <remarks>
+    /// RULING lex-event-20260904T215906714Z-6dadaf27829d4a3aa3c355063754ccd6 reversed this test's own
+    /// former rule. It used to assert that a floored receipt is the ONLY kind that mints a proof,
+    /// and it named the mutation "change TryProveFamilyEnumeration to read Delivery instead of
+    /// RequireFlooredRun" as the one it killed. That is now the intended behaviour: refusing the
+    /// proof refuses the family, and an adapter refuses a run with an unproven family, so the old
+    /// rule meant a store publishing no enforcement could acquire nothing at all. The load-bearing
+    /// assertion moved with the rule, to
+    /// <c>AbsenceCutTests.ACompleteCutRefusesAProofHeldWithoutAnEnforcedFloor</c>.
+    /// </remarks>
     [TestMethod]
-    public void AFlooredReceiptIsTheOnlyKindThatMintsAnAbsenceEnumerationProof()
+    public void EveryReceiptMintsAProofAndTheProofCarriesTheRunsCustodyClass()
     {
-        // Objection 1(b)'s mutation, at the level where the rule lives. The delivered run itself
-        // is proven end to end by the executor's AGenuineDeliveryReceiptMintsACompleteAbsenceCut,
-        // which takes a genuine LU receipt all the way to AbsenceCut.TryCreateComplete. This is
-        // the other half: a receipt whose custody is not floored cannot mint a proof at all, so it
-        // cannot reach a complete cut either, because TryCreateComplete admits no family without
-        // one.
-        //
-        // The mutation this kills: change TryProveFamilyEnumeration to read Delivery instead of
-        // RequireFlooredRun. Confirmed to make this test pass a proof back instead of throwing,
-        // while every other test in this file and the executor's own still pass, which is what
-        // makes this the load-bearing assertion for that one line.
         var delivery = new RepeatedEnumerationDeliveryProofTests.Fixture().Create("a,b", "a,b");
         var familyKey = delivery.PartitionKey;
 
@@ -273,9 +283,18 @@ public sealed class RepeatedEnumerationDeliveryReceiptTests
             delivery, session, executor, custody, out _)!;
         Assert.AreEqual(CustodyMembership.RetainedUnenforced, unflooredReceipt.RetainedFloor);
 
-        var thrown = Assert.ThrowsExactly<InvalidOperationException>(() =>
-            unflooredReceipt.TryProveFamilyEnumeration(familyKey, out _));
-        StringAssert.Contains(thrown.Message, unflooredBody);
+        var unflooredProof = unflooredReceipt.TryProveFamilyEnumeration(familyKey, out var unflooredRefusal);
+        Assert.IsNotNull(unflooredProof, $"the enumeration is still proven: {unflooredRefusal}");
+        Assert.AreEqual(AbsenceFamilyEnumerationProofRefusal.None, unflooredRefusal);
+        Assert.AreEqual(
+            CustodyMembership.RetainedUnenforced,
+            unflooredProof.RetainedFloor,
+            "the proof must say which of the three its run was, not say durable.");
+        Assert.AreEqual(
+            CustodyMembership.Floored,
+            proof.RetainedFloor,
+            "and a floored run must still say Floored, or the stamp says nothing.");
+        _ = unflooredBody;
     }
 
     [TestMethod]

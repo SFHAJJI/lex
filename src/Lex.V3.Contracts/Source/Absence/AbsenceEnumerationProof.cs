@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 
 namespace Lex.V3.Contracts.Source.Absence;
@@ -34,6 +35,16 @@ public enum AbsenceFamilyEnumerationProofRefusal
     /// </summary>
     [JsonStringEnumMemberName("selection_reached_the_row_cap")]
     SelectionReachedTheRowCap = 4,
+
+    /// <summary>
+    /// The supplied custody class is not one a write receipt can produce, so it is not an observed
+    /// membership at all. <c>CustodyMembershipClassifier</c> answers only
+    /// <see cref="CustodyMembership.RetainedUnenforced"/> or <see cref="CustodyMembership.Floored"/>;
+    /// <see cref="CustodyMembership.ReadOnce"/> establishes no custody and can never be a proof's
+    /// class.
+    /// </summary>
+    [JsonStringEnumMemberName("retained_floor_is_not_receipt_derived")]
+    RetainedFloorIsNotReceiptDerived = 5,
 }
 
 /// <summary>
@@ -101,7 +112,8 @@ public sealed class AbsenceFamilyEnumerationProof
         SourceArtifactRef interpretationProfileRef,
         SourceArtifactRef sourceProfileRef,
         long deliveredRowCount,
-        string canonicalKeyDigest)
+        string canonicalKeyDigest,
+        CustodyMembership retainedFloor)
     {
         FamilyKey = familyKey;
         AcquisitionRunRef = acquisitionRunRef;
@@ -109,6 +121,7 @@ public sealed class AbsenceFamilyEnumerationProof
         SourceProfileRef = sourceProfileRef;
         DeliveredRowCount = deliveredRowCount;
         CanonicalKeyDigest = canonicalKeyDigest;
+        RetainedFloor = retainedFloor;
     }
 
     /// <summary>The family whose enumeration this proves. The delivery's partition member key.</summary>
@@ -139,17 +152,53 @@ public sealed class AbsenceFamilyEnumerationProof
     public string CanonicalKeyDigest { get; }
 
     /// <summary>
+    /// The custody class of the run that produced this proof: the weakest membership over every
+    /// artifact the delivery names, carried through from
+    /// <c>RepeatedEnumerationDeliveryReceipt.RetainedFloor</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// RULING lex-event-20260904T215906714Z-6dadaf27829d4a3aa3c355063754ccd6. Decision 71 ruling two,
+    /// applied verbatim: the session says WHICH of the three a member is, and a run whose members
+    /// are retained unenforced SAYS SO rather than saying durable. So a proof exists for such a run
+    /// and states its own class, instead of the run being refused before it can prove anything.
+    /// </para>
+    /// <para>
+    /// A required input of the one door, never a settable property. The alternative, a proof that
+    /// carries no class and a caller who checks the receipt separately, is the declared-value shape
+    /// this whole type exists to remove: the two could be paired wrongly, and the pairing is exactly
+    /// what a release must not get wrong. <see cref="AbsenceCut.TryCreateComplete"/> reads this and
+    /// admits only <see cref="CustodyMembership.Floored"/>, which is where durability is required
+    /// and the only place it is.
+    /// </para>
+    /// </remarks>
+    public CustodyMembership RetainedFloor { get; }
+
+    /// <summary>
     /// The only path that mints a family enumeration proof. Returns null with a typed refusal,
     /// because a delivery that does not demonstrate a whole enumeration is a reviewable input
     /// rather than a programming error.
     /// </summary>
+    /// <param name="retainedFloor">
+    /// The custody class of the run behind <paramref name="delivery"/>. Required, and stamped onto
+    /// the proof: see <see cref="RetainedFloor"/>. A value outside the two a write receipt can
+    /// produce is refused rather than recorded, because a proof carrying a class no receipt could
+    /// have derived is a claim about custody that nothing observed.
+    /// </param>
     public static AbsenceFamilyEnumerationProof? TryCreate(
         string familyKey,
         EnumerationDeliveryComparison delivery,
+        CustodyMembership retainedFloor,
         out AbsenceFamilyEnumerationProofRefusal refusal)
     {
         ArgumentNullException.ThrowIfNull(familyKey);
         ArgumentNullException.ThrowIfNull(delivery);
+
+        if (retainedFloor is not (CustodyMembership.RetainedUnenforced or CustodyMembership.Floored))
+        {
+            refusal = AbsenceFamilyEnumerationProofRefusal.RetainedFloorIsNotReceiptDerived;
+            return null;
+        }
 
         if (!AbsenceValidation.IsIdentifier(familyKey))
         {
@@ -182,6 +231,7 @@ public sealed class AbsenceFamilyEnumerationProof
             delivery.InterpretationProfileRef,
             delivery.SourceProfileRef,
             delivery.DeliveredRowCountA,
-            delivery.CanonicalKeyDigestA);
+            delivery.CanonicalKeyDigestA,
+            retainedFloor);
     }
 }

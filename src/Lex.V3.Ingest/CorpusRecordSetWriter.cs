@@ -267,8 +267,20 @@ public static class CorpusRecordBuilder
 /// <summary>Why <see cref="CorpusRecordSetWriter.WriteAsync"/> refused to complete a run. Closed at one.</summary>
 public enum CorpusRecordSetWriteRefusalKind
 {
-    /// <summary>The set was written, but the store enforced no retention floor on it.</summary>
-    RecordSetNotHeld = 1,
+    /// <summary>
+    /// The record set could not be retained at all: the custody write failed, or the digest-checked
+    /// reopen handed back bytes that are not the ones the write receipt names.
+    /// </summary>
+    /// <remarks>
+    /// Was <c>RecordSetNotHeld</c>, and fired for exactly one condition: the store published no
+    /// retention enforcement. RULING lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c
+    /// removed that condition, because a record set held without an enforced floor is recorded with
+    /// the class it observed and the run continues. This member is RE-CONDITIONED rather than
+    /// removed: a genuine custody failure really can happen at this point, and it used to escape
+    /// <c>WriteAsync</c> as an exception instead of being stated. Still closed at one, and the one
+    /// now means something that can actually go wrong.
+    /// </remarks>
+    RecordSetNotRetained = 1,
 }
 
 public sealed record CorpusRecordSetWriteRefusal(CorpusRecordSetWriteRefusalKind Kind, string Detail);
@@ -280,13 +292,27 @@ public sealed class CorpusRecordSetWriteResult
         SourceArtifactRef? setRef,
         VerifiedCorpusRecordSet? verifiedSet,
         CorpusRecordSetCompletion? completion,
-        CorpusRecordSetWriteRefusal? refusal)
+        CorpusRecordSetWriteRefusal? refusal,
+        CustodyMembership? retainedFloor)
     {
         SetRef = setRef;
         VerifiedSet = verifiedSet;
         Completion = completion;
         Refusal = refusal;
+        RetainedFloor = retainedFloor;
     }
+
+    /// <summary>
+    /// The custody class the store actually published for this run's record-set write, derived by
+    /// <see cref="CustodyMembershipClassifier"/>. Null on a refusal, where no set was retained.
+    /// </summary>
+    /// <remarks>
+    /// RULING lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c: a run whose members are
+    /// retained unenforced SAYS SO rather than saying durable. Before that ruling this could only
+    /// ever have been <see cref="CustodyMembership.Floored"/>, because anything weaker refused, so
+    /// there was nothing to carry.
+    /// </remarks>
+    public CustodyMembership? RetainedFloor { get; }
 
     /// <summary>The reopened set's own artifact reference, for a written result only.</summary>
     public SourceArtifactRef? SetRef { get; }
@@ -305,18 +331,28 @@ public sealed class CorpusRecordSetWriteResult
     public static CorpusRecordSetWriteResult Written(
         SourceArtifactRef setRef,
         VerifiedCorpusRecordSet verifiedSet,
-        CorpusRecordSetCompletion completion)
+        CorpusRecordSetCompletion completion,
+        CustodyMembership retainedFloor)
     {
         ArgumentNullException.ThrowIfNull(setRef);
         ArgumentNullException.ThrowIfNull(verifiedSet);
         ArgumentNullException.ThrowIfNull(completion);
-        return new CorpusRecordSetWriteResult(setRef, verifiedSet, completion, null);
+        if (retainedFloor is not (CustodyMembership.RetainedUnenforced or CustodyMembership.Floored))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(retainedFloor),
+                retainedFloor,
+                "A written set carries the class its own write receipt derived, and a receipt " +
+                "derives only RetainedUnenforced or Floored.");
+        }
+
+        return new CorpusRecordSetWriteResult(setRef, verifiedSet, completion, null, retainedFloor);
     }
 
     public static CorpusRecordSetWriteResult Refused(CorpusRecordSetWriteRefusal refusal)
     {
         ArgumentNullException.ThrowIfNull(refusal);
-        return new CorpusRecordSetWriteResult(null, null, null, refusal);
+        return new CorpusRecordSetWriteResult(null, null, null, refusal, null);
     }
 }
 
@@ -354,25 +390,42 @@ public sealed class CorpusRecordSetWriter
         var setCanonicalSha256 = CorpusRecordSetCanonicalWriter.Write(buffer, set);
         var setBytes = buffer.ToArray();
 
-        var writeReceipt = await _custodyStore.CreateAsync(
-                setBytes, CustodyClass.NightlyFloor90d, cancellationToken)
+        // RULING lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c: the set's observed
+        // membership is recorded on the result this writer produces, and the run completes. It used
+        // to refuse whenever the store published no enforcement, which discarded a record set that
+        // had been written correctly and, because this is the run's last step, cost the whole run
+        // its corpus records. The class is derived by the one classifier and carried out on
+        // CorpusRecordSetWriteResult.RetainedFloor; it is never asserted by a caller.
+        //
+        // What still refuses is a GENUINE custody failure, decided by CustodyHold, the one place
+        // that says what held means for both publishers' acquisition paths. RULING
+        // lex-event-20260904T222140534Z-4141e26bfe9d4ce18649118d06c4dbd7 routes this writer through it
+        // rather than repeating the definition here.
+        var (writeReceipt, holdFailure) = await CustodyHold
+            .TryHoldAsync(_custodyStore, setBytes, cancellationToken)
             .ConfigureAwait(false);
-        if (CustodyMembershipClassifier.Classify(writeReceipt) != CustodyMembership.Floored)
+        if (writeReceipt is null)
         {
             return CorpusRecordSetWriteResult.Refused(
                 new CorpusRecordSetWriteRefusal(
-                    CorpusRecordSetWriteRefusalKind.RecordSetNotHeld,
-                    "The corpus record set was written but the store enforced no retention floor " +
-                    "on it."));
+                    CorpusRecordSetWriteRefusalKind.RecordSetNotRetained,
+                    // Never null here: CustodyHold.TryHoldAsync documents its pair as never both
+                    // and never neither, so no receipt means a failure string. Not defended with a
+                    // fallback message, which would be an answer to a case that door rules out.
+                    holdFailure!));
         }
 
+        // Read for the BYTES the verification below parses. The hold already proved the store can
+        // reproduce them at this digest; this call is how they are obtained, not a second proof.
         var reopenedBytes = await CustodyRestore.ReadByDigestCheckedAsync(
                 _custodyStore, writeReceipt.Reference.ContentSha256, cancellationToken)
             .ConfigureAwait(false);
+
         var setArtifactRef = new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", setCanonicalSha256);
         var verifiedSet = VerifiedCorpusRecordSet.ParseAndVerify(setArtifactRef, reopenedBytes.Span);
 
-        return CorpusRecordSetWriteResult.Written(setArtifactRef, verifiedSet, completion);
+        return CorpusRecordSetWriteResult.Written(
+            setArtifactRef, verifiedSet, completion, CustodyMembershipClassifier.Classify(writeReceipt));
     }
 
     private static CorpusRecordSetCompletion BuildCompletion(

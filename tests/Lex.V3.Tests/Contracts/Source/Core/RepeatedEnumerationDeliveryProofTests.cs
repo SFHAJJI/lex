@@ -218,13 +218,44 @@ public sealed class RepeatedEnumerationDeliveryProofTests
     public void FactoryRejectsEveryMismatchedRetainedReference(RefMutation mutation) =>
         Assert.ThrowsExactly<ArgumentException>(() => new Fixture(mutation: mutation).Create("a,b", "a,b"));
 
+    /// <summary>
+    /// An UNENFORCED custody receipt binds. The delivery is admitted and the run's own class is what
+    /// records the difference, rather than the tuple bind refusing the evidence outright.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// RULING lex-event-20260904T230719370Z-54cc701601f1430187d4f172437a84b0. This mutation used to sit in
+    /// the DataRows above, asserting a throw. Two conditions stood here, VerificationProfile ==
+    /// ImmutableObject1 and Protection == LockedTime, and they were ONE gate rather than two:
+    /// CustodyPolicyEvidence admits ImmutableObject1 only with a policy key and only for
+    /// (NightlyFloor90d, LockedTime) or (LegalHoldEvidence, ActiveLegalHold), while
+    /// FileSystemUnenforced1 requires NotEnforced. So no receipt could carry ImmutableObject1 with
+    /// NotEnforced, and relaxing the protection half alone would have admitted nothing at all.
+    /// </para>
+    /// <para>
+    /// The two neighbouring arms stay red and are what stops this from being a hole:
+    /// <see cref="HttpBindingMutation.CustodyReference"/> is a receipt from another custody class and
+    /// still throws, and <see cref="HttpBindingMutation.CustodyReceiptDigest"/> is a receipt that
+    /// does not match the hop's own claim and still throws. Class and identity are guarded; only the
+    /// published protection stopped being a gate.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void AnUnenforcedCustodyReceiptBindsRatherThanRefusingTheEvidence()
+    {
+        var delivery = new Fixture(httpBindingMutation: HttpBindingMutation.UnenforcedCustody)
+            .Create("a,b", "a,b");
+
+        Assert.IsNotNull(delivery);
+        Assert.AreEqual(EnumerationDeliveryOutcome.EqualSelections, delivery.Outcome);
+    }
+
     [TestMethod]
     [DataRow(HttpBindingMutation.TerminalLogicalRequestDigest)]
     [DataRow(HttpBindingMutation.TerminalRequestUri)]
     [DataRow(HttpBindingMutation.IncompleteRoute)]
     [DataRow(HttpBindingMutation.NonDerivableStatus200)]
     [DataRow(HttpBindingMutation.CustodyReference)]
-    [DataRow(HttpBindingMutation.UnenforcedCustody)]
     [DataRow(HttpBindingMutation.PayloadLength)]
     [DataRow(HttpBindingMutation.LogicalRequestMethod)]
     [DataRow(HttpBindingMutation.LogicalRequestBody)]

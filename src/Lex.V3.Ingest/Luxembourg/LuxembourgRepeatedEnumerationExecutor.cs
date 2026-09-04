@@ -434,8 +434,13 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
                 // executor hands the receipt comes from one map per kind, and Source/Core's own
                 // tuple check (RepeatedEnumerationDeliveryProof.cs, "The retained SPARQL evidence
                 // tuple does not bind") already refuses any observation whose body receipt is not
-                // ImmutableObject1 and LockedTime, so a body cannot reach the receipt carrying a
-                // membership that would refuse there. The three refusals are driven where they
+                // of custody class NightlyFloor90d, or whose receipt digest does not match the hop's
+                // own claim. It no longer refuses an unenforced receipt: RULING
+                // lex-event-20260904T230719370Z-54cc701601f1430187d4f172437a84b0 removed the
+                // ImmutableObject1-and-LockedTime pair from that check, because those two were one
+                // gate and an unenforced body is now HELD and says so.
+                //
+                // The three refusals are driven where they
                 // ARE reachable, on RepeatedEnumerationDeliveryReceipt.TryCreate itself, which
                 // is public and takes caller-stated membership. Carrying the value costs one
                 // string and stops "unreachable today" being written down as "unreachable".

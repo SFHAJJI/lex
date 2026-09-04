@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Text;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Source.Absence;
@@ -9,6 +9,8 @@ using Lex.V3.Contracts.Source.Http;
 using Lex.V3.Contracts.Source.Scope;
 using Lex.V3.Ingest.Europe;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+using Lex.V3.Contracts.Custody;
 
 namespace Lex.V3.Ingest.Tests;
 
@@ -216,7 +218,7 @@ public sealed class EuQueryExecutionAdapterTests
     /// <see cref="EuQueryExecutionAdapter.RunAsync"/>.
     /// </remarks>
     [TestMethod]
-    public async Task ASuccessfulDocumentFetchWhoseBodyCustodyWriteIsUnenforcedRefusesTheWholeRunRatherThanHoldingIt()
+    public async Task ASuccessfulDocumentFetchWhoseBodyCustodyWriteIsUnenforcedIsHeldAndSaysSo()
     {
         var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
         var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)
@@ -254,10 +256,144 @@ public sealed class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             CancellationToken.None);
 
-        Assert.IsNull(outcomes, "an unenforced document body must refuse, not deliver silently.");
+        // RULING lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c. This used to refuse the
+        // WHOLE RUN over one row's body, discarding a body the office had already served and this
+        // run had already written. The body is Held, and the record says under which guarantee.
+        Assert.IsNull(refusal, $"code={refusal?.Code} detail={refusal?.Detail}");
+        Assert.IsNotNull(outcomes);
+        var outcome = outcomes!.Values.Single();
+        Assert.IsNotNull(outcome.Receipt, "an unenforced store held these bytes and said so.");
+        Assert.AreEqual(
+            CustodyMembership.RetainedUnenforced,
+            CorpusBodyRecord.Held(outcome.Receipt!).Floor,
+            "the record derives the weaker class from this very receipt rather than asserting one.");
+        _ = ladderResults;
+    }
+
+    /// <summary>
+    /// The dangerous direction, at the body gate: a body this run CANNOT retain at all still refuses,
+    /// and never reappears as a body held under a weaker class.
+    /// </summary>
+    /// <remarks>
+    /// RULING lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c draws exactly this line.
+    /// "We stored it under a weaker guarantee" and "we failed to store it" are different facts, and
+    /// the second must never quietly become the first. <c>CustodyHold.TryHoldAsync</c> is the one
+    /// place that decides which, for both publishers, and it returns no receipt at all on a failure
+    /// rather than a receipt with a softer label. The store here refuses the write outright.
+    /// </remarks>
+    [TestMethod]
+    public async Task ADocumentBodyTheStoreCannotRetainAtAllStillRefusesRatherThanHolding()
+    {
+        var (outcomes, _, refusal) = await RunOneAcceptedBodyFetchAsync(
+            store: new EuAcquisitionTestFixture.EuInMemoryCustodyStore(
+                failWriteDigest: (digest, occurrence) =>
+                    occurrence == 2 && string.Equals(digest, CanaryBodyDigest, StringComparison.Ordinal)));
+
+        Assert.IsNull(outcomes, "a body that cannot be retained must not come back as an outcome.");
         Assert.IsNotNull(refusal);
-        Assert.AreEqual(EuQueryExecutionRefusal.DocumentBodyNotHeld, refusal!.Code);
-        StringAssert.Contains(refusal.Detail, "no retention floor");
+        Assert.AreEqual(EuQueryExecutionRefusal.DocumentBodyNotRetained, refusal!.Code);
+        StringAssert.Contains(refusal.Detail, "the custody write failed");
+    }
+
+    /// <summary>
+    /// A held record for a body NO CONSUMER CAN FIND BY DIGEST is the user finding no text, and the
+    /// per-hold reopen is what stops it becoming one.
+    /// </summary>
+    /// <remarks>
+    /// RULING lex-event-20260904T223559409Z-940e6f5dd5f540598920f6bf7849da47. The store here writes the
+    /// object and returns a real receipt, so <c>CreateAsync</c>'s own obligation is satisfied: its
+    /// readback goes through <c>ReadAsync(reference)</c>, one class-qualified path at the path the
+    /// write just used. What fails is the lookup BY CONTENT ADDRESS ALONE through
+    /// <c>CustodyRestore.ReadByDigestCheckedAsync</c>, which is the reader every downstream
+    /// consumer uses. The two readbacks prove different properties, which is why the write
+    /// obligation does not subsume the reopen and why the reopen stays. Remove it and this test is
+    /// the one that goes red.
+    /// </remarks>
+    [TestMethod]
+    public async Task ADocumentBodyNoConsumerCouldFindByDigestRefusesRatherThanHolding()
+    {
+        var (outcomes, _, refusal) = await RunOneAcceptedBodyFetchAsync(
+            store: new EuAcquisitionTestFixture.EuInMemoryCustodyStore(
+                loseBytesAfterWriteDigest: (digest, occurrence) =>
+                    occurrence == 2 && string.Equals(digest, CanaryBodyDigest, StringComparison.Ordinal)));
+
+        Assert.IsNull(outcomes, "a body nothing can resolve by digest must not be recorded as held.");
+        Assert.IsNotNull(refusal);
+        Assert.AreEqual(EuQueryExecutionRefusal.DocumentBodyNotRetained, refusal!.Code);
+        StringAssert.Contains(refusal.Detail, "could not reproduce those exact");
+    }
+
+    /// <summary>
+    /// The other half of the same line: the store cannot reproduce the bytes it just wrote. Under
+    /// <see cref="Lex.V3.Contracts.Custody.ICustodyStore.CreateAsync"/>'s own stated obligation that
+    /// is raised as <see cref="Lex.V3.Contracts.Custody.CustodyIntegrityException"/> from the write
+    /// itself, because a receipt exists only after the store has read the bytes back. So this is
+    /// caught where the write is caught, which is why <c>CustodyHold</c> no longer reopens.
+    /// </summary>
+    [TestMethod]
+    public async Task ADocumentBodyTheStoreCannotReproduceStillRefusesRatherThanHolding()
+    {
+        var (outcomes, _, refusal) = await RunOneAcceptedBodyFetchAsync(
+            store: new EuAcquisitionTestFixture.EuInMemoryCustodyStore(
+                raiseIntegrityOnWriteDigest: (digest, occurrence) =>
+                    occurrence == 2 && string.Equals(digest, CanaryBodyDigest, StringComparison.Ordinal)));
+
+        Assert.IsNull(outcomes);
+        Assert.IsNotNull(refusal);
+        Assert.AreEqual(EuQueryExecutionRefusal.DocumentBodyNotRetained, refusal!.Code);
+        StringAssert.Contains(refusal.Detail, "the custody write failed");
+        StringAssert.Contains(refusal.Detail, "CustodyIntegrityException");
+    }
+
+    /// <summary>
+    /// The real GDPR xhtml canary body's own digest, which
+    /// <see cref="EuAcquisitionTestFixture.ClassifyingHandler"/>'s default document-fetch response
+    /// actually serves. Observed live on 2026-09-04 and again on 2026-09-05 at 806,864 bytes.
+    /// </summary>
+    private const string CanaryBodyDigest =
+        "962539af03738bf552319ff4ce42d69e5f95a576307c4dfed7bf87e81b646b9d";
+
+    /// <summary>
+    /// One accepted-body document fetch through the real
+    /// <see cref="EuQueryExecutionAdapter.RunDocumentAcquisitionAsync"/>, against whichever store the
+    /// caller wants to script. Extracted so the three custody outcomes at this gate (held unenforced,
+    /// write refused, bytes irreproducible) are the same scenario differing only in the store.
+    /// </summary>
+    private static async Task<(
+        IReadOnlyDictionary<int, CorpusAcquisitionOutcome>? Outcomes,
+        IReadOnlyDictionary<int, EuDocumentLadderResult>? LadderResults,
+        EuQueryExecutionRefusalDetail? Refusal)>
+        RunOneAcceptedBodyFetchAsync(EuAcquisitionTestFixture.EuInMemoryCustodyStore store)
+    {
+        var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
+        var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)
+            ?? throw new AssertFailedException("Appendix A's own seed root failed to canonicalize.");
+
+        var scopeProfile = EuScopeProfile.BuildBinding();
+        var (input, address) = BuildAcceptedBodyReductionInput(rootIri, scopeProfile);
+        var manifest = ScopeReducer.Reduce(
+            scopeProfile,
+            [CompleteEnumerationRef],
+            [input.ObjectRef],
+            [input],
+            new PermissiveEvidenceResolver(CompleteEnumerationRef)).Manifest;
+        var mintedAddressesByObjectRef = new Dictionary<SourceObjectRef, IReadOnlyList<EuDocumentFetchAddress>>
+        {
+            [input.ObjectRef] = new[] { address },
+        };
+
+        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(
+            new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal));
+        var executor = new EuRepeatedEnumerationExecutor(
+            store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
+        var adapter = new EuQueryExecutionAdapter(store, executor);
+
+        return await adapter.RunDocumentAcquisitionAsync(
+            manifest,
+            mintedAddressesByObjectRef,
+            EuAcquisitionTestFixture.BuildRendererSource(801),
+            EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
+            CancellationToken.None);
     }
 
     /// <summary>
@@ -690,9 +826,9 @@ public sealed class EuQueryExecutionAdapterTests
     /// <summary>
     /// D1-06c-EU defect nine's own fold-in five: no existing test forced
     /// <see cref="CorpusRecordSetWriter.WriteAsync"/>'s own floor check to fail through the adapter, so
-    /// <see cref="EuQueryExecutionRefusal.RecordSetNotHeld"/> was never actually driven end to end
+    /// <see cref="EuQueryExecutionRefusal.RecordSetNotRetained"/> was never actually driven end to end
     /// (<see cref="CorpusRecordSetWriterTests.WriteAsyncRefusesWhenTheStoreEnforcesNoFloor"/> already
-    /// drives the writer's own <see cref="CorpusRecordSetWriteRefusalKind.RecordSetNotHeld"/> in
+    /// drives the writer's own <see cref="CorpusRecordSetWriteRefusalKind.RecordSetNotRetained"/> in
     /// isolation; this drives the adapter's own translation of that into its own refusal code).
     /// </summary>
     /// <remarks>
@@ -709,7 +845,7 @@ public sealed class EuQueryExecutionAdapterTests
     /// total turns out to be.
     /// </remarks>
     [TestMethod]
-    public async Task ARecordSetWriteWhoseFloorIsUnenforcedRefusesTheWholeRunAsRecordSetNotHeld()
+    public async Task ARecordSetWriteWhoseFloorIsUnenforcedStillDeliversAndRecordsTheWeakerClass()
     {
         var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
         var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)
@@ -804,9 +940,102 @@ public sealed class EuQueryExecutionAdapterTests
         var result = await RunOnceAsync(
             new EuAcquisitionTestFixture.EuInMemoryCustodyStore(unenforceCallOrdinal: totalCustodyWrites));
 
-        Assert.IsNotNull(result.Refusal, "an unenforced record-set write must refuse the whole run, not deliver silently.");
-        Assert.AreEqual(EuQueryExecutionRefusal.RecordSetNotHeld, result.Refusal!.Code);
-        StringAssert.Contains(result.Refusal.Detail, "no retention floor");
+        // RULING lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c. This used to refuse the
+        // whole run at its literal last step, so a store publishing no enforcement threw away every
+        // record the run had just built. The set is written and the class is recorded.
+        Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+        Assert.IsNotNull(result.CorpusRecordSet);
+        Assert.IsNotNull(result.CorpusRecordSetRef);
+
+        // GATE TWO, the scope manifest's own custody write, targeted BY ITS OWN DIGEST. Pass one
+        // above ran fully enforcing, so it hands back the exact manifest this scenario writes; that
+        // digest is then the one write unenforced here. Discovered rather than guessed, for the same
+        // reason the ordinal above is discovered: a hardcoded digest would rot the moment the
+        // manifest's canonical bytes changed for any unrelated reason.
+        //
+        // This test exists because the mutation that restores gate two's floor check SURVIVED the
+        // first sweep. Unenforcing a session artifact does not reach it and unenforcing the last
+        // write is the record set's, so nothing drove the manifest write specifically and its
+        // record-and-continue behaviour was asserted nowhere.
+        // Targeted by ORDINAL, discovered from pass one, because the manifest's own digest is not
+        // stable across runs: it embeds a fresh urn:uuid, so its bytes differ every time while its
+        // position in the write order does not. Discovering the ordinal by matching pass one's own
+        // manifest receipt against pass one's own write order keeps this a measurement rather than a
+        // guess, and the digest equality asserted below is what proves the right write was hit.
+        var manifestOrdinal = discoveryStore.WrittenDigestsInOrder
+            .Select(static (digest, index) => (Digest: digest, Ordinal: index + 1))
+            .Single(entry => string.Equals(
+                entry.Digest,
+                firstResult.ScopeManifestReceipt!.Reference.ContentSha256,
+                StringComparison.Ordinal))
+            .Ordinal;
+        Assert.AreNotEqual(
+            totalCustodyWrites,
+            manifestOrdinal,
+            "the manifest must not be the last write, or this would be the record set's gate again.");
+
+        var manifestUnenforced = await RunOnceAsync(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(unenforceCallOrdinal: manifestOrdinal));
+
+        Assert.IsNull(
+            manifestUnenforced.Refusal,
+            "an unenforced scope manifest was written correctly and must not be thrown away: " +
+            $"code={manifestUnenforced.Refusal?.Code} detail={manifestUnenforced.Refusal?.Detail}");
+        Assert.IsNotNull(manifestUnenforced.ScopeManifestReceipt);
+        Assert.AreEqual(
+            CustodyMembership.RetainedUnenforced,
+            CustodyMembershipClassifier.Classify(manifestUnenforced.ScopeManifestReceipt!),
+            "the manifest's observed class must be recorded on the receipt the run carries out.");
+        Assert.IsNotNull(manifestUnenforced.CorpusRecordSet);
+
+        // GATE ONE, the executor's own bootstrap floor, driven through a real RunAsync. The FIRST
+        // custody write a run makes is a session bootstrap artifact, before any product request, and
+        // that is exactly the membership the executor used to refuse on: RULING
+        // lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c. Unenforcing it used to end
+        // the whole run at productRequestCount 0, so none of the later gates was even reachable.
+        //
+        // Only that one write is unenforced, deliberately. Unenforcing EVERY write changes the bytes
+        // of every retained delivery artifact, so the evidence refs this run binds against stop
+        // resolving and the run refuses for an unrelated fixture reason ("the retained SPARQL
+        // evidence tuple does not bind"). That is a property of the scripted resolver, not of the
+        // gates, and the store-wide condition is what the live canary on FileSystemCustodyStore
+        // exercises instead.
+        var everythingUnenforced = await RunOnceAsync(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(unenforceCallOrdinal: 1));
+
+        Assert.IsNull(
+            everythingUnenforced.Refusal,
+            "a store that enforces nothing must still deliver: " +
+            $"code={everythingUnenforced.Refusal?.Code} detail={everythingUnenforced.Refusal?.Detail} " +
+            "outcomes=[" + string.Join("; ", everythingUnenforced.FamilyOutcomes.Select(
+                o => $"{o.Kind}/{o.ExecutorRefusal?.Code}/{o.ExecutorRefusal?.CoreRefusalDetail}/{o.ProofRefusal}")) + "]");
+        Assert.AreEqual(EuQueryExecutionCompletion.AllFamiliesProven, everythingUnenforced.Completion);
+        Assert.IsNotNull(everythingUnenforced.CorpusRecordSet);
+        Assert.IsNotNull(everythingUnenforced.ScopeManifestReceipt);
+
+        // Every family proves, and each outcome RECORDS a class rather than leaving one unstated.
+        Assert.IsTrue(everythingUnenforced.FamilyOutcomes.Count > 0);
+        foreach (var outcome in everythingUnenforced.FamilyOutcomes)
+        {
+            Assert.AreEqual(
+                EuFamilyEnumerationOutcomeKind.Proven,
+                outcome.Kind,
+                $"family {outcome.FamilyKey} did not prove: {outcome.ExecutorRefusal?.Code} {outcome.ProofRefusal}");
+            Assert.IsNotNull(
+                outcome.RetainedFloor,
+                "a proven family must say which of the three its run was.");
+        }
+
+        // Floored, and that is the honest answer here rather than a weakness in the test: the one
+        // unenforced write is a SESSION BOOTSTRAP artifact, and a delivery receipt's floor is taken
+        // over the artifacts that delivery itself names. What this test proves is that the executor
+        // no longer refuses the run over that artifact. That an unenforced DELIVERY member lowers
+        // the proof's own class is held one layer down, where it is directly observable, by
+        // RepeatedEnumerationDeliveryReceiptTests
+        // .TheReceiptNamesEveryUnenforcedDigestAndStillMintsAProofCarryingThatClass.
+        Assert.AreEqual(
+            CustodyMembership.Floored,
+            everythingUnenforced.FamilyOutcomes[0].RetainedFloor);
         // No assertion on DocumentAcquisitionOutcomesByOrdinal here on purpose. A refused result
         // passes null for it unconditionally, so asserting null on this path cannot fail and would
         // be evidence of nothing (REVIEW_RESULT lex-event-20260904T165317709Z-8282f67ac5234a68a5fa108a76840dfe

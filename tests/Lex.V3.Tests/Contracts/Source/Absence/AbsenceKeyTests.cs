@@ -349,10 +349,11 @@ public sealed class AbsenceKeyTests
                 + "observations_empty, duplicate_observation_id, duplicate_family_key, "
                 + "observed_key_invalid, duplicate_observed_key, "
                 + "duplicate_enumeration_proof_family, enumeration_proof_family_not_observed, "
-                + "family_enumeration_proof_missing, enumeration_proofs_span_more_than_one_run",
+                + "family_enumeration_proof_missing, enumeration_proofs_span_more_than_one_run, "
+                + "enumeration_proof_not_floored",
                 "AbsenceFamilyEnumerationProofRefusal: none, family_key_invalid, "
                 + "partition_is_not_this_family, passes_delivered_different_selections, "
-                + "selection_reached_the_row_cap",
+                + "selection_reached_the_row_cap, retained_floor_is_not_receipt_derived",
                 "AbsenceFamilyObservationRefusal: none, observation_id_invalid, family_key_invalid, "
                 + "timestamp_not_utc, precision_undefined, "
                 + "timestamp_finer_than_declared_precision, clock_source_invalid, "

@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Facts;
 using Lex.V3.Contracts.Source.Core;

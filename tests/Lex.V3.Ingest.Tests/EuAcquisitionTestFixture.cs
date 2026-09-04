@@ -734,11 +734,39 @@ internal static class EuAcquisitionTestFixture
     /// of a real canonical serialization -- exactly what forcing the corpus/6 record set's own write
     /// (never the scope manifest's) to fail its floor needs.
     /// </param>
+    /// <param name="failWriteDigest">
+    /// A GENUINE custody failure, which is a different fact from an unenforced one: when supplied, a
+    /// write whose (digest, occurrence) matches this predicate throws
+    /// <see cref="Lex.V3.Contracts.Custody.CustodyRequiredException"/> instead of returning a
+    /// receipt. This is what the inverse mutations for the custody gates drive: a forced failure must
+    /// never come back as Held or Written under a weaker class.
+    /// </param>
+    /// <param name="loseBytesAfterWriteDigest">
+    /// The failure the per-hold REOPEN exists to catch, which the write obligation does not
+    /// subsume: the write succeeds and returns a real receipt, but the object cannot afterwards be
+    /// found by its content address alone. CreateAsync's own readback goes through
+    /// ReadAsync(reference), one class-qualified path; CustodyHold reopens through
+    /// CustodyRestore.ReadByDigestCheckedAsync, which is the reader every downstream consumer uses
+    /// and which looks the object up across every CustodyClass by digest. When supplied, a matching
+    /// (digest, occurrence) writes the receipt and drops the bytes.
+    /// </param>
+    /// <param name="raiseIntegrityOnWriteDigest">
+    /// The other genuine failure, modelled the way ICustodyStore.CreateAsync requires: a receipt
+    /// exists only after the store has read the bytes back and observed their protection, and a
+    /// mismatch raises CustodyIntegrityException. So a store that cannot reproduce what it just
+    /// wrote fails INSIDE the write rather than at some later reopen. When supplied, a matching
+    /// (digest, occurrence) raises that exception instead of returning a receipt.
+    /// </param>
     internal sealed class EuInMemoryCustodyStore(
-        Func<string, bool>? unenforceDigest = null, int? unenforceCallOrdinal = null)
+        Func<string, bool>? unenforceDigest = null,
+        int? unenforceCallOrdinal = null,
+        Func<string, int, bool>? failWriteDigest = null,
+        Func<string, int, bool>? raiseIntegrityOnWriteDigest = null,
+        Func<string, int, bool>? loseBytesAfterWriteDigest = null)
         : Lex.V3.Contracts.Custody.ICustodyStore
     {
         private readonly Dictionary<string, byte[]> _byDigest = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, int> _writesPerDigest = new(StringComparer.Ordinal);
         private int _createCallCount;
 
         /// <summary>
@@ -749,6 +777,16 @@ internal static class EuAcquisitionTestFixture
         /// </summary>
         internal int CreateCallCount => _createCallCount;
 
+        /// <summary>
+        /// The content digest of every write this store answered, in real call order. A two-pass test
+        /// uses it to discover WHICH ordinal a particular artifact's write is, when that artifact's
+        /// own digest is not stable across runs: the scope manifest embeds a fresh urn:uuid per run,
+        /// so its bytes differ every time while its position in the write order does not.
+        /// </summary>
+        internal IReadOnlyList<string> WrittenDigestsInOrder => _writtenDigestsInOrder;
+
+        private readonly List<string> _writtenDigestsInOrder = [];
+
         public Task<Lex.V3.Contracts.Custody.DurableBlobWriteReceipt> CreateAsync(
             ReadOnlyMemory<byte> bytes,
             Lex.V3.Contracts.Custody.CustodyClass custodyClass,
@@ -757,7 +795,39 @@ internal static class EuAcquisitionTestFixture
             var callOrdinal = ++_createCallCount;
             var frozen = bytes.ToArray();
             var digest = Lex.V3.Contracts.Custody.CustodyDigest.Of(frozen);
-            _byDigest[digest] = frozen;
+            // Which write OF THIS DIGEST this is, 1-indexed. A body is written twice in a real run:
+            // the routed acquisition session retains the fetched bytes, and the adapter then holds
+            // them again through CustodyHold. Targeting a digest alone would always hit the session's
+            // write and refuse the fetch instead of the hold, which is a different gate.
+            _writtenDigestsInOrder.Add(digest);
+            _writesPerDigest.TryGetValue(digest, out var priorWrites);
+            var occurrence = priorWrites + 1;
+            _writesPerDigest[digest] = occurrence;
+
+            if (failWriteDigest?.Invoke(digest, occurrence) == true)
+            {
+                throw new Lex.V3.Contracts.Custody.CustodyRequiredException(
+                    "the scripted store refused to write this object.");
+            }
+
+            if (raiseIntegrityOnWriteDigest?.Invoke(digest, occurrence) == true)
+            {
+                throw new Lex.V3.Contracts.Custody.CustodyIntegrityException(
+                    "the scripted store read back bytes that are not the ones this digest names.");
+            }
+
+            // A store that wrote the object under its class and cannot answer for it BY DIGEST
+            // ALONE. This is not the write obligation failing; the write succeeded and the receipt
+            // is real. It is the second property CustodyHold's own reopen proves, and the one every
+            // downstream consumer depends on.
+            if (loseBytesAfterWriteDigest?.Invoke(digest, occurrence) == true)
+            {
+                _byDigest.Remove(digest);
+            }
+            else
+            {
+                _byDigest[digest] = frozen;
+            }
             var reference = new Lex.V3.Contracts.Custody.DurableBlobRef(
                 Lex.V3.Contracts.Custody.CustodySchemaIds.DurableBlobRef, digest, frozen.LongLength, custodyClass);
             var observedAt = new DateTimeOffset(2026, 9, 4, 0, 0, 0, TimeSpan.Zero);

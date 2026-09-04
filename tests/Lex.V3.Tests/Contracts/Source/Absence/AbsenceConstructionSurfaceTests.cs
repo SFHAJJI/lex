@@ -29,6 +29,7 @@ public sealed class AbsenceConstructionSurfaceTests
 {
     private const string N = "Lex.V3.Contracts.Source.Absence.";
     private const string Core = "Lex.V3.Contracts.Source.Core.";
+    private const string Custody = "Lex.V3.Contracts.Custody.";
     private const string Lu = "Lex.V3.Contracts.Source.Luxembourg.";
 
     [TestMethod]
@@ -154,10 +155,12 @@ public sealed class AbsenceConstructionSurfaceTests
             {
                 "constructor private instance " + N + "AbsenceFamilyEnumerationProof::.ctor("
                 + "System.String, " + Core + "SourceArtifactRef, " + Core + "SourceArtifactRef, "
-                + Core + "SourceArtifactRef, System.Int64, System.String) -> "
+                + Core + "SourceArtifactRef, System.Int64, System.String, "
+                + Custody + "CustodyMembership) -> "
                 + N + "AbsenceFamilyEnumerationProof",
                 "method public static " + N + "AbsenceFamilyEnumerationProof::TryCreate("
-                + "System.String, " + Core + "EnumerationDeliveryComparison, out "
+                + "System.String, " + Core + "EnumerationDeliveryComparison, "
+                + Custody + "CustodyMembership, out "
                 + N + "AbsenceFamilyEnumerationProofRefusal&) -> "
                 + N + "AbsenceFamilyEnumerationProof?",
             },
@@ -178,13 +181,15 @@ public sealed class AbsenceConstructionSurfaceTests
                 // The publisher-neutral delivery receipt's bridge (queue item 19: moved and renamed
                 // from Lex.V3.Contracts.Source.Luxembourg.LuxembourgEnumerationDeliveryReceipt), and
                 // the second producer this pin was written to catch. It is admitted, not tolerated:
-                // it takes the family key and reads RepeatedEnumerationDeliveryReceipt
-                // .RequireFlooredRun, so it can only mint a proof from a comparison this
-                // repository's own verifying factory produced AND whose every custody member is
-                // floored. A producer that read the receipt's plain Delivery property instead would
-                // satisfy this pin's shape while dropping the durability half, so the pin is not the
-                // whole guard here; the LU-side test AGenuineDeliveryReceiptMintsACompleteAbsenceCut
-                // and its unfloored twin are.
+                // it takes the family key and reads the receipt's own verified Delivery, so it can
+                // only mint a proof from a comparison this repository's own verifying factory
+                // produced. Under RULING
+                // lex-event-20260904T215906714Z-6dadaf27829d4a3aa3c355063754ccd6 it also STAMPS the run's
+                // custody class onto the proof, which is why the door below carries a
+                // CustodyMembership. It used to read a RequireFlooredRun accessor that threw, so no
+                // proof existed at all for an unfloored run; durability is now required at the
+                // release instead, and AbsenceCutTests
+                // .ACompleteCutRefusesAProofHeldWithoutAnEnforcedFloor is that guard.
                 "method public instance " + Core + "RepeatedEnumerationDeliveryReceipt"
                 + "::TryProveFamilyEnumeration(System.String, out "
                 + N + "AbsenceFamilyEnumerationProofRefusal&) -> "
@@ -239,17 +244,18 @@ public sealed class AbsenceConstructionSurfaceTests
         CollectionAssert.AreEqual(
             new[]
             {
-                // All three are the publisher-neutral delivery receipt (queue item 19: moved and
+                // Both are the publisher-neutral delivery receipt (queue item 19: moved and
                 // renamed from Lex.V3.Contracts.Source.Luxembourg.LuxembourgEnumerationDeliveryReceipt)
                 // holding the comparison it was minted from. None of them is a second way to OBTAIN
                 // one: the receipt's only door takes a comparison as a parameter, so nothing here
                 // can exist without EnumerationDeliveryComparison.Create having already run above.
-                // Delivery hands it back asserting nothing, RequireFlooredRun hands the same object
-                // back only when every custody member is floored.
+                // Delivery hands it back asserting nothing. There were three: a RequireFlooredRun
+                // accessor handed the same object back only when every custody member was floored,
+                // and RULING
+                // lex-event-20260904T215906714Z-6dadaf27829d4a3aa3c355063754ccd6 took its last caller
+                // away. It was removed rather than left unreferenced, so this pin is down to two.
                 "field private instance " + Core + "RepeatedEnumerationDeliveryReceipt"
                 + "::<Delivery>k__BackingField -> " + Core + "EnumerationDeliveryComparison",
-                "method public instance " + Core + "RepeatedEnumerationDeliveryReceipt"
-                + "::RequireFlooredRun() -> " + Core + "EnumerationDeliveryComparison",
                 "property public instance " + Core + "RepeatedEnumerationDeliveryReceipt"
                 + "::Delivery() -> " + Core + "EnumerationDeliveryComparison",
             },

@@ -1,4 +1,4 @@
-﻿using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Core;
 
 namespace Lex.V3.Contracts.Source.Europe;
 
@@ -8,8 +8,12 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// <remarks>
 /// <para>
 /// No member here drops a row silently: every family M row this door reads is either folded into
-/// one object's listing, or recorded on that one object's own observation as a type this closed
-/// vocabulary does not know, or is the exact row that produced one of these refusals.
+/// one object's listing, or is the exact row that produced one of these refusals, or named a type
+/// this closed vocabulary does not know. Of that last kind, the FIRST per Work is recorded on that
+/// object's own observation; a second unknown token on the same Work survives only in family M's
+/// own retained rows, which is where the observation's evidence reference points. The reason code
+/// is one bounded contract identifier and carries one token, so it names the one that moved rather
+/// than truncating a list.
 /// </para>
 /// <para>
 /// The line every member here sits on is DELIVERY INTEGRITY, not object count. Each one says the
@@ -408,15 +412,10 @@ public static class EuManifestationListingDecode
         }
 
         var listed = new HashSet<EuManifestationFormat>(listedFormats);
-        var candidates = LadderCandidatesOf(listed);
-        if (candidates.Count > 0)
+        var admitted = TryObserveLadder(listed, "listing_offers_wording_format", evidenceRef);
+        if (admitted is not null)
         {
-            return new EuFormatObservation(
-                candidates[0],
-                EuFormatBodyAdmission.BodyAdmitted,
-                "listing_offers_wording_format",
-                evidenceRef,
-                candidates);
+            return admitted;
         }
 
         if (listed.Count == 1 && listed.Contains(EuManifestationFormat.Print))
@@ -571,22 +570,18 @@ public static class EuManifestationListingDecode
 
         var reasonCode = UnadmittedTypeReasonCode + ":" + BoundTokenForReason(unadmittedToken);
         var known = new HashSet<EuManifestationFormat>(knownListedFormats);
-        var candidates = LadderCandidatesOf(known);
-        if (candidates.Count > 0)
+        var admitted = TryObserveLadder(known, reasonCode, evidenceRef);
+        if (admitted is not null)
         {
-            return new EuFormatObservation(
-                candidates[0], EuFormatBodyAdmission.BodyAdmitted, reasonCode, evidenceRef, candidates);
+            return admitted;
         }
 
-        var namedFormat = EuManifestationFormat.NoneAdmitted;
-        foreach (var candidate in known.OrderBy(static value => value))
-        {
-            if (candidate != EuManifestationFormat.Print)
-            {
-                namedFormat = candidate;
-                break;
-            }
-        }
+        // The floor: the lowest-ordinal known format that is not print, else NoneAdmitted. Print is
+        // stepped over rather than named because naming it would assert never_ingest.
+        var namedFormat = known
+            .Where(static candidate => candidate != EuManifestationFormat.Print)
+            .Order()
+            .FirstOrDefault(EuManifestationFormat.NoneAdmitted);
 
         return new EuFormatObservation(
             namedFormat, EuFormatBodyAdmission.BodyNotAdmitted, reasonCode, evidenceRef);
@@ -606,6 +601,23 @@ public static class EuManifestationListingDecode
     private static IReadOnlyList<EuManifestationFormat> LadderCandidatesOf(
         IReadOnlySet<EuManifestationFormat> listed) =>
         FormatLadder.Where(listed.Contains).ToArray();
+
+    /// <summary>
+    /// The admitted-listing observation both doors return when the known listed set names anything
+    /// on the ladder, or null when it names nothing. One expression of "the ladder decides the
+    /// format, the admission and the candidates", so the ordinary listing and the listing with an
+    /// unknown token beside it cannot drift apart in anything except their reason code, which is
+    /// the one thing that genuinely differs between them.
+    /// </summary>
+    private static EuFormatObservation? TryObserveLadder(
+        IReadOnlySet<EuManifestationFormat> listed, string reasonCode, SourceArtifactRef evidenceRef)
+    {
+        var candidates = LadderCandidatesOf(listed);
+        return candidates.Count == 0
+            ? null
+            : new EuFormatObservation(
+                candidates[0], EuFormatBodyAdmission.BodyAdmitted, reasonCode, evidenceRef, candidates);
+    }
 
     /// <summary>
     /// The offending token, reduced to something a bounded printable-ASCII contract identifier can
@@ -643,7 +655,10 @@ public static class EuManifestationListingDecode
     /// Derived, never chosen. <see cref="ContractValidation.RequireIdentifier"/> caps an identifier
     /// at <see cref="ContractValidation.MaximumIdentifierLength"/>, and
     /// <see cref="ObserveWithUnadmittedType"/> builds its reason as the prefix, a colon, then the
-    /// bounded token, so this is that cap minus what the prefix and colon already occupy. It was a
+    /// bounded token, so this is that cap minus what the prefix and colon already occupy. The
+    /// prefix measures ITSELF: this was a hand copied 25 in a second constant, which is the same
+    /// choose-rather-than-derive defect one level down, and renaming the prefix without editing
+    /// that number would have silently moved the budget off the contract. It was a
     /// bare 64 until REVIEW_RESULT lex-event-20260904T203812231Z-0e0dbd80d0e64f3e93e9a9c5f0b7b06f
     /// observed that raising it to 4096 broke nothing: a constant no test held and no contract
     /// explained. A wrong value cannot survive now, because
@@ -653,15 +668,8 @@ public static class EuManifestationListingDecode
     /// <see cref="EuFormatObservation"/>'s own constructor refuses it, smaller and the length falls
     /// short.
     /// </remarks>
-    private const int MaximumReasonTokenLength =
-        ContractValidation.MaximumIdentifierLength - UnadmittedTypeReasonCodeLength - 1;
-
-    /// <summary>
-    /// <see cref="UnadmittedTypeReasonCode"/>'s own length, as a constant so
-    /// <see cref="MaximumReasonTokenLength"/> is a compile-time expression rather than a number a
-    /// reader must trust. Held by <c>TheReasonCodeBoundIsDerivedFromTheIdentifierContract</c>.
-    /// </summary>
-    private const int UnadmittedTypeReasonCodeLength = 25;
+    private static readonly int MaximumReasonTokenLength =
+        ContractValidation.MaximumIdentifierLength - UnadmittedTypeReasonCode.Length - 1;
 
     /// <summary>
     /// The publisher tokens, and only those. <see cref="EuManifestationFormat.NoneAdmitted"/> is
