@@ -388,15 +388,19 @@ public sealed class EuCellarObjectSnapshotTests
         CollectionAssert.AreEqual(
             new[]
             {
+                // D1-05c-1's decode reads family P's own rows and either builds one
+                // EuPredicateObservation per closed CDM predicate or refuses; the door for this is a
+                // TryBuild* method (a genuine outcome, not a guaranteed value), so the observation
+                // reaches callers through its own `out` parameter rather than a bare return.
+                "by-ref-method private static " + N + "EuCellarObjectDecode::TryBuildPredicateObservation("
+                    + C + "EuCdmPredicate, System.Collections.Generic.IReadOnlyList<" + N
+                    + "EuCellarObjectDecode+ObjectFactRow>, Lex.V3.Contracts.Source.Core.SourceArtifactRef, "
+                    + "out " + N + "EuPredicateObservation&) -> System.Boolean",
                 "field private instance " + N + "EuCellarObjectSnapshot::<PredicateObservations>k__BackingField -> "
                     + "System.Collections.Generic.IReadOnlyList<" + N + "EuPredicateObservation>",
                 "field private instance " + N + "EuCellarObjectSnapshot::_predicateIndex -> "
                     + "System.Collections.Generic.IReadOnlyDictionary<" + C + "EuCdmPredicate, " + N
                     + "EuPredicateObservation>",
-                // D1-05b's decode builds one EuPredicateObservation per closed CDM predicate.
-                "method private static " + N + "EuCellarObjectDecode::BuildPredicateObservation(" + C
-                    + "EuCdmPredicate, System.String, Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> "
-                    + N + "EuPredicateObservation",
                 "method public instance " + N + "EuCellarObjectSnapshot::Predicate(" + C
                     + "EuCdmPredicate) -> " + N + "EuPredicateObservation",
                 "property public instance " + N + "EuCellarObjectSnapshot::PredicateObservations() -> "
@@ -429,16 +433,18 @@ public sealed class EuCellarObjectSnapshotTests
     public void EuRelationFamilyObservationAndEuCellarObjectDecodeAreTheOnlyRecognisedExternalProducersOfEuRelationEdgeObservation()
     {
         var assembly = typeof(EuCellarObjectSnapshot).Assembly;
+        // D1-05c-1 retires D1-05b's BuildConsolidatedBasedOnEdge (the OntologyAuthorizedInverse
+        // builder) along with its own pin here: EuCellarObjectDecode now constructs every edge from
+        // inside TryBuildRelationFamilyObservation's own loop body, and that method's SIGNATURE never
+        // names EuRelationEdgeObservation (only the family-observation type it hands out and the raw
+        // row list it reads) - a real reduction in this decode's own recognised producer surface for
+        // the edge type specifically, print-actual-then-transcribe, matching this file's own
+        // documented limitation that ConstructionSurface reads signatures only.
         CollectionAssert.AreEqual(
             new[]
             {
                 "field private instance " + N + "EuRelationFamilyObservation::<Edges>k__BackingField -> "
                     + "System.Collections.Generic.IReadOnlyList<" + N + "EuRelationEdgeObservation>",
-                // D1-05b's decode builds one edge per discovered consolidated state.
-                "method private static " + N
-                    + "EuCellarObjectDecode::BuildConsolidatedBasedOnEdge(System.String, "
-                    + "Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> " + N
-                    + "EuRelationEdgeObservation",
                 "property public instance " + N + "EuRelationFamilyObservation::Edges() -> "
                     + "System.Collections.Generic.IReadOnlyList<" + N + "EuRelationEdgeObservation>",
             },
@@ -474,17 +480,18 @@ public sealed class EuCellarObjectSnapshotTests
         CollectionAssert.AreEqual(
             new[]
             {
+                // D1-05c-1's decode reads family P's own rows and either builds one
+                // EuRelationFamilyObservation per read relation family or refuses.
+                "by-ref-method private static " + N
+                    + "EuCellarObjectDecode::TryBuildRelationFamilyObservation(" + C
+                    + "EuRelationFamily, System.Collections.Generic.IReadOnlyList<" + N
+                    + "EuCellarObjectDecode+ObjectFactRow>, Lex.V3.Contracts.Source.Core.SourceArtifactRef, "
+                    + "out " + N + "EuRelationFamilyObservation&) -> System.Boolean",
                 "field private instance " + N + "EuCellarObjectSnapshot::<RelationObservations>k__BackingField -> "
                     + "System.Collections.Generic.IReadOnlyList<" + N + "EuRelationFamilyObservation>",
                 "field private instance " + N + "EuCellarObjectSnapshot::_relationIndex -> "
                     + "System.Collections.Generic.IReadOnlyDictionary<" + C + "EuRelationFamily, " + N
                     + "EuRelationFamilyObservation>",
-                // D1-05b's decode builds one EuRelationFamilyObservation per read relation family.
-                "method private static " + N
-                    + "EuCellarObjectDecode::BuildRelationFamilyObservation(" + C
-                    + "EuRelationFamily, System.Collections.Generic.IReadOnlyList<" + N
-                    + "EuRelationEdgeObservation>, Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> "
-                    + N + "EuRelationFamilyObservation",
                 "method public instance " + N + "EuCellarObjectSnapshot::Relation(" + C
                     + "EuRelationFamily) -> " + N + "EuRelationFamilyObservation",
                 "property public instance " + N + "EuCellarObjectSnapshot::RelationObservations() -> "
@@ -556,13 +563,20 @@ public sealed class EuCellarObjectSnapshotTests
     }
 
     [TestMethod]
-    public void EuCellarObjectSnapshotIsTheOnlyRecognisedExternalProducerOfEuLanguageExpressionObservation()
+    public void EuCellarObjectSnapshotAndEuCellarObjectDecodeAreTheOnlyRecognisedExternalProducersOfEuLanguageExpressionObservation()
     {
         var assembly = typeof(EuCellarObjectSnapshot).Assembly;
         CollectionAssert.AreEqual(
             new[]
             {
                 "field private instance " + N + "EuCellarObjectSnapshot::<Language>k__BackingField -> " + N
+                    + "EuLanguageExpressionObservation",
+                // D1-05c-1's decode fills the language observation from family X's own rows (queue
+                // item 18's own line: "the language observation filled from X").
+                "method private static " + N + "EuCellarObjectDecode::BuildLanguageObservation("
+                    + "System.Collections.Generic.IReadOnlyList<" + N
+                    + "EuCellarObjectDecode+ExpressionFactRow>, "
+                    + "Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> " + N
                     + "EuLanguageExpressionObservation",
                 "property public instance " + N + "EuCellarObjectSnapshot::Language() -> " + N
                     + "EuLanguageExpressionObservation",
@@ -657,17 +671,28 @@ public sealed class EuCellarObjectSnapshotTests
     public void EuCellarObjectDecodeIsTheOnlyRecognisedExternalProducerOfEuCellarObjectSnapshot()
     {
         const string C = "Lex.V3.Contracts.";
+        const string RowList =
+            "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Core.RepeatedEnumerationRow>, "
+            + "Lex.V3.Contracts.Source.Core.RepeatedEnumerationInterpretationProfile, ";
         var assembly = typeof(EuCellarObjectSnapshot).Assembly;
         CollectionAssert.AreEqual(
             new[]
             {
-                "method public static " + N + "EuCellarObjectDecode::TryDecode(System.String, "
-                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Core."
-                    + "RepeatedEnumerationRow>, Lex.V3.Contracts.Source.Core."
-                    + "RepeatedEnumerationInterpretationProfile, " + C + "EuActForm, "
-                    + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, out " + N
-                    + "EuCellarObjectDecodeRefusal&, out " + N
+                // TryDecode's own per-object helper: a real, separate door, since it is the method
+                // that actually calls EuCellarObjectSnapshot.TryObserve.
+                "method private static " + N + "EuCellarObjectDecode::BuildOneObject(System.String, "
+                    + "System.Boolean, System.String, "
+                    + "System.Collections.Generic.IReadOnlyList<" + N + "EuCellarObjectDecode+ObjectFactRow>, "
+                    + "System.Collections.Generic.IReadOnlyList<" + N + "EuCellarObjectDecode+ExpressionFactRow>, "
+                    + C + "EuActForm, Lex.V3.Contracts.Source.Core.SourceArtifactRef, out " + N
+                    + "EuCellarObjectDecodeRefusal&, out System.String&, out " + N
                     + "EuCellarObjectSnapshotRefusal&) -> " + N + "EuCellarObjectSnapshot",
+                "method public static " + N + "EuCellarObjectDecode::TryDecode(System.String, "
+                    + RowList + RowList + RowList + C + "EuActForm, "
+                    + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, out " + N
+                    + "EuCellarObjectDecodeRefusal&, out System.String&, out " + N
+                    + "EuCellarObjectSnapshotRefusal&) -> "
+                    + "System.Collections.Generic.IReadOnlyList<" + N + "EuCellarObjectSnapshot>",
             },
             ConstructionSurface.ProducersIn(assembly, typeof(EuCellarObjectSnapshot), includeNonPublic: true)
                 .ToArray(),

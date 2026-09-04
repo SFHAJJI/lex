@@ -157,11 +157,11 @@ public enum LuxembourgPartitionCoverRefusal
 /// </summary>
 public sealed class LuxembourgPartitionCover
 {
-    private readonly IReadOnlyList<LuxembourgEnumerationDeliveryReceipt> _leafReceipts;
+    private readonly IReadOnlyList<RepeatedEnumerationDeliveryReceipt> _leafReceipts;
 
     private LuxembourgPartitionCover(
         LuxembourgPartitionChain chain,
-        IReadOnlyList<LuxembourgEnumerationDeliveryReceipt> leafReceipts,
+        IReadOnlyList<RepeatedEnumerationDeliveryReceipt> leafReceipts,
         LuxembourgPartitionCoverBasis basis,
         SourceArtifactRef runIdentity,
         SourceArtifactRef interpretationProfileRef,
@@ -179,7 +179,7 @@ public sealed class LuxembourgPartitionCover
 
     public LuxembourgPartitionChain Chain { get; }
 
-    public IReadOnlyList<LuxembourgEnumerationDeliveryReceipt> LeafReceipts => _leafReceipts;
+    public IReadOnlyList<RepeatedEnumerationDeliveryReceipt> LeafReceipts => _leafReceipts;
 
     public LuxembourgPartitionCoverBasis Basis { get; }
 
@@ -203,8 +203,8 @@ public sealed class LuxembourgPartitionCover
     /// </summary>
     public static LuxembourgPartitionCover? TryCreate(
         LuxembourgPartitionChain chain,
-        IReadOnlyList<LuxembourgEnumerationDeliveryReceipt> leafReceiptsInLeafOrder,
-        LuxembourgEnumerationDeliveryReceipt? rootReceipt,
+        IReadOnlyList<RepeatedEnumerationDeliveryReceipt> leafReceiptsInLeafOrder,
+        RepeatedEnumerationDeliveryReceipt? rootReceipt,
         out LuxembourgPartitionCoverRefusal refusal)
     {
         ArgumentNullException.ThrowIfNull(chain);
@@ -273,7 +273,7 @@ public sealed class LuxembourgPartitionCover
             // one of the two values Weakest is total over.
             floor = floor is null
                 ? receipt.RetainedFloor
-                : LuxembourgEnumerationDeliveryReceipt.Weakest(floor.Value, receipt.RetainedFloor);
+                : RepeatedEnumerationDeliveryReceipt.Weakest(floor.Value, receipt.RetainedFloor);
         }
 
         if (rootReceipt is not null)

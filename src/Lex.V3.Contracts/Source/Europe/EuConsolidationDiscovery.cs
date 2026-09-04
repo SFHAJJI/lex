@@ -6,13 +6,17 @@ using Lex.V3.Contracts.Source.Core;
 
 namespace Lex.V3.Contracts.Source.Europe;
 
-internal enum EuConsolidationQuerySet
+public enum EuConsolidationQuerySet
 {
     Family = 1,
     TemporalFacts = 2,
 }
 
-internal enum EuConsolidationQueryPass
+// Widened alongside EuConsolidationDiscoveryPlan (SCOPE_RULING
+// lex-event-20260904T040718222Z-7e6f29af07024cf5b2cb716f94f288e3): a caller outside this assembly
+// now binds a pass through the plan's own now-public BindCount/BindPage, so the parameter type they
+// take can no longer be internal. No logic changed.
+public enum EuConsolidationQueryPass
 {
     Pass1 = 1,
     Pass2 = 2,
@@ -61,7 +65,7 @@ internal sealed class EuConsolidationQueryDefinition
     internal IReadOnlyList<string> CursorVariables { get; }
 }
 
-internal sealed record EuConsolidationBoundQuery(
+public sealed record EuConsolidationBoundQuery(
     MachineQueryPlan MachinePlan,
     SourceArtifactRef MachinePlanRef,
     MachineQueryInputArtifact InputArtifact,
@@ -74,7 +78,7 @@ internal sealed record EuConsolidationBoundQuery(
 /// This is an internal, non-authoritative selector-delivery contract. It does not claim publisher
 /// completeness, absence, a legal interval, a release use, or permission to serve text.
 /// </remarks>
-internal sealed class EuConsolidationDiscoveryPlan
+public sealed class EuConsolidationDiscoveryPlan
 {
     internal const string PublisherEndpoint =
         "https://publications.europa.eu/webapi/rdf/sparql";
@@ -182,9 +186,9 @@ internal sealed class EuConsolidationDiscoveryPlan
         };
     }
 
-    internal SourceArtifactRef ArtifactRef { get; }
+    public SourceArtifactRef ArtifactRef { get; }
 
-    internal static EuConsolidationDiscoveryPlan Create() => new();
+    public static EuConsolidationDiscoveryPlan Create() => new();
 
     /// <summary>
     /// A copy of the exact bytes <see cref="ArtifactRef"/> names, so the held array cannot be
@@ -197,7 +201,7 @@ internal sealed class EuConsolidationDiscoveryPlan
             ? value
             : throw new ArgumentOutOfRangeException(nameof(set));
 
-    internal RepeatedEnumerationInterpretationProfile CreateDeliveryProfile(
+    public RepeatedEnumerationInterpretationProfile CreateDeliveryProfile(
         EuConsolidationQuerySet set)
     {
         var definition = Definition(set);
@@ -223,7 +227,7 @@ internal sealed class EuConsolidationDiscoveryPlan
             RepeatedEnumerationTerminalPagePolicy.EmptySuccessorAfterShortPage);
     }
 
-    internal EuConsolidationBoundQuery BindCount(
+    public EuConsolidationBoundQuery BindCount(
         EuConsolidationQuerySet set,
         string requestedCelex,
         EuConsolidationQueryPass pass,
@@ -250,7 +254,7 @@ internal sealed class EuConsolidationDiscoveryPlan
             rendererSource);
     }
 
-    internal EuConsolidationBoundQuery BindPage(
+    public EuConsolidationBoundQuery BindPage(
         EuConsolidationQuerySet set,
         string requestedCelex,
         EuConsolidationQueryPass pass,

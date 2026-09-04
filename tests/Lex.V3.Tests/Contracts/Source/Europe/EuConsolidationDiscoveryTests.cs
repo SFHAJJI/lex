@@ -8,6 +8,7 @@ using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Europe;
 using Lex.V3.Contracts.Source.Http;
+using Lex.V3.TestSupport;
 
 namespace Lex.V3.Tests.Contracts.Source.Europe;
 
@@ -1055,4 +1056,130 @@ public sealed class EuConsolidationDiscoveryTests
                 Artifact('c').ResourceId,
                 Convert.ToHexStringLower(SHA256.HashData(RendererSourceBytes))),
             RendererSourceBytes);
+
+    // ---- Construction surface (design fix three). These four types were widened from internal to
+    // public alongside D1-05c-1's own EuObjectFactsDiscoveryPlan family (a caller outside this
+    // assembly now binds a pass through the plan's own now-public BindCount/BindPage), and none of
+    // them carried a pin before. Values transcribed literally from ConstructionSurface.Of, the same
+    // print-then-transcribe discipline EuObjectFactsDiscoveryPlanTests uses for its own four types. ----
+
+    private const string SurfaceN = "Lex.V3.Contracts.Source.Europe.";
+    private const string SurfaceCore = "Lex.V3.Contracts.Source.Core.";
+
+    [TestMethod]
+    public void ThePlanHasExactlyOneCheckedDoor()
+    {
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + SurfaceN + "EuConsolidationDiscoveryPlan::.ctor() -> "
+                    + SurfaceN + "EuConsolidationDiscoveryPlan",
+                "constructor private static " + SurfaceN + "EuConsolidationDiscoveryPlan::.cctor() -> "
+                    + SurfaceN + "EuConsolidationDiscoveryPlan",
+                "method public static " + SurfaceN + "EuConsolidationDiscoveryPlan::Create() -> "
+                    + SurfaceN + "EuConsolidationDiscoveryPlan",
+            },
+            ConstructionSurface.Of(typeof(EuConsolidationDiscoveryPlan)).ToArray());
+
+        CollectionAssert.AreEqual(
+            Array.Empty<string>(),
+            ConstructionSurface.ProducersIn(
+                typeof(EuConsolidationDiscoveryPlan).Assembly, typeof(EuConsolidationDiscoveryPlan), true).ToArray(),
+            "nothing else in Contracts may hand out a plan it did not create");
+    }
+
+    [TestMethod]
+    public void TheQuerySetEnumHasExactlyTwoMembers()
+    {
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "base-constructor protected instance System.Enum::.ctor() -> System.Enum",
+                "base-constructor protected instance System.ValueType::.ctor() -> System.ValueType",
+                "field public static " + SurfaceN + "EuConsolidationQuerySet::Family -> "
+                    + SurfaceN + "EuConsolidationQuerySet",
+                "field public static " + SurfaceN + "EuConsolidationQuerySet::TemporalFacts -> "
+                    + SurfaceN + "EuConsolidationQuerySet",
+            },
+            ConstructionSurface.Of(typeof(EuConsolidationQuerySet)).ToArray());
+
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "field private instance " + SurfaceN + "EuConsolidationDiscoveryPlan::_definitions -> "
+                    + "System.Collections.Generic.IReadOnlyDictionary<" + SurfaceN + "EuConsolidationQuerySet, "
+                    + SurfaceN + "EuConsolidationQueryDefinition>",
+                "field private instance " + SurfaceN + "EuConsolidationQueryDefinition::<Set>k__BackingField -> "
+                    + SurfaceN + "EuConsolidationQuerySet",
+                "property internal instance " + SurfaceN + "EuConsolidationQueryDefinition::Set() -> "
+                    + SurfaceN + "EuConsolidationQuerySet",
+            },
+            ConstructionSurface.ProducersIn(
+                typeof(EuConsolidationDiscoveryPlan).Assembly, typeof(EuConsolidationQuerySet), true).ToArray());
+    }
+
+    [TestMethod]
+    public void TheQueryPassEnumHasExactlyTwoMembers()
+    {
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "base-constructor protected instance System.Enum::.ctor() -> System.Enum",
+                "base-constructor protected instance System.ValueType::.ctor() -> System.ValueType",
+                "field public static " + SurfaceN + "EuConsolidationQueryPass::Pass1 -> "
+                    + SurfaceN + "EuConsolidationQueryPass",
+                "field public static " + SurfaceN + "EuConsolidationQueryPass::Pass2 -> "
+                    + SurfaceN + "EuConsolidationQueryPass",
+            },
+            ConstructionSurface.Of(typeof(EuConsolidationQueryPass)).ToArray());
+
+        CollectionAssert.AreEqual(
+            Array.Empty<string>(),
+            ConstructionSurface.ProducersIn(
+                typeof(EuConsolidationDiscoveryPlan).Assembly, typeof(EuConsolidationQueryPass), true).ToArray(),
+            "nothing else in Contracts distinguishes a pass otherwise; only Set does, via the definitions map");
+    }
+
+    [TestMethod]
+    public void TheBoundQueryRecordHasExactlyItsOwnPrimaryConstructorAndCopyDoors()
+    {
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + SurfaceN + "EuConsolidationBoundQuery::.ctor("
+                    + SurfaceN + "EuConsolidationBoundQuery) -> " + SurfaceN + "EuConsolidationBoundQuery",
+                "constructor public instance " + SurfaceN + "EuConsolidationBoundQuery::.ctor("
+                    + SurfaceCore + "MachineQueryPlan, " + SurfaceCore + "SourceArtifactRef, "
+                    + SurfaceCore + "MachineQueryInputArtifact, " + SurfaceCore + "BoundMachineRequest) -> "
+                    + SurfaceN + "EuConsolidationBoundQuery",
+                "method public instance " + SurfaceN + "EuConsolidationBoundQuery::<Clone>$() -> "
+                    + SurfaceN + "EuConsolidationBoundQuery",
+            },
+            ConstructionSurface.Of(typeof(EuConsolidationBoundQuery)).ToArray());
+
+        // The plan's own private Bind is the one helper both public entry points route through -
+        // a real external door the sweep is right to report alongside BindCount and BindPage,
+        // not a shape to guess down to just the two public methods.
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "method private instance " + SurfaceN + "EuConsolidationDiscoveryPlan::Bind("
+                    + SurfaceN + "EuConsolidationQueryDefinition, System.Boolean, System.String, "
+                    + SurfaceN + "EuConsolidationQueryPass, "
+                    + "System.Collections.Generic.IReadOnlyList<System.String>, "
+                    + SurfaceCore + "MachineResponseCardinality, System.String, System.String, "
+                    + SurfaceCore + "MachineQueryRendererSource) -> " + SurfaceN + "EuConsolidationBoundQuery",
+                "method public instance " + SurfaceN + "EuConsolidationDiscoveryPlan::BindCount("
+                    + SurfaceN + "EuConsolidationQuerySet, System.String, " + SurfaceN + "EuConsolidationQueryPass, "
+                    + "System.String, System.String, " + SurfaceCore + "MachineQueryRendererSource) -> "
+                    + SurfaceN + "EuConsolidationBoundQuery",
+                "method public instance " + SurfaceN + "EuConsolidationDiscoveryPlan::BindPage("
+                    + SurfaceN + "EuConsolidationQuerySet, System.String, " + SurfaceN + "EuConsolidationQueryPass, "
+                    + "System.Collections.Generic.IReadOnlyList<System.String>, System.Int64, "
+                    + SurfaceCore + "SourceArtifactRef, System.String, System.String, "
+                    + SurfaceCore + "MachineQueryRendererSource) -> " + SurfaceN + "EuConsolidationBoundQuery",
+            },
+            ConstructionSurface.ProducersIn(
+                typeof(EuConsolidationDiscoveryPlan).Assembly, typeof(EuConsolidationBoundQuery), true).ToArray());
+    }
 }

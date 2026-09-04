@@ -101,7 +101,7 @@ public enum CustodyMembership
     /// retain was the reader this member described, and that read-without-write path was deleted.
     /// The member is reserved for a caller-supplied membership claim built some other way. Nothing
     /// in this codebase currently builds one: every consumer that receives a claimed membership
-    /// (for example <c>Lex.V3.Contracts.Source.Luxembourg.LuxembourgEnumerationReceiptRefusal
+    /// (for example <c>Lex.V3.Contracts.Source.Core.RepeatedEnumerationReceiptRefusal
     /// .MembershipIsNotReceiptDerived</c>) refuses this value outright rather than accept it as a
     /// floor, because a membership that establishes no custody at all has no defensible floor
     /// answer.
