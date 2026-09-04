@@ -124,11 +124,16 @@ public sealed class EuManifestationListingDecodeTests
         Assert.AreEqual("listing_offers_wording_format", observation.ReasonCode);
 
         // The whole point of the slice: the ladder, in the closed order, filtered to this Work's own
-        // listing. xhtml first even though the office listed fmx4 first, html second even though the
-        // office listed it second-of-six, pdfa1a and print and fmx4 and pdf absent because this
-        // route can address none of them (see EuDocumentFetchAddress.TryMediaTypeFor).
+        // listing. xhtml first even though the office listed fmx4 first; html second even though the
+        // office listed it second-of-six; pdf last even though the office listed it third, because
+        // the ruled order is XHTML, html, PDF/A, PDF and this Work lists no pdfa2a. fmx4, pdfa1a and
+        // print are absent because this route can address none of them (see
+        // EuDocumentFetchAddress.TryMediaTypeFor for what was observed for each).
         CollectionAssert.AreEqual(
-            new[] { EuManifestationFormat.Xhtml, EuManifestationFormat.Html },
+            new[]
+            {
+                EuManifestationFormat.Xhtml, EuManifestationFormat.Html, EuManifestationFormat.Pdf,
+            },
             observation.OrderedCandidates.ToArray());
 
         // The manifest row's single address is the FIRST candidate, never any other.
@@ -140,10 +145,12 @@ public sealed class EuManifestationListingDecodeTests
     }
 
     [TestMethod]
-    public void RomeOneListsNoHtmlSoItsLadderIsXhtmlAlone()
+    public void RomeOneListsNoHtmlSoItsLadderSkipsThatRung()
     {
         // 32008R0593's real listing: fmx4, pdf, pdfa1a, print, xhtml. No html at all, which is why
-        // the first canary could not see that html is itself listed-but-unservable elsewhere.
+        // the first canary could not see that html is itself listed-but-unservable elsewhere. The
+        // ladder therefore skips its second rung entirely and goes xhtml then pdf: a rung the office
+        // does not list is never attempted.
         var rows = new[]
         {
             ListedRow(RomeOneRoot, "fmx4"),
@@ -157,7 +164,7 @@ public sealed class EuManifestationListingDecodeTests
 
         Assert.AreEqual(EuManifestationListingRefusal.None, refusal);
         CollectionAssert.AreEqual(
-            new[] { EuManifestationFormat.Xhtml },
+            new[] { EuManifestationFormat.Xhtml, EuManifestationFormat.Pdf },
             decoded![RomeOneRoot].OrderedCandidates.ToArray());
     }
 
@@ -203,19 +210,30 @@ public sealed class EuManifestationListingDecodeTests
             EuManifestationListingDecode.Observe(
                 [EuManifestationFormat.Html, EuManifestationFormat.PdfA2a], ladderRef).Format);
 
-        // Arm three: PDF/A wins when neither wording format is listed.
+        // Arm three: PDF/A wins when neither wording format is listed, and still loses to them.
         Assert.AreEqual(
             EuManifestationFormat.PdfA2a,
             EuManifestationListingDecode.Observe([EuManifestationFormat.PdfA2a], ladderRef).Format);
 
-        // Arm four: print ALONE is never a body source, at any position.
+        // Arm four: PDF, the ruled fourth rung, wins only when nothing above it is listed, and sorts
+        // after PDF/A when both are.
+        Assert.AreEqual(
+            EuManifestationFormat.Pdf,
+            EuManifestationListingDecode.Observe([EuManifestationFormat.Pdf], ladderRef).Format);
+        CollectionAssert.AreEqual(
+            new[] { EuManifestationFormat.PdfA2a, EuManifestationFormat.Pdf },
+            EuManifestationListingDecode.Observe(
+                [EuManifestationFormat.Pdf, EuManifestationFormat.PdfA2a], ladderRef)
+                .OrderedCandidates.ToArray());
+
+        // Arm five: print ALONE is never a body source, at any position.
         var printOnly = EuManifestationListingDecode.Observe([EuManifestationFormat.Print], ladderRef);
         Assert.AreEqual(EuManifestationFormat.Print, printOnly.Format);
         Assert.AreEqual(EuFormatBodyAdmission.BodyNotAdmitted, printOnly.Admission);
         Assert.AreEqual("listing_offers_print_only", printOnly.ReasonCode);
         Assert.HasCount(0, printOnly.OrderedCandidates);
 
-        // Arm five: a listing this route cannot address as a wording body is a typed GAP, never the
+        // Arm six: a listing this route cannot address as a wording body is a typed GAP, never the
         // permanent exclusion print alone is. Formex is real and parseable; this slice just has no
         // reviewed way to read it yet.
         var formexOnly = EuManifestationListingDecode.Observe(
@@ -261,14 +279,27 @@ public sealed class EuManifestationListingDecodeTests
         Assert.AreEqual(EuManifestationMediaType.TextHtml, html);
         Assert.IsTrue(EuDocumentFetchAddress.TryMediaTypeFor(EuManifestationFormat.PdfA2a, out var pdfa2a));
         Assert.AreEqual(EuManifestationMediaType.PdfTypePdfa2a, pdfa2a);
+        Assert.IsTrue(EuDocumentFetchAddress.TryMediaTypeFor(EuManifestationFormat.Pdf, out var pdf));
+        Assert.AreEqual(EuManifestationMediaType.ApplicationPdf, pdf);
 
-        // Recorded rather than hidden: these four have no admitted token today, so the ruled ladder's
-        // PDF rung is not reachable until a reviewer admits one. See TryMediaTypeFor's own remarks
-        // for what was observed live for each.
+        // All four ruled rungs, in the ruled order, after RULING
+        // lex-event-20260904T185339315Z-87d1510eccdc42a5947c41d2d8580744 admitted application/pdf.
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                EuManifestationFormat.Xhtml, EuManifestationFormat.Html,
+                EuManifestationFormat.PdfA2a, EuManifestationFormat.Pdf,
+            },
+            EuManifestationListingDecode.FormatLadder.ToArray());
+
+        // Recorded rather than hidden: these three still have no admitted token, and none of them is
+        // a ladder rung. pdfa1a and pdfa1b have never been observed serving at all: on 2026-09-04
+        // application/pdf;type=pdfa1a answered 404 on all five acts probed, every one of which lists
+        // pdfa1a. See TryMediaTypeFor's own remarks for each.
         foreach (var unaddressable in new[]
                  {
-                     EuManifestationFormat.Pdf, EuManifestationFormat.PdfA1a,
-                     EuManifestationFormat.PdfA1b, EuManifestationFormat.Print,
+                     EuManifestationFormat.PdfA1a, EuManifestationFormat.PdfA1b,
+                     EuManifestationFormat.Print,
                  })
         {
             Assert.IsFalse(
@@ -420,13 +451,15 @@ public sealed class EuManifestationListingDecodeTests
             evidenceRef,
             [EuManifestationFormat.Xhtml, EuManifestationFormat.Xhtml]));
 
-        // A format that is not on the ladder at all.
+        // A format that is not on the ladder at all. Formex is the example precisely because it is
+        // a real, parseable body format this route simply has no reviewed way to read yet: being off
+        // the ladder is not the same as being unreadable.
         Assert.ThrowsExactly<ArgumentException>(() => new EuFormatDisposition(
             EuManifestationFormat.Xhtml,
             EuFormatBodyAdmission.BodyAdmitted,
             "listing_offers_wording_format",
             evidenceRef,
-            [EuManifestationFormat.Xhtml, EuManifestationFormat.Pdf]));
+            [EuManifestationFormat.Xhtml, EuManifestationFormat.Formex4]));
 
         // A first candidate that is not the row's own single address.
         Assert.ThrowsExactly<ArgumentException>(() => new EuFormatObservation(

@@ -109,7 +109,7 @@ public sealed class EuScopeSnapshotReductionTests
     public void AnObservedBodyHeldLanguageReducesToBodyCandidate()
     {
         var language = new EuLanguageExpressionObservation(
-            EuOfficialLanguage.English, EuExpressionObservationState.ExpressionObservedBodyHeld,
+            EuOfficialLanguage.English, EuExpressionObservationState.ExpressionObservedBodyCandidate,
             "eu_language.held", "rule.language", Artifact("lang"));
 
         var dispositions = EuScopeSnapshotReduction.Reduce(Snapshot(language: language));

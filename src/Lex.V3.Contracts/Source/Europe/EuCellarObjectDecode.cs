@@ -174,11 +174,13 @@ public enum EuCellarObjectDecodeRefusal
 /// fetches a body for: English if family X observes an English Expression for the object, French if
 /// it observes a French one and not an English one, and an explicit
 /// <see cref="EuExpressionObservationState.NotObserved"/> English observation when family X observes
-/// neither - never <c>ExpressionObservedBodyHeld</c>, since no body-acquisition machinery exists in
-/// this closure at all (format stays null; D1-05d's own manifestation slice is what could ever set
-/// body-held true). This is a judgement call the SCOPE_RULING text does not itself resolve (which of
-/// several observed languages counts as "the" one of interest); the reviewer can revisit it under
-/// D1-05d without this door's own row-reading logic changing.
+/// neither. D1-05d settles what an observed one carries: the reviewed scope's own closed policy,
+/// <see cref="EuLanguageBodyDisposition.BodyCandidateLanguages"/>, holds exactly English and French,
+/// so an observed Expression in either is
+/// <see cref="EuExpressionObservationState.ExpressionObservedBodyCandidate"/> -- the scope takes a
+/// body in this language, and NO body is claimed fetched by saying so. Which of several observed
+/// languages counts as "the" one of interest remains a judgement call the SCOPE_RULING text does not
+/// resolve; the reviewer can revisit it without this door's own row-reading logic changing.
 /// </para>
 /// <para>
 /// Contracts-only: nothing here calls a store, a publisher endpoint, or <c>Lex.V3.Ingest</c>.
@@ -769,7 +771,7 @@ public static class EuCellarObjectDecode
         {
             return new EuLanguageExpressionObservation(
                 EuOfficialLanguage.English,
-                EuExpressionObservationState.ExpressionObservedBodyHeld,
+                EuExpressionObservationState.ExpressionObservedBodyCandidate,
                 "eu_object_facts_decode.language",
                 "eu_cellar_object_decode.language_english_observed_body_candidate",
                 evidenceRef);
@@ -779,7 +781,7 @@ public static class EuCellarObjectDecode
         {
             return new EuLanguageExpressionObservation(
                 EuOfficialLanguage.French,
-                EuExpressionObservationState.ExpressionObservedBodyHeld,
+                EuExpressionObservationState.ExpressionObservedBodyCandidate,
                 "eu_object_facts_decode.language",
                 "eu_cellar_object_decode.language_french_observed_body_candidate",
                 evidenceRef);

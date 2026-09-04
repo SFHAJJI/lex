@@ -1,5 +1,6 @@
 using Lex.V3.Contracts.Source.Europe;
 using Lex.V3.Contracts.Source.Scope;
+using Lex.V3.TestSupport;
 
 namespace Lex.V3.Tests.Contracts.Source.Europe;
 
@@ -43,8 +44,13 @@ public sealed class EuDocumentFetchAddressTests
             // v2 sent: observed live on 2026-09-04 serving 200 on 32003L0088, 31995L0046 and
             // 32004R0139.
             [EuManifestationMediaType.TextHtml] = "text/html",
+            // D1-05d's tenth member, admitted by RULING
+            // lex-event-20260904T185339315Z-87d1510eccdc42a5947c41d2d8580744. The bare token,
+            // observed serving 200 live on 2026-09-04 on four works, the largest being 32006L0112 at
+            // 486,142 bytes whose retained body carries the %PDF-1.4 magic.
+            [EuManifestationMediaType.ApplicationPdf] = "application/pdf",
         };
-        Assert.AreEqual(9, Enum.GetValues<EuManifestationMediaType>().Length);
+        Assert.AreEqual(10, Enum.GetValues<EuManifestationMediaType>().Length);
         foreach (var (mediaType, expectedAccept) in mediaTypes)
         {
             var minted = EuDocumentFetchAddress.TryCreate(
@@ -68,6 +74,39 @@ public sealed class EuDocumentFetchAddressTests
             Assert.AreEqual(EuDocumentFetchAddressRefusal.None, langRefusal);
             Assert.AreEqual(expectedToken, minted.AcceptLanguage, language.ToString());
         }
+    }
+
+    /// <summary>
+    /// The closed Accept vocabulary this route may ever ask for, pinned member by member.
+    /// </summary>
+    /// <remarks>
+    /// Added by D1-05d. This vocabulary had NO construction-surface pin before, which is why adding
+    /// a ninth and a tenth member broke no gate: a closed set whose whole point is that widening it
+    /// is a reviewed act was widened twice with nothing to say so. Every marker below is transcribed
+    /// from ConstructionSurface.Of's own printed output, never hand-derived.
+    /// </remarks>
+    [TestMethod]
+    public void TheMediaTypeVocabularyHasExactlyTenMembers()
+    {
+        const string N = "Lex.V3.Contracts.Source.Europe.";
+        const string T = N + "EuManifestationMediaType";
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "base-constructor protected instance System.Enum::.ctor() -> System.Enum",
+                "base-constructor protected instance System.ValueType::.ctor() -> System.ValueType",
+                "field public static " + T + "::ApplicationPdf -> " + T,
+                "field public static " + T + "::PdfTypePdfa2a -> " + T,
+                "field public static " + T + "::RdfXml -> " + T,
+                "field public static " + T + "::RdfXmlNoticeTree -> " + T,
+                "field public static " + T + "::TextHtml -> " + T,
+                "field public static " + T + "::XhtmlXml -> " + T,
+                "field public static " + T + "::XmlNoticeBranch -> " + T,
+                "field public static " + T + "::XmlNoticeIdentifier -> " + T,
+                "field public static " + T + "::XmlNoticeObject -> " + T,
+                "field public static " + T + "::ZipMtypeFmx4 -> " + T,
+            },
+            ConstructionSurface.Of(typeof(EuManifestationMediaType)).ToArray());
     }
 
     [TestMethod]

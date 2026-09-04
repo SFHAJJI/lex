@@ -586,6 +586,45 @@ public sealed class EuCellarObjectSnapshotTests
             "the exact set of external producers of EuLanguageExpressionObservation across Lex.V3.Contracts.");
     }
 
+    /// <summary>
+    /// The closed language-expression state vocabulary, pinned member by member.
+    /// </summary>
+    /// <remarks>
+    /// Added by D1-05d, which REMOVED a public member from this enum
+    /// (<c>ExpressionObservedBodyHeld</c>, see
+    /// <see cref="EuExpressionObservationState.ExpressionObservedBodyCandidate"/>'s own remarks for
+    /// why removed rather than reserved) and found that no gate noticed, because this vocabulary had
+    /// no construction-surface pin at all. Every marker below is transcribed from
+    /// ConstructionSurface.Of's own printed output, never hand-derived. The retired member's absence
+    /// is what this pin exists to hold: re-adding a member that claims a body is held would fail
+    /// here first.
+    /// </remarks>
+    [TestMethod]
+    public void TheExpressionObservationStateVocabularyHasExactlyThreeMembersAndClaimsNoHeldBody()
+    {
+        const string T = N + "EuExpressionObservationState";
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "base-constructor protected instance System.Enum::.ctor() -> System.Enum",
+                "base-constructor protected instance System.ValueType::.ctor() -> System.ValueType",
+                "field public static " + T + "::ExpressionObservedBodyCandidate -> " + T,
+                "field public static " + T + "::ExpressionObservedBodyNotHeld -> " + T,
+                "field public static " + T + "::NotObserved -> " + T,
+            },
+            ConstructionSurface.Of(typeof(EuExpressionObservationState)).ToArray());
+
+        // Said as a property rather than only as a transcribed list, so the intent survives a future
+        // re-transcription: no member of this decode-time vocabulary may assert that a body is held.
+        // That fact has exactly one home, CorpusBodyRecordKind, decided after acquisition.
+        foreach (var name in Enum.GetNames<EuExpressionObservationState>())
+        {
+            Assert.IsFalse(
+                name.EndsWith("BodyHeld", StringComparison.Ordinal),
+                $"{name} claims a held body on a decode-time observation taken before any fetch.");
+        }
+    }
+
     [TestMethod]
     public void EuFormatObservationHasExactlyOneConstructionPath()
     {
