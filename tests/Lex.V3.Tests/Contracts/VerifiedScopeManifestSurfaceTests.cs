@@ -65,6 +65,15 @@ public sealed class VerifiedScopeManifestSurfaceTests
                 "method public instance Lex.V3.Contracts.Source.Luxembourg.VerifiedLuxembourgSourceProfile"
                 + "::ReduceScope(Lex.V3.Contracts.Source.Luxembourg.LuxembourgProfileResolution+Resolved, "
                 + Scope + "IScopeReductionEvidenceResolver) -> " + Verified,
+                // D1-06c-LU-2's own overload, which projects this run's minted per-object fetch
+                // addresses onto the reduction inputs and then calls ScopeReducer.Reduce exactly as
+                // the two-parameter door does. It adds no verification of its own either, and the
+                // shorter overload now forwards to it, so there is still one reduction path.
+                "method public instance Lex.V3.Contracts.Source.Luxembourg.VerifiedLuxembourgSourceProfile"
+                + "::ReduceScope(Lex.V3.Contracts.Source.Luxembourg.LuxembourgProfileResolution+Resolved, "
+                + Scope + "IScopeReductionEvidenceResolver, "
+                + "System.Collections.Generic.IReadOnlyDictionary<" + Core + "SourceObjectRef, "
+                + Scope + "ScopeManifestFetchAddress>) -> " + Verified,
                 "method public static " + Scope + "ScopeReducer::Reduce(" + Scope + "ScopeProfileBinding, "
                 + "System.Collections.Generic.IReadOnlyList<" + Core + "SourceArtifactRef>, "
                 + "System.Collections.Generic.IReadOnlyList<" + Core + "SourceObjectRef>, "

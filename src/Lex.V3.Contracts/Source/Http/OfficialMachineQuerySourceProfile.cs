@@ -481,7 +481,7 @@ public sealed class OfficialMachineQuerySourceProfile
             // cannot be canonicalized two ways. Taking the merged form moves the LU document-fetch
             // profile's own digest, which is why its pinned literal is recomputed in this commit;
             // the two SPARQL profiles carry no null here so their digests are untouched.
-            $"method={(Method == HttpRequestMethod.Get ? "GET" : "POST")}",
+            $"method={MethodToken(Method)}",
             $"request_content_type={RequestContentType ?? "none"}",
             $"request_charset={(RequestCharset is null ? "none" : "utf-8")}",
             $"accept={Accept ?? "none"}",
@@ -515,6 +515,22 @@ public sealed class OfficialMachineQuerySourceProfile
 
         return Encoding.UTF8.GetBytes(string.Join('\n', lines));
     }
+
+    /// <summary>
+    /// The canonical wire token for one request method. Exhaustive by name and refusing an
+    /// unrecognized member, never a two-way ternary: the merge that produced this file replaced an
+    /// exhaustive helper with <c>Method == HttpRequestMethod.Get ? "GET" : "POST"</c>, which would
+    /// have canonicalized a third <see cref="HttpRequestMethod"/> member silently as POST and
+    /// therefore given two different methods one profile digest. The two tokens returned here are
+    /// byte for byte what that ternary returned for the only two members that exist, so every
+    /// existing profile digest is unchanged.
+    /// </summary>
+    private static string MethodToken(HttpRequestMethod method) => method switch
+    {
+        HttpRequestMethod.Get => "GET",
+        HttpRequestMethod.Post => "POST",
+        _ => throw new ArgumentOutOfRangeException(nameof(method)),
+    };
 
     private static string ProfileIdToken(OfficialMachineQuerySourceProfileId id) => id switch
     {

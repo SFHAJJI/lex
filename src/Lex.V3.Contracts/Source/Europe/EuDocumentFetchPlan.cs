@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Http;
 
 namespace Lex.V3.Contracts.Source.Europe;
 
@@ -26,11 +27,19 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// </remarks>
 public sealed class EuDocumentFetchPlan
 {
+    /// <summary>
+    /// This route's own ordered parameter declaration. D1-06c-LU-2 fold-in three: the two names
+    /// below are read from it rather than repeated here, so the plan that mints the parameters and
+    /// the session that verifies them cannot drift apart.
+    /// </summary>
+    public static DocumentFetchParameterContract ParameterContract =>
+        DocumentFetchParameterContract.EuropeanUnionDocumentFetch;
+
     /// <summary>The parameter name carrying the exact <c>Accept</c> header value.</summary>
-    public const string AcceptParameterName = "eu_document_fetch_accept";
+    public static string AcceptParameterName => ParameterContract.Parameters[0].ParameterName;
 
     /// <summary>The parameter name carrying the exact <c>Accept-Language</c> header value.</summary>
-    public const string AcceptLanguageParameterName = "eu_document_fetch_accept_language";
+    public static string AcceptLanguageParameterName => ParameterContract.Parameters[1].ParameterName;
 
     private const string DocumentFetchFamilyMemberKey = "document.fetch";
 

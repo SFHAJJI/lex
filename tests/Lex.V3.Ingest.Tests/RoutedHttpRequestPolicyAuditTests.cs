@@ -912,7 +912,7 @@ public sealed class RoutedHttpRequestPolicyAuditTests
         var constructor = typeof(RoutedHttpAcquisitionSession).GetConstructors(
             BindingFlags.Instance | BindingFlags.NonPublic).Single();
         return (RoutedHttpAcquisitionSession)constructor.Invoke(
-            [request, custodyStore, handler, new AdvancingTimeProvider(), false]);
+            [request, custodyStore, handler, new AdvancingTimeProvider(), false, Array.Empty<string>()]);
     }
 
     private static HttpLogicalRequest RobotsRequest(RoutedHttpAcquisitionSession session) =>

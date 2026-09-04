@@ -190,10 +190,23 @@ public sealed class VerifiedLuxembourgSourceProfile
 
     public VerifiedScopeManifest ReduceScope(
         LuxembourgProfileResolution.Resolved resolution,
-        IScopeReductionEvidenceResolver evidenceResolver)
+        IScopeReductionEvidenceResolver evidenceResolver) =>
+        ReduceScope(resolution, evidenceResolver, new Dictionary<SourceObjectRef, ScopeManifestFetchAddress>());
+
+    /// <summary>
+    /// D1-06c-LU-2 item 1: the same reduction, with this run's own minted per-object fetch
+    /// addresses projected onto the rows. An object with no entry keeps the typed absence
+    /// ScopeObjectReductionInput already defaults to, so a run that mints nothing produces exactly
+    /// the manifest the two-parameter overload produces.
+    /// </summary>
+    public VerifiedScopeManifest ReduceScope(
+        LuxembourgProfileResolution.Resolved resolution,
+        IScopeReductionEvidenceResolver evidenceResolver,
+        IReadOnlyDictionary<SourceObjectRef, ScopeManifestFetchAddress> mintedFetchAddresses)
     {
         ArgumentNullException.ThrowIfNull(resolution);
         ArgumentNullException.ThrowIfNull(evidenceResolver);
+        ArgumentNullException.ThrowIfNull(mintedFetchAddresses);
         if (resolution.SourceProfileRef != ScopeBinding.SourceProfileRef ||
             resolution.CompleteEnumerationRef != Snapshot.CompleteEnumerationRef ||
             evidenceResolver.CompleteEnumerationRef != Snapshot.CompleteEnumerationRef)
@@ -203,11 +216,25 @@ public sealed class VerifiedLuxembourgSourceProfile
                 nameof(resolution));
         }
 
+        // A plain loop rather than a Select: a lambda here would be a compiler-generated method
+        // returning ScopeObjectReductionInput, which shows up as a new producer of that type in
+        // EuScopeProfileTests' own exact ProducersIn pin under a name that moves whenever anything
+        // else in this file does. The loop keeps the producer set unchanged.
+        var inputs = new ScopeObjectReductionInput[resolution.ScopeInputs.Count];
+        for (var index = 0; index < inputs.Length; index++)
+        {
+            var input = resolution.ScopeInputs[index];
+            inputs[index] = mintedFetchAddresses.TryGetValue(input.ObjectRef, out var address)
+                ? new ScopeObjectReductionInput(
+                    input.ObjectRef, input.Selectors, input.RuleEvaluations, address)
+                : input;
+        }
+
         return ScopeReducer.Reduce(
             ScopeBinding,
             resolution.OrderedEvidenceArtifacts,
             resolution.Resources.Select(static resource => resource.ObjectRef).ToArray(),
-            resolution.ScopeInputs,
+            inputs,
             evidenceResolver);
     }
 
