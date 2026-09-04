@@ -13,9 +13,10 @@ namespace Lex.V3.Tests.Contracts.Source.Europe;
 
 /// <summary>
 /// D1-05c-1: the three new bounded row-set query-plan families (object-facts/P, expression-facts/X,
-/// root-watermark/W), following the exact six-part (five for W) cursor and unbound-branch template
-/// shape <c>EuConsolidationDiscoveryPlan</c>'s own <c>Family</c>/<c>TemporalFacts</c> sets establish.
-/// SCOPE_RULING <c>lex-event-20260904T040718222Z-7e6f29af07024cf5b2cb716f94f288e3</c>.
+/// root-watermark/W), following the cursor-arity-matches-natural-key and unbound-branch template
+/// shape <c>EuConsolidationDiscoveryPlan</c>'s own <c>Family</c>/<c>TemporalFacts</c> sets establish,
+/// generalized to each family's own row shape: six parts for P, seven for X (parent-inclusive, design
+/// fix two), five for W. SCOPE_RULING <c>lex-event-20260904T040718222Z-7e6f29af07024cf5b2cb716f94f288e3</c>.
 /// </summary>
 [TestClass]
 public sealed class EuObjectFactsDiscoveryPlanTests
@@ -501,7 +502,11 @@ public sealed class EuObjectFactsDiscoveryPlanTests
     // but decoded and cross-checked by the shared Core machinery, so the profile's cursor arity
     // and its uniqueness/ordering checks are proven by execution rather than by inspection. Every
     // batch below names far fewer objects than the 50-slot capacity, so every one of these three
-    // is also a genuinely padded batch. ----
+    // is also a genuinely padded batch. Note: AddPass feeds the identical row bodies to pass 1 and
+    // pass 2, so EqualSelections below follows by construction rather than from any real two-pass
+    // agreement over independently observed data; the property these fixtures actually exercise is
+    // EnumerationDeliveryComparison.VerifyPages's own decode, cursor-arity and ordering checks
+    // against real rows, not cross-pass agreement itself. ----
 
     private const string FixtureXsdString = "http://www.w3.org/2001/XMLSchema#string";
     private const string FixtureXsdDateTime = "http://www.w3.org/2001/XMLSchema#dateTime";
@@ -569,15 +574,16 @@ public sealed class EuObjectFactsDiscoveryPlanTests
     /// <summary>
     /// Design fix two's own regression test, run through the real Core delivery machinery rather
     /// than read: the same Expression (<see cref="FixtureExprShared"/>) observed with the same
-    /// language under two different parent Works in one batch. Every one of X's own six-part key
-    /// columns (<c>object</c>, <c>predicate</c>, <c>value_kind</c>, <c>value</c>,
-    /// <c>datatype_iri</c>, <c>language_tag</c>) is identical between the two rows on purpose; only
-    /// <c>parent</c> (X's own <c>key_7</c>) differs. Before design fix two, this constructed a
-    /// duplicate six-part cursor and canonical key, which
-    /// <see cref="EnumerationDeliveryComparison.VerifyPages"/> refuses outright (confirmed by
-    /// reverting <see cref="EuObjectFactsDiscoveryPlan"/> to the six-part cursor locally and
-    /// re-running this test: it throws "Keys must be unique and cursors strictly increase"). After
-    /// the fix, the seventh part distinguishes the two rows and this succeeds.
+    /// language under two different parent Works in one batch. Six of X's own seven key columns
+    /// (<c>object</c>, <c>predicate</c>, <c>value_kind</c>, <c>value</c>,
+    /// <c>datatype_iri</c>, <c>language_tag</c>) are identical between the two rows on purpose; only
+    /// <c>parent</c> (X's own <c>key_7</c>) differs. Reverting <see cref="EuObjectFactsDiscoveryPlan"/>
+    /// to a six-part cursor for X does not even reach <see cref="EnumerationDeliveryComparison.VerifyPages"/>'s
+    /// own duplicate-key refusal: this test's own fixture cursor is still seven elements wide, so
+    /// <see cref="EuObjectFactsDiscoveryPlan.BindPage"/>'s own cursor-arity check throws first
+    /// (confirmed by performing that exact revert locally and re-running this test: it throws "A
+    /// continuation cursor must have the exact query-set arity."). After the fix, the seventh part
+    /// distinguishes the two rows and this succeeds.
     /// </summary>
     [TestMethod]
     public void ExpressionFactsDeliveryProvesTheSevenPartCursorWithOneExpressionUnderTwoParentWorksInOneBatch()
@@ -839,6 +845,12 @@ public sealed class EuObjectFactsDiscoveryPlanTests
                     + N + "EuObjectFactsDiscoveryPlan",
             },
             ConstructionSurface.Of(typeof(EuObjectFactsDiscoveryPlan)).ToArray());
+
+        CollectionAssert.AreEqual(
+            Array.Empty<string>(),
+            ConstructionSurface.ProducersIn(
+                typeof(EuObjectFactsDiscoveryPlan).Assembly, typeof(EuObjectFactsDiscoveryPlan), true).ToArray(),
+            "nothing else in Contracts may hand out a plan it did not create");
     }
 
     [TestMethod]
@@ -857,6 +869,20 @@ public sealed class EuObjectFactsDiscoveryPlanTests
                     + N + "EuObjectFactsQuerySet",
             },
             ConstructionSurface.Of(typeof(EuObjectFactsQuerySet)).ToArray());
+
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "field private instance " + N + "EuObjectFactsDiscoveryPlan::_definitions -> "
+                    + "System.Collections.Generic.IReadOnlyDictionary<" + N + "EuObjectFactsQuerySet, "
+                    + N + "EuObjectFactsQueryDefinition>",
+                "field private instance " + N + "EuObjectFactsQueryDefinition::<Set>k__BackingField -> "
+                    + N + "EuObjectFactsQuerySet",
+                "property internal instance " + N + "EuObjectFactsQueryDefinition::Set() -> "
+                    + N + "EuObjectFactsQuerySet",
+            },
+            ConstructionSurface.ProducersIn(
+                typeof(EuObjectFactsDiscoveryPlan).Assembly, typeof(EuObjectFactsQuerySet), true).ToArray());
     }
 
     [TestMethod]
@@ -873,6 +899,12 @@ public sealed class EuObjectFactsDiscoveryPlanTests
                     + N + "EuObjectFactsQueryPass",
             },
             ConstructionSurface.Of(typeof(EuObjectFactsQueryPass)).ToArray());
+
+        CollectionAssert.AreEqual(
+            Array.Empty<string>(),
+            ConstructionSurface.ProducersIn(
+                typeof(EuObjectFactsDiscoveryPlan).Assembly, typeof(EuObjectFactsQueryPass), true).ToArray(),
+            "nothing else in Contracts distinguishes a pass otherwise; only Set does, via the definitions map");
     }
 
     [TestMethod]
@@ -891,5 +923,30 @@ public sealed class EuObjectFactsDiscoveryPlanTests
                     + N + "EuObjectFactsBoundQuery",
             },
             ConstructionSurface.Of(typeof(EuObjectFactsBoundQuery)).ToArray());
+
+        // The plan's own private Bind is the one helper both public entry points route through -
+        // a real external door the sweep is right to report alongside BindCount and BindPage,
+        // not a shape to guess down to just the two public methods.
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "method private instance " + N + "EuObjectFactsDiscoveryPlan::Bind("
+                    + N + "EuObjectFactsQueryDefinition, " + N + "EuObjectFactsQuerySet, System.Boolean, "
+                    + "System.Collections.Generic.IReadOnlyList<System.String>, " + N + "EuObjectFactsQueryPass, "
+                    + "System.Collections.Generic.IReadOnlyList<System.String>, "
+                    + Core + "MachineResponseCardinality, System.String, System.String, "
+                    + Core + "MachineQueryRendererSource) -> " + N + "EuObjectFactsBoundQuery",
+                "method public instance " + N + "EuObjectFactsDiscoveryPlan::BindCount("
+                    + N + "EuObjectFactsQuerySet, System.Collections.Generic.IReadOnlyList<System.String>, "
+                    + N + "EuObjectFactsQueryPass, System.String, System.String, "
+                    + Core + "MachineQueryRendererSource) -> " + N + "EuObjectFactsBoundQuery",
+                "method public instance " + N + "EuObjectFactsDiscoveryPlan::BindPage("
+                    + N + "EuObjectFactsQuerySet, System.Collections.Generic.IReadOnlyList<System.String>, "
+                    + N + "EuObjectFactsQueryPass, System.Collections.Generic.IReadOnlyList<System.String>, "
+                    + "System.Int64, " + Core + "SourceArtifactRef, System.String, System.String, "
+                    + Core + "MachineQueryRendererSource) -> " + N + "EuObjectFactsBoundQuery",
+            },
+            ConstructionSurface.ProducersIn(
+                typeof(EuObjectFactsDiscoveryPlan).Assembly, typeof(EuObjectFactsBoundQuery), true).ToArray());
     }
 }

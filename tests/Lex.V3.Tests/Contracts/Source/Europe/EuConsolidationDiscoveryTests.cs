@@ -1080,6 +1080,12 @@ public sealed class EuConsolidationDiscoveryTests
                     + SurfaceN + "EuConsolidationDiscoveryPlan",
             },
             ConstructionSurface.Of(typeof(EuConsolidationDiscoveryPlan)).ToArray());
+
+        CollectionAssert.AreEqual(
+            Array.Empty<string>(),
+            ConstructionSurface.ProducersIn(
+                typeof(EuConsolidationDiscoveryPlan).Assembly, typeof(EuConsolidationDiscoveryPlan), true).ToArray(),
+            "nothing else in Contracts may hand out a plan it did not create");
     }
 
     [TestMethod]
@@ -1096,6 +1102,20 @@ public sealed class EuConsolidationDiscoveryTests
                     + SurfaceN + "EuConsolidationQuerySet",
             },
             ConstructionSurface.Of(typeof(EuConsolidationQuerySet)).ToArray());
+
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "field private instance " + SurfaceN + "EuConsolidationDiscoveryPlan::_definitions -> "
+                    + "System.Collections.Generic.IReadOnlyDictionary<" + SurfaceN + "EuConsolidationQuerySet, "
+                    + SurfaceN + "EuConsolidationQueryDefinition>",
+                "field private instance " + SurfaceN + "EuConsolidationQueryDefinition::<Set>k__BackingField -> "
+                    + SurfaceN + "EuConsolidationQuerySet",
+                "property internal instance " + SurfaceN + "EuConsolidationQueryDefinition::Set() -> "
+                    + SurfaceN + "EuConsolidationQuerySet",
+            },
+            ConstructionSurface.ProducersIn(
+                typeof(EuConsolidationDiscoveryPlan).Assembly, typeof(EuConsolidationQuerySet), true).ToArray());
     }
 
     [TestMethod]
@@ -1112,6 +1132,12 @@ public sealed class EuConsolidationDiscoveryTests
                     + SurfaceN + "EuConsolidationQueryPass",
             },
             ConstructionSurface.Of(typeof(EuConsolidationQueryPass)).ToArray());
+
+        CollectionAssert.AreEqual(
+            Array.Empty<string>(),
+            ConstructionSurface.ProducersIn(
+                typeof(EuConsolidationDiscoveryPlan).Assembly, typeof(EuConsolidationQueryPass), true).ToArray(),
+            "nothing else in Contracts distinguishes a pass otherwise; only Set does, via the definitions map");
     }
 
     [TestMethod]
@@ -1130,5 +1156,30 @@ public sealed class EuConsolidationDiscoveryTests
                     + SurfaceN + "EuConsolidationBoundQuery",
             },
             ConstructionSurface.Of(typeof(EuConsolidationBoundQuery)).ToArray());
+
+        // The plan's own private Bind is the one helper both public entry points route through -
+        // a real external door the sweep is right to report alongside BindCount and BindPage,
+        // not a shape to guess down to just the two public methods.
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "method private instance " + SurfaceN + "EuConsolidationDiscoveryPlan::Bind("
+                    + SurfaceN + "EuConsolidationQueryDefinition, System.Boolean, System.String, "
+                    + SurfaceN + "EuConsolidationQueryPass, "
+                    + "System.Collections.Generic.IReadOnlyList<System.String>, "
+                    + SurfaceCore + "MachineResponseCardinality, System.String, System.String, "
+                    + SurfaceCore + "MachineQueryRendererSource) -> " + SurfaceN + "EuConsolidationBoundQuery",
+                "method public instance " + SurfaceN + "EuConsolidationDiscoveryPlan::BindCount("
+                    + SurfaceN + "EuConsolidationQuerySet, System.String, " + SurfaceN + "EuConsolidationQueryPass, "
+                    + "System.String, System.String, " + SurfaceCore + "MachineQueryRendererSource) -> "
+                    + SurfaceN + "EuConsolidationBoundQuery",
+                "method public instance " + SurfaceN + "EuConsolidationDiscoveryPlan::BindPage("
+                    + SurfaceN + "EuConsolidationQuerySet, System.String, " + SurfaceN + "EuConsolidationQueryPass, "
+                    + "System.Collections.Generic.IReadOnlyList<System.String>, System.Int64, "
+                    + SurfaceCore + "SourceArtifactRef, System.String, System.String, "
+                    + SurfaceCore + "MachineQueryRendererSource) -> " + SurfaceN + "EuConsolidationBoundQuery",
+            },
+            ConstructionSurface.ProducersIn(
+                typeof(EuConsolidationDiscoveryPlan).Assembly, typeof(EuConsolidationBoundQuery), true).ToArray());
     }
 }
