@@ -23,6 +23,22 @@ public enum OfficialMachineQuerySourceProfileId
     /// </summary>
     [JsonStringEnumMemberName("european_union_document_fetch")]
     EuropeanUnionDocumentFetch = 3,
+
+    /// <summary>
+    /// D1-06c-LU: the LU document-fetch route member. GET, on the robots-permitted www host
+    /// (legilux.public.lu), never the data host (data.legilux.public.lu/robots.txt disallows
+    /// /eli/* and /filestore/* outright). This is the route only; minting the actual fetch
+    /// address from a store URI is the LU adapter's job in a later slice.
+    /// </summary>
+    /// <remarks>
+    /// Value 4, not 3: D1-06c-EU took 3 for its own document-fetch member and merged first
+    /// (275483f3), so this member renumbered on its rebase per the READY verdict
+    /// lex-event-20260904T134000164Z-d7c9a3b4f21e499f91b4e15ec7bc7aca. The wire spelling is
+    /// unchanged and is what the canonical bytes carry, so the numeric value is an internal
+    /// ordinal only.
+    /// </remarks>
+    [JsonStringEnumMemberName("luxembourg_document_fetch")]
+    LuxembourgDocumentFetch = 4,
 }
 
 public enum RobotsPolicyFreshness
@@ -260,19 +276,23 @@ public sealed class OfficialMachineQuerySourceProfile
 
     public HttpRequestMethod Method { get; }
 
-    /// <summary>Null for a GET profile: a GET carries no request entity or content type.</summary>
+    /// <summary>
+    /// Null for either GET profile: a GET carries no request entity or content type. The two SPARQL
+    /// POST profiles always carry one.
+    /// </summary>
     public string? RequestContentType { get; }
 
-    /// <summary>Null for a GET profile: a GET carries no request entity or charset.</summary>
+    /// <summary>Null exactly when <see cref="RequestContentType"/> is null.</summary>
     public MachineQueryCharset? RequestCharset { get; }
 
     /// <summary>
-    /// Null for the EU document-fetch profile: unlike the two SPARQL channels, a document fetch has
-    /// no single fixed <c>Accept</c> value the whole channel shares. The exact value for one bound
-    /// GET is instead carried on that request's own <see cref="MachineQueryInputArtifact"/>
+    /// Null for either document-fetch profile: unlike the two SPARQL channels, a document fetch has
+    /// no single fixed <c>Accept</c> value the whole channel shares. For the EU channel the exact
+    /// value for one bound GET is carried on that request's own <see cref="MachineQueryInputArtifact"/>
     /// parameters (see <see cref="Lex.V3.Contracts.Source.Europe.EuDocumentFetchPlan"/>), because it can never be recovered
     /// from the requested URI text the way <see cref="OfficialMachineQuerySourceProfiles.ResolveFor(BoundMachineRequestIdentity)"/>
-    /// resolves a profile.
+    /// resolves a profile. The LU channel declares no fixed representation either; D1-06c-LU-2 mints
+    /// its per-document value from the store's own userFormat when it sends.
     /// </summary>
     public string? Accept { get; }
 
@@ -284,6 +304,8 @@ public sealed class OfficialMachineQuerySourceProfile
     /// same host live on 2026-09-04: <c>GET /resource/celex/32016R0679</c> 303s to
     /// <c>/resource/cellar/{uuid}/rdf/object/full</c> on that identical host), so "admitted" reduces
     /// to "same origin as this route's own initial hop" and needs no separate host allow-list.
+    /// The LU document-fetch route is deliberately not included: its own robots bootstrap and the
+    /// filestore-to-www host mapping decide its admissibility, and no LU redirect has been observed.
     /// </summary>
     public bool AllowsRedirectWithinInitialAuthority =>
         Id == OfficialMachineQuerySourceProfileId.EuropeanUnionDocumentFetch;
@@ -421,6 +443,30 @@ public sealed class OfficialMachineQuerySourceProfile
             200,
             null));
 
+    /// <summary>
+    /// D1-06c-LU: the LU document-fetch route. A plain GET on the robots-permitted www host,
+    /// admitting no fixed request entity (there is nothing to POST) and no fixed accept
+    /// representation (a publisher document's content type is whatever the manifestation is, not
+    /// negotiated). <see cref="RequestTarget"/> names the admitted host for this profile's
+    /// canonical identity; the exact per-document path is a later slice's concern (minting the
+    /// fetch address from a validated store URI, and sending the actual product request, are both
+    /// out of this lane's path).
+    /// </summary>
+    internal static OfficialMachineQuerySourceProfile LuxembourgDocumentFetch() => new(
+        OfficialMachineQuerySourceProfileId.LuxembourgDocumentFetch,
+        "urn:uuid:c820fff7-3780-41a6-9805-bbfbd52b094e",
+        "https://legilux.public.lu/",
+        HttpRequestMethod.Get,
+        null,
+        null,
+        null,
+        new RobotsPolicyRoute(
+            RoutedHttpNetworkOrigin.FromUri("https://legilux.public.lu/robots.txt"),
+            new RobotsPolicyRouteStep(
+                "https://legilux.public.lu/robots.txt",
+                200,
+                null)));
+
     private byte[] BuildCanonicalBytes()
     {
         var lines = new List<string>
@@ -429,6 +475,12 @@ public sealed class OfficialMachineQuerySourceProfile
             $"resource_id={ResourceId}",
             $"id={ProfileIdToken(Id)}",
             $"request_target={RequestTarget}",
+            // Rebase resolution onto D1-06c-EU's merge 275483f3: the EU form wins for every profile,
+            // including this lane's own LU document-fetch member. The two lanes had encoded an absent
+            // value differently, EU as the literal "none" and LU as an empty string, and one channel
+            // cannot be canonicalized two ways. Taking the merged form moves the LU document-fetch
+            // profile's own digest, which is why its pinned literal is recomputed in this commit;
+            // the two SPARQL profiles carry no null here so their digests are untouched.
             $"method={(Method == HttpRequestMethod.Get ? "GET" : "POST")}",
             $"request_content_type={RequestContentType ?? "none"}",
             $"request_charset={(RequestCharset is null ? "none" : "utf-8")}",
@@ -469,6 +521,7 @@ public sealed class OfficialMachineQuerySourceProfile
         OfficialMachineQuerySourceProfileId.LuxembourgSparql => "luxembourg_sparql",
         OfficialMachineQuerySourceProfileId.EuropeanUnionSparql => "european_union_sparql",
         OfficialMachineQuerySourceProfileId.EuropeanUnionDocumentFetch => "european_union_document_fetch",
+        OfficialMachineQuerySourceProfileId.LuxembourgDocumentFetch => "luxembourg_document_fetch",
         _ => throw new ArgumentOutOfRangeException(nameof(id)),
     };
 
@@ -498,6 +551,8 @@ public static class OfficialMachineQuerySourceProfiles
                 OfficialMachineQuerySourceProfile.EuropeanUnionSparql(),
             OfficialMachineQuerySourceProfileId.EuropeanUnionDocumentFetch =>
                 OfficialMachineQuerySourceProfile.EuropeanUnionDocumentFetch(),
+            OfficialMachineQuerySourceProfileId.LuxembourgDocumentFetch =>
+                OfficialMachineQuerySourceProfile.LuxembourgDocumentFetch(),
             _ => throw new ArgumentOutOfRangeException(nameof(id)),
         };
 
@@ -537,6 +592,12 @@ public static class OfficialMachineQuerySourceProfiles
             // this cannot also recover the request's Accept/Accept-Language from the URI text.
             _ when Lex.V3.Contracts.Source.Europe.EuDocumentFetchAddress.IsAdmittedResourceUri(requestedUri) =>
                 Resolve(OfficialMachineQuerySourceProfileId.EuropeanUnionDocumentFetch),
+            // D1-06c-LU: the second shape check, for the other publisher's own document host. The
+            // two cannot overlap (one admits only publications.europa.eu, the other only
+            // legilux.public.lu), so their order here carries no meaning; every input matching
+            // neither still throws exactly as before.
+            _ when IsLuxembourgDocumentFetchHost(requestedUri) =>
+                Resolve(OfficialMachineQuerySourceProfileId.LuxembourgDocumentFetch),
             _ => throw new ArgumentException(
                 "The bound machine request does not target an admitted official query channel.",
                 parameterName),
@@ -556,4 +617,20 @@ public static class OfficialMachineQuerySourceProfiles
 
         return profile;
     }
+
+    /// <summary>
+    /// D1-06c-LU: recognizes the LU document-fetch route by host rather than by one fixed literal
+    /// URL, because unlike the two fixed SPARQL endpoints, a document fetch legitimately targets
+    /// many different paths on the same host. Robots admissibility of the specific path is decided
+    /// separately, live, by the acquisition run's own robots bootstrap; this guard only says "this
+    /// is the admitted host", exactly as narrow as the two literal-equality cases beside it.
+    /// </summary>
+    private static bool IsLuxembourgDocumentFetchHost(string requestedUri) =>
+        Uri.TryCreate(requestedUri, UriKind.Absolute, out var uri) &&
+        uri.Scheme == Uri.UriSchemeHttps &&
+        string.Equals(uri.Host, "legilux.public.lu", StringComparison.Ordinal) &&
+        uri.IsDefaultPort &&
+        string.IsNullOrEmpty(uri.UserInfo) &&
+        string.IsNullOrEmpty(uri.Query) &&
+        string.IsNullOrEmpty(uri.Fragment);
 }

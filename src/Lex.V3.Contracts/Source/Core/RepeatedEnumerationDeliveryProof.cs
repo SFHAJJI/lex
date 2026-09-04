@@ -432,8 +432,19 @@ public sealed class EnumerationDeliveryComparison
         ReadOnlySpan<byte> requestBody)
     {
         // Repeated enumeration is a query (POST) concept only; every caller here is one of the two
-        // SPARQL profiles, whose Accept and RequestContentType are never null. The document-fetch
-        // GET profile carries neither and never reaches this verification path.
+        // SPARQL profiles, whose Accept and RequestContentType are never null, and no document-fetch
+        // GET profile reaches this verification path today.
+        //
+        // Rebase resolution onto D1-06c-EU's merge 275483f3: that lane stated this invariant as a
+        // comment and this lane enforced it, and there are now two GET-shaped profiles rather than
+        // one, so the enforced form is kept. It is behaviour-preserving for every real caller (a
+        // SPARQL profile has neither field null, so the guard cannot fire) and turns the otherwise
+        // impossible case into a typed mismatch rather than a null dereference.
+        if (sourceProfile.RequestContentType is null || sourceProfile.Accept is null)
+        {
+            return false;
+        }
+
         var expectedHeaders = new[]
         {
             new HttpLogicalRequestHeader("user-agent", sourceProfile.CrawlerUserAgent),

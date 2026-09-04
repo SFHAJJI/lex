@@ -463,6 +463,16 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                 nameof(openedRequest));
         }
 
+        if (profile.Accept is null || profile.RequestContentType is null)
+        {
+            // D1-06c-LU's GET-shaped document-fetch profile deliberately fixes neither: sending
+            // its actual product request is a later slice's job (this lane builds the route, its
+            // robots bootstrap and route-level tests only), so this machine-query POST sender is
+            // not yet asked to carry it.
+            throw new NotSupportedException(
+                "CreateMachineRequest does not yet support a GET-shaped source profile.");
+        }
+
         var body = openedRequest.CopyRequestBody();
         if (profile.Method == HttpRequestMethod.Get)
         {
