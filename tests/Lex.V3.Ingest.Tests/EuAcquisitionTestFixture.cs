@@ -206,6 +206,28 @@ internal static class EuAcquisitionTestFixture
 
     internal static string RootWatermarkRowsJson(IReadOnlyList<string> rows) => RowsJson(RootWatermarkProjection, rows);
 
+    /// <summary>
+    /// One family row: one discovered consolidated state of one seed's own base Work.
+    /// <c>state_key</c> is <c>STR(?state)</c>, mirroring the real page template's own
+    /// <c>BIND(STR(?state) AS ?state_key)</c>, so delivering rows whose <c>state</c> IRIs already
+    /// sort ordinally ascending keeps them in the strictly-ascending cursor order
+    /// <see cref="EuRepeatedEnumerationExecutor"/>'s own strict cursor check requires.
+    /// </summary>
+    internal static string CensusFamilyRow(string baseCelex, string baseIri, string stateIri)
+    {
+        var fields = new List<(string Var, string Term)>
+        {
+            ("base_celex", PlainLiteral(baseCelex)),
+            ("base", Iri(baseIri)),
+            ("state", Iri(stateIri)),
+            ("family_multiplicity", PlainLiteral("1")),
+            ("state_key", PlainLiteral(stateIri)),
+        };
+        return Row(fields);
+    }
+
+    internal static string CensusFamilyRowsJson(IReadOnlyList<string> rows) => RowsJson(CensusFamilyProjection, rows);
+
     private static string Row(IReadOnlyList<(string Var, string Term)> fields) =>
         "{" + string.Join(',', fields.Select(static field => J(field.Var) + ":" + field.Term)) + "}";
 

@@ -295,7 +295,7 @@ internal sealed class EuDeliveryEvidenceSet : IRepeatedEnumerationEvidenceResolv
 
         var planBytes = await CustodyRestore.ReadByDigestCheckedAsync(custodyStore, refs.QueryPlanRef.Sha256, cancellationToken)
             .ConfigureAwait(false);
-        var queryPlan = DeserializeCanonical<MachineQueryPlan>(
+        var queryPlan = RepeatedEnumerationDeliveryReopenGlue.DecodeCanonical<MachineQueryPlan>(
             planBytes.Span, MachineQueryPlanIdentity.CanonicalizationIdentity, "the machine query plan");
         try
         {
@@ -322,7 +322,7 @@ internal sealed class EuDeliveryEvidenceSet : IRepeatedEnumerationEvidenceResolv
 
         var receiptBytes = await CustodyRestore.ReadByDigestCheckedAsync(custodyStore, refs.RenderReceiptRef.Sha256, cancellationToken)
             .ConfigureAwait(false);
-        var renderReceipt = DeserializeCanonical<MachineQueryRenderReceipt>(
+        var renderReceipt = RepeatedEnumerationDeliveryReopenGlue.DecodeCanonical<MachineQueryRenderReceipt>(
             receiptBytes.Span, MachineQueryRenderReceiptIdentity.CanonicalizationIdentity, "the machine query render receipt");
         try
         {
@@ -389,46 +389,6 @@ internal sealed class EuDeliveryEvidenceSet : IRepeatedEnumerationEvidenceResolv
                 ?? throw new CustodyIntegrityException($"The retained bytes decoded to no {what}.");
         }
         catch (Exception exception) when (exception is JsonException or DecoderFallbackException)
-        {
-            throw new CustodyIntegrityException($"The retained bytes are not {what}.", exception);
-        }
-    }
-
-    /// <summary>
-    /// Decodes bytes shaped by <c>ContractCanonicalizer.Canonicalize</c>: an ASCII identity line, the
-    /// canonical (sorted-key) JSON, then a trailing newline. Identical decode to the one
-    /// <c>Lex.V3.Ingest.RepeatedEnumerationDeliveryReopenGlue</c>'s own private helper of the same
-    /// name performs; not shared with it because that helper is private to its own file and this is a
-    /// small, closed, publisher-neutral routine rather than a second place an invariant could drift.
-    /// </summary>
-    private static T DeserializeCanonical<T>(ReadOnlySpan<byte> bytes, string expectedIdentity, string what)
-    {
-        string decoded;
-        try
-        {
-            decoded = new UTF8Encoding(false, true).GetString(bytes);
-        }
-        catch (DecoderFallbackException exception)
-        {
-            throw new CustodyIntegrityException($"The retained bytes for {what} are not valid UTF-8.", exception);
-        }
-
-        var prefix = expectedIdentity + "\n";
-        if (!decoded.StartsWith(prefix, StringComparison.Ordinal) ||
-            !decoded.EndsWith('\n') ||
-            decoded.Length < prefix.Length + 1)
-        {
-            throw new CustodyIntegrityException(
-                $"The retained bytes for {what} do not carry their canonicalization identity.");
-        }
-
-        var json = decoded[prefix.Length..^1];
-        try
-        {
-            return ContractJson.Deserialize<T>(json)
-                ?? throw new CustodyIntegrityException($"The retained bytes decoded to no {what}.");
-        }
-        catch (JsonException exception)
         {
             throw new CustodyIntegrityException($"The retained bytes are not {what}.", exception);
         }

@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
@@ -262,7 +263,6 @@ public sealed class EuRepeatedEnumerationExecutor
                     profileRef,
                     pass => BindCensusCount(request, pass),
                     (pass, cursor, selected, evidenceRef) => BindCensusPage(request, pass, cursor, selected, evidenceRef),
-                    censusCursorArity: 1,
                     batchObjects: null,
                     batchMembershipKeyOrdinal: null,
                     cancellationToken)
@@ -296,15 +296,13 @@ public sealed class EuRepeatedEnumerationExecutor
         {
             var profile = request.Plan.CreateDeliveryProfile(request.Set);
             var profileRef = RepeatedEnumerationInterpretationProfileIdentity.Create(NewUrn(), profile);
-            var cursorArity = profile.CursorVariables.Count;
-            var batchMembershipOrdinal = BatchMembershipKeyOrdinal(request.Set);
+            var batchMembershipOrdinal = BatchMembershipKeyOrdinal(profile, request.Set);
             return await RunPassesAsync(
                     session,
                     profile,
                     profileRef,
                     pass => BindObjectFactsCount(request, pass),
                     (pass, cursor, selected, evidenceRef) => BindObjectFactsPage(request, pass, cursor, selected, evidenceRef),
-                    censusCursorArity: cursorArity,
                     batchObjects: request.BatchObjects,
                     batchMembershipKeyOrdinal: batchMembershipOrdinal,
                     cancellationToken)
@@ -340,7 +338,6 @@ public sealed class EuRepeatedEnumerationExecutor
         SourceArtifactRef profileRef,
         Func<int, EuBoundQueryParts> bindCount,
         Func<int, IReadOnlyList<string>?, long, SourceArtifactRef, EuBoundQueryParts> bindPage,
-        int censusCursorArity,
         IReadOnlyList<string>? batchObjects,
         int? batchMembershipKeyOrdinal,
         CancellationToken cancellationToken)
@@ -372,7 +369,7 @@ public sealed class EuRepeatedEnumerationExecutor
             {
                 var passResult = await RunOnePassAsync(
                         session, profile, bindCount, bindPage, passOrdinal,
-                        censusCursorArity, batchObjects, batchMembershipKeyOrdinal,
+                        batchObjects, batchMembershipKeyOrdinal,
                         executorWrittenMembership,
                         () => productRequestCount, count => productRequestCount = count,
                         cancellationToken)
@@ -429,7 +426,6 @@ public sealed class EuRepeatedEnumerationExecutor
         Func<int, EuBoundQueryParts> bindCount,
         Func<int, IReadOnlyList<string>?, long, SourceArtifactRef, EuBoundQueryParts> bindPage,
         int passOrdinal,
-        int cursorArity,
         IReadOnlyList<string>? batchObjects,
         int? batchMembershipKeyOrdinal,
         Dictionary<string, CustodyMembership> executorWrittenMembership,
@@ -450,7 +446,7 @@ public sealed class EuRepeatedEnumerationExecutor
         long selected;
         try
         {
-            selected = ParseStrictEuCount(countOutcome.Transport!.RetainedPayloadBytes.Span);
+            selected = ParseStrictEuCount(countOutcome.Transport!.RetainedPayloadBytes.Span, profile);
         }
         catch (Exception exception) when (exception is FormatException or System.Text.Json.JsonException)
         {
@@ -518,7 +514,7 @@ public sealed class EuRepeatedEnumerationExecutor
             IReadOnlyList<string[]> rows;
             try
             {
-                rows = ParseStrictRows(transport.RetainedPayloadBytes.Span, cursorArity);
+                rows = ParseStrictRows(transport.RetainedPayloadBytes.Span, profile.CursorVariables);
             }
             catch (Exception exception) when (exception is FormatException or System.Text.Json.JsonException)
             {
@@ -597,18 +593,43 @@ public sealed class EuRepeatedEnumerationExecutor
     }
 
     /// <summary>
-    /// Which zero-based cursor part carries the family's own VALUES-bound selection term: <c>key_1</c>
-    /// (<c>STR(?object)</c>) for object-facts and root-watermark, <c>key_7</c> (<c>STR(?parent)</c>)
-    /// for expression-facts, since that family's own <c>?object</c> (<c>key_1</c>) is the discovered
-    /// Expression, never a batch member itself.
+    /// Which zero-based cursor part carries the family's own VALUES-bound selection term:
+    /// <c>key_1</c> (<c>STR(?object)</c>) for object-facts and root-watermark, <c>key_7</c>
+    /// (<c>STR(?parent)</c>) for expression-facts, since that family's own <c>?object</c>
+    /// (<c>key_1</c>) is the discovered Expression, never a batch member itself.
     /// </summary>
-    private static int BatchMembershipKeyOrdinal(EuObjectFactsQuerySet set) => set switch
+    /// <remarks>
+    /// Small fold-in. Looked up by NAME in <paramref name="profile"/>'s own
+    /// <see cref="RepeatedEnumerationInterpretationProfile.CursorVariables"/> rather than as a
+    /// hardcoded numeric index: the cursor-variable NAME (<c>key_1</c> or <c>key_7</c>) is the one
+    /// fact this executor actually knows about which part carries the selection term: its own
+    /// ordinal position within one query set's cursor is a property of
+    /// <see cref="EuObjectFactsDiscoveryPlan"/>'s own (internal) cursor construction, not something
+    /// this file should assume never shifts.
+    /// </remarks>
+    private static int BatchMembershipKeyOrdinal(
+        RepeatedEnumerationInterpretationProfile profile, EuObjectFactsQuerySet set)
     {
-        EuObjectFactsQuerySet.ObjectFacts => 0,
-        EuObjectFactsQuerySet.ExpressionFacts => 6,
-        EuObjectFactsQuerySet.RootWatermark => 0,
-        _ => throw new ArgumentOutOfRangeException(nameof(set)),
-    };
+        var variableName = set switch
+        {
+            EuObjectFactsQuerySet.ObjectFacts => "key_1",
+            EuObjectFactsQuerySet.ExpressionFacts => "key_7",
+            EuObjectFactsQuerySet.RootWatermark => "key_1",
+            _ => throw new ArgumentOutOfRangeException(nameof(set)),
+        };
+
+        var cursorVariables = profile.CursorVariables;
+        for (var index = 0; index < cursorVariables.Count; index++)
+        {
+            if (string.Equals(cursorVariables[index], variableName, StringComparison.Ordinal))
+            {
+                return index;
+            }
+        }
+
+        throw new ArgumentException(
+            $"'{variableName}' is not part of this profile's own cursor variables.", nameof(profile));
+    }
 
     private static EuBoundQueryParts BindCensusCount(EuCensusPartitionRunRequest request, int passOrdinal)
     {
@@ -748,12 +769,23 @@ public sealed class EuRepeatedEnumerationExecutor
     /// The EU dialect's own strict count parse (D1-05c-2 precision one). The EU Cellar SPARQL
     /// endpoint's Virtuoso instance answers a bounded COUNT with a plain <c>"literal"</c> term
     /// carrying an explicit <c>xsd:integer</c> datatype qualifier, never the <c>"typed-literal"</c>
-    /// token the LU executor's own <c>ParseStrictCount</c> hard-codes -- confirmed against
-    /// <see cref="EnumerationDeliveryComparison"/>'s own dialect-keyed wire-type check, which already
-    /// requires <c>"literal"</c> for every non-Luxembourg dialect.
+    /// token the LU executor's own <c>ParseStrictCount</c> hard-codes.
     /// </summary>
-    private static long ParseStrictEuCount(ReadOnlySpan<byte> bytes)
+    /// <remarks>
+    /// Small fold-in. The expected wire-type token is read off <paramref name="profile"/>'s own
+    /// <see cref="RepeatedEnumerationInterpretationProfile.Dialect"/> the exact same way
+    /// <see cref="EnumerationDeliveryComparison"/>'s own dialect-keyed <c>ParseCount</c> derives it
+    /// (<c>"typed-literal"</c> for <see cref="RepeatedEnumerationSparqlJsonDialect.LuxembourgVirtuoso"/>,
+    /// <c>"literal"</c> for every other dialect), rather than as a second, independent literal that
+    /// happens to agree with Core's own check only because this executor is never handed anything but
+    /// an EU profile today.
+    /// </remarks>
+    private static long ParseStrictEuCount(ReadOnlySpan<byte> bytes, RepeatedEnumerationInterpretationProfile profile)
     {
+        var expectedWireType = profile.Dialect == RepeatedEnumerationSparqlJsonDialect.LuxembourgVirtuoso
+            ? "typed-literal"
+            : "literal";
+
         using var document = System.Text.Json.JsonDocument.Parse(bytes.ToArray());
         var root = document.RootElement;
         if (root.ValueKind != System.Text.Json.JsonValueKind.Object ||
@@ -777,7 +809,7 @@ public sealed class EuRepeatedEnumerationExecutor
         if (term.ValueKind != System.Text.Json.JsonValueKind.Object ||
             !term.TryGetProperty("type", out var type) ||
             type.ValueKind != System.Text.Json.JsonValueKind.String ||
-            type.GetString() != "literal" ||
+            type.GetString() != expectedWireType ||
             !term.TryGetProperty("datatype", out var datatype) ||
             datatype.ValueKind != System.Text.Json.JsonValueKind.String ||
             datatype.GetString() != "http://www.w3.org/2001/XMLSchema#integer" ||
@@ -800,15 +832,43 @@ public sealed class EuRepeatedEnumerationExecutor
     }
 
     /// <summary>
-    /// Reads exactly <paramref name="cursorArity"/> <c>key_N</c> string values from each delivered
-    /// row, generically across the four cursor arities this executor drives (one for the census
-    /// family's <c>state_key</c>, five for root-watermark, six for object-facts, seven for
-    /// expression-facts). Deliberately shallow, mirroring the LU executor's own <c>ParseStrictRows</c>:
-    /// it reads only as far as the executor's own driving needs (cursor advance, partition-membership
-    /// check, termination), and does not re-check what Source/Core already checks over the same
-    /// retained bytes when it resolves them.
+    /// Reads exactly <paramref name="cursorVariables"/>'s own string values from each delivered row,
+    /// generically across the four cursors this executor drives (one for the census family's own
+    /// <c>state_key</c>, five for root-watermark, six for object-facts, seven for expression-facts).
+    /// Deliberately shallow, mirroring the LU executor's own <c>ParseStrictRows</c>: it reads only as
+    /// far as the executor's own driving needs (cursor advance, partition-membership check,
+    /// termination), and does not re-check what Source/Core already checks over the same retained
+    /// bytes when it resolves them.
     /// </summary>
-    private static IReadOnlyList<string[]> ParseStrictRows(ReadOnlySpan<byte> bytes, int cursorArity)
+    /// <remarks>
+    /// <para>
+    /// Read by each cursor variable's own NAME (<paramref name="cursorVariables"/>, taken from
+    /// <see cref="RepeatedEnumerationInterpretationProfile.CursorVariables"/>), never by a hardcoded
+    /// <c>key_N</c> positional name: family P, X and W's own cursor variables happen to be literally
+    /// named <c>key_1</c>.. (<see cref="EuObjectFactsDiscoveryPlan"/>'s own choice), but the census
+    /// family's single cursor variable is genuinely named <c>state_key</c>
+    /// (<see cref="EuConsolidationDiscoveryPlan"/>'s own page template projects no <c>key_1</c> at
+    /// all) -- a real, previously undiscovered defect this fix closes: any nonzero census delivery
+    /// was unparseable here before this change, throwing "row is missing key_1" on real data, because
+    /// nothing in the test suite before this file's own new tests ever delivered a nonzero census
+    /// page.
+    /// </para>
+    /// <para>
+    /// Defect 5's own fix. Every delivered key part is checked for representability
+    /// (<see cref="RequireRepresentableKeyPart"/>), ported from the LU executor's own
+    /// <c>LuxembourgQueryCursor</c> constructor (through <c>LuxembourgQueryText.RequireKeyPart</c>,
+    /// <c>internal</c> to <c>Lex.V3.Contracts</c> and so not reachable from here, hence this file's own
+    /// small copy rather than a shared reference): bounded UTF-8 byte length, and valid strict UTF-8
+    /// on re-encode. Investigated before porting rather than assumed: <c>System.Text.Json</c>'s own
+    /// <c>GetString()</c> does not itself reject an unpaired UTF-16 surrogate inside a JSON string
+    /// escape, so a delivered key value carrying one is exactly as reachable on the EU wire as on
+    /// LU's, from equally untrusted publisher JSON; <see cref="EuEnumerationRefusal.DeliveredKeyNotRepresentable"/>
+    /// was dead code only because nothing on this side ever checked for it, not because the condition
+    /// cannot occur here.
+    /// </para>
+    /// </remarks>
+    private static IReadOnlyList<string[]> ParseStrictRows(
+        ReadOnlySpan<byte> bytes, IReadOnlyList<string> cursorVariables)
     {
         using var document = System.Text.Json.JsonDocument.Parse(bytes.ToArray());
         var root = document.RootElement;
@@ -829,10 +889,10 @@ public sealed class EuRepeatedEnumerationExecutor
                 throw new FormatException("The page response row is not an object.");
             }
 
-            var parts = new string[cursorArity];
-            for (var index = 0; index < cursorArity; index++)
+            var parts = new string[cursorVariables.Count];
+            for (var index = 0; index < cursorVariables.Count; index++)
             {
-                var name = $"key_{index + 1}";
+                var name = cursorVariables[index];
                 if (!binding.TryGetProperty(name, out var term) ||
                     term.ValueKind != System.Text.Json.JsonValueKind.Object ||
                     !term.TryGetProperty("value", out var value) ||
@@ -841,13 +901,62 @@ public sealed class EuRepeatedEnumerationExecutor
                     throw new FormatException($"The page response row is missing {name}.");
                 }
 
-                parts[index] = value.GetString()!;
+                parts[index] = RequireRepresentableKeyPart(value.GetString()!, name);
             }
 
             rows.Add(parts);
         }
 
         return rows;
+    }
+
+    /// <summary>
+    /// The bound, mirroring the LU executor's own identical bound
+    /// (<c>LuxembourgQueryText.MaximumKeyPartByteLength</c>): a delivered key part must be bounded,
+    /// control-free, strictly UTF-8-representable text. Reused rather than independently chosen: it is
+    /// already the reviewed bound for the identical shape of value (one delivered SPARQL results
+    /// binding's own string), and there is no EU-specific reason a different number would be right.
+    /// </summary>
+    private const int MaximumKeyPartByteLength = 2047;
+
+    private static readonly UTF8Encoding StrictKeyPartUtf8 = new(false, true);
+
+    /// <summary>Defect 5: the EU counterpart of the LU executor's own key-part representability check.</summary>
+    private static string RequireRepresentableKeyPart(string value, string partName)
+    {
+        byte[] bytes;
+        try
+        {
+            bytes = StrictKeyPartUtf8.GetBytes(value);
+        }
+        catch (EncoderFallbackException exception)
+        {
+            throw PageFailure(
+                $"The delivered key part '{partName}' is not valid UTF-8 text.",
+                EuEnumerationRefusal.DeliveredKeyNotRepresentable,
+                exception);
+        }
+
+        if (bytes.Length > MaximumKeyPartByteLength)
+        {
+            throw PageFailure(
+                $"The delivered key part '{partName}' exceeds {MaximumKeyPartByteLength} UTF-8 bytes.",
+                EuEnumerationRefusal.DeliveredKeyNotRepresentable);
+        }
+
+        return value;
+    }
+
+    /// <summary>
+    /// Tags an exception with the refusal <see cref="ClassifyPageParseFailure"/> should read back out
+    /// of it, exactly mirroring the LU executor's own identically named private helper.
+    /// </summary>
+    private static FormatException PageFailure(
+        string message, EuEnumerationRefusal refusal, Exception? inner = null)
+    {
+        var exception = new FormatException(message, inner);
+        exception.Data[PageParseFailureKey] = refusal.ToString();
+        return exception;
     }
 
     /// <summary>

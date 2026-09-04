@@ -74,6 +74,48 @@ public sealed class EuRepeatedEnumerationExecutorTests
     }
 
     /// <summary>
+    /// Defect 5's own driving test. <c>EuEnumerationRefusal.DeliveredKeyNotRepresentable</c> was dead
+    /// code before this fix: nothing on the EU side ever tagged an exception with the classifier's own
+    /// <c>eu.pageParseFailure</c> key. This delivers a real page whose one delivered key part (the
+    /// census family's own <c>state_key</c>) exceeds the representability bound, proving the refusal
+    /// is now reachable rather than merely declared.
+    /// </summary>
+    [TestMethod]
+    public async Task ADeliveredKeyPartExceedingTheRepresentabilityBoundIsRefused()
+    {
+        var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
+        var (plan, planResourceId) = EuAcquisitionTestFixture.BuildCensusPlan();
+        var rendererSource = EuAcquisitionTestFixture.BuildRendererSource(3);
+        var request = new EuCensusPartitionRunRequest(plan, planResourceId, seed.Celex, rendererSource);
+
+        var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)!;
+        // Well past the 2047 UTF-8 byte bound RequireRepresentableKeyPart enforces.
+        var oversizedStateIri = "http://publications.europa.eu/resource/cellar/" + new string('a', 2100);
+        var oversizedRow = EuAcquisitionTestFixture.CensusFamilyRow(seed.Celex, rootIri, oversizedStateIri);
+
+        var script = new EuAcquisitionTestFixture.FamilyScript("Census", new[]
+        {
+            EuAcquisitionTestFixture.EuCountJson(1),
+            EuAcquisitionTestFixture.CensusFamilyRowsJson(new[] { oversizedRow }),
+        });
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["Census"] = script,
+        };
+        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(scripts);
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var executor = new EuRepeatedEnumerationExecutor(
+            store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
+
+        var result = await executor.RunCensusPartitionAsync(
+            request, EuAcquisitionTestFixture.SourceWitness(), CancellationToken.None);
+
+        Assert.IsNull(result.Receipt);
+        Assert.IsNotNull(result.Refusal);
+        Assert.AreEqual(EuEnumerationRefusal.DeliveredKeyNotRepresentable, result.Refusal!.Code);
+    }
+
+    /// <summary>
     /// Answers the EU robots route (by URI, exactly as <see cref="EuAcquisitionTestFixture.ClassifyingHandler"/>
     /// does), then always returns <paramref name="countBody"/> for every SPARQL POST -- correct for
     /// these two tests because both refuse from the pass's own count response, before any page bind

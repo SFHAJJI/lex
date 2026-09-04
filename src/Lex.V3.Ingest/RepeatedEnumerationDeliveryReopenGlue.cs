@@ -324,7 +324,15 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
     /// <c>ContractCanonicalizer</c> that originally wrote this shape is not, so this decodes the
     /// public envelope directly rather than reaching for that internal type.
     /// </summary>
-    private static T DecodeCanonical<T>(ReadOnlySpan<byte> bytes, string canonicalizationIdentity, string what)
+    /// <remarks>
+    /// Internal rather than private: <see cref="Lex.V3.Ingest.Europe.EuDeliveryEvidenceSet"/>'s own
+    /// <c>ResolveOneAsync</c> (same assembly) reuses this exact decode rather than carrying its own
+    /// duplicate, since the two calls decode the identical canonical-bytes shape over the identical
+    /// artifact types (<c>MachineQueryPlan</c>, <c>MachineQueryRenderReceipt</c>). Not public: nothing
+    /// outside this assembly needs it, and every caller this glue exists for already lives in
+    /// <c>Lex.V3.Ingest</c>.
+    /// </remarks>
+    internal static T DecodeCanonical<T>(ReadOnlySpan<byte> bytes, string canonicalizationIdentity, string what)
     {
         string decoded;
         try
