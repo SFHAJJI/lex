@@ -107,6 +107,36 @@ public sealed class EuCellarObjectDecodeTests
         Assert.IsNull(snapshot.Supporting);
     }
 
+    // Fold-in for the D1-05b decode refreeze
+    // (lex-event-20260904T025508487Z-0d433eb3f5254b6188c05ab22e962acd): BuildObjectRef's canonical
+    // key prefix ("eu-consolidation-root:") feeds both ObjectRef.CanonicalKey and its SHA-256 digest,
+    // and neither was ever asserted against a fixed expected string. The two expected literals below
+    // are computed independently of this production code (sha256sum and, cross-checked, openssl dgst
+    // -sha256, over the exact UTF-8 bytes of the canonical key string), the same "pin the GDPR root's
+    // canonical key and digest as fixed literals" convention D1-05a used for the binding digest
+    // (EuScopeProfileTests.ProfileAndSelectorTableDigestsArePinnedLiterally): a change to the prefix,
+    // to the root the key is built from, or to how the digest is taken, is a real, catchable diff
+    // rather than a tautology that recomputes the same literal through the same code it is meant to
+    // guard.
+    [TestMethod]
+    public void TheObjectRefsCanonicalKeyAndDigestArePinnedLiterally()
+    {
+        var rows = new[] { FamilyRow(GdprCelex, GdprRoot, StateA) };
+
+        var snapshot = EuCellarObjectDecode.TryDecode(
+            GdprCelex, rows, FamilyProfile, EuActForm.Regulation, Evidence("gdpr-object-ref"),
+            out var refusal, out _);
+
+        Assert.AreEqual(EuCellarObjectDecodeRefusal.None, refusal);
+        Assert.AreEqual(
+            "eu-consolidation-root:"
+                + "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
+            snapshot!.ObjectRef.CanonicalKey);
+        Assert.AreEqual(
+            "7c5c4154a86ab3396956c0c1440e15710914741e9272273c1ca49eff5da51f68",
+            snapshot.ObjectRef.CanonicalKeySha256);
+    }
+
     [TestMethod]
     public void EveryOtherClosedPredicateIsHonestlyNotObserved()
     {
@@ -380,6 +410,32 @@ public sealed class EuCellarObjectDecodeTests
         Assert.ThrowsExactly<ArgumentException>(() => EuCellarObjectDecode.TryDecode(
             GdprCelex, new RepeatedEnumerationRow?[] { null }!, FamilyProfile, EuActForm.Regulation,
             Evidence("null-row"), out _, out _));
+    }
+
+    // Noted, not blocking, by the D1-05b decode refreeze
+    // (lex-event-20260904T025508487Z-0d433eb3f5254b6188c05ab22e962acd): a row shorter than the
+    // profile's own projection previously reached an unexplained ArgumentOutOfRangeException at
+    // Term's single positional read. Not reachable from a real delivery (the item 17 door already
+    // shapes every row to match the profile it was verified under), but a hand-built or corrupted row
+    // is still a caller contract violation, not a reviewable data disagreement -- the same treatment
+    // TryDecode already gives a null row above -- so this is a clean, explained ArgumentException
+    // rather than a raw index exception with no message.
+    [TestMethod]
+    public void ARowWithFewerTermsThanTheProjectionThrowsACleanArgumentException()
+    {
+        var shortTerms = new RepeatedEnumerationRdfTerm[]
+        {
+            RepeatedEnumerationRdfTerm.Literal(GdprCelex, XsdString, null),
+        };
+        var row = new RepeatedEnumerationRow(
+            Array.AsReadOnly(shortTerms),
+            Array.AsReadOnly(new[] { shortTerms[0] }),
+            Array.AsReadOnly(new[] { shortTerms[0] }));
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(() => EuCellarObjectDecode.TryDecode(
+            GdprCelex, [row], FamilyProfile, EuActForm.Regulation, Evidence("short-terms"),
+            out _, out _));
+        StringAssert.Contains(thrown.Message, "too few");
     }
 
     // ---- Construction surface. ----

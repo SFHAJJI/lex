@@ -372,6 +372,19 @@ public static class EuCellarObjectDecode
                 $"'{variableName}' is not part of this profile's projection.", nameof(variableName));
         }
 
+        // The door (queue item 17) already shapes every row it hands back to match the profile it
+        // was verified under, so this is not reachable from a real delivery; it guards a hand-built
+        // or corrupted row against an unexplained ArgumentOutOfRangeException, the same "caller
+        // contract violation, not a reviewable data disagreement" treatment TryDecode already gives a
+        // null row above.
+        if (index >= row.Terms.Count)
+        {
+            throw new ArgumentException(
+                $"A family row has {row.Terms.Count} term(s), too few to read '{variableName}' at " +
+                $"projection position {index}.",
+                nameof(row));
+        }
+
         return row.Terms[index];
     }
 

@@ -646,4 +646,31 @@ public sealed class EuCellarObjectSnapshotTests
                 .ToArray(),
             "the exact set of external producers of EuContentClassObservation across Lex.V3.Contracts.");
     }
+
+    // ---- Fold-in for the D1-05b decode refreeze (lex-event-20260904T025508487Z-0d433eb3f5254b6188c05ab22e962acd):
+    // this type's own Of pin (TheSnapshotHasExactlyOneConstructionPath above) had no matching
+    // ProducersIn pin, and EuCellarObjectDecode.TryDecode is now a real external producer of
+    // EuCellarObjectSnapshot (it calls TryObserve directly). Print-actual-then-transcribe, the same
+    // technique the seven observation-record pins above already use. ------------------------------
+
+    [TestMethod]
+    public void EuCellarObjectDecodeIsTheOnlyRecognisedExternalProducerOfEuCellarObjectSnapshot()
+    {
+        const string C = "Lex.V3.Contracts.";
+        var assembly = typeof(EuCellarObjectSnapshot).Assembly;
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "method public static " + N + "EuCellarObjectDecode::TryDecode(System.String, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Core."
+                    + "RepeatedEnumerationRow>, Lex.V3.Contracts.Source.Core."
+                    + "RepeatedEnumerationInterpretationProfile, " + C + "EuActForm, "
+                    + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, out " + N
+                    + "EuCellarObjectDecodeRefusal&, out " + N
+                    + "EuCellarObjectSnapshotRefusal&) -> " + N + "EuCellarObjectSnapshot",
+            },
+            ConstructionSurface.ProducersIn(assembly, typeof(EuCellarObjectSnapshot), includeNonPublic: true)
+                .ToArray(),
+            "the exact set of external producers of EuCellarObjectSnapshot across Lex.V3.Contracts.");
+    }
 }
