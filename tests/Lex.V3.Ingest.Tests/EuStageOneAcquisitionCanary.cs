@@ -1,0 +1,291 @@
+using Lex.V3.Artifacts;
+using Lex.V3.Contracts.Custody;
+using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Corpus;
+using Lex.V3.Contracts.Source.Europe;
+using Lex.V3.Contracts.Source.Scope;
+using Lex.V3.Ingest.Europe;
+
+namespace Lex.V3.Ingest.Tests;
+
+/// <summary>
+/// The Stage 1 acceptance canary for the Union acquisition route, the EU twin of
+/// <c>LuxembourgCodeCivilAcquisitionCanary</c>. Its standard is NOT parity with any deployed
+/// service, which stays withdrawn: every object in the closure is either Held with a real receipt
+/// or refused for exactly one of the four legitimate reasons, stated per object, with the accepted
+/// fraction reported as a number.
+/// </summary>
+/// <remarks>
+/// <para>
+/// OPT IN, AND DELIBERATELY SO. It sends real requests to publications.europa.eu, so it is skipped
+/// unless LEX_EU_CANARY=1 is set. A network test that ran by default would make the suite depend on
+/// a third party's uptime and would send traffic nobody asked for. The test EXISTING and being
+/// GATED is a fact about this repository; it is not evidence that any run passed, and the two are
+/// reported separately.
+/// </para>
+/// <para>
+/// It uses the REAL <see cref="FileSystemCustodyStore"/>, never a synthetic one: a canary that
+/// proved bodies were held against a synthetic store would prove nothing. That store publishes
+/// CustodyVerificationProfile.FileSystemUnenforced1 with CustodyProtection.NotEnforced, so every
+/// artifact this run holds is RetainedUnenforced and says so, which is what Decision 71's
+/// interpretation (RULING lex-event-20260904T212914634Z-f166f0b9e11b445795efd40c268bfbb8 and its
+/// gate extension lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c) made possible.
+/// Before those, this run refused before its first product request.
+/// </para>
+/// <para>
+/// A TEST ASSEMBLED RUN, not a production path. Per RULING
+/// lex-event-20260904T231236855Z-8c7a540fc4d2420f859f9d92fdfc733a, no shipped code chooses a
+/// production implementation for any door <see cref="EuQueryExecutionAdapter.RunAsync"/> takes:
+/// nothing in src constructs either acquisition adapter, and the first assembled production run is
+/// Stage 6 R6-01. So every statement about which implementation a door uses is about THIS TEST's
+/// assembly. Door by door: the custody store is the production
+/// <see cref="FileSystemCustodyStore"/>; the executor is the production
+/// <see cref="EuRepeatedEnumerationExecutor"/> on its live constructor; the plans
+/// (<see cref="EuConsolidationDiscoveryPlan"/>, <see cref="EuObjectFactsDiscoveryPlan"/>) and the
+/// bound requests through their own binders are production types; the renderer sources are
+/// production <see cref="MachineQueryRendererSource"/> values minted from bytes this test retains;
+/// and the evidence resolver has NO EU PRODUCTION IMPLEMENTATION AT ALL, which is residue R0.
+/// </para>
+/// <para>
+/// THE BOUNDARY THIS RUN DOES NOT CROSS, stated as plainly as the LU canary states its own. The
+/// evidence resolver is <see cref="CanaryPermissiveEvidenceResolver"/>, a TEST DOUBLE with the same
+/// behaviour as the adapter tests' own. Its <c>IsSelectorObservationAdmitted</c>,
+/// <c>IsSelectorNotApplicableAdmitted</c> and <c>IsRuleEvaluationAdmitted</c> admit ON SHA-256 SHAPE
+/// ALONE: they check that the binding's digest fields are 64 lowercase hex characters and nothing
+/// else. Its <c>IsCompleteEnumerationAdmitted</c> compares against the ref THE CALLER HANDED ITS
+/// CONSTRUCTOR. So THIS RUN DOES NOT PROVE THE REDUCTION STEP. Any sentence saying the manifest was
+/// reduced from the enumeration carries that qualification. What the run checks about the reduction
+/// is its OUTPUT, against an independent census obtained outside this lane, which is a materially
+/// different and weaker claim than a proven admission policy.
+/// </para>
+/// <para>
+/// CONDITION TWO, the output check. The reduced manifest's expression count and its family M token
+/// set are compared per seed against the census in RULING
+/// lex-event-20260904T232128757Z-e21b4aedbfc4412dba8e6533ab2499d0, measured at the endpoint outside
+/// this lane. The GDPR is regular: 24 expressions, 72 manifestations, tokens fmx4 24, xhtml 24,
+/// pdfa1a 24. 32003L0088 is NOT: 23 expressions, 71 manifestations, tokens fmx4 1, html 20, pdf 22,
+/// pdfa1a 1, print 23, xhtml 4, so most languages lack most formats and at least one lacks html
+/// entirely. Nothing here assumes one manifestation of each type per expression; that would pass on
+/// the GDPR and be wrong on the second seed.
+/// </para>
+/// <para>
+/// WHAT THE COUNT COMPARISON CAN AND CANNOT REACH. Family M as this route queries it returns the
+/// DISTINCT manifestation types per work, not one row per manifestation, so this run observes three
+/// tokens for the GDPR where the census counts 72 manifestations. The token SET is compared and the
+/// manifestation TOTAL is not, because this route never enumerates individual manifestations and
+/// asserting 72 against a number it cannot produce would be a fabricated check. The expression
+/// count is compared directly, because family X does enumerate those.
+/// </para>
+/// <para>
+/// The fetch half is separately corroborated by RULING
+/// lex-event-20260904T232443443Z-e3a024f2bda04e1ba90ae14a02848068: three independent observations of
+/// the publisher agree byte for byte on 32003L0088's text/html body,
+/// 0d23ad4953be900de8a614fea4022aa46086e0bdc2fdfd6d0fde0cd84429e4b6 at 37,616 bytes. The PUBLISHER
+/// is the authority; that agreement is evidence this route's fetch is correct and that the pinned
+/// constant is the publisher's real bytes rather than a value recorded once and never rechecked. It
+/// proves nothing about the reduction step, nothing about custody, and nothing about the other seed.
+/// </para>
+/// </remarks>
+[TestClass]
+[DoNotParallelize]
+public sealed class EuStageOneAcquisitionCanary
+{
+    private const string EnableVariable = "LEX_EU_CANARY";
+
+    private const string Gdpr = "32016R0679";
+    private const string WorkingTime = "32003L0088";
+
+    /// <summary>
+    /// The independent census, RULING lex-event-20260904T232128757Z-e21b4aedbfc4412dba8e6533ab2499d0.
+    /// Expression count and the distinct manifestation token set per seed. The per-token counts are
+    /// in the class remarks; only the SET is comparable against what this route observes.
+    /// </summary>
+    private static readonly (string Celex, int Expressions, string[] Tokens)[] Census =
+    [
+        (Gdpr, 24, ["fmx4", "pdfa1a", "xhtml"]),
+        (WorkingTime, 23, ["fmx4", "html", "pdf", "pdfa1a", "print", "xhtml"]),
+    ];
+
+    [TestMethod]
+    public async Task BothCanarySeedsAreHeldOrRefusedForALegitimateReason()
+    {
+        if (Environment.GetEnvironmentVariable(EnableVariable) != "1")
+        {
+            Assert.Inconclusive(
+                $"Live publisher canary. Set {EnableVariable}=1 to run it; it is skipped by default "
+                + "so the suite does not depend on a third party's uptime or send unasked traffic.");
+            return;
+        }
+
+        foreach (var (celex, expressions, tokens) in Census)
+        {
+            Console.WriteLine(
+                $"CANARY|census|{celex}|expressions={expressions}|tokens={string.Join(",", tokens)}");
+        }
+
+        var root = Path.Combine(Path.GetTempPath(), "lex-eu-canary-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        Console.WriteLine($"CANARY|custodyRoot|{root}");
+
+        var store = new FileSystemCustodyStore(root);
+        var executor = new EuRepeatedEnumerationExecutor(store, TimeProvider.System);
+        var adapter = new EuQueryExecutionAdapter(store, executor);
+
+        var seeds = EuAppendixASeedMap.SeedsInCelexOrder
+            .Where(seed => seed.Celex == Gdpr || seed.Celex == WorkingTime)
+            .ToArray();
+        Assert.HasCount(2, seeds, "both canary seeds must be Appendix A members.");
+
+        var roots = seeds
+            .Select(seed => EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)
+                ?? throw new AssertFailedException($"{seed.Celex}'s own seed root failed to canonicalize."))
+            .OrderBy(static value => value, StringComparer.Ordinal)
+            .ToArray();
+        foreach (var (seed, index) in seeds.Select(static (seed, index) => (seed, index)))
+        {
+            Console.WriteLine($"CANARY|seed|{index}|{seed.Celex}|{seed.WorkRoot}");
+        }
+
+        var censusRequests = seeds
+            .Select(seed =>
+            {
+                var (plan, planId) = EuAcquisitionTestFixture.BuildCensusPlan();
+                return (
+                    Request: new EuCensusPartitionRunRequest(
+                        plan, planId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(6100)),
+                    Witness: EuAcquisitionTestFixture.SourceWitness());
+            })
+            .ToArray();
+
+        var objectFactsRequests = new[]
+            {
+                EuObjectFactsQuerySet.ObjectFacts,
+                EuObjectFactsQuerySet.ExpressionFacts,
+                EuObjectFactsQuerySet.RootWatermark,
+                EuObjectFactsQuerySet.ManifestationFacts,
+            }
+            .Select(set =>
+            {
+                var (plan, planId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+                return (
+                    Request: new EuObjectFactsPartitionRunRequest(
+                        plan, planId, set, roots, EuAcquisitionTestFixture.BuildRendererSource(6200)),
+                    Witness: EuAcquisitionTestFixture.SourceWitness());
+            })
+            .ToArray();
+
+        var completeEnumerationRef = new SourceArtifactRef(
+            $"urn:uuid:{Guid.NewGuid():D}",
+            System.Convert.ToHexStringLower(
+                System.Security.Cryptography.SHA256.HashData(
+                    System.Text.Encoding.UTF8.GetBytes("eu-canary-complete-enumeration"))));
+
+        var result = await adapter.RunAsync(
+            censusRequests,
+            objectFactsRequests,
+            EuAcquisitionTestFixture.BuildRendererSource(6300),
+            EuAcquisitionTestFixture.SourceWitness(),
+            EuAcquisitionTestFixture.BuildRendererSource(6400),
+            EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
+            new CanaryPermissiveEvidenceResolver(completeEnumerationRef),
+            CancellationToken.None);
+
+        Console.WriteLine($"CANARY|refusal|{result.Refusal?.Code}|{result.Refusal?.Detail}");
+        Console.WriteLine($"CANARY|completion|{result.Completion}");
+        Console.WriteLine($"CANARY|observedObjects|{result.ObservedObjectCount}");
+        Console.WriteLine($"CANARY|observedExpressions|{result.ObservedExpressionCount}");
+        Console.WriteLine($"CANARY|decodeRefusal|{result.DecodeRefusal}|{result.DecodeOffendingIri}");
+
+        foreach (var outcome in result.FamilyOutcomes)
+        {
+            Console.WriteLine(
+                $"CANARY|family|{outcome.FamilyKey}|{outcome.Kind}|floor={outcome.RetainedFloor}|"
+                + $"executorRefusal={outcome.ExecutorRefusal?.Code}|"
+                + $"detail={outcome.ExecutorRefusal?.CoreRefusalDetail}|proof={outcome.ProofRefusal}");
+        }
+
+        if (result.DocumentAcquisitionOutcomesByOrdinal is { } bodies)
+        {
+            var held = 0;
+            foreach (var (ordinal, outcome) in bodies.OrderBy(static entry => entry.Key))
+            {
+                var floor = outcome.Receipt is null
+                    ? null
+                    : (CustodyMembership?)CorpusBodyRecord.Held(outcome.Receipt).Floor;
+                Console.WriteLine(
+                    $"CANARY|body|{ordinal}|held={outcome.Receipt is not null}|floor={floor}|"
+                    + $"digest={outcome.Receipt?.Reference.ContentSha256}|"
+                    + $"bytes={outcome.Receipt?.Reference.ByteLength}|refusal={outcome.Refusal}");
+                if (outcome.Receipt is not null)
+                {
+                    held++;
+                }
+            }
+
+            var fraction = bodies.Count == 0 ? 0d : (double)held / bodies.Count;
+            Console.WriteLine($"CANARY|acceptedFraction|{held}/{bodies.Count}|{fraction:F4}");
+        }
+
+        if (result.DocumentLadderResultsByOrdinal is { } ladders)
+        {
+            foreach (var (ordinal, ladder) in ladders.OrderBy(static entry => entry.Key))
+            {
+                Console.WriteLine(
+                    $"CANARY|ladder|{ordinal}|attempted={string.Join(",", ladder.Attempted)}|"
+                    + $"served={ladder.Served}");
+            }
+        }
+
+        if (result.CorpusRecordSet is { } set)
+        {
+            var records = set.Set.Records;
+            Console.WriteLine(
+                $"CANARY|records|{records.Count}|"
+                + $"held={records.Count(static r => r.Body.Kind == CorpusBodyRecordKind.Held)}");
+            foreach (var record in records)
+            {
+                Console.WriteLine(
+                    $"CANARY|record|{record.ObjectRef.CanonicalKey}|{record.Body.Kind}|"
+                    + $"floor={record.Body.Floor}|notHeld={record.Body.NotHeldReason}|"
+                    + $"pending={record.Body.PendingAcquisitionReason}");
+            }
+        }
+
+        Assert.IsNull(
+            result.Refusal,
+            $"the run must not refuse as a whole: code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+    }
+
+    /// <summary>
+    /// The same permissive shape as <c>EuQueryExecutionAdapterTests.PermissiveEvidenceResolver</c>,
+    /// declared here because that one is private to its own test class. A TEST DOUBLE, and the
+    /// reason this canary cannot claim the reduction step: the three admission questions below
+    /// answer on SHA-256 SHAPE ALONE, and the fourth compares against the ref this constructor was
+    /// handed. Residue R0 is the EU production resolver that would answer them against evidence the
+    /// run independently holds, the way
+    /// <c>LuxembourgProductionScopeReductionEvidenceResolver</c> already does for Luxembourg.
+    /// </summary>
+    private sealed class CanaryPermissiveEvidenceResolver(SourceArtifactRef completeEnumerationRef)
+        : IScopeReductionEvidenceResolver
+    {
+        public SourceArtifactRef CompleteEnumerationRef { get; } = completeEnumerationRef;
+
+        public bool IsSelectorObservationAdmitted(ScopeSelectorObservationBinding binding) =>
+            IsSha256(binding.ObjectRefSha256) && IsSha256(binding.SelectorEvidenceSha256);
+
+        public bool IsSelectorNotApplicableAdmitted(ScopeSelectorNotApplicableBinding binding) =>
+            IsSha256(binding.ObjectRefSha256);
+
+        public bool IsRuleEvaluationAdmitted(ScopeRuleEvaluationBinding binding) =>
+            IsSha256(binding.ObjectRefSha256) &&
+            IsSha256(binding.SelectorSetSha256) &&
+            IsSha256(binding.RuleEvaluationSha256);
+
+        public bool IsCompleteEnumerationAdmitted(ScopeCompleteEnumerationBinding binding) =>
+            binding.CompleteEnumerationRef == CompleteEnumerationRef;
+
+        private static bool IsSha256(string value) =>
+            value.Length == 64 &&
+            value.All(static character => character is (>= '0' and <= '9') or (>= 'a' and <= 'f'));
+    }
+}
