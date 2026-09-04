@@ -119,8 +119,15 @@ public sealed class EuScopeProfileTests
         // today over the closed EU vocabularies and the selector/projection table. A change to
         // either input is expected to change these literals, which is exactly what the sensitivity
         // tests below drive on purpose.
+        //
+        // The profile digest moved with D1-05d's tenth EuManifestationFormat member, NoneAdmitted
+        // (RULING lex-event-20260904T201230364Z-8afe287d7c9b49509a410204e7ee729d): ComputeProfileSha256
+        // folds in every format token and whether the never-carries-a-body set excludes it, so a
+        // widened vocabulary MUST move this digest. Re-pinned from the value the test itself printed,
+        // never hand-derived. The selector-table digest below is unchanged, because that table is a
+        // property of the selector and projection rules and this slice added no selector.
         Assert.AreEqual(
-            "0438e3d2ec9d99c0b1190c20b1b93d500508a1a3e4bb91c068a95f8d6fee0e0d",
+            "800267b8e89b5ff08882b2a226031097ba3d0cc3e582b34eeea29d9907719352",
             binding.SourceProfileRef.Sha256);
         Assert.AreEqual(
             "b4fb1a17408b4fab4b6ab5080f34b847813460230327f4770f3a3febaf4e41a5",
@@ -361,7 +368,7 @@ public sealed class EuScopeProfileTests
 
         foreach (var format in Enum.GetValues<EuManifestationFormat>())
         {
-            var admission = format == EuManifestationFormat.Print
+            var admission = format is EuManifestationFormat.Print or EuManifestationFormat.NoneAdmitted
                 ? EuFormatBodyAdmission.BodyNotAdmitted
                 : EuFormatBodyAdmission.BodyAdmitted;
             var expected = format switch
@@ -375,6 +382,7 @@ public sealed class EuScopeProfileTests
                 EuManifestationFormat.PdfA1b => "pdfa1b",
                 EuManifestationFormat.PdfA2a => "pdfa2a",
                 EuManifestationFormat.Print => "print",
+                EuManifestationFormat.NoneAdmitted => "none_admitted",
                 _ => throw new ArgumentOutOfRangeException(nameof(format)),
             };
             var dispositions = Baseline(

@@ -514,10 +514,12 @@ public static class EuManifestationListingDecode
     /// <see cref="EuManifestationScope.FormatsThatCanNeverCarryABody"/>, and a permanent exclusion is
     /// exactly what an unread listing does not license: the unknown token may well be a body format.
     /// When the Work listed no known non-print format at all (its listing is print plus unknowns, or
-    /// unknowns alone) there is no honest publisher value left to name, so this names
-    /// <see cref="EuManifestationFormat.Formex4"/>, the vocabulary's own floor, and says so here
-    /// rather than implying it was observed. That branch is unreachable against every real listing
-    /// observed to date, all of which name at least one known non-print format.
+    /// unknowns alone) there is no publisher value left to name, so this names
+    /// <see cref="EuManifestationFormat.NoneAdmitted"/>, the one member that means exactly that.
+    /// It named <see cref="EuManifestationFormat.Formex4"/> until RULING
+    /// lex-event-20260904T201230364Z-8afe287d7c9b49509a410204e7ee729d, which is a format the office
+    /// had not listed for that Work; a field inventing a publisher fact is not excused by the branch
+    /// being unreachable, since the branch exists to be correct when it is finally reached.
     /// </para>
     /// </remarks>
     public static EuFormatObservation ObserveUnreadableListing(
@@ -529,7 +531,7 @@ public static class EuManifestationListingDecode
         ArgumentException.ThrowIfNullOrWhiteSpace(unadmittedToken);
         ArgumentNullException.ThrowIfNull(evidenceRef);
 
-        var namedFormat = EuManifestationFormat.Formex4;
+        var namedFormat = EuManifestationFormat.NoneAdmitted;
         foreach (var candidate in knownListedFormats.OrderBy(static value => value))
         {
             ContractValidation.RequireDefined(candidate, nameof(knownListedFormats));
@@ -573,11 +575,22 @@ public static class EuManifestationListingDecode
 
     private const int MaximumReasonTokenLength = 64;
 
+    /// <summary>
+    /// The publisher tokens, and only those. <see cref="EuManifestationFormat.NoneAdmitted"/> is
+    /// excluded by construction: it is this vocabulary's own answer for a listing it cannot read,
+    /// never something the office can say, so admitting a token for it would let a publisher literal
+    /// decode straight into "none of what was listed is admitted".
+    /// </summary>
     private static Dictionary<string, EuManifestationFormat> BuildTokenIndex()
     {
         var index = new Dictionary<string, EuManifestationFormat>(StringComparer.Ordinal);
         foreach (var format in Enum.GetValues<EuManifestationFormat>())
         {
+            if (format == EuManifestationFormat.NoneAdmitted)
+            {
+                continue;
+            }
+
             index.Add(ListedTypeToken(format), format);
         }
 
@@ -595,6 +608,11 @@ public static class EuManifestationListingDecode
         EuManifestationFormat.PdfA1b => "pdfa1b",
         EuManifestationFormat.PdfA2a => "pdfa2a",
         EuManifestationFormat.Print => "print",
+        EuManifestationFormat.NoneAdmitted => throw new ArgumentOutOfRangeException(
+            nameof(format),
+            format,
+            "NoneAdmitted is this vocabulary's own answer for an unreadable listing, never a token " +
+            "the office can send; it has no publisher lexical form by construction."),
         _ => throw new ArgumentOutOfRangeException(nameof(format)),
     };
 
