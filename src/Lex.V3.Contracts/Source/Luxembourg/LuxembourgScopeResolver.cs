@@ -250,17 +250,15 @@ internal static class LuxembourgScopeResolver
                 observation.ObjectRef.PublisherUri);
         }
 
-        foreach (var licenceIri in observation.SparqlRightsObservations.Observations
-                     .Concat(observation.InFileRightsObservations.Observations)
-                     .SelectMany(static row => row.LicenceIris))
-        {
-            if (!profile.ContainsVocabulary(LuxembourgVocabularyKind.Licence, licenceIri))
-            {
-                return NewFailure(
-                    LuxembourgProfileResolutionFailureCode.UnknownVocabularyDrift,
-                    licenceIri);
-            }
-        }
+        // An unruled licence IRI used to refuse the WHOLE RUN here as UnknownVocabularyDrift. That
+        // is the D1-05d blast-radius shape: one odd licence on one manifestation anywhere in the
+        // store could stop every Luxembourg run, and the pressure it created was to drop such rows
+        // before they arrived, which loses the IRI silently. RULING
+        // lex-event-20260904T204900861Z-6b737927d58a409dab05149aa28052e5: an unruled licence is
+        // THAT OBJECT'S typed rights state instead. The channel carries the IRI, the resolution
+        // reports TypedQuarantineUnruledLicence for it, that object's body is not admitted, and
+        // every other object in the run is unaffected. Whole-run refusal stays for rows outside the
+        // closure, which is a fact about the enumeration rather than about one publisher value.
 
         foreach (var assertion in observation.Assertions)
         {
@@ -836,6 +834,8 @@ internal static class LuxembourgScopeResolver
 
         if (bodyJoin.Candidates.Count == 0)
         {
+            // The publisher's own listing reaches no manifestation at all for this root. That is
+            // the unservable-listing reason, not an unknown.
             return Disposition(
                 LuScopeTerminalState.TypedQuarantine,
                 "typed_quarantine_publisher_realization_path_unproven",
@@ -843,10 +843,32 @@ internal static class LuxembourgScopeResolver
                 BodyJoinEvidenceArtifacts(observation));
         }
 
+        // THE ACCEPTING ARM. Before this, every one of ResolveBody's five paths returned a
+        // withholding state, so the Body axis was the only axis in this file with no accepting
+        // path at all, and the accepted fraction of every real Luxembourg manifest was zero of N.
+        // Owner principle, RULING lex-event-20260904T205636383Z-e92b888b62c24df29fe3f8c1be5016f0:
+        // a law that can legitimately be ingested is ingested. A candidate reaches
+        // AcceptedCandidate exactly when it carries no blocker, and the four blockers that remain
+        // are the publisher's own facts (see LuxembourgBodyBlockerCode): an unservable listing, a
+        // format we cannot compare text from, the publisher marking the object not reusable, plus
+        // one structural guard against selecting another root's file. Everything the publisher
+        // simply did not say is an unknown, recorded on the candidate's own rights resolution and
+        // carried forward rather than used as a reason to hold nothing.
+        if (bodyJoin.Candidates.Any(static candidate =>
+                candidate.Disposition == LuxembourgBodyCandidateDisposition.AcceptedCandidate))
+        {
+            return Disposition(
+                LuScopeTerminalState.AcceptedCandidate,
+                "accepted_publisher_listed_wording_manifestation",
+                "lu_body_accepted_wording_manifestation",
+                BodyJoinEvidenceArtifacts(observation));
+        }
+
+        // Every candidate this root offers carries at least one of those four publisher facts.
         return Disposition(
             LuScopeTerminalState.TypedQuarantine,
-            "typed_quarantine_verified_body_join_required",
-            "lu_body_verified_join_required",
+            "typed_quarantine_no_admitted_body_candidate",
+            "lu_body_no_admitted_candidate",
             BodyJoinEvidenceArtifacts(observation));
     }
 

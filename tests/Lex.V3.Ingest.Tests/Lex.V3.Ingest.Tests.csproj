@@ -6,6 +6,14 @@
   <ItemGroup>
     <Compile Include="../Lex.V3.TestSupport/ConstructionSurface.cs" Link="TestSupport/ConstructionSurface.cs" />
     <Compile Include="../Lex.V3.TestSupport/ClosedSurfaceCensus.cs" Link="TestSupport/ClosedSurfaceCensus.cs" />
+    <!-- D1-06c-LU-2: scope resolution now goes through a proof door, so this project needs the
+         same REAL AbsenceFamilyEnumerationProof builder the contract tests use rather than a
+         second, weaker one of its own. Linked, exactly as ConstructionSurface.cs already is, so
+         there is one fixture and not two that can drift. -->
+    <Compile Include="../Lex.V3.Tests/Contracts/Source/Absence/AbsenceEnumerationProofFixture.cs"
+             Link="TestSupport/AbsenceEnumerationProofFixture.cs" />
+    <Compile Include="../Lex.V3.Tests/Contracts/Source/Absence/AbsenceFixtures.cs"
+             Link="TestSupport/AbsenceFixtures.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/Lex.V3.Artifacts/Lex.V3.Artifacts.csproj" />

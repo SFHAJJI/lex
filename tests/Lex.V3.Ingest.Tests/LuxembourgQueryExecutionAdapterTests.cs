@@ -1,3 +1,4 @@
+using Lex.V3.Tests.Contracts.Source.Absence;
 using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
@@ -811,7 +812,11 @@ public sealed class LuxembourgQueryExecutionAdapterTests
             new LuxembourgSparqlRightsChannelObservations(observationRef, observationRef, []),
             new LuxembourgInFileRightsChannelObservations(observationRef, observationRef, []));
 
-        var resolution = profile.Resolve([observation]);
+        // Through the proof door, with a real AbsenceFamilyEnumerationProof: a probe that could
+        // resolve scope without one would be exercising a path production cannot take.
+        var resolution = profile.Resolve(
+            LuxembourgProvenResourceObservations.RequireProven(
+                AbsenceFixtures.Proof(), [observation]));
         var resolved = resolution as LuxembourgProfileResolution.Resolved;
         Assert.IsNotNull(
             resolved,
