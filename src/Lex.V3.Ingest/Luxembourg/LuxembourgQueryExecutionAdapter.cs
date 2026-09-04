@@ -109,51 +109,6 @@ public sealed class LuxembourgRelationFamilyAcquisition
     }
 }
 
-/// <summary>
-/// Item 15 of the D1-04 design-synthesis ruling named the gap this enum used to mark: "Luxembourg
-/// ScopeResolver implements bucket membership only, not R5.1's TC and RECT typed roles nor an ACC
-/// constitutional review evidence gate; that is a defect in the merged resolver and gets its own
-/// slice after D1-04's first freeze names the gap; D1-04 records the coarser disposition with typed
-/// acquisition state so the gap stays visible, never papers over it." Item 15 (and, for ACC, the
-/// reviewer RULING lex-event-20260904T002301246Z-7699c8fdd1ad4868a7d94dcb152fbf57) closed that gap:
-/// the resolver now carries R5.1's TC, RECT and ACC roles as their own
-/// <see cref="LuxembourgTypedRoleResolution"/>, exposed on <see cref="LuxembourgResourceResolution.TypedRole"/>.
-/// </summary>
-/// <remarks>
-/// D1-04c retired all three members this enum used to carry
-/// (<c>TcTypedRoleNotDistinguished</c>, <c>RectTypedRoleNotDistinguished</c>,
-/// <c>AccTypedRoleNotDistinguished</c>). <see cref="LuxembourgQueryExecutionAdapter.BuildCoarseDispositionMarkers"/>
-/// now consumes <see cref="LuxembourgResourceResolution.TypedRole"/> directly: a resource whose
-/// <see cref="LuScopeDimensions.PublicationFamily"/> reached <c>AcceptedCandidate</c> through
-/// <c>PriorityCandidateTypes</c> bucket membership resolves its <c>TypedRole</c> from the exact same
-/// raw <c>rdf:type</c>/<c>typeDocument</c> assertions (<c>LuxembourgScopeResolver.ResolveDimensions</c>
-/// and <c>ResolveTypedRole</c> both compute <c>classes</c>/<c>types</c> via the identical
-/// <c>IriValues(observation.Assertions, ...)</c> call on the same observation), so every case that
-/// used to earn one of these three coarse gaps now also earns a real, distinguished
-/// <see cref="LuxembourgTypedRoleKind"/> -- the coarse gap is provably unreachable, not merely
-/// unused. Proven by watching it fail: before this retirement, wiring the TypedRole guard into
-/// <c>BuildCoarseDispositionMarkers</c> turned <c>LuxembourgQueryExecutionAdapterTests</c>' own
-/// TC/RECT/ACC marker-count-one assertions into marker-count-zero failures, for exactly this reason,
-/// before those tests were updated to assert the real zero. This enum is kept, empty, as the closed
-/// set item 15 introduced (<see cref="LuxembourgCoarseDispositionMarker"/> still carries one), so a
-/// future coarse gap this bucket-membership dimension might still need has a named home; adding a
-/// member back is a deliberate, reviewed act, not a silent reopening, because
-/// <c>CoarseDispositionGapIsAnEmptyEnum</c> pins it at zero.
-/// </remarks>
-public enum LuxembourgCoarseDispositionGap
-{
-}
-
-/// <summary>
-/// One resource whose <c>PublicationFamily</c> disposition is the coarser bucket-membership
-/// acceptance item 15 names, rather than R5.1's full role-level rule. Never silently treated as
-/// fully resolved.
-/// </summary>
-public sealed record LuxembourgCoarseDispositionMarker(
-    string PublisherUri,
-    string ObservedTypeDocumentIri,
-    LuxembourgCoarseDispositionGap Gap);
-
 /// <summary>One family's execution: the executor call, and, if it delivered, the proof attempt.</summary>
 public enum LuxembourgFamilyEnumerationOutcomeKind
 {
@@ -563,7 +518,6 @@ public sealed class LuxembourgQueryExecutionResult
         SourceProfileTopology topology,
         IReadOnlyList<LuxembourgFamilyEnumerationOutcome> familyOutcomes,
         IReadOnlyList<LuxembourgRelationFamilyAcquisition> relationFamilyAcquisitions,
-        IReadOnlyList<LuxembourgCoarseDispositionMarker> coarseDispositionMarkers,
         IReadOnlyList<string> resourceObservationSubjects,
         IReadOnlyList<LuxembourgResourceObservationExclusionAccounting> resourceObservationExclusions,
         DurableBlobWriteReceipt? scopeManifestReceipt,
@@ -574,7 +528,6 @@ public sealed class LuxembourgQueryExecutionResult
         Topology = topology;
         FamilyOutcomes = familyOutcomes;
         RelationFamilyAcquisitions = relationFamilyAcquisitions;
-        CoarseDispositionMarkers = coarseDispositionMarkers;
         ResourceObservationSubjects = resourceObservationSubjects;
         ResourceObservationExclusions = resourceObservationExclusions;
         ScopeManifestReceipt = scopeManifestReceipt;
@@ -587,7 +540,6 @@ public sealed class LuxembourgQueryExecutionResult
         SourceProfileTopology topology,
         IReadOnlyList<LuxembourgFamilyEnumerationOutcome> familyOutcomes,
         IReadOnlyList<LuxembourgRelationFamilyAcquisition> relationFamilyAcquisitions,
-        IReadOnlyList<LuxembourgCoarseDispositionMarker> coarseDispositionMarkers,
         IReadOnlyList<string> resourceObservationSubjects,
         IReadOnlyList<LuxembourgResourceObservationExclusionAccounting> resourceObservationExclusions,
         DurableBlobWriteReceipt scopeManifestReceipt,
@@ -605,7 +557,7 @@ public sealed class LuxembourgQueryExecutionResult
             ? LuxembourgQueryExecutionCompletion.AllFamiliesProven
             : LuxembourgQueryExecutionCompletion.PartialFamilyRefused;
         return new(
-            topology, familyOutcomes, relationFamilyAcquisitions, coarseDispositionMarkers,
+            topology, familyOutcomes, relationFamilyAcquisitions,
             resourceObservationSubjects, resourceObservationExclusions, scopeManifestReceipt,
             scopeManifestCanonicalSha256, completion, null);
     }
@@ -618,7 +570,7 @@ public sealed class LuxembourgQueryExecutionResult
     {
         ArgumentNullException.ThrowIfNull(topology);
         ArgumentNullException.ThrowIfNull(refusal);
-        return new(topology, familyOutcomes, relationFamilyAcquisitions, [], [], [], null, null, null, refusal);
+        return new(topology, familyOutcomes, relationFamilyAcquisitions, [], [], null, null, null, refusal);
     }
 
     /// <summary>Always present: minting it cannot fail, and it is useful context on a refusal too.</summary>
@@ -627,8 +579,6 @@ public sealed class LuxembourgQueryExecutionResult
     public IReadOnlyList<LuxembourgFamilyEnumerationOutcome> FamilyOutcomes { get; }
 
     public IReadOnlyList<LuxembourgRelationFamilyAcquisition> RelationFamilyAcquisitions { get; }
-
-    public IReadOnlyList<LuxembourgCoarseDispositionMarker> CoarseDispositionMarkers { get; }
 
     /// <summary>
     /// The exact set of publisher URIs <see cref="LuxembourgQueryExecutionAdapter.BuildResourceObservations"/>
@@ -747,6 +697,20 @@ public sealed class LuxembourgQueryExecutionResult
 /// assumes. A family with no supplied cover, or whose pass refuses for any other reason, is reported
 /// as an ordinary refused family outcome exactly as before.
 /// </para>
+/// <para>
+/// Said plainly, because it is easy to read the cover-chain machinery above as more than it is:
+/// this adapter has no split strategy of its own. A caller-supplied <see cref="LuxembourgPartitionChain"/>
+/// is exactly as much of a caller-supplied input as <paramref name="families"/> itself; nothing here
+/// computes where to split a partition that saturates. So a census or assertion family that refuses
+/// <see cref="LuxembourgEnumerationRefusal.PartitionRequired"/> with no cover supplied, or whose
+/// supplied cover does not reconcile, is refused with a typed outcome
+/// (<see cref="LuxembourgFamilyEnumerationOutcomeKind.ExecutorRefused"/> or
+/// <see cref="LuxembourgFamilyEnumerationOutcomeKind.CoverRefused"/> respectively) -- production
+/// cannot and does not paper over a family this large today. That remains true until D1-04d (queued
+/// separately, not this slice) builds a real production split strategy: the simplest one on the
+/// table bisects the refused partition at the last cursor of its first delivered page and recurses
+/// on the right leaf, documented as correct and slow.
+/// </para>
 /// </remarks>
 public sealed class LuxembourgQueryExecutionAdapter
 {
@@ -845,8 +809,15 @@ public sealed class LuxembourgQueryExecutionAdapter
     /// <see cref="LuxembourgQueryExecutionRefusal.ObservationSubjectNotInDeliveredCensus"/> -- an
     /// identity-set membership test over both families' own decoded rows, never a count.
     /// </param>
-    /// <param name="evidenceResolver">The evidence resolver the merged R5.1 scope reduction requires.</param>
-    public async Task<LuxembourgQueryExecutionResult> RunAsync(
+    /// <summary>
+    /// D1-04c item 2: the caller-facing door. Never accepts an evidence resolver from outside --
+    /// production code cannot hand this run an arbitrary admission answer. This run's own
+    /// <see cref="LuxembourgProductionScopeReductionEvidenceResolver"/> is constructed internally,
+    /// from this exact run's own custody store, its own independently re-derived observations, and
+    /// its own resolved evidence-artifact set (see the six-parameter internal overload below for the
+    /// shared implementation).
+    /// </summary>
+    public Task<LuxembourgQueryExecutionResult> RunAsync(
         IReadOnlyList<(
             LuxembourgPartitionRunRequest PartitionRequest,
             BoundMachineRequest SourceWitness,
@@ -854,11 +825,36 @@ public sealed class LuxembourgQueryExecutionAdapter
         string? relationAssertionsFamilyKey,
         string? resourceObservationFamilyKey,
         string? resourceAssertionsFamilyKey,
-        IScopeReductionEvidenceResolver evidenceResolver,
+        CancellationToken cancellationToken) =>
+        RunAsync(
+            families, relationAssertionsFamilyKey, resourceObservationFamilyKey, resourceAssertionsFamilyKey,
+            evidenceResolver: null, cancellationToken);
+
+    /// <summary>
+    /// D1-04c item 2: the test-only seam. <paramref name="evidenceResolver"/>, when supplied,
+    /// substitutes for this run's own <see cref="LuxembourgProductionScopeReductionEvidenceResolver"/>
+    /// entirely -- reachable only from this assembly and <c>Lex.V3.Ingest.Tests</c>
+    /// (<c>InternalsVisibleTo</c> already grants that; no widening), never from the public
+    /// five-parameter overload production code calls. Null (the five-parameter overload's own only
+    /// caller shape) means "construct the real thing": <see cref="LuxembourgProductionScopeReductionEvidenceResolver.CreateAsync"/>
+    /// against this run's own <see cref="_custodyStore"/>, its own <c>observations</c> derived below,
+    /// and its own <c>resolved.OrderedEvidenceArtifacts</c> -- never a caller-supplied set.
+    /// </summary>
+    /// <param name="evidenceResolver">
+    /// Test-only. Null in every production call (the five-parameter overload always passes null).
+    /// </param>
+    internal async Task<LuxembourgQueryExecutionResult> RunAsync(
+        IReadOnlyList<(
+            LuxembourgPartitionRunRequest PartitionRequest,
+            BoundMachineRequest SourceWitness,
+            LuxembourgPartitionChain? Cover)> families,
+        string? relationAssertionsFamilyKey,
+        string? resourceObservationFamilyKey,
+        string? resourceAssertionsFamilyKey,
+        IScopeReductionEvidenceResolver? evidenceResolver,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(families);
-        ArgumentNullException.ThrowIfNull(evidenceResolver);
         if ((resourceObservationFamilyKey is null) != (resourceAssertionsFamilyKey is null))
         {
             throw new ArgumentException(
@@ -1093,8 +1089,19 @@ public sealed class LuxembourgQueryExecutionAdapter
         }
 
         var resolved = (LuxembourgProfileResolution.Resolved)resolution;
-        var coarseMarkers = BuildCoarseDispositionMarkers(resolved);
-        var manifest = _sourceProfile.ReduceScope(resolved, evidenceResolver);
+
+        // D1-04c item 2: this run's own production evidence resolver, constructed here rather than
+        // accepted from a caller -- from this exact run's own custody store, its own independently
+        // re-derived observations, and its own resolved evidence-artifact set
+        // (resolved.OrderedEvidenceArtifacts, minted by LuxembourgScopeResolver.Resolve above from
+        // these same observations, never a caller-hand-transcribed set). The test-only
+        // evidenceResolver parameter substitutes entirely when supplied; production callers (the
+        // public five-parameter RunAsync overload) always pass null here.
+        var resolver = evidenceResolver ?? await LuxembourgProductionScopeReductionEvidenceResolver.CreateAsync(
+                _custodyStore, _sourceProfile.Snapshot.CompleteEnumerationRef, observations,
+                resolved.OrderedEvidenceArtifacts, cancellationToken)
+            .ConfigureAwait(false);
+        var manifest = _sourceProfile.ReduceScope(resolved, resolver);
 
         // ScopeManifestCanonicalWriter.Write returns the manifest's OWN canonical identity: a
         // domain-separated hash (SHA256("lex-v3-source-scope-manifest/1\n" + bytes)), never written
@@ -1146,10 +1153,10 @@ public sealed class LuxembourgQueryExecutionAdapter
         // baked into a *retained* policy's own canonical bytes).
         var manifestArtifactRef = new SourceArtifactRef(
             $"urn:uuid:{Guid.NewGuid():D}", manifestCanonicalSha256);
-        _ = VerifiedScopeManifest.ParseAndVerify(manifestArtifactRef, reopened.Span, evidenceResolver);
+        _ = VerifiedScopeManifest.ParseAndVerify(manifestArtifactRef, reopened.Span, resolver);
 
         return LuxembourgQueryExecutionResult.Delivered(
-            topology, outcomes, relationAcquisitions, coarseMarkers, resourceObservationSubjects,
+            topology, outcomes, relationAcquisitions, resourceObservationSubjects,
             resourceObservationExclusions, writeReceipt, manifestCanonicalSha256);
     }
 
@@ -1226,6 +1233,14 @@ public sealed class LuxembourgQueryExecutionAdapter
             }
         }
 
+        // This adapter never holds a root receipt to hand TryCreate here: the root pass refused
+        // PartitionRequired before delivering (that refusal is exactly what routed this method's own
+        // caller here), so rootReceipt is always null and cover.Basis is therefore always
+        // LuxembourgPartitionCoverBasis.LeafTilingOnly, never the root-reconciled alternative -- an
+        // inherent constraint of this call path, not a choice made here. cover itself is discarded
+        // immediately below once non-null: only its refusal (when null) and, through leafReceipts
+        // directly, each leaf's own proof are read; nothing here consumes cover.Basis or any other
+        // field of the minted cover object.
         var leafReceipts = leafResults.Select(static result => result.Receipt!).ToArray();
         var cover = LuxembourgPartitionCover.TryCreate(chain, leafReceipts, rootReceipt: null, out var coverRefusal);
         if (cover is null)
@@ -1737,25 +1752,4 @@ public sealed class LuxembourgQueryExecutionAdapter
         return acquisitions;
     }
 
-    /// <summary>Item 15: names every resource whose acceptance rests on bucket membership only.</summary>
-    /// <summary>
-    /// D1-04c: always empty now. Item 15's original form of this method matched a resource's own
-    /// accepted <c>typeDocument</c> assertion, by its last IRI path segment, against
-    /// <c>VerifiedLuxembourgSourceProfile.PriorityCandidateTypeTc/Rect/Acc</c> -- a heuristic that
-    /// stood in for R5.1's real typed role until it existed. It now consumes
-    /// <see cref="LuxembourgResourceResolution.TypedRole"/> directly instead: a resource with a
-    /// typed role carries it, so the coarse re-derivation is unneeded and, per the retirement
-    /// documented on <see cref="LuxembourgCoarseDispositionGap"/>'s own remarks, unreachable -- every
-    /// resource that heuristic could have matched now resolves a real
-    /// <see cref="LuxembourgTypedRoleKind"/> instead of <c>NotApplicable</c>. Kept as a named method,
-    /// not inlined to <c>[]</c> at the call site, so a future coarse gap this bucket-membership
-    /// dimension might still need (a case <see cref="LuxembourgTypedRoleResolution"/> does not cover)
-    /// has an obvious, already-wired place to resume filtering <paramref name="resolved"/>.
-    /// </summary>
-    private static IReadOnlyList<LuxembourgCoarseDispositionMarker> BuildCoarseDispositionMarkers(
-        LuxembourgProfileResolution.Resolved resolved)
-    {
-        _ = resolved;
-        return [];
-    }
 }
