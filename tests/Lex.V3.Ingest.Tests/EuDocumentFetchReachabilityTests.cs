@@ -27,11 +27,15 @@ public sealed class EuDocumentFetchReachabilityTests
     /// <summary>
     /// Item 5's required reachability proof: a completed document-fetch GET whose terminal status
     /// is 404 (PROVEN, <c>review/23-research-temporal.md</c> section 1.2: "Missing manifestation
-    /// returns 404") becomes the closed, named <see cref="EuDocumentFetchRefusal.ManifestationNotFound"/>
-    /// member carrying the real observed status, not a generic HTTP-status wrapper.
+    /// returns 404") becomes the closed, named
+    /// <see cref="EuDocumentFetchRefusal.RequestedRepresentationNotServed"/> member carrying the
+    /// real observed status, not a generic HTTP-status wrapper. Named for what this code actually
+    /// checked -- the one Accept type it sent was not served -- not for a claim about the office's
+    /// own manifestation listing, which this slice never reads (return ruling
+    /// lex-event-20260904T124400144Z-b220238c9a85480aa7dcc2b488a034ef).
     /// </summary>
     [TestMethod]
-    public async Task ManifestationNotFoundReachabilityMatchesTheProvenObserved404()
+    public async Task RequestedRepresentationNotServedReachabilityMatchesTheProvenObserved404()
     {
         var bound = BindDocumentFetchRequest(out _);
         using var session = Session(
@@ -55,7 +59,7 @@ public sealed class EuDocumentFetchReachabilityTests
         Assert.AreEqual(404, evidence.Hops[^1].Status);
 
         var outcome = EuDocumentFetchOutcome.Classify(evidence);
-        Assert.AreEqual(EuDocumentFetchRefusal.ManifestationNotFound, outcome.Refusal);
+        Assert.AreEqual(EuDocumentFetchRefusal.RequestedRepresentationNotServed, outcome.Refusal);
         Assert.AreEqual(404, outcome.ObservedStatus);
     }
 
@@ -64,8 +68,8 @@ public sealed class EuDocumentFetchReachabilityTests
     /// application/pdf;mtype=pdfa1a</c> returned 400 (wrong token: the spec uses <c>type=</c> for
     /// PDF and <c>mtype=</c> for zip packages)". Closed and named as
     /// <see cref="EuDocumentFetchRefusal.WrongAcceptToken"/>, distinct from
-    /// <see cref="EuDocumentFetchRefusal.ManifestationNotFound"/> above even though both terminate a
-    /// completed, non-redirect route.
+    /// <see cref="EuDocumentFetchRefusal.RequestedRepresentationNotServed"/> above even though both
+    /// terminate a completed, non-redirect route.
     /// </summary>
     [TestMethod]
     public async Task WrongAcceptTokenReachabilityMatchesTheProvenObserved400()

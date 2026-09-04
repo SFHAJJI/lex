@@ -20,9 +20,15 @@ public enum EuDocumentFetchRefusal
     [JsonStringEnumMemberName("wrong_accept_token")]
     WrongAcceptToken = 1,
 
-    /// <summary>HTTP 404. PROVEN: a manifestation that does not exist for this object.</summary>
-    [JsonStringEnumMemberName("manifestation_not_found")]
-    ManifestationNotFound = 2,
+    /// <summary>
+    /// HTTP 404. The office answered 404 for the requested media type; this slice never checks
+    /// whether it lists other manifestations for the object, only that this exact request was not
+    /// served. Naming it "manifestation not found" would claim a fact this code does not check --
+    /// D1-05d reads the office's own manifestation listing before minting a fetch address; until
+    /// that lands, a 404 here proves only that this one Accept type was not served.
+    /// </summary>
+    [JsonStringEnumMemberName("requested_representation_not_served")]
+    RequestedRepresentationNotServed = 2,
 }
 
 /// <summary>
@@ -61,7 +67,7 @@ public sealed class EuDocumentFetchOutcome
         return terminal.Status switch
         {
             400 => new EuDocumentFetchOutcome(EuDocumentFetchRefusal.WrongAcceptToken, 400),
-            404 => new EuDocumentFetchOutcome(EuDocumentFetchRefusal.ManifestationNotFound, 404),
+            404 => new EuDocumentFetchOutcome(EuDocumentFetchRefusal.RequestedRepresentationNotServed, 404),
             _ => new EuDocumentFetchOutcome(null, terminal.Status),
         };
     }
