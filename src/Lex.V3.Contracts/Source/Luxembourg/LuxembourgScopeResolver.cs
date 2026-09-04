@@ -462,6 +462,14 @@ internal static class LuxembourgScopeResolver
         // catchall below said "unknown_publication_family", which claims a value was observed and
         // not admitted -- false when no typeDocument assertion exists at all. The resource's class
         // presence stays visible through its own evidence, the supporting-document selector.
+        //
+        // This branch is checked first and so displaces the two fallbacks immediately below it,
+        // PointSupportClasses and MetadataSupportClasses (or prov#Entity): an Act class with no
+        // typeDocument that also happens to carry a point-support or metadata-support class (for
+        // example jolux:Work) still lands here as TypedQuarantine, never on their Point or
+        // AcceptedMetadata outcomes. That displacement is deliberate -- the conservative reading
+        // of rule 11 for an Act, where an absent typeDocument governs regardless of any other
+        // WEMI-support class also present -- not an oversight of those two fallbacks.
         if (IsActClass(classes))
         {
             return Disposition(

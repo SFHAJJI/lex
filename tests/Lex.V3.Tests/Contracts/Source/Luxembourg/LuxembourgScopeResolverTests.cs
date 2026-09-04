@@ -777,6 +777,67 @@ public sealed class LuxembourgScopeResolverTests
     }
 
     [TestMethod]
+    public void AnActClassCombinedWithAMetadataSupportClassAndNoTypeDocumentStillTypedQuarantines()
+    {
+        // Fold-in from item 18's review verdict (Opus lens on head 14b5bcee,
+        // lex-event-20260904T034830674Z-07fe2476daac40fa82eb092cb094838c): the IsActClass branch
+        // above is checked first, so it displaces the two pre-existing fallbacks below it,
+        // PointSupportClasses and MetadataSupportClasses. This drives exactly that displacement:
+        // an Act with zero typeDocument assertions that ALSO carries jolux:Work, a
+        // MetadataSupportClasses member, must still land on TypedQuarantine with
+        // typed_quarantine_publication_type_absent, never on the AcceptedMetadata outcome that
+        // jolux:Work alone would otherwise reach. Conservative reading of rule 11 for an Act,
+        // confirmed by the reviewer; untested before this fold-in.
+        var observation = new LuxembourgResourceObservation(
+            ObjectRef(),
+            ObservationRef,
+            [
+                Iri(ActIri, RdfType, Jolux + "Act"),
+                Iri(ActIri, RdfType, Jolux + "Work"),
+            ],
+            [],
+            new LuxembourgSparqlRightsChannelObservations(
+                ObservationRef,
+                SparqlEnumerationRef,
+                []),
+            new LuxembourgInFileRightsChannelObservations(
+                ObservationRef,
+                InFileEnumerationRef,
+                []));
+
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve([observation]));
+
+        var resource = resolved.Resources.Single();
+        Assert.AreEqual(LuScopeTerminalState.TypedQuarantine, resource.Dimensions.Body.State);
+        Assert.AreEqual(
+            "typed_quarantine_publication_type_absent",
+            resource.Dimensions.Body.ReasonCode);
+    }
+
+    [TestMethod]
+    public void PublicationFamilySelectorIndexIsBoundToItsOwnSelectorKeyNotJustUsedByLocators()
+    {
+        // Fold-in from item 18's review verdict: PublicationFamilySelectorIndex was used twice
+        // above (the two tests locating this selector) but asserted nowhere, so nothing proved it
+        // was actually the right ordinal -- a reorder of the resolver's own `selectors` array in
+        // BuildScopeInput could silently point this constant at the wrong selector, and those
+        // locator-based tests would start passing against the wrong data with no failure signal.
+        // Bind it here to VerifiedLuxembourgSourceProfile.SelectorKeys, the independent
+        // member-key list both the profile and this resolver read the same fixed order from
+        // (confirmed by reading VerifiedLuxembourgSourceProfile.SelectorKeys itself, and by the
+        // end-to-end selector-signature order that
+        // LuxembourgSourceProfileAdversarialProofTests.SelectorAndProjectionInventoriesCarryEveryExpectedStateAndEvidenceKind
+        // already pins for the resolver's real output). A reorder of either array without the
+        // other now fails this assertion, or that one, instead of silently relocating what a
+        // locator finds.
+        Assert.AreEqual(
+            "selector.publication_family",
+            VerifiedLuxembourgSourceProfile.SelectorKeys[
+                LuxembourgScopeResolver.PublicationFamilySelectorIndex]);
+    }
+
+    [TestMethod]
     public void ThePublicationFamilySelectorCanonicalValuesNeverFoldInTheResourceClassIri()
     {
         // A mutation that restores the old `[.. classes, .. types]` fold would add the resource's
