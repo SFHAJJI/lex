@@ -338,15 +338,17 @@ internal static class EuAcquisitionTestFixture
         RowsJson(ManifestationFactsProjection, rows);
 
     /// <summary>
-    /// The listing a real act in the 1995 to 2008 band actually returns, in family M's own ascending
+    /// The listing a real act in the 2003 to 2006 band actually returns, in family M's own ascending
     /// cursor order.
     /// </summary>
     /// <remarks>
     /// Not invented: this exact six-token set was returned live on 2026-09-04 by the family-M query
-    /// shape for CELEX 32003L0088 (Cellar 050dd964-4f94-4c61-ab50-89217a0d90e2), 32003L0087,
-    /// 32003R0001, 32004R0139 and 32006L0112. Ordered fmx4, html, pdf, pdfa1a, print, xhtml, which is
-    /// both the office's own ordinal order and the ascending key_3 order the executor's strict cursor
-    /// check requires.
+    /// shape for five Works, CELEX 32003L0087, 32003L0088 (Cellar
+    /// 050dd964-4f94-4c61-ab50-89217a0d90e2), 32003R0001, 32004R0139 and 32006L0112. Two further
+    /// Works read the same day returned different sets and are deliberately not described by this
+    /// constant: 32005L0029 lists no html, and 31995L0046 lists pdfa1b as well. Ordered fmx4, html,
+    /// pdf, pdfa1a, print, xhtml, which is both the office's own ordinal order and the ascending
+    /// key_3 order the executor's strict cursor check requires.
     /// </remarks>
     internal static readonly string[] RealBandListedTypes =
         ["fmx4", "html", "pdf", "pdfa1a", "print", "xhtml"];

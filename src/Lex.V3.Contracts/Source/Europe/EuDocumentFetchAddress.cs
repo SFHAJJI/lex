@@ -85,8 +85,8 @@ public enum EuManifestationMediaType
     /// </para>
     /// <para>
     /// Distinct from <see cref="PdfTypePdfa2a"/>, and this route deliberately never substitutes one
-    /// for the other. <c>application/pdf;type=pdfa1a</c> answered 404 on every one of the five acts
-    /// probed in the 1995 to 2008 band despite all five LISTING pdfa1a, so a PDF profile parameter
+    /// for the other. <c>application/pdf;type=pdfa1a</c> answered 404 on every one of the seven acts
+    /// it was probed on, spanning 2003 to 2008, despite all seven LISTING pdfa1a, so a PDF profile
     /// selects a genuinely narrower thing than the bare token does; asking for one profile because
     /// the office listed another would request a representation it never said it had.
     /// </para>
@@ -360,7 +360,7 @@ public sealed class EuDocumentFetchAddress
     /// ladder is the one the format ruling named rather than a truncated version of it.
     /// </para>
     /// <para>
-    /// Four formats still have no admitted token, each for its own reason, and none of them is a
+    /// Five formats still have no admitted token, each for its own reason, and none of them is a
     /// ladder rung. <see cref="EuManifestationFormat.Print"/> is the physical manifestation and is
     /// excluded by <see cref="EuManifestationScope.FormatsThatCanNeverCarryABody"/>, one level above
     /// this. <see cref="EuManifestationFormat.Formex4"/> has a token
@@ -372,10 +372,12 @@ public sealed class EuDocumentFetchAddress
     /// it here would put a per-fetch-varying body on the mainline path.
     /// <see cref="EuManifestationFormat.Xhtml5"/> is the summary format, outside the act ladder.
     /// <see cref="EuManifestationFormat.PdfA1a"/> and <see cref="EuManifestationFormat.PdfA1b"/>
-    /// have no token because none has ever been observed serving: on 2026-09-04
-    /// <c>application/pdf;type=pdfa1a</c> answered 404 on every one of the five acts probed in the
-    /// 1995 to 2008 band, all five of which LIST pdfa1a. Minting a token for a profile nobody has
-    /// seen served would be exactly the unproven guess this route refuses.
+    /// have no token because neither has ever been observed serving. On 2026-09-04
+    /// <c>application/pdf;type=pdfa1a</c> answered 404 on all seven acts it was probed on
+    /// (32003L0087, 32003L0088, 32003R0001, 32004R0139, 32005L0029, 32006L0112, 32008R0593), every
+    /// one of which LISTS pdfa1a; pdfa1b was never probed at all, and is unaddressed for that reason
+    /// rather than on evidence. Minting a token for a profile nobody has seen served would be
+    /// exactly the unproven guess this route refuses.
     /// </para>
     /// </remarks>
     public static bool TryMediaTypeFor(EuManifestationFormat format, out EuManifestationMediaType mediaType)

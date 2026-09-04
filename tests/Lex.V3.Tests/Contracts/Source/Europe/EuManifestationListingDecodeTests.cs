@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Europe;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -12,7 +13,7 @@ namespace Lex.V3.Tests.Contracts.Source.Europe;
 /// <remarks>
 /// Every listing fixture here is a real observation, not an invention. The six-token listing is what
 /// the family-M query shape returned live on 2026-09-04 for CELEX 32003L0088 (Cellar
-/// 050dd964-4f94-4c61-ab50-89217a0d90e2) and for four sibling acts in the 1995 to 2008 band; the
+/// 050dd964-4f94-4c61-ab50-89217a0d90e2) and for four sibling acts between 2003 and 2006; the
 /// five-token one is 32008R0593's own; the single unbound row is exactly what the query's
 /// <c>FILTER NOT EXISTS</c> branch returned for a well-formed Cellar IRI the store holds no
 /// manifestation for. Contracts-only: nothing here calls a store or a publisher endpoint.
@@ -96,7 +97,136 @@ public sealed class EuManifestationListingDecodeTests
             out offendingIri,
             out offendingToken);
 
-    // ---- The decode itself, against a retained listing fixture. ----
+    // ---- The decode against the office's own retained response bytes. ----
+
+    /// <summary>
+    /// Family M's decode run against the exact SPARQL response bytes the publisher returned, rather
+    /// than against a token set reconstructed in code.
+    /// </summary>
+    /// <remarks>
+    /// The three fixtures under <c>Fixtures/EuManifestationListing</c> are the unmodified
+    /// <c>application/sparql-results+json</c> bodies the family-M query shape received from
+    /// <c>publications.europa.eu</c> on 2026-09-04 under User-Agent Lex/0.1, retained and evented in
+    /// PROBE_RESULT lex-event-20260904T193609083Z-6d8f89361bd9473f8657a0f11b628ce3. Each one's
+    /// SHA-256 is pinned below, so a fixture edited by hand fails here before its content is ever
+    /// decoded.
+    /// </remarks>
+    [TestMethod]
+    [DataRow(
+        "32003L0088",
+        "050dd964-4f94-4c61-ab50-89217a0d90e2",
+        "ce1638196cf8585407f5fc98a47c79ac8665a25aa18a6bbbb92accf8e0433241",
+        "fmx4,html,pdf,pdfa1a,print,xhtml")]
+    [DataRow(
+        "32008R0593",
+        "3db0a06f-cae9-433d-a229-dde3e68d6dc7",
+        "d7374d60c4e65e24379cb1615e2ee185ceed2de6e18a4a4b54aaeea562e810b0",
+        "fmx4,pdf,pdfa1a,print,xhtml")]
+    [DataRow(
+        "31995L0046",
+        "775a4724-2086-4a06-9213-1a4e6489053b",
+        "72b2fb408a21d362205c37befbfc4b995183700417f5e756eb50b2a50b58cec2",
+        "fmx4,html,pdf,pdfa1a,pdfa1b,print,xhtml")]
+    public void TheRetainedPublisherResponseDecodesToTheTypesTheOfficeReallyListed(
+        string celex, string cellarKey, string expectedDigest, string expectedTokens)
+    {
+        var path = Path.Combine(
+            AppContext.BaseDirectory,
+            "Fixtures",
+            "EuManifestationListing",
+            celex + "-manifestation-listing.json");
+        var bytes = File.ReadAllBytes(path);
+        Assert.AreEqual(
+            expectedDigest,
+            Convert.ToHexStringLower(SHA256.HashData(bytes)),
+            $"the retained {celex} listing response has been modified since it was observed.");
+
+        var parentIri = "http://publications.europa.eu/resource/cellar/" + cellarKey;
+        var rows = RowsFromSparqlJson(bytes);
+        Assert.IsTrue(rows.Count > 0, "the retained response must carry rows.");
+
+        var decoded = EuManifestationListingDecode.TryDecode(
+            new HashSet<string>([parentIri], StringComparer.Ordinal),
+            rows,
+            ManifestationProfile,
+            Evidence("retained"),
+            out var refusal,
+            out var iri,
+            out var token);
+
+        Assert.AreEqual(EuManifestationListingRefusal.None, refusal);
+        Assert.IsNull(iri);
+        Assert.IsNull(
+            token,
+            "every type the office really listed for these works must be in the closed vocabulary.");
+        Assert.IsNotNull(decoded);
+
+        // Every listed token round-trips through the closed vocabulary, so this asserts what the
+        // office actually said rather than what this test hoped it said.
+        var listed = rows
+            .Select(row => row.Terms[1].Value)
+            .Where(value => value is not null)
+            .Select(value => value!)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        Assert.AreEqual(expectedTokens, string.Join(',', listed));
+
+        var observation = decoded![parentIri];
+        Assert.AreEqual(EuFormatBodyAdmission.BodyAdmitted, observation.Admission);
+        foreach (var candidate in observation.OrderedCandidates)
+        {
+            Assert.IsTrue(
+                listed.Contains(EuManifestationListingDecode.ListedTypeTokens
+                    .First(entry => entry.Value == candidate).Key),
+                $"{candidate} is a candidate but the office did not list it.");
+        }
+    }
+
+    /// <summary>
+    /// Reads the publisher's own <c>application/sparql-results+json</c> body into family M's row
+    /// shape, in the projection order the plan declares. Deliberately minimal: it reads the bytes
+    /// the office sent rather than re-deriving them.
+    /// </summary>
+    private static IReadOnlyList<RepeatedEnumerationRow> RowsFromSparqlJson(byte[] body)
+    {
+        using var document = JsonDocument.Parse(body);
+        var bindings = document.RootElement.GetProperty("results").GetProperty("bindings");
+        var rows = new List<RepeatedEnumerationRow>(bindings.GetArrayLength());
+        foreach (var binding in bindings.EnumerateArray())
+        {
+            string? Value(string name) =>
+                binding.TryGetProperty(name, out var cell) ? cell.GetProperty("value").GetString() : null;
+            string? Datatype(string name) =>
+                binding.TryGetProperty(name, out var cell) && cell.TryGetProperty("datatype", out var d)
+                    ? d.GetString()
+                    : null;
+
+            var value = Value("value");
+            var terms = new[]
+            {
+                RepeatedEnumerationRdfTerm.Iri(Value("parent")!),
+                value is null
+                    ? RepeatedEnumerationRdfTerm.Unbound()
+                    : RepeatedEnumerationRdfTerm.Literal(value, Datatype("value"), null),
+                RepeatedEnumerationRdfTerm.Literal(Value("value_kind")!, null, null),
+                RepeatedEnumerationRdfTerm.Literal(Value("datatype_iri") ?? "", null, null),
+                RepeatedEnumerationRdfTerm.Literal(Value("language_tag") ?? "", null, null),
+                RepeatedEnumerationRdfTerm.Literal(Value("parent")!, null, null),
+                RepeatedEnumerationRdfTerm.Literal(Value("value_kind")!, null, null),
+                RepeatedEnumerationRdfTerm.Literal(value ?? "", null, null),
+                RepeatedEnumerationRdfTerm.Literal(Value("datatype_iri") ?? "", null, null),
+                RepeatedEnumerationRdfTerm.Literal(Value("language_tag") ?? "", null, null),
+            };
+            rows.Add(new RepeatedEnumerationRow(
+                Array.AsReadOnly(terms),
+                Array.AsReadOnly(new[] { terms[0], terms[1] }),
+                Array.AsReadOnly(terms[5..10])));
+        }
+
+        return rows;
+    }
+
+    // ---- The decode itself, against hand-built rows in the same shape. ----
 
     [TestMethod]
     public void TheRealSixTokenListingDecodesToTheLadderInItsClosedOrder()
@@ -136,12 +266,16 @@ public sealed class EuManifestationListingDecodeTests
             },
             observation.OrderedCandidates.ToArray());
 
-        // The manifest row's single address is the FIRST candidate, never any other.
+        // The manifest row's single address is the FIRST candidate, never any other. The companion
+        // assertion that OrderedCandidates[0] equals Format is gone: EuFormatObservation's own
+        // constructor guard already enforces it, so it could not fail here and said nothing.
         Assert.AreEqual(EuManifestationFormat.Xhtml, observation.Format);
-        Assert.AreEqual(observation.OrderedCandidates[0], observation.Format);
 
-        // Every disposition names the observation it came from: family M's own delivery evidence.
-        Assert.AreEqual(Evidence("m"), observation.EvidenceRef);
+        // The evidence assertion that used to sit here compared the ref this test had just handed
+        // in against itself and could not fail either. Whether a disposition names family M's own
+        // delivery evidence rather than a sibling family's is decided by the ADAPTER, so it is
+        // asserted where it can fail: EuQueryExecutionAdapterTests
+        // .AMintedFormatDispositionNamesFamilyMsOwnDeliveryEvidenceAndNotFamilyPs.
     }
 
     [TestMethod]
@@ -293,9 +427,9 @@ public sealed class EuManifestationListingDecodeTests
             EuManifestationListingDecode.FormatLadder.ToArray());
 
         // Recorded rather than hidden: these three still have no admitted token, and none of them is
-        // a ladder rung. pdfa1a and pdfa1b have never been observed serving at all: on 2026-09-04
-        // application/pdf;type=pdfa1a answered 404 on all five acts probed, every one of which lists
-        // pdfa1a. See TryMediaTypeFor's own remarks for each.
+        // a ladder rung. On 2026-09-04 application/pdf;type=pdfa1a answered 404 on all seven acts it
+        // was probed on, every one of which lists pdfa1a; pdfa1b was never probed at all. See
+        // TryMediaTypeFor's own remarks for what is evidence and what is merely unprobed.
         foreach (var unaddressable in new[]
                  {
                      EuManifestationFormat.PdfA1a, EuManifestationFormat.PdfA1b,
@@ -333,21 +467,91 @@ public sealed class EuManifestationListingDecodeTests
 
     // ---- Refusals: nothing is dropped silently. ----
 
+    /// <summary>
+    /// An unadmitted manifestation type refuses THAT WORK by name and lets every other Work through.
+    /// </summary>
+    /// <remarks>
+    /// D1-05d's REVIEW_RESULT lex-event-20260904T192428840Z-a6a8ebd26c58436aafd109a55303c12e defect
+    /// two: this used to refuse the whole decode, so one new type listed anywhere in the office's
+    /// catalogue would have refused every EU run. The token is still named, and still never dropped
+    /// silently; what changed is the blast radius.
+    /// </remarks>
     [TestMethod]
-    public void AManifestationTypeOutsideTheClosedVocabularyIsRefusedByName()
+    public void AnUnadmittedManifestationTypeQuarantinesOnlyItsOwnWork()
     {
         var rows = new[]
         {
-            ListedRow(WorkingTimeRoot, "xhtml"),
             ListedRow(WorkingTimeRoot, "epub3"),
+            ListedRow(WorkingTimeRoot, "xhtml"),
+            ListedRow(RomeOneRoot, "xhtml"),
         };
 
         var decoded = Decode(rows, out var refusal, out var iri, out var token);
 
-        Assert.IsNull(decoded, "an unknown listed type must refuse the whole decode, never be dropped.");
-        Assert.AreEqual(EuManifestationListingRefusal.ManifestationTypeNotInVocabulary, refusal);
-        Assert.AreEqual("epub3", token, "the refusal must name the offending token.");
+        Assert.AreEqual(
+            EuManifestationListingRefusal.None,
+            refusal,
+            "one Work's unknown token must never refuse the whole decode.");
         Assert.IsNull(iri);
+        Assert.AreEqual("epub3", token, "the offending token is still reported, never dropped.");
+        Assert.IsNotNull(decoded);
+        Assert.HasCount(2, decoded!);
+
+        // The offending Work is quarantined, by name, with no candidates.
+        var quarantined = decoded[WorkingTimeRoot];
+        Assert.AreEqual(EuFormatBodyAdmission.BodyNotAdmitted, quarantined.Admission);
+        Assert.AreEqual("listing_type_not_admitted:epub3", quarantined.ReasonCode);
+        Assert.HasCount(0, quarantined.OrderedCandidates);
+        Assert.AreEqual(
+            EuManifestationFormat.Xhtml,
+            quarantined.Format,
+            "the named format must be one the Work really listed, and never print.");
+
+        // Its sibling in the same batch is untouched.
+        var sibling = decoded[RomeOneRoot];
+        Assert.AreEqual(EuFormatBodyAdmission.BodyAdmitted, sibling.Admission);
+        CollectionAssert.AreEqual(
+            new[] { EuManifestationFormat.Xhtml }, sibling.OrderedCandidates.ToArray());
+    }
+
+    /// <summary>
+    /// A Work whose listing is print plus an unknown token must NOT reach never-ingest: an unread
+    /// listing licenses no permanent exclusion, because the unknown token may itself be a body
+    /// format. It reaches the typed gap instead, through the vocabulary's own documented floor.
+    /// </summary>
+    [TestMethod]
+    public void AnUnreadableListingNeverNamesPrintAndSoNeverReachesNeverIngest()
+    {
+        var printAndUnknown = EuManifestationListingDecode.ObserveUnreadableListing(
+            [EuManifestationFormat.Print], "epub3", Evidence("floor"));
+        Assert.AreNotEqual(EuManifestationFormat.Print, printAndUnknown.Format);
+        Assert.IsFalse(
+            EuManifestationScope.FormatsThatCanNeverCarryABody.Contains(printAndUnknown.Format),
+            "an unread listing must never reach never_ingest.");
+        Assert.AreEqual(EuFormatBodyAdmission.BodyNotAdmitted, printAndUnknown.Admission);
+
+        // A listing this vocabulary knows nothing at all about takes the same floor.
+        var nothingKnown = EuManifestationListingDecode.ObserveUnreadableListing(
+            [], "epub3", Evidence("floor"));
+        Assert.IsFalse(
+            EuManifestationScope.FormatsThatCanNeverCarryABody.Contains(nothingKnown.Format));
+        Assert.AreEqual("listing_type_not_admitted:epub3", nothingKnown.ReasonCode);
+    }
+
+    /// <summary>
+    /// A publisher token that is not a bounded contract identifier still produces a usable reason
+    /// code rather than throwing, so a hostile or merely odd token cannot crash a run.
+    /// </summary>
+    [TestMethod]
+    public void AnOddPublisherTokenIsBoundedIntoTheReasonCodeRatherThanThrowing()
+    {
+        var wild = EuManifestationListingDecode.ObserveUnreadableListing(
+            [EuManifestationFormat.Xhtml], "a b\n\u00e9/" + new string('z', 200), Evidence("wild"));
+
+        StringAssert.StartsWith(wild.ReasonCode, "listing_type_not_admitted:");
+        Assert.IsTrue(
+            wild.ReasonCode.Length <= 256 && wild.ReasonCode.All(c => c is >= ' ' and <= '~'),
+            "the reason code must stay a bounded printable-ASCII contract identifier.");
     }
 
     [TestMethod]
@@ -491,7 +695,8 @@ public sealed class EuManifestationListingDecodeTests
                 $"{format} has no listed-type token.");
         }
 
-        // The seven tokens observed live on 2026-09-04 across the 1995 to 2008 band.
+        // The seven tokens observed live on 2026-09-04 across the eight Works whose listings this
+        // slice read, spanning 1995 to 2008.
         foreach (var (token, expected) in new (string, EuManifestationFormat)[]
                  {
                      ("fmx4", EuManifestationFormat.Formex4),

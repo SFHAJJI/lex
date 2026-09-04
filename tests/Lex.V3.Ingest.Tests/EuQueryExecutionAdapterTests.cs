@@ -2001,6 +2001,13 @@ public sealed class EuQueryExecutionAdapterTests
         Assert.AreEqual(ScopeManifestFetchAddressStatus.Minted, rowAddress.Status);
         Assert.AreEqual("application/xhtml+xml", rowAddress.AcceptMediaType);
         Assert.AreEqual("eng", rowAddress.AcceptLanguage);
+
+        // The scope ruling asks for Held on the RECORD, not only on this run's own outcome map and
+        // manifest row, so the reopened corpus/6 record set is where this slice's central claim is
+        // finally checked: before D1-05d this object's record was NotHeld.
+        Assert.IsNotNull(result.CorpusRecordSet);
+        var record = result.CorpusRecordSet!.Set.Records.Single();
+        Assert.AreEqual(CorpusBodyRecordKind.Held, record.Body.Kind);
     }
 
     /// <summary>
@@ -2188,6 +2195,118 @@ public sealed class EuQueryExecutionAdapterTests
     private static readonly byte[] PdfBody =
         System.Text.Encoding.UTF8.GetBytes("%PDF-1.4\n% served-through-application-pdf\n");
 
+    /// <summary>
+    /// Fix one for REVIEW_RESULT lex-event-20260904T192428840Z-a6a8ebd26c58436aafd109a55303c12e
+    /// defect one: a minted format disposition names family M's OWN delivery evidence, and not
+    /// family P's.
+    /// </summary>
+    /// <remarks>
+    /// This is asserted here rather than in the contracts test because only the adapter chooses
+    /// which family's proof to hand the listing decode, and it used to hand it P's while M's own
+    /// proof went unused. What this test checks, exactly: the format selector and the language
+    /// selector of the same row cite DIFFERENT delivery evidence. That is the discriminating fact,
+    /// because under the defect both cited family P's one ref and were equal. It does not separately
+    /// name family M's ref, which the adapter does not publish anywhere a test can read; the
+    /// contracts-level
+    /// <c>EuCellarObjectDecodeTests.TheDecodeMintsAFormatObservationFromFamilyMsRowsAndNamesFamilyMsOwnEvidence</c>
+    /// holds that half, against two refs built from deliberately different labels.
+    /// </remarks>
+    [TestMethod]
+    public async Task AMintedFormatDispositionNamesFamilyMsOwnDeliveryEvidenceAndNotFamilyPs()
+    {
+        var (result, _, store) = await RunWorkingTimeDirectiveAsync(
+            EuAcquisitionTestFixture.RealBandListedTypes,
+            WorkingTimeLadderResponse);
+
+        Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+
+        // The manifest publishes each selector's evidence as an ordinal into its own ordered
+        // artifact list, so both refs are read back out of the written manifest rather than assumed.
+        var manifest = await ReopenManifestAsync(result, store);
+        var selectors = manifest.Rows.Single().Selectors;
+
+        SourceArtifactRef EvidenceFor(string canonicalValue)
+        {
+            var selector = selectors.Single(
+                candidate => candidate.CanonicalValues.Count == 1 &&
+                    candidate.CanonicalValues[0] == canonicalValue);
+            Assert.IsNotNull(
+                selector.EvidenceArtifactOrdinal, $"the '{canonicalValue}' selector cites no evidence.");
+            return manifest.OrderedEvidenceArtifacts[selector.EvidenceArtifactOrdinal!.Value];
+        }
+
+        // "xhtml" is the format selector's value for this Work, "eng" the language selector's. The
+        // language axis is read from families P and X, the format axis from family M, so the two
+        // must cite DIFFERENT delivery evidence. Before this fix the adapter stamped family P's ref
+        // on the format observation too, and these two were the same artifact.
+        var formatEvidence = EvidenceFor("xhtml");
+        var languageEvidence = EvidenceFor("ENG");
+
+        Assert.AreNotEqual(
+            languageEvidence,
+            formatEvidence,
+            "the format axis must name family M's own delivery evidence, not the sibling families'.");
+
+        // Every OTHER selector on the row cites the sibling families' one artifact, so the format
+        // selector is alone in citing family M's. This is what makes the inequality above a fact
+        // about which proof the adapter passed, rather than about which two selectors were picked.
+        foreach (var other in selectors.Where(
+            candidate => candidate.EvidenceArtifactOrdinal is not null &&
+                !(candidate.CanonicalValues.Count == 1 && candidate.CanonicalValues[0] == "xhtml")))
+        {
+            Assert.AreEqual(
+                languageEvidence,
+                manifest.OrderedEvidenceArtifacts[other.EvidenceArtifactOrdinal!.Value],
+                $"selector [{string.Join(',', other.CanonicalValues)}] should rest on the sibling " +
+                "families' proof.");
+        }
+
+        // The manifest really did carry two distinct artifacts, so nothing above is an artefact of
+        // one of them being absent.
+        Assert.HasCount(2, manifest.OrderedEvidenceArtifacts);
+        CollectionAssert.Contains(manifest.OrderedEvidenceArtifacts.ToArray(), formatEvidence);
+        CollectionAssert.Contains(manifest.OrderedEvidenceArtifacts.ToArray(), languageEvidence);
+    }
+
+    /// <summary>
+    /// Fix two at the adapter level: a manifestation type this vocabulary does not know, in one
+    /// Work's listing, quarantines THAT WORK and lets the run deliver.
+    /// </summary>
+    /// <remarks>
+    /// REVIEW_RESULT lex-event-20260904T192428840Z-a6a8ebd26c58436aafd109a55303c12e defect two: this
+    /// used to refuse the whole seed's run, so the day the office lists a new manifestation type
+    /// anywhere in its catalogue, every EU run would have refused. The listing here is the real
+    /// six-token band listing with one invented extra token standing in for that future type.
+    /// </remarks>
+    [TestMethod]
+    public async Task AnUnadmittedManifestationTypeQuarantinesItsWorkAndTheRunStillDelivers()
+    {
+        var withFutureType = EuAcquisitionTestFixture.RealBandListedTypes
+            .Concat(["epub3"])
+            .ToArray();
+
+        var (result, handler, store) = await RunWorkingTimeDirectiveAsync(
+            withFutureType, WorkingTimeLadderResponse);
+
+        Assert.IsNull(
+            result.Refusal,
+            "one unknown publisher token must never refuse the run: " +
+            $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+        Assert.AreEqual(EuQueryExecutionCompletion.AllFamiliesProven, result.Completion);
+
+        // The Work is quarantined, so nothing is fetched for it and its record is not held.
+        Assert.AreEqual(
+            0, handler.DocumentFetchCount, "a quarantined Work must not be fetched.");
+        Assert.HasCount(0, result.DocumentAcquisitionOutcomesByOrdinal!);
+
+        var record = result.CorpusRecordSet!.Set.Records.Single();
+        Assert.AreEqual(CorpusBodyRecordKind.NotHeld, record.Body.Kind);
+
+        // And the row still carries no minted address, because there is no candidate to address.
+        var rowAddress = await ReopenSingleRowFetchAddressAsync(result, store);
+        Assert.AreEqual(ScopeManifestFetchAddressStatus.NotMinted, rowAddress.Status);
+    }
+
     private const string WorkingTimeCelex = "32003L0088";
     private const string CellarResourceOrigin = "http://publications.europa.eu/resource/cellar/";
 
@@ -2317,6 +2436,19 @@ public sealed class EuQueryExecutionAdapterTests
     /// so a test can check what the ROW carries rather than only what the ladder attempted. The two
     /// are deliberately different facts once a ladder falls through.
     /// </summary>
+    private static async Task<ScopeManifest> ReopenManifestAsync(
+        EuQueryExecutionResult result, EuAcquisitionTestFixture.EuInMemoryCustodyStore store)
+    {
+        var bytes = await Lex.V3.Contracts.Custody.CustodyRestore.ReadByDigestCheckedAsync(
+            store, result.ScopeManifestReceipt!.Reference.ContentSha256, CancellationToken.None);
+        var manifestRef = new SourceArtifactRef(
+            $"urn:uuid:{Guid.NewGuid():D}", result.ScopeManifestCanonicalSha256!);
+        var manifest = EuScopeManifestBindingProof.TryOpenAsEuManifest(
+            manifestRef, bytes.Span, new PermissiveEvidenceResolver(CompleteEnumerationRef), out var refusal);
+        Assert.IsNotNull(manifest, $"the written manifest did not reopen: {refusal}.");
+        return manifest!;
+    }
+
     private static async Task<ScopeManifestFetchAddress> ReopenSingleRowFetchAddressAsync(
         EuQueryExecutionResult result, EuAcquisitionTestFixture.EuInMemoryCustodyStore store)
     {
