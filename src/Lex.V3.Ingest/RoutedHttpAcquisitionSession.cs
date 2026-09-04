@@ -345,13 +345,43 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                     evidence);
             }
 
-            RobotsPolicyEvaluationResult verdict;
+            // Design ruling (D1-06c-LU review, event
+            // lex-event-20260904T125234593Z-594a479b1c774e23bc5e9dc920a7dfd5): the Legilux
+            // robots.txt disallows page paths under /eli/, but this profile fetches
+            // document bytes under /filestore/, a prefix those /eli/ rules never match. A
+            // filestore path's own structure embeds its expression's exact /eli/ page path once
+            // the /filestore/ prefix and the trailing filename segment are stripped (see
+            // TryDeriveLuxembourgFilestoreEliPagePath), so both the actual fetch path and that
+            // derived page path are evaluated here, refusing when either is disallowed. Every
+            // other profile derives no second path and is evaluated exactly as before.
+            var primaryPath = new Uri(_sourceWitnessIdentity.RequestedUri, UriKind.Absolute).PathAndQuery;
+            var derivedEliPagePath = TryDeriveLuxembourgFilestoreEliPagePath(_profile.Id, primaryPath);
+            var candidatePaths = derivedEliPagePath is null
+                ? [primaryPath]
+                : new[] { primaryPath, derivedEliPagePath };
+
+            string? deniedPath = null;
+            var sawUnsafeToInterpret = false;
             try
             {
-                verdict = RobotsExclusionPolicy.Evaluate(
-                    terminalBody.Bytes.Span,
-                    _profile.RobotsProductToken,
-                    new Uri(_sourceWitnessIdentity.RequestedUri, UriKind.Absolute).PathAndQuery);
+                foreach (var candidatePath in candidatePaths)
+                {
+                    var verdict = RobotsExclusionPolicy.Evaluate(
+                        terminalBody.Bytes.Span,
+                        _profile.RobotsProductToken,
+                        candidatePath);
+                    if (verdict == RobotsPolicyEvaluationResult.Denied)
+                    {
+                        deniedPath = candidatePath;
+                        break;
+                    }
+
+                    if (verdict == RobotsPolicyEvaluationResult.UnsafeToInterpret)
+                    {
+                        sawUnsafeToInterpret = true;
+                        break;
+                    }
+                }
             }
             catch (ArgumentException)
             {
@@ -361,13 +391,13 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                     evidence);
             }
 
-            if (verdict == RobotsPolicyEvaluationResult.Denied)
+            if (deniedPath is not null)
             {
                 Dispose();
-                return StartResult.PublisherDenied(evidence);
+                return StartResult.PublisherDenied(evidence, deniedPath);
             }
 
-            if (verdict == RobotsPolicyEvaluationResult.UnsafeToInterpret)
+            if (sawUnsafeToInterpret)
             {
                 Dispose();
                 return StartResult.Refused(
@@ -407,6 +437,32 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             Dispose();
             throw;
         }
+    }
+
+    /// <summary>
+    /// Structural derivation only, never a hardcoded document list: legilux.public.lu's own
+    /// filestore path for one manifestation is
+    /// <c>/filestore/eli/etat/leg/loi/{date}/{id}/jo/{lang}/{format}/eli-etat-leg-loi-...-
+    /// {format}.{ext}</c>, and that expression's own page path is the same segments with the
+    /// <c>/filestore/</c> prefix and the trailing filename segment removed:
+    /// <c>/eli/etat/leg/loi/{date}/{id}/jo/{lang}/{format}</c>. Returns null for every other
+    /// profile and for any path not under <c>/filestore/</c> with a segment to strip, so the
+    /// caller falls back to evaluating the one actual fetch path exactly as before.
+    /// </summary>
+    private static string? TryDeriveLuxembourgFilestoreEliPagePath(
+        OfficialMachineQuerySourceProfileId profileId,
+        string requestPathAndQuery)
+    {
+        const string filestorePrefix = "/filestore/";
+        if (profileId != OfficialMachineQuerySourceProfileId.LuxembourgDocumentFetch ||
+            !requestPathAndQuery.StartsWith(filestorePrefix, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var afterPrefix = requestPathAndQuery[filestorePrefix.Length..];
+        var lastSegmentStart = afterPrefix.LastIndexOf('/');
+        return lastSegmentStart > 0 ? "/" + afterPrefix[..lastSegmentStart] : null;
     }
 
     private async Task<RouteExecution> ExecuteMachineAttemptAsync(
@@ -1834,7 +1890,8 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             RoutedHttpEvidence? evidence,
             OfficialMachineQueryLocalSafetyReason? localSafetyReason,
             OfficialHttpOperationalFailureReason? operationalReason,
-            PostHeaderRejection? postHeaderRejection)
+            PostHeaderRejection? postHeaderRejection,
+            string? deniedRequestPath)
         {
             RequireExactlyOneOperationalReasonShape(kind, operationalReason, postHeaderRejection);
             Kind = kind;
@@ -1843,6 +1900,7 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             LocalSafetyReason = localSafetyReason;
             OperationalReason = operationalReason;
             PostHeaderRejection = postHeaderRejection;
+            DeniedRequestPath = deniedRequestPath;
         }
 
         internal OfficialHttpAcquisitionOutcomeKind Kind { get; }
@@ -1858,6 +1916,16 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
         /// </summary>
         internal PostHeaderRejection? PostHeaderRejection { get; }
 
+        /// <summary>
+        /// Present exactly for <see cref="OfficialHttpAcquisitionOutcomeKind.PublisherDenial"/>:
+        /// the one path, of the (up to two) paths this run evaluated, whose robots rule actually
+        /// matched a disallow. For the LU document-fetch profile this can be the derived
+        /// <c>/eli/...</c> page path rather than the raw <c>/filestore/...</c> fetch path, so a
+        /// caller and its tests can see which of the two disallowed the run rather than a bare
+        /// denial.
+        /// </summary>
+        internal string? DeniedRequestPath { get; }
+
         internal static StartResult Started(
             RoutedHttpAcquisitionSession session,
             RoutedHttpEvidence evidence) => new(
@@ -1866,15 +1934,20 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                 evidence,
                 null,
                 null,
+                null,
                 null);
 
-        internal static StartResult PublisherDenied(RoutedHttpEvidence evidence) => new(
-            OfficialHttpAcquisitionOutcomeKind.PublisherDenial,
-            null,
-            evidence,
-            null,
-            null,
-            null);
+        internal static StartResult PublisherDenied(
+            RoutedHttpEvidence evidence,
+            string deniedRequestPath) => new(
+                OfficialHttpAcquisitionOutcomeKind.PublisherDenial,
+                null,
+                evidence,
+                null,
+                null,
+                null,
+                deniedRequestPath
+                    ?? throw new ArgumentNullException(nameof(deniedRequestPath)));
 
         internal static StartResult Refused(
             OfficialMachineQueryLocalSafetyReason reason,
@@ -1883,6 +1956,7 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                 null,
                 evidence,
                 reason,
+                null,
                 null,
                 null);
 
@@ -1894,6 +1968,7 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                 evidence,
                 null,
                 reason,
+                null,
                 null);
 
         internal static StartResult PostHeaderRejected(PostHeaderRejection rejection) => new(
@@ -1904,12 +1979,14 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             null,
             null,
             null,
-            rejection);
+            rejection,
+            null);
 
         internal static StartResult Integrity(RoutedHttpEvidence? evidence) => new(
             OfficialHttpAcquisitionOutcomeKind.IntegrityFailure,
             null,
             evidence,
+            null,
             null,
             null,
             null);

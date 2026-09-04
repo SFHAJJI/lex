@@ -163,8 +163,9 @@ public sealed class OfficialMachineQuerySourceProfileTests
             OfficialMachineQuerySourceProfiles.ResolveFor(MachineQueryBinder.OpenIdentity(
                 BoundGet("https://legilux.public.lu:8443/filestore/x.xml"))));
 
-        // A GET request cannot claim the LU or EU SPARQL profile's POST identity, and a POST
-        // request cannot claim the LU document-fetch profile's GET identity.
+        // A POST request cannot claim the LU document-fetch profile's GET identity: the same
+        // host and path resolved via GET above throws when opened as a POST instead, so the
+        // guard this test proves is method-exact, not merely host-and-path-exact.
         Assert.ThrowsExactly<ArgumentException>(() =>
             OfficialMachineQuerySourceProfiles.ResolveFor(OpenedPost(
                 "https://legilux.public.lu/filestore/x.xml",

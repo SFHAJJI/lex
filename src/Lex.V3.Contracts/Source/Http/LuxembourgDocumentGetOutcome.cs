@@ -11,11 +11,11 @@ namespace Lex.V3.Contracts.Source.Http;
 /// used):
 /// <list type="bullet">
 /// <item>a real filestore XML document returned HTTP 200, Content-Type application/xml (SHA-256
-/// 9e43a99e4b9735e383d989989d4005fc9e1676f4094c2633f30b2f056d5e476, 19,986 bytes retained);</item>
+/// 9e43a99e4b9735e383d989989d4005fc9e1676f4094c2633f30b2f056d5e476d, 19,986 bytes retained);</item>
 /// <item>a deliberately nonexistent filestore path returned HTTP 404, Content-Type
 /// application/json, a JSON body {"timestamp","status":404,"error":"Not Found",
 /// "message":"No message available","path":...} (SHA-256
-/// f298775ddb13aad5e490a383b3a09f8fe3533c522a3bc5749c38214cadc13dd, 209 bytes retained).</item>
+/// efd7f3ff4dd45f9a9a303fad9353892c244154d940e24db8b1e480b7b8f4312c, 234 bytes retained).</item>
 /// </list>
 /// <see cref="Gone"/> and <see cref="RetryExhausted"/> are not directly observed here; they mirror
 /// v2's own already-proven ladder for this exact publisher

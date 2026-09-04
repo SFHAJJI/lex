@@ -56,25 +56,30 @@ public sealed record LuxembourgManifestationSelection
 
     /// <summary>
     /// Selects among the manifestations the publisher's own SPARQL store lists for one expression.
-    /// Each parameter is that format's file URI when the publisher enumerates one, else null;
-    /// XML strictly precedes PDF/A in the selection order.
+    /// Each parameter is that format's already-validated <see cref="LuxembourgFileUri"/> when the
+    /// publisher enumerates one, else null; XML strictly precedes PDF/A in the selection order.
+    /// Taking the validated type rather than a raw string means a caller cannot pass an
+    /// unvalidated candidate into selection logic: validation happens once, at
+    /// <see cref="LuxembourgFileUri.RequireValid"/>, before a candidate ever reaches here.
     /// </summary>
-    public static LuxembourgManifestationSelection Select(string? xmlFileUri, string? pdfAFileUri)
+    public static LuxembourgManifestationSelection Select(
+        LuxembourgFileUri? xmlFileUri,
+        LuxembourgFileUri? pdfAFileUri)
     {
-        if (!string.IsNullOrEmpty(xmlFileUri))
+        if (xmlFileUri is not null)
         {
             return new LuxembourgManifestationSelection(
                 LuxembourgManifestationSelectionOutcome.Selected,
                 LuxembourgManifestationFormat.Xml,
-                xmlFileUri);
+                xmlFileUri.Value.AbsoluteUri);
         }
 
-        if (!string.IsNullOrEmpty(pdfAFileUri))
+        if (pdfAFileUri is not null)
         {
             return new LuxembourgManifestationSelection(
                 LuxembourgManifestationSelectionOutcome.Selected,
                 LuxembourgManifestationFormat.PdfA,
-                pdfAFileUri);
+                pdfAFileUri.Value.AbsoluteUri);
         }
 
         return new LuxembourgManifestationSelection(

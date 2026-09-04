@@ -5,10 +5,14 @@ namespace Lex.V3.Tests.Contracts.Source.Http;
 [TestClass]
 public sealed class LuxembourgManifestationSelectionTests
 {
-    private const string XmlUri =
+    private const string XmlUriText =
         "https://data.legilux.public.lu/filestore/eli/etat/leg/loi/2017/03/14/a439/jo/fr/xml/x.xml";
-    private const string PdfUri =
+    private const string PdfUriText =
         "https://data.legilux.public.lu/filestore/eli/etat/leg/loi/2017/03/14/a439/jo/fr/pdfa/x.pdf";
+
+    private static LuxembourgFileUri XmlUri => LuxembourgFileUri.RequireValid(XmlUriText);
+
+    private static LuxembourgFileUri PdfUri => LuxembourgFileUri.RequireValid(PdfUriText);
 
     [TestMethod]
     public void XmlWinsWhenBothAreListed()
@@ -17,7 +21,7 @@ public sealed class LuxembourgManifestationSelectionTests
 
         Assert.AreEqual(LuxembourgManifestationSelectionOutcome.Selected, selection.Outcome);
         Assert.AreEqual(LuxembourgManifestationFormat.Xml, selection.Format);
-        Assert.AreEqual(XmlUri, selection.FileUri);
+        Assert.AreEqual(XmlUriText, selection.FileUri);
     }
 
     [TestMethod]
@@ -27,7 +31,7 @@ public sealed class LuxembourgManifestationSelectionTests
 
         Assert.AreEqual(LuxembourgManifestationSelectionOutcome.Selected, selection.Outcome);
         Assert.AreEqual(LuxembourgManifestationFormat.PdfA, selection.Format);
-        Assert.AreEqual(PdfUri, selection.FileUri);
+        Assert.AreEqual(PdfUriText, selection.FileUri);
     }
 
     [TestMethod]
@@ -43,20 +47,12 @@ public sealed class LuxembourgManifestationSelectionTests
     }
 
     [TestMethod]
-    public void AnEmptyStringIsTreatedAsNotListed()
-    {
-        var selection = LuxembourgManifestationSelection.Select(string.Empty, PdfUri);
-
-        Assert.AreEqual(LuxembourgManifestationFormat.PdfA, selection.Format);
-    }
-
-    [TestMethod]
     public void XmlAloneIsSelectedWithoutRequiringAPdfCandidate()
     {
         var selection = LuxembourgManifestationSelection.Select(XmlUri, null);
 
         Assert.AreEqual(LuxembourgManifestationSelectionOutcome.Selected, selection.Outcome);
         Assert.AreEqual(LuxembourgManifestationFormat.Xml, selection.Format);
-        Assert.AreEqual(XmlUri, selection.FileUri);
+        Assert.AreEqual(XmlUriText, selection.FileUri);
     }
 }

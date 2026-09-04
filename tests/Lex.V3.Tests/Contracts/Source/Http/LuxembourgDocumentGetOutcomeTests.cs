@@ -10,7 +10,7 @@ public sealed class LuxembourgDocumentGetOutcomeTests
     {
         // Live-verified 2026-09-04: legilux.public.lu/filestore/.../xml/....xml returned HTTP 200,
         // Content-Type application/xml, genuine Akoma Ntoso (root <akomaNtoso>), 19,986 bytes,
-        // SHA-256 9e43a99e4b9735e383d989989d4005fc9e1676f4094c2633f30b2f056d5e476.
+        // SHA-256 9e43a99e4b9735e383d989989d4005fc9e1676f4094c2633f30b2f056d5e476d.
         var outcome = LuxembourgDocumentGetOutcome.FromObservedStatus(200);
 
         Assert.AreEqual(LuxembourgDocumentGetOutcomeKind.Retrieved, outcome.Kind);
@@ -22,8 +22,8 @@ public sealed class LuxembourgDocumentGetOutcomeTests
     {
         // Live-verified 2026-09-04: a deliberately nonexistent filestore path returned HTTP 404,
         // Content-Type application/json, body {"timestamp":...,"status":404,"error":"Not Found",
-        // "message":"No message available","path":...}, 209 bytes, SHA-256
-        // f298775ddb13aad5e490a383b3a09f8fe3533c522a3bc5749c38214cadc13dd.
+        // "message":"No message available","path":...}, 234 bytes, SHA-256
+        // efd7f3ff4dd45f9a9a303fad9353892c244154d940e24db8b1e480b7b8f4312c.
         var outcome = LuxembourgDocumentGetOutcome.FromObservedStatus(404);
 
         Assert.AreEqual(LuxembourgDocumentGetOutcomeKind.NotFound, outcome.Kind);
