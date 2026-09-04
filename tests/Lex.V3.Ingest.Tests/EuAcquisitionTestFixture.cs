@@ -39,7 +39,13 @@ internal static class EuAcquisitionTestFixture
     internal const string BasedOnPredicate = Cdm + "resource_legal_based_on_resource_legal";
     internal const string ConsolidatedBasedOnPredicate = Cdm + "act_consolidated_based_on_resource_legal";
     internal const string ExpressionBelongsToWork = Cdm + "expression_belongs_to_work";
+    internal const string ExpressionUsesLanguage = Cdm + "expression_uses_language";
+
+    /// <summary>The EU Vocabularies authority IRI for English, the one this decode reads for ENG.</summary>
+    internal const string EnglishLanguageAuthority =
+        "http://publications.europa.eu/resource/authority/language/ENG";
     internal const string RegulationResourceType = "http://publications.europa.eu/resource/authority/resource-type/REG";
+    internal const string DirectiveResourceType = "http://publications.europa.eu/resource/authority/resource-type/DIR";
 
     /// <summary>The nine object-authority CDM predicates, in the exact order family P asks them.</summary>
     internal static readonly string[] ObjectAuthorityPredicates =
@@ -62,6 +68,15 @@ internal static class EuAcquisitionTestFixture
 
     internal static readonly string[] RootWatermarkProjection =
         ["object", "value", "value_kind", "datatype_iri", "language_tag", "key_1", "key_2", "key_3", "key_4", "key_5"];
+
+    /// <summary>
+    /// Family M's projection: <c>?parent</c> (the batch-bound Work) and its one listed
+    /// <c>cdm:manifestation_type</c>, with the five-part cursor whose <c>key_1</c> carries the
+    /// parent. Mirrors <c>EuObjectFactsDiscoveryPlan</c>'s own manifestation-facts projection.
+    /// </summary>
+    internal static readonly string[] ManifestationFactsProjection =
+        ["parent", "value", "value_kind", "datatype_iri", "language_tag",
+            "key_1", "key_2", "key_3", "key_4", "key_5"];
 
     internal static readonly string[] CensusFamilyProjection =
         ["base_celex", "base", "state", "family_multiplicity", "state_key"];
@@ -133,6 +148,11 @@ internal static class EuAcquisitionTestFixture
         "\"results\":{\"distinct\":false,\"ordered\":true,\"bindings\":[" + string.Join(',', rows) + "]}}";
 
     private static string PlainLiteral(string value) => "{\"type\":\"literal\",\"value\":" + J(value) + "}";
+
+    private const string XsdStringIri = "http://www.w3.org/2001/XMLSchema#string";
+
+    private static string TypedLiteral(string value, string datatypeIri) =>
+        "{\"type\":\"literal\",\"value\":" + J(value) + ",\"datatype\":" + J(datatypeIri) + "}";
 
     private static string Iri(string value) => "{\"type\":\"uri\",\"value\":" + J(value) + "}";
 
@@ -207,6 +227,44 @@ internal static class EuAcquisitionTestFixture
         return Row(fields);
     }
 
+    /// <summary>
+    /// One family-X row asserting <c>expression_uses_language</c> for the same Expression, which is
+    /// what makes the decode observe a real language Expression rather than none at all.
+    /// </summary>
+    internal static string ExpressionLanguageRow(
+        string parentIri, string expressionIri, string languageAuthorityIri)
+    {
+        var fields = new List<(string Var, string Term)>
+        {
+            ("parent", Iri(parentIri)),
+            ("object", Iri(expressionIri)),
+            ("predicate", Iri(ExpressionUsesLanguage)),
+            ("value", Iri(languageAuthorityIri)),
+            ("value_kind", PlainLiteral("iri")),
+            ("datatype_iri", PlainLiteral("")),
+            ("language_tag", PlainLiteral("")),
+            ("key_1", PlainLiteral(expressionIri)),
+            ("key_2", PlainLiteral(ExpressionUsesLanguage)),
+            ("key_3", PlainLiteral("iri")),
+            ("key_4", PlainLiteral(languageAuthorityIri)),
+            ("key_5", PlainLiteral("")),
+            ("key_6", PlainLiteral("")),
+            ("key_7", PlainLiteral(parentIri)),
+        };
+        return Row(fields);
+    }
+
+    /// <summary>
+    /// One Expression's two family-X rows in the exact ascending cursor order the real page
+    /// template's own ORDER BY produces: key_2 carries the predicate IRI, and
+    /// <c>expression_belongs_to_work</c> sorts before <c>expression_uses_language</c>.
+    /// </summary>
+    internal static IReadOnlyList<string> EnglishExpressionFactRows(string parentIri, string expressionIri) =>
+    [
+        ExpressionFactRow(parentIri, expressionIri),
+        ExpressionLanguageRow(parentIri, expressionIri, EnglishLanguageAuthority),
+    ];
+
     internal static string ExpressionFactsRowsJson(IReadOnlyList<string> rows) => RowsJson(ExpressionFactsProjection, rows);
 
     /// <summary>One family-W row: one root's own <c>cmr:lastModificationDate</c> lexical value.</summary>
@@ -229,6 +287,93 @@ internal static class EuAcquisitionTestFixture
     }
 
     internal static string RootWatermarkRowsJson(IReadOnlyList<string> rows) => RowsJson(RootWatermarkProjection, rows);
+
+    /// <summary>One family-M row: one Work's own listed <c>cdm:manifestation_type</c>.</summary>
+    /// <remarks>
+    /// The term shape is the real one, probed live on 2026-09-04 against the publisher endpoint:
+    /// <c>?value</c> is a plain <c>xsd:string</c> literal carrying the bare token (<c>xhtml</c>,
+    /// <c>html</c>, <c>pdfa1a</c>, ...), never an IRI, and <c>?value_kind</c> is <c>"literal"</c>.
+    /// </remarks>
+    internal static string ManifestationFactsRow(string parentIri, string listedType)
+    {
+        var fields = new List<(string Var, string Term)>
+        {
+            ("parent", Iri(parentIri)),
+            ("value", TypedLiteral(listedType, XsdStringIri)),
+            ("value_kind", PlainLiteral("literal")),
+            ("datatype_iri", PlainLiteral(XsdStringIri)),
+            ("language_tag", PlainLiteral("")),
+            ("key_1", PlainLiteral(parentIri)),
+            ("key_2", PlainLiteral("literal")),
+            ("key_3", PlainLiteral(listedType)),
+            ("key_4", PlainLiteral(XsdStringIri)),
+            ("key_5", PlainLiteral("")),
+        };
+        return Row(fields);
+    }
+
+    /// <summary>
+    /// Family M's own explicit absence row: the office lists NOTHING for this Work. The exact shape
+    /// the real <c>FILTER NOT EXISTS</c> branch returned when probed live on 2026-09-04 against a
+    /// well-formed Cellar IRI the store holds no manifestation for -- one row, <c>?value</c> unbound.
+    /// </summary>
+    internal static string ManifestationFactsUnboundRow(string parentIri)
+    {
+        var fields = new List<(string Var, string Term)>
+        {
+            ("parent", Iri(parentIri)),
+            ("value_kind", PlainLiteral("unbound")),
+            ("datatype_iri", PlainLiteral("")),
+            ("language_tag", PlainLiteral("")),
+            ("key_1", PlainLiteral(parentIri)),
+            ("key_2", PlainLiteral("unbound")),
+            ("key_3", PlainLiteral("")),
+            ("key_4", PlainLiteral("")),
+            ("key_5", PlainLiteral("")),
+        };
+        return Row(fields);
+    }
+
+    internal static string ManifestationFactsRowsJson(IReadOnlyList<string> rows) =>
+        RowsJson(ManifestationFactsProjection, rows);
+
+    /// <summary>
+    /// The listing a real act in the 1995 to 2008 band actually returns, in family M's own ascending
+    /// cursor order.
+    /// </summary>
+    /// <remarks>
+    /// Not invented: this exact six-token set was returned live on 2026-09-04 by the family-M query
+    /// shape for CELEX 32003L0088 (Cellar 050dd964-4f94-4c61-ab50-89217a0d90e2), 32003L0087,
+    /// 32003R0001, 32004R0139 and 32006L0112. Ordered fmx4, html, pdf, pdfa1a, print, xhtml, which is
+    /// both the office's own ordinal order and the ascending key_3 order the executor's strict cursor
+    /// check requires.
+    /// </remarks>
+    internal static readonly string[] RealBandListedTypes =
+        ["fmx4", "html", "pdf", "pdfa1a", "print", "xhtml"];
+
+    /// <summary>Family M's full scripted sequence for one Work with the real band's own listing.</summary>
+    internal static FamilyScript ManifestationScriptFor(string parentIri) =>
+        ManifestationScriptFor(parentIri, RealBandListedTypes);
+
+    /// <summary>Family M's full scripted sequence for one Work listing exactly these types.</summary>
+    internal static FamilyScript ManifestationScriptFor(string parentIri, IReadOnlyList<string> listedTypes)
+    {
+        var rows = listedTypes
+            .OrderBy(static type => type, StringComparer.Ordinal)
+            .Select(type => ManifestationFactsRow(parentIri, type))
+            .ToArray();
+        return ScriptFor("M", rows.Length, rows, ManifestationFactsProjection);
+    }
+
+    /// <summary>
+    /// Family M's full scripted sequence for a Work the office lists NOTHING for: its own explicit
+    /// absence row, which is the typed absence and never a fabricated empty listing.
+    /// </summary>
+    internal static FamilyScript ManifestationAbsenceScriptFor(string parentIri)
+    {
+        var rows = new[] { ManifestationFactsUnboundRow(parentIri) };
+        return ScriptFor("M", rows.Length, rows, ManifestationFactsProjection);
+    }
 
     /// <summary>
     /// Defect 6's own driving row: a family-W row whose <c>value_kind</c> is <c>"unbound"</c> rather
@@ -349,7 +494,7 @@ internal static class EuAcquisitionTestFixture
     }
 
     /// <summary>
-    /// Classifies a rendered SPARQL request body by the one substring unique to each of the five
+    /// Classifies a rendered SPARQL request body by the one substring unique to each of the six
     /// shapes this run can drive, never by request order. The witness must be checked before family
     /// W: both ask <c>cmr#lastModificationDate</c> (the witness's own predicate is that same watermark
     /// predicate), but only the witness's own template carries <c>isIRI(?entry)</c> -- family W's own
@@ -363,6 +508,14 @@ internal static class EuAcquisitionTestFixture
         if (body.Contains("isIRI(?entry)", StringComparison.Ordinal))
         {
             return "Witness";
+        }
+
+        // Family M must be checked BEFORE family X: M's own two-hop path walks
+        // expression_belongs_to_work too, so classifying on that alone would silently answer every
+        // family-M request with family X's script. Only M asks manifestation_manifests_expression.
+        if (body.Contains("manifestation_manifests_expression", StringComparison.Ordinal))
+        {
+            return "M";
         }
 
         if (body.Contains("expression_belongs_to_work", StringComparison.Ordinal))
@@ -399,9 +552,37 @@ internal static class EuAcquisitionTestFixture
             Path.Combine(AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", "gdpr-xhtml-200-body.bin")));
 
         private readonly Dictionary<string, int> _occurrence = new(StringComparer.Ordinal);
+        private readonly List<string> _documentFetchAcceptTokens = [];
         private int _sendCount;
 
         internal int SendCount => Volatile.Read(ref _sendCount);
+
+        /// <summary>
+        /// D1-05d: the exact Accept token of every document-fetch GET this handler answered, in the
+        /// order it answered them. Real dispatch, never a test-declared expectation: this is what
+        /// proves a ladder attempted its candidates in the closed order and stopped when one served.
+        /// </summary>
+        internal IReadOnlyList<string> DocumentFetchAcceptTokens
+        {
+            get
+            {
+                lock (_documentFetchAcceptTokens)
+                {
+                    return _documentFetchAcceptTokens.ToArray();
+                }
+            }
+        }
+
+        internal int DocumentFetchCount
+        {
+            get
+            {
+                lock (_documentFetchAcceptTokens)
+                {
+                    return _documentFetchAcceptTokens.Count;
+                }
+            }
+        }
 
         /// <summary>
         /// How many real requests this handler has classified into <paramref name="family"/> and
@@ -441,6 +622,11 @@ internal static class EuAcquisitionTestFixture
             // documentFetchResponse.
             if (request.Method == HttpMethod.Get)
             {
+                lock (_documentFetchAcceptTokens)
+                {
+                    _documentFetchAcceptTokens.Add(request.Headers.Accept.ToString());
+                }
+
                 return (documentFetchResponse ?? DefaultDocumentFetchResponse)(request);
             }
 

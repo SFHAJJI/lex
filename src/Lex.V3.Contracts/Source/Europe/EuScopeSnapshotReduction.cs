@@ -40,9 +40,14 @@ public static class EuScopeSnapshotReduction
 
         var languageDisposition = ReduceLanguage(snapshot.Language);
 
+        // The ordered candidates cross with everything else this observation carries. Dropping them
+        // here would leave the manifest row's single address looking like the only one this object
+        // has, which is exactly the false reading RULING
+        // lex-event-20260904T174138711Z-cdf5cbd17806423cbe05a6234cc4f262 corrects.
         var formatDisposition = snapshot.Format is { } format
             ? new EuFormatDisposition(
-                format.Format, format.Admission, format.ReasonCode, format.EvidenceRef)
+                format.Format, format.Admission, format.ReasonCode, format.EvidenceRef,
+                format.OrderedCandidates)
             : null;
 
         var rightsDisposition = snapshot.Rights is { } rights

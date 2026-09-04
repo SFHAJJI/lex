@@ -1165,6 +1165,9 @@ public sealed class EuRepeatedEnumerationExecutor
             EuObjectFactsQuerySet.ObjectFacts => "key_1",
             EuObjectFactsQuerySet.ExpressionFacts => "key_7",
             EuObjectFactsQuerySet.RootWatermark => "key_1",
+            // Family M's selection term is its own ?parent, which its five-part cursor carries at
+            // key_1 -- unlike family X, whose key_1 is the discovered Expression.
+            EuObjectFactsQuerySet.ManifestationFacts => "key_1",
             _ => throw new ArgumentOutOfRangeException(nameof(set)),
         };
 

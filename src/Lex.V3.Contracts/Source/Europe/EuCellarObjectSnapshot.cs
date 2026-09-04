@@ -296,12 +296,15 @@ public sealed record EuFormatObservation
         EuManifestationFormat format,
         EuFormatBodyAdmission admission,
         string reasonCode,
-        SourceArtifactRef evidenceRef)
+        SourceArtifactRef evidenceRef,
+        IReadOnlyList<EuManifestationFormat>? orderedCandidates = null)
     {
         Format = ContractValidation.RequireDefined(format, nameof(format));
         Admission = ContractValidation.RequireDefined(admission, nameof(admission));
         ReasonCode = ContractValidation.RequireIdentifier(reasonCode, nameof(reasonCode));
         EvidenceRef = evidenceRef ?? throw new ArgumentNullException(nameof(evidenceRef));
+        OrderedCandidates = EuManifestationListingDecode.RequireCandidateLadder(
+            orderedCandidates, Format, nameof(orderedCandidates));
     }
 
     public EuManifestationFormat Format { get; }
@@ -311,6 +314,18 @@ public sealed record EuFormatObservation
     public string ReasonCode { get; }
 
     public SourceArtifactRef EvidenceRef { get; }
+
+    /// <summary>
+    /// Every format this object's own publisher listing offers that this route can address, in the
+    /// closed ladder's order, starting with <see cref="Format"/>. Empty when this observation was
+    /// not minted from a listing.
+    /// </summary>
+    /// <remarks>
+    /// Carried because a listed format is not a servable one (see
+    /// <see cref="EuManifestationListingDecode"/>): the acquisition step attempts these in order
+    /// within one run, and <see cref="Format"/> alone is the FIRST attempt, not the only one.
+    /// </remarks>
+    public IReadOnlyList<EuManifestationFormat> OrderedCandidates { get; }
 }
 
 /// <summary>One object's observed content class, for the rights axis.</summary>
