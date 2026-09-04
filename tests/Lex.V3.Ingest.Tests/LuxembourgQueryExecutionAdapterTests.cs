@@ -1031,15 +1031,22 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         // (record/body/relation/supportingDocument/family/language/format/authenticity/rights/
         // transport) over that one object, and each axis has its own selector evidence and its own
         // rule-evaluation outcome.
+        //
+        // Item 18 re-transcription: the publication-family selector (ordinal 3) no longer folds the
+        // resource's rdf:type class IRI into its canonical values, so its own selector-evidence
+        // digest and the aggregate selector-set digest that includes it both changed; the object-ref
+        // digest and every rule-evaluation digest did not, because this fixture's family disposition
+        // state (AcceptedCandidate, LOI) is unchanged by that fold removal. Re-printed and
+        // re-transcribed the same way, against the same scenario, after the fold was removed.
         private const string ObjectRefSha256 =
             "8fa6de8d8732399c7e3931fcc51ead455bd4c1f1001290ebe0526cb2075b7317";
         private const string SelectorSetSha256 =
-            "c7d890e7479f494c3c8a7882995d4f76de5656abbc0b1dbb0b9b93b51930d7ab";
+            "30339f04ca72fcc2f3525510bcee114f7030219f583183ae9ef2101581d1a5b6";
 
         private static readonly HashSet<string> AdmittedSelectorEvidenceDigests = new(StringComparer.Ordinal)
         {
             "711dd62e9f0418e13614daaf717b40c49be9211b386d7d0fbd318758b93dded8",
-            "b8c0268e4b77cd359e470e3a73fd768e27c090911663acf1e5f7e4242533aa7a",
+            "1c09b396ee9913b05546867f28632a84f464bfd6f59c5229d404812c1898ef3b",
             "dc2c9fb5b1147229561547dfe4b858fe0819fb77c0cab6ea29f07ddd62c2ce19",
         };
 
