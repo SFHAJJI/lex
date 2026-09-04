@@ -240,10 +240,16 @@ public sealed class EuCaseLawLinkTests
         Assert.AreEqual(EcliState.EcliPresent, binding.CaseEcliState);
         Assert.AreEqual(SchremsIiEcli, binding.CaseEcli());
 
-        // The consistency check the design objection asked for: this binding's own,
-        // independently derived case-side state must equal RelationFact's own built-in check,
-        // not merely be defined to equal it.
-        Assert.AreEqual(binding.Fact.TargetEcliState, binding.CaseEcliState);
+        // The consistency check the design objection asked for, fixed: the prior version asserted
+        // binding.Fact.TargetEcliState against binding.CaseEcliState, but EuCaseLawLinkBinding.Create
+        // sets both from the identical local (factTargetEcliState is literally caseEcliState
+        // whenever caseSide is Target), so that comparison could never fail no matter what value
+        // the shared computation produced -- it proved agreement between a value and itself, not
+        // correctness. The independent expectation instead: SchremsIi's own identity set literally
+        // carries SchremsIiEcli (see the fixture above), so RelationFact's own target-ECLI invariant
+        // requires exactly EcliPresent here, checked against that literal rather than against
+        // CaseEcliState.
+        Assert.AreEqual(EcliState.EcliPresent, binding.Fact.TargetEcliState);
         Assert.AreEqual(SchremsIiEcli, binding.Fact.TargetEcli());
     }
 
