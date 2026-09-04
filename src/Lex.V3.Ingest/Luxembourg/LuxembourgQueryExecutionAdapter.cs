@@ -107,11 +107,17 @@ public sealed class LuxembourgRelationFamilyAcquisition
 }
 
 /// <summary>
-/// Item 15 of the D1-04 design-synthesis ruling: "LuxembourgScopeResolver implements bucket
-/// membership only, not R5.1's TC and RECT typed roles nor an ACC constitutional review evidence
-/// gate; that is a defect in the merged resolver and gets its own slice after D1-04's first freeze
-/// names the gap; D1-04 records the coarser disposition with typed acquisition state so the gap
-/// stays visible, never papers over it."
+/// Item 15 of the D1-04 design-synthesis ruling named the gap this enum marks: "Luxembourg
+/// ScopeResolver implements bucket membership only, not R5.1's TC and RECT typed roles nor an ACC
+/// constitutional review evidence gate; that is a defect in the merged resolver and gets its own
+/// slice after D1-04's first freeze names the gap; D1-04 records the coarser disposition with typed
+/// acquisition state so the gap stays visible, never papers over it." Item 15 has since closed that
+/// gap: the resolver now carries R5.1's TC, RECT and ACC roles as their own
+/// <see cref="LuxembourgTypedRoleResolution"/>, separate from and alongside the coarser
+/// <c>PublicationFamily</c> bucket-membership disposition this enum names. What remains true, and
+/// what this enum still marks, is that a resource carrying one of these members was accepted through
+/// bucket membership at this coarse dimension; it is not a claim that the resource's typed role is
+/// unresolved.
 /// </summary>
 /// <remarks>
 /// ACC's own member is named for what item 15 actually resolved, not the lane's initial (and

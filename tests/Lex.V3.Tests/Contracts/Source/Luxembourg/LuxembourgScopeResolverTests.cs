@@ -4,6 +4,7 @@ using Lex.V3.Contracts;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Contracts.Source.Scope;
+using Lex.V3.TestSupport;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Lex.V3.Tests.Contracts.Source.Luxembourg;
@@ -15,6 +16,7 @@ public sealed class LuxembourgScopeResolverTests
         "http://data.legilux.public.lu/resource/ontology/jolux#";
     private const string RdfType =
         "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+    private const string N = "Lex.V3.Contracts.Source.Luxembourg.";
 
     [TestMethod]
     public void EmptyExactObservationStaysFailClosedAndAccountsForEveryDimensionState()
@@ -509,8 +511,12 @@ public sealed class LuxembourgScopeResolverTests
             resource.Dimensions.PublicationFamily.ReasonCode);
         Assert.AreEqual(LuxembourgTypedRoleKind.CoordinatedText, resource.TypedRole.Kind);
         Assert.AreEqual(ActIri, resource.TypedRole.OwnCoordinate);
+        // Pinned as the literal wire value rather than the named constant: comparing against
+        // LuxembourgTypedRoleDisclosures.ConsolidationWithoutLegalEffect itself can only ever
+        // fail if production code stops assigning that exact same constant reference, never if
+        // someone silently changes the constant's own string value.
         Assert.AreEqual(
-            LuxembourgTypedRoleDisclosures.ConsolidationWithoutLegalEffect,
+            "disclosure_consolidation_without_legal_effect",
             resource.TypedRole.DisclosureCode);
     }
 
@@ -529,8 +535,10 @@ public sealed class LuxembourgScopeResolverTests
             resource.Dimensions.PublicationFamily.ReasonCode);
         Assert.AreEqual(LuxembourgTypedRoleKind.Corrigendum, resource.TypedRole.Kind);
         Assert.AreEqual(ActIri, resource.TypedRole.OwnCoordinate);
+        // Pinned as the literal wire value; see the TC test above for why the named constant
+        // alone is not enough.
         Assert.AreEqual(
-            LuxembourgTypedRoleDisclosures.CorrectiveMaterialNeverCorrectedAct,
+            "disclosure_corrective_material_never_corrected_act",
             resource.TypedRole.DisclosureCode);
     }
 
@@ -557,26 +565,29 @@ public sealed class LuxembourgScopeResolverTests
             LuxembourgTypedRoleKind.ConstitutionalReviewDecision,
             resource.TypedRole.Kind);
         Assert.AreEqual(ActIri, resource.TypedRole.OwnCoordinate);
+        // Pinned as the literal wire value; see the TC test above for why the named constant
+        // alone is not enough.
         Assert.AreEqual(
-            LuxembourgTypedRoleDisclosures.ConstitutionalReviewDecisionNeverStatutoryText,
+            "disclosure_constitutional_review_decision_never_statutory_text",
             resource.TypedRole.DisclosureCode);
     }
 
     [TestMethod]
-    public void AnActWhoseAccSignalArrivesOnlyViaTitleOrRelationCarriesNoConstitutionalReviewRole()
+    public void AnActWhoseAccSignalArrivesOnlyViaTitleCarriesNoConstitutionalReviewRole()
     {
         // R5.1 rule 6's evidence is the publisher's own typeDocument assertion carrying the exact
         // ACC IRI, and nothing else may substitute (reviewer RULING
         // lex-event-20260904T002301246Z-7699c8fdd1ad4868a7d94dcb152fbf57: "no spelling, title,
         // relation or alternate format may widen it"). This resource's typeDocument assertion names
-        // an ordinary LOI, but carries the exact ACC IRI as the object of two other, separately
-        // registered assertion predicates -- title and isMemberOf (a relation) -- so a mutant that
-        // widened ResolveTypedRole's match to either of those predicates, instead of reading
-        // TypeDocument alone, would wrongly admit this as a constitutional-review role. (The third
-        // named channel, an alternate format, cannot even be constructed here: UserFormatPrefix +
-        // "ACC" is not a registered UserFormat vocabulary value, so injecting it fails resolution
-        // outright with UnknownVocabularyDrift before TypedRole is ever computed -- the publisher's
-        // own closed vocabulary already forecloses that path structurally.)
+        // an ordinary LOI, but carries the exact ACC IRI as the object of a separately registered
+        // assertion predicate, title, so a mutant that widened ResolveTypedRole's match to that
+        // predicate, instead of reading TypeDocument alone, would wrongly admit this as a
+        // constitutional-review role. Split from the isMemberOf channel below so each predicate has
+        // its own failure signal. (The third named channel, an alternate format, cannot even be
+        // constructed here: UserFormatPrefix + "ACC" is not a registered UserFormat vocabulary
+        // value, so injecting it fails resolution outright with UnknownVocabularyDrift before
+        // TypedRole is ever computed -- the publisher's own closed vocabulary already forecloses
+        // that path structurally.)
         var accIri = JoluxAuthority + "resource-type/ACC";
         var observation = new LuxembourgResourceObservation(
             ObjectRef(),
@@ -585,6 +596,39 @@ public sealed class LuxembourgScopeResolverTests
                 Iri(ActIri, RdfType, Jolux + "Act"),
                 Iri(ActIri, Jolux + "typeDocument", JoluxAuthority + "resource-type/LOI"),
                 Iri(ActIri, Jolux + "title", accIri),
+            ],
+            [],
+            new LuxembourgSparqlRightsChannelObservations(
+                ObservationRef,
+                SparqlEnumerationRef,
+                []),
+            new LuxembourgInFileRightsChannelObservations(
+                ObservationRef,
+                InFileEnumerationRef,
+                []));
+
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve([observation]));
+
+        Assert.AreEqual(
+            LuxembourgTypedRoleKind.NotApplicable,
+            resolved.Resources.Single().TypedRole.Kind);
+    }
+
+    [TestMethod]
+    public void AnActWhoseAccSignalArrivesOnlyViaIsMemberOfCarriesNoConstitutionalReviewRole()
+    {
+        // Same rule as the title test above, the relation channel: this resource's typeDocument
+        // assertion names an ordinary LOI, but carries the exact ACC IRI as the object of
+        // isMemberOf, so a mutant that widened ResolveTypedRole's match to that relation predicate
+        // would wrongly admit this as a constitutional-review role.
+        var accIri = JoluxAuthority + "resource-type/ACC";
+        var observation = new LuxembourgResourceObservation(
+            ObjectRef(),
+            ObservationRef,
+            [
+                Iri(ActIri, RdfType, Jolux + "Act"),
+                Iri(ActIri, Jolux + "typeDocument", JoluxAuthority + "resource-type/LOI"),
                 Iri(ActIri, Jolux + "isMemberOf", accIri),
             ],
             [],
@@ -680,6 +724,148 @@ public sealed class LuxembourgScopeResolverTests
         var resource = resolved.Resources.Single();
         Assert.AreEqual(LuxembourgTypedRoleKind.NotApplicable, resource.TypedRole.Kind);
         Assert.IsNull(resource.TypedRole.OwnCoordinate);
+    }
+
+    [TestMethod]
+    public void AnActClassResourceWithNoTypeDocumentAssertionCarriesNoTypedRoleAndBodyQuarantine()
+    {
+        // No existing test drove an Act-class resource with zero typeDocument assertions at all,
+        // as opposed to a wrong (non-Act subject) or conflicting (multiple values) one: both of
+        // those are covered above, but ResolveTypedRole's "types.Length != 1" branch was never
+        // actually exercised for the zero case.
+        var observation = new LuxembourgResourceObservation(
+            ObjectRef(),
+            ObservationRef,
+            [
+                Iri(ActIri, RdfType, Jolux + "Act"),
+            ],
+            [],
+            new LuxembourgSparqlRightsChannelObservations(
+                ObservationRef,
+                SparqlEnumerationRef,
+                []),
+            new LuxembourgInFileRightsChannelObservations(
+                ObservationRef,
+                InFileEnumerationRef,
+                []));
+
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve([observation]));
+
+        var resource = resolved.Resources.Single();
+        Assert.AreEqual(LuxembourgTypedRoleKind.NotApplicable, resource.TypedRole.Kind);
+        Assert.IsNull(resource.TypedRole.OwnCoordinate);
+        Assert.AreEqual(LuScopeTerminalState.TypedQuarantine, resource.Dimensions.Body.State);
+        Assert.AreEqual(
+            "typed_quarantine_unknown_publication_family",
+            resource.Dimensions.Body.ReasonCode);
+
+        // Verified by running rather than assumed: ResolvePublicationFamily's catchall only
+        // reaches TypedQuarantine when classes is non-empty (an empty classes-and-types selector
+        // resolves MissingPublisherValue one branch earlier), so the family selector still
+        // carries the resource's own Act class IRI here. Its wire-facing state is therefore
+        // PublisherValuePresent, not PublisherValueAbsent.
+        var familySelector = resolved.ScopeInputs.Single().Selectors.Single(candidate =>
+            candidate.CanonicalValues.Count == 1 &&
+            candidate.CanonicalValues[0] == Jolux + "Act");
+        Assert.AreEqual(ScopeSelectorState.PublisherValuePresent, familySelector.State);
+    }
+
+    /// <summary>
+    /// The two typed-role output types, pinned the way
+    /// <see cref="LuxembourgConstructionSurfaceTests"/> pins the resolver's other repeated-
+    /// enumeration proof types, and following the same fold-in convention as
+    /// <c>LuxembourgAssertionVocabularyTests</c> and <c>LuxembourgRelationVocabularyTests</c>: each
+    /// fold-in's own new types get their construction-surface pin beside the tests that exercise
+    /// them, rather than in the canonical pin file.
+    /// </summary>
+    [TestMethod]
+    public void ATypedRoleKindExposesOnlyItsFourNamedValues()
+    {
+        // Transcribed from ConstructionSurface.Of's actual output, per this project's
+        // print-then-transcribe technique (see LuxembourgConstructionSurfaceTests.cs's remarks).
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "base-constructor protected instance System.Enum::.ctor() -> System.Enum",
+                "base-constructor protected instance System.ValueType::.ctor() -> System.ValueType",
+                "field public static " + N
+                    + "LuxembourgTypedRoleKind::ConstitutionalReviewDecision -> "
+                    + N + "LuxembourgTypedRoleKind",
+                "field public static " + N + "LuxembourgTypedRoleKind::CoordinatedText -> "
+                    + N + "LuxembourgTypedRoleKind",
+                "field public static " + N + "LuxembourgTypedRoleKind::Corrigendum -> "
+                    + N + "LuxembourgTypedRoleKind",
+                "field public static " + N + "LuxembourgTypedRoleKind::NotApplicable -> "
+                    + N + "LuxembourgTypedRoleKind",
+            },
+            ConstructionSurface.Of(typeof(LuxembourgTypedRoleKind)).ToArray());
+    }
+
+    [TestMethod]
+    public void ATypedRoleResolutionHasExactlyFourCheckedFactoriesAndNoOtherProducer()
+    {
+        // Transcribed from ConstructionSurface.Of's actual output, per this project's
+        // print-then-transcribe technique (see LuxembourgConstructionSurfaceTests.cs's remarks).
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + N + "LuxembourgTypedRoleResolution::.ctor("
+                    + N + "LuxembourgTypedRoleKind, System.String, System.String) -> "
+                    + N + "LuxembourgTypedRoleResolution",
+                "constructor private instance " + N + "LuxembourgTypedRoleResolution::.ctor("
+                    + N + "LuxembourgTypedRoleResolution) -> " + N
+                    + "LuxembourgTypedRoleResolution",
+                "constructor private static " + N + "LuxembourgTypedRoleResolution::.cctor() -> "
+                    + N + "LuxembourgTypedRoleResolution",
+                "field internal static " + N
+                    + "LuxembourgTypedRoleResolution::NotApplicableInstance -> "
+                    + N + "LuxembourgTypedRoleResolution",
+                "method internal static " + N + "LuxembourgTypedRoleResolution::"
+                    + "AcceptedConstitutionalReviewDecision(System.String) -> "
+                    + N + "LuxembourgTypedRoleResolution",
+                "method internal static " + N
+                    + "LuxembourgTypedRoleResolution::AcceptedCoordinatedText(System.String) -> "
+                    + N + "LuxembourgTypedRoleResolution",
+                "method internal static " + N
+                    + "LuxembourgTypedRoleResolution::AcceptedCorrigendum(System.String) -> "
+                    + N + "LuxembourgTypedRoleResolution",
+                "method public instance " + N + "LuxembourgTypedRoleResolution::<Clone>$() -> "
+                    + N + "LuxembourgTypedRoleResolution",
+            },
+            ConstructionSurface.Of(typeof(LuxembourgTypedRoleResolution)).ToArray());
+
+        // Fold-in: paired the way the sibling Luxembourg pin file pairs every Of pin with a
+        // ProducersIn assertion. The resolver's own ResolveTypedRole, the per-resource projection
+        // closure that carries it into the anonymous type ResolveTypedRole's caller builds, and
+        // LuxembourgResourceResolution's own TypedRole property (and its backing field) are the
+        // only places elsewhere in Contracts that hand out a typed-role resolution.
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "field private instance " + N
+                    + "LuxembourgResourceResolution::<TypedRole>k__BackingField -> "
+                    + N + "LuxembourgTypedRoleResolution",
+                "method internal instance " + N + "LuxembourgScopeResolver+<>c__DisplayClass23_0"
+                    + "::<Resolve>b__3(" + N + "LuxembourgResourceObservation) -> "
+                    + "<>f__AnonymousType0<" + N + "LuxembourgResourceObservation, "
+                    + "Lex.V3.Contracts.LuScopeDimensions, "
+                    + "System.Collections.Generic.IReadOnlyList<"
+                    + N + "LuxembourgResolvedAssertion>, "
+                    + "System.Collections.Generic.IReadOnlyList<" + N
+                    + "LuxembourgResolvedRelation>, " + N + "LuxembourgWemiTopologyResolution, "
+                    + N + "LuxembourgBodyJoinResolution, " + N + "LuxembourgTypedRoleResolution>",
+                "method private static " + N + "LuxembourgScopeResolver::ResolveTypedRole("
+                    + N + "LuxembourgResourceObservation) -> "
+                    + N + "LuxembourgTypedRoleResolution",
+                "property public instance " + N + "LuxembourgResourceResolution::TypedRole() -> "
+                    + N + "LuxembourgTypedRoleResolution",
+            },
+            ConstructionSurface.ProducersIn(
+                typeof(LuxembourgTypedRoleResolution).Assembly,
+                typeof(LuxembourgTypedRoleResolution),
+                true).ToArray(),
+            "something other than the resolver now hands out a typed-role resolution");
     }
 
     private static LuxembourgResourceObservation TypedRoleObservation(string typeDocumentSuffix) =>
