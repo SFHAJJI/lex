@@ -420,11 +420,7 @@ internal static class LuxembourgScopeResolver
                         ? LuScopeTerminalState.Point
                         : PriorityCandidateTypes.Contains(type) &&
                           IsActClass(classes)
-                            ? AccTypes.Contains(type)
-                                ? (HasAcceptedConstitutionalReviewEvidence(observation)
-                                    ? LuScopeTerminalState.AcceptedCandidate
-                                    : LuScopeTerminalState.TypedQuarantine)
-                                : LuScopeTerminalState.AcceptedCandidate
+                            ? LuScopeTerminalState.AcceptedCandidate
                             : RegulatorTypes.Contains(type)
                                 ? IsRegulatorQualified(observation, type)
                                     ? LuScopeTerminalState.AcceptedCandidate
@@ -441,9 +437,6 @@ internal static class LuxembourgScopeResolver
                     LuScopeTerminalState.AcceptedCandidate => "accepted_exact_family",
                     LuScopeTerminalState.Point => "point_exact_family",
                     LuScopeTerminalState.NeverIngest => "never_ingest_exact_family",
-                    LuScopeTerminalState.TypedQuarantine
-                        when AccTypes.Contains(type) && IsActClass(classes) =>
-                        LuxembourgTypedRoleDisclosures.ConstitutionalReviewEvidenceAbsentReason,
                     _ => "typed_quarantine_role_not_admitted",
                 },
                 "lu_family_exact_type",
@@ -478,27 +471,18 @@ internal static class LuxembourgScopeResolver
     }
 
     /// <summary>
-    /// R5.1 rule 6 and the reviewer's SCOPE_RULING (lex-event-20260903T234803274Z-54f15ecf651941ebb58c91e269959aed)
-    /// require ACC's constitutional-review role to rest on genuine evidence, never merely on the
-    /// typeDocument token reading ACC. The acquired LU assertion set (Decision 65: 26 assertion and
-    /// 18 relation predicates -- <c>rdf:type</c>, <c>typeDocument</c>, the WEMI and rights
-    /// predicates this resolver already reads, plus the 16 Act-fact predicates it does not yet
-    /// consume) names no predicate for "this Act is a constitutional-review judgment" distinct
-    /// from the type token itself. This gate therefore has no positive signal to check today and
-    /// always refuses. That is deliberate, not a placeholder: Decision 64's discipline is that an
-    /// absent condition is explicitly typed, never silently defaulted to acceptance. Defining the
-    /// real evidence predicate is a separate, future ruling (reported as a named gap by this item,
-    /// not solved by it).
-    /// </summary>
-    private static bool HasAcceptedConstitutionalReviewEvidence(
-        LuxembourgResourceObservation observation) => false;
-
-    /// <summary>
     /// R5.1's own TC, RECT and ACC role, distinguished from bare <c>PriorityCandidateTypes</c>
-    /// bucket membership. TC and RECT roles come directly from the publisher's own typeDocument
-    /// assertion the resolver already reads (Candidate 6 section 4's own type-keyed family map);
-    /// ACC's role additionally requires <see cref="HasAcceptedConstitutionalReviewEvidence"/>,
-    /// which is refused today for the reason documented on that method.
+    /// bucket membership. All three roles come directly, and only, from the publisher's own
+    /// typeDocument assertion the resolver already reads (Candidate 6 section 4's own type-keyed
+    /// family map): TC and RECT resolve here exactly as this lane's first freeze had them, and ACC
+    /// resolves here exactly the same way per the reviewer RULING
+    /// lex-event-20260904T002301246Z-7699c8fdd1ad4868a7d94dcb152fbf57. That ruling held that R5.1
+    /// rule 6's own evidence for "this is a constitutional-review judgment" is the exact ACC
+    /// typeDocument assertion itself -- already required to reach this branch via
+    /// <see cref="AccTypes"/> below -- and that no further predicate is required or may substitute
+    /// (a title, a relation, an alternate format), correcting this lane's own earlier reading of
+    /// the 23:48Z SCOPE_RULING as requiring some other, undefined evidence predicate that
+    /// unconditionally refused every ACC resource.
     /// </summary>
     private static LuxembourgTypedRoleResolution ResolveTypedRole(
         LuxembourgResourceObservation observation)
@@ -528,10 +512,7 @@ internal static class LuxembourgScopeResolver
 
         if (AccTypes.Contains(type))
         {
-            return HasAcceptedConstitutionalReviewEvidence(observation)
-                ? throw new InvalidOperationException(
-                    "No typed role exists yet for accepted ACC constitutional-review evidence.")
-                : LuxembourgTypedRoleResolution.ConstitutionalReviewEvidenceAbsent(resourceIri);
+            return LuxembourgTypedRoleResolution.AcceptedConstitutionalReviewDecision(resourceIri);
         }
 
         return LuxembourgTypedRoleResolution.NotApplicableInstance;

@@ -113,6 +113,19 @@ public sealed class LuxembourgRelationFamilyAcquisition
 /// names the gap; D1-04 records the coarser disposition with typed acquisition state so the gap
 /// stays visible, never papers over it."
 /// </summary>
+/// <remarks>
+/// ACC's own member is named for what item 15 actually resolved, not the lane's initial (and
+/// reviewer-corrected) always-refuse reading. The reviewer RULING
+/// lex-event-20260904T002301246Z-7699c8fdd1ad4868a7d94dcb152fbf57 held that R5.1 rule 6's own
+/// evidence is the publisher's typeDocument assertion carrying the exact ACC IRI -- no further
+/// predicate required or substitutable -- so an ACC resource is admitted through
+/// <c>PriorityCandidateTypes</c> bucket membership exactly like TC and RECT, and separately carries
+/// R5.1's <c>constitutional_review_decision</c> role
+/// (<see cref="LuxembourgTypedRoleResolution"/>). The former
+/// <c>AccConstitutionalReviewEvidenceGateNotApplied</c> name described a gate that the ruling
+/// refused as contradicting the accepted text; this member is the same coarse signal TC and RECT
+/// already carry, renamed to match.
+/// </remarks>
 public enum LuxembourgCoarseDispositionGap
 {
     /// <summary>
@@ -132,12 +145,13 @@ public enum LuxembourgCoarseDispositionGap
     RectTypedRoleNotDistinguished = 2,
 
     /// <summary>
-    /// Accepted through <c>PriorityCandidateTypes</c> bucket membership only. R5.1's ACC
-    /// constitutional-review evidence gate (a separately typed interpretation source that never
-    /// becomes statutory text) is not separately applied.
+    /// Accepted through <c>PriorityCandidateTypes</c> bucket membership only. R5.1's own ACC role
+    /// (its own coordinate, the constitutional-review-decision-never-statutory-text disclosure,
+    /// never treated as statutory text and never entering the legislation timeline) is not
+    /// separately verified at this coarse level.
     /// </summary>
-    [JsonStringEnumMemberName("acc_constitutional_review_evidence_gate_not_applied")]
-    AccConstitutionalReviewEvidenceGateNotApplied = 3,
+    [JsonStringEnumMemberName("acc_typed_role_not_distinguished")]
+    AccTypedRoleNotDistinguished = 3,
 }
 
 /// <summary>
@@ -809,7 +823,7 @@ public sealed class LuxembourgQueryExecutionAdapter
                 VerifiedLuxembourgSourceProfile.PriorityCandidateTypeRect =>
                     LuxembourgCoarseDispositionGap.RectTypedRoleNotDistinguished,
                 VerifiedLuxembourgSourceProfile.PriorityCandidateTypeAcc =>
-                    LuxembourgCoarseDispositionGap.AccConstitutionalReviewEvidenceGateNotApplied,
+                    LuxembourgCoarseDispositionGap.AccTypedRoleNotDistinguished,
                 _ => (LuxembourgCoarseDispositionGap?)null,
             };
             if (gap is { } value)

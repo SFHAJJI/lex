@@ -103,7 +103,11 @@ public enum LuxembourgDimension
 /// <summary>
 /// R5.1's own role for a TC, RECT or ACC object, distinguished from bare
 /// <c>PriorityCandidateTypes</c> bucket membership (item 15 of the D1-04 design-synthesis ruling;
-/// reviewer SCOPE_RULING lex-event-20260903T234803274Z-54f15ecf651941ebb58c91e269959aed).
+/// reviewer SCOPE_RULING lex-event-20260903T234803274Z-54f15ecf651941ebb58c91e269959aed). ACC's own
+/// member was corrected by the reviewer RULING
+/// lex-event-20260904T002301246Z-7699c8fdd1ad4868a7d94dcb152fbf57 after this lane's first freeze
+/// read the 23:48Z SCOPE_RULING too strictly and gated every ACC resource to an unconditional
+/// refusal; see <see cref="ConstitutionalReviewDecision"/>.
 /// </summary>
 public enum LuxembourgTypedRoleKind
 {
@@ -124,14 +128,21 @@ public enum LuxembourgTypedRoleKind
     Corrigendum = 3,
 
     /// <summary>
-    /// R5.1 rule 6: refused to this named typed state because no constitutional-review evidence
-    /// beyond the bare typeDocument token is available in the acquired LU assertion set. Never
-    /// silently promoted to an accepted candidate on the token alone (Decision 64's discipline).
+    /// R5.1 rule 6, as corrected by the reviewer RULING
+    /// lex-event-20260904T002301246Z-7699c8fdd1ad4868a7d94dcb152fbf57: accepted only as
+    /// <c>constitutional_review_decision</c> when the publisher's own typeDocument assertion
+    /// carries the exact ACC resource type IRI. That assertion is the one evidence R5.1 designates
+    /// (Candidate 5 R5.1, line 599 and line 608); no further predicate is required and none may
+    /// substitute -- a title, a relation or an alternate format never widens this exact semantic
+    /// carve-out (line 617, Decision 58). Carries its own coordinate and the
+    /// interpretation-source-never-statutory-text disclosure, exactly like
+    /// <see cref="CoordinatedText"/> and <see cref="Corrigendum"/>: never treated as statutory
+    /// text, and its judgment date never enters the legislation timeline.
     /// </summary>
-    ConstitutionalReviewEvidenceAbsent = 4,
+    ConstitutionalReviewDecision = 4,
 }
 
-/// <summary>Closed disclosure and refusal-reason codes for <see cref="LuxembourgTypedRoleResolution"/>.</summary>
+/// <summary>Closed disclosure codes for <see cref="LuxembourgTypedRoleResolution"/>.</summary>
 public static class LuxembourgTypedRoleDisclosures
 {
     /// <summary>R5.1 rule 4: a TC body is consolidation-without-legal-effect, never its base act.</summary>
@@ -143,15 +154,12 @@ public static class LuxembourgTypedRoleDisclosures
         "disclosure_corrective_material_never_corrected_act";
 
     /// <summary>
-    /// R5.1 rule 6 requires ACC to carry constitutional-review evidence, not merely the
-    /// typeDocument token. No predicate for that evidence exists in the acquired LU assertion or
-    /// relation set (Decision 65's 26 assertion and 18 relation predicates), so
-    /// <see cref="LuxembourgScopeResolver"/> refuses unconditionally today. This is a named,
-    /// reported gap awaiting a future ruling that defines the evidence predicate, not a
-    /// placeholder default.
+    /// R5.1 rule 6: an ACC body is <c>constitutional_review_decision</c>, a separately typed
+    /// interpretation source that never becomes statutory text; its judgment date never enters the
+    /// legislation timeline.
     /// </summary>
-    public const string ConstitutionalReviewEvidenceAbsentReason =
-        "typed_quarantine_acc_constitutional_review_evidence_absent";
+    public const string ConstitutionalReviewDecisionNeverStatutoryText =
+        "disclosure_constitutional_review_decision_never_statutory_text";
 }
 
 /// <summary>
@@ -166,48 +174,26 @@ public sealed record LuxembourgTypedRoleResolution
     private LuxembourgTypedRoleResolution(
         LuxembourgTypedRoleKind kind,
         string? ownCoordinate,
-        string? disclosureCode,
-        string? evidenceAbsentReasonCode)
+        string? disclosureCode)
     {
         Kind = LuxembourgSourceValidation.RequireDefined(kind, nameof(kind));
         switch (kind)
         {
             case LuxembourgTypedRoleKind.NotApplicable:
-                if (ownCoordinate is not null ||
-                    disclosureCode is not null ||
-                    evidenceAbsentReasonCode is not null)
+                if (ownCoordinate is not null || disclosureCode is not null)
                 {
                     throw new ArgumentException(
-                        "A not-applicable role carries no coordinate, disclosure or reason.");
+                        "A not-applicable role carries no coordinate or disclosure.");
                 }
 
                 break;
             case LuxembourgTypedRoleKind.CoordinatedText:
             case LuxembourgTypedRoleKind.Corrigendum:
+            case LuxembourgTypedRoleKind.ConstitutionalReviewDecision:
                 if (string.IsNullOrEmpty(ownCoordinate) || string.IsNullOrEmpty(disclosureCode))
                 {
                     throw new ArgumentException(
-                        "An accepted TC or RECT role must carry its own coordinate and disclosure.");
-                }
-
-                if (evidenceAbsentReasonCode is not null)
-                {
-                    throw new ArgumentException(
-                        "An accepted role carries no evidence-absence reason.");
-                }
-
-                break;
-            case LuxembourgTypedRoleKind.ConstitutionalReviewEvidenceAbsent:
-                if (string.IsNullOrEmpty(ownCoordinate) ||
-                    string.IsNullOrEmpty(evidenceAbsentReasonCode))
-                {
-                    throw new ArgumentException(
-                        "A refused ACC role must carry its own coordinate and the absence reason.");
-                }
-
-                if (disclosureCode is not null)
-                {
-                    throw new ArgumentException("A refused role carries no disclosure.");
+                        "An accepted TC, RECT or ACC role must carry its own coordinate and disclosure.");
                 }
 
                 break;
@@ -217,7 +203,6 @@ public sealed record LuxembourgTypedRoleResolution
 
         OwnCoordinate = ownCoordinate;
         DisclosureCode = disclosureCode;
-        EvidenceAbsentReasonCode = evidenceAbsentReasonCode;
     }
 
     /// <summary>The closed role this resource resolved to.</summary>
@@ -225,47 +210,40 @@ public sealed record LuxembourgTypedRoleResolution
 
     /// <summary>
     /// The resource's own publisher IRI, present only when <see cref="Kind"/> is not
-    /// <see cref="LuxembourgTypedRoleKind.NotApplicable"/>, so a TC or RECT role can never be read
-    /// off the base or corrected act's coordinate instead of its own.
+    /// <see cref="LuxembourgTypedRoleKind.NotApplicable"/>, so a TC, RECT or ACC role can never be
+    /// read off some other resource's coordinate instead of its own.
     /// </summary>
     public string? OwnCoordinate { get; }
 
     /// <summary>
-    /// The R5.1 disclosure required alongside an accepted <see cref="LuxembourgTypedRoleKind.CoordinatedText"/>
-    /// or <see cref="LuxembourgTypedRoleKind.Corrigendum"/> role.
+    /// The R5.1 disclosure required alongside an accepted
+    /// <see cref="LuxembourgTypedRoleKind.CoordinatedText"/>,
+    /// <see cref="LuxembourgTypedRoleKind.Corrigendum"/> or
+    /// <see cref="LuxembourgTypedRoleKind.ConstitutionalReviewDecision"/> role.
     /// </summary>
     public string? DisclosureCode { get; }
 
-    /// <summary>
-    /// The reason the ACC constitutional-review evidence gate refused, present only when
-    /// <see cref="Kind"/> is <see cref="LuxembourgTypedRoleKind.ConstitutionalReviewEvidenceAbsent"/>.
-    /// </summary>
-    public string? EvidenceAbsentReasonCode { get; }
-
     internal static readonly LuxembourgTypedRoleResolution NotApplicableInstance =
-        new(LuxembourgTypedRoleKind.NotApplicable, null, null, null);
+        new(LuxembourgTypedRoleKind.NotApplicable, null, null);
 
     internal static LuxembourgTypedRoleResolution AcceptedCoordinatedText(string ownCoordinate) =>
         new(
             LuxembourgTypedRoleKind.CoordinatedText,
             ownCoordinate,
-            LuxembourgTypedRoleDisclosures.ConsolidationWithoutLegalEffect,
-            null);
+            LuxembourgTypedRoleDisclosures.ConsolidationWithoutLegalEffect);
 
     internal static LuxembourgTypedRoleResolution AcceptedCorrigendum(string ownCoordinate) =>
         new(
             LuxembourgTypedRoleKind.Corrigendum,
             ownCoordinate,
-            LuxembourgTypedRoleDisclosures.CorrectiveMaterialNeverCorrectedAct,
-            null);
+            LuxembourgTypedRoleDisclosures.CorrectiveMaterialNeverCorrectedAct);
 
-    internal static LuxembourgTypedRoleResolution ConstitutionalReviewEvidenceAbsent(
+    internal static LuxembourgTypedRoleResolution AcceptedConstitutionalReviewDecision(
         string ownCoordinate) =>
         new(
-            LuxembourgTypedRoleKind.ConstitutionalReviewEvidenceAbsent,
+            LuxembourgTypedRoleKind.ConstitutionalReviewDecision,
             ownCoordinate,
-            null,
-            LuxembourgTypedRoleDisclosures.ConstitutionalReviewEvidenceAbsentReason);
+            LuxembourgTypedRoleDisclosures.ConstitutionalReviewDecisionNeverStatutoryText);
 }
 
 public sealed record LuxembourgIriVocabularyValue

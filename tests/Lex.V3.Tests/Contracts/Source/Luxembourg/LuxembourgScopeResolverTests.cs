@@ -512,7 +512,6 @@ public sealed class LuxembourgScopeResolverTests
         Assert.AreEqual(
             LuxembourgTypedRoleDisclosures.ConsolidationWithoutLegalEffect,
             resource.TypedRole.DisclosureCode);
-        Assert.IsNull(resource.TypedRole.EvidenceAbsentReasonCode);
     }
 
     [TestMethod]
@@ -533,36 +532,77 @@ public sealed class LuxembourgScopeResolverTests
         Assert.AreEqual(
             LuxembourgTypedRoleDisclosures.CorrectiveMaterialNeverCorrectedAct,
             resource.TypedRole.DisclosureCode);
-        Assert.IsNull(resource.TypedRole.EvidenceAbsentReasonCode);
     }
 
     [TestMethod]
-    public void AnAccActIsRefusedToATypedEvidenceAbsentStateNeverAdmittedOnTheTypeTokenAlone()
+    public void AnAccActCarriesItsOwnConstitutionalReviewDecisionRoleSeparatelyFromBucketMembership()
     {
+        // Reviewer RULING lex-event-20260904T002301246Z-7699c8fdd1ad4868a7d94dcb152fbf57: R5.1 rule
+        // 6's own evidence is the publisher's typeDocument assertion carrying the exact ACC IRI, so
+        // ACC is admitted through PriorityCandidateTypes bucket membership exactly like TC and RECT
+        // above, and separately carries its own constitutional_review_decision role -- never an
+        // unconditional refusal on the type token, which was this lane's own earlier (and
+        // reviewer-corrected) reading of the 23:48Z SCOPE_RULING.
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
             Profile().Resolve([TypedRoleObservation("ACC")]));
 
         var resource = resolved.Resources.Single();
         Assert.AreEqual(
-            LuScopeTerminalState.TypedQuarantine,
+            LuScopeTerminalState.AcceptedCandidate,
             resource.Dimensions.PublicationFamily.State);
         Assert.AreEqual(
-            LuxembourgTypedRoleDisclosures.ConstitutionalReviewEvidenceAbsentReason,
+            "accepted_exact_family",
             resource.Dimensions.PublicationFamily.ReasonCode);
         Assert.AreEqual(
-            LuScopeTerminalState.TypedQuarantine,
-            resource.Dimensions.Body.State);
-        Assert.AreEqual(
-            LuxembourgTypedRoleDisclosures.ConstitutionalReviewEvidenceAbsentReason,
-            resource.Dimensions.Body.ReasonCode);
-        Assert.AreEqual(
-            LuxembourgTypedRoleKind.ConstitutionalReviewEvidenceAbsent,
+            LuxembourgTypedRoleKind.ConstitutionalReviewDecision,
             resource.TypedRole.Kind);
         Assert.AreEqual(ActIri, resource.TypedRole.OwnCoordinate);
         Assert.AreEqual(
-            LuxembourgTypedRoleDisclosures.ConstitutionalReviewEvidenceAbsentReason,
-            resource.TypedRole.EvidenceAbsentReasonCode);
-        Assert.IsNull(resource.TypedRole.DisclosureCode);
+            LuxembourgTypedRoleDisclosures.ConstitutionalReviewDecisionNeverStatutoryText,
+            resource.TypedRole.DisclosureCode);
+    }
+
+    [TestMethod]
+    public void AnActWhoseAccSignalArrivesOnlyViaTitleOrRelationCarriesNoConstitutionalReviewRole()
+    {
+        // R5.1 rule 6's evidence is the publisher's own typeDocument assertion carrying the exact
+        // ACC IRI, and nothing else may substitute (reviewer RULING
+        // lex-event-20260904T002301246Z-7699c8fdd1ad4868a7d94dcb152fbf57: "no spelling, title,
+        // relation or alternate format may widen it"). This resource's typeDocument assertion names
+        // an ordinary LOI, but carries the exact ACC IRI as the object of two other, separately
+        // registered assertion predicates -- title and isMemberOf (a relation) -- so a mutant that
+        // widened ResolveTypedRole's match to either of those predicates, instead of reading
+        // TypeDocument alone, would wrongly admit this as a constitutional-review role. (The third
+        // named channel, an alternate format, cannot even be constructed here: UserFormatPrefix +
+        // "ACC" is not a registered UserFormat vocabulary value, so injecting it fails resolution
+        // outright with UnknownVocabularyDrift before TypedRole is ever computed -- the publisher's
+        // own closed vocabulary already forecloses that path structurally.)
+        var accIri = JoluxAuthority + "resource-type/ACC";
+        var observation = new LuxembourgResourceObservation(
+            ObjectRef(),
+            ObservationRef,
+            [
+                Iri(ActIri, RdfType, Jolux + "Act"),
+                Iri(ActIri, Jolux + "typeDocument", JoluxAuthority + "resource-type/LOI"),
+                Iri(ActIri, Jolux + "title", accIri),
+                Iri(ActIri, Jolux + "isMemberOf", accIri),
+            ],
+            [],
+            new LuxembourgSparqlRightsChannelObservations(
+                ObservationRef,
+                SparqlEnumerationRef,
+                []),
+            new LuxembourgInFileRightsChannelObservations(
+                ObservationRef,
+                InFileEnumerationRef,
+                []));
+
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve([observation]));
+
+        Assert.AreEqual(
+            LuxembourgTypedRoleKind.NotApplicable,
+            resolved.Resources.Single().TypedRole.Kind);
     }
 
     [TestMethod]
@@ -578,7 +618,6 @@ public sealed class LuxembourgScopeResolverTests
         Assert.AreEqual(LuxembourgTypedRoleKind.NotApplicable, resource.TypedRole.Kind);
         Assert.IsNull(resource.TypedRole.OwnCoordinate);
         Assert.IsNull(resource.TypedRole.DisclosureCode);
-        Assert.IsNull(resource.TypedRole.EvidenceAbsentReasonCode);
     }
 
     [TestMethod]
