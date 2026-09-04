@@ -841,7 +841,7 @@ public sealed class RepeatedEnumerationDeliveryProofTests
             var requestTarget = sourceProfile.RequestTarget;
             var target = Encoding.ASCII.GetBytes(new Uri(requestTarget).PathAndQuery);
             var requestBody = Encoding.UTF8.GetBytes("ASK{}");
-            var contentType = new SourceRegistryMemberRef(Artifact(907), sourceProfile.RequestContentType);
+            var contentType = new SourceRegistryMemberRef(Artifact(907), sourceProfile.RequestContentType!);
             var plan = new MachineQueryPlan(MachineQueryPlan.SchemaId, input.QueryFamilyRef, Artifact(907), Artifact(908), HttpRequestMethod.Post, requestTarget, target.Length, Sha(target), cardinality, contentType, MachineQueryCharset.Utf8, MachineQueryInputMode.RendererInputs, input.ArtifactRef, input.PartitionBinding, requestBody.LongLength, Sha(requestBody));
             var planRef = MachineQueryPlanIdentity.Create(Artifact(seed + 110).ResourceId, plan);
             var renderer = new Renderer(plan.RendererProfileRef, plan.RendererSourceRef, requestTarget, requestBody);
@@ -910,7 +910,7 @@ public sealed class RepeatedEnumerationDeliveryProofTests
                         "accept",
                         _httpBindingMutation == HttpBindingMutation.LogicalRequestHeaders && seed == 1
                             ? "application/json"
-                            : logicalSourceProfile.Accept),
+                            : logicalSourceProfile.Accept!),
                     new HttpLogicalRequestHeader(
                         "content-type",
                         $"{logicalSourceProfile.RequestContentType}; charset=utf-8"),

@@ -3,7 +3,7 @@
   "properties": {
     "schema": {
       "type": "string",
-      "const": "lex-v3-source-scope-manifest/1"
+      "const": "lex-v3-source-scope-manifest/2"
     },
     "profile": {
       "type": "object",
@@ -666,6 +666,56 @@
               }
             ]
           },
+          "fetch_address": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "enum": [
+                  "minted",
+                  "not_minted"
+                ]
+              },
+              "host": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "resource_path": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "accept_media_type": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "accept_language": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "not_minted_reason": {
+                "enum": [
+                  "no_publisher_route_yet",
+                  null
+                ]
+              }
+            },
+            "required": [
+              "status",
+              "host",
+              "resource_path",
+              "accept_media_type",
+              "accept_language",
+              "not_minted_reason"
+            ],
+            "additionalProperties": false
+          },
           "row_sha256": {
             "type": "string",
             "pattern": "^[0-9a-f]{64}(?![\\s\\S])",
@@ -679,6 +729,7 @@
           "rule_match_bits_base64_url",
           "matched_evaluations",
           "axis_winning_rule_ordinals",
+          "fetch_address",
           "row_sha256"
         ],
         "additionalProperties": false

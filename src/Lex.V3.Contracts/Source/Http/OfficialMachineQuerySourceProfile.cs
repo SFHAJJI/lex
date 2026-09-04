@@ -14,6 +14,15 @@ public enum OfficialMachineQuerySourceProfileId
 
     [JsonStringEnumMemberName("european_union_sparql")]
     EuropeanUnionSparql = 2,
+
+    /// <summary>
+    /// D1-06c-EU (SCOPE_RULING lex-event-20260904T104723233Z-fa84c4edb4144467a2a63c94ee469cef): the
+    /// EU Cellar REST dissemination (content negotiation) document-fetch channel, GET rather than
+    /// POST. The switch <see cref="OfficialMachineQuerySourceProfiles.ResolveFor(BoundMachineRequestIdentity)"/>
+    /// gains exactly this one new member; every other input still throws exactly as before.
+    /// </summary>
+    [JsonStringEnumMemberName("european_union_document_fetch")]
+    EuropeanUnionDocumentFetch = 3,
 }
 
 public enum RobotsPolicyFreshness
@@ -212,13 +221,19 @@ public sealed class OfficialMachineQuerySourceProfile
         OfficialMachineQuerySourceProfileId id,
         string resourceId,
         string requestTarget,
-        string requestContentType,
+        HttpRequestMethod method,
+        string? requestContentType,
+        MachineQueryCharset? requestCharset,
+        string? accept,
         RobotsPolicyRoute robotsRoute)
     {
         Id = id;
         ResourceId = SourceCoreValidation.RequireUuidUrn(resourceId, nameof(resourceId));
         RequestTarget = requestTarget;
+        Method = method;
         RequestContentType = requestContentType;
+        RequestCharset = requestCharset;
+        Accept = accept;
         RobotsRoute = robotsRoute;
         RetryConditions = Array.AsReadOnly(new[]
         {
@@ -243,13 +258,35 @@ public sealed class OfficialMachineQuerySourceProfile
 
     public string RequestTarget { get; }
 
-    public HttpRequestMethod Method => HttpRequestMethod.Post;
+    public HttpRequestMethod Method { get; }
 
-    public string RequestContentType { get; }
+    /// <summary>Null for a GET profile: a GET carries no request entity or content type.</summary>
+    public string? RequestContentType { get; }
 
-    public MachineQueryCharset RequestCharset => MachineQueryCharset.Utf8;
+    /// <summary>Null for a GET profile: a GET carries no request entity or charset.</summary>
+    public MachineQueryCharset? RequestCharset { get; }
 
-    public string Accept => "application/sparql-results+json";
+    /// <summary>
+    /// Null for the EU document-fetch profile: unlike the two SPARQL channels, a document fetch has
+    /// no single fixed <c>Accept</c> value the whole channel shares. The exact value for one bound
+    /// GET is instead carried on that request's own <see cref="MachineQueryInputArtifact"/>
+    /// parameters (see <see cref="Lex.V3.Contracts.Source.Europe.EuDocumentFetchPlan"/>), because it can never be recovered
+    /// from the requested URI text the way <see cref="OfficialMachineQuerySourceProfiles.ResolveFor(BoundMachineRequestIdentity)"/>
+    /// resolves a profile.
+    /// </summary>
+    public string? Accept { get; }
+
+    /// <summary>
+    /// True only for the EU document-fetch profile. SCOPE_RULING
+    /// lex-event-20260904T104723233Z-fa84c4edb4144467a2a63c94ee469cef item 1: "follow the observed
+    /// 303 chain only to hosts in the route's own closed admitted set". For this channel the
+    /// admitted set is exactly the one host the route's own first hop already started at (proven the
+    /// same host live on 2026-09-04: <c>GET /resource/celex/32016R0679</c> 303s to
+    /// <c>/resource/cellar/{uuid}/rdf/object/full</c> on that identical host), so "admitted" reduces
+    /// to "same origin as this route's own initial hop" and needs no separate host allow-list.
+    /// </summary>
+    public bool AllowsRedirectWithinInitialAuthority =>
+        Id == OfficialMachineQuerySourceProfileId.EuropeanUnionDocumentFetch;
 
     public string CrawlerUserAgent => OutboundCrawlerIdentity.Token;
 
@@ -327,7 +364,10 @@ public sealed class OfficialMachineQuerySourceProfile
         OfficialMachineQuerySourceProfileId.LuxembourgSparql,
         "urn:uuid:911499a3-087c-42ec-9dca-5c9131ccec47",
         "https://data.legilux.public.lu/sparqlendpoint",
+        HttpRequestMethod.Post,
         "application/x-www-form-urlencoded",
+        MachineQueryCharset.Utf8,
+        "application/sparql-results+json",
         new RobotsPolicyRoute(
             RoutedHttpNetworkOrigin.FromUri("https://data.legilux.public.lu/robots.txt"),
             new RobotsPolicyRouteStep(
@@ -339,17 +379,47 @@ public sealed class OfficialMachineQuerySourceProfile
         OfficialMachineQuerySourceProfileId.EuropeanUnionSparql,
         "urn:uuid:f08afb3b-e30f-41cc-b9be-cf29da97bb76",
         "https://publications.europa.eu/webapi/rdf/sparql",
+        HttpRequestMethod.Post,
         "application/sparql-query",
-        new RobotsPolicyRoute(
-            RoutedHttpNetworkOrigin.FromUri("https://publications.europa.eu/robots.txt"),
-            new RobotsPolicyRouteStep(
-                "https://publications.europa.eu/robots.txt",
-                301,
-                "https://op.europa.eu/robots.txt"),
-            new RobotsPolicyRouteStep(
-                "https://op.europa.eu/robots.txt",
-                200,
-                null)));
+        MachineQueryCharset.Utf8,
+        "application/sparql-results+json",
+        EuropeanUnionRobotsRoute());
+
+    /// <summary>
+    /// D1-06c-EU. One canonical, parameterless profile instance for the whole EU document-fetch
+    /// channel -- exactly one <see cref="OfficialMachineQuerySourceProfile.ArtifactRef"/> for every
+    /// document this channel ever fetches, mirroring <see cref="LuxembourgSparql"/> and
+    /// <see cref="EuropeanUnionSparql"/>. The per-document resource path, <c>Accept</c> and
+    /// <c>Accept-Language</c> live on the bound request's own input artifact
+    /// (<see cref="Lex.V3.Contracts.Source.Europe.EuDocumentFetchPlan"/>), not on this shared channel policy, because unlike
+    /// the SPARQL endpoint this channel's real per-request target genuinely varies.
+    /// </summary>
+    internal static OfficialMachineQuerySourceProfile EuropeanUnionDocumentFetch() => new(
+        OfficialMachineQuerySourceProfileId.EuropeanUnionDocumentFetch,
+        "urn:uuid:2c9e6f1a-8d4b-4a7f-9e3c-5b6a8d1f2c40",
+        "https://" + Lex.V3.Contracts.Source.Europe.EuDocumentFetchAddress.AdmittedHost + "/resource",
+        HttpRequestMethod.Get,
+        null,
+        null,
+        null,
+        EuropeanUnionRobotsRoute());
+
+    /// <summary>
+    /// The <c>publications.europa.eu</c> robots route, shared identically by the SPARQL and the
+    /// document-fetch channels: both are the same publisher and the same robots policy, confirmed
+    /// live for the SPARQL channel and unchanged in shape here (host, 301 to <c>op.europa.eu</c>,
+    /// terminal 200).
+    /// </summary>
+    private static RobotsPolicyRoute EuropeanUnionRobotsRoute() => new(
+        RoutedHttpNetworkOrigin.FromUri("https://publications.europa.eu/robots.txt"),
+        new RobotsPolicyRouteStep(
+            "https://publications.europa.eu/robots.txt",
+            301,
+            "https://op.europa.eu/robots.txt"),
+        new RobotsPolicyRouteStep(
+            "https://op.europa.eu/robots.txt",
+            200,
+            null));
 
     private byte[] BuildCanonicalBytes()
     {
@@ -359,10 +429,10 @@ public sealed class OfficialMachineQuerySourceProfile
             $"resource_id={ResourceId}",
             $"id={ProfileIdToken(Id)}",
             $"request_target={RequestTarget}",
-            $"method=POST",
-            $"request_content_type={RequestContentType}",
-            $"request_charset=utf-8",
-            $"accept={Accept}",
+            $"method={(Method == HttpRequestMethod.Get ? "GET" : "POST")}",
+            $"request_content_type={RequestContentType ?? "none"}",
+            $"request_charset={(RequestCharset is null ? "none" : "utf-8")}",
+            $"accept={Accept ?? "none"}",
             $"crawler_user_agent={CrawlerUserAgent}",
             $"robots_product_token={RobotsProductToken}",
             $"robots_parser_identity={RobotsParserIdentity}",
@@ -398,6 +468,7 @@ public sealed class OfficialMachineQuerySourceProfile
     {
         OfficialMachineQuerySourceProfileId.LuxembourgSparql => "luxembourg_sparql",
         OfficialMachineQuerySourceProfileId.EuropeanUnionSparql => "european_union_sparql",
+        OfficialMachineQuerySourceProfileId.EuropeanUnionDocumentFetch => "european_union_document_fetch",
         _ => throw new ArgumentOutOfRangeException(nameof(id)),
     };
 
@@ -425,6 +496,8 @@ public static class OfficialMachineQuerySourceProfiles
                 OfficialMachineQuerySourceProfile.LuxembourgSparql(),
             OfficialMachineQuerySourceProfileId.EuropeanUnionSparql =>
                 OfficialMachineQuerySourceProfile.EuropeanUnionSparql(),
+            OfficialMachineQuerySourceProfileId.EuropeanUnionDocumentFetch =>
+                OfficialMachineQuerySourceProfile.EuropeanUnionDocumentFetch(),
             _ => throw new ArgumentOutOfRangeException(nameof(id)),
         };
 
@@ -457,6 +530,13 @@ public static class OfficialMachineQuerySourceProfiles
                 Resolve(OfficialMachineQuerySourceProfileId.LuxembourgSparql),
             "https://publications.europa.eu/webapi/rdf/sparql" =>
                 Resolve(OfficialMachineQuerySourceProfileId.EuropeanUnionSparql),
+            // D1-06c-EU: the switch's one new member. It gains a shape check, not an exact-string
+            // case, because unlike the two fixed SPARQL endpoints the document-fetch channel's real
+            // per-document target genuinely varies; every other input still throws exactly as
+            // before. See Lex.V3.Contracts.Source.Europe.EuDocumentFetchAddress.IsAdmittedResourceUri's own remarks for why
+            // this cannot also recover the request's Accept/Accept-Language from the URI text.
+            _ when Lex.V3.Contracts.Source.Europe.EuDocumentFetchAddress.IsAdmittedResourceUri(requestedUri) =>
+                Resolve(OfficialMachineQuerySourceProfileId.EuropeanUnionDocumentFetch),
             _ => throw new ArgumentException(
                 "The bound machine request does not target an admitted official query channel.",
                 parameterName),

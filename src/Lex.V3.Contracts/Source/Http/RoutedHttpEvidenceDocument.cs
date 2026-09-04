@@ -96,6 +96,18 @@ public enum HttpRouteIncompleteReason
     RedirectTargetUnobserved = 6,
     RobotsPolicyUnavailable = 7,
     PublisherServerFailure = 8,
+
+    /// <summary>
+    /// D1-06c-EU (SCOPE_RULING lex-event-20260904T104723233Z-fa84c4edb4144467a2a63c94ee469cef) item
+    /// 1: "follow the observed 303 chain only to hosts in the route's own closed admitted set, any
+    /// redirect off it is a typed refusal". Distinct from <see cref="RedirectRefused"/>: that member
+    /// requires the redirect target to NOT be a well-formed admitted absolute HTTPS URI at all. This
+    /// member is for the other case -- a well-formed absolute HTTPS redirect target whose origin
+    /// differs from this route's own first hop -- which only the document-fetch channel's own
+    /// same-origin redirect allowance ever reaches; every other channel refuses any redirect at all
+    /// before this distinction could matter.
+    /// </summary>
+    RedirectTargetOriginNotAdmitted = 9,
 }
 
 public abstract class RoutedHttpRouteOutcome
@@ -694,6 +706,21 @@ public sealed class RoutedHttpEvidence
                 {
                     throw new ArgumentException(
                         "A redirect-limit outcome requires six observed hops and one further admissible transition.",
+                        nameof(outcome));
+                }
+
+                return;
+            case HttpRouteIncompleteReason.RedirectTargetOriginNotAdmitted:
+                if (!finalIsRedirect ||
+                    !TryGetAdmittedRedirectTarget(terminal, out var offOriginTarget) ||
+                    string.Equals(
+                        new Uri(offOriginTarget, UriKind.Absolute).GetLeftPart(UriPartial.Authority),
+                        new Uri(hops[0].RequestUri, UriKind.Absolute).GetLeftPart(UriPartial.Authority),
+                        StringComparison.Ordinal))
+                {
+                    throw new ArgumentException(
+                        "An origin-not-admitted outcome requires a well-formed redirect target whose "
+                        + "origin genuinely differs from this route's own first hop.",
                         nameof(outcome));
                 }
 
@@ -1621,6 +1648,7 @@ internal static partial class RoutedHttpValidation
         HttpRouteIncompleteReason.RedirectTargetUnobserved => "redirect_target_unobserved",
         HttpRouteIncompleteReason.RobotsPolicyUnavailable => "robots_policy_unavailable",
         HttpRouteIncompleteReason.PublisherServerFailure => "publisher_server_failure",
+        HttpRouteIncompleteReason.RedirectTargetOriginNotAdmitted => "redirect_target_origin_not_admitted",
         _ => throw new ArgumentOutOfRangeException(nameof(value)),
     };
 
@@ -1635,6 +1663,7 @@ internal static partial class RoutedHttpValidation
             "redirect_target_unobserved" => HttpRouteIncompleteReason.RedirectTargetUnobserved,
             "robots_policy_unavailable" => HttpRouteIncompleteReason.RobotsPolicyUnavailable,
             "publisher_server_failure" => HttpRouteIncompleteReason.PublisherServerFailure,
+            "redirect_target_origin_not_admitted" => HttpRouteIncompleteReason.RedirectTargetOriginNotAdmitted,
             _ => throw new ArgumentException("The HTTP route reason is not closed.", parameterName),
         };
 

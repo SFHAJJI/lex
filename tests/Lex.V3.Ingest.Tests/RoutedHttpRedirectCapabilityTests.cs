@@ -1026,6 +1026,12 @@ public sealed class RoutedHttpRedirectCapabilityTests
                 + "System.Collections.Generic.IReadOnlyList<" + Session + "+CanonicalArtifactBytes>, "
                 + "System.Collections.Generic.IReadOnlyList<" + Http + "HttpLogicalRequestHeader>, "
                 + "System.ReadOnlySpan<System.Byte>) -> " + RequestArtifact,
+                "method internal static " + RequestArtifact + "::ForMachineQueryGet("
+                + Http + "OfficialMachineQuerySourceProfile, " + Core + "SourceArtifactRef, "
+                + "System.ReadOnlySpan<System.Byte>, " + Core + "OpenedMachineRequest, "
+                + "System.Collections.Generic.IReadOnlyList<" + Session + "+CanonicalArtifactBytes>, "
+                + "System.Collections.Generic.IReadOnlyList<" + Http + "HttpLogicalRequestHeader>, "
+                + "System.ReadOnlySpan<System.Byte>) -> " + RequestArtifact,
                 "method internal static " + RequestArtifact + "::ForRobots("
                 + Http + "OfficialMachineQuerySourceProfile, " + Core + "SourceArtifactRef, "
                 + "System.ReadOnlySpan<System.Byte>) -> " + RequestArtifact,
@@ -1039,6 +1045,8 @@ public sealed class RoutedHttpRedirectCapabilityTests
                 + Session + "+RedirectPolicyKind, " + Core + "SourceArtifactRef, "
                 + "System.Byte[], System.Collections.Generic.IReadOnlyList<System.String>) -> "
                 + RedirectArtifact,
+                "method internal static " + RedirectArtifact + "::ForDocumentFetch("
+                + Http + "OfficialMachineQuerySourceProfile) -> " + RedirectArtifact,
                 "method internal static " + RedirectArtifact + "::ForRobots("
                 + Http + "OfficialMachineQuerySourceProfile) -> " + RedirectArtifact,
                 "method internal static " + RedirectArtifact + "::NoRedirect("

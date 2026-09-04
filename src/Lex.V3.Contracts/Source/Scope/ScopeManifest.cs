@@ -11,7 +11,12 @@ namespace Lex.V3.Contracts.Source.Scope;
 
 public static class ScopeManifestSchemaIds
 {
-    public const string Manifest = "lex-v3-source-scope-manifest/1";
+    /// <summary>
+    /// D1-06c-EU (SCOPE_RULING lex-event-20260904T104723233Z-fa84c4edb4144467a2a63c94ee469cef):
+    /// bumped from <c>/1</c> because <see cref="ScopeManifestRow"/> gained
+    /// <see cref="ScopeManifestRow.FetchAddress"/>, changing the manifest's canonical wire shape.
+    /// </summary>
+    public const string Manifest = "lex-v3-source-scope-manifest/2";
 }
 
 public static class ScopeManifestSchemaResourceIds
@@ -432,11 +437,23 @@ public sealed record ScopeObjectReductionInput
     public ScopeObjectReductionInput(
         SourceObjectRef objectRef,
         IReadOnlyList<ScopeSelectorEvidence> selectors,
-        IReadOnlyList<ScopeRuleEvaluation> ruleEvaluations)
+        IReadOnlyList<ScopeRuleEvaluation> ruleEvaluations,
+        ScopeManifestFetchAddress? fetchAddress = null)
     {
         ObjectRef = objectRef ?? throw new ArgumentNullException(nameof(objectRef));
         Selectors = ScopeValidation.Copy(selectors, nameof(selectors));
         RuleEvaluations = ScopeValidation.Copy(ruleEvaluations, nameof(ruleEvaluations));
+
+        // D1-06c-EU, item 3. Optional and defaulted, not required: this ephemeral
+        // adapter-to-reducer handoff type (never itself part of the durable manifest wire bytes --
+        // ReduceCanonicalRow reads this field and re-emits it on the durable ScopeManifestRow, which
+        // is where the schema actually bumped) has no publisher-neutral way to require every caller
+        // to supply an address. A caller that has not been taught about fetch addresses at all --
+        // today, every existing Luxembourg and test call site -- gets NotMinted for free, which is
+        // exactly the D1-06c-LU "leave them NotMinted, do not touch the LU adapter at all" shape.
+        FetchAddress = fetchAddress
+            ?? ScopeManifestFetchAddress.NotMinted(
+                ScopeManifestFetchAddressAbsenceReason.NoPublisherRouteYet);
     }
 
     public SourceObjectRef ObjectRef { get; }
@@ -444,6 +461,8 @@ public sealed record ScopeObjectReductionInput
     public IReadOnlyList<ScopeSelectorEvidence> Selectors { get; }
 
     public IReadOnlyList<ScopeRuleEvaluation> RuleEvaluations { get; }
+
+    public ScopeManifestFetchAddress FetchAddress { get; }
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -502,6 +521,153 @@ public sealed record ScopeObservedObjectEntry
     public string ObjectRefSha256 { get; }
 }
 
+/// <summary>
+/// Whether a <see cref="ScopeManifestRow"/> carries a real publisher fetch address. Closed.
+/// </summary>
+/// <remarks>
+/// D1-06c-EU (SCOPE_RULING lex-event-20260904T104723233Z-fa84c4edb4144467a2a63c94ee469cef), item 3:
+/// "the fetch address is a typed value ... publisher neutral on the manifest row with a typed
+/// absence (NotMinted with a closed reason)". This is that typed absence's other half: the row
+/// always carries one <see cref="ScopeManifestFetchAddress"/>, and this status says which shape it
+/// is in.
+/// </remarks>
+public enum ScopeManifestFetchAddressStatus
+{
+    [JsonStringEnumMemberName("minted")]
+    Minted = 1,
+
+    [JsonStringEnumMemberName("not_minted")]
+    NotMinted = 2,
+}
+
+/// <summary>
+/// Why a <see cref="ScopeManifestRow"/> carries no minted fetch address. Closed.
+/// </summary>
+/// <remarks>
+/// One member today: no publisher route exists yet for this row's publisher (D1-06c-LU is
+/// owner-blocked as of this slice, so every Luxembourg row is <see cref="NoPublisherRouteYet"/>).
+/// The vocabulary is deliberately closed rather than a bare marker, so a second cause -- for
+/// example, an object shape a publisher's route cannot address -- is a new named member here rather
+/// than an overload of this one's meaning.
+/// </remarks>
+public enum ScopeManifestFetchAddressAbsenceReason
+{
+    [JsonStringEnumMemberName("no_publisher_route_yet")]
+    NoPublisherRouteYet = 1,
+}
+
+/// <summary>
+/// The publisher-neutral, generic projection of one publisher's typed document-fetch address, as
+/// carried on a <see cref="ScopeManifestRow"/>.
+/// </summary>
+/// <remarks>
+/// <para>
+/// D1-06c-EU, item 3. This type is deliberately thinner than a publisher's own typed fetch-address
+/// value (see <c>Lex.V3.Contracts.Source.Europe.EuDocumentFetchAddress</c>): it carries plain
+/// bounded strings rather than closed publisher-specific enums, precisely so both an EU row and a
+/// future LU row can share this one field name and shape without a second manifest schema bump.
+/// The publisher's own richly-typed value is converted into this shape once, at the point the
+/// publisher mints it; this type never re-derives or re-validates publisher-specific structure.
+/// </para>
+/// <para>
+/// Distinct from the Cellar CELEX/identity IRI already carried elsewhere on the object
+/// (<c>SourceObjectRef.PublisherUri</c>): identity is <c>http://...</c>, this fetch address renders
+/// to <c>https://...</c>.
+/// </para>
+/// </remarks>
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record ScopeManifestFetchAddress
+{
+    private const int MaximumFieldLength = 512;
+
+    [JsonConstructor]
+    public ScopeManifestFetchAddress(
+        ScopeManifestFetchAddressStatus status,
+        string? host,
+        string? resourcePath,
+        string? acceptMediaType,
+        string? acceptLanguage,
+        ScopeManifestFetchAddressAbsenceReason? notMintedReason)
+    {
+        Status = ScopeValidation.RequireDefined(status, nameof(status));
+        var mintedFieldCount = new[] { host, resourcePath, acceptMediaType, acceptLanguage }
+            .Count(static value => value is not null);
+
+        if (Status == ScopeManifestFetchAddressStatus.Minted)
+        {
+            if (mintedFieldCount != 4 || notMintedReason is not null)
+            {
+                throw new ArgumentException(
+                    "A minted fetch address must carry all four address fields and no absence reason.",
+                    nameof(status));
+            }
+
+            Host = RequireBoundedToken(host!, nameof(host));
+            ResourcePath = RequireBoundedToken(resourcePath!, nameof(resourcePath));
+            AcceptMediaType = RequireBoundedToken(acceptMediaType!, nameof(acceptMediaType));
+            AcceptLanguage = RequireBoundedToken(acceptLanguage!, nameof(acceptLanguage));
+            NotMintedReason = null;
+        }
+        else
+        {
+            if (mintedFieldCount != 0 || notMintedReason is null)
+            {
+                throw new ArgumentException(
+                    "A not-minted fetch address carries no address field and exactly one closed reason.",
+                    nameof(status));
+            }
+
+            Host = null;
+            ResourcePath = null;
+            AcceptMediaType = null;
+            AcceptLanguage = null;
+            NotMintedReason = ScopeValidation.RequireDefined(notMintedReason.Value, nameof(notMintedReason));
+        }
+    }
+
+    public ScopeManifestFetchAddressStatus Status { get; }
+
+    public string? Host { get; }
+
+    public string? ResourcePath { get; }
+
+    public string? AcceptMediaType { get; }
+
+    public string? AcceptLanguage { get; }
+
+    public ScopeManifestFetchAddressAbsenceReason? NotMintedReason { get; }
+
+    public static ScopeManifestFetchAddress NotMinted(ScopeManifestFetchAddressAbsenceReason reason) =>
+        new(ScopeManifestFetchAddressStatus.NotMinted, null, null, null, null, reason);
+
+    public static ScopeManifestFetchAddress Minted(
+        string host,
+        string resourcePath,
+        string acceptMediaType,
+        string acceptLanguage) =>
+        new(
+            ScopeManifestFetchAddressStatus.Minted,
+            host,
+            resourcePath,
+            acceptMediaType,
+            acceptLanguage,
+            null);
+
+    private static string RequireBoundedToken(string value, string parameterName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
+        if (value.Length > MaximumFieldLength ||
+            value.Any(static character => character is < ' ' or '\u007f'))
+        {
+            throw new ArgumentException(
+                "A fetch-address field must be one bounded control-free token.",
+                parameterName);
+        }
+
+        return value;
+    }
+}
+
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ScopeManifestRow
 {
@@ -512,6 +678,7 @@ public sealed record ScopeManifestRow
         string ruleMatchBitsBase64Url,
         IReadOnlyList<ScopeMatchedEvaluation> matchedEvaluations,
         IReadOnlyList<int> axisWinningRuleOrdinals,
+        ScopeManifestFetchAddress fetchAddress,
         string rowSha256)
     {
         ObjectOrdinal = ScopeValidation.RequireOrdinal(objectOrdinal, nameof(objectOrdinal));
@@ -523,6 +690,7 @@ public sealed record ScopeManifestRow
         AxisWinningRuleOrdinals = ScopeValidation.CopyOrdinals(
             axisWinningRuleOrdinals,
             nameof(axisWinningRuleOrdinals));
+        FetchAddress = fetchAddress ?? throw new ArgumentNullException(nameof(fetchAddress));
         RowSha256 = SourceCoreValidation.RequireSha256(rowSha256, nameof(rowSha256));
     }
 
@@ -535,6 +703,13 @@ public sealed record ScopeManifestRow
     public IReadOnlyList<ScopeMatchedEvaluation> MatchedEvaluations { get; }
 
     public IReadOnlyList<int> AxisWinningRuleOrdinals { get; }
+
+    /// <summary>
+    /// D1-06c-EU, item 3: the per-object publisher fetch address, publisher neutral on the row
+    /// itself. <see cref="ScopeManifestFetchAddress.NotMinted"/> until a publisher's own route mints
+    /// a real one; never absent.
+    /// </summary>
+    public ScopeManifestFetchAddress FetchAddress { get; }
 
     public string RowSha256 { get; }
 }
@@ -783,7 +958,7 @@ public static class ScopeManifestReaderOnlyInvariants
 
 public static class ScopeManifestCanonicalWriter
 {
-    private const string ManifestDomain = "lex-v3-source-scope-manifest/1\n";
+    private const string ManifestDomain = "lex-v3-source-scope-manifest/2\n";
     private const string RowDomain = "lex-v3-source-scope-row/1\n";
     private const string ObjectRefDomain = "lex-v3-source-object-ref/1\n";
     private const string SelectorEvidenceDomain = "lex-v3-source-scope-selector-evidence/1\n";
@@ -1478,7 +1653,26 @@ public static class ScopeManifestCanonicalWriter
             writer,
             "axis_winning_rule_ordinals",
             value.AxisWinningRuleOrdinals);
+        writer.WritePropertyName("fetch_address");
+        WriteFetchAddress(writer, value.FetchAddress);
         writer.WriteString("row_sha256", value.RowSha256);
+        writer.WriteEndObject();
+    }
+
+    private static void WriteFetchAddress(Utf8JsonWriter writer, ScopeManifestFetchAddress value)
+    {
+        writer.WriteStartObject();
+        writer.WriteString("status", FetchAddressStatusName(value.Status));
+        WriteNullableString(writer, "host", value.Host);
+        WriteNullableString(writer, "resource_path", value.ResourcePath);
+        WriteNullableString(writer, "accept_media_type", value.AcceptMediaType);
+        WriteNullableString(writer, "accept_language", value.AcceptLanguage);
+        WriteNullableString(
+            writer,
+            "not_minted_reason",
+            value.NotMintedReason is null
+                ? null
+                : FetchAddressAbsenceReasonName(value.NotMintedReason.Value));
         writer.WriteEndObject();
     }
 
@@ -1865,6 +2059,20 @@ public static class ScopeManifestCanonicalWriter
         ScopeDisposition.Point => "point",
         ScopeDisposition.NeverIngest => "never_ingest",
         _ => throw new InvalidOperationException("Unknown scope disposition."),
+    };
+
+    internal static string FetchAddressStatusName(ScopeManifestFetchAddressStatus value) => value switch
+    {
+        ScopeManifestFetchAddressStatus.Minted => "minted",
+        ScopeManifestFetchAddressStatus.NotMinted => "not_minted",
+        _ => throw new InvalidOperationException("Unknown fetch-address status."),
+    };
+
+    internal static string FetchAddressAbsenceReasonName(
+        ScopeManifestFetchAddressAbsenceReason value) => value switch
+    {
+        ScopeManifestFetchAddressAbsenceReason.NoPublisherRouteYet => "no_publisher_route_yet",
+        _ => throw new InvalidOperationException("Unknown fetch-address absence reason."),
     };
 
     private static void WriteAscii(Stream output, string value)

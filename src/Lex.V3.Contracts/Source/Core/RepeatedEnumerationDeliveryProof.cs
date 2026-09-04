@@ -431,13 +431,22 @@ public sealed class EnumerationDeliveryComparison
         OfficialMachineQuerySourceProfile sourceProfile,
         ReadOnlySpan<byte> requestBody)
     {
+        // Repeated enumeration is a query (POST) concept only; every caller here is one of the two
+        // SPARQL profiles, whose Accept and RequestContentType are never null. The document-fetch
+        // GET profile carries neither and never reaches this verification path.
         var expectedHeaders = new[]
         {
             new HttpLogicalRequestHeader("user-agent", sourceProfile.CrawlerUserAgent),
-            new HttpLogicalRequestHeader("accept", sourceProfile.Accept),
+            new HttpLogicalRequestHeader(
+                "accept",
+                sourceProfile.Accept
+                    ?? throw new InvalidOperationException(
+                        "A repeated-enumeration source profile must carry a fixed Accept.")),
             new HttpLogicalRequestHeader(
                 "content-type",
-                $"{sourceProfile.RequestContentType}; charset=utf-8"),
+                $"{sourceProfile.RequestContentType
+                    ?? throw new InvalidOperationException(
+                        "A repeated-enumeration source profile must carry a fixed request content type.")}; charset=utf-8"),
         };
         return string.Equals(logicalRequest.Uri, reproducedRequest.RequestedUri, StringComparison.Ordinal) &&
             logicalRequest.Method == sourceProfile.Method &&

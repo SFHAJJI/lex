@@ -667,7 +667,9 @@ public sealed class EuQueryExecutionAdapter
             try
             {
                 var dispositions = EuScopeSnapshotReduction.Reduce(snapshot);
-                var input = EuScopeProfile.BuildScopeInput(scopeProfile, dispositions, evidenceOrdinals);
+                var fetchAddress = MintFetchAddress(dispositions.ObjectRef);
+                var input = EuScopeProfile.BuildScopeInput(
+                    scopeProfile, dispositions, evidenceOrdinals, fetchAddress);
                 observedObjects.Add(snapshot.ObjectRef);
                 reductionInputs.Add(input);
             }
@@ -1255,6 +1257,49 @@ public sealed class EuQueryExecutionAdapter
 
         offendingValue = null;
         return true;
+    }
+
+    /// <summary>
+    /// D1-06c-EU, item 3: "The EU adapter mints a real fetch address for every EU row it produces."
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="EuWemiIdentityBoundary"/>'s own <c>CellarOrigins</c> constant already proves every
+    /// Cellar WEMI object's (work, expression, manifestation, item) <c>PublisherUri</c> is exactly
+    /// <c>{origin}/resource/cellar/{CanonicalKey}</c>, so the object's own already-validated
+    /// <see cref="SourceObjectRef.CanonicalKey"/> IS the <c>ps-id</c> this route needs for
+    /// <c>ps-name=cellar</c> -- no further parsing of the identity IRI is needed or attempted.
+    /// </para>
+    /// <para>
+    /// The manifestation media type and language are fixed to the one combination
+    /// <c>review/23-research-temporal.md</c> section 1.2 PROVES reaches a real 200 with actual
+    /// content (<c>Accept: application/xhtml+xml</c>, <c>Accept-Language: en</c>). Choosing a
+    /// different manifestation per object is a later slice's policy decision, not this one's.
+    /// </para>
+    /// <para>
+    /// Never throws: a row this route cannot yet address (wrong authority, or a shape
+    /// <see cref="EuDocumentFetchAddress.TryCreate"/> refuses) becomes <c>NotMinted</c> rather than
+    /// failing the whole object's reduction, matching this loop's own "reduction never throws"
+    /// discipline for everything else it calls.
+    /// </para>
+    /// </remarks>
+    private static ScopeManifestFetchAddress MintFetchAddress(SourceObjectRef objectRef)
+    {
+        if (objectRef.Authority != SourceAuthority.Cellar)
+        {
+            return ScopeManifestFetchAddress.NotMinted(
+                ScopeManifestFetchAddressAbsenceReason.NoPublisherRouteYet);
+        }
+
+        var address = EuDocumentFetchAddress.TryCreate(
+            "cellar",
+            objectRef.CanonicalKey,
+            EuManifestationMediaType.XhtmlXml,
+            EuDocumentLanguage.Eng,
+            out _);
+        return address is null
+            ? ScopeManifestFetchAddress.NotMinted(ScopeManifestFetchAddressAbsenceReason.NoPublisherRouteYet)
+            : address.ToManifestFetchAddress();
     }
 
     /// <summary>

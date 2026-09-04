@@ -316,6 +316,7 @@ public static class ScopeReducer
             ScopeRuleBits.Encode(evaluations),
             matched,
             winners,
+            input.FetchAddress,
             digest);
         return new ReducedScopeRow(row, results);
     }

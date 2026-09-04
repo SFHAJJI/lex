@@ -954,6 +954,69 @@ public sealed class EuQueryExecutionAdapterTests
     }
 
     /// <summary>
+    /// D1-06c-EU, item 3: "The EU adapter mints a real fetch address for every EU row it produces."
+    /// Direct, isolated proof of the adapter's own <c>MintFetchAddress</c> integration point (the
+    /// private static method <see cref="EuQueryExecutionAdapter.RunAsync"/> calls per object),
+    /// against a Cellar-authority object shaped exactly the way real WEMI decode output is (per
+    /// <c>EuWemiIdentityBoundary</c>'s own <c>CellarOrigins</c> constant): <c>Authority = Cellar</c>,
+    /// <c>CanonicalKey</c> the WEMI key. No full end-to-end custody re-open is needed here because
+    /// <see cref="EuDocumentFetchAddressTests"/> already proves the minted address's own shape in
+    /// full; this test proves only that the adapter reaches it with the right inputs.
+    /// </summary>
+    [TestMethod]
+    public void MintFetchAddressProducesARealCellarAddressForACellarAuthorityObjectAndNotMintedOtherwise()
+    {
+        var method = typeof(EuQueryExecutionAdapter).GetMethod(
+            "MintFetchAddress",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
+            ?? throw new AssertFailedException("EuQueryExecutionAdapter.MintFetchAddress is missing.");
+
+        var evidenceRef = new SourceArtifactRef(
+            "urn:uuid:00000000-0000-4000-8000-0000000000f1",
+            new string('b', 64));
+        var entityKind = new SourceRegistryMemberRef(evidenceRef, "eu_cellar_manifestation");
+        const string canonicalKey = "00000000-0000-0000-0000-000000000001.0001.01";
+        var canonicalKeySha256 = Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(canonicalKey)));
+        var cellarObject = new SourceObjectRef(
+            SourceCoreSchemaIds.SourceObjectRef,
+            SourceAuthority.Cellar,
+            entityKind,
+            "https://publications.europa.eu/resource/cellar/" + canonicalKey,
+            canonicalKey,
+            canonicalKeySha256,
+            evidenceRef,
+            null);
+
+        var mintedFetchAddress = (ScopeManifestFetchAddress)method.Invoke(null, [cellarObject])!;
+        Assert.AreEqual(ScopeManifestFetchAddressStatus.Minted, mintedFetchAddress.Status);
+        Assert.AreEqual(EuDocumentFetchAddress.AdmittedHost, mintedFetchAddress.Host);
+        Assert.AreEqual("cellar/" + canonicalKey, mintedFetchAddress.ResourcePath);
+        Assert.AreEqual("application/xhtml+xml", mintedFetchAddress.AcceptMediaType);
+        Assert.AreEqual("eng", mintedFetchAddress.AcceptLanguage);
+
+        var joluxKey = "jolux:id:legal-instrument:123";
+        var joluxKeySha256 = Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(joluxKey)));
+        var nonCellarObject = new SourceObjectRef(
+            SourceCoreSchemaIds.SourceObjectRef,
+            SourceAuthority.Jolux,
+            entityKind,
+            "https://data.legilux.public.lu/eli/etat/leg/loi/2020/01/01/a1/jo",
+            joluxKey,
+            joluxKeySha256,
+            evidenceRef,
+            null);
+        var notMinted = (ScopeManifestFetchAddress)method.Invoke(null, [nonCellarObject])!;
+        Assert.AreEqual(ScopeManifestFetchAddressStatus.NotMinted, notMinted.Status);
+        Assert.AreEqual(
+            ScopeManifestFetchAddressAbsenceReason.NoPublisherRouteYet,
+            notMinted.NotMintedReason);
+    }
+
+    /// <summary>
     /// Structural admission only (well-formed digests, matching complete-enumeration identity),
     /// mirroring <c>LuxembourgQueryExecutionAdapterTests.PermissiveEvidenceResolver</c> exactly: these
     /// tests are not re-proving <see cref="ScopeReducer"/>'s admission correctness, which

@@ -23,6 +23,7 @@ public sealed class OfficialMachineQuerySourceProfileTests
             {
                 OfficialMachineQuerySourceProfileId.LuxembourgSparql,
                 OfficialMachineQuerySourceProfileId.EuropeanUnionSparql,
+                OfficialMachineQuerySourceProfileId.EuropeanUnionDocumentFetch,
             },
             Enum.GetValues<OfficialMachineQuerySourceProfileId>());
 
@@ -255,6 +256,7 @@ public sealed class OfficialMachineQuerySourceProfileTests
                 "method instance CopyCanonicalBytes(): Byte[]",
                 "method instance EvaluateRobotsPolicyFreshness(DateTimeOffset, DateTimeOffset): RobotsPolicyFreshness",
                 "property instance Accept: String",
+                "property instance AllowsRedirectWithinInitialAuthority: Boolean",
                 "property instance ArtifactRef: SourceArtifactRef",
                 "property instance CrawlerUserAgent: String",
                 "property instance FirstProductRequestOrdinal: UInt64",
@@ -268,7 +270,7 @@ public sealed class OfficialMachineQuerySourceProfileTests
                 "property instance MinimumRequestInterval: TimeSpan",
                 "property instance PacingScope: OfficialHttpPacingScope",
                 "property instance ProfileSha256: String",
-                "property instance RequestCharset: MachineQueryCharset",
+                "property instance RequestCharset: Nullable`1",
                 "property instance RequestContentType: String",
                 "property instance RequestTarget: String",
                 "property instance RequestTimeout: TimeSpan",
@@ -466,6 +468,8 @@ public sealed class OfficialMachineQuerySourceProfileTests
             "ed71dfc0c8014d96cde668f5af53bc6300d1bf6dc2c4b7dc70ca00d2bd90b3ca",
         OfficialMachineQuerySourceProfileId.EuropeanUnionSparql =>
             "b600156709cdc5009974f5420539232b649ce9bc2baaa6a147d5975931fdc877",
+        OfficialMachineQuerySourceProfileId.EuropeanUnionDocumentFetch =>
+            "e688e815770911a88f0a47fb9adc22cc39c0d900f08cbee79f95449ea0880955",
         _ => throw new ArgumentOutOfRangeException(nameof(id)),
     };
 
@@ -475,6 +479,8 @@ public sealed class OfficialMachineQuerySourceProfileTests
             "urn:uuid:911499a3-087c-42ec-9dca-5c9131ccec47",
         OfficialMachineQuerySourceProfileId.EuropeanUnionSparql =>
             "urn:uuid:f08afb3b-e30f-41cc-b9be-cf29da97bb76",
+        OfficialMachineQuerySourceProfileId.EuropeanUnionDocumentFetch =>
+            "urn:uuid:2c9e6f1a-8d4b-4a7f-9e3c-5b6a8d1f2c40",
         _ => throw new ArgumentOutOfRangeException(nameof(id)),
     };
 

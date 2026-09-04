@@ -324,6 +324,7 @@ public sealed class ScopeManifestContractTests
                 row.RuleMatchBitsBase64Url,
                 row.MatchedEvaluations,
                 row.AxisWinningRuleOrdinals,
+                row.FetchAddress,
                 new string('0', 64)));
         Assert.ThrowsExactly<InvalidOperationException>(() => ScopeReducer.VerifyAndOpen(
             wrongDigest,
@@ -338,6 +339,7 @@ public sealed class ScopeManifestContractTests
                 row.RuleMatchBitsBase64Url,
                 row.MatchedEvaluations,
                 [4, .. row.AxisWinningRuleOrdinals.Skip(1)],
+                row.FetchAddress,
                 row.RowSha256));
         Assert.ThrowsExactly<InvalidOperationException>(() => ScopeReducer.VerifyAndOpen(
             wrongWinner,
@@ -352,6 +354,7 @@ public sealed class ScopeManifestContractTests
                 "_w",
                 row.MatchedEvaluations,
                 row.AxisWinningRuleOrdinals,
+                row.FetchAddress,
                 row.RowSha256));
         Assert.ThrowsExactly<InvalidOperationException>(() => ScopeReducer.VerifyAndOpen(
             badPaddingBits,
@@ -626,7 +629,7 @@ public sealed class ScopeManifestContractTests
         var firstMemberEnd = json.IndexOf(',', StringComparison.Ordinal);
         var duplicateSchema = json.Insert(
             firstMemberEnd + 1,
-            "\"schema\":\"lex-v3-source-scope-manifest/1\",");
+            "\"schema\":\"lex-v3-source-scope-manifest/2\",");
         Assert.ThrowsExactly<JsonException>(() =>
             ContractJson.Deserialize<ScopeManifest>(duplicateSchema));
     }
@@ -664,7 +667,13 @@ public sealed class ScopeManifestContractTests
         var sampleLength = CanonicalBytes(sample).Length;
         var incrementalBytes = (sampleLength - oneLength) / (double)(sampleCount - 1);
         var projectedBytes = oneLength + (incrementalBytes * (555_000 - 1));
-        Assert.IsLessThan(2_000, incrementalBytes);
+
+        // D1-06c-EU raised this from 2,000: every row now carries a fetch_address object (a
+        // NotMinted row's own JSON, e.g. {"status":"not_minted","host":null,...}, is real bytes),
+        // observed at ~2,031 per row here. The number stays a rough sanity tripwire against future
+        // per-row bloat, not a pinned exact byte count; the invariant that actually matters is the
+        // projectedBytes assertion just below, which stays far under int.MaxValue at this size.
+        Assert.IsLessThan(2_200, incrementalBytes);
         Assert.IsLessThan(int.MaxValue, projectedBytes);
 
         using var streamed = new MemoryStream();
@@ -1029,6 +1038,7 @@ public sealed class ScopeManifestContractTests
                 row.RuleMatchBitsBase64Url,
                 row.MatchedEvaluations,
                 row.AxisWinningRuleOrdinals,
+                row.FetchAddress,
                 new string('0', 64)));
         var bytes = BytesForUnverified(tampered);
         var artifactRef = ArtifactRefFor(bytes);
@@ -1055,6 +1065,7 @@ public sealed class ScopeManifestContractTests
                 row.RuleMatchBitsBase64Url,
                 row.MatchedEvaluations,
                 [4, .. row.AxisWinningRuleOrdinals.Skip(1)],
+                row.FetchAddress,
                 row.RowSha256));
         var bytes = BytesForUnverified(tampered);
         var artifactRef = ArtifactRefFor(bytes);
@@ -1081,6 +1092,7 @@ public sealed class ScopeManifestContractTests
                 "_w",
                 row.MatchedEvaluations,
                 row.AxisWinningRuleOrdinals,
+                row.FetchAddress,
                 row.RowSha256));
         var bytes = BytesForUnverified(tampered);
         var artifactRef = ArtifactRefFor(bytes);
@@ -1157,6 +1169,7 @@ public sealed class ScopeManifestContractTests
                 row.RuleMatchBitsBase64Url,
                 row.MatchedEvaluations.Take(row.MatchedEvaluations.Count - 1).ToArray(),
                 row.AxisWinningRuleOrdinals,
+                row.FetchAddress,
                 row.RowSha256));
         var bytes = BytesForUnverified(tampered);
         var artifactRef = ArtifactRefFor(bytes);
@@ -1388,6 +1401,7 @@ public sealed class ScopeManifestContractTests
                 row.RuleMatchBitsBase64Url,
                 matched,
                 row.AxisWinningRuleOrdinals,
+                row.FetchAddress,
                 row.RowSha256));
         var bytes = BytesForUnverified(tampered);
         var artifactRef = ArtifactRefFor(bytes);
@@ -1611,7 +1625,7 @@ public sealed class ScopeManifestContractTests
         using var output = new MemoryStream();
         var digest = ScopeManifestCanonicalWriter.Write(output, verified);
         var bytes = output.ToArray();
-        var domain = Encoding.ASCII.GetBytes("lex-v3-source-scope-manifest/1\n");
+        var domain = Encoding.ASCII.GetBytes("lex-v3-source-scope-manifest/2\n");
         var preimage = new byte[domain.Length + bytes.Length];
         domain.CopyTo(preimage, 0);
         bytes.CopyTo(preimage, domain.Length);

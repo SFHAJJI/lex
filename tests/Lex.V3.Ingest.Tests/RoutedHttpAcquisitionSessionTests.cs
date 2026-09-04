@@ -1013,7 +1013,7 @@ public sealed class RoutedHttpAcquisitionSessionTests
         }
     }
 
-    private sealed class MultiObjectCustodyStore : ICustodyStore
+    internal sealed class MultiObjectCustodyStore : ICustodyStore
     {
         private readonly Dictionary<string, byte[]> _objects = new(StringComparer.Ordinal);
 
@@ -1193,7 +1193,7 @@ public sealed class RoutedHttpAcquisitionSessionTests
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
-    private sealed class ShortDelayTimeProvider : TimeProvider
+    internal sealed class ShortDelayTimeProvider : TimeProvider
     {
         private static readonly DateTimeOffset Epoch = new(
             2026,

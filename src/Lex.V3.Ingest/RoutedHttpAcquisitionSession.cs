@@ -10,6 +10,7 @@ using System.Text;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Europe;
 using Lex.V3.Contracts.Source.Http;
 
 [assembly: InternalsVisibleTo("Lex.V3.Ingest.Tests")]
@@ -45,6 +46,7 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
     private readonly RequestPolicyArtifact _robotsRequestPolicy;
     private readonly RedirectPolicyArtifact _robotsRedirectPolicy;
     private readonly RedirectPolicyArtifact _noRedirectPolicy;
+    private readonly RedirectPolicyArtifact _documentFetchRedirectPolicy;
     private readonly ConcurrentDictionary<string, RequestPolicyArtifact> _requestPolicies =
         new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, RedirectPolicyArtifact> _redirectPolicies =
@@ -99,9 +101,11 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             _adapterExecutionBytes);
         _robotsRedirectPolicy = RedirectPolicyArtifact.ForRobots(_profile);
         _noRedirectPolicy = RedirectPolicyArtifact.NoRedirect(_profile);
+        _documentFetchRedirectPolicy = RedirectPolicyArtifact.ForDocumentFetch(_profile);
         RegisterRequestPolicy(_robotsRequestPolicy);
         RegisterRedirectPolicy(_robotsRedirectPolicy);
         RegisterRedirectPolicy(_noRedirectPolicy);
+        RegisterRedirectPolicy(_documentFetchRedirectPolicy);
         (_runIdentity, _runIdentityBytes) = CreateRunIdentity(
             _profile,
             _runCreatedAt,
@@ -460,14 +464,31 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
         }
 
         var body = openedRequest.CopyRequestBody();
+        if (profile.Method == HttpRequestMethod.Get)
+        {
+            // D1-06c-EU: the one GET channel. Its Accept/Accept-Language are not fixed profile
+            // constants the way the two SPARQL channels' Accept is; they vary per bound request and
+            // are carried on that request's own input artifact (see EuDocumentFetchPlan's remarks),
+            // so this branch reads them back from the reopened input rather than from the profile.
+            return CreateDocumentFetchRequest(profile, openedRequest, resolvedRequest.Artifacts, body);
+        }
+
         var contentType = profile.RequestCharset == MachineQueryCharset.Utf8
             ? $"{profile.RequestContentType}; charset=utf-8"
             : profile.RequestContentType;
         var headers = new[]
         {
             new HttpLogicalRequestHeader("user-agent", profile.CrawlerUserAgent),
-            new HttpLogicalRequestHeader("accept", profile.Accept),
-            new HttpLogicalRequestHeader("content-type", contentType),
+            new HttpLogicalRequestHeader(
+                "accept",
+                profile.Accept
+                    ?? throw new InvalidOperationException(
+                        "A POST machine-query profile must carry a fixed Accept.")),
+            new HttpLogicalRequestHeader(
+                "content-type",
+                contentType
+                    ?? throw new InvalidOperationException(
+                        "A POST machine-query profile must carry a fixed request content type.")),
         };
         var requestPolicy = RequestPolicyArtifact.ForMachineQuery(
             profile,
@@ -485,6 +506,68 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             new HttpLogicalRequestBody(checked((ulong)body.LongLength), Hash(body)),
             requestPolicy.Sha256,
             _noRedirectPolicy.Sha256);
+    }
+
+    /// <summary>
+    /// Builds the GET logical request for the EU document-fetch channel. The wire target is
+    /// <paramref name="openedRequest"/>'s own <c>RequestedUri</c> -- already the exact, real
+    /// <see cref="EuDocumentFetchAddress.ResourceUri"/>, never rebuilt here -- and the
+    /// <c>Accept</c>/<c>Accept-Language</c> headers are read back from the reopened input artifact's
+    /// two carried parameters, the same door <see cref="EuDocumentFetchPlan"/> used to carry them
+    /// through binding.
+    /// </summary>
+    private HttpLogicalRequest CreateDocumentFetchRequest(
+        OfficialMachineQuerySourceProfile profile,
+        OpenedMachineRequest openedRequest,
+        IReadOnlyList<CanonicalArtifactBytes> binderArtifacts,
+        ReadOnlyMemory<byte> body)
+    {
+        if (!body.IsEmpty)
+        {
+            throw new InvalidOperationException("A document-fetch GET request cannot carry a body.");
+        }
+
+        var input = MachineQueryInputArtifact.ParseAndVerify(
+            openedRequest.OrderedParameterSetRef,
+            openedRequest.CopyOrderedParameterSetCanonicalBytes());
+        if (input.OrderedParameters.Count != 2 ||
+            !string.Equals(
+                input.OrderedParameters[0].Name,
+                EuDocumentFetchPlan.AcceptParameterName,
+                StringComparison.Ordinal) ||
+            input.OrderedParameters[0].TextValue is not { } accept ||
+            !string.Equals(
+                input.OrderedParameters[1].Name,
+                EuDocumentFetchPlan.AcceptLanguageParameterName,
+                StringComparison.Ordinal) ||
+            input.OrderedParameters[1].TextValue is not { } acceptLanguage)
+        {
+            throw new InvalidOperationException(
+                "The document-fetch input does not carry the accept/accept-language pair this session expects.");
+        }
+
+        var headers = new[]
+        {
+            new HttpLogicalRequestHeader("user-agent", profile.CrawlerUserAgent),
+            new HttpLogicalRequestHeader("accept", accept),
+            new HttpLogicalRequestHeader("accept-language", acceptLanguage),
+        };
+        var requestPolicy = RequestPolicyArtifact.ForMachineQueryGet(
+            profile,
+            _adapterExecutionIdentity,
+            _adapterExecutionBytes,
+            openedRequest,
+            binderArtifacts,
+            headers,
+            body.Span);
+        RegisterRequestPolicy(requestPolicy);
+        return HttpLogicalRequest.Create(
+            openedRequest.RequestedUri,
+            profile.Method,
+            headers,
+            new HttpLogicalRequestBody(0, Hash(ReadOnlySpan<byte>.Empty)),
+            requestPolicy.Sha256,
+            _documentFetchRedirectPolicy.Sha256);
     }
 
     private void ActivateGeneration()
@@ -1627,6 +1710,33 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
         "yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'",
         CultureInfo.InvariantCulture);
 
+    /// <summary>
+    /// D1-06c-EU: scheme+host+port equality between two already-validated absolute HTTPS URIs. Both
+    /// <see cref="RequestPolicyArtifact"/> and <see cref="RedirectPolicyArtifact"/> use this
+    /// identical comparison for the document-fetch channel's same-origin redirect allowance, so the
+    /// two independent checks cannot silently drift into comparing different things.
+    /// </summary>
+    private static bool IsSameOrigin(string firstUri, string secondUri) =>
+        string.Equals(
+            new Uri(firstUri, UriKind.Absolute).GetLeftPart(UriPartial.Authority),
+            new Uri(secondUri, UriKind.Absolute).GetLeftPart(UriPartial.Authority),
+            StringComparison.Ordinal);
+
+    /// <summary>
+    /// Whether <paramref name="uri"/>'s origin is exactly <paramref name="profile"/>'s own robots
+    /// authority -- structured field comparison (scheme, host, port), the same three fields
+    /// <see cref="RobotsPolicyRoute"/>'s own constructor already compares, rather than a formatted
+    /// string, so there is no risk of a default-port spelling mismatch between the two sides.
+    /// </summary>
+    private static bool IsAdmittedProfileOrigin(string uri, OfficialMachineQuerySourceProfile profile)
+    {
+        var parsed = new Uri(uri, UriKind.Absolute);
+        var authority = profile.RobotsRoute.InitialAuthority;
+        return string.Equals(parsed.Scheme, authority.Scheme, StringComparison.Ordinal) &&
+            string.Equals(parsed.Host, authority.Host, StringComparison.Ordinal) &&
+            parsed.Port == authority.EffectivePort;
+    }
+
     private static string Hash(params ReadOnlyMemory<byte>[] parts)
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
@@ -2115,6 +2225,7 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
     {
         RobotsGet = 1,
         MachineQueryPost = 2,
+        MachineQueryGet = 3,
     }
 
     private sealed record ResolvedMachineRequest(
@@ -2241,7 +2352,13 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             var lines = new List<string>
             {
                 "lex-http-request-policy/1",
-                kind == RequestPolicyKind.RobotsGet ? "robots_get" : "machine_query_post",
+                kind switch
+                {
+                    RequestPolicyKind.RobotsGet => "robots_get",
+                    RequestPolicyKind.MachineQueryPost => "machine_query_post",
+                    RequestPolicyKind.MachineQueryGet => "machine_query_get",
+                    _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+                },
                 $"source_profile={sourceProfileRef.ResourceId}\t{sourceProfileRef.Sha256}",
                 $"adapter_execution={adapterExecutionRef.ResourceId}\t{adapterExecutionRef.Sha256}",
                 $"adapter_execution_bytes_sha256={Hash(adapterExecutionBytes)}",
@@ -2274,15 +2391,19 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             lines.AddRange(_admittedUris.Select(static uri => $"uri={uri}"));
             lines.AddRange(_headers.Select(static header => $"header={header.Name}\t{header.Value}"));
             lines.Add($"body={bodyLength.ToString(CultureInfo.InvariantCulture)}\t{bodySha256}");
-            if (kind == RequestPolicyKind.MachineQueryPost)
+            if (kind is RequestPolicyKind.MachineQueryPost or RequestPolicyKind.MachineQueryGet)
             {
                 lines.Add($"render_receipt={renderReceiptRef!.ResourceId}\t{renderReceiptRef.Sha256}");
                 lines.Add($"query_plan={queryPlanRef!.ResourceId}\t{queryPlanRef.Sha256}");
                 lines.Add($"ordered_parameter_set={orderedParameterSetRef!.ResourceId}\t{orderedParameterSetRef.Sha256}");
                 lines.Add($"renderer_profile={rendererProfileRef!.ResourceId}\t{rendererProfileRef.Sha256}");
                 lines.Add($"renderer_source={rendererSourceRef!.ResourceId}\t{rendererSourceRef.Sha256}");
-                lines.Add($"content_type_registry={contentType!.RegistryRef.ResourceId}\t{contentType.RegistryRef.Sha256}");
-                lines.Add($"content_type_member={contentType.MemberKey}");
+                if (contentType is not null)
+                {
+                    lines.Add($"content_type_registry={contentType.RegistryRef.ResourceId}\t{contentType.RegistryRef.Sha256}");
+                    lines.Add($"content_type_member={contentType.MemberKey}");
+                }
+
                 lines.AddRange(_binderArtifacts.Select(static artifact =>
                     $"opened_artifact={artifact.Reference.ResourceId}\t{artifact.Reference.Sha256}"));
             }
@@ -2396,6 +2517,66 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                 profile);
         }
 
+        /// <summary>
+        /// D1-06c-EU: the GET counterpart of <see cref="ForMachineQuery"/>. A GET carries no entity,
+        /// so there is no content-type registry member to require -- <see cref="ContentType"/> stays
+        /// null for this kind, exactly mirroring <see cref="OfficialMachineQuerySourceProfile.RequestContentType"/>.
+        /// </summary>
+        internal static RequestPolicyArtifact ForMachineQueryGet(
+            OfficialMachineQuerySourceProfile profile,
+            SourceArtifactRef adapterExecutionRef,
+            ReadOnlySpan<byte> adapterExecutionBytes,
+            OpenedMachineRequest request,
+            IReadOnlyList<CanonicalArtifactBytes> binderArtifacts,
+            IReadOnlyList<HttpLogicalRequestHeader> headers,
+            ReadOnlySpan<byte> body)
+        {
+            if (body.Length != 0)
+            {
+                throw new ArgumentException(
+                    "A document-fetch GET request policy must bind the empty body.",
+                    nameof(body));
+            }
+
+            var receipt = request.RenderReceipt;
+            var requiredArtifacts = new[]
+            {
+                request.RenderReceiptRef,
+                receipt.QueryPlanRef,
+                receipt.OrderedParameterSetRef,
+                receipt.RendererProfileRef,
+                receipt.RendererSourceRef,
+            };
+            var reopenedArtifacts = binderArtifacts
+                .Select(static artifact => artifact.Reference)
+                .ToHashSet();
+            if (requiredArtifacts.Any(reference => !reopenedArtifacts.Contains(reference)))
+            {
+                throw new ArgumentException(
+                    "The machine request did not reopen every required artifact role.",
+                    nameof(binderArtifacts));
+            }
+
+            return new RequestPolicyArtifact(
+                RequestPolicyKind.MachineQueryGet,
+                profile.ArtifactRef,
+                adapterExecutionRef,
+                adapterExecutionBytes,
+                [request.RequestedUri],
+                receipt.Method,
+                headers,
+                0,
+                Hash(body),
+                request.RenderReceiptRef,
+                receipt.QueryPlanRef,
+                receipt.OrderedParameterSetRef,
+                receipt.RendererProfileRef,
+                receipt.RendererSourceRef,
+                null,
+                binderArtifacts,
+                profile);
+        }
+
         internal byte[] CopyCanonicalBytes() => _canonicalBytes.ToArray();
 
         internal void Validate(
@@ -2405,6 +2586,17 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             SourceArtifactRef adapterExecutionRef,
             ReadOnlySpan<byte> adapterExecutionBytes)
         {
+            // A document-fetch GET's admitted URI check is origin-based rather than exact-URI
+            // membership: TryCreateRedirectRequest carries this same request policy forward onto a
+            // redirect successor whose exact URI is server-computed and unknowable in advance (a
+            // Cellar UUID), so only the origin -- proven the one this route's own first hop already
+            // started at -- can be pinned ahead of time. RedirectPolicyArtifact's own
+            // AdmittedOriginRoute check makes the identical comparison independently; this is
+            // defense in depth, not the only place it is enforced.
+            var admittedTarget = Kind == RequestPolicyKind.MachineQueryGet
+                ? IsSameOrigin(request.Uri, _admittedUris[0])
+                : _admittedUris.Contains(request.Uri, StringComparer.Ordinal);
+
             // Sha256 was assigned as Hash(_canonicalBytes) in the constructor over a private array
             // nothing writes, so comparing the two here could never be false. The binding that can
             // fail is the request's digest against this artifact's.
@@ -2413,7 +2605,7 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                 AdapterExecutionRef != adapterExecutionRef ||
                 !string.Equals(AdapterExecutionRef.Sha256, Hash(adapterExecutionBytes), StringComparison.Ordinal) ||
                 request.Method != Method ||
-                !_admittedUris.Contains(request.Uri, StringComparer.Ordinal) ||
+                !admittedTarget ||
                 !request.Headers.SequenceEqual(_headers) ||
                 request.Body.Length != BodyLength ||
                 !string.Equals(request.Body.Sha256, BodySha256, StringComparison.Ordinal) ||
@@ -2444,6 +2636,17 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                 throw new InvalidOperationException(
                     "A machine-query request policy lost its exact plan or representation binding.");
             }
+
+            if (Kind == RequestPolicyKind.MachineQueryGet &&
+                (QueryPlanRef is null || OrderedParameterSetRef is null ||
+                 RendererProfileRef is null || RendererSourceRef is null || ContentType is not null ||
+                 BodyLength != 0 ||
+                 request.Headers.Count != 3 ||
+                 !string.Equals(request.Headers[2].Name, "accept-language", StringComparison.Ordinal)))
+            {
+                throw new InvalidOperationException(
+                    "A document-fetch GET request policy lost its exact plan or representation binding.");
+            }
         }
     }
 
@@ -2451,6 +2654,7 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
     {
         RobotsRoute = 1,
         NoRedirect = 2,
+        AdmittedOriginRoute = 3,
     }
 
     private sealed class RedirectPolicyArtifact
@@ -2495,19 +2699,50 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                     "no_redirect") + "\n"),
                 [profile.RequestTarget]);
 
+        /// <summary>
+        /// D1-06c-EU: the document-fetch channel's redirect policy. Unlike
+        /// <see cref="NoRedirect"/> and <see cref="ForRobots"/>, this admits by origin rather than
+        /// by a pre-declared exact URI list, because the real 303 target is server-computed (a
+        /// Cellar UUID) and cannot be known before the route runs. The admitted origin is
+        /// <paramref name="profile"/>'s own robots authority: proven live on 2026-09-04 to be the
+        /// same host the observed 303 actually redirects within.
+        /// </summary>
+        internal static RedirectPolicyArtifact ForDocumentFetch(OfficialMachineQuerySourceProfile profile)
+        {
+            var authority = profile.RobotsRoute.InitialAuthority;
+            return new(
+                RedirectPolicyKind.AdmittedOriginRoute,
+                profile.ArtifactRef,
+                Encoding.UTF8.GetBytes(string.Join('\n',
+                    "lex-http-redirect-policy/1",
+                    profile.ArtifactRef.ResourceId,
+                    profile.ArtifactRef.Sha256,
+                    "admitted_origin_route",
+                    $"admitted_origin_scheme={authority.Scheme}",
+                    $"admitted_origin_host={authority.Host}",
+                    $"admitted_origin_port={authority.EffectivePort.ToString(CultureInfo.InvariantCulture)}")
+                    + "\n"),
+                Array.Empty<string>());
+        }
+
         internal byte[] CopyCanonicalBytes() => _canonicalBytes.ToArray();
 
         internal void Validate(
             HttpLogicalRequest request,
             OfficialMachineQuerySourceProfile profile)
         {
+            var targetAdmitted = Kind == RedirectPolicyKind.AdmittedOriginRoute
+                ? IsAdmittedProfileOrigin(request.Uri, profile)
+                : _admittedUris.Contains(request.Uri, StringComparer.Ordinal);
+
             // As in RequestPolicyArtifact: the constructor's own hash is not re-compared, because
             // that clause could never be false; the request's digest against this one can.
             if (!string.Equals(Sha256, request.RedirectPolicySha256, StringComparison.Ordinal) ||
                 SourceProfileRef != profile.ArtifactRef ||
-                !_admittedUris.Contains(request.Uri, StringComparer.Ordinal) ||
+                !targetAdmitted ||
                 Kind == RedirectPolicyKind.NoRedirect && request.Method != HttpRequestMethod.Post ||
-                Kind == RedirectPolicyKind.RobotsRoute && request.Method != HttpRequestMethod.Get)
+                Kind == RedirectPolicyKind.RobotsRoute && request.Method != HttpRequestMethod.Get ||
+                Kind == RedirectPolicyKind.AdmittedOriginRoute && request.Method != HttpRequestMethod.Get)
             {
                 throw new InvalidOperationException(
                     "The logical request does not reproduce its exact opened redirect policy.");
@@ -3312,14 +3547,58 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             }
 
             var stepIndex = hops.Count - 1;
-            if (robotsRoute is null ||
-                stepIndex >= robotsRoute.Steps.Count ||
-                status != robotsRoute.Steps[stepIndex].ExpectedStatusCode ||
-                !string.Equals(
-                    robotsRoute.Steps[stepIndex].ExpectedLocation,
-                    nextUri,
-                    StringComparison.Ordinal))
+            if (robotsRoute is not null)
             {
+                if (stepIndex >= robotsRoute.Steps.Count ||
+                    status != robotsRoute.Steps[stepIndex].ExpectedStatusCode ||
+                    !string.Equals(
+                        robotsRoute.Steps[stepIndex].ExpectedLocation,
+                        nextUri,
+                        StringComparison.Ordinal))
+                {
+                    return new RouteExecution(
+                        RoutedHttpEvidence.Create(
+                            _runIdentity,
+                            requestOrdinal,
+                            attemptOrdinal,
+                            hops,
+                            new IncompleteHttpRouteOutcome(HttpRouteIncompleteReason.SourceProfileStale),
+                            BuildHopWriteReceipts(requestOrdinal, attemptOrdinal, hops)),
+                        custodyKey,
+                        null,
+                        null);
+                }
+            }
+            else if (_profile.AllowsRedirectWithinInitialAuthority)
+            {
+                // D1-06c-EU, SCOPE_RULING lex-event-20260904T104723233Z-fa84c4edb4144467a2a63c94ee469cef
+                // item 1: "follow the observed 303 chain only to hosts in the route's own closed
+                // admitted set, any redirect off it is a typed refusal". The admitted set here is
+                // exactly the one origin this route's own first hop already started at (proven the
+                // same host live on 2026-09-04): unlike the robots bootstrap's pre-declared exact
+                // chain, the real target is server-computed and cannot be pinned ahead of time, so
+                // this checks the target's origin rather than its exact URI.
+                if (!IsSameOrigin(nextUri, hops[0].RequestUri))
+                {
+                    return new RouteExecution(
+                        RoutedHttpEvidence.Create(
+                            _runIdentity,
+                            requestOrdinal,
+                            attemptOrdinal,
+                            hops,
+                            new IncompleteHttpRouteOutcome(
+                                HttpRouteIncompleteReason.RedirectTargetOriginNotAdmitted),
+                            BuildHopWriteReceipts(requestOrdinal, attemptOrdinal, hops)),
+                        custodyKey,
+                        null,
+                        null);
+                }
+            }
+            else
+            {
+                // Every non-document-fetch product channel (both SPARQL profiles today): a redirect
+                // was never expected at all, so its mere occurrence means the profile's own frozen
+                // assumption about this endpoint no longer holds, not a chain to negotiate.
                 return new RouteExecution(
                     RoutedHttpEvidence.Create(
                         _runIdentity,

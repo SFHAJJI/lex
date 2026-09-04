@@ -171,7 +171,7 @@ internal sealed class AbsenceEnumerationProofFixture : IRepeatedEnumerationEvide
             target.Length,
             Sha(target),
             cardinality,
-            new SourceRegistryMemberRef(Artifact(907), sourceProfile.RequestContentType),
+            new SourceRegistryMemberRef(Artifact(907), sourceProfile.RequestContentType!),
             MachineQueryCharset.Utf8,
             MachineQueryInputMode.RendererInputs,
             input.ArtifactRef,
@@ -201,7 +201,7 @@ internal sealed class AbsenceEnumerationProofFixture : IRepeatedEnumerationEvide
             HttpRequestMethod.Post,
             [
                 new HttpLogicalRequestHeader("user-agent", sourceProfile.CrawlerUserAgent),
-                new HttpLogicalRequestHeader("accept", sourceProfile.Accept),
+                new HttpLogicalRequestHeader("accept", sourceProfile.Accept!),
                 new HttpLogicalRequestHeader(
                     "content-type", $"{sourceProfile.RequestContentType}; charset=utf-8"),
             ],

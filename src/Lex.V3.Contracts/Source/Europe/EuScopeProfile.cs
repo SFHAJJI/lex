@@ -192,7 +192,8 @@ public static class EuScopeProfile
     public static ScopeObjectReductionInput BuildScopeInput(
         ScopeProfileBinding profile,
         EuScopeObjectDispositions dispositions,
-        IReadOnlyDictionary<SourceArtifactRef, int> evidenceOrdinals)
+        IReadOnlyDictionary<SourceArtifactRef, int> evidenceOrdinals,
+        ScopeManifestFetchAddress? fetchAddress = null)
     {
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(dispositions);
@@ -278,7 +279,7 @@ public static class EuScopeProfile
                 isBodyCandidate: false),
         };
 
-        return new ScopeObjectReductionInput(dispositions.ObjectRef, selectors, evaluations);
+        return new ScopeObjectReductionInput(dispositions.ObjectRef, selectors, evaluations, fetchAddress);
     }
 
     /// <summary>
