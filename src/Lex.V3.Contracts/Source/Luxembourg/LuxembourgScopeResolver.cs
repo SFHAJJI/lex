@@ -25,10 +25,13 @@ internal static class LuxembourgScopeResolver
     private static readonly HashSet<string> QuarantinedTypes = Values("DIV", "PA");
     private static readonly HashSet<string> PointTypes = Values("RECUEIL", "CODE_RECUEIL");
     private static readonly HashSet<string> RegulatorTypes = Values("RCSF", "RBCL", "RILR");
-    private static readonly HashSet<string> PriorityCandidateTypes = Values(
+    private static readonly HashSet<string> TcRectTypes = Values(
         VerifiedLuxembourgSourceProfile.PriorityCandidateTypeTc,
-        VerifiedLuxembourgSourceProfile.PriorityCandidateTypeRect,
+        VerifiedLuxembourgSourceProfile.PriorityCandidateTypeRect);
+    private static readonly HashSet<string> AccTypes = Values(
         VerifiedLuxembourgSourceProfile.PriorityCandidateTypeAcc);
+    private static readonly HashSet<string> PriorityCandidateTypes =
+        TcRectTypes.Concat(AccTypes).ToHashSet(StringComparer.Ordinal);
     private static readonly HashSet<string> OrdinaryCandidateTypes = Values(
         "A", "AGC", "AGD", "AMIN",
         "ARGD", "CODE", "Constitution", "CONV", "LOI", "ORD", "PROT", "REG", "RGC",
@@ -115,6 +118,7 @@ internal static class LuxembourgScopeResolver
                     Relations = relations,
                     WemiTopology = wemiTopology,
                     BodyJoin = bodyJoin,
+                    TypedRole = ResolveTypedRole(observation),
                 };
             })
             .ToArray();
@@ -147,7 +151,8 @@ internal static class LuxembourgScopeResolver
                 classified[ordinal].Assertions,
                 relations,
                 classified[ordinal].WemiTopology,
-                classified[ordinal].BodyJoin);
+                classified[ordinal].BodyJoin,
+                classified[ordinal].TypedRole);
             scopeInputs[ordinal] = BuildScopeInput(
                 profile,
                 observation,
@@ -463,6 +468,54 @@ internal static class LuxembourgScopeResolver
             "typed_quarantine_unknown_publication_family",
             "lu_family_catchall",
             evidence);
+    }
+
+    /// <summary>
+    /// R5.1's own TC, RECT and ACC role, distinguished from bare <c>PriorityCandidateTypes</c>
+    /// bucket membership. All three roles come directly, and only, from the publisher's own
+    /// typeDocument assertion the resolver already reads (Candidate 6 section 4's own type-keyed
+    /// family map): TC and RECT resolve here exactly as this lane's first freeze had them, and ACC
+    /// resolves here exactly the same way per the reviewer RULING
+    /// lex-event-20260904T002301246Z-7699c8fdd1ad4868a7d94dcb152fbf57. That ruling held that R5.1
+    /// rule 6's own evidence for "this is a constitutional-review judgment" is the exact ACC
+    /// typeDocument assertion itself -- already required to reach this branch via
+    /// <see cref="AccTypes"/> below -- and that no further predicate is required or may substitute
+    /// (a title, a relation, an alternate format), correcting this lane's own earlier reading of
+    /// the 23:48Z SCOPE_RULING as requiring some other, undefined evidence predicate that
+    /// unconditionally refused every ACC resource.
+    /// </summary>
+    private static LuxembourgTypedRoleResolution ResolveTypedRole(
+        LuxembourgResourceObservation observation)
+    {
+        var resourceIri = observation.ObjectRef.PublisherUri;
+        var classes = IriValues(
+            observation.Assertions,
+            VerifiedLuxembourgSourceProfile.RdfType,
+            resourceIri);
+        var types = IriValues(observation.Assertions, TypeDocument, resourceIri);
+        if (types.Length != 1 || !IsActClass(classes))
+        {
+            return LuxembourgTypedRoleResolution.NotApplicableInstance;
+        }
+
+        var type = types[0];
+        if (TcRectTypes.Contains(type))
+        {
+            return string.Equals(
+                type,
+                VerifiedLuxembourgSourceProfile.TypeDocumentPrefix +
+                VerifiedLuxembourgSourceProfile.PriorityCandidateTypeTc,
+                StringComparison.Ordinal)
+                ? LuxembourgTypedRoleResolution.AcceptedCoordinatedText(resourceIri)
+                : LuxembourgTypedRoleResolution.AcceptedCorrigendum(resourceIri);
+        }
+
+        if (AccTypes.Contains(type))
+        {
+            return LuxembourgTypedRoleResolution.AcceptedConstitutionalReviewDecision(resourceIri);
+        }
+
+        return LuxembourgTypedRoleResolution.NotApplicableInstance;
     }
 
     private static LuScopeDimensionDisposition ResolveFormat(
