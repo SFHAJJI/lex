@@ -1,0 +1,745 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Lex.V3.Contracts.Custody;
+using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Scope;
+
+namespace Lex.V3.Contracts.Source.Corpus;
+
+/// <summary>
+/// The corpus/6 record's own schema identity.
+/// </summary>
+/// <remarks>
+/// D1-06's queue split (<c>STAGE1-AUTHORITY-AND-QUEUE-2026-09-03.md</c>, "D1-06 split") and every
+/// coordination reference to this deliverable name it "corpus/6" (for example the much larger
+/// <c>lex-corpus/6</c> of the dual-channel licence design, the full signed corpus manifest set
+/// Rebuild 0 emits for both publishers -- a different artifact this slice does not build). This
+/// constant names the narrower thing D1-06a actually builds, one record per object, following this
+/// codebase's own <c>lex-v3-source-&lt;domain&gt;/&lt;version&gt;</c> convention
+/// (<see cref="ScopeManifestSchemaIds"/>, <see cref="SourceCoreSchemaIds"/>) while preserving the
+/// version number 6 that "corpus/6" names everywhere the deliverable is discussed, rather than
+/// restarting the version at 1.
+/// </remarks>
+public static class CorpusRecordSchemaIds
+{
+    /// <summary>
+    /// Not <c>lex-corpus/6</c> (the dual-channel licence design's full signed corpus manifest set,
+    /// see the type-level remarks above): a different, larger, separately owned artifact this
+    /// constant's own value is never confused with, in code, by sharing a schema id.
+    /// </summary>
+    public const string Record = "lex-v3-source-corpus-record/6";
+}
+
+/// <summary>
+/// Which of the three shapes a corpus record's own body field takes: a real held body, a typed
+/// reason none is held, or an accepted body not yet acquired. Closed at three; see
+/// <see cref="CorpusBodyRecord"/>.
+/// </summary>
+public enum CorpusBodyRecordKind
+{
+    [JsonStringEnumMemberName("held")]
+    Held = 1,
+
+    [JsonStringEnumMemberName("not_held")]
+    NotHeld = 2,
+
+    [JsonStringEnumMemberName("pending_acquisition")]
+    PendingAcquisition = 3,
+}
+
+/// <summary>
+/// Which of the two shapes <see cref="CorpusBodyRecord.PendingAcquisitionReason"/> takes: D1-06b's
+/// own fetch simply has not run yet for this accepted object, or it ran and was refused. Closed at
+/// two.
+/// </summary>
+/// <remarks>
+/// Provisional. No production acquisition writer exists in this codebase yet (D1-06b); this is the
+/// narrowest vocabulary the two named cases require, taken from this record's own reviewer verdict
+/// (event <c>lex-event-20260904T071246618Z-2d4ca939f7144ea5ac3fd4c421091154</c>, fix three) rather
+/// than guessed. When D1-06b's own refusal vocabulary lands, the <see cref="AcquisitionRefused"/>
+/// member's free-form <see cref="CorpusBodyPendingAcquisitionReason.Refusal"/> string should be
+/// reconsidered against it; nothing here presumes that vocabulary's shape.
+/// </remarks>
+public enum CorpusBodyPendingAcquisitionReasonKind
+{
+    [JsonStringEnumMemberName("not_yet_acquired")]
+    NotYetAcquired = 1,
+
+    [JsonStringEnumMemberName("acquisition_refused")]
+    AcquisitionRefused = 2,
+}
+
+/// <summary>
+/// The typed reason a <see cref="CorpusBodyRecordKind.PendingAcquisition"/> body carries no body
+/// yet: an exact variant, <see cref="CorpusBodyPendingAcquisitionReasonKind.NotYetAcquired"/> with no
+/// further detail, or <see cref="CorpusBodyPendingAcquisitionReasonKind.AcquisitionRefused"/> naming
+/// the actual refusal.
+/// </summary>
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record CorpusBodyPendingAcquisitionReason
+{
+    [JsonConstructor]
+    public CorpusBodyPendingAcquisitionReason(
+        CorpusBodyPendingAcquisitionReasonKind kind,
+        string? refusal)
+    {
+        Kind = ContractValidation.RequireDefined(kind, nameof(kind));
+        switch (Kind)
+        {
+            case CorpusBodyPendingAcquisitionReasonKind.NotYetAcquired:
+                if (refusal is not null)
+                {
+                    throw new ArgumentException(
+                        "A not-yet-acquired reason carries no refusal.", nameof(refusal));
+                }
+
+                break;
+
+            case CorpusBodyPendingAcquisitionReasonKind.AcquisitionRefused:
+                if (string.IsNullOrWhiteSpace(refusal))
+                {
+                    throw new ArgumentException(
+                        "An acquisition-refused reason must name the actual refusal.",
+                        nameof(refusal));
+                }
+
+                break;
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(kind));
+        }
+
+        Refusal = refusal;
+    }
+
+    public CorpusBodyPendingAcquisitionReasonKind Kind { get; }
+
+    /// <summary>
+    /// The actual refusal named, for
+    /// <see cref="CorpusBodyPendingAcquisitionReasonKind.AcquisitionRefused"/> only;
+    /// <see langword="null"/> for <see cref="CorpusBodyPendingAcquisitionReasonKind.NotYetAcquired"/>.
+    /// Provisional free text (see this type's own remarks): D1-06b does not exist yet in this
+    /// codebase, so there is no closed refusal vocabulary yet to reuse for the value this names.
+    /// </summary>
+    public string? Refusal { get; }
+
+    public static CorpusBodyPendingAcquisitionReason NotYetAcquired() =>
+        new(CorpusBodyPendingAcquisitionReasonKind.NotYetAcquired, null);
+
+    public static CorpusBodyPendingAcquisitionReason AcquisitionRefused(string refusal) =>
+        new(CorpusBodyPendingAcquisitionReasonKind.AcquisitionRefused, refusal);
+}
+
+/// <summary>
+/// One corpus/6 record's own body: a real held body, receipted and floored; the typed reason none
+/// is held; or an accepted body pending acquisition. An exact variant, validated in the constructor
+/// exactly as <see cref="ScopeSelectorEvidence"/> validates its own four states, never a free-form
+/// set of nullable fields a caller could set inconsistently.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The "no body held" reason is not a new vocabulary. It IS <see cref="ScopeDisposition"/>,
+/// restricted here to its three non-<see cref="ScopeDisposition.AcceptedSelected"/> members --
+/// exactly the closed set the two merged adapters actually classify a body's exclusion as today.
+/// <c>EuScopeProfile.ReduceBody</c>'s four independent contributions (channel, language, format,
+/// rights) each resolve to one of <see cref="ScopeDisposition.TypedQuarantine"/>,
+/// <see cref="ScopeDisposition.Point"/> or <see cref="ScopeDisposition.NeverIngest"/> whenever they
+/// do not admit a body, and the axis result is the worst of the four under
+/// <see cref="ScopeDisposition"/>'s own declared order. Luxembourg's own body join (behind
+/// <c>LuxembourgScopeResolver</c>, out of this slice's path claim) publishes into the same shared
+/// <see cref="ScopeManifest"/> body axis, so it is bound by the same closed three-member set by
+/// construction of the manifest schema itself: <see cref="ScopeManifestCanonicalWriter"/>'s own
+/// body-candidate projection recognises exactly these four disposition values for every axis, and
+/// there is no fifth. Building a second, corpus-specific reason enum alongside it would either
+/// duplicate this vocabulary or silently narrow it; this type reuses it directly instead, per the
+/// SCOPE_RULING's first precision. <see cref="CorpusRecord"/>'s own constructor (fix two of the
+/// corpus/6 verdict, event <c>lex-event-20260904T071246618Z-2d4ca939f7144ea5ac3fd4c421091154</c>)
+/// additionally refuses to hold a not-held body together with a
+/// <see cref="CorpusRecord.BodyDisposition"/> the reason disagrees with, since only that type
+/// carries both sides of the comparison.
+/// </para>
+/// <para>
+/// <see cref="CorpusBodyRecordKind.PendingAcquisition"/>: an object whose body axis is
+/// <see cref="ScopeDisposition.AcceptedSelected"/> but whose body has not (yet) been acquired or
+/// receipted. The peer reviewer verdict on this slice (fix three, same event as above) named this
+/// the state every accepted object passes through in D1-06b whenever the fetch has not happened or
+/// was refused, and required a typed reason distinguishing the two:
+/// <see cref="CorpusBodyPendingAcquisitionReasonKind.NotYetAcquired"/> and
+/// <see cref="CorpusBodyPendingAcquisitionReasonKind.AcquisitionRefused"/>. Still no receipt and no
+/// floor -- both remain exactly what a real held body proves, never asserted independently -- and no
+/// not-held reason, because the body axis here is accepted, not one of the three exclusion
+/// dispositions.
+/// </para>
+/// </remarks>
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record CorpusBodyRecord
+{
+    [JsonConstructor]
+    public CorpusBodyRecord(
+        CorpusBodyRecordKind kind,
+        DurableBlobWriteReceipt? receipt,
+        CustodyMembership? floor,
+        ScopeDisposition? notHeldReason,
+        CorpusBodyPendingAcquisitionReason? pendingAcquisitionReason)
+    {
+        Kind = ContractValidation.RequireDefined(kind, nameof(kind));
+
+        switch (Kind)
+        {
+            case CorpusBodyRecordKind.Held:
+                if (receipt is null)
+                {
+                    throw new ArgumentException(
+                        "A held body record requires its own receipt.", nameof(receipt));
+                }
+
+                if (notHeldReason is not null)
+                {
+                    throw new ArgumentException(
+                        "A held body record carries no not-held reason.", nameof(notHeldReason));
+                }
+
+                if (pendingAcquisitionReason is not null)
+                {
+                    throw new ArgumentException(
+                        "A held body record carries no pending-acquisition reason.",
+                        nameof(pendingAcquisitionReason));
+                }
+
+                // The floor is never an independently supplied fact: it is exactly what
+                // CustodyMembershipClassifier derives from the receipt's own policy evidence, the
+                // one rule Decision 71 fixes in one place. A caller-supplied value that disagreed
+                // with the receipt it names would let a corpus record claim a floor its own
+                // evidence does not prove.
+                var actualFloor = CustodyMembershipClassifier.Classify(receipt);
+                if (floor != actualFloor)
+                {
+                    throw new ArgumentException(
+                        $"A held body record's floor must be exactly {actualFloor} for this " +
+                        "receipt, never an independently supplied value.",
+                        nameof(floor));
+                }
+
+                break;
+
+            case CorpusBodyRecordKind.NotHeld:
+                if (receipt is not null)
+                {
+                    throw new ArgumentException(
+                        "A not-held body record carries no receipt.", nameof(receipt));
+                }
+
+                if (floor is not null)
+                {
+                    throw new ArgumentException(
+                        "A not-held body record carries no floor.", nameof(floor));
+                }
+
+                if (pendingAcquisitionReason is not null)
+                {
+                    throw new ArgumentException(
+                        "A not-held body record carries no pending-acquisition reason.",
+                        nameof(pendingAcquisitionReason));
+                }
+
+                if (notHeldReason is not (ScopeDisposition.TypedQuarantine or ScopeDisposition.Point
+                        or ScopeDisposition.NeverIngest))
+                {
+                    throw new ArgumentException(
+                        "A not-held reason must be one of the manifest's three non-accepted body " +
+                        "dispositions: typed_quarantine, point or never_ingest.",
+                        nameof(notHeldReason));
+                }
+
+                break;
+
+            case CorpusBodyRecordKind.PendingAcquisition:
+                if (receipt is not null)
+                {
+                    throw new ArgumentException(
+                        "A pending-acquisition body record carries no receipt.", nameof(receipt));
+                }
+
+                if (floor is not null)
+                {
+                    throw new ArgumentException(
+                        "A pending-acquisition body record carries no floor.", nameof(floor));
+                }
+
+                if (notHeldReason is not null)
+                {
+                    throw new ArgumentException(
+                        "A pending-acquisition body record carries no not-held reason.",
+                        nameof(notHeldReason));
+                }
+
+                if (pendingAcquisitionReason is null)
+                {
+                    throw new ArgumentException(
+                        "A pending-acquisition body record requires its own typed reason.",
+                        nameof(pendingAcquisitionReason));
+                }
+
+                break;
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(kind));
+        }
+
+        Receipt = receipt;
+        Floor = floor;
+        NotHeldReason = notHeldReason;
+        PendingAcquisitionReason = pendingAcquisitionReason;
+    }
+
+    public CorpusBodyRecordKind Kind { get; }
+
+    public DurableBlobWriteReceipt? Receipt { get; }
+
+    public CustodyMembership? Floor { get; }
+
+    public ScopeDisposition? NotHeldReason { get; }
+
+    /// <summary>
+    /// The typed acquisition state, for <see cref="CorpusBodyRecordKind.PendingAcquisition"/> only.
+    /// </summary>
+    public CorpusBodyPendingAcquisitionReason? PendingAcquisitionReason { get; }
+
+    /// <summary>A held body, receipted through <paramref name="receipt"/>. The floor is derived, never asserted.</summary>
+    public static CorpusBodyRecord Held(DurableBlobWriteReceipt receipt)
+    {
+        ArgumentNullException.ThrowIfNull(receipt);
+        return new CorpusBodyRecord(
+            CorpusBodyRecordKind.Held,
+            receipt,
+            CustodyMembershipClassifier.Classify(receipt),
+            null,
+            null);
+    }
+
+    /// <summary>No body held, for one of the manifest's three non-accepted body dispositions.</summary>
+    public static CorpusBodyRecord NotHeld(ScopeDisposition reason) =>
+        new(CorpusBodyRecordKind.NotHeld, null, null, reason, null);
+
+    /// <summary>
+    /// An accepted body not yet acquired: the body axis is
+    /// <see cref="ScopeDisposition.AcceptedSelected"/> but D1-06b has not (yet) produced a receipt
+    /// for it, or its own fetch was refused.
+    /// </summary>
+    public static CorpusBodyRecord PendingAcquisition(CorpusBodyPendingAcquisitionReason reason)
+    {
+        ArgumentNullException.ThrowIfNull(reason);
+        return new CorpusBodyRecord(
+            CorpusBodyRecordKind.PendingAcquisition, null, null, null, reason);
+    }
+}
+
+/// <summary>
+/// The corpus/6 record: the final, point-in-time record for one object in scope, built from either
+/// publisher's own scope manifest (D1-06 split, <c>STAGE1-AUTHORITY-AND-QUEUE-2026-09-03.md</c>,
+/// SCOPE_RULING <c>lex-event-20260904T062043029Z-b0bb5529327b49a197ddad0dce54bbc8</c>). One record
+/// type for both publishers: <see cref="ObjectRef"/> IS <see cref="SourceObjectRef"/> and every
+/// disposition below IS <see cref="ScopeDisposition"/>, the manifest's own types, reused directly
+/// rather than wrapped in a corpus-specific identity or disposition vocabulary.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This type is fixtures-only, contracts-only work (D1-06a). Nothing here calls a custody store,
+/// an adapter, or a live manifest; D1-06b is the writer that produces a real instance from a real
+/// run, floored and reopened through a checked read.
+/// </para>
+/// <para>
+/// Fix one of the peer reviewer verdict on this slice (event
+/// <c>lex-event-20260904T071246618Z-2d4ca939f7144ea5ac3fd4c421091154</c>): the first committed shape
+/// of this type kept only <see cref="RecordDisposition"/>, one <see cref="ScopeDisposition"/> for
+/// the manifest's <c>ScopeAxis.Record</c> alone, and dropped the other three axes
+/// <c>ScopeManifestRow</c> carries, with no ordinal or row reference back into the manifest -- a
+/// reader could not check the record against the manifest it claimed to come from. This type now
+/// carries <see cref="ObjectOrdinal"/> (the exact row) plus all four axis outcomes
+/// (<see cref="RecordDisposition"/>, <see cref="BodyDisposition"/>, <see cref="RelationDisposition"/>,
+/// <see cref="SupportingDocumentDisposition"/>), each the same <see cref="ScopeDisposition"/> the
+/// manifest itself declares, so the record is the manifest's own statement rather than a claim
+/// about it. <c>ScopeManifest.cs</c> itself has no single named type that bundles exactly these
+/// four per-row disposition values alone: its <c>ScopeManifestRow</c> instead carries
+/// <c>AxisWinningRuleOrdinals</c> plus the matched-rule table (its compact persisted form), and the
+/// richer <see cref="ScopeAxisResult"/> used for live/expanded reduction bundles the winning rule
+/// ordinal and its role/capability members alongside the disposition. That is named here as a small
+/// manifest-side gap rather than invented casually, since this type's own path claim is
+/// Source/Corpus, not Source/Scope.
+/// </para>
+/// </remarks>
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record CorpusRecord
+{
+    [JsonConstructor]
+    public CorpusRecord(
+        string schema,
+        SourceObjectRef objectRef,
+        int objectOrdinal,
+        ScopeDisposition recordDisposition,
+        ScopeDisposition bodyDisposition,
+        ScopeDisposition relationDisposition,
+        ScopeDisposition supportingDocumentDisposition,
+        CorpusBodyRecord body,
+        SourceArtifactRef manifestRef,
+        SourceArtifactRef runIdentity)
+    {
+        if (!string.Equals(schema, CorpusRecordSchemaIds.Record, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                $"A corpus record must declare {CorpusRecordSchemaIds.Record}.", nameof(schema));
+        }
+
+        Schema = schema;
+        ObjectRef = objectRef ?? throw new ArgumentNullException(nameof(objectRef));
+        ObjectOrdinal = ScopeValidation.RequireOrdinal(objectOrdinal, nameof(objectOrdinal));
+        RecordDisposition = ContractValidation.RequireDefined(
+            recordDisposition, nameof(recordDisposition));
+        BodyDisposition = ContractValidation.RequireDefined(
+            bodyDisposition, nameof(bodyDisposition));
+        RelationDisposition = ContractValidation.RequireDefined(
+            relationDisposition, nameof(relationDisposition));
+        SupportingDocumentDisposition = ContractValidation.RequireDefined(
+            supportingDocumentDisposition, nameof(supportingDocumentDisposition));
+        Body = body ?? throw new ArgumentNullException(nameof(body));
+
+        // Fix two of the peer reviewer verdict (same event as above): the body can never disagree
+        // with the manifest's own body axis this record now carries. A caller could still build a
+        // CorpusBodyRecord.NotHeld with any of the three reasons independently -- that type alone
+        // cannot see the manifest -- so this is the one place both sides of the comparison are ever
+        // held together, and it refuses to hold them apart.
+        if (BodyDisposition == ScopeDisposition.AcceptedSelected)
+        {
+            if (Body.Kind == CorpusBodyRecordKind.NotHeld)
+            {
+                throw new ArgumentException(
+                    "A record whose body axis is accepted_selected cannot carry a not-held body.",
+                    nameof(body));
+            }
+        }
+        else if (Body.Kind != CorpusBodyRecordKind.NotHeld || Body.NotHeldReason != BodyDisposition)
+        {
+            throw new ArgumentException(
+                $"A record whose body axis is {BodyDisposition} must carry a not-held body whose " +
+                "reason is exactly that disposition.",
+                nameof(body));
+        }
+
+        ManifestRef = manifestRef ?? throw new ArgumentNullException(nameof(manifestRef));
+        RunIdentity = runIdentity ?? throw new ArgumentNullException(nameof(runIdentity));
+    }
+
+    public string Schema { get; }
+
+    /// <summary>The object's own identity: the manifest's <see cref="SourceObjectRef"/>, reused directly.</summary>
+    public SourceObjectRef ObjectRef { get; }
+
+    /// <summary>
+    /// This object's ordinal in the manifest named by <see cref="ManifestRef"/>: exactly
+    /// <c>ScopeManifestRow.ObjectOrdinal</c> for the row this record was built from, so a reader
+    /// holding that manifest can locate the exact row and check every disposition below against it.
+    /// </summary>
+    public int ObjectOrdinal { get; }
+
+    /// <summary>
+    /// The object's own disposition from the manifest: the record axis's outcome, the same closed
+    /// <see cref="ScopeDisposition"/> the manifest itself carries for <c>ScopeAxis.Record</c>.
+    /// Independent of <see cref="Body"/> and the other two axes below: the manifest's own four axes
+    /// are evaluated independently of one another (an object can be an accepted record whose body
+    /// axis is excluded, or vice versa).
+    /// </summary>
+    public ScopeDisposition RecordDisposition { get; }
+
+    /// <summary>
+    /// The manifest row's own <c>ScopeAxis.Body</c> outcome. <see cref="Body"/> is constructed to
+    /// agree with this value exactly: <see cref="ScopeDisposition.AcceptedSelected"/> requires
+    /// <see cref="CorpusBodyRecord.Held"/> or <see cref="CorpusBodyRecord.PendingAcquisition"/>; any
+    /// other value requires <see cref="CorpusBodyRecord.NotHeld"/> with that same value as the
+    /// reason. This is fix two of the corpus/6 verdict: a caller cannot make this record say
+    /// <see cref="ScopeDisposition.Point"/> for a body the manifest actually excluded as
+    /// <see cref="ScopeDisposition.TypedQuarantine"/>, because the constructor above refuses to
+    /// hold the two together.
+    /// </summary>
+    public ScopeDisposition BodyDisposition { get; }
+
+    /// <summary>The manifest row's own <c>ScopeAxis.Relation</c> outcome, carried exactly as stated.</summary>
+    public ScopeDisposition RelationDisposition { get; }
+
+    /// <summary>
+    /// The manifest row's own <c>ScopeAxis.SupportingDocument</c> outcome, carried exactly as
+    /// stated.
+    /// </summary>
+    public ScopeDisposition SupportingDocumentDisposition { get; }
+
+    /// <summary>The receipted document, the typed reason none is held, or the pending-acquisition state.</summary>
+    public CorpusBodyRecord Body { get; }
+
+    /// <summary>Which manifest artifact this record was built from.</summary>
+    public SourceArtifactRef ManifestRef { get; }
+
+    /// <summary>
+    /// Which run produced this record, named and typed the same way every other acquisition-run
+    /// identity in this codebase is (for example <c>RepeatedEnumerationDeliveryProof.RunIdentity</c>,
+    /// <c>AbsenceFamilyEnumerationProof</c>'s <c>AcquisitionRunRef</c>): a <see cref="SourceArtifactRef"/>,
+    /// never a corpus-specific run-identity type.
+    /// </summary>
+    public SourceArtifactRef RunIdentity { get; }
+}
+
+/// <summary>
+/// The reader door for a corpus record previously durably written by
+/// <see cref="CorpusRecordCanonicalWriter.Write"/>, shaped like
+/// <see cref="VerifiedScopeManifest.ParseAndVerify"/>: verifies the SHA-256 against
+/// <paramref name="artifactRef"/> before any content is exposed, then requires the parsed record's
+/// own canonical re-serialization to reproduce the input bytes exactly. No InternalsVisibleTo is
+/// granted for this door; D1-06b will reopen corpus records from custody the same way the adapters
+/// already reopen manifests and rows.
+/// </summary>
+/// <remarks>
+/// Unlike <see cref="VerifiedScopeManifest.ParseAndVerify"/> this door takes no evidence resolver:
+/// a <see cref="CorpusRecord"/> carries no row that must be checked against externally supplied
+/// observation evidence the way a scope manifest's rows must. Its own constructor already proves
+/// every invariant this type has (the exact body variant, the floor derived from its own receipt),
+/// so byte integrity against <paramref name="artifactRef"/> plus exact canonical round-tripping is
+/// the whole of what this door needs to re-verify.
+/// </remarks>
+public sealed class VerifiedCorpusRecord
+{
+    internal VerifiedCorpusRecord(CorpusRecord record)
+    {
+        Record = record;
+    }
+
+    /// <summary>
+    /// The verified record's own content. Reading it needs no InternalsVisibleTo; holding an
+    /// instance is itself the evidence that <see cref="ParseAndVerify"/> ran to completion, because
+    /// the constructor above is the only door onto this type and it stays internal.
+    /// </summary>
+    public CorpusRecord Record { get; }
+
+    public static VerifiedCorpusRecord ParseAndVerify(
+        SourceArtifactRef artifactRef,
+        ReadOnlySpan<byte> canonicalBytes)
+    {
+        ArgumentNullException.ThrowIfNull(artifactRef);
+
+        if (!string.Equals(
+                CorpusRecordCanonicalWriter.ComputeRecordSha256(canonicalBytes),
+                artifactRef.Sha256,
+                StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "The corpus record bytes do not match their artifact reference.",
+                nameof(canonicalBytes));
+        }
+
+        var json = ScopeValidation.DecodeStrictUtf8(canonicalBytes, nameof(canonicalBytes));
+        CorpusRecord record;
+        try
+        {
+            record = ContractJson.Deserialize<CorpusRecord>(json);
+        }
+        catch (JsonException exception)
+        {
+            throw new ArgumentException(
+                "The corpus record bytes are not one valid typed canonical document.",
+                nameof(canonicalBytes),
+                exception);
+        }
+
+        using var rebuilt = new MemoryStream();
+        CorpusRecordCanonicalWriter.Write(rebuilt, record);
+        if (!canonicalBytes.SequenceEqual(rebuilt.ToArray()))
+        {
+            throw new ArgumentException(
+                "The corpus record is not its exact canonical typed representation.",
+                nameof(canonicalBytes));
+        }
+
+        return new VerifiedCorpusRecord(record);
+    }
+}
+
+/// <summary>
+/// Canonicalizes a <see cref="CorpusRecord"/> into deterministic UTF-8 bytes and their SHA-256,
+/// domain-separated exactly the way <see cref="ScopeManifestCanonicalWriter"/> domain-separates its
+/// own digest: a fixed ASCII domain string is hashed ahead of the document bytes, so a corpus
+/// record and a scope manifest that happened to serialize to the same JSON bytes could never
+/// collide on one digest.
+/// </summary>
+public static class CorpusRecordCanonicalWriter
+{
+    private const string RecordDomain = "lex-v3-source-corpus-record/6\n";
+
+    public static string Write(Stream destination, CorpusRecord record)
+    {
+        ArgumentNullException.ThrowIfNull(destination);
+        ArgumentNullException.ThrowIfNull(record);
+        if (!destination.CanWrite)
+        {
+            throw new ArgumentException(
+                "The canonical destination must be writable.", nameof(destination));
+        }
+
+        using var buffer = new MemoryStream();
+        using (var writer = NewWriter(buffer))
+        {
+            WriteRecord(writer, record);
+            writer.Flush();
+        }
+
+        buffer.WriteByte((byte)'\n');
+        var bytes = buffer.ToArray();
+        destination.Write(bytes, 0, bytes.Length);
+        return ComputeRecordSha256(bytes);
+    }
+
+    /// <summary>
+    /// The exact digest <see cref="Write"/> returns for its own output, recomputed directly from
+    /// durable bytes so a reader can check them against a pinned artifact reference before parsing.
+    /// <paramref name="canonicalBytes"/> must be exactly what <see cref="Write"/> wrote, trailing
+    /// newline included.
+    /// </summary>
+    internal static string ComputeRecordSha256(ReadOnlySpan<byte> canonicalBytes)
+    {
+        using var incremental = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        incremental.AppendData(Encoding.ASCII.GetBytes(RecordDomain));
+        incremental.AppendData(canonicalBytes);
+        Span<byte> digest = stackalloc byte[SHA256.HashSizeInBytes];
+        incremental.GetHashAndReset(digest);
+        return Convert.ToHexStringLower(digest);
+    }
+
+    private static Utf8JsonWriter NewWriter(Stream output) => new(
+        output,
+        new JsonWriterOptions
+        {
+            Encoder = JavaScriptEncoder.Default,
+            Indented = false,
+            SkipValidation = false,
+        });
+
+    private static void WriteRecord(Utf8JsonWriter writer, CorpusRecord record)
+    {
+        writer.WriteStartObject();
+        writer.WriteString("schema", CorpusRecordSchemaIds.Record);
+        writer.WritePropertyName("object_ref");
+        ScopeManifestCanonicalWriter.WriteObjectRef(writer, record.ObjectRef);
+        writer.WriteNumber("object_ordinal", record.ObjectOrdinal);
+        writer.WriteString("record_disposition", DispositionName(record.RecordDisposition));
+        writer.WriteString("body_disposition", DispositionName(record.BodyDisposition));
+        writer.WriteString("relation_disposition", DispositionName(record.RelationDisposition));
+        writer.WriteString(
+            "supporting_document_disposition",
+            DispositionName(record.SupportingDocumentDisposition));
+        writer.WritePropertyName("body");
+        WriteBody(writer, record.Body);
+        writer.WritePropertyName("manifest_ref");
+        ScopeManifestCanonicalWriter.WriteArtifact(writer, record.ManifestRef);
+        writer.WritePropertyName("run_identity");
+        ScopeManifestCanonicalWriter.WriteArtifact(writer, record.RunIdentity);
+        writer.WriteEndObject();
+    }
+
+    private static void WriteBody(Utf8JsonWriter writer, CorpusBodyRecord body)
+    {
+        writer.WriteStartObject();
+        writer.WriteString("kind", BodyKindName(body.Kind));
+        writer.WritePropertyName("receipt");
+        if (body.Receipt is null)
+        {
+            writer.WriteNullValue();
+        }
+        else
+        {
+            // DurableBlobWriteReceiptDigest already treats ContractJson.Serialize's output as this
+            // receipt's own canonical form (it is exactly what that digest hashes); embedding it
+            // here rather than hand-writing the receipt's fields a second time keeps the two
+            // canonicalizations from being able to drift apart.
+            writer.WriteRawValue(ContractJson.Serialize(body.Receipt), skipInputValidation: true);
+        }
+
+        writer.WritePropertyName("floor");
+        if (body.Floor is { } floor)
+        {
+            writer.WriteStringValue(FloorName(floor));
+        }
+        else
+        {
+            writer.WriteNullValue();
+        }
+
+        writer.WritePropertyName("not_held_reason");
+        if (body.NotHeldReason is { } reason)
+        {
+            writer.WriteStringValue(DispositionName(reason));
+        }
+        else
+        {
+            writer.WriteNullValue();
+        }
+
+        writer.WritePropertyName("pending_acquisition_reason");
+        if (body.PendingAcquisitionReason is { } pending)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("kind", PendingAcquisitionReasonKindName(pending.Kind));
+            writer.WritePropertyName("refusal");
+            if (pending.Refusal is { } refusal)
+            {
+                writer.WriteStringValue(refusal);
+            }
+            else
+            {
+                writer.WriteNullValue();
+            }
+
+            writer.WriteEndObject();
+        }
+        else
+        {
+            writer.WriteNullValue();
+        }
+
+        writer.WriteEndObject();
+    }
+
+    private static string BodyKindName(CorpusBodyRecordKind kind) => kind switch
+    {
+        CorpusBodyRecordKind.Held => "held",
+        CorpusBodyRecordKind.NotHeld => "not_held",
+        CorpusBodyRecordKind.PendingAcquisition => "pending_acquisition",
+        _ => throw new InvalidOperationException("Unknown corpus body record kind."),
+    };
+
+    private static string PendingAcquisitionReasonKindName(
+        CorpusBodyPendingAcquisitionReasonKind kind) => kind switch
+    {
+        CorpusBodyPendingAcquisitionReasonKind.NotYetAcquired => "not_yet_acquired",
+        CorpusBodyPendingAcquisitionReasonKind.AcquisitionRefused => "acquisition_refused",
+        _ => throw new InvalidOperationException("Unknown pending-acquisition reason kind."),
+    };
+
+    private static string FloorName(CustodyMembership floor) => floor switch
+    {
+        CustodyMembership.ReadOnce => "read_once",
+        CustodyMembership.RetainedUnenforced => "retained_unenforced",
+        CustodyMembership.Floored => "floored",
+        _ => throw new InvalidOperationException("Unknown custody membership."),
+    };
+
+    // Not reused from ScopeManifestCanonicalWriter's own DispositionName: that method is private to
+    // its class, and ScopeManifest.cs is out of this slice's path claim except for a genuine
+    // missing piece, which widening a four-line switch from private to internal is not.
+    private static string DispositionName(ScopeDisposition disposition) => disposition switch
+    {
+        ScopeDisposition.AcceptedSelected => "accepted_selected",
+        ScopeDisposition.TypedQuarantine => "typed_quarantine",
+        ScopeDisposition.Point => "point",
+        ScopeDisposition.NeverIngest => "never_ingest",
+        _ => throw new InvalidOperationException("Unknown scope disposition."),
+    };
+}

@@ -797,6 +797,21 @@ public sealed record LuxembourgQueryPlan
     public const string SchemaId = "lex-lu-query-plan/1";
     public const string PublisherEndpoint = "https://data.legilux.public.lu/sparqlendpoint";
     public const long PublisherDeliveryCeilingRows = 1_000_000;
+
+    /// <summary>
+    /// The three literal values the "assertion-rows" template's own <c>object_kind</c> BIND
+    /// (<see cref="BuildTemplates"/>) can produce. D1-04c: public, so
+    /// <c>LuxembourgQueryExecutionAdapter</c> (Lex.V3.Ingest) reads these same three tokens
+    /// instead of declaring its own duplicate copy of "iri", "literal" and
+    /// "unsupported_blank_node" across the assembly boundary.
+    /// </summary>
+    public const string AssertionObjectKindIri = "iri";
+
+    /// <summary>See <see cref="AssertionObjectKindIri"/>.</summary>
+    public const string AssertionObjectKindLiteral = "literal";
+
+    /// <summary>See <see cref="AssertionObjectKindIri"/>.</summary>
+    public const string AssertionObjectKindUnsupportedBlankNode = "unsupported_blank_node";
     private static readonly string[] SchemeRootIris =
     [
         "http://data.legilux.public.lu/resource/authority/license/",
@@ -1157,7 +1172,7 @@ public sealed record LuxembourgQueryPlan
             Template("assertion-rows", graph, $"""
                 {predicateValues}
                 ?subject ?predicate ?object .
-                BIND(IF(isIRI(?object), "iri", IF(isLiteral(?object), "literal", "unsupported_blank_node")) AS ?object_kind)
+                BIND(IF(isIRI(?object), "{AssertionObjectKindIri}", IF(isLiteral(?object), "{AssertionObjectKindLiteral}", "{AssertionObjectKindUnsupportedBlankNode}")) AS ?object_kind)
                 BIND(IF(isLiteral(?object), STR(DATATYPE(?object)), "") AS ?datatype_iri)
                 BIND(IF(isLiteral(?object), LANG(?object), "") AS ?language_tag)
                 BIND(IF(isIRI(?subject), STR(?subject), "") AS ?key_1)

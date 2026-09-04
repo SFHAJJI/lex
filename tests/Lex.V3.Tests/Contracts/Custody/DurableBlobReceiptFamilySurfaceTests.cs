@@ -32,6 +32,7 @@ public sealed class DurableBlobReceiptFamilySurfaceTests
     private const string Policy = "Lex.V3.Contracts.Custody.CustodyPolicyEvidence";
     private const string Custody = "Lex.V3.Contracts.Custody.";
     private const string Core = "Lex.V3.Contracts.Source.Core.";
+    private const string Corpus = "Lex.V3.Contracts.Source.Corpus.";
     private const string Http = "Lex.V3.Contracts.Source.Http.";
 
     [TestMethod]
@@ -90,6 +91,12 @@ public sealed class DurableBlobReceiptFamilySurfaceTests
         // it carries the write receipt beside them the same way RepeatedEnumerationResolvedEvidence
         // does above it. Same three producer shapes (Deconstruct out-parameter, backing field,
         // property), reviewed and pinned rather than discovered later.
+        //
+        // CorpusBodyRecord (Lex.V3.Contracts.Source.Corpus, D1-06a) joined with the corpus/6 record
+        // contract: its own held-body variant carries the receipt beside the Decision-71 floor that
+        // receipt's own policy evidence proves, so it is a plain field-and-property holder, never a
+        // positional record (it declares no primary constructor for the compiler to generate a
+        // Deconstruct from), which is why only two new lines appear here rather than three.
         CollectionAssert.AreEqual(
             new[]
             {
@@ -106,11 +113,13 @@ public sealed class DurableBlobReceiptFamilySurfaceTests
                 "field private instance " + Custody + "CustodiedDecode<T>::<Receipt>k__BackingField -> " + Receipt,
                 "field private instance " + Core + "RepeatedEnumerationObservedTransport::<DurableWriteReceipt>k__BackingField -> " + Receipt,
                 "field private instance " + Core + "RepeatedEnumerationResolvedEvidence::<DurableWriteReceipt>k__BackingField -> " + Receipt,
+                "field private instance " + Corpus + "CorpusBodyRecord::<Receipt>k__BackingField -> " + Receipt,
                 "method public instance " + Custody + "ICustodyStore::CreateAsync(System.ReadOnlyMemory<System.Byte>, "
                 + Custody + "CustodyClass, System.Threading.CancellationToken) -> System.Threading.Tasks.Task<" + Receipt + ">",
                 "property public instance " + Custody + "CustodiedDecode<T>::Receipt() -> " + Receipt,
                 "property public instance " + Core + "RepeatedEnumerationObservedTransport::DurableWriteReceipt() -> " + Receipt,
                 "property public instance " + Core + "RepeatedEnumerationResolvedEvidence::DurableWriteReceipt() -> " + Receipt,
+                "property public instance " + Corpus + "CorpusBodyRecord::Receipt() -> " + Receipt,
             },
             ConstructionSurface.ProducersIn(typeof(DurableBlobWriteReceipt).Assembly, typeof(DurableBlobWriteReceipt), true).ToArray());
     }
