@@ -1368,9 +1368,22 @@ public sealed class LuxembourgQueryExecutionAdapter
 
             if (FindLegalValue(assertions, wemi.ManifestationIri) is not { } legalValue)
             {
-                // The publisher's own official marker is missing for this manifestation. It is not
-                // defaulted to officiel: the ladder ranks on that marker, so guessing it would
-                // silently promote an unmarked file over a marked one.
+                // Reached only when the publisher states TWO DIFFERENT legal values for one
+                // manifestation, which is the store disagreeing with itself. Neither is chosen and
+                // the manifestation stops being a candidate.
+                //
+                // It used to be reached for a second reason as well, and that was the defect. An
+                // ABSENT marker dropped the manifestation too, on the reasoning that the ladder
+                // ranked on the marker so an unmarked file must not be silently promoted over a
+                // marked one. That reasoning was sound while legal value outranked format, and the
+                // amendment (RULING lex-event-20260904T194018108Z-62079c93ce9d405ca1fb326cfea41bd9)
+                // inverts it: format is primary, so an unmarked file is not promoted by anything,
+                // it simply keeps its own format's place. Dropping it removed the very
+                // manifestations D49 prefers, since 99.5 percent of plain xml and 42 percent of
+                // xml-akomantoso carry no marker, and it made an expression whose files were all
+                // unmarked report an absence that was not one. Absence is now the typed
+                // LuxembourgLegalValue.Unstated state, carried into selection, never read as "not
+                // official".
                 continue;
             }
 
@@ -1387,8 +1400,17 @@ public sealed class LuxembourgQueryExecutionAdapter
 
     /// <summary>
     /// The publisher's own jolux:legalValue marker for one manifestation, read from this object's
-    /// own resolved assertions by exact subject and predicate, or null when the store carries none.
+    /// own resolved assertions by exact subject and predicate.
+    /// <see cref="LuxembourgLegalValue.Unstated"/> when the store states none, which is the common
+    /// case; null ONLY when the store states two different values for the same manifestation, which
+    /// is publisher data disagreeing with itself.
     /// </summary>
+    /// <remarks>
+    /// Absence and conflict were the same answer here before the amendment, and that conflation is
+    /// what let "no marker" be handled as "unusable". They are separate now: one is a fact about
+    /// the publisher having said nothing, the other is a fact about the publisher contradicting
+    /// itself, and only the second is a reason to refuse a manifestation.
+    /// </remarks>
     private static LuxembourgLegalValue? FindLegalValue(
         IReadOnlyList<LuxembourgObservedAssertion> assertions,
         string manifestationIri)
@@ -1418,7 +1440,7 @@ public sealed class LuxembourgQueryExecutionAdapter
             found = value;
         }
 
-        return found;
+        return found ?? LuxembourgLegalValue.Unstated;
     }
 
     /// <summary>

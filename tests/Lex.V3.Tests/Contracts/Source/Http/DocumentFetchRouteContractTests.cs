@@ -212,6 +212,12 @@ public sealed class DocumentFetchRouteContractTests
             LuxembourgDocumentFetchAddress.Create(
                 fileUri, LuxembourgUserFormatToken.Xml, LuxembourgLegalValue.Definitif, "/eli/a")
                 .ArtifactRef.Sha256,
+            // Unstated is a distinct third state and must not collapse onto either marker in the
+            // canonical bytes: an address for an unmarked manifestation is a different artifact
+            // from one the publisher marked, even when everything else matches.
+            LuxembourgDocumentFetchAddress.Create(
+                fileUri, LuxembourgUserFormatToken.Xml, LuxembourgLegalValue.Unstated, "/eli/a")
+                .ArtifactRef.Sha256,
             LuxembourgDocumentFetchAddress.Create(
                 fileUri, LuxembourgUserFormatToken.Xml, LuxembourgLegalValue.Officiel, "/eli/b")
                 .ArtifactRef.Sha256,
