@@ -64,6 +64,11 @@ public sealed class LuxembourgExecutorConstructionSurfaceTests
                 + N + "LuxembourgEnumerationRefusalDetail",
                 "field private instance " + N + "LuxembourgFamilyEnumerationOutcome"
                 + "::<ExecutorRefusal>k__BackingField -> " + N + "LuxembourgEnumerationRefusalDetail",
+                // D1-04c: LuxembourgPartitionCoverReconciliationDetail carries a leaf's own executor
+                // refusal exactly as LuxembourgFamilyEnumerationOutcome already carries one above --
+                // it does not make a refusal, only names which leaf's own leg refused.
+                "field private instance " + N + "LuxembourgPartitionCoverReconciliationDetail"
+                + "::<LeafExecutorRefusal>k__BackingField -> " + N + "LuxembourgEnumerationRefusalDetail",
                 "field private instance " + N + "LuxembourgRepeatedEnumerationExecutor+ObserveOutcome"
                 + "::<Refusal>k__BackingField -> " + N + "LuxembourgEnumerationRefusalDetail",
                 "field private instance " + N + "LuxembourgRepeatedEnumerationExecutor+PassOutcome"
@@ -72,6 +77,8 @@ public sealed class LuxembourgExecutorConstructionSurfaceTests
                 + N + "LuxembourgEnumerationRefusalDetail",
                 "property public instance " + N + "LuxembourgFamilyEnumerationOutcome::ExecutorRefusal() -> "
                 + N + "LuxembourgEnumerationRefusalDetail",
+                "property public instance " + N + "LuxembourgPartitionCoverReconciliationDetail"
+                + "::LeafExecutorRefusal() -> " + N + "LuxembourgEnumerationRefusalDetail",
                 "property public instance " + N + "LuxembourgRepeatedEnumerationExecutor+ObserveOutcome"
                 + "::Refusal() -> " + N + "LuxembourgEnumerationRefusalDetail",
                 "property public instance " + N + "LuxembourgRepeatedEnumerationExecutor+PassOutcome"
@@ -215,7 +222,21 @@ public sealed class LuxembourgExecutorConstructionSurfaceTests
             ConstructionSurface.Of(typeof(LuxembourgPartitionRunRequest)).ToArray());
 
         CollectionAssert.AreEqual(
-            Array.Empty<string>(),
+            new[]
+            {
+                // D1-04c: LuxembourgQueryExecutionAdapter's own private FamilyRowsLeg carries one
+                // already-constructed leg's request through the cover-chain union reopen -- it
+                // never mints a new LuxembourgPartitionRunRequest, only carries one exactly as
+                // LuxembourgEnumerationRunResult already carries a refusal detail it did not make.
+                "by-ref-method public instance " + N + "LuxembourgQueryExecutionAdapter+FamilyRowsLeg"
+                + "::Deconstruct(out Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProof&, "
+                + "out " + Core + "RepeatedEnumerationDeliveryReceipt&, "
+                + "out " + N + "LuxembourgPartitionRunRequest&) -> System.Void",
+                "field private instance " + N + "LuxembourgQueryExecutionAdapter+FamilyRowsLeg"
+                + "::<PartitionRequest>k__BackingField -> " + N + "LuxembourgPartitionRunRequest",
+                "property public instance " + N + "LuxembourgQueryExecutionAdapter+FamilyRowsLeg"
+                + "::PartitionRequest() -> " + N + "LuxembourgPartitionRunRequest",
+            },
             ConstructionSurface.ProducersIn(
                 typeof(LuxembourgPartitionRunRequest).Assembly,
                 typeof(LuxembourgPartitionRunRequest),
