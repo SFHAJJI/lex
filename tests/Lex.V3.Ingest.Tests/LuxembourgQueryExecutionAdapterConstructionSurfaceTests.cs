@@ -172,9 +172,9 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 "base-constructor protected instance System.ValueType::.ctor() -> System.ValueType",
                 "field public static " + N + "LuxembourgQueryExecutionRefusal::None -> "
                 + N + "LuxembourgQueryExecutionRefusal",
-                "field public static " + N + "LuxembourgQueryExecutionRefusal::ObservationCountDoesNotMatchDelivery -> "
+                "field public static " + N + "LuxembourgQueryExecutionRefusal::ResourceObservationFamilyNotProven -> "
                 + N + "LuxembourgQueryExecutionRefusal",
-                "field public static " + N + "LuxembourgQueryExecutionRefusal::ObservationsWithoutProvenCensus -> "
+                "field public static " + N + "LuxembourgQueryExecutionRefusal::ResourceObservationRowsNotVerified -> "
                 + N + "LuxembourgQueryExecutionRefusal",
                 "field public static " + N + "LuxembourgQueryExecutionRefusal::ScopeManifestNotHeld -> "
                 + N + "LuxembourgQueryExecutionRefusal",

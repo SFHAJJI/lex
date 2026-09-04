@@ -1,8 +1,11 @@
+using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Http;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Contracts.Source.Scope;
 
@@ -232,25 +235,24 @@ public enum LuxembourgQueryExecutionRefusal
     ScopeManifestNotHeld = 2,
 
     /// <summary>
-    /// One or more <see cref="LuxembourgResourceObservation"/> values were supplied to
-    /// <see cref="LuxembourgQueryExecutionAdapter.RunAsync"/>, but no family this run enumerated
-    /// can attest them: either no resource-observation family was designated at all, or the
-    /// designated family key does not name a family this run proved. The review objection this
-    /// refusal closes: nothing previously tied a caller's <c>observations</c> to what the executor
-    /// actually delivered, so a manifest could be built from a hand-supplied set the run never
-    /// enumerated.
+    /// <see cref="LuxembourgQueryExecutionAdapter.RunAsync"/> was given a non-null
+    /// <c>resourceObservationFamilyKey</c>, but no family this run enumerated can attest one: either
+    /// the key does not name any entry of this run's family results, or the entry it names is not
+    /// <see cref="LuxembourgFamilyEnumerationOutcomeKind.Proven"/>. <see
+    /// cref="Lex.V3.Contracts.Source.Core.VerifiedRepeatedEnumerationRows.TryOpen"/> can only reopen
+    /// rows behind a proof that exists, so an unproven or unmatched designation refuses here rather
+    /// than silently deriving zero observations from a family this run never actually censused.
     /// </summary>
-    ObservationsWithoutProvenCensus = 3,
+    ResourceObservationFamilyNotProven = 3,
 
     /// <summary>
-    /// The designated resource-observation family was proven, but the number of observations
-    /// supplied does not equal the number of rows that family's proof reports as delivered. This
-    /// is a narrower binding than full identity-set equality between the supplied observations and
-    /// the family's delivered canonical keys: see the remark on
-    /// <see cref="LuxembourgQueryExecutionAdapter.RunAsync"/> for why that stronger comparison is
-    /// not available from this assembly today.
+    /// The designated resource-observation family was proven, but its delivered rows did not
+    /// independently re-verify through <see
+    /// cref="Lex.V3.Contracts.Source.Core.VerifiedRepeatedEnumerationRows.TryOpen"/> when reopened
+    /// from custody: see <see cref="LuxembourgQueryExecutionRefusalDetail.Detail"/> for the exact
+    /// <see cref="Lex.V3.Contracts.Source.Core.RepeatedEnumerationRowsOpenRefusal"/> reason.
     /// </summary>
-    ObservationCountDoesNotMatchDelivery = 4,
+    ResourceObservationRowsNotVerified = 4,
 }
 
 public sealed class LuxembourgQueryExecutionRefusalDetail
@@ -429,18 +431,29 @@ public sealed class LuxembourgQueryExecutionResult
 /// adapter's own manifest write).
 /// </para>
 /// <para>
-/// RESIDUE, named rather than papered over. This adapter does not decode a family's delivered
-/// SPARQL rows into <see cref="LuxembourgResourceObservation"/> objects: no production path in this
-/// codebase does that today (only test fixtures construct
-/// <see cref="LuxembourgResourceObservation"/>), and the repeated-enumeration executor's own row
-/// parser is a private implementation detail of proving enumeration completeness, not a public
-/// reader. <c>RunAsync</c>'s own <c>observations</c> parameter is therefore supplied by the caller.
-/// This mirrors <see cref="VerifiedLuxembourgSourceProfile.Resolve"/>'s own existing
-/// input boundary rather than inventing new plumbing the ruled design does not ask for; closing it
-/// is its own future slice. Likewise, this adapter drives one partition per family
+/// D1-04b closed the observation-decoding residue D1-04a named: <c>RunAsync</c> derives its own
+/// <see cref="LuxembourgResourceObservation"/> values from the designated resource-observation
+/// family's own delivered rows, rather than trusting a caller-supplied list. It does this through
+/// <see cref="Lex.V3.Contracts.Source.Core.VerifiedRepeatedEnumerationRows.TryOpen"/> (queue item
+/// 17): this adapter reopens that family's pass-A pages from custody by the exact digests its own
+/// <see cref="LuxembourgEnumerationDeliveryReceipt.Delivery"/> names, in page order, assembling each
+/// <see cref="Lex.V3.Contracts.Source.Core.RepeatedEnumerationResolvedEvidence"/> from that page's
+/// own plan, input, render receipt, logical request, HTTP evidence and write receipt -- never minted
+/// anew or faked -- then lets item 17 independently re-parse and re-verify every row before this
+/// adapter ever reads one. A verified <c>RepeatedEnumerationRow</c>'s <c>Terms</c> are mapped to an
+/// observation by looking up the interpretation profile's own named projection variables, never by
+/// positional index, so a template whose column order differs cannot silently mismap.
+/// </para>
+/// <para>
+/// This adapter still drives one partition per family
 /// (<see cref="LuxembourgRepeatedEnumerationExecutor.RunPartitionAsync"/>), not a
 /// <see cref="LuxembourgPartitionCover"/> chain: a family whose selection requires repartitioning is
 /// reported as an ordinary refused family outcome rather than silently retried across a chain.
+/// D1-04b measured no live count for the resource-discovery family against the publisher's
+/// 1,000,000-row selection ceiling -- no production crawl has run under V3 yet, and every count in
+/// this file's own tests is a small synthetic fixture value -- so driving
+/// <see cref="LuxembourgRepeatedEnumerationExecutor.RunCoverAsync"/> for a <c>PartitionRequired</c>
+/// census family remains D1-04c's job, not this one's.
 /// </para>
 /// </remarks>
 public sealed class LuxembourgQueryExecutionAdapter
@@ -483,56 +496,30 @@ public sealed class LuxembourgQueryExecutionAdapter
     /// </param>
     /// <param name="resourceObservationFamilyKey">
     /// Which entry of <paramref name="families"/>, if any, is the LU resource-discovery family
-    /// (query-plan set "S", template "subjects") <paramref name="observations"/> is asserted to be
-    /// the delivered census of. This is the refreeze's answer to the one objection that mattered
-    /// most in review: previously nothing tied a caller's <paramref name="observations"/> to what
-    /// the executor actually enumerated this run, so the scope manifest could classify objects the
-    /// run never saw and omit ones it delivered. When <paramref name="observations"/> is non-empty
-    /// (or this key is non-null), the named family must be among <paramref name="families"/> and
-    /// its enumeration must be <see cref="LuxembourgFamilyEnumerationOutcomeKind.Proven"/>, and the
-    /// number of <paramref name="observations"/> must equal that family's proven
-    /// <see cref="AbsenceFamilyEnumerationProof.DeliveredRowCount"/>; otherwise <c>RunAsync</c>
-    /// refuses with <see cref="LuxembourgQueryExecutionRefusal.ObservationsWithoutProvenCensus"/> or
-    /// <see cref="LuxembourgQueryExecutionRefusal.ObservationCountDoesNotMatchDelivery"/> rather than
-    /// resolving scope over an unattested set.
-    /// <para>
-    /// RESIDUE, named rather than papered over, exactly as the type remarks above name the
-    /// observation-decoding residue. This is a count binding, not the stronger identity-set
-    /// equality the review objection also offered as acceptable ("the supplied observations'
-    /// identity set equals the delivered canonical key set of the resource family"). That stronger
-    /// check is not reachable from this assembly today: <see cref="EnumerationDeliveryComparison"/>
-    /// retains a family's delivered canonical keys only as <c>CanonicalKeyDigestA</c>/<c>B</c>, a
-    /// hash over RDF term tuples canonicalized by <c>ContractCanonicalizer</c>, which is
-    /// <c>internal</c> to <c>Lex.V3.Contracts</c> and granted <c>InternalsVisibleTo</c> only to that
-    /// assembly's own tests, never to <c>Lex.V3.Ingest</c>; and
-    /// <see cref="AbsenceFamilyEnumerationProof"/>'s own remarks say plainly that this digest "does
-    /// not bind the delivered rows to a cut's observed keys... which no list of canonical publisher
-    /// URIs can be checked against from here". Reproducing that digest from this assembly would mean
-    /// duplicating a private canonicalization and the private SPARQL-row parsing that feeds it
-    /// (<c>EnumerationDeliveryComparison.Parse</c>/<c>ParseRows</c>), which is exactly the
-    /// re-implementation this design deliberately avoids elsewhere (see the observation-decoding
-    /// residue above). A durable fix for the stronger comparison is a new public reader door on
-    /// <c>Source.Core</c> analogous to <see cref="Scope.VerifiedScopeManifest.ParseAndVerify"/>
-    /// (Decision 80's precedent for exactly this "production Ingest previously had no way to turn
-    /// durable bytes back into a verified value" shape); that is a cross-cutting change to shared,
-    /// already-merged EU/LU infrastructure and belongs to its own reviewed slice, not bundled into
-    /// this one. The count binding here is the strongest check achievable without it, and it already
-    /// closes the concrete defect the objection's own tests demonstrated: a manifest built from zero
-    /// enumerated families, or from an enumerated family with no matching observations.
-    /// </para>
+    /// (query-plan set "S", template "subjects") this run derives
+    /// <see cref="LuxembourgResourceObservation"/> values from. Null means this run does not census
+    /// resources at all, exactly as a null <paramref name="relationAssertionsFamilyKey"/> means it
+    /// does not census relations. When non-null, the named family must be among
+    /// <paramref name="families"/> and its enumeration must be
+    /// <see cref="LuxembourgFamilyEnumerationOutcomeKind.Proven"/>, or <c>RunAsync</c> refuses with
+    /// <see cref="LuxembourgQueryExecutionRefusal.ResourceObservationFamilyNotProven"/>; its proven
+    /// delivered rows must then independently re-verify when reopened from custody through
+    /// <see cref="Lex.V3.Contracts.Source.Core.VerifiedRepeatedEnumerationRows.TryOpen"/>, or
+    /// <c>RunAsync</c> refuses with
+    /// <see cref="LuxembourgQueryExecutionRefusal.ResourceObservationRowsNotVerified"/>. There is no
+    /// caller-supplied <c>observations</c> parameter any more (D1-04a's own residue, closed here):
+    /// every observation this run resolves scope over is this run's own, independently re-derived
+    /// data, never a hand-supplied set the run never actually enumerated.
     /// </param>
-    /// <param name="observations">The resource observations to resolve. See the residue note above.</param>
     /// <param name="evidenceResolver">The evidence resolver the merged R5.1 scope reduction requires.</param>
     public async Task<LuxembourgQueryExecutionResult> RunAsync(
         IReadOnlyList<(LuxembourgPartitionRunRequest PartitionRequest, BoundMachineRequest SourceWitness)> families,
         string? relationAssertionsFamilyKey,
         string? resourceObservationFamilyKey,
-        IReadOnlyList<LuxembourgResourceObservation> observations,
         IScopeReductionEvidenceResolver evidenceResolver,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(families);
-        ArgumentNullException.ThrowIfNull(observations);
         ArgumentNullException.ThrowIfNull(evidenceResolver);
 
         var topology = LuxembourgSourceProfileTopology.Mint(_sourceProfile);
@@ -541,6 +528,8 @@ public sealed class LuxembourgQueryExecutionAdapter
         AbsenceFamilyEnumerationProof? relationProof = null;
         string? relationIncompleteReason = null;
         var sawRelationFamily = false;
+        LuxembourgEnumerationDeliveryReceipt? resourceReceipt = null;
+        LuxembourgPartitionRunRequest? resourcePartitionRequest = null;
 
         foreach (var (partitionRequest, sourceWitness) in families)
         {
@@ -548,6 +537,8 @@ public sealed class LuxembourgQueryExecutionAdapter
             var familyKey = partitionRequest.Partition.PartitionId;
             var isRelationFamily = string.Equals(
                 familyKey, relationAssertionsFamilyKey, StringComparison.Ordinal);
+            var isResourceObservationFamily = string.Equals(
+                familyKey, resourceObservationFamilyKey, StringComparison.Ordinal);
 
             var runResult = await _executor.RunPartitionAsync(
                     partitionRequest, sourceWitness, cancellationToken)
@@ -563,6 +554,12 @@ public sealed class LuxembourgQueryExecutionAdapter
                     {
                         sawRelationFamily = true;
                         relationProof = proof;
+                    }
+
+                    if (isResourceObservationFamily)
+                    {
+                        resourceReceipt = receipt;
+                        resourcePartitionRequest = partitionRequest;
                     }
                 }
                 else
@@ -589,14 +586,55 @@ public sealed class LuxembourgQueryExecutionAdapter
         var relationAcquisitions = BuildRelationFamilyAcquisitions(
             relationAssertionsFamilyKey, sawRelationFamily, relationProof, relationIncompleteReason);
 
-        // THE OBJECTION this refreeze closes: bind observations to what this run's own family
-        // enumeration actually delivered, rather than trusting a caller-supplied list wholesale.
-        // Refuses before Resolve/ReduceScope ever sees the observations, so an unattested set never
+        // D1-04b: derive this run's own observations from the designated family's own proven,
+        // independently re-verified rows, rather than trusting a caller-supplied list. Refuses
+        // before Resolve/ReduceScope ever sees anything, so an unproven or unverified family never
         // reaches the scope manifest at all.
-        var censusRefusal = CheckObservationCensus(resourceObservationFamilyKey, observations, outcomes);
-        if (censusRefusal is not null)
+        IReadOnlyList<LuxembourgResourceObservation> observations;
+        if (resourceObservationFamilyKey is null)
         {
-            return LuxembourgQueryExecutionResult.Refused(topology, outcomes, relationAcquisitions, censusRefusal);
+            // Symmetric with BuildRelationFamilyAcquisitions' own "did not try this run" case: no
+            // designation is the ordinary empty run, not a refusal.
+            observations = [];
+        }
+        else
+        {
+            var resourceOutcome = outcomes.FirstOrDefault(
+                candidate => string.Equals(
+                    candidate.FamilyKey, resourceObservationFamilyKey, StringComparison.Ordinal));
+            if (resourceOutcome is null ||
+                resourceOutcome.Kind != LuxembourgFamilyEnumerationOutcomeKind.Proven ||
+                resourceReceipt is null ||
+                resourcePartitionRequest is null)
+            {
+                return LuxembourgQueryExecutionResult.Refused(
+                    topology,
+                    outcomes,
+                    relationAcquisitions,
+                    new LuxembourgQueryExecutionRefusalDetail(
+                        LuxembourgQueryExecutionRefusal.ResourceObservationFamilyNotProven,
+                        null,
+                        $"the designated resource-observation family '{resourceObservationFamilyKey}' was " +
+                        "not proven by this run's enumeration."));
+            }
+
+            var (rows, rowsProfile, rowsRefusal) = await ReopenAndVerifyResourceRowsAsync(
+                    resourceOutcome.Proof!, resourceReceipt, resourcePartitionRequest, cancellationToken)
+                .ConfigureAwait(false);
+            if (rows is null)
+            {
+                return LuxembourgQueryExecutionResult.Refused(
+                    topology,
+                    outcomes,
+                    relationAcquisitions,
+                    new LuxembourgQueryExecutionRefusalDetail(
+                        LuxembourgQueryExecutionRefusal.ResourceObservationRowsNotVerified,
+                        null,
+                        $"the designated resource-observation family '{resourceObservationFamilyKey}' rows " +
+                        $"did not reverify: {rowsRefusal}."));
+            }
+
+            observations = MapRowsToResourceObservations(rows, rowsProfile);
         }
 
         var resolution = _sourceProfile.Resolve(observations);
@@ -672,53 +710,291 @@ public sealed class LuxembourgQueryExecutionAdapter
     }
 
     /// <summary>
-    /// The review objection's mismatch guard, and a mismatch test drives every branch here.
-    /// Returns null (no refusal) only when either nothing was supplied that needs attesting, or
-    /// what was supplied is attested by a family this run actually proved. See the
-    /// <paramref name="resourceObservationFamilyKey"/> remark on <see cref="RunAsync"/> for why this
-    /// is a count binding rather than full identity-set equality.
+    /// Reopens the designated family's pass-A pages from custody by the exact digests its own
+    /// receipt names, in page order, and hands them to item 17's door
+    /// (<see cref="VerifiedRepeatedEnumerationRows.TryOpen"/>) together with the family's proof and
+    /// the comparison that minted it. Returns the verified rows and the interpretation profile they
+    /// were read under (needed by the caller to map <c>Terms</c> by projection name), or a null row
+    /// list plus the specific <see cref="RepeatedEnumerationRowsOpenRefusal"/> reason.
     /// </summary>
-    private static LuxembourgQueryExecutionRefusalDetail? CheckObservationCensus(
-        string? resourceObservationFamilyKey,
-        IReadOnlyList<LuxembourgResourceObservation> observations,
-        IReadOnlyList<LuxembourgFamilyEnumerationOutcome> outcomes)
+    private async Task<(
+        IReadOnlyList<RepeatedEnumerationRow>? Rows,
+        RepeatedEnumerationInterpretationProfile Profile,
+        RepeatedEnumerationRowsOpenRefusal Refusal)> ReopenAndVerifyResourceRowsAsync(
+        AbsenceFamilyEnumerationProof proof,
+        LuxembourgEnumerationDeliveryReceipt receipt,
+        LuxembourgPartitionRunRequest partitionRequest,
+        CancellationToken cancellationToken)
     {
-        if (resourceObservationFamilyKey is null)
+        var delivery = receipt.Delivery;
+
+        // Deterministic from the same invariant plan, resource id and set id the executor itself
+        // derived its profile from (LuxembourgRepeatedEnumerationExecutor.RunPartitionOnSessionAsync):
+        // reconstructing it here mints no new artifact and cannot legitimately disagree with
+        // delivery.InterpretationProfileRef, which TryOpen itself checks the reconstruction against
+        // before trusting anything.
+        var profile = partitionRequest.InvariantPlan.CreateDeliveryProfile(
+            partitionRequest.InvariantPlanResourceId, partitionRequest.SetId);
+
+        var pages = new List<RepeatedEnumerationResolvedEvidence>(delivery.PagesA.Pages.Count);
+        foreach (var pageRef in delivery.PagesA.Pages.OrderBy(static page => page.Ordinal))
         {
-            // Symmetric with BuildRelationFamilyAcquisitions' own "did not try this run" case: no
-            // observations and no designation is the ordinary empty run, not a mismatch.
-            return observations.Count == 0
-                ? null
-                : new LuxembourgQueryExecutionRefusalDetail(
-                    LuxembourgQueryExecutionRefusal.ObservationsWithoutProvenCensus,
-                    null,
-                    $"{observations.Count} observation(s) were supplied but no resource-observation " +
-                    "family was designated to attest them.");
+            var renderer = new ResourceObservationPageRenderer(
+                pageRef.Evidence.QueryPlanRef, partitionRequest.RendererSource.Reference);
+            pages.Add(await ReopenPageEvidenceAsync(pageRef.Evidence, renderer, _custodyStore, cancellationToken)
+                .ConfigureAwait(false));
         }
 
-        var outcome = outcomes.FirstOrDefault(
-            candidate => string.Equals(
-                candidate.FamilyKey, resourceObservationFamilyKey, StringComparison.Ordinal));
-        if (outcome is null || outcome.Kind != LuxembourgFamilyEnumerationOutcomeKind.Proven)
+        var rows = VerifiedRepeatedEnumerationRows.TryOpen(
+            proof, delivery, profile, delivery.InterpretationProfileRef, delivery.CountA.HttpEvidenceRef,
+            pages, out var refusal);
+        return (rows, profile, refusal);
+    }
+
+    /// <summary>
+    /// Reopens one page's full evidence tuple from custody by the digests
+    /// <paramref name="refs"/> names, mirroring the reopen
+    /// <c>Lex.V3.Contracts.Source.Luxembourg.LuxembourgDeliveryEvidenceSet.ResolveOneAsync</c> already
+    /// performs for the executor's own in-process delivery (precision 1 of the D1-04b scope ruling:
+    /// "trace the actual custody read path used elsewhere"). That method is private to
+    /// <c>Lex.V3.Contracts</c> and this assembly holds no <c>InternalsVisibleTo</c> grant into it
+    /// (Decision 80), so this reproduces the identical sequence through this assembly's own public
+    /// doors instead of a second, divergent copy: every field is read back by digest and
+    /// independently re-verified against its own reference before this method trusts it.
+    /// </summary>
+    private static async Task<RepeatedEnumerationResolvedEvidence> ReopenPageEvidenceAsync(
+        RepeatedEnumerationEvidenceRefs refs,
+        IMachineQueryRenderer renderer,
+        ICustodyStore custodyStore,
+        CancellationToken cancellationToken)
+    {
+        var planBytes = await CustodyRestore.ReadByDigestCheckedAsync(
+                custodyStore, refs.QueryPlanRef.Sha256, cancellationToken)
+            .ConfigureAwait(false);
+        var queryPlan = DecodeCanonical<MachineQueryPlan>(
+            planBytes.Span, MachineQueryPlanIdentity.CanonicalizationIdentity, "the machine query plan");
+        try
         {
-            return new LuxembourgQueryExecutionRefusalDetail(
-                LuxembourgQueryExecutionRefusal.ObservationsWithoutProvenCensus,
-                null,
-                $"the designated resource-observation family '{resourceObservationFamilyKey}' was " +
-                "not proven by this run's enumeration.");
+            MachineQueryPlanIdentity.Validate(refs.QueryPlanRef, queryPlan);
+        }
+        catch (ArgumentException exception)
+        {
+            throw new CustodyIntegrityException(
+                "The retained machine query plan does not reproduce its own canonical bytes.", exception);
         }
 
-        if (observations.Count != outcome.Proof!.DeliveredRowCount)
+        var inputBytes = await CustodyRestore.ReadByDigestCheckedAsync(
+                custodyStore, refs.QueryInputRef.Sha256, cancellationToken)
+            .ConfigureAwait(false);
+        MachineQueryInputArtifact queryInput;
+        try
         {
-            return new LuxembourgQueryExecutionRefusalDetail(
-                LuxembourgQueryExecutionRefusal.ObservationCountDoesNotMatchDelivery,
-                null,
-                $"{observations.Count} observation(s) were supplied but the proven " +
-                $"resource-observation family '{resourceObservationFamilyKey}' delivered " +
-                $"{outcome.Proof.DeliveredRowCount}.");
+            queryInput = MachineQueryInputArtifact.ParseAndVerify(refs.QueryInputRef, inputBytes.Span);
+        }
+        catch (ArgumentException exception)
+        {
+            throw new CustodyIntegrityException(
+                "The retained machine query input does not bind its reference.", exception);
         }
 
-        return null;
+        var receiptBytes = await CustodyRestore.ReadByDigestCheckedAsync(
+                custodyStore, refs.RenderReceiptRef.Sha256, cancellationToken)
+            .ConfigureAwait(false);
+        var renderReceipt = DecodeCanonical<MachineQueryRenderReceipt>(
+            receiptBytes.Span, MachineQueryRenderReceiptIdentity.CanonicalizationIdentity,
+            "the machine query render receipt");
+        try
+        {
+            MachineQueryRenderReceiptIdentity.Validate(refs.RenderReceiptRef, renderReceipt);
+        }
+        catch (ArgumentException exception)
+        {
+            throw new CustodyIntegrityException(
+                "The retained render receipt does not reproduce its own canonical bytes.", exception);
+        }
+
+        var logicalRequestBytes = await CustodyRestore.ReadByDigestCheckedAsync(
+                custodyStore, refs.LogicalRequestRef.Sha256, cancellationToken)
+            .ConfigureAwait(false);
+        HttpLogicalRequest logicalRequest;
+        try
+        {
+            logicalRequest = HttpLogicalRequest.ParseAndVerify(logicalRequestBytes.Span);
+        }
+        catch (ArgumentException exception)
+        {
+            throw new CustodyIntegrityException(
+                "The retained logical request does not parse as its exact canonical form.", exception);
+        }
+
+        var httpEvidenceBytes = await CustodyRestore.ReadByDigestCheckedAsync(
+                custodyStore, refs.HttpEvidenceRef.Sha256, cancellationToken)
+            .ConfigureAwait(false);
+        RoutedHttpEvidence httpEvidence;
+        try
+        {
+            httpEvidence = RoutedHttpEvidence.ParseAndVerify(httpEvidenceBytes.Span);
+        }
+        catch (ArgumentException exception)
+        {
+            throw new CustodyIntegrityException(
+                "The retained HTTP evidence does not parse as its exact canonical form.", exception);
+        }
+
+        if (httpEvidence.Hops.Count != 1)
+        {
+            throw new CustodyIntegrityException("The retained HTTP evidence no longer names exactly one hop.");
+        }
+
+        var terminal = httpEvidence.Hops[0];
+        var writeReceiptBytes = await CustodyRestore.ReadByDigestCheckedAsync(
+                custodyStore, terminal.DurableWriteReceiptSha256, cancellationToken)
+            .ConfigureAwait(false);
+        var writeReceipt = ContractJson.Deserialize<DurableBlobWriteReceipt>(
+                new UTF8Encoding(false, true).GetString(writeReceiptBytes.Span))
+            ?? throw new CustodyIntegrityException("The retained write receipt decoded to nothing.");
+
+        var payload = await CustodyRestore.ReadByDigestCheckedAsync(
+                custodyStore, terminal.Sha256, cancellationToken)
+            .ConfigureAwait(false);
+
+        return new RepeatedEnumerationResolvedEvidence(
+            queryPlan, queryInput, renderReceipt, renderer, logicalRequest, httpEvidence, writeReceipt, payload);
+    }
+
+    /// <summary>
+    /// Decodes bytes shaped like <c>MachineQueryPlanIdentity.GetCanonicalBytes</c> and
+    /// <c>MachineQueryRenderReceiptIdentity.GetCanonicalBytes</c> produce: an ASCII canonicalization
+    /// identity line, then the canonical JSON, then a trailing newline. The framing constants
+    /// (<paramref name="canonicalizationIdentity"/>) are public; only the internal
+    /// <c>ContractCanonicalizer</c> that originally wrote this shape is not, so this decodes the
+    /// public envelope directly rather than reaching for that internal type.
+    /// </summary>
+    private static T DecodeCanonical<T>(ReadOnlySpan<byte> bytes, string canonicalizationIdentity, string what)
+    {
+        string decoded;
+        try
+        {
+            decoded = new UTF8Encoding(false, true).GetString(bytes);
+        }
+        catch (DecoderFallbackException exception)
+        {
+            throw new CustodyIntegrityException($"The retained bytes for {what} are not valid UTF-8.", exception);
+        }
+
+        var prefix = canonicalizationIdentity + "\n";
+        if (!decoded.StartsWith(prefix, StringComparison.Ordinal) ||
+            !decoded.EndsWith('\n') ||
+            decoded.Length < prefix.Length + 1)
+        {
+            throw new CustodyIntegrityException(
+                $"The retained bytes for {what} do not carry their canonicalization identity.");
+        }
+
+        var json = decoded[prefix.Length..^1];
+        try
+        {
+            return ContractJson.Deserialize<T>(json);
+        }
+        catch (JsonException exception)
+        {
+            throw new CustodyIntegrityException($"The retained bytes are not {what}.", exception);
+        }
+    }
+
+    /// <summary>
+    /// The projection variable that names the resource's own publisher IRI in the "subjects"
+    /// template's delivery profile (<c>LuxembourgQueryPlan.CreateDeliveryProfile</c>'s
+    /// <c>DeliveryProjectionVariables("subjects")</c>: an empty template-specific prefix followed by
+    /// the generic <c>key_1..key_6</c> cursor columns, with the subject IRI bound to <c>key_1</c> and
+    /// <c>key_2..key_6</c> always the empty string). Looked up by name against
+    /// <see cref="RepeatedEnumerationInterpretationProfile.ProjectionVariables"/>, never assumed to
+    /// be positional index 0, so a family whose template prefixes extra columns before it still maps
+    /// correctly.
+    /// </summary>
+    private const string ResourceIdentityProjectionVariable = "key_1";
+
+    /// <summary>
+    /// D1-04b decodes the LU resource-discovery family ("subjects") alone, whose own SPARQL template
+    /// (<c>LuxembourgQueryPlan.BuildTemplates</c>, template "subjects") projects only a distinct
+    /// subject IRI per row -- no predicate, object, or type information at all. So every observation
+    /// this method mints carries an empty <see cref="LuxembourgResourceObservation.Assertions"/> and
+    /// <see cref="LuxembourgResourceObservation.Relations"/> list: that is the honest, complete
+    /// content of what this one family's rows can attest, not a shortcut. A resource observation
+    /// carrying real assertions (rdf:type, typeDocument, ...) needs the "assertion-rows" family
+    /// ("A") joined in by subject, which is a materially different, larger mapping this precision
+    /// does not ask for and is not attempted here.
+    /// </summary>
+    private IReadOnlyList<LuxembourgResourceObservation> MapRowsToResourceObservations(
+        IReadOnlyList<RepeatedEnumerationRow> rows,
+        RepeatedEnumerationInterpretationProfile profile)
+    {
+        var keyIndex = profile.ProjectionVariables.ToList().IndexOf(ResourceIdentityProjectionVariable);
+        if (keyIndex < 0)
+        {
+            throw new InvalidOperationException(
+                "The resource-observation family's interpretation profile has no " +
+                $"'{ResourceIdentityProjectionVariable}' projection variable.");
+        }
+
+        // ObservationRef is not this method's to vary per row or per page: VerifiedLuxembourgSourceProfile's own
+        // ValidateObservation (LuxembourgScopeResolver.cs) requires every observation's ObservationRef, and both
+        // rights-channel wrappers' RunIdentity, to equal this exact profile-wide value; see this method's own
+        // caller-side report for the fork this leaves open against a page-scoped identity.
+        var observationRef = _sourceProfile.Snapshot.ObservationRef;
+
+        var observations = new List<LuxembourgResourceObservation>(rows.Count);
+        foreach (var row in rows)
+        {
+            var publisherUri = row.Terms[keyIndex].Value
+                ?? throw new InvalidOperationException(
+                    "The resource-observation family's resource-identity term is unbound.");
+            var objectRef = new SourceObjectRef(
+                SourceCoreSchemaIds.SourceObjectRef,
+                SourceAuthority.Jolux,
+                new SourceRegistryMemberRef(_sourceProfile.ScopeBinding.SourceProfileRef, "legal_resource"),
+                publisherUri,
+                publisherUri,
+                Sha256Hex(publisherUri),
+                _sourceProfile.ScopeBinding.SourceProfileRef,
+                null);
+            observations.Add(new LuxembourgResourceObservation(
+                objectRef,
+                observationRef,
+                [],
+                [],
+                new LuxembourgSparqlRightsChannelObservations(observationRef, observationRef, []),
+                new LuxembourgInFileRightsChannelObservations(observationRef, observationRef, [])));
+        }
+
+        return observations;
+    }
+
+    private static string Sha256Hex(string value) =>
+        Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+
+    /// <summary>
+    /// A renderer identity carried on <see cref="RepeatedEnumerationResolvedEvidence"/> purely to
+    /// satisfy its constructor. <see cref="EnumerationDeliveryComparison.VerifyPages"/> -- the only
+    /// check <see cref="VerifiedRepeatedEnumerationRows.TryOpen"/> runs over a reopened page here --
+    /// reads only <c>QueryPlan</c>, <c>QueryInput</c> and <c>RetainedPayloadBytes</c> off it, never
+    /// <c>Renderer</c>. The genuine renderer for this family, <c>LuxembourgSparqlRenderer</c>, is
+    /// <c>internal</c> to <c>Lex.V3.Contracts</c> and cannot be constructed from this assembly
+    /// (Decision 80: no <c>InternalsVisibleTo</c> beyond the two test assemblies), so a real one
+    /// cannot be built here even if this door needed one. <see cref="Render"/> throws rather than
+    /// silently returning a wrong result if that ever changes.
+    /// </summary>
+    private sealed class ResourceObservationPageRenderer(
+        SourceArtifactRef rendererProfileRef, SourceArtifactRef rendererSourceRef) : IMachineQueryRenderer
+    {
+        public SourceArtifactRef RendererProfileRef { get; } = rendererProfileRef;
+
+        public SourceArtifactRef RendererSourceRef { get; } = rendererSourceRef;
+
+        public MachineQueryRenderOutput Render(MachineQueryPlan plan, MachineQueryInputArtifact orderedParameterSet) =>
+            throw new NotSupportedException(
+                "This renderer exists only to satisfy RepeatedEnumerationResolvedEvidence's constructor for " +
+                "VerifiedRepeatedEnumerationRows.TryOpen, which never calls Render.");
     }
 
     /// <summary>
@@ -774,8 +1050,11 @@ public sealed class LuxembourgQueryExecutionAdapter
     {
         // Fold-in six of the D1-04 refreeze: read the predicate directly off the shared public
         // constant instead of searching RequiredIriVocabulary for the one AssertionPredicate value
-        // ending in "typeDocument". VerifiedLuxembourgSourceProfile.TypeDocumentPredicateIri is the
-        // one place both this assembly and LuxembourgScopeResolver (Lex.V3.Contracts) read it from.
+        // ending in "typeDocument". VerifiedLuxembourgSourceProfile.TypeDocumentPredicateIri is where
+        // this assembly reads it from; LuxembourgScopeResolver (Lex.V3.Contracts) does not read this
+        // constant at all -- it keeps its own private "TypeDocument" string duplicate
+        // (LuxembourgScopeResolver.cs) rather than sharing this one. That duplicate is a separate,
+        // already-named gap (item 18, lane-w), not fixed here.
         var typeDocumentPredicateIri = VerifiedLuxembourgSourceProfile.TypeDocumentPredicateIri;
 
         var markers = new List<LuxembourgCoarseDispositionMarker>();
