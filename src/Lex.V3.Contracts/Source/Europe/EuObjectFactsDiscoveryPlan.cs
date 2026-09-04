@@ -6,8 +6,9 @@ using Lex.V3.Contracts.Source.Core;
 namespace Lex.V3.Contracts.Source.Europe;
 
 /// <summary>
-/// The three bounded row-set query-plan families D1-05c-1 adds beyond D1-05a's own closure
-/// (<see cref="EuConsolidationDiscoveryPlan"/>'s <c>Family</c> set, reused unchanged for <c>O</c>).
+/// The bounded row-set query-plan families D1-05c-1 adds beyond D1-05a's own closure
+/// (<see cref="EuConsolidationDiscoveryPlan"/>'s <c>Family</c> set, reused unchanged for <c>O</c>),
+/// plus the manifestation-listing family D1-05d adds to the same machinery.
 /// </summary>
 /// <remarks>
 /// <see cref="ObjectFacts"/> ("P" in the design record) asks the nine object-authority
@@ -19,12 +20,19 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// external enumeration - X proves its own closure. <see cref="RootWatermark"/> ("W") asks
 /// <see cref="EuWatermarkWitnessPlan.WatermarkPredicateIri"/> over the 82 Appendix A roots only,
 /// feeding <see cref="EuFirstCutWatermarkBootstrap.TryComputeStartPosition"/>.
+/// <see cref="ManifestationFacts"/> ("M", D1-05d) asks the one Manifestation-authority predicate
+/// <see cref="EuObjectFactsDiscoveryPlan.ManifestationTypePredicateIri"/> over the Manifestations
+/// reached from every object in <c>O</c> through <c>expression_belongs_to_work</c> and then
+/// <c>manifestation_manifests_expression</c> - the office's own per-work listing of the formats it
+/// offers. See <see cref="EuManifestationListingDecode"/> for exactly what that listing does and
+/// does not entitle a reader to conclude.
 /// </remarks>
 public enum EuObjectFactsQuerySet
 {
     ObjectFacts = 1,
     ExpressionFacts = 2,
     RootWatermark = 3,
+    ManifestationFacts = 4,
 }
 
 /// <summary>Same two-pass shape as <see cref="EuConsolidationDiscoveryPlan"/>'s own pass enum.</summary>
@@ -95,8 +103,9 @@ public sealed record EuObjectFactsBoundQuery(
 /// <c>MachineQueryValidation.MaximumParameterCount</c> (64, Source/Core, unchanged by this slice) caps
 /// the total ordered parameters one request may carry. Nine of those are always spent on
 /// <c>pass_id</c>, <c>has_cursor</c> and up to seven cursor-continuation parameters -
-/// <see cref="ExpressionFacts"/>'s own seven-part cursor is the widest of the three, wider than
-/// <see cref="ObjectFacts"/>'s six and <see cref="RootWatermark"/>'s five - leaving 55; 50 keeps a
+/// <see cref="ExpressionFacts"/>'s own seven-part cursor is the widest of the four, wider than
+/// <see cref="ObjectFacts"/>'s six and <see cref="RootWatermark"/>'s and
+/// <see cref="ManifestationFacts"/>'s five - leaving 55; 50 keeps a
 /// five-parameter margin rather than sitting on the ceiling, and matches
 /// <c>D1-05C-DESIGN-PROPOSAL-A.md</c>'s own batch constant. A batch smaller than
 /// <see cref="BatchCapacity"/> is padded by repeating its own lexicographically-greatest canonical
@@ -111,7 +120,9 @@ public sealed record EuObjectFactsBoundQuery(
 /// <para>
 /// <see cref="RootWatermark"/>'s row shape carries no <c>predicate</c> column: every row already
 /// describes the one fixed predicate <see cref="EuWatermarkWitnessPlan.WatermarkPredicateIri"/>, so a
-/// constant key column would carry no distinguishing information. Its cursor is therefore five parts,
+/// constant key column would carry no distinguishing information.
+/// <see cref="ManifestationFacts"/> carries none for the same reason (its one predicate is
+/// <see cref="ManifestationTypePredicateIri"/>). Their cursors are therefore five parts,
 /// not six - the same "cursor arity matches the row's own natural key, not a fixed count" precedent
 /// <see cref="EuConsolidationDiscoveryPlan"/>'s own <c>Family</c> set already sets with its one-part
 /// <c>state_key</c> cursor, generalized here to the five parts <see cref="RootWatermark"/> actually
@@ -135,10 +146,24 @@ public sealed class EuObjectFactsDiscoveryPlan
     internal const string Cdm = EuConsolidationDiscoveryPlan.Cdm;
     internal const string WatermarkPredicateIri = EuWatermarkWitnessPlan.WatermarkPredicateIri;
 
+    /// <summary>
+    /// The Manifestation-to-Expression edge family M walks. Declared here as family M's own constant
+    /// rather than as a fourteenth <see cref="EuCdmPredicate"/> member, exactly as
+    /// <see cref="WatermarkPredicateIri"/> already is for family W: this type's own constructor
+    /// asserts that families P and X partition the closed thirteen-member CDM predicate vocabulary
+    /// exactly once each, so a fourteenth member would break that partition to describe a predicate
+    /// neither P nor X asks.
+    /// </summary>
+    internal const string ManifestsExpressionPredicateIri = Cdm + "manifestation_manifests_expression";
+
+    /// <summary>The one predicate family M reads. See <see cref="ManifestsExpressionPredicateIri"/>.</summary>
+    internal const string ManifestationTypePredicateIri = Cdm + "manifestation_type";
+
     private const string ResourceId = "urn:uuid:6f3f0a1e-6b8b-4e6a-8f36-6a7f2c9d5b41";
     private const string ObjectFactsMemberPrefix = "eu-object-facts";
     private const string ExpressionFactsMemberPrefix = "eu-expression-facts";
     private const string RootWatermarkMemberPrefix = "eu-root-watermark";
+    private const string ManifestationFactsMemberPrefix = "eu-manifestation-facts";
     private const string ResponseMediaType = "application/sparql-results+json";
     private const string ThresholdDetectorIdentity = "enumeration-row-threshold/1";
 
@@ -199,6 +224,20 @@ public sealed class EuObjectFactsDiscoveryPlan
             "object", "value", "value_kind", "datatype_iri", "language_tag",
             "key_1", "key_2", "key_3", "key_4", "key_5",
         };
+
+        // Family M's row shape is family W's shape with ?parent in place of ?object: like W it asks
+        // exactly one predicate, so a constant predicate column would carry no distinguishing
+        // information, and like X its VALUES-bound term is the parent Work rather than the row's own
+        // discovered subject. The Manifestation IRI is deliberately NOT projected: M's fact is "this
+        // Work's listing offers this manifestation type", and grouping it per Manifestation instead
+        // multiplies the row set by every language expression of every act (measured live on
+        // 2026-09-04 for CELEX 32008R0593: 5 grouped rows against a 32 KB per-manifestation result)
+        // without adding one fact the format ladder reads.
+        var manifestationFactsProjection = new[]
+        {
+            "parent", "value", "value_kind", "datatype_iri", "language_tag",
+            "key_1", "key_2", "key_3", "key_4", "key_5",
+        };
         var sixKeyCursor = new[] { "key_1", "key_2", "key_3", "key_4", "key_5", "key_6" };
 
         // Family X's own SELECT groups by ?parent ?object ?predicate ?value ?value_kind
@@ -242,18 +281,24 @@ public sealed class EuObjectFactsDiscoveryPlan
             "expression_facts_cursor=" + string.Join(',', sevenKeyCursor),
             "root_watermark_projection=" + string.Join(',', rootWatermarkProjection),
             "root_watermark_cursor=" + string.Join(',', fiveKeyCursor),
+            "manifestation_facts_projection=" + string.Join(',', manifestationFactsProjection),
+            "manifestation_facts_cursor=" + string.Join(',', fiveKeyCursor),
             "object_facts_count_member=" + ObjectFactsMemberPrefix + ".count",
             "object_facts_page_member=" + ObjectFactsMemberPrefix + ".page",
             "expression_facts_count_member=" + ExpressionFactsMemberPrefix + ".count",
             "expression_facts_page_member=" + ExpressionFactsMemberPrefix + ".page",
             "root_watermark_count_member=" + RootWatermarkMemberPrefix + ".count",
             "root_watermark_page_member=" + RootWatermarkMemberPrefix + ".page",
+            "manifestation_facts_count_member=" + ManifestationFactsMemberPrefix + ".count",
+            "manifestation_facts_page_member=" + ManifestationFactsMemberPrefix + ".page",
             templates.ObjectFactsCount,
             templates.ObjectFactsPage,
             templates.ExpressionFactsCount,
             templates.ExpressionFactsPage,
             templates.RootWatermarkCount,
             templates.RootWatermarkPage,
+            templates.ManifestationFactsCount,
+            templates.ManifestationFactsPage,
         }));
         ArtifactRef = new SourceArtifactRef(ResourceId, Sha256(identityBytes));
         _canonicalIdentityBytes = identityBytes;
@@ -280,6 +325,13 @@ public sealed class EuObjectFactsDiscoveryPlan
                 templates.RootWatermarkCount,
                 templates.RootWatermarkPage,
                 rootWatermarkProjection,
+                fiveKeyCursor),
+            [EuObjectFactsQuerySet.ManifestationFacts] = Definition(
+                EuObjectFactsQuerySet.ManifestationFacts,
+                ManifestationFactsMemberPrefix,
+                templates.ManifestationFactsCount,
+                templates.ManifestationFactsPage,
+                manifestationFactsProjection,
                 fiveKeyCursor),
         };
     }
@@ -562,7 +614,8 @@ public sealed class EuObjectFactsDiscoveryPlan
     private static (
         string ObjectFactsCount, string ObjectFactsPage,
         string ExpressionFactsCount, string ExpressionFactsPage,
-        string RootWatermarkCount, string RootWatermarkPage) BuildTemplates()
+        string RootWatermarkCount, string RootWatermarkPage,
+        string ManifestationFactsCount, string ManifestationFactsPage) BuildTemplates()
     {
         var slots = BatchParameterNames();
         var valuesBlock = string.Join('\n', slots.Select(static name => "    {" + name + ":iri}"));
@@ -731,10 +784,70 @@ public sealed class EuObjectFactsDiscoveryPlan
             LIMIT {page_limit:uint}
             """;
 
+        // Family M. The two-hop path and the FILTER NOT EXISTS absence branch below are the exact
+        // query shape probed live against the publisher endpoint on 2026-09-04 under User-Agent
+        // Lex/0.1: 200 with five grouped rows (fmx4, pdf, pdfa1a, print, xhtml) for CELEX
+        // 32008R0593, and 200 with exactly one value_kind="unbound" row for a well-formed Cellar
+        // IRI the store holds no manifestation for.
+        var manifestationFactsRows = $$"""
+            SELECT ?parent ?value ?value_kind ?datatype_iri ?language_tag WHERE {
+              VALUES ?lex_pass_id { {pass_id:uint} }
+              VALUES ?parent {
+            {{valuesBlock}}
+              }
+              {
+                ?listed_expression <{{CdmIri(EuCdmPredicate.ExpressionBelongsToWork)}}> ?parent .
+                ?listed_manifestation <{{ManifestsExpressionPredicateIri}}> ?listed_expression .
+                ?listed_manifestation <{{ManifestationTypePredicateIri}}> ?value .
+                BIND(IF(isIRI(?value), "iri", IF(isLiteral(?value), "literal", "unsupported_blank_node")) AS ?value_kind)
+                BIND(IF(isLiteral(?value), STR(DATATYPE(?value)), "") AS ?datatype_iri)
+                BIND(IF(isLiteral(?value), LANG(?value), "") AS ?language_tag)
+              }
+              UNION
+              {
+                FILTER NOT EXISTS {
+                  ?absent_expression <{{CdmIri(EuCdmPredicate.ExpressionBelongsToWork)}}> ?parent .
+                  ?absent_manifestation <{{ManifestsExpressionPredicateIri}}> ?absent_expression .
+                  ?absent_manifestation <{{ManifestationTypePredicateIri}}> ?absent_value .
+                }
+                BIND("unbound" AS ?value_kind)
+                BIND("" AS ?datatype_iri)
+                BIND("" AS ?language_tag)
+              }
+            }
+            GROUP BY ?parent ?value ?value_kind ?datatype_iri ?language_tag
+            """;
+        var manifestationFactsCount = Wrap(manifestationFactsRows);
+        var manifestationFactsPage = $$"""
+            SELECT ?parent ?value ?value_kind ?datatype_iri ?language_tag ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 WHERE {
+              {
+            {{Indent(Indent(manifestationFactsRows))}}
+              }
+              BIND(STR(?parent) AS ?key_1)
+              BIND(?value_kind AS ?key_2)
+              BIND(IF(BOUND(?value), STR(?value), "") AS ?key_3)
+              BIND(?datatype_iri AS ?key_4)
+              BIND(?language_tag AS ?key_5)
+              VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3 ?last_key_4 ?last_key_5) {
+                ({has_cursor:uint} {last_key_1:sparql_string} {last_key_2:sparql_string} {last_key_3:sparql_string} {last_key_4:sparql_string} {last_key_5:sparql_string})
+              }
+              FILTER(
+                ?has_cursor = 0 || ?key_1 > ?last_key_1 ||
+                (?key_1 = ?last_key_1 && ?key_2 > ?last_key_2) ||
+                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 > ?last_key_3) ||
+                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 > ?last_key_4) ||
+                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 > ?last_key_5)
+              )
+            }
+            ORDER BY ?key_1 ?key_2 ?key_3 ?key_4 ?key_5
+            LIMIT {page_limit:uint}
+            """;
+
         return (
             Normalize(objectFactsCount), Normalize(objectFactsPage),
             Normalize(expressionFactsCount), Normalize(expressionFactsPage),
-            Normalize(rootWatermarkCount), Normalize(rootWatermarkPage));
+            Normalize(rootWatermarkCount), Normalize(rootWatermarkPage),
+            Normalize(manifestationFactsCount), Normalize(manifestationFactsPage));
     }
 
     private static string Wrap(string rows) => $$"""

@@ -39,8 +39,12 @@ public sealed class EuDocumentFetchAddressTests
             [EuManifestationMediaType.XmlNoticeBranch] = "application/xml;notice=branch",
             [EuManifestationMediaType.XmlNoticeObject] = "application/xml;notice=object",
             [EuManifestationMediaType.XmlNoticeIdentifier] = "application/xml;notice=identifier",
+            // D1-05d's ninth member. The bare single token, never the multi-value preference list
+            // v2 sent: observed live on 2026-09-04 serving 200 on 32003L0088, 31995L0046 and
+            // 32004R0139.
+            [EuManifestationMediaType.TextHtml] = "text/html",
         };
-        Assert.AreEqual(8, Enum.GetValues<EuManifestationMediaType>().Length);
+        Assert.AreEqual(9, Enum.GetValues<EuManifestationMediaType>().Length);
         foreach (var (mediaType, expectedAccept) in mediaTypes)
         {
             var minted = EuDocumentFetchAddress.TryCreate(
