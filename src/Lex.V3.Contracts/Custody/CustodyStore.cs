@@ -14,12 +14,52 @@ namespace Lex.V3.Contracts.Custody;
 public interface ICustodyStore
 {
     /// <summary>
-    /// Holds the exact bytes and returns evidence. Creating an address that already holds the
-    /// identical bytes is idempotent; creating one that holds different bytes is impossible for a
-    /// correct store and must raise <see cref="CustodyIntegrityException"/> if observed.
-    /// Cancellation may be observed after a remote create committed. No receipt is issued in that
-    /// call; a retry must read back the bytes and protection before reporting idempotent success.
+    /// Holds the exact bytes and returns evidence. A RECEIPT EXISTS ONLY AFTER THE STORE HAS READ
+    /// BACK THE BYTES AND OBSERVED THEIR PROTECTION, and bytes that do not match raise
+    /// <see cref="CustodyIntegrityException"/>. That binds EVERY store on EVERY write.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Decision 71 ruling two, restated here as the obligation it always was. RULING
+    /// lex-event-20260904T222639346Z-59bc15e36f8e4a29abd70c30ed02e4d5. This paragraph used to say the
+    /// mismatch "must raise CustodyIntegrityException IF OBSERVED", and stated the readback only for
+    /// the retry path, verbatim "a retry must read back the bytes and protection before reporting
+    /// idempotent success". So the contract demanded the exception when a mismatch was seen while
+    /// obliging nobody to look. Both production stores did look, which made the guarantee a
+    /// convention standing in for a contract, and a caller could not tell the two apart from here.
+    /// </para>
+    /// <para>
+    /// THE SECOND OBLIGATION, and it is a genuinely different one. After a receipt exists,
+    /// <see cref="ReadByDigestAsync"/> finds that object BY ITS CONTENT ADDRESS ALONE. The readback
+    /// above proves the store holds these bytes at the path the write just used; this proves every
+    /// later consumer can resolve them, since every consumer reads by digest and none of them knows
+    /// the write's own path or custody class. A store can satisfy the first and fail the second, so
+    /// stating only the first would leave the property downstream actually depends on unwritten.
+    /// RULING lex-event-20260904T223559409Z-940e6f5dd5f540598920f6bf7849da47.
+    /// </para>
+    /// <para>
+    /// Creating an address that already holds the identical bytes is idempotent; creating one that
+    /// holds different bytes is impossible for a correct store. Cancellation may be observed after a
+    /// remote create committed, and no receipt is issued in that call; a retry reads back before
+    /// reporting idempotent success, which is the same obligation as every other write rather than a
+    /// special case of it.
+    /// </para>
+    /// <para>
+    /// WHAT NEITHER OBLIGATION ESTABLISHES. Both are WRITE TIME facts. Under
+    /// <see cref="CustodyMembership.RetainedUnenforced"/> nothing prevents the bytes changing
+    /// afterwards, and nothing here proves or claims they stay put. That is precisely why the
+    /// retention floor gates the release rather than the hold: a caller may rely on these
+    /// obligations to know the store held and can resolve these bytes, and may not read either as
+    /// durability.
+    /// </para>
+    /// <para>
+    /// Residue R2, queued and deliberately not built here: a conformance test over every
+    /// <see cref="ICustodyStore"/> implementation. Thirteen exist, two in <c>src</c> and eleven
+    /// private test doubles, several written specifically to VIOLATE this contract, so a literal
+    /// sweep would fail by design and an exclusion list would be a sweep narrowed by its own
+    /// expected answer.
+    /// </para>
+    /// </remarks>
     Task<DurableBlobWriteReceipt> CreateAsync(
         ReadOnlyMemory<byte> bytes,
         CustodyClass custodyClass,
