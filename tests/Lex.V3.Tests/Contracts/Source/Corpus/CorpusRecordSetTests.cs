@@ -33,8 +33,15 @@ public sealed class CorpusRecordSetTests
     /// calling <see cref="CorpusRecordSetCanonicalWriter"/> and asserting its own answer equals
     /// itself.
     /// </summary>
+    /// <remarks>
+    /// Re-pinned by fold-in (b) of the D1-06b corpus/6 record set verdict: <c>ObjectRef</c> below
+    /// used to return the identical object regardless of ordinal, so <see cref="Fixture"/>'s own two
+    /// records accidentally named the same object. Parametrizing it so each ordinal gets its own
+    /// object changed <see cref="Fixture"/>'s canonical bytes, so this digest was recomputed by the
+    /// same independent print-then-transcribe method described above, from the new bytes.
+    /// </remarks>
     private const string FixtureDigest =
-        "45d930b87f0dd8d02d5a950d63099bc4970c5308f777490e74e791f17b9b56bc";
+        "482a46a9739368ebaecf1ec5248a01a4f4dc93162f6d682e4d2a54d5e2498ff4";
 
     [TestMethod]
     public void ConstructorRequiresItsOwnSchema()
@@ -70,7 +77,7 @@ public sealed class CorpusRecordSetTests
             "urn:uuid:eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", new string('f', 64));
         var record = new CorpusRecord(
             CorpusRecordSchemaIds.Record,
-            ObjectRef(),
+            ObjectRef(0),
             0,
             ScopeDisposition.AcceptedSelected,
             ScopeDisposition.TypedQuarantine,
@@ -92,7 +99,7 @@ public sealed class CorpusRecordSetTests
             "urn:uuid:dddddddd-dddd-4ddd-8ddd-dddddddddddd", new string('9', 64));
         var record = new CorpusRecord(
             CorpusRecordSchemaIds.Record,
-            ObjectRef(),
+            ObjectRef(0),
             0,
             ScopeDisposition.AcceptedSelected,
             ScopeDisposition.TypedQuarantine,
@@ -120,6 +127,46 @@ public sealed class CorpusRecordSetTests
         var duplicate = Assert.ThrowsExactly<ArgumentException>(() => new CorpusRecordSet(
             CorpusRecordSetSchemaIds.Set, ManifestRef(), RunIdentity(), new[] { first, first }));
         StringAssert.Contains(duplicate.Message, "strictly ordered by object ordinal");
+    }
+
+    /// <summary>
+    /// Fold-in (b) of the D1-06b corpus/6 record set verdict: the ordinal check above refuses two
+    /// rows at the SAME ordinal, but says nothing about one object appearing twice under two
+    /// DIFFERENT ordinals. This builds two genuinely distinct <see cref="CorpusRecord"/> instances
+    /// (ordinal 0 and ordinal 1, so the ordinal-uniqueness check does not fire first) that both name
+    /// the same <see cref="CorpusRecord.ObjectRef"/>, and requires the constructor's own refusal
+    /// message to name the actual cause (the duplicate object), not the ordinal message above.
+    /// </summary>
+    [TestMethod]
+    public void ConstructorRejectsTwoRecordsNamingTheSameObjectRef()
+    {
+        var sharedObjectRef = ObjectRef(0);
+        var first = new CorpusRecord(
+            CorpusRecordSchemaIds.Record,
+            sharedObjectRef,
+            0,
+            ScopeDisposition.AcceptedSelected,
+            ScopeDisposition.TypedQuarantine,
+            ScopeDisposition.AcceptedSelected,
+            ScopeDisposition.AcceptedSelected,
+            CorpusBodyRecord.NotHeld(ScopeDisposition.TypedQuarantine),
+            ManifestRef(),
+            RunIdentity());
+        var second = new CorpusRecord(
+            CorpusRecordSchemaIds.Record,
+            sharedObjectRef,
+            1,
+            ScopeDisposition.AcceptedSelected,
+            ScopeDisposition.TypedQuarantine,
+            ScopeDisposition.AcceptedSelected,
+            ScopeDisposition.AcceptedSelected,
+            CorpusBodyRecord.NotHeld(ScopeDisposition.TypedQuarantine),
+            ManifestRef(),
+            RunIdentity());
+
+        var exception = Assert.ThrowsExactly<ArgumentException>(() => new CorpusRecordSet(
+            CorpusRecordSetSchemaIds.Set, ManifestRef(), RunIdentity(), new[] { first, second }));
+        StringAssert.Contains(exception.Message, "cannot name the same object twice");
     }
 
     [TestMethod]
@@ -245,7 +292,7 @@ public sealed class CorpusRecordSetTests
     private static CorpusRecord RecordAt(int ordinal) => ordinal == 0
         ? new CorpusRecord(
             CorpusRecordSchemaIds.Record,
-            ObjectRef(),
+            ObjectRef(0),
             0,
             ScopeDisposition.AcceptedSelected,
             ScopeDisposition.TypedQuarantine,
@@ -256,7 +303,7 @@ public sealed class CorpusRecordSetTests
             RunIdentity())
         : new CorpusRecord(
             CorpusRecordSchemaIds.Record,
-            ObjectRef(),
+            ObjectRef(1),
             1,
             ScopeDisposition.AcceptedSelected,
             ScopeDisposition.AcceptedSelected,
@@ -266,16 +313,22 @@ public sealed class CorpusRecordSetTests
             ManifestRef(),
             RunIdentity());
 
-    private static SourceObjectRef ObjectRef() => new(
+    // Fold-in (b) of the D1-06b corpus/6 record set verdict: this used to return the identical
+    // SourceObjectRef regardless of ordinal, so Fixture()'s own two records (RecordAt(0) and
+    // RecordAt(1)) accidentally named the same object -- invisible before CorpusRecordSet's
+    // constructor gained its own duplicate-ObjectRef refusal, since nothing else in Fixture()'s own
+    // tests checked object identity across records. Parametrized so every ordinal this test file
+    // builds gets its own distinct object.
+    private static SourceObjectRef ObjectRef(int ordinal) => new(
         SourceCoreSchemaIds.SourceObjectRef,
         SourceAuthority.Cellar,
         new SourceRegistryMemberRef(
             new SourceArtifactRef(
                 "urn:uuid:11111111-1111-4111-8111-111111111111", new string('a', 64)),
             "eu_consolidation_root"),
-        "https://publications.europa.eu/resource/celex/32019L0001",
-        "eu-consolidation-root:example",
-        CanonicalKeySha256("eu-consolidation-root:example"),
+        $"https://publications.europa.eu/resource/celex/32019L000{ordinal}",
+        $"eu-consolidation-root:example-{ordinal}",
+        CanonicalKeySha256($"eu-consolidation-root:example-{ordinal}"),
         new SourceArtifactRef(
             "urn:uuid:22222222-2222-4222-8222-222222222222", new string('b', 64)),
         null);

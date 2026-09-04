@@ -74,14 +74,22 @@ public enum CorpusRecordOutcomeKind
 /// One manifest row's own outcome in a built <see cref="CorpusRecordSet"/>: which object, which
 /// ordinal, which of the three body shapes it ended up as, and (for the two non-held shapes) the
 /// exact typed reason -- named directly rather than requiring a reader to re-derive it from the
-/// underlying <see cref="CorpusRecord.Body"/>.
+/// underlying <see cref="CorpusRecord.Body"/>. For <see cref="CorpusRecordOutcomeKind.PendingAcquisition"/>
+/// whose own <see cref="PendingAcquisitionReasonKind"/> is
+/// <see cref="CorpusBodyPendingAcquisitionReasonKind.AcquisitionRefused"/>, <see cref="RefusalCause"/>
+/// additionally names the exact one of the fourteen <see cref="CorpusAcquisitionRefusalReason"/>
+/// values that caused it -- named directly here too, rather than requiring a reader to reach back
+/// into <see cref="CorpusRecord.Body"/>'s own <see cref="CorpusBodyPendingAcquisitionReason.Refusal"/>
+/// for the one fact this entry otherwise only reports the shape of. <see langword="null"/> for every
+/// other combination of <see cref="Kind"/> and <see cref="PendingAcquisitionReasonKind"/>.
 /// </summary>
 public sealed record CorpusRecordOutcomeEntry(
     SourceObjectRef ObjectRef,
     int ObjectOrdinal,
     CorpusRecordOutcomeKind Kind,
     ScopeDisposition? NotHeldReason,
-    CorpusBodyPendingAcquisitionReasonKind? PendingAcquisitionReasonKind);
+    CorpusBodyPendingAcquisitionReasonKind? PendingAcquisitionReasonKind,
+    CorpusAcquisitionRefusalReason? RefusalCause);
 
 /// <summary>
 /// Whether a built record set covers its whole manifest. Closed at two.
@@ -387,7 +395,8 @@ public sealed class CorpusRecordSetWriter
                 record.ObjectOrdinal,
                 kind,
                 record.Body.NotHeldReason,
-                record.Body.PendingAcquisitionReason?.Kind);
+                record.Body.PendingAcquisitionReason?.Kind,
+                record.Body.PendingAcquisitionReason?.Refusal);
         }
 
         var state = records.Count == expected

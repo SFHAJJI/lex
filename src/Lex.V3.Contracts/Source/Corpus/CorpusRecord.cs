@@ -890,9 +890,11 @@ public static class CorpusRecordSetSchemaIds
 /// held together so a caller custody-writes and reopens the run's complete output in one artifact
 /// rather than one artifact per object. Every member below is validated for internal consistency
 /// (fix two's own discipline, applied at set scope): every record must declare the set's own
-/// <see cref="ManifestRef"/> and <see cref="RunIdentity"/>, and records must be strictly ordered by
-/// <see cref="CorpusRecord.ObjectOrdinal"/>, so a reader can never observe a set that mixes records
-/// from two different runs or manifests, or that silently reorders or duplicates one object's row.
+/// <see cref="ManifestRef"/> and <see cref="RunIdentity"/>, records must be strictly ordered by
+/// <see cref="CorpusRecord.ObjectOrdinal"/> with no duplicate ordinal, and no two records may name
+/// the same <see cref="CorpusRecord.ObjectRef"/>, so a reader can never observe a set that mixes
+/// records from two different runs or manifests, silently reorders or duplicates one object's row,
+/// or lists the same object twice under two different ordinals.
 /// Emptiness is not refused: a manifest that observed zero objects is a legitimate, if unusual, run.
 /// </summary>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -916,6 +918,7 @@ public sealed record CorpusRecordSet
         RunIdentity = runIdentity ?? throw new ArgumentNullException(nameof(runIdentity));
         Records = ScopeValidation.Copy(records, nameof(records));
 
+        var seenObjectRefs = new HashSet<SourceObjectRef>();
         for (var index = 0; index < Records.Count; index++)
         {
             var record = Records[index];
@@ -937,6 +940,18 @@ public sealed record CorpusRecordSet
             {
                 throw new ArgumentException(
                     "A record set must be strictly ordered by object ordinal, with no duplicate.",
+                    nameof(records));
+            }
+
+            // Ordinal uniqueness above refuses two rows at the same ordinal; it says nothing about
+            // one object appearing twice under two DIFFERENT ordinals. A set is one record per
+            // manifest object, so the same ObjectRef naming two rows is refused here regardless of
+            // ordinal.
+            if (!seenObjectRefs.Add(record.ObjectRef))
+            {
+                throw new ArgumentException(
+                    "A record set cannot name the same object twice: every record's own object " +
+                    "reference must be distinct.",
                     nameof(records));
             }
         }

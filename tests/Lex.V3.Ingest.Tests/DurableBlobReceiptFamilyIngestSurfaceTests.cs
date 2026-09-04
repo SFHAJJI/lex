@@ -41,7 +41,7 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
     /// <c>CorpusAcquisitionOutcome.Held</c> is the only production path onto its <c>Receipt</c>
     /// property, and that factory requires the caller to pass an already-real receipt -- there is
     /// still no constructor of <see cref="DurableBlobWriteReceipt"/> itself anywhere in this
-    /// assembly. See <c>CorpusAcquisitionOutcomeHasNoPathToHeldWithoutARealReceipt</c>
+    /// assembly. See <c>AcquisitionOutcomeHasNoPathToHeldWithoutARealReceipt</c>
     /// (<c>CorpusRecordSetWriterTests</c>) for that factory's own construction-surface pin.
     /// </summary>
     private const string CorpusAcquisitionOutcome = "Lex.V3.Ingest.CorpusAcquisitionOutcome";
