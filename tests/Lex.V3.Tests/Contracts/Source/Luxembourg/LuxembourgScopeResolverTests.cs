@@ -494,6 +494,173 @@ public sealed class LuxembourgScopeResolverTests
             resolved.Resources.Single().Dimensions.PublicationFamily.State);
     }
 
+    [TestMethod]
+    public void ATcActCarriesItsOwnCoordinatedTextRoleSeparatelyFromBucketMembership()
+    {
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve([TypedRoleObservation("TC")]));
+
+        var resource = resolved.Resources.Single();
+        Assert.AreEqual(
+            LuScopeTerminalState.AcceptedCandidate,
+            resource.Dimensions.PublicationFamily.State);
+        Assert.AreEqual(
+            "accepted_exact_family",
+            resource.Dimensions.PublicationFamily.ReasonCode);
+        Assert.AreEqual(LuxembourgTypedRoleKind.CoordinatedText, resource.TypedRole.Kind);
+        Assert.AreEqual(ActIri, resource.TypedRole.OwnCoordinate);
+        Assert.AreEqual(
+            LuxembourgTypedRoleDisclosures.ConsolidationWithoutLegalEffect,
+            resource.TypedRole.DisclosureCode);
+        Assert.IsNull(resource.TypedRole.EvidenceAbsentReasonCode);
+    }
+
+    [TestMethod]
+    public void ARectActCarriesItsOwnCorrigendumRoleSeparatelyFromBucketMembership()
+    {
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve([TypedRoleObservation("RECT")]));
+
+        var resource = resolved.Resources.Single();
+        Assert.AreEqual(
+            LuScopeTerminalState.AcceptedCandidate,
+            resource.Dimensions.PublicationFamily.State);
+        Assert.AreEqual(
+            "accepted_exact_family",
+            resource.Dimensions.PublicationFamily.ReasonCode);
+        Assert.AreEqual(LuxembourgTypedRoleKind.Corrigendum, resource.TypedRole.Kind);
+        Assert.AreEqual(ActIri, resource.TypedRole.OwnCoordinate);
+        Assert.AreEqual(
+            LuxembourgTypedRoleDisclosures.CorrectiveMaterialNeverCorrectedAct,
+            resource.TypedRole.DisclosureCode);
+        Assert.IsNull(resource.TypedRole.EvidenceAbsentReasonCode);
+    }
+
+    [TestMethod]
+    public void AnAccActIsRefusedToATypedEvidenceAbsentStateNeverAdmittedOnTheTypeTokenAlone()
+    {
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve([TypedRoleObservation("ACC")]));
+
+        var resource = resolved.Resources.Single();
+        Assert.AreEqual(
+            LuScopeTerminalState.TypedQuarantine,
+            resource.Dimensions.PublicationFamily.State);
+        Assert.AreEqual(
+            LuxembourgTypedRoleDisclosures.ConstitutionalReviewEvidenceAbsentReason,
+            resource.Dimensions.PublicationFamily.ReasonCode);
+        Assert.AreEqual(
+            LuScopeTerminalState.TypedQuarantine,
+            resource.Dimensions.Body.State);
+        Assert.AreEqual(
+            LuxembourgTypedRoleDisclosures.ConstitutionalReviewEvidenceAbsentReason,
+            resource.Dimensions.Body.ReasonCode);
+        Assert.AreEqual(
+            LuxembourgTypedRoleKind.ConstitutionalReviewEvidenceAbsent,
+            resource.TypedRole.Kind);
+        Assert.AreEqual(ActIri, resource.TypedRole.OwnCoordinate);
+        Assert.AreEqual(
+            LuxembourgTypedRoleDisclosures.ConstitutionalReviewEvidenceAbsentReason,
+            resource.TypedRole.EvidenceAbsentReasonCode);
+        Assert.IsNull(resource.TypedRole.DisclosureCode);
+    }
+
+    [TestMethod]
+    public void AnOrdinaryAcceptedActCarriesNoTypedRole()
+    {
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve([BodyObservation()]));
+
+        var resource = resolved.Resources.Single();
+        Assert.AreEqual(
+            LuScopeTerminalState.AcceptedCandidate,
+            resource.Dimensions.PublicationFamily.State);
+        Assert.AreEqual(LuxembourgTypedRoleKind.NotApplicable, resource.TypedRole.Kind);
+        Assert.IsNull(resource.TypedRole.OwnCoordinate);
+        Assert.IsNull(resource.TypedRole.DisclosureCode);
+        Assert.IsNull(resource.TypedRole.EvidenceAbsentReasonCode);
+    }
+
+    [TestMethod]
+    public void AnActWithConflictingTypeDocumentValuesCarriesNoTypedRoleEitherWay()
+    {
+        var observation = new LuxembourgResourceObservation(
+            ObjectRef(),
+            ObservationRef,
+            [
+                Iri(ActIri, RdfType, Jolux + "Act"),
+                Iri(ActIri, Jolux + "typeDocument", JoluxAuthority + "resource-type/TC"),
+                Iri(ActIri, Jolux + "typeDocument", JoluxAuthority + "resource-type/RECT"),
+            ],
+            [],
+            new LuxembourgSparqlRightsChannelObservations(
+                ObservationRef,
+                SparqlEnumerationRef,
+                []),
+            new LuxembourgInFileRightsChannelObservations(
+                ObservationRef,
+                InFileEnumerationRef,
+                []));
+
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve([observation]));
+
+        var resource = resolved.Resources.Single();
+        Assert.AreEqual(
+            LuScopeTerminalState.TypedQuarantine,
+            resource.Dimensions.PublicationFamily.State);
+        Assert.AreEqual(
+            "typed_quarantine_selector_conflict",
+            resource.Dimensions.PublicationFamily.ReasonCode);
+        Assert.AreEqual(LuxembourgTypedRoleKind.NotApplicable, resource.TypedRole.Kind);
+    }
+
+    [TestMethod]
+    public void ATypeDocumentTcAssertionOnANonActSubjectCarriesNoTypedRole()
+    {
+        var observation = new LuxembourgResourceObservation(
+            ObjectRef(ExpressionIri),
+            ObservationRef,
+            [
+                Iri(ExpressionIri, RdfType, Jolux + "Expression"),
+                Iri(ExpressionIri, Jolux + "typeDocument", JoluxAuthority + "resource-type/TC"),
+            ],
+            [],
+            new LuxembourgSparqlRightsChannelObservations(
+                ObservationRef,
+                SparqlEnumerationRef,
+                []),
+            new LuxembourgInFileRightsChannelObservations(
+                ObservationRef,
+                InFileEnumerationRef,
+                []));
+
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            Profile().Resolve([observation]));
+
+        var resource = resolved.Resources.Single();
+        Assert.AreEqual(LuxembourgTypedRoleKind.NotApplicable, resource.TypedRole.Kind);
+        Assert.IsNull(resource.TypedRole.OwnCoordinate);
+    }
+
+    private static LuxembourgResourceObservation TypedRoleObservation(string typeDocumentSuffix) =>
+        new(
+            ObjectRef(),
+            ObservationRef,
+            [
+                Iri(ActIri, RdfType, Jolux + "Act"),
+                Iri(ActIri, Jolux + "typeDocument", JoluxAuthority + "resource-type/" + typeDocumentSuffix),
+            ],
+            [],
+            new LuxembourgSparqlRightsChannelObservations(
+                ObservationRef,
+                SparqlEnumerationRef,
+                []),
+            new LuxembourgInFileRightsChannelObservations(
+                ObservationRef,
+                InFileEnumerationRef,
+                []));
+
     private static VerifiedLuxembourgSourceProfile Profile() =>
         VerifiedLuxembourgSourceProfile.Open(new LuxembourgVocabularySnapshot(
             ObservationRef,

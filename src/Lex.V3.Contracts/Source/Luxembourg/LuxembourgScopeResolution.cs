@@ -100,6 +100,174 @@ public enum LuxembourgDimension
     Transport = 10,
 }
 
+/// <summary>
+/// R5.1's own role for a TC, RECT or ACC object, distinguished from bare
+/// <c>PriorityCandidateTypes</c> bucket membership (item 15 of the D1-04 design-synthesis ruling;
+/// reviewer SCOPE_RULING lex-event-20260903T234803274Z-54f15ecf651941ebb58c91e269959aed).
+/// </summary>
+public enum LuxembourgTypedRoleKind
+{
+    /// <summary>The object is not a TC, RECT or ACC Act, or does not qualify as an Act at all.</summary>
+    NotApplicable = 1,
+
+    /// <summary>
+    /// R5.1 rule 4: accepted only as <c>coordinated_text_act</c>, carrying its own coordinate and
+    /// the consolidation-without-legal-effect disclosure, never relabeled as its base act.
+    /// </summary>
+    CoordinatedText = 2,
+
+    /// <summary>
+    /// R5.1 rule 5: accepted only as <c>corrigendum_act</c>, carrying its own coordinate and the
+    /// corrective-material disclosure, never relabeled as the corrected act or statutory
+    /// replacement text.
+    /// </summary>
+    Corrigendum = 3,
+
+    /// <summary>
+    /// R5.1 rule 6: refused to this named typed state because no constitutional-review evidence
+    /// beyond the bare typeDocument token is available in the acquired LU assertion set. Never
+    /// silently promoted to an accepted candidate on the token alone (Decision 64's discipline).
+    /// </summary>
+    ConstitutionalReviewEvidenceAbsent = 4,
+}
+
+/// <summary>Closed disclosure and refusal-reason codes for <see cref="LuxembourgTypedRoleResolution"/>.</summary>
+public static class LuxembourgTypedRoleDisclosures
+{
+    /// <summary>R5.1 rule 4: a TC body is consolidation-without-legal-effect, never its base act.</summary>
+    public const string ConsolidationWithoutLegalEffect =
+        "disclosure_consolidation_without_legal_effect";
+
+    /// <summary>R5.1 rule 5: a RECT body is corrective material, never the corrected act.</summary>
+    public const string CorrectiveMaterialNeverCorrectedAct =
+        "disclosure_corrective_material_never_corrected_act";
+
+    /// <summary>
+    /// R5.1 rule 6 requires ACC to carry constitutional-review evidence, not merely the
+    /// typeDocument token. No predicate for that evidence exists in the acquired LU assertion or
+    /// relation set (Decision 65's 26 assertion and 18 relation predicates), so
+    /// <see cref="LuxembourgScopeResolver"/> refuses unconditionally today. This is a named,
+    /// reported gap awaiting a future ruling that defines the evidence predicate, not a
+    /// placeholder default.
+    /// </summary>
+    public const string ConstitutionalReviewEvidenceAbsentReason =
+        "typed_quarantine_acc_constitutional_review_evidence_absent";
+}
+
+/// <summary>
+/// One resource's R5.1 typed role, carried on the resolver's own disposition
+/// (<see cref="LuxembourgResourceResolution"/>) rather than folded into the coarser
+/// <see cref="LuxembourgDimension.PublicationFamily"/> bucket, and never reaching the scope
+/// manifest wire schema directly (a later, separately ruled schema change would be required for
+/// that).
+/// </summary>
+public sealed record LuxembourgTypedRoleResolution
+{
+    private LuxembourgTypedRoleResolution(
+        LuxembourgTypedRoleKind kind,
+        string? ownCoordinate,
+        string? disclosureCode,
+        string? evidenceAbsentReasonCode)
+    {
+        Kind = LuxembourgSourceValidation.RequireDefined(kind, nameof(kind));
+        switch (kind)
+        {
+            case LuxembourgTypedRoleKind.NotApplicable:
+                if (ownCoordinate is not null ||
+                    disclosureCode is not null ||
+                    evidenceAbsentReasonCode is not null)
+                {
+                    throw new ArgumentException(
+                        "A not-applicable role carries no coordinate, disclosure or reason.");
+                }
+
+                break;
+            case LuxembourgTypedRoleKind.CoordinatedText:
+            case LuxembourgTypedRoleKind.Corrigendum:
+                if (string.IsNullOrEmpty(ownCoordinate) || string.IsNullOrEmpty(disclosureCode))
+                {
+                    throw new ArgumentException(
+                        "An accepted TC or RECT role must carry its own coordinate and disclosure.");
+                }
+
+                if (evidenceAbsentReasonCode is not null)
+                {
+                    throw new ArgumentException(
+                        "An accepted role carries no evidence-absence reason.");
+                }
+
+                break;
+            case LuxembourgTypedRoleKind.ConstitutionalReviewEvidenceAbsent:
+                if (string.IsNullOrEmpty(ownCoordinate) ||
+                    string.IsNullOrEmpty(evidenceAbsentReasonCode))
+                {
+                    throw new ArgumentException(
+                        "A refused ACC role must carry its own coordinate and the absence reason.");
+                }
+
+                if (disclosureCode is not null)
+                {
+                    throw new ArgumentException("A refused role carries no disclosure.");
+                }
+
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(kind));
+        }
+
+        OwnCoordinate = ownCoordinate;
+        DisclosureCode = disclosureCode;
+        EvidenceAbsentReasonCode = evidenceAbsentReasonCode;
+    }
+
+    /// <summary>The closed role this resource resolved to.</summary>
+    public LuxembourgTypedRoleKind Kind { get; }
+
+    /// <summary>
+    /// The resource's own publisher IRI, present only when <see cref="Kind"/> is not
+    /// <see cref="LuxembourgTypedRoleKind.NotApplicable"/>, so a TC or RECT role can never be read
+    /// off the base or corrected act's coordinate instead of its own.
+    /// </summary>
+    public string? OwnCoordinate { get; }
+
+    /// <summary>
+    /// The R5.1 disclosure required alongside an accepted <see cref="LuxembourgTypedRoleKind.CoordinatedText"/>
+    /// or <see cref="LuxembourgTypedRoleKind.Corrigendum"/> role.
+    /// </summary>
+    public string? DisclosureCode { get; }
+
+    /// <summary>
+    /// The reason the ACC constitutional-review evidence gate refused, present only when
+    /// <see cref="Kind"/> is <see cref="LuxembourgTypedRoleKind.ConstitutionalReviewEvidenceAbsent"/>.
+    /// </summary>
+    public string? EvidenceAbsentReasonCode { get; }
+
+    internal static readonly LuxembourgTypedRoleResolution NotApplicableInstance =
+        new(LuxembourgTypedRoleKind.NotApplicable, null, null, null);
+
+    internal static LuxembourgTypedRoleResolution AcceptedCoordinatedText(string ownCoordinate) =>
+        new(
+            LuxembourgTypedRoleKind.CoordinatedText,
+            ownCoordinate,
+            LuxembourgTypedRoleDisclosures.ConsolidationWithoutLegalEffect,
+            null);
+
+    internal static LuxembourgTypedRoleResolution AcceptedCorrigendum(string ownCoordinate) =>
+        new(
+            LuxembourgTypedRoleKind.Corrigendum,
+            ownCoordinate,
+            LuxembourgTypedRoleDisclosures.CorrectiveMaterialNeverCorrectedAct,
+            null);
+
+    internal static LuxembourgTypedRoleResolution ConstitutionalReviewEvidenceAbsent(
+        string ownCoordinate) =>
+        new(
+            LuxembourgTypedRoleKind.ConstitutionalReviewEvidenceAbsent,
+            ownCoordinate,
+            null,
+            LuxembourgTypedRoleDisclosures.ConstitutionalReviewEvidenceAbsentReason);
+}
+
 public sealed record LuxembourgIriVocabularyValue
 {
     public LuxembourgIriVocabularyValue(LuxembourgVocabularyKind kind, string fullIri)
@@ -494,7 +662,8 @@ public sealed record LuxembourgResourceResolution
         IReadOnlyList<LuxembourgResolvedAssertion> assertions,
         IReadOnlyList<LuxembourgResolvedRelation> relations,
         LuxembourgWemiTopologyResolution wemiTopology,
-        LuxembourgBodyJoinResolution bodyJoin)
+        LuxembourgBodyJoinResolution bodyJoin,
+        LuxembourgTypedRoleResolution typedRole)
     {
         ObjectRef = objectRef ?? throw new ArgumentNullException(nameof(objectRef));
         Dimensions = dimensions ?? throw new ArgumentNullException(nameof(dimensions));
@@ -502,6 +671,7 @@ public sealed record LuxembourgResourceResolution
         Relations = LuxembourgSourceValidation.Copy(relations, nameof(relations));
         WemiTopology = wemiTopology ?? throw new ArgumentNullException(nameof(wemiTopology));
         BodyJoin = bodyJoin ?? throw new ArgumentNullException(nameof(bodyJoin));
+        TypedRole = typedRole ?? throw new ArgumentNullException(nameof(typedRole));
     }
 
     public SourceObjectRef ObjectRef { get; }
@@ -515,6 +685,9 @@ public sealed record LuxembourgResourceResolution
     public LuxembourgWemiTopologyResolution WemiTopology { get; }
 
     public LuxembourgBodyJoinResolution BodyJoin { get; }
+
+    /// <summary>R5.1's own TC, RECT or ACC role for this resource. See <see cref="LuxembourgTypedRoleResolution"/>.</summary>
+    public LuxembourgTypedRoleResolution TypedRole { get; }
 }
 
 public sealed record LuxembourgProfileResolutionFailure
