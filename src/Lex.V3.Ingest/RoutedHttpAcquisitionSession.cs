@@ -519,14 +519,22 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                 nameof(openedRequest));
         }
 
-        if (profile.Accept is null || profile.RequestContentType is null)
+        if (profile.Id == OfficialMachineQuerySourceProfileId.LuxembourgDocumentFetch)
         {
-            // D1-06c-LU's GET-shaped document-fetch profile deliberately fixes neither: sending
-            // its actual product request is a later slice's job (this lane builds the route, its
-            // robots bootstrap and route-level tests only), so this machine-query POST sender is
-            // not yet asked to carry it.
+            // D1-06c-LU builds the LU route, its robots bootstrap and its route-level tests only;
+            // sending the actual LU product request is D1-06c-LU-2's job, so this sender is not yet
+            // asked to carry it and says so rather than sending something unreviewed.
+            //
+            // Rebase resolution onto D1-06c-EU's merge 275483f3, and the reason this is keyed on the
+            // profile rather than on a null Accept/RequestContentType as it originally was: this
+            // guard was written when LU's was the only GET-shaped profile in the codebase. EU's
+            // document-fetch profile is also GET and also fixes neither field, so the original
+            // condition matched it too and made the working EU GET branch below unreachable. That
+            // combination never existed on either lane alone: RoutedHttpAcquisitionSession.cs
+            // auto-merged with no textual conflict, and the 18 EU document-fetch tests this broke
+            // are what surfaced it.
             throw new NotSupportedException(
-                "CreateMachineRequest does not yet support a GET-shaped source profile.");
+                "CreateMachineRequest does not yet support the Luxembourg document-fetch profile.");
         }
 
         var body = openedRequest.CopyRequestBody();
