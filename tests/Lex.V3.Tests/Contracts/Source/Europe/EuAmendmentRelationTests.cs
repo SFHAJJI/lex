@@ -6,8 +6,8 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace Lex.V3.Tests.Contracts.Source.Europe;
 
 /// <summary>
-/// Stage 2 item E4 (ledger row <c>REL-002</c>): the located amendment axiom, the repeal edge and
-/// the typed relation edge.
+/// Stage 2 item E4 (ledger row <c>REL-002</c>): the asserted relation edge binding, the located
+/// amendment axiom, the repeal edge and the derived amendment inverse.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -18,13 +18,16 @@ namespace Lex.V3.Tests.Contracts.Source.Europe;
 /// date spellings, the one absent <c>start</c> and the <c>MS</c> link type are the publisher's own
 /// bytes. The repeals row is the GDPR repeals axiom from canary
 /// <c>lex-event-20260904T174651520Z-392411cf4e9446e2aa76bd3be3cc2c8a</c> (digest 4701a3361ff09048).
+/// The ontology URI and version are from the probe relayed with digest
+/// <c>6c918b286291c621944ec20b409ac794b25128f53dd39529fc07c55174f4bba9</c>.
 /// </para>
 /// <para>
-/// <b>What is invented, said plainly.</b> Every <c>axiom:...</c> identity here is made up for the
-/// fixture. The retained result is a SELECT and carries no <c>owl:Axiom</c> identifier column, so
-/// there is no real axiom id to transcribe. The same is true of the CELEX numbers used to build
-/// the GDPR and 1995 directive identity sets in the repeal test, which come from those acts and
-/// not from the retained repeals row. Contract only: no live call anywhere in this file.
+/// <b>What is invented, said plainly.</b> Every <c>axiom:...</c> identity and every <c>obs:...</c>
+/// observation id here is made up for the fixture. The retained result is a SELECT and carries no
+/// <c>owl:Axiom</c> identifier column and no custody coordinate, so there is nothing real to
+/// transcribe for either. The CELEX numbers used to build the GDPR and 1995 directive identity
+/// sets in the repeal test come from those acts, not from the retained repeals row. Contract only:
+/// no live call anywhere in this file.
 /// </para>
 /// </remarks>
 [TestClass]
@@ -36,13 +39,29 @@ public sealed class EuAmendmentRelationTests
 
     // Pinned as literals rather than through the vocabulary's own constants: a fixture built from
     // the constant it is later checked against can only fail if production stops assigning that
-    // constant, never if the constant's own value silently changes.
+    // constant, never if the constant's own value silently changes. The amended-by spelling is the
+    // one a guard keys on, so this independent transcription is what keeps that guard honest.
     private const string AmendsPredicate =
         "http://publications.europa.eu/ontology/cdm#resource_legal_amends_resource_legal";
     private const string AmendedByPredicate =
         "http://publications.europa.eu/ontology/cdm#resource_legal_amended_by_resource_legal";
     private const string RepealsPredicate =
         "http://publications.europa.eu/ontology/cdm#resource_legal_repeals_resource_legal";
+    private const string BasedOnPredicate =
+        "http://publications.europa.eu/ontology/cdm#act_consolidated_based_on_resource_legal";
+    private const string ConsolidatesPredicate =
+        "http://publications.europa.eu/ontology/cdm#act_consolidated_consolidates_resource_legal";
+    private const string OntologyUri = "http://publications.europa.eu/ontology/cdm";
+    private const string OntologyVersion = "4.17.0";
+
+    private const string LocationAnnotation =
+        "http://publications.europa.eu/ontology/annotation#reference_to_modified_location";
+    private const string StartAnnotation =
+        "http://publications.europa.eu/ontology/annotation#start_of_validity";
+    private const string LinkTargetAnnotation =
+        "http://publications.europa.eu/ontology/annotation#type_of_link_target";
+    private const string RoleAnnotation =
+        "http://publications.europa.eu/ontology/annotation#role2";
 
     /// <summary>The five retained rows, in the order the endpoint returned them.</summary>
     private static (string Source, string Target, string Location, string? Start, string LinkType, string Role)[] RetainedRows() =>
@@ -75,13 +94,14 @@ public sealed class EuAmendmentRelationTests
         EuLocatedAmendmentAxiom.Create(
             Work(row.Source),
             Work(row.Target),
-            EuRelationTargetState.Unheld,
+            TargetBodyScope.BodyInScopeNotHeld,
             row.Location,
             row.Role,
             row.Start,
             rawEndOfValidity: null,
             row.LinkType,
-            remoteAxiomId);
+            remoteAxiomId,
+            "obs:invented-" + remoteAxiomId);
 
     // --- The five retained rows -----------------------------------------------------------------
 
@@ -149,10 +169,9 @@ public sealed class EuAmendmentRelationTests
     /// hyphenated, two slash separated, one absent.
     /// </summary>
     /// <remarks>
-    /// The E4 re-filed scope check says "three rows give 2000-02-09 style with hyphens, two give
-    /// slashes", which totals five and implies every row binds a start. The retained bytes say
-    /// otherwise: two hyphenated, two slash, one with no <c>start</c> binding. This test transcribes
-    /// the bytes.
+    /// The E4 re-filed scope check says "three rows give hyphens, two give slashes", which totals
+    /// five and implies every row binds a start. The retained bytes say otherwise: two hyphenated,
+    /// two slash, one with no <c>start</c> binding. This test transcribes the bytes.
     /// </remarks>
     [TestMethod]
     public void TheSameFiveRowsCarryTwoHyphenatedTwoSlashSeparatedAndOneAbsentStartDate()
@@ -179,16 +198,49 @@ public sealed class EuAmendmentRelationTests
         Assert.AreEqual("2000-02-09", hyphenated.TypedDate.RawLexicalValue);
         Assert.AreEqual(PublisherDate.Date, hyphenated.TypedDate.DatatypeUri);
         Assert.AreEqual(DatePrecision.YearMonthDay, hyphenated.TypedDate.Precision);
+        Assert.AreEqual(DateOpenSentinel.NotOpen, hyphenated.TypedDate.OpenSentinel);
 
         var slash = EuValidityDate.Create("2010/02/01");
         Assert.AreEqual(EuValidityDateShape.SlashSeparated, slash.ObservedShape);
         Assert.IsNull(slash.TypedDate, "PublisherDate's lexical space has no slash spelling.");
 
-        // Neither value is rewritten into the other's spelling.
         Assert.AreEqual("2010/02/01", slash.RawLexicalValue);
         Assert.IsFalse(
             PublisherDate.IsValidLexicalValue("2010/02/01", DatePrecision.YearMonthDay),
             "The Facts date layer itself refuses the slash spelling, which is why TypedDate is null.");
+    }
+
+    /// <summary>
+    /// The hyphenated open end is carried as the Facts layer's own sentinel, not as a date in the
+    /// year 9999.
+    /// </summary>
+    [TestMethod]
+    public void TheHyphenatedOpenEndIsCarriedAsTheSentinel()
+    {
+        var openEnded = EuValidityDate.Create("9999-12-31");
+
+        Assert.AreEqual(EuValidityDateShape.HyphenatedIso8601, openEnded.ObservedShape);
+        Assert.IsNotNull(openEnded.TypedDate);
+        Assert.AreEqual(DateOpenSentinel.OpenEnded, openEnded.TypedDate.OpenSentinel);
+        Assert.AreEqual("9999-12-31", openEnded.RawLexicalValue);
+    }
+
+    /// <summary>
+    /// The slash-spelled open end is refused by name rather than guessed at in either direction.
+    /// </summary>
+    /// <remarks>
+    /// No slash-spelled sentinel has been observed. Reading it as an ordinary date silently turns
+    /// "validity does not end" into "validity ended in the year 9999"; reading it as the sentinel
+    /// invents a second sentinel spelling no observation supports. The refusal is the only honest
+    /// third option, and this test is what drives it.
+    /// </remarks>
+    [TestMethod]
+    public void TheSlashSpelledOpenEndIsRefusedByName()
+    {
+        var error = Assert.ThrowsExactly<ArgumentException>(() => EuValidityDate.Create("9999/12/31"));
+
+        StringAssert.Contains(error.Message, "9999/12/31");
+        StringAssert.Contains(error.Message, "no slash-spelled sentinel has been observed");
     }
 
     /// <summary>The calendar rule is the Facts layer's own, on both spellings.</summary>
@@ -276,9 +328,9 @@ public sealed class EuAmendmentRelationTests
     /// <remarks>
     /// All five retained rows carry exactly one token, so this shape is grounded in the canary
     /// event <c>lex-event-20260904T175313280Z-e99a2a04ab2e44fb8bc5a5aa66d14451</c> rather than in
-    /// the retained fixture. That event quotes <c>{AR|...fd_370/AR} 23 {PTA|...}</c> and elides the
-    /// second IRI with an ellipsis, so the second token's IRI here is completed to the form the
-    /// list requires and is not a transcription.
+    /// the retained fixture. That event quotes a two-token location and elides the second IRI with
+    /// an ellipsis, so the second token's IRI here is completed to the form the list requires and
+    /// is not a transcription.
     /// </remarks>
     [TestMethod]
     public void AMultiTokenLocationKeepsItsOrderAndItsValuelessFinalToken()
@@ -306,93 +358,204 @@ public sealed class EuAmendmentRelationTests
         Assert.AreEqual("(e)", location.Tokens[0].Value);
     }
 
-    // --- The typed edge and forward-only materialisation ----------------------------------------
+    // --- The binding sits on the Facts layer ----------------------------------------------------
 
     /// <summary>
-    /// A located amendment axiom is always a publisher assertion on the amends predicate, and its
-    /// type alone says so: there is no flag that could make it a derived edge.
+    /// The asserted edge is a real <see cref="PublisherRelation"/> inside a real
+    /// <see cref="RelationFact"/>, not a parallel re-declaration of one.
     /// </summary>
     [TestMethod]
-    public void ALocatedAmendmentIsAPublisherAssertedForwardEdge()
+    public void TheAssertedEdgeIsAPublisherRelationInsideARelationFact()
+    {
+        var axiom = Axiom(RetainedRows()[0], "axiom:invented-0");
+        var fact = axiom.Edge.Fact;
+
+        Assert.AreEqual(RelationFact.Identity, fact.Schema);
+        Assert.AreEqual(RelationAssertionKind.PublisherAsserted, fact.Kind);
+        Assert.IsNotNull(fact.PublisherAsserted);
+        Assert.IsNull(fact.OntologyAuthorizedInverse);
+        Assert.IsNull(fact.LocalInboundView);
+
+        var asserted = fact.PublisherAsserted;
+        Assert.AreEqual(PublisherRelation.Identity, asserted.Schema);
+        Assert.AreEqual(AmendsPredicate, asserted.PredicateUri);
+        Assert.AreSame(asserted, axiom.Edge.Asserted);
+    }
+
+    /// <summary>
+    /// The edge carries the observation that produced it, so a live run can always say where an
+    /// edge came from. The first version of E4 could not.
+    /// </summary>
+    [TestMethod]
+    public void TheAssertedEdgeCarriesItsSourceObservationId()
     {
         var axiom = Axiom(RetainedRows()[0], "axiom:invented-0");
 
-        Assert.AreEqual(AmendsPredicate, axiom.Edge.PredicateUri);
-        Assert.IsInstanceOfType<EuPublisherRelationEdge>(axiom.Edge);
+        Assert.AreEqual("obs:invented-axiom:invented-0", axiom.Edge.Asserted.SourceObservationId);
     }
 
     /// <summary>
-    /// The inverse predicate returns zero rows store-wide, so no edge on it can be a publisher
-    /// assertion. This is Decisions 25 and 26 made unconstructible.
+    /// An EU act is not a case, so the fact's ECLI state is computed as not applicable rather than
+    /// accepted from a caller who could get it wrong.
     /// </summary>
     [TestMethod]
-    public void AnEdgeOnTheInversePredicateCannotBeAPublisherAssertion()
+    public void TheTargetEcliStateIsComputedFromTheTargetItself()
     {
-        var error = Assert.ThrowsExactly<ArgumentException>(() => EuPublisherRelationEdge.Create(
+        var axiom = Axiom(RetainedRows()[0], "axiom:invented-0");
+
+        Assert.AreEqual(EcliState.EcliNotApplicable, axiom.Edge.Fact.TargetEcliState);
+        Assert.IsNull(axiom.Edge.Fact.TargetEcli());
+    }
+
+    /// <summary>Every declared body scope reaches the fact unchanged.</summary>
+    [TestMethod]
+    public void EveryTargetBodyScopeIsDrivenAndKept()
+    {
+        foreach (var scope in Enum.GetValues<TargetBodyScope>())
+        {
+            var edge = EuRelationEdgeBinding.Create(
+                Work("00034b8a-6af2-4207-bc76-d24a10b5125c"),
+                Work("62212f0d-011f-471e-a033-bf56990d4329"),
+                AmendsPredicate,
+                scope,
+                [],
+                "obs:invented-scope");
+
+            Assert.AreEqual(scope, edge.Fact.TargetBodyScope);
+        }
+
+        Assert.HasCount(3, Enum.GetValues<TargetBodyScope>());
+    }
+
+    /// <summary>
+    /// The predicate set is closed. An unpinned but syntactically valid absolute URI is refused by
+    /// name, which the first version of E4 accepted.
+    /// </summary>
+    [TestMethod]
+    public void AnUnpinnedPredicateIsRefusedByName()
+    {
+        var error = Assert.ThrowsExactly<ArgumentException>(() => EuRelationEdgeBinding.Create(
+            Work("00034b8a-6af2-4207-bc76-d24a10b5125c"),
+            Work("62212f0d-011f-471e-a033-bf56990d4329"),
+            "http://publications.europa.eu/ontology/cdm#work_cites_work",
+            TargetBodyScope.BodyInScopeNotHeld,
+            [],
+            "obs:invented-unpinned"));
+
+        StringAssert.Contains(error.Message, "work_cites_work");
+        StringAssert.Contains(error.Message, "not one of the pinned");
+    }
+
+    /// <summary>Exactly the four asserted predicates are accepted, and the inverse is not one.</summary>
+    [TestMethod]
+    public void ExactlyTheFourAssertedPredicatesAreAccepted()
+    {
+        foreach (var predicate in new[]
+                 {
+                     AmendsPredicate, RepealsPredicate, BasedOnPredicate, ConsolidatesPredicate,
+                 })
+        {
+            var edge = EuRelationEdgeBinding.Create(
+                Work("00034b8a-6af2-4207-bc76-d24a10b5125c"),
+                Work("62212f0d-011f-471e-a033-bf56990d4329"),
+                predicate,
+                TargetBodyScope.BodyInScopeNotHeld,
+                [],
+                "obs:invented-pinned");
+
+            Assert.AreEqual(predicate, edge.Asserted.PredicateUri);
+        }
+
+        // The inverse predicate returns zero rows store-wide, so it is not an asserted predicate.
+        var error = Assert.ThrowsExactly<ArgumentException>(() => EuRelationEdgeBinding.Create(
             Work("62212f0d-011f-471e-a033-bf56990d4329"),
             Work("00034b8a-6af2-4207-bc76-d24a10b5125c"),
             AmendedByPredicate,
-            EuRelationTargetState.Held,
-            []));
-
-        StringAssert.Contains(error.Message, "returns zero rows");
+            TargetBodyScope.BodyInScopeNotHeld,
+            [],
+            "obs:invented-inverse"));
         StringAssert.Contains(error.Message, AmendedByPredicate);
+        StringAssert.Contains(error.Message, "derived inverse");
+    }
+
+    // --- The derived inverse is a Facts DerivedInverseRelation ----------------------------------
+
+    /// <summary>
+    /// The inverse is a Facts <see cref="DerivedInverseRelation"/> carrying the publisher's own
+    /// <c>owl:inverseOf</c> declaration, with the ontology and version it was observed at.
+    /// </summary>
+    [TestMethod]
+    public void TheDerivedInverseCarriesTheObservedOntologyAxiom()
+    {
+        var forward = Axiom(RetainedRows()[0], "axiom:invented-0").Edge;
+        var inverse = EuDerivedAmendmentInverse.From(forward, "obs:invented-ontology");
+
+        Assert.AreEqual(DerivedInverseRelation.Identity, inverse.Schema);
+        Assert.AreEqual(AmendedByPredicate, inverse.PredicateUri);
+        Assert.AreEqual(AmendsPredicate, inverse.InverseOfPredicateUri);
+        Assert.AreSame(forward.Asserted, inverse.DerivedFrom);
+
+        var axiom = inverse.AuthorizingAxiom;
+        Assert.AreEqual(OntologyUri, axiom.OntologyUri);
+        Assert.AreEqual(OntologyVersion, axiom.OntologyVersion);
+        Assert.AreEqual(AmendsPredicate, axiom.SubjectPredicateUri);
+        Assert.AreEqual(AmendedByPredicate, axiom.ObjectPredicateUri);
+        Assert.AreEqual("obs:invented-ontology", axiom.SourceObservationId);
+        Assert.IsTrue(axiom.Authorizes(AmendsPredicate, AmendedByPredicate));
+    }
+
+    /// <summary>The inverse's endpoints are the forward assertion's endpoints, swapped.</summary>
+    [TestMethod]
+    public void TheDerivedInverseSwapsTheForwardEndpoints()
+    {
+        var forward = Axiom(RetainedRows()[0], "axiom:invented-0").Edge;
+        var inverse = EuDerivedAmendmentInverse.From(forward, "obs:invented-ontology");
+
+        Assert.IsTrue(inverse.Source.SameIdentity(forward.Asserted.Target));
+        Assert.IsTrue(inverse.Target.SameIdentity(forward.Asserted.Source));
     }
 
     /// <summary>
-    /// The inverse edge exists only as a derived one, and it takes its endpoints from the real
-    /// forward assertion rather than from the caller.
+    /// Only the amends predicate has an observed inverse declaration, so nothing else can be
+    /// inverted. An unwitnessed inversion is unconstructible, not merely discouraged.
     /// </summary>
     [TestMethod]
-    public void TheInverseEdgeIsConstructibleOnlyByInvertingARealPublisherAssertion()
+    public void OnlyTheAmendmentEdgeCanBeInvertedBecauseOnlyItHasAnObservedAxiom()
     {
-        var forward = Axiom(RetainedRows()[0], "axiom:invented-0").Edge;
-        var derived = EuDerivedInverseRelationEdge.From(
-            forward,
-            AmendedByPredicate,
-            EuRelationTargetState.Held);
-
-        Assert.AreEqual(AmendedByPredicate, derived.PredicateUri);
-        Assert.AreEqual(AmendsPredicate, derived.InvertedFromPredicateUri);
-        Assert.AreSame(forward, derived.DerivedFrom);
-
-        // The endpoints are swapped by the type, so they cannot disagree with the assertion.
-        Assert.AreSame(forward.Target, derived.Source);
-        Assert.AreSame(forward.Source, derived.Target);
-    }
-
-    /// <summary>A derived inverse cannot be stated on the predicate it was inverted from.</summary>
-    [TestMethod]
-    public void ADerivedInverseCannotReuseTheForwardPredicate()
-    {
-        var forward = Axiom(RetainedRows()[0], "axiom:invented-0").Edge;
+        var repeal = EuRelationEdgeBinding.Create(
+            Celex("32016R0679"),
+            Celex("31995L0046"),
+            RepealsPredicate,
+            TargetBodyScope.BodyInScopeHeld,
+            [],
+            "obs:invented-repeal");
 
         var error = Assert.ThrowsExactly<ArgumentException>(
-            () => EuDerivedInverseRelationEdge.From(
-                forward,
-                AmendsPredicate,
-                EuRelationTargetState.Held));
-        StringAssert.Contains(error.Message, "same predicate");
+            () => EuDerivedAmendmentInverse.From(repeal, "obs:invented-ontology"));
+        StringAssert.Contains(error.Message, "no observed owl:inverseOf declaration");
     }
 
     /// <summary>
-    /// Admissibility, as ruled: the publisher-asserted edge is evidence and every other E4 type,
-    /// the derived inverse above all, is not. REL-002 excludes derived edges from bundles, and a
-    /// bundle typed against the marker cannot hold one.
+    /// Admissibility, as ruled: the asserted binding is evidence, and the derived inverse is a
+    /// Facts record that implements no marker and so can never enter a bundle typed against it.
     /// </summary>
     [TestMethod]
-    public void OnlyThePublisherAssertedEdgeIsAdmissibleEvidence()
+    public void OnlyTheAssertedBindingIsAdmissibleEvidence()
     {
         Assert.IsTrue(
-            typeof(IEuFactsEvidenceCarrier).IsAssignableFrom(typeof(EuPublisherRelationEdge)),
+            typeof(IEuFactsEvidenceCarrier).IsAssignableFrom(typeof(EuRelationEdgeBinding)),
             "A publisher-asserted EU relation edge is evidence.");
+
+        Assert.IsFalse(
+            typeof(IEuFactsEvidenceCarrier).IsAssignableFrom(typeof(DerivedInverseRelation)),
+            "REL-002 excludes derived edges from evidence bundles.");
 
         foreach (var type in new[]
                  {
-                     typeof(EuDerivedInverseRelationEdge), typeof(EuLocatedAmendmentAxiom),
-                     typeof(EuRepealEdge), typeof(EuConstituentClosure), typeof(EuConstituentStep),
+                     typeof(EuLocatedAmendmentAxiom), typeof(EuRepealEdge),
+                     typeof(EuConstituentClosure), typeof(EuConstituentStep),
                      typeof(EuStructuralLocation), typeof(EuAuthorityQualifiedToken),
-                     typeof(EuValidityDate),
+                     typeof(EuValidityDate), typeof(EuDerivedAmendmentInverse),
                  })
         {
             Assert.IsFalse(
@@ -401,68 +564,32 @@ public sealed class EuAmendmentRelationTests
         }
     }
 
-    /// <summary>Each of the three target states is drivable and survives onto the edge.</summary>
-    [TestMethod]
-    public void EveryTypedTargetStateIsDrivenAndKept()
-    {
-        foreach (var state in Enum.GetValues<EuRelationTargetState>())
-        {
-            var axiom = EuLocatedAmendmentAxiom.Create(
-                Work("00034b8a-6af2-4207-bc76-d24a10b5125c"),
-                Work("62212f0d-011f-471e-a033-bf56990d4329"),
-                state,
-                "{AN|" + Fd370 + "/AN} 1",
-                "{R|" + Fd375 + "/R}",
-                "2000-02-09",
-                rawEndOfValidity: null,
-                "MS",
-                "axiom:invented-state");
-
-            Assert.AreEqual(state, axiom.Edge.TargetState);
-        }
-
-        Assert.HasCount(3, Enum.GetValues<EuRelationTargetState>());
-    }
-
-    /// <summary>An undeclared enum value cannot be forced in through the cast a caller can write.</summary>
-    [TestMethod]
-    public void AnUndeclaredTargetStateIsRefused()
-    {
-        Assert.ThrowsExactly<ArgumentException>(() => EuPublisherRelationEdge.Create(
-            Work("00034b8a-6af2-4207-bc76-d24a10b5125c"),
-            Work("62212f0d-011f-471e-a033-bf56990d4329"),
-            AmendsPredicate,
-            (EuRelationTargetState)42,
-            []));
-    }
-
     // --- The publisher's raw values survive beside the typed reading ----------------------------
 
     /// <summary>
-    /// The Facts-layer axiom carries the publisher's raw values under the five annotation
-    /// predicates, and omits a qualifier for an annotation the publisher did not bind.
+    /// The Facts-layer axiom carries the publisher's raw values under the annotation predicates,
+    /// and omits a qualifier for an annotation the publisher did not bind. The same axiom reaches
+    /// the publisher relation, so the qualifiers travel with the edge rather than beside it.
     /// </summary>
     [TestMethod]
     public void TheFactsAxiomCarriesRawValuesAndOmitsUnboundAnnotations()
     {
         var withStart = Axiom(RetainedRows()[4], "axiom:invented-4");
         CollectionAssert.AreEqual(
-            new[]
-            {
-                "http://publications.europa.eu/ontology/annotation#reference_to_modified_location",
-                "http://publications.europa.eu/ontology/annotation#start_of_validity",
-                "http://publications.europa.eu/ontology/annotation#type_of_link_target",
-                "http://publications.europa.eu/ontology/annotation#role2",
-            },
+            new[] { LocationAnnotation, StartAnnotation, LinkTargetAnnotation, RoleAnnotation },
             withStart.Axiom.Qualifiers.Select(qualifier => qualifier.PredicateUri).ToArray());
         CollectionAssert.AreEqual(
             new[] { "{AN|" + Fd370 + "/AN} IA", "2010/01/01", "MS", "{M|" + Fd375 + "/M}" },
             withStart.Axiom.Qualifiers.Select(qualifier => qualifier.RawValue).ToArray());
 
+        // The same axiom object is the one the publisher relation carries.
+        Assert.HasCount(1, withStart.Edge.Asserted.QualifiedAxioms);
+        Assert.AreSame(withStart.Axiom, withStart.Edge.Asserted.QualifiedAxioms[0]);
+
         var withoutStart = Axiom(RetainedRows()[2], "axiom:invented-2");
         Assert.IsFalse(
             withoutStart.Axiom.Qualifiers.Any(qualifier =>
-                qualifier.PredicateUri.EndsWith("start_of_validity", StringComparison.Ordinal)),
+                string.Equals(qualifier.PredicateUri, StartAnnotation, StringComparison.Ordinal)),
             "An unbound annotation contributes no qualifier at all.");
     }
 
@@ -473,13 +600,14 @@ public sealed class EuAmendmentRelationTests
         var error = Assert.ThrowsExactly<ArgumentException>(() => EuLocatedAmendmentAxiom.Create(
             Work("00034b8a-6af2-4207-bc76-d24a10b5125c"),
             Work("62212f0d-011f-471e-a033-bf56990d4329"),
-            EuRelationTargetState.Unheld,
+            TargetBodyScope.BodyInScopeNotHeld,
             "{AN|" + Fd370 + "/AN} 1",
             "{R|" + Fd375 + "/R} 7",
             "2000-02-09",
             rawEndOfValidity: null,
             "MS",
-            "axiom:invented-role"));
+            "axiom:invented-role",
+            "obs:invented-role"));
 
         StringAssert.Contains(error.Message, "bare code");
     }
@@ -496,14 +624,15 @@ public sealed class EuAmendmentRelationTests
         var repeal = EuRepealEdge.Create(
             Celex("32016R0679"),
             Celex("31995L0046"),
-            EuRelationTargetState.Held,
+            TargetBodyScope.BodyInScopeHeld,
             "2018-05-25",
             rawEndOfValidity: null,
             "MS",
-            "axiom:invented-repeal");
+            "axiom:invented-repeal",
+            "obs:invented-repeal");
 
-        Assert.AreEqual(RepealsPredicate, repeal.Edge.PredicateUri);
-        Assert.IsInstanceOfType<EuPublisherRelationEdge>(repeal.Edge);
+        Assert.AreEqual(RepealsPredicate, repeal.Edge.Asserted.PredicateUri);
+        Assert.AreEqual(RelationAssertionKind.PublisherAsserted, repeal.Edge.Fact.Kind);
         Assert.AreEqual("2018-05-25", repeal.StartOfValidity!.RawLexicalValue);
         Assert.AreEqual(EuValidityDateShape.HyphenatedIso8601, repeal.StartOfValidity.ObservedShape);
         Assert.IsNotNull(repeal.StartOfValidity.TypedDate);
@@ -513,15 +642,9 @@ public sealed class EuAmendmentRelationTests
         // The annotation set difference from a located amendment, recorded as observed: a repeal
         // carries type_of_link_target and carries no reference_to_modified_location.
         var predicates = repeal.Axiom.Qualifiers.Select(qualifier => qualifier.PredicateUri).ToArray();
-        CollectionAssert.Contains(
-            predicates,
-            "http://publications.europa.eu/ontology/annotation#type_of_link_target");
-        CollectionAssert.DoesNotContain(
-            predicates,
-            "http://publications.europa.eu/ontology/annotation#reference_to_modified_location");
-        CollectionAssert.DoesNotContain(
-            predicates,
-            "http://publications.europa.eu/ontology/annotation#role2");
+        CollectionAssert.Contains(predicates, LinkTargetAnnotation);
+        CollectionAssert.DoesNotContain(predicates, LocationAnnotation);
+        CollectionAssert.DoesNotContain(predicates, RoleAnnotation);
     }
 
     /// <summary>A repeal with no dates at all is constructible, because both are optional.</summary>
@@ -531,11 +654,12 @@ public sealed class EuAmendmentRelationTests
         var repeal = EuRepealEdge.Create(
             Celex("32016R0679"),
             Celex("31995L0046"),
-            EuRelationTargetState.Unresolved,
+            TargetBodyScope.BodyOutsideScope,
             rawStartOfValidity: null,
             rawEndOfValidity: null,
             "MS",
-            "axiom:invented-repeal-bare");
+            "axiom:invented-repeal-bare",
+            "obs:invented-repeal-bare");
 
         Assert.IsNull(repeal.StartOfValidity);
         Assert.IsNull(repeal.EndOfValidity);

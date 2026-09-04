@@ -98,6 +98,15 @@ public sealed class EuAuthorityQualifiedToken
         return new EuAuthorityQualifiedToken(code, authorityUri, value);
     }
 
+    /// <remarks>
+    /// <b>The ASCII bound is observed, not specified.</b> Every code in the retained fixture and in
+    /// the canary quotations is short uppercase ASCII: <c>AN</c>, <c>AR</c>, <c>PTA</c>, and the
+    /// fd_375 members <c>R</c>, <c>J</c> and <c>M</c>. No publisher document has been read stating
+    /// the character set these lists may draw on, so this bound describes what has been seen rather
+    /// than what is permitted. If a code outside it ever appears it will surface as a refusal
+    /// naming the offending value, which is the visible failure, not the silent one; widening it is
+    /// then a one-line change against that observation.
+    /// </remarks>
     internal static bool IsAdmittedCode(string? code)
     {
         if (code is not { Length: >= 1 and <= 64 })
@@ -116,6 +125,11 @@ public sealed class EuAuthorityQualifiedToken
         return true;
     }
 
+    /// <remarks>
+    /// The same observed bound as <see cref="IsAdmittedCode"/>, widened to admit the space and the
+    /// punctuation seen in real trailing values (<c>1</c>, <c>2</c>, <c>23</c>, <c>IA</c>, and
+    /// review/22's <c>(e)</c>). Also observed rather than specified.
+    /// </remarks>
     internal static bool IsAdmittedValue(string? value)
     {
         if (value is not { Length: >= 1 and <= 128 })
@@ -197,7 +211,7 @@ public sealed class EuStructuralLocation
     public IReadOnlyList<EuAuthorityQualifiedToken> Tokens { get; }
 
     /// <summary>
-    /// Parses a <c>reference_to_modified_location</c> value against the pinned fd_370 list.
+    /// Parses an authority-qualified token sequence against a caller-named pinned authority list.
     /// </summary>
     /// <remarks>
     /// The verbatim input is retained on <see cref="RawValue"/>, so the one thing this parse
@@ -205,12 +219,6 @@ public sealed class EuStructuralLocation
     /// from the whole value. Nothing else is normalised: codes, IRIs and values are sliced out and
     /// stored exactly as they appear.
     /// </remarks>
-    public static EuStructuralLocation Parse(string rawValue) =>
-        Parse(rawValue, EuAmendmentRelationVocabulary.LocationAuthorityListUri);
-
-    /// <summary>
-    /// Parses an authority-qualified token sequence against a caller-named pinned authority list.
-    /// </summary>
     public static EuStructuralLocation Parse(string rawValue, string expectedAuthorityListUri)
     {
         ArgumentNullException.ThrowIfNull(rawValue);

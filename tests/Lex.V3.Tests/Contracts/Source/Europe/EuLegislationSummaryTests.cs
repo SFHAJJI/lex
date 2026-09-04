@@ -326,7 +326,7 @@ public sealed class EuLegislationSummaryTests
     /// <c>Lex.V3.Contracts</c> assembly rather than by a hand-built example bundle:
     /// <see cref="IEuFactsEvidenceCarrier"/>'s implementers are exactly E1's own
     /// <see cref="EuDateAxiomBinding"/>, E6's own <see cref="EuCaseLawLinkBinding"/> and E4's own
-    /// <see cref="EuPublisherRelationEdge"/>, and this record is not assignable to the marker. A
+    /// <see cref="EuRelationEdgeBinding"/>, and this record is not assignable to the marker. A
     /// further implementer added later would change the expected array here too, so the closed set
     /// cannot silently widen; see the type remarks on
     /// <see cref="EuLegislationSummary"/> and on <see cref="IEuFactsEvidenceCarrier"/> for why a
@@ -335,9 +335,9 @@ public sealed class EuLegislationSummaryTests
     /// <remarks>
     /// E4 widened this pin from two implementers to three, ruled at
     /// <c>lex-event-20260904T190136614Z-26f124d9e6d246348b54b6719e22a63a</c>: a publisher-asserted
-    /// EU relation edge is evidence. E4's derived inverse
-    /// (<c>EuDerivedInverseRelationEdge</c>) is deliberately absent from this list and must stay
-    /// absent, because REL-002 excludes derived edges from evidence bundles.
+    /// EU relation edge is evidence. E4's derived inverse is a Facts
+    /// <c>DerivedInverseRelation</c>, which implements no marker at all and so can never appear in
+    /// this list, which is REL-002's exclusion of derived edges from evidence bundles.
     /// </remarks>
     [TestMethod]
     public void TheEvidenceCarrierMarkerIsImplementedByExactlyE1sE6sAndE4sBindingsAndNotByThisRecord()
@@ -353,7 +353,7 @@ public sealed class EuLegislationSummaryTests
             {
                 typeof(EuCaseLawLinkBinding),
                 typeof(EuDateAxiomBinding),
-                typeof(EuPublisherRelationEdge),
+                typeof(EuRelationEdgeBinding),
             },
             implementers);
 

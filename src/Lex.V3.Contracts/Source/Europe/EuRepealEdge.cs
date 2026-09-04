@@ -34,7 +34,7 @@ namespace Lex.V3.Contracts.Source.Europe;
 public sealed class EuRepealEdge
 {
     private EuRepealEdge(
-        EuPublisherRelationEdge edge,
+        EuRelationEdgeBinding edge,
         EuValidityDate? startOfValidity,
         EuValidityDate? endOfValidity,
         string typeOfLinkTarget,
@@ -48,10 +48,11 @@ public sealed class EuRepealEdge
     }
 
     /// <summary>
-    /// The repeal edge, repealing act to repealed act, carrying the typed target state. Always a
-    /// publisher assertion on <see cref="EuAmendmentRelationVocabulary.RepealsPredicateUri"/>.
+    /// The repeal edge, repealing act to repealed act, as a binding over the Facts layer's own
+    /// <see cref="PublisherRelation"/> and <see cref="RelationFact"/>. Always a publisher assertion
+    /// on <see cref="EuAmendmentRelationVocabulary.RepealsPredicateUri"/>.
     /// </summary>
-    public EuPublisherRelationEdge Edge { get; }
+    public EuRelationEdgeBinding Edge { get; }
 
     /// <summary>When the repeal takes effect, or <c>null</c> where the publisher bound none.</summary>
     public EuValidityDate? StartOfValidity { get; }
@@ -68,19 +69,23 @@ public sealed class EuRepealEdge
     /// <summary>Reads one repeal axiom from the publisher's raw annotation values.</summary>
     /// <param name="source">The repealing act.</param>
     /// <param name="target">The repealed act.</param>
-    /// <param name="targetState">How <paramref name="target"/> stands.</param>
+    /// <param name="targetBodyScope">Whether <paramref name="target"/>'s own body is held.</param>
     /// <param name="rawStartOfValidity">The <c>start_of_validity</c> value, or null when unbound.</param>
     /// <param name="rawEndOfValidity">The <c>end_of_validity</c> value, or null when unbound.</param>
     /// <param name="typeOfLinkTarget">The <c>type_of_link_target</c> value, verbatim.</param>
     /// <param name="remoteAxiomId">The publisher's own <c>owl:Axiom</c> identity.</param>
+    /// <param name="sourceObservationId">
+    /// The custody coordinate for the observation this edge came from.
+    /// </param>
     public static EuRepealEdge Create(
         OfficialIdentitySet source,
         OfficialIdentitySet target,
-        EuRelationTargetState targetState,
+        TargetBodyScope targetBodyScope,
         string? rawStartOfValidity,
         string? rawEndOfValidity,
         string typeOfLinkTarget,
-        string remoteAxiomId)
+        string remoteAxiomId,
+        string sourceObservationId)
     {
         var start = rawStartOfValidity is null ? null : EuValidityDate.Create(rawStartOfValidity);
         var end = rawEndOfValidity is null ? null : EuValidityDate.Create(rawEndOfValidity);
@@ -108,12 +113,13 @@ public sealed class EuRepealEdge
             linkTargetType));
 
         var axiom = new QualifiedAxiom(remoteAxiomId, qualifiers);
-        var edge = EuPublisherRelationEdge.Create(
+        var edge = EuRelationEdgeBinding.Create(
             source,
             target,
             EuAmendmentRelationVocabulary.RepealsPredicateUri,
-            targetState,
-            new[] { axiom });
+            targetBodyScope,
+            new[] { axiom },
+            sourceObservationId);
 
         return new EuRepealEdge(edge, start, end, linkTargetType, axiom);
     }

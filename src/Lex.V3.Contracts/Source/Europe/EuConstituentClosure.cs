@@ -4,6 +4,32 @@ using Lex.V3.Contracts.Facts;
 namespace Lex.V3.Contracts.Source.Europe;
 
 /// <summary>
+/// Whether a consolidation step's own act resolved.
+/// </summary>
+/// <remarks>
+/// <b>Not a second spelling of <see cref="TargetBodyScope"/>.</b> That enum answers whether a
+/// resolved target's body is held, with three answers that all presume resolution succeeded. This
+/// one answers whether it succeeded, which is the question R4's unresolved case is about, and it
+/// has exactly two members because there are exactly two answers. An earlier version of E4 carried
+/// a three-member EU target-state enum that duplicated <see cref="TargetBodyScope"/>'s held and
+/// not-held answers to reach the unresolved one; the design verdict
+/// <c>lex-event-20260904T192820932Z-4101310a2b7a482d87330f1eda1ec14a</c> named that class of
+/// duplication as the defect, so the overlapping members are gone and only the genuinely new
+/// distinction remains.
+/// </remarks>
+public enum EuConstituentMemberResolution
+{
+    /// <summary>The step's act resolved and can be reasoned about.</summary>
+    Resolved,
+
+    /// <summary>
+    /// The step's act did not resolve. Nothing can be said about it, including that the rest of
+    /// the chain is unaffected by it.
+    /// </summary>
+    Unresolved,
+}
+
+/// <summary>
 /// Why a constituent closure could not be validated. These are the four cases Candidate 5 R4
 /// names, and a closure that hits any of them blocks.
 /// </summary>
@@ -36,14 +62,23 @@ public enum EuConstituentClosureRefusal
 }
 
 /// <summary>
-/// One consolidation step: a consolidated act, the act it is based on, and the act it consolidates.
+/// One consolidation step: a consolidated act, the act it is based on, and the act it consolidates,
+/// each read from a named publisher predicate.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The two predicates are the ones the E4 scope ruling names,
-/// <c>act_consolidated_based_on_resource_legal</c> and
-/// <c>act_consolidated_consolidates_resource_legal</c>. They answer different questions: what the
-/// original act is, and what this consolidation supersedes. A closure that reads only one of them
-/// cannot tell a legitimate chain from two chains interleaved.
+/// <see cref="EuAmendmentRelationVocabulary.ConsolidatedBasedOnPredicateUri"/> and
+/// <see cref="EuAmendmentRelationVocabulary.ConsolidatedConsolidatesPredicateUri"/>. They answer
+/// different questions: what the original act is, and what this consolidation supersedes. A closure
+/// reading only one of them cannot tell a legitimate chain from two chains interleaved.
+/// </para>
+/// <para>
+/// <b>A step names the predicate each half was read from</b>, and <see cref="Create"/> refuses any
+/// other. Carrying the predicate rather than assuming it means the two constants are bound to the
+/// data they describe instead of sitting in the vocabulary unused, and a step built from the wrong
+/// predicate is refused by name rather than silently treated as the right one.
+/// </para>
 /// </remarks>
 public sealed class EuConstituentStep
 {
@@ -51,44 +86,87 @@ public sealed class EuConstituentStep
         OfficialIdentitySet consolidatedAct,
         OfficialIdentitySet basedOn,
         OfficialIdentitySet consolidates,
-        EuRelationTargetState targetState)
+        EuConstituentMemberResolution resolution)
     {
         ConsolidatedAct = consolidatedAct;
         BasedOn = basedOn;
         Consolidates = consolidates;
-        TargetState = targetState;
+        Resolution = resolution;
     }
 
     /// <summary>The consolidated act this step is.</summary>
     public OfficialIdentitySet ConsolidatedAct { get; }
 
-    /// <summary>The act this consolidation is based on, by <c>act_consolidated_based_on_resource_legal</c>.</summary>
+    /// <summary>The act this consolidation is based on.</summary>
     public OfficialIdentitySet BasedOn { get; }
 
-    /// <summary>The act this consolidation consolidates, by <c>act_consolidated_consolidates_resource_legal</c>.</summary>
+    /// <summary>The act this consolidation consolidates.</summary>
     public OfficialIdentitySet Consolidates { get; }
 
-    /// <summary>How this step's own act stands.</summary>
-    public EuRelationTargetState TargetState { get; }
+    /// <summary>Whether this step's own act resolved.</summary>
+    public EuConstituentMemberResolution Resolution { get; }
 
-    /// <summary>Builds one step.</summary>
+    /// <summary>The predicate <see cref="BasedOn"/> was read from. Always the pinned one.</summary>
+    public static string BasedOnPredicateUri =>
+        EuAmendmentRelationVocabulary.ConsolidatedBasedOnPredicateUri;
+
+    /// <summary>The predicate <see cref="Consolidates"/> was read from. Always the pinned one.</summary>
+    public static string ConsolidatesPredicateUri =>
+        EuAmendmentRelationVocabulary.ConsolidatedConsolidatesPredicateUri;
+
+    /// <summary>
+    /// Builds one step, refusing either half read from a predicate other than the pinned one.
+    /// </summary>
+    /// <param name="consolidatedAct">The consolidated act this step is.</param>
+    /// <param name="basedOn">The act it is based on.</param>
+    /// <param name="basedOnPredicateUri">
+    /// The predicate <paramref name="basedOn"/> was read from. Must be
+    /// <see cref="EuAmendmentRelationVocabulary.ConsolidatedBasedOnPredicateUri"/>.
+    /// </param>
+    /// <param name="consolidates">The act it consolidates.</param>
+    /// <param name="consolidatesPredicateUri">
+    /// The predicate <paramref name="consolidates"/> was read from. Must be
+    /// <see cref="EuAmendmentRelationVocabulary.ConsolidatedConsolidatesPredicateUri"/>.
+    /// </param>
+    /// <param name="resolution">Whether <paramref name="consolidatedAct"/> resolved.</param>
     public static EuConstituentStep Create(
         OfficialIdentitySet consolidatedAct,
         OfficialIdentitySet basedOn,
+        string basedOnPredicateUri,
         OfficialIdentitySet consolidates,
-        EuRelationTargetState targetState)
+        string consolidatesPredicateUri,
+        EuConstituentMemberResolution resolution)
     {
         ArgumentNullException.ThrowIfNull(consolidatedAct);
         ArgumentNullException.ThrowIfNull(basedOn);
         ArgumentNullException.ThrowIfNull(consolidates);
-        if (!Enum.IsDefined(targetState))
+
+        if (!string.Equals(basedOnPredicateUri, BasedOnPredicateUri, StringComparison.Ordinal))
         {
             throw new ArgumentException(
-                $"{targetState} is not a declared EuRelationTargetState member.",
-                nameof(targetState));
+                $"\"{EuAuthorityQualifiedToken.Describe(basedOnPredicateUri)}\" is not "
+                    + BasedOnPredicateUri + ", the predicate a based-on member is read from.",
+                nameof(basedOnPredicateUri));
         }
 
-        return new EuConstituentStep(consolidatedAct, basedOn, consolidates, targetState);
+        if (!string.Equals(
+                consolidatesPredicateUri, ConsolidatesPredicateUri, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                $"\"{EuAuthorityQualifiedToken.Describe(consolidatesPredicateUri)}\" is not "
+                    + ConsolidatesPredicateUri
+                    + ", the predicate a consolidates member is read from.",
+                nameof(consolidatesPredicateUri));
+        }
+
+        if (!Enum.IsDefined(resolution))
+        {
+            throw new ArgumentException(
+                $"{resolution} is not a declared EuConstituentMemberResolution member.",
+                nameof(resolution));
+        }
+
+        return new EuConstituentStep(consolidatedAct, basedOn, consolidates, resolution);
     }
 }
 
@@ -185,7 +263,7 @@ public sealed class EuConstituentClosure
         {
             var step = ordered[index];
 
-            if (step.TargetState == EuRelationTargetState.Unresolved)
+            if (step.Resolution == EuConstituentMemberResolution.Unresolved)
             {
                 return Refuse(
                     root,

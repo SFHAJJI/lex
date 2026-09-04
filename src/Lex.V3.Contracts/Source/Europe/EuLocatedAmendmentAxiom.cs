@@ -45,7 +45,7 @@ namespace Lex.V3.Contracts.Source.Europe;
 public sealed class EuLocatedAmendmentAxiom
 {
     private EuLocatedAmendmentAxiom(
-        EuPublisherRelationEdge edge,
+        EuRelationEdgeBinding edge,
         EuStructuralLocation location,
         EuAuthorityQualifiedToken role,
         EuValidityDate? startOfValidity,
@@ -63,11 +63,12 @@ public sealed class EuLocatedAmendmentAxiom
     }
 
     /// <summary>
-    /// The amendment edge this axiom annotates, carrying the typed target state. Always on
+    /// The amendment edge this axiom annotates, as a binding over the Facts layer's own
+    /// <see cref="PublisherRelation"/> and <see cref="RelationFact"/>. Always on
     /// <see cref="EuAmendmentRelationVocabulary.AmendsPredicateUri"/> and always a publisher
     /// assertion, because that is the only direction the store holds.
     /// </summary>
-    public EuPublisherRelationEdge Edge { get; }
+    public EuRelationEdgeBinding Edge { get; }
 
     /// <summary>The structural location, as ordered authority-qualified tokens.</summary>
     public EuStructuralLocation Location { get; }
@@ -102,23 +103,28 @@ public sealed class EuLocatedAmendmentAxiom
     /// </summary>
     /// <param name="source">The amending act.</param>
     /// <param name="target">The amended act.</param>
-    /// <param name="targetState">How <paramref name="target"/> stands.</param>
+    /// <param name="targetBodyScope">Whether <paramref name="target"/>'s own body is held.</param>
     /// <param name="rawLocation">The <c>reference_to_modified_location</c> value, verbatim.</param>
     /// <param name="rawRole">The <c>role2</c> value, verbatim, for example <c>{R|...fd_375/R}</c>.</param>
     /// <param name="rawStartOfValidity">The <c>start_of_validity</c> value, or null when unbound.</param>
     /// <param name="rawEndOfValidity">The <c>end_of_validity</c> value, or null when unbound.</param>
     /// <param name="typeOfLinkTarget">The <c>type_of_link_target</c> value, verbatim.</param>
     /// <param name="remoteAxiomId">The publisher's own <c>owl:Axiom</c> identity.</param>
+    /// <param name="sourceObservationId">
+    /// The custody coordinate for the observation this edge came from. Required, so a live run can
+    /// always say which observation produced an edge.
+    /// </param>
     public static EuLocatedAmendmentAxiom Create(
         OfficialIdentitySet source,
         OfficialIdentitySet target,
-        EuRelationTargetState targetState,
+        TargetBodyScope targetBodyScope,
         string rawLocation,
         string rawRole,
         string? rawStartOfValidity,
         string? rawEndOfValidity,
         string typeOfLinkTarget,
-        string remoteAxiomId)
+        string remoteAxiomId,
+        string sourceObservationId)
     {
         ArgumentNullException.ThrowIfNull(rawLocation);
         ArgumentNullException.ThrowIfNull(rawRole);
@@ -181,12 +187,13 @@ public sealed class EuLocatedAmendmentAxiom
             roleTokens.RawValue));
 
         var axiom = new QualifiedAxiom(remoteAxiomId, qualifiers);
-        var edge = EuPublisherRelationEdge.Create(
+        var edge = EuRelationEdgeBinding.Create(
             source,
             target,
             EuAmendmentRelationVocabulary.AmendsPredicateUri,
-            targetState,
-            new[] { axiom });
+            targetBodyScope,
+            new[] { axiom },
+            sourceObservationId);
 
         return new EuLocatedAmendmentAxiom(edge, location, role, start, end, linkTargetType, axiom);
     }

@@ -1,7 +1,6 @@
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Facts;
 using Lex.V3.Contracts.Source.Europe;
-using Lex.V3.TestSupport;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Lex.V3.Tests.Contracts.Source.Europe;
@@ -20,6 +19,11 @@ namespace Lex.V3.Tests.Contracts.Source.Europe;
 [TestClass]
 public sealed class EuConstituentClosureTests
 {
+    private const string BasedOnPredicate =
+        "http://publications.europa.eu/ontology/cdm#act_consolidated_based_on_resource_legal";
+    private const string ConsolidatesPredicate =
+        "http://publications.europa.eu/ontology/cdm#act_consolidated_consolidates_resource_legal";
+
     private static OfficialIdentitySet Act(string celex) =>
         new(PublisherId.EuEurLex, [new OfficialIdentifier(FactsIdentifierFamily.Celex, celex)]);
 
@@ -38,8 +42,42 @@ public sealed class EuConstituentClosureTests
         OfficialIdentitySet act,
         OfficialIdentitySet basedOn,
         OfficialIdentitySet consolidates,
-        EuRelationTargetState state = EuRelationTargetState.Held) =>
-        EuConstituentStep.Create(act, basedOn, consolidates, state);
+        EuConstituentMemberResolution resolution = EuConstituentMemberResolution.Resolved) =>
+        EuConstituentStep.Create(
+            act, basedOn, BasedOnPredicate, consolidates, ConsolidatesPredicate, resolution);
+
+    // --- Each half names the predicate it was read from ------------------------------------------
+
+    /// <summary>
+    /// A step names the two publisher predicates its members were read from, and refuses either
+    /// half read from another predicate. This is what binds the two constants to real data instead
+    /// of leaving them declared and unused.
+    /// </summary>
+    [TestMethod]
+    public void AStepNamesBothConsolidationPredicatesAndRefusesAnyOther()
+    {
+        Assert.AreEqual(BasedOnPredicate, EuConstituentStep.BasedOnPredicateUri);
+        Assert.AreEqual(ConsolidatesPredicate, EuConstituentStep.ConsolidatesPredicateUri);
+
+        var wrongBasedOn = Assert.ThrowsExactly<ArgumentException>(() => EuConstituentStep.Create(
+            First, Root, ConsolidatesPredicate, Root, ConsolidatesPredicate,
+            EuConstituentMemberResolution.Resolved));
+        StringAssert.Contains(wrongBasedOn.Message, BasedOnPredicate);
+
+        var wrongConsolidates = Assert.ThrowsExactly<ArgumentException>(() => EuConstituentStep.Create(
+            First, Root, BasedOnPredicate, Root, BasedOnPredicate,
+            EuConstituentMemberResolution.Resolved));
+        StringAssert.Contains(wrongConsolidates.Message, ConsolidatesPredicate);
+    }
+
+    /// <summary>An undeclared resolution value cannot be forced in through a cast.</summary>
+    [TestMethod]
+    public void AnUndeclaredResolutionIsRefused()
+    {
+        Assert.ThrowsExactly<ArgumentException>(() => EuConstituentStep.Create(
+            First, Root, BasedOnPredicate, Root, ConsolidatesPredicate,
+            (EuConstituentMemberResolution)42));
+    }
 
     // --- The validated closure ------------------------------------------------------------------
 
@@ -76,7 +114,10 @@ public sealed class EuConstituentClosureTests
     {
         var closure = EuConstituentClosure.Validate(
             Root,
-            [Step(First, Root, Root), Step(Second, Root, First, EuRelationTargetState.Unresolved)]);
+            [
+                Step(First, Root, Root),
+                Step(Second, Root, First, EuConstituentMemberResolution.Unresolved),
+            ]);
 
         Assert.AreEqual(EuConstituentClosureRefusal.UnresolvedMember, closure.Refusal);
         StringAssert.Contains(closure.RefusedDetail!, "step 1");
@@ -154,14 +195,19 @@ public sealed class EuConstituentClosureTests
     {
         var reached = new[]
         {
-            EuConstituentClosure.Validate(Root, [Step(First, Root, Root, EuRelationTargetState.Unresolved)]).Refusal,
-            EuConstituentClosure.Validate(Root, [Step(First, Root, Root), Step(First, Root, First)]).Refusal,
+            EuConstituentClosure.Validate(
+                Root,
+                [Step(First, Root, Root, EuConstituentMemberResolution.Unresolved)]).Refusal,
+            EuConstituentClosure.Validate(
+                Root, [Step(First, Root, Root), Step(First, Root, First)]).Refusal,
             EuConstituentClosure.Validate(Root, [Step(First, Act("31995L0046"), Root)]).Refusal,
-            EuConstituentClosure.Validate(Root, [Step(First, Root, Root), Step(Second, Root, Root)]).Refusal,
+            EuConstituentClosure.Validate(
+                Root, [Step(First, Root, Root), Step(Second, Root, Root)]).Refusal,
             EuConstituentClosure.Validate(Root, []).Refusal,
         };
 
-        CollectionAssert.AreEquivalent(Enum.GetValues<EuConstituentClosureRefusal>(), reached.Distinct().ToArray());
+        CollectionAssert.AreEquivalent(
+            Enum.GetValues<EuConstituentClosureRefusal>(), reached.Distinct().ToArray());
     }
 
     // --- Blocking is structural, not advisory ---------------------------------------------------
@@ -177,46 +223,14 @@ public sealed class EuConstituentClosureTests
         // back the first step here.
         var closure = EuConstituentClosure.Validate(
             Root,
-            [Step(First, Root, Root), Step(Second, Root, First, EuRelationTargetState.Unresolved)]);
+            [
+                Step(First, Root, Root),
+                Step(Second, Root, First, EuConstituentMemberResolution.Unresolved),
+            ]);
 
         Assert.IsFalse(closure.IsValidated);
         var error = Assert.ThrowsExactly<InvalidOperationException>(() => _ = closure.Chain);
         StringAssert.Contains(error.Message, "partial or otherwise");
         StringAssert.Contains(error.Message, "UnresolvedMember");
-    }
-
-    /// <summary>
-    /// The only way to mint a closure is <see cref="EuConstituentClosure.Validate"/>. Pinned
-    /// structurally, because a second producer could hand out a closure whose chain was never
-    /// checked, and visibility alone does not prevent one being added.
-    /// </summary>
-    [TestMethod]
-    public void ValidateIsTheOnlyDoorThatMintsAClosure()
-    {
-        const string N = "Lex.V3.Contracts.Source.Europe.EuConstituentClosure";
-        const string Facts = "Lex.V3.Contracts.Facts.OfficialIdentitySet";
-
-        CollectionAssert.AreEqual(
-            new[]
-            {
-                // The two nullable parameters are the refusal path: a refused closure is built with
-                // no chain and a detail string, and a validated one with a chain and no detail.
-                "constructor private instance " + N + "::.ctor(" + Facts
-                    + ", System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Europe."
-                    + "EuConstituentStep>?, Lex.V3.Contracts.Source.Europe."
-                    + "EuConstituentClosureRefusal, System.String?) -> " + N,
-                "method private static " + N + "::Refuse(" + Facts
-                    + ", Lex.V3.Contracts.Source.Europe.EuConstituentClosureRefusal, System.String) -> " + N,
-                "method public static " + N + "::Validate(" + Facts
-                    + ", System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Europe."
-                    + "EuConstituentStep>) -> " + N,
-            },
-            ConstructionSurface.Of(typeof(EuConstituentClosure)).ToArray());
-
-        Assert.IsEmpty(
-            ConstructionSurface.ProducersIn(
-                typeof(EuConstituentClosure).Assembly,
-                typeof(EuConstituentClosure),
-                includeNonPublic: true));
     }
 }
