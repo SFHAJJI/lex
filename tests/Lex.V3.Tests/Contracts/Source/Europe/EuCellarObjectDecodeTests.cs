@@ -9,34 +9,63 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace Lex.V3.Tests.Contracts.Source.Europe;
 
 /// <summary>
-/// D1-05b: the decode from a verified EU consolidation-family row set into
-/// <see cref="EuCellarObjectSnapshot"/>. Fixtures mirror the real closure plan's own family
-/// projection (<c>EuConsolidationDiscoveryPlan.CreateDeliveryProfile(EuConsolidationQuerySet.Family)</c>,
-/// the same door <see cref="EuConsolidationDiscoveryTests"/> uses) and reuse GDPR's real CELEX and
-/// Cellar coordinates from Appendix A and review/23's observed CDM shapes, per SCOPE_RULING
-/// <c>lex-event-20260904T015609998Z-bb7cc08f556347f5a5455a58f810b9ee</c>: no live SPARQL call, no law
+/// D1-05c-1: the decode extended from D1-05a's family census plus D1-05c-1's own object-facts
+/// (family P) and Expression-facts (family X) row sets into one <see cref="EuCellarObjectSnapshot"/>
+/// per object in the closure's own object set <c>O</c>. Fixtures mirror the real plans' own delivery
+/// profiles (<c>EuConsolidationDiscoveryPlan.CreateDeliveryProfile</c>,
+/// <c>EuObjectFactsDiscoveryPlan.CreateDeliveryProfile</c>) and reuse GDPR's real CELEX and Cellar
+/// coordinates from Appendix A, per SCOPE_RULING
+/// <c>lex-event-20260904T040718222Z-7e6f29af07024cf5b2cb716f94f288e3</c>: no live SPARQL call, no law
 /// text.
 /// </summary>
 [TestClass]
 public sealed class EuCellarObjectDecodeTests
 {
-    // GDPR: Appendix A seed 32016R0679, review/23's own worked CELEX/Cellar example.
+    // GDPR: Appendix A seed 32016R0679.
     private const string GdprCelex = "32016R0679";
     private const string GdprRoot =
         "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1";
-
-    // A dated consolidation of GDPR, in the shape review/23 records
-    // (act_consolidated_number 2016R0679/20160504): a plausible distinct Cellar state.
     private const string StateA =
         "http://publications.europa.eu/resource/cellar/44444444-4444-4444-8444-444444444444";
     private const string StateB =
         "http://publications.europa.eu/resource/cellar/55555555-5555-4555-8555-555555555555";
+    private const string ExprA =
+        "http://publications.europa.eu/resource/cellar/66666666-6666-4666-8666-666666666666.0001";
+    private const string ExprB =
+        "http://publications.europa.eu/resource/cellar/77777777-7777-4777-8777-777777777777.0001";
+    private const string CitedRoot =
+        "http://publications.europa.eu/resource/cellar/88888888-8888-4888-8888-888888888888";
 
     private const string XsdString = "http://www.w3.org/2001/XMLSchema#string";
     private const string XsdInteger = "http://www.w3.org/2001/XMLSchema#integer";
+    private const string ConsolidatedActResourceTypeIri =
+        "http://publications.europa.eu/resource/authority/resource-type/CONSOLID_ACT";
+    private const string OrdinaryActResourceTypeIri =
+        "http://publications.europa.eu/resource/authority/resource-type/REG";
+    private const string EnglishLanguageAuthorityIri =
+        "http://publications.europa.eu/resource/authority/language/ENG";
+    private const string FrenchLanguageAuthorityIri =
+        "http://publications.europa.eu/resource/authority/language/FRA";
+
+    private static readonly string CelexIri =
+        EuObjectFactsDiscoveryPlan.CdmIri(EuCdmPredicate.ResourceLegalIdCelex);
+    private static readonly string WorkHasResourceTypeIri =
+        EuObjectFactsDiscoveryPlan.CdmIri(EuCdmPredicate.WorkHasResourceType);
+    private static readonly string AmendsIri =
+        EuObjectFactsDiscoveryPlan.RelationIri(EuRelationFamily.Amends);
+    private static readonly string ConsolidatedBasedOnIri =
+        EuObjectFactsDiscoveryPlan.RelationIri(EuRelationFamily.ConsolidatedBasedOn);
+    private static readonly string ExpressionBelongsToWorkIri =
+        EuObjectFactsDiscoveryPlan.CdmIri(EuCdmPredicate.ExpressionBelongsToWork);
+    private static readonly string ExpressionUsesLanguageIri =
+        EuObjectFactsDiscoveryPlan.CdmIri(EuCdmPredicate.ExpressionUsesLanguage);
 
     private static readonly RepeatedEnumerationInterpretationProfile FamilyProfile =
         EuConsolidationDiscoveryPlan.Create().CreateDeliveryProfile(EuConsolidationQuerySet.Family);
+    private static readonly RepeatedEnumerationInterpretationProfile ObjectFactsProfile =
+        EuObjectFactsDiscoveryPlan.Create().CreateDeliveryProfile(EuObjectFactsQuerySet.ObjectFacts);
+    private static readonly RepeatedEnumerationInterpretationProfile ExpressionFactsProfile =
+        EuObjectFactsDiscoveryPlan.Create().CreateDeliveryProfile(EuObjectFactsQuerySet.ExpressionFacts);
 
     private static SourceArtifactRef Evidence(string label) =>
         new($"urn:uuid:{DeterministicGuid(label)}", Digest("evidence:" + label));
@@ -64,164 +93,611 @@ public sealed class EuCellarObjectDecodeTests
             Array.AsReadOnly(new[] { terms[4] }));
     }
 
-    // ---- Happy path. ----
+    // ---- Object-facts (family P) row fixtures. ----
 
-    [TestMethod]
-    public void AMinimalSnapshotDecodesFromOneDiscoveredState()
+    private sealed record PValue(string Value, bool IsIri = true, string? Datatype = null, string? Lang = null);
+
+    private static RepeatedEnumerationRow PBoundRow(string objectIri, string predicateIri, PValue value)
     {
-        var rows = new[] { FamilyRow(GdprCelex, GdprRoot, StateA) };
-
-        var snapshot = EuCellarObjectDecode.TryDecode(
-            GdprCelex, rows, FamilyProfile, EuActForm.Regulation, Evidence("gdpr"),
-            out var refusal, out var snapshotRefusal);
-
-        Assert.IsNotNull(snapshot);
-        Assert.AreEqual(EuCellarObjectDecodeRefusal.None, refusal);
-        Assert.AreEqual(EuCellarObjectSnapshotRefusal.None, snapshotRefusal);
-        Assert.AreEqual(GdprRoot, snapshot!.CanonicalWorkRoot);
-        Assert.AreEqual(GdprRoot, snapshot.ObjectRef.PublisherUri);
-
-        var celexObservation = snapshot.Predicate(EuCdmPredicate.ResourceLegalIdCelex);
-        Assert.AreEqual(EuPredicateObservationState.ObservedPresent, celexObservation.State);
-        CollectionAssert.AreEqual(new[] { GdprCelex }, celexObservation.Values.ToArray());
-
-        Assert.AreEqual(
-            EuPredicateObservationState.NotObserved,
-            snapshot.Predicate(EuCdmPredicate.ActConsolidatedDate).State);
-
-        var consolidated = snapshot.Relation(EuRelationFamily.ConsolidatedBasedOn);
-        Assert.AreEqual(EuRelationAcquisitionState.Complete, consolidated.Acquisition);
-        Assert.AreEqual(1, consolidated.Edges.Count);
-        Assert.AreEqual(StateA, consolidated.Edges[0].TargetWorkRoot);
-        Assert.AreEqual(EuRelationAuthority.OntologyAuthorizedInverse, consolidated.Edges[0].Authority);
-
-        Assert.AreEqual(
-            EuRelationAcquisitionState.Unacquired,
-            snapshot.Relation(EuRelationFamily.Amends).Acquisition);
-        Assert.AreEqual(0, snapshot.Relation(EuRelationFamily.Amends).Edges.Count);
-
-        Assert.AreEqual(EuChannel.CellarSparqlEndpoint, snapshot.Channel.Channel);
-        Assert.IsNull(snapshot.Language);
-        Assert.IsNull(snapshot.Format);
-        Assert.IsNull(snapshot.Rights);
-        Assert.IsNull(snapshot.Supporting);
-    }
-
-    // Fold-in for the D1-05b decode refreeze
-    // (lex-event-20260904T025508487Z-0d433eb3f5254b6188c05ab22e962acd): BuildObjectRef's canonical
-    // key prefix ("eu-consolidation-root:") feeds both ObjectRef.CanonicalKey and its SHA-256 digest,
-    // and neither was ever asserted against a fixed expected string. The two expected literals below
-    // are computed independently of this production code (sha256sum and, cross-checked, openssl dgst
-    // -sha256, over the exact UTF-8 bytes of the canonical key string), the same "pin the GDPR root's
-    // canonical key and digest as fixed literals" convention D1-05a used for the binding digest
-    // (EuScopeProfileTests.ProfileAndSelectorTableDigestsArePinnedLiterally): a change to the prefix,
-    // to the root the key is built from, or to how the digest is taken, is a real, catchable diff
-    // rather than a tautology that recomputes the same literal through the same code it is meant to
-    // guard.
-    [TestMethod]
-    public void TheObjectRefsCanonicalKeyAndDigestArePinnedLiterally()
-    {
-        var rows = new[] { FamilyRow(GdprCelex, GdprRoot, StateA) };
-
-        var snapshot = EuCellarObjectDecode.TryDecode(
-            GdprCelex, rows, FamilyProfile, EuActForm.Regulation, Evidence("gdpr-object-ref"),
-            out var refusal, out _);
-
-        Assert.AreEqual(EuCellarObjectDecodeRefusal.None, refusal);
-        Assert.AreEqual(
-            "eu-consolidation-root:"
-                + "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
-            snapshot!.ObjectRef.CanonicalKey);
-        Assert.AreEqual(
-            "7c5c4154a86ab3396956c0c1440e15710914741e9272273c1ca49eff5da51f68",
-            snapshot.ObjectRef.CanonicalKeySha256);
-    }
-
-    [TestMethod]
-    public void EveryOtherClosedPredicateIsHonestlyNotObserved()
-    {
-        var rows = new[] { FamilyRow(GdprCelex, GdprRoot, StateA) };
-
-        var snapshot = EuCellarObjectDecode.TryDecode(
-            GdprCelex, rows, FamilyProfile, EuActForm.Regulation, Evidence("gdpr"),
-            out _, out _);
-
-        Assert.IsNotNull(snapshot);
-        foreach (var predicate in EuScopeVocabulary.CdmPredicates)
+        var kind = value.IsIri ? "iri" : "literal";
+        var datatype = value.IsIri ? "" : value.Datatype ?? "";
+        var lang = value.IsIri ? "" : value.Lang ?? "";
+        var terms = new[]
         {
-            if (predicate == EuCdmPredicate.ResourceLegalIdCelex)
-            {
-                continue;
-            }
+            RepeatedEnumerationRdfTerm.Iri(objectIri),
+            RepeatedEnumerationRdfTerm.Iri(predicateIri),
+            value.IsIri
+                ? RepeatedEnumerationRdfTerm.Iri(value.Value)
+                : RepeatedEnumerationRdfTerm.Literal(value.Value, value.Datatype, value.Lang),
+            RepeatedEnumerationRdfTerm.Literal(kind, null, null),
+            RepeatedEnumerationRdfTerm.Literal(datatype, null, null),
+            RepeatedEnumerationRdfTerm.Literal(lang, null, null),
+            RepeatedEnumerationRdfTerm.Literal("1", XsdInteger, null),
+            RepeatedEnumerationRdfTerm.Literal(objectIri, null, null),
+            RepeatedEnumerationRdfTerm.Literal(predicateIri, null, null),
+            RepeatedEnumerationRdfTerm.Literal(kind, null, null),
+            RepeatedEnumerationRdfTerm.Literal(value.Value, null, null),
+            RepeatedEnumerationRdfTerm.Literal(datatype, null, null),
+            RepeatedEnumerationRdfTerm.Literal(lang, null, null),
+        };
+        return new RepeatedEnumerationRow(
+            Array.AsReadOnly(terms),
+            Array.AsReadOnly(new[] { terms[0], terms[1], terms[2] }),
+            Array.AsReadOnly(terms[7..13]));
+    }
 
+    private static RepeatedEnumerationRow PUnboundRow(string objectIri, string predicateIri)
+    {
+        var terms = new[]
+        {
+            RepeatedEnumerationRdfTerm.Iri(objectIri),
+            RepeatedEnumerationRdfTerm.Iri(predicateIri),
+            RepeatedEnumerationRdfTerm.Unbound(),
+            RepeatedEnumerationRdfTerm.Literal("unbound", null, null),
+            RepeatedEnumerationRdfTerm.Literal("", null, null),
+            RepeatedEnumerationRdfTerm.Literal("", null, null),
+            RepeatedEnumerationRdfTerm.Literal("0", XsdInteger, null),
+            RepeatedEnumerationRdfTerm.Literal(objectIri, null, null),
+            RepeatedEnumerationRdfTerm.Literal(predicateIri, null, null),
+            RepeatedEnumerationRdfTerm.Literal("unbound", null, null),
+            RepeatedEnumerationRdfTerm.Literal("", null, null),
+            RepeatedEnumerationRdfTerm.Literal("", null, null),
+            RepeatedEnumerationRdfTerm.Literal("", null, null),
+        };
+        return new RepeatedEnumerationRow(
+            Array.AsReadOnly(terms),
+            Array.AsReadOnly(new[] { terms[0], terms[1], terms[2] }),
+            Array.AsReadOnly(terms[7..13]));
+    }
+
+    private static IEnumerable<string> AllPPredicateIris() =>
+        EuObjectFactsDiscoveryPlan.ObjectAuthorityPredicates.Select(EuObjectFactsDiscoveryPlan.CdmIri)
+            .Concat(EuScopeVocabulary.ReadRelationFamilies.Select(EuObjectFactsDiscoveryPlan.RelationIri));
+
+    /// <summary>
+    /// A complete family-P delivery for one object: every one of the thirteen predicates this
+    /// family asks gets exactly one outcome (the supplied bound values, or an explicit unbound row
+    /// when the caller supplies none), matching what a real bounded-and-proven P delivery always
+    /// carries.
+    /// </summary>
+    private static IReadOnlyList<RepeatedEnumerationRow> CompleteObjectRows(
+        string objectIri, IReadOnlyDictionary<string, PValue[]>? overrides = null)
+    {
+        overrides ??= new Dictionary<string, PValue[]>();
+        var rows = new List<RepeatedEnumerationRow>();
+        foreach (var predicateIri in AllPPredicateIris())
+        {
+            if (overrides.TryGetValue(predicateIri, out var values) && values.Length > 0)
+            {
+                rows.AddRange(values.Select(value => PBoundRow(objectIri, predicateIri, value)));
+            }
+            else
+            {
+                rows.Add(PUnboundRow(objectIri, predicateIri));
+            }
+        }
+
+        return rows;
+    }
+
+    /// <summary>A root's complete family-P rows: real CELEX, ordinary (non-consolidated) type.</summary>
+    private static IReadOnlyList<RepeatedEnumerationRow> RootObjectRows(
+        string rootIri, string celex, IReadOnlyDictionary<string, PValue[]>? extra = null)
+    {
+        var overrides = new Dictionary<string, PValue[]>
+        {
+            [CelexIri] = [new PValue(celex, IsIri: false, Datatype: XsdString)],
+            [WorkHasResourceTypeIri] = [new PValue(OrdinaryActResourceTypeIri)],
+        };
+        if (extra is not null)
+        {
+            foreach (var (key, value) in extra)
+            {
+                overrides[key] = value;
+            }
+        }
+
+        return CompleteObjectRows(rootIri, overrides);
+    }
+
+    /// <summary>
+    /// A state's complete family-P rows: consolidated type marker, and its own
+    /// <c>ConsolidatedBasedOn</c> edge back to <paramref name="baseIri"/>, matching what P's own
+    /// uniform per-object query naturally returns for a consolidated state.
+    /// </summary>
+    private static IReadOnlyList<RepeatedEnumerationRow> StateObjectRows(
+        string stateIri, string baseIri, IReadOnlyDictionary<string, PValue[]>? extra = null)
+    {
+        var overrides = new Dictionary<string, PValue[]>
+        {
+            [WorkHasResourceTypeIri] = [new PValue(ConsolidatedActResourceTypeIri)],
+            [ConsolidatedBasedOnIri] = [new PValue(baseIri)],
+        };
+        if (extra is not null)
+        {
+            foreach (var (key, value) in extra)
+            {
+                overrides[key] = value;
+            }
+        }
+
+        return CompleteObjectRows(stateIri, overrides);
+    }
+
+    // ---- Expression-facts (family X) row fixtures. ----
+
+    private static RepeatedEnumerationRow XBoundRow(
+        string parentIri, string exprIri, string predicateIri, PValue value)
+    {
+        var kind = value.IsIri ? "iri" : "literal";
+        var datatype = value.IsIri ? "" : value.Datatype ?? "";
+        var lang = value.IsIri ? "" : value.Lang ?? "";
+        var terms = new[]
+        {
+            RepeatedEnumerationRdfTerm.Iri(parentIri),
+            RepeatedEnumerationRdfTerm.Iri(exprIri),
+            RepeatedEnumerationRdfTerm.Iri(predicateIri),
+            value.IsIri
+                ? RepeatedEnumerationRdfTerm.Iri(value.Value)
+                : RepeatedEnumerationRdfTerm.Literal(value.Value, value.Datatype, value.Lang),
+            RepeatedEnumerationRdfTerm.Literal(kind, null, null),
+            RepeatedEnumerationRdfTerm.Literal(datatype, null, null),
+            RepeatedEnumerationRdfTerm.Literal(lang, null, null),
+            RepeatedEnumerationRdfTerm.Literal("1", XsdInteger, null),
+            RepeatedEnumerationRdfTerm.Literal(exprIri, null, null),
+            RepeatedEnumerationRdfTerm.Literal(predicateIri, null, null),
+            RepeatedEnumerationRdfTerm.Literal(kind, null, null),
+            RepeatedEnumerationRdfTerm.Literal(value.Value, null, null),
+            RepeatedEnumerationRdfTerm.Literal(datatype, null, null),
+            RepeatedEnumerationRdfTerm.Literal(lang, null, null),
+        };
+        return new RepeatedEnumerationRow(
+            Array.AsReadOnly(terms),
+            Array.AsReadOnly(new[] { terms[0], terms[1], terms[2], terms[3] }),
+            Array.AsReadOnly(terms[8..14]));
+    }
+
+    /// <summary>One Expression's complete family-X rows: belongs-to-work plus a language.</summary>
+    private static IReadOnlyList<RepeatedEnumerationRow> ExpressionRows(
+        string parentIri, string exprIri, string languageAuthorityIri)
+    {
+        return
+        [
+            XBoundRow(parentIri, exprIri, ExpressionBelongsToWorkIri, new PValue(parentIri)),
+            XBoundRow(parentIri, exprIri, ExpressionUsesLanguageIri, new PValue(languageAuthorityIri)),
+        ];
+    }
+
+    private static SourceArtifactRef Ev(string label) => Evidence(label);
+
+    private static IReadOnlyList<EuCellarObjectSnapshot>? Decode(
+        string celex,
+        IReadOnlyList<RepeatedEnumerationRow> familyRows,
+        IReadOnlyList<RepeatedEnumerationRow> pRows,
+        IReadOnlyList<RepeatedEnumerationRow> xRows,
+        out EuCellarObjectDecodeRefusal refusal,
+        out string? offendingIri,
+        out EuCellarObjectSnapshotRefusal snapshotRefusal,
+        string evidenceLabel = "ev") =>
+        EuCellarObjectDecode.TryDecode(
+            celex, familyRows, FamilyProfile, pRows, ObjectFactsProfile, xRows, ExpressionFactsProfile,
+            EuActForm.Regulation, Ev(evidenceLabel), out refusal, out offendingIri, out snapshotRefusal);
+
+    // ---- Happy path: root only, no discovered states. ----
+
+    [TestMethod]
+    public void ARootWithNoStatesDecodesToExactlyOneSnapshot()
+    {
+        var pRows = RootObjectRows(GdprRoot, GdprCelex);
+        var snapshots = Decode(
+            GdprCelex, [], pRows, [], out var refusal, out var offendingIri, out var snapshotRefusal);
+
+        Assert.IsNotNull(snapshots);
+        Assert.AreEqual(EuCellarObjectDecodeRefusal.None, refusal);
+        Assert.IsNull(offendingIri);
+        Assert.AreEqual(EuCellarObjectSnapshotRefusal.None, snapshotRefusal);
+        Assert.AreEqual(1, snapshots!.Count);
+
+        var root = snapshots[0];
+        Assert.AreEqual(GdprRoot, root.CanonicalWorkRoot);
+        Assert.AreEqual(GdprRoot, root.ObjectRef.PublisherUri);
+        Assert.AreEqual(
+            EuPredicateObservationState.ObservedPresent,
+            root.Predicate(EuCdmPredicate.ResourceLegalIdCelex).State);
+        CollectionAssert.AreEqual(
+            new[] { GdprCelex }, root.Predicate(EuCdmPredicate.ResourceLegalIdCelex).Values.ToArray());
+
+        var consolidated = root.Relation(EuRelationFamily.ConsolidatedBasedOn);
+        Assert.AreEqual(EuRelationAcquisitionState.Complete, consolidated.Acquisition);
+        Assert.AreEqual(0, consolidated.Edges.Count);
+
+        Assert.IsNotNull(root.Rights);
+        Assert.AreEqual(EuContentClass.OriginalLegalText, root.Rights!.ContentClass);
+        Assert.IsNotNull(root.Language);
+        Assert.AreEqual(EuExpressionObservationState.NotObserved, root.Language!.State);
+    }
+
+    [TestMethod]
+    public void EveryExpressionAuthorityPredicateIsHonestlyNotObservedOnEveryObject()
+    {
+        var pRows = RootObjectRows(GdprRoot, GdprCelex);
+        var snapshots = Decode(GdprCelex, [], pRows, [], out var refusal, out _, out _);
+
+        Assert.AreEqual(EuCellarObjectDecodeRefusal.None, refusal);
+        foreach (var predicate in EuObjectFactsDiscoveryPlan.ExpressionAuthorityPredicates)
+        {
             Assert.AreEqual(
                 EuPredicateObservationState.NotObserved,
-                snapshot!.Predicate(predicate).State,
-                $"{predicate} should be honestly not-observed by this closure.");
+                snapshots![0].Predicate(predicate).State,
+                $"{predicate} is an Expression-authority predicate; family P never asks it of a Work.");
         }
     }
 
-    [TestMethod]
-    public void ZeroFamilyRowsProducesACompleteZeroEdgeSnapshot()
-    {
-        var snapshot = EuCellarObjectDecode.TryDecode(
-            GdprCelex, Array.Empty<RepeatedEnumerationRow>(), FamilyProfile, EuActForm.Regulation,
-            Evidence("gdpr-empty"), out var refusal, out var snapshotRefusal);
+    // ---- Happy path: root plus discovered states, the edge-placement move. ----
 
-        Assert.IsNotNull(snapshot);
+    [TestMethod]
+    public void EachDiscoveredStateGetsItsOwnSnapshotWithThePublisherAssertedEdgeAndTheRootIsCompleteWithZeroEdges()
+    {
+        var familyRows = new[] { FamilyRow(GdprCelex, GdprRoot, StateA), FamilyRow(GdprCelex, GdprRoot, StateB) };
+        var pRows = RootObjectRows(GdprRoot, GdprCelex)
+            .Concat(StateObjectRows(StateA, GdprRoot))
+            .Concat(StateObjectRows(StateB, GdprRoot))
+            .ToArray();
+
+        var snapshots = Decode(
+            GdprCelex, familyRows, pRows, [], out var refusal, out var offendingIri, out var snapshotRefusal);
+
+        Assert.IsNotNull(snapshots);
         Assert.AreEqual(EuCellarObjectDecodeRefusal.None, refusal);
+        Assert.IsNull(offendingIri);
         Assert.AreEqual(EuCellarObjectSnapshotRefusal.None, snapshotRefusal);
-        Assert.AreEqual(GdprRoot, snapshot!.CanonicalWorkRoot);
+        Assert.AreEqual(3, snapshots!.Count);
 
-        var consolidated = snapshot.Relation(EuRelationFamily.ConsolidatedBasedOn);
-        Assert.AreEqual(EuRelationAcquisitionState.Complete, consolidated.Acquisition);
-        Assert.AreEqual(0, consolidated.Edges.Count);
+        var root = snapshots.Single(s => s.ObjectRef.PublisherUri == GdprRoot);
+        var rootConsolidated = root.Relation(EuRelationFamily.ConsolidatedBasedOn);
+        Assert.AreEqual(EuRelationAcquisitionState.Complete, rootConsolidated.Acquisition);
+        Assert.AreEqual(0, rootConsolidated.Edges.Count);
+        Assert.AreEqual(EuContentClass.OriginalLegalText, root.Rights!.ContentClass);
+
+        foreach (var stateIri in new[] { StateA, StateB })
+        {
+            var state = snapshots.Single(s => s.ObjectRef.PublisherUri == stateIri);
+            Assert.AreEqual(GdprRoot, state.CanonicalWorkRoot, "every object's resolved work root is this call's own base");
+            var edge = state.Relation(EuRelationFamily.ConsolidatedBasedOn);
+            Assert.AreEqual(EuRelationAcquisitionState.Complete, edge.Acquisition);
+            Assert.AreEqual(1, edge.Edges.Count);
+            Assert.AreEqual(GdprRoot, edge.Edges[0].TargetWorkRoot);
+            Assert.AreEqual(EuRelationAuthority.PublisherAsserted, edge.Edges[0].Authority);
+            Assert.AreEqual(EuContentClass.Consolidation, state.Rights!.ContentClass);
+        }
+
+        // No edge anywhere carries the retired inverse authority.
+        Assert.IsFalse(snapshots.SelectMany(s => s.RelationObservations).SelectMany(r => r.Edges)
+            .Any(edge => edge.Authority == EuRelationAuthority.OntologyAuthorizedInverse));
     }
 
     [TestMethod]
-    public void MultipleDistinctStatesAggregateIntoOneRelationFamilyObservationSortedOrdinally()
+    public void ObjectRefsDifferBetweenTheRootAndAStateAndBothAreCanonicallyKeyed()
     {
-        var rows = new[]
-        {
-            FamilyRow(GdprCelex, GdprRoot, StateB),
-            FamilyRow(GdprCelex, GdprRoot, StateA),
-        };
+        var familyRows = new[] { FamilyRow(GdprCelex, GdprRoot, StateA) };
+        var pRows = RootObjectRows(GdprRoot, GdprCelex).Concat(StateObjectRows(StateA, GdprRoot)).ToArray();
 
-        var snapshot = EuCellarObjectDecode.TryDecode(
-            GdprCelex, rows, FamilyProfile, EuActForm.Regulation, Evidence("gdpr-multi"),
-            out var refusal, out _);
+        var snapshots = Decode(GdprCelex, familyRows, pRows, [], out var refusal, out _, out _);
+        Assert.AreEqual(EuCellarObjectDecodeRefusal.None, refusal);
+
+        var root = snapshots!.Single(s => s.ObjectRef.PublisherUri == GdprRoot);
+        var state = snapshots!.Single(s => s.ObjectRef.PublisherUri == StateA);
+
+        StringAssert.StartsWith(root.ObjectRef.CanonicalKey, "eu-consolidation-root:");
+        StringAssert.StartsWith(state.ObjectRef.CanonicalKey, "eu-consolidation-state:");
+        Assert.AreNotEqual(root.ObjectRef.CanonicalKey, state.ObjectRef.CanonicalKey);
+    }
+
+    // Fold-in for the D1-05b decode refreeze
+    // (lex-event-20260904T025508487Z-0d433eb3f5254b6188c05ab22e962acd), still pinned after the
+    // D1-05c-1 extension: the root's own canonical key and digest never move.
+    [TestMethod]
+    public void TheRootObjectRefsCanonicalKeyAndDigestArePinnedLiterally()
+    {
+        var pRows = RootObjectRows(GdprRoot, GdprCelex);
+        var snapshots = Decode(GdprCelex, [], pRows, [], out var refusal, out _, out _);
 
         Assert.AreEqual(EuCellarObjectDecodeRefusal.None, refusal);
-        var edges = snapshot!.Relation(EuRelationFamily.ConsolidatedBasedOn).Edges;
-        CollectionAssert.AreEqual(
-            new[] { StateA, StateB }, edges.Select(edge => edge.TargetWorkRoot).ToArray());
+        var root = snapshots!.Single();
+        Assert.AreEqual(
+            "eu-consolidation-root:"
+                + "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
+            root.ObjectRef.CanonicalKey);
+        Assert.AreEqual(
+            "7c5c4154a86ab3396956c0c1440e15710914741e9272273c1ca49eff5da51f68",
+            root.ObjectRef.CanonicalKeySha256);
+    }
+
+    // ---- Relation families beyond ConsolidatedBasedOn. ----
+
+    [TestMethod]
+    public void AnAmendsEdgeOnTheRootIsPublisherAssertedFromFamilyPDirectly()
+    {
+        var pRows = RootObjectRows(GdprRoot, GdprCelex, new Dictionary<string, PValue[]>
+        {
+            [AmendsIri] = [new PValue(CitedRoot)],
+        });
+
+        var snapshots = Decode(GdprCelex, [], pRows, [], out var refusal, out _, out _);
+        Assert.AreEqual(EuCellarObjectDecodeRefusal.None, refusal);
+
+        var amends = snapshots!.Single().Relation(EuRelationFamily.Amends);
+        Assert.AreEqual(EuRelationAcquisitionState.Complete, amends.Acquisition);
+        Assert.AreEqual(1, amends.Edges.Count);
+        Assert.AreEqual(CitedRoot, amends.Edges[0].TargetWorkRoot);
+        Assert.AreEqual(EuRelationAuthority.PublisherAsserted, amends.Edges[0].Authority);
+    }
+
+    // ---- Language, filled from family X. ----
+
+    [TestMethod]
+    public void AnEnglishExpressionIsObservedAsBodyNotHeld()
+    {
+        var pRows = RootObjectRows(GdprRoot, GdprCelex);
+        var xRows = ExpressionRows(GdprRoot, ExprA, EnglishLanguageAuthorityIri);
+
+        var snapshots = Decode(GdprCelex, [], pRows, xRows, out var refusal, out _, out _);
+        Assert.AreEqual(EuCellarObjectDecodeRefusal.None, refusal);
+
+        var language = snapshots!.Single().Language;
+        Assert.IsNotNull(language);
+        Assert.AreEqual(EuOfficialLanguage.English, language!.Language);
+        Assert.AreEqual(EuExpressionObservationState.ExpressionObservedBodyNotHeld, language.State);
     }
 
     [TestMethod]
-    public void ARepeatedStateAcrossRowsDoesNotDuplicateTheEdge()
+    public void AFrenchExpressionIsObservedWhenNoEnglishExpressionExists()
     {
-        var rows = new[]
-        {
-            FamilyRow(GdprCelex, GdprRoot, StateA, multiplicity: 1),
-            FamilyRow(GdprCelex, GdprRoot, StateA, multiplicity: 2),
-        };
+        var pRows = RootObjectRows(GdprRoot, GdprCelex);
+        var xRows = ExpressionRows(GdprRoot, ExprA, FrenchLanguageAuthorityIri);
 
-        var snapshot = EuCellarObjectDecode.TryDecode(
-            GdprCelex, rows, FamilyProfile, EuActForm.Regulation, Evidence("gdpr-dup-state"),
-            out var refusal, out _);
-
+        var snapshots = Decode(GdprCelex, [], pRows, xRows, out var refusal, out _, out _);
         Assert.AreEqual(EuCellarObjectDecodeRefusal.None, refusal);
-        Assert.AreEqual(1, snapshot!.Relation(EuRelationFamily.ConsolidatedBasedOn).Edges.Count);
+
+        var language = snapshots!.Single().Language;
+        Assert.IsNotNull(language);
+        Assert.AreEqual(EuOfficialLanguage.French, language!.Language);
+        Assert.AreEqual(EuExpressionObservationState.ExpressionObservedBodyNotHeld, language.State);
     }
 
-    // ---- Refusals, each driven on its own branch. ----
+    [TestMethod]
+    public void EnglishIsPreferredWhenBothEnglishAndFrenchExpressionsExist()
+    {
+        var pRows = RootObjectRows(GdprRoot, GdprCelex);
+        var xRows = ExpressionRows(GdprRoot, ExprA, EnglishLanguageAuthorityIri)
+            .Concat(ExpressionRows(GdprRoot, ExprB, FrenchLanguageAuthorityIri))
+            .ToArray();
+
+        var snapshots = Decode(GdprCelex, [], pRows, xRows, out var refusal, out _, out _);
+        Assert.AreEqual(EuCellarObjectDecodeRefusal.None, refusal);
+        Assert.AreEqual(EuOfficialLanguage.English, snapshots!.Single().Language!.Language);
+    }
+
+    [TestMethod]
+    public void NoEligibleExpressionYieldsAnExplicitNotObservedEnglishObservation()
+    {
+        var pRows = RootObjectRows(GdprRoot, GdprCelex);
+        var snapshots = Decode(GdprCelex, [], pRows, [], out var refusal, out _, out _);
+
+        Assert.AreEqual(EuCellarObjectDecodeRefusal.None, refusal);
+        var language = snapshots!.Single().Language;
+        Assert.IsNotNull(language);
+        Assert.AreEqual(EuOfficialLanguage.English, language!.Language);
+        Assert.AreEqual(EuExpressionObservationState.NotObserved, language.State);
+    }
+
+    // ---- Content class: derived from P, closure position as a consistency check. ----
+
+    [TestMethod]
+    public void AStateWhoseTypeAssertionsDoNotMarkItConsolidatedRefusesOnContentClassMismatch()
+    {
+        var familyRows = new[] { FamilyRow(GdprCelex, GdprRoot, StateA) };
+        // The state's own P rows claim the ordinary (non-consolidated) resource type - disagrees
+        // with its closure position as a discovered state.
+        var pRows = RootObjectRows(GdprRoot, GdprCelex)
+            .Concat(CompleteObjectRows(StateA, new Dictionary<string, PValue[]>
+            {
+                [WorkHasResourceTypeIri] = [new PValue(OrdinaryActResourceTypeIri)],
+                [ConsolidatedBasedOnIri] = [new PValue(GdprRoot)],
+            }))
+            .ToArray();
+
+        var snapshots = Decode(GdprCelex, familyRows, pRows, [], out var refusal, out _, out _);
+        Assert.IsNull(snapshots);
+        Assert.AreEqual(EuCellarObjectDecodeRefusal.ContentClassClosurePositionMismatch, refusal);
+    }
+
+    [TestMethod]
+    public void ARootWhoseTypeAssertionsMarkItConsolidatedRefusesOnContentClassMismatch()
+    {
+        var pRows = RootObjectRows(GdprRoot, GdprCelex, new Dictionary<string, PValue[]>
+        {
+            [WorkHasResourceTypeIri] = [new PValue(ConsolidatedActResourceTypeIri)],
+        });
+
+        var snapshots = Decode(GdprCelex, [], pRows, [], out var refusal, out _, out _);
+        Assert.IsNull(snapshots);
+        Assert.AreEqual(EuCellarObjectDecodeRefusal.ContentClassClosurePositionMismatch, refusal);
+    }
+
+    // ---- The ConsolidatedBasedOn cross-check between family P and the family census. ----
+
+    [TestMethod]
+    public void ARootCarryingAConsolidatedBasedOnEdgeInFamilyPRefusesAsDisagreeingWithTheFamilyCensus()
+    {
+        var pRows = RootObjectRows(GdprRoot, GdprCelex, new Dictionary<string, PValue[]>
+        {
+            [ConsolidatedBasedOnIri] = [new PValue(CitedRoot)],
+        });
+
+        var snapshots = Decode(GdprCelex, [], pRows, [], out var refusal, out _, out _);
+        Assert.IsNull(snapshots);
+        Assert.AreEqual(EuCellarObjectDecodeRefusal.ConsolidatedBasedOnEdgeDisagreesWithFamily, refusal);
+    }
+
+    [TestMethod]
+    public void AStateWhoseFamilyPEdgeTargetsTheWrongRootRefusesAsDisagreeingWithTheFamilyCensus()
+    {
+        var familyRows = new[] { FamilyRow(GdprCelex, GdprRoot, StateA) };
+        var pRows = RootObjectRows(GdprRoot, GdprCelex)
+            .Concat(StateObjectRows(StateA, CitedRoot)) // wrong target: not this call's own root
+            .ToArray();
+
+        var snapshots = Decode(GdprCelex, familyRows, pRows, [], out var refusal, out _, out _);
+        Assert.IsNull(snapshots);
+        Assert.AreEqual(EuCellarObjectDecodeRefusal.ConsolidatedBasedOnEdgeDisagreesWithFamily, refusal);
+    }
+
+    // ---- Family P closure and shape refusals. ----
+
+    [TestMethod]
+    public void AFamilyPRowNamingAnObjectOutsideTheClosureRefusesNamingTheIri()
+    {
+        var outsideObject = CitedRoot;
+        var pRows = RootObjectRows(GdprRoot, GdprCelex).Concat(CompleteObjectRows(outsideObject)).ToArray();
+
+        var snapshots = Decode(GdprCelex, [], pRows, [], out var refusal, out var offendingIri, out _);
+        Assert.IsNull(snapshots);
+        Assert.AreEqual(EuCellarObjectDecodeRefusal.ObjectFactRowNotInClosure, refusal);
+        Assert.AreEqual(outsideObject, offendingIri);
+    }
+
+    [TestMethod]
+    public void AFamilyPRowMissingAnOutcomeForAClosedPredicateRefusesAsTermKindMismatch()
+    {
+        // A malformed delivery: one of the thirteen predicates has no row at all for this object,
+        // neither a bound value nor the explicit unbound marker.
+        var incomplete = AllPPredicateIris()
+            .Where(iri => iri != CelexIri)
+            .Select(iri => PUnboundRow(GdprRoot, iri))
+            .Append(PBoundRow(GdprRoot, CelexIri, new PValue(GdprCelex, IsIri: false, Datatype: XsdString)))
+            .ToList();
+        incomplete.RemoveAt(0); // drop one predicate's outcome entirely
+
+        var snapshots = Decode(GdprCelex, [], incomplete, [], out var refusal, out _, out _);
+        Assert.IsNull(snapshots);
+        Assert.AreEqual(EuCellarObjectDecodeRefusal.ObjectFactRowTermKindMismatch, refusal);
+    }
+
+    [TestMethod]
+    public void AFamilyPRowWhoseValueKindDisagreesWithTheTermRefusesAsTermKindMismatch()
+    {
+        var badRow = PUnboundRow(GdprRoot, CelexIri) with { };
+        // Construct a row claiming value_kind "unbound" while the value term is actually bound.
+        var terms = new[]
+        {
+            RepeatedEnumerationRdfTerm.Iri(GdprRoot),
+            RepeatedEnumerationRdfTerm.Iri(CelexIri),
+            RepeatedEnumerationRdfTerm.Literal(GdprCelex, XsdString, null),
+            RepeatedEnumerationRdfTerm.Literal("unbound", null, null), // disagrees with a bound value
+            RepeatedEnumerationRdfTerm.Literal("", null, null),
+            RepeatedEnumerationRdfTerm.Literal("", null, null),
+            RepeatedEnumerationRdfTerm.Literal("1", XsdInteger, null),
+            RepeatedEnumerationRdfTerm.Literal(GdprRoot, null, null),
+            RepeatedEnumerationRdfTerm.Literal(CelexIri, null, null),
+            RepeatedEnumerationRdfTerm.Literal("unbound", null, null),
+            RepeatedEnumerationRdfTerm.Literal(GdprCelex, null, null),
+            RepeatedEnumerationRdfTerm.Literal("", null, null),
+            RepeatedEnumerationRdfTerm.Literal("", null, null),
+        };
+        var mismatched = new RepeatedEnumerationRow(
+            Array.AsReadOnly(terms),
+            Array.AsReadOnly(new[] { terms[0], terms[1], terms[2] }),
+            Array.AsReadOnly(terms[7..13]));
+
+        var rows = AllPPredicateIris().Where(iri => iri != CelexIri)
+            .Select(iri => PUnboundRow(GdprRoot, iri)).Append(mismatched).ToArray();
+
+        var snapshots = Decode(GdprCelex, [], rows, [], out var refusal, out _, out _);
+        Assert.IsNull(snapshots);
+        Assert.AreEqual(EuCellarObjectDecodeRefusal.ObjectFactRowTermKindMismatch, refusal);
+    }
+
+    // ---- Family X row-shape refusal. ----
+
+    /// <summary>
+    /// Test fold-in: before this test, nothing in this file reached
+    /// <see cref="EuCellarObjectDecodeRefusal.ExpressionFactRowTermKindMismatch"/> - every family X
+    /// test used well-formed rows from <see cref="XBoundRow"/>. This is family P's own
+    /// <c>AFamilyPRowWhoseValueKindDisagreesWithTheTermRefusesAsTermKindMismatch</c> mirrored for
+    /// family X: a row claims <c>value_kind</c> "unbound" while its own <c>value</c> term is
+    /// actually bound.
+    /// </summary>
+    [TestMethod]
+    public void AFamilyXRowWhoseValueKindDisagreesWithTheTermRefusesAsTermKindMismatch()
+    {
+        var pRows = RootObjectRows(GdprRoot, GdprCelex);
+        var terms = new[]
+        {
+            RepeatedEnumerationRdfTerm.Iri(GdprRoot),
+            RepeatedEnumerationRdfTerm.Iri(ExprA),
+            RepeatedEnumerationRdfTerm.Iri(ExpressionUsesLanguageIri),
+            RepeatedEnumerationRdfTerm.Iri(EnglishLanguageAuthorityIri),
+            RepeatedEnumerationRdfTerm.Literal("unbound", null, null), // disagrees with a bound value
+            RepeatedEnumerationRdfTerm.Literal("", null, null),
+            RepeatedEnumerationRdfTerm.Literal("", null, null),
+            RepeatedEnumerationRdfTerm.Literal("1", XsdInteger, null),
+            RepeatedEnumerationRdfTerm.Literal(ExprA, null, null),
+            RepeatedEnumerationRdfTerm.Literal(ExpressionUsesLanguageIri, null, null),
+            RepeatedEnumerationRdfTerm.Literal("unbound", null, null),
+            RepeatedEnumerationRdfTerm.Literal(EnglishLanguageAuthorityIri, null, null),
+            RepeatedEnumerationRdfTerm.Literal("", null, null),
+            RepeatedEnumerationRdfTerm.Literal("", null, null),
+        };
+        var mismatched = new RepeatedEnumerationRow(
+            Array.AsReadOnly(terms),
+            Array.AsReadOnly(new[] { terms[0], terms[1], terms[2], terms[3] }),
+            Array.AsReadOnly(terms[8..14]));
+
+        var snapshots = Decode(GdprCelex, [], pRows, [mismatched], out var refusal, out _, out _);
+        Assert.IsNull(snapshots);
+        Assert.AreEqual(EuCellarObjectDecodeRefusal.ExpressionFactRowTermKindMismatch, refusal);
+    }
+
+    // ---- Family X closure refusals. ----
+
+    [TestMethod]
+    public void AFamilyXRowWhoseParentIsOutsideTheClosureRefusesNamingTheIri()
+    {
+        var pRows = RootObjectRows(GdprRoot, GdprCelex);
+        var xRows = ExpressionRows(CitedRoot, ExprA, EnglishLanguageAuthorityIri);
+
+        var snapshots = Decode(GdprCelex, [], pRows, xRows, out var refusal, out var offendingIri, out _);
+        Assert.IsNull(snapshots);
+        Assert.AreEqual(EuCellarObjectDecodeRefusal.ExpressionParentNotInClosure, refusal);
+        Assert.AreEqual(CitedRoot, offendingIri);
+    }
+
+    [TestMethod]
+    public void AFamilyXSubjectWithNoBelongsToWorkRowOfItsOwnRefusesAsNotSelfClosed()
+    {
+        var pRows = RootObjectRows(GdprRoot, GdprCelex);
+        // Only the language row is delivered for ExprA; its own expression_belongs_to_work row is
+        // missing from this (hostile or corrupted) delivery, so X cannot prove its own closure.
+        var xRows = new[]
+        {
+            XBoundRow(GdprRoot, ExprA, ExpressionUsesLanguageIri, new PValue(EnglishLanguageAuthorityIri)),
+        };
+
+        var snapshots = Decode(GdprCelex, [], pRows, xRows, out var refusal, out var offendingIri, out _);
+        Assert.IsNull(snapshots);
+        Assert.AreEqual(EuCellarObjectDecodeRefusal.ExpressionSubjectNotSelfClosed, refusal);
+        Assert.AreEqual(ExprA, offendingIri);
+    }
+
+    // ---- Family census refusals, unchanged from D1-05b. ----
 
     [TestMethod]
     public void ABaseCelexTermThatIsAnIriRefusesAsTermKindMismatch()
     {
         var terms = new RepeatedEnumerationRdfTerm[]
         {
-            RepeatedEnumerationRdfTerm.Iri(GdprCelex), // wrong kind: an IRI, not a literal
+            RepeatedEnumerationRdfTerm.Iri(GdprCelex),
             RepeatedEnumerationRdfTerm.Iri(GdprRoot),
             RepeatedEnumerationRdfTerm.Iri(StateA),
             RepeatedEnumerationRdfTerm.Literal("1", XsdInteger, null),
@@ -232,119 +708,34 @@ public sealed class EuCellarObjectDecodeTests
             Array.AsReadOnly(new[] { terms[0], terms[1], terms[2] }),
             Array.AsReadOnly(new[] { terms[4] }));
 
-        EuCellarObjectDecode.TryDecode(
-            GdprCelex, [row], FamilyProfile, EuActForm.Regulation, Evidence("bad-celex-kind"),
-            out var refusal, out _);
+        var pRows = RootObjectRows(GdprRoot, GdprCelex);
+        var snapshots = Decode(GdprCelex, [row], pRows, [], out var refusal, out _, out _);
 
-        Assert.AreEqual(EuCellarObjectDecodeRefusal.FamilyRowTermKindMismatch, refusal);
-    }
-
-    [TestMethod]
-    public void ABaseTermThatIsALiteralRefusesAsTermKindMismatch()
-    {
-        var terms = new RepeatedEnumerationRdfTerm[]
-        {
-            RepeatedEnumerationRdfTerm.Literal(GdprCelex, XsdString, null),
-            RepeatedEnumerationRdfTerm.Literal(GdprRoot, null, null), // wrong kind: expected IRI
-            RepeatedEnumerationRdfTerm.Iri(StateA),
-            RepeatedEnumerationRdfTerm.Literal("1", XsdInteger, null),
-            RepeatedEnumerationRdfTerm.Literal(StateA, null, null),
-        };
-        var row = new RepeatedEnumerationRow(
-            Array.AsReadOnly(terms),
-            Array.AsReadOnly(new[] { terms[0], terms[1], terms[2] }),
-            Array.AsReadOnly(new[] { terms[4] }));
-
-        EuCellarObjectDecode.TryDecode(
-            GdprCelex, [row], FamilyProfile, EuActForm.Regulation, Evidence("bad-base-kind"),
-            out var refusal, out _);
-
-        Assert.AreEqual(EuCellarObjectDecodeRefusal.FamilyRowTermKindMismatch, refusal);
-    }
-
-    [TestMethod]
-    public void AStateTermThatIsUnboundRefusesAsTermKindMismatch()
-    {
-        var terms = new RepeatedEnumerationRdfTerm[]
-        {
-            RepeatedEnumerationRdfTerm.Literal(GdprCelex, XsdString, null),
-            RepeatedEnumerationRdfTerm.Iri(GdprRoot),
-            RepeatedEnumerationRdfTerm.Unbound(), // wrong kind: expected IRI
-            RepeatedEnumerationRdfTerm.Literal("1", XsdInteger, null),
-            RepeatedEnumerationRdfTerm.Literal(string.Empty, null, null),
-        };
-        var row = new RepeatedEnumerationRow(
-            Array.AsReadOnly(terms),
-            Array.AsReadOnly(new[] { terms[0], terms[1], terms[2] }),
-            Array.AsReadOnly(new[] { terms[4] }));
-
-        EuCellarObjectDecode.TryDecode(
-            GdprCelex, [row], FamilyProfile, EuActForm.Regulation, Evidence("bad-state-kind"),
-            out var refusal, out _);
-
-        Assert.AreEqual(EuCellarObjectDecodeRefusal.FamilyRowTermKindMismatch, refusal);
-    }
-
-    [TestMethod]
-    public void AStateTermThatCannotCanonicalizeRefusesAsTermKindMismatch()
-    {
-        var malformedState = StateA + "?x=1";
-        var row = FamilyRow(GdprCelex, GdprRoot, malformedState);
-
-        EuCellarObjectDecode.TryDecode(
-            GdprCelex, [row], FamilyProfile, EuActForm.Regulation, Evidence("bad-state-shape"),
-            out var refusal, out _);
-
+        Assert.IsNull(snapshots);
         Assert.AreEqual(EuCellarObjectDecodeRefusal.FamilyRowTermKindMismatch, refusal);
     }
 
     [TestMethod]
     public void ARowNamingADifferentCelexThanRequestedRefusesAsADuplicateBinding()
     {
-        var row = FamilyRow("32013R0575", GdprRoot, StateA); // CRR's own Appendix A CELEX, not GDPR's
+        var row = FamilyRow("32013R0575", GdprRoot, StateA);
+        var pRows = RootObjectRows(GdprRoot, GdprCelex);
 
-        EuCellarObjectDecode.TryDecode(
-            GdprCelex, [row], FamilyProfile, EuActForm.Regulation, Evidence("wrong-celex"),
-            out var refusal, out _);
-
-        Assert.AreEqual(EuCellarObjectDecodeRefusal.DuplicateSingleValuedBinding, refusal);
-    }
-
-    [TestMethod]
-    public void ASecondRowNamingADifferentBaseRefusesAsADuplicateBinding()
-    {
-        var otherRoot =
-            "http://publications.europa.eu/resource/cellar/66666666-6666-4666-8666-666666666666";
-        var rows = new[]
-        {
-            FamilyRow(GdprCelex, GdprRoot, StateA),
-            FamilyRow(GdprCelex, otherRoot, StateB),
-        };
-
-        EuCellarObjectDecode.TryDecode(
-            GdprCelex, rows, FamilyProfile, EuActForm.Regulation, Evidence("wrong-base"),
-            out var refusal, out _);
-
+        var snapshots = Decode(GdprCelex, [row], pRows, [], out var refusal, out _, out _);
+        Assert.IsNull(snapshots);
         Assert.AreEqual(EuCellarObjectDecodeRefusal.DuplicateSingleValuedBinding, refusal);
     }
 
     [TestMethod]
     public void AFabricatedOutOfPackBaseRefusesThroughTheSnapshotDoorEvenWithATrustedCelex()
     {
-        // The row's own base names a real, well-formed Cellar Work root that is simply not one of
-        // Appendix A's 82 seeds, while its base_celex still correctly echoes the requested seed - the
-        // shape a corrupted or hostile SPARQL response could produce. Appendix A's own root for
-        // GdprCelex is never substituted in its place; the row's own claim reaches
-        // EuCellarObjectSnapshot.TryObserve and is refused there, on point 9 of the ruling.
         var notASeed =
             "http://publications.europa.eu/resource/cellar/00000000-0000-0000-0000-000000000000";
         var row = FamilyRow(GdprCelex, notASeed, StateA);
+        var pRows = RootObjectRows(notASeed, GdprCelex).Concat(StateObjectRows(StateA, notASeed)).ToArray();
 
-        var snapshot = EuCellarObjectDecode.TryDecode(
-            GdprCelex, [row], FamilyProfile, EuActForm.Regulation, Evidence("out-of-pack"),
-            out var refusal, out var snapshotRefusal);
-
-        Assert.IsNull(snapshot);
+        var snapshots = Decode(GdprCelex, [row], pRows, [], out var refusal, out _, out var snapshotRefusal);
+        Assert.IsNull(snapshots);
         Assert.AreEqual(EuCellarObjectDecodeRefusal.ObjectSnapshotRejected, refusal);
         Assert.AreEqual(EuCellarObjectSnapshotRefusal.WorkRootOutsideAppendixAPack, snapshotRefusal);
     }
@@ -355,87 +746,72 @@ public sealed class EuCellarObjectDecodeTests
     public void ARequestedCelexOutsideAppendixARefusesAsACallerContractViolation()
     {
         Assert.ThrowsExactly<ArgumentException>(() => EuCellarObjectDecode.TryDecode(
-            "31995L0046", // Directive 95/46: repealed by GDPR, never itself an Appendix A seed
-            Array.Empty<RepeatedEnumerationRow>(),
-            FamilyProfile,
-            EuActForm.Regulation,
-            Evidence("not-a-seed"),
-            out _,
-            out _));
+            "31995L0046", [], FamilyProfile, [], ObjectFactsProfile, [], ExpressionFactsProfile,
+            EuActForm.Regulation, Ev("not-a-seed"), out _, out _, out _));
     }
 
     [TestMethod]
     public void ABlankRequestedCelexThrows()
     {
         Assert.ThrowsExactly<ArgumentException>(() => EuCellarObjectDecode.TryDecode(
-            "   ", Array.Empty<RepeatedEnumerationRow>(), FamilyProfile, EuActForm.Regulation,
-            Evidence("blank"), out _, out _));
+            "   ", [], FamilyProfile, [], ObjectFactsProfile, [], ExpressionFactsProfile,
+            EuActForm.Regulation, Ev("blank"), out _, out _, out _));
     }
 
     [TestMethod]
     public void ANullFamilyRowsThrows()
     {
         Assert.ThrowsExactly<ArgumentNullException>(() => EuCellarObjectDecode.TryDecode(
-            GdprCelex, null!, FamilyProfile, EuActForm.Regulation, Evidence("null-rows"),
-            out _, out _));
+            GdprCelex, null!, FamilyProfile, [], ObjectFactsProfile, [], ExpressionFactsProfile,
+            EuActForm.Regulation, Ev("null-rows"), out _, out _, out _));
     }
 
     [TestMethod]
-    public void ANullFamilyProfileThrows()
+    public void ANullObjectFactRowsThrows()
     {
         Assert.ThrowsExactly<ArgumentNullException>(() => EuCellarObjectDecode.TryDecode(
-            GdprCelex, Array.Empty<RepeatedEnumerationRow>(), null!, EuActForm.Regulation,
-            Evidence("null-profile"), out _, out _));
+            GdprCelex, [], FamilyProfile, null!, ObjectFactsProfile, [], ExpressionFactsProfile,
+            EuActForm.Regulation, Ev("null-p-rows"), out _, out _, out _));
+    }
+
+    [TestMethod]
+    public void ANullExpressionFactRowsThrows()
+    {
+        Assert.ThrowsExactly<ArgumentNullException>(() => EuCellarObjectDecode.TryDecode(
+            GdprCelex, [], FamilyProfile, [], ObjectFactsProfile, null!, ExpressionFactsProfile,
+            EuActForm.Regulation, Ev("null-x-rows"), out _, out _, out _));
+    }
+
+    [TestMethod]
+    public void ANullObjectFactProfileThrows()
+    {
+        Assert.ThrowsExactly<ArgumentNullException>(() => EuCellarObjectDecode.TryDecode(
+            GdprCelex, [], FamilyProfile, [], null!, [], ExpressionFactsProfile,
+            EuActForm.Regulation, Ev("null-p-profile"), out _, out _, out _));
+    }
+
+    [TestMethod]
+    public void ANullExpressionFactProfileThrows()
+    {
+        Assert.ThrowsExactly<ArgumentNullException>(() => EuCellarObjectDecode.TryDecode(
+            GdprCelex, [], FamilyProfile, [], ObjectFactsProfile, [], null!,
+            EuActForm.Regulation, Ev("null-x-profile"), out _, out _, out _));
     }
 
     [TestMethod]
     public void ANullEvidenceRefThrows()
     {
         Assert.ThrowsExactly<ArgumentNullException>(() => EuCellarObjectDecode.TryDecode(
-            GdprCelex, Array.Empty<RepeatedEnumerationRow>(), FamilyProfile, EuActForm.Regulation,
-            null!, out _, out _));
+            GdprCelex, [], FamilyProfile, [], ObjectFactsProfile, [], ExpressionFactsProfile,
+            EuActForm.Regulation, null!, out _, out _, out _));
     }
 
     [TestMethod]
     public void AnUndefinedRecordFormThrows()
     {
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => EuCellarObjectDecode.TryDecode(
-            GdprCelex, Array.Empty<RepeatedEnumerationRow>(), FamilyProfile, (EuActForm)999,
-            Evidence("bad-form"), out _, out _));
-    }
-
-    [TestMethod]
-    public void ANullFamilyRowThrows()
-    {
-        Assert.ThrowsExactly<ArgumentException>(() => EuCellarObjectDecode.TryDecode(
-            GdprCelex, new RepeatedEnumerationRow?[] { null }!, FamilyProfile, EuActForm.Regulation,
-            Evidence("null-row"), out _, out _));
-    }
-
-    // Noted, not blocking, by the D1-05b decode refreeze
-    // (lex-event-20260904T025508487Z-0d433eb3f5254b6188c05ab22e962acd): a row shorter than the
-    // profile's own projection previously reached an unexplained ArgumentOutOfRangeException at
-    // Term's single positional read. Not reachable from a real delivery (the item 17 door already
-    // shapes every row to match the profile it was verified under), but a hand-built or corrupted row
-    // is still a caller contract violation, not a reviewable data disagreement -- the same treatment
-    // TryDecode already gives a null row above -- so this is a clean, explained ArgumentException
-    // rather than a raw index exception with no message.
-    [TestMethod]
-    public void ARowWithFewerTermsThanTheProjectionThrowsACleanArgumentException()
-    {
-        var shortTerms = new RepeatedEnumerationRdfTerm[]
-        {
-            RepeatedEnumerationRdfTerm.Literal(GdprCelex, XsdString, null),
-        };
-        var row = new RepeatedEnumerationRow(
-            Array.AsReadOnly(shortTerms),
-            Array.AsReadOnly(new[] { shortTerms[0] }),
-            Array.AsReadOnly(new[] { shortTerms[0] }));
-
-        var thrown = Assert.ThrowsExactly<ArgumentException>(() => EuCellarObjectDecode.TryDecode(
-            GdprCelex, [row], FamilyProfile, EuActForm.Regulation, Evidence("short-terms"),
-            out _, out _));
-        StringAssert.Contains(thrown.Message, "too few");
+            GdprCelex, [], FamilyProfile, [], ObjectFactsProfile, [], ExpressionFactsProfile,
+            (EuActForm)999, Ev("bad-form"), out _, out _, out _));
     }
 
     // ---- Construction surface. ----
@@ -443,9 +819,6 @@ public sealed class EuCellarObjectDecodeTests
     [TestMethod]
     public void TheDoorItselfIsNeverProducedBecauseItIsNeverAValue()
     {
-        // EuCellarObjectDecode is a static class, the same shape as VerifiedRepeatedEnumerationRows
-        // (Source/Core): nothing anywhere can ever hold, return or hand out a value of this type - it
-        // only ever hands out an EuCellarObjectSnapshot - so both surfaces are empty by construction.
         CollectionAssert.AreEqual(
             Array.Empty<string>(),
             ConstructionSurface.Of(typeof(EuCellarObjectDecode)).ToArray());
@@ -456,7 +829,7 @@ public sealed class EuCellarObjectDecodeTests
     }
 
     [TestMethod]
-    public void TheRefusalEnumHasExactlyFourMembersAndOneHandOutPath()
+    public void TheRefusalEnumHasExactlyElevenMembersAndTwoHandOutPaths()
     {
         const string N = "Lex.V3.Contracts.Source.Europe.";
         const string Refusal = N + "EuCellarObjectDecodeRefusal";
@@ -465,23 +838,44 @@ public sealed class EuCellarObjectDecodeTests
             {
                 "base-constructor protected instance System.Enum::.ctor() -> System.Enum",
                 "base-constructor protected instance System.ValueType::.ctor() -> System.ValueType",
+                "field public static " + Refusal + "::ConsolidatedBasedOnEdgeDisagreesWithFamily -> "
+                    + Refusal,
+                "field public static " + Refusal + "::ContentClassClosurePositionMismatch -> " + Refusal,
                 "field public static " + Refusal + "::DuplicateSingleValuedBinding -> " + Refusal,
+                "field public static " + Refusal + "::ExpressionFactRowTermKindMismatch -> " + Refusal,
+                "field public static " + Refusal + "::ExpressionParentNotInClosure -> " + Refusal,
+                "field public static " + Refusal + "::ExpressionSubjectNotSelfClosed -> " + Refusal,
                 "field public static " + Refusal + "::FamilyRowTermKindMismatch -> " + Refusal,
                 "field public static " + Refusal + "::None -> " + Refusal,
+                "field public static " + Refusal + "::ObjectFactRowNotInClosure -> " + Refusal,
+                "field public static " + Refusal + "::ObjectFactRowTermKindMismatch -> " + Refusal,
                 "field public static " + Refusal + "::ObjectSnapshotRejected -> " + Refusal,
             },
             ConstructionSurface.Of(typeof(EuCellarObjectDecodeRefusal)).ToArray());
 
         const string C = "Lex.V3.Contracts.";
+        const string RowList =
+            "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Core.RepeatedEnumerationRow>, "
+            + "Lex.V3.Contracts.Source.Core.RepeatedEnumerationInterpretationProfile, ";
         CollectionAssert.AreEqual(
             new[]
             {
+                // BuildOneObject is TryDecode's own private per-object helper: it also carries an
+                // `out EuCellarObjectDecodeRefusal` parameter, so it is a second real hand-out path,
+                // not only TryDecode itself.
+                "by-ref-method private static " + N + "EuCellarObjectDecode::BuildOneObject(System.String, "
+                + "System.Boolean, System.String, "
+                + "System.Collections.Generic.IReadOnlyList<" + N + "EuCellarObjectDecode+ObjectFactRow>, "
+                + "System.Collections.Generic.IReadOnlyList<" + N + "EuCellarObjectDecode+ExpressionFactRow>, "
+                + C + "EuActForm, Lex.V3.Contracts.Source.Core.SourceArtifactRef, out " + Refusal
+                + "&, out System.String&, out " + N + "EuCellarObjectSnapshotRefusal&) -> "
+                + N + "EuCellarObjectSnapshot",
                 "by-ref-method public static " + N + "EuCellarObjectDecode::TryDecode(System.String, "
-                + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Core."
-                + "RepeatedEnumerationRow>, Lex.V3.Contracts.Source.Core."
-                + "RepeatedEnumerationInterpretationProfile, " + C + "EuActForm, "
-                + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, out " + Refusal + "&, out " + N
-                + "EuCellarObjectSnapshotRefusal&) -> " + N + "EuCellarObjectSnapshot",
+                + RowList + RowList + RowList + C + "EuActForm, "
+                + "Lex.V3.Contracts.Source.Core.SourceArtifactRef, out " + Refusal + "&, out "
+                + "System.String&, out " + N
+                + "EuCellarObjectSnapshotRefusal&) -> "
+                + "System.Collections.Generic.IReadOnlyList<" + N + "EuCellarObjectSnapshot>",
             },
             ConstructionSurface.ProducersIn(
                 typeof(EuCellarObjectDecodeRefusal).Assembly, typeof(EuCellarObjectDecodeRefusal), true)

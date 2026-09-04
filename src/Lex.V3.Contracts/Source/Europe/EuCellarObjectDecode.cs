@@ -3,219 +3,276 @@ using Lex.V3.Contracts.Source.Core;
 namespace Lex.V3.Contracts.Source.Europe;
 
 /// <summary>
-/// Why <see cref="EuCellarObjectDecode.TryDecode"/> refused to hand back a snapshot. Closed.
+/// Why <see cref="EuCellarObjectDecode.TryDecode"/> refused to hand back snapshots. Closed.
 /// </summary>
 /// <remarks>
-/// Three members beyond <see cref="None"/>, matching the SCOPE_RULING's three named refusal
-/// conditions exactly: a root outside the pack is <see cref="ObjectSnapshotRejected"/> (delegated to
-/// <see cref="EuCellarObjectSnapshot.TryObserve"/>'s own pack-membership check rather than a second
-/// one this door invents), a term kind that disagrees with the family projection's own expectation is
-/// <see cref="FamilyRowTermKindMismatch"/>, and a duplicate binding for a predicate this decode treats
-/// as single-valued for one root is <see cref="DuplicateSingleValuedBinding"/>. No member here drops a
-/// row silently: every family row this door reads is either folded into the one snapshot it builds or
-/// is the exact row that produced one of these three refusals.
+/// D1-05c-1 (SCOPE_RULING <c>lex-event-20260904T040718222Z-7e6f29af07024cf5b2cb716f94f288e3</c>)
+/// extends D1-05b's three-member set with seven more, one per new named refusal condition this
+/// door's own extension introduces. No member here drops a row silently: every row this door reads
+/// from any of its three row sets is either folded into one of the snapshots it builds or is the
+/// exact row that produced one of these refusals.
 /// </remarks>
 public enum EuCellarObjectDecodeRefusal
 {
-    /// <summary>No refusal: the snapshot was admitted.</summary>
+    /// <summary>No refusal: the snapshots were admitted.</summary>
     None = 0,
 
     /// <summary>
     /// A family row's <c>base_celex</c>, <c>base</c> or <c>state</c> term disagreed with the shape
-    /// the family projection promises: <c>base_celex</c> must be a plain literal, <c>base</c> and
-    /// <c>state</c> must be IRIs, and <c>state</c> must reduce to Appendix A's exact lexical form
-    /// (<see cref="EuPackRootCanonicalForm"/>) even though it is never checked against pack
-    /// membership (a relation target is never restricted to the pack; see
-    /// <see cref="EuRelationEdgeObservation"/>'s own remarks). A row failing any of these is refused
-    /// here rather than let an ill-shaped term reach a downstream constructor as an uncaught
-    /// exception.
+    /// the family projection promises. Unchanged from D1-05b.
     /// </summary>
     FamilyRowTermKindMismatch = 1,
 
     /// <summary>
-    /// This decode treats a root's own CELEX identity and its own canonical Work-root IRI as
-    /// single-valued facts, fixed by <paramref name="requestedCelex"/> and by Appendix A's own
-    /// admitted-seed map rather than by whichever row happens to be read first. A family row whose
-    /// <c>base_celex</c> or <c>base</c> disagrees with that fixed value is a second, conflicting
-    /// value bound to a fact this decode cannot aggregate (unlike the relation edges a family's many
-    /// rows legitimately carry many of), so it is refused rather than silently overwritten or
-    /// silently ignored.
+    /// A family row's <c>base_celex</c> or <c>base</c> disagreed with this call's fixed root
+    /// identity. Unchanged from D1-05b.
     /// </summary>
     DuplicateSingleValuedBinding = 2,
 
     /// <summary>
-    /// <see cref="EuCellarObjectSnapshot.TryObserve"/> itself refused the assembled observation set,
-    /// most notably (Point 9 of the ruling) when the resolved root is not a member of
-    /// <see cref="EuAppendixASeedMap.PackRoots"/>. The exact inner reason is reported alongside this
-    /// member rather than being collapsed into one opaque code, so a caller can distinguish "outside
-    /// the pack" from any other reason the snapshot's own door refuses.
+    /// <see cref="EuCellarObjectSnapshot.TryObserve"/> itself refused one object's assembled
+    /// observation set. The exact inner reason is reported alongside this member.
     /// </summary>
     ObjectSnapshotRejected = 3,
+
+    /// <summary>
+    /// An object-facts (family P) row's <c>object</c>, <c>predicate</c>, <c>value_kind</c>,
+    /// <c>datatype_iri</c> or <c>language_tag</c> term disagreed with the shape the family P
+    /// projection promises, or P's own delivery for one object omitted an outcome row (a real value
+    /// or an explicit unbound row) for one of the predicates this closed door expects every object
+    /// in <c>O</c> to carry an outcome for.
+    /// </summary>
+    ObjectFactRowTermKindMismatch = 4,
+
+    /// <summary>
+    /// A family P row named an <c>object</c> that is not a member of this call's own closure
+    /// <c>O</c> (the root plus every state <c>familyRows</c> discovered). The offending canonical
+    /// IRI is reported through <c>offendingIri</c>.
+    /// </summary>
+    ObjectFactRowNotInClosure = 5,
+
+    /// <summary>
+    /// An Expression-facts (family X) row's <c>parent</c>, <c>object</c>, <c>predicate</c>,
+    /// <c>value_kind</c>, <c>datatype_iri</c> or <c>language_tag</c> term disagreed with the shape
+    /// the family X projection promises.
+    /// </summary>
+    ExpressionFactRowTermKindMismatch = 6,
+
+    /// <summary>
+    /// A family X row's <c>parent</c> (the Work an Expression belongs to) is not a member of this
+    /// call's own closure <c>O</c>. The offending canonical parent IRI is reported through
+    /// <c>offendingIri</c>.
+    /// </summary>
+    ExpressionParentNotInClosure = 7,
+
+    /// <summary>
+    /// A family X row named an Expression (<c>object</c>) for some predicate, but no
+    /// <c>expression_belongs_to_work</c> row for that same Expression exists among X's own
+    /// delivered rows: X proves its own closure rather than trusting an external Expression
+    /// enumeration, per the SCOPE_RULING's second X closure rule. The offending Expression IRI is
+    /// reported through <c>offendingIri</c>.
+    /// </summary>
+    ExpressionSubjectNotSelfClosed = 8,
+
+    /// <summary>
+    /// Family P's own <c>ConsolidatedBasedOn</c> edges for one object disagree with what
+    /// <c>familyRows</c> independently established for that same object: the root carried a
+    /// nonempty edge, or a state's edges were not exactly the one edge targeting this call's own
+    /// root. Two independently delivered families describing the same relation must agree; this is
+    /// the typed refusal when they do not.
+    /// </summary>
+    ConsolidatedBasedOnEdgeDisagreesWithFamily = 9,
+
+    /// <summary>
+    /// The content class family P's own type assertions derive for one object (root or state)
+    /// disagrees with the content class its closure position requires (a root must derive
+    /// <see cref="EuContentClass.OriginalLegalText"/>, a state must derive
+    /// <see cref="EuContentClass.Consolidation"/>), per the SCOPE_RULING's fourth precision: closure
+    /// position is a consistency check on the publisher's own assertion, never a silent override of
+    /// it.
+    /// </summary>
+    ContentClassClosurePositionMismatch = 10,
 }
 
 /// <summary>
-/// The decode from a verified EU consolidation-family row set
-/// (<see cref="VerifiedRepeatedEnumerationRows.TryOpen"/>'s return, read under
-/// <c>EuConsolidationDiscoveryPlan</c>'s own family projection) into the typed
-/// <see cref="EuCellarObjectSnapshot"/> observation set for exactly the one Cellar root the rows were
-/// enumerated for.
+/// The decode from a verified EU consolidation closure - D1-05a's family census plus D1-05c-1's own
+/// object-facts, Expression-facts and root-watermark row sets
+/// (<see cref="EuObjectFactsDiscoveryPlan"/>) - into one typed <see cref="EuCellarObjectSnapshot"/>
+/// per object the closure discovers.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Queue item D1-05b (SCOPE_RULING <c>lex-event-20260904T015609998Z-bb7cc08f556347f5a5455a58f810b9ee</c>):
-/// "a decode from <c>VerifiedRepeatedEnumerationRows.TryOpen</c>'s rows into the typed EU observations
-/// <c>EuCellarObjectSnapshot.TryObserve</c> takes, then one snapshot per cellar root." This type is
-/// that decode. It is contracts-only: nothing here calls a store, a publisher endpoint, or
-/// <c>Lex.V3.Ingest</c>. D1-05c (the EU executor and adapter, queued separately) is the caller this
-/// door is built for.
+/// D1-05b (SCOPE_RULING <c>lex-event-20260904T015609998Z-bb7cc08f556347f5a5455a58f810b9ee</c>) built
+/// the first version of this door: one snapshot, for the root alone, with every predicate but the
+/// root's own CELEX honestly <see cref="EuPredicateObservationState.NotObserved"/> because that
+/// closure never asked anything else. D1-05c-1 (SCOPE_RULING
+/// <c>lex-event-20260904T040718222Z-7e6f29af07024cf5b2cb716f94f288e3</c>) extends this door rather
+/// than replacing it: the object universe this call decodes, <c>O</c>, is still exactly the root plus
+/// every state <c>familyRows</c> discovers (family P's and family X's own rows never grow or shrink
+/// <c>O</c>; a row naming an object outside it is refused, never silently admitted). What changes is
+/// that every object in <c>O</c> - the root and every discovered state alike - now gets its own real
+/// snapshot built from its own rows in family P (the nine object-authority CDM predicates plus the
+/// four read relation families, asked uniformly of every object as subject) and family X (the four
+/// Expression-authority CDM predicates, asked of the Expressions of <c>O</c>).
 /// </para>
 /// <para>
-/// Precision one, the column set. The plan's family query set (<c>EuConsolidationQuerySet.Family</c>
-/// in <c>EuConsolidationDiscoveryPlan</c>) projects exactly <c>base_celex</c>, <c>base</c>,
-/// <c>state</c>, <c>family_multiplicity</c> and <c>state_key</c>, in that order, from
-/// <c>?state &lt;act_consolidated_based_on_resource_legal&gt; ?base</c> bound against one requested
-/// seed CELEX. Every variable this door reads is looked up by name against
-/// <paramref name="familyProfile"/>'s own <c>ProjectionVariables</c>
-/// (<see cref="RepeatedEnumerationRow"/> itself carries no per-term name; a term is keyed only by its
-/// position in <c>ProjectionVariables</c>, so <see cref="Term"/> below is the one place a literal
-/// index ever occurs, and every call site names its variable rather than its position) - never a
-/// literal index into <see cref="RepeatedEnumerationRow.Terms"/>. <c>family_multiplicity</c> and
-/// <c>state_key</c> are not read: multiplicity is a count this decode does not need (it observes
-/// which states exist, not how many triples asserted each), and <c>state_key</c> is the cursor column
-/// the delivery-verification layer already re-derives and checks before these rows ever reach this
-/// door.
+/// The edge-placement move (SCOPE_RULING precision two). D1-05b recorded a discovered state as an
+/// <see cref="EuRelationAuthority.OntologyAuthorizedInverse"/> edge on the <em>root's own</em>
+/// snapshot: "the root has this state as a consolidated derivative", the inverse of what the
+/// publisher actually asserts (<c>state consolidated_based_on base</c>). Candidate 5 R4 is explicit
+/// that an inverse may be derived only from an exact mapping frozen in the pinned ontology, and CDM's
+/// declared inverse is not established, so that inverse was never authorised. Family P asks
+/// <c>act_consolidated_based_on_resource_legal</c> uniformly, object-as-subject, of every object in
+/// <c>O</c>: for the root this predicate is asked and (ordinarily) unbound, so the root's own
+/// <see cref="EuRelationFamily.ConsolidatedBasedOn"/> family is
+/// <see cref="EuRelationAcquisitionState.Complete"/> with zero edges, a real negative fact rather
+/// than a coverage gap; for a state this predicate is asked and bound to the state's own base, so
+/// that edge is recorded on the <em>state's own</em> snapshot as
+/// <see cref="EuRelationAuthority.PublisherAsserted"/> - the direction the publisher actually wrote.
+/// No special-casing was needed to reach this shape: it falls out of asking the same four relation
+/// predicates the same way of every object in <c>O</c>. D1-05b's own
+/// <c>BuildConsolidatedBasedOnEdge</c> inverse builder is retired along with its
+/// <c>OntologyAuthorizedInverse</c> authority; nothing this door produces carries that authority any
+/// more, for any object.
 /// </para>
 /// <para>
-/// The plan's other query set, <c>TemporalFacts</c>, projects <c>act_consolidated_date</c> (one of the
-/// thirteen closed <see cref="EuCdmPredicate"/> members) and three predicates
-/// (<c>act_consolidated_layer</c>, <c>_version</c>, <c>_number</c>) that are not CDM predicates this
-/// pipeline reads at all - but every one of those facts is asserted on <c>?state</c>, never on
-/// <c>?base</c>. This door builds one snapshot per <em>root</em> (<c>base</c>, the Appendix A pack
-/// member), not per state, so none of the temporal-facts projection describes the object this door
-/// observes; <see cref="EuCdmPredicate.ActConsolidatedDate"/> is therefore honestly
-/// <see cref="EuPredicateObservationState.NotObserved"/> below rather than fed from a fact about a
-/// different Cellar object. This door's own signature reflects that: it takes only the family row set.
-/// A future decode of each discovered state's own facts into its own state-scoped snapshot is separate
-/// work this scope ruling does not ask for.
+/// Decision 64's "not observed" rule for family X. Family X only ever describes Expressions, never a
+/// Work or a consolidated state directly; asking an Expression-authority predicate of a plain Work
+/// object would manufacture a false <see cref="EuPredicateObservationState.ObservedAbsent"/> for a
+/// predicate nothing ever asked about that subject. So the four Expression-authority
+/// <see cref="EuCdmPredicate"/> members stay <see cref="EuPredicateObservationState.NotObserved"/> on
+/// every object's own predicate-observation set, unconditionally: family P's own VALUES predicate
+/// list never includes them, so no object-facts row could ever bear one, and this door does not
+/// invent one from family X's rows either. Family X's own facts live only in the language
+/// observation below.
 /// </para>
 /// <para>
-/// Precision two, grouping and absence. One call to <see cref="TryDecode"/> is scoped to exactly one
-/// root, matching how the plan itself binds exactly one <c>requested_celex</c> per count-and-page
-/// cycle (<c>VALUES ?base_celex { ... }</c> takes one value, never a set). "Grouping is per root"
-/// therefore means: every row this call reads is folded into the one snapshot for
-/// <paramref name="requestedCelex"/>'s own root. Within that group, <see cref="EuCdmPredicate.ResourceLegalIdCelex"/>
-/// is <see cref="EuPredicateObservationState.ObservedPresent"/> (this closure's whole premise is a
-/// bound, admitted CELEX); every other of the thirteen closed predicates is
-/// <see cref="EuPredicateObservationState.NotObserved"/>, honestly, because this closure never asks
-/// them about the root. <see cref="EuRelationFamily.ConsolidatedBasedOn"/> aggregates every distinct
-/// <c>state</c> discovered across the group's rows into one collection-shaped observation (Decision
-/// 64: many edges, one family observation, never one observation per row); the family's own bounded,
-/// re-verified enumeration (already proven complete by the delivery-comparison machinery this door's
-/// rows were reopened and re-checked against before ever reaching here) makes
-/// <see cref="EuRelationAcquisitionState.Complete"/> the honest acquisition state, including the zero
-/// edges case (a root with no consolidated states yet is a real, complete, negative observation, not a
-/// coverage gap). The other three relation families this pipeline reads
-/// (<see cref="EuRelationFamily.Amends"/>, <see cref="EuRelationFamily.Corrects"/>,
-/// <see cref="EuRelationFamily.BasedOn"/>) are <see cref="EuRelationAcquisitionState.Unacquired"/>:
-/// this specific closure never asks about them either.
+/// Content class (SCOPE_RULING precision four). Family P's <c>work_has_resource-type</c> rows are
+/// the publisher's own type assertion; this door reads whether any of an object's values names the
+/// EU Vocabularies consolidated-act resource-type
+/// (<c>http://publications.europa.eu/resource/authority/resource-type/CONSOLID_ACT</c>) and derives
+/// <see cref="EuContentClass.Consolidation"/> when it does, <see cref="EuContentClass.OriginalLegalText"/>
+/// otherwise - the only two content classes this closure's object universe (roots and consolidated
+/// states) can ever produce. Closure position is then a consistency check, never the source of
+/// truth: a root whose own type assertions derive <c>Consolidation</c>, or a state whose own type
+/// assertions derive <c>OriginalLegalText</c>, refuses with
+/// <see cref="EuCellarObjectDecodeRefusal.ContentClassClosurePositionMismatch"/> rather than silently
+/// picking one disagreeing signal over the other.
 /// </para>
 /// <para>
-/// The edge direction is deliberately inverted from the publisher's own assertion. The publisher
-/// asserts <c>state consolidated_based_on base</c>; the snapshot observes <c>base</c> (the root), so
-/// recording the edge as <see cref="EuRelationAuthority.PublisherAsserted"/> would claim the publisher
-/// asserted the opposite direction. <see cref="EuRelationAuthority.OntologyAuthorizedInverse"/> is the
-/// honest label for "the root has this state as a consolidated derivative", the inverse the ontology
-/// authorises rather than a claim about which way the publisher's own triple points.
+/// Language (queue item 18's own line: "the language observation filled from X"). Because
+/// <see cref="EuCellarObjectSnapshot.Language"/> still carries only one language of interest pending
+/// D1-05d's own widening to every selected Expression language, this door narrows that one language
+/// to the two <see cref="EuLanguageBodyDisposition.BodyCandidateLanguages"/> the reviewed scope ever
+/// fetches a body for: English if family X observes an English Expression for the object, French if
+/// it observes a French one and not an English one, and an explicit
+/// <see cref="EuExpressionObservationState.NotObserved"/> English observation when family X observes
+/// neither - never <c>ExpressionObservedBodyHeld</c>, since no body-acquisition machinery exists in
+/// this closure at all (format stays null; D1-05d's own manifestation slice is what could ever set
+/// body-held true). This is a judgement call the SCOPE_RULING text does not itself resolve (which of
+/// several observed languages counts as "the" one of interest); the reviewer can revisit it under
+/// D1-05d without this door's own row-reading logic changing.
 /// </para>
 /// <para>
-/// Precision three, refusals. See <see cref="EuCellarObjectDecodeRefusal"/> for the three named
-/// conditions. None of the three ever drops a row: a row that cannot be read by name and by expected
-/// shape refuses the whole call rather than being skipped so the remaining rows can still produce a
-/// technically-successful, silently-incomplete snapshot.
-/// </para>
-/// <para>
-/// What this door does not attempt to decode from the rows, and takes as caller-supplied context
-/// instead, because no column of this specific closure's projection carries it: the act form
-/// (<paramref name="recordForm"/> - <c>resource_legal_type</c> is a real <see cref="EuCdmPredicate"/>
-/// member, but this closure's own SPARQL never selects it) and every evidence reference
-/// (<paramref name="evidenceRef"/>, reused for the record, the channel, the relation axis and the
-/// unconditionally-required supporting-document evidence alike, since
-/// <see cref="VerifiedRepeatedEnumerationRows.TryOpen"/> hands back verified rows with no finer
-/// per-row evidence identity than the interpretation profile they were verified under). Channel,
-/// language, format and rights are the other four axes <c>EuCellarObjectSnapshot.TryObserve</c>
-/// accepts: channel is always <see cref="EuChannel.CellarSparqlEndpoint"/> here (every row this door
-/// ever reads arrived over that one SPARQL endpoint, by construction of the plan itself); language,
-/// format, rights and the supporting-document content class are left <c>null</c>, honestly, because
-/// this closure evaluates none of those axes for any object it discovers.
+/// Contracts-only: nothing here calls a store, a publisher endpoint, or <c>Lex.V3.Ingest</c>.
 /// </para>
 /// </remarks>
 public static class EuCellarObjectDecode
 {
-    /// <summary>The only path that decodes a family row set into a snapshot.</summary>
-    /// <param name="requestedCelex">
-    /// The exact admitted seed CELEX the family rows were enumerated for. Every row's own
-    /// <c>base_celex</c> is checked against this fixed value (a caller-independent second value is a
-    /// conflicting duplicate, never silently trusted); <see cref="EuAppendixASeedMap.SeedsInCelexOrder"/>
-    /// supplies the root's identity only when <paramref name="familyRows"/> is empty, since a root
-    /// with rows fixes its own root from the first row's own <c>base</c> term instead (so a corrupted
-    /// or hostile delivery naming a root outside the pack is still reachable and refused downstream,
-    /// rather than silently overridden by Appendix A's always-in-pack answer).
-    /// </param>
+    private const string ConsolidatedActResourceTypeIri =
+        "http://publications.europa.eu/resource/authority/resource-type/CONSOLID_ACT";
+    private const string EnglishLanguageAuthorityIri =
+        "http://publications.europa.eu/resource/authority/language/ENG";
+    private const string FrenchLanguageAuthorityIri =
+        "http://publications.europa.eu/resource/authority/language/FRA";
+
+    /// <summary>The only path that decodes a closure's row sets into its object snapshots.</summary>
+    /// <param name="requestedCelex">The exact admitted seed CELEX this closure was enumerated for.</param>
     /// <param name="familyRows">
-    /// The family query set's rows, already reopened and re-verified by
-    /// <see cref="VerifiedRepeatedEnumerationRows.TryOpen"/>. May be empty: a root with no discovered
-    /// consolidated states is a real, complete, negative observation, not a caller error.
+    /// D1-05a's family query set's rows: the census that discovers <c>O</c> (the root plus every
+    /// state). Already reopened and re-verified. May be empty: a root with no discovered
+    /// consolidated states is a real, complete, negative observation.
     /// </param>
-    /// <param name="familyProfile">
-    /// The interpretation profile the rows were verified under - the same instance the caller already
-    /// holds for its own <see cref="VerifiedRepeatedEnumerationRows.TryOpen"/> call. Every variable
-    /// this door reads is looked up by name against <see cref="RepeatedEnumerationInterpretationProfile.ProjectionVariables"/>.
+    /// <param name="familyProfile">The interpretation profile <paramref name="familyRows"/> were verified under.</param>
+    /// <param name="objectFactRows">
+    /// Family P's rows: the nine object-authority CDM predicates plus the four read relation
+    /// families, for every object in <c>O</c>. Already reopened and re-verified.
     /// </param>
+    /// <param name="objectFactProfile">The interpretation profile <paramref name="objectFactRows"/> were verified under.</param>
+    /// <param name="expressionFactRows">
+    /// Family X's rows: the four Expression-authority CDM predicates, for the Expressions of
+    /// <c>O</c>. Already reopened and re-verified. May be empty: an object with no Expression at all
+    /// is a real, complete, negative observation.
+    /// </param>
+    /// <param name="expressionFactProfile">The interpretation profile <paramref name="expressionFactRows"/> were verified under.</param>
     /// <param name="recordForm">
-    /// The root's own act form. Not recoverable from this closure's rows (see the type remarks); the
-    /// caller supplies it from wherever it independently resolves <c>resource_legal_type</c>.
+    /// Every object's own act form. Not recoverable from these closures' rows; the caller supplies it
+    /// from wherever it independently resolves <c>resource_legal_type</c>. Applied uniformly to every
+    /// object this call decodes, exactly as D1-05b applied it to the one root it decoded.
     /// </param>
     /// <param name="evidenceRef">
-    /// The evidence this decode's observations rest on, reused for every predicate, channel, relation
-    /// and axis field <see cref="EuCellarObjectSnapshot.TryObserve"/> requires evidence for. There is
-    /// no finer per-row evidence identity available from verified rows alone.
+    /// The evidence every observation in every returned snapshot rests on. There is no finer per-row
+    /// evidence identity available from verified rows alone.
     /// </param>
-    /// <param name="refusal">Why no snapshot was returned, when none was.</param>
+    /// <param name="refusal">Why no snapshots were returned, when none were.</param>
+    /// <param name="offendingIri">
+    /// The exact canonical IRI a closure-boundary refusal names, when <paramref name="refusal"/> is
+    /// <see cref="EuCellarObjectDecodeRefusal.ObjectFactRowNotInClosure"/>,
+    /// <see cref="EuCellarObjectDecodeRefusal.ExpressionParentNotInClosure"/> or
+    /// <see cref="EuCellarObjectDecodeRefusal.ExpressionSubjectNotSelfClosed"/>; otherwise <c>null</c>.
+    /// </param>
     /// <param name="snapshotRefusal">
     /// The inner reason, when <paramref name="refusal"/> is
     /// <see cref="EuCellarObjectDecodeRefusal.ObjectSnapshotRejected"/>; otherwise
     /// <see cref="EuCellarObjectSnapshotRefusal.None"/>.
     /// </param>
+    /// <returns>
+    /// One <see cref="EuCellarObjectSnapshot"/> per object in <c>O</c>, the root first then every
+    /// discovered state in ascending ordinal order, or <c>null</c> when refused.
+    /// </returns>
     /// <exception cref="ArgumentException">
-    /// A caller contract violation rather than a reviewable data disagreement: a null argument, or a
-    /// <paramref name="requestedCelex"/> that is not one of Appendix A's 82 admitted seeds.
+    /// A caller contract violation rather than a reviewable data disagreement.
     /// </exception>
-    public static EuCellarObjectSnapshot? TryDecode(
+    public static IReadOnlyList<EuCellarObjectSnapshot>? TryDecode(
         string requestedCelex,
         IReadOnlyList<RepeatedEnumerationRow> familyRows,
         RepeatedEnumerationInterpretationProfile familyProfile,
+        IReadOnlyList<RepeatedEnumerationRow> objectFactRows,
+        RepeatedEnumerationInterpretationProfile objectFactProfile,
+        IReadOnlyList<RepeatedEnumerationRow> expressionFactRows,
+        RepeatedEnumerationInterpretationProfile expressionFactProfile,
         EuActForm recordForm,
         SourceArtifactRef evidenceRef,
         out EuCellarObjectDecodeRefusal refusal,
+        out string? offendingIri,
         out EuCellarObjectSnapshotRefusal snapshotRefusal)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(requestedCelex);
         ArgumentNullException.ThrowIfNull(familyRows);
         ArgumentNullException.ThrowIfNull(familyProfile);
+        ArgumentNullException.ThrowIfNull(objectFactRows);
+        ArgumentNullException.ThrowIfNull(objectFactProfile);
+        ArgumentNullException.ThrowIfNull(expressionFactRows);
+        ArgumentNullException.ThrowIfNull(expressionFactProfile);
         ContractValidation.RequireDefined(recordForm, nameof(recordForm));
         ArgumentNullException.ThrowIfNull(evidenceRef);
+        offendingIri = null;
 
         if (Array.Exists(familyRows.ToArray(), static row => row is null))
         {
             throw new ArgumentException("A family row cannot be null.", nameof(familyRows));
         }
 
-        // requestedCelex must itself be one of Appendix A's 82 admitted seeds: a caller contract
-        // violation, not a reviewable data disagreement, because this door only ever serves an
-        // already-admitted seed. Its WorkRoot is used only as the zero-rows fallback below, never to
-        // override what the rows themselves say: overriding it would make a fabricated out-of-pack
-        // `base` term unreachable, since every Appendix A seed's own root is a pack member by
-        // construction.
+        if (Array.Exists(objectFactRows.ToArray(), static row => row is null))
+        {
+            throw new ArgumentException("An object-fact row cannot be null.", nameof(objectFactRows));
+        }
+
+        if (Array.Exists(expressionFactRows.ToArray(), static row => row is null))
+        {
+            throw new ArgumentException("An expression-fact row cannot be null.", nameof(expressionFactRows));
+        }
+
         var seedEntry = EuAppendixASeedMap.SeedsInCelexOrder.FirstOrDefault(
             seed => string.Equals(seed.Celex, requestedCelex, StringComparison.Ordinal));
         if (seedEntry.Celex is null)
@@ -225,6 +282,7 @@ public static class EuCellarObjectDecode
                 nameof(requestedCelex));
         }
 
+        // ---- Discover O from the family census. Unchanged from D1-05b. ----
         string? rootIri = null;
         var discoveredStates = new List<string>();
         var seenStates = new HashSet<string>(StringComparer.Ordinal);
@@ -251,11 +309,6 @@ public static class EuCellarObjectDecode
                 return null;
             }
 
-            // The row's own base term - not Appendix A's - fixes this call's root, so a corrupted or
-            // hostile delivery that names a base outside the 82-root pack is actually reachable here
-            // and is refused downstream by EuCellarObjectSnapshot.TryObserve's own pack-membership
-            // check, never silently accepted because the caller's requestedCelex happened to be
-            // legitimate.
             var canonicalBase = EuPackRootCanonicalForm.TryCanonicalize(baseTerm.Value, out _);
             if (canonicalBase is null)
             {
@@ -289,45 +342,227 @@ public static class EuCellarObjectDecode
             }
         }
 
-        // A root with no discovered consolidated states at all has no row to read a base term from;
-        // Appendix A's own seed map is the only source left, and it is always a pack member by
-        // construction, so this fallback path never itself reaches ObjectSnapshotRejected on pack
-        // membership - there is no row here that could have named a different, wrong root.
         rootIri ??= EuPackRootCanonicalForm.TryCanonicalize(seedEntry.WorkRoot, out _)
             ?? throw new InvalidOperationException(
                 "Appendix A's own seed map root failed to canonicalize; this is a defect in that " +
                 "map, never a caller input.");
 
         discoveredStates.Sort(StringComparer.Ordinal);
+        var closure = new HashSet<string>(StringComparer.Ordinal) { rootIri };
+        closure.UnionWith(discoveredStates);
 
-        // Built with explicit loops calling named static methods, deliberately, rather than a LINQ
-        // Select over a branching ternary: a lambda whose two branches capture different variables
-        // compiles to a stable single method under Debug but is split into two separate
-        // compiler-generated methods under Release's optimizer, which would make the
-        // ConstructionSurface pins on the observation records below configuration-dependent. A named
-        // method with an ordinary in-body ternary has no such split in either configuration.
+        // ---- Parse family P (object facts), checked against the closure. ----
+        var objectFacts = new List<ObjectFactRow>();
+        foreach (var row in objectFactRows)
+        {
+            var objectTerm = Term(row, objectFactProfile, "object");
+            var predicateTerm = Term(row, objectFactProfile, "predicate");
+            var valueTerm = Term(row, objectFactProfile, "value");
+            var valueKindTerm = Term(row, objectFactProfile, "value_kind");
+            var datatypeTerm = Term(row, objectFactProfile, "datatype_iri");
+            var languageTerm = Term(row, objectFactProfile, "language_tag");
+
+            if (objectTerm.Kind != RepeatedEnumerationRdfTermKind.Iri || objectTerm.Value is null ||
+                predicateTerm.Kind != RepeatedEnumerationRdfTermKind.Iri || predicateTerm.Value is null ||
+                !IsPlainLiteral(valueKindTerm) || !IsPlainLiteral(datatypeTerm) || !IsPlainLiteral(languageTerm) ||
+                (valueTerm.Kind == RepeatedEnumerationRdfTermKind.Unbound) != (valueKindTerm.Value == "unbound"))
+            {
+                refusal = EuCellarObjectDecodeRefusal.ObjectFactRowTermKindMismatch;
+                snapshotRefusal = EuCellarObjectSnapshotRefusal.None;
+                return null;
+            }
+
+            var canonicalObject = EuPackRootCanonicalForm.TryCanonicalize(objectTerm.Value, out _);
+            if (canonicalObject is null)
+            {
+                refusal = EuCellarObjectDecodeRefusal.ObjectFactRowTermKindMismatch;
+                snapshotRefusal = EuCellarObjectSnapshotRefusal.None;
+                return null;
+            }
+
+            if (!closure.Contains(canonicalObject))
+            {
+                refusal = EuCellarObjectDecodeRefusal.ObjectFactRowNotInClosure;
+                offendingIri = canonicalObject;
+                snapshotRefusal = EuCellarObjectSnapshotRefusal.None;
+                return null;
+            }
+
+            objectFacts.Add(new ObjectFactRow(
+                canonicalObject, predicateTerm.Value, valueTerm, valueKindTerm.Value!));
+        }
+
+        // ---- Parse family X (expression facts), checked against the closure and its own closure. ----
+        var expressionFacts = new List<ExpressionFactRow>();
+        foreach (var row in expressionFactRows)
+        {
+            var parentTerm = Term(row, expressionFactProfile, "parent");
+            var objectTerm = Term(row, expressionFactProfile, "object");
+            var predicateTerm = Term(row, expressionFactProfile, "predicate");
+            var valueTerm = Term(row, expressionFactProfile, "value");
+            var valueKindTerm = Term(row, expressionFactProfile, "value_kind");
+            var datatypeTerm = Term(row, expressionFactProfile, "datatype_iri");
+            var languageTerm = Term(row, expressionFactProfile, "language_tag");
+
+            if (parentTerm.Kind != RepeatedEnumerationRdfTermKind.Iri || parentTerm.Value is null ||
+                objectTerm.Kind != RepeatedEnumerationRdfTermKind.Iri || objectTerm.Value is null ||
+                predicateTerm.Kind != RepeatedEnumerationRdfTermKind.Iri || predicateTerm.Value is null ||
+                !IsPlainLiteral(valueKindTerm) || !IsPlainLiteral(datatypeTerm) || !IsPlainLiteral(languageTerm) ||
+                (valueTerm.Kind == RepeatedEnumerationRdfTermKind.Unbound) != (valueKindTerm.Value == "unbound"))
+            {
+                refusal = EuCellarObjectDecodeRefusal.ExpressionFactRowTermKindMismatch;
+                snapshotRefusal = EuCellarObjectSnapshotRefusal.None;
+                return null;
+            }
+
+            var canonicalParent = EuPackRootCanonicalForm.TryCanonicalize(parentTerm.Value, out _);
+            if (canonicalParent is null)
+            {
+                refusal = EuCellarObjectDecodeRefusal.ExpressionFactRowTermKindMismatch;
+                snapshotRefusal = EuCellarObjectSnapshotRefusal.None;
+                return null;
+            }
+
+            if (!closure.Contains(canonicalParent))
+            {
+                refusal = EuCellarObjectDecodeRefusal.ExpressionParentNotInClosure;
+                offendingIri = canonicalParent;
+                snapshotRefusal = EuCellarObjectSnapshotRefusal.None;
+                return null;
+            }
+
+            expressionFacts.Add(new ExpressionFactRow(
+                canonicalParent, objectTerm.Value, predicateTerm.Value, valueTerm, valueKindTerm.Value!));
+        }
+
+        var belongsToWorkIri = EuObjectFactsDiscoveryPlan.CdmIri(EuCdmPredicate.ExpressionBelongsToWork);
+        var selfClosedExpressions = new HashSet<string>(
+            expressionFacts
+                .Where(fact => fact.PredicateIri == belongsToWorkIri &&
+                    fact.Value.Kind != RepeatedEnumerationRdfTermKind.Unbound)
+                .Select(static fact => fact.Object),
+            StringComparer.Ordinal);
+        foreach (var fact in expressionFacts)
+        {
+            if (!selfClosedExpressions.Contains(fact.Object))
+            {
+                refusal = EuCellarObjectDecodeRefusal.ExpressionSubjectNotSelfClosed;
+                offendingIri = fact.Object;
+                snapshotRefusal = EuCellarObjectSnapshotRefusal.None;
+                return null;
+            }
+        }
+
+        // ---- Build one snapshot per object in O: the root, then every discovered state. ----
+        var snapshots = new List<EuCellarObjectSnapshot>(1 + discoveredStates.Count);
+        var objectsInOrder = new List<(string Iri, bool IsRoot)> { (rootIri, true) };
+        objectsInOrder.AddRange(discoveredStates.Select(static state => (state, false)));
+
+        foreach (var (objectIri, isRoot) in objectsInOrder)
+        {
+            var pRows = objectFacts.Where(fact => fact.Object == objectIri).ToArray();
+            var xRows = expressionFacts.Where(fact => fact.Parent == objectIri).ToArray();
+
+            var snapshot = BuildOneObject(
+                objectIri, isRoot, rootIri, pRows, xRows, recordForm, evidenceRef,
+                out refusal, out offendingIri, out snapshotRefusal);
+            if (snapshot is null)
+            {
+                return null;
+            }
+
+            snapshots.Add(snapshot);
+        }
+
+        refusal = EuCellarObjectDecodeRefusal.None;
+        snapshotRefusal = EuCellarObjectSnapshotRefusal.None;
+        return Array.AsReadOnly(snapshots.ToArray());
+    }
+
+    private static EuCellarObjectSnapshot? BuildOneObject(
+        string objectIri,
+        bool isRoot,
+        string rootIri,
+        IReadOnlyList<ObjectFactRow> pRows,
+        IReadOnlyList<ExpressionFactRow> xRows,
+        EuActForm recordForm,
+        SourceArtifactRef evidenceRef,
+        out EuCellarObjectDecodeRefusal refusal,
+        out string? offendingIri,
+        out EuCellarObjectSnapshotRefusal snapshotRefusal)
+    {
+        offendingIri = null;
+        snapshotRefusal = EuCellarObjectSnapshotRefusal.None;
+
         var predicateObservations = new List<EuPredicateObservation>(EuScopeVocabulary.CdmPredicates.Count);
         foreach (var predicate in EuScopeVocabulary.CdmPredicates)
         {
-            predicateObservations.Add(BuildPredicateObservation(predicate, requestedCelex, evidenceRef));
-        }
+            if (EuObjectFactsDiscoveryPlan.ExpressionAuthorityPredicates.Contains(predicate))
+            {
+                predicateObservations.Add(new EuPredicateObservation(
+                    predicate, EuPredicateObservationState.NotObserved, [], evidenceRef));
+                continue;
+            }
 
-        var edges = new List<EuRelationEdgeObservation>(discoveredStates.Count);
-        foreach (var state in discoveredStates)
-        {
-            edges.Add(BuildConsolidatedBasedOnEdge(state, evidenceRef));
+            var iri = EuObjectFactsDiscoveryPlan.CdmIri(predicate);
+            var matches = pRows.Where(row => row.PredicateIri == iri).ToArray();
+            if (!TryBuildPredicateObservation(predicate, matches, evidenceRef, out var observation))
+            {
+                refusal = EuCellarObjectDecodeRefusal.ObjectFactRowTermKindMismatch;
+                return null;
+            }
+
+            predicateObservations.Add(observation);
         }
 
         var relationObservations = new List<EuRelationFamilyObservation>(
             EuScopeVocabulary.ReadRelationFamilies.Count);
         foreach (var family in EuScopeVocabulary.ReadRelationFamilies)
         {
-            relationObservations.Add(BuildRelationFamilyObservation(family, edges, evidenceRef));
+            var iri = EuObjectFactsDiscoveryPlan.RelationIri(family);
+            var matches = pRows.Where(row => row.PredicateIri == iri).ToArray();
+            if (!TryBuildRelationFamilyObservation(family, matches, evidenceRef, out var observation))
+            {
+                refusal = EuCellarObjectDecodeRefusal.ObjectFactRowTermKindMismatch;
+                return null;
+            }
+
+            if (family == EuRelationFamily.ConsolidatedBasedOn)
+            {
+                var agrees = isRoot
+                    ? observation.Edges.Count == 0
+                    : observation.Edges.Count == 1 &&
+                        string.Equals(observation.Edges[0].TargetWorkRoot, rootIri, StringComparison.Ordinal);
+                if (!agrees)
+                {
+                    refusal = EuCellarObjectDecodeRefusal.ConsolidatedBasedOnEdgeDisagreesWithFamily;
+                    return null;
+                }
+            }
+
+            relationObservations.Add(observation);
         }
 
-        var channel = BuildChannel(evidenceRef);
+        var hasConsolidatedMarker = pRows.Any(row =>
+            row.PredicateIri == EuObjectFactsDiscoveryPlan.CdmIri(EuCdmPredicate.WorkHasResourceType) &&
+            row.ValueKind == "iri" &&
+            row.Value.Value == ConsolidatedActResourceTypeIri);
+        var derivedContentClass = hasConsolidatedMarker
+            ? EuContentClass.Consolidation
+            : EuContentClass.OriginalLegalText;
+        var expectedContentClass = isRoot ? EuContentClass.OriginalLegalText : EuContentClass.Consolidation;
+        if (derivedContentClass != expectedContentClass)
+        {
+            refusal = EuCellarObjectDecodeRefusal.ContentClassClosurePositionMismatch;
+            return null;
+        }
 
-        var objectRef = BuildObjectRef(rootIri, evidenceRef);
+        var rights = new EuContentClassObservation(derivedContentClass, evidenceRef);
+        var language = BuildLanguageObservation(xRows, evidenceRef);
+        var channel = BuildChannel(evidenceRef);
+        var objectRef = isRoot
+            ? BuildRootObjectRef(objectIri, evidenceRef)
+            : BuildStateObjectRef(objectIri, evidenceRef);
 
         var snapshot = EuCellarObjectSnapshot.TryObserve(
             objectRef,
@@ -336,9 +571,9 @@ public static class EuCellarObjectDecode
             evidenceRef,
             predicateObservations,
             channel,
+            language,
             null,
-            null,
-            null,
+            rights,
             relationObservations,
             evidenceRef,
             null,
@@ -355,10 +590,178 @@ public static class EuCellarObjectDecode
         return snapshot;
     }
 
+    private static bool TryBuildPredicateObservation(
+        EuCdmPredicate predicate,
+        IReadOnlyList<ObjectFactRow> matches,
+        SourceArtifactRef evidenceRef,
+        out EuPredicateObservation observation)
+    {
+        observation = null!;
+        if (matches.Count == 0)
+        {
+            // Family P asks every one of the nine object-authority predicates of every object it
+            // describes; a complete delivery always carries at least one outcome row (a real value
+            // or the explicit unbound marker) per predicate. Zero rows here is a malformed delivery,
+            // not a fact.
+            return false;
+        }
+
+        var unbound = matches.Where(static match => match.Value.Kind == RepeatedEnumerationRdfTermKind.Unbound)
+            .ToArray();
+        if (unbound.Length != 0)
+        {
+            if (matches.Count != 1)
+            {
+                return false;
+            }
+
+            observation = new EuPredicateObservation(
+                predicate, EuPredicateObservationState.ObservedAbsent, [], evidenceRef);
+            return true;
+        }
+
+        var values = matches.Select(static match => match.Value.Value)
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .Select(static value => value!)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static value => value, StringComparer.Ordinal)
+            .ToArray();
+        if (values.Length == 0)
+        {
+            return false;
+        }
+
+        observation = new EuPredicateObservation(
+            predicate, EuPredicateObservationState.ObservedPresent, values, evidenceRef);
+        return true;
+    }
+
+    private static bool TryBuildRelationFamilyObservation(
+        EuRelationFamily family,
+        IReadOnlyList<ObjectFactRow> matches,
+        SourceArtifactRef evidenceRef,
+        out EuRelationFamilyObservation observation)
+    {
+        observation = null!;
+        if (matches.Count == 0)
+        {
+            return false;
+        }
+
+        var unbound = matches.Where(static match => match.Value.Kind == RepeatedEnumerationRdfTermKind.Unbound)
+            .ToArray();
+        if (unbound.Length != 0)
+        {
+            if (matches.Count != 1)
+            {
+                return false;
+            }
+
+            observation = new EuRelationFamilyObservation(
+                family, EuRelationAcquisitionState.Complete, [], evidenceRef);
+            return true;
+        }
+
+        var targets = matches
+            .Where(static match => match.ValueKind == "iri" && match.Value.Value is not null)
+            .Select(static match => match.Value.Value!)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static value => value, StringComparer.Ordinal)
+            .ToArray();
+        if (targets.Length != matches.Count)
+        {
+            return false;
+        }
+
+        var edges = new List<EuRelationEdgeObservation>(targets.Length);
+        foreach (var target in targets)
+        {
+            var canonicalTarget = EuPackRootCanonicalForm.TryCanonicalize(target, out _);
+            if (canonicalTarget is null)
+            {
+                return false;
+            }
+
+            edges.Add(new EuRelationEdgeObservation(
+                family, EuRelationAuthority.PublisherAsserted, canonicalTarget, evidenceRef));
+        }
+
+        observation = new EuRelationFamilyObservation(
+            family, EuRelationAcquisitionState.Complete, edges, evidenceRef);
+        return true;
+    }
+
+    private static EuLanguageExpressionObservation BuildLanguageObservation(
+        IReadOnlyList<ExpressionFactRow> xRows, SourceArtifactRef evidenceRef)
+    {
+        var usesLanguageIri = EuObjectFactsDiscoveryPlan.CdmIri(EuCdmPredicate.ExpressionUsesLanguage);
+        bool HasLanguage(string authorityIri) => xRows.Any(row =>
+            row.PredicateIri == usesLanguageIri && row.ValueKind == "iri" && row.Value.Value == authorityIri);
+
+        if (HasLanguage(EnglishLanguageAuthorityIri))
+        {
+            return new EuLanguageExpressionObservation(
+                EuOfficialLanguage.English,
+                EuExpressionObservationState.ExpressionObservedBodyNotHeld,
+                "eu_object_facts_decode.language",
+                "eu_cellar_object_decode.language_english_observed_body_not_held",
+                evidenceRef);
+        }
+
+        if (HasLanguage(FrenchLanguageAuthorityIri))
+        {
+            return new EuLanguageExpressionObservation(
+                EuOfficialLanguage.French,
+                EuExpressionObservationState.ExpressionObservedBodyNotHeld,
+                "eu_object_facts_decode.language",
+                "eu_cellar_object_decode.language_french_observed_body_not_held",
+                evidenceRef);
+        }
+
+        return new EuLanguageExpressionObservation(
+            EuOfficialLanguage.English,
+            EuExpressionObservationState.NotObserved,
+            "eu_object_facts_decode.language",
+            "eu_cellar_object_decode.language_not_observed",
+            evidenceRef);
+    }
+
+    private static EuChannelObservation BuildChannel(SourceArtifactRef evidenceRef) => new(
+        EuChannel.CellarSparqlEndpoint,
+        "eu_consolidation_discovery.channel",
+        "eu_cellar_object_decode.channel_cellar_sparql_endpoint",
+        evidenceRef);
+
+    private static SourceObjectRef BuildRootObjectRef(string rootIri, SourceArtifactRef evidenceRef) =>
+        BuildObjectRef("eu-consolidation-root:", "eu_consolidation_root", rootIri, evidenceRef);
+
+    private static SourceObjectRef BuildStateObjectRef(string stateIri, SourceArtifactRef evidenceRef) =>
+        BuildObjectRef("eu-consolidation-state:", "eu_consolidation_state", stateIri, evidenceRef);
+
+    private static SourceObjectRef BuildObjectRef(
+        string canonicalKeyPrefix, string entityKindMember, string iri, SourceArtifactRef evidenceRef)
+    {
+        var canonicalKey = canonicalKeyPrefix + iri;
+        var canonicalKeySha256 = Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(canonicalKey)));
+        var entityKind = new SourceRegistryMemberRef(evidenceRef, entityKindMember);
+        return new SourceObjectRef(
+            SourceCoreSchemaIds.SourceObjectRef,
+            SourceAuthority.Cellar,
+            entityKind,
+            iri,
+            canonicalKey,
+            canonicalKeySha256,
+            evidenceRef,
+            null);
+    }
+
+    private static bool IsPlainLiteral(RepeatedEnumerationRdfTerm term) =>
+        term.Kind == RepeatedEnumerationRdfTermKind.Literal && term.Datatype is null && term.Language is null;
+
     /// <summary>
-    /// Looks up one projection variable's term by name, never by a literal index into
-    /// <see cref="RepeatedEnumerationRow.Terms"/>. This is the one place a positional index into
-    /// <c>Terms</c> ever occurs in this file; every call site names its variable.
+    /// Looks up one projection variable's term by name, never by a literal index. Shared by all
+    /// three row sets this door reads.
     /// </summary>
     private static RepeatedEnumerationRdfTerm Term(
         RepeatedEnumerationRow row,
@@ -372,15 +775,10 @@ public static class EuCellarObjectDecode
                 $"'{variableName}' is not part of this profile's projection.", nameof(variableName));
         }
 
-        // The door (queue item 17) already shapes every row it hands back to match the profile it
-        // was verified under, so this is not reachable from a real delivery; it guards a hand-built
-        // or corrupted row against an unexplained ArgumentOutOfRangeException, the same "caller
-        // contract violation, not a reviewable data disagreement" treatment TryDecode already gives a
-        // null row above.
         if (index >= row.Terms.Count)
         {
             throw new ArgumentException(
-                $"A family row has {row.Terms.Count} term(s), too few to read '{variableName}' at " +
+                $"A row has {row.Terms.Count} term(s), too few to read '{variableName}' at " +
                 $"projection position {index}.",
                 nameof(row));
         }
@@ -401,83 +799,9 @@ public static class EuCellarObjectDecode
         return -1;
     }
 
-    /// <summary>
-    /// One of the thirteen closed CDM predicates: the root's own CELEX is
-    /// <see cref="EuPredicateObservationState.ObservedPresent"/> (this closure's whole premise is a
-    /// bound, admitted CELEX); every other predicate is honestly
-    /// <see cref="EuPredicateObservationState.NotObserved"/>, because this closure never asks any of
-    /// them about the root.
-    /// </summary>
-    private static EuPredicateObservation BuildPredicateObservation(
-        EuCdmPredicate predicate, string requestedCelex, SourceArtifactRef evidenceRef) =>
-        predicate == EuCdmPredicate.ResourceLegalIdCelex
-            ? new EuPredicateObservation(
-                predicate, EuPredicateObservationState.ObservedPresent, [requestedCelex], evidenceRef)
-            : new EuPredicateObservation(
-                predicate, EuPredicateObservationState.NotObserved, [], evidenceRef);
+    private sealed record ObjectFactRow(
+        string Object, string PredicateIri, RepeatedEnumerationRdfTerm Value, string ValueKind);
 
-    /// <summary>
-    /// One discovered state, recorded as the ontology-authorized inverse of the publisher's own
-    /// <c>state consolidated_based_on base</c> assertion (see the type remarks for why the direction
-    /// is inverted).
-    /// </summary>
-    private static EuRelationEdgeObservation BuildConsolidatedBasedOnEdge(
-        string state, SourceArtifactRef evidenceRef) =>
-        new(
-            EuRelationFamily.ConsolidatedBasedOn,
-            EuRelationAuthority.OntologyAuthorizedInverse,
-            state,
-            evidenceRef);
-
-    /// <summary>
-    /// <see cref="EuRelationFamily.ConsolidatedBasedOn"/> aggregates every discovered state into one
-    /// <see cref="EuRelationAcquisitionState.Complete"/> observation - complete because the rows this
-    /// door reads were already reopened and re-verified as a bounded, proven enumeration before ever
-    /// reaching here, including the zero-edges case (a root with no consolidated states yet is a
-    /// real, complete, negative observation). The other three relation families this pipeline reads
-    /// are <see cref="EuRelationAcquisitionState.Unacquired"/>: this specific closure never asks
-    /// about them.
-    /// </summary>
-    private static EuRelationFamilyObservation BuildRelationFamilyObservation(
-        EuRelationFamily family,
-        IReadOnlyList<EuRelationEdgeObservation> consolidatedBasedOnEdges,
-        SourceArtifactRef evidenceRef) =>
-        family == EuRelationFamily.ConsolidatedBasedOn
-            ? new EuRelationFamilyObservation(
-                family, EuRelationAcquisitionState.Complete, consolidatedBasedOnEdges, evidenceRef)
-            : new EuRelationFamilyObservation(
-                family, EuRelationAcquisitionState.Unacquired, [], null);
-
-    /// <summary>
-    /// Every row this door ever reads arrived over the Cellar SPARQL endpoint, by construction of
-    /// the plan itself, so the channel observation is a fixed fact rather than something read from a
-    /// row. A named method rather than an inline expression: this is the one call site that makes
-    /// <see cref="EuCellarObjectDecode"/> a recognised external producer of
-    /// <see cref="EuChannelObservation"/>, alongside <see cref="EuCellarObjectSnapshot"/>'s own field
-    /// and property.
-    /// </summary>
-    private static EuChannelObservation BuildChannel(SourceArtifactRef evidenceRef) => new(
-        EuChannel.CellarSparqlEndpoint,
-        "eu_consolidation_discovery.channel",
-        "eu_cellar_object_decode.channel_cellar_sparql_endpoint",
-        evidenceRef);
-
-    private static SourceObjectRef BuildObjectRef(string rootIri, SourceArtifactRef evidenceRef)
-    {
-        const string CanonicalKeyPrefix = "eu-consolidation-root:";
-        var canonicalKey = CanonicalKeyPrefix + rootIri;
-        var canonicalKeySha256 = Convert.ToHexStringLower(
-            System.Security.Cryptography.SHA256.HashData(
-                System.Text.Encoding.UTF8.GetBytes(canonicalKey)));
-        var entityKind = new SourceRegistryMemberRef(evidenceRef, "eu_consolidation_root");
-        return new SourceObjectRef(
-            SourceCoreSchemaIds.SourceObjectRef,
-            SourceAuthority.Cellar,
-            entityKind,
-            rootIri,
-            canonicalKey,
-            canonicalKeySha256,
-            evidenceRef,
-            null);
-    }
+    private sealed record ExpressionFactRow(
+        string Parent, string Object, string PredicateIri, RepeatedEnumerationRdfTerm Value, string ValueKind);
 }
