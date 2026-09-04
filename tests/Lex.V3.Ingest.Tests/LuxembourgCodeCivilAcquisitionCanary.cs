@@ -55,7 +55,24 @@ namespace Lex.V3.Ingest.Tests;
 /// wall stands in front of the EU canary. The refusal is correctly typed and is a custody failure
 /// on our side, which IS one of the owner's four legitimate reasons, so the product code behaved
 /// correctly; what cannot both hold is the canary's own pair of constraints, a local filesystem
-/// store and bodies Held. That needs a ruling and must not be resolved by weakening the floor.
+/// store and bodies Held. That was ruled since
+/// (lex-event-20260904T212914634Z-f166f0b9e11b445795efd40c268bfbb8 and its extension
+/// lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c): the floor conflated retention
+/// with immutability, so a body held under a weaker guarantee is HELD and says so, while a write
+/// error or a digest mismatch stays a refusal.
+/// </para>
+/// <para>
+/// WHAT THIS RUN SAYS NOTHING ABOUT, so a future reader cannot mistake a green canary for evidence
+/// that these paths are sound. PROFILE RESOLUTION WAS NEVER EXERCISED: this canary acquires over a
+/// manifest built from the publisher's own retained SPARQL answers rather than from a live
+/// enumeration, so <c>LuxembourgScopeResolver.Resolve</c> is never called and its failure arms,
+/// including the two <c>LuxembourgProfileResolutionFailureCode</c> members no production path
+/// constructs (IncompleteVocabulary and SelectorConflict, residue R0 per RULING
+/// lex-event-20260904T215524557Z-7cb36f1f533c4318b978a4ff97c929d7), were never reached. So this run
+/// proves THE FETCH HALF ONLY. RULING
+/// lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c requires the canary to exercise
+/// the live enumeration path end to end before it counts, and a manifest built from pre-shaped
+/// publisher answers is explicitly not that.
 /// </para>
 /// </remarks>
 [TestClass]

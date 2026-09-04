@@ -9,6 +9,18 @@ using Lex.V3.Ingest;
 
 namespace Lex.V3.Ingest.Luxembourg;
 
+/// <remarks>
+/// Renumbered dense when custody_floor_not_observed was removed. RULING
+/// lex-event-20260904T215906714Z-6dadaf27829d4a3aa3c355063754ccd6: a member whose only producer was
+/// the weak class is re-conditioned and renamed when a GENUINE failure can still occur at that
+/// point and escapes as an exception, and removed with a dense renumber when it cannot. Here it
+/// cannot: the genuine custody failures reachable at that gate, an artifact absent from the
+/// session's map and an unreopenable dependency, both surface as CustodyIntegrityException or
+/// CustodyRequiredException and are ALREADY caught into
+/// <see cref="LuxembourgEnumerationRefusal.CustodyMemberMissing"/>, whose name already says exactly
+/// that. Re-conditioning would have produced two members for one fact. The wire names are
+/// unchanged, so the numbers are internal ordinals only.
+/// </remarks>
 public enum LuxembourgEnumerationRefusal
 {
     [JsonStringEnumMemberName("none")]
@@ -17,47 +29,44 @@ public enum LuxembourgEnumerationRefusal
     [JsonStringEnumMemberName("robots_bootstrap_refused")]
     RobotsBootstrapRefused = 1,
 
-    /// <summary>
-    /// The acquisition run's own bootstrap artifacts are not held under an enforced floor, so this
-    /// store cannot produce a payload receipt Source/Core will bind. Observed from the session's
-    /// membership after robots and before the first product request, so a deployment that cannot
-    /// mint a proof spends nothing finding out, and writes nothing to find out.
-    /// </summary>
-    [JsonStringEnumMemberName("custody_floor_not_observed")]
-    CustodyFloorNotObserved = 2,
+    // custody_floor_not_observed, 2, is removed. It refused any run whose bootstrap artifacts
+    // were not Floored, which stopped every deployment outside Azure before its first product
+    // request. Under the extended Decision 71 interpretation the class is recorded and the run
+    // continues, and the three genuine custody failures are refused where they are actually known
+    // (see the removed gate's own note in RunPartitionOnSessionAsync). Nothing produces it.
 
     [JsonStringEnumMemberName("observation_not_executed")]
-    ObservationNotExecuted = 3,
+    ObservationNotExecuted = 2,
 
     [JsonStringEnumMemberName("status_not_admitted")]
-    StatusNotAdmitted = 4,
+    StatusNotAdmitted = 3,
 
     [JsonStringEnumMemberName("media_type_not_admitted")]
-    MediaTypeNotAdmitted = 5,
+    MediaTypeNotAdmitted = 4,
 
     [JsonStringEnumMemberName("count_not_one_nonnegative_integer")]
-    CountNotOneNonNegativeInteger = 6,
+    CountNotOneNonNegativeInteger = 5,
 
     [JsonStringEnumMemberName("partition_required")]
-    PartitionRequired = 7,
+    PartitionRequired = 6,
 
     [JsonStringEnumMemberName("delivered_key_not_representable")]
-    DeliveredKeyNotRepresentable = 8,
+    DeliveredKeyNotRepresentable = 7,
 
     [JsonStringEnumMemberName("delivered_row_outside_partition")]
-    DeliveredRowOutsidePartition = 9,
+    DeliveredRowOutsidePartition = 8,
 
     [JsonStringEnumMemberName("cursor_did_not_advance")]
-    CursorDidNotAdvance = 10,
+    CursorDidNotAdvance = 9,
 
     [JsonStringEnumMemberName("page_budget_exhausted")]
-    PageBudgetExhausted = 11,
+    PageBudgetExhausted = 10,
 
     [JsonStringEnumMemberName("custody_member_missing")]
-    CustodyMemberMissing = 12,
+    CustodyMemberMissing = 11,
 
     [JsonStringEnumMemberName("delivery_proof_refused")]
-    DeliveryProofRefused = 13,
+    DeliveryProofRefused = 12,
 
     /// <summary>
     /// A page body admitted by status and media type is not a SPARQL results document this
@@ -69,7 +78,7 @@ public enum LuxembourgEnumerationRefusal
     /// then be looked at for the wrong reason.
     /// </summary>
     [JsonStringEnumMemberName("page_body_malformed")]
-    PageBodyMalformed = 14,
+    PageBodyMalformed = 13,
 
 }
 
@@ -473,23 +482,38 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         var productRequestCount = 0;
         try
         {
-            // Step 3: the custody floor is observed, not assumed, from the session's own
-            // cumulative membership (robots bootstrap, plus every earlier leaf on this same
-            // session). Zero extra writes, zero extra requests.
-            var bootstrapMembership = runner.CopyArtifactMembership();
-            var unenforced = bootstrapMembership
-                .Where(static entry => entry.Value != CustodyMembership.Floored)
-                .Select(static entry => entry.Key)
-                .ToArray();
-            if (unenforced.Length > 0)
-            {
-                return LuxembourgEnumerationRunResult.Refused(
-                    new LuxembourgEnumerationRefusalDetail(
-                        LuxembourgEnumerationRefusal.CustodyFloorNotObserved,
-                        null, null, null, null, null, null, unenforced, null),
-                    productRequestCount: 0);
-            }
-
+            // Step 3: the custody membership is observed, not assumed, from the session's own
+            // cumulative map (robots bootstrap, plus every earlier leaf on this same session).
+            //
+            // THIS GATE USED TO REFUSE ANYTHING THAT WAS NOT Floored, at request zero, so a run on
+            // any store but Azure stopped before its first product request. RULING
+            // lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c, extending the
+            // Decision 71 interpretation lex-event-20260904T212914634Z-f166f0b9e11b445795efd40c268bfbb8
+            // to every custody floor gate: a completeness proof resting on retained artifacts is the
+            // immutability argument one level up and takes the same answer. Membership is RECORDED
+            // and the run CONTINUES; Floored gates the cut release and any completeness claim
+            // served as checkable evidence, so an enumeration proved under RetainedUnenforced is
+            // real, usable and not releasable.
+            //
+            // THERE IS NO REFUSAL LEFT HERE, and that is a finding rather than a gap. This map is
+            // populated in exactly one place, RoutedHttpAcquisitionSession's own
+            // ClassifyMembership, which is CustodyMembershipClassifier and answers only Floored or
+            // RetainedUnenforced. So "an entry whose class is neither" is unreachable, and writing
+            // it would be a guard that cannot fail, which reads downstream as a promise nothing
+            // keeps. The three genuine custody failures are each already refused, harder and
+            // earlier, where the fact is actually known:
+            //   - an artifact ABSENT from this map: the session refuses per send, before capability
+            //     minting, because only the session knows the expected dependency set
+            //     (RoutedHttpAcquisitionSession, "A send dependency was not retained by this run");
+            //   - a membership that is not receipt derived: refused when the receipt is built
+            //     (RepeatedEnumerationDeliveryReceipt.Record, MembershipIsNotReceiptDerived);
+            //   - a write error or a digest mismatch: refused at the hold (CustodyHold).
+            // The class itself is not dropped by continuing: this same map is handed to
+            // TryCompareAndReceipt below, whose own Weakest fold puts the observed class on the
+            // receipt, so a run whose bootstrap was unenforced yields a receipt that says so.
+            //
+            // LuxembourgEnumerationRefusal.CustodyFloorNotObserved is removed with this gate rather
+            // than left declared, because nothing could produce it any more.
             var executorWrittenMembership = new Dictionary<string, CustodyMembership>(StringComparer.Ordinal);
             LuxembourgDeliveryPass? passA = null;
             LuxembourgDeliveryPass? passB = null;

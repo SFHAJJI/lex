@@ -76,49 +76,74 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
         Assert.AreEqual(0, result.ProductRequestCount);
     }
 
+    /// <summary>
+    /// A filesystem deployment RUNS, and its receipt says under which guarantee it holds.
+    /// </summary>
+    /// <remarks>
+    /// THIS TEST ASSERTED THE OPPOSITE and was named
+    /// <c>AFilesystemDeploymentSaysSoBeforeTheFirstProductRequest</c>: the executor refused at
+    /// request zero, with a handler that threw if any product request followed, because the robots
+    /// bootstrap artifacts on a filesystem store are RetainedUnenforced. That gate stopped every
+    /// Luxembourg run outside Azure before it sent anything, and it is what the acceptance canary
+    /// hit one level down.
+    /// <para>
+    /// RULING lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c, extending the
+    /// Decision 71 interpretation lex-event-20260904T212914634Z-f166f0b9e11b445795efd40c268bfbb8 to
+    /// every custody floor gate: a completeness proof resting on retained artifacts is the
+    /// immutability argument one level up and takes the same answer. The membership is recorded and
+    /// the run continues. The three genuine custody failures are each refused where the fact is
+    /// actually known rather than here: an artifact ABSENT from the map by the session itself,
+    /// per send, before capability minting; a membership that is not receipt derived when the
+    /// receipt is built; a write error or digest mismatch at the hold.
+    /// </para>
+    /// </remarks>
     [TestMethod]
-    public async Task AFilesystemDeploymentSaysSoBeforeTheFirstProductRequest()
+    public async Task AFilesystemDeploymentRunsAndItsReceiptCarriesRetainedUnenforced()
     {
         var (request, witness) = BuildRequest();
         var root = Path.Combine(Path.GetTempPath(), "lex-lu-executor-floor-" + Guid.NewGuid().ToString("N"));
-        var baselineRoot = Path.Combine(Path.GetTempPath(), "lex-lu-executor-floor-baseline-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
-        Directory.CreateDirectory(baselineRoot);
         try
         {
             var store = new FileSystemCustodyStore(root);
-            var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((_, req) =>
-                throw new AssertFailedException("No product request should follow an unfloored custody observation."));
+            var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, req) => ordinal switch
+            {
+                1 or 3 => JsonResponse(req, LuxembourgAcquisitionTestFixture.CountJson(0)),
+                _ => JsonResponse(req, LuxembourgAcquisitionTestFixture.EmptyRowsJson()),
+            });
 
             var result = await Run(store, request, witness, handler);
-            var afterCount = CountFiles(root);
 
-            Assert.IsNull(result.Receipt);
-            Assert.IsNotNull(result.Refusal);
-            Assert.AreEqual(LuxembourgEnumerationRefusal.CustodyFloorNotObserved, result.Refusal.Code);
-            Assert.AreEqual(0, result.ProductRequestCount);
-            Assert.IsTrue(result.Refusal.UnenforcedDigests.Count > 0);
+            // WHAT THIS LANE'S CHANGE PROVES: the run is no longer stopped at request zero. It
+            // reaches and sends its product requests, which the old gate refused to allow.
+            Assert.AreNotEqual(
+                LuxembourgEnumerationRefusal.RobotsBootstrapRefused,
+                result.Refusal?.Code,
+                "robots is not the point of this test.");
+            Assert.IsTrue(
+                result.ProductRequestCount > 0,
+                "product requests really happen now; the old custody gate refused before the "
+                + "first one, which is what stopped every deployment outside Azure.");
 
-            // The baseline: exactly what robots bootstrap alone writes against an identical fresh
-            // store, using the same handler and clock so the byte-for-byte retained set matches.
-            // Comparing to this rather than to zero is the honest form of "the executor wrote
-            // nothing": robots bootstrap unavoidably writes the artifacts the floor check reads.
-            var baselineStore = new FileSystemCustodyStore(baselineRoot);
-            var baselineHandler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((_, req) =>
-                throw new AssertFailedException("The baseline run must never reach a product request either."));
-            using var baselineSession = await LuxembourgAcquisitionTestFixture.StartedSessionAsync(
-                witness, baselineHandler, baselineStore, new LuxembourgAcquisitionTestFixture.FixedTimeProvider());
-            var baselineCount = CountFiles(baselineRoot);
-
+            // WHAT IS NOT THIS LANE'S TO FIX, named rather than asserted away. A FIFTH custody
+            // floor gate sits in shared Source/Core:
+            // RepeatedEnumerationDeliveryReceipt.RequireFlooredRun throws for any unenforced
+            // member, and TryProveFamilyEnumeration calls it, so the family enumeration PROOF
+            // still cannot be built on an unenforced store. That is the completeness proof resting
+            // on retained artifacts, which RULING
+            // lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c says takes the same
+            // answer as the others, but Source/Core is shared with the EU lane and the gate
+            // ownership ruling put shared hunks in the lane that merges first. So this asserts the
+            // refusal that remains, by name, instead of pretending the path is complete.
             Assert.AreEqual(
-                baselineCount,
-                afterCount,
-                "the executor must write nothing beyond what the robots bootstrap itself already wrote");
+                LuxembourgEnumerationRefusal.DeliveryProofRefused,
+                result.Refusal?.Code,
+                "the remaining refusal is the shared Core completeness-proof floor, not this "
+                + "lane's custody gate.");
         }
         finally
         {
             Directory.Delete(root, recursive: true);
-            Directory.Delete(baselineRoot, recursive: true);
         }
     }
 

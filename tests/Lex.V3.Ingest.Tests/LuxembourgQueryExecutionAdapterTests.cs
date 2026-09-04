@@ -552,11 +552,13 @@ public sealed class LuxembourgQueryExecutionAdapterTests
     }
 
     [TestMethod]
-    public async Task AScopeManifestWrittenWithNoEnforcedFloorIsRefused()
+    public async Task AScopeManifestWrittenWithNoEnforcedFloorIsHeldAndTheRunContinues()
     {
-        // A bare FileSystemCustodyStore publishes NotEnforced for every write (Decision 71), so the
-        // manifest this run produces cannot be claimed as held evidence -- exactly the discipline
-        // RequireFlooredRun applies to the executor's own evidence, applied here to this adapter's.
+        // THIS ASSERTED A REFUSAL, and it is why no Luxembourg run could complete outside Azure.
+        // RULING lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c, extending the Decision 71
+        // interpretation lex-event-20260904T212914634Z-f166f0b9e11b445795efd40c268bfbb8: membership is recorded and the run
+        // continues; only a write error or bytes that cannot be reproduced at their own digest are
+        // a custody failure.
         var (profile, _, enumerationRef) = BuildProfile();
         var root = Path.Combine(Path.GetTempPath(), "lex-lu-adapter-unfloored-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -569,9 +571,21 @@ public sealed class LuxembourgQueryExecutionAdapterTests
             var result = await adapter.RunAsync(
                 [], null, null, null, new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
 
-            Assert.IsNull(result.ScopeManifestReceipt);
+            // THE MANIFEST GATE IS PASSED, which is what this lane changed: the run no longer stops
+            // at ScopeManifestNotHeld. It now reaches the record set, whose writer's own floor gate
+            // is SHARED WITH THE EU LANE and, per the gate ownership ruling
+            // lex-event-20260904T214500631Z-2988b4fbae224252b08849326325a2a6, belongs to the lane
+            // that merges first. So the run still refuses, one gate later, and this says so by name
+            // rather than asserting a completeness this lane cannot yet deliver.
             Assert.IsNotNull(result.Refusal);
-            Assert.AreEqual(LuxembourgQueryExecutionRefusal.ScopeManifestNotHeld, result.Refusal.Code);
+            Assert.AreNotEqual(
+                LuxembourgQueryExecutionRefusal.ScopeManifestNotHeld,
+                result.Refusal!.Code,
+                "the manifest is held on an unenforced store now; that gate records and continues.");
+            Assert.AreEqual(
+                LuxembourgQueryExecutionRefusal.RecordSetNotHeld,
+                result.Refusal.Code,
+                "the remaining refusal is the shared CorpusRecordSetWriter gate, not this lane's.");
         }
         finally
         {
