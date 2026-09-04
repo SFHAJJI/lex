@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Net;
 using System.Net.Http;
 using Lex.V3.Artifacts;
@@ -125,21 +126,29 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
                 "product requests really happen now; the old custody gate refused before the "
                 + "first one, which is what stopped every deployment outside Azure.");
 
-            // WHAT IS NOT THIS LANE'S TO FIX, named rather than asserted away. A FIFTH custody
-            // floor gate sits in shared Source/Core:
-            // RepeatedEnumerationDeliveryReceipt.RequireFlooredRun throws for any unenforced
-            // member, and TryProveFamilyEnumeration calls it, so the family enumeration PROOF
-            // still cannot be built on an unenforced store. That is the completeness proof resting
-            // on retained artifacts, which RULING
-            // lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c says takes the same
-            // answer as the others, but Source/Core is shared with the EU lane and the gate
-            // ownership ruling put shared hunks in the lane that merges first. So this asserts the
-            // refusal that remains, by name, instead of pretending the path is complete.
+            // WHAT IS NOT THIS LANE'S TO FIX, named rather than asserted away, and named
+            // CORRECTLY: an earlier version of this remark said the residual gate was
+            // RepeatedEnumerationDeliveryReceipt.RequireFlooredRun. It is not, and the executor
+            // never reaches that method at all: RequireFlooredRun is called only by
+            // TryProveFamilyEnumeration, and only the two ADAPTERS call that. Verified by reading
+            // the call sites rather than by the name.
+            //
+            // Where an unfloored run actually stops is the TUPLE BIND, EnumerationDeliveryComparison
+            // .Create in shared Source/Core, which refuses any observation whose body receipt is not
+            // ImmutableObject1 and LockedTime; this executor's own remark beside its
+            // DeliveryProofRefused site already said so. That gate takes the same answer as the
+            // others under RULING lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c,
+            // but Source/Core is shared and the gate ownership ruling puts shared hunks in the lane
+            // that merges first, so it is LANE B's.
+            //
+            // The assertion below is KEPT deliberately. It will go red when lane B lands, and the
+            // repair is to flip it to the receipt carrying RetainedUnenforced that this test's own
+            // name already promises.
             Assert.AreEqual(
                 LuxembourgEnumerationRefusal.DeliveryProofRefused,
                 result.Refusal?.Code,
-                "the remaining refusal is the shared Core completeness-proof floor, not this "
-                + "lane's custody gate.");
+                "the remaining refusal comes from the shared Core tuple bind, not this lane's "
+                + "custody gate.");
         }
         finally
         {
@@ -1454,12 +1463,19 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
         // Materialization afterwards reopens every artifact out of the same directory.
         //
         // The one thing wrapped is the protection each write receipt publishes. This is not
-        // cosmetic and is not hidden: FileSystemCustodyStore publishes NotEnforced for every
-        // class by design (Decision 71), the executor's floor gate refuses
-        // custody_floor_not_observed before the first product request against it, and
-        // AFilesystemDeploymentSaysSoBeforeTheFirstProductRequest above proves exactly that and
-        // keeps proving it. So a bare FileSystemCustodyStore cannot reach Delivered, ever, and a
-        // test claiming otherwise would be claiming the floor gate does not work.
+        // cosmetic and is not hidden: FileSystemCustodyStore publishes NotEnforced for every class
+        // by design (Decision 71).
+        //
+        // THIS REMARK USED TO SAY the executor's floor gate refuses custody_floor_not_observed
+        // before the first product request, and cited a test by its old name as proof. Both halves
+        // are stale. That gate is gone and the member with it, because the extended Decision 71
+        // interpretation (lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c) records
+        // the class and continues; the test is now
+        // AFilesystemDeploymentRunsAndItsReceiptCarriesRetainedUnenforced and proves the opposite,
+        // that the run reaches its product requests. A bare FileSystemCustodyStore still cannot
+        // reach Delivered, but for a different reason and one owned by another lane: the shared
+        // Source/Core tuple bind refuses an observation whose body receipt is not ImmutableObject1
+        // and LockedTime.
         //
         // RESIDUE, stated rather than papered over: the only store in this repository that
         // genuinely publishes enforcement is AzureBlobCustodyStore, which no unit test can reach.
@@ -1615,6 +1631,85 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
     /// executor, so every test drives one of the two production entry points, RunPartitionAsync or
     /// RunCoverAsync, with a fake transport substituted underneath it.
     /// </summary>
+    /// <summary>
+    /// A CustodyRequiredException raised during the run becomes the typed
+    /// <see cref="LuxembourgEnumerationRefusal.CustodyMemberMissing"/> rather than escaping.
+    /// </summary>
+    /// <remarks>
+    /// This arm was DRIVEN BY NO TEST while the argument for deleting the old custody floor gate
+    /// rested on BOTH its exception kinds surfacing here. An argument for removing a guard that
+    /// leans on an untested catch is exactly the shape that let the absent-artifact mutation
+    /// survive earlier in this lane, so it is driven now rather than asserted in a comment.
+    /// </remarks>
+    [TestMethod]
+    public async Task ACustodyRequiredFailureDuringTheRunBecomesCustodyMemberMissing()
+    {
+        var (request, witness) = BuildRequest();
+        var root = Path.Combine(Path.GetTempPath(), "lex-lu-custody-required-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        // The failure is armed by the HANDLER, on the first product request, rather than by a write
+        // count. A count was tried and is the wrong instrument: the robots bootstrap's own write
+        // volume is an implementation detail, so any threshold either fires inside the bootstrap
+        // (giving RobotsBootstrapRefused, a true refusal about the wrong thing) or drifts silently
+        // when that volume changes.
+        var armed = new StrongBox<bool>(false);
+        // Calibrated to this fixture's own clean run, which performs exactly 50 custody writes:
+        // arming after 49 puts the failure in the LAST one, which happens during delivery-evidence
+        // materialisation, inside the outer try this test is about. Arming earlier lands in the
+        // send path and is caught as ObservationNotExecuted instead, and arming on the bootstrap
+        // gives RobotsBootstrapRefused; both are true refusals about a different thing. If that
+        // write count ever drifts, this test fails rather than silently arming in the wrong phase.
+        var store = new CustodyRequiredAfterBootstrapStore(new FileSystemCustodyStore(root), armed)
+        {
+            ArmAfter = 49,
+        };
+        var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, req) =>
+        {
+            armed.Value = true;
+            return ordinal is 1 or 3
+                ? JsonResponse(req, LuxembourgAcquisitionTestFixture.CountJson(0))
+                : JsonResponse(req, LuxembourgAcquisitionTestFixture.EmptyRowsJson());
+        });
+
+        var result = await Run(store, request, witness, handler);
+        Assert.IsNotNull(result.Refusal, "a custody failure is a typed refusal, never an escape.");
+        Assert.AreEqual(LuxembourgEnumerationRefusal.CustodyMemberMissing, result.Refusal!.Code);
+        Assert.IsNull(result.Receipt);
+        Directory.Delete(root, recursive: true);
+    }
+
+    /// <summary>
+    /// Refuses every write once the robots bootstrap has completed, so the failure lands inside the
+    /// run rather than before it and reaches the catch this test is about.
+    /// </summary>
+    private sealed class CustodyRequiredAfterBootstrapStore(ICustodyStore inner, StrongBox<bool> armed)
+        : ICustodyStore
+    {
+        internal int Writes;
+
+        internal int ArmAfter = int.MaxValue;
+
+        public Task<DurableBlobWriteReceipt> CreateAsync(
+            ReadOnlyMemory<byte> bytes, CustodyClass custodyClass, CancellationToken cancellationToken)
+        {
+            var n = Interlocked.Increment(ref Writes);
+            if (armed.Value && n > ArmAfter)
+            {
+                throw new CustodyRequiredException("the store refused a write during the run.");
+            }
+
+            return inner.CreateAsync(bytes, custodyClass, cancellationToken);
+        }
+
+        public Task<ReadOnlyMemory<byte>> ReadAsync(
+            DurableBlobRef reference, CancellationToken cancellationToken) =>
+            inner.ReadAsync(reference, cancellationToken);
+
+        public Task<ReadOnlyMemory<byte>> ReadByDigestAsync(
+            string contentSha256, CancellationToken cancellationToken) =>
+            inner.ReadByDigestAsync(contentSha256, cancellationToken);
+    }
+
     private static Task<LuxembourgEnumerationRunResult> Run(
         ICustodyStore store,
         LuxembourgPartitionRunRequest request,
