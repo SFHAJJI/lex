@@ -130,9 +130,13 @@ public sealed class LuxembourgExecutorConstructionSurfaceTests
                 // shifted from b__8_0 to b__9_0 when queue item 19 replaced ObserveAsync's body with
                 // a call into the shared glue plus the ToObserveOutcome mapping method, which moved
                 // where the compiler numbers this generated method -- not a new way to build a run
-                // result, confirmed by re-printing this exact list after the change.
+                // result, confirmed by re-printing this exact list after the change. It shifted
+                // again, from b__9_0 to b__11_0, when D1-06c-LU-2 added RunDocumentGetAsync and
+                // IsRetryableStatus ahead of RunCoverAsync in this type: same reason, the compiler
+                // numbers generated methods by declaration position, and this is still not a new
+                // way to build a run result. Re-printed after the change rather than guessed.
                 "method internal instance " + N + "LuxembourgRepeatedEnumerationExecutor+<>c"
-                + "::<RunCoverAsync>b__9_0(" + Contracts + "LuxembourgQueryPartitionRange) -> "
+                + "::<RunCoverAsync>b__11_0(" + Contracts + "LuxembourgQueryPartitionRange) -> "
                 + N + "LuxembourgEnumerationRunResult",
                 "method private instance " + N + "LuxembourgRepeatedEnumerationExecutor"
                 + "::RunPartitionOnSessionAsync(" + N + "LuxembourgPartitionRunRequest, "

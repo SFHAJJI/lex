@@ -3,18 +3,63 @@ using System.Text.Json.Serialization;
 namespace Lex.V3.Contracts.Source.Http;
 
 /// <summary>
-/// The format a selected Legilux manifestation is served as. Only xml and pdf/a participate in
-/// D1-06c-LU item 3's selection order (Decision 22 admits xml, pdf and html generally for
-/// filestore fetches; html and docx and svg never participate in THIS selection, which picks the
-/// one manifestation this route fetches for one expression).
+/// The EXACT <c>jolux:userFormat</c> token a selected Legilux manifestation is held under, never a
+/// normalised category. RULING lex-event-20260904T174533266Z-bcf05c64ac1b43a3a4f8acf75196a6d5
+/// item 4: "the corpus record names the exact userFormat token held, so xml-akomantoso, xml, pdfa
+/// and pdf are distinguishable downstream".
 /// </summary>
-public enum LuxembourgManifestationFormat
+/// <remarks>
+/// Four members, not two, because the store uses four distinct authority IRIs under
+/// <c>.../resource/authority/user-format/</c> and an earlier reading of "xml first, pdf second"
+/// collapsed each pair. Counted over one bounded probe of 1,000 expressions
+/// (PROBE_RESULT lex-event-20260904T174227089Z-8f2c03f33d1c4e95b397323c992bbfce, an unordered
+/// LIMIT and explicitly not a census): xml-akomantoso 250, xml 131, pdf 586, pdfa 414.
+/// <para>
+/// Both XML tokens are Akoma Ntoso, which was probed rather than assumed: the plain-xml Civil Code
+/// manifestation was fetched and read (PROBE_RESULT
+/// lex-event-20260904T180020924Z-ca9982dc058b4d539f2e4a61662af959, 5,531,380 bytes, SHA-256
+/// 71695f377e7cef4ab1f0a39361a5992f1772d2fd059d8012801b65d962adf40f) and carries an
+/// <c>akomaNtoso</c> root in namespace
+/// <c>http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13</c>, the same family as the retained
+/// xml-akomantoso instance 9e43a99e4b9735e383d989989d4005fc9e1676f4094c2633f30b2f056d5e476d. The
+/// ruling's conditional -- record plain xml after pdf if it turned out to be another schema -- does
+/// not trigger.
+/// </para>
+/// <para>
+/// <c>html</c>, <c>doc</c>, <c>docx</c> and <c>svg</c> are deliberately absent. They are real store
+/// tokens and are not wording candidates for this route; <c>docx</c> and <c>svg</c> are in addition
+/// disallowed outright by the www host's own robots.txt (<c>Disallow: /*.docx</c>,
+/// <c>Disallow: /*.svg</c>).
+/// </para>
+/// </remarks>
+public enum LuxembourgUserFormatToken
 {
-    [JsonStringEnumMemberName("xml")]
-    Xml = 1,
+    [JsonStringEnumMemberName("xml-akomantoso")]
+    XmlAkomaNtoso = 1,
 
-    [JsonStringEnumMemberName("pdf_a")]
-    PdfA = 2,
+    [JsonStringEnumMemberName("xml")]
+    Xml = 2,
+
+    [JsonStringEnumMemberName("pdfa")]
+    PdfA = 3,
+
+    [JsonStringEnumMemberName("pdf")]
+    Pdf = 4,
+}
+
+/// <summary>
+/// The publisher's own official marker, <c>jolux:legalValue</c>. Decision 58(a)'s "if such a marker
+/// exists" resolved to yes by direct query: exactly two values store wide,
+/// <c>statut-version/officiel</c> (187,313 manifestations) and <c>statut-version/definitif</c>
+/// (80,291), PROBE_RESULT lex-event-20260904T180020924Z-ca9982dc058b4d539f2e4a61662af959.
+/// </summary>
+public enum LuxembourgLegalValue
+{
+    [JsonStringEnumMemberName("officiel")]
+    Officiel = 1,
+
+    [JsonStringEnumMemberName("definitif")]
+    Definitif = 2,
 }
 
 public enum LuxembourgManifestationSelectionOutcome
@@ -27,64 +72,179 @@ public enum LuxembourgManifestationSelectionOutcome
 }
 
 /// <summary>
-/// D1-06c-LU item 5: pure manifestation-selection decision logic for one expression, ready for a
-/// later slice's adapter wiring (this type is deliberately not wired into any
-/// <c>ScopeManifestRow</c> or LU adapter here). XML wins when the publisher lists it; otherwise
-/// PDF/A when the publisher lists that; otherwise a typed absence. Per the ruling's own words, "the
-/// record names the format it holds": <see cref="Format"/> is populated on every selected outcome,
-/// never reduced to a bare boolean.
+/// One candidate manifestation offered for selection: its exact userFormat token, its publisher
+/// legal-value marker, and its already-validated store file URI. Taking the validated
+/// <see cref="LuxembourgFileUri"/> rather than a raw string means a caller cannot route an
+/// unvalidated candidate into selection: validation happens once, at
+/// <see cref="LuxembourgFileUri.RequireValid"/>, before a candidate can be constructed.
 /// </summary>
+public sealed record LuxembourgManifestationCandidate
+{
+    public LuxembourgManifestationCandidate(
+        LuxembourgUserFormatToken token,
+        LuxembourgLegalValue legalValue,
+        LuxembourgFileUri fileUri)
+    {
+        if (!Enum.IsDefined(token))
+        {
+            throw new ArgumentOutOfRangeException(nameof(token));
+        }
+
+        if (!Enum.IsDefined(legalValue))
+        {
+            throw new ArgumentOutOfRangeException(nameof(legalValue));
+        }
+
+        Token = token;
+        LegalValue = legalValue;
+        FileUri = fileUri ?? throw new ArgumentNullException(nameof(fileUri));
+    }
+
+    public LuxembourgUserFormatToken Token { get; }
+
+    public LuxembourgLegalValue LegalValue { get; }
+
+    public LuxembourgFileUri FileUri { get; }
+}
+
+/// <summary>
+/// D1-06c-LU-2 item 2: which single manifestation this route fetches, among the manifestations the
+/// publisher's own store lists. Pure decision logic over already-validated candidates.
+/// </summary>
+/// <remarks>
+/// The ladder is legal value first, then the exact userFormat token, both ruled rather than
+/// invented:
+/// <list type="number">
+/// <item>
+/// <c>officiel</c> outranks <c>definitif</c> regardless of token
+/// (PROBE_RESULT lex-event-20260904T180020924Z-ca9982dc058b4d539f2e4a61662af959, adopted as the
+/// true rule in place of the earlier "pdfa before pdf, official wins between them" reading). The
+/// probe's own breakdown is why: legalValue is not constant per token. <c>pdf</c> is officiel in
+/// all 117,960 cases, <c>xml</c> in all 165, <c>xml-akomantoso</c> in all 36,798, <c>html</c> in
+/// all 4,136, but <c>pdfa</c> SPLITS, 80,291 definitif against 28,251 officiel. The real
+/// discrimination is inside the pdfa token, not between pdf and pdfa.
+/// </item>
+/// <item>
+/// Within equal legal value: xml-akomantoso, then xml, then pdfa, then pdf. Both XML tokens are
+/// wording candidates in that order per RULING
+/// lex-event-20260904T174533266Z-bcf05c64ac1b43a3a4f8acf75196a6d5 item 1; pdfa precedes pdf per
+/// item 2 of the same ruling.
+/// </item>
+/// <item>
+/// A deterministic tie-break on the store file URI's own ordinal order, so one candidate set has
+/// exactly one answer whatever order a caller enumerates it in.
+/// </item>
+/// </list>
+/// <para>
+/// TWO ARMS OF THIS FUNCTION ARE CLOSED-WORLD NECESSITIES WITH NO OBSERVED INSTANCE, and their
+/// tests are labelled shape tests rather than grounded ones. First, the absence arm: zero of the
+/// 1,000 probed expressions offered neither an xml nor a pdf token
+/// (lex-event-20260904T174227089Z-8f2c03f33d1c4e95b397323c992bbfce), so the ruling kept the arm in
+/// code and dropped its acquisition-level fixture from scope. Second, a candidate set holding both
+/// <c>pdfa</c> and <c>pdf</c>: a direct query for an expression offering both, admin paths
+/// excluded, returned ZERO rows, and the 1,000-expression sample independently contained no such
+/// format set. So the pdfa-before-pdf step, and every case where legal value overrules token order,
+/// changes no selection on today's data. The code states the true rule anyway; no synthetic
+/// response is called observed anywhere.
+/// </para>
+/// <para>
+/// One consequence of legal value ranking above token, stated rather than hidden: a hypothetical
+/// definitif XML manifestation would lose to an officiel PDF, which reads against "xml first". It
+/// is unreachable on the store as measured -- every one of the 165 xml and 36,798 xml-akomantoso
+/// manifestations counted is officiel, and only pdfa is ever definitif -- so no selection observed
+/// today turns on it. It is recorded here because the day a definitif XML appears, this ladder
+/// answers PDF and someone will need to know that was ruled, not accidental.
+/// </para>
+/// </remarks>
 public sealed record LuxembourgManifestationSelection
 {
     private LuxembourgManifestationSelection(
         LuxembourgManifestationSelectionOutcome outcome,
-        LuxembourgManifestationFormat? format,
-        string? fileUri)
+        LuxembourgManifestationCandidate? selected)
     {
         Outcome = outcome;
-        Format = format;
-        FileUri = fileUri;
+        Selected = selected;
     }
 
     public LuxembourgManifestationSelectionOutcome Outcome { get; }
 
-    /// <summary>The selected format, or null exactly when <see cref="Outcome"/> is the absence.</summary>
-    public LuxembourgManifestationFormat? Format { get; }
+    /// <summary>
+    /// The winning candidate, or null exactly when <see cref="Outcome"/> is the typed absence. Per
+    /// the ruling's own words the record names the format it holds, so this carries the whole
+    /// candidate -- exact token, legal value and file URI -- never a reduced category.
+    /// </summary>
+    public LuxembourgManifestationCandidate? Selected { get; }
+
+    /// <summary>The selected exact userFormat token, or null exactly when absent.</summary>
+    public LuxembourgUserFormatToken? Token => Selected?.Token;
 
     /// <summary>The selected manifestation's store file URI, or null exactly when absent.</summary>
-    public string? FileUri { get; }
+    public string? FileUri => Selected?.FileUri.Value.AbsoluteUri;
 
     /// <summary>
-    /// Selects among the manifestations the publisher's own SPARQL store lists for one expression.
-    /// Each parameter is that format's already-validated <see cref="LuxembourgFileUri"/> when the
-    /// publisher enumerates one, else null; XML strictly precedes PDF/A in the selection order.
-    /// Taking the validated type rather than a raw string means a caller cannot pass an
-    /// unvalidated candidate into selection logic: validation happens once, at
-    /// <see cref="LuxembourgFileUri.RequireValid"/>, before a candidate ever reaches here.
+    /// Selects one manifestation among those the publisher's own store lists for one expression.
+    /// An empty candidate list is the typed absence, never an exception and never a silent null.
     /// </summary>
     public static LuxembourgManifestationSelection Select(
-        LuxembourgFileUri? xmlFileUri,
-        LuxembourgFileUri? pdfAFileUri)
+        IReadOnlyList<LuxembourgManifestationCandidate> candidates)
     {
-        if (xmlFileUri is not null)
+        ArgumentNullException.ThrowIfNull(candidates);
+
+        LuxembourgManifestationCandidate? best = null;
+        foreach (var candidate in candidates)
         {
-            return new LuxembourgManifestationSelection(
-                LuxembourgManifestationSelectionOutcome.Selected,
-                LuxembourgManifestationFormat.Xml,
-                xmlFileUri.Value.AbsoluteUri);
+            ArgumentNullException.ThrowIfNull(candidate);
+            if (best is null || Precedes(candidate, best))
+            {
+                best = candidate;
+            }
         }
 
-        if (pdfAFileUri is not null)
-        {
-            return new LuxembourgManifestationSelection(
+        return best is null
+            ? new LuxembourgManifestationSelection(
+                LuxembourgManifestationSelectionOutcome.NoManifestationAvailable,
+                null)
+            : new LuxembourgManifestationSelection(
                 LuxembourgManifestationSelectionOutcome.Selected,
-                LuxembourgManifestationFormat.PdfA,
-                pdfAFileUri.Value.AbsoluteUri);
-        }
-
-        return new LuxembourgManifestationSelection(
-            LuxembourgManifestationSelectionOutcome.NoManifestationAvailable,
-            null,
-            null);
+                best);
     }
+
+    /// <summary>
+    /// Total order over candidates: legal value, then token, then the store file URI. Total rather
+    /// than merely "better than", so <see cref="Select"/> never depends on enumeration order.
+    /// </summary>
+    private static bool Precedes(
+        LuxembourgManifestationCandidate left,
+        LuxembourgManifestationCandidate right)
+    {
+        if (left.LegalValue != right.LegalValue)
+        {
+            return LegalValueRank(left.LegalValue) < LegalValueRank(right.LegalValue);
+        }
+
+        if (left.Token != right.Token)
+        {
+            return TokenRank(left.Token) < TokenRank(right.Token);
+        }
+
+        return string.CompareOrdinal(
+            left.FileUri.Value.AbsoluteUri,
+            right.FileUri.Value.AbsoluteUri) < 0;
+    }
+
+    private static int LegalValueRank(LuxembourgLegalValue value) => value switch
+    {
+        LuxembourgLegalValue.Officiel => 0,
+        LuxembourgLegalValue.Definitif => 1,
+        _ => throw new ArgumentOutOfRangeException(nameof(value)),
+    };
+
+    private static int TokenRank(LuxembourgUserFormatToken token) => token switch
+    {
+        LuxembourgUserFormatToken.XmlAkomaNtoso => 0,
+        LuxembourgUserFormatToken.Xml => 1,
+        LuxembourgUserFormatToken.PdfA => 2,
+        LuxembourgUserFormatToken.Pdf => 3,
+        _ => throw new ArgumentOutOfRangeException(nameof(token)),
+    };
 }

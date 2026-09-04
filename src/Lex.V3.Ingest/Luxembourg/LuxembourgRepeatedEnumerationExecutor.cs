@@ -255,6 +255,108 @@ public sealed record LuxembourgPartitionRunRequest(
     LuxembourgQueryPartitionRange Partition,
     MachineQueryRendererSource RendererSource);
 
+/// <summary>
+/// Why <see cref="LuxembourgRepeatedEnumerationExecutor.RunDocumentGetAsync"/> did not deliver real
+/// evidence for a document-fetch GET. Closed and deliberately narrow: this method never classifies
+/// the status of a completed response itself, which is
+/// <see cref="LuxembourgDocumentGetOutcome.FromObservedStatus"/>'s job, run by the caller against
+/// the real evidence handed back here.
+/// </summary>
+/// <remarks>
+/// This vocabulary splits what the EU route keeps as one member, and the split is load bearing.
+/// <see cref="RobotsDisallowed"/> is a fact about THIS document (the publisher's own robots.txt
+/// refuses one of its three evaluated paths) and becomes that one object's per-object refusal;
+/// <see cref="RobotsBootstrapNotCompleted"/> is a fact about the run (robots was unreachable,
+/// uninterpretable, expired, or the store could not hold it) and must never be recorded against an
+/// object as though the publisher had refused it.
+/// </remarks>
+public enum LuxembourgDocumentGetAttemptRefusal
+{
+    [JsonStringEnumMemberName("none")]
+    None = 0,
+
+    [JsonStringEnumMemberName("robots_disallowed")]
+    RobotsDisallowed = 1,
+
+    [JsonStringEnumMemberName("robots_bootstrap_not_completed")]
+    RobotsBootstrapNotCompleted = 2,
+
+    [JsonStringEnumMemberName("observation_not_executed")]
+    ObservationNotExecuted = 3,
+}
+
+/// <summary>Executed for real (whatever the office answered), or refused before it ever sent. Never both, never neither.</summary>
+public sealed class LuxembourgDocumentGetAttemptResult
+{
+    private LuxembourgDocumentGetAttemptResult(
+        RoutedHttpEvidence? evidence,
+        bool retryAllowanceSpent,
+        LuxembourgDocumentGetAttemptRefusal? refusal,
+        string? deniedRobotsPath,
+        string? detail)
+    {
+        Evidence = evidence;
+        RetryAllowanceSpent = retryAllowanceSpent;
+        Refusal = refusal;
+        DeniedRobotsPath = deniedRobotsPath;
+        Detail = detail;
+    }
+
+    /// <summary>The real, retained route evidence for this one GET. Present iff this is <see cref="Executed"/>.</summary>
+    public RoutedHttpEvidence? Evidence { get; }
+
+    /// <summary>
+    /// Whether this GET spent every application attempt its own profile allows. The caller needs
+    /// it to classify a retryable terminal status truthfully; see
+    /// <see cref="LuxembourgDocumentGetOutcome.FromObservedStatus"/>.
+    /// </summary>
+    public bool RetryAllowanceSpent { get; }
+
+    public LuxembourgDocumentGetAttemptRefusal? Refusal { get; }
+
+    /// <summary>
+    /// The exact path the publisher's robots.txt disallowed, present only for
+    /// <see cref="LuxembourgDocumentGetAttemptRefusal.RobotsDisallowed"/>. RULING
+    /// lex-event-20260904T180444431Z-13c6f8f86ddf4f02857cf4001c202143 requires the refusal to name
+    /// which of the three evaluated paths matched, so it is carried rather than summarised.
+    /// </summary>
+    public string? DeniedRobotsPath { get; }
+
+    public string? Detail { get; }
+
+    public static LuxembourgDocumentGetAttemptResult Executed(
+        RoutedHttpEvidence evidence,
+        bool retryAllowanceSpent)
+    {
+        ArgumentNullException.ThrowIfNull(evidence);
+        return new(evidence, retryAllowanceSpent, null, null, null);
+    }
+
+    public static LuxembourgDocumentGetAttemptResult RobotsRefused(string deniedPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(deniedPath);
+        return new(
+            null,
+            false,
+            LuxembourgDocumentGetAttemptRefusal.RobotsDisallowed,
+            deniedPath,
+            $"legilux.public.lu robots.txt disallows '{deniedPath}' for the Lex product token.");
+    }
+
+    public static LuxembourgDocumentGetAttemptResult Refused(
+        LuxembourgDocumentGetAttemptRefusal refusal,
+        string? detail)
+    {
+        if (refusal is LuxembourgDocumentGetAttemptRefusal.None or
+            LuxembourgDocumentGetAttemptRefusal.RobotsDisallowed)
+        {
+            throw new ArgumentOutOfRangeException(nameof(refusal));
+        }
+
+        return new(null, false, refusal, null, detail);
+    }
+}
+
 public sealed class LuxembourgRepeatedEnumerationExecutor
 {
     private readonly ICustodyStore _custodyStore;
@@ -472,6 +574,127 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         CancellationToken cancellationToken) =>
         RoutedHttpAcquisitionSession.StartWithTestTransportAsync(
             sourceWitness, _custodyStore, _testHandlerOverride!, _timeProvider, cancellationToken);
+
+    /// <summary>
+    /// D1-06c-LU-2 item 3: sends one real Luxembourg document GET through the routed session and
+    /// hands back its retained evidence, or one typed refusal. One session per document, and the
+    /// session's own source witness IS this document's own bound request, so the robots verdict is
+    /// evaluated against this document's own paths rather than against one representative request
+    /// for the whole run. That is required, not stylistic: RULING
+    /// lex-event-20260904T180444431Z-13c6f8f86ddf4f02857cf4001c202143 evaluates three paths PER
+    /// MANIFESTATION, which a per-run witness could not do.
+    /// </summary>
+    /// <param name="boundRequest">The bound GET, from <c>LuxembourgDocumentFetchPlan.Bind</c>.</param>
+    /// <param name="additionalRobotsPaths">
+    /// Store-derived paths the robots verdict must also consider, today exactly the act's own ELI
+    /// page path. Not derivable from the fetch path; see the session's own remarks.
+    /// </param>
+    public async Task<LuxembourgDocumentGetAttemptResult> RunDocumentGetAsync(
+        BoundMachineRequest boundRequest,
+        IReadOnlyList<string> additionalRobotsPaths,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(boundRequest);
+        ArgumentNullException.ThrowIfNull(additionalRobotsPaths);
+
+        var start = _testHandlerOverride is null
+            ? await RoutedHttpAcquisitionSession.StartAsync(
+                    boundRequest, _custodyStore, additionalRobotsPaths, cancellationToken)
+                .ConfigureAwait(false)
+            : await RoutedHttpAcquisitionSession.StartWithTestTransportAsync(
+                    boundRequest, _custodyStore, _testHandlerOverride, _timeProvider,
+                    additionalRobotsPaths, cancellationToken)
+                .ConfigureAwait(false);
+        if (start.Kind != OfficialHttpAcquisitionOutcomeKind.ExecutedObservation || start.Session is null)
+        {
+            // The two shapes are kept apart deliberately: a publisher denial is this document's own
+            // refusal and names the matching path, everything else is a run-level bootstrap failure
+            // that says nothing about this document.
+            return start.Kind == OfficialHttpAcquisitionOutcomeKind.PublisherDenial &&
+                   start.DeniedRequestPath is { } deniedPath
+                ? LuxembourgDocumentGetAttemptResult.RobotsRefused(deniedPath)
+                : LuxembourgDocumentGetAttemptResult.Refused(
+                    LuxembourgDocumentGetAttemptRefusal.RobotsBootstrapNotCompleted,
+                    $"kind={start.Kind} safety={start.LocalSafetyReason} operational={start.OperationalReason}");
+        }
+
+        var session = start.Session;
+        try
+        {
+            var item = session.OpenPlanItem(boundRequest);
+            var maximumAttempts = session.SourceProfile.MaximumAttempts;
+            var attemptCount = 0;
+            RoutedHttpAcquisitionSession.AttemptResult attempt;
+            while (true)
+            {
+                attempt = await item.ExecuteNextAttemptAsync(cancellationToken).ConfigureAwait(false);
+                attemptCount++;
+                if (attempt.Kind == OfficialHttpAcquisitionOutcomeKind.ExecutedObservation)
+                {
+                    // The one place this driver deliberately differs from the EU one: a completed
+                    // response at a retryable status is re-attempted rather than returned at once.
+                    // The session's own PlanItem.IsRetryable already admits exactly these six
+                    // statuses, so without this loop the profile's retry allowance was declared and
+                    // never spent, and a single 503 would still have been reported downstream as
+                    // "retry exhausted". Now that name is earned or not claimed.
+                    if (attemptCount >= maximumAttempts || !IsRetryableStatus(attempt))
+                    {
+                        break;
+                    }
+
+                    continue;
+                }
+
+                var retryable = attempt.PreHeaderFailureClass is
+                    HttpPreHeaderFailureClass.HeaderDeadline or
+                    HttpPreHeaderFailureClass.TransportBeforeHeaders;
+                if (!retryable || attemptCount >= maximumAttempts)
+                {
+                    return LuxembourgDocumentGetAttemptResult.Refused(
+                        LuxembourgDocumentGetAttemptRefusal.ObservationNotExecuted,
+                        $"{attempt.OperationalReason}/{attempt.PreHeaderFailureClass}");
+                }
+            }
+
+            var evidence = attempt.Evidence!;
+
+            // Decision 78 retention: a run holds what it depends on. The evidence document is
+            // written and reopened by digest exactly as every other channel already does, so a
+            // document GET's own evidence is retained custody too, never left to live only in this
+            // process's memory.
+            var evidenceBytes = evidence.CopyCanonicalBytes();
+            var evidenceReceipt = await _custodyStore.CreateAsync(
+                    evidenceBytes, CustodyClass.NightlyFloor90d, cancellationToken)
+                .ConfigureAwait(false);
+            var reopenedEvidenceBytes = await CustodyRestore.ReadByDigestCheckedAsync(
+                    _custodyStore, evidenceReceipt.Reference.ContentSha256, cancellationToken)
+                .ConfigureAwait(false);
+            var reopenedEvidence = RoutedHttpEvidence.ParseAndVerify(reopenedEvidenceBytes.Span);
+
+            return LuxembourgDocumentGetAttemptResult.Executed(
+                reopenedEvidence, attemptCount >= maximumAttempts && IsRetryableStatus(attempt));
+        }
+        catch (Exception exception) when (exception is CustodyIntegrityException or CustodyRequiredException)
+        {
+            return LuxembourgDocumentGetAttemptResult.Refused(
+                LuxembourgDocumentGetAttemptRefusal.ObservationNotExecuted, exception.Message);
+        }
+        finally
+        {
+            session.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Whether a completed attempt's own terminal status is one the session itself would admit
+    /// another attempt for. Read from the evidence, never re-derived from a separate list: the six
+    /// values are exactly <c>RoutedHttpAcquisitionSession.PlanItem.IsRetryable</c>'s own final
+    /// clause and exactly the six <c>OfficialMachineQueryRetryCondition</c> HTTP members.
+    /// </summary>
+    private static bool IsRetryableStatus(RoutedHttpAcquisitionSession.AttemptResult attempt) =>
+        attempt.Evidence is { } evidence &&
+        evidence.Hops.Count > 0 &&
+        evidence.Hops[^1].Status is 408 or 429 or 500 or 502 or 503 or 504;
 
     /// <summary>
     /// Every leaf of one chain in ONE session, so the cover's one-run requirement holds by

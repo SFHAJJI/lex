@@ -18,9 +18,15 @@ namespace Lex.V3.Contracts.Source.Http;
 /// efd7f3ff4dd45f9a9a303fad9353892c244154d940e24db8b1e480b7b8f4312c, 234 bytes retained).</item>
 /// </list>
 /// <see cref="Gone"/> and <see cref="RetryExhausted"/> are not directly observed here; they mirror
-/// v2's own already-proven ladder for this exact publisher
-/// (C:/lex, src/Lex.Sources.Legilux/LegiluxAdapter.cs FetchBody), reproduced rather than referenced
-/// because Ingest/Luxembourg is out of this lane's path.
+/// v2's own already-proven ladder for this exact publisher, reproduced rather than referenced.
+/// <para>
+/// The 404 body's digest is PER FETCH, not a constant: the office's JSON error carries a live
+/// timestamp field, so a fresh fetch of the same nonexistent path produces different bytes and a
+/// different digest. The 234-byte efd7f3ff.. observation above supersedes an earlier 209-byte one
+/// taken minutes before it, which is the same body shape with a shorter timestamp rendering. Never
+/// assert that a fresh fetch reproduces that digest; the retained bytes are evidence of one
+/// observation, not a fixture a live call can be checked against.
+/// </para>
 /// </summary>
 public enum LuxembourgDocumentGetOutcomeKind
 {
@@ -114,14 +120,39 @@ public sealed record LuxembourgDocumentGetOutcome
     /// <see cref="RetryExhausted"/> also carry the numeric status, and both still name what that
     /// status means for this route rather than passing it through unlabelled.
     /// </summary>
-    public static LuxembourgDocumentGetOutcome FromObservedStatus(int status) => status switch
+    /// <param name="status">The terminal status the route actually completed at.</param>
+    /// <param name="retryAllowanceSpent">
+    /// Whether this object's fetch has already spent every application attempt its own profile
+    /// allows. D1-06c-LU-2 made this a parameter rather than an assumption, because the claim was
+    /// otherwise untrue: the six retryable statuses used to map to
+    /// <see cref="RetryExhausted"/> on the FIRST observation of one, which would have named a
+    /// retry policy that never ran. <c>LuxembourgRepeatedEnumerationExecutor.RunDocumentGetAsync</c>
+    /// really does re-attempt a retryable status up to
+    /// <c>OfficialMachineQuerySourceProfile.MaximumAttempts</c> (the session's own
+    /// <c>PlanItem.IsRetryable</c> admits exactly these six), so when it passes true here the name
+    /// is earned. Passing false for a retryable status is refused outright rather than quietly
+    /// downgraded, so no caller can produce the unearned claim by accident.
+    /// </param>
+    public static LuxembourgDocumentGetOutcome FromObservedStatus(int status, bool retryAllowanceSpent)
     {
-        200 => Retrieved(),
-        404 => NotFound(),
-        410 => Gone(),
-        408 or 429 or 500 or 502 or 503 or 504 => RetryExhausted(status),
-        _ => UnexpectedPublisherStatus(status),
-    };
+        if (status is 408 or 429 or 500 or 502 or 503 or 504)
+        {
+            return retryAllowanceSpent
+                ? RetryExhausted(status)
+                : throw new ArgumentException(
+                    $"HTTP {status} is retryable on this route, so it cannot be classified as a " +
+                    "terminal outcome until this object's own retry allowance is spent.",
+                    nameof(retryAllowanceSpent));
+        }
+
+        return status switch
+        {
+            200 => Retrieved(),
+            404 => NotFound(),
+            410 => Gone(),
+            _ => UnexpectedPublisherStatus(status),
+        };
+    }
 
     private static int RequireHttpStatus(int status) => status is >= 100 and <= 599
         ? status

@@ -21,6 +21,22 @@ internal static class LuxembourgAcquisitionTestFixture
     internal const string SubjectsSetId = "S";
 
     /// <summary>
+    /// A held renderer-source artifact for a Luxembourg document-fetch bind. The bytes name this
+    /// fixture, never production code: a test artifact that claimed to be
+    /// <c>LuxembourgDocumentFetchRenderer</c>'s own source would be a false provenance claim, and
+    /// the seed keeps two distinct binds in one test from sharing one identity.
+    /// </summary>
+    internal static MachineQueryRendererSource DocumentFetchRendererSource(int seed)
+    {
+        var bytes = Encoding.UTF8.GetBytes($"lu-fixture-renderer-source-{seed}");
+        return MachineQueryRendererSource.Open(
+            new SourceArtifactRef(
+                $"urn:uuid:{Guid.NewGuid():D}",
+                Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant()),
+            bytes);
+    }
+
+    /// <summary>
     /// Constructs and bootstraps a session against a test handler and time provider, through <see
     /// cref="RoutedHttpAcquisitionSession.StartWithTestTransportAsync"/>, the one internal door a
     /// same-assembly driver uses to start a session on a caller-supplied transport. This used to

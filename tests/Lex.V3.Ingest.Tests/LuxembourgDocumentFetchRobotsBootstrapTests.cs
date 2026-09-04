@@ -39,7 +39,7 @@ public sealed class LuxembourgDocumentFetchRobotsBootstrapTests
 
     // Fetched live 2026-09-04 with User-Agent Lex/0.1 (+https://github.com/SFHAJJI/lex), GET only.
     // Full 1,199-byte body, byte for byte (see the type doc comment for the line-ending policy).
-    private const string RealRobotsTxt = """
+    internal const string RealRobotsTxt = """
         User-agent: *
         Disallow: /publications-regroupees
         Disallow: /api/rss-adm.xml
@@ -144,6 +144,78 @@ public sealed class LuxembourgDocumentFetchRobotsBootstrapTests
             "/eli/ page path does, so the refusal must name that derived path, not the fetch path.");
     }
 
+    /// <summary>
+    /// RULING lex-event-20260904T180444431Z-13c6f8f86ddf4f02857cf4001c202143: the third robots path.
+    /// </summary>
+    /// <remarks>
+    /// THE TEST LESSON, recorded plainly rather than presented as routine coverage. The publisher's
+    /// robots.txt groups four lines around loi 2007/01/15/n2: the act page
+    /// <c>/eli/etat/leg/loi/2007/01/15/n2/jo</c>, and its html, xml and pdf manifestations. Three of
+    /// those four derive correctly from their own filestore path, and
+    /// <see cref="AFilestoreXmlPathForAnIndividuallyDisallowedDocumentIsRefusedViaItsDerivedEliPagePath"/>
+    /// exercises one of the three. The fourth does not: the publisher wrote the PDF's line as
+    /// <c>/eli/etat/leg/memorial/2007/8/fr/pdf</c> while the file actually lives under
+    /// <c>memorial/2007/a8</c>, so the two derivable paths both miss it and a literal evaluation
+    /// permits a fetch the publisher plainly meant to withhold. LU-1's guard was not wrong; the test
+    /// that vouched for it happened to pick the manifestation that works. This test drives the one
+    /// that does not.
+    /// <para>
+    /// The fix adds no name list and does not repair the publisher's file toward intent: the act's
+    /// own ELI page path comes from the store (manifestation to expression to work) and is evaluated
+    /// as a third path, so this PDF is refused because that act's own <c>/jo</c> page is disallowed
+    /// by prefix. The refusal must NAME that path, which is what makes the reason auditable rather
+    /// than a bare denial. The rgd 1977/11/16/n3 PDF is the same shape: its file lives under
+    /// <c>memorial/1977/a67</c>, outside its own act's ELI path entirely.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task ThePdfOfAnIndividuallyDisallowedActIsRefusedViaTheActsOwnEliPagePath()
+    {
+        // The real filestore path of the loi 2007/01/15/n2 PDF, which lives under the memorial
+        // a8 issue rather than under the act's own ELI path.
+        const string filestorePath =
+            "/filestore/eli/etat/leg/memorial/2007/a8/fr/pdf/"
+            + "eli-etat-leg-memorial-2007-a8-fr-pdf.pdf";
+        const string derivedPagePath = "/eli/etat/leg/memorial/2007/a8/fr/pdf";
+        const string actEliPagePath = "/eli/etat/leg/loi/2007/01/15/n2/jo";
+
+        // First, the finding itself: the two paths this route can derive on its own are both
+        // permitted by the real robots.txt, so without the act's page path the fetch would proceed.
+        var withoutActPath = await BootstrapForPathAsync(filestorePath);
+        Assert.AreEqual(
+            OfficialHttpAcquisitionOutcomeKind.ExecutedObservation,
+            withoutActPath.Kind,
+            "the publisher's own line names memorial/2007/8, not memorial/2007/a8, so a literal "
+            + "evaluation of the fetch path and its derived page path permits this fetch.");
+        withoutActPath.Session?.Dispose();
+
+        var result = await BootstrapForPathAsync(filestorePath, actEliPagePath);
+
+        Assert.AreEqual(OfficialHttpAcquisitionOutcomeKind.PublisherDenial, result.Kind);
+        Assert.AreEqual(actEliPagePath, result.DeniedRequestPath);
+        Assert.AreNotEqual(filestorePath, result.DeniedRequestPath);
+        Assert.AreNotEqual(derivedPagePath, result.DeniedRequestPath);
+    }
+
+    /// <summary>
+    /// The third path can only ever refuse: supplying an act page path the robots.txt permits
+    /// changes nothing, so the mechanism fetches strictly less and never more. Without this, a
+    /// third path that somehow admitted a fetch would look the same as one that changed nothing.
+    /// </summary>
+    [TestMethod]
+    public async Task AnAllowedActEliPagePathChangesNothingAboutAnAllowedFetch()
+    {
+        const string filestorePath =
+            "/filestore/eli/etat/leg/loi/2017/03/14/a439/jo/fr/xml/"
+            + "eli-etat-leg-loi-2017-03-14-a439-jo-fr-xml.xml";
+
+        var result = await BootstrapForPathAsync(
+            filestorePath, "/eli/etat/leg/loi/2017/03/14/a439/jo");
+
+        Assert.AreEqual(OfficialHttpAcquisitionOutcomeKind.ExecutedObservation, result.Kind);
+        result.Session?.Dispose();
+    }
+
     [TestMethod]
     public async Task AnOrdinaryFilestoreXmlPathIsAllowedByTheRealRobotsText()
     {
@@ -159,7 +231,8 @@ public sealed class LuxembourgDocumentFetchRobotsBootstrapTests
     }
 
     private static async Task<RoutedHttpAcquisitionSession.StartResult> BootstrapForPathAsync(
-        string path)
+        string path,
+        params string[] additionalRobotsPaths)
     {
         var target = "https://legilux.public.lu" + path;
         var request = BoundLuxembourgDocumentFetchRequest(target);
@@ -169,6 +242,7 @@ public sealed class LuxembourgDocumentFetchRobotsBootstrapTests
             new InMemoryCustodyStore(),
             handler,
             TimeProvider.System,
+            additionalRobotsPaths,
             CancellationToken.None);
     }
 

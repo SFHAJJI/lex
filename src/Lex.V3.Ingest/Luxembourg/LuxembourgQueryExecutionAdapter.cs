@@ -5,6 +5,7 @@ using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Corpus;
 using Lex.V3.Contracts.Source.Http;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Contracts.Source.Scope;
@@ -407,6 +408,38 @@ public enum LuxembourgQueryExecutionRefusal
     /// </para>
     /// </summary>
     AssertionRowTermUnbound = 7,
+
+    /// <summary>
+    /// D1-06c-LU-2: this run's own document-fetch session never started for one row, and the cause
+    /// is a fact about the run rather than about that document: robots was unreachable,
+    /// uninterpretable or expired, the store could not hold the robots policy, or the transport
+    /// failed before headers on every attempt this profile allows. A publisher DENIAL is
+    /// deliberately not here; that is one object's own
+    /// <see cref="Lex.V3.Contracts.Source.Corpus.CorpusAcquisitionRefusalReason.RobotsDisallowed"/>
+    /// record, because it is the publisher speaking about that document.
+    /// </summary>
+    DocumentFetchSessionNotStarted = 8,
+
+    /// <summary>
+    /// A document body was fetched for real, but the store enforced no retention floor on it, so
+    /// this run cannot claim it as held (never bypass the Decision 71 floor). Refuses the whole run
+    /// rather than recording an object as held on bytes nothing protects.
+    /// </summary>
+    DocumentBodyNotHeld = 9,
+
+    /// <summary>
+    /// A document GET completed or failed in a shape this route has no reviewed reading for and
+    /// D1-06b's closed <see cref="Lex.V3.Contracts.Source.Corpus.CorpusAcquisitionRefusalReason"/>
+    /// vocabulary cannot name faithfully. The whole run refuses, naming the real classified cause,
+    /// rather than mapping it onto an unrelated existing member or accepting it as held.
+    /// </summary>
+    DocumentGetOutcomeNotRepresentable = 10,
+
+    /// <summary>
+    /// This run's own corpus/6 record set was written but the store enforced no retention floor on
+    /// it. Mirrors <see cref="ScopeManifestNotHeld"/> for the run's last step.
+    /// </summary>
+    RecordSetNotHeld = 11,
 }
 
 /// <summary>
@@ -523,6 +556,9 @@ public sealed class LuxembourgQueryExecutionResult
         DurableBlobWriteReceipt? scopeManifestReceipt,
         string? scopeManifestCanonicalSha256,
         LuxembourgQueryExecutionCompletion? completion,
+        IReadOnlyDictionary<int, CorpusAcquisitionOutcome>? documentAcquisitionOutcomesByOrdinal,
+        SourceArtifactRef? corpusRecordSetRef,
+        VerifiedCorpusRecordSet? corpusRecordSet,
         LuxembourgQueryExecutionRefusalDetail? refusal)
     {
         Topology = topology;
@@ -533,6 +569,9 @@ public sealed class LuxembourgQueryExecutionResult
         ScopeManifestReceipt = scopeManifestReceipt;
         ScopeManifestCanonicalSha256 = scopeManifestCanonicalSha256;
         Completion = completion;
+        DocumentAcquisitionOutcomesByOrdinal = documentAcquisitionOutcomesByOrdinal;
+        CorpusRecordSetRef = corpusRecordSetRef;
+        CorpusRecordSet = corpusRecordSet;
         Refusal = refusal;
     }
 
@@ -543,13 +582,19 @@ public sealed class LuxembourgQueryExecutionResult
         IReadOnlyList<string> resourceObservationSubjects,
         IReadOnlyList<LuxembourgResourceObservationExclusionAccounting> resourceObservationExclusions,
         DurableBlobWriteReceipt scopeManifestReceipt,
-        string scopeManifestCanonicalSha256)
+        string scopeManifestCanonicalSha256,
+        IReadOnlyDictionary<int, CorpusAcquisitionOutcome> documentAcquisitionOutcomesByOrdinal,
+        SourceArtifactRef corpusRecordSetRef,
+        VerifiedCorpusRecordSet corpusRecordSet)
     {
         ArgumentNullException.ThrowIfNull(topology);
         ArgumentNullException.ThrowIfNull(resourceObservationSubjects);
         ArgumentNullException.ThrowIfNull(resourceObservationExclusions);
         ArgumentNullException.ThrowIfNull(scopeManifestReceipt);
         ArgumentException.ThrowIfNullOrWhiteSpace(scopeManifestCanonicalSha256);
+        ArgumentNullException.ThrowIfNull(documentAcquisitionOutcomesByOrdinal);
+        ArgumentNullException.ThrowIfNull(corpusRecordSetRef);
+        ArgumentNullException.ThrowIfNull(corpusRecordSet);
         var completion = familyOutcomes.All(
             static outcome => outcome.Kind is
                 LuxembourgFamilyEnumerationOutcomeKind.Proven or
@@ -559,7 +604,8 @@ public sealed class LuxembourgQueryExecutionResult
         return new(
             topology, familyOutcomes, relationFamilyAcquisitions,
             resourceObservationSubjects, resourceObservationExclusions, scopeManifestReceipt,
-            scopeManifestCanonicalSha256, completion, null);
+            scopeManifestCanonicalSha256, completion, documentAcquisitionOutcomesByOrdinal,
+            corpusRecordSetRef, corpusRecordSet, null);
     }
 
     public static LuxembourgQueryExecutionResult Refused(
@@ -570,7 +616,9 @@ public sealed class LuxembourgQueryExecutionResult
     {
         ArgumentNullException.ThrowIfNull(topology);
         ArgumentNullException.ThrowIfNull(refusal);
-        return new(topology, familyOutcomes, relationFamilyAcquisitions, [], [], null, null, null, refusal);
+        return new(
+            topology, familyOutcomes, relationFamilyAcquisitions, [], [], null, null, null,
+            null, null, null, refusal);
     }
 
     /// <summary>Always present: minting it cannot fail, and it is useful context on a refusal too.</summary>
@@ -623,6 +671,25 @@ public sealed class LuxembourgQueryExecutionResult
     /// custody content address. Present if and only if <see cref="ScopeManifestReceipt"/> is.
     /// </summary>
     public string? ScopeManifestCanonicalSha256 { get; }
+
+    /// <summary>
+    /// D1-06c-LU-2: this run's own real per-ordinal document-acquisition outcomes, exactly what was
+    /// handed to <see cref="Lex.V3.Ingest.CorpusRecordSetWriter.WriteAsync"/>. Present iff this run
+    /// delivered. An empty dictionary is the honest and, today, the universal answer for a real LU
+    /// run: see <see cref="LuxembourgQueryExecutionAdapter.RunDocumentAcquisitionAsync"/>'s own
+    /// remarks on the body axis.
+    /// </summary>
+    public IReadOnlyDictionary<int, CorpusAcquisitionOutcome>? DocumentAcquisitionOutcomesByOrdinal { get; }
+
+    /// <summary>This run's own durably written corpus/6 record set reference. Present iff delivered.</summary>
+    public SourceArtifactRef? CorpusRecordSetRef { get; }
+
+    /// <summary>
+    /// The record set as reopened and verified by
+    /// <see cref="Lex.V3.Ingest.CorpusRecordSetWriter.WriteAsync"/> itself, never the in-memory set
+    /// this run computed. Present iff delivered.
+    /// </summary>
+    public VerifiedCorpusRecordSet? CorpusRecordSet { get; }
 
     public LuxembourgQueryExecutionRefusalDetail? Refusal { get; }
 }
@@ -825,10 +892,11 @@ public sealed class LuxembourgQueryExecutionAdapter
         string? relationAssertionsFamilyKey,
         string? resourceObservationFamilyKey,
         string? resourceAssertionsFamilyKey,
+        MachineQueryRendererSource documentFetchRendererSource,
         CancellationToken cancellationToken) =>
         RunAsync(
             families, relationAssertionsFamilyKey, resourceObservationFamilyKey, resourceAssertionsFamilyKey,
-            evidenceResolver: null, cancellationToken);
+            evidenceResolver: null, documentFetchRendererSource, cancellationToken);
 
     /// <summary>
     /// D1-04c item 2: the test-only seam. <paramref name="evidenceResolver"/>, when supplied,
@@ -852,9 +920,11 @@ public sealed class LuxembourgQueryExecutionAdapter
         string? resourceObservationFamilyKey,
         string? resourceAssertionsFamilyKey,
         IScopeReductionEvidenceResolver? evidenceResolver,
+        MachineQueryRendererSource documentFetchRendererSource,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(families);
+        ArgumentNullException.ThrowIfNull(documentFetchRendererSource);
         if ((resourceObservationFamilyKey is null) != (resourceAssertionsFamilyKey is null))
         {
             throw new ArgumentException(
@@ -1101,7 +1171,17 @@ public sealed class LuxembourgQueryExecutionAdapter
                 _custodyStore, _sourceProfile.Snapshot.CompleteEnumerationRef, observations,
                 resolved.OrderedEvidenceArtifacts, cancellationToken)
             .ConfigureAwait(false);
-        var manifest = _sourceProfile.ReduceScope(resolved, resolver);
+        // D1-06c-LU-2 item 1: mint every addressable object's own document-fetch address from the
+        // store's own isExemplifiedBy file URI, and carry it onto the durable manifest row. Before
+        // this, every Luxembourg row was NotMinted with reason NoPublisherRouteYet, which was true
+        // when there was no LU route and is a lie now that there is one.
+        var mintedAddressesByObjectRef = MintDocumentFetchAddresses(resolved);
+        var manifest = _sourceProfile.ReduceScope(
+            resolved,
+            resolver,
+            mintedAddressesByObjectRef.ToDictionary(
+                static entry => entry.Key,
+                static entry => entry.Value.ToScopeManifestFetchAddress()));
 
         // ScopeManifestCanonicalWriter.Write returns the manifest's OWN canonical identity: a
         // domain-separated hash (SHA256("lex-v3-source-scope-manifest/1\n" + bytes)), never written
@@ -1153,11 +1233,422 @@ public sealed class LuxembourgQueryExecutionAdapter
         // baked into a *retained* policy's own canonical bytes).
         var manifestArtifactRef = new SourceArtifactRef(
             $"urn:uuid:{Guid.NewGuid():D}", manifestCanonicalSha256);
-        _ = VerifiedScopeManifest.ParseAndVerify(manifestArtifactRef, reopened.Span, resolver);
+        var reopenedManifest = VerifiedScopeManifest
+            .ParseAndVerify(manifestArtifactRef, reopened.Span, resolver)
+            .Manifest;
+
+        // This run's own identity for the corpus/6 record set it writes as its last step, paired
+        // with real evidence -- this exact run's own manifest custody-write digest, distinct from
+        // manifestArtifactRef's own canonical digest above -- rather than an inert placeholder,
+        // mirroring EuQueryExecutionAdapter's own runIdentityRef exactly.
+        var runIdentityRef = new SourceArtifactRef(
+            $"urn:uuid:{Guid.NewGuid():D}", writeReceipt.Reference.ContentSha256);
+
+        var (documentAcquisitionOutcomesByOrdinal, acquisitionRefusal) =
+            await RunDocumentAcquisitionAsync(
+                    reopenedManifest, mintedAddressesByObjectRef, documentFetchRendererSource,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        if (acquisitionRefusal is not null)
+        {
+            return LuxembourgQueryExecutionResult.Refused(
+                topology, outcomes, relationAcquisitions, acquisitionRefusal);
+        }
+
+        // D1-06c-LU-2 item 5: this run's whole corpus/6 record set, written as the LITERAL last
+        // step, after the manifest above and after every document GET this run attempted. Reuses
+        // this run's own scope-manifest custody floor (CustodyClass.NightlyFloor90d), the exact
+        // constant CorpusRecordSetWriter itself already requires. The outcomes are handed over
+        // unfiltered and need no second filter: RunDocumentAcquisitionAsync's own gate already means
+        // every key in the dictionary names an accepted-body ordinal. An object with no outcome
+        // still gets a real record -- CorpusRecordBuilder's default path makes it NotHeld, naming
+        // the manifest's own disposition as the reason.
+        var recordSetWriter = new CorpusRecordSetWriter(_custodyStore);
+        var recordSetResult = await recordSetWriter.WriteAsync(
+                reopenedManifest, manifestArtifactRef, runIdentityRef,
+                documentAcquisitionOutcomesByOrdinal, cancellationToken)
+            .ConfigureAwait(false);
+        if (recordSetResult.Refusal is not null)
+        {
+            return LuxembourgQueryExecutionResult.Refused(
+                topology, outcomes, relationAcquisitions,
+                new LuxembourgQueryExecutionRefusalDetail(
+                    LuxembourgQueryExecutionRefusal.RecordSetNotHeld,
+                    null,
+                    recordSetResult.Refusal.Detail));
+        }
 
         return LuxembourgQueryExecutionResult.Delivered(
             topology, outcomes, relationAcquisitions, resourceObservationSubjects,
-            resourceObservationExclusions, writeReceipt, manifestCanonicalSha256);
+            resourceObservationExclusions, writeReceipt, manifestCanonicalSha256,
+            documentAcquisitionOutcomesByOrdinal!, recordSetResult.SetRef!,
+            recordSetResult.VerifiedSet!);
+    }
+
+    /// <summary>
+    /// D1-06c-LU-2 items 1 and 2: every object this run can address, and the ONE manifestation the
+    /// selection ladder picks for it. Pure over this run's own already-resolved data: no second
+    /// query, no network.
+    /// </summary>
+    /// <remarks>
+    /// Each candidate comes from the object's own resolved WEMI topology, which walked
+    /// isRealizedBy/isEmbodiedBy/isExemplifiedBy across that observation's own assertions. Only
+    /// structurally consistent candidates are offered, which is what makes the file URI safe: that
+    /// disposition already requires <c>LuxembourgItemUriFamily.IsCurrent</c> (http, host
+    /// data.legilux.public.lu, path strictly under /filestore/) and every candidate IRI already
+    /// passed <c>RequireExactResourceIri</c> (no userinfo, query or fragment, default port), which
+    /// together are exactly <see cref="LuxembourgFileUri.RequireValid"/>'s own conditions. So the
+    /// validator cannot refuse a candidate that reaches it; it is still called, because validating
+    /// once at the door is what stops an unvalidated string reaching selection at all.
+    /// <para>
+    /// The act's own ELI page path is the object IRI's own path. The WEMI walk starts at that IRI
+    /// and reaches the manifestation through the work-to-expression-to-manifestation chain, so
+    /// "the act's page path obtained from the store via the manifestation to expression to work
+    /// relation" (RULING lex-event-20260904T180444431Z-13c6f8f86ddf4f02857cf4001c202143) is that
+    /// walk read backwards, and needs no extra query.
+    /// </para>
+    /// <para>
+    /// LIMIT, stated rather than hidden: a manifest row carries exactly one fetch address, so this
+    /// mints one document per object even when the object offers manifestations in several
+    /// languages. The tie-break is total (legal value, token, then the store URI's ordinal order),
+    /// so the choice is deterministic rather than arbitrary, but multi-language acquisition is not
+    /// in this slice and is not pretended to be.
+    /// </para>
+    /// </remarks>
+    internal static IReadOnlyDictionary<SourceObjectRef, LuxembourgDocumentFetchAddress>
+        MintDocumentFetchAddresses(LuxembourgProfileResolution.Resolved resolution)
+    {
+        ArgumentNullException.ThrowIfNull(resolution);
+        var minted = new Dictionary<SourceObjectRef, LuxembourgDocumentFetchAddress>();
+        foreach (var resource in resolution.Resources)
+        {
+            var address = MintDocumentFetchAddress(
+                resource.ObjectRef,
+                resource.WemiTopology,
+                resource.Assertions.Select(static resolved => resolved.Assertion).ToArray());
+            if (address is not null)
+            {
+                minted[resource.ObjectRef] = address;
+            }
+        }
+
+        return minted;
+    }
+
+    /// <summary>
+    /// One object's own address, or null when the store offers it no selectable manifestation. Split
+    /// out of <see cref="MintDocumentFetchAddresses"/> so a test can drive the real WEMI join and the
+    /// real selection ladder against real assertions, without first assembling a whole resolved
+    /// profile (which would need rights-channel observations this decision reads nothing from).
+    /// </summary>
+    internal static LuxembourgDocumentFetchAddress? MintDocumentFetchAddress(
+        SourceObjectRef objectRef,
+        LuxembourgWemiTopologyResolution wemiTopology,
+        IReadOnlyList<LuxembourgObservedAssertion> assertions)
+    {
+        ArgumentNullException.ThrowIfNull(objectRef);
+        ArgumentNullException.ThrowIfNull(wemiTopology);
+        ArgumentNullException.ThrowIfNull(assertions);
+
+        var actEliPagePath = new Uri(objectRef.PublisherUri, UriKind.Absolute).AbsolutePath;
+        var candidates = new List<LuxembourgManifestationCandidate>();
+        foreach (var wemi in wemiTopology.Candidates)
+        {
+            if (wemi.Disposition != LuxembourgWemiCandidateDisposition.StructurallyConsistent)
+            {
+                continue;
+            }
+
+            if (LuxembourgAuthorityIri.TryParseUserFormat(wemi.FormatIri) is not { } token)
+            {
+                // A real store token this route does not select: html, doc, docx or svg. Not an
+                // error and not a refusal, simply not a wording candidate for this route.
+                continue;
+            }
+
+            if (FindLegalValue(assertions, wemi.ManifestationIri) is not { } legalValue)
+            {
+                // The publisher's own official marker is missing for this manifestation. It is not
+                // defaulted to officiel: the ladder ranks on that marker, so guessing it would
+                // silently promote an unmarked file over a marked one.
+                continue;
+            }
+
+            candidates.Add(new LuxembourgManifestationCandidate(
+                token, legalValue, LuxembourgFileUri.RequireValid(wemi.ItemIri)));
+        }
+
+        var selection = LuxembourgManifestationSelection.Select(candidates);
+        return selection.Selected is { } selected
+            ? LuxembourgDocumentFetchAddress.Create(
+                selected.FileUri, selected.Token, selected.LegalValue, actEliPagePath)
+            : null;
+    }
+
+    /// <summary>
+    /// The publisher's own jolux:legalValue marker for one manifestation, read from this object's
+    /// own resolved assertions by exact subject and predicate, or null when the store carries none.
+    /// </summary>
+    private static LuxembourgLegalValue? FindLegalValue(
+        IReadOnlyList<LuxembourgObservedAssertion> assertions,
+        string manifestationIri)
+    {
+        LuxembourgLegalValue? found = null;
+        foreach (var assertion in assertions)
+        {
+            if (!string.Equals(assertion.SubjectIri, manifestationIri, StringComparison.Ordinal) ||
+                !string.Equals(assertion.PredicateIri, JoluxLegalValue, StringComparison.Ordinal) ||
+                assertion.ObjectKind != LuxembourgAssertionObjectKind.Iri)
+            {
+                continue;
+            }
+
+            if (LuxembourgAuthorityIri.TryParseLegalValue(assertion.ObjectIriOrLexical) is not { } value)
+            {
+                continue;
+            }
+
+            if (found is not null && found != value)
+            {
+                // Two different markers on one manifestation is publisher data disagreeing with
+                // itself. Neither is chosen: the manifestation stops being a candidate.
+                return null;
+            }
+
+            found = value;
+        }
+
+        return found;
+    }
+
+    /// <summary>
+    /// The publisher's own jolux:legalValue predicate IRI. Spelled out here rather than read from
+    /// <c>VerifiedLuxembourgSourceProfile.JoluxPrefix</c>, which is internal to Contracts, and
+    /// pinned against that prefix by
+    /// <c>TheLegalValuePredicateIriIsTheStoresOwnJoluxLegalValuePredicate</c> so the literal cannot
+    /// drift from the ontology the resolver itself reads.
+    /// </summary>
+    internal const string JoluxLegalValue =
+        "http://data.legilux.public.lu/resource/ontology/jolux#legalValue";
+
+    /// <summary>
+    /// D1-06c-LU-2 items 3, 4 and 5: drives the document GET for every reopened manifest row whose
+    /// own body axis is <see cref="ScopeDisposition.AcceptedSelected"/> and whose fetch address this
+    /// run actually minted, classifies the real response, and prepares this run's own
+    /// <see cref="CorpusAcquisitionOutcome"/> per ordinal. The gate is computed before the loop and
+    /// gates iteration directly, exactly as the merged EU adapter's own gate does: no fetch attempt
+    /// at all for a row the body axis excludes.
+    /// </summary>
+    /// <remarks>
+    /// WHAT FRACTION OF A REAL LU MANIFEST IS ACCEPTED, answered plainly because the scope ruling
+    /// asked for it: ZERO of N, on every LU manifest this codebase can produce, and it is
+    /// structural rather than incidental. <c>LuxembourgBodyJoin.ResolveCandidate</c> attaches eight
+    /// unconditional milestone blockers to every candidate and returns
+    /// <c>LuxembourgBodyCandidateDisposition.Withheld</c> on every path, and
+    /// <c>LuxembourgScopeResolver.ResolveBody</c> has no <c>AcceptedCandidate</c> branch at all: its
+    /// four arms are NeverIngest, the family's own quarantine or point state, a point for a missing
+    /// family, and a typed quarantine. So the Body/AcceptedSelected accounting set is empty for
+    /// every real run and this loop attempts nothing. That is the same honest position the EU route
+    /// is in for its own reason, and it is why the tests here drive this method directly against a
+    /// manifest built with a genuine accepted body axis.
+    /// <para>
+    /// This corrects a premise in the scope ruling itself, which said the LU body axis is derived
+    /// from the store's userFormat listing so that "xml or pdf listed means a body admitted". The
+    /// FORMAT axis is derived that way (<c>ResolveFormat</c>: xml and xml-akomantoso accepted, pdf,
+    /// pdfa and html a point, doc, docx and svg never); the BODY axis is not, and never accepts.
+    /// </para>
+    /// </remarks>
+    /// <returns>
+    /// The real per-ordinal outcomes this run's GETs produced, or a whole-run refusal for a cause
+    /// this door's own closed <see cref="CorpusAcquisitionRefusalReason"/> vocabulary cannot
+    /// represent. Never both, never neither.
+    /// </returns>
+    internal async Task<(
+        IReadOnlyDictionary<int, CorpusAcquisitionOutcome>? Outcomes,
+        LuxembourgQueryExecutionRefusalDetail? Refusal)> RunDocumentAcquisitionAsync(
+        ScopeManifest reopenedManifest,
+        IReadOnlyDictionary<SourceObjectRef, LuxembourgDocumentFetchAddress> mintedAddressesByObjectRef,
+        MachineQueryRendererSource documentFetchRendererSource,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(reopenedManifest);
+        ArgumentNullException.ThrowIfNull(mintedAddressesByObjectRef);
+        ArgumentNullException.ThrowIfNull(documentFetchRendererSource);
+
+        var bodyAcceptedOrdinals = new HashSet<int>();
+        foreach (var accountingSet in reopenedManifest.Accounting)
+        {
+            if (accountingSet.Axis == ScopeAxis.Body &&
+                accountingSet.Disposition == ScopeDisposition.AcceptedSelected)
+            {
+                foreach (var ordinal in accountingSet.ObjectOrdinals)
+                {
+                    bodyAcceptedOrdinals.Add(ordinal);
+                }
+            }
+        }
+
+        var outcomesByOrdinal = new Dictionary<int, CorpusAcquisitionOutcome>();
+        for (var rowOrdinal = 0; rowOrdinal < reopenedManifest.Rows.Count; rowOrdinal++)
+        {
+            var row = reopenedManifest.Rows[rowOrdinal];
+            if (row.FetchAddress.Status != ScopeManifestFetchAddressStatus.Minted ||
+                !bodyAcceptedOrdinals.Contains(rowOrdinal))
+            {
+                continue;
+            }
+
+            var mintedObjectRef = reopenedManifest.ObservedObjects[rowOrdinal].ObjectRef;
+            if (!mintedAddressesByObjectRef.TryGetValue(mintedObjectRef, out var address))
+            {
+                // Unreachable in practice: every Minted row's address came from this exact run's own
+                // MintDocumentFetchAddresses, the only path that mints one. Refusing the whole run
+                // here rather than throwing keeps this method's "never throws past a typed refusal"
+                // discipline even for a defect this loop cannot itself introduce.
+                return (null, new LuxembourgQueryExecutionRefusalDetail(
+                    LuxembourgQueryExecutionRefusal.DocumentGetOutcomeNotRepresentable,
+                    null,
+                    $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}') carries a Minted " +
+                    "fetch address this run never itself minted."));
+            }
+
+            var bound = new LuxembourgDocumentFetchPlan(address).Bind(
+                $"urn:uuid:{Guid.NewGuid():D}",
+                $"urn:uuid:{Guid.NewGuid():D}",
+                documentFetchRendererSource);
+            var attempt = await _executor.RunDocumentGetAsync(
+                    bound.Request, [address.ActEliPagePath], cancellationToken)
+                .ConfigureAwait(false);
+            if (attempt.Evidence is null)
+            {
+                if (attempt.Refusal == LuxembourgDocumentGetAttemptRefusal.RobotsDisallowed)
+                {
+                    // The publisher's own robots.txt refused THIS document, on one of the three
+                    // paths the ruling evaluates. That is this one object's own cause, never a
+                    // whole-run refusal: one withheld act must not block every other act's record.
+                    outcomesByOrdinal[rowOrdinal] = CorpusAcquisitionOutcome.Refused(
+                        CorpusAcquisitionRefusalReason.RobotsDisallowed);
+                    continue;
+                }
+
+                return (null, new LuxembourgQueryExecutionRefusalDetail(
+                    LuxembourgQueryExecutionRefusal.DocumentFetchSessionNotStarted,
+                    null,
+                    $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): code=" +
+                    $"{attempt.Refusal} detail={attempt.Detail}."));
+            }
+
+            var evidence = attempt.Evidence;
+            if (evidence.Outcome is CompleteHttpRouteOutcome && evidence.Hops.Count > 0)
+            {
+                var classified = LuxembourgDocumentGetOutcome.FromObservedStatus(
+                    evidence.Hops[^1].Status, attempt.RetryAllowanceSpent);
+                if (classified.Kind == LuxembourgDocumentGetOutcomeKind.Retrieved)
+                {
+                    var bodyBytes = await CustodyRestore.ReadByDigestCheckedAsync(
+                            _custodyStore, evidence.Hops[^1].Sha256, cancellationToken)
+                        .ConfigureAwait(false);
+                    var bodyReceipt = await _custodyStore.CreateAsync(
+                            bodyBytes, CustodyClass.NightlyFloor90d, cancellationToken)
+                        .ConfigureAwait(false);
+                    if (CustodyMembershipClassifier.Classify(bodyReceipt) != CustodyMembership.Floored)
+                    {
+                        return (null, new LuxembourgQueryExecutionRefusalDetail(
+                            LuxembourgQueryExecutionRefusal.DocumentBodyNotHeld,
+                            null,
+                            $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): the " +
+                            "document body was fetched but the store enforced no retention floor on it."));
+                    }
+
+                    outcomesByOrdinal[rowOrdinal] = CorpusAcquisitionOutcome.Held(bodyReceipt);
+                    continue;
+                }
+
+                outcomesByOrdinal[rowOrdinal] = CorpusAcquisitionOutcome.Refused(
+                    MapDocumentGetKind(classified.Kind));
+                continue;
+            }
+
+            if (TryMapHopIncompleteToCorpusAcquisitionRefusal(evidence, out var hopRefusal))
+            {
+                outcomesByOrdinal[rowOrdinal] = CorpusAcquisitionOutcome.Refused(hopRefusal);
+                continue;
+            }
+
+            var routeOutcomeDetail = evidence.Outcome is IncompleteHttpRouteOutcome incompleteOutcome
+                ? $"{evidence.Outcome.GetType().Name}({incompleteOutcome.Reason})"
+                : evidence.Outcome.GetType().Name;
+            return (null, new LuxembourgQueryExecutionRefusalDetail(
+                LuxembourgQueryExecutionRefusal.DocumentGetOutcomeNotRepresentable,
+                null,
+                $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): " +
+                $"routeOutcome={routeOutcomeDetail}."));
+        }
+
+        return (outcomesByOrdinal, null);
+    }
+
+    /// <summary>
+    /// This route's own closed GET vocabulary onto D1-06b's own closed corpus vocabulary, one
+    /// member to one member under the identical wire spelling. Every member here is genuinely
+    /// reachable on THIS route and nothing is mapped that is not: <c>Retrieved</c> never reaches
+    /// this method (it is the held path), and <c>RobotsDisallowed</c> never does either, because a
+    /// robots refusal never produces a status to classify and is mapped at its own branch above.
+    /// </summary>
+    private static CorpusAcquisitionRefusalReason MapDocumentGetKind(
+        LuxembourgDocumentGetOutcomeKind kind) => kind switch
+    {
+        LuxembourgDocumentGetOutcomeKind.NotFound => CorpusAcquisitionRefusalReason.NotFound,
+        LuxembourgDocumentGetOutcomeKind.Gone => CorpusAcquisitionRefusalReason.Gone,
+        LuxembourgDocumentGetOutcomeKind.RetryExhausted => CorpusAcquisitionRefusalReason.RetryExhausted,
+        LuxembourgDocumentGetOutcomeKind.UnexpectedPublisherStatus =>
+            CorpusAcquisitionRefusalReason.UnexpectedPublisherStatus,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+    };
+
+    /// <summary>
+    /// Whether a hop-level transport-incomplete outcome has a faithful member in D1-06b's own closed
+    /// <see cref="CorpusAcquisitionRefusalReason"/> vocabulary, which mirrors
+    /// <see cref="HttpAcquisitionReasonRegistry"/>'s own fourteen reasons one for one under the
+    /// identical wire names, so a hop's already-checked registry member maps by its wire key alone,
+    /// never by re-deriving or guessing one. Everything else returns false and refuses the run.
+    /// </summary>
+    private static bool TryMapHopIncompleteToCorpusAcquisitionRefusal(
+        RoutedHttpEvidence evidence,
+        out CorpusAcquisitionRefusalReason mapped)
+    {
+        if (evidence.Outcome is IncompleteHttpRouteOutcome { Reason: HttpRouteIncompleteReason.HopIncomplete } &&
+            evidence.Hops.Count > 0 &&
+            evidence.Hops[^1].Completion is IncompleteHttpCompletion incomplete &&
+            incomplete.Reason.RegistryRef == HttpAcquisitionReasonRegistry.RegistryRef)
+        {
+            var candidate = incomplete.Reason.MemberKey switch
+            {
+                "body_deadline" => CorpusAcquisitionRefusalReason.BodyDeadline,
+                "body_read_failure" => CorpusAcquisitionRefusalReason.BodyReadFailure,
+                "byte_bound_prevented_completion" => CorpusAcquisitionRefusalReason.ByteBoundPreventedCompletion,
+                "caller_cancelled_after_headers" => CorpusAcquisitionRefusalReason.CallerCancelledAfterHeaders,
+                "declared_length_short_read" => CorpusAcquisitionRefusalReason.DeclaredLengthShortRead,
+                "missing_completion_proof" => CorpusAcquisitionRefusalReason.MissingCompletionProof,
+                "transfer_coding_conflict" => CorpusAcquisitionRefusalReason.TransferCodingConflict,
+                "invalid_content_length" => CorpusAcquisitionRefusalReason.InvalidContentLength,
+                "unsupported_transfer_coding" => CorpusAcquisitionRefusalReason.UnsupportedTransferCoding,
+                "header_deadline" => CorpusAcquisitionRefusalReason.HeaderDeadline,
+                "transport_before_headers" => CorpusAcquisitionRefusalReason.TransportBeforeHeaders,
+                "revalidation_request_not_admitted" => CorpusAcquisitionRefusalReason.RevalidationRequestNotAdmitted,
+                "status_content_forbidden" => CorpusAcquisitionRefusalReason.StatusContentForbidden,
+                "status_framing_conflict" => CorpusAcquisitionRefusalReason.StatusFramingConflict,
+                _ => (CorpusAcquisitionRefusalReason?)null,
+            };
+            if (candidate is { } value)
+            {
+                mapped = value;
+                return true;
+            }
+        }
+
+        mapped = default;
+        return false;
     }
 
     /// <summary>
