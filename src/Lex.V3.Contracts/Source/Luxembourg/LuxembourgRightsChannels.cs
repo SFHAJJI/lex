@@ -31,6 +31,22 @@ public enum LuxembourgRightsChannelDisposition
 
     [JsonStringEnumMemberName("typed_quarantine_unruled_licence")]
     TypedQuarantineUnruledLicence = 9,
+
+    /// <summary>
+    /// Channel one, the publisher's own SPARQL <c>jolux:license</c> declaration, resolved for this
+    /// manifestation and names the admitting licence. Channel two, Decision 21's in-file
+    /// declaration, has not run: it reads the licence out of the document itself and so cannot
+    /// precede acquisition (RULING lex-event-20260904T201756388Z-897fb21258b14e088f0495121479c9f4).
+    /// </summary>
+    /// <remarks>
+    /// This is a state, NEVER an empty channel dressed as a resolved one. Nothing fabricates a
+    /// second evidence reference to reach agreement: <see cref="LuxembourgRightsChannels"/>'s own
+    /// disjointness check exists precisely because two channels sharing evidence are one channel
+    /// counted twice, and a synthesised second ref would defeat it silently rather than loudly.
+    /// The in-file channel is D1-04f, queued first among the residue and needing no re-fetch.
+    /// </remarks>
+    [JsonStringEnumMemberName("second_channel_pending")]
+    SecondChannelPending = 10,
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -160,6 +176,15 @@ public sealed record LuxembourgRightsChannelResolution
     public bool ChannelsAgreeOnAdmittingLicence =>
         Disposition == LuxembourgRightsChannelDisposition.AgreedSameRunCcBy;
 
+    /// <summary>
+    /// Channel one alone admits, and channel two is a typed pending state rather than a refusal.
+    /// This is what the pre-acquisition body selection reads; it is deliberately NOT
+    /// <see cref="ChannelsAgreeOnAdmittingLicence"/>, because the two channels have not agreed and
+    /// saying they had would be the fabrication the disjointness rule guards against.
+    /// </summary>
+    public bool SparqlChannelAdmitsWithSecondChannelPending =>
+        Disposition == LuxembourgRightsChannelDisposition.SecondChannelPending;
+
     public string ReasonCode => Disposition switch
     {
         LuxembourgRightsChannelDisposition.ChannelEnumerationUnproven =>
@@ -176,6 +201,8 @@ public sealed record LuxembourgRightsChannelResolution
             "rights_non_admitting_licence_scl",
         LuxembourgRightsChannelDisposition.TypedQuarantineUnruledLicence =>
             "rights_typed_quarantine_unruled_licence",
+        LuxembourgRightsChannelDisposition.SecondChannelPending =>
+            "rights_sparql_channel_admits_second_channel_pending",
         _ => throw new InvalidOperationException("Unknown rights-channel disposition."),
     };
 }
@@ -214,6 +241,38 @@ public static class LuxembourgRightsChannels
             disposition);
     }
 
+    /// <summary>
+    /// Channel one read alone: the same value tail the two-channel path uses, so a missing value, a
+    /// multiple, the non-admitting SCL licence and an unruled licence all keep their own named
+    /// outcomes rather than collapsing into "pending". Only a single admitting licence reaches
+    /// <see cref="LuxembourgRightsChannelDisposition.SecondChannelPending"/>.
+    /// </summary>
+    private static LuxembourgRightsChannelDisposition ClassifySingleChannel(
+        LuxembourgRightsChannelObservation sparql)
+    {
+        if (sparql.LicenceIris.Count == 0)
+        {
+            return LuxembourgRightsChannelDisposition.MissingValue;
+        }
+
+        if (sparql.LicenceIris.Count > 1)
+        {
+            return LuxembourgRightsChannelDisposition.Multiple;
+        }
+
+        var licence = sparql.LicenceIris[0];
+        if (string.Equals(
+                licence, VerifiedLuxembourgSourceProfile.AdmittingLicence, StringComparison.Ordinal))
+        {
+            return LuxembourgRightsChannelDisposition.SecondChannelPending;
+        }
+
+        return string.Equals(
+                licence, VerifiedLuxembourgSourceProfile.NonAdmittingLicenceScl, StringComparison.Ordinal)
+            ? LuxembourgRightsChannelDisposition.NonAdmittingLicenceScl
+            : LuxembourgRightsChannelDisposition.TypedQuarantineUnruledLicence;
+    }
+
     private static LuxembourgRightsChannelDisposition ResolveDisposition(
         SourceArtifactRef boundRunIdentity,
         LuxembourgSparqlRightsChannelObservations sparqlObservations,
@@ -227,9 +286,17 @@ public static class LuxembourgRightsChannels
             return LuxembourgRightsChannelDisposition.Stale;
         }
 
-        if (sparql is null || inFile is null)
+        if (sparql is null)
         {
             return LuxembourgRightsChannelDisposition.ChannelEnumerationUnproven;
+        }
+
+        if (inFile is null)
+        {
+            // Channel one resolved and channel two has not run. Read channel one on its own terms,
+            // with exactly the same tail the two-channel path applies, and stop at the typed
+            // pending state instead of claiming an agreement one channel cannot make.
+            return ClassifySingleChannel(sparql);
         }
 
         if (sparql.LicenceIris.Count == 0 || inFile.LicenceIris.Count == 0)
