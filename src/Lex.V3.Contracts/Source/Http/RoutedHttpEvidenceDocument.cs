@@ -777,12 +777,19 @@ public sealed class RoutedHttpEvidence
     /// D1-06c-EU defect five's own shared decision, extracted so <see cref="LocationCausedHop"/> and
     /// <see cref="TryGetAdmittedRedirectTarget"/> can no longer drift apart on it: whether
     /// <paramref name="locationValue"/> is a well-formed absolute http URI on
-    /// <paramref name="admittedOriginUri"/>'s own host at its default port -- the identical shape
-    /// <c>Lex.V3.Ingest.RoutedHttpAcquisitionSession.ResolveRedirectTarget</c> upgrades on the send
-    /// path. Never throws: anything else (a different host, a non-default port, a relative or
-    /// malformed value, or an already-https value) returns <see langword="false"/>.
+    /// <paramref name="admittedOriginUri"/>'s own host at its default port. Never throws: anything
+    /// else (a different host, a non-default port, a relative or malformed value, or an already-https
+    /// value) returns <see langword="false"/>.
     /// </summary>
-    private static bool TryUpgradeHttpLocationOnAdmittedHost(
+    /// <remarks>
+    /// D1-06c-EU defect nine's own fold-in six (REVIEW_RESULT
+    /// lex-event-20260904T153119262Z-e51c74bf8710495fbd972b2706509922): public, not private, so
+    /// <c>Lex.V3.Ingest.RoutedHttpAcquisitionSession.ResolveRedirectTarget</c> calls this exact method
+    /// on the send path instead of carrying its own separately maintained copy of the same decision.
+    /// Ingest already depends on Contracts (never the reverse), so reaching this from Ingest needs no
+    /// <c>InternalsVisibleTo</c>; this method only had to stop being <see langword="private"/>.
+    /// </remarks>
+    public static bool TryUpgradeHttpLocationOnAdmittedHost(
         string locationValue, string admittedOriginUri, out string upgraded)
     {
         upgraded = string.Empty;
@@ -805,12 +812,10 @@ public sealed class RoutedHttpEvidence
     /// D1-06c-EU defect 1 (SCOPE_RULING lex-event-20260904T130546972Z-c72fad2da5b34344af802c068d8fbf08
     /// item 1) -- the https upgrade of an observed http Location on the admitted host
     /// (<paramref name="admittedOriginUri"/>), through the shared
-    /// <see cref="TryUpgradeHttpLocationOnAdmittedHost"/> decision defect five's own fix extracted
-    /// (same file, same shape <c>Lex.V3.Ingest.RoutedHttpAcquisitionSession.ResolveRedirectTarget</c>'s
-    /// send-path upgrade already applies). Contracts cannot reference the session's own type to share
-    /// the one implementation directly (Ingest depends on Contracts, never the reverse), so the
-    /// decision is duplicated at that one shared helper, deliberately kept small so it and the send
-    /// path cannot drift unnoticed.
+    /// <see cref="TryUpgradeHttpLocationOnAdmittedHost"/> decision defect five's own fix extracted.
+    /// <c>Lex.V3.Ingest.RoutedHttpAcquisitionSession.ResolveRedirectTarget</c>'s own send-path upgrade
+    /// calls this exact method too (D1-06c-EU defect nine's own fold-in six), so the send path and
+    /// this evidence validator cannot drift apart on what counts as an upgrade.
     /// </summary>
     private static bool LocationCausedHop(string locationValue, string hopRequestUri, string admittedOriginUri) =>
         string.Equals(locationValue, hopRequestUri, StringComparison.Ordinal) ||

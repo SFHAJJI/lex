@@ -537,16 +537,36 @@ internal static class EuAcquisitionTestFixture
     /// manifest, the document-fetch evidence document) stays floored, so only the one write this
     /// predicate targets is unenforced, never the whole store.
     /// </param>
-    internal sealed class EuInMemoryCustodyStore(Func<string, bool>? unenforceDigest = null)
+    /// <param name="unenforceCallOrdinal">
+    /// D1-06c-EU defect nine's own fold-in five (REVIEW_RESULT
+    /// lex-event-20260904T153119262Z-e51c74bf8710495fbd972b2706509922): when supplied, the Nth call
+    /// to <see cref="CreateAsync"/> (1-indexed, in real call order) publishes
+    /// <see cref="CustodyProtection.NotEnforced"/> regardless of its own content digest. Targets one
+    /// write by the order a real run makes it rather than by a digest the test cannot predict ahead
+    /// of a real canonical serialization -- exactly what forcing the corpus/6 record set's own write
+    /// (never the scope manifest's) to fail its floor needs.
+    /// </param>
+    internal sealed class EuInMemoryCustodyStore(
+        Func<string, bool>? unenforceDigest = null, int? unenforceCallOrdinal = null)
         : Lex.V3.Contracts.Custody.ICustodyStore
     {
         private readonly Dictionary<string, byte[]> _byDigest = new(StringComparer.Ordinal);
+        private int _createCallCount;
+
+        /// <summary>
+        /// How many real <see cref="CreateAsync"/> calls this store has answered so far -- used by a
+        /// two-pass test (run once against a plain enforcing store to discover the real total, then
+        /// again with <c>unenforceCallOrdinal</c> set to that total) rather than a hardcoded guess at
+        /// how many custody writes a real run makes before its own last one.
+        /// </summary>
+        internal int CreateCallCount => _createCallCount;
 
         public Task<Lex.V3.Contracts.Custody.DurableBlobWriteReceipt> CreateAsync(
             ReadOnlyMemory<byte> bytes,
             Lex.V3.Contracts.Custody.CustodyClass custodyClass,
             CancellationToken cancellationToken)
         {
+            var callOrdinal = ++_createCallCount;
             var frozen = bytes.ToArray();
             var digest = Lex.V3.Contracts.Custody.CustodyDigest.Of(frozen);
             _byDigest[digest] = frozen;
@@ -559,7 +579,7 @@ internal static class EuAcquisitionTestFixture
             // real bare filesystem store does (FileSystemCustodyStore, LuxembourgQueryExecutionAdapterTests
             // own unfloored test): CustodyVerificationProfile.FileSystemUnenforced1, no policy key, no
             // protectedUntil.
-            var policy = unenforceDigest?.Invoke(digest) == true
+            var policy = unenforceDigest?.Invoke(digest) == true || unenforceCallOrdinal == callOrdinal
                 ? new Lex.V3.Contracts.Custody.CustodyPolicyEvidence(
                     Lex.V3.Contracts.Custody.CustodySchemaIds.CustodyPolicyEvidence,
                     reference,

@@ -1603,19 +1603,22 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
     /// whose host matches <paramref name="admittedOriginUri"/> is rewritten to https with no explicit
     /// port; anything else is returned unchanged.
     /// </summary>
-    private static string ResolveRedirectTarget(string locationValue, string admittedOriginUri)
-    {
-        if (Uri.TryCreate(locationValue, UriKind.Absolute, out var parsedLocation) &&
-            string.Equals(parsedLocation.Scheme, Uri.UriSchemeHttp, StringComparison.Ordinal) &&
-            parsedLocation.IsDefaultPort &&
-            Uri.TryCreate(admittedOriginUri, UriKind.Absolute, out var admittedOrigin) &&
-            string.Equals(parsedLocation.Host, admittedOrigin.Host, StringComparison.Ordinal))
-        {
-            return new UriBuilder(parsedLocation) { Scheme = Uri.UriSchemeHttps, Port = -1 }.Uri.AbsoluteUri;
-        }
-
-        return locationValue;
-    }
+    /// <remarks>
+    /// D1-06c-EU defect nine's own fold-in six (REVIEW_RESULT
+    /// lex-event-20260904T153119262Z-e51c74bf8710495fbd972b2706509922): calls through
+    /// <see cref="RoutedHttpEvidence.TryUpgradeHttpLocationOnAdmittedHost"/>, the identical decision
+    /// <see cref="RoutedHttpEvidence"/>'s own evidence validators (<c>TryGetAdmittedRedirectTarget</c>,
+    /// <c>LocationCausedHop</c>) already call, rather than carrying its own separately maintained copy
+    /// of the same host/scheme/port comparison. The two had already drifted once before this fix
+    /// (defect five): this method's own copy upgraded correctly, but the evidence validators had no
+    /// upgrade at all yet, so a real redirect loop or six-hop chain on the admitted host threw instead
+    /// of producing the typed refusal the route actually observed. One call site removes the risk of
+    /// a second, silent drift.
+    /// </remarks>
+    private static string ResolveRedirectTarget(string locationValue, string admittedOriginUri) =>
+        RoutedHttpEvidence.TryUpgradeHttpLocationOnAdmittedHost(locationValue, admittedOriginUri, out var upgraded)
+            ? upgraded
+            : locationValue;
 
     /// <summary>
     /// D1-06c-EU defect 1 (SCOPE_RULING lex-event-20260904T130546972Z-c72fad2da5b34344af802c068d8fbf08
