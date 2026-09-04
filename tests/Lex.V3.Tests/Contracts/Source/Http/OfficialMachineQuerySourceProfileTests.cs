@@ -24,6 +24,7 @@ public sealed class OfficialMachineQuerySourceProfileTests
                 OfficialMachineQuerySourceProfileId.LuxembourgSparql,
                 OfficialMachineQuerySourceProfileId.EuropeanUnionSparql,
                 OfficialMachineQuerySourceProfileId.EuropeanUnionDocumentFetch,
+                OfficialMachineQuerySourceProfileId.LuxembourgDocumentFetch,
             },
             Enum.GetValues<OfficialMachineQuerySourceProfileId>());
 
@@ -97,6 +98,78 @@ public sealed class OfficialMachineQuerySourceProfileTests
             profile.RobotsRoute.InitialAuthority.Host,
             new Uri(profile.RobotsRoute.Steps[^1].RequestedUri).Host,
             "A redirected policy remains scoped to the initial authority.");
+    }
+
+    [TestMethod]
+    public void LuxembourgDocumentFetchProfileIsAGetRouteWithNoFixedEntityOrRepresentation()
+    {
+        var profile = OfficialMachineQuerySourceProfiles.Resolve(
+            OfficialMachineQuerySourceProfileId.LuxembourgDocumentFetch);
+
+        Assert.AreEqual(OfficialMachineQuerySourceProfileId.LuxembourgDocumentFetch, profile.Id);
+        Assert.AreEqual(HttpRequestMethod.Get, profile.Method);
+        Assert.IsNull(profile.RequestContentType);
+        Assert.IsNull(profile.RequestCharset);
+        Assert.IsNull(profile.Accept);
+        Assert.AreEqual(UserAgent, profile.CrawlerUserAgent);
+        Assert.AreEqual("Lex", profile.RobotsProductToken);
+        Assert.AreEqual("https://legilux.public.lu/", profile.RequestTarget);
+        Assert.AreEqual("legilux.public.lu", profile.RobotsRoute.InitialAuthority.Host);
+        Assert.AreEqual(443, profile.RobotsRoute.InitialAuthority.EffectivePort);
+        AssertRoute(
+            profile,
+            new RobotsPolicyRouteStep(
+                "https://legilux.public.lu/robots.txt",
+                200,
+                null));
+
+        // Item 1's own closed-switch test: every other unrelated input still throws, exactly as
+        // before this member was added.
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            OfficialMachineQuerySourceProfiles.Resolve((OfficialMachineQuerySourceProfileId)int.MaxValue));
+    }
+
+    [TestMethod]
+    public void LuxembourgDocumentFetchHostResolvesManyPathsToOneProfileWhileEveryOtherInputStillThrows()
+    {
+        // Unlike the two fixed-endpoint SPARQL profiles, a document fetch legitimately targets
+        // many different paths on the same host, so the resolver recognizes the host rather than
+        // one literal URL. Three different real-shaped paths all resolve to the same profile.
+        Assert.AreEqual(
+            OfficialMachineQuerySourceProfileId.LuxembourgDocumentFetch,
+            OfficialMachineQuerySourceProfiles.ResolveFor(MachineQueryBinder.OpenIdentity(
+                BoundGet("https://legilux.public.lu/"))).Id);
+        Assert.AreEqual(
+            OfficialMachineQuerySourceProfileId.LuxembourgDocumentFetch,
+            OfficialMachineQuerySourceProfiles.ResolveFor(MachineQueryBinder.OpenIdentity(
+                BoundGet(
+                    "https://legilux.public.lu/filestore/eli/etat/leg/loi/2017/03/14/a439/jo/fr/xml/"
+                    + "eli-etat-leg-loi-2017-03-14-a439-jo-fr-xml.xml"))).Id);
+        Assert.AreEqual(
+            OfficialMachineQuerySourceProfileId.LuxembourgDocumentFetch,
+            OfficialMachineQuerySourceProfiles.ResolveFor(MachineQueryBinder.OpenIdentity(
+                BoundGet("https://legilux.public.lu/eli/etat/adm/pa/2020/10/23/b4077/jo"))).Id);
+
+        // Every other input still throws exactly as before: the two fixed SPARQL literals are
+        // unaffected, an unrelated host is refused, and the guard is scheme- and port-exact (no
+        // downgrade to http, no non-default port smuggled in).
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            OfficialMachineQuerySourceProfiles.ResolveFor(MachineQueryBinder.OpenIdentity(
+                BoundGet("https://example.com/filestore/x.xml"))));
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            OfficialMachineQuerySourceProfiles.ResolveFor(MachineQueryBinder.OpenIdentity(
+                BoundGet("http://legilux.public.lu/filestore/x.xml"))));
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            OfficialMachineQuerySourceProfiles.ResolveFor(MachineQueryBinder.OpenIdentity(
+                BoundGet("https://legilux.public.lu:8443/filestore/x.xml"))));
+
+        // A POST request cannot claim the LU document-fetch profile's GET identity: the same
+        // host and path resolved via GET above throws when opened as a POST instead, so the
+        // guard this test proves is method-exact, not merely host-and-path-exact.
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            OfficialMachineQuerySourceProfiles.ResolveFor(OpenedPost(
+                "https://legilux.public.lu/filestore/x.xml",
+                "application/x-www-form-urlencoded")));
     }
 
     [TestMethod]
@@ -443,6 +516,60 @@ public sealed class OfficialMachineQuerySourceProfileTests
             new ProfileRenderer(rendererProfile, rendererSource, target, body));
     }
 
+    private static BoundMachineRequest BoundGet(string target)
+    {
+        var targetBytes = Encoding.ASCII.GetBytes(new Uri(target).PathAndQuery);
+        var queryFamily = new SourceRegistryMemberRef(
+            Artifact("00000000-0000-4000-8000-000000000088", '8'),
+            "document-fetch-test-query");
+        var cardinality = new MachineResponseCardinality(
+            MachineResponseCardinalityKind.OpaqueBody,
+            rowLimit: null,
+            expectedPartitionRowCount: null,
+            expectedPartitionRowCountEvidenceRef: null);
+        var input = MachineQueryInputArtifact.Create(
+            "urn:uuid:00000000-0000-4000-8000-000000000099",
+            queryFamily,
+            "document-fetch-test-partition",
+            cardinality,
+            new[]
+            {
+                new MachineQueryParameter(
+                    "document",
+                    MachineQueryParameterKind.PublisherLiteral,
+                    integerValue: null,
+                    textValue: target,
+                    Artifact("00000000-0000-4000-8000-0000000000aa", 'b')),
+            });
+        var rendererProfile = Artifact("00000000-0000-4000-8000-0000000000bb", 'c');
+        var rendererSource = Artifact("00000000-0000-4000-8000-0000000000cc", 'd');
+        var plan = new MachineQueryPlan(
+            MachineQueryPlan.SchemaId,
+            queryFamily,
+            rendererProfile,
+            rendererSource,
+            HttpRequestMethod.Get,
+            target,
+            targetBytes.LongLength,
+            Sha256(targetBytes),
+            cardinality,
+            contentType: null,
+            charset: null,
+            MachineQueryInputMode.RendererInputs,
+            input.ArtifactRef,
+            input.PartitionBinding,
+            expectedRequestBodyLength: null,
+            expectedRequestBodySha256: null);
+        var planRef = MachineQueryPlanIdentity.Create(
+            "urn:uuid:00000000-0000-4000-8000-0000000000dd",
+            plan);
+        return MachineQueryBinder.BindForSend(
+            plan,
+            planRef,
+            input,
+            new ProfileRenderer(rendererProfile, rendererSource, target, []));
+    }
+
     private static SourceArtifactRef Artifact(string id, char digestFill) => new(
         $"urn:uuid:{id}",
         new string(digestFill, 64));
@@ -470,6 +597,8 @@ public sealed class OfficialMachineQuerySourceProfileTests
             "b600156709cdc5009974f5420539232b649ce9bc2baaa6a147d5975931fdc877",
         OfficialMachineQuerySourceProfileId.EuropeanUnionDocumentFetch =>
             "e688e815770911a88f0a47fb9adc22cc39c0d900f08cbee79f95449ea0880955",
+        OfficialMachineQuerySourceProfileId.LuxembourgDocumentFetch =>
+            "a448c0f9e61300ce917f07a930eaa6c5d77150452123bc4145ddda910844e11f",
         _ => throw new ArgumentOutOfRangeException(nameof(id)),
     };
 
@@ -481,6 +610,8 @@ public sealed class OfficialMachineQuerySourceProfileTests
             "urn:uuid:f08afb3b-e30f-41cc-b9be-cf29da97bb76",
         OfficialMachineQuerySourceProfileId.EuropeanUnionDocumentFetch =>
             "urn:uuid:2c9e6f1a-8d4b-4a7f-9e3c-5b6a8d1f2c40",
+        OfficialMachineQuerySourceProfileId.LuxembourgDocumentFetch =>
+            "urn:uuid:c820fff7-3780-41a6-9805-bbfbd52b094e",
         _ => throw new ArgumentOutOfRangeException(nameof(id)),
     };
 
