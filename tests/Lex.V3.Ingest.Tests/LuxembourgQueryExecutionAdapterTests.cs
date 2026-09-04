@@ -597,7 +597,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
     [TestMethod]
     public async Task AnAccResourceAcceptedByBucketMembershipCarriesTheTypedGapMarker() =>
         await AssertCoarseGapAsync(
-            "ACC", LuxembourgCoarseDispositionGap.AccConstitutionalReviewEvidenceGateNotApplied);
+            "ACC", LuxembourgCoarseDispositionGap.AccTypedRoleNotDistinguished);
 
     [TestMethod]
     public async Task ATcObservationWithoutTheActClassCarriesNoCoarseMarker()

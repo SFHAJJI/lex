@@ -85,6 +85,13 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
             ConstructionSurface.Of(typeof(LuxembourgRelationFamilyAcquisition)).ToArray());
     }
 
+    /// <summary>
+    /// The third member is renamed, not retired (reviewer RULING
+    /// lex-event-20260904T002301246Z-7699c8fdd1ad4868a7d94dcb152fbf57): ACC is admitted through
+    /// PriorityCandidateTypes bucket membership exactly like TC and RECT, so its own coarse marker
+    /// is the same "typed role not separately distinguished at this coarse level" signal, renamed
+    /// from the refused AccConstitutionalReviewEvidenceGateNotApplied to AccTypedRoleNotDistinguished.
+    /// </summary>
     [TestMethod]
     public void CoarseDispositionGapIsAPlainThreeMemberEnum()
     {
@@ -93,8 +100,7 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
             {
                 "base-constructor protected instance System.Enum::.ctor() -> System.Enum",
                 "base-constructor protected instance System.ValueType::.ctor() -> System.ValueType",
-                "field public static " + N
-                + "LuxembourgCoarseDispositionGap::AccConstitutionalReviewEvidenceGateNotApplied -> "
+                "field public static " + N + "LuxembourgCoarseDispositionGap::AccTypedRoleNotDistinguished -> "
                 + N + "LuxembourgCoarseDispositionGap",
                 "field public static " + N + "LuxembourgCoarseDispositionGap::RectTypedRoleNotDistinguished -> "
                 + N + "LuxembourgCoarseDispositionGap",
