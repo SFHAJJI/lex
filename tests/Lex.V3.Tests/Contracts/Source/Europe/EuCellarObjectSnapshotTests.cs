@@ -381,7 +381,7 @@ public sealed class EuCellarObjectSnapshotTests
     }
 
     [TestMethod]
-    public void EuCellarObjectSnapshotIsTheOnlyRecognisedExternalProducerOfEuPredicateObservation()
+    public void EuCellarObjectSnapshotAndEuCellarObjectDecodeAreTheOnlyRecognisedExternalProducersOfEuPredicateObservation()
     {
         const string C = "Lex.V3.Contracts.";
         var assembly = typeof(EuCellarObjectSnapshot).Assembly;
@@ -393,6 +393,10 @@ public sealed class EuCellarObjectSnapshotTests
                 "field private instance " + N + "EuCellarObjectSnapshot::_predicateIndex -> "
                     + "System.Collections.Generic.IReadOnlyDictionary<" + C + "EuCdmPredicate, " + N
                     + "EuPredicateObservation>",
+                // D1-05b's decode builds one EuPredicateObservation per closed CDM predicate.
+                "method private static " + N + "EuCellarObjectDecode::BuildPredicateObservation(" + C
+                    + "EuCdmPredicate, System.String, Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> "
+                    + N + "EuPredicateObservation",
                 "method public instance " + N + "EuCellarObjectSnapshot::Predicate(" + C
                     + "EuCdmPredicate) -> " + N + "EuPredicateObservation",
                 "property public instance " + N + "EuCellarObjectSnapshot::PredicateObservations() -> "
@@ -422,7 +426,7 @@ public sealed class EuCellarObjectSnapshotTests
     }
 
     [TestMethod]
-    public void EuRelationFamilyObservationIsTheOnlyRecognisedExternalProducerOfEuRelationEdgeObservation()
+    public void EuRelationFamilyObservationAndEuCellarObjectDecodeAreTheOnlyRecognisedExternalProducersOfEuRelationEdgeObservation()
     {
         var assembly = typeof(EuCellarObjectSnapshot).Assembly;
         CollectionAssert.AreEqual(
@@ -430,6 +434,11 @@ public sealed class EuCellarObjectSnapshotTests
             {
                 "field private instance " + N + "EuRelationFamilyObservation::<Edges>k__BackingField -> "
                     + "System.Collections.Generic.IReadOnlyList<" + N + "EuRelationEdgeObservation>",
+                // D1-05b's decode builds one edge per discovered consolidated state.
+                "method private static " + N
+                    + "EuCellarObjectDecode::BuildConsolidatedBasedOnEdge(System.String, "
+                    + "Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> " + N
+                    + "EuRelationEdgeObservation",
                 "property public instance " + N + "EuRelationFamilyObservation::Edges() -> "
                     + "System.Collections.Generic.IReadOnlyList<" + N + "EuRelationEdgeObservation>",
             },
@@ -458,7 +467,7 @@ public sealed class EuCellarObjectSnapshotTests
     }
 
     [TestMethod]
-    public void EuCellarObjectSnapshotIsTheOnlyRecognisedExternalProducerOfEuRelationFamilyObservation()
+    public void EuCellarObjectSnapshotAndEuCellarObjectDecodeAreTheOnlyRecognisedExternalProducersOfEuRelationFamilyObservation()
     {
         const string C = "Lex.V3.Contracts.";
         var assembly = typeof(EuCellarObjectSnapshot).Assembly;
@@ -470,6 +479,12 @@ public sealed class EuCellarObjectSnapshotTests
                 "field private instance " + N + "EuCellarObjectSnapshot::_relationIndex -> "
                     + "System.Collections.Generic.IReadOnlyDictionary<" + C + "EuRelationFamily, " + N
                     + "EuRelationFamilyObservation>",
+                // D1-05b's decode builds one EuRelationFamilyObservation per read relation family.
+                "method private static " + N
+                    + "EuCellarObjectDecode::BuildRelationFamilyObservation(" + C
+                    + "EuRelationFamily, System.Collections.Generic.IReadOnlyList<" + N
+                    + "EuRelationEdgeObservation>, Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> "
+                    + N + "EuRelationFamilyObservation",
                 "method public instance " + N + "EuCellarObjectSnapshot::Relation(" + C
                     + "EuRelationFamily) -> " + N + "EuRelationFamilyObservation",
                 "property public instance " + N + "EuCellarObjectSnapshot::RelationObservations() -> "
@@ -499,13 +514,19 @@ public sealed class EuCellarObjectSnapshotTests
     }
 
     [TestMethod]
-    public void EuCellarObjectSnapshotIsTheOnlyRecognisedExternalProducerOfEuChannelObservation()
+    public void EuCellarObjectSnapshotAndEuCellarObjectDecodeAreTheOnlyRecognisedExternalProducersOfEuChannelObservation()
     {
         var assembly = typeof(EuCellarObjectSnapshot).Assembly;
         CollectionAssert.AreEqual(
             new[]
             {
                 "field private instance " + N + "EuCellarObjectSnapshot::<Channel>k__BackingField -> " + N
+                    + "EuChannelObservation",
+                // D1-05b's decode always observes the Cellar SPARQL endpoint channel; BuildChannel is
+                // a named method (rather than an inline expression) precisely so this call site has a
+                // return type this tool recognises as a producer.
+                "method private static " + N + "EuCellarObjectDecode::BuildChannel("
+                    + "Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> " + N
                     + "EuChannelObservation",
                 "property public instance " + N + "EuCellarObjectSnapshot::Channel() -> " + N
                     + "EuChannelObservation",
