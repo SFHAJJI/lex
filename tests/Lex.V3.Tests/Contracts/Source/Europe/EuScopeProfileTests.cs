@@ -1255,7 +1255,7 @@ public sealed class EuScopeProfileTests
                 "method public static " + N + "EuScopeProfile::BuildScopeInput(" + Sc + "ScopeProfileBinding, "
                     + N + "EuScopeObjectDispositions, System.Collections.Generic.IReadOnlyDictionary<"
                     + Co + "SourceArtifactRef, System.Int32>, " + Sc
-                    + "ScopeManifestFetchAddress) -> " + Sc + "ScopeObjectReductionInput",
+                    + "ScopeManifestFetchAddress?) -> " + Sc + "ScopeObjectReductionInput",
                 "property public instance " + Lu + "LuxembourgProfileResolution+Resolved::ScopeInputs() -> "
                     + "System.Collections.Generic.IReadOnlyList<" + Sc + "ScopeObjectReductionInput>",
             },

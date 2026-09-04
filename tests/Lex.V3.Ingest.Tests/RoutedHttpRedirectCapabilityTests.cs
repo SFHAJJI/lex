@@ -47,7 +47,7 @@ public sealed class RoutedHttpRedirectCapabilityTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "constructor private instance " + Lease + "::.ctor(" + Common + ", System.UInt64, System.String, " + Lease + "+RedirectAntecedent, System.Boolean) -> " + Lease,
+                "constructor private instance " + Lease + "::.ctor(" + Common + ", System.UInt64, System.String, " + Lease + "+RedirectAntecedent?, System.Boolean) -> " + Lease,
                 "method internal static " + Lease + "::FromRedirect(" + Common + ", System.UInt64, System.String, System.String, " + Session + "+RedirectAntecedentCapability) -> " + Lease,
                 "method internal static " + Lease + "::Initial(" + Common + ", System.Boolean) -> " + Lease,
             },
