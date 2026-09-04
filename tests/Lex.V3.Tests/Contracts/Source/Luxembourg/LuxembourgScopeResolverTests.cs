@@ -5,6 +5,7 @@ using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Contracts.Source.Scope;
 using Lex.V3.TestSupport;
+using Lex.V3.Tests.Contracts.Source.Absence;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Lex.V3.Tests.Contracts.Source.Luxembourg;
@@ -22,7 +23,7 @@ public sealed class LuxembourgScopeResolverTests
     public void EmptyExactObservationStaysFailClosedAndAccountsForEveryDimensionState()
     {
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            Profile().Resolve([Observation(ObservationRef)]));
+            Profile().Resolve(Proven([Observation(ObservationRef)])));
 
         var resource = resolved.Resources.Single();
         Assert.AreEqual(
@@ -46,7 +47,7 @@ public sealed class LuxembourgScopeResolverTests
     public void ResourceObservationFromAnotherRunFailsBeforeScopeProjection()
     {
         var failed = Assert.IsInstanceOfType<LuxembourgProfileResolution.Failed>(
-            Profile().Resolve([Observation(OtherObservationRef)]));
+            Profile().Resolve(Proven([Observation(OtherObservationRef)])));
 
         Assert.AreEqual(
             LuxembourgProfileResolutionFailureCode.EvidenceBindingRejected,
@@ -71,7 +72,7 @@ public sealed class LuxembourgScopeResolverTests
                 []));
 
         var failed = Assert.IsInstanceOfType<LuxembourgProfileResolution.Failed>(
-            Profile().Resolve([observation]));
+            Profile().Resolve(Proven([observation])));
 
         Assert.AreEqual(
             LuxembourgProfileResolutionFailureCode.EvidenceBindingRejected,
@@ -79,10 +80,10 @@ public sealed class LuxembourgScopeResolverTests
     }
 
     [TestMethod]
-    public void ExactWemiTupleIsExposedButEveryUnprovenBodyGateRemainsBlocking()
+    public void ExactWemiTupleIsExposedAndItsWordingManifestationIsAccepted()
     {
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            Profile().Resolve([BodyObservation()]));
+            Profile().Resolve(Proven([BodyObservation()])));
 
         var resource = resolved.Resources.Single();
         Assert.HasCount(1, resource.WemiTopology.Candidates);
@@ -90,10 +91,14 @@ public sealed class LuxembourgScopeResolverTests
         var candidate = resource.BodyJoin.Candidates.Single();
         Assert.AreEqual(ExpressionIri, candidate.WemiCandidate.ExpressionIri);
         Assert.AreEqual(ManifestationIri, candidate.WemiCandidate.ManifestationIri);
+        // Was Withheld with all eight milestone blockers. Owner principle
+        // (RULING lex-event-20260904T205636383Z-e92b888b62c24df29fe3f8c1be5016f0): a law that can
+        // legitimately be ingested is ingested, and none of the four legitimate reasons applies to
+        // an exact tuple whose publisher listed a wording manifestation.
         Assert.AreEqual(
-            LuxembourgBodyCandidateDisposition.Withheld,
+            LuxembourgBodyCandidateDisposition.AcceptedCandidate,
             candidate.Disposition);
-        Assert.HasCount(8, candidate.BlockerCodes);
+        Assert.IsEmpty(candidate.BlockerCodes);
         Assert.AreEqual(
             LuScopeTerminalState.AcceptedCandidate,
             resource.Dimensions.PublicationFamily.State);
@@ -115,11 +120,14 @@ public sealed class LuxembourgScopeResolverTests
         Assert.AreEqual(
             LuScopeTerminalState.TypedQuarantine,
             resource.Dimensions.Transport.State);
+        // The Body axis reaches its accepting arm. It had none: all five of ResolveBody's return
+        // paths withheld, so this axis was the only one in the resolver with no accepting state and
+        // every real Luxembourg manifest had an accepted fraction of zero.
         Assert.AreEqual(
-            LuScopeTerminalState.TypedQuarantine,
+            LuScopeTerminalState.AcceptedCandidate,
             resource.Dimensions.Body.State);
         Assert.AreEqual(
-            "typed_quarantine_verified_body_join_required",
+            "accepted_publisher_listed_wording_manifestation",
             resource.Dimensions.Body.ReasonCode);
         Assert.IsTrue(resolved.ScopeInputs.Single().Selectors.Any(selector =>
             selector.CanonicalValues.Any(value => value.StartsWith(
@@ -150,7 +158,7 @@ public sealed class LuxembourgScopeResolverTests
                 InFileEnumerationRef,
                 []));
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            Profile().Resolve([observation]));
+            Profile().Resolve(Proven([observation])));
 
         var resource = resolved.Resources.Single();
         Assert.AreEqual(
@@ -191,7 +199,7 @@ public sealed class LuxembourgScopeResolverTests
         const string nonOfficial = JoluxAuthority + "statut-version/non-officiel";
         const string official = JoluxAuthority + "statut-version/officiel";
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            Profile().Resolve([BodyObservation(additionalAssertions:
+            Profile().Resolve(Proven([BodyObservation(additionalAssertions:
             [
                 Iri(ExpressionIri, Jolux + "isEmbodiedBy", pdfManifestation),
                 Iri(pdfManifestation, RdfType, Jolux + "Manifestation"),
@@ -199,7 +207,7 @@ public sealed class LuxembourgScopeResolverTests
                 Iri(pdfManifestation, Jolux + "isExemplifiedBy", pdfItem),
                 Iri(ManifestationIri, Jolux + "legalValue", nonOfficial),
                 Iri(pdfManifestation, Jolux + "legalValue", official),
-            ])]));
+            ])])));
 
         var resource = resolved.Resources.Single();
         Assert.AreEqual(
@@ -260,7 +268,7 @@ public sealed class LuxembourgScopeResolverTests
                 []));
 
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            profile.Resolve([observation]));
+            profile.Resolve(Proven([observation])));
         var resource = resolved.Resources.Single();
         Assert.AreEqual(
             LuScopeTerminalState.TypedQuarantine,
@@ -280,10 +288,10 @@ public sealed class LuxembourgScopeResolverTests
     {
         const string externalSubject = "urn:lex:external-subject";
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            Profile().Resolve([BodyObservation(additionalAssertions:
+            Profile().Resolve(Proven([BodyObservation(additionalAssertions:
             [
                 Iri(externalSubject, RdfType, Jolux + "Act"),
-            ])]));
+            ])])));
 
         var assertion = resolved.Resources.Single().Assertions.Single(candidate =>
             candidate.Assertion.SubjectIri == externalSubject);
@@ -299,10 +307,10 @@ public sealed class LuxembourgScopeResolverTests
         const string replacedItem =
             "http://data.legilux.public.lu/file/external-replaced-body.xml";
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            Profile().Resolve([BodyObservation(additionalAssertions:
+            Profile().Resolve(Proven([BodyObservation(additionalAssertions:
             [
                 Iri(externalSubject, Jolux + "previousIsExemplifiedBy", replacedItem),
-            ])]));
+            ])])));
 
         var resource = resolved.Resources.Single();
         var assertion = resource.Assertions.Single(candidate =>
@@ -339,7 +347,7 @@ public sealed class LuxembourgScopeResolverTests
                 []));
 
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            Profile().Resolve([observation]));
+            Profile().Resolve(Proven([observation])));
         var relation = resolved.Resources.Single().Relations.Single();
         Assert.AreEqual(externalTarget, relation.ObjectIri);
         Assert.AreEqual(LuxembourgRelationDisposition.Accepted, relation.Disposition);
@@ -379,7 +387,7 @@ public sealed class LuxembourgScopeResolverTests
                 []));
 
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            Profile().Resolve([observation]));
+            Profile().Resolve(Proven([observation])));
         var relation = resolved.Resources.Single().Relations.Single();
         Assert.AreEqual(externalTarget, relation.ObjectIri);
         Assert.AreEqual(
@@ -400,11 +408,11 @@ public sealed class LuxembourgScopeResolverTests
         var profile = Profile();
 
         var baseline = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            profile.Resolve([BodyObservation()]));
+            profile.Resolve(Proven([BodyObservation()])));
         var currentChanged = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            profile.Resolve([BodyObservation(otherCurrent)]));
+            profile.Resolve(Proven([BodyObservation(otherCurrent)])));
         var previousAdded = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            profile.Resolve([BodyObservation(previousItemIri: previous)]));
+            profile.Resolve(Proven([BodyObservation(previousItemIri: previous)])));
 
         Assert.AreNotEqual(BodyJoinSelector(baseline), BodyJoinSelector(currentChanged));
         Assert.AreNotEqual(BodyJoinSelector(baseline), BodyJoinSelector(previousAdded));
@@ -423,9 +431,9 @@ public sealed class LuxembourgScopeResolverTests
             string.Empty,
             ObservationRef);
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            Profile().Resolve([BodyObservation(
+            Profile().Resolve(Proven([BodyObservation(
                 removePredicate: RdfType,
-                additionalAssertions: [malformedRootType])]));
+                additionalAssertions: [malformedRootType])])));
 
         var resource = resolved.Resources.Single();
         Assert.IsFalse(resource.WemiTopology.Candidates.Any(candidate =>
@@ -464,7 +472,7 @@ public sealed class LuxembourgScopeResolverTests
         ]);
 
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            Profile().Resolve([observation]));
+            Profile().Resolve(Proven([observation])));
         var resource = resolved.Resources.Single();
         var orphanAssertions = resource.Assertions.Where(assertion =>
             assertion.Assertion.SubjectIri == orphanManifestation).ToArray();
@@ -486,10 +494,10 @@ public sealed class LuxembourgScopeResolverTests
     public void MixedRootWemiRolesCannotQualifyPublicationFamily(string conflictingRole)
     {
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            Profile().Resolve([BodyObservation(additionalAssertions:
+            Profile().Resolve(Proven([BodyObservation(additionalAssertions:
             [
                 Iri(ActIri, RdfType, Jolux + conflictingRole),
-            ])]));
+            ])])));
 
         Assert.AreEqual(
             LuScopeTerminalState.TypedQuarantine,
@@ -500,7 +508,7 @@ public sealed class LuxembourgScopeResolverTests
     public void ATcActCarriesItsOwnCoordinatedTextRoleSeparatelyFromBucketMembership()
     {
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            Profile().Resolve([TypedRoleObservation("TC")]));
+            Profile().Resolve(Proven([TypedRoleObservation("TC")])));
 
         var resource = resolved.Resources.Single();
         Assert.AreEqual(
@@ -524,7 +532,7 @@ public sealed class LuxembourgScopeResolverTests
     public void ARectActCarriesItsOwnCorrigendumRoleSeparatelyFromBucketMembership()
     {
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            Profile().Resolve([TypedRoleObservation("RECT")]));
+            Profile().Resolve(Proven([TypedRoleObservation("RECT")])));
 
         var resource = resolved.Resources.Single();
         Assert.AreEqual(
@@ -552,7 +560,7 @@ public sealed class LuxembourgScopeResolverTests
         // unconditional refusal on the type token, which was this lane's own earlier (and
         // reviewer-corrected) reading of the 23:48Z SCOPE_RULING.
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            Profile().Resolve([TypedRoleObservation("ACC")]));
+            Profile().Resolve(Proven([TypedRoleObservation("ACC")])));
 
         var resource = resolved.Resources.Single();
         Assert.AreEqual(
@@ -608,7 +616,7 @@ public sealed class LuxembourgScopeResolverTests
                 []));
 
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            Profile().Resolve([observation]));
+            Profile().Resolve(Proven([observation])));
 
         Assert.AreEqual(
             LuxembourgTypedRoleKind.NotApplicable,
@@ -642,7 +650,7 @@ public sealed class LuxembourgScopeResolverTests
                 []));
 
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            Profile().Resolve([observation]));
+            Profile().Resolve(Proven([observation])));
 
         Assert.AreEqual(
             LuxembourgTypedRoleKind.NotApplicable,
@@ -653,7 +661,7 @@ public sealed class LuxembourgScopeResolverTests
     public void AnOrdinaryAcceptedActCarriesNoTypedRole()
     {
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            Profile().Resolve([BodyObservation()]));
+            Profile().Resolve(Proven([BodyObservation()])));
 
         var resource = resolved.Resources.Single();
         Assert.AreEqual(
@@ -686,7 +694,7 @@ public sealed class LuxembourgScopeResolverTests
                 []));
 
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            Profile().Resolve([observation]));
+            Profile().Resolve(Proven([observation])));
 
         var resource = resolved.Resources.Single();
         Assert.AreEqual(
@@ -719,7 +727,7 @@ public sealed class LuxembourgScopeResolverTests
                 []));
 
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            Profile().Resolve([observation]));
+            Profile().Resolve(Proven([observation])));
 
         var resource = resolved.Resources.Single();
         Assert.AreEqual(LuxembourgTypedRoleKind.NotApplicable, resource.TypedRole.Kind);
@@ -750,7 +758,7 @@ public sealed class LuxembourgScopeResolverTests
                 []));
 
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            Profile().Resolve([observation]));
+            Profile().Resolve(Proven([observation])));
 
         var resource = resolved.Resources.Single();
         Assert.AreEqual(LuxembourgTypedRoleKind.NotApplicable, resource.TypedRole.Kind);
@@ -806,7 +814,7 @@ public sealed class LuxembourgScopeResolverTests
                 []));
 
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            Profile().Resolve([observation]));
+            Profile().Resolve(Proven([observation])));
 
         var resource = resolved.Resources.Single();
         Assert.AreEqual(LuScopeTerminalState.TypedQuarantine, resource.Dimensions.Body.State);
@@ -846,7 +854,7 @@ public sealed class LuxembourgScopeResolverTests
         // canonical-value set is non-empty either way and only its exact content, not its mere
         // presence, can catch the fold.
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            Profile().Resolve([TypedRoleObservation("TC")]));
+            Profile().Resolve(Proven([TypedRoleObservation("TC")])));
 
         var familySelector = resolved.ScopeInputs.Single()
             .Selectors[LuxembourgScopeResolver.PublicationFamilySelectorIndex];
@@ -964,6 +972,17 @@ public sealed class LuxembourgScopeResolverTests
         // and re-transcribe this assertion's expected array whenever LuxembourgScopeResolver next
         // gains or loses a member ahead of ResolveTypedRole's own closure.
     }
+
+    /// <summary>
+    /// The proof door every scope resolution now goes through
+    /// (<see cref="LuxembourgProvenResourceObservations"/>). The proof is a REAL one from
+    /// <see cref="AbsenceFixtures"/>, built through AbsenceFamilyEnumerationProof's own TryCreate
+    /// from a real delivery comparison, so these tests exercise the same door production does
+    /// rather than a relaxed one.
+    /// </summary>
+    private static LuxembourgProvenResourceObservations Proven(
+        params LuxembourgResourceObservation[] observations) =>
+        LuxembourgProvenResourceObservations.RequireProven(AbsenceFixtures.Proof(), observations);
 
     private static LuxembourgResourceObservation TypedRoleObservation(string typeDocumentSuffix) =>
         new(

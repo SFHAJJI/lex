@@ -1037,6 +1037,7 @@ public sealed class LuxembourgQueryExecutionAdapter
         // before Resolve/ReduceScope ever sees anything, so an unproven or unverified family never
         // reaches the scope manifest at all.
         IReadOnlyList<LuxembourgResourceObservation> observations;
+        AbsenceFamilyEnumerationProof? assertionFamilyProof = null;
         IReadOnlyList<string> resourceObservationSubjects = [];
         IReadOnlyList<LuxembourgResourceObservationExclusionAccounting> resourceObservationExclusions = [];
         if (resourceObservationFamilyKey is null)
@@ -1143,11 +1144,39 @@ public sealed class LuxembourgQueryExecutionAdapter
             }
 
             observations = buildResult.Observations!;
+            // The proof this run actually holds for the assertion family these observations were
+            // derived from: FindProvenOutcome above refused the run without it, and
+            // ReopenAndVerifyFamilyRowsUnionAsync refused it again unless the delivered rows
+            // re-verified from custody. A cover chain proves the same family through its leaves, so
+            // either shape supplies it.
+            assertionFamilyProof = assertionOutcome.Proof ?? assertionOutcome.CoverLeafProofs?[0];
             resourceObservationSubjects = observations.Select(static o => o.ObjectRef.PublisherUri).ToArray();
             resourceObservationExclusions = buildResult.Exclusions!;
         }
 
-        var resolution = _sourceProfile.Resolve(observations);
+        // The door, not a guard: scope resolution and the body join can only read observations
+        // carried by a proof object, so nothing downstream has to check (or be named after) the
+        // fact that this family was proven. An empty run designates no family and so has no proof
+        // and no observations; RequireProven is reached only on the designated path.
+        if (observations.Count != 0 && assertionFamilyProof is null)
+        {
+            // Unreachable: observations exist only on the designated branch, which refuses the run
+            // above unless the family is proven. Typed rather than thrown, for the same reason the
+            // rest of this method never throws past a refusal.
+            return LuxembourgQueryExecutionResult.Refused(
+                topology,
+                outcomes,
+                relationAcquisitions,
+                new LuxembourgQueryExecutionRefusalDetail(
+                    LuxembourgQueryExecutionRefusal.ResourceObservationFamilyNotProven,
+                    null,
+                    "this run derived resource observations without holding the assertion family's " +
+                    "own enumeration proof."));
+        }
+
+        var resolution = _sourceProfile.Resolve(assertionFamilyProof is null
+            ? LuxembourgProvenResourceObservations.NoFamilyDesignated()
+            : LuxembourgProvenResourceObservations.RequireProven(assertionFamilyProof, observations));
         if (resolution is LuxembourgProfileResolution.Failed failed)
         {
             return LuxembourgQueryExecutionResult.Refused(
@@ -2190,15 +2219,15 @@ public sealed class LuxembourgQueryExecutionAdapter
                 continue;
             }
 
+            // EVERY licence is carried, ruled or not. The first version of this filtered to the two
+            // ruled IRIs, because an unruled one on a rights channel refused the whole run; that
+            // avoided the blast radius with the wrong lever, since a dropped row means the IRI
+            // vanishes from the record entirely. The run-level refusal is gone (see
+            // LuxembourgScopeResolver.ValidateObservation), so an unruled licence now reaches the
+            // resolution as that object's own TypedQuarantineUnruledLicence state, with the IRI
+            // recorded on the channel and its body not admitted, while every other object in the
+            // run proceeds.
             var licence = assertion.ObjectIriOrLexical;
-            if (!string.Equals(
-                    licence, RuledAdmittingLicence, StringComparison.Ordinal) &&
-                !string.Equals(
-                    licence, RuledNonAdmittingLicenceScl, StringComparison.Ordinal))
-            {
-                continue;
-            }
-
             if (!licencesByManifestation.TryGetValue(assertion.SubjectIri, out var set))
             {
                 set = new SortedSet<string>(StringComparer.Ordinal);

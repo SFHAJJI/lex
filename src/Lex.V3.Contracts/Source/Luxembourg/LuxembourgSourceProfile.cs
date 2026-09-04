@@ -184,9 +184,18 @@ public sealed class VerifiedLuxembourgSourceProfile
             ordinals);
     }
 
+    /// <summary>
+    /// Resolves scope over observations that can only be constructed from this run's own proven
+    /// assertion-family enumeration. The parameter type IS the guarantee: see
+    /// <see cref="LuxembourgProvenResourceObservations"/> for why this is a door rather than a
+    /// condition the body join checks and names.
+    /// </summary>
     public LuxembourgProfileResolution Resolve(
-        IReadOnlyList<LuxembourgResourceObservation> observations) =>
-        LuxembourgScopeResolver.Resolve(this, observations);
+        LuxembourgProvenResourceObservations observations)
+    {
+        ArgumentNullException.ThrowIfNull(observations);
+        return LuxembourgScopeResolver.Resolve(this, observations.Observations);
+    }
 
     public VerifiedScopeManifest ReduceScope(
         LuxembourgProfileResolution.Resolved resolution,
