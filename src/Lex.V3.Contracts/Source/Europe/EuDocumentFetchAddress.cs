@@ -219,8 +219,7 @@ public sealed class EuDocumentFetchAddress
     /// This checks shape only; it cannot recover the <see cref="Accept"/> or
     /// <see cref="AcceptLanguage"/> a real address was minted with, because those never appear in
     /// the URI at all -- they are request headers, carried instead on the bound machine-query
-    /// input's own parameters (see <c>EuDocumentFetchSparqlRenderer</c>... no: see
-    /// <c>EuDocumentFetchRenderer</c>).
+    /// input's own parameters (see <c>EuDocumentFetchRenderer</c>).
     /// </summary>
     public static bool IsAdmittedResourceUri(string requestedUri)
     {
@@ -268,7 +267,8 @@ public sealed class EuDocumentFetchAddress
 
     private static bool IsAdmittedPsIdShape(string value) =>
         value.Length is > 0 and <= MaximumPsIdLength &&
-        value.All(static character => character is > ' ' and <= '~' and not '/');
+        value.All(static character =>
+            character is > ' ' and <= '~' and not '/' and not '?' and not '#');
 
     private static string AcceptToken(EuManifestationMediaType mediaType) => mediaType switch
     {

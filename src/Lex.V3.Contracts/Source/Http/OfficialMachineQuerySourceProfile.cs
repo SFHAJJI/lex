@@ -230,7 +230,7 @@ public sealed class OfficialMachineQuerySourceProfile
         Id = id;
         ResourceId = SourceCoreValidation.RequireUuidUrn(resourceId, nameof(resourceId));
         RequestTarget = requestTarget;
-        Method = method;
+        Method = SourceCoreValidation.RequireDefined(method, nameof(method));
         RequestContentType = requestContentType;
         RequestCharset = requestCharset;
         Accept = accept;

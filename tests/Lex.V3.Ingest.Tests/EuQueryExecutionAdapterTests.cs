@@ -1,3 +1,5 @@
+using System.Net;
+using System.Text;
 using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Europe;
@@ -109,6 +111,8 @@ public sealed class EuQueryExecutionAdapterTests
             ],
             EuAcquisitionTestFixture.BuildRendererSource(9),
             EuAcquisitionTestFixture.SourceWitness(),
+            EuAcquisitionTestFixture.BuildRendererSource(1009),
+            EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             evidenceResolver,
             CancellationToken.None);
 
@@ -162,6 +166,204 @@ public sealed class EuQueryExecutionAdapterTests
         Assert.IsNotNull(result.WitnessReconciliation);
         Assert.AreEqual(0, result.WitnessReconciliation!.CheckedTerminationCount);
         Assert.AreSame(result.RootBinding, result.WitnessReconciliation.Primary);
+
+        // D1-06c-EU defect 4: the one Minted row this run produced (the seed's own root, the only
+        // object O contains here) actually went through the routed session and was classified as a
+        // real 200, held under this run's own floor. The receipt's own content digest is the real
+        // GDPR xhtml canary's, proving this was the actual fetched body, not a placeholder.
+        Assert.IsNotNull(result.DocumentAcquisitionOutcomesByOrdinal);
+        Assert.HasCount(1, result.DocumentAcquisitionOutcomesByOrdinal!);
+        var acquisitionOutcome = result.DocumentAcquisitionOutcomesByOrdinal[0];
+        Assert.IsNotNull(acquisitionOutcome.Receipt);
+        Assert.IsNull(acquisitionOutcome.Refusal);
+        Assert.AreEqual(
+            "962539af03738bf552319ff4ce42d69e5f95a576307c4dfed7bf87e81b646b9d",
+            acquisitionOutcome.Receipt!.Reference.ContentSha256);
+        Assert.AreEqual(806864, acquisitionOutcome.Receipt.Reference.ByteLength);
+    }
+
+    /// <summary>
+    /// D1-06c-EU defect 4's own required test: "a successful fetch whose resulting receipt's
+    /// classified floor is below what this run requires must be refused, not silently accepted as
+    /// Held." The document-fetch GET itself completes as a real 200 (the default scripted response);
+    /// only the custody write for that one body's own digest is unenforced. The whole run refuses,
+    /// naming the row it happened on, rather than quietly returning a Held outcome the store never
+    /// actually protected.
+    /// </summary>
+    [TestMethod]
+    public async Task ASuccessfulDocumentFetchWhoseBodyCustodyWriteIsUnenforcedRefusesTheWholeRunRatherThanHoldingIt()
+    {
+        var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
+        var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)
+            ?? throw new AssertFailedException("Appendix A's own seed root failed to canonicalize.");
+        const string expressionIri = "http://publications.europa.eu/resource/cellar/00000000-0000-0000-0000-000000000801.0001.01/DOC_1";
+        const string watermarkLexical = "2026-01-01T00:00:00.0000000+01:00";
+
+        var pOutcomes = EuAcquisitionTestFixture.ObjectAuthorityPredicates
+            .Select(predicate => (
+                PredicateIri: predicate,
+                ValueIri: predicate == EuAcquisitionTestFixture.ResourceLegalType
+                    ? EuAcquisitionTestFixture.RegulationResourceType
+                    : (string?)null))
+            .Concat(EuAcquisitionTestFixture.RelationPredicates.Select(predicate => (predicate, (string?)null)))
+            .ToArray();
+        var pRows = EuAcquisitionTestFixture.SortedObjectFactRows(rootIri, pOutcomes);
+        var xRows = new[] { EuAcquisitionTestFixture.ExpressionFactRow(rootIri, expressionIri) };
+        var wRows = new[] { EuAcquisitionTestFixture.RootWatermarkRow(rootIri, watermarkLexical) };
+
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["Census"] = EuAcquisitionTestFixture.ScriptFor(
+                "Census", 0, [], EuAcquisitionTestFixture.CensusFamilyProjection),
+            ["P"] = EuAcquisitionTestFixture.ScriptFor(
+                "P", pRows.Count, pRows, EuAcquisitionTestFixture.ObjectFactsProjection),
+            ["X"] = EuAcquisitionTestFixture.ScriptFor(
+                "X", xRows.Length, xRows, EuAcquisitionTestFixture.ExpressionFactsProjection),
+            ["W"] = EuAcquisitionTestFixture.ScriptFor(
+                "W", wRows.Length, wRows, EuAcquisitionTestFixture.RootWatermarkProjection),
+            ["Witness"] = new EuAcquisitionTestFixture.FamilyScript(
+                "Witness", EuAcquisitionTestFixture.WitnessEmptyTraversalScript(rootIri, watermarkLexical)),
+        };
+
+        // The real GDPR xhtml canary body's own digest, the one this run's default document-fetch
+        // response actually serves: unenforcing exactly that digest's write (and no other -- the
+        // scope manifest and the document-fetch evidence document keep their own real floor) proves
+        // this refusal fires on the body's own custody write specifically.
+        const string bodyDigest = "962539af03738bf552319ff4ce42d69e5f95a576307c4dfed7bf87e81b646b9d";
+        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(scripts);
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore(
+            unenforceDigest: digest => string.Equals(digest, bodyDigest, StringComparison.Ordinal));
+        var executor = new EuRepeatedEnumerationExecutor(
+            store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
+        var adapter = new EuQueryExecutionAdapter(store, executor);
+
+        var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
+        var censusRequest = new EuCensusPartitionRunRequest(
+            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(801));
+        var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var pRequest = new EuObjectFactsPartitionRunRequest(
+            pPlan, pPlanId, EuObjectFactsQuerySet.ObjectFacts, [rootIri],
+            EuAcquisitionTestFixture.BuildRendererSource(802));
+        var (xPlan, xPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var xRequest = new EuObjectFactsPartitionRunRequest(
+            xPlan, xPlanId, EuObjectFactsQuerySet.ExpressionFacts, [rootIri],
+            EuAcquisitionTestFixture.BuildRendererSource(803));
+        var (wPlan, wPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var wRequest = new EuObjectFactsPartitionRunRequest(
+            wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
+            EuAcquisitionTestFixture.BuildRendererSource(804));
+
+        var result = await adapter.RunAsync(
+            [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
+            [
+                (pRequest, EuAcquisitionTestFixture.SourceWitness()),
+                (xRequest, EuAcquisitionTestFixture.SourceWitness()),
+                (wRequest, EuAcquisitionTestFixture.SourceWitness()),
+            ],
+            EuAcquisitionTestFixture.BuildRendererSource(805),
+            EuAcquisitionTestFixture.SourceWitness(),
+            EuAcquisitionTestFixture.BuildRendererSource(1805),
+            EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
+            new PermissiveEvidenceResolver(CompleteEnumerationRef),
+            CancellationToken.None);
+
+        Assert.IsNotNull(result.Refusal, "an unenforced document body must refuse the whole run, not deliver silently.");
+        Assert.AreEqual(EuQueryExecutionRefusal.DocumentBodyNotHeld, result.Refusal!.Code);
+        StringAssert.Contains(result.Refusal.Detail, "no retention floor");
+        Assert.IsNull(result.DocumentAcquisitionOutcomesByOrdinal);
+        Assert.IsNull(result.ScopeManifestReceipt);
+    }
+
+    /// <summary>
+    /// A document-fetch GET that completes for real but classifies as one of the two named business
+    /// refusals (here, PROVEN 404 -- "Missing manifestation returns 404") has no faithful member in
+    /// D1-06b's own closed <see cref="Lex.V3.Contracts.Source.Corpus.CorpusAcquisitionRefusalReason"/>
+    /// vocabulary (see <see cref="EuQueryExecutionRefusal.DocumentFetchOutcomeNotRepresentable"/>'s
+    /// own remarks for exactly why), so this run refuses as a whole, naming the real classified cause,
+    /// rather than mapping it onto an unrelated existing member or silently treating it as held.
+    /// </summary>
+    [TestMethod]
+    public async Task AClassified404DocumentFetchRefusesTheWholeRunNamingTheRealCause()
+    {
+        var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
+        var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)
+            ?? throw new AssertFailedException("Appendix A's own seed root failed to canonicalize.");
+        const string expressionIri = "http://publications.europa.eu/resource/cellar/00000000-0000-0000-0000-000000000901.0001.01/DOC_1";
+        const string watermarkLexical = "2026-01-01T00:00:00.0000000+01:00";
+
+        var pOutcomes = EuAcquisitionTestFixture.ObjectAuthorityPredicates
+            .Select(predicate => (
+                PredicateIri: predicate,
+                ValueIri: predicate == EuAcquisitionTestFixture.ResourceLegalType
+                    ? EuAcquisitionTestFixture.RegulationResourceType
+                    : (string?)null))
+            .Concat(EuAcquisitionTestFixture.RelationPredicates.Select(predicate => (predicate, (string?)null)))
+            .ToArray();
+        var pRows = EuAcquisitionTestFixture.SortedObjectFactRows(rootIri, pOutcomes);
+        var xRows = new[] { EuAcquisitionTestFixture.ExpressionFactRow(rootIri, expressionIri) };
+        var wRows = new[] { EuAcquisitionTestFixture.RootWatermarkRow(rootIri, watermarkLexical) };
+
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["Census"] = EuAcquisitionTestFixture.ScriptFor(
+                "Census", 0, [], EuAcquisitionTestFixture.CensusFamilyProjection),
+            ["P"] = EuAcquisitionTestFixture.ScriptFor(
+                "P", pRows.Count, pRows, EuAcquisitionTestFixture.ObjectFactsProjection),
+            ["X"] = EuAcquisitionTestFixture.ScriptFor(
+                "X", xRows.Length, xRows, EuAcquisitionTestFixture.ExpressionFactsProjection),
+            ["W"] = EuAcquisitionTestFixture.ScriptFor(
+                "W", wRows.Length, wRows, EuAcquisitionTestFixture.RootWatermarkProjection),
+            ["Witness"] = new EuAcquisitionTestFixture.FamilyScript(
+                "Witness", EuAcquisitionTestFixture.WitnessEmptyTraversalScript(rootIri, watermarkLexical)),
+        };
+
+        // PROVEN (review/23-research-temporal.md section 1.2), the same real 214-byte GDPR pdfa2a
+        // 404 shape EuDocumentFetchReachabilityTests embeds from the retained canary.
+        var real404Body = Encoding.UTF8.GetBytes(string.Empty);
+        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(
+            scripts,
+            documentFetchResponse: request =>
+                EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.NotFound, real404Body));
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var executor = new EuRepeatedEnumerationExecutor(
+            store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
+        var adapter = new EuQueryExecutionAdapter(store, executor);
+
+        var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
+        var censusRequest = new EuCensusPartitionRunRequest(
+            censusPlan, censusPlanId, seed.Celex, EuAcquisitionTestFixture.BuildRendererSource(901));
+        var (pPlan, pPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var pRequest = new EuObjectFactsPartitionRunRequest(
+            pPlan, pPlanId, EuObjectFactsQuerySet.ObjectFacts, [rootIri],
+            EuAcquisitionTestFixture.BuildRendererSource(902));
+        var (xPlan, xPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var xRequest = new EuObjectFactsPartitionRunRequest(
+            xPlan, xPlanId, EuObjectFactsQuerySet.ExpressionFacts, [rootIri],
+            EuAcquisitionTestFixture.BuildRendererSource(903));
+        var (wPlan, wPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var wRequest = new EuObjectFactsPartitionRunRequest(
+            wPlan, wPlanId, EuObjectFactsQuerySet.RootWatermark, [rootIri],
+            EuAcquisitionTestFixture.BuildRendererSource(904));
+
+        var result = await adapter.RunAsync(
+            [(censusRequest, EuAcquisitionTestFixture.SourceWitness())],
+            [
+                (pRequest, EuAcquisitionTestFixture.SourceWitness()),
+                (xRequest, EuAcquisitionTestFixture.SourceWitness()),
+                (wRequest, EuAcquisitionTestFixture.SourceWitness()),
+            ],
+            EuAcquisitionTestFixture.BuildRendererSource(905),
+            EuAcquisitionTestFixture.SourceWitness(),
+            EuAcquisitionTestFixture.BuildRendererSource(1905),
+            EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
+            new PermissiveEvidenceResolver(CompleteEnumerationRef),
+            CancellationToken.None);
+
+        Assert.IsNotNull(result.Refusal);
+        Assert.AreEqual(EuQueryExecutionRefusal.DocumentFetchOutcomeNotRepresentable, result.Refusal!.Code);
+        StringAssert.Contains(result.Refusal.Detail, "RequestedRepresentationNotServed");
+        Assert.IsNull(result.DocumentAcquisitionOutcomesByOrdinal);
+        Assert.IsNull(result.ScopeManifestReceipt);
     }
 
     [TestMethod]
@@ -236,6 +438,8 @@ public sealed class EuQueryExecutionAdapterTests
             ],
             EuAcquisitionTestFixture.BuildRendererSource(80),
             EuAcquisitionTestFixture.SourceWitness(),
+            EuAcquisitionTestFixture.BuildRendererSource(1080),
+            EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
             CancellationToken.None);
 
@@ -365,6 +569,8 @@ public sealed class EuQueryExecutionAdapterTests
             ],
             EuAcquisitionTestFixture.BuildRendererSource(29),
             EuAcquisitionTestFixture.SourceWitness(),
+            EuAcquisitionTestFixture.BuildRendererSource(1029),
+            EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
             CancellationToken.None);
 
@@ -465,6 +671,8 @@ public sealed class EuQueryExecutionAdapterTests
             ],
             EuAcquisitionTestFixture.BuildRendererSource(35),
             EuAcquisitionTestFixture.SourceWitness(),
+            EuAcquisitionTestFixture.BuildRendererSource(1035),
+            EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
             CancellationToken.None);
 
@@ -566,6 +774,8 @@ public sealed class EuQueryExecutionAdapterTests
             ],
             EuAcquisitionTestFixture.BuildRendererSource(45),
             EuAcquisitionTestFixture.SourceWitness(),
+            EuAcquisitionTestFixture.BuildRendererSource(1045),
+            EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
             CancellationToken.None);
 
@@ -625,6 +835,8 @@ public sealed class EuQueryExecutionAdapterTests
             [],
             EuAcquisitionTestFixture.BuildRendererSource(52),
             EuAcquisitionTestFixture.SourceWitness(),
+            EuAcquisitionTestFixture.BuildRendererSource(1052),
+            EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
             CancellationToken.None);
 
@@ -668,6 +880,8 @@ public sealed class EuQueryExecutionAdapterTests
             [],
             EuAcquisitionTestFixture.BuildRendererSource(62),
             EuAcquisitionTestFixture.SourceWitness(),
+            EuAcquisitionTestFixture.BuildRendererSource(1062),
+            EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
             CancellationToken.None);
 
@@ -762,6 +976,8 @@ public sealed class EuQueryExecutionAdapterTests
             ],
             EuAcquisitionTestFixture.BuildRendererSource(705),
             EuAcquisitionTestFixture.SourceWitness(),
+            EuAcquisitionTestFixture.BuildRendererSource(1705),
+            EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
             CancellationToken.None);
 
@@ -852,6 +1068,8 @@ public sealed class EuQueryExecutionAdapterTests
             ],
             EuAcquisitionTestFixture.BuildRendererSource(715),
             EuAcquisitionTestFixture.SourceWitness(),
+            EuAcquisitionTestFixture.BuildRendererSource(1715),
+            EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
             CancellationToken.None);
 
@@ -941,6 +1159,8 @@ public sealed class EuQueryExecutionAdapterTests
             ],
             EuAcquisitionTestFixture.BuildRendererSource(725),
             EuAcquisitionTestFixture.SourceWitness(),
+            EuAcquisitionTestFixture.BuildRendererSource(1725),
+            EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             new PermissiveEvidenceResolver(CompleteEnumerationRef),
             CancellationToken.None);
 
@@ -989,12 +1209,22 @@ public sealed class EuQueryExecutionAdapterTests
             evidenceRef,
             null);
 
-        var mintedFetchAddress = (ScopeManifestFetchAddress)method.Invoke(null, [cellarObject])!;
+        // Defect 4's own fix: MintFetchAddress now returns the real EuDocumentFetchAddress alongside
+        // its manifest projection (a ValueTuple, since it stays private and this door is reflection
+        // only), so the caller can actually drive this route's own GET for a Minted row.
+        var mintedResult = (System.Runtime.CompilerServices.ITuple)method.Invoke(null, [cellarObject])!;
+        var mintedFetchAddress = (ScopeManifestFetchAddress)mintedResult[0]!;
+        var mintedAddress = (EuDocumentFetchAddress?)mintedResult[1];
         Assert.AreEqual(ScopeManifestFetchAddressStatus.Minted, mintedFetchAddress.Status);
         Assert.AreEqual(EuDocumentFetchAddress.AdmittedHost, mintedFetchAddress.Host);
         Assert.AreEqual("cellar/" + canonicalKey, mintedFetchAddress.ResourcePath);
         Assert.AreEqual("application/xhtml+xml", mintedFetchAddress.AcceptMediaType);
         Assert.AreEqual("eng", mintedFetchAddress.AcceptLanguage);
+        Assert.IsNotNull(mintedAddress);
+        Assert.AreEqual("cellar", mintedAddress!.PsName);
+        Assert.AreEqual(canonicalKey, mintedAddress.PsId);
+        Assert.AreEqual(EuManifestationMediaType.XhtmlXml, mintedAddress.MediaType);
+        Assert.AreEqual(EuDocumentLanguage.Eng, mintedAddress.Language);
 
         var joluxKey = "jolux:id:legal-instrument:123";
         var joluxKeySha256 = Convert.ToHexStringLower(
@@ -1009,11 +1239,13 @@ public sealed class EuQueryExecutionAdapterTests
             joluxKeySha256,
             evidenceRef,
             null);
-        var notMinted = (ScopeManifestFetchAddress)method.Invoke(null, [nonCellarObject])!;
+        var notMintedResult = (System.Runtime.CompilerServices.ITuple)method.Invoke(null, [nonCellarObject])!;
+        var notMinted = (ScopeManifestFetchAddress)notMintedResult[0]!;
         Assert.AreEqual(ScopeManifestFetchAddressStatus.NotMinted, notMinted.Status);
         Assert.AreEqual(
             ScopeManifestFetchAddressAbsenceReason.NoPublisherRouteYet,
             notMinted.NotMintedReason);
+        Assert.IsNull(notMintedResult[1]);
     }
 
     /// <summary>

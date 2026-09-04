@@ -1,0 +1,1 @@
+None of the requests returned successfully a redirection. The following exception was thrown: [Illegal accept header: Invalid media type(s) "application/pdf;mtype=pdfa1a"]

@@ -108,6 +108,21 @@ public sealed class EuDocumentFetchAddressTests
             "celex", string.Empty, EuManifestationMediaType.XhtmlXml, EuDocumentLanguage.Eng,
             out var emptyIdRefusal));
         Assert.AreEqual(EuDocumentFetchAddressRefusal.PsIdShapeInvalid, emptyIdRefusal);
+
+        // Fold-in: this type's own doc comments claim the minted resource URI carries "no query, no
+        // fragment" (see the remarks on IsAdmittedResourceUri). Before this fix, IsAdmittedPsIdShape's
+        // character class (> ' ' and <= '~' and not '/') admitted both '?' and '#' -- printable ASCII
+        // neither excluded -- so a candidate carrying either was minted into a resourceUri that
+        // silently carried a query or a fragment, contradicting the type's own claim.
+        Assert.IsNull(EuDocumentFetchAddress.TryCreate(
+            "celex", "32016R0679?x=1", EuManifestationMediaType.XhtmlXml, EuDocumentLanguage.Eng,
+            out var queryRefusal));
+        Assert.AreEqual(EuDocumentFetchAddressRefusal.PsIdShapeInvalid, queryRefusal);
+
+        Assert.IsNull(EuDocumentFetchAddress.TryCreate(
+            "celex", "32016R0679#frag", EuManifestationMediaType.XhtmlXml, EuDocumentLanguage.Eng,
+            out var fragmentRefusal));
+        Assert.AreEqual(EuDocumentFetchAddressRefusal.PsIdShapeInvalid, fragmentRefusal);
     }
 
     [TestMethod]

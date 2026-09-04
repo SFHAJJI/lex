@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using Json.Schema;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Europe;
 using Lex.V3.Contracts.Source.Scope;
 
 namespace Lex.V3.Tests.Contracts.Source.Scope;
@@ -817,6 +818,115 @@ public sealed class ScopeManifestContractTests
             input.ObjectRef.CanonicalKey,
             reopened.Manifest.ObservedObjects[0].ObjectRef.CanonicalKey);
         CollectionAssert.AreEqual(bytes, CanonicalBytes(reopened));
+    }
+
+    /// <summary>
+    /// D1-06c-EU defect 3 (SCOPE_RULING lex-event-20260904T130546972Z-c72fad2da5b34344af802c068d8fbf08
+    /// item 3): "a Minted fetch address has never been written into a manifest or read back; every
+    /// manifest test row is NotMinted" -- true of every other test in this file, whose own
+    /// <see cref="ValidInput"/> rows never supply one and so always default to
+    /// <see cref="ScopeManifestFetchAddressStatus.NotMinted"/>. This test writes one real row carrying
+    /// a genuine <see cref="EuDocumentFetchAddress"/>, converted through its own real
+    /// <see cref="EuDocumentFetchAddress.ToManifestFetchAddress"/> (never a
+    /// <see cref="ScopeManifestFetchAddress.Minted"/> call hand-built to look like one), through the
+    /// checked write/reopen round trip every other positive test in this file already uses
+    /// (<see cref="ScopeReducer.Reduce"/> then <see cref="VerifiedScopeManifest.ParseAndVerify"/>), and
+    /// asserts every one of the four Minted fields survived exactly: host, ps-name/ps-id (as the one
+    /// <c>resource_path</c> field), Accept media type, and Accept-Language.
+    /// </summary>
+    [TestMethod]
+    public void AMintedEuFetchAddressRoundTripsFieldByFieldThroughParseAndVerify()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var euAddress = EuDocumentFetchAddress.TryCreate(
+            "cellar",
+            "3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
+            EuManifestationMediaType.XhtmlXml,
+            EuDocumentLanguage.Eng,
+            out var addressRefusal)
+            ?? throw new AssertFailedException($"Address minting refused: {addressRefusal}.");
+        var mintedAddress = euAddress.ToManifestFetchAddress();
+        var baseInput = ValidInput(profile, Object("minted-fetch-address"));
+        var input = new ScopeObjectReductionInput(
+            baseInput.ObjectRef, baseInput.Selectors, baseInput.RuleEvaluations, mintedAddress);
+        var resolver = ExactResolver.For(profile, evidence, [input]);
+        var verified = ScopeReducer.Reduce(profile, evidence, [input.ObjectRef], [input], resolver);
+        var bytes = CanonicalBytes(verified);
+        var artifactRef = ArtifactRefFor(bytes);
+
+        var reopened = VerifiedScopeManifest.ParseAndVerify(artifactRef, bytes, resolver);
+
+        Assert.HasCount(1, reopened.Manifest.Rows);
+        var reopenedAddress = reopened.Manifest.Rows[0].FetchAddress;
+        Assert.AreEqual(ScopeManifestFetchAddressStatus.Minted, reopenedAddress.Status);
+        Assert.AreEqual("publications.europa.eu", reopenedAddress.Host);
+        Assert.AreEqual("cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1", reopenedAddress.ResourcePath);
+        Assert.AreEqual("application/xhtml+xml", reopenedAddress.AcceptMediaType);
+        Assert.AreEqual("eng", reopenedAddress.AcceptLanguage);
+        Assert.IsNull(reopenedAddress.NotMintedReason);
+
+        // Every field individually matches the source EuDocumentFetchAddress too, not just the
+        // literals above (the two assertion styles could drift apart if one were wrong).
+        Assert.AreEqual(EuDocumentFetchAddress.AdmittedHost, reopenedAddress.Host);
+        Assert.AreEqual(euAddress.PsName + "/" + euAddress.PsId, reopenedAddress.ResourcePath);
+        Assert.AreEqual(euAddress.Accept, reopenedAddress.AcceptMediaType);
+        Assert.AreEqual(euAddress.AcceptLanguage, reopenedAddress.AcceptLanguage);
+        CollectionAssert.AreEqual(bytes, CanonicalBytes(reopened));
+    }
+
+    /// <summary>
+    /// Defect 3's second required test: tampering the canonical <c>fetch_address</c> bytes is refused
+    /// by <see cref="VerifiedScopeManifest.ParseAndVerify"/>. The tamper strips one of a Minted
+    /// address's four required fields (<c>accept_language</c>) by raw text surgery on the canonical
+    /// bytes, mirroring the byte-level tamper technique <see cref="ParseAndVerifyRejectsNonCanonicalWhitespace"/>
+    /// already uses in this file, rather than going through <see cref="ScopeManifestFetchAddress"/>'s
+    /// own constructor (which refuses to build a malformed value in the first place -- the tamper has
+    /// to happen below that door, on the wire bytes, to prove the reader itself refuses it too).
+    /// </summary>
+    /// <remarks>
+    /// This targets the one kind of tamper <see cref="VerifiedScopeManifest.ParseAndVerify"/> can
+    /// actually catch for this field: a structurally malformed <c>fetch_address</c> object, refused by
+    /// <see cref="ScopeManifestFetchAddress"/>'s own constructor invariant during deserialization.
+    /// <see cref="ScopeManifestCanonicalWriter.ComputeExpandedRowSha256"/> takes no fetch-address
+    /// parameter at all -- <see cref="ScopeManifestRow.RowSha256"/>'s hash domain does not cover this
+    /// field's content -- so a well-formed but substituted value (a different real host or path,
+    /// still carrying all four required fields) is not independently caught by any recompute check the
+    /// way a tampered selector or rule evaluation is elsewhere in this file. That is a real, narrower
+    /// protection than the row digest gives every other field, worth recording here rather than
+    /// implying a stronger guarantee than this door actually provides.
+    /// </remarks>
+    [TestMethod]
+    public void ParseAndVerifyRejectsAStructurallyTamperedFetchAddress()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var euAddress = EuDocumentFetchAddress.TryCreate(
+            "cellar",
+            "3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
+            EuManifestationMediaType.XhtmlXml,
+            EuDocumentLanguage.Eng,
+            out var addressRefusal)
+            ?? throw new AssertFailedException($"Address minting refused: {addressRefusal}.");
+        var baseInput = ValidInput(profile, Object("tampered-fetch-address"));
+        var input = new ScopeObjectReductionInput(
+            baseInput.ObjectRef, baseInput.Selectors, baseInput.RuleEvaluations,
+            euAddress.ToManifestFetchAddress());
+        var resolver = ExactResolver.For(profile, evidence, [input]);
+        var verified = ScopeReducer.Reduce(profile, evidence, [input.ObjectRef], [input], resolver);
+        var bytes = CanonicalBytes(verified);
+        var json = Encoding.UTF8.GetString(bytes);
+        const string acceptLanguageField = "\"accept_language\":\"eng\",";
+        StringAssert.Contains(json, acceptLanguageField, "the fixture's own minted row carries this field.");
+        var tamperedJson = json.Replace(acceptLanguageField, string.Empty, StringComparison.Ordinal);
+        Assert.AreNotEqual(json.Length, tamperedJson.Length);
+        var tamperedBytes = Encoding.UTF8.GetBytes(tamperedJson);
+        var artifactRef = ArtifactRefFor(tamperedBytes);
+
+        var exception = Assert.ThrowsExactly<ArgumentException>(() =>
+            VerifiedScopeManifest.ParseAndVerify(artifactRef, tamperedBytes, resolver));
+        StringAssert.Contains(
+            exception.Message, "The scope manifest bytes are not one valid typed canonical document.");
     }
 
     [TestMethod]

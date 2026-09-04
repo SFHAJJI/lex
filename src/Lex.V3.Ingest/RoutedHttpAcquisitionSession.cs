@@ -1593,9 +1593,70 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
         }
     }
 
+    /// <summary>
+    /// D1-06c-EU defect 1 (SCOPE_RULING lex-event-20260904T130546972Z-c72fad2da5b34344af802c068d8fbf08
+    /// item 1): the real Cellar dissemination service answers a document-fetch 303 with a plain
+    /// <c>http://</c> Location on the identical admitted host (proven live on 2026-09-04 against both
+    /// the xhtml and fmx4 canary probes). <see cref="RoutedHttpValidation.RequireAbsoluteHttpsUri"/>,
+    /// called from <see cref="HttpLogicalRequest.Create"/> below, refuses http unconditionally, so
+    /// without this step every such redirect would end <see cref="HttpRouteIncompleteReason.RedirectRefused"/>
+    /// before the same-origin check downstream ever ran. A Location whose scheme is http, whose port
+    /// is the http default (there is no observed case of a publisher-controlled non-default port to
+    /// reason about) and whose host matches <paramref name="admittedOriginUri"/> is instead followed
+    /// as https: the scheme is rewritten before this method ever builds a request, so the plaintext
+    /// http target is never itself sent. Nothing here widens what host is trusted -- the caller's own
+    /// same-origin check still runs on the result, unchanged, comparing host and port exactly as it
+    /// always has, only now against the upgraded https target instead of being short-circuited by the
+    /// scheme refusal first. The observed Location and the upgrade both remain readable on the
+    /// resulting evidence without a new field: this hop's own <c>Headers.Location</c> keeps the exact
+    /// observed http string, and the next hop's own <c>RequestUri</c> (which
+    /// <see cref="RoutedHttpHop.Create"/> only ever admits as https) is what was actually followed.
+    /// </summary>
+    /// <summary>
+    /// The one place the http-to-https redirect upgrade is decided, so
+    /// <see cref="TryCreateRedirectRequest"/> (which builds the followed request) and
+    /// <see cref="SendLease.FromRedirect"/> (which re-derives what the antecedent hop's own Location
+    /// must have produced, to check a caller's capability against it) can never independently drift
+    /// on what counts as an upgrade. A Location whose scheme is http, whose port is the http default
+    /// (there is no observed case of a publisher-controlled non-default port to reason about) and
+    /// whose host matches <paramref name="admittedOriginUri"/> is rewritten to https with no explicit
+    /// port; anything else is returned unchanged.
+    /// </summary>
+    private static string ResolveRedirectTarget(string locationValue, string admittedOriginUri)
+    {
+        if (Uri.TryCreate(locationValue, UriKind.Absolute, out var parsedLocation) &&
+            string.Equals(parsedLocation.Scheme, Uri.UriSchemeHttp, StringComparison.Ordinal) &&
+            parsedLocation.IsDefaultPort &&
+            Uri.TryCreate(admittedOriginUri, UriKind.Absolute, out var admittedOrigin) &&
+            string.Equals(parsedLocation.Host, admittedOrigin.Host, StringComparison.Ordinal))
+        {
+            return new UriBuilder(parsedLocation) { Scheme = Uri.UriSchemeHttps, Port = -1 }.Uri.AbsoluteUri;
+        }
+
+        return locationValue;
+    }
+
+    /// <summary>
+    /// D1-06c-EU defect 1 (SCOPE_RULING lex-event-20260904T130546972Z-c72fad2da5b34344af802c068d8fbf08
+    /// item 1): the real Cellar dissemination service answers a document-fetch 303 with a plain
+    /// <c>http://</c> Location on the identical admitted host (proven live on 2026-09-04 against both
+    /// the xhtml and fmx4 canary probes). <see cref="RoutedHttpValidation.RequireAbsoluteHttpsUri"/>,
+    /// called from <see cref="HttpLogicalRequest.Create"/> below, refuses http unconditionally, so
+    /// without <see cref="ResolveRedirectTarget"/>'s rewrite every such redirect would end
+    /// <see cref="HttpRouteIncompleteReason.RedirectRefused"/> before the same-origin check downstream
+    /// ever ran. The scheme is rewritten before this method ever builds a request, so the plaintext
+    /// http target is never itself sent. Nothing here widens what host is trusted -- the caller's own
+    /// same-origin check still runs on the result, unchanged, comparing host and port exactly as it
+    /// always has, only now against the upgraded https target instead of being short-circuited by the
+    /// scheme refusal first. The observed Location and the upgrade both remain readable on the
+    /// resulting evidence without a new field: this hop's own <c>Headers.Location</c> keeps the exact
+    /// observed http string, and the next hop's own <c>RequestUri</c> (which
+    /// <see cref="RoutedHttpHop.Create"/> only ever admits as https) is what was actually followed.
+    /// </summary>
     private static bool TryCreateRedirectRequest(
         HttpLogicalRequest current,
         RoutedHttpHeaderField location,
+        string admittedOriginUri,
         out HttpLogicalRequest next)
     {
         next = null!;
@@ -1604,10 +1665,12 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             return false;
         }
 
+        var target = ResolveRedirectTarget(single.Value, admittedOriginUri);
+
         try
         {
             next = HttpLogicalRequest.Create(
-                single.Value,
+                target,
                 current.Method,
                 current.Headers,
                 current.Body,
@@ -2839,15 +2902,25 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             ulong requestOrdinal,
             ulong attemptOrdinal,
             ulong nextHopOrdinal,
+            string admittedOriginUri,
             string antecedentRedirectPolicySha256,
             RedirectAntecedentCapability antecedentCapability)
         {
             var (antecedentCustodyKey, antecedent) = antecedentCapability.Consume(session);
+            // D1-06c-EU defect 1: the request actually being sent is checked against
+            // ResolveRedirectTarget's own re-derivation of the antecedent's Location, not against
+            // that Location string verbatim, because TryCreateRedirectRequest may have upgraded an
+            // observed http Location on the admitted host to https before this successor request was
+            // ever built (see that method's own remarks). Both call sites resolve through the
+            // identical helper, so they cannot independently drift on what counts as an upgrade.
             if (nextHopOrdinal == 0 || antecedent.Ordinal != nextHopOrdinal - 1 ||
                 antecedent.Completion is IncompleteHttpCompletion ||
                 antecedent.StatusDisposition != HttpStatusDisposition.RedirectObserved ||
                 antecedent.Headers.Location is not RoutedHttpSingleHeader location ||
-                !string.Equals(location.Value, request.Uri, StringComparison.Ordinal) ||
+                !string.Equals(
+                    ResolveRedirectTarget(location.Value, admittedOriginUri),
+                    request.Uri,
+                    StringComparison.Ordinal) ||
                 antecedentCustodyKey.RunIdentity != session._runIdentity ||
                 antecedentCustodyKey.RequestOrdinal != requestOrdinal ||
                 antecedentCustodyKey.AttemptOrdinal != attemptOrdinal ||
@@ -3499,7 +3572,7 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                     null);
             }
 
-            if (!TryCreateRedirectRequest(currentRequest, headers.Location, out var nextRequest))
+            if (!TryCreateRedirectRequest(currentRequest, headers.Location, hops[0].RequestUri, out var nextRequest))
             {
                 return new RouteExecution(
                     RoutedHttpEvidence.Create(
@@ -3630,6 +3703,7 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                 requestOrdinal,
                 attemptOrdinal,
                 checked((ulong)hops.Count),
+                hops[0].RequestUri,
                 currentRequest.RedirectPolicySha256,
                 antecedentCapability);
             currentRequest = nextRequest;

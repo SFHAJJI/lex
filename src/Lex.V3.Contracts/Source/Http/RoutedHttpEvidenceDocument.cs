@@ -525,7 +525,7 @@ public sealed class RoutedHttpEvidence
             if (predecessor.Completion is IncompleteHttpCompletion ||
                 predecessor.StatusDisposition != HttpStatusDisposition.RedirectObserved ||
                 predecessor.Headers.Location is not RoutedHttpSingleHeader location ||
-                !string.Equals(location.Value, hop.RequestUri, StringComparison.Ordinal))
+                !LocationCausedHop(location.Value, hop.RequestUri, hopSnapshot[0].RequestUri))
             {
                 throw new ArgumentException(
                     "Every noninitial hop must be caused by its complete redirect predecessor's exact Location.",
@@ -747,6 +747,40 @@ public sealed class RoutedHttpEvidence
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="hopRequestUri"/> is exactly what a predecessor hop's own observed
+    /// <c>Location</c> (<paramref name="locationValue"/>) caused: either the identical string, or --
+    /// D1-06c-EU defect 1 (SCOPE_RULING lex-event-20260904T130546972Z-c72fad2da5b34344af802c068d8fbf08
+    /// item 1) -- the https upgrade of an observed http Location on the admitted host
+    /// (<paramref name="admittedOriginUri"/>). This reproduces
+    /// <c>Lex.V3.Ingest.RoutedHttpAcquisitionSession.ResolveRedirectTarget</c>'s identical decision
+    /// (http scheme, default port, host equal to the admitted origin) independently in this layer,
+    /// exactly as Decision 80 already requires <see cref="CreateFromVerifiedHops"/> to reproduce every
+    /// other fact the session privately proved, rather than refusing the one real observed shape the
+    /// fix exists to admit. Contracts cannot reference the session's own type to share the one
+    /// implementation directly (Ingest depends on Contracts, never the reverse), so the decision is
+    /// duplicated here, deliberately kept this small so the two cannot drift unnoticed.
+    /// </summary>
+    private static bool LocationCausedHop(string locationValue, string hopRequestUri, string admittedOriginUri)
+    {
+        if (string.Equals(locationValue, hopRequestUri, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (!Uri.TryCreate(locationValue, UriKind.Absolute, out var observedLocation) ||
+            !string.Equals(observedLocation.Scheme, Uri.UriSchemeHttp, StringComparison.Ordinal) ||
+            !observedLocation.IsDefaultPort ||
+            !Uri.TryCreate(admittedOriginUri, UriKind.Absolute, out var admittedOrigin) ||
+            !string.Equals(observedLocation.Host, admittedOrigin.Host, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var upgraded = new UriBuilder(observedLocation) { Scheme = Uri.UriSchemeHttps, Port = -1 }.Uri.AbsoluteUri;
+        return string.Equals(upgraded, hopRequestUri, StringComparison.Ordinal);
     }
 
     private static bool IsRobotsStatusFailure(ulong requestOrdinal, RoutedHttpHop hop) =>
