@@ -530,12 +530,80 @@ public sealed class EuManifestationListingDecodeTests
             "an unread listing must never reach never_ingest.");
         Assert.AreEqual(EuFormatBodyAdmission.BodyNotAdmitted, printAndUnknown.Admission);
 
-        // A listing this vocabulary knows nothing at all about takes the same floor.
+        // It names NoneAdmitted, the member that means exactly "none of what was listed is admitted
+        // here", and never a format the office did not list for this Work. Until RULING
+        // lex-event-20260904T201230364Z-8afe287d7c9b49509a410204e7ee729d this named Formex4, which
+        // invented a publisher fact in a branch nobody could reach yet.
+        Assert.AreEqual(EuManifestationFormat.NoneAdmitted, printAndUnknown.Format);
+
+        // A listing this vocabulary knows nothing at all about takes the same answer.
         var nothingKnown = EuManifestationListingDecode.ObserveUnreadableListing(
             [], "epub3", Evidence("floor"));
+        Assert.AreEqual(EuManifestationFormat.NoneAdmitted, nothingKnown.Format);
         Assert.IsFalse(
             EuManifestationScope.FormatsThatCanNeverCarryABody.Contains(nothingKnown.Format));
         Assert.AreEqual("listing_type_not_admitted:epub3", nothingKnown.ReasonCode);
+        Assert.HasCount(0, nothingKnown.OrderedCandidates);
+
+        // And a Work that DID list something admitted still names that, never NoneAdmitted: the
+        // member is the answer for an unreadable listing, not for every refused one.
+        var oneKnown = EuManifestationListingDecode.ObserveUnreadableListing(
+            [EuManifestationFormat.Xhtml, EuManifestationFormat.Print], "epub3", Evidence("floor"));
+        Assert.AreEqual(EuManifestationFormat.Xhtml, oneKnown.Format);
+    }
+
+    /// <summary>
+    /// The four properties that hold <see cref="EuManifestationFormat.NoneAdmitted"/> in place. It is
+    /// this vocabulary's own answer for a listing it cannot read, so it must never be reachable from
+    /// a publisher token, never addressable, never a ladder rung, and never a permanent exclusion.
+    /// </summary>
+    [TestMethod]
+    public void NoneAdmittedIsUnreachableFromThePublisherAndNeverFetchableOrPermanent()
+    {
+        // One: no publisher token decodes into it. A Work whose listing literally contains the
+        // string "none_admitted" is an unreadable listing, not an admitted one.
+        Assert.IsFalse(
+            EuManifestationListingDecode.ListedTypeTokens.ContainsKey("none_admitted"),
+            "a publisher literal must never decode into NoneAdmitted.");
+        var spoofed = Decode(
+            [ListedRow(WorkingTimeRoot, "none_admitted"), ListedRow(WorkingTimeRoot, "xhtml")],
+            out var refusal,
+            out _,
+            out var token);
+        Assert.AreEqual(EuManifestationListingRefusal.None, refusal);
+        Assert.AreEqual("none_admitted", token, "the spoofed token is refused by name like any other.");
+        Assert.AreEqual(EuFormatBodyAdmission.BodyNotAdmitted, spoofed![WorkingTimeRoot].Admission);
+
+        // Two: it can mint no request.
+        Assert.IsFalse(
+            EuDocumentFetchAddress.TryMediaTypeFor(EuManifestationFormat.NoneAdmitted, out _),
+            "NoneAdmitted must have no Accept token; there is nothing to ask the office for.");
+
+        // Three: it is not a rung.
+        CollectionAssert.DoesNotContain(
+            EuManifestationListingDecode.FormatLadder.ToArray(), EuManifestationFormat.NoneAdmitted);
+
+        // Four: it is a typed gap, never never_ingest. Only print is permanently excluded, because
+        // only print is physically incapable of carrying a body; an unread listing is an open
+        // question.
+        Assert.IsFalse(
+            EuManifestationScope.FormatsThatCanNeverCarryABody.Contains(
+                EuManifestationFormat.NoneAdmitted),
+            "an unreadable listing must stay a typed gap pending a reviewed profile.");
+
+        // And Observe, the admitted-listing door, can never produce it either.
+        foreach (var format in Enum.GetValues<EuManifestationFormat>())
+        {
+            if (format == EuManifestationFormat.NoneAdmitted)
+            {
+                continue;
+            }
+
+            Assert.AreNotEqual(
+                EuManifestationFormat.NoneAdmitted,
+                EuManifestationListingDecode.Observe([format], Evidence("observe")).Format,
+                $"a listing of {format} alone must never be reported as NoneAdmitted.");
+        }
     }
 
     /// <summary>
@@ -685,11 +753,23 @@ public sealed class EuManifestationListingDecodeTests
     [TestMethod]
     public void EveryClosedFormatHasExactlyOneListedTypeTokenAndTheyRoundTrip()
     {
+        // Every member EXCEPT NoneAdmitted, which is this vocabulary's own answer for an unreadable
+        // listing rather than anything the office can say. A token for it would let a publisher
+        // literal decode straight into "none of what was listed is admitted".
         Assert.HasCount(
-            Enum.GetValues<EuManifestationFormat>().Length,
+            Enum.GetValues<EuManifestationFormat>().Length - 1,
             EuManifestationListingDecode.ListedTypeTokens);
+        Assert.IsFalse(
+            EuManifestationListingDecode.ListedTypeTokens.Values.Contains(
+                EuManifestationFormat.NoneAdmitted),
+            "NoneAdmitted must never be reachable from a publisher token.");
         foreach (var format in Enum.GetValues<EuManifestationFormat>())
         {
+            if (format == EuManifestationFormat.NoneAdmitted)
+            {
+                continue;
+            }
+
             Assert.IsTrue(
                 EuManifestationListingDecode.ListedTypeTokens.Values.Contains(format),
                 $"{format} has no listed-type token.");

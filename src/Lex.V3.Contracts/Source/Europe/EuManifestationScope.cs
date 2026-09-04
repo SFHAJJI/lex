@@ -79,6 +79,42 @@ public enum EuManifestationFormat
     /// <summary>The print manifestation. Offered, never a body source for us.</summary>
     [JsonStringEnumMemberName("print")]
     Print = 9,
+
+    /// <summary>
+    /// The office listed manifestation types for a Work, and this closed vocabulary admits none of
+    /// them as that Work's format. D1-05d, RULING
+    /// lex-event-20260904T201230364Z-8afe287d7c9b49509a410204e7ee729d.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The one member that is not a publisher format. It exists because
+    /// <see cref="EuFormatObservation.Format"/> must always name something, and the honest answer
+    /// for a Work whose listing this route could not read is "none of what was listed". Before this
+    /// member that case named <see cref="Formex4"/>, which asserted a format the office had never
+    /// listed for that Work: unreachable in practice, and still a fact invented by a field, which is
+    /// exactly the defect this slice exists to remove.
+    /// </para>
+    /// <para>
+    /// Named for what is true, and deliberately NOT "none listed". Whenever this member appears the
+    /// office DID list something; that is why there is an observation at all. A Work the office
+    /// lists nothing for carries no format observation whatsoever (see
+    /// <see cref="EuManifestationListingDecode.TryDecode"/>'s own returns note), and calling this
+    /// member "none listed" would name that other fact and blur the two apart precisely where this
+    /// slice works hardest to keep them distinct. What is true is that none of what was listed is
+    /// admitted here.
+    /// </para>
+    /// <para>
+    /// Four properties hold it in place, each asserted by test. It is never a publisher token, so no
+    /// listing can ever decode INTO it (<see cref="EuManifestationListingDecode.ListedTypeTokens"/>
+    /// excludes it by construction). It is never addressable, so it can mint no request
+    /// (<see cref="EuDocumentFetchAddress.TryMediaTypeFor"/>). It is never a rung of
+    /// <see cref="EuManifestationListingDecode.FormatLadder"/>. And it is deliberately NOT in
+    /// <see cref="EuManifestationScope.FormatsThatCanNeverCarryABody"/>: an unread listing is a typed
+    /// gap pending a reviewed profile, never the permanent exclusion print carries.
+    /// </para>
+    /// </remarks>
+    [JsonStringEnumMemberName("none_admitted")]
+    NoneAdmitted = 10,
 }
 
 /// <summary>

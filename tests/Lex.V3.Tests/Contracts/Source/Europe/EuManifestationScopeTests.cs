@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Europe;
+using Lex.V3.TestSupport;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Lex.V3.Tests.Contracts.Source.Europe;
@@ -27,9 +28,45 @@ public sealed class EuManifestationScopeTests
     {
         // Pinned by hand, in declaration order. A format missing from the vocabulary would mean
         // "not considered" rather than "considered and refused".
+        // none_admitted is the one member that is not an offered format: it is this vocabulary's
+        // own answer for a Work whose listing it cannot read. See EuManifestationFormat.NoneAdmitted.
         AssertTokens<EuManifestationFormat>(
-            "fmx4", "xhtml", "xhtml5", "html", "pdf", "pdfa1a", "pdfa1b", "pdfa2a", "print");
+            "fmx4", "xhtml", "xhtml5", "html", "pdf", "pdfa1a", "pdfa1b", "pdfa2a", "print",
+            "none_admitted");
         AssertTokens<EuFormatBodyAdmission>("body_admitted", "body_not_admitted");
+    }
+
+    /// <summary>
+    /// The closed manifestation-format vocabulary, pinned member by member.
+    /// </summary>
+    /// <remarks>
+    /// Added by D1-05d when it widened this vocabulary a second time. It had no construction-surface
+    /// pin, so the tenth member (<see cref="EuManifestationFormat.NoneAdmitted"/>) would have broken
+    /// no gate, exactly as the ninth media type and the removed observation-state member did not.
+    /// Every marker below is transcribed from ConstructionSurface.Of's own printed output.
+    /// </remarks>
+    [TestMethod]
+    public void TheManifestationFormatVocabularyHasExactlyTenMembers()
+    {
+        const string N = "Lex.V3.Contracts.Source.Europe.";
+        const string T = N + "EuManifestationFormat";
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "base-constructor protected instance System.Enum::.ctor() -> System.Enum",
+                "base-constructor protected instance System.ValueType::.ctor() -> System.ValueType",
+                "field public static " + T + "::Formex4 -> " + T,
+                "field public static " + T + "::Html -> " + T,
+                "field public static " + T + "::NoneAdmitted -> " + T,
+                "field public static " + T + "::Pdf -> " + T,
+                "field public static " + T + "::PdfA1a -> " + T,
+                "field public static " + T + "::PdfA1b -> " + T,
+                "field public static " + T + "::PdfA2a -> " + T,
+                "field public static " + T + "::Print -> " + T,
+                "field public static " + T + "::Xhtml -> " + T,
+                "field public static " + T + "::Xhtml5 -> " + T,
+            },
+            ConstructionSurface.Of(typeof(EuManifestationFormat)).ToArray());
     }
 
     [TestMethod]
@@ -574,7 +611,7 @@ public sealed class EuManifestationScopeTests
         formats.Clear();
         rights.Clear();
 
-        Assert.AreEqual(9, scope.Formats.Count);
+        Assert.AreEqual(10, scope.Formats.Count);
         Assert.AreEqual(Enum.GetValues<EuContentClass>().Length, scope.Rights.Count);
         Assert.IsTrue(scope.Formats.Any(d => d.Admission == EuFormatBodyAdmission.BodyAdmitted));
     }
@@ -803,7 +840,9 @@ public sealed class EuManifestationScopeTests
         Enum.GetValues<EuManifestationFormat>()
             .Select(format => Format(
                 format,
-                format is EuManifestationFormat.Print or EuManifestationFormat.PdfA1b
+                format is EuManifestationFormat.Print
+                    or EuManifestationFormat.PdfA1b
+                    or EuManifestationFormat.NoneAdmitted
                     ? EuFormatBodyAdmission.BodyNotAdmitted
                     : EuFormatBodyAdmission.BodyAdmitted))
             .ToArray();

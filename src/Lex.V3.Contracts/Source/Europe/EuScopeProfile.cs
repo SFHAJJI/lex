@@ -596,6 +596,7 @@ public static class EuScopeProfile
         EuManifestationFormat.PdfA1b => "pdfa1b",
         EuManifestationFormat.PdfA2a => "pdfa2a",
         EuManifestationFormat.Print => "print",
+        EuManifestationFormat.NoneAdmitted => "none_admitted",
         _ => throw new ArgumentOutOfRangeException(nameof(format), format, "Unknown EU format."),
     };
 
