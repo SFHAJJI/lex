@@ -163,7 +163,7 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
     }
 
     [TestMethod]
-    public void QueryExecutionRefusalIsAFiveMemberEnumIncludingNone()
+    public void QueryExecutionRefusalIsASixMemberEnumIncludingNone()
     {
         CollectionAssert.AreEqual(
             new[]
@@ -171,6 +171,8 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 "base-constructor protected instance System.Enum::.ctor() -> System.Enum",
                 "base-constructor protected instance System.ValueType::.ctor() -> System.ValueType",
                 "field public static " + N + "LuxembourgQueryExecutionRefusal::None -> "
+                + N + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N + "LuxembourgQueryExecutionRefusal::ObservationSubjectNotInDeliveredCensus -> "
                 + N + "LuxembourgQueryExecutionRefusal",
                 "field public static " + N + "LuxembourgQueryExecutionRefusal::ResourceObservationFamilyNotProven -> "
                 + N + "LuxembourgQueryExecutionRefusal",

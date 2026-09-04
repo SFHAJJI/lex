@@ -34,6 +34,15 @@ public sealed class LuxembourgQueryExecutionAdapterTests
     private const string RelationFamilyKey = "relation-assertions";
     private const string ResourceSetId = "S";
     private const string ResourceFamilyKey = "resource-observations";
+    private const string AssertionSetId = "A";
+    private const string AssertionFamilyKey = "resource-assertions";
+    private const string JoluxAct = "http://data.legilux.public.lu/resource/ontology/jolux#Act";
+    private const string RdfType = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+    private const string TypeDocumentPredicate =
+        "http://data.legilux.public.lu/resource/ontology/jolux#typeDocument";
+    private const string TypeDocumentPrefix =
+        "http://data.legilux.public.lu/resource/authority/resource-type/";
+    private const string CitesPredicate = "http://data.legilux.public.lu/resource/ontology/jolux#cites";
 
     [TestMethod]
     public async Task TopologyIsAlwaysMintedEvenOnRefusal()
@@ -44,7 +53,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
             profile);
 
         var result = await adapter.RunAsync(
-            [], null, null, new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
+            [], null, null, null, new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
 
         Assert.IsNotNull(result.Topology);
         Assert.AreEqual(
@@ -108,7 +117,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
             store, NewExecutor(store, NoSendHandler()), profile);
 
         var result = await adapter.RunAsync(
-            [], null, null, new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
+            [], null, null, null, new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
 
         Assert.AreEqual(18, result.RelationFamilyAcquisitions.Count);
         foreach (var acquisition in result.RelationFamilyAcquisitions)
@@ -128,7 +137,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
             store, NewExecutor(store, NoSendHandler()), profile);
 
         var result = await adapter.RunAsync(
-            [], RelationFamilyKey, null, new PermissiveEvidenceResolver(enumerationRef),
+            [], RelationFamilyKey, null, null, new PermissiveEvidenceResolver(enumerationRef),
             CancellationToken.None);
 
         Assert.AreEqual(18, result.RelationFamilyAcquisitions.Count);
@@ -152,7 +161,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         var (partitionRequest, witness) = BuildPartitionRequest(RelationSetId, RelationFamilyKey);
 
         var result = await adapter.RunAsync(
-            [(partitionRequest, witness)], RelationFamilyKey, null,
+            [(partitionRequest, witness)], RelationFamilyKey, null, null,
             new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
 
         Assert.AreEqual(1, result.FamilyOutcomes.Count);
@@ -178,7 +187,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         var (partitionRequest, witness) = BuildPartitionRequest(RelationSetId, RelationFamilyKey);
 
         var result = await adapter.RunAsync(
-            [(partitionRequest, witness)], RelationFamilyKey, null,
+            [(partitionRequest, witness)], RelationFamilyKey, null, null,
             new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
 
         Assert.AreEqual(1, result.FamilyOutcomes.Count);
@@ -227,7 +236,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         var (partitionRequest, witness) = BuildPartitionRequest(RelationSetId, RelationFamilyKey);
 
         var result = await adapter.RunAsync(
-            [(partitionRequest, witness)], RelationFamilyKey, null,
+            [(partitionRequest, witness)], RelationFamilyKey, null, null,
             new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
 
         Assert.AreEqual(1, result.FamilyOutcomes.Count);
@@ -258,7 +267,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         var (partitionRequest, witness) = BuildPartitionRequest(RelationSetId, RelationFamilyKey);
 
         var result = await adapter.RunAsync(
-            [(partitionRequest, witness)], null, null,
+            [(partitionRequest, witness)], null, null, null,
             new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
@@ -282,7 +291,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
             store, NewExecutor(store, NoSendHandler()), profile);
 
         var result = await adapter.RunAsync(
-            [], null, ResourceFamilyKey, new PermissiveEvidenceResolver(enumerationRef),
+            [], null, ResourceFamilyKey, AssertionFamilyKey, new PermissiveEvidenceResolver(enumerationRef),
             CancellationToken.None);
 
         Assert.IsNull(result.ScopeManifestReceipt);
@@ -310,7 +319,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         var (partitionRequest, witness) = BuildPartitionRequest(ResourceSetId, ResourceFamilyKey);
 
         var result = await adapter.RunAsync(
-            [(partitionRequest, witness)], null, ResourceFamilyKey,
+            [(partitionRequest, witness)], null, ResourceFamilyKey, AssertionFamilyKey,
             new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
 
         Assert.AreEqual(LuxembourgFamilyEnumerationOutcomeKind.ProofRefused, result.FamilyOutcomes.Single().Kind);
@@ -322,25 +331,27 @@ public sealed class LuxembourgQueryExecutionAdapterTests
     [TestMethod]
     public async Task TheResourceDerivationMatchesTheDesignatedFamilyByKeyNotByPosition()
     {
-        // Two families enumerated in one run, both Proven, the designated resource family listed
-        // SECOND. A derivation that picked "the first Proven outcome" or "any Proven outcome" rather
-        // than the outcome whose FamilyKey equals resourceObservationFamilyKey would try to decode
-        // the relation family's own "subject, predicate, object, key_1..key_6" rows as if they were
-        // the resource family's plain key_1..key_6 rows and disagree with that family's own proof,
-        // refusing instead of succeeding.
+        // Three families enumerated in one run, all Proven, the designated census family listed
+        // SECOND and the designated assertion family listed THIRD (neither first). A derivation that
+        // picked "the first Proven outcome" or "any Proven outcome" rather than the outcome whose
+        // FamilyKey equals resourceObservationFamilyKey/resourceAssertionsFamilyKey would try to
+        // decode the wrong family's own rows and disagree with that family's own proof, refusing
+        // instead of succeeding.
         //
         // Each family is its own RoutedHttpAcquisitionSession (LuxembourgRepeatedEnumerationExecutor
         // .RunPartitionAsync starts a fresh one every call), and SequencedHandler's ordinal counter
         // is one running total across the whole shared handler instance, so this handler answers
-        // robots twice -- once at ordinal 0 for the relation family's own bootstrap, once at ordinal
-        // 7 for the resource family's.
+        // robots three times -- once at ordinal 0 for the relation family's own bootstrap, once at
+        // ordinal 7 for the census family's, once at ordinal 14 for the assertion family's.
+        const string subjectUri = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0";
         var (profile, _, enumerationRef) = BuildProfile();
         var store = new InMemoryCustodyStore();
         var (relationRequest, relationWitness) = BuildPartitionRequest(RelationSetId, RelationFamilyKey);
         var (resourceRequest, resourceWitness) = BuildPartitionRequest(ResourceSetId, ResourceFamilyKey);
+        var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
         var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, req) => ordinal switch
         {
-            7 => TextResponse(req, "User-agent: *\nAllow: /\n"),
+            7 or 14 => TextResponse(req, "User-agent: *\nAllow: /\n"),
             1 or 4 => LuxembourgAcquisitionTestFixture.JsonResponse(
                 req, LuxembourgAcquisitionTestFixture.CountJson(2)),
             2 or 5 => LuxembourgAcquisitionTestFixture.JsonResponse(req, RelationAssertionsRowsJson("a", "b")),
@@ -348,20 +359,31 @@ public sealed class LuxembourgQueryExecutionAdapterTests
             8 or 11 => LuxembourgAcquisitionTestFixture.JsonResponse(
                 req, LuxembourgAcquisitionTestFixture.CountJson(1)),
             9 or 12 => LuxembourgAcquisitionTestFixture.JsonResponse(
-                req, LuxembourgAcquisitionTestFixture.RowsJson(
-                    "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0")),
+                req, LuxembourgAcquisitionTestFixture.RowsJson(subjectUri)),
             10 or 13 => LuxembourgAcquisitionTestFixture.JsonResponse(
                 req, LuxembourgAcquisitionTestFixture.EmptyRowsJson()),
+            15 or 18 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                req, LuxembourgAcquisitionTestFixture.CountJson(1)),
+            // A relation-predicate row: real content the identity check must still admit as a member
+            // of the census, even though BuildResourceObservations' own vocabulary filter then
+            // excludes it from Assertions (that filter is exercised for its own sake by the two
+            // AcceptedCandidate-restoring tests below; this test's own concern is family selection by
+            // key, not assertion content).
+            16 or 19 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                req, AssertionRowsJson(
+                    (subjectUri, CitesPredicate, subjectUri, "iri", "", ""))),
+            17 or 20 => LuxembourgAcquisitionTestFixture.JsonResponse(req, AssertionRowsJson()),
             _ => throw new AssertFailedException($"unexpected ordinal {ordinal}"),
         });
         var adapter = new LuxembourgQueryExecutionAdapter(store, NewExecutor(store, handler), profile);
 
         var result = await adapter.RunAsync(
-            [(relationRequest, relationWitness), (resourceRequest, resourceWitness)],
-            RelationFamilyKey, ResourceFamilyKey,
+            [(relationRequest, relationWitness), (resourceRequest, resourceWitness),
+                (assertionRequest, assertionWitness)],
+            RelationFamilyKey, ResourceFamilyKey, AssertionFamilyKey,
             new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
 
-        Assert.AreEqual(2, result.FamilyOutcomes.Count);
+        Assert.AreEqual(3, result.FamilyOutcomes.Count);
         Assert.IsTrue(
             result.FamilyOutcomes.All(
                 static outcome => outcome.Kind == LuxembourgFamilyEnumerationOutcomeKind.Proven),
@@ -377,27 +399,50 @@ public sealed class LuxembourgQueryExecutionAdapterTests
     [TestMethod]
     public async Task AProvenResourceFamilysRowsDeriveObservationsAndLetScopeResolutionProceed()
     {
-        // The positive control: one genuinely delivered, independently re-verified row, decoded
-        // through item 17 into one LuxembourgResourceObservation with no caller-supplied list
-        // anywhere in the call. Two rows exercises the per-row mapping loop, not just a single
-        // iteration.
+        // The positive control: two genuinely delivered, independently re-verified census rows,
+        // decoded through item 17 into two LuxembourgResourceObservation values with no
+        // caller-supplied list anywhere in the call. Both this run's census keys end up with empty
+        // assertions, for two DIFFERENT honest reasons the ruling names explicitly: a0 has a real "A"
+        // row whose predicate (a RelationPredicate, not an AssertionPredicate) BuildResourceObservations'
+        // own vocabulary filter excludes, while a1 has no "A" row at all. Both are the identity-set
+        // membership check passing, not it being skipped: a0's subject must still be found in the
+        // census's own delivered key set before its row is even looked at.
+        const string subjectA0 = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0";
+        const string subjectA1 = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a1";
         var (profile, _, enumerationRef) = BuildProfile();
         var store = new InMemoryCustodyStore();
-        var handler = ResourceFamilyDeliveringHandler(rowCount: 2);
+        var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, req) => ordinal switch
+        {
+            1 or 4 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                req, LuxembourgAcquisitionTestFixture.CountJson(2)),
+            2 or 5 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                req, LuxembourgAcquisitionTestFixture.RowsJson(subjectA0, subjectA1)),
+            3 or 6 => LuxembourgAcquisitionTestFixture.JsonResponse(req, LuxembourgAcquisitionTestFixture.EmptyRowsJson()),
+            7 => TextResponse(req, "User-agent: *\nAllow: /\n"),
+            8 or 11 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                req, LuxembourgAcquisitionTestFixture.CountJson(1)),
+            9 or 12 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                req, AssertionRowsJson((subjectA0, CitesPredicate, subjectA1, "iri", "", ""))),
+            10 or 13 => LuxembourgAcquisitionTestFixture.JsonResponse(req, AssertionRowsJson()),
+            _ => throw new AssertFailedException($"unexpected ordinal {ordinal}"),
+        });
         var adapter = new LuxembourgQueryExecutionAdapter(store, NewExecutor(store, handler), profile);
-        var (partitionRequest, witness) = BuildPartitionRequest(ResourceSetId, ResourceFamilyKey);
+        var (resourceRequest, resourceWitness) = BuildPartitionRequest(ResourceSetId, ResourceFamilyKey);
+        var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
 
         var result = await adapter.RunAsync(
-            [(partitionRequest, witness)], null, ResourceFamilyKey,
+            [(resourceRequest, resourceWitness), (assertionRequest, assertionWitness)],
+            null, ResourceFamilyKey, AssertionFamilyKey,
             new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
 
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
         Assert.IsNotNull(result.ScopeManifestReceipt);
         Assert.AreEqual(LuxembourgQueryExecutionCompletion.AllFamiliesProven, result.Completion);
-        // The "subjects" family projects only a bare resource identity (no rdf:type, no
-        // typeDocument), so a genuinely derived observation can never resolve to AcceptedCandidate
-        // and this run's coarse-disposition markers must be empty -- proving the derivation actually
-        // ran (an unreached derivation would also show zero markers, but would have refused above).
+        // Neither census key carries an admitted assertion (a0's own "A" row is a relation predicate,
+        // filtered; a1 has no "A" row at all), so a genuinely derived observation can never resolve to
+        // AcceptedCandidate here and this run's coarse-disposition markers must be empty -- proving
+        // the derivation actually ran (an unreached derivation would also show zero markers, but would
+        // have refused above).
         Assert.AreEqual(0, result.CoarseDispositionMarkers.Count);
     }
 
@@ -417,7 +462,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
                 store, NewExecutor(store, NoSendHandler()), profile);
 
             var result = await adapter.RunAsync(
-                [], null, null, new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
+                [], null, null, null, new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
 
             Assert.IsNull(result.ScopeManifestReceipt);
             Assert.IsNotNull(result.Refusal);
@@ -432,21 +477,99 @@ public sealed class LuxembourgQueryExecutionAdapterTests
     // D1-04a's coarse-disposition-marker tests (ATcResourceAcceptedByBucketMembershipCarriesThe...,
     // AnOrdinaryLoiActCarriesNoCoarseDispositionMarker, and their AssertCoarseGapAsync helper) drove
     // BuildCoarseDispositionMarkers through hand-crafted rdf:type/typeDocument assertions on a
-    // caller-supplied observations list. D1-04b removes that list: this adapter now derives
-    // observations only from the "subjects" family's own rows, which carry no assertions at all (see
-    // MapRowsToResourceObservations' remarks on LuxembourgQueryExecutionAdapter), so a genuinely
-    // derived resource can never resolve to AcceptedCandidate and those scenarios are no longer
-    // reachable through this adapter -- not a corner cut, a direct, named consequence of removing the
-    // caller-supplied list. AProvenResourceFamilysRowsDeriveObservationsAndLetScopeResolutionProceed
-    // above proves the wiring still calls BuildCoarseDispositionMarkers correctly against real derived
-    // data (finding nothing to mark, honestly, because there is nothing to find); it does NOT exercise
-    // BuildCoarseDispositionMarkers' own gap-found branch (locating the typeDocument assertion and
-    // mapping a PriorityCandidateType to its LuxembourgCoarseDispositionGap), which needs an
-    // AcceptedCandidate resource this family alone cannot produce. That branch's own unit-level
-    // correctness is unrelated to family sourcing and was never adapter-specific logic under test
-    // here in the first place; restoring adapter-level coverage of it is future work for whichever
-    // slice wires a resource-observation source that actually carries assertions (see this file's own
-    // report on the "A" family finding).
+    // caller-supplied observations list D1-04b removed. D1-04b's first pass could not restore them:
+    // the "subjects" family alone carries no assertions, so a genuinely derived resource could never
+    // reach AcceptedCandidate through this adapter. The reviewer's ruling on that finding
+    // (lex-event-20260904T023842960Z-3b559fba1e3c46dba3ef496e401d96f3) confirmed the "assertion-rows"
+    // family carries the real content D1-04a's original binding never asked for; the two tests below
+    // restore this branch's adapter-level reachability using that family's own real, independently
+    // re-verified rows -- never a hand-built LuxembourgResourceObservation. One gap
+    // (TcTypedRoleNotDistinguished) stands in for the three PriorityCandidateType gaps
+    // BuildCoarseDispositionMarkers' own switch produces: RECT and ACC follow the identical adapter
+    // wiring with a different constant, and each gap's own resolver-level correctness (not
+    // family-sourcing-dependent) is already covered by LuxembourgScopeResolverTests and
+    // LuxembourgSourceProfileTests.
+
+    [TestMethod]
+    public async Task ATcResourceAcceptedByBucketMembershipCarriesTheTypedGapMarkerFromDerivedAssertions()
+    {
+        const string subjectUri = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0";
+        var (profile, _, enumerationRef) = BuildProfile();
+        var store = new InMemoryCustodyStore();
+        // Two real "A" rows for the one census subject, delivered in one page on both passes.
+        // Ordered by ascending key_2 (predicate): TypeDocumentPredicate's "data.legilux.public.lu"
+        // host sorts before RdfType's "www.w3.org" one, and RepeatedEnumerationDeliveryProof requires
+        // strictly ascending cursors across a pass's own delivered rows.
+        var assertionPage = AssertionRowsJson(
+            (subjectUri, TypeDocumentPredicate, TypeDocumentPrefix + "TC", "iri", "", ""),
+            (subjectUri, RdfType, JoluxAct, "iri", "", ""));
+        var handler = TwoFamilyDeliveringHandler([subjectUri], 2, assertionPage);
+        var adapter = new LuxembourgQueryExecutionAdapter(store, NewExecutor(store, handler), profile);
+        var (resourceRequest, resourceWitness) = BuildPartitionRequest(ResourceSetId, ResourceFamilyKey);
+        var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
+
+        var result = await adapter.RunAsync(
+            [(resourceRequest, resourceWitness), (assertionRequest, assertionWitness)],
+            null, ResourceFamilyKey, AssertionFamilyKey,
+            new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
+
+        Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+        Assert.IsNotNull(result.ScopeManifestReceipt);
+        Assert.AreEqual(1, result.CoarseDispositionMarkers.Count);
+        var marker = result.CoarseDispositionMarkers[0];
+        Assert.AreEqual(subjectUri, marker.PublisherUri);
+        Assert.AreEqual(TypeDocumentPrefix + "TC", marker.ObservedTypeDocumentIri);
+        Assert.AreEqual(LuxembourgCoarseDispositionGap.TcTypedRoleNotDistinguished, marker.Gap);
+    }
+
+    [TestMethod]
+    public async Task AnOrdinaryLoiActCarriesNoCoarseDispositionMarkerFromDerivedAssertions()
+    {
+        const string subjectUri = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0";
+        var (profile, _, enumerationRef) = BuildProfile();
+        var store = new InMemoryCustodyStore();
+        var assertionPage = AssertionRowsJson(
+            (subjectUri, TypeDocumentPredicate, TypeDocumentPrefix + "LOI", "iri", "", ""),
+            (subjectUri, RdfType, JoluxAct, "iri", "", ""));
+        var handler = TwoFamilyDeliveringHandler([subjectUri], 2, assertionPage);
+        var adapter = new LuxembourgQueryExecutionAdapter(store, NewExecutor(store, handler), profile);
+        var (resourceRequest, resourceWitness) = BuildPartitionRequest(ResourceSetId, ResourceFamilyKey);
+        var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
+
+        var result = await adapter.RunAsync(
+            [(resourceRequest, resourceWitness), (assertionRequest, assertionWitness)],
+            null, ResourceFamilyKey, AssertionFamilyKey,
+            new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
+
+        Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+        Assert.IsNotNull(result.ScopeManifestReceipt);
+        Assert.AreEqual(0, result.CoarseDispositionMarkers.Count);
+    }
+
+    /// <summary>
+    /// Two families in one run: the "subjects" census (one row per <paramref name="censusSubjects"/>
+    /// value) enumerated first (ordinals 0-6), then the "assertion-rows" family delivering
+    /// <paramref name="assertionPage"/> ((<paramref name="assertionRowCount"/> rows) on both passes,
+    /// enumerated second (ordinals 7-13) -- the same proven 1-robots-plus-3-requests-per-pass shape
+    /// <see cref="RelationFamilyDeliveringHandler"/> already uses, applied to two families instead of
+    /// one.
+    /// </summary>
+    private static HttpMessageHandler TwoFamilyDeliveringHandler(
+        string[] censusSubjects, int assertionRowCount, string assertionPage) =>
+        LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, req) => ordinal switch
+        {
+            1 or 4 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                req, LuxembourgAcquisitionTestFixture.CountJson(censusSubjects.Length)),
+            2 or 5 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                req, LuxembourgAcquisitionTestFixture.RowsJson(censusSubjects)),
+            3 or 6 => LuxembourgAcquisitionTestFixture.JsonResponse(req, LuxembourgAcquisitionTestFixture.EmptyRowsJson()),
+            7 => TextResponse(req, "User-agent: *\nAllow: /\n"),
+            8 or 11 => LuxembourgAcquisitionTestFixture.JsonResponse(
+                req, LuxembourgAcquisitionTestFixture.CountJson(assertionRowCount)),
+            9 or 12 => LuxembourgAcquisitionTestFixture.JsonResponse(req, assertionPage),
+            10 or 13 => LuxembourgAcquisitionTestFixture.JsonResponse(req, AssertionRowsJson()),
+            _ => throw new AssertFailedException($"unexpected ordinal {ordinal}"),
+        });
 
     [TestMethod]
     public async Task AFullRunDeliversAgainstARealFreshFileSystemCustodyStore()
@@ -471,7 +594,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
             var (partitionRequest, witness) = BuildPartitionRequest(RelationSetId, RelationFamilyKey);
 
             var result = await adapter.RunAsync(
-                [(partitionRequest, witness)], RelationFamilyKey, null,
+                [(partitionRequest, witness)], RelationFamilyKey, null, null,
                 new PermissiveEvidenceResolver(enumerationRef), CancellationToken.None);
 
             Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
@@ -548,37 +671,6 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         });
 
     /// <summary>
-    /// Robots allow, then a <paramref name="rowCount"/>-row page and an empty terminal page, on
-    /// both passes, using the plain "subjects" template's own key_1..key_6 projection (no
-    /// relation-assertions style extra columns): the same generic shape D1-03's own executor tests
-    /// use for a resource family. D1-04b's own derivation decodes <c>key_1</c> as the resource's
-    /// publisher URI (<see cref="LuxembourgQueryExecutionAdapter.MapRowsToResourceObservations"/>),
-    /// which <see cref="Lex.V3.Contracts.Source.Core.SourceObjectRef"/> requires to be a genuine
-    /// absolute HTTP(S) URI -- unlike D1-04a's own bare single-letter row keys, which only ever fed a
-    /// row count. Row keys are therefore distinct, strictly ascending absolute URIs, which this
-    /// file's own <see cref="BuildPartitionRequest"/> range ("" to "￿") still contains. Requires
-    /// <paramref name="rowCount"/> to be at least 1 and small enough to fit in one page (every
-    /// scenario in this file uses 1 or 2).
-    /// </summary>
-    private static HttpMessageHandler ResourceFamilyDeliveringHandler(int rowCount)
-    {
-        var key1Values = Enumerable.Range(0, rowCount)
-            .Select(static index =>
-                $"http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a{index}")
-            .ToArray();
-        return LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, req) => ordinal switch
-        {
-            1 or 4 => LuxembourgAcquisitionTestFixture.JsonResponse(
-                req, LuxembourgAcquisitionTestFixture.CountJson(rowCount)),
-            2 or 5 => LuxembourgAcquisitionTestFixture.JsonResponse(
-                req, LuxembourgAcquisitionTestFixture.RowsJson(key1Values)),
-            3 or 6 => LuxembourgAcquisitionTestFixture.JsonResponse(
-                req, LuxembourgAcquisitionTestFixture.EmptyRowsJson()),
-            _ => throw new AssertFailedException("No further sends after both passes complete."),
-        });
-    }
-
-    /// <summary>
     /// Like <see cref="LuxembourgAcquisitionTestFixture.RowsJson(string[])"/>, but with the
     /// "relation-assertions" template's own closed delivery projection in <c>head.vars</c>
     /// (<c>subject, predicate, object, key_1..key_6</c>, per
@@ -608,6 +700,52 @@ public sealed class LuxembourgQueryExecutionAdapterTests
         var bindings = string.Join(',', key1Values.Select(Row));
         return "{\"head\":{\"link\":[],\"vars\":[\"subject\",\"predicate\",\"object\"," +
                "\"key_1\",\"key_2\",\"key_3\",\"key_4\",\"key_5\",\"key_6\"]}," +
+               $"\"results\":{{\"distinct\":false,\"ordered\":true,\"bindings\":[{bindings}]}}}}";
+    }
+
+    /// <summary>
+    /// One page of the "assertion-rows" family's own closed delivery projection (<c>subject,
+    /// predicate, object, object_kind, datatype_iri, language_tag, key_1..key_6</c>, per
+    /// <c>LuxembourgQueryPlan.DeliveryProjectionVariables("assertion-rows")</c>). Every subject in
+    /// this file's own fixtures is an absolute IRI, so <c>key_1</c> always equals
+    /// <c>row.Subject</c> exactly (the template's own <c>BIND(IF(isIRI(?subject), STR(?subject),
+    /// "") AS ?key_1)</c>) -- this helper does not model the non-IRI-subject branch, which no test
+    /// in this file needs. Rows are emitted in the exact order given, so a caller supplying more
+    /// than one row for the same subject is responsible for ordering them by ascending
+    /// <c>key_2</c> (predicate) itself, exactly as <see cref="RepeatedEnumerationDeliveryProof"/>'s
+    /// own strict cursor-ordering check requires.
+    /// </summary>
+    private static string AssertionRowsJson(
+        params (string Subject, string Predicate, string ObjectValue, string ObjectKind, string Datatype,
+            string Language)[] rows)
+    {
+        static string Field(string name, string kind, string value) =>
+            $"\"{name}\":{{\"type\":\"{kind}\",\"value\":\"{value}\"}}";
+
+        static string Row(
+            (string Subject, string Predicate, string ObjectValue, string ObjectKind, string Datatype,
+                string Language) row)
+        {
+            var objectKind = row.ObjectKind == "iri" ? "uri" : "literal";
+            var keyParts = new[] { row.Subject, row.Predicate, row.ObjectKind, row.ObjectValue, row.Datatype, row.Language };
+            var fields = new[]
+            {
+                Field("subject", "uri", row.Subject),
+                Field("predicate", "uri", row.Predicate),
+                Field("object", objectKind, row.ObjectValue),
+                Field("object_kind", "literal", row.ObjectKind),
+                Field("datatype_iri", "literal", row.Datatype),
+                Field("language_tag", "literal", row.Language),
+            };
+            var keys = keyParts.Select(
+                static (value, index) => Field($"key_{index + 1}", "literal", value));
+            return "{" + string.Join(',', fields.Concat(keys)) + "}";
+        }
+
+        var bindings = string.Join(',', rows.Select(Row));
+        return "{\"head\":{\"link\":[],\"vars\":[\"subject\",\"predicate\",\"object\",\"object_kind\"," +
+               "\"datatype_iri\",\"language_tag\",\"key_1\",\"key_2\",\"key_3\",\"key_4\",\"key_5\"," +
+               "\"key_6\"]}," +
                $"\"results\":{{\"distinct\":false,\"ordered\":true,\"bindings\":[{bindings}]}}}}";
     }
 

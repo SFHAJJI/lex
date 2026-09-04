@@ -253,6 +253,16 @@ public enum LuxembourgQueryExecutionRefusal
     /// <see cref="Lex.V3.Contracts.Source.Core.RepeatedEnumerationRowsOpenRefusal"/> reason.
     /// </summary>
     ResourceObservationRowsNotVerified = 4,
+
+    /// <summary>
+    /// D1-04b's ruling on the two families: the "assertion-rows" family (set "A") is bound to the
+    /// "subjects" census family (set "S") by IDENTITY-SET EQUALITY, never a count. This refuses when
+    /// a subject appearing in A's own decoded rows is not a member of S's own delivered key set --
+    /// two independent enumerations over the same triple store disagreeing about which subjects
+    /// exist is a genuine data-integrity problem this adapter reports rather than silently drops.
+    /// See <see cref="LuxembourgQueryExecutionRefusalDetail.Detail"/> for the exact subject.
+    /// </summary>
+    ObservationSubjectNotInDeliveredCensus = 5,
 }
 
 public sealed class LuxembourgQueryExecutionRefusalDetail
@@ -432,28 +442,52 @@ public sealed class LuxembourgQueryExecutionResult
 /// </para>
 /// <para>
 /// D1-04b closed the observation-decoding residue D1-04a named: <c>RunAsync</c> derives its own
-/// <see cref="LuxembourgResourceObservation"/> values from the designated resource-observation
-/// family's own delivered rows, rather than trusting a caller-supplied list. It does this through
+/// <see cref="LuxembourgResourceObservation"/> values from real delivered rows, rather than trusting
+/// a caller-supplied list. It does this through
 /// <see cref="Lex.V3.Contracts.Source.Core.VerifiedRepeatedEnumerationRows.TryOpen"/> (queue item
-/// 17): this adapter reopens that family's pass-A pages from custody by the exact digests its own
+/// 17): this adapter reopens a family's pages from custody by the exact digests its own
 /// <see cref="LuxembourgEnumerationDeliveryReceipt.Delivery"/> names, in page order, assembling each
 /// <see cref="Lex.V3.Contracts.Source.Core.RepeatedEnumerationResolvedEvidence"/> from that page's
 /// own plan, input, render receipt, logical request, HTTP evidence and write receipt -- never minted
 /// anew or faked -- then lets item 17 independently re-parse and re-verify every row before this
 /// adapter ever reads one. A verified <c>RepeatedEnumerationRow</c>'s <c>Terms</c> are mapped to an
 /// observation by looking up the interpretation profile's own named projection variables, never by
-/// positional index, so a template whose column order differs cannot silently mismap.
+/// positional index, so a template whose column order differs cannot silently mismap. This reopen
+/// (<see cref="ReopenAndVerifyFamilyRowsAsync"/>) does not care which family it reopens: it is the
+/// same private method for both families D1-04b drives below, generalized from the single-family
+/// form D1-04b's own first pass built, rather than a second copy.
+/// </para>
+/// <para>
+/// The reviewer's ruling on D1-04b's first-pass fork
+/// (lex-event-20260904T023842960Z-3b559fba1e3c46dba3ef496e401d96f3, over the NOTE at
+/// lex-event-20260904T023643784Z-f87a1781e3ae45b88c0a263d9d7a1249) settled which family carries what:
+/// the "subjects" family (set "S") projects only <c>STR(?subject)</c> and is the census -- D1-04a's
+/// own binding to it was correct, it bound the census, never the content. The "assertion-rows"
+/// family (set "A") projects <c>subject, predicate, object, object_kind, datatype_iri,
+/// language_tag</c> and is the actual content. <c>RunAsync</c> now designates and proves both
+/// families in the same run (<paramref name="resourceObservationFamilyKey"/> for S,
+/// <paramref name="resourceAssertionsFamilyKey"/> for A) and binds them by IDENTITY-SET EQUALITY,
+/// never a count: every subject A's own decoded rows name must be a member of S's own delivered key
+/// set, refused as <see cref="LuxembourgQueryExecutionRefusal.ObservationSubjectNotInDeliveredCensus"/>
+/// otherwise, and every key S actually delivered yields exactly one derived observation -- carrying
+/// A's real assertions when A has rows for that subject, or honestly empty assertions when it does
+/// not (a real "this resource has no assertions this run observed", which the merged
+/// <c>LuxembourgScopeResolver</c> is left free to keep typing however it already does; that is a
+/// resolver-layer question this slice does not touch). See <see cref="BuildResourceObservations"/>.
 /// </para>
 /// <para>
 /// This adapter still drives one partition per family
 /// (<see cref="LuxembourgRepeatedEnumerationExecutor.RunPartitionAsync"/>), not a
 /// <see cref="LuxembourgPartitionCover"/> chain: a family whose selection requires repartitioning is
 /// reported as an ordinary refused family outcome rather than silently retried across a chain.
-/// D1-04b measured no live count for the resource-discovery family against the publisher's
-/// 1,000,000-row selection ceiling -- no production crawl has run under V3 yet, and every count in
-/// this file's own tests is a small synthetic fixture value -- so driving
-/// <see cref="LuxembourgRepeatedEnumerationExecutor.RunCoverAsync"/> for a <c>PartitionRequired</c>
-/// census family remains D1-04c's job, not this one's.
+/// D1-04b measured no live count for either the "subjects" census family or the "assertion-rows"
+/// family against the publisher's 1,000,000-row selection ceiling -- no production crawl has run
+/// under V3 yet, and every count in this file's own tests is a small synthetic fixture value -- and
+/// no such measurement exists anywhere in this repository's coordination record either, so this
+/// slice proceeds on the single-partition assumption for both families, named explicitly here rather
+/// than assumed silently. Driving <see cref="LuxembourgRepeatedEnumerationExecutor.RunCoverAsync"/>
+/// for either family once a real <c>PartitionRequired</c> count is observed remains future work, not
+/// this one's, exactly as the prior ruling already established for the census family alone.
 /// </para>
 /// </remarks>
 public sealed class LuxembourgQueryExecutionAdapter
@@ -474,8 +508,9 @@ public sealed class LuxembourgQueryExecutionAdapter
 
     /// <summary>
     /// Runs one D1-04 slice: enumerates <paramref name="families"/> (one partition request each,
-    /// no cover/chain yet -- see the type remarks above), then reuses the merged R5.1 pipeline
-    /// exactly once over <paramref name="observations"/>.
+    /// no cover/chain yet -- see the type remarks above), derives this run's own
+    /// <see cref="LuxembourgResourceObservation"/> values (see <see cref="BuildResourceObservations"/>),
+    /// then reuses the merged R5.1 pipeline exactly once over them.
     /// </summary>
     /// <param name="families">
     /// One partition request and its already-bound source witness per family to enumerate. Passed
@@ -495,12 +530,14 @@ public sealed class LuxembourgQueryExecutionAdapter
     /// enumerate relations at all.
     /// </param>
     /// <param name="resourceObservationFamilyKey">
-    /// Which entry of <paramref name="families"/>, if any, is the LU resource-discovery family
-    /// (query-plan set "S", template "subjects") this run derives
-    /// <see cref="LuxembourgResourceObservation"/> values from. Null means this run does not census
-    /// resources at all, exactly as a null <paramref name="relationAssertionsFamilyKey"/> means it
-    /// does not census relations. When non-null, the named family must be among
-    /// <paramref name="families"/> and its enumeration must be
+    /// Which entry of <paramref name="families"/>, if any, is the LU resource-discovery census
+    /// family (query-plan set "S", template "subjects") this run derives one
+    /// <see cref="LuxembourgResourceObservation"/> per delivered key from. Null means this run does
+    /// not census resources at all, exactly as a null <paramref name="relationAssertionsFamilyKey"/>
+    /// means it does not census relations; when null, <paramref name="resourceAssertionsFamilyKey"/>
+    /// must also be null (<c>RunAsync</c> throws <see cref="ArgumentException"/> otherwise -- a
+    /// caller-contract violation, not a domain refusal). When non-null, the named family must be
+    /// among <paramref name="families"/> and its enumeration must be
     /// <see cref="LuxembourgFamilyEnumerationOutcomeKind.Proven"/>, or <c>RunAsync</c> refuses with
     /// <see cref="LuxembourgQueryExecutionRefusal.ResourceObservationFamilyNotProven"/>; its proven
     /// delivered rows must then independently re-verify when reopened from custody through
@@ -511,16 +548,38 @@ public sealed class LuxembourgQueryExecutionAdapter
     /// every observation this run resolves scope over is this run's own, independently re-derived
     /// data, never a hand-supplied set the run never actually enumerated.
     /// </param>
+    /// <param name="resourceAssertionsFamilyKey">
+    /// Which entry of <paramref name="families"/>, if any, is the LU assertion-content family
+    /// (query-plan set "A", template "assertion-rows") this run derives real
+    /// <see cref="LuxembourgObservedAssertion"/> values from, joined by subject to the census
+    /// <paramref name="resourceObservationFamilyKey"/> names. Must be null exactly when
+    /// <paramref name="resourceObservationFamilyKey"/> is null. Proven and reopened the same way as
+    /// the census family (same two refusal codes on the same two failure shapes); once both families'
+    /// rows are in hand, every subject A's own rows name must be a member of S's own delivered key
+    /// set or <c>RunAsync</c> refuses with
+    /// <see cref="LuxembourgQueryExecutionRefusal.ObservationSubjectNotInDeliveredCensus"/> -- an
+    /// identity-set membership test over both families' own decoded rows, never a count.
+    /// </param>
     /// <param name="evidenceResolver">The evidence resolver the merged R5.1 scope reduction requires.</param>
     public async Task<LuxembourgQueryExecutionResult> RunAsync(
         IReadOnlyList<(LuxembourgPartitionRunRequest PartitionRequest, BoundMachineRequest SourceWitness)> families,
         string? relationAssertionsFamilyKey,
         string? resourceObservationFamilyKey,
+        string? resourceAssertionsFamilyKey,
         IScopeReductionEvidenceResolver evidenceResolver,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(families);
         ArgumentNullException.ThrowIfNull(evidenceResolver);
+        if ((resourceObservationFamilyKey is null) != (resourceAssertionsFamilyKey is null))
+        {
+            throw new ArgumentException(
+                "A resource-observation census family key and its assertion-rows family key must " +
+                "both be null (this run does not census resources at all) or both be provided (the " +
+                "census supplies the resource identities, the assertion family supplies their real " +
+                "content, joined by subject identity-set membership).",
+                nameof(resourceAssertionsFamilyKey));
+        }
 
         var topology = LuxembourgSourceProfileTopology.Mint(_sourceProfile);
 
@@ -528,8 +587,10 @@ public sealed class LuxembourgQueryExecutionAdapter
         AbsenceFamilyEnumerationProof? relationProof = null;
         string? relationIncompleteReason = null;
         var sawRelationFamily = false;
-        LuxembourgEnumerationDeliveryReceipt? resourceReceipt = null;
-        LuxembourgPartitionRunRequest? resourcePartitionRequest = null;
+        LuxembourgEnumerationDeliveryReceipt? censusReceipt = null;
+        LuxembourgPartitionRunRequest? censusPartitionRequest = null;
+        LuxembourgEnumerationDeliveryReceipt? assertionReceipt = null;
+        LuxembourgPartitionRunRequest? assertionPartitionRequest = null;
 
         foreach (var (partitionRequest, sourceWitness) in families)
         {
@@ -537,8 +598,10 @@ public sealed class LuxembourgQueryExecutionAdapter
             var familyKey = partitionRequest.Partition.PartitionId;
             var isRelationFamily = string.Equals(
                 familyKey, relationAssertionsFamilyKey, StringComparison.Ordinal);
-            var isResourceObservationFamily = string.Equals(
+            var isCensusFamily = string.Equals(
                 familyKey, resourceObservationFamilyKey, StringComparison.Ordinal);
+            var isAssertionFamily = string.Equals(
+                familyKey, resourceAssertionsFamilyKey, StringComparison.Ordinal);
 
             var runResult = await _executor.RunPartitionAsync(
                     partitionRequest, sourceWitness, cancellationToken)
@@ -556,10 +619,16 @@ public sealed class LuxembourgQueryExecutionAdapter
                         relationProof = proof;
                     }
 
-                    if (isResourceObservationFamily)
+                    if (isCensusFamily)
                     {
-                        resourceReceipt = receipt;
-                        resourcePartitionRequest = partitionRequest;
+                        censusReceipt = receipt;
+                        censusPartitionRequest = partitionRequest;
+                    }
+
+                    if (isAssertionFamily)
+                    {
+                        assertionReceipt = receipt;
+                        assertionPartitionRequest = partitionRequest;
                     }
                 }
                 else
@@ -586,7 +655,7 @@ public sealed class LuxembourgQueryExecutionAdapter
         var relationAcquisitions = BuildRelationFamilyAcquisitions(
             relationAssertionsFamilyKey, sawRelationFamily, relationProof, relationIncompleteReason);
 
-        // D1-04b: derive this run's own observations from the designated family's own proven,
+        // D1-04b: derive this run's own observations from the two designated families' own proven,
         // independently re-verified rows, rather than trusting a caller-supplied list. Refuses
         // before Resolve/ReduceScope ever sees anything, so an unproven or unverified family never
         // reaches the scope manifest at all.
@@ -594,18 +663,14 @@ public sealed class LuxembourgQueryExecutionAdapter
         if (resourceObservationFamilyKey is null)
         {
             // Symmetric with BuildRelationFamilyAcquisitions' own "did not try this run" case: no
-            // designation is the ordinary empty run, not a refusal.
+            // designation is the ordinary empty run, not a refusal. The constructor-level guard above
+            // already requires resourceAssertionsFamilyKey to also be null here.
             observations = [];
         }
         else
         {
-            var resourceOutcome = outcomes.FirstOrDefault(
-                candidate => string.Equals(
-                    candidate.FamilyKey, resourceObservationFamilyKey, StringComparison.Ordinal));
-            if (resourceOutcome is null ||
-                resourceOutcome.Kind != LuxembourgFamilyEnumerationOutcomeKind.Proven ||
-                resourceReceipt is null ||
-                resourcePartitionRequest is null)
+            var censusOutcome = FindProvenOutcome(outcomes, resourceObservationFamilyKey);
+            if (censusOutcome is null || censusReceipt is null || censusPartitionRequest is null)
             {
                 return LuxembourgQueryExecutionResult.Refused(
                     topology,
@@ -614,14 +679,28 @@ public sealed class LuxembourgQueryExecutionAdapter
                     new LuxembourgQueryExecutionRefusalDetail(
                         LuxembourgQueryExecutionRefusal.ResourceObservationFamilyNotProven,
                         null,
-                        $"the designated resource-observation family '{resourceObservationFamilyKey}' was " +
-                        "not proven by this run's enumeration."));
+                        $"the designated resource-observation census family '{resourceObservationFamilyKey}' " +
+                        "was not proven by this run's enumeration."));
             }
 
-            var (rows, rowsProfile, rowsRefusal) = await ReopenAndVerifyResourceRowsAsync(
-                    resourceOutcome.Proof!, resourceReceipt, resourcePartitionRequest, cancellationToken)
+            var assertionOutcome = FindProvenOutcome(outcomes, resourceAssertionsFamilyKey!);
+            if (assertionOutcome is null || assertionReceipt is null || assertionPartitionRequest is null)
+            {
+                return LuxembourgQueryExecutionResult.Refused(
+                    topology,
+                    outcomes,
+                    relationAcquisitions,
+                    new LuxembourgQueryExecutionRefusalDetail(
+                        LuxembourgQueryExecutionRefusal.ResourceObservationFamilyNotProven,
+                        null,
+                        $"the designated resource-assertion family '{resourceAssertionsFamilyKey}' was not " +
+                        "proven by this run's enumeration."));
+            }
+
+            var (censusRows, censusProfile, censusRefusal) = await ReopenAndVerifyFamilyRowsAsync(
+                    censusOutcome.Proof!, censusReceipt, censusPartitionRequest, cancellationToken)
                 .ConfigureAwait(false);
-            if (rows is null)
+            if (censusRows is null)
             {
                 return LuxembourgQueryExecutionResult.Refused(
                     topology,
@@ -630,11 +709,44 @@ public sealed class LuxembourgQueryExecutionAdapter
                     new LuxembourgQueryExecutionRefusalDetail(
                         LuxembourgQueryExecutionRefusal.ResourceObservationRowsNotVerified,
                         null,
-                        $"the designated resource-observation family '{resourceObservationFamilyKey}' rows " +
-                        $"did not reverify: {rowsRefusal}."));
+                        $"the designated resource-observation census family '{resourceObservationFamilyKey}' " +
+                        $"rows did not reverify: {censusRefusal}."));
             }
 
-            observations = MapRowsToResourceObservations(rows, rowsProfile);
+            var (assertionRows, assertionProfile, assertionRefusal) = await ReopenAndVerifyFamilyRowsAsync(
+                    assertionOutcome.Proof!, assertionReceipt, assertionPartitionRequest, cancellationToken)
+                .ConfigureAwait(false);
+            if (assertionRows is null)
+            {
+                return LuxembourgQueryExecutionResult.Refused(
+                    topology,
+                    outcomes,
+                    relationAcquisitions,
+                    new LuxembourgQueryExecutionRefusalDetail(
+                        LuxembourgQueryExecutionRefusal.ResourceObservationRowsNotVerified,
+                        null,
+                        $"the designated resource-assertion family '{resourceAssertionsFamilyKey}' rows did " +
+                        $"not reverify: {assertionRefusal}."));
+            }
+
+            var (built, subjectNotInCensus) = BuildResourceObservations(
+                censusRows, censusProfile, assertionRows, assertionProfile,
+                assertionPartitionRequest.InvariantPlan.SelectorPredicates);
+            if (built is null)
+            {
+                return LuxembourgQueryExecutionResult.Refused(
+                    topology,
+                    outcomes,
+                    relationAcquisitions,
+                    new LuxembourgQueryExecutionRefusalDetail(
+                        LuxembourgQueryExecutionRefusal.ObservationSubjectNotInDeliveredCensus,
+                        null,
+                        $"the subject '{subjectNotInCensus}' has a row in the assertion family " +
+                        $"'{resourceAssertionsFamilyKey}' but is not a member of the census family " +
+                        $"'{resourceObservationFamilyKey}'s own delivered key set."));
+            }
+
+            observations = built;
         }
 
         var resolution = _sourceProfile.Resolve(observations);
@@ -710,17 +822,39 @@ public sealed class LuxembourgQueryExecutionAdapter
     }
 
     /// <summary>
-    /// Reopens the designated family's pass-A pages from custody by the exact digests its own
-    /// receipt names, in page order, and hands them to item 17's door
+    /// Finds <paramref name="familyKey"/> among <paramref name="outcomes"/>, returning it only when
+    /// it was actually <see cref="LuxembourgFamilyEnumerationOutcomeKind.Proven"/> this run -- a
+    /// missing key and a found-but-not-proven key are both "no usable outcome" to every caller of
+    /// this method, which report the difference themselves (or don't need to).
+    /// </summary>
+    private static LuxembourgFamilyEnumerationOutcome? FindProvenOutcome(
+        IReadOnlyList<LuxembourgFamilyEnumerationOutcome> outcomes, string familyKey)
+    {
+        var outcome = outcomes.FirstOrDefault(
+            candidate => string.Equals(candidate.FamilyKey, familyKey, StringComparison.Ordinal));
+        return outcome is { Kind: LuxembourgFamilyEnumerationOutcomeKind.Proven } ? outcome : null;
+    }
+
+    /// <summary>
+    /// Reopens one already-proven family's own delivered pages from custody by the exact digests its
+    /// own receipt names, in page order, and hands them to item 17's door
     /// (<see cref="VerifiedRepeatedEnumerationRows.TryOpen"/>) together with the family's proof and
     /// the comparison that minted it. Returns the verified rows and the interpretation profile they
     /// were read under (needed by the caller to map <c>Terms</c> by projection name), or a null row
     /// list plus the specific <see cref="RepeatedEnumerationRowsOpenRefusal"/> reason.
+    /// <para>
+    /// Generalized by D1-04b from the single-family form its own first pass built: this method reads
+    /// nothing "resource"-specific off <paramref name="receipt"/> or <paramref name="partitionRequest"/>
+    /// -- it reopens whichever family <paramref name="partitionRequest"/>'s own <c>SetId</c> and
+    /// <paramref name="receipt"/>'s own delivery name, so the same code now serves both the "subjects"
+    /// census family and the "assertion-rows" content family from <c>RunAsync</c> above, rather than a
+    /// second copy differing only in field names.
+    /// </para>
     /// </summary>
     private async Task<(
         IReadOnlyList<RepeatedEnumerationRow>? Rows,
         RepeatedEnumerationInterpretationProfile Profile,
-        RepeatedEnumerationRowsOpenRefusal Refusal)> ReopenAndVerifyResourceRowsAsync(
+        RepeatedEnumerationRowsOpenRefusal Refusal)> ReopenAndVerifyFamilyRowsAsync(
         AbsenceFamilyEnumerationProof proof,
         LuxembourgEnumerationDeliveryReceipt receipt,
         LuxembourgPartitionRunRequest partitionRequest,
@@ -736,6 +870,10 @@ public sealed class LuxembourgQueryExecutionAdapter
         var profile = partitionRequest.InvariantPlan.CreateDeliveryProfile(
             partitionRequest.InvariantPlanResourceId, partitionRequest.SetId);
 
+        // "PagesA" here is the delivery comparison's own first independent pass (as opposed to its
+        // second, "PagesB"), not query-plan set "A" ("assertion-rows") -- the two are an unrelated
+        // naming coincidence. Either family this method is called for (set "S" or set "A") reopens
+        // its own first pass the identical way.
         var pages = new List<RepeatedEnumerationResolvedEvidence>(delivery.PagesA.Pages.Count);
         foreach (var pageRef in delivery.PagesA.Pages.OrderBy(static page => page.Ordinal))
         {
@@ -904,7 +1042,7 @@ public sealed class LuxembourgQueryExecutionAdapter
 
     /// <summary>
     /// The projection variable that names the resource's own publisher IRI in the "subjects"
-    /// template's delivery profile (<c>LuxembourgQueryPlan.CreateDeliveryProfile</c>'s
+    /// census family's delivery profile (<c>LuxembourgQueryPlan.CreateDeliveryProfile</c>'s
     /// <c>DeliveryProjectionVariables("subjects")</c>: an empty template-specific prefix followed by
     /// the generic <c>key_1..key_6</c> cursor columns, with the subject IRI bound to <c>key_1</c> and
     /// <c>key_2..key_6</c> always the empty string). Looked up by name against
@@ -914,61 +1052,187 @@ public sealed class LuxembourgQueryExecutionAdapter
     /// </summary>
     private const string ResourceIdentityProjectionVariable = "key_1";
 
+    /// <summary>The "assertion-rows" family's own named projection variables (<c>LuxembourgQueryPlan.DeliveryProjectionVariables("assertion-rows")</c>), looked up by name for the same reason as <see cref="ResourceIdentityProjectionVariable"/>.</summary>
+    private const string AssertionSubjectProjectionVariable = "subject";
+
+    private const string AssertionPredicateProjectionVariable = "predicate";
+    private const string AssertionObjectProjectionVariable = "object";
+    private const string AssertionObjectKindProjectionVariable = "object_kind";
+    private const string AssertionDatatypeProjectionVariable = "datatype_iri";
+    private const string AssertionLanguageProjectionVariable = "language_tag";
+
+    /// <summary>The three literal values <c>LuxembourgQueryPlan.BuildTemplates</c>' own <c>object_kind</c> BIND can produce.</summary>
+    private const string AssertionObjectKindIri = "iri";
+
+    private const string AssertionObjectKindLiteral = "literal";
+    private const string AssertionObjectKindUnsupportedBlankNode = "unsupported_blank_node";
+
     /// <summary>
-    /// D1-04b decodes the LU resource-discovery family ("subjects") alone, whose own SPARQL template
-    /// (<c>LuxembourgQueryPlan.BuildTemplates</c>, template "subjects") projects only a distinct
-    /// subject IRI per row -- no predicate, object, or type information at all. So every observation
-    /// this method mints carries an empty <see cref="LuxembourgResourceObservation.Assertions"/> and
-    /// <see cref="LuxembourgResourceObservation.Relations"/> list: that is the honest, complete
-    /// content of what this one family's rows can attest, not a shortcut. A resource observation
-    /// carrying real assertions (rdf:type, typeDocument, ...) needs the "assertion-rows" family
-    /// ("A") joined in by subject, which is a materially different, larger mapping this precision
-    /// does not ask for and is not attempted here.
+    /// D1-04b's real derivation, per the reviewer's ruling
+    /// (lex-event-20260904T023842960Z-3b559fba1e3c46dba3ef496e401d96f3): one
+    /// <see cref="LuxembourgResourceObservation"/> per key <paramref name="censusRows"/> (the
+    /// "subjects" family, set "S") actually delivered, carrying whichever real
+    /// <see cref="LuxembourgObservedAssertion"/> values <paramref name="assertionRows"/> (the
+    /// "assertion-rows" family, set "A") delivered for that same subject -- or honestly empty
+    /// assertions when A has none for it.
+    /// <para>
+    /// The binding between the two families is IDENTITY-SET membership, never a count: every subject
+    /// named by any row in <paramref name="assertionRows"/> (checked here on the RAW, unfiltered
+    /// subject -- before the predicate/object-kind admission below ever runs, so a subject whose only
+    /// A rows get filtered out below still had to pass this membership check) must be a member of the
+    /// key set <paramref name="censusRows"/> actually delivered. The first subject that fails this
+    /// check is returned as <c>SubjectNotInCensus</c> and no observations are built at all; the
+    /// caller turns that into <see cref="LuxembourgQueryExecutionRefusal.ObservationSubjectNotInDeliveredCensus"/>.
+    /// This is a genuine set comparison over both families' own decoded rows, not a row-count
+    /// comparison in disguise: two families that deliver the same COUNT of distinct subjects but
+    /// disagree on which subjects they are still refuses here.
+    /// </para>
+    /// <para>
+    /// Set A's own predicate filter (<c>LuxembourgQueryPlan.BuildTemplates</c>' <c>predicateValues</c>
+    /// for template "assertion-rows") is the union of every AssertionPredicate AND RelationPredicate
+    /// vocabulary IRI, because this one family harvests every predicate value the LU dataset can
+    /// produce for either purpose. Only rows whose predicate is in
+    /// <paramref name="assertionPredicateVocabulary"/> (the AssertionPredicate-kind IRIs; the merged
+    /// <c>LuxembourgQueryPlan.SelectorPredicates</c> this run's own invariant plan already carries)
+    /// become a <see cref="LuxembourgObservedAssertion"/>: the merged
+    /// <c>LuxembourgScopeResolver.ValidateObservation</c> (out of this slice's path claim, and not
+    /// touched) hard-requires every assertion's predicate to be an AssertionPredicate-vocabulary IRI,
+    /// so admitting a RelationPredicate-only row here (say, "cites" or "modifies", both common) would
+    /// fail scope resolution for essentially every real LU resource. A relation-predicate row is real
+    /// content, but it is relation content: it belongs to <see cref="LuxembourgObservedRelation"/>,
+    /// sourced from the unrelated "relation-assertions" family (set "G") through this adapter's
+    /// existing, unchanged relation machinery, not to <see cref="LuxembourgResourceObservation.Assertions"/>.
+    /// A row this admission skips is not lost data: it is data this method was never asked to carry.
+    /// </para>
+    /// <para>
+    /// A row whose <c>object_kind</c> is <see cref="AssertionObjectKindUnsupportedBlankNode"/> is
+    /// skipped the same way: <see cref="LuxembourgObservedAssertion.ObjectKind"/>
+    /// (<see cref="LuxembourgAssertionObjectKind"/>) admits only <c>Iri</c> or <c>Literal</c>, so a
+    /// blank-node object cannot be represented by this type at all -- the query plan's own template
+    /// names this shape "unsupported_blank_node" for exactly this reason. This is the query plan's
+    /// own documented boundary, not a delivery-integrity problem this method refuses over.
+    /// </para>
     /// </summary>
-    private IReadOnlyList<LuxembourgResourceObservation> MapRowsToResourceObservations(
-        IReadOnlyList<RepeatedEnumerationRow> rows,
-        RepeatedEnumerationInterpretationProfile profile)
+    private (IReadOnlyList<LuxembourgResourceObservation>? Observations, string? SubjectNotInCensus)
+        BuildResourceObservations(
+        IReadOnlyList<RepeatedEnumerationRow> censusRows,
+        RepeatedEnumerationInterpretationProfile censusProfile,
+        IReadOnlyList<RepeatedEnumerationRow> assertionRows,
+        RepeatedEnumerationInterpretationProfile assertionProfile,
+        IReadOnlyCollection<string> assertionPredicateVocabulary)
     {
-        var keyIndex = profile.ProjectionVariables.ToList().IndexOf(ResourceIdentityProjectionVariable);
-        if (keyIndex < 0)
+        var censusKeyIndex = RequireProjectionIndex(censusProfile, ResourceIdentityProjectionVariable);
+        var subjectIndex = RequireProjectionIndex(assertionProfile, AssertionSubjectProjectionVariable);
+        var predicateIndex = RequireProjectionIndex(assertionProfile, AssertionPredicateProjectionVariable);
+        var objectIndex = RequireProjectionIndex(assertionProfile, AssertionObjectProjectionVariable);
+        var objectKindIndex = RequireProjectionIndex(assertionProfile, AssertionObjectKindProjectionVariable);
+        var datatypeIndex = RequireProjectionIndex(assertionProfile, AssertionDatatypeProjectionVariable);
+        var languageIndex = RequireProjectionIndex(assertionProfile, AssertionLanguageProjectionVariable);
+        var assertionPredicates = new HashSet<string>(assertionPredicateVocabulary, StringComparer.Ordinal);
+
+        // The census: every resource identity the "subjects" family actually delivered this run,
+        // preserving delivery order for the observations this method emits below.
+        var censusKeys = new HashSet<string>(StringComparer.Ordinal);
+        var censusOrder = new List<string>(censusRows.Count);
+        foreach (var row in censusRows)
         {
-            throw new InvalidOperationException(
-                "The resource-observation family's interpretation profile has no " +
-                $"'{ResourceIdentityProjectionVariable}' projection variable.");
+            var key = RequireBoundValue(row, censusKeyIndex, "the census family's resource-identity term");
+            if (censusKeys.Add(key))
+            {
+                censusOrder.Add(key);
+            }
+        }
+
+        var observationRef = _sourceProfile.Snapshot.ObservationRef;
+        var assertionsBySubject = new Dictionary<string, List<LuxembourgObservedAssertion>>(StringComparer.Ordinal);
+        foreach (var row in assertionRows)
+        {
+            var subject = RequireBoundValue(row, subjectIndex, "the assertion-rows family's subject term");
+            if (!censusKeys.Contains(subject))
+            {
+                return (null, subject);
+            }
+
+            if (!assertionsBySubject.TryGetValue(subject, out var list))
+            {
+                list = [];
+                assertionsBySubject.Add(subject, list);
+            }
+
+            var predicate = RequireBoundValue(row, predicateIndex, "the assertion-rows family's predicate term");
+            if (!assertionPredicates.Contains(predicate))
+            {
+                continue;
+            }
+
+            var objectKind = RequireBoundValue(row, objectKindIndex, "the assertion-rows family's object_kind term");
+            LuxembourgAssertionObjectKind? mappedObjectKind = objectKind switch
+            {
+                AssertionObjectKindIri => LuxembourgAssertionObjectKind.Iri,
+                AssertionObjectKindLiteral => LuxembourgAssertionObjectKind.Literal,
+                AssertionObjectKindUnsupportedBlankNode => null,
+                _ => throw new InvalidOperationException(
+                    "The assertion-rows family's object_kind term carries an unrecognised value " +
+                    $"'{objectKind}'."),
+            };
+            if (mappedObjectKind is not { } definiteObjectKind)
+            {
+                continue;
+            }
+
+            var objectValue = RequireBoundValue(row, objectIndex, "the assertion-rows family's object term");
+            var datatypeValue = RequireBoundValue(row, datatypeIndex, "the assertion-rows family's datatype_iri term");
+            var languageValue = RequireBoundValue(row, languageIndex, "the assertion-rows family's language_tag term");
+            list.Add(new LuxembourgObservedAssertion(
+                subject, predicate, definiteObjectKind, objectValue, datatypeValue, languageValue,
+                observationRef));
         }
 
         // ObservationRef is not this method's to vary per row or per page: VerifiedLuxembourgSourceProfile's own
         // ValidateObservation (LuxembourgScopeResolver.cs) requires every observation's ObservationRef, and both
-        // rights-channel wrappers' RunIdentity, to equal this exact profile-wide value; see this method's own
-        // caller-side report for the fork this leaves open against a page-scoped identity.
-        var observationRef = _sourceProfile.Snapshot.ObservationRef;
-
-        var observations = new List<LuxembourgResourceObservation>(rows.Count);
-        foreach (var row in rows)
+        // rights-channel wrappers' RunIdentity, to equal this exact profile-wide value -- the reviewer's ruling
+        // withdrew this method's own earlier concern about a page-scoped identity (precision three, withdrawn).
+        var observations = new List<LuxembourgResourceObservation>(censusOrder.Count);
+        foreach (var subject in censusOrder)
         {
-            var publisherUri = row.Terms[keyIndex].Value
-                ?? throw new InvalidOperationException(
-                    "The resource-observation family's resource-identity term is unbound.");
+            IReadOnlyList<LuxembourgObservedAssertion> assertions = assertionsBySubject.TryGetValue(subject, out var list)
+                ? list
+                : [];
             var objectRef = new SourceObjectRef(
                 SourceCoreSchemaIds.SourceObjectRef,
                 SourceAuthority.Jolux,
                 new SourceRegistryMemberRef(_sourceProfile.ScopeBinding.SourceProfileRef, "legal_resource"),
-                publisherUri,
-                publisherUri,
-                Sha256Hex(publisherUri),
+                subject,
+                subject,
+                Sha256Hex(subject),
                 _sourceProfile.ScopeBinding.SourceProfileRef,
                 null);
             observations.Add(new LuxembourgResourceObservation(
                 objectRef,
                 observationRef,
-                [],
+                assertions,
                 [],
                 new LuxembourgSparqlRightsChannelObservations(observationRef, observationRef, []),
                 new LuxembourgInFileRightsChannelObservations(observationRef, observationRef, [])));
         }
 
-        return observations;
+        return (observations, null);
     }
+
+    private static int RequireProjectionIndex(RepeatedEnumerationInterpretationProfile profile, string variable)
+    {
+        var index = profile.ProjectionVariables.ToList().IndexOf(variable);
+        if (index < 0)
+        {
+            throw new InvalidOperationException(
+                $"The family's interpretation profile has no '{variable}' projection variable.");
+        }
+
+        return index;
+    }
+
+    private static string RequireBoundValue(RepeatedEnumerationRow row, int index, string what) =>
+        row.Terms[index].Value ?? throw new InvalidOperationException($"{what} is unbound.");
 
     private static string Sha256Hex(string value) =>
         Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(value)));
