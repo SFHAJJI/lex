@@ -52,15 +52,17 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// section 10 records against itself. E4 types the target state
 /// (<see cref="EuRelationTargetState"/>) and the axiom qualifiers
 /// (<see cref="EuLocatedAmendmentAxiom"/>, <see cref="EuRepealEdge"/>) instead of flattening
-/// them, so a qualifier survives the edge rather than being dropped on the way into a row.
+/// them, so a qualifier survives the edge rather than being dropped on the way into a row. It
+/// also types the publisher assertion and its derived inverse as two different types rather than
+/// one row with a direction column, which is what makes admissibility decidable.
 /// </para>
 /// <para>
-/// REFUSE: v2 mixed derived inverses into the same bundle as publisher assertions.
-/// <see cref="EuRelationEdge"/> carries <see cref="EuRelationEdge.IsDerived"/> and
-/// <see cref="EuRelationEdge.MaterialisedDirection"/>, and no type in this slice implements
-/// <see cref="IEuFactsEvidenceCarrier"/>, so a derived inverse cannot reach an evidence bundle
-/// typed against that marker at all. REL-002's own criterion is that derived edges are excluded
-/// from bundles, and this is that exclusion made structural rather than documented.
+/// REFUSE: v2 mixed derived inverses into the same bundle as publisher assertions. Here the two
+/// are separate types, and only <see cref="EuPublisherRelationEdge"/> implements
+/// <see cref="IEuFactsEvidenceCarrier"/>. <see cref="EuDerivedInverseRelationEdge"/> does not and
+/// never will, so a derived inverse cannot reach an evidence bundle typed against that marker at
+/// all. REL-002's own criterion is that derived edges are excluded from bundles, and this is that
+/// exclusion made structural rather than documented.
 /// </para>
 /// <para>
 /// <b>Recorded as incomplete.</b> review/22 section 3 renders a location as the bare
@@ -90,8 +92,8 @@ public static class EuAmendmentRelationVocabulary
     /// The inverse amendment predicate. Never read: an unfiltered store-wide query on this exact
     /// predicate returned zero rows (canary digest 21732a68993ff562), while the forward predicate
     /// returned rows immediately (digest 58c50d8c78ab80c9). An edge on this predicate can only
-    /// ever be locally derived, which is why <see cref="EuRelationEdge"/> refuses to call one
-    /// publisher-asserted.
+    /// ever be locally derived, which is why <see cref="EuPublisherRelationEdge"/> refuses this
+    /// predicate outright.
     /// </summary>
     public const string AmendedByPredicateUri =
         CdmNamespace + "resource_legal_amended_by_resource_legal";

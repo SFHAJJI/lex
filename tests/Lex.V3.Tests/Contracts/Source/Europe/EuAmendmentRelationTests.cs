@@ -309,33 +309,29 @@ public sealed class EuAmendmentRelationTests
     // --- The typed edge and forward-only materialisation ----------------------------------------
 
     /// <summary>
-    /// A located amendment axiom is always a publisher-materialised forward edge on the amends
-    /// predicate, and it is never derived.
+    /// A located amendment axiom is always a publisher assertion on the amends predicate, and its
+    /// type alone says so: there is no flag that could make it a derived edge.
     /// </summary>
     [TestMethod]
-    public void ALocatedAmendmentIsAPublisherMaterialisedForwardEdge()
+    public void ALocatedAmendmentIsAPublisherAssertedForwardEdge()
     {
         var axiom = Axiom(RetainedRows()[0], "axiom:invented-0");
 
         Assert.AreEqual(AmendsPredicate, axiom.Edge.PredicateUri);
-        Assert.AreEqual(EuRelationMaterialisation.PublisherMaterialised, axiom.Edge.MaterialisedDirection);
-        Assert.IsFalse(axiom.Edge.IsDerived);
-        Assert.IsNull(axiom.Edge.InvertedFromPredicateUri);
+        Assert.IsInstanceOfType<EuPublisherRelationEdge>(axiom.Edge);
     }
 
     /// <summary>
-    /// The inverse predicate returns zero rows store-wide, so no edge on it can be declared
-    /// publisher-materialised. This is Decisions 25 and 26 made unconstructible.
+    /// The inverse predicate returns zero rows store-wide, so no edge on it can be a publisher
+    /// assertion. This is Decisions 25 and 26 made unconstructible.
     /// </summary>
     [TestMethod]
-    public void AnEdgeOnTheInversePredicateCannotBeCalledPublisherMaterialised()
+    public void AnEdgeOnTheInversePredicateCannotBeAPublisherAssertion()
     {
-        var error = Assert.ThrowsExactly<ArgumentException>(() => EuRelationEdge.Create(
+        var error = Assert.ThrowsExactly<ArgumentException>(() => EuPublisherRelationEdge.Create(
             Work("62212f0d-011f-471e-a033-bf56990d4329"),
             Work("00034b8a-6af2-4207-bc76-d24a10b5125c"),
             AmendedByPredicate,
-            EuRelationMaterialisation.PublisherMaterialised,
-            invertedFromPredicateUri: null,
             EuRelationTargetState.Held,
             []));
 
@@ -343,64 +339,65 @@ public sealed class EuAmendmentRelationTests
         StringAssert.Contains(error.Message, AmendedByPredicate);
     }
 
-    /// <summary>The same edge is constructible, and is labelled derived, when declared as one.</summary>
+    /// <summary>
+    /// The inverse edge exists only as a derived one, and it takes its endpoints from the real
+    /// forward assertion rather than from the caller.
+    /// </summary>
     [TestMethod]
-    public void TheInverseEdgeIsConstructibleOnlyAsALabelledDerivedInverse()
+    public void TheInverseEdgeIsConstructibleOnlyByInvertingARealPublisherAssertion()
     {
-        var derived = EuRelationEdge.Create(
-            Work("62212f0d-011f-471e-a033-bf56990d4329"),
-            Work("00034b8a-6af2-4207-bc76-d24a10b5125c"),
+        var forward = Axiom(RetainedRows()[0], "axiom:invented-0").Edge;
+        var derived = EuDerivedInverseRelationEdge.From(
+            forward,
             AmendedByPredicate,
-            EuRelationMaterialisation.LocallyDerivedInverse,
-            AmendsPredicate,
-            EuRelationTargetState.Held,
-            []);
+            EuRelationTargetState.Held);
 
-        Assert.IsTrue(derived.IsDerived);
+        Assert.AreEqual(AmendedByPredicate, derived.PredicateUri);
         Assert.AreEqual(AmendsPredicate, derived.InvertedFromPredicateUri);
+        Assert.AreSame(forward, derived.DerivedFrom);
+
+        // The endpoints are swapped by the type, so they cannot disagree with the assertion.
+        Assert.AreSame(forward.Target, derived.Source);
+        Assert.AreSame(forward.Source, derived.Target);
     }
 
-    /// <summary>A derived edge must say what it was inverted from, and must not invert itself.</summary>
+    /// <summary>A derived inverse cannot be stated on the predicate it was inverted from.</summary>
     [TestMethod]
-    public void ADerivedInverseMustNameADifferentForwardPredicate()
+    public void ADerivedInverseCannotReuseTheForwardPredicate()
     {
-        Assert.ThrowsExactly<ArgumentException>(() => EuRelationEdge.Create(
-            Work("62212f0d-011f-471e-a033-bf56990d4329"),
-            Work("00034b8a-6af2-4207-bc76-d24a10b5125c"),
-            AmendedByPredicate,
-            EuRelationMaterialisation.LocallyDerivedInverse,
-            invertedFromPredicateUri: null,
-            EuRelationTargetState.Held,
-            []));
+        var forward = Axiom(RetainedRows()[0], "axiom:invented-0").Edge;
 
-        Assert.ThrowsExactly<ArgumentException>(() => EuRelationEdge.Create(
-            Work("62212f0d-011f-471e-a033-bf56990d4329"),
-            Work("00034b8a-6af2-4207-bc76-d24a10b5125c"),
-            AmendedByPredicate,
-            EuRelationMaterialisation.LocallyDerivedInverse,
-            AmendedByPredicate,
-            EuRelationTargetState.Held,
-            []));
+        var error = Assert.ThrowsExactly<ArgumentException>(
+            () => EuDerivedInverseRelationEdge.From(
+                forward,
+                AmendsPredicate,
+                EuRelationTargetState.Held));
+        StringAssert.Contains(error.Message, "same predicate");
     }
 
     /// <summary>
-    /// No type in this slice implements the evidence-carrier marker, so a derived inverse cannot
-    /// reach a bundle typed against it. This is REL-002's exclusion criterion, structurally.
+    /// Admissibility, as ruled: the publisher-asserted edge is evidence and every other E4 type,
+    /// the derived inverse above all, is not. REL-002 excludes derived edges from bundles, and a
+    /// bundle typed against the marker cannot hold one.
     /// </summary>
     [TestMethod]
-    public void NoEfourTypeImplementsTheEvidenceCarrierMarker()
+    public void OnlyThePublisherAssertedEdgeIsAdmissibleEvidence()
     {
+        Assert.IsTrue(
+            typeof(IEuFactsEvidenceCarrier).IsAssignableFrom(typeof(EuPublisherRelationEdge)),
+            "A publisher-asserted EU relation edge is evidence.");
+
         foreach (var type in new[]
                  {
-                     typeof(EuRelationEdge), typeof(EuLocatedAmendmentAxiom), typeof(EuRepealEdge),
-                     typeof(EuConstituentClosure), typeof(EuConstituentStep),
+                     typeof(EuDerivedInverseRelationEdge), typeof(EuLocatedAmendmentAxiom),
+                     typeof(EuRepealEdge), typeof(EuConstituentClosure), typeof(EuConstituentStep),
                      typeof(EuStructuralLocation), typeof(EuAuthorityQualifiedToken),
                      typeof(EuValidityDate),
                  })
         {
             Assert.IsFalse(
                 typeof(IEuFactsEvidenceCarrier).IsAssignableFrom(type),
-                $"{type.Name} must not be admissible to an evidence bundle in this slice.");
+                $"{type.Name} must not be admissible to an evidence bundle.");
         }
     }
 
@@ -431,12 +428,10 @@ public sealed class EuAmendmentRelationTests
     [TestMethod]
     public void AnUndeclaredTargetStateIsRefused()
     {
-        Assert.ThrowsExactly<ArgumentException>(() => EuRelationEdge.Create(
+        Assert.ThrowsExactly<ArgumentException>(() => EuPublisherRelationEdge.Create(
             Work("00034b8a-6af2-4207-bc76-d24a10b5125c"),
             Work("62212f0d-011f-471e-a033-bf56990d4329"),
             AmendsPredicate,
-            EuRelationMaterialisation.PublisherMaterialised,
-            invertedFromPredicateUri: null,
             (EuRelationTargetState)42,
             []));
     }
@@ -508,7 +503,7 @@ public sealed class EuAmendmentRelationTests
             "axiom:invented-repeal");
 
         Assert.AreEqual(RepealsPredicate, repeal.Edge.PredicateUri);
-        Assert.AreEqual(EuRelationMaterialisation.PublisherMaterialised, repeal.Edge.MaterialisedDirection);
+        Assert.IsInstanceOfType<EuPublisherRelationEdge>(repeal.Edge);
         Assert.AreEqual("2018-05-25", repeal.StartOfValidity!.RawLexicalValue);
         Assert.AreEqual(EuValidityDateShape.HyphenatedIso8601, repeal.StartOfValidity.ObservedShape);
         Assert.IsNotNull(repeal.StartOfValidity.TypedDate);

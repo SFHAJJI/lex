@@ -325,14 +325,22 @@ public sealed class EuLegislationSummaryTests
     /// SCOPE_RULING precision three's real exclusion, proven by reflection over the whole
     /// <c>Lex.V3.Contracts</c> assembly rather than by a hand-built example bundle:
     /// <see cref="IEuFactsEvidenceCarrier"/>'s implementers are exactly E1's own
-    /// <see cref="EuDateAxiomBinding"/> and E6's own <see cref="EuCaseLawLinkBinding"/>, and this
-    /// record is not assignable to the marker. A third implementer added later would change the
-    /// expected array here too, so the closed set cannot silently widen; see the type remarks on
+    /// <see cref="EuDateAxiomBinding"/>, E6's own <see cref="EuCaseLawLinkBinding"/> and E4's own
+    /// <see cref="EuPublisherRelationEdge"/>, and this record is not assignable to the marker. A
+    /// further implementer added later would change the expected array here too, so the closed set
+    /// cannot silently widen; see the type remarks on
     /// <see cref="EuLegislationSummary"/> and on <see cref="IEuFactsEvidenceCarrier"/> for why a
     /// marker-typed bundle member trips neither E1's nor E6's own construction-surface guard.
     /// </summary>
+    /// <remarks>
+    /// E4 widened this pin from two implementers to three, ruled at
+    /// <c>lex-event-20260904T190136614Z-26f124d9e6d246348b54b6719e22a63a</c>: a publisher-asserted
+    /// EU relation edge is evidence. E4's derived inverse
+    /// (<c>EuDerivedInverseRelationEdge</c>) is deliberately absent from this list and must stay
+    /// absent, because REL-002 excludes derived edges from evidence bundles.
+    /// </remarks>
     [TestMethod]
-    public void TheEvidenceCarrierMarkerIsImplementedByExactlyE1sAndE6sBindingsAndNotByThisRecord()
+    public void TheEvidenceCarrierMarkerIsImplementedByExactlyE1sE6sAndE4sBindingsAndNotByThisRecord()
     {
         var implementers = typeof(EuLegislationSummary).Assembly.GetTypes()
             .Where(type => type != typeof(IEuFactsEvidenceCarrier) &&
@@ -341,7 +349,12 @@ public sealed class EuLegislationSummaryTests
             .ToArray();
 
         CollectionAssert.AreEqual(
-            new[] { typeof(EuCaseLawLinkBinding), typeof(EuDateAxiomBinding) },
+            new[]
+            {
+                typeof(EuCaseLawLinkBinding),
+                typeof(EuDateAxiomBinding),
+                typeof(EuPublisherRelationEdge),
+            },
             implementers);
 
         Assert.IsFalse(typeof(IEuFactsEvidenceCarrier).IsAssignableFrom(typeof(EuLegislationSummary)));

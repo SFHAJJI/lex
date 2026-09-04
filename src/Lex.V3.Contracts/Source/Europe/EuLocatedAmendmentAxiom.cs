@@ -45,7 +45,7 @@ namespace Lex.V3.Contracts.Source.Europe;
 public sealed class EuLocatedAmendmentAxiom
 {
     private EuLocatedAmendmentAxiom(
-        EuRelationEdge edge,
+        EuPublisherRelationEdge edge,
         EuStructuralLocation location,
         EuAuthorityQualifiedToken role,
         EuValidityDate? startOfValidity,
@@ -64,10 +64,10 @@ public sealed class EuLocatedAmendmentAxiom
 
     /// <summary>
     /// The amendment edge this axiom annotates, carrying the typed target state. Always on
-    /// <see cref="EuAmendmentRelationVocabulary.AmendsPredicateUri"/> and always
-    /// publisher-materialised, because that is the only direction the store holds.
+    /// <see cref="EuAmendmentRelationVocabulary.AmendsPredicateUri"/> and always a publisher
+    /// assertion, because that is the only direction the store holds.
     /// </summary>
-    public EuRelationEdge Edge { get; }
+    public EuPublisherRelationEdge Edge { get; }
 
     /// <summary>The structural location, as ordered authority-qualified tokens.</summary>
     public EuStructuralLocation Location { get; }
@@ -181,12 +181,10 @@ public sealed class EuLocatedAmendmentAxiom
             roleTokens.RawValue));
 
         var axiom = new QualifiedAxiom(remoteAxiomId, qualifiers);
-        var edge = EuRelationEdge.Create(
+        var edge = EuPublisherRelationEdge.Create(
             source,
             target,
             EuAmendmentRelationVocabulary.AmendsPredicateUri,
-            EuRelationMaterialisation.PublisherMaterialised,
-            invertedFromPredicateUri: null,
             targetState,
             new[] { axiom });
 

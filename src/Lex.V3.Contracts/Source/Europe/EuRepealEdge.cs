@@ -34,7 +34,7 @@ namespace Lex.V3.Contracts.Source.Europe;
 public sealed class EuRepealEdge
 {
     private EuRepealEdge(
-        EuRelationEdge edge,
+        EuPublisherRelationEdge edge,
         EuValidityDate? startOfValidity,
         EuValidityDate? endOfValidity,
         string typeOfLinkTarget,
@@ -48,10 +48,10 @@ public sealed class EuRepealEdge
     }
 
     /// <summary>
-    /// The repeal edge, repealing act to repealed act, carrying the typed target state. Always
-    /// publisher-materialised on <see cref="EuAmendmentRelationVocabulary.RepealsPredicateUri"/>.
+    /// The repeal edge, repealing act to repealed act, carrying the typed target state. Always a
+    /// publisher assertion on <see cref="EuAmendmentRelationVocabulary.RepealsPredicateUri"/>.
     /// </summary>
-    public EuRelationEdge Edge { get; }
+    public EuPublisherRelationEdge Edge { get; }
 
     /// <summary>When the repeal takes effect, or <c>null</c> where the publisher bound none.</summary>
     public EuValidityDate? StartOfValidity { get; }
@@ -108,12 +108,10 @@ public sealed class EuRepealEdge
             linkTargetType));
 
         var axiom = new QualifiedAxiom(remoteAxiomId, qualifiers);
-        var edge = EuRelationEdge.Create(
+        var edge = EuPublisherRelationEdge.Create(
             source,
             target,
             EuAmendmentRelationVocabulary.RepealsPredicateUri,
-            EuRelationMaterialisation.PublisherMaterialised,
-            invertedFromPredicateUri: null,
             targetState,
             new[] { axiom });
 
