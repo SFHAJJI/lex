@@ -39,8 +39,11 @@ public enum LuxembourgDocumentGetOutcomeKind
     [JsonStringEnumMemberName("gone")]
     Gone = 3,
 
-    [JsonStringEnumMemberName("robots_disallowed")]
-    RobotsDisallowed = 4,
+    // robots_disallowed, 4, is removed. Nothing in production ever produced it: a robots refusal
+    // never reaches a status to classify, so the route maps it one level up, at
+    // LuxembourgDocumentGetAttemptRefusal.RobotsDisallowed, which the adapter turns into the
+    // object's own CorpusAcquisitionRefusalReason.RobotsDisallowed. Its only caller was its own
+    // test. A declared member nothing can produce is the defect this slice keeps removing.
 
     [JsonStringEnumMemberName("retry_exhausted")]
     RetryExhausted = 5,
@@ -51,9 +54,8 @@ public enum LuxembourgDocumentGetOutcomeKind
 
 /// <summary>
 /// One typed result of a document-fetch GET attempt. <see cref="ObservedStatus"/> is the real wire
-/// status (0 for <see cref="LuxembourgDocumentGetOutcomeKind.RobotsDisallowed"/>, which never
-/// reaches the network); <see cref="Detail"/> always names what happened in prose, never leaving a
-/// refusal to a bare status code.
+/// status; <see cref="Detail"/> always names what happened in prose, never leaving a refusal to a
+/// bare status code.
 /// </summary>
 public sealed record LuxembourgDocumentGetOutcome
 {
@@ -87,21 +89,6 @@ public sealed record LuxembourgDocumentGetOutcome
         LuxembourgDocumentGetOutcomeKind.Gone,
         410,
         "The Legilux www host returned HTTP 410 for this document.");
-
-    /// <summary>
-    /// The per-object robots refusal (scope ruling item 4): the individually disallowed documents,
-    /// every *.docx (and *.svg, also disallowed on this host), and broad disallowed prefixes such
-    /// as /eli/etat/adm/, all decided by actually parsing the live robots.txt, never by a
-    /// hardcoded list of paths in this type.
-    /// </summary>
-    public static LuxembourgDocumentGetOutcome RobotsDisallowed(string requestedPath)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(requestedPath);
-        return new(
-            LuxembourgDocumentGetOutcomeKind.RobotsDisallowed,
-            0,
-            $"legilux.public.lu robots.txt disallows '{requestedPath}' for the Lex product token.");
-    }
 
     public static LuxembourgDocumentGetOutcome RetryExhausted(int observedStatus) => new(
         LuxembourgDocumentGetOutcomeKind.RetryExhausted,
