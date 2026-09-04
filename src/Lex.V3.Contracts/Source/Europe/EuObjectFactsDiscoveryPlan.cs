@@ -93,9 +93,11 @@ public sealed record EuObjectFactsBoundQuery(
 /// <see cref="MachineQueryParameter"/> (an IRI cannot be embedded free-form in query text without a
 /// carrier the delivery-verification machinery can bind and reproduce), and
 /// <c>MachineQueryValidation.MaximumParameterCount</c> (64, Source/Core, unchanged by this slice) caps
-/// the total ordered parameters one request may carry. Eight of those are always spent on
-/// <c>pass_id</c>, <c>has_cursor</c> and up to six cursor-continuation parameters, leaving 56; 50
-/// keeps a five-parameter margin rather than sitting on the ceiling, and matches
+/// the total ordered parameters one request may carry. Nine of those are always spent on
+/// <c>pass_id</c>, <c>has_cursor</c> and up to seven cursor-continuation parameters -
+/// <see cref="ExpressionFacts"/>'s own seven-part cursor is the widest of the three, wider than
+/// <see cref="ObjectFacts"/>'s six and <see cref="RootWatermark"/>'s five - leaving 55; 50 keeps a
+/// five-parameter margin rather than sitting on the ceiling, and matches
 /// <c>D1-05C-DESIGN-PROPOSAL-A.md</c>'s own batch constant. A batch smaller than
 /// <see cref="BatchCapacity"/> is padded by repeating its own lexicographically-greatest canonical
 /// member into the unused slots: every template groups by the generic row shape
@@ -185,19 +187,30 @@ public sealed class EuObjectFactsDiscoveryPlan
         var objectFactsProjection = new[]
         {
             "object", "predicate", "value", "value_kind", "datatype_iri", "language_tag",
-            "multiplicity", "key_1", "key_2", "key_3", "key_4", "key_5", "key_6",
+            "key_1", "key_2", "key_3", "key_4", "key_5", "key_6",
         };
         var expressionFactsProjection = new[]
         {
             "parent", "object", "predicate", "value", "value_kind", "datatype_iri", "language_tag",
-            "multiplicity", "key_1", "key_2", "key_3", "key_4", "key_5", "key_6",
+            "key_1", "key_2", "key_3", "key_4", "key_5", "key_6", "key_7",
         };
         var rootWatermarkProjection = new[]
         {
-            "object", "value", "value_kind", "datatype_iri", "language_tag", "multiplicity",
+            "object", "value", "value_kind", "datatype_iri", "language_tag",
             "key_1", "key_2", "key_3", "key_4", "key_5",
         };
         var sixKeyCursor = new[] { "key_1", "key_2", "key_3", "key_4", "key_5", "key_6" };
+
+        // Family X's own SELECT groups by ?parent ?object ?predicate ?value ?value_kind
+        // ?datatype_iri ?language_tag - seven columns, since one Expression can in principle belong
+        // to more than one Work in the same batch (Decision: SCOPE_RULING review, design fix two).
+        // The six-part key_1..key_6 below covers everything but ?parent, so two rows sharing one
+        // Expression under two different parent Works would carry the identical six-part cursor -
+        // a collision EnumerationDeliveryComparison.VerifyPages refuses outright. key_7 closes that
+        // gap by carrying ?parent, so X's cursor covers its own grouped row identity exactly, the
+        // same "cursor arity matches the row's own natural key" rule the five-part
+        // <see cref="RootWatermark"/> cursor already follows for a narrower reason.
+        var sevenKeyCursor = new[] { "key_1", "key_2", "key_3", "key_4", "key_5", "key_6", "key_7" };
         var fiveKeyCursor = new[] { "key_1", "key_2", "key_3", "key_4", "key_5" };
 
         var templates = BuildTemplates();
@@ -226,7 +239,7 @@ public sealed class EuObjectFactsDiscoveryPlan
             "object_facts_projection=" + string.Join(',', objectFactsProjection),
             "object_facts_cursor=" + string.Join(',', sixKeyCursor),
             "expression_facts_projection=" + string.Join(',', expressionFactsProjection),
-            "expression_facts_cursor=" + string.Join(',', sixKeyCursor),
+            "expression_facts_cursor=" + string.Join(',', sevenKeyCursor),
             "root_watermark_projection=" + string.Join(',', rootWatermarkProjection),
             "root_watermark_cursor=" + string.Join(',', fiveKeyCursor),
             "object_facts_count_member=" + ObjectFactsMemberPrefix + ".count",
@@ -260,7 +273,7 @@ public sealed class EuObjectFactsDiscoveryPlan
                 templates.ExpressionFactsCount,
                 templates.ExpressionFactsPage,
                 expressionFactsProjection,
-                sixKeyCursor),
+                sevenKeyCursor),
             [EuObjectFactsQuerySet.RootWatermark] = Definition(
                 EuObjectFactsQuerySet.RootWatermark,
                 RootWatermarkMemberPrefix,
@@ -347,7 +360,12 @@ public sealed class EuObjectFactsDiscoveryPlan
     /// <summary>
     /// The batch's own partition/member key: the SHA-256 of its sorted, deduplicated, canonical,
     /// LF-joined members. Never computed from the padded 50-slot parameter set - two batches naming
-    /// the same real objects bind the same partition regardless of padding or input order.
+    /// the same real objects bind the same partition regardless of padding or input order. The
+    /// 24-hex-character (96-bit) truncation matches <see cref="EuConsolidationDiscoveryPlan"/>'s own
+    /// <c>PartitionKey</c>, the only other partition/member key this source mints; 96 bits of a
+    /// cryptographic digest is far past the collision risk this key space (batches of Appendix A's 82
+    /// roots and their discovered states) can ever reach, so this reuses that plan's own established
+    /// length rather than choosing a second one for the same purpose.
     /// </summary>
     public static string PartitionKeyFor(IReadOnlyList<string> batchObjects)
     {
@@ -555,7 +573,7 @@ public sealed class EuObjectFactsDiscoveryPlan
                 "    <" + RelationIri(family) + ">")));
 
         var objectFactsRows = $$"""
-            SELECT ?object ?predicate ?value ?value_kind ?datatype_iri ?language_tag (COUNT(?value) AS ?multiplicity) WHERE {
+            SELECT ?object ?predicate ?value ?value_kind ?datatype_iri ?language_tag WHERE {
               VALUES ?lex_pass_id { {pass_id:uint} }
               VALUES ?object {
             {{valuesBlock}}
@@ -581,7 +599,7 @@ public sealed class EuObjectFactsDiscoveryPlan
             """;
         var objectFactsCount = Wrap(objectFactsRows);
         var objectFactsPage = $$"""
-            SELECT ?object ?predicate ?value ?value_kind ?datatype_iri ?language_tag ?multiplicity ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 ?key_6 WHERE {
+            SELECT ?object ?predicate ?value ?value_kind ?datatype_iri ?language_tag ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 ?key_6 WHERE {
               {
             {{Indent(Indent(objectFactsRows))}}
               }
@@ -610,7 +628,7 @@ public sealed class EuObjectFactsDiscoveryPlan
         var expressionPredicates = string.Join('\n', ExpressionAuthorityPredicates
             .Select(static predicate => "    <" + CdmIri(predicate) + ">"));
         var expressionFactsRows = $$"""
-            SELECT ?parent ?object ?predicate ?value ?value_kind ?datatype_iri ?language_tag (COUNT(?value) AS ?multiplicity) WHERE {
+            SELECT ?parent ?object ?predicate ?value ?value_kind ?datatype_iri ?language_tag WHERE {
               VALUES ?lex_pass_id { {pass_id:uint} }
               VALUES ?parent {
             {{valuesBlock}}
@@ -637,7 +655,7 @@ public sealed class EuObjectFactsDiscoveryPlan
             """;
         var expressionFactsCount = Wrap(expressionFactsRows);
         var expressionFactsPage = $$"""
-            SELECT ?parent ?object ?predicate ?value ?value_kind ?datatype_iri ?language_tag ?multiplicity ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 ?key_6 WHERE {
+            SELECT ?parent ?object ?predicate ?value ?value_kind ?datatype_iri ?language_tag ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 ?key_6 ?key_7 WHERE {
               {
             {{Indent(Indent(expressionFactsRows))}}
               }
@@ -647,8 +665,9 @@ public sealed class EuObjectFactsDiscoveryPlan
               BIND(IF(BOUND(?value), STR(?value), "") AS ?key_4)
               BIND(?datatype_iri AS ?key_5)
               BIND(?language_tag AS ?key_6)
-              VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3 ?last_key_4 ?last_key_5 ?last_key_6) {
-                ({has_cursor:uint} {last_key_1:sparql_string} {last_key_2:sparql_string} {last_key_3:sparql_string} {last_key_4:sparql_string} {last_key_5:sparql_string} {last_key_6:sparql_string})
+              BIND(STR(?parent) AS ?key_7)
+              VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3 ?last_key_4 ?last_key_5 ?last_key_6 ?last_key_7) {
+                ({has_cursor:uint} {last_key_1:sparql_string} {last_key_2:sparql_string} {last_key_3:sparql_string} {last_key_4:sparql_string} {last_key_5:sparql_string} {last_key_6:sparql_string} {last_key_7:sparql_string})
               }
               FILTER(
                 ?has_cursor = 0 || ?key_1 > ?last_key_1 ||
@@ -656,15 +675,16 @@ public sealed class EuObjectFactsDiscoveryPlan
                 (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 > ?last_key_3) ||
                 (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 > ?last_key_4) ||
                 (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 > ?last_key_5) ||
-                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 = ?last_key_5 && ?key_6 > ?last_key_6)
+                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 = ?last_key_5 && ?key_6 > ?last_key_6) ||
+                (?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 = ?last_key_5 && ?key_6 = ?last_key_6 && ?key_7 > ?last_key_7)
               )
             }
-            ORDER BY ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 ?key_6
+            ORDER BY ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 ?key_6 ?key_7
             LIMIT {page_limit:uint}
             """;
 
         var rootWatermarkRows = $$"""
-            SELECT ?object ?value ?value_kind ?datatype_iri ?language_tag (COUNT(?value) AS ?multiplicity) WHERE {
+            SELECT ?object ?value ?value_kind ?datatype_iri ?language_tag WHERE {
               VALUES ?lex_pass_id { {pass_id:uint} }
               VALUES ?object {
             {{valuesBlock}}
@@ -687,7 +707,7 @@ public sealed class EuObjectFactsDiscoveryPlan
             """;
         var rootWatermarkCount = Wrap(rootWatermarkRows);
         var rootWatermarkPage = $$"""
-            SELECT ?object ?value ?value_kind ?datatype_iri ?language_tag ?multiplicity ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 WHERE {
+            SELECT ?object ?value ?value_kind ?datatype_iri ?language_tag ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 WHERE {
               {
             {{Indent(Indent(rootWatermarkRows))}}
               }

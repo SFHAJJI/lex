@@ -8,6 +8,7 @@ using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Europe;
 using Lex.V3.Contracts.Source.Http;
+using Lex.V3.TestSupport;
 
 namespace Lex.V3.Tests.Contracts.Source.Europe;
 
@@ -1055,4 +1056,79 @@ public sealed class EuConsolidationDiscoveryTests
                 Artifact('c').ResourceId,
                 Convert.ToHexStringLower(SHA256.HashData(RendererSourceBytes))),
             RendererSourceBytes);
+
+    // ---- Construction surface (design fix three). These four types were widened from internal to
+    // public alongside D1-05c-1's own EuObjectFactsDiscoveryPlan family (a caller outside this
+    // assembly now binds a pass through the plan's own now-public BindCount/BindPage), and none of
+    // them carried a pin before. Values transcribed literally from ConstructionSurface.Of, the same
+    // print-then-transcribe discipline EuObjectFactsDiscoveryPlanTests uses for its own four types. ----
+
+    private const string SurfaceN = "Lex.V3.Contracts.Source.Europe.";
+    private const string SurfaceCore = "Lex.V3.Contracts.Source.Core.";
+
+    [TestMethod]
+    public void ThePlanHasExactlyOneCheckedDoor()
+    {
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + SurfaceN + "EuConsolidationDiscoveryPlan::.ctor() -> "
+                    + SurfaceN + "EuConsolidationDiscoveryPlan",
+                "constructor private static " + SurfaceN + "EuConsolidationDiscoveryPlan::.cctor() -> "
+                    + SurfaceN + "EuConsolidationDiscoveryPlan",
+                "method public static " + SurfaceN + "EuConsolidationDiscoveryPlan::Create() -> "
+                    + SurfaceN + "EuConsolidationDiscoveryPlan",
+            },
+            ConstructionSurface.Of(typeof(EuConsolidationDiscoveryPlan)).ToArray());
+    }
+
+    [TestMethod]
+    public void TheQuerySetEnumHasExactlyTwoMembers()
+    {
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "base-constructor protected instance System.Enum::.ctor() -> System.Enum",
+                "base-constructor protected instance System.ValueType::.ctor() -> System.ValueType",
+                "field public static " + SurfaceN + "EuConsolidationQuerySet::Family -> "
+                    + SurfaceN + "EuConsolidationQuerySet",
+                "field public static " + SurfaceN + "EuConsolidationQuerySet::TemporalFacts -> "
+                    + SurfaceN + "EuConsolidationQuerySet",
+            },
+            ConstructionSurface.Of(typeof(EuConsolidationQuerySet)).ToArray());
+    }
+
+    [TestMethod]
+    public void TheQueryPassEnumHasExactlyTwoMembers()
+    {
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "base-constructor protected instance System.Enum::.ctor() -> System.Enum",
+                "base-constructor protected instance System.ValueType::.ctor() -> System.ValueType",
+                "field public static " + SurfaceN + "EuConsolidationQueryPass::Pass1 -> "
+                    + SurfaceN + "EuConsolidationQueryPass",
+                "field public static " + SurfaceN + "EuConsolidationQueryPass::Pass2 -> "
+                    + SurfaceN + "EuConsolidationQueryPass",
+            },
+            ConstructionSurface.Of(typeof(EuConsolidationQueryPass)).ToArray());
+    }
+
+    [TestMethod]
+    public void TheBoundQueryRecordHasExactlyItsOwnPrimaryConstructorAndCopyDoors()
+    {
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "constructor private instance " + SurfaceN + "EuConsolidationBoundQuery::.ctor("
+                    + SurfaceN + "EuConsolidationBoundQuery) -> " + SurfaceN + "EuConsolidationBoundQuery",
+                "constructor public instance " + SurfaceN + "EuConsolidationBoundQuery::.ctor("
+                    + SurfaceCore + "MachineQueryPlan, " + SurfaceCore + "SourceArtifactRef, "
+                    + SurfaceCore + "MachineQueryInputArtifact, " + SurfaceCore + "BoundMachineRequest) -> "
+                    + SurfaceN + "EuConsolidationBoundQuery",
+                "method public instance " + SurfaceN + "EuConsolidationBoundQuery::<Clone>$() -> "
+                    + SurfaceN + "EuConsolidationBoundQuery",
+            },
+            ConstructionSurface.Of(typeof(EuConsolidationBoundQuery)).ToArray());
+    }
 }

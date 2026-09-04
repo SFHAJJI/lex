@@ -618,6 +618,47 @@ public sealed class EuCellarObjectDecodeTests
         Assert.AreEqual(EuCellarObjectDecodeRefusal.ObjectFactRowTermKindMismatch, refusal);
     }
 
+    // ---- Family X row-shape refusal. ----
+
+    /// <summary>
+    /// Test fold-in: before this test, nothing in this file reached
+    /// <see cref="EuCellarObjectDecodeRefusal.ExpressionFactRowTermKindMismatch"/> - every family X
+    /// test used well-formed rows from <see cref="XBoundRow"/>. This is family P's own
+    /// <c>AFamilyPRowWhoseValueKindDisagreesWithTheTermRefusesAsTermKindMismatch</c> mirrored for
+    /// family X: a row claims <c>value_kind</c> "unbound" while its own <c>value</c> term is
+    /// actually bound.
+    /// </summary>
+    [TestMethod]
+    public void AFamilyXRowWhoseValueKindDisagreesWithTheTermRefusesAsTermKindMismatch()
+    {
+        var pRows = RootObjectRows(GdprRoot, GdprCelex);
+        var terms = new[]
+        {
+            RepeatedEnumerationRdfTerm.Iri(GdprRoot),
+            RepeatedEnumerationRdfTerm.Iri(ExprA),
+            RepeatedEnumerationRdfTerm.Iri(ExpressionUsesLanguageIri),
+            RepeatedEnumerationRdfTerm.Iri(EnglishLanguageAuthorityIri),
+            RepeatedEnumerationRdfTerm.Literal("unbound", null, null), // disagrees with a bound value
+            RepeatedEnumerationRdfTerm.Literal("", null, null),
+            RepeatedEnumerationRdfTerm.Literal("", null, null),
+            RepeatedEnumerationRdfTerm.Literal("1", XsdInteger, null),
+            RepeatedEnumerationRdfTerm.Literal(ExprA, null, null),
+            RepeatedEnumerationRdfTerm.Literal(ExpressionUsesLanguageIri, null, null),
+            RepeatedEnumerationRdfTerm.Literal("unbound", null, null),
+            RepeatedEnumerationRdfTerm.Literal(EnglishLanguageAuthorityIri, null, null),
+            RepeatedEnumerationRdfTerm.Literal("", null, null),
+            RepeatedEnumerationRdfTerm.Literal("", null, null),
+        };
+        var mismatched = new RepeatedEnumerationRow(
+            Array.AsReadOnly(terms),
+            Array.AsReadOnly(new[] { terms[0], terms[1], terms[2], terms[3] }),
+            Array.AsReadOnly(terms[8..14]));
+
+        var snapshots = Decode(GdprCelex, [], pRows, [mismatched], out var refusal, out _, out _);
+        Assert.IsNull(snapshots);
+        Assert.AreEqual(EuCellarObjectDecodeRefusal.ExpressionFactRowTermKindMismatch, refusal);
+    }
+
     // ---- Family X closure refusals. ----
 
     [TestMethod]
