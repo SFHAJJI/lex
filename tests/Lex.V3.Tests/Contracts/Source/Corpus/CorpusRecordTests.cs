@@ -317,16 +317,18 @@ public sealed class CorpusRecordTests
         Assert.AreEqual(CorpusBodyPendingAcquisitionReasonKind.NotYetAcquired, notYetAcquired.Kind);
         Assert.IsNull(notYetAcquired.Refusal);
 
-        var refused = CorpusBodyPendingAcquisitionReason.AcquisitionRefused("dns_lookup_failed");
+        var refused = CorpusBodyPendingAcquisitionReason.AcquisitionRefused(
+            CorpusAcquisitionRefusalReason.BodyReadFailure);
         Assert.AreEqual(CorpusBodyPendingAcquisitionReasonKind.AcquisitionRefused, refused.Kind);
-        Assert.AreEqual("dns_lookup_failed", refused.Refusal);
+        Assert.AreEqual(CorpusAcquisitionRefusalReason.BodyReadFailure, refused.Refusal);
 
         Assert.ThrowsExactly<ArgumentException>(() => new CorpusBodyPendingAcquisitionReason(
-            CorpusBodyPendingAcquisitionReasonKind.NotYetAcquired, "unexpected"));
+            CorpusBodyPendingAcquisitionReasonKind.NotYetAcquired,
+            CorpusAcquisitionRefusalReason.BodyDeadline));
         Assert.ThrowsExactly<ArgumentException>(() => new CorpusBodyPendingAcquisitionReason(
             CorpusBodyPendingAcquisitionReasonKind.AcquisitionRefused, null));
-        Assert.ThrowsExactly<ArgumentException>(() => new CorpusBodyPendingAcquisitionReason(
-            CorpusBodyPendingAcquisitionReasonKind.AcquisitionRefused, "   "));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new CorpusBodyPendingAcquisitionReason(
+            CorpusBodyPendingAcquisitionReasonKind.AcquisitionRefused, (CorpusAcquisitionRefusalReason)999));
     }
 
     [TestMethod]
@@ -357,11 +359,14 @@ public sealed class CorpusRecordTests
             notYetAcquired.PendingAcquisitionReason!.Kind);
 
         var refused = CorpusBodyRecord.PendingAcquisition(
-            CorpusBodyPendingAcquisitionReason.AcquisitionRefused("connection_reset"));
+            CorpusBodyPendingAcquisitionReason.AcquisitionRefused(
+                CorpusAcquisitionRefusalReason.TransportBeforeHeaders));
         Assert.AreEqual(
             CorpusBodyPendingAcquisitionReasonKind.AcquisitionRefused,
             refused.PendingAcquisitionReason!.Kind);
-        Assert.AreEqual("connection_reset", refused.PendingAcquisitionReason!.Refusal);
+        Assert.AreEqual(
+            CorpusAcquisitionRefusalReason.TransportBeforeHeaders,
+            refused.PendingAcquisitionReason!.Refusal);
 
         Assert.ThrowsExactly<ArgumentNullException>(
             () => CorpusBodyRecord.PendingAcquisition(null!));
@@ -499,13 +504,14 @@ public sealed class CorpusRecordTests
             ScopeDisposition.AcceptedSelected,
             ScopeDisposition.AcceptedSelected,
             CorpusBodyRecord.PendingAcquisition(
-                CorpusBodyPendingAcquisitionReason.AcquisitionRefused("connection_reset")),
+                CorpusBodyPendingAcquisitionReason.AcquisitionRefused(
+                    CorpusAcquisitionRefusalReason.TransportBeforeHeaders)),
             ManifestRef(),
             RunIdentity());
         var refusedNode = CanonicalNode(refusedRecord);
         var refusedReason = refusedNode["body"]!.AsObject()["pending_acquisition_reason"]!.AsObject();
         Assert.AreEqual("acquisition_refused", refusedReason["kind"]!.GetValue<string>());
-        Assert.AreEqual("connection_reset", refusedReason["refusal"]!.GetValue<string>());
+        Assert.AreEqual("transport_before_headers", refusedReason["refusal"]!.GetValue<string>());
 
         var retainedUnenforcedReceipt = new DurableBlobWriteReceipt(
             CustodySchemaIds.DurableBlobWriteReceipt,
@@ -535,6 +541,60 @@ public sealed class CorpusRecordTests
         Assert.AreEqual("retained_unenforced", retainedBody["floor"]!.GetValue<string>());
     }
 
+    /// <summary>
+    /// D1-06b item 2: every one of the fourteen closed <see cref="CorpusAcquisitionRefusalReason"/>
+    /// wire spellings, exercised through the canonical writer and asserted as a literal string, not
+    /// only through a round trip that would pass even if the writer's own switch silently mapped two
+    /// different members onto the same string.
+    /// </summary>
+    [TestMethod]
+    public void AcquisitionRefusalReasonWireStringsAreExactlyThePinnedLiterals()
+    {
+        var expected = new (CorpusAcquisitionRefusalReason Reason, string Wire)[]
+        {
+            (CorpusAcquisitionRefusalReason.BodyDeadline, "body_deadline"),
+            (CorpusAcquisitionRefusalReason.BodyReadFailure, "body_read_failure"),
+            (CorpusAcquisitionRefusalReason.ByteBoundPreventedCompletion, "byte_bound_prevented_completion"),
+            (CorpusAcquisitionRefusalReason.CallerCancelledAfterHeaders, "caller_cancelled_after_headers"),
+            (CorpusAcquisitionRefusalReason.DeclaredLengthShortRead, "declared_length_short_read"),
+            (CorpusAcquisitionRefusalReason.MissingCompletionProof, "missing_completion_proof"),
+            (CorpusAcquisitionRefusalReason.TransferCodingConflict, "transfer_coding_conflict"),
+            (CorpusAcquisitionRefusalReason.InvalidContentLength, "invalid_content_length"),
+            (CorpusAcquisitionRefusalReason.UnsupportedTransferCoding, "unsupported_transfer_coding"),
+            (CorpusAcquisitionRefusalReason.HeaderDeadline, "header_deadline"),
+            (CorpusAcquisitionRefusalReason.TransportBeforeHeaders, "transport_before_headers"),
+            (CorpusAcquisitionRefusalReason.RevalidationRequestNotAdmitted, "revalidation_request_not_admitted"),
+            (CorpusAcquisitionRefusalReason.StatusContentForbidden, "status_content_forbidden"),
+            (CorpusAcquisitionRefusalReason.StatusFramingConflict, "status_framing_conflict"),
+        };
+
+        // Every member of the enum is covered above, or this test itself proves nothing about the
+        // fourteenth.
+        CollectionAssert.AreEquivalent(
+            Enum.GetValues<CorpusAcquisitionRefusalReason>(),
+            expected.Select(pair => pair.Reason).ToArray());
+
+        foreach (var (reason, wire) in expected)
+        {
+            var record = new CorpusRecord(
+                CorpusRecordSchemaIds.Record,
+                ObjectRef(),
+                0,
+                ScopeDisposition.AcceptedSelected,
+                ScopeDisposition.AcceptedSelected,
+                ScopeDisposition.AcceptedSelected,
+                ScopeDisposition.AcceptedSelected,
+                CorpusBodyRecord.PendingAcquisition(
+                    CorpusBodyPendingAcquisitionReason.AcquisitionRefused(reason)),
+                ManifestRef(),
+                RunIdentity());
+            var node = CanonicalNode(record);
+            var actualWire = node["body"]!.AsObject()["pending_acquisition_reason"]!
+                .AsObject()["refusal"]!.GetValue<string>();
+            Assert.AreEqual(wire, actualWire, $"{reason} must serialize to exactly \"{wire}\"");
+        }
+    }
+
     [TestMethod]
     public void WriteRejectsNullArgumentsAndAnUnwritableDestination()
     {
@@ -562,6 +622,7 @@ public sealed class CorpusRecordTests
         var verified = VerifiedCorpusRecord.ParseAndVerify(artifactRef, bytes);
 
         Assert.AreEqual(record.ObjectOrdinal, verified.Record.ObjectOrdinal);
+        Assert.AreEqual(record.RecordDisposition, verified.Record.RecordDisposition);
         Assert.AreEqual(record.BodyDisposition, verified.Record.BodyDisposition);
         Assert.AreEqual(record.RelationDisposition, verified.Record.RelationDisposition);
         Assert.AreEqual(
@@ -585,6 +646,7 @@ public sealed class CorpusRecordTests
 
         var verified = VerifiedCorpusRecord.ParseAndVerify(artifactRef, bytes);
 
+        Assert.AreEqual(record.RecordDisposition, verified.Record.RecordDisposition);
         Assert.AreEqual(CorpusBodyRecordKind.Held, verified.Record.Body.Kind);
         Assert.AreEqual(CustodyMembership.Floored, verified.Record.Body.Floor);
         Assert.AreEqual(
@@ -604,12 +666,50 @@ public sealed class CorpusRecordTests
 
         var verified = VerifiedCorpusRecord.ParseAndVerify(artifactRef, bytes);
 
+        Assert.AreEqual(record.RecordDisposition, verified.Record.RecordDisposition);
         Assert.AreEqual(CorpusBodyRecordKind.PendingAcquisition, verified.Record.Body.Kind);
         Assert.IsNull(verified.Record.Body.Receipt);
         Assert.IsNull(verified.Record.Body.Floor);
         Assert.AreEqual(
             CorpusBodyPendingAcquisitionReasonKind.NotYetAcquired,
             verified.Record.Body.PendingAcquisitionReason!.Kind);
+    }
+
+    /// <summary>
+    /// D1-06b item 3: the three fixtures above all happen to use
+    /// <see cref="ScopeDisposition.AcceptedSelected"/> for <see cref="CorpusRecord.RecordDisposition"/>,
+    /// so a writer defect that hardcoded that one value into the wire's <c>record_disposition</c>
+    /// field regardless of the real one would pass every assertion above undetected. This fixture
+    /// gives all four axes four different values so the round trip genuinely discriminates rather
+    /// than only appearing to.
+    /// </summary>
+    [TestMethod]
+    public void ParseAndVerifyRoundTripsAllFourAxisDispositionsWhenTheyDiffer()
+    {
+        var record = new CorpusRecord(
+            CorpusRecordSchemaIds.Record,
+            ObjectRef(),
+            5,
+            ScopeDisposition.NeverIngest,
+            ScopeDisposition.TypedQuarantine,
+            ScopeDisposition.Point,
+            ScopeDisposition.AcceptedSelected,
+            CorpusBodyRecord.NotHeld(ScopeDisposition.TypedQuarantine),
+            ManifestRef(),
+            RunIdentity());
+        using var buffer = new MemoryStream();
+        var digest = CorpusRecordCanonicalWriter.Write(buffer, record);
+        var bytes = buffer.ToArray();
+        var artifactRef = new SourceArtifactRef(
+            "urn:uuid:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", digest);
+
+        var verified = VerifiedCorpusRecord.ParseAndVerify(artifactRef, bytes);
+
+        Assert.AreEqual(ScopeDisposition.NeverIngest, verified.Record.RecordDisposition);
+        Assert.AreEqual(ScopeDisposition.TypedQuarantine, verified.Record.BodyDisposition);
+        Assert.AreEqual(ScopeDisposition.Point, verified.Record.RelationDisposition);
+        Assert.AreEqual(
+            ScopeDisposition.AcceptedSelected, verified.Record.SupportingDocumentDisposition);
     }
 
     [TestMethod]

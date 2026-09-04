@@ -41,7 +41,7 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// second property that could drift from that one.
 /// </para>
 /// </remarks>
-public sealed class EuDateAxiomBinding
+public sealed class EuDateAxiomBinding : IEuFactsEvidenceCarrier
 {
     private EuDateAxiomBinding(
         PublisherDateFact fact,
