@@ -52,16 +52,16 @@ public enum CorpusBodyRecordKind
 
 /// <summary>
 /// Which of the two shapes <see cref="CorpusBodyRecord.PendingAcquisitionReason"/> takes: D1-06b's
-/// own fetch simply has not run yet for this accepted object, or it ran and was refused. Closed at
-/// two.
+/// own writer simply has not attempted a fetch yet for this accepted object (the only case D1-06b
+/// itself ever produces, since no fetch capability exists in this codebase yet), or a future fetch
+/// (D1-06c) ran and was refused. Closed at two.
 /// </summary>
 /// <remarks>
-/// Provisional. No production acquisition writer exists in this codebase yet (D1-06b); this is the
-/// narrowest vocabulary the two named cases require, taken from this record's own reviewer verdict
-/// (event <c>lex-event-20260904T071246618Z-2d4ca939f7144ea5ac3fd4c421091154</c>, fix three) rather
-/// than guessed. When D1-06b's own refusal vocabulary lands, the <see cref="AcquisitionRefused"/>
-/// member's free-form <see cref="CorpusBodyPendingAcquisitionReason.Refusal"/> string should be
-/// reconsidered against it; nothing here presumes that vocabulary's shape.
+/// Named in this record's own reviewer verdict (event
+/// <c>lex-event-20260904T071246618Z-2d4ca939f7144ea5ac3fd4c421091154</c>, fix three).
+/// <see cref="AcquisitionRefused"/>'s own reason is <see cref="CorpusAcquisitionRefusalReason"/>, a
+/// closed enum rather than the free-form string this type originally carried; see that type's own
+/// remarks for why and for its exact members.
 /// </remarks>
 public enum CorpusBodyPendingAcquisitionReasonKind
 {
@@ -73,10 +73,112 @@ public enum CorpusBodyPendingAcquisitionReasonKind
 }
 
 /// <summary>
+/// The closed cause vocabulary for <see cref="CorpusBodyPendingAcquisitionReasonKind.AcquisitionRefused"/>.
+/// Closed at fourteen: one member for every cause named in
+/// <see cref="Lex.V3.Contracts.Source.Http.HttpAcquisitionReasonRegistry"/>.
+/// </summary>
+/// <remarks>
+/// The registry (Source/Http, out of this slice's own path claim -- read, never touched, per
+/// D1-06b's scope ruling) is read, not touched: every one of its causes is plausible for a future
+/// document-body fetch (D1-06c), since none of them are specific to the two SPARQL query endpoints
+/// <c>RoutedHttpAcquisitionSession</c> sends today. This mirrors, rather than duplicates, that
+/// registry's own four grouped enums
+/// (<see cref="Lex.V3.Contracts.Source.Http.HttpPartialBodyReason"/>,
+/// <see cref="Lex.V3.Contracts.Source.Http.HttpCompletionUnprovenReason"/>,
+/// <see cref="Lex.V3.Contracts.Source.Http.HttpPreHeaderFailureClass"/>,
+/// <see cref="Lex.V3.Contracts.Source.Http.HttpResponseSemanticsReason"/>): each member below shares
+/// its name and wire spelling with exactly the registry member it names, cited by name/value in its
+/// own doc comment rather than by widening that file's own visibility. D1-06b's own writer never
+/// produces this vocabulary itself (it has no fetch to refuse); it exists so the wire shape is ready
+/// for D1-06c's real refusal without another breaking change to this record.
+/// </remarks>
+public enum CorpusAcquisitionRefusalReason
+{
+    /// <summary>Mirrors <see cref="Lex.V3.Contracts.Source.Http.HttpPartialBodyReason.BodyDeadline"/>.</summary>
+    [JsonStringEnumMemberName("body_deadline")]
+    BodyDeadline = 1,
+
+    /// <summary>Mirrors <see cref="Lex.V3.Contracts.Source.Http.HttpPartialBodyReason.BodyReadFailure"/>.</summary>
+    [JsonStringEnumMemberName("body_read_failure")]
+    BodyReadFailure = 2,
+
+    /// <summary>
+    /// Mirrors <see cref="Lex.V3.Contracts.Source.Http.HttpPartialBodyReason.ByteBoundPreventedCompletion"/>.
+    /// </summary>
+    [JsonStringEnumMemberName("byte_bound_prevented_completion")]
+    ByteBoundPreventedCompletion = 3,
+
+    /// <summary>
+    /// Mirrors <see cref="Lex.V3.Contracts.Source.Http.HttpPartialBodyReason.CallerCancelledAfterHeaders"/>.
+    /// </summary>
+    [JsonStringEnumMemberName("caller_cancelled_after_headers")]
+    CallerCancelledAfterHeaders = 4,
+
+    /// <summary>
+    /// Mirrors <see cref="Lex.V3.Contracts.Source.Http.HttpPartialBodyReason.DeclaredLengthShortRead"/>.
+    /// </summary>
+    [JsonStringEnumMemberName("declared_length_short_read")]
+    DeclaredLengthShortRead = 5,
+
+    /// <summary>
+    /// Mirrors <see cref="Lex.V3.Contracts.Source.Http.HttpCompletionUnprovenReason.MissingCompletionProof"/>.
+    /// </summary>
+    [JsonStringEnumMemberName("missing_completion_proof")]
+    MissingCompletionProof = 6,
+
+    /// <summary>
+    /// Mirrors <see cref="Lex.V3.Contracts.Source.Http.HttpCompletionUnprovenReason.TransferCodingConflict"/>.
+    /// </summary>
+    [JsonStringEnumMemberName("transfer_coding_conflict")]
+    TransferCodingConflict = 7,
+
+    /// <summary>
+    /// Mirrors <see cref="Lex.V3.Contracts.Source.Http.HttpCompletionUnprovenReason.InvalidContentLength"/>.
+    /// </summary>
+    [JsonStringEnumMemberName("invalid_content_length")]
+    InvalidContentLength = 8,
+
+    /// <summary>
+    /// Mirrors <see cref="Lex.V3.Contracts.Source.Http.HttpCompletionUnprovenReason.UnsupportedTransferCoding"/>.
+    /// </summary>
+    [JsonStringEnumMemberName("unsupported_transfer_coding")]
+    UnsupportedTransferCoding = 9,
+
+    /// <summary>Mirrors <see cref="Lex.V3.Contracts.Source.Http.HttpPreHeaderFailureClass.HeaderDeadline"/>.</summary>
+    [JsonStringEnumMemberName("header_deadline")]
+    HeaderDeadline = 10,
+
+    /// <summary>
+    /// Mirrors <see cref="Lex.V3.Contracts.Source.Http.HttpPreHeaderFailureClass.TransportBeforeHeaders"/>.
+    /// </summary>
+    [JsonStringEnumMemberName("transport_before_headers")]
+    TransportBeforeHeaders = 11,
+
+    /// <summary>
+    /// Mirrors
+    /// <see cref="Lex.V3.Contracts.Source.Http.HttpResponseSemanticsReason.RevalidationRequestNotAdmitted"/>.
+    /// </summary>
+    [JsonStringEnumMemberName("revalidation_request_not_admitted")]
+    RevalidationRequestNotAdmitted = 12,
+
+    /// <summary>
+    /// Mirrors <see cref="Lex.V3.Contracts.Source.Http.HttpResponseSemanticsReason.StatusContentForbidden"/>.
+    /// </summary>
+    [JsonStringEnumMemberName("status_content_forbidden")]
+    StatusContentForbidden = 13,
+
+    /// <summary>
+    /// Mirrors <see cref="Lex.V3.Contracts.Source.Http.HttpResponseSemanticsReason.StatusFramingConflict"/>.
+    /// </summary>
+    [JsonStringEnumMemberName("status_framing_conflict")]
+    StatusFramingConflict = 14,
+}
+
+/// <summary>
 /// The typed reason a <see cref="CorpusBodyRecordKind.PendingAcquisition"/> body carries no body
 /// yet: an exact variant, <see cref="CorpusBodyPendingAcquisitionReasonKind.NotYetAcquired"/> with no
 /// further detail, or <see cref="CorpusBodyPendingAcquisitionReasonKind.AcquisitionRefused"/> naming
-/// the actual refusal.
+/// the actual refusal from the closed <see cref="CorpusAcquisitionRefusalReason"/> vocabulary.
 /// </summary>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record CorpusBodyPendingAcquisitionReason
@@ -84,7 +186,7 @@ public sealed record CorpusBodyPendingAcquisitionReason
     [JsonConstructor]
     public CorpusBodyPendingAcquisitionReason(
         CorpusBodyPendingAcquisitionReasonKind kind,
-        string? refusal)
+        CorpusAcquisitionRefusalReason? refusal)
     {
         Kind = ContractValidation.RequireDefined(kind, nameof(kind));
         switch (Kind)
@@ -99,13 +201,14 @@ public sealed record CorpusBodyPendingAcquisitionReason
                 break;
 
             case CorpusBodyPendingAcquisitionReasonKind.AcquisitionRefused:
-                if (string.IsNullOrWhiteSpace(refusal))
+                if (refusal is null)
                 {
                     throw new ArgumentException(
                         "An acquisition-refused reason must name the actual refusal.",
                         nameof(refusal));
                 }
 
+                ContractValidation.RequireDefined(refusal.Value, nameof(refusal));
                 break;
 
             default:
@@ -121,15 +224,14 @@ public sealed record CorpusBodyPendingAcquisitionReason
     /// The actual refusal named, for
     /// <see cref="CorpusBodyPendingAcquisitionReasonKind.AcquisitionRefused"/> only;
     /// <see langword="null"/> for <see cref="CorpusBodyPendingAcquisitionReasonKind.NotYetAcquired"/>.
-    /// Provisional free text (see this type's own remarks): D1-06b does not exist yet in this
-    /// codebase, so there is no closed refusal vocabulary yet to reuse for the value this names.
     /// </summary>
-    public string? Refusal { get; }
+    public CorpusAcquisitionRefusalReason? Refusal { get; }
 
     public static CorpusBodyPendingAcquisitionReason NotYetAcquired() =>
         new(CorpusBodyPendingAcquisitionReasonKind.NotYetAcquired, null);
 
-    public static CorpusBodyPendingAcquisitionReason AcquisitionRefused(string refusal) =>
+    public static CorpusBodyPendingAcquisitionReason AcquisitionRefused(
+        CorpusAcquisitionRefusalReason refusal) =>
         new(CorpusBodyPendingAcquisitionReasonKind.AcquisitionRefused, refusal);
 }
 
@@ -622,7 +724,11 @@ public static class CorpusRecordCanonicalWriter
             SkipValidation = false,
         });
 
-    private static void WriteRecord(Utf8JsonWriter writer, CorpusRecord record)
+    // Internal, not private: CorpusRecordSetCanonicalWriter (same file, same assembly) reuses this
+    // exact per-record encoding to embed each record inline in a record set's own canonical bytes,
+    // so a set's own digest can never drift from what CorpusRecordCanonicalWriter.Write itself
+    // produces for the identical record standing alone.
+    internal static void WriteRecord(Utf8JsonWriter writer, CorpusRecord record)
     {
         writer.WriteStartObject();
         writer.WriteString("schema", CorpusRecordSchemaIds.Record);
@@ -690,7 +796,7 @@ public static class CorpusRecordCanonicalWriter
             writer.WritePropertyName("refusal");
             if (pending.Refusal is { } refusal)
             {
-                writer.WriteStringValue(refusal);
+                writer.WriteStringValue(RefusalReasonName(refusal));
             }
             else
             {
@@ -723,6 +829,29 @@ public static class CorpusRecordCanonicalWriter
         _ => throw new InvalidOperationException("Unknown pending-acquisition reason kind."),
     };
 
+    // Every wire spelling here is exactly the member_key HttpAcquisitionReasonRegistry.cs's own
+    // CanonicalArtifact literal already uses for the mirrored cause (Source/Http, read, not
+    // touched); see CorpusAcquisitionRefusalReason's own remarks for the full cross-reference.
+    private static string RefusalReasonName(CorpusAcquisitionRefusalReason refusal) => refusal switch
+    {
+        CorpusAcquisitionRefusalReason.BodyDeadline => "body_deadline",
+        CorpusAcquisitionRefusalReason.BodyReadFailure => "body_read_failure",
+        CorpusAcquisitionRefusalReason.ByteBoundPreventedCompletion => "byte_bound_prevented_completion",
+        CorpusAcquisitionRefusalReason.CallerCancelledAfterHeaders => "caller_cancelled_after_headers",
+        CorpusAcquisitionRefusalReason.DeclaredLengthShortRead => "declared_length_short_read",
+        CorpusAcquisitionRefusalReason.MissingCompletionProof => "missing_completion_proof",
+        CorpusAcquisitionRefusalReason.TransferCodingConflict => "transfer_coding_conflict",
+        CorpusAcquisitionRefusalReason.InvalidContentLength => "invalid_content_length",
+        CorpusAcquisitionRefusalReason.UnsupportedTransferCoding => "unsupported_transfer_coding",
+        CorpusAcquisitionRefusalReason.HeaderDeadline => "header_deadline",
+        CorpusAcquisitionRefusalReason.TransportBeforeHeaders => "transport_before_headers",
+        CorpusAcquisitionRefusalReason.RevalidationRequestNotAdmitted =>
+            "revalidation_request_not_admitted",
+        CorpusAcquisitionRefusalReason.StatusContentForbidden => "status_content_forbidden",
+        CorpusAcquisitionRefusalReason.StatusFramingConflict => "status_framing_conflict",
+        _ => throw new InvalidOperationException("Unknown corpus acquisition refusal reason."),
+    };
+
     private static string FloorName(CustodyMembership floor) => floor switch
     {
         CustodyMembership.ReadOnce => "read_once",
@@ -742,4 +871,225 @@ public static class CorpusRecordCanonicalWriter
         ScopeDisposition.NeverIngest => "never_ingest",
         _ => throw new InvalidOperationException("Unknown scope disposition."),
     };
+}
+
+/// <summary>
+/// The corpus/6 record set's own schema identity: D1-06b's own new wire artifact, not itself named
+/// in any pre-existing "corpus/6" coordination reference the way <see cref="CorpusRecordSchemaIds.Record"/>
+/// is (see that type's own remarks), so this starts at version 1 rather than borrowing the record's
+/// own "6".
+/// </summary>
+public static class CorpusRecordSetSchemaIds
+{
+    public const string Set = "lex-v3-source-corpus-record-set/1";
+}
+
+/// <summary>
+/// One durable, canonically written run's worth of <see cref="CorpusRecord"/>s: the whole set
+/// D1-06b's own writer produces from one <see cref="Lex.V3.Contracts.Source.Scope.ScopeManifest"/>,
+/// held together so a caller custody-writes and reopens the run's complete output in one artifact
+/// rather than one artifact per object. Every member below is validated for internal consistency
+/// (fix two's own discipline, applied at set scope): every record must declare the set's own
+/// <see cref="ManifestRef"/> and <see cref="RunIdentity"/>, and records must be strictly ordered by
+/// <see cref="CorpusRecord.ObjectOrdinal"/>, so a reader can never observe a set that mixes records
+/// from two different runs or manifests, or that silently reorders or duplicates one object's row.
+/// Emptiness is not refused: a manifest that observed zero objects is a legitimate, if unusual, run.
+/// </summary>
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record CorpusRecordSet
+{
+    [JsonConstructor]
+    public CorpusRecordSet(
+        string schema,
+        SourceArtifactRef manifestRef,
+        SourceArtifactRef runIdentity,
+        IReadOnlyList<CorpusRecord> records)
+    {
+        if (!string.Equals(schema, CorpusRecordSetSchemaIds.Set, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                $"A corpus record set must declare {CorpusRecordSetSchemaIds.Set}.", nameof(schema));
+        }
+
+        Schema = schema;
+        ManifestRef = manifestRef ?? throw new ArgumentNullException(nameof(manifestRef));
+        RunIdentity = runIdentity ?? throw new ArgumentNullException(nameof(runIdentity));
+        Records = ScopeValidation.Copy(records, nameof(records));
+
+        for (var index = 0; index < Records.Count; index++)
+        {
+            var record = Records[index];
+            if (record.ManifestRef != ManifestRef)
+            {
+                throw new ArgumentException(
+                    "Every record in a set must declare the set's own manifest reference.",
+                    nameof(records));
+            }
+
+            if (record.RunIdentity != RunIdentity)
+            {
+                throw new ArgumentException(
+                    "Every record in a set must declare the set's own run identity.",
+                    nameof(records));
+            }
+
+            if (index > 0 && Records[index - 1].ObjectOrdinal >= record.ObjectOrdinal)
+            {
+                throw new ArgumentException(
+                    "A record set must be strictly ordered by object ordinal, with no duplicate.",
+                    nameof(records));
+            }
+        }
+    }
+
+    public string Schema { get; }
+
+    /// <summary>Which manifest artifact every record in this set was built from.</summary>
+    public SourceArtifactRef ManifestRef { get; }
+
+    /// <summary>Which run produced every record in this set.</summary>
+    public SourceArtifactRef RunIdentity { get; }
+
+    public IReadOnlyList<CorpusRecord> Records { get; }
+}
+
+/// <summary>
+/// The reader door for a corpus record set previously durably written by
+/// <see cref="CorpusRecordSetCanonicalWriter.Write"/>, shaped exactly like
+/// <see cref="VerifiedCorpusRecord.ParseAndVerify"/>: verifies the SHA-256 against
+/// <paramref name="artifactRef"/> before any content is exposed, then requires the parsed set's own
+/// canonical re-serialization to reproduce the input bytes exactly. No InternalsVisibleTo is granted
+/// for this door.
+/// </summary>
+public sealed class VerifiedCorpusRecordSet
+{
+    internal VerifiedCorpusRecordSet(CorpusRecordSet set)
+    {
+        Set = set;
+    }
+
+    /// <summary>
+    /// The verified set's own content. Reading it needs no InternalsVisibleTo; holding an instance
+    /// is itself the evidence that <see cref="ParseAndVerify"/> ran to completion, because the
+    /// constructor above is the only door onto this type and it stays internal.
+    /// </summary>
+    public CorpusRecordSet Set { get; }
+
+    public static VerifiedCorpusRecordSet ParseAndVerify(
+        SourceArtifactRef artifactRef,
+        ReadOnlySpan<byte> canonicalBytes)
+    {
+        ArgumentNullException.ThrowIfNull(artifactRef);
+
+        if (!string.Equals(
+                CorpusRecordSetCanonicalWriter.ComputeSetSha256(canonicalBytes),
+                artifactRef.Sha256,
+                StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "The corpus record set bytes do not match their artifact reference.",
+                nameof(canonicalBytes));
+        }
+
+        var json = ScopeValidation.DecodeStrictUtf8(canonicalBytes, nameof(canonicalBytes));
+        CorpusRecordSet set;
+        try
+        {
+            set = ContractJson.Deserialize<CorpusRecordSet>(json);
+        }
+        catch (JsonException exception)
+        {
+            throw new ArgumentException(
+                "The corpus record set bytes are not one valid typed canonical document.",
+                nameof(canonicalBytes),
+                exception);
+        }
+
+        using var rebuilt = new MemoryStream();
+        CorpusRecordSetCanonicalWriter.Write(rebuilt, set);
+        if (!canonicalBytes.SequenceEqual(rebuilt.ToArray()))
+        {
+            throw new ArgumentException(
+                "The corpus record set is not its exact canonical typed representation.",
+                nameof(canonicalBytes));
+        }
+
+        return new VerifiedCorpusRecordSet(set);
+    }
+}
+
+/// <summary>
+/// Canonicalizes a <see cref="CorpusRecordSet"/> into deterministic UTF-8 bytes and their SHA-256,
+/// domain-separated the same way <see cref="CorpusRecordCanonicalWriter"/> and
+/// <see cref="ScopeManifestCanonicalWriter"/> domain-separate their own digests. Each record inside
+/// the set is written by <see cref="CorpusRecordCanonicalWriter.WriteRecord"/> itself, the exact same
+/// per-record encoding <see cref="CorpusRecordCanonicalWriter.Write"/> uses for a standalone record,
+/// so a set's own bytes can never disagree with what the identical record would canonicalize to on
+/// its own.
+/// </summary>
+public static class CorpusRecordSetCanonicalWriter
+{
+    private const string SetDomain = "lex-v3-source-corpus-record-set/1\n";
+
+    public static string Write(Stream destination, CorpusRecordSet set)
+    {
+        ArgumentNullException.ThrowIfNull(destination);
+        ArgumentNullException.ThrowIfNull(set);
+        if (!destination.CanWrite)
+        {
+            throw new ArgumentException(
+                "The canonical destination must be writable.", nameof(destination));
+        }
+
+        using var buffer = new MemoryStream();
+        using (var writer = NewWriter(buffer))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("schema", CorpusRecordSetSchemaIds.Set);
+            writer.WritePropertyName("manifest_ref");
+            ScopeManifestCanonicalWriter.WriteArtifact(writer, set.ManifestRef);
+            writer.WritePropertyName("run_identity");
+            ScopeManifestCanonicalWriter.WriteArtifact(writer, set.RunIdentity);
+            writer.WritePropertyName("records");
+            writer.WriteStartArray();
+            foreach (var record in set.Records)
+            {
+                CorpusRecordCanonicalWriter.WriteRecord(writer, record);
+            }
+
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+            writer.Flush();
+        }
+
+        buffer.WriteByte((byte)'\n');
+        var bytes = buffer.ToArray();
+        destination.Write(bytes, 0, bytes.Length);
+        return ComputeSetSha256(bytes);
+    }
+
+    /// <summary>
+    /// The exact digest <see cref="Write"/> returns for its own output, recomputed directly from
+    /// durable bytes so a reader can check them against a pinned artifact reference before parsing.
+    /// <paramref name="canonicalBytes"/> must be exactly what <see cref="Write"/> wrote, trailing
+    /// newline included.
+    /// </summary>
+    internal static string ComputeSetSha256(ReadOnlySpan<byte> canonicalBytes)
+    {
+        using var incremental = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        incremental.AppendData(Encoding.ASCII.GetBytes(SetDomain));
+        incremental.AppendData(canonicalBytes);
+        Span<byte> digest = stackalloc byte[SHA256.HashSizeInBytes];
+        incremental.GetHashAndReset(digest);
+        return Convert.ToHexStringLower(digest);
+    }
+
+    private static Utf8JsonWriter NewWriter(Stream output) => new(
+        output,
+        new JsonWriterOptions
+        {
+            Encoder = JavaScriptEncoder.Default,
+            Indented = false,
+            SkipValidation = false,
+        });
 }

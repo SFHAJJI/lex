@@ -36,6 +36,16 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
     /// </summary>
     private const string EuQueryExecutionResult = "Lex.V3.Ingest.Europe.EuQueryExecutionResult";
 
+    /// <summary>
+    /// D1-06b adds the third holder: the corpus/6 record set writer's own acquisition door.
+    /// <c>CorpusAcquisitionOutcome.Held</c> is the only production path onto its <c>Receipt</c>
+    /// property, and that factory requires the caller to pass an already-real receipt -- there is
+    /// still no constructor of <see cref="DurableBlobWriteReceipt"/> itself anywhere in this
+    /// assembly. See <c>CorpusAcquisitionOutcomeHasNoPathToHeldWithoutARealReceipt</c>
+    /// (<c>CorpusRecordSetWriterTests</c>) for that factory's own construction-surface pin.
+    /// </summary>
+    private const string CorpusAcquisitionOutcome = "Lex.V3.Ingest.CorpusAcquisitionOutcome";
+
     [TestMethod]
     public void EveryHolderOfReceiptInIngestIsPinnedAndNoneIsAConstructor()
     {
@@ -46,6 +56,7 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 + "&, out System.String&, out " + Session + "+HeldCausalFacts&) -> System.Void",
                 "by-ref-method public instance " + Session + "+ResolvedHeldBody::Deconstruct(out " + Receipt
                 + "&, out System.ReadOnlyMemory<System.Byte>&, out System.String&) -> System.Void",
+                "field private instance " + CorpusAcquisitionOutcome + "::<Receipt>k__BackingField -> " + Receipt,
                 "field private instance " + EuQueryExecutionResult + "::<ScopeManifestReceipt>k__BackingField -> " + Receipt,
                 "field private instance " + QueryExecutionResult + "::<ScopeManifestReceipt>k__BackingField -> " + Receipt,
                 "field private instance " + Session + "+HeldBodyReceipt::<Receipt>k__BackingField -> " + Receipt,
@@ -53,6 +64,7 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 "method private instance " + Session + "::BuildHopWriteReceipts(System.UInt64, System.UInt64, "
                 + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Http.RoutedHttpHop>) "
                 + "-> System.Collections.Generic.Dictionary<System.String, " + Receipt + ">",
+                "property public instance " + CorpusAcquisitionOutcome + "::Receipt() -> " + Receipt,
                 "property public instance " + EuQueryExecutionResult + "::ScopeManifestReceipt() -> " + Receipt,
                 "property public instance " + QueryExecutionResult + "::ScopeManifestReceipt() -> " + Receipt,
                 "property public instance " + Session + "+HeldBodyReceipt::Receipt() -> " + Receipt,
