@@ -561,6 +561,11 @@ public sealed class EnumerationDeliveryComparison
 
         return bindings.EnumerateArray().Select(binding =>
         {
+            if (binding.ValueKind != JsonValueKind.Object)
+            {
+                throw new ArgumentException("A binding must be an object.");
+            }
+
             Object(
                 binding,
                 "binding",

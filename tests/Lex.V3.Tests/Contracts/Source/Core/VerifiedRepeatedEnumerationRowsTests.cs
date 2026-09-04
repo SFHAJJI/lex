@@ -70,6 +70,10 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
     private static readonly string NonStringHeadVarsBody =
         "{\"head\":{\"link\":[],\"vars\":[\"id\",\"cursor\",5]},\"results\":{\"distinct\":false,\"ordered\":true,\"bindings\":[]}}";
 
+    /// <summary>Fold-in one's hostile shape: a <c>bindings</c> array element that is not an object.</summary>
+    private static readonly string NonObjectBindingBody =
+        "{\"head\":{\"link\":[],\"vars\":[\"id\",\"cursor\",\"value\"]},\"results\":{\"distinct\":false,\"ordered\":true,\"bindings\":[5]}}";
+
     [TestMethod]
     public void ADeliveredFamilysRowsReopenVerifiedFromItsProof()
     {
@@ -316,6 +320,52 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
     }
 
     /// <summary>
+    /// The same binding check, varied on a different one of the six compared fields: a comparison
+    /// with the same partition key but a different acquisition run is just as much an unrelated
+    /// comparison as one with a different partition key, and the fixture's own
+    /// <c>runIdentitySeed</c> exists (per its own remarks) exactly to build two otherwise-identical
+    /// comparisons that differ in only that one respect.
+    /// </summary>
+    [TestMethod]
+    public void AComparisonWithADifferentRunDidNotMintThisProofIsACallerError()
+    {
+        var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture();
+        var delivery = fixture.Create("a,b", "a,b");
+        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, out _);
+        Assert.IsNotNull(proof);
+        var pages = ResolvePages(fixture, delivery);
+
+        var otherDelivery = new RepeatedEnumerationDeliveryProofTests.Fixture(runIdentitySeed: 931)
+            .Create("a,b", "a,b");
+
+        Assert.ThrowsExactly<ArgumentException>(() => VerifiedRepeatedEnumerationRows.TryOpen(
+            proof!, otherDelivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,
+            delivery.CountA.HttpEvidenceRef, pages, out _));
+    }
+
+    /// <summary>
+    /// Another of the six compared fields: a comparison with the same partition key and run, but a
+    /// different delivered row count (one row instead of two), is still an unrelated comparison
+    /// this proof was not minted from.
+    /// </summary>
+    [TestMethod]
+    public void AComparisonWithADifferentDeliveredRowCountDidNotMintThisProofIsACallerError()
+    {
+        var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture();
+        var delivery = fixture.Create("a,b", "a,b");
+        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, out _);
+        Assert.IsNotNull(proof);
+        var pages = ResolvePages(fixture, delivery);
+
+        var otherDelivery = new RepeatedEnumerationDeliveryProofTests.Fixture(expectedCount: 1)
+            .Create("a", "a");
+
+        Assert.ThrowsExactly<ArgumentException>(() => VerifiedRepeatedEnumerationRows.TryOpen(
+            proof!, otherDelivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,
+            delivery.CountA.HttpEvidenceRef, pages, out _));
+    }
+
+    /// <summary>
     /// Fold-in two: a <c>head.vars</c> array element that is not a JSON string throws
     /// <see cref="InvalidOperationException"/> out of <see cref="System.Text.Json.JsonElement.GetString"/>
     /// past this door's own catch filter, so the door threw where it promises to refuse. The strict
@@ -331,6 +381,32 @@ public sealed class VerifiedRepeatedEnumerationRowsTests
         Assert.IsNotNull(proof);
 
         var tampered = Tamper(fixture, delivery, NonStringHeadVarsBody);
+
+        var rows = VerifiedRepeatedEnumerationRows.TryOpen(
+            proof!, delivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,
+            delivery.CountA.HttpEvidenceRef, [tampered], out var refusal);
+
+        Assert.IsNull(rows);
+        Assert.AreEqual(RepeatedEnumerationRowsOpenRefusal.PageChainInvalid, refusal);
+    }
+
+    /// <summary>
+    /// Fold-in one: a <c>bindings</c> array element that is not a JSON object threw
+    /// <see cref="InvalidOperationException"/> out of <see cref="System.Text.Json.JsonElement.EnumerateObject"/>
+    /// past this door's own catch filter, because that call sat inside the argument expression
+    /// evaluated before the shared <c>Object</c> helper's own element-kind guard ever ran. The
+    /// strict parser now checks the element kind before calling <c>EnumerateObject</c> on the
+    /// binding, and this test drives that exact body.
+    /// </summary>
+    [TestMethod]
+    public void ANonObjectBindingElementRefusesRatherThanThrows()
+    {
+        var fixture = new RepeatedEnumerationDeliveryProofTests.Fixture();
+        var delivery = fixture.Create("a,b", "a,b");
+        var proof = AbsenceFamilyEnumerationProof.TryCreate("laws", delivery, out _);
+        Assert.IsNotNull(proof);
+
+        var tampered = Tamper(fixture, delivery, NonObjectBindingBody);
 
         var rows = VerifiedRepeatedEnumerationRows.TryOpen(
             proof!, delivery, fixture.ProfileForTest, delivery.InterpretationProfileRef,

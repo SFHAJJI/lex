@@ -7,12 +7,11 @@ namespace Lex.V3.Contracts.Source.Core;
 /// </summary>
 /// <remarks>
 /// No member here carries a <c>JsonStringEnumMemberName</c> wire token: this refusal is not yet
-/// serialised anywhere (queue item 17 has no adapter caller today), and no sibling enum in this
-/// same file (<see cref="RepeatedEnumerationThresholdAssessment"/>,
-/// <see cref="EnumerationDeliveryOutcome"/>, and the rest) carries one either. The Absence
-/// namespace's closed vocabularies are pinned member-by-member because they cross a real wire
-/// boundary today (<c>AbsenceKeyTests.EveryClosedAbsenceVocabularyIsPinnedMemberByMember</c>); this
-/// enum is outside that sweep by namespace, on purpose, and stays that way until something actually
+/// serialised anywhere (queue item 17 has no adapter caller today), so there is no wire form to
+/// pin one against. The Absence namespace's closed vocabularies are pinned member-by-member
+/// because they cross a real wire boundary today
+/// (<c>AbsenceKeyTests.EveryClosedAbsenceVocabularyIsPinnedMemberByMember</c>); this enum sits
+/// outside that sweep by namespace, on purpose, and stays that way until something actually
 /// serialises it. What is pinned instead, in
 /// <see cref="VerifiedRepeatedEnumerationRowsConstructionSurfaceTests"/>, is the exact member set
 /// and the one place that can hand one out.
