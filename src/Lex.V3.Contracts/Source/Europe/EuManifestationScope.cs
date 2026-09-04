@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Facts;
 using Lex.V3.Contracts.Source.Core;
@@ -81,18 +81,29 @@ public enum EuManifestationFormat
     Print = 9,
 
     /// <summary>
-    /// The office listed manifestation types for a Work, and this closed vocabulary admits none of
-    /// them as that Work's format. D1-05d, RULING
-    /// lex-event-20260904T201230364Z-8afe287d7c9b49509a410204e7ee729d.
+    /// The office listed manifestation types for a Work, and none of them is a wording format this
+    /// closed vocabulary knows. D1-05d, RULING
+    /// lex-event-20260904T201230364Z-8afe287d7c9b49509a410204e7ee729d, narrowed by OWNER RULING
+    /// lex-event-20260904T205636383Z-e92b888b62c24df29fe3f8c1be5016f0.
     /// </summary>
     /// <remarks>
     /// <para>
     /// The one member that is not a publisher format. It exists because
     /// <see cref="EuFormatObservation.Format"/> must always name something, and the honest answer
-    /// for a Work whose listing this route could not read is "none of what was listed". Before this
-    /// member that case named <see cref="Formex4"/>, which asserted a format the office had never
-    /// listed for that Work: unreachable in practice, and still a fact invented by a field, which is
-    /// exactly the defect this slice exists to remove.
+    /// for a Work whose listing left this route no wording format to name is "none of what was
+    /// listed". Before this member that case named <see cref="Formex4"/>, which asserted a format
+    /// the office had never listed for that Work: unreachable in practice, and still a fact invented
+    /// by a field, which is exactly the defect this slice exists to remove.
+    /// </para>
+    /// <para>
+    /// EXACTLY ONE producer, and the condition is narrow. An unadmitted manifestation type no longer
+    /// quarantines its Work: the token is recorded and the decode proceeds on the types it does
+    /// know, so this member is reached only when the office named an unknown type AND everything
+    /// else it named for that Work was print or another unknown. Two shapes reach it through the
+    /// real decode, both driven by test: a listing of print plus an unknown token, and a listing of
+    /// unknown tokens alone. Print is stepped over rather than named because
+    /// <see cref="EuManifestationScope.FormatsThatCanNeverCarryABody"/> would turn it into
+    /// <c>never_ingest</c>, and an unread token licenses no permanent exclusion.
     /// </para>
     /// <para>
     /// Named for what is true, and deliberately NOT "none listed". Whenever this member appears the

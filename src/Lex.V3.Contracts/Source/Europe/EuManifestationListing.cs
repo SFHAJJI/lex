@@ -1,4 +1,4 @@
-using Lex.V3.Contracts.Source.Core;
+﻿using Lex.V3.Contracts.Source.Core;
 
 namespace Lex.V3.Contracts.Source.Europe;
 
@@ -8,8 +8,8 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// <remarks>
 /// <para>
 /// No member here drops a row silently: every family M row this door reads is either folded into
-/// one object's listing, or quarantines the one Work whose listing named it, or is the exact row
-/// that produced one of these refusals.
+/// one object's listing, or recorded on that one object's own observation as a type this closed
+/// vocabulary does not know, or is the exact row that produced one of these refusals.
 /// </para>
 /// <para>
 /// The line every member here sits on is DELIVERY INTEGRITY, not object count. Each one says the
@@ -25,10 +25,19 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// An unadmitted manifestation TYPE is deliberately not a member, because it is categorically
 /// different: the delivery is exactly what the profile promised, and the office simply said
 /// something this closed vocabulary does not know. That is a fact about the publisher, not a defect
-/// in the response, so it quarantines its own Work by name through
-/// <see cref="EuManifestationListingDecode.UnadmittedTypeReasonCode"/> and the run continues, which
-/// is the containment REVIEW_RESULT lex-event-20260904T192428840Z-a6a8ebd26c58436aafd109a55303c12e
-/// required. A member for it was declared here until
+/// in the response, so it is RECORDED on that Work's own observation through
+/// <see cref="EuManifestationListingDecode.UnadmittedTypeReasonCode"/> and the decode proceeds on
+/// the types it does know. A publisher fact is recorded and proceeded past; only a response defect
+/// stops the decode. That is OWNER RULING
+/// lex-event-20260904T205636383Z-e92b888b62c24df29fe3f8c1be5016f0, binding on every acquisition
+/// slice: a body is not held only for the publisher's rules, the publisher's answer, the publisher
+/// marking the object not reusable, or a custody failure on our side, and unknown is recorded and
+/// never a reason. Until that ruling the token cost its Work the whole listing, so one odd token
+/// beside a perfectly good xhtml body refused a law this route can serve; see
+/// <see cref="EuManifestationListingDecode.ObserveWithUnadmittedType"/>. The containment
+/// REVIEW_RESULT lex-event-20260904T192428840Z-a6a8ebd26c58436aafd109a55303c12e that first stopped
+/// it refusing the whole RUN is the same line drawn one object further out. A member for it was
+/// declared here until
 /// lex-event-20260904T203812231Z-0e0dbd80d0e64f3e93e9a9c5f0b7b06f and was never set, never driven
 /// and never pinned; it is gone rather than kept for symmetry, and ordinal 3 belongs to the member
 /// below.
@@ -213,8 +222,9 @@ public static class EuManifestationListingDecode
     /// <param name="offendingToken">
     /// The first manifestation type outside the closed vocabulary these rows named, or null when
     /// every listed type was admitted. Reported alongside a SUCCESSFUL decode rather than a refusal:
-    /// an unadmitted type quarantines its own Work and the decode still delivers, so this is how a
-    /// caller learns the office's vocabulary has moved without reading every reason code.
+    /// an unadmitted type is recorded on its own Work's observation and refuses nothing at all, so
+    /// this is how a caller learns the office's vocabulary has moved without reading every reason
+    /// code.
     /// </param>
     /// <returns>
     /// One entry per object in <paramref name="closure"/> the rows say anything about, keyed by
@@ -222,8 +232,10 @@ public static class EuManifestationListingDecode
     /// ABSENT from the result: the office listing nothing is the typed absence, and inventing an
     /// observation for it would turn "nobody offers this a body" into "we looked at a format". An
     /// object whose listing carried a token outside the closed vocabulary IS present, carrying
-    /// <see cref="ObserveUnreadableListing"/>'s own answer, so the unreadable listing and the empty
-    /// listing stay two distinguishable facts.
+    /// <see cref="ObserveWithUnadmittedType"/>'s own answer: the types this vocabulary does know,
+    /// laddered exactly as any other listing, with the unknown token recorded on the reason code. A
+    /// listing the office answered and a listing the office never made therefore stay two
+    /// distinguishable facts.
     /// </returns>
     public static IReadOnlyDictionary<string, EuFormatObservation>? TryDecode(
         IReadOnlySet<string> closure,
@@ -305,11 +317,13 @@ public static class EuManifestationListingDecode
 
             if (!ListedTypeTokens.TryGetValue(valueTerm.Value, out var format))
             {
-                // Fix two: this Work's listing carried a type this vocabulary does not know. Record
-                // it against THIS WORK and carry on; the run must not die because one object's
-                // publisher vocabulary moved. The parent's entry above is created first on purpose,
-                // so a Work whose listing is ENTIRELY unknown tokens is still distinguishable from a
-                // Work the office lists nothing for.
+                // This Work's listing carried a type this vocabulary does not know. Record it
+                // against THIS WORK, leave it out of the ladder, and carry on with the types the
+                // office named that this route does know: OWNER RULING
+                // lex-event-20260904T205636383Z-e92b888b62c24df29fe3f8c1be5016f0, unknown is
+                // recorded and never a reason. The parent's entry above is created first on
+                // purpose, so a Work whose listing is ENTIRELY unknown tokens is still
+                // distinguishable from a Work the office lists nothing for.
                 offendingToken ??= valueTerm.Value;
                 if (!unadmittedTokenByParent.ContainsKey(canonicalParent))
                 {
@@ -336,7 +350,7 @@ public static class EuManifestationListingDecode
         foreach (var (parent, listed) in listedByParent)
         {
             observations[parent] = unadmittedTokenByParent.TryGetValue(parent, out var unadmitted)
-                ? ObserveUnreadableListing(listed, unadmitted, evidenceRef)
+                ? ObserveWithUnadmittedType(listed, unadmitted, evidenceRef)
                 : Observe(listed, evidenceRef);
         }
 
@@ -394,8 +408,8 @@ public static class EuManifestationListingDecode
         }
 
         var listed = new HashSet<EuManifestationFormat>(listedFormats);
-        var candidates = FormatLadder.Where(listed.Contains).ToArray();
-        if (candidates.Length > 0)
+        var candidates = LadderCandidatesOf(listed);
+        if (candidates.Count > 0)
         {
             return new EuFormatObservation(
                 candidates[0],
@@ -490,36 +504,55 @@ public static class EuManifestationListingDecode
         return Array.AsReadOnly(candidates.ToArray());
     }
 
-    /// <summary>The reason-code prefix a Work whose listing this route could not fully read carries.</summary>
+    /// <summary>
+    /// The reason-code prefix a Work carries when its listing named a manifestation type outside
+    /// this closed vocabulary, whatever this route then held for that Work.
+    /// </summary>
     public const string UnadmittedTypeReasonCode = "listing_type_not_admitted";
 
     /// <summary>
     /// One Work's observation when its listing named a manifestation type outside the closed
-    /// vocabulary. Never admitted as a body source, so the body axis is a typed gap.
+    /// vocabulary. The unknown token is recorded, left out of the ladder, and the Work proceeds on
+    /// the types the office named that this route does know.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The admission and the reason carry the real fact: this route did not fully read this Work's
-    /// listing, so it will not claim to have chosen a format from it, and it offers no fetch
-    /// candidates. The reason names the exact offending token so a reader can see which one moved.
+    /// OWNER RULING lex-event-20260904T205636383Z-e92b888b62c24df29fe3f8c1be5016f0: if a law can be
+    /// legitimately ingested, it is ingested, and unknown is recorded and never a reason. Until that
+    /// ruling this method quarantined the whole Work, so a listing of xhtml plus one token this
+    /// vocabulary had never seen cost us a body the office was serving that minute. That was an
+    /// illegitimate refusal. The office delivered exactly what the verified interpretation profile
+    /// promised and merely said one more thing besides, which is a fact about the publisher rather
+    /// than a defect in the response; a publisher fact is recorded and proceeded past, and only a
+    /// response defect stops a decode. <see cref="EuManifestationListingRefusal"/>'s three members
+    /// are the response defects, and they still refuse exactly as they did.
     /// </para>
     /// <para>
-    /// The <see cref="EuFormatObservation.Format"/> field is descriptive only here, and it is chosen
-    /// to avoid two different overclaims. It names the lowest-ordinal format the Work really listed
-    /// EXCLUDING <see cref="EuManifestationFormat.Print"/>, because naming print would send the body
-    /// axis to <c>never_ingest</c> through
-    /// <see cref="EuManifestationScope.FormatsThatCanNeverCarryABody"/>, and a permanent exclusion is
-    /// exactly what an unread listing does not license: the unknown token may well be a body format.
-    /// When the Work listed no known non-print format at all (its listing is print plus unknowns, or
+    /// The ladder is therefore <see cref="Observe"/>'s own ladder over the known listed types,
+    /// through the shared <see cref="LadderCandidatesOf"/>: an unknown token is kept OUT of the
+    /// ladder without being dropped from the record. What differs from <see cref="Observe"/> is the
+    /// reason code, which names the exact offending token so a reader can see which one moved, and
+    /// the floor below, which refuses to turn an unread token into a permanent exclusion.
+    /// </para>
+    /// <para>
+    /// When no known listed type is on the ladder, <see cref="EuFormatObservation.Format"/> is
+    /// descriptive only, and it is chosen to avoid two different overclaims. It names the
+    /// lowest-ordinal format the Work really listed EXCLUDING
+    /// <see cref="EuManifestationFormat.Print"/>, because naming print would send the body axis to
+    /// <c>never_ingest</c> through
+    /// <see cref="EuManifestationScope.FormatsThatCanNeverCarryABody"/>, and a permanent exclusion
+    /// is exactly what an unread token does not license: the unknown type may well be a body format.
+    /// When the Work listed no known wording format at all (its listing is print plus unknowns, or
     /// unknowns alone) there is no publisher value left to name, so this names
-    /// <see cref="EuManifestationFormat.NoneAdmitted"/>, the one member that means exactly that.
-    /// It named <see cref="EuManifestationFormat.Formex4"/> until RULING
+    /// <see cref="EuManifestationFormat.NoneAdmitted"/>, the one member that means exactly that, and
+    /// since the ruling that narrowed floor is the ONLY producer of that member anywhere. It named
+    /// <see cref="EuManifestationFormat.Formex4"/> until RULING
     /// lex-event-20260904T201230364Z-8afe287d7c9b49509a410204e7ee729d, which is a format the office
     /// had not listed for that Work; a field inventing a publisher fact is not excused by the branch
     /// being unreachable, since the branch exists to be correct when it is finally reached.
     /// </para>
     /// </remarks>
-    public static EuFormatObservation ObserveUnreadableListing(
+    public static EuFormatObservation ObserveWithUnadmittedType(
         IReadOnlyCollection<EuManifestationFormat> knownListedFormats,
         string unadmittedToken,
         SourceArtifactRef evidenceRef)
@@ -528,10 +561,26 @@ public static class EuManifestationListingDecode
         ArgumentException.ThrowIfNullOrWhiteSpace(unadmittedToken);
         ArgumentNullException.ThrowIfNull(evidenceRef);
 
-        var namedFormat = EuManifestationFormat.NoneAdmitted;
-        foreach (var candidate in knownListedFormats.OrderBy(static value => value))
+        // Every member, not merely the ones an early exit happens to reach: the old floor loop
+        // validated only as far as its first non-print format, so an undefined value sitting behind
+        // one was never checked at all.
+        foreach (var listedFormat in knownListedFormats)
         {
-            ContractValidation.RequireDefined(candidate, nameof(knownListedFormats));
+            ContractValidation.RequireDefined(listedFormat, nameof(knownListedFormats));
+        }
+
+        var reasonCode = UnadmittedTypeReasonCode + ":" + BoundTokenForReason(unadmittedToken);
+        var known = new HashSet<EuManifestationFormat>(knownListedFormats);
+        var candidates = LadderCandidatesOf(known);
+        if (candidates.Count > 0)
+        {
+            return new EuFormatObservation(
+                candidates[0], EuFormatBodyAdmission.BodyAdmitted, reasonCode, evidenceRef, candidates);
+        }
+
+        var namedFormat = EuManifestationFormat.NoneAdmitted;
+        foreach (var candidate in known.OrderBy(static value => value))
+        {
             if (candidate != EuManifestationFormat.Print)
             {
                 namedFormat = candidate;
@@ -540,11 +589,23 @@ public static class EuManifestationListingDecode
         }
 
         return new EuFormatObservation(
-            namedFormat,
-            EuFormatBodyAdmission.BodyNotAdmitted,
-            UnadmittedTypeReasonCode + ":" + BoundTokenForReason(unadmittedToken),
-            evidenceRef);
+            namedFormat, EuFormatBodyAdmission.BodyNotAdmitted, reasonCode, evidenceRef);
     }
+
+    /// <summary>
+    /// The one place a listed set becomes an ordered fetch ladder, shared by <see cref="Observe"/>
+    /// and <see cref="ObserveWithUnadmittedType"/> so the two can never ladder the same listing
+    /// differently.
+    /// </summary>
+    /// <remarks>
+    /// A type outside <see cref="ListedTypeTokens"/> never reaches this method at all, because
+    /// <see cref="TryDecode"/> records it separately instead of adding it to the listed set. That is
+    /// the whole mechanism by which an unknown token is ignored for the ladder without being dropped
+    /// from the record.
+    /// </remarks>
+    private static IReadOnlyList<EuManifestationFormat> LadderCandidatesOf(
+        IReadOnlySet<EuManifestationFormat> listed) =>
+        FormatLadder.Where(listed.Contains).ToArray();
 
     /// <summary>
     /// The offending token, reduced to something a bounded printable-ASCII contract identifier can
@@ -567,7 +628,7 @@ public static class EuManifestationListingDecode
                     : '_');
         }
 
-        // No empty-result arm: ObserveUnreadableListing rejects a null, empty or whitespace token
+        // No empty-result arm: ObserveWithUnadmittedType rejects a null, empty or whitespace token
         // before this is reached, and every remaining character maps to itself or to an underscore,
         // so the builder always holds at least one character. An "unnamed" fallback would be an
         // answer to a case the guard above already makes impossible.
@@ -581,7 +642,7 @@ public static class EuManifestationListingDecode
     /// <remarks>
     /// Derived, never chosen. <see cref="ContractValidation.RequireIdentifier"/> caps an identifier
     /// at <see cref="ContractValidation.MaximumIdentifierLength"/>, and
-    /// <see cref="ObserveUnreadableListing"/> builds its reason as the prefix, a colon, then the
+    /// <see cref="ObserveWithUnadmittedType"/> builds its reason as the prefix, a colon, then the
     /// bounded token, so this is that cap minus what the prefix and colon already occupy. It was a
     /// bare 64 until REVIEW_RESULT lex-event-20260904T203812231Z-0e0dbd80d0e64f3e93e9a9c5f0b7b06f
     /// observed that raising it to 4096 broke nothing: a constant no test held and no contract
@@ -604,9 +665,9 @@ public static class EuManifestationListingDecode
 
     /// <summary>
     /// The publisher tokens, and only those. <see cref="EuManifestationFormat.NoneAdmitted"/> is
-    /// excluded by construction: it is this vocabulary's own answer for a listing it cannot read,
-    /// never something the office can say, so admitting a token for it would let a publisher literal
-    /// decode straight into "none of what was listed is admitted".
+    /// excluded by construction: it is this vocabulary's own answer for a listing that left it no
+    /// wording format to name, never something the office can say, so admitting a token for it would
+    /// let a publisher literal decode straight into "none of what was listed is admitted".
     /// </summary>
     private static Dictionary<string, EuManifestationFormat> BuildTokenIndex()
     {
@@ -638,8 +699,9 @@ public static class EuManifestationListingDecode
         EuManifestationFormat.NoneAdmitted => throw new ArgumentOutOfRangeException(
             nameof(format),
             format,
-            "NoneAdmitted is this vocabulary's own answer for an unreadable listing, never a token " +
-            "the office can send; it has no publisher lexical form by construction."),
+            "NoneAdmitted is this vocabulary's own answer when a listing leaves it no wording " +
+            "format to name, never a token the office can send; it has no publisher lexical form " +
+            "by construction."),
         _ => throw new ArgumentOutOfRangeException(nameof(format)),
     };
 

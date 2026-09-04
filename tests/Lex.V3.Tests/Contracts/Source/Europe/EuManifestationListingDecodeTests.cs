@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Lex.V3.Contracts.Source.Core;
@@ -469,16 +469,29 @@ public sealed class EuManifestationListingDecodeTests
     // ---- Refusals: nothing is dropped silently. ----
 
     /// <summary>
-    /// An unadmitted manifestation type refuses THAT WORK by name and lets every other Work through.
+    /// An unadmitted manifestation type is RECORDED on its own Work's observation and costs that
+    /// Work nothing else: the ladder proceeds on the types the office named that this route knows.
     /// </summary>
     /// <remarks>
-    /// D1-05d's REVIEW_RESULT lex-event-20260904T192428840Z-a6a8ebd26c58436aafd109a55303c12e defect
-    /// two: this used to refuse the whole decode, so one new type listed anywhere in the office's
-    /// catalogue would have refused every EU run. The token is still named, and still never dropped
-    /// silently; what changed is the blast radius.
+    /// <para>
+    /// OWNER RULING lex-event-20260904T205636383Z-e92b888b62c24df29fe3f8c1be5016f0: if a law can be
+    /// legitimately ingested, it is ingested, and unknown is recorded and never a reason. This
+    /// condition has now shed two illegitimate refusals in a row. It refused the whole DECODE until
+    /// REVIEW_RESULT lex-event-20260904T192428840Z-a6a8ebd26c58436aafd109a55303c12e, so one new type
+    /// anywhere in the office's catalogue would have refused every EU run; it then quarantined the
+    /// one WORK, so a single odd token sitting beside a perfectly good xhtml body still cost us a
+    /// law this route can serve. Both times the delivery was exactly what the verified profile
+    /// promised and the office had merely said something extra, which is a publisher fact and never
+    /// a response defect.
+    /// </para>
+    /// <para>
+    /// The discriminating assertion is the last block: the same listing WITHOUT the unknown token
+    /// ladders identically. That is what "ignore it for the ladder" has to mean, and it fails the
+    /// moment the token is allowed to touch the format, the admission or the candidates again.
+    /// </para>
     /// </remarks>
     [TestMethod]
-    public void AnUnadmittedManifestationTypeQuarantinesOnlyItsOwnWork()
+    public void AnUnadmittedManifestationTypeIsRecordedAndTheWorkProceedsOnWhatIsKnown()
     {
         var rows = new[]
         {
@@ -498,59 +511,119 @@ public sealed class EuManifestationListingDecodeTests
         Assert.IsNotNull(decoded);
         Assert.HasCount(2, decoded!);
 
-        // The offending Work is quarantined, by name, with no candidates.
-        var quarantined = decoded[WorkingTimeRoot];
-        Assert.AreEqual(EuFormatBodyAdmission.BodyNotAdmitted, quarantined.Admission);
-        Assert.AreEqual("listing_type_not_admitted:epub3", quarantined.ReasonCode);
-        Assert.HasCount(0, quarantined.OrderedCandidates);
-        Assert.AreEqual(
-            EuManifestationFormat.Xhtml,
-            quarantined.Format,
-            "the named format must be one the Work really listed, and never print.");
+        // The Work is HELD on what the office really listed, and the token it did not know is
+        // recorded on the reason rather than charged against the body.
+        var held = decoded[WorkingTimeRoot];
+        Assert.AreEqual(EuFormatBodyAdmission.BodyAdmitted, held.Admission);
+        Assert.AreEqual("listing_type_not_admitted:epub3", held.ReasonCode);
+        CollectionAssert.AreEqual(
+            new[] { EuManifestationFormat.Xhtml }, held.OrderedCandidates.ToArray());
+        Assert.AreEqual(EuManifestationFormat.Xhtml, held.Format);
 
-        // Its sibling in the same batch is untouched.
+        // Its sibling in the same batch is untouched, and carries the ordinary reason.
         var sibling = decoded[RomeOneRoot];
         Assert.AreEqual(EuFormatBodyAdmission.BodyAdmitted, sibling.Admission);
+        Assert.AreEqual("listing_offers_wording_format", sibling.ReasonCode);
         CollectionAssert.AreEqual(
             new[] { EuManifestationFormat.Xhtml }, sibling.OrderedCandidates.ToArray());
+
+        // The office's own real six-token band plus one future type ladders all three rungs, so the
+        // rule is not an artefact of a one-format listing.
+        var band = Decode(
+            [.. new[] { "fmx4", "html", "pdf", "pdfa1a", "print", "xhtml", "epub3" }
+                .Select(listed => ListedRow(WorkingTimeRoot, listed))],
+            out var bandRefusal,
+            out _,
+            out _)![WorkingTimeRoot];
+        Assert.AreEqual(EuManifestationListingRefusal.None, bandRefusal);
+        CollectionAssert.AreEqual(
+            new[] { EuManifestationFormat.Xhtml, EuManifestationFormat.Html, EuManifestationFormat.Pdf },
+            band.OrderedCandidates.ToArray(),
+            "an unknown token must not shorten the ladder the office's known types earn.");
+
+        // The unknown token changed exactly one thing.
+        var withoutIt = Decode([ListedRow(WorkingTimeRoot, "xhtml")], out _, out _, out _)![WorkingTimeRoot];
+        Assert.AreEqual(withoutIt.Format, held.Format);
+        Assert.AreEqual(withoutIt.Admission, held.Admission);
+        CollectionAssert.AreEqual(
+            withoutIt.OrderedCandidates.ToArray(), held.OrderedCandidates.ToArray());
+        Assert.AreNotEqual(
+            withoutIt.ReasonCode,
+            held.ReasonCode,
+            "the token must still be recorded, or nothing says the office's vocabulary moved.");
     }
 
     /// <summary>
-    /// A Work whose listing is print plus an unknown token must NOT reach never-ingest: an unread
-    /// listing licenses no permanent exclusion, because the unknown token may itself be a body
-    /// format. It reaches the typed gap instead, through the vocabulary's own documented floor.
+    /// <see cref="EuManifestationFormat.NoneAdmitted"/> is still produced, and now produced ONLY on
+    /// its narrowed condition: the office named an unknown type and left no known wording format
+    /// behind it.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This test is the answer to "did the amendment leave the member unproduced". It did not, and
+    /// both producing shapes are driven here through the REAL decode rather than through
+    /// <see cref="EuManifestationListingDecode.ObserveWithUnadmittedType"/> directly, so what is
+    /// held is that a publisher listing can still reach it. If it ever cannot, the member must be
+    /// removed the way this slice removed <c>ManifestationTypeNotInVocabulary</c>.
+    /// </para>
+    /// <para>
+    /// Print is stepped over rather than named, because naming it would send the body axis to
+    /// <c>never_ingest</c> through
+    /// <see cref="EuManifestationScope.FormatsThatCanNeverCarryABody"/>, and a permanent exclusion
+    /// is exactly what an unread token does not license: the unknown type may itself be a body
+    /// format.
+    /// </para>
+    /// </remarks>
     [TestMethod]
-    public void AnUnreadableListingNeverNamesPrintAndSoNeverReachesNeverIngest()
+    public void NoneAdmittedIsProducedOnlyWhereTheListingLeftNoKnownWordingFormat()
     {
-        var printAndUnknown = EuManifestationListingDecode.ObserveUnreadableListing(
-            [EuManifestationFormat.Print], "epub3", Evidence("floor"));
+        // Reached, shape one: print plus an unknown token.
+        var printAndUnknown = Decode(
+            [ListedRow(WorkingTimeRoot, "print"), ListedRow(WorkingTimeRoot, "epub3")],
+            out var printRefusal,
+            out _,
+            out var printToken)![WorkingTimeRoot];
+        Assert.AreEqual(EuManifestationListingRefusal.None, printRefusal);
+        Assert.AreEqual("epub3", printToken);
+        Assert.AreEqual(EuManifestationFormat.NoneAdmitted, printAndUnknown.Format);
+        Assert.AreEqual(EuFormatBodyAdmission.BodyNotAdmitted, printAndUnknown.Admission);
+        Assert.HasCount(0, printAndUnknown.OrderedCandidates);
         Assert.AreNotEqual(EuManifestationFormat.Print, printAndUnknown.Format);
         Assert.IsFalse(
             EuManifestationScope.FormatsThatCanNeverCarryABody.Contains(printAndUnknown.Format),
-            "an unread listing must never reach never_ingest.");
-        Assert.AreEqual(EuFormatBodyAdmission.BodyNotAdmitted, printAndUnknown.Admission);
+            "print beside an unread token must never reach never_ingest.");
 
-        // It names NoneAdmitted, the member that means exactly "none of what was listed is admitted
-        // here", and never a format the office did not list for this Work. Until RULING
-        // lex-event-20260904T201230364Z-8afe287d7c9b49509a410204e7ee729d this named Formex4, which
-        // invented a publisher fact in a branch nobody could reach yet.
-        Assert.AreEqual(EuManifestationFormat.NoneAdmitted, printAndUnknown.Format);
+        // Reached, shape two: unknown tokens and nothing else. The Work is still PRESENT, which is
+        // what keeps it distinct from the office listing nothing at all.
+        var unknownsAlone = Decode(
+            [ListedRow(WorkingTimeRoot, "epub3"), ListedRow(WorkingTimeRoot, "daisy")],
+            out var aloneRefusal,
+            out _,
+            out _)![WorkingTimeRoot];
+        Assert.AreEqual(EuManifestationListingRefusal.None, aloneRefusal);
+        Assert.AreEqual(EuManifestationFormat.NoneAdmitted, unknownsAlone.Format);
+        Assert.AreEqual("listing_type_not_admitted:epub3", unknownsAlone.ReasonCode);
+        Assert.HasCount(0, unknownsAlone.OrderedCandidates);
 
-        // A listing this vocabulary knows nothing at all about takes the same answer.
-        var nothingKnown = EuManifestationListingDecode.ObserveUnreadableListing(
-            [], "epub3", Evidence("floor"));
-        Assert.AreEqual(EuManifestationFormat.NoneAdmitted, nothingKnown.Format);
-        Assert.IsFalse(
-            EuManifestationScope.FormatsThatCanNeverCarryABody.Contains(nothingKnown.Format));
-        Assert.AreEqual("listing_type_not_admitted:epub3", nothingKnown.ReasonCode);
-        Assert.HasCount(0, nothingKnown.OrderedCandidates);
-
-        // And a Work that DID list something admitted still names that, never NoneAdmitted: the
-        // member is the answer for an unreadable listing, not for every refused one.
-        var oneKnown = EuManifestationListingDecode.ObserveUnreadableListing(
-            [EuManifestationFormat.Xhtml, EuManifestationFormat.Print], "epub3", Evidence("floor"));
-        Assert.AreEqual(EuManifestationFormat.Xhtml, oneKnown.Format);
+        // NOT reached whenever the office named one wording format this vocabulary knows, on the
+        // ladder or off it. Before the ruling the first of these was this member's condition too.
+        foreach (var known in new[] { "xhtml", "html", "pdf", "pdfa2a", "fmx4", "xhtml5", "pdfa1a", "pdfa1b" })
+        {
+            var mixed = Decode(
+                [
+                    ListedRow(RomeOneRoot, known),
+                    ListedRow(RomeOneRoot, "print"),
+                    ListedRow(RomeOneRoot, "epub3"),
+                ],
+                out var mixedRefusal,
+                out _,
+                out _)![RomeOneRoot];
+            Assert.AreEqual(EuManifestationListingRefusal.None, mixedRefusal);
+            Assert.AreNotEqual(
+                EuManifestationFormat.NoneAdmitted,
+                mixed.Format,
+                $"a listing naming {known} has a wording format left to name.");
+        }
     }
 
     /// <summary>
@@ -572,8 +645,12 @@ public sealed class EuManifestationListingDecodeTests
             out _,
             out var token);
         Assert.AreEqual(EuManifestationListingRefusal.None, refusal);
-        Assert.AreEqual("none_admitted", token, "the spoofed token is refused by name like any other.");
-        Assert.AreEqual(EuFormatBodyAdmission.BodyNotAdmitted, spoofed![WorkingTimeRoot].Admission);
+        Assert.AreEqual("none_admitted", token, "the spoofed token is recorded by name like any other.");
+        Assert.AreEqual(
+            EuManifestationFormat.Xhtml,
+            spoofed![WorkingTimeRoot].Format,
+            "a listing literal must stay an unknown token beside the real xhtml body it sits with, " +
+            "never this vocabulary's own member.");
 
         // Two: it can mint no request.
         Assert.IsFalse(
@@ -614,7 +691,7 @@ public sealed class EuManifestationListingDecodeTests
     [TestMethod]
     public void AnOddPublisherTokenIsBoundedIntoTheReasonCodeRatherThanThrowing()
     {
-        var wild = EuManifestationListingDecode.ObserveUnreadableListing(
+        var wild = EuManifestationListingDecode.ObserveWithUnadmittedType(
             [EuManifestationFormat.Xhtml], "a b\n\u00e9/" + new string('z', 400), Evidence("wild"));
 
         StringAssert.StartsWith(wild.ReasonCode, "listing_type_not_admitted:");
@@ -639,7 +716,7 @@ public sealed class EuManifestationListingDecodeTests
     /// dead code rather than defence.
     /// </summary>
     /// <remarks>
-    /// <see cref="EuManifestationListingDecode.ObserveUnreadableListing"/> refuses a null, empty or
+    /// <see cref="EuManifestationListingDecode.ObserveWithUnadmittedType"/> refuses a null, empty or
     /// whitespace token outright, and every surviving character maps to itself or an underscore, so
     /// the bounded token always holds at least one character. That is why the reason builder needs
     /// no "unnamed" arm; this test is what holds the premise, so removing the guard cannot quietly
@@ -651,18 +728,18 @@ public sealed class EuManifestationListingDecodeTests
         foreach (var empty in new[] { "", "   " })
         {
             Assert.ThrowsExactly<ArgumentException>(
-                () => EuManifestationListingDecode.ObserveUnreadableListing(
+                () => EuManifestationListingDecode.ObserveWithUnadmittedType(
                     [EuManifestationFormat.Xhtml], empty, Evidence("empty")),
                 $"a token of {empty.Length} space(s) must be refused, not bounded into a fallback.");
         }
 
         Assert.ThrowsExactly<ArgumentNullException>(
-            () => EuManifestationListingDecode.ObserveUnreadableListing(
+            () => EuManifestationListingDecode.ObserveWithUnadmittedType(
                 [EuManifestationFormat.Xhtml], null!, Evidence("null")));
 
         // A token made entirely of characters the bound rewrites still yields a real reason code,
         // never an empty one: every character becomes an underscore rather than vanishing.
-        var rewritten = EuManifestationListingDecode.ObserveUnreadableListing(
+        var rewritten = EuManifestationListingDecode.ObserveWithUnadmittedType(
             [EuManifestationFormat.Xhtml], "%%%", Evidence("rewritten"));
         Assert.AreEqual("listing_type_not_admitted:___", rewritten.ReasonCode);
     }
@@ -682,11 +759,11 @@ public sealed class EuManifestationListingDecodeTests
         Assert.AreEqual(25, EuManifestationListingDecode.UnadmittedTypeReasonCode.Length);
 
         // The longest exactly-fitting token and the one below it bracket the boundary.
-        var exact = EuManifestationListingDecode.ObserveUnreadableListing(
+        var exact = EuManifestationListingDecode.ObserveWithUnadmittedType(
             [EuManifestationFormat.Xhtml], new string('z', 256 - 25 - 1), Evidence("exact"));
         Assert.AreEqual(256, exact.ReasonCode.Length);
 
-        var justUnder = EuManifestationListingDecode.ObserveUnreadableListing(
+        var justUnder = EuManifestationListingDecode.ObserveWithUnadmittedType(
             [EuManifestationFormat.Xhtml], new string('z', 256 - 25 - 2), Evidence("under"));
         Assert.AreEqual(255, justUnder.ReasonCode.Length);
     }

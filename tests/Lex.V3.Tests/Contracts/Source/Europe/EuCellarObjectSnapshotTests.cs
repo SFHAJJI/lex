@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Source.Core;
@@ -658,10 +658,13 @@ public sealed class EuCellarObjectSnapshotTests
                 "method public static " + N + "EuManifestationListingDecode::Observe("
                     + "System.Collections.Generic.IReadOnlyCollection<" + N + "EuManifestationFormat>, "
                     + "Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> " + N + "EuFormatObservation",
-                // The unreadable-listing door: a second real producer, added when an unadmitted
-                // manifestation type stopped refusing the whole decode and became one Work's own
-                // typed quarantine.
-                "method public static " + N + "EuManifestationListingDecode::ObserveUnreadableListing("
+                // The unadmitted-type door: a second real producer, added when an unadmitted
+                // manifestation type stopped refusing the whole decode. It was ObserveUnreadableListing
+                // until OWNER RULING lex-event-20260904T205636383Z-e92b888b62c24df29fe3f8c1be5016f0
+                // stopped the token quarantining its Work at all, which left the old name claiming
+                // more than the method does: the listing is read, and only the token it did not know
+                // is set aside. Re-transcribed from ConstructionSurface.ProducersIn's own output.
+                "method public static " + N + "EuManifestationListingDecode::ObserveWithUnadmittedType("
                     + "System.Collections.Generic.IReadOnlyCollection<" + N + "EuManifestationFormat>, "
                     + "System.String, Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> " + N
                     + "EuFormatObservation",
