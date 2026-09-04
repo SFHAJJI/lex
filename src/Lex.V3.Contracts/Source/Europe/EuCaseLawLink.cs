@@ -52,9 +52,10 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// layer already carries the ECLI-state machinery (<see cref="EcliState"/>), the held/not-held
 /// state of a target's body (<see cref="TargetBodyScope"/>), and the exactly-one-edge-shape
 /// invariant. Nothing here reimplements any of that. What review/23-research-temporal.md section 3
-/// (the CDM FRBR class and predicate lists, lines 50 and 54) and section 7 (case law, judgment
-/// text and article-level granularity, lines 91, 92 and 109) show is missing from Facts, because it
-/// is EU-case-law-specific rather than a property every <see cref="RelationFact"/> across both
+/// (the CDM FRBR class and predicate lists, lines 50 and 54), section 7 (case law and judgment
+/// text, lines 91 and 92) and section 10 (article-level granularity, line 109) show is missing
+/// from Facts, because it is EU-case-law-specific rather than a property every
+/// <see cref="RelationFact"/> across both
 /// publishers needs, is added here instead of there: which real CDM predicates this lane vouches
 /// for (<see cref="EuCaseLawPredicateVocabulary"/>), which side of an edge is actually the case
 /// (<see cref="EuCaseLawLinkCaseSide"/>), that the judgment text behind a case-law link is never
@@ -97,10 +98,14 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// derivation, since a side is only ever named the case after it has already proven
 /// <see cref="OfficialIdentitySet.IsCase"/>). When the case is the edge's target,
 /// <see cref="RelationFact"/>'s own <c>TargetEcliState</c> already carries this exact question, and
-/// <see cref="Create"/> passes <see cref="CaseEcliState"/> straight through, so the two are provably
-/// equal (<c>EuCaseLawLinkTests</c> asserts this equality directly, as a consistency check between
-/// this binding's own derivation and <see cref="RelationFact"/>'s own, not a redundant restatement).
-/// When the case is the edge's source, <see cref="RelationFact"/>'s own <c>TargetEcliState</c>
+/// <see cref="Create"/> sets it from the identical local value it also stores as
+/// <see cref="CaseEcliState"/> (see <see cref="Create"/>'s own <c>factTargetEcliState</c>), so the
+/// two fields are equal by construction, not by proof: an assertion comparing one against the
+/// other would pass for any value the shared computation produced, tautologically. What
+/// <c>EuCaseLawLinkTests</c> (<c>WhenTheCaseIsTheTargetTheDerivedStateEqualsRelationFactsOwnTargetEcliState</c>)
+/// actually checks instead is each field independently against the fixture's own known ECLI
+/// literal, so a defect in the shared computation itself would still be caught. When the case is
+/// the edge's source, <see cref="RelationFact"/>'s own <c>TargetEcliState</c>
 /// describes the <i>other</i>, non-case side instead, and per its own invariant that can only ever
 /// be <see cref="EcliState.EcliNotApplicable"/>; <see cref="CaseEcliState"/> is what actually answers
 /// REL-005 in that direction.
@@ -159,7 +164,7 @@ namespace Lex.V3.Contracts.Source.Europe;
 /// <see cref="EuCaseLawGranularity"/> declares no alternative this binding can never produce.
 /// </para>
 /// </remarks>
-public sealed class EuCaseLawLinkBinding
+public sealed class EuCaseLawLinkBinding : IEuFactsEvidenceCarrier
 {
     private EuCaseLawLinkBinding(
         RelationFact fact,
@@ -302,8 +307,11 @@ public sealed class EuCaseLawLinkBinding
         }
 
         // RelationFact's own EcliState field always describes the target. When the case is the
-        // target, that is exactly caseEcliState (verified equal in EuCaseLawLinkTests). When the
-        // case is the source, the target is, by caseSide's own derivation above, not a case, so
+        // target, this assigns it the identical caseEcliState value computed above, so the two
+        // fields agree by construction rather than by an independently checked proof; the type
+        // remarks on this class explain why EuCaseLawLinkTests checks each field against the
+        // fixture's own known ECLI literal instead of against each other. When the case is the
+        // source, the target is, by caseSide's own derivation above, not a case, so
         // RelationFact's own invariant requires EcliNotApplicable there.
         var factTargetEcliState = caseSide == EuCaseLawLinkCaseSide.Target
             ? caseEcliState
