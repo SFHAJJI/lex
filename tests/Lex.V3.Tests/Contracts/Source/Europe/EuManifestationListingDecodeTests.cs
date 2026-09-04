@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Europe;
+using Lex.V3.TestSupport;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Lex.V3.Tests.Contracts.Source.Europe;
@@ -614,12 +615,114 @@ public sealed class EuManifestationListingDecodeTests
     public void AnOddPublisherTokenIsBoundedIntoTheReasonCodeRatherThanThrowing()
     {
         var wild = EuManifestationListingDecode.ObserveUnreadableListing(
-            [EuManifestationFormat.Xhtml], "a b\n\u00e9/" + new string('z', 200), Evidence("wild"));
+            [EuManifestationFormat.Xhtml], "a b\n\u00e9/" + new string('z', 400), Evidence("wild"));
 
         StringAssert.StartsWith(wild.ReasonCode, "listing_type_not_admitted:");
         Assert.IsTrue(
-            wild.ReasonCode.Length <= 256 && wild.ReasonCode.All(c => c is >= ' ' and <= '~'),
-            "the reason code must stay a bounded printable-ASCII contract identifier.");
+            wild.ReasonCode.All(c => c is >= ' ' and <= '~'),
+            "the reason code must stay printable ASCII.");
+
+        // The bound is PINNED, not merely respected. A token longer than the room a contract
+        // identifier leaves must fill that room exactly: 256 is
+        // ContractValidation.MaximumIdentifierLength, which EuFormatObservation's own constructor
+        // enforces through RequireIdentifier. A larger bound would have thrown on construction
+        // above; a smaller one lands short here. Before D1-05d's second cycle this was a bare 64
+        // that nothing held, so raising it to 4096 broke no test.
+        Assert.AreEqual(
+            256,
+            wild.ReasonCode.Length,
+            "an over-long publisher token must fill exactly the identifier budget.");
+    }
+
+    /// <summary>
+    /// The guard that makes an empty bounded token impossible, and so makes a fallback for one
+    /// dead code rather than defence.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="EuManifestationListingDecode.ObserveUnreadableListing"/> refuses a null, empty or
+    /// whitespace token outright, and every surviving character maps to itself or an underscore, so
+    /// the bounded token always holds at least one character. That is why the reason builder needs
+    /// no "unnamed" arm; this test is what holds the premise, so removing the guard cannot quietly
+    /// make the removed arm reachable again.
+    /// </remarks>
+    [TestMethod]
+    public void AnEmptyOrWhitespaceUnadmittedTokenIsRefusedOutright()
+    {
+        foreach (var empty in new[] { "", "   " })
+        {
+            Assert.ThrowsExactly<ArgumentException>(
+                () => EuManifestationListingDecode.ObserveUnreadableListing(
+                    [EuManifestationFormat.Xhtml], empty, Evidence("empty")),
+                $"a token of {empty.Length} space(s) must be refused, not bounded into a fallback.");
+        }
+
+        Assert.ThrowsExactly<ArgumentNullException>(
+            () => EuManifestationListingDecode.ObserveUnreadableListing(
+                [EuManifestationFormat.Xhtml], null!, Evidence("null")));
+
+        // A token made entirely of characters the bound rewrites still yields a real reason code,
+        // never an empty one: every character becomes an underscore rather than vanishing.
+        var rewritten = EuManifestationListingDecode.ObserveUnreadableListing(
+            [EuManifestationFormat.Xhtml], "%%%", Evidence("rewritten"));
+        Assert.AreEqual("listing_type_not_admitted:___", rewritten.ReasonCode);
+    }
+
+    /// <summary>
+    /// The reason-code prefix really is the length the bound is computed from.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="EuManifestationListingDecode"/> derives its token budget as the identifier cap
+    /// minus this prefix and one colon, using a compile-time constant for the prefix length. If the
+    /// prefix is renamed without that constant following, the budget silently stops matching the
+    /// contract; this is what makes that impossible to miss.
+    /// </remarks>
+    [TestMethod]
+    public void TheReasonCodeBoundIsDerivedFromTheIdentifierContract()
+    {
+        Assert.AreEqual(25, EuManifestationListingDecode.UnadmittedTypeReasonCode.Length);
+
+        // The longest exactly-fitting token and the one below it bracket the boundary.
+        var exact = EuManifestationListingDecode.ObserveUnreadableListing(
+            [EuManifestationFormat.Xhtml], new string('z', 256 - 25 - 1), Evidence("exact"));
+        Assert.AreEqual(256, exact.ReasonCode.Length);
+
+        var justUnder = EuManifestationListingDecode.ObserveUnreadableListing(
+            [EuManifestationFormat.Xhtml], new string('z', 256 - 25 - 2), Evidence("under"));
+        Assert.AreEqual(255, justUnder.ReasonCode.Length);
+    }
+
+    /// <summary>
+    /// The closed refusal vocabulary, pinned member by member.
+    /// </summary>
+    /// <remarks>
+    /// Added when D1-05d removed <c>ManifestationTypeNotInVocabulary</c>, a member nothing set,
+    /// nothing drove and nothing pinned. Every marker is transcribed from ConstructionSurface.Of's
+    /// own printed output. The pin is what stops a member being declared here again without a
+    /// producer: an unproduced refusal is a vocabulary claiming a condition the code cannot reach.
+    /// </remarks>
+    [TestMethod]
+    public void TheListingRefusalVocabularyHasExactlyFourMembersAndEachIsReachable()
+    {
+        const string N = "Lex.V3.Contracts.Source.Europe.";
+        const string T = N + "EuManifestationListingRefusal";
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "base-constructor protected instance System.Enum::.ctor() -> System.Enum",
+                "base-constructor protected instance System.ValueType::.ctor() -> System.ValueType",
+                "field public static " + T + "::ListingContradictsItsOwnAbsenceRow -> " + T,
+                "field public static " + T + "::ListingParentNotInClosure -> " + T,
+                "field public static " + T + "::ListingRowTermKindMismatch -> " + T,
+                "field public static " + T + "::None -> " + T,
+            },
+            ConstructionSurface.Of(typeof(EuManifestationListingRefusal)).ToArray());
+
+        // Every non-None member is driven by a test in this file through the real decode:
+        // AnIriValuedOrLanguageTaggedManifestationTypeIsRefusedRatherThanReinterpreted,
+        // AListingRowNamingAParentOutsideTheClosureIsRefusedByName and
+        // ARowClaimingBothARealTypeAndTheAbsenceMarkerIsRefused. The count is asserted so a fifth
+        // member cannot arrive without one.
+        Assert.AreEqual(4, Enum.GetValues<EuManifestationListingRefusal>().Length);
     }
 
     [TestMethod]
