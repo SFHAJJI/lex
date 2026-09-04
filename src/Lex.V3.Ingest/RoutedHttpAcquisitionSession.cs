@@ -1594,25 +1594,6 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
     }
 
     /// <summary>
-    /// D1-06c-EU defect 1 (SCOPE_RULING lex-event-20260904T130546972Z-c72fad2da5b34344af802c068d8fbf08
-    /// item 1): the real Cellar dissemination service answers a document-fetch 303 with a plain
-    /// <c>http://</c> Location on the identical admitted host (proven live on 2026-09-04 against both
-    /// the xhtml and fmx4 canary probes). <see cref="RoutedHttpValidation.RequireAbsoluteHttpsUri"/>,
-    /// called from <see cref="HttpLogicalRequest.Create"/> below, refuses http unconditionally, so
-    /// without this step every such redirect would end <see cref="HttpRouteIncompleteReason.RedirectRefused"/>
-    /// before the same-origin check downstream ever ran. A Location whose scheme is http, whose port
-    /// is the http default (there is no observed case of a publisher-controlled non-default port to
-    /// reason about) and whose host matches <paramref name="admittedOriginUri"/> is instead followed
-    /// as https: the scheme is rewritten before this method ever builds a request, so the plaintext
-    /// http target is never itself sent. Nothing here widens what host is trusted -- the caller's own
-    /// same-origin check still runs on the result, unchanged, comparing host and port exactly as it
-    /// always has, only now against the upgraded https target instead of being short-circuited by the
-    /// scheme refusal first. The observed Location and the upgrade both remain readable on the
-    /// resulting evidence without a new field: this hop's own <c>Headers.Location</c> keeps the exact
-    /// observed http string, and the next hop's own <c>RequestUri</c> (which
-    /// <see cref="RoutedHttpHop.Create"/> only ever admits as https) is what was actually followed.
-    /// </summary>
-    /// <summary>
     /// The one place the http-to-https redirect upgrade is decided, so
     /// <see cref="TryCreateRedirectRequest"/> (which builds the followed request) and
     /// <see cref="SendLease.FromRedirect"/> (which re-derives what the antecedent hop's own Location

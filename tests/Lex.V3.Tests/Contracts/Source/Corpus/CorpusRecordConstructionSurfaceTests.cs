@@ -85,11 +85,14 @@ public sealed class CorpusRecordConstructionSurfaceTests
 
     /// <summary>
     /// D1-06b closed <see cref="CorpusBodyPendingAcquisitionReason"/>'s own free-form
-    /// <c>Refusal</c> string into this fourteen-member vocabulary, one member per cause named in
-    /// <c>Lex.V3.Contracts.Source.Http.HttpAcquisitionReasonRegistry</c> (read, never touched).
+    /// <c>Refusal</c> string into this vocabulary, originally fourteen members (one per cause named
+    /// in <c>Lex.V3.Contracts.Source.Http.HttpAcquisitionReasonRegistry</c>, read, never touched),
+    /// widened to twenty-two by D1-06c-EU fix one (SCOPE_RULING
+    /// lex-event-20260904T141600712Z-0b823f7143154a608f01ec8f757f9e93 item 1): three real EU
+    /// document-fetch causes plus five reserved for the LU-2 lane's own document-get route.
     /// </summary>
     [TestMethod]
-    public void AcquisitionRefusalReasonIsExactlyItsFourteenMembers()
+    public void AcquisitionRefusalReasonIsExactlyItsTwentyTwoMembers()
     {
         CollectionAssert.AreEqual(
             new[]
@@ -106,13 +109,25 @@ public sealed class CorpusRecordConstructionSurfaceTests
                     + N + "CorpusAcquisitionRefusalReason",
                 "field public static " + N + "CorpusAcquisitionRefusalReason::DeclaredLengthShortRead -> "
                     + N + "CorpusAcquisitionRefusalReason",
+                "field public static " + N + "CorpusAcquisitionRefusalReason::Gone -> "
+                    + N + "CorpusAcquisitionRefusalReason",
                 "field public static " + N + "CorpusAcquisitionRefusalReason::HeaderDeadline -> "
                     + N + "CorpusAcquisitionRefusalReason",
                 "field public static " + N + "CorpusAcquisitionRefusalReason::InvalidContentLength -> "
                     + N + "CorpusAcquisitionRefusalReason",
                 "field public static " + N + "CorpusAcquisitionRefusalReason::MissingCompletionProof -> "
                     + N + "CorpusAcquisitionRefusalReason",
+                "field public static " + N + "CorpusAcquisitionRefusalReason::NotFound -> "
+                    + N + "CorpusAcquisitionRefusalReason",
+                "field public static " + N + "CorpusAcquisitionRefusalReason::RedirectTargetOriginNotAdmitted -> "
+                    + N + "CorpusAcquisitionRefusalReason",
+                "field public static " + N + "CorpusAcquisitionRefusalReason::RequestedRepresentationNotServed -> "
+                    + N + "CorpusAcquisitionRefusalReason",
+                "field public static " + N + "CorpusAcquisitionRefusalReason::RetryExhausted -> "
+                    + N + "CorpusAcquisitionRefusalReason",
                 "field public static " + N + "CorpusAcquisitionRefusalReason::RevalidationRequestNotAdmitted -> "
+                    + N + "CorpusAcquisitionRefusalReason",
+                "field public static " + N + "CorpusAcquisitionRefusalReason::RobotsDisallowed -> "
                     + N + "CorpusAcquisitionRefusalReason",
                 "field public static " + N + "CorpusAcquisitionRefusalReason::StatusContentForbidden -> "
                     + N + "CorpusAcquisitionRefusalReason",
@@ -122,11 +137,15 @@ public sealed class CorpusRecordConstructionSurfaceTests
                     + N + "CorpusAcquisitionRefusalReason",
                 "field public static " + N + "CorpusAcquisitionRefusalReason::TransportBeforeHeaders -> "
                     + N + "CorpusAcquisitionRefusalReason",
+                "field public static " + N + "CorpusAcquisitionRefusalReason::UnexpectedPublisherStatus -> "
+                    + N + "CorpusAcquisitionRefusalReason",
                 "field public static " + N + "CorpusAcquisitionRefusalReason::UnsupportedTransferCoding -> "
+                    + N + "CorpusAcquisitionRefusalReason",
+                "field public static " + N + "CorpusAcquisitionRefusalReason::WrongAcceptToken -> "
                     + N + "CorpusAcquisitionRefusalReason",
             },
             ConstructionSurface.Of(typeof(CorpusAcquisitionRefusalReason)).ToArray(),
-            "a fifteenth refusal cause must be justified in review, not discovered later");
+            "a twenty-third refusal cause must be justified in review, not discovered later");
     }
 
     [TestMethod]

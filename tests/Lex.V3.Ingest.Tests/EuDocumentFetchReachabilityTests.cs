@@ -344,6 +344,21 @@ public sealed class EuDocumentFetchReachabilityTests
     /// a real 3388-byte body. See this file's own remarks for why this admitted-media-type case
     /// stands in for the reviewer-cited (but non-admitted-media-type) html observation.
     /// </summary>
+    /// <remarks>
+    /// D1-06c-EU fix one's own fold-in three (SCOPE_RULING
+    /// lex-event-20260904T141600712Z-0b823f7143154a608f01ec8f757f9e93): this proves only that the
+    /// route's own SHAPE reaches a real 200 for the 1995 directive under an admitted media type. It is
+    /// not a claim that the 1995 act's actual WORDING (its readable legal text) is available through
+    /// this route: <see cref="EuManifestationMediaType.RdfXml"/> is object metadata, not the act's
+    /// text, and the request the EU adapter actually mints (<see cref="EuManifestationMediaType.XhtmlXml"/>,
+    /// the only format <c>EuQueryExecutionAdapter.MintFetchAddress</c> requests today) is exactly what
+    /// <see cref="OldDirectiveXhtmlAndPdfa2aShareTheRealObserved404Body"/> below proves 404s for this
+    /// same act. So for the 1995 act specifically, its real wording stays a per-object typed refusal
+    /// (<c>requested_representation_not_served</c>) until D1-05d adds <c>text/html</c> (the format the
+    /// office's own content negotiation actually serves this act's text under, per this file's own
+    /// class-level remarks) to the closed <see cref="EuManifestationMediaType"/> set; nothing in this
+    /// test or fix one changes that.
+    /// </remarks>
     [TestMethod]
     public async Task OldDirectiveSucceedsWithItsRealRdfXmlManifestation()
     {
@@ -546,7 +561,7 @@ public sealed class EuDocumentFetchReachabilityTests
     }
 
     /// <summary>
-    /// The real robots negotiation (302-to-op.europa.eu, then a real 200) every document-fetch
+    /// The real robots negotiation (301-to-op.europa.eu, then a real 200) every document-fetch
     /// session bootstraps through before its first product request, exactly as the retained
     /// <c>eu-robots.txt</c> fixture proves (see <see cref="RobotsFixtureBytesMatchTheRetainedCanaryDigest"/>).
     /// Ordinal 0/1 are that bootstrap; ordinal 2 onward is the caller's own product response.

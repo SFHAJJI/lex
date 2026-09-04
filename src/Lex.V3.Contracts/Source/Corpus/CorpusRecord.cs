@@ -74,8 +74,15 @@ public enum CorpusBodyPendingAcquisitionReasonKind
 
 /// <summary>
 /// The closed cause vocabulary for <see cref="CorpusBodyPendingAcquisitionReasonKind.AcquisitionRefused"/>.
-/// Closed at fourteen: one member for every cause named in
-/// <see cref="Lex.V3.Contracts.Source.Http.HttpAcquisitionReasonRegistry"/>.
+/// Closed at twenty-two: the original fourteen members, one for every cause named in
+/// <see cref="Lex.V3.Contracts.Source.Http.HttpAcquisitionReasonRegistry"/>, plus D1-06c-EU fix one's
+/// own widening (SCOPE_RULING lex-event-20260904T141600712Z-0b823f7143154a608f01ec8f757f9e93 item 1)
+/// to eight more: the EU document-fetch route's own three named shapes
+/// (<see cref="RequestedRepresentationNotServed"/>, <see cref="WrongAcceptToken"/>,
+/// <see cref="RedirectTargetOriginNotAdmitted"/>), plus five reserved in the same widening for the
+/// LU-2 lane's own document-get route so it needs no second schema/enum touch when it lands
+/// (<see cref="RobotsDisallowed"/>, <see cref="NotFound"/>, <see cref="Gone"/>,
+/// <see cref="RetryExhausted"/>, <see cref="UnexpectedPublisherStatus"/>).
 /// </summary>
 /// <remarks>
 /// The registry (Source/Http, out of this slice's own path claim -- read, never touched, per
@@ -86,11 +93,22 @@ public enum CorpusBodyPendingAcquisitionReasonKind
 /// (<see cref="Lex.V3.Contracts.Source.Http.HttpPartialBodyReason"/>,
 /// <see cref="Lex.V3.Contracts.Source.Http.HttpCompletionUnprovenReason"/>,
 /// <see cref="Lex.V3.Contracts.Source.Http.HttpPreHeaderFailureClass"/>,
-/// <see cref="Lex.V3.Contracts.Source.Http.HttpResponseSemanticsReason"/>): each member below shares
-/// its name and wire spelling with exactly the registry member it names, cited by name/value in its
-/// own doc comment rather than by widening that file's own visibility. D1-06b's own writer never
-/// produces this vocabulary itself (it has no fetch to refuse); it exists so the wire shape is ready
-/// for D1-06c's real refusal without another breaking change to this record.
+/// <see cref="Lex.V3.Contracts.Source.Http.HttpResponseSemanticsReason"/>): each of the first fourteen
+/// members below shares its name and wire spelling with exactly the registry member it names, cited
+/// by name/value in its own doc comment rather than by widening that file's own visibility. D1-06b's
+/// own writer never produces this vocabulary itself (it has no fetch to refuse); it exists so the
+/// wire shape is ready for D1-06c's real refusal without another breaking change to this record.
+/// <para>
+/// The eight members added by fix one mirror the EU and (reserved) LU-2 document routes' own closed
+/// refusals the identical way: shared name, shared wire spelling. The three EU members are actually
+/// produced today, by <c>EuQueryExecutionAdapter</c>'s own document-fetch classification (see that
+/// type's own remarks on <c>TryMapDocumentFetchToCorpusAcquisitionRefusal</c>). The five LU-2 members
+/// are not produced by any adapter in this codebase yet -- there is no LU-2 lane here to produce
+/// them -- and are named directly from the ruling's own wire spellings rather than copied from a
+/// <c>LuxembourgDocumentGetOutcomeKind</c> this worktree does not contain; LU-2 should confirm its own
+/// closed vocabulary agrees with these five spellings when it lands, exactly as this remark already
+/// says.
+/// </para>
 /// </remarks>
 public enum CorpusAcquisitionRefusalReason
 {
@@ -172,6 +190,59 @@ public enum CorpusAcquisitionRefusalReason
     /// </summary>
     [JsonStringEnumMemberName("status_framing_conflict")]
     StatusFramingConflict = 14,
+
+    /// <summary>
+    /// D1-06c-EU fix one. Mirrors
+    /// <see cref="Lex.V3.Contracts.Source.Europe.EuDocumentFetchRefusal.RequestedRepresentationNotServed"/>,
+    /// the EU document-fetch route's own 404 business refusal: this exact representation was not
+    /// served for this object. Produced today by <c>EuQueryExecutionAdapter</c>.
+    /// </summary>
+    [JsonStringEnumMemberName("requested_representation_not_served")]
+    RequestedRepresentationNotServed = 15,
+
+    /// <summary>
+    /// D1-06c-EU fix one. Mirrors
+    /// <see cref="Lex.V3.Contracts.Source.Europe.EuDocumentFetchRefusal.WrongAcceptToken"/>, the EU
+    /// document-fetch route's own 400 business refusal. Produced today by
+    /// <c>EuQueryExecutionAdapter</c>.
+    /// </summary>
+    [JsonStringEnumMemberName("wrong_accept_token")]
+    WrongAcceptToken = 16,
+
+    /// <summary>
+    /// D1-06c-EU fix one. Mirrors
+    /// <see cref="Lex.V3.Contracts.Source.Http.HttpRouteIncompleteReason.RedirectTargetOriginNotAdmitted"/>:
+    /// a well-formed absolute-HTTPS redirect target on a different origin than this route's own first
+    /// hop. Produced today by <c>EuQueryExecutionAdapter</c>.
+    /// </summary>
+    [JsonStringEnumMemberName("redirect_target_origin_not_admitted")]
+    RedirectTargetOriginNotAdmitted = 17,
+
+    /// <summary>
+    /// D1-06c-EU fix one, reserved for the LU-2 lane's own document-get route landing in this same
+    /// widening so it needs no second schema/enum touch when it lands. Not produced by any adapter in
+    /// this codebase today; named from the ruling's own wire spelling, not copied from an LU-2 enum
+    /// this worktree does not contain -- LU-2 should confirm this spelling against its own closed
+    /// vocabulary when it lands.
+    /// </summary>
+    [JsonStringEnumMemberName("robots_disallowed")]
+    RobotsDisallowed = 18,
+
+    /// <summary>Reserved for LU-2, same note as <see cref="RobotsDisallowed"/>.</summary>
+    [JsonStringEnumMemberName("not_found")]
+    NotFound = 19,
+
+    /// <summary>Reserved for LU-2, same note as <see cref="RobotsDisallowed"/>.</summary>
+    [JsonStringEnumMemberName("gone")]
+    Gone = 20,
+
+    /// <summary>Reserved for LU-2, same note as <see cref="RobotsDisallowed"/>.</summary>
+    [JsonStringEnumMemberName("retry_exhausted")]
+    RetryExhausted = 21,
+
+    /// <summary>Reserved for LU-2, same note as <see cref="RobotsDisallowed"/>.</summary>
+    [JsonStringEnumMemberName("unexpected_publisher_status")]
+    UnexpectedPublisherStatus = 22,
 }
 
 /// <summary>
@@ -849,6 +920,14 @@ public static class CorpusRecordCanonicalWriter
             "revalidation_request_not_admitted",
         CorpusAcquisitionRefusalReason.StatusContentForbidden => "status_content_forbidden",
         CorpusAcquisitionRefusalReason.StatusFramingConflict => "status_framing_conflict",
+        CorpusAcquisitionRefusalReason.RequestedRepresentationNotServed => "requested_representation_not_served",
+        CorpusAcquisitionRefusalReason.WrongAcceptToken => "wrong_accept_token",
+        CorpusAcquisitionRefusalReason.RedirectTargetOriginNotAdmitted => "redirect_target_origin_not_admitted",
+        CorpusAcquisitionRefusalReason.RobotsDisallowed => "robots_disallowed",
+        CorpusAcquisitionRefusalReason.NotFound => "not_found",
+        CorpusAcquisitionRefusalReason.Gone => "gone",
+        CorpusAcquisitionRefusalReason.RetryExhausted => "retry_exhausted",
+        CorpusAcquisitionRefusalReason.UnexpectedPublisherStatus => "unexpected_publisher_status",
         _ => throw new InvalidOperationException("Unknown corpus acquisition refusal reason."),
     };
 

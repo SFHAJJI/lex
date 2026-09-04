@@ -542,10 +542,12 @@ public sealed class CorpusRecordTests
     }
 
     /// <summary>
-    /// D1-06b item 2: every one of the fourteen closed <see cref="CorpusAcquisitionRefusalReason"/>
-    /// wire spellings, exercised through the canonical writer and asserted as a literal string, not
-    /// only through a round trip that would pass even if the writer's own switch silently mapped two
-    /// different members onto the same string.
+    /// D1-06b item 2, widened by D1-06c-EU fix one: every one of the twenty-two closed
+    /// <see cref="CorpusAcquisitionRefusalReason"/> wire spellings (the original fourteen plus the
+    /// eight fix one added: three real EU document-fetch causes and five reserved for LU-2), exercised
+    /// through the canonical writer and asserted as a literal string, not only through a round trip
+    /// that would pass even if the writer's own switch silently mapped two different members onto the
+    /// same string.
     /// </summary>
     [TestMethod]
     public void AcquisitionRefusalReasonWireStringsAreExactlyThePinnedLiterals()
@@ -566,10 +568,19 @@ public sealed class CorpusRecordTests
             (CorpusAcquisitionRefusalReason.RevalidationRequestNotAdmitted, "revalidation_request_not_admitted"),
             (CorpusAcquisitionRefusalReason.StatusContentForbidden, "status_content_forbidden"),
             (CorpusAcquisitionRefusalReason.StatusFramingConflict, "status_framing_conflict"),
+            (CorpusAcquisitionRefusalReason.RequestedRepresentationNotServed, "requested_representation_not_served"),
+            (CorpusAcquisitionRefusalReason.WrongAcceptToken, "wrong_accept_token"),
+            (CorpusAcquisitionRefusalReason.RedirectTargetOriginNotAdmitted, "redirect_target_origin_not_admitted"),
+            (CorpusAcquisitionRefusalReason.RobotsDisallowed, "robots_disallowed"),
+            (CorpusAcquisitionRefusalReason.NotFound, "not_found"),
+            (CorpusAcquisitionRefusalReason.Gone, "gone"),
+            (CorpusAcquisitionRefusalReason.RetryExhausted, "retry_exhausted"),
+            (CorpusAcquisitionRefusalReason.UnexpectedPublisherStatus, "unexpected_publisher_status"),
         };
 
         // Every member of the enum is covered above, or this test itself proves nothing about the
-        // fourteenth.
+        // twenty-second.
+        Assert.AreEqual(22, expected.Length);
         CollectionAssert.AreEquivalent(
             Enum.GetValues<CorpusAcquisitionRefusalReason>(),
             expected.Select(pair => pair.Reason).ToArray());

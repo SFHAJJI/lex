@@ -406,6 +406,84 @@ public sealed class RoutedHttpEvidenceContractTests
             new IncompleteHttpRouteOutcome(HttpRouteIncompleteReason.SourceProfileStale)));
     }
 
+    /// <summary>
+    /// D1-06c-EU defect five (SCOPE_RULING lex-event-20260904T143553601Z-e6842d729c9b41fc8f5a6e76d5750bc2):
+    /// before the fix, <c>TryGetAdmittedRedirectTarget</c> required the raw <c>Location</c> to already
+    /// be an admitted absolute HTTPS URI, with no upgrade for a real observed http Location on the
+    /// admitted host -- the exact shape <c>EuDocumentFetchReachabilityTests</c> proves this publisher
+    /// actually sends, and defect one's own send-path fix already follows. A redirect loop or a
+    /// six-hop chain whose own terminal Location happened to be http on the admitted host therefore
+    /// refused to construct at all (an <see cref="ArgumentException"/> from the construction-time
+    /// validator itself, not the typed route refusal the route actually observed). Both cases below
+    /// construct cleanly after the fix, proving the shared
+    /// <c>TryUpgradeHttpLocationOnAdmittedHost</c> decision now reaches both
+    /// <see cref="HttpRouteIncompleteReason.RedirectLoop"/> and
+    /// <see cref="HttpRouteIncompleteReason.RedirectLimitExceeded"/> classification, not only the send
+    /// path's own <c>ResolveRedirectTarget</c>.
+    /// </summary>
+    [TestMethod]
+    public void AnHttpLocationOnTheAdmittedHostIsUpgradedForRedirectLoopAndLimitClassification()
+    {
+        // The terminal hop's own Location is http on the identical host and default port as its own
+        // RequestUri (both publications.europa.eu), so once upgraded to https it names exactly this
+        // one observed hop's own RequestUri -- a genuine loop back to something this route already
+        // requested, the shape RedirectLoop's own construction-time check requires.
+        var httpLoopRedirect = CompleteHop(
+            status: 301,
+            headers: Headers(
+                contentLength: "0",
+                location: "http://publications.europa.eu/resource/cellar"),
+            length: 0,
+            digest: EmptyDigest,
+            completion: new DeclaredContentLengthHttpCompletion(0));
+        _ = Evidence(
+            [httpLoopRedirect],
+            new IncompleteHttpRouteOutcome(HttpRouteIncompleteReason.RedirectLoop));
+
+        // Six real hops on one fixed host (publications.europa.eu, admitted from hop 0's own
+        // RequestUri), the sixth's own Location an http further transition on that same host never
+        // yet observed -- the exact real shape the redirect ceiling reaches when the office's own
+        // final Location in a long chain happens to be http.
+        var ceilingRouteWithHttpFinalLocation = RedirectCeilingRouteOnOneHostWithHttpFinalLocation();
+        _ = Evidence(
+            ceilingRouteWithHttpFinalLocation,
+            new IncompleteHttpRouteOutcome(HttpRouteIncompleteReason.RedirectLimitExceeded));
+    }
+
+    /// <summary>
+    /// D1-06c-EU defect six (same SCOPE_RULING as defect five): the negative case on record. An http
+    /// Location on a host genuinely different from the route's own first hop is never upgraded (the
+    /// shared decision requires the SAME host), so it is not a well-formed absolute HTTPS URI at all
+    /// and this route's own <see cref="HttpRouteIncompleteReason.RedirectTargetOriginNotAdmitted"/>
+    /// (reserved for a well-formed HTTPS target on a genuinely different origin) does not apply to it;
+    /// it constructs only as <see cref="HttpRouteIncompleteReason.RedirectRefused"/>, exactly as an
+    /// http Location on the ADMITTED host would if this route refused to follow it for some other
+    /// reason. Proves the upgrade is host-scoped, never a blanket http-to-https admission.
+    /// </summary>
+    [TestMethod]
+    public void AnHttpLocationOnAForeignHostIsNeverUpgradedAndClassifiesOnlyAsRedirectRefused()
+    {
+        var foreignHttpRedirect = CompleteHop(
+            status: 301,
+            headers: Headers(
+                contentLength: "0",
+                location: "http://not-publications.europa.eu.example.invalid/elsewhere"),
+            length: 0,
+            digest: EmptyDigest,
+            completion: new DeclaredContentLengthHttpCompletion(0));
+
+        _ = Evidence(
+            [foreignHttpRedirect],
+            new IncompleteHttpRouteOutcome(HttpRouteIncompleteReason.RedirectRefused));
+
+        Assert.ThrowsExactly<ArgumentException>(() => Evidence(
+            [foreignHttpRedirect],
+            new IncompleteHttpRouteOutcome(HttpRouteIncompleteReason.RedirectTargetOriginNotAdmitted)));
+        Assert.ThrowsExactly<ArgumentException>(() => Evidence(
+            [foreignHttpRedirect],
+            new IncompleteHttpRouteOutcome(HttpRouteIncompleteReason.RedirectLoop)));
+    }
+
     [TestMethod]
     public void RobotsStatusRouteReasonsRequireExactCompleteTerminalFactsAndOutrankStaleness()
     {
@@ -1144,6 +1222,33 @@ public sealed class RoutedHttpEvidenceContractTests
                 headers: Headers(
                     contentLength: "0",
                     location: $"https://route{index + 1}.example/path"),
+                length: 0,
+                digest: EmptyDigest,
+                completion: new DeclaredContentLengthHttpCompletion(0)))
+            .ToArray();
+
+    /// <summary>
+    /// D1-06c-EU defect five's own driving fixture: six hops on ONE fixed host (unlike
+    /// <see cref="RedirectCeilingRoute"/>'s per-hop distinct hosts, which cannot exercise an
+    /// admitted-host upgrade since the "admitted origin" -- hop 0's own RequestUri -- would never
+    /// match a later hop's host), the sixth's own further Location an http transition on that same
+    /// host, never yet observed among the six.
+    /// </summary>
+    private static RoutedHttpHop[] RedirectCeilingRouteOnOneHostWithHttpFinalLocation() =>
+        Enumerable.Range(0, 6)
+            .Select(index => CompleteHop(
+                ordinal: (ulong)index,
+                observationId: $"urn:uuid:00000000-0000-4000-8000-{index + 1:D12}",
+                antecedent: index == 0
+                    ? null
+                    : $"urn:uuid:00000000-0000-4000-8000-{index:D12}",
+                uri: $"https://publications.europa.eu/route{index}",
+                status: 301,
+                headers: Headers(
+                    contentLength: "0",
+                    location: index == 5
+                        ? "http://publications.europa.eu/route6"
+                        : $"https://publications.europa.eu/route{index + 1}"),
                 length: 0,
                 digest: EmptyDigest,
                 completion: new DeclaredContentLengthHttpCompletion(0)))
