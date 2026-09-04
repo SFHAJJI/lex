@@ -178,7 +178,21 @@ public static class RepeatedEnumerationInterpretationProfileIdentity
 public sealed record RepeatedEnumerationEvidenceRefs(SourceArtifactRef QueryPlanRef, SourceArtifactRef QueryInputRef, SourceArtifactRef RenderReceiptRef, SourceArtifactRef LogicalRequestRef, SourceArtifactRef HttpEvidenceRef);
 public sealed record RepeatedEnumerationPageRef(int Ordinal, RepeatedEnumerationEvidenceRefs Evidence);
 public sealed record EnumerationPageSetRefs(IReadOnlyList<RepeatedEnumerationPageRef> Pages);
-public sealed record RepeatedEnumerationResolvedEvidence(MachineQueryPlan QueryPlan, MachineQueryInputArtifact QueryInput, MachineQueryRenderReceipt RenderReceipt, IMachineQueryRenderer Renderer, HttpLogicalRequest LogicalRequest, RoutedHttpEvidence HttpEvidence, DurableBlobWriteReceipt DurableWriteReceipt, ReadOnlyMemory<byte> RetainedPayloadBytes);
+/// <summary>
+/// <paramref name="Renderer"/> is null exactly for a page read back from custody after the fact
+/// (queue item 19: <c>Lex.V3.Ingest.RepeatedEnumerationDeliveryReopenGlue.ReopenPageEvidenceAsync</c>),
+/// where <see cref="EnumerationDeliveryComparison.VerifyPages"/> -- the only check
+/// <see cref="VerifiedRepeatedEnumerationRows.TryOpen"/> runs over a reopened page -- reads only
+/// <see cref="QueryPlan"/>, <see cref="QueryInput"/> and <see cref="RetainedPayloadBytes"/> off this
+/// record, never <see cref="Renderer"/>. It is non-null for evidence resolved through
+/// <see cref="IRepeatedEnumerationEvidenceResolver.Resolve"/> during the original two-pass
+/// <see cref="EnumerationDeliveryComparison.Create"/> comparison, which genuinely needs a real
+/// renderer to reproduce the request (see <see cref="EnumerationDeliveryComparison.Resolve"/>).
+/// Nullable rather than a second, near-duplicate record for the reopened-page shape: the two shapes
+/// differ in exactly one already-optional-in-effect field, and a caller that never reads
+/// <see cref="Renderer"/> is unaffected either way.
+/// </summary>
+public sealed record RepeatedEnumerationResolvedEvidence(MachineQueryPlan QueryPlan, MachineQueryInputArtifact QueryInput, MachineQueryRenderReceipt RenderReceipt, IMachineQueryRenderer? Renderer, HttpLogicalRequest LogicalRequest, RoutedHttpEvidence HttpEvidence, DurableBlobWriteReceipt DurableWriteReceipt, ReadOnlyMemory<byte> RetainedPayloadBytes);
 public sealed record EnumerationObservationTimes(string CountA, IReadOnlyList<string> PagesA, string CountB, IReadOnlyList<string> PagesB);
 public interface IRepeatedEnumerationEvidenceResolver { RepeatedEnumerationResolvedEvidence Resolve(RepeatedEnumerationEvidenceRefs references); }
 
@@ -346,11 +360,16 @@ public sealed class EnumerationDeliveryComparison
         MachineQueryRenderReceiptIdentity.Validate(refs.RenderReceiptRef, value.RenderReceipt);
         RequireArtifactBinding(refs.LogicalRequestRef, value.LogicalRequest.CopyCanonicalBytes());
         RequireArtifactBinding(refs.HttpEvidenceRef, value.HttpEvidence.CopyCanonicalBytes());
+        // Genuinely required here, unlike VerifyPages: this two-pass comparison independently
+        // reproduces the render to prove the retained receipt matches an offline rerender, which a
+        // reopened-page-from-custody evidence value (Renderer null, queue item 19) never needs to do.
+        var renderer = value.Renderer
+            ?? throw new ArgumentException("Retained evidence has no renderer to reproduce it with.", nameof(resolver));
         var reproducedRequest = MachineQueryBinder.ReproduceForEvidence(
             value.QueryPlan,
             refs.QueryPlanRef,
             value.QueryInput,
-            value.Renderer);
+            renderer);
         if (reproducedRequest.RenderReceipt != value.RenderReceipt)
         {
             throw new ArgumentException(

@@ -38,53 +38,6 @@ public sealed class LuxembourgConstructionSurfaceTests
         + Custody + "CustodyMembership>";
 
     /// <summary>
-    /// The receipt: one private constructor, one checked factory. The factory takes the custody
-    /// maps and the per-observation custody as parameters, so a receipt cannot exist without a
-    /// statement about every member the comparison names.
-    /// </summary>
-    [TestMethod]
-    public void ADeliveryReceiptHasExactlyOneCheckedDoor()
-    {
-        CollectionAssert.AreEqual(
-            new[]
-            {
-                "constructor private instance " + N + "LuxembourgEnumerationDeliveryReceipt::.ctor("
-                + Core + "EnumerationDeliveryComparison, " + Membership + ", "
-                + Custody + "CustodyMembership, " + List + "System.String>) -> "
-                + N + "LuxembourgEnumerationDeliveryReceipt",
-                "method public static " + N + "LuxembourgEnumerationDeliveryReceipt::TryCreate("
-                + Core + "EnumerationDeliveryComparison, " + Membership + ", " + Membership + ", "
-                + List + N + "LuxembourgObservationCustody>, out "
-                + N + "LuxembourgEnumerationReceiptRefusal&) -> "
-                + N + "LuxembourgEnumerationDeliveryReceipt",
-            },
-            ConstructionSurface.Of(typeof(LuxembourgEnumerationDeliveryReceipt)).ToArray());
-
-        CollectionAssert.AreEqual(
-            new[]
-            {
-                // The cover holds leaf receipts; it produces none.
-                "field private instance " + N + "LuxembourgPartitionCover::_leafReceipts -> "
-                + List + N + "LuxembourgEnumerationDeliveryReceipt>",
-
-                // The one production path, and the reason TryCreate above being public is not the
-                // whole story: this is the only caller that fills the custody parameters in from
-                // real write receipts rather than from a caller's assertion.
-                "method public instance " + N + "LuxembourgDeliveryEvidenceSet::TryCompareAndReceipt("
-                + Membership + ", " + Membership + ", out "
-                + N + "LuxembourgEnumerationReceiptRefusal&) -> "
-                + N + "LuxembourgEnumerationDeliveryReceipt",
-                "property public instance " + N + "LuxembourgPartitionCover::LeafReceipts() -> "
-                + List + N + "LuxembourgEnumerationDeliveryReceipt>",
-            },
-            ConstructionSurface.ProducersIn(
-                typeof(LuxembourgEnumerationDeliveryReceipt).Assembly,
-                typeof(LuxembourgEnumerationDeliveryReceipt),
-                true).ToArray(),
-            "a delivery receipt reached a new holder in Contracts");
-    }
-
-    /// <summary>
     /// The cover: one private constructor and one reconciling factory, and nothing else in
     /// Contracts produces one.
     /// </summary>
@@ -95,13 +48,13 @@ public sealed class LuxembourgConstructionSurfaceTests
             new[]
             {
                 "constructor private instance " + N + "LuxembourgPartitionCover::.ctor("
-                + N + "LuxembourgPartitionChain, " + List + N + "LuxembourgEnumerationDeliveryReceipt>, "
+                + N + "LuxembourgPartitionChain, " + List + Core + "RepeatedEnumerationDeliveryReceipt>, "
                 + N + "LuxembourgPartitionCoverBasis, " + Core + "SourceArtifactRef, "
                 + Core + "SourceArtifactRef, System.Int64, " + Custody + "CustodyMembership) -> "
                 + N + "LuxembourgPartitionCover",
                 "method public static " + N + "LuxembourgPartitionCover::TryCreate("
-                + N + "LuxembourgPartitionChain, " + List + N + "LuxembourgEnumerationDeliveryReceipt>, "
-                + N + "LuxembourgEnumerationDeliveryReceipt, out "
+                + N + "LuxembourgPartitionChain, " + List + Core + "RepeatedEnumerationDeliveryReceipt>, "
+                + Core + "RepeatedEnumerationDeliveryReceipt, out "
                 + N + "LuxembourgPartitionCoverRefusal&) -> " + N + "LuxembourgPartitionCover",
             },
             ConstructionSurface.Of(typeof(LuxembourgPartitionCover)).ToArray());
@@ -182,18 +135,18 @@ public sealed class LuxembourgConstructionSurfaceTests
                 + N + "LuxembourgDeliveryObservation",
                 "method private static " + N + "LuxembourgDeliveryObservation::Create("
                 + Core + "SourceArtifactRef, " + Core + "SourceArtifactRef, "
-                + Core + "BoundMachineRequest, " + N + "LuxembourgObservationIdentity, "
-                + N + "LuxembourgObservedTransport, "
+                + Core + "BoundMachineRequest, " + Core + "RepeatedEnumerationObservationIdentity, "
+                + Core + "RepeatedEnumerationObservedTransport, "
                 + Core + "RepeatedEnumerationInterpretationProfile) -> "
                 + N + "LuxembourgDeliveryObservation",
                 "method public static " + N + "LuxembourgDeliveryObservation::ForCount("
-                + N + "LuxembourgBoundQueryCount, " + N + "LuxembourgObservationIdentity, "
-                + N + "LuxembourgObservedTransport, "
+                + N + "LuxembourgBoundQueryCount, " + Core + "RepeatedEnumerationObservationIdentity, "
+                + Core + "RepeatedEnumerationObservedTransport, "
                 + Core + "RepeatedEnumerationInterpretationProfile) -> "
                 + N + "LuxembourgDeliveryObservation",
                 "method public static " + N + "LuxembourgDeliveryObservation::ForPage("
-                + N + "LuxembourgBoundQueryPage, " + N + "LuxembourgObservationIdentity, "
-                + N + "LuxembourgObservedTransport, "
+                + N + "LuxembourgBoundQueryPage, " + Core + "RepeatedEnumerationObservationIdentity, "
+                + Core + "RepeatedEnumerationObservedTransport, "
                 + Core + "RepeatedEnumerationInterpretationProfile) -> "
                 + N + "LuxembourgDeliveryObservation",
             },
@@ -221,113 +174,4 @@ public sealed class LuxembourgConstructionSurfaceTests
             ConstructionSurface.Of(typeof(LuxembourgDeliveryPass)).ToArray());
     }
 
-    /// <summary>
-    /// The observation identity: minted whole or not at all, so no caller reuses or reorders the
-    /// four resource ids that Core's <c>RequireDistinct</c> defends against.
-    /// </summary>
-    [TestMethod]
-    public void AnObservationIdentityIsMintedWholeOrNotAtAll()
-    {
-        CollectionAssert.AreEqual(
-            new[]
-            {
-                "constructor private instance " + N + "LuxembourgObservationIdentity::.ctor("
-                + "System.String, System.String, System.String, System.String) -> "
-                + N + "LuxembourgObservationIdentity",
-                "method public static " + N + "LuxembourgObservationIdentity::NewObservation() -> "
-                + N + "LuxembourgObservationIdentity",
-            },
-            ConstructionSurface.Of(typeof(LuxembourgObservationIdentity)).ToArray());
-    }
-
-    /// <summary>
-    /// Pinned and explicitly OPEN, and the reason is the point of the type.
-    /// </summary>
-    /// <remarks>
-    /// <see cref="LuxembourgObservedTransport"/> is the four transport facts a caller hands
-    /// <see cref="LuxembourgDeliveryObservation"/> to be checked. Closing it would be closing the
-    /// wrong door: the whole design is that an observation VALIDATES a caller-supplied transport
-    /// against the hop it claims to describe, so a transport nobody can assemble wrongly would
-    /// make those checks untestable, and the tests that assemble a deliberately wrong one are the
-    /// only drivers those checks have. Holding one of these is evidence of nothing, which is why
-    /// nothing in this repository treats it as evidence.
-    /// </remarks>
-    [TestMethod]
-    public void AnObservedTransportIsAnOpenInputRecordByDesign()
-    {
-        CollectionAssert.AreEqual(
-            new[]
-            {
-                "constructor private instance " + N + "LuxembourgObservedTransport::.ctor("
-                + N + "LuxembourgObservedTransport) -> " + N + "LuxembourgObservedTransport",
-                "constructor public instance " + N + "LuxembourgObservedTransport::.ctor("
-                + "Lex.V3.Contracts.Source.Http.HttpLogicalRequest, "
-                + "Lex.V3.Contracts.Source.Http.RoutedHttpEvidence, "
-                + Custody + "DurableBlobWriteReceipt, System.ReadOnlyMemory<System.Byte>) -> "
-                + N + "LuxembourgObservedTransport",
-                "method public instance " + N + "LuxembourgObservedTransport::<Clone>$() -> "
-                + N + "LuxembourgObservedTransport",
-            },
-            ConstructionSurface.Of(typeof(LuxembourgObservedTransport)).ToArray());
-
-        CollectionAssert.AreEqual(
-            Array.Empty<string>(),
-            ConstructionSurface.ProducersIn(
-                typeof(LuxembourgObservedTransport).Assembly,
-                typeof(LuxembourgObservedTransport),
-                true).ToArray(),
-            "something in Contracts now hands out a transport rather than checking one");
-    }
-
-    /// <summary>
-    /// Pinned and explicitly OPEN, which is a different claim from the six above and is stated
-    /// here rather than left for a reader to infer.
-    /// </summary>
-    /// <remarks>
-    /// <see cref="LuxembourgObservationCustody"/> is a record with a public constructor. Anyone can
-    /// build one and claim <see cref="Lex.V3.Contracts.Custody.CustodyMembership.Floored"/> for any
-    /// digest. That is deliberate and it is not a hole, because it is exactly as open as the two
-    /// membership dictionaries beside it in the same parameter list: the receipt is a pure function
-    /// over stated custody, and what makes the statement true is its one production caller,
-    /// <c>LuxembourgDeliveryEvidenceSet.TryCompareAndReceipt</c>, which fills it in from write
-    /// receipts already bound by content to the bodies they describe. Closing this type would not
-    /// close the maps, so it would buy nothing and would cost the ability to test the receipt's
-    /// membership rules without a live acquisition session. What this pin holds is narrower and
-    /// real: that the only PRODUCER of one inside Contracts stays the observation that owns the
-    /// bytes, so no second place starts deciding what a body's membership is.
-    /// </remarks>
-    [TestMethod]
-    public void ObservationCustodyIsAnOpenWireShapeWithOneProducerInContracts()
-    {
-        CollectionAssert.AreEqual(
-            new[]
-            {
-                "constructor private instance " + N + "LuxembourgObservationCustody::.ctor("
-                + N + "LuxembourgObservationCustody) -> " + N + "LuxembourgObservationCustody",
-                "constructor public instance " + N + "LuxembourgObservationCustody::.ctor("
-                + Core + "RepeatedEnumerationEvidenceRefs, System.String, "
-                + Custody + "CustodyMembership, System.String) -> " + N + "LuxembourgObservationCustody",
-                "method public instance " + N + "LuxembourgObservationCustody::<Clone>$() -> "
-                + N + "LuxembourgObservationCustody",
-            },
-            ConstructionSurface.Of(typeof(LuxembourgObservationCustody)).ToArray());
-
-        CollectionAssert.AreEqual(
-            new[]
-            {
-                // The closure the evidence set's own Select compiles to, and the observation
-                // property it calls. Both are the one production path; neither is a second place
-                // that decides a membership.
-                "method internal instance " + N + "LuxembourgDeliveryEvidenceSet+<>c"
-                + "::<TryCompareAndReceipt>b__15_0(" + N + "LuxembourgDeliveryObservation) -> "
-                + N + "LuxembourgObservationCustody",
-                "property public instance " + N + "LuxembourgDeliveryObservation::Custody() -> "
-                + N + "LuxembourgObservationCustody",
-            },
-            ConstructionSurface.ProducersIn(
-                typeof(LuxembourgObservationCustody).Assembly,
-                typeof(LuxembourgObservationCustody),
-                true).ToArray(),
-            "something other than the observation that holds the bytes now decides their membership");
-    }
 }

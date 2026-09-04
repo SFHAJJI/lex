@@ -31,7 +31,7 @@ public sealed class LuxembourgDeliveryEvidenceSetTests
         var membership = MembershipFor(store, run);
         var receipt = set.TryCompareAndReceipt(membership.Session, membership.Executor, out var refusal);
 
-        Assert.AreEqual(LuxembourgEnumerationReceiptRefusal.None, refusal);
+        Assert.AreEqual(RepeatedEnumerationReceiptRefusal.None, refusal);
         Assert.IsNotNull(receipt);
         Assert.AreEqual(EnumerationDeliveryOutcome.EqualSelections, receipt.Delivery.Outcome);
         Assert.AreEqual(2, receipt.Delivery.DeliveredRowCountA);
@@ -89,7 +89,7 @@ public sealed class LuxembourgDeliveryEvidenceSetTests
         var receipt = set.TryCompareAndReceipt(membership.Session, membership.Executor, out var refusal);
 
         Assert.IsNull(receipt);
-        Assert.AreEqual(LuxembourgEnumerationReceiptRefusal.DeliveryComparisonRefused, refusal);
+        Assert.AreEqual(RepeatedEnumerationReceiptRefusal.DeliveryComparisonRefused, refusal);
         Assert.IsNotNull(set.LastCoreRefusalMessage);
     }
 
@@ -101,7 +101,7 @@ public sealed class LuxembourgDeliveryEvidenceSetTests
         // not enough: the receipt must also be a receipt ABOUT these bytes, or the body's floor
         // would be read off some other object's protection.
         //
-        // Reachable because LuxembourgObservedTransport is a caller-supplied record and
+        // Reachable because RepeatedEnumerationObservedTransport is a caller-supplied record and
         // ForCount/ForPage exist to validate one. Here the evidence names a different payload
         // digest than the receipt describes, with every other binding intact, which is precisely
         // the substitution the check exists for.
@@ -156,8 +156,8 @@ public sealed class LuxembourgDeliveryEvidenceSetTests
         var thrown = Assert.ThrowsExactly<ArgumentException>(() =>
             LuxembourgDeliveryObservation.ForCount(
                 bound,
-                LuxembourgObservationIdentity.NewObservation(),
-                new LuxembourgObservedTransport(
+                RepeatedEnumerationObservationIdentity.NewObservation(),
+                new RepeatedEnumerationObservedTransport(
                     genuine.LogicalRequest, substituted, genuine.DurableWriteReceipt, otherBytes),
                 profile));
         StringAssert.Contains(thrown.Message, "receipt for different bytes");

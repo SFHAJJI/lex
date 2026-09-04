@@ -567,7 +567,7 @@ public sealed class LuxembourgQueryExecutionResult
 /// a caller-supplied list. It does this through
 /// <see cref="Lex.V3.Contracts.Source.Core.VerifiedRepeatedEnumerationRows.TryOpen"/> (queue item
 /// 17): this adapter reopens a family's pages from custody by the exact digests its own
-/// <see cref="LuxembourgEnumerationDeliveryReceipt.Delivery"/> names, in page order, assembling each
+/// <see cref="RepeatedEnumerationDeliveryReceipt.Delivery"/> names, in page order, assembling each
 /// <see cref="Lex.V3.Contracts.Source.Core.RepeatedEnumerationResolvedEvidence"/> from that page's
 /// own plan, input, render receipt, logical request, HTTP evidence and write receipt -- never minted
 /// anew or faked -- then lets item 17 independently re-parse and re-verify every row before this
@@ -617,6 +617,13 @@ public sealed class LuxembourgQueryExecutionAdapter
     private readonly LuxembourgRepeatedEnumerationExecutor _executor;
     private readonly VerifiedLuxembourgSourceProfile _sourceProfile;
 
+    /// <summary>
+    /// Queue item 19: the publisher-neutral reopen half of D1-04b's own reopen glue, constructed
+    /// from this adapter's own <see cref="_custodyStore"/> so nothing here holds a second,
+    /// independent custody dependency (Decision 78).
+    /// </summary>
+    private readonly RepeatedEnumerationDeliveryReopenGlue _reopenGlue;
+
     public LuxembourgQueryExecutionAdapter(
         ICustodyStore custodyStore,
         LuxembourgRepeatedEnumerationExecutor executor,
@@ -625,6 +632,7 @@ public sealed class LuxembourgQueryExecutionAdapter
         _custodyStore = custodyStore ?? throw new ArgumentNullException(nameof(custodyStore));
         _executor = executor ?? throw new ArgumentNullException(nameof(executor));
         _sourceProfile = sourceProfile ?? throw new ArgumentNullException(nameof(sourceProfile));
+        _reopenGlue = new RepeatedEnumerationDeliveryReopenGlue(_custodyStore);
     }
 
     /// <summary>
@@ -708,9 +716,9 @@ public sealed class LuxembourgQueryExecutionAdapter
         AbsenceFamilyEnumerationProof? relationProof = null;
         string? relationIncompleteReason = null;
         var sawRelationFamily = false;
-        LuxembourgEnumerationDeliveryReceipt? censusReceipt = null;
+        RepeatedEnumerationDeliveryReceipt? censusReceipt = null;
         LuxembourgPartitionRunRequest? censusPartitionRequest = null;
-        LuxembourgEnumerationDeliveryReceipt? assertionReceipt = null;
+        RepeatedEnumerationDeliveryReceipt? assertionReceipt = null;
         LuxembourgPartitionRunRequest? assertionPartitionRequest = null;
 
         foreach (var (partitionRequest, sourceWitness) in families)
@@ -993,7 +1001,7 @@ public sealed class LuxembourgQueryExecutionAdapter
         RepeatedEnumerationInterpretationProfile Profile,
         RepeatedEnumerationRowsOpenRefusal Refusal)> ReopenAndVerifyFamilyRowsAsync(
         AbsenceFamilyEnumerationProof proof,
-        LuxembourgEnumerationDeliveryReceipt receipt,
+        RepeatedEnumerationDeliveryReceipt receipt,
         LuxembourgPartitionRunRequest partitionRequest,
         CancellationToken cancellationToken)
     {
@@ -1014,9 +1022,7 @@ public sealed class LuxembourgQueryExecutionAdapter
         var pages = new List<RepeatedEnumerationResolvedEvidence>(delivery.PagesA.Pages.Count);
         foreach (var pageRef in delivery.PagesA.Pages.OrderBy(static page => page.Ordinal))
         {
-            var renderer = new ResourceObservationPageRenderer(
-                pageRef.Evidence.QueryPlanRef, partitionRequest.RendererSource.Reference);
-            pages.Add(await ReopenPageEvidenceAsync(pageRef.Evidence, renderer, _custodyStore, cancellationToken)
+            pages.Add(await _reopenGlue.ReopenPageEvidenceAsync(pageRef.Evidence, cancellationToken)
                 .ConfigureAwait(false));
         }
 
@@ -1024,157 +1030,6 @@ public sealed class LuxembourgQueryExecutionAdapter
             proof, delivery, profile, delivery.InterpretationProfileRef, delivery.CountA.HttpEvidenceRef,
             pages, out var refusal);
         return (rows, profile, refusal);
-    }
-
-    /// <summary>
-    /// Reopens one page's full evidence tuple from custody by the digests
-    /// <paramref name="refs"/> names, mirroring the reopen
-    /// <c>Lex.V3.Contracts.Source.Luxembourg.LuxembourgDeliveryEvidenceSet.ResolveOneAsync</c> already
-    /// performs for the executor's own in-process delivery (precision 1 of the D1-04b scope ruling:
-    /// "trace the actual custody read path used elsewhere"). That method is private to
-    /// <c>Lex.V3.Contracts</c> and this assembly holds no <c>InternalsVisibleTo</c> grant into it
-    /// (Decision 80), so this reproduces the identical sequence through this assembly's own public
-    /// doors instead of a second, divergent copy: every field is read back by digest and
-    /// independently re-verified against its own reference before this method trusts it.
-    /// </summary>
-    private static async Task<RepeatedEnumerationResolvedEvidence> ReopenPageEvidenceAsync(
-        RepeatedEnumerationEvidenceRefs refs,
-        IMachineQueryRenderer renderer,
-        ICustodyStore custodyStore,
-        CancellationToken cancellationToken)
-    {
-        var planBytes = await CustodyRestore.ReadByDigestCheckedAsync(
-                custodyStore, refs.QueryPlanRef.Sha256, cancellationToken)
-            .ConfigureAwait(false);
-        var queryPlan = DecodeCanonical<MachineQueryPlan>(
-            planBytes.Span, MachineQueryPlanIdentity.CanonicalizationIdentity, "the machine query plan");
-        try
-        {
-            MachineQueryPlanIdentity.Validate(refs.QueryPlanRef, queryPlan);
-        }
-        catch (ArgumentException exception)
-        {
-            throw new CustodyIntegrityException(
-                "The retained machine query plan does not reproduce its own canonical bytes.", exception);
-        }
-
-        var inputBytes = await CustodyRestore.ReadByDigestCheckedAsync(
-                custodyStore, refs.QueryInputRef.Sha256, cancellationToken)
-            .ConfigureAwait(false);
-        MachineQueryInputArtifact queryInput;
-        try
-        {
-            queryInput = MachineQueryInputArtifact.ParseAndVerify(refs.QueryInputRef, inputBytes.Span);
-        }
-        catch (ArgumentException exception)
-        {
-            throw new CustodyIntegrityException(
-                "The retained machine query input does not bind its reference.", exception);
-        }
-
-        var receiptBytes = await CustodyRestore.ReadByDigestCheckedAsync(
-                custodyStore, refs.RenderReceiptRef.Sha256, cancellationToken)
-            .ConfigureAwait(false);
-        var renderReceipt = DecodeCanonical<MachineQueryRenderReceipt>(
-            receiptBytes.Span, MachineQueryRenderReceiptIdentity.CanonicalizationIdentity,
-            "the machine query render receipt");
-        try
-        {
-            MachineQueryRenderReceiptIdentity.Validate(refs.RenderReceiptRef, renderReceipt);
-        }
-        catch (ArgumentException exception)
-        {
-            throw new CustodyIntegrityException(
-                "The retained render receipt does not reproduce its own canonical bytes.", exception);
-        }
-
-        var logicalRequestBytes = await CustodyRestore.ReadByDigestCheckedAsync(
-                custodyStore, refs.LogicalRequestRef.Sha256, cancellationToken)
-            .ConfigureAwait(false);
-        HttpLogicalRequest logicalRequest;
-        try
-        {
-            logicalRequest = HttpLogicalRequest.ParseAndVerify(logicalRequestBytes.Span);
-        }
-        catch (ArgumentException exception)
-        {
-            throw new CustodyIntegrityException(
-                "The retained logical request does not parse as its exact canonical form.", exception);
-        }
-
-        var httpEvidenceBytes = await CustodyRestore.ReadByDigestCheckedAsync(
-                custodyStore, refs.HttpEvidenceRef.Sha256, cancellationToken)
-            .ConfigureAwait(false);
-        RoutedHttpEvidence httpEvidence;
-        try
-        {
-            httpEvidence = RoutedHttpEvidence.ParseAndVerify(httpEvidenceBytes.Span);
-        }
-        catch (ArgumentException exception)
-        {
-            throw new CustodyIntegrityException(
-                "The retained HTTP evidence does not parse as its exact canonical form.", exception);
-        }
-
-        if (httpEvidence.Hops.Count != 1)
-        {
-            throw new CustodyIntegrityException("The retained HTTP evidence no longer names exactly one hop.");
-        }
-
-        var terminal = httpEvidence.Hops[0];
-        var writeReceiptBytes = await CustodyRestore.ReadByDigestCheckedAsync(
-                custodyStore, terminal.DurableWriteReceiptSha256, cancellationToken)
-            .ConfigureAwait(false);
-        var writeReceipt = ContractJson.Deserialize<DurableBlobWriteReceipt>(
-                new UTF8Encoding(false, true).GetString(writeReceiptBytes.Span))
-            ?? throw new CustodyIntegrityException("The retained write receipt decoded to nothing.");
-
-        var payload = await CustodyRestore.ReadByDigestCheckedAsync(
-                custodyStore, terminal.Sha256, cancellationToken)
-            .ConfigureAwait(false);
-
-        return new RepeatedEnumerationResolvedEvidence(
-            queryPlan, queryInput, renderReceipt, renderer, logicalRequest, httpEvidence, writeReceipt, payload);
-    }
-
-    /// <summary>
-    /// Decodes bytes shaped like <c>MachineQueryPlanIdentity.GetCanonicalBytes</c> and
-    /// <c>MachineQueryRenderReceiptIdentity.GetCanonicalBytes</c> produce: an ASCII canonicalization
-    /// identity line, then the canonical JSON, then a trailing newline. The framing constants
-    /// (<paramref name="canonicalizationIdentity"/>) are public; only the internal
-    /// <c>ContractCanonicalizer</c> that originally wrote this shape is not, so this decodes the
-    /// public envelope directly rather than reaching for that internal type.
-    /// </summary>
-    private static T DecodeCanonical<T>(ReadOnlySpan<byte> bytes, string canonicalizationIdentity, string what)
-    {
-        string decoded;
-        try
-        {
-            decoded = new UTF8Encoding(false, true).GetString(bytes);
-        }
-        catch (DecoderFallbackException exception)
-        {
-            throw new CustodyIntegrityException($"The retained bytes for {what} are not valid UTF-8.", exception);
-        }
-
-        var prefix = canonicalizationIdentity + "\n";
-        if (!decoded.StartsWith(prefix, StringComparison.Ordinal) ||
-            !decoded.EndsWith('\n') ||
-            decoded.Length < prefix.Length + 1)
-        {
-            throw new CustodyIntegrityException(
-                $"The retained bytes for {what} do not carry their canonicalization identity.");
-        }
-
-        var json = decoded[prefix.Length..^1];
-        try
-        {
-            return ContractJson.Deserialize<T>(json);
-        }
-        catch (JsonException exception)
-        {
-            throw new CustodyIntegrityException($"The retained bytes are not {what}.", exception);
-        }
     }
 
     /// <summary>
@@ -1516,30 +1371,6 @@ public sealed class LuxembourgQueryExecutionAdapter
 
     private static string Sha256Hex(string value) =>
         Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(value)));
-
-    /// <summary>
-    /// A renderer identity carried on <see cref="RepeatedEnumerationResolvedEvidence"/> purely to
-    /// satisfy its constructor. <see cref="EnumerationDeliveryComparison.VerifyPages"/> -- the only
-    /// check <see cref="VerifiedRepeatedEnumerationRows.TryOpen"/> runs over a reopened page here --
-    /// reads only <c>QueryPlan</c>, <c>QueryInput</c> and <c>RetainedPayloadBytes</c> off it, never
-    /// <c>Renderer</c>. The genuine renderer for this family, <c>LuxembourgSparqlRenderer</c>, is
-    /// <c>internal</c> to <c>Lex.V3.Contracts</c> and cannot be constructed from this assembly
-    /// (Decision 80: no <c>InternalsVisibleTo</c> beyond the two test assemblies), so a real one
-    /// cannot be built here even if this door needed one. <see cref="Render"/> throws rather than
-    /// silently returning a wrong result if that ever changes.
-    /// </summary>
-    private sealed class ResourceObservationPageRenderer(
-        SourceArtifactRef rendererProfileRef, SourceArtifactRef rendererSourceRef) : IMachineQueryRenderer
-    {
-        public SourceArtifactRef RendererProfileRef { get; } = rendererProfileRef;
-
-        public SourceArtifactRef RendererSourceRef { get; } = rendererSourceRef;
-
-        public MachineQueryRenderOutput Render(MachineQueryPlan plan, MachineQueryInputArtifact orderedParameterSet) =>
-            throw new NotSupportedException(
-                "This renderer exists only to satisfy RepeatedEnumerationResolvedEvidence's constructor for " +
-                "VerifiedRepeatedEnumerationRows.TryOpen, which never calls Render.");
-    }
 
     /// <summary>
     /// Decision 64 projected over the LU relation predicates. All 18 predicates
