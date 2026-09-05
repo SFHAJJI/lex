@@ -59,6 +59,36 @@ public sealed class EuPageDecodeClassificationTests
     private const string MaintenanceHtml =
         "e7fab335ce5367cfe359f9f7e0ad6ce1838bec9189a216bc3faf437ce169d404";
 
+    /// <summary>
+    /// The page the D1-05g acceptance run refused on, cut from the retained body by its own digest.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// WHAT THE PUBLISHER ACTUALLY RETURNED, measured rather than reasoned. The row carries
+    /// <c>predicate=cdm:expression_title</c>, <c>value_kind=literal</c> and
+    /// <c>language_tag=nl</c>, and BOTH <c>datatype_iri</c> AND <c>key_5</c> are ABSENT from the
+    /// binding. 32 of the 373 rows on that page were the same shape, all of them
+    /// language-tagged titles on GDPR's consolidated states.
+    /// </para>
+    /// <para>
+    /// AND THE CAUSE IS NOT D1-05f'S. That defect was eager IF evaluation: the engine chose the
+    /// branch correctly but evaluated both arms, so a conditional guarding an UNBOUND term still
+    /// raised. Here <c>isLiteral(?value)</c> is TRUE and the true branch is the right one to take;
+    /// what fails is <c>DATATYPE()</c> ON A LANGUAGE-TAGGED LITERAL, which SPARQL 1.1 answers with
+    /// <c>rdf:langString</c> and this engine does not, so the erroring BIND leaves
+    /// <c>datatype_iri</c> unbound and the cursor key derived from it unbound with it.
+    /// </para>
+    /// <para>
+    /// WHY IT ONLY APPEARED AT D1-05g. Family X was asked about the seed ROOTS until this slice
+    /// derived its objects from the proven census. The roots' own titles carry no language tag on
+    /// this route; the consolidated states' do. Making the run correct is what made these rows
+    /// reachable, which is the shape worth noticing: the batch change did not cause the defect, it
+    /// stopped hiding it.
+    /// </para>
+    /// </remarks>
+    private const string LangTagUnboundDatatype =
+        "b5ca00b1f26b46987f515d92d1c1b19541c9baddbceeb959ff63431fb5918c6d";
+
     [TestMethod]
     [DataRow("objectfacts-page-unbound-key.bin", ObjectFactsUnboundKey, 39498)]
     [DataRow("maintenance-page-not-json.bin", MaintenanceHtml, 2005)]
@@ -66,6 +96,7 @@ public sealed class EuPageDecodeClassificationTests
     [DataRow("rootwatermark-page.bin", "fb14660f2a0c881e48b06396611f1bfff8d632f7b18b7627458704ded30c248c", 1073)]
     [DataRow("manifestationfacts-page.bin", "2581d2c517b9405842ade20aef289f733556ba414a927983eb70862da7b9b6e9", 2625)]
     [DataRow("objectfacts-page-coalesce-total.bin", "3ee1711425945b2ec789fdffe6d66c3a12ea6527c91a3ac58a531e1eb65afa80", 39866)]
+    [DataRow("expressionfacts-langtag-unbound-datatype.bin", LangTagUnboundDatatype, 6593)]
     public void EveryRetainedPageFixtureIsTheExactBytesItsNameClaims(
         string fileName, string expectedSha256, int expectedLength)
     {
@@ -76,6 +107,48 @@ public sealed class EuPageDecodeClassificationTests
             expectedSha256,
             Convert.ToHexStringLower(SHA256.HashData(bytes)),
             $"{fileName} is not the retained publisher body its digest names.");
+    }
+
+
+    /// <summary>
+    /// The language-tagged row is VALID SPARQL JSON whose datatype and cursor key are both simply
+    /// ABSENT, which is the unbound encoding and not a malformed page.
+    /// </summary>
+    [TestMethod]
+    public void TheLanguageTaggedTitleRowOmitsItsDatatypeAndItsCursorKey()
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(
+            ReadFixture("expressionfacts-langtag-unbound-datatype.bin"));
+        var rows = document.RootElement.GetProperty("results").GetProperty("bindings");
+
+        var offending = rows.EnumerateArray()
+            .Where(row => !row.TryGetProperty("key_5", out _))
+            .ToArray();
+
+        Assert.HasCount(
+            1,
+            offending,
+            "this fixture exists for exactly one row shape; if it stops containing it the test "
+                + "below proves nothing.");
+
+        var row = offending[0];
+        Assert.AreEqual(
+            "literal", row.GetProperty("value_kind").GetProperty("value").GetString());
+        Assert.AreEqual(
+            "nl", row.GetProperty("language_tag").GetProperty("value").GetString());
+        Assert.IsFalse(
+            row.TryGetProperty("datatype_iri", out _),
+            "datatype_iri is absent, which is the unbound encoding: DATATYPE() on a "
+                + "language-tagged literal did not answer and the BIND left it unbound.");
+        StringAssert.Contains(
+            row.GetProperty("predicate").GetProperty("value").GetString(),
+            "expression_title");
+
+        // The rows around it ARE complete, so the page is not broken: only this shape is.
+        Assert.IsTrue(
+            rows.EnumerateArray().Any(other => other.TryGetProperty("key_5", out _)),
+            "the fixture must also carry complete rows, or the page would look uniformly bad and "
+                + "the classification argument would not hold.");
     }
 
     /// <summary>

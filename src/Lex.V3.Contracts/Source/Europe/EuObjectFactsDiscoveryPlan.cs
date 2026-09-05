@@ -720,8 +720,8 @@ public sealed class EuObjectFactsDiscoveryPlan
               BIND(STR(?predicate) AS ?key_2)
               BIND(?value_kind AS ?key_3)
               BIND(COALESCE(STR(?value), "") AS ?key_4)
-              BIND(?datatype_iri AS ?key_5)
-              BIND(?language_tag AS ?key_6)
+              BIND(COALESCE(?datatype_iri, "") AS ?key_5)
+              BIND(COALESCE(?language_tag, "") AS ?key_6)
               VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3 ?last_key_4 ?last_key_5 ?last_key_6) {
                 ({has_cursor:uint} {last_key_1:sparql_string} {last_key_2:sparql_string} {last_key_3:sparql_string} {last_key_4:sparql_string} {last_key_5:sparql_string} {last_key_6:sparql_string})
               }
@@ -776,8 +776,8 @@ public sealed class EuObjectFactsDiscoveryPlan
               BIND(STR(?predicate) AS ?key_2)
               BIND(?value_kind AS ?key_3)
               BIND(COALESCE(STR(?value), "") AS ?key_4)
-              BIND(?datatype_iri AS ?key_5)
-              BIND(?language_tag AS ?key_6)
+              BIND(COALESCE(?datatype_iri, "") AS ?key_5)
+              BIND(COALESCE(?language_tag, "") AS ?key_6)
               BIND(STR(?parent) AS ?key_7)
               VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3 ?last_key_4 ?last_key_5 ?last_key_6 ?last_key_7) {
                 ({has_cursor:uint} {last_key_1:sparql_string} {last_key_2:sparql_string} {last_key_3:sparql_string} {last_key_4:sparql_string} {last_key_5:sparql_string} {last_key_6:sparql_string} {last_key_7:sparql_string})
@@ -827,8 +827,8 @@ public sealed class EuObjectFactsDiscoveryPlan
               BIND(STR(?object) AS ?key_1)
               BIND(?value_kind AS ?key_2)
               BIND(COALESCE(STR(?value), "") AS ?key_3)
-              BIND(?datatype_iri AS ?key_4)
-              BIND(?language_tag AS ?key_5)
+              BIND(COALESCE(?datatype_iri, "") AS ?key_4)
+              BIND(COALESCE(?language_tag, "") AS ?key_5)
               VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3 ?last_key_4 ?last_key_5) {
                 ({has_cursor:uint} {last_key_1:sparql_string} {last_key_2:sparql_string} {last_key_3:sparql_string} {last_key_4:sparql_string} {last_key_5:sparql_string})
               }
@@ -886,8 +886,8 @@ public sealed class EuObjectFactsDiscoveryPlan
               BIND(STR(?parent) AS ?key_1)
               BIND(?value_kind AS ?key_2)
               BIND(COALESCE(STR(?value), "") AS ?key_3)
-              BIND(?datatype_iri AS ?key_4)
-              BIND(?language_tag AS ?key_5)
+              BIND(COALESCE(?datatype_iri, "") AS ?key_4)
+              BIND(COALESCE(?language_tag, "") AS ?key_5)
               VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3 ?last_key_4 ?last_key_5) {
                 ({has_cursor:uint} {last_key_1:sparql_string} {last_key_2:sparql_string} {last_key_3:sparql_string} {last_key_4:sparql_string} {last_key_5:sparql_string})
               }
