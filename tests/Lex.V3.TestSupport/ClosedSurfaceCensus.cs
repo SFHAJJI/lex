@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Text.Json.Serialization;
 using System.Text;
 
 namespace Lex.V3.TestSupport;
@@ -229,6 +230,45 @@ public static class ClosedSurfaceCensus
 
         return text.ToString();
     }
+
+    /// <summary>
+    /// Every enum in <paramref name="assemblies"/> that declares a wire token on SOME of its
+    /// members but not all, as <c>full name: n of m declared, missing A, B</c>, ordered by full
+    /// name. Empty is the healthy answer.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A half declared vocabulary is a surface a reader cannot judge: some names are contract and
+    /// the rest fall through to default serialization, which for this codebase is the exact CLR
+    /// member name, and nothing says which is which. Two such enums were found by a lane looking at
+    /// one of them; this closes the class rather than the instances.
+    /// </para>
+    /// <para>
+    /// An enum declaring NOTHING is deliberately outside the rule. Most enums here are internal
+    /// state that never reaches a wire, and requiring tokens on them would be a rule about
+    /// paperwork rather than about contract. The criterion is that a vocabulary which has begun
+    /// declaring tokens has to finish, because that is the point at which a reader starts to infer
+    /// meaning from their presence.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<string> HalfDeclaredVocabularies(params string[] assemblies) =>
+        Load(assemblies)
+            .SelectMany(AllTypes)
+            .Where(static type => type.IsEnum)
+            .Select(static type =>
+            {
+                var names = Enum.GetNames(type);
+                var missing = names
+                    .Where(name => type.GetField(name, BindingFlags.Public | BindingFlags.Static)!
+                        .GetCustomAttribute<JsonStringEnumMemberNameAttribute>() is null)
+                    .ToArray();
+                return (Type: type, Declared: names.Length - missing.Length, names.Length, Missing: missing);
+            })
+            .Where(static found => found.Declared > 0 && found.Missing.Length > 0)
+            .OrderBy(static found => found.Type.FullName, StringComparer.Ordinal)
+            .Select(static found => found.Type.FullName + ": " + found.Declared + " of "
+                + found.Length + " declared, missing " + string.Join(", ", found.Missing))
+            .ToArray();
 
     private static IEnumerable<Assembly> Load(string[] assemblies)
     {
