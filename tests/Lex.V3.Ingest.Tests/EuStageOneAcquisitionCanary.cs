@@ -85,8 +85,10 @@ namespace Lex.V3.Ingest.Tests;
 /// work, not one row per manifestation, so the run observes three tokens for the GDPR where the
 /// census counts 72 manifestations. Asserting 72 against a number this route cannot produce would
 /// be a fabricated check, so the totals are carried as data and the gap is stated by a failing
-/// assertion rather than by a sentence a reader may not reach. D1-05f decides whether the canary
-/// enumerates manifestations or the comparison narrows to the token set.
+/// assertion rather than by a sentence a reader may not reach. D1-05g SETTLED IT: the comparison
+/// is over the TYPE SET, because family M lists manifestation types per Work and emits no per
+/// format row, so there is no row to count. The per type counts stay recorded as the publisher's
+/// inventory, and counting that inventory is residue R8.
 /// </para>
 /// <para>
 /// The fetch half is separately corroborated by RULING
@@ -345,16 +347,47 @@ public sealed class EuStageOneAcquisitionCanary
             result.ObservedExpressionCount,
             "the reduced manifest's expression count must equal the independent census total.");
 
-        Assert.Fail(
-            "the run reached the manifest, and the per type totals are still not comparable: family M "
-            + "returns DISTINCT manifestation types per work rather than one row per manifestation, so "
-            + "this route cannot produce the census totals "
-            + string.Join("; ", Census.Select(
-                static row => $"{row.Celex} {row.Manifestations} across "
-                    + string.Join(",", row.Types.Select(static entry => $"{entry.Token}={entry.Count}"))))
-            + ". Asserting them against a number the route cannot produce would be a fabricated check, "
-            + "so this fails rather than passing on the half it can reach. D1-05f decides whether the "
-            + "canary enumerates manifestations or the comparison narrows to the token set.");
+        // ---- D1-05g: THE TYPE SET COMPARISON, PER ROOT WORK. ----
+        // This replaces an unconditional Assert.Fail that said the per type totals were not
+        // comparable. They are not, and that has been settled rather than worked around: family M
+        // lists manifestation TYPES per Work and emits NO PER FORMAT ROW, so there is no row to
+        // count and a count comparison would have to invent one. The census per type counts stay
+        // recorded as the publisher's inventory and the comparison is over type SETS. Counting the
+        // inventory needs its own acquisition and is residue R8.
+        //
+        // THE ROW SOURCE IS STATED AND IT IS NOT THE LADDER. These tokens come from
+        // ObservedManifestationTypesByCelex, which the adapter fills from family M's OWN rows: the
+        // publisher's listing. DocumentLadderResultsByOrdinal is the ladder, what this run
+        // attempted and was served, and comparing that against a census would report OUR coverage
+        // as the OFFICE'S holdings.
+        Assert.IsNotNull(
+            result.ObservedManifestationTypesByCelex,
+            "a run that reached the manifest must carry family M's own listing per Work.");
+
+        foreach (var row in Census)
+        {
+            Assert.IsTrue(
+                result.ObservedManifestationTypesByCelex!.TryGetValue(row.Celex, out var observed),
+                $"{row.Celex} has no observed manifestation listing at all. Listings were for: "
+                + string.Join(", ", result.ObservedManifestationTypesByCelex.Keys));
+
+            var expected = row.Types
+                .Select(static entry => entry.Token)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(static token => token, StringComparer.Ordinal)
+                .ToArray();
+
+            // Joined rather than compared element-wise so a diff names the token that moved.
+            Assert.AreEqual(
+                string.Join(",", expected),
+                string.Join(",", observed!),
+                $"{row.Celex}'s listed manifestation TYPE SET must equal the census's own. The "
+                + $"census also records per type counts ({string.Join(",", row.Types.Select(
+                    static entry => $"{entry.Token}={entry.Count}"))}) as the publisher's "
+                + "inventory; those are NOT compared here, because family M lists types and not "
+                + "rows, and asserting a count this route cannot produce would be a fabricated "
+                + "check.");
+        }
     }
 
     /// <summary>

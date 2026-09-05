@@ -382,6 +382,7 @@ public sealed class EuQueryExecutionResult
         string? scopeManifestCanonicalSha256,
         IReadOnlyDictionary<int, CorpusAcquisitionOutcome>? documentAcquisitionOutcomesByOrdinal,
         IReadOnlyDictionary<int, EuDocumentLadderResult>? documentLadderResultsByOrdinal,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? observedManifestationTypesByCelex,
         SourceArtifactRef? corpusRecordSetRef,
         VerifiedCorpusRecordSet? corpusRecordSet,
         EuQueryExecutionCompletion? completion,
@@ -403,6 +404,7 @@ public sealed class EuQueryExecutionResult
         ScopeManifestCanonicalSha256 = scopeManifestCanonicalSha256;
         DocumentAcquisitionOutcomesByOrdinal = documentAcquisitionOutcomesByOrdinal;
         DocumentLadderResultsByOrdinal = documentLadderResultsByOrdinal;
+        ObservedManifestationTypesByCelex = observedManifestationTypesByCelex;
         CorpusRecordSetRef = corpusRecordSetRef;
         CorpusRecordSet = corpusRecordSet;
         Completion = completion;
@@ -426,6 +428,7 @@ public sealed class EuQueryExecutionResult
         string scopeManifestCanonicalSha256,
         IReadOnlyDictionary<int, CorpusAcquisitionOutcome> documentAcquisitionOutcomesByOrdinal,
         IReadOnlyDictionary<int, EuDocumentLadderResult> documentLadderResultsByOrdinal,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> observedManifestationTypesByCelex,
         SourceArtifactRef corpusRecordSetRef,
         VerifiedCorpusRecordSet corpusRecordSet)
     {
@@ -438,6 +441,7 @@ public sealed class EuQueryExecutionResult
         ArgumentException.ThrowIfNullOrWhiteSpace(scopeManifestCanonicalSha256);
         ArgumentNullException.ThrowIfNull(documentAcquisitionOutcomesByOrdinal);
         ArgumentNullException.ThrowIfNull(documentLadderResultsByOrdinal);
+        ArgumentNullException.ThrowIfNull(observedManifestationTypesByCelex);
         ArgumentNullException.ThrowIfNull(corpusRecordSetRef);
         ArgumentNullException.ThrowIfNull(corpusRecordSet);
         var completion = familyOutcomes.All(static outcome => outcome.Kind == EuFamilyEnumerationOutcomeKind.Proven)
@@ -447,7 +451,8 @@ public sealed class EuQueryExecutionResult
             topology, familyOutcomes, observedObjectCount, observedExpressionCount, reductionExclusions,
             watermarkWitnessPlan, rootBinding, witnessReconciliation, witnessTerminations, scopeManifestReceipt,
             scopeManifestCanonicalSha256, documentAcquisitionOutcomesByOrdinal, documentLadderResultsByOrdinal,
-            corpusRecordSetRef, corpusRecordSet, completion, null, null, null, null);
+            observedManifestationTypesByCelex, corpusRecordSetRef, corpusRecordSet, completion,
+            null, null, null, null);
     }
 
     public static EuQueryExecutionResult Refused(
@@ -462,7 +467,7 @@ public sealed class EuQueryExecutionResult
         ArgumentNullException.ThrowIfNull(refusal);
         return new(
             topology, familyOutcomes, 0, 0, [], null, null, null, null, null, null, null, null, null, null, null,
-            refusal, decodeRefusal, decodeOffendingIri, decodeSnapshotRefusal);
+            null, refusal, decodeRefusal, decodeOffendingIri, decodeSnapshotRefusal);
     }
 
     /// <summary>Always present: minting it cannot fail, and it is useful context on a refusal too.</summary>
@@ -558,6 +563,29 @@ public sealed class EuQueryExecutionResult
     /// misreport every fall-through object.
     /// </remarks>
     public IReadOnlyDictionary<int, EuDocumentLadderResult>? DocumentLadderResultsByOrdinal { get; }
+
+    /// <summary>
+    /// Per requested CELEX, the DISTINCT manifestation type tokens FAMILY M ACTUALLY LISTED for
+    /// that root Work, sorted ordinally.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE PUBLISHER'S OWN LISTING, AND NEVER WHAT THE LADDER ADMITTED. The distinction is the
+    /// whole reason this property exists rather than the canary reading
+    /// <see cref="DocumentLadderResultsByOrdinal"/>: that is the LADDER, the formats this run
+    /// attempted and was served, which is a fact about our fetching rather than about the office's
+    /// inventory. Comparing a census of what the office lists against a record of what we managed
+    /// to fetch would report our own coverage as the publisher's holdings.
+    /// </para>
+    /// <para>
+    /// A SET RATHER THAN COUNTS, and that is settled rather than convenient. Family M lists
+    /// manifestation TYPES per Work and emits no per-format row, so there is no row to count: a
+    /// count comparison would have to invent one. The census per-type counts stay recorded as the
+    /// publisher's inventory and are compared as type SETS. Counting the inventory, if it is ever
+    /// wanted, needs its own acquisition and is residue R8.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyDictionary<string, IReadOnlyList<string>>? ObservedManifestationTypesByCelex { get; }
 
     /// <summary>
     /// D1-06c-EU fix two: this run's own written corpus/6 record set artifact reference. Present iff
@@ -863,6 +891,8 @@ public sealed class EuQueryExecutionAdapter
 
         // ---- Per seed: derive the closure from the census family's own rows, filter P/X to it, decode. ----
         var allSnapshots = new List<EuCellarObjectSnapshot>();
+        var observedManifestationTypesByCelex =
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
         var discoveredRoots = new List<string>();
         var expressionIris = new HashSet<string>(StringComparer.Ordinal);
         var rootWatermarkObservations = new List<(string WatermarkLexical, string CanonicalEntryKey)>();
@@ -955,6 +985,12 @@ public sealed class EuQueryExecutionAdapter
 
             allSnapshots.AddRange(snapshots);
             CollectExpressionIris(seedXRows, xProfile, expressionIris);
+
+            // D1-05g: the type set the canary compares against the census, taken from FAMILY M'S
+            // OWN ROWS. Not from the ladder: the ladder is what this run attempted and was served,
+            // which is a fact about our fetching rather than about the office's inventory.
+            observedManifestationTypesByCelex[requestedCelex] =
+                CollectListedManifestationTypes(seedMRows, mProfile);
         }
 
         // ---- D1-05c-2 precision two: bind the discovered roots to Appendix A's own 82-seed pack. ----
@@ -1295,6 +1331,7 @@ public sealed class EuQueryExecutionAdapter
             observedObjectCount: allSnapshots.Count,
             observedExpressionCount: expressionIris.Count,
             reductionExclusions: exclusions,
+            observedManifestationTypesByCelex: observedManifestationTypesByCelex,
             watermarkWitnessPlan: witnessPlan,
             rootBinding: rootBinding,
             witnessReconciliation: witnessReconciliation,
@@ -1757,6 +1794,31 @@ public sealed class EuQueryExecutionAdapter
             proof, delivery, profile, delivery.InterpretationProfileRef, delivery.CountA.HttpEvidenceRef, pages,
             out var refusal);
         return (rows, profile, refusal);
+    }
+
+    /// <summary>
+    /// The DISTINCT manifestation type tokens family M listed for one Work, sorted ordinally.
+    /// </summary>
+    /// <remarks>
+    /// Rows whose value is unbound are the office's own typed ABSENCE and contribute no token, so a
+    /// Work the office lists nothing for yields an EMPTY set rather than a missing entry. That
+    /// distinction is the point: an empty set is an observation, and a missing key would be a
+    /// question never asked.
+    /// </remarks>
+    private static IReadOnlyList<string> CollectListedManifestationTypes(
+        IReadOnlyList<RepeatedEnumerationRow> mRows,
+        RepeatedEnumerationInterpretationProfile mProfile)
+    {
+        var valueIndex = IndexOf(mProfile, "value");
+        var valueKindIndex = IndexOf(mProfile, "value_kind");
+        return mRows
+            .Where(row => row.Terms[valueKindIndex].Value == "literal")
+            .Select(row => row.Terms[valueIndex].Value)
+            .Where(static value => !string.IsNullOrEmpty(value))
+            .Select(static value => value!)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static value => value, StringComparer.Ordinal)
+            .ToArray();
     }
 
     /// <summary>
