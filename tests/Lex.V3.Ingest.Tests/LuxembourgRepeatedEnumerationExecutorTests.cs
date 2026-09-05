@@ -985,7 +985,11 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
 
         Assert.IsNull(result.Receipt);
         Assert.IsNotNull(result.Refusal);
-        Assert.AreEqual(LuxembourgEnumerationRefusal.PageBodyMalformed, result.Refusal.Code);
+        Assert.AreEqual(
+            LuxembourgEnumerationRefusal.PageDecodeFailedOnOurSide,
+            result.Refusal.Code,
+            "a row missing a key is an omitted variable, which is ours to decode, not a page "
+            + "the office malformed.");
     }
 
     [TestMethod]
@@ -1200,6 +1204,62 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
         Assert.IsNull(result.Receipt);
         Assert.IsNotNull(result.Refusal);
         Assert.AreEqual(LuxembourgEnumerationRefusal.PageBodyMalformed, result.Refusal.Code);
+    }
+
+    /// <summary>
+    /// A ROW WHOSE VARIABLE IS LEGITIMATELY UNBOUND IS OUR DECODE LIMIT, NOT A MALFORMED PAGE, and
+    /// the refusal has to say so rather than blaming the office.
+    /// </summary>
+    /// <remarks>
+    /// THE PAGE BELOW IS SYNTHETIC AND IS STATED AS SYNTHETIC. It is not a capture of anything
+    /// legilux served; it is hand-built to omit key_6 from one binding while declaring it in head
+    /// vars, which is exactly what the SPARQL JSON format does for an unbound variable. Lane B
+    /// established the mechanism at the endpoint
+    /// (lex-event-20260905T022432768Z-43d363d14f524f87b9f8063afe398de6): the engine picks the
+    /// conditional's branch correctly but evaluates both arms, the string conversion raises on the
+    /// absent term, the erroring BIND leaves the variable unbound, and the format omits it. Whether
+    /// this lane's own template wants COALESCE is a separate question and is not what this test is
+    /// about.
+    /// <para>
+    /// The neighbouring test above is the CONTRAST that makes this one mean something: there key_1
+    /// is PRESENT but is a bare string, which is a statement about what the office served and still
+    /// refuses as PageBodyMalformed. Present-but-misshapen stays theirs; absent is ours.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task AnUnboundVariableInARowIsOurDecodeFailureAndNotTheOfficesMalformedPage()
+    {
+        var (request, witness) = BuildRequest();
+        var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
+
+        // SYNTHETIC: key_6 is declared in head vars and omitted from the binding, the shape SPARQL
+        // produces for an unbound variable. Never captured from the publisher.
+        var unboundVariableRow =
+            "{\"head\":{\"link\":[],\"vars\":[\"key_1\",\"key_2\",\"key_3\",\"key_4\",\"key_5\",\"key_6\"]},"
+            + "\"results\":{\"distinct\":false,\"ordered\":true,\"bindings\":[{"
+            + "\"key_1\":{\"type\":\"literal\",\"value\":\"a\"},"
+            + "\"key_2\":{\"type\":\"literal\",\"value\":\"\"},\"key_3\":{\"type\":\"literal\",\"value\":\"\"},"
+            + "\"key_4\":{\"type\":\"literal\",\"value\":\"\"},\"key_5\":{\"type\":\"literal\",\"value\":\"\"}}]}}";
+        var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, req) => ordinal switch
+        {
+            1 => JsonResponse(req, LuxembourgAcquisitionTestFixture.CountJson(1)),
+            2 => JsonResponse(req, unboundVariableRow),
+            _ => throw new AssertFailedException("No further sends after a row with an unbound variable."),
+        });
+
+        var result = await Run(store, request, witness, handler);
+
+        Assert.IsNull(result.Receipt);
+        Assert.IsNotNull(result.Refusal);
+        Assert.AreEqual(
+            LuxembourgEnumerationRefusal.PageDecodeFailedOnOurSide,
+            result.Refusal.Code,
+            "an omitted variable is a decode limit of ours; naming it PageBodyMalformed would make "
+            + "the product state a falsehood about the office.");
+        Assert.AreNotEqual(
+            LuxembourgEnumerationRefusal.PageBodyMalformed,
+            result.Refusal.Code,
+            "and specifically not the publisher-facing name it used to carry.");
     }
 
     // ---------------------------------------------------------------------------------------
