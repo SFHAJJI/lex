@@ -47,8 +47,13 @@ namespace Lex.V3.Tests.Custody;
 /// </para>
 /// <para>
 /// The swept count moves when a lane merges, and that is the design working rather than churn.
-/// Lane A carries two more doubles today. When they arrive they will be neither driven nor exempt,
-/// this partition will fail, and somebody will have to decide about each one.
+/// Lane A adds EIGHT implementations, not the two first reported. Two of them declare no
+/// constructor, so the default rule drives them and no exemption entry is written: the partition
+/// stays green and only the count pins move. The other six take constructor arguments configuring
+/// the fault they inject, so each needs an exemption entry with a reason. An earlier version of
+/// this remark predicted that the two would be neither driven nor exempt and that the partition
+/// would fail. That was wrong, and it is corrected here rather than left for the next reader to
+/// discover, because a prediction the next event contradicts teaches people to distrust remarks.
 /// </para>
 /// </remarks>
 [TestClass]
@@ -87,15 +92,30 @@ public sealed class CustodyStoreConformanceTests
                 || CustodyStoreConformance.HasRecipe(type))
             .Select(static type => type.FullName!);
 
+        var swept = CustodyStoreConformance.Implementations(Scope).ToArray();
+        var accounted = driven
+            .Concat(Exempt.Select(NameOf))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static name => name, StringComparer.Ordinal)
+            .ToArray();
+
         CollectionAssert.AreEqual(
-            CustodyStoreConformance.Implementations(Scope).ToArray(),
-            driven
-                .Concat(Exempt.Select(NameOf))
+            swept,
+            accounted,
+            "a custody store is neither driven nor declared exempt, so nothing records whether it "
+                + "meets the contract. Swept but unaccounted: "
+                + Join(swept.Except(accounted, StringComparer.Ordinal))
+                + ". Accounted but not swept: "
+                + Join(accounted.Except(swept, StringComparer.Ordinal)));
+
+        CollectionAssert.AreEqual(
+            Exempt.Select(NameOf).OrderBy(static name => name, StringComparer.Ordinal).ToArray(),
+            Exempt.Select(NameOf)
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(static name => name, StringComparer.Ordinal)
                 .ToArray(),
-            "a custody store is neither driven nor declared exempt, so nothing records whether it "
-                + "meets the contract");
+            "an exemption is declared twice. Distinct would hide the duplicate from the partition "
+                + "above, so only the pinned count would stand between that and silence.");
     }
 
     [TestMethod]
@@ -219,6 +239,64 @@ public sealed class CustodyStoreConformanceTests
         }
 
         return false;
+    }
+
+
+    /// <summary>
+    /// What each driven store declares as its observed protection, per lane, pinned literally.
+    /// </summary>
+    /// <remarks>
+    /// This is the only place a declared protection is compared to anything. The obligations check
+    /// proves the policy evidence describes the same object, by digest and byte length and custody
+    /// class; it deliberately does not judge the protection, because the honest comparison is a
+    /// literal somebody chose rather than a rule derived from the value itself. An earlier version
+    /// asked only whether the protection was a defined enum member, which the
+    /// CustodyPolicyEvidence constructor already guarantees, so it could not fail while the remarks
+    /// said it verified the declaration.
+    /// </remarks>
+    [TestMethod]
+    public async Task EveryDrivenStoreDeclaresExactlyThisProtectionPerLane()
+    {
+        var outcome = await ConformanceRun.RunAsync(Scope, TestContext.CancellationToken);
+
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "Lex.V3.Artifacts.FileSystemCustodyStore under LegalHoldEvidence: NotEnforced",
+                "Lex.V3.Artifacts.FileSystemCustodyStore under NightlyFloor90d: NotEnforced",
+            },
+            outcome.Declarations.ToArray(),
+            "a store changed what protection it declares: " + Join(outcome.Declarations));
+    }
+
+    /// <summary>
+    /// Every Lex assembly deployed beside these tests is inside one of the two conformance scopes.
+    /// </summary>
+    /// <remarks>
+    /// Without this the sweep stays comprehensive over a set that quietly stops being everything: a
+    /// new source project would be deployed, hold custody stores, and appear in no scope at all,
+    /// while every count and partition here still agreed with itself.
+    /// </remarks>
+    [TestMethod]
+    public void EveryDeployedAssemblyIsInThisConformanceScopeOrTheSiblings()
+    {
+        var deployed = ClosedSurfaceCensus.LexAssembliesBeside(
+            typeof(CustodyStoreConformanceTests).Assembly);
+        var covered = Scope
+            .Concat(CensusScope.SweptBySibling)
+            .ToHashSet(StringComparer.Ordinal);
+
+        CollectionAssert.AreEqual(
+            Array.Empty<string>(),
+            deployed.Where(name => !covered.Contains(name)).ToArray(),
+            "a deployed assembly is in neither custody conformance scope, so these sweeps are "
+                + "comprehensive over a set that is no longer everything");
+    }
+
+    private static string Join(IEnumerable<string> names)
+    {
+        var listed = names.ToArray();
+        return listed.Length == 0 ? "none" : string.Join(" | ", listed);
     }
 
     private static string NameOf(string entry) =>

@@ -29,11 +29,19 @@ namespace Lex.V3.TestSupport;
 /// WHAT THIS PROVES, IN EFFECT RATHER THAN MECHANISM. Obligation two is driven directly: after a
 /// receipt, the digest alone returns the bytes. Obligation one is proven BY ITS EFFECT, because the
 /// readback and the protection observation are internal to a store and a contract test binds
-/// observable behaviour: a receipt implies the bytes are retrievable at the reference the write
-/// returned, the receipt describes those bytes exactly, and its policy evidence describes the same
-/// object and names a protection the store declares. The interface documentation keeps the
-/// mechanism; these remarks say effect, because a conformance test whose name implied it proved the
-/// mechanism would be the exact shape the census exists to remove.
+/// observable behaviour. Three effects are bound. The bytes are retrievable at the reference the
+/// write returned. The receipt describes those bytes exactly. And the policy evidence describes the
+/// SAME object, by digest and by byte length and by custody class, while the protection it declares
+/// is reported to the caller and PINNED PER STORE PER LANE.
+/// </para>
+/// <para>
+/// That pin is the only thing that actually compares a declared protection, and it replaces an
+/// assertion that could not fail. An earlier version asked whether the protection was a defined enum
+/// member. The CustodyPolicyEvidence constructor already refuses an undefined one, so no receipt
+/// could ever reach that check carrying one, and the remark above it claimed the declared protection
+/// was verified while nothing compared it to anything. That is an unfailable assertion carrying a
+/// claim, which is the shape this census was built to find in production code, appearing a second
+/// time in the instrument instead. THE INSTRUMENT IS NOT EXEMPT FROM THE PROPERTY IT MEASURES.
 /// </para>
 /// <para>
 /// THE MISMATCH CLAUSE IS DRIVEN, and the reasoning that once said it could not be is recorded here
@@ -148,10 +156,26 @@ public static class CustodyStoreConformance
     }
 
     /// <summary>
-    /// Drives both obligations against one store and returns null when it conforms, or the first
-    /// failure in the store's own terms. A failure is a finding, not something to be silenced.
+    /// Everything one write shows: whether the store refused the lane, whether an obligation went
+    /// unmet, and what protection the policy evidence declared.
     /// </summary>
-    public static async Task<string?> RunObligationsAsync(
+    /// <remarks>
+    /// One write decides all three. An earlier version probed a lane with one write to learn whether
+    /// it was accepted and then wrote again to learn how it refused, which cost two writes and could
+    /// report a refusal kind of accepted on retry when the second write behaved differently from the
+    /// first. A store is entitled to differ between two writes; a classification that depends on
+    /// which write it read is not a classification.
+    /// </remarks>
+    public readonly record struct ObligationOutcome(
+        string? Failure,
+        string? Refusal,
+        CustodyProtection? DeclaredProtection);
+
+    /// <summary>
+    /// Drives both obligations against one store with a single write. A failure is a finding, not
+    /// something to be silenced, and a refusal is not a failure.
+    /// </summary>
+    public static async Task<ObligationOutcome> RunObligationsAsync(
         ICustodyStore store, CustodyClass custodyClass, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(store);
@@ -167,18 +191,19 @@ public static class CustodyStoreConformance
         }
         catch (Exception exception)
         {
-            return $"CreateAsync threw {exception.GetType().Name}: {Trim(exception.Message)}";
+            return new(null, exception.GetType().Name, null);
         }
 
         if (receipt is null)
         {
-            return "CreateAsync returned no receipt";
+            return new("CreateAsync returned no receipt", null, null);
         }
 
+        var declared = receipt.PolicyEvidence?.Protection;
         var described = DescribesTheBytes(receipt, digest, payload.Length, custodyClass);
         if (described is not null)
         {
-            return described;
+            return new(described, null, declared);
         }
 
         // Obligation one, in the only form observable from outside: a receipt implies the bytes are
@@ -189,13 +214,17 @@ public static class CustodyStoreConformance
                 .ConfigureAwait(false);
             if (!atReference.Span.SequenceEqual(payload.Span))
             {
-                return "ReadAsync on the receipt reference returned different bytes";
+                return new(
+                    "ReadAsync on the receipt reference returned different bytes", null, declared);
             }
         }
         catch (Exception exception)
         {
-            return $"ReadAsync on the receipt reference threw {exception.GetType().Name}: "
-                + Trim(exception.Message);
+            return new(
+                $"ReadAsync on the receipt reference threw {exception.GetType().Name}: "
+                    + Trim(exception.Message),
+                null,
+                declared);
         }
 
         // Obligation two, which is a genuinely different property: the digest alone resolves it.
@@ -205,15 +234,19 @@ public static class CustodyStoreConformance
                 .ConfigureAwait(false);
             if (!byDigest.Span.SequenceEqual(payload.Span))
             {
-                return "ReadByDigestAsync returned different bytes than were held";
+                return new(
+                    "ReadByDigestAsync returned different bytes than were held", null, declared);
             }
         }
         catch (Exception exception)
         {
-            return $"ReadByDigestAsync threw {exception.GetType().Name}: {Trim(exception.Message)}";
+            return new(
+                $"ReadByDigestAsync threw {exception.GetType().Name}: {Trim(exception.Message)}",
+                null,
+                declared);
         }
 
-        return null;
+        return new(null, null, declared);
     }
 
     /// <summary>
@@ -302,7 +335,9 @@ public static class CustodyStoreConformance
 
     /// <summary>
     /// The receipt has to describe the bytes that were presented, and its policy evidence has to be
-    /// about the same object and name a protection the store declares.
+    /// about the SAME object: same digest, same byte length, same custody class. What protection it
+    /// declares is reported rather than judged here, because the only honest comparison for that is
+    /// a literal the caller pins per store per lane.
     /// </summary>
     private static string? DescribesTheBytes(
         DurableBlobWriteReceipt receipt, string digest, int length, CustodyClass custodyClass)
@@ -334,9 +369,16 @@ public static class CustodyStoreConformance
             return "the policy evidence describes a different object than the receipt";
         }
 
-        if (!Enum.IsDefined(receipt.PolicyEvidence.Protection))
+        if (receipt.PolicyEvidence.Reference.ByteLength != length)
         {
-            return $"the policy evidence names an undefined protection {receipt.PolicyEvidence.Protection}";
+            return $"the policy evidence declares {receipt.PolicyEvidence.Reference.ByteLength} "
+                + $"bytes, not the {length} the receipt holds";
+        }
+
+        if (receipt.PolicyEvidence.Reference.CustodyClass != custodyClass)
+        {
+            return "the policy evidence names custody class "
+                + $"{receipt.PolicyEvidence.Reference.CustodyClass}, not the requested {custodyClass}";
         }
 
         return null;
@@ -410,9 +452,15 @@ public static class ConformanceRun
     /// Lanes a store refused to write, as <c>full name declines lane: exception type</c>. A refusal
     /// is not a failure; it is a store declining to issue evidence it cannot back.
     /// </param>
+    /// <param name="Declarations">
+    /// What each accepted write declared, as <c>full name under lane: protection</c>. The caller
+    /// pins this, which is the only comparison that makes a declared protection a checked fact
+    /// rather than a value nothing ever reads.
+    /// </param>
     public readonly record struct ConformanceOutcome(
         IReadOnlyList<string> Failures,
-        IReadOnlyList<string> DeclinedLanes);
+        IReadOnlyList<string> DeclinedLanes,
+        IReadOnlyList<string> Declarations);
 
     public static async Task<ConformanceOutcome> RunAsync(
         string[] scope, CancellationToken cancellationToken)
@@ -420,6 +468,7 @@ public static class ConformanceRun
         ArgumentNullException.ThrowIfNull(scope);
         var failures = new List<string>();
         var declined = new List<string>();
+        var declarations = new List<string>();
 
         foreach (var type in CustodyStoreConformance.ImplementationTypes(scope))
         {
@@ -435,21 +484,35 @@ public static class ConformanceRun
                 var store = CustodyStoreConformance.Construct(type, scratch);
                 foreach (var lane in Enum.GetValues<CustodyClass>())
                 {
-                    if (lane != RequiredLane
-                        && !await AcceptsAsync(store, lane, cancellationToken).ConfigureAwait(false))
+                    // One write per lane, classified once from its own result.
+                    var outcome = await CustodyStoreConformance
+                        .RunObligationsAsync(store, lane, cancellationToken)
+                        .ConfigureAwait(false);
+
+                    if (outcome.Refusal is not null)
                     {
-                        declined.Add($"{type.FullName} declines {lane}: "
-                            + await RefusalKindAsync(store, lane, cancellationToken)
-                                .ConfigureAwait(false));
+                        if (lane == RequiredLane)
+                        {
+                            failures.Add($"{type.FullName} under {lane}: refused the required lane "
+                                + $"with {outcome.Refusal}");
+                        }
+                        else
+                        {
+                            declined.Add($"{type.FullName} declines {lane}: {outcome.Refusal}");
+                        }
+
                         continue;
                     }
 
-                    var failure = await CustodyStoreConformance
-                        .RunObligationsAsync(store, lane, cancellationToken)
-                        .ConfigureAwait(false);
-                    if (failure is not null)
+                    if (outcome.DeclaredProtection is not null)
                     {
-                        failures.Add($"{type.FullName} under {lane}: {failure}");
+                        declarations.Add(
+                            $"{type.FullName} under {lane}: {outcome.DeclaredProtection}");
+                    }
+
+                    if (outcome.Failure is not null)
+                    {
+                        failures.Add($"{type.FullName} under {lane}: {outcome.Failure}");
                     }
                 }
             }
@@ -461,37 +524,8 @@ public static class ConformanceRun
 
         failures.Sort(StringComparer.Ordinal);
         declined.Sort(StringComparer.Ordinal);
-        return new(failures, declined);
-    }
-
-    private static async Task<bool> AcceptsAsync(
-        ICustodyStore store, CustodyClass lane, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var probe = System.Text.Encoding.UTF8.GetBytes($"lane probe {lane} {Guid.NewGuid():n}");
-            await store.CreateAsync(probe, lane, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-    }
-
-    private static async Task<string> RefusalKindAsync(
-        ICustodyStore store, CustodyClass lane, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var probe = System.Text.Encoding.UTF8.GetBytes($"lane probe {lane} {Guid.NewGuid():n}");
-            await store.CreateAsync(probe, lane, cancellationToken).ConfigureAwait(false);
-            return "accepted on retry";
-        }
-        catch (Exception exception)
-        {
-            return exception.GetType().Name;
-        }
+        declarations.Sort(StringComparer.Ordinal);
+        return new(failures, declined, declarations);
     }
 
     /// <summary>A fresh directory this run owns, built at run time and never a literal.</summary>
@@ -513,6 +547,22 @@ public static class ConformanceRun
         {
             // A store may still hold a handle. The directory is under the system temporary root and
             // is not evidence, so a failure to remove it is not a test failure.
+            return;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return;
+        }
+
+        // Remove the shared parent too, but only while it is empty, so a run leaves nothing behind
+        // and a concurrent run keeps its own. Non recursive delete is what makes that safe: it
+        // fails rather than reaching into another run.
+        try
+        {
+            Directory.Delete(Path.GetDirectoryName(scratch)!);
+        }
+        catch (IOException)
+        {
         }
         catch (UnauthorizedAccessException)
         {
