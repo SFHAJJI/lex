@@ -72,6 +72,7 @@ public sealed class CensusPartitionTests
         "Lex.V3.Contracts.Source.Corpus.CorpusRecordSetSchemaIds: stateful static, not a token registry",
         "Lex.V3.Contracts.Source.Europe.EuAcquisitionPeriod: stateful static, not a token registry",
         "Lex.V3.Contracts.Source.Http.RoutedHttpValidation: constant table, not a vocabulary",
+        "Lex.V3.Contracts.Source.Luxembourg.LuxembourgBodyJoin: the IRI sets it held moved to LuxembourgScopeResolver, which IS pinned as a registry; what is left is one private static comparer, which is behaviour",
         "Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryPageBinder: stateful static, not a token registry",
         "Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryPassPolicy: constant table, not a vocabulary",
         "Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryPlanIdentity: stateful static, not a token registry",
@@ -111,14 +112,14 @@ public sealed class CensusPartitionTests
     public void ThePartitionTotalsAreExactlyThese()
     {
         Assert.AreEqual(
-            450, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
+            456, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
         Assert.AreEqual(
-            212, ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).Count, "vocabularies");
+            213, ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).Count, "vocabularies");
         Assert.AreEqual(
-            136, ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).Count, "guarded types");
+            140, ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).Count, "guarded types");
         Assert.AreEqual(
             59, ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere).Count, "registries");
-        Assert.AreEqual(43, Declined.Length, "declined");
+        Assert.AreEqual(44, Declined.Length, "declined");
     }
 
     private static string NameOf(string row) =>

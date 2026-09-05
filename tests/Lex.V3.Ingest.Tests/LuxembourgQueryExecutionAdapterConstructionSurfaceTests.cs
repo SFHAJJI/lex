@@ -142,29 +142,53 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
     }
 
     [TestMethod]
-    public void QueryExecutionRefusalIsAnEightMemberEnumIncludingNone()
+    public void QueryExecutionRefusalIsATwelveMemberEnumIncludingNone()
     {
+        // D1-06c-LU-2 added four: DocumentFetchSessionNotStarted, DocumentBodyNotHeld,
+        // DocumentGetOutcomeNotRepresentable and RecordSetNotHeld, one per whole-run failure the
+        // document-acquisition phase and the corpus record-set write can produce. Every other
+        // document-GET failure is a PER OBJECT refusal and appears nowhere here, which is the
+        // distinction this pin makes visible.
         CollectionAssert.AreEqual(
             new[]
             {
                 "base-constructor protected instance System.Enum::.ctor() -> System.Enum",
                 "base-constructor protected instance System.ValueType::.ctor() -> System.ValueType",
-                "field public static " + N + "LuxembourgQueryExecutionRefusal::AssertionRowObjectKindNotRecognised -> "
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::AssertionRowObjectKindNotRecognised -> "
                 + N + "LuxembourgQueryExecutionRefusal",
-                "field public static " + N + "LuxembourgQueryExecutionRefusal::AssertionRowTermUnbound -> "
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::AssertionRowTermUnbound -> " + N
+                + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::DocumentBodyNotHeld -> " + N
+                + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::DocumentFetchSessionNotStarted -> " + N
+                + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::DocumentGetOutcomeNotRepresentable -> "
                 + N + "LuxembourgQueryExecutionRefusal",
                 "field public static " + N + "LuxembourgQueryExecutionRefusal::None -> "
                 + N + "LuxembourgQueryExecutionRefusal",
-                "field public static " + N + "LuxembourgQueryExecutionRefusal::ObservationSubjectNotInDeliveredCensus -> "
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::ObservationSubjectNotInDeliveredCensus -> "
                 + N + "LuxembourgQueryExecutionRefusal",
-                "field public static " + N + "LuxembourgQueryExecutionRefusal::ResourceObservationFamilyNotProven -> "
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::RecordSetNotRetained -> " + N
+                + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::ResourceObservationFamilyNotProven -> "
                 + N + "LuxembourgQueryExecutionRefusal",
-                "field public static " + N + "LuxembourgQueryExecutionRefusal::ResourceObservationRowsNotVerified -> "
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::ResourceObservationRowsNotVerified -> "
                 + N + "LuxembourgQueryExecutionRefusal",
-                "field public static " + N + "LuxembourgQueryExecutionRefusal::ScopeManifestNotHeld -> "
-                + N + "LuxembourgQueryExecutionRefusal",
-                "field public static " + N + "LuxembourgQueryExecutionRefusal::ScopeResolutionFailed -> "
-                + N + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::ScopeManifestNotRetained -> " + N
+                + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::ScopeResolutionFailed -> " + N
+                + "LuxembourgQueryExecutionRefusal",
             },
             ConstructionSurface.Of(typeof(LuxembourgQueryExecutionRefusal)).ToArray());
     }
@@ -233,27 +257,69 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "constructor private instance " + N + "LuxembourgQueryExecutionResult::.ctor("
-                + Core + "SourceProfileTopology, "
-                + "System.Collections.Generic.IReadOnlyList<" + N + "LuxembourgFamilyEnumerationOutcome>, "
-                + "System.Collections.Generic.IReadOnlyList<" + N + "LuxembourgRelationFamilyAcquisition>, "
+                "constructor private instance "
+                + N
+                + "LuxembourgQueryExecutionResult::.ctor("
+                + Core
+                + "SourceProfileTopology, System.Collections.Generic.IReadOnlyList<"
+                + N
+                + "LuxembourgFamilyEnumerationOutcome>, "
+                + "System.Collections.Generic.IReadOnlyList<"
+                + N
+                + "LuxembourgRelationFamilyAcquisition>, "
                 + "System.Collections.Generic.IReadOnlyList<System.String>, "
-                + "System.Collections.Generic.IReadOnlyList<" + N + "LuxembourgResourceObservationExclusionAccounting>, "
-                + Custody + "DurableBlobWriteReceipt?, System.String?, "
-                + "System.Nullable<" + N + "LuxembourgQueryExecutionCompletion>, "
-                + N + "LuxembourgQueryExecutionRefusalDetail?) -> " + N + "LuxembourgQueryExecutionResult",
-                "method public static " + N + "LuxembourgQueryExecutionResult::Delivered("
-                + Core + "SourceProfileTopology, "
-                + "System.Collections.Generic.IReadOnlyList<" + N + "LuxembourgFamilyEnumerationOutcome>, "
-                + "System.Collections.Generic.IReadOnlyList<" + N + "LuxembourgRelationFamilyAcquisition>, "
+                + "System.Collections.Generic.IReadOnlyList<"
+                + N
+                + "LuxembourgResourceObservationExclusionAccounting>, "
+                + "Lex.V3.Contracts.Custody.DurableBlobWriteReceipt?, System.String?, "
+                + "System.Nullable<"
+                + N
+                + "LuxembourgQueryExecutionCompletion>, "
+                + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "
+                + "Lex.V3.Ingest.CorpusAcquisitionOutcome>?, "
+                + Core
+                + "SourceArtifactRef?, "
+                + "Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecordSet?, "
+                + N
+                + "LuxembourgQueryExecutionRefusalDetail?) -> "
+                + N
+                + "LuxembourgQueryExecutionResult",
+                "method public static "
+                + N
+                + "LuxembourgQueryExecutionResult::Delivered("
+                + Core
+                + "SourceProfileTopology, System.Collections.Generic.IReadOnlyList<"
+                + N
+                + "LuxembourgFamilyEnumerationOutcome>, "
+                + "System.Collections.Generic.IReadOnlyList<"
+                + N
+                + "LuxembourgRelationFamilyAcquisition>, "
                 + "System.Collections.Generic.IReadOnlyList<System.String>, "
-                + "System.Collections.Generic.IReadOnlyList<" + N + "LuxembourgResourceObservationExclusionAccounting>, "
-                + Custody + "DurableBlobWriteReceipt, System.String) -> " + N + "LuxembourgQueryExecutionResult",
-                "method public static " + N + "LuxembourgQueryExecutionResult::Refused("
-                + Core + "SourceProfileTopology, "
-                + "System.Collections.Generic.IReadOnlyList<" + N + "LuxembourgFamilyEnumerationOutcome>, "
-                + "System.Collections.Generic.IReadOnlyList<" + N + "LuxembourgRelationFamilyAcquisition>, "
-                + N + "LuxembourgQueryExecutionRefusalDetail) -> " + N + "LuxembourgQueryExecutionResult",
+                + "System.Collections.Generic.IReadOnlyList<"
+                + N
+                + "LuxembourgResourceObservationExclusionAccounting>, "
+                + "Lex.V3.Contracts.Custody.DurableBlobWriteReceipt, System.String, "
+                + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "
+                + "Lex.V3.Ingest.CorpusAcquisitionOutcome>, "
+                + Core
+                + "SourceArtifactRef, "
+                + "Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecordSet) -> "
+                + N
+                + "LuxembourgQueryExecutionResult",
+                "method public static "
+                + N
+                + "LuxembourgQueryExecutionResult::Refused("
+                + Core
+                + "SourceProfileTopology, System.Collections.Generic.IReadOnlyList<"
+                + N
+                + "LuxembourgFamilyEnumerationOutcome>, "
+                + "System.Collections.Generic.IReadOnlyList<"
+                + N
+                + "LuxembourgRelationFamilyAcquisition>, "
+                + N
+                + "LuxembourgQueryExecutionRefusalDetail) -> "
+                + N
+                + "LuxembourgQueryExecutionResult",
             },
             ConstructionSurface.Of(typeof(LuxembourgQueryExecutionResult)).ToArray());
     }
@@ -278,21 +344,39 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "method internal instance " + N + "LuxembourgQueryExecutionAdapter::RunAsync("
+                "method internal instance "
+                + N
+                + "LuxembourgQueryExecutionAdapter::RunAsync("
                 + "System.Collections.Generic.IReadOnlyList<System.ValueTuple<"
-                + N + "LuxembourgPartitionRunRequest, " + Core + "BoundMachineRequest, "
-                + Contracts + "LuxembourgPartitionChain>>, "
-                + "System.String?, System.String?, System.String?, "
+                + N
+                + "LuxembourgPartitionRunRequest, "
+                + Core
+                + "BoundMachineRequest, "
+                + Contracts
+                + "LuxembourgPartitionChain>>, System.String?, System.String?, "
+                + "System.String?, "
                 + "Lex.V3.Contracts.Source.Scope.IScopeReductionEvidenceResolver?, "
+                + Core
+                + "MachineQueryRendererSource, "
                 + "System.Threading.CancellationToken) -> System.Threading.Tasks.Task<"
-                + N + "LuxembourgQueryExecutionResult>",
-                "method public instance " + N + "LuxembourgQueryExecutionAdapter::RunAsync("
+                + N
+                + "LuxembourgQueryExecutionResult>",
+                "method public instance "
+                + N
+                + "LuxembourgQueryExecutionAdapter::RunAsync("
                 + "System.Collections.Generic.IReadOnlyList<System.ValueTuple<"
-                + N + "LuxembourgPartitionRunRequest, " + Core + "BoundMachineRequest, "
-                + Contracts + "LuxembourgPartitionChain>>, "
-                + "System.String?, System.String?, System.String?, "
+                + N
+                + "LuxembourgPartitionRunRequest, "
+                + Core
+                + "BoundMachineRequest, "
+                + Contracts
+                + "LuxembourgPartitionChain>>, System.String?, System.String?, "
+                + "System.String?, "
+                + Core
+                + "MachineQueryRendererSource, "
                 + "System.Threading.CancellationToken) -> System.Threading.Tasks.Task<"
-                + N + "LuxembourgQueryExecutionResult>",
+                + N
+                + "LuxembourgQueryExecutionResult>",
             },
             ConstructionSurface.ProducersIn(
                 typeof(LuxembourgQueryExecutionResult).Assembly,

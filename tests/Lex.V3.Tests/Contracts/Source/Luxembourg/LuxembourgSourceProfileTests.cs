@@ -1,3 +1,4 @@
+using Lex.V3.Tests.Contracts.Source.Absence;
 using System.Security.Cryptography;
 using System.Text;
 using Lex.V3.Contracts;
@@ -22,7 +23,7 @@ public sealed class LuxembourgSourceProfileTests
         var observation = Observation(objectRef);
 
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            profile.Resolve([observation]));
+            profile.Resolve(Proven([observation])));
 
         Assert.AreEqual("https://data.legilux.public.lu", profile.PublisherOrigin);
         Assert.AreEqual(
@@ -256,7 +257,7 @@ public sealed class LuxembourgSourceProfileTests
             ObservationRef);
 
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
-            profile.Resolve([Observation(source, relations: [relation])]));
+            profile.Resolve(Proven([Observation(source, relations: [relation])])));
         var resource = resolved.Resources.Single();
         var retained = resource.Relations.Single();
 
@@ -275,7 +276,7 @@ public sealed class LuxembourgSourceProfileTests
         var outsidePublisher = ObjectRef("https://example.invalid/legal-resource");
 
         var failure = Assert.IsInstanceOfType<LuxembourgProfileResolution.Failed>(
-            profile.Resolve([Observation(outsidePublisher)]));
+            profile.Resolve(Proven([Observation(outsidePublisher)])));
 
         Assert.AreEqual(
             LuxembourgProfileResolutionFailureCode.InvalidPublisherIri,
@@ -301,12 +302,21 @@ public sealed class LuxembourgSourceProfileTests
             ObservationRef);
 
         var failure = Assert.IsInstanceOfType<LuxembourgProfileResolution.Failed>(
-            profile.Resolve([Observation(objectRef, assertions: [assertion])]));
+            profile.Resolve(Proven([Observation(objectRef, assertions: [assertion])])));
 
         Assert.AreEqual(
             LuxembourgProfileResolutionFailureCode.UnknownVocabularyDrift,
             failure.Failure.Code);
     }
+
+    /// <summary>
+    /// The proof door every scope resolution goes through
+    /// (<see cref="LuxembourgProvenResourceObservations"/>), using a REAL proof from
+    /// <see cref="AbsenceFixtures"/> rather than a relaxed test-only one.
+    /// </summary>
+    private static LuxembourgProvenResourceObservations Proven(
+        params LuxembourgResourceObservation[] observations) =>
+        LuxembourgProvenResourceObservations.RequireProven(AbsenceFixtures.Proof(), observations);
 
     private static LuxembourgVocabularySnapshot CompleteSnapshot() => new(
         ObservationRef,

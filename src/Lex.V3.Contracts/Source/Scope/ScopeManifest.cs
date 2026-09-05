@@ -595,17 +595,36 @@ public sealed record ScopeManifestFetchAddress
 
         if (Status == ScopeManifestFetchAddressStatus.Minted)
         {
-            if (mintedFieldCount != 4 || notMintedReason is not null)
+            // D1-06c-LU-2: a minted address carries its host and resource path always, and the
+            // Accept pair exactly when its route negotiates. The original rule required all four,
+            // which was true of the only route that existed when it was written (EU Cellar content
+            // negotiation) and is unrepresentable for the Legilux filestore route, which negotiates
+            // nothing: it fetches one exact file URI and the format is decided by which file that
+            // is (SCOPE_RULING lex-event-20260904T173606578Z-44305cbdf86043ae9a5a502282aebcd5).
+            // Filling the two fields with invented values to satisfy an arity would have put an
+            // Accept header this route never sends into the durable manifest. The wire shape is
+            // unchanged and needed no schema edit: source-scope-manifest.schema.json already types
+            // accept_media_type and accept_language as string-or-null on a minted address and only
+            // requires the keys to be present, which they still are. Every existing EU row still
+            // carries all four and its bytes are untouched.
+            if ((host is null) || (resourcePath is null) ||
+                ((acceptMediaType is null) != (acceptLanguage is null)) ||
+                notMintedReason is not null)
             {
                 throw new ArgumentException(
-                    "A minted fetch address must carry all four address fields and no absence reason.",
+                    "A minted fetch address carries a host and resource path, the Accept pair " +
+                    "together or not at all, and no absence reason.",
                     nameof(status));
             }
 
-            Host = RequireBoundedToken(host!, nameof(host));
-            ResourcePath = RequireBoundedToken(resourcePath!, nameof(resourcePath));
-            AcceptMediaType = RequireBoundedToken(acceptMediaType!, nameof(acceptMediaType));
-            AcceptLanguage = RequireBoundedToken(acceptLanguage!, nameof(acceptLanguage));
+            Host = RequireBoundedToken(host, nameof(host));
+            ResourcePath = RequireBoundedToken(resourcePath, nameof(resourcePath));
+            AcceptMediaType = acceptMediaType is null
+                ? null
+                : RequireBoundedToken(acceptMediaType, nameof(acceptMediaType));
+            AcceptLanguage = acceptLanguage is null
+                ? null
+                : RequireBoundedToken(acceptLanguage, nameof(acceptLanguage));
             NotMintedReason = null;
         }
         else
@@ -651,6 +670,21 @@ public sealed record ScopeManifestFetchAddress
             resourcePath,
             acceptMediaType,
             acceptLanguage,
+            null);
+
+    /// <summary>
+    /// A minted address for a route that negotiates nothing: host and resource path, and no Accept
+    /// pair, because the route sends neither header. See this type's own constructor remarks.
+    /// </summary>
+    public static ScopeManifestFetchAddress MintedWithoutNegotiation(
+        string host,
+        string resourcePath) =>
+        new(
+            ScopeManifestFetchAddressStatus.Minted,
+            host,
+            resourcePath,
+            null,
+            null,
             null);
 
     private static string RequireBoundedToken(string value, string parameterName)

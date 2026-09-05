@@ -402,13 +402,15 @@ public sealed class ClosedVocabularyCensusTests
                     + "RedirectObserved, RevalidationReferenceOnly, SemanticNoEntityStatus, "
                     + "RangeNotApproved, NonDerivableStatus, NegotiationChoiceOffered",
                 "Lex.V3.Contracts.Source.Http.LuxembourgDocumentGetOutcomeKind: Retrieved, NotFound, "
-                    + "Gone, RobotsDisallowed, RetryExhausted, UnexpectedPublisherStatus",
+                    + "Gone, RetryExhausted, UnexpectedPublisherStatus",
                 "Lex.V3.Contracts.Source.Http.LuxembourgFileUriRefusalReason: NotAbsoluteUri, "
                     + "UnsupportedScheme, UnexpectedHost, NonDefaultPort, UserInfoPresent, "
                     + "QueryPresent, FragmentPresent, PathNotUnderFilestore",
-                "Lex.V3.Contracts.Source.Http.LuxembourgManifestationFormat: Xml, PdfA",
+                "Lex.V3.Contracts.Source.Http.LuxembourgLegalValue: Officiel, Definitif, Unstated",
                 "Lex.V3.Contracts.Source.Http.LuxembourgManifestationSelectionOutcome: Selected, "
                     + "NoManifestationAvailable",
+                "Lex.V3.Contracts.Source.Http.LuxembourgUserFormatToken: XmlAkomaNtoso, Xml, PdfA, "
+                    + "Pdf",
                 "Lex.V3.Contracts.Source.Http.OfficialHttpAcquisitionOutcomeKind: "
                     + "ExecutedObservation, PublisherDenial, LocalSafetyRefusal, OperationalFailure, "
                     + "IntegrityFailure",
@@ -444,11 +446,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "ResponsibilityOf, Rights, RightsHolder, Title, TitleShort, TypeDocument, "
                     + "UserFormat",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgBodyBlockerCode: "
-                    + "AssertionEnumerationUnproven, RightsChannelEnumerationUnproven, "
-                    + "TextPublicNotCleared, LicenceContractResultMissing, RobotsEvidenceUnbound, "
-                    + "HttpEvidenceUnbound, DerivationUnverified, IntegrityUnverified, "
-                    + "WemiTupleTypedQuarantine, RightsChannelsNotAgreed, WemiRootMismatch, "
-                    + "WemiObservationRunMismatch",
+                    + "WemiTupleTypedQuarantine, WemiRootMismatch, FormatNotAWordingCandidate, "
+                    + "PublisherMarkedNotReusable",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgBodyCandidateDisposition: Withheld, "
                     + "AcceptedCandidate",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgBodyRootBlockerCode: "
@@ -511,7 +510,7 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelDisposition: "
                     + "ChannelEnumerationUnproven, MissingValue, Stale, EvidenceNotIndependent, "
                     + "Multiple, Conflict, AgreedSameRunCcBy, NonAdmittingLicenceScl, "
-                    + "TypedQuarantineUnruledLicence",
+                    + "TypedQuarantineUnruledLicence, SecondChannelPending",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgSelectorCardinality: Missing, Single, "
                     + "Multiple",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgTypedRoleKind: NotApplicable, "

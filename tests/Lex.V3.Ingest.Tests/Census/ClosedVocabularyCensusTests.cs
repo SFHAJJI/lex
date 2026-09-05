@@ -81,12 +81,14 @@ public sealed class ClosedVocabularyCensusTests
                     + "BindRefused, ObservationNotExecuted, StatusNotAdmitted, MediaTypeNotAdmitted, "
                     + "PageBodyMalformed, CrossingRefused, StepRefused, EntrySetRefused, "
                     + "PageBudgetExhausted",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgDocumentGetAttemptRefusal: None, "
+                    + "RobotsDisallowed, RobotsBootstrapNotCompleted, ObservationNotExecuted",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRefusal: None, "
-                    + "RobotsBootstrapRefused, CustodyFloorNotObserved, ObservationNotExecuted, "
-                    + "StatusNotAdmitted, MediaTypeNotAdmitted, CountNotOneNonNegativeInteger, "
-                    + "PartitionRequired, DeliveredKeyNotRepresentable, "
-                    + "DeliveredRowOutsidePartition, CursorDidNotAdvance, PageBudgetExhausted, "
-                    + "CustodyMemberMissing, DeliveryProofRefused, PageBodyMalformed",
+                    + "RobotsBootstrapRefused, ObservationNotExecuted, StatusNotAdmitted, "
+                    + "MediaTypeNotAdmitted, CountNotOneNonNegativeInteger, PartitionRequired, "
+                    + "DeliveredKeyNotRepresentable, DeliveredRowOutsidePartition, "
+                    + "CursorDidNotAdvance, PageBudgetExhausted, CustodyMemberMissing, "
+                    + "DeliveryProofRefused, PageBodyMalformed, PageDecodeFailedOnOurSide",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgFamilyEnumerationOutcomeKind: Proven, "
                     + "ExecutorRefused, ProofRefused, CoverProven, CoverRefused",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPartitionCoverReconciliationRefusal: "
@@ -96,10 +98,11 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionCompletion: AllFamiliesProven, "
                     + "PartialFamilyRefused",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionRefusal: None, "
-                    + "ScopeResolutionFailed, ScopeManifestNotHeld, "
+                    + "ScopeResolutionFailed, ScopeManifestNotRetained, "
                     + "ResourceObservationFamilyNotProven, ResourceObservationRowsNotVerified, "
                     + "ObservationSubjectNotInDeliveredCensus, AssertionRowObjectKindNotRecognised, "
-                    + "AssertionRowTermUnbound",
+                    + "AssertionRowTermUnbound, DocumentFetchSessionNotStarted, DocumentBodyNotHeld, "
+                    + "DocumentGetOutcomeNotRepresentable, RecordSetNotRetained",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgRelationFamilyAcquisitionState: "
                     + "AcquiredComplete, Unacquired, Incomplete, Uncertain",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgResourceObservationExclusionCause: "

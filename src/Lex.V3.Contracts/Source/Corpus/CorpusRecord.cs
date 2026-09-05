@@ -83,9 +83,11 @@ public enum CorpusBodyPendingAcquisitionReasonKind
 /// LU-2 lane's own document-get route so it needs no second schema/enum touch when it lands. Two of
 /// those five are no longer merely reserved: defect nine's own fold-in one gave the EU route a
 /// per-object mapping for each, so <c>EuQueryExecutionAdapter</c> produces
-/// <see cref="RobotsDisallowed"/> and <see cref="UnexpectedPublisherStatus"/> today and LU-2 will
-/// produce them too. The three that remain reserved and produced by no adapter are
-/// <see cref="NotFound"/>, <see cref="Gone"/> and <see cref="RetryExhausted"/>.
+/// <see cref="RobotsDisallowed"/> and <see cref="UnexpectedPublisherStatus"/> today. D1-06c-LU-2
+/// then gave <c>LuxembourgQueryExecutionAdapter</c> its own per-object mapping for
+/// <see cref="RobotsDisallowed"/>, <see cref="NotFound"/>, <see cref="Gone"/>,
+/// <see cref="RetryExhausted"/> and <see cref="UnexpectedPublisherStatus"/>, so all five are
+/// produced by a real adapter now and none of the twenty-two members is reserved-only.
 /// </summary>
 /// <remarks>
 /// The registry (Source/Http, out of this slice's own path claim -- read, never touched, per
@@ -102,15 +104,18 @@ public enum CorpusBodyPendingAcquisitionReasonKind
 /// own writer never produces this vocabulary itself (it has no fetch to refuse); it exists so the
 /// wire shape is ready for D1-06c's real refusal without another breaking change to this record.
 /// <para>
-/// The eight members added by fix one mirror the EU and (reserved) LU-2 document routes' own closed
-/// refusals the identical way: shared name, shared wire spelling. The three EU members are actually
-/// produced today, by <c>EuQueryExecutionAdapter</c>'s own document-fetch classification (see that
-/// type's own remarks on <c>TryMapDocumentFetchToCorpusAcquisitionRefusal</c>). The five LU-2 members
-/// are not produced by any adapter in this codebase yet -- there is no LU-2 lane here to produce
-/// them -- and are named directly from the ruling's own wire spellings rather than copied from a
-/// <c>LuxembourgDocumentGetOutcomeKind</c> this worktree does not contain; LU-2 should confirm its own
-/// closed vocabulary agrees with these five spellings when it lands, exactly as this remark already
-/// says.
+/// The eight members added by fix one mirror the EU and LU document routes' own closed refusals the
+/// identical way: shared name, shared wire spelling. The three EU members are produced by
+/// <c>EuQueryExecutionAdapter</c>'s own document-fetch classification (see that type's own remarks
+/// on <c>TryMapDocumentFetchToCorpusAcquisitionRefusal</c>). The five LU members are produced by
+/// <c>LuxembourgQueryExecutionAdapter</c>'s own document-get classification, added by D1-06c-LU-2
+/// (SCOPE_RULING lex-event-20260904T173606578Z-44305cbdf86043ae9a5a502282aebcd5). The cross-check
+/// this remark used to defer is done: this worktree DOES contain
+/// <see cref="Lex.V3.Contracts.Source.Http.LuxembourgDocumentGetOutcomeKind"/>, brought by the
+/// D1-06c-LU-1 merge, and its five refusal spellings ("robots_disallowed", "not_found", "gone",
+/// "retry_exhausted", "unexpected_publisher_status") are byte for byte the five wire spellings
+/// below. <c>CorpusAcquisitionRefusalReasonMirrorsTheLuxembourgDocumentGetVocabulary</c> asserts
+/// that agreement mechanically rather than leaving it to this comment.
 /// </para>
 /// </remarks>
 public enum CorpusAcquisitionRefusalReason

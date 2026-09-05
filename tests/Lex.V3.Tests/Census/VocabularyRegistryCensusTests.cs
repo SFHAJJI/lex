@@ -155,12 +155,13 @@ public sealed class VocabularyRegistryCensusTests
                 "Lex.V3.Contracts.Source.Http.HttpAcquisitionReasonRegistry: "
                     + "CanonicalArtifactBytes=1112, const CanonicalArtifact, const ResourceId, "
                     + "const Schema, const Sha256",
+                "Lex.V3.Contracts.Source.Http.LuxembourgAuthorityIri: const LegalValuePrefix, "
+                    + "const UserFormatPrefix",
                 "Lex.V3.Contracts.Source.Http.OutboundCrawlerIdentity: static property Schema, "
                     + "static property Token",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionVocabulary: "
                     + "ActForceDatePredicates=2, ConsolidationApplicabilityDatePredicates=2, "
                     + "Predicates=26",
-                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgBodyJoin: CurrentMilestoneBlockers=8",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgItemUriFamily: const "
                     + "CurrentPathPrefix, const Origin, const PreviousPathPrefix",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgLiteralCanonicalizer: "
@@ -177,8 +178,8 @@ public sealed class VocabularyRegistryCensusTests
                     + "NeverTypes=2, OrdinaryCandidateTypes=17, PointFormats=3, "
                     + "PointSupportClasses=16, PointTypes=2, PriorityCandidateTypes=3, "
                     + "QuarantinedTypes=2, RegulatorTypes=3, StructuredFormats=2, TcRectTypes=2, "
-                    + "const IsEmbodiedBy, const IsExemplifiedBy, const IsMemberOf, "
-                    + "const IsRealizedBy, const Language, const LegalValue, "
+                    + "KnownUserFormatIris=8, const IsEmbodiedBy, const IsExemplifiedBy, "
+                    + "const IsMemberOf, const IsRealizedBy, const Language, const LegalValue, "
                     + "const PreviousIsExemplifiedBy, const TypeDocument, const UserFormat",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgSourceProfileTopology: const "
                     + "RegistryDomain, const RegistryResourceId, "

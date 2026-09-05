@@ -219,6 +219,9 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Europe.EuWatermarkWitnessBoundQuery::Deconstruct, "
                     + "by-ref-method public instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgBoundMachineTuple::Deconstruct, "
+                    + "by-ref-method public instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDocumentFetchBoundQuery::Decons"
+                    + "truct, "
                     + "constructor internal instance "
                     + "Lex.V3.Contracts.Source.Core.MachineQueryBinder+MintedBoundMachineRequest::."
                     + "ctor, "
@@ -262,6 +265,9 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Europe.EuWatermarkWitnessBoundQuery::Deconstruct, "
                     + "by-ref-method public instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgBoundMachineTuple::Deconstruct, "
+                    + "by-ref-method public instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDocumentFetchBoundQuery::Decons"
+                    + "truct, "
                     + "constructor private instance "
                     + "Lex.V3.Contracts.Source.Core.MachineQueryInputArtifact::.ctor, "
                     + "method public static "
@@ -565,6 +571,12 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Contracts.Source.Europe.EuWatermarkWitnessSparqlRenderer: constructor "
                     + "internal instance "
                     + "Lex.V3.Contracts.Source.Europe.EuWatermarkWitnessSparqlRenderer::.ctor",
+                "Lex.V3.Contracts.Source.Http.DocumentFetchParameterContract: constructor private "
+                    + "instance Lex.V3.Contracts.Source.Http.DocumentFetchParameterContract::.ctor, "
+                    + "constructor private static "
+                    + "Lex.V3.Contracts.Source.Http.DocumentFetchParameterContract::.cctor, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Http.DocumentFetchParameterContract::For",
                 "Lex.V3.Contracts.Source.Http.HeldAcquisitionReceipt: constructor private instance "
                     + "Lex.V3.Contracts.Source.Http.HeldAcquisitionReceipt::.ctor, "
                     + "method internal static "
@@ -586,6 +598,10 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static Lex.V3.Contracts.Source.Http.HttpLogicalRequest::Create, "
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Http.HttpLogicalRequest::ParseAndVerify",
+                "Lex.V3.Contracts.Source.Http.LuxembourgDocumentFetchAddress: constructor private "
+                    + "instance Lex.V3.Contracts.Source.Http.LuxembourgDocumentFetchAddress::.ctor, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Http.LuxembourgDocumentFetchAddress::Create",
                 "Lex.V3.Contracts.Source.Http.LuxembourgDocumentGetOutcome: constructor private "
                     + "instance Lex.V3.Contracts.Source.Http.LuxembourgDocumentGetOutcome::.ctor, "
                     + "constructor private instance "
@@ -603,8 +619,6 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Http.LuxembourgDocumentGetOutcome::Retrieved, "
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Http.LuxembourgDocumentGetOutcome::RetryExhausted, "
-                    + "method public static "
-                    + "Lex.V3.Contracts.Source.Http.LuxembourgDocumentGetOutcome::RobotsDisallowed, "
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Http.LuxembourgDocumentGetOutcome::UnexpectedPublish"
                     + "erStatus",
@@ -835,6 +849,9 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgScopeResolver::BuildAccounting, "
                     + "method public instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDimensionAccounting::<Clone>$",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDocumentFetchRenderer: constructor "
+                    + "internal instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgDocumentFetchRenderer::.ctor",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgLiteralCanonicalization: constructor "
                     + "internal instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgLiteralCanonicalization::.ctor, "
@@ -936,6 +953,16 @@ public sealed class GuardedConstructionCensusTests
                     + "method public instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgProfileResolutionFailure::<Clon"
                     + "e>$",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgProvenResourceObservations: "
+                    + "constructor private instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgProvenResourceObservations::.ct"
+                    + "or, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgProvenResourceObservations::NoF"
+                    + "amilyDesignated, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgProvenResourceObservations::Req"
+                    + "uireProven",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryPlan: constructor private "
                     + "instance Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryPlan::.ctor, "
                     + "constructor private instance "
@@ -1084,6 +1111,9 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Scope.ScopeManifestCanonicalWriter::WriteStreaming",
                 "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest: constructor internal "
                     + "instance Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest::.ctor, "
+                    + "method public instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.VerifiedLuxembourgSourceProfile::ReduceSc"
+                    + "ope, "
                     + "method public instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.VerifiedLuxembourgSourceProfile::ReduceSc"
                     + "ope, method public static Lex.V3.Contracts.Source.Scope.ScopeReducer::Reduce, "

@@ -9,6 +9,18 @@ using Lex.V3.Ingest;
 
 namespace Lex.V3.Ingest.Luxembourg;
 
+/// <remarks>
+/// Renumbered dense when custody_floor_not_observed was removed. RULING
+/// lex-event-20260904T215906714Z-6dadaf27829d4a3aa3c355063754ccd6: a member whose only producer was
+/// the weak class is re-conditioned and renamed when a GENUINE failure can still occur at that
+/// point and escapes as an exception, and removed with a dense renumber when it cannot. Here it
+/// cannot: the genuine custody failures reachable at that gate, an artifact absent from the
+/// session's map and an unreopenable dependency, both surface as CustodyIntegrityException or
+/// CustodyRequiredException and are ALREADY caught into
+/// <see cref="LuxembourgEnumerationRefusal.CustodyMemberMissing"/>, whose name already says exactly
+/// that. Re-conditioning would have produced two members for one fact. The wire names are
+/// unchanged, so the numbers are internal ordinals only.
+/// </remarks>
 public enum LuxembourgEnumerationRefusal
 {
     [JsonStringEnumMemberName("none")]
@@ -17,47 +29,44 @@ public enum LuxembourgEnumerationRefusal
     [JsonStringEnumMemberName("robots_bootstrap_refused")]
     RobotsBootstrapRefused = 1,
 
-    /// <summary>
-    /// The acquisition run's own bootstrap artifacts are not held under an enforced floor, so this
-    /// store cannot produce a payload receipt Source/Core will bind. Observed from the session's
-    /// membership after robots and before the first product request, so a deployment that cannot
-    /// mint a proof spends nothing finding out, and writes nothing to find out.
-    /// </summary>
-    [JsonStringEnumMemberName("custody_floor_not_observed")]
-    CustodyFloorNotObserved = 2,
+    // custody_floor_not_observed, 2, is removed. It refused any run whose bootstrap artifacts
+    // were not Floored, which stopped every deployment outside Azure before its first product
+    // request. Under the extended Decision 71 interpretation the class is recorded and the run
+    // continues, and the three genuine custody failures are refused where they are actually known
+    // (see the removed gate's own note in RunPartitionOnSessionAsync). Nothing produces it.
 
     [JsonStringEnumMemberName("observation_not_executed")]
-    ObservationNotExecuted = 3,
+    ObservationNotExecuted = 2,
 
     [JsonStringEnumMemberName("status_not_admitted")]
-    StatusNotAdmitted = 4,
+    StatusNotAdmitted = 3,
 
     [JsonStringEnumMemberName("media_type_not_admitted")]
-    MediaTypeNotAdmitted = 5,
+    MediaTypeNotAdmitted = 4,
 
     [JsonStringEnumMemberName("count_not_one_nonnegative_integer")]
-    CountNotOneNonNegativeInteger = 6,
+    CountNotOneNonNegativeInteger = 5,
 
     [JsonStringEnumMemberName("partition_required")]
-    PartitionRequired = 7,
+    PartitionRequired = 6,
 
     [JsonStringEnumMemberName("delivered_key_not_representable")]
-    DeliveredKeyNotRepresentable = 8,
+    DeliveredKeyNotRepresentable = 7,
 
     [JsonStringEnumMemberName("delivered_row_outside_partition")]
-    DeliveredRowOutsidePartition = 9,
+    DeliveredRowOutsidePartition = 8,
 
     [JsonStringEnumMemberName("cursor_did_not_advance")]
-    CursorDidNotAdvance = 10,
+    CursorDidNotAdvance = 9,
 
     [JsonStringEnumMemberName("page_budget_exhausted")]
-    PageBudgetExhausted = 11,
+    PageBudgetExhausted = 10,
 
     [JsonStringEnumMemberName("custody_member_missing")]
-    CustodyMemberMissing = 12,
+    CustodyMemberMissing = 11,
 
     [JsonStringEnumMemberName("delivery_proof_refused")]
-    DeliveryProofRefused = 13,
+    DeliveryProofRefused = 12,
 
     /// <summary>
     /// A page body admitted by status and media type is not a SPARQL results document this
@@ -69,8 +78,22 @@ public enum LuxembourgEnumerationRefusal
     /// then be looked at for the wrong reason.
     /// </summary>
     [JsonStringEnumMemberName("page_body_malformed")]
-    PageBodyMalformed = 14,
+    PageBodyMalformed = 13,
 
+    /// <summary>
+    /// OUR DECODE FAILED, and this member exists so the refusal says so instead of blaming the
+    /// office. SPARQL legitimately OMITS AN UNBOUND VARIABLE from a binding, and this parser
+    /// demands every projected variable in every row, so a page that is perfectly well formed
+    /// by the protocol was being reported under the publisher's name as a malformed page.
+    /// Established at the endpoint by lane B on its own executor
+    /// (lex-event-20260905T022432768Z-43d363d14f524f87b9f8063afe398de6): the engine selects the
+    /// conditional's branch correctly but evaluates both arms, the string conversion raises on
+    /// the absent term, the erroring BIND leaves the variable unbound, and the JSON format
+    /// omits it. Whether this lane's template also wants COALESCE at its value-derived key
+    /// positions is a SEPARATE question; this member is about the refusal telling the truth.
+    /// </summary>
+    [JsonStringEnumMemberName("page_decode_failed_on_our_side")]
+    PageDecodeFailedOnOurSide = 14,
 }
 
 public sealed class LuxembourgEnumerationRefusalDetail
@@ -255,6 +278,108 @@ public sealed record LuxembourgPartitionRunRequest(
     LuxembourgQueryPartitionRange Partition,
     MachineQueryRendererSource RendererSource);
 
+/// <summary>
+/// Why <see cref="LuxembourgRepeatedEnumerationExecutor.RunDocumentGetAsync"/> did not deliver real
+/// evidence for a document-fetch GET. Closed and deliberately narrow: this method never classifies
+/// the status of a completed response itself, which is
+/// <see cref="LuxembourgDocumentGetOutcome.FromObservedStatus"/>'s job, run by the caller against
+/// the real evidence handed back here.
+/// </summary>
+/// <remarks>
+/// This vocabulary splits what the EU route keeps as one member, and the split is load bearing.
+/// <see cref="RobotsDisallowed"/> is a fact about THIS document (the publisher's own robots.txt
+/// refuses one of its three evaluated paths) and becomes that one object's per-object refusal;
+/// <see cref="RobotsBootstrapNotCompleted"/> is a fact about the run (robots was unreachable,
+/// uninterpretable, expired, or the store could not hold it) and must never be recorded against an
+/// object as though the publisher had refused it.
+/// </remarks>
+public enum LuxembourgDocumentGetAttemptRefusal
+{
+    [JsonStringEnumMemberName("none")]
+    None = 0,
+
+    [JsonStringEnumMemberName("robots_disallowed")]
+    RobotsDisallowed = 1,
+
+    [JsonStringEnumMemberName("robots_bootstrap_not_completed")]
+    RobotsBootstrapNotCompleted = 2,
+
+    [JsonStringEnumMemberName("observation_not_executed")]
+    ObservationNotExecuted = 3,
+}
+
+/// <summary>Executed for real (whatever the office answered), or refused before it ever sent. Never both, never neither.</summary>
+public sealed class LuxembourgDocumentGetAttemptResult
+{
+    private LuxembourgDocumentGetAttemptResult(
+        RoutedHttpEvidence? evidence,
+        bool retryAllowanceSpent,
+        LuxembourgDocumentGetAttemptRefusal? refusal,
+        string? deniedRobotsPath,
+        string? detail)
+    {
+        Evidence = evidence;
+        RetryAllowanceSpent = retryAllowanceSpent;
+        Refusal = refusal;
+        DeniedRobotsPath = deniedRobotsPath;
+        Detail = detail;
+    }
+
+    /// <summary>The real, retained route evidence for this one GET. Present iff this is <see cref="Executed"/>.</summary>
+    public RoutedHttpEvidence? Evidence { get; }
+
+    /// <summary>
+    /// Whether this GET spent every application attempt its own profile allows. The caller needs
+    /// it to classify a retryable terminal status truthfully; see
+    /// <see cref="LuxembourgDocumentGetOutcome.FromObservedStatus"/>.
+    /// </summary>
+    public bool RetryAllowanceSpent { get; }
+
+    public LuxembourgDocumentGetAttemptRefusal? Refusal { get; }
+
+    /// <summary>
+    /// The exact path the publisher's robots.txt disallowed, present only for
+    /// <see cref="LuxembourgDocumentGetAttemptRefusal.RobotsDisallowed"/>. RULING
+    /// lex-event-20260904T180444431Z-13c6f8f86ddf4f02857cf4001c202143 requires the refusal to name
+    /// which of the three evaluated paths matched, so it is carried rather than summarised.
+    /// </summary>
+    public string? DeniedRobotsPath { get; }
+
+    public string? Detail { get; }
+
+    public static LuxembourgDocumentGetAttemptResult Executed(
+        RoutedHttpEvidence evidence,
+        bool retryAllowanceSpent)
+    {
+        ArgumentNullException.ThrowIfNull(evidence);
+        return new(evidence, retryAllowanceSpent, null, null, null);
+    }
+
+    public static LuxembourgDocumentGetAttemptResult RobotsRefused(string deniedPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(deniedPath);
+        return new(
+            null,
+            false,
+            LuxembourgDocumentGetAttemptRefusal.RobotsDisallowed,
+            deniedPath,
+            $"legilux.public.lu robots.txt disallows '{deniedPath}' for the Lex product token.");
+    }
+
+    public static LuxembourgDocumentGetAttemptResult Refused(
+        LuxembourgDocumentGetAttemptRefusal refusal,
+        string? detail)
+    {
+        if (refusal is LuxembourgDocumentGetAttemptRefusal.None or
+            LuxembourgDocumentGetAttemptRefusal.RobotsDisallowed)
+        {
+            throw new ArgumentOutOfRangeException(nameof(refusal));
+        }
+
+        return new(null, false, refusal, null, detail);
+    }
+}
+
 public sealed class LuxembourgRepeatedEnumerationExecutor
 {
     private readonly ICustodyStore _custodyStore;
@@ -371,23 +496,38 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         var productRequestCount = 0;
         try
         {
-            // Step 3: the custody floor is observed, not assumed, from the session's own
-            // cumulative membership (robots bootstrap, plus every earlier leaf on this same
-            // session). Zero extra writes, zero extra requests.
-            var bootstrapMembership = runner.CopyArtifactMembership();
-            var unenforced = bootstrapMembership
-                .Where(static entry => entry.Value != CustodyMembership.Floored)
-                .Select(static entry => entry.Key)
-                .ToArray();
-            if (unenforced.Length > 0)
-            {
-                return LuxembourgEnumerationRunResult.Refused(
-                    new LuxembourgEnumerationRefusalDetail(
-                        LuxembourgEnumerationRefusal.CustodyFloorNotObserved,
-                        null, null, null, null, null, null, unenforced, null),
-                    productRequestCount: 0);
-            }
-
+            // Step 3: the custody membership is observed, not assumed, from the session's own
+            // cumulative map (robots bootstrap, plus every earlier leaf on this same session).
+            //
+            // THIS GATE USED TO REFUSE ANYTHING THAT WAS NOT Floored, at request zero, so a run on
+            // any store but Azure stopped before its first product request. RULING
+            // lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c, extending the
+            // Decision 71 interpretation lex-event-20260904T212914634Z-f166f0b9e11b445795efd40c268bfbb8
+            // to every custody floor gate: a completeness proof resting on retained artifacts is the
+            // immutability argument one level up and takes the same answer. Membership is RECORDED
+            // and the run CONTINUES; Floored gates the cut release and any completeness claim
+            // served as checkable evidence, so an enumeration proved under RetainedUnenforced is
+            // real, usable and not releasable.
+            //
+            // THERE IS NO REFUSAL LEFT HERE, and that is a finding rather than a gap. This map is
+            // populated in exactly one place, RoutedHttpAcquisitionSession's own
+            // ClassifyMembership, which is CustodyMembershipClassifier and answers only Floored or
+            // RetainedUnenforced. So "an entry whose class is neither" is unreachable, and writing
+            // it would be a guard that cannot fail, which reads downstream as a promise nothing
+            // keeps. The three genuine custody failures are each already refused, harder and
+            // earlier, where the fact is actually known:
+            //   - an artifact ABSENT from this map: the session refuses per send, before capability
+            //     minting, because only the session knows the expected dependency set
+            //     (RoutedHttpAcquisitionSession, "A send dependency was not retained by this run");
+            //   - a membership that is not receipt derived: refused when the receipt is built
+            //     (RepeatedEnumerationDeliveryReceipt.Record, MembershipIsNotReceiptDerived);
+            //   - a write error or a digest mismatch: refused at the hold (CustodyHold).
+            // The class itself is not dropped by continuing: this same map is handed to
+            // TryCompareAndReceipt below, whose own Weakest fold puts the observed class on the
+            // receipt, so a run whose bootstrap was unenforced yields a receipt that says so.
+            //
+            // LuxembourgEnumerationRefusal.CustodyFloorNotObserved is removed with this gate rather
+            // than left declared, because nothing could produce it any more.
             var executorWrittenMembership = new Dictionary<string, CustodyMembership>(StringComparer.Ordinal);
             LuxembourgDeliveryPass? passA = null;
             LuxembourgDeliveryPass? passB = null;
@@ -491,6 +631,127 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         CancellationToken cancellationToken) =>
         RoutedHttpAcquisitionSession.StartWithTestTransportAsync(
             sourceWitness, _custodyStore, _testHandlerOverride!, _timeProvider, cancellationToken);
+
+    /// <summary>
+    /// D1-06c-LU-2 item 3: sends one real Luxembourg document GET through the routed session and
+    /// hands back its retained evidence, or one typed refusal. One session per document, and the
+    /// session's own source witness IS this document's own bound request, so the robots verdict is
+    /// evaluated against this document's own paths rather than against one representative request
+    /// for the whole run. That is required, not stylistic: RULING
+    /// lex-event-20260904T180444431Z-13c6f8f86ddf4f02857cf4001c202143 evaluates three paths PER
+    /// MANIFESTATION, which a per-run witness could not do.
+    /// </summary>
+    /// <param name="boundRequest">The bound GET, from <c>LuxembourgDocumentFetchPlan.Bind</c>.</param>
+    /// <param name="additionalRobotsPaths">
+    /// Store-derived paths the robots verdict must also consider, today exactly the act's own ELI
+    /// page path. Not derivable from the fetch path; see the session's own remarks.
+    /// </param>
+    public async Task<LuxembourgDocumentGetAttemptResult> RunDocumentGetAsync(
+        BoundMachineRequest boundRequest,
+        IReadOnlyList<string> additionalRobotsPaths,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(boundRequest);
+        ArgumentNullException.ThrowIfNull(additionalRobotsPaths);
+
+        var start = _testHandlerOverride is null
+            ? await RoutedHttpAcquisitionSession.StartAsync(
+                    boundRequest, _custodyStore, additionalRobotsPaths, cancellationToken)
+                .ConfigureAwait(false)
+            : await RoutedHttpAcquisitionSession.StartWithTestTransportAsync(
+                    boundRequest, _custodyStore, _testHandlerOverride, _timeProvider,
+                    additionalRobotsPaths, cancellationToken)
+                .ConfigureAwait(false);
+        if (start.Kind != OfficialHttpAcquisitionOutcomeKind.ExecutedObservation || start.Session is null)
+        {
+            // The two shapes are kept apart deliberately: a publisher denial is this document's own
+            // refusal and names the matching path, everything else is a run-level bootstrap failure
+            // that says nothing about this document.
+            return start.Kind == OfficialHttpAcquisitionOutcomeKind.PublisherDenial &&
+                   start.DeniedRequestPath is { } deniedPath
+                ? LuxembourgDocumentGetAttemptResult.RobotsRefused(deniedPath)
+                : LuxembourgDocumentGetAttemptResult.Refused(
+                    LuxembourgDocumentGetAttemptRefusal.RobotsBootstrapNotCompleted,
+                    $"kind={start.Kind} safety={start.LocalSafetyReason} operational={start.OperationalReason}");
+        }
+
+        var session = start.Session;
+        try
+        {
+            var item = session.OpenPlanItem(boundRequest);
+            var maximumAttempts = session.SourceProfile.MaximumAttempts;
+            var attemptCount = 0;
+            RoutedHttpAcquisitionSession.AttemptResult attempt;
+            while (true)
+            {
+                attempt = await item.ExecuteNextAttemptAsync(cancellationToken).ConfigureAwait(false);
+                attemptCount++;
+                if (attempt.Kind == OfficialHttpAcquisitionOutcomeKind.ExecutedObservation)
+                {
+                    // The one place this driver deliberately differs from the EU one: a completed
+                    // response at a retryable status is re-attempted rather than returned at once.
+                    // The session's own PlanItem.IsRetryable already admits exactly these six
+                    // statuses, so without this loop the profile's retry allowance was declared and
+                    // never spent, and a single 503 would still have been reported downstream as
+                    // "retry exhausted". Now that name is earned or not claimed.
+                    if (attemptCount >= maximumAttempts || !IsRetryableStatus(attempt))
+                    {
+                        break;
+                    }
+
+                    continue;
+                }
+
+                var retryable = attempt.PreHeaderFailureClass is
+                    HttpPreHeaderFailureClass.HeaderDeadline or
+                    HttpPreHeaderFailureClass.TransportBeforeHeaders;
+                if (!retryable || attemptCount >= maximumAttempts)
+                {
+                    return LuxembourgDocumentGetAttemptResult.Refused(
+                        LuxembourgDocumentGetAttemptRefusal.ObservationNotExecuted,
+                        $"{attempt.OperationalReason}/{attempt.PreHeaderFailureClass}");
+                }
+            }
+
+            var evidence = attempt.Evidence!;
+
+            // Decision 78 retention: a run holds what it depends on. The evidence document is
+            // written and reopened by digest exactly as every other channel already does, so a
+            // document GET's own evidence is retained custody too, never left to live only in this
+            // process's memory.
+            var evidenceBytes = evidence.CopyCanonicalBytes();
+            var evidenceReceipt = await _custodyStore.CreateAsync(
+                    evidenceBytes, CustodyClass.NightlyFloor90d, cancellationToken)
+                .ConfigureAwait(false);
+            var reopenedEvidenceBytes = await CustodyRestore.ReadByDigestCheckedAsync(
+                    _custodyStore, evidenceReceipt.Reference.ContentSha256, cancellationToken)
+                .ConfigureAwait(false);
+            var reopenedEvidence = RoutedHttpEvidence.ParseAndVerify(reopenedEvidenceBytes.Span);
+
+            return LuxembourgDocumentGetAttemptResult.Executed(
+                reopenedEvidence, attemptCount >= maximumAttempts && IsRetryableStatus(attempt));
+        }
+        catch (Exception exception) when (exception is CustodyIntegrityException or CustodyRequiredException)
+        {
+            return LuxembourgDocumentGetAttemptResult.Refused(
+                LuxembourgDocumentGetAttemptRefusal.ObservationNotExecuted, exception.Message);
+        }
+        finally
+        {
+            session.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Whether a completed attempt's own terminal status is one the session itself would admit
+    /// another attempt for. Read from the evidence, never re-derived from a separate list: the six
+    /// values are exactly <c>RoutedHttpAcquisitionSession.PlanItem.IsRetryable</c>'s own final
+    /// clause and exactly the six <c>OfficialMachineQueryRetryCondition</c> HTTP members.
+    /// </summary>
+    private static bool IsRetryableStatus(RoutedHttpAcquisitionSession.AttemptResult attempt) =>
+        attempt.Evidence is { } evidence &&
+        evidence.Hops.Count > 0 &&
+        evidence.Hops[^1].Status is 408 or 429 or 500 or 502 or 503 or 504;
 
     /// <summary>
     /// Every leaf of one chain in ONE session, so the cover's one-run requirement holds by
@@ -766,7 +1027,8 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
     /// <summary>
     /// Which typed refusal a page-parse failure is. Keyed on the tag <see cref="ParseStrictRows"/>
     /// attaches at each throw site rather than on the message text, so a reworded message cannot
-    /// silently reclassify a refusal.
+    /// silently reclassify a refusal. THE PUBLISHER-FACING NAME REQUIRES AN EXPLICIT TAG; the
+    /// default names us.
     /// </summary>
     private static LuxembourgEnumerationRefusal ClassifyPageParseFailure(Exception exception) =>
         exception.Data[PageParseFailureKey] switch
@@ -774,9 +1036,24 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
             nameof(LuxembourgEnumerationRefusal.DeliveredKeyNotRepresentable) =>
                 LuxembourgEnumerationRefusal.DeliveredKeyNotRepresentable,
 
-            // Untagged: either a JsonException from JsonDocument.Parse, or a shape failure this
-            // parser raises about the document rather than about one delivered value.
-            _ => LuxembourgEnumerationRefusal.PageBodyMalformed,
+            // The positioned publisher-facing tag. It has to be matched explicitly now that
+            // the default no longer names the publisher, which is the point: saying it is the
+            // office's page is a claim a throw site has to make deliberately.
+            nameof(LuxembourgEnumerationRefusal.PageBodyMalformed) =>
+                LuxembourgEnumerationRefusal.PageBodyMalformed,
+
+            // A JsonException never comes from this parser at all: JsonDocument.Parse raises it
+            // when the bytes are not JSON, which IS a statement about what the office served,
+            // so it keeps the publisher-facing name. Classified by TYPE here rather than by a
+            // tag because there is no throw site of ours to tag.
+            null when exception is System.Text.Json.JsonException =>
+                LuxembourgEnumerationRefusal.PageBodyMalformed,
+
+            // EVERYTHING ELSE UNTAGGED IS OURS. The publisher-facing name now requires an
+            // explicit, positioned tag, because a DEFAULT that blames a third party makes the
+            // product state a falsehood about them on every case nobody thought about. The
+            // missing-variable throw is deliberately left untagged so it lands here.
+            _ => LuxembourgEnumerationRefusal.PageDecodeFailedOnOurSide,
         };
 
     private const string PageParseFailureKey = "lu.pageParseFailure";
@@ -881,7 +1158,9 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
             !results.TryGetProperty("bindings", out var bindings) ||
             bindings.ValueKind != System.Text.Json.JsonValueKind.Array)
         {
-            throw new FormatException("The page response has no binding array.");
+            throw PageFailure(
+                "The page response has no binding array.",
+                LuxembourgEnumerationRefusal.PageBodyMalformed);
         }
 
         var rows = new List<LuxembourgQueryCursor>();
@@ -895,19 +1174,32 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
             // entirely instead of becoming a typed refusal.
             if (binding.ValueKind != System.Text.Json.JsonValueKind.Object)
             {
-                throw new FormatException("The page response row is not an object.");
+                throw PageFailure(
+                    "The page response row is not an object.",
+                    LuxembourgEnumerationRefusal.PageBodyMalformed);
             }
 
             var parts = new string[6];
             for (var index = 0; index < 6; index++)
             {
                 var name = $"key_{index + 1}";
-                if (!binding.TryGetProperty(name, out var term) ||
-                    term.ValueKind != System.Text.Json.JsonValueKind.Object ||
+                // SPLIT, because one condition was answering two different questions. Only the
+                // ABSENT variable is ours: SPARQL omits an unbound variable and this loop
+                // demands all six. A term that is PRESENT but misshapen is a statement about
+                // what the office served, and keeps the publisher-facing name.
+                if (!binding.TryGetProperty(name, out var term))
+                {
+                    // DELIBERATELY UNTAGGED, so it falls to PageDecodeFailedOnOurSide.
+                    throw new FormatException($"The page response row is missing {name}.");
+                }
+
+                if (term.ValueKind != System.Text.Json.JsonValueKind.Object ||
                     !term.TryGetProperty("value", out var value) ||
                     value.ValueKind != System.Text.Json.JsonValueKind.String)
                 {
-                    throw new FormatException($"The page response row is missing {name}.");
+                    throw PageFailure(
+                        $"The page response row term {name} is not one string-valued term.",
+                        LuxembourgEnumerationRefusal.PageBodyMalformed);
                 }
 
                 parts[index] = value.GetString()!;

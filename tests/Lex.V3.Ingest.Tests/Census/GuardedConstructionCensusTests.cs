@@ -66,6 +66,9 @@ public sealed class GuardedConstructionCensusTests
                     + "constructor private instance Lex.V3.Ingest.CorpusAcquisitionOutcome::.ctor, "
                     + "method internal instance "
                     + "Lex.V3.Ingest.Europe.EuQueryExecutionAdapter::RunDocumentAcquisitionAsync, "
+                    + "method internal instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunDocumentAcquisi"
+                    + "tionAsync, "
                     + "method public instance Lex.V3.Ingest.CorpusAcquisitionOutcome::<Clone>$, "
                     + "method public static Lex.V3.Ingest.CorpusAcquisitionOutcome::Held, "
                     + "method public static Lex.V3.Ingest.CorpusAcquisitionOutcome::Refused",
@@ -140,6 +143,17 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Ingest.Europe.EuWitnessTraversalResult::Delivered, "
                     + "method public static Lex.V3.Ingest.Europe.EuWitnessTraversalResult::Refused",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgDocumentGetAttemptResult: constructor private "
+                    + "instance Lex.V3.Ingest.Luxembourg.LuxembourgDocumentGetAttemptResult::.ctor, "
+                    + "method public instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumerationExecutor::RunDocumentG"
+                    + "etAsync, "
+                    + "method public static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgDocumentGetAttemptResult::Executed, "
+                    + "method public static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgDocumentGetAttemptResult::Refused, "
+                    + "method public static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgDocumentGetAttemptResult::RobotsRefused",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationBudget: constructor private "
                     + "instance Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationBudget::.ctor, "
                     + "method public static "
@@ -226,7 +240,10 @@ public sealed class GuardedConstructionCensusTests
                     + "BuildResult::TermUnbound",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionRefusalDetail: constructor "
                     + "internal instance "
-                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionRefusalDetail::.ctor",
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionRefusalDetail::.ctor, "
+                    + "method internal instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunDocumentAcquisi"
+                    + "tionAsync",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult: constructor private "
                     + "instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult::.ctor, "
                     + "method internal instance "
@@ -339,6 +356,10 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.RoutedHttpAcquisitionSession+StartResult::Started, "
                     + "method internal static "
                     + "Lex.V3.Ingest.RoutedHttpAcquisitionSession::StartAsync, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.RoutedHttpAcquisitionSession::StartAsync, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.RoutedHttpAcquisitionSession::StartWithTestTransportAsync, "
                     + "method internal static "
                     + "Lex.V3.Ingest.RoutedHttpAcquisitionSession::StartWithTestTransportAsync, "
                     + "method private instance "
