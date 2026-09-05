@@ -110,6 +110,29 @@ public enum EuWatermarkPlanRefusal
     /// </summary>
     [JsonStringEnumMemberName("position_shape_without_frozen_order_semantics")]
     PositionShapeWithoutFrozenOrderSemantics = 6,
+
+    /// <summary>
+    /// The plan was frozen over no objects. A witness restricted to an empty pack observes nothing
+    /// and would report that as "no change", which is the false zero this whole design exists to
+    /// avoid. Refused rather than frozen.
+    /// </summary>
+    [JsonStringEnumMemberName("batch_names_no_objects")]
+    BatchNamesNoObjects = 7,
+
+    /// <summary>
+    /// The batch names more objects than <see cref="EuWatermarkWitnessPlan.BatchCapacity"/> admits.
+    /// The caller batches; this plan does not silently truncate, because a truncated batch would
+    /// observe part of the pack while the record said it observed the pack.
+    /// </summary>
+    [JsonStringEnumMemberName("batch_above_capacity")]
+    BatchAboveCapacity = 8,
+
+    /// <summary>
+    /// A batch member does not reduce to Appendix A's exact lexical form, or two members reduce to
+    /// the same one. Either way the VALUES block would not name what the caller believes it names.
+    /// </summary>
+    [JsonStringEnumMemberName("batch_member_not_canonical_or_duplicated")]
+    BatchMemberNotCanonicalOrDuplicated = 9,
 }
 
 /// <summary>
@@ -178,7 +201,25 @@ public sealed class EuWatermarkWitnessPlan
     public const int SortedResultWindowRows = 10_000;
 
     /// <summary>The schema this plan is an instance of.</summary>
-    public const string SchemaId = "cellar_last_modification_witness/1";
+    /// <summary>
+    /// The schema this plan is an instance of. Bumped to /2 when the plan gained its VALUES
+    /// restriction: a /1 digest and a /2 digest describe queries that observe different sets, and a
+    /// reader must not be able to mistake one for the other.
+    /// </summary>
+    public const string SchemaId = "cellar_last_modification_witness/2";
+
+    /// <summary>
+    /// How many objects one frozen witness plan restricts to, TAKEN FROM FAMILY P'S OWN SYMBOL
+    /// rather than restated here as a number.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately a reference and never a literal. If D1-05g moves
+    /// <see cref="EuObjectFactsDiscoveryPlan.BatchCapacity"/>, this plan follows it and the
+    /// <c>batch_capacity</c> line in the digest picks up whatever it becomes; a literal here would
+    /// turn that rebase into a rework, and would let the two families disagree about how many
+    /// objects a batch holds while both believed they agreed.
+    /// </remarks>
+    public static int BatchCapacity => EuObjectFactsDiscoveryPlan.BatchCapacity;
 
     /// <summary>
     /// The ordering tuple, named for the receipt. It is <see cref="EuWatermarkCursor"/>'s
@@ -229,8 +270,12 @@ public sealed class EuWatermarkWitnessPlan
         EuWatermarkLexicalShape startPositionShape,
         string template,
         string queryPlanIdentityDigest,
-        byte[] canonicalIdentityBytes)
+        byte[] canonicalIdentityBytes,
+        string[] paddedEntries,
+        string batchDigest)
     {
+        _paddedEntries = paddedEntries;
+        BatchDigest = batchDigest;
         Endpoint = endpoint;
         PredicateIri = predicateIri;
         PageLimit = pageLimit;
@@ -242,6 +287,18 @@ public sealed class EuWatermarkWitnessPlan
         ArtifactRef = new SourceArtifactRef(WitnessPlanResourceId, queryPlanIdentityDigest);
         _witnessPageFamilyRef = new SourceRegistryMemberRef(ArtifactRef, WitnessPageFamilyMemberKey);
     }
+
+    private readonly string[] _paddedEntries;
+
+    /// <summary>
+    /// The digest of this plan's own canonical batch. NOT part of
+    /// <see cref="QueryPlanIdentityDigest"/>, which covers the query's shape; this covers which
+    /// objects the shape was pointed at, and the two answer different questions.
+    /// </summary>
+    public string BatchDigest { get; }
+
+    /// <summary>The canonical objects this plan observes, padded to <see cref="BatchCapacity"/>.</summary>
+    public IReadOnlyList<string> PaddedEntries => Array.AsReadOnly(_paddedEntries);
 
     /// <summary>
     /// This plan's own content-addressed identity: <see cref="WitnessPlanResourceId"/> paired with
@@ -315,11 +372,13 @@ public sealed class EuWatermarkWitnessPlan
         string predicateIri,
         int pageLimit,
         EuWatermarkCursor startPosition,
+        IReadOnlyList<string> batchObjects,
         out EuWatermarkPlanRefusal refusal)
     {
         ArgumentException.ThrowIfNullOrEmpty(endpoint);
         ArgumentException.ThrowIfNullOrEmpty(predicateIri);
         ArgumentNullException.ThrowIfNull(startPosition);
+        ArgumentNullException.ThrowIfNull(batchObjects);
 
         if (!string.Equals(endpoint, OfficialCellarSparqlEndpoint, StringComparison.Ordinal))
         {
@@ -352,9 +411,16 @@ public sealed class EuWatermarkWitnessPlan
             return null;
         }
 
+        var padded = TryCanonicalizeAndPad(batchObjects, out refusal);
+        if (padded is null)
+        {
+            return null;
+        }
+
         var template = BuildTemplate(predicateIri, pageLimit);
         var identityBytes = BuildQueryPlanIdentityBytes(endpoint, predicateIri, pageLimit, template);
         var digest = Convert.ToHexString(SHA256.HashData(identityBytes)).ToLowerInvariant();
+        var batchDigest = Sha256(StrictUtf8.GetBytes(string.Join('\n', padded)));
         refusal = EuWatermarkPlanRefusal.None;
         return new EuWatermarkWitnessPlan(
             endpoint,
@@ -364,7 +430,9 @@ public sealed class EuWatermarkWitnessPlan
             shape,
             template,
             digest,
-            identityBytes);
+            identityBytes,
+            padded,
+            batchDigest);
     }
 
     /// <summary>
@@ -392,7 +460,16 @@ public sealed class EuWatermarkWitnessPlan
     /// renderer cannot have (see <see cref="TryBindPage"/>'s own remarks). <see cref="RenderPage"/>'s
     /// external behavior is unchanged: same checks, same output, for the same input.
     /// </summary>
-    internal string? RenderForWatermarkLexical(string watermarkLexical, out EuWatermarkPlanRefusal refusal)
+    internal string? RenderForWatermarkLexical(string watermarkLexical, out EuWatermarkPlanRefusal refusal) =>
+        RenderForWatermarkLexical(watermarkLexical, _paddedEntries, out refusal);
+
+    /// <summary>
+    /// The substitution core, taking the entry values explicitly so the renderer can supply the ones
+    /// it decoded out of the bound input's own parameters rather than trusting the plan instance it
+    /// happens to hold. Same checks, same output, for the same input.
+    /// </summary>
+    internal string? RenderForWatermarkLexical(
+        string watermarkLexical, IReadOnlyList<string> entries, out EuWatermarkPlanRefusal refusal)
     {
         if (ClassifyShape(watermarkLexical) == EuWatermarkLexicalShape.OutsideTheMeasuredSet)
         {
@@ -400,8 +477,24 @@ public sealed class EuWatermarkWitnessPlan
             return null;
         }
 
+        if (entries.Count != BatchCapacity)
+        {
+            refusal = EuWatermarkPlanRefusal.BatchAboveCapacity;
+            return null;
+        }
+
+        var slotNames = EntryParameterNames();
+        var withEntries = _template;
+        for (var index = 0; index < slotNames.Count; index++)
+        {
+            withEntries = withEntries.Replace(
+                "{" + slotNames[index] + "}",
+                "<" + entries[index] + ">",
+                StringComparison.Ordinal);
+        }
+
         refusal = EuWatermarkPlanRefusal.None;
-        return _template.Replace(
+        return withEntries.Replace(
             LowerBoundarySlot,
             SparqlQueryText.StringLiteral(watermarkLexical),
             StringComparison.Ordinal);
@@ -473,15 +566,25 @@ public sealed class EuWatermarkWitnessPlan
         refusal = EuWatermarkPlanRefusal.None;
 
         var response = new MachineResponseCardinality(MachineResponseCardinalityKind.OpaqueBody, null, null, null);
-        var parameters = new[]
+        var slotNames = EntryParameterNames();
+        var parameters = new List<MachineQueryParameter>(slotNames.Count + 1)
         {
-            new MachineQueryParameter(
+            new(
                 BoundaryParameterName,
                 MachineQueryParameterKind.PublisherCursor,
                 null,
                 EnumerationCursorEnvelope.Encode(position.WatermarkLexical),
                 ArtifactRef),
         };
+        for (var index = 0; index < slotNames.Count; index++)
+        {
+            parameters.Add(new MachineQueryParameter(
+                slotNames[index],
+                MachineQueryParameterKind.PublisherLiteral,
+                null,
+                _paddedEntries[index],
+                ArtifactRef));
+        }
         // The renderer (a separate, top-level class in this same file, mirroring
         // EuObjectFactsSparqlRenderer's own top-level placement) reads this parameter back by name;
         // BoundaryParameterName is internal for exactly that reason.
@@ -516,6 +619,95 @@ public sealed class EuWatermarkWitnessPlan
 
     internal const string BoundaryParameterName = "watermark_lower_boundary_param";
 
+    /// <summary>
+    /// This plan's own VALUES slot names, one per <see cref="BatchCapacity"/>. The NAMES are the
+    /// witness's own even though the CAPACITY is family P's: reusing P's slot names would mean a
+    /// rename there silently renamed the parameters this plan binds, which is a wire change nobody
+    /// asked for. Only the count is shared, because only the count has to agree.
+    /// </summary>
+    internal static IReadOnlyList<string> EntryParameterNames()
+    {
+        var names = new string[BatchCapacity];
+        for (var index = 0; index < BatchCapacity; index++)
+        {
+            names[index] = "witness_entry_" + (index + 1).ToString("D2", CultureInfo.InvariantCulture);
+        }
+
+        return Array.AsReadOnly(names);
+    }
+
+    /// <summary>
+    /// Canonicalizes, refuses and sorts a batch exactly as family P's own <c>CanonicalizeBatch</c>
+    /// does, then pads to <see cref="BatchCapacity"/> by repeating the greatest member, so the
+    /// rendered query has a fixed shape whatever the batch holds.
+    /// </summary>
+    /// <remarks>
+    /// The padding is not decoration. It is what lets the TEMPLATE be fixed and therefore lets the
+    /// plan digest cover the query's shape while the batch's CONTENTS travel as parameters. Without
+    /// it the digest would move every batch and stop being a plan identity at all.
+    /// <para>
+    /// THE DUPLICATE-SOLUTION QUESTION, ANSWERED RATHER THAN ASSUMED, because SPARQL defines VALUES
+    /// as a multiset and a repeated row would in principle multiply every match. Family P pads the
+    /// identical way with no DISTINCT, and its padded query has been observed against this exact
+    /// endpoint returning one row set rather than a multiplied one, so this endpoint treats the
+    /// block as a set. The witness inherits that proven behaviour by using the same mechanism, and
+    /// if it ever changed the traversal's own strictly-ascending page check would refuse loudly
+    /// rather than quietly counting a row twice.
+    /// </para>
+    /// </remarks>
+    private static string[]? TryCanonicalizeAndPad(
+        IReadOnlyList<string> batchObjects, out EuWatermarkPlanRefusal refusal)
+    {
+        if (batchObjects.Count == 0)
+        {
+            refusal = EuWatermarkPlanRefusal.BatchNamesNoObjects;
+            return null;
+        }
+
+        if (batchObjects.Count > BatchCapacity)
+        {
+            refusal = EuWatermarkPlanRefusal.BatchAboveCapacity;
+            return null;
+        }
+
+        var canonical = new string[batchObjects.Count];
+        for (var index = 0; index < batchObjects.Count; index++)
+        {
+            var value = batchObjects[index];
+            if (value is null)
+            {
+                refusal = EuWatermarkPlanRefusal.BatchMemberNotCanonicalOrDuplicated;
+                return null;
+            }
+
+            var reduced = EuPackRootCanonicalForm.TryCanonicalize(value, out _);
+            if (reduced is null)
+            {
+                refusal = EuWatermarkPlanRefusal.BatchMemberNotCanonicalOrDuplicated;
+                return null;
+            }
+
+            canonical[index] = reduced;
+        }
+
+        if (canonical.Distinct(StringComparer.Ordinal).Count() != canonical.Length)
+        {
+            refusal = EuWatermarkPlanRefusal.BatchMemberNotCanonicalOrDuplicated;
+            return null;
+        }
+
+        Array.Sort(canonical, StringComparer.Ordinal);
+        var padded = new string[BatchCapacity];
+        var last = canonical[^1];
+        for (var index = 0; index < BatchCapacity; index++)
+        {
+            padded[index] = index < canonical.Length ? canonical[index] : last;
+        }
+
+        refusal = EuWatermarkPlanRefusal.None;
+        return padded;
+    }
+
     /// <summary>The canonical identity bytes <see cref="ArtifactRef"/>'s digest is over, for the renderer's own <c>CopyRendererProfileBytes</c>.</summary>
     internal byte[] CopyCanonicalIdentityBytes() => _canonicalIdentityBytes.ToArray();
 
@@ -525,9 +717,18 @@ public sealed class EuWatermarkWitnessPlan
     /// <c>EuObjectFactsDiscoveryPlan.PartitionKeyFor</c> already truncates its own batch digest, for
     /// the identical reason given there (96 bits is far past this key space's own collision risk).
     /// </summary>
-    private static string PartitionKeyFor(EuWatermarkCursor position) =>
+    /// <remarks>
+    /// THE BATCH DIGEST IS PART OF THE KEY, and leaving it out would have been a real defect rather
+    /// than a tidiness point. Two batches traverse from the same start position, so keyed on the
+    /// position alone they would collide on one partition, and <see cref="EuBoundaryCrossing"/>
+    /// would then prove "no entry skipped and none delivered twice" by comparing one batch's page
+    /// against another batch's. A change detector that reconciles the wrong pages reports change it
+    /// invented. Found on paper while planning this, not in a run.
+    /// </remarks>
+    private string PartitionKeyFor(EuWatermarkCursor position) =>
         "eu-watermark-witness-" + Convert.ToHexString(SHA256.HashData(
-            StrictUtf8.GetBytes(position.WatermarkLexical + "\n" + position.CanonicalEntryKey)))
+            StrictUtf8.GetBytes(
+                position.WatermarkLexical + "\n" + position.CanonicalEntryKey + "\n" + BatchDigest)))
             .ToLowerInvariant()[..24];
 
     private static string Sha256(ReadOnlySpan<byte> value) =>
@@ -625,6 +826,9 @@ public sealed class EuWatermarkWitnessPlan
         string.Join('\n',
         [
             "SELECT ?entry ?entry_key ?watermark WHERE {",
+            "  VALUES ?entry {",
+            .. EntryParameterNames().Select(static name => "    {" + name + "}"),
+            "  }",
             "  ?entry <" + predicateIri + "> ?watermark_value .",
             "  FILTER(isIRI(?entry))",
             "  BIND(STR(?entry) AS ?entry_key)",
@@ -650,6 +854,11 @@ public sealed class EuWatermarkWitnessPlan
             "boundary_rule=" + BoundaryRuleIdentity,
             "admitted_shapes=" + string.Join(',', AdmittedShapes),
             "page_limit=" + pageLimit.ToString(CultureInfo.InvariantCulture),
+            // The CAPACITY is in the identity because two plans differing only in capacity observe
+            // differently while hashing identically without it. The batch's CONTENTS are NOT, and
+            // must not be: they travel as bound parameters, exactly as family P's do, so one frozen
+            // plan identity covers every batch it is pointed at.
+            "batch_capacity=" + BatchCapacity.ToString(CultureInfo.InvariantCulture),
             "template=" + template,
         ]));
 }
@@ -702,9 +911,12 @@ internal sealed class EuWatermarkWitnessSparqlRenderer : IMachineQueryRenderer
 
     internal MachineQueryRenderOutput RenderInput(MachineQueryInputArtifact input)
     {
-        if (input.OrderedParameters.Count != 1)
+        var slotNames = EuWatermarkWitnessPlan.EntryParameterNames();
+        if (input.OrderedParameters.Count != slotNames.Count + 1)
         {
-            throw new ArgumentException("A witness page input has exactly one boundary parameter.", nameof(input));
+            throw new ArgumentException(
+                "A witness page input has one boundary parameter and one parameter per entry slot.",
+                nameof(input));
         }
 
         var parameter = input.OrderedParameters[0];
@@ -716,8 +928,24 @@ internal sealed class EuWatermarkWitnessSparqlRenderer : IMachineQueryRenderer
                 "The witness page input does not carry the boundary cursor this renderer expects.", nameof(input));
         }
 
+        var entries = new string[slotNames.Count];
+        for (var index = 0; index < slotNames.Count; index++)
+        {
+            var slot = input.OrderedParameters[index + 1];
+            if (!string.Equals(slot.Name, slotNames[index], StringComparison.Ordinal) ||
+                slot.Kind != MachineQueryParameterKind.PublisherLiteral ||
+                slot.TextValue is null)
+            {
+                throw new ArgumentException(
+                    "The witness page input does not carry the entry slots this renderer expects.",
+                    nameof(input));
+            }
+
+            entries[index] = slot.TextValue;
+        }
+
         var watermarkLexical = EnumerationCursorEnvelope.Decode(parameter.TextValue);
-        var query = _plan.RenderForWatermarkLexical(watermarkLexical, out var refusal)
+        var query = _plan.RenderForWatermarkLexical(watermarkLexical, entries, out var refusal)
             ?? throw new ArgumentException($"The witness page could not be rendered: {refusal}.", nameof(input));
         return new MachineQueryRenderOutput(_plan.Endpoint, Encoding.UTF8.GetBytes(query));
     }
@@ -822,7 +1050,7 @@ public sealed class EuWatermarkTraversalStep
 {
     private EuWatermarkTraversalStep(
         EuWatermarkWitnessPlan plan,
-        EuBoundaryCrossing crossing,
+        EuBoundaryCrossing? crossing,
         IReadOnlyList<EuWatermarkCursor> deliveredPage,
         IReadOnlyList<EuWatermarkCursor> newlyDelivered,
         EuWatermarkCursor? nextPosition,
@@ -839,8 +1067,32 @@ public sealed class EuWatermarkTraversalStep
     /// <summary>The plan this page was rendered from.</summary>
     public EuWatermarkWitnessPlan Plan { get; }
 
-    /// <summary>The reconciled boundary crossing this page carried.</summary>
-    public EuBoundaryCrossing Crossing { get; }
+    /// <summary>
+    /// The reconciled boundary crossing this page carried, and ABSENT for a batch's opening page.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// TWO SITUATIONS WERE BEING SQUEEZED THROUGH ONE TYPE. A page that continues a traversal
+    /// crosses a boundary the previous page established, and the crossing is what proves nothing
+    /// was skipped across it. A batch's FIRST page crosses nothing: the batch has delivered no
+    /// earlier page, so there is no boundary of its own to cross and no tie group it could have
+    /// skipped.
+    /// </para>
+    /// <para>
+    /// Forcing the first case's shape onto the second is what produced the defect this replaces.
+    /// The witness runs in batches, and only ONE batch holds the run-wide boundary entry; every
+    /// other batch was handed an EMPTY retained tie set, which
+    /// <see cref="EuWatermarkStepRefusal.CrossingCursorNotInRetainedTieSet"/> refuses BY DESIGN, so
+    /// at eighty two seeds every batch but one refused the whole run. Relaxing that guard was the
+    /// obvious move and the wrong one: it exists so an empty tie set cannot reconcile against an
+    /// empty reread and read as a clean terminal, which is a real defect it really does catch.
+    /// Separating the two situations lets both survive intact.
+    /// </para>
+    /// </remarks>
+    public EuBoundaryCrossing? Crossing { get; }
+
+    /// <summary>Whether this step opened a batch rather than continuing one.</summary>
+    public bool IsBatchOpening => Crossing is null;
 
     /// <summary>The page as delivered, in publisher order.</summary>
     public IReadOnlyList<EuWatermarkCursor> DeliveredPage { get; }
@@ -863,6 +1115,105 @@ public sealed class EuWatermarkTraversalStep
 
     /// <summary>How many rows this page carried above the boundary watermark.</summary>
     public int RowsBeyondBoundary { get; }
+
+
+    /// <summary>
+    /// A batch's FIRST page: establishes where that batch's own traversal starts and what it
+    /// carries forward, WITHOUT asserting a crossing it has nothing to cross.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every page validation <see cref="TryAdvance"/> performs is performed here too: the page
+    /// limit, the admitted watermark shapes, strict ascent, and the floor at the plan's own start
+    /// position. What is NOT performed is the boundary reconciliation, because there is no earlier
+    /// page of this batch to reconcile against.
+    /// </para>
+    /// <para>
+    /// AND THE WHOLE PAGE IS NEWLY DELIVERED, which is the substantive difference. A continuing
+    /// page discounts the rows its incoming crossing already retained; an opening page has
+    /// retained nothing, so discounting anything here would silently drop the batch's own first
+    /// rows from the cut.
+    /// </para>
+    /// </remarks>
+    /// <param name="plan">The plan this page was rendered from.</param>
+    /// <param name="startPosition">The plan's own start position, which the page must not precede.</param>
+    /// <param name="deliveredPage">The page as delivered, in publisher order.</param>
+    /// <param name="refusal">Why no step exists, when none does.</param>
+    public static EuWatermarkTraversalStep? TryOpenBatch(
+        EuWatermarkWitnessPlan plan,
+        EuWatermarkCursor startPosition,
+        IReadOnlyList<EuWatermarkCursor> deliveredPage,
+        out EuWatermarkStepRefusal refusal)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(startPosition);
+        ArgumentNullException.ThrowIfNull(deliveredPage);
+
+        var page = deliveredPage.ToArray();
+        if (Array.Exists(page, static row => row is null))
+        {
+            throw new ArgumentException("A delivered row cannot be null.", nameof(deliveredPage));
+        }
+
+        if (page.Length > plan.PageLimit)
+        {
+            refusal = EuWatermarkStepRefusal.PageExceedsPlanLimit;
+            return null;
+        }
+
+        if (Outside(startPosition.WatermarkLexical) ||
+            Array.Exists(page, row => Outside(row.WatermarkLexical)))
+        {
+            refusal = EuWatermarkStepRefusal.WatermarkShapeWithoutFrozenOrderSemantics;
+            return null;
+        }
+
+        for (var index = 1; index < page.Length; index++)
+        {
+            if (page[index].CompareTo(page[index - 1]) <= 0)
+            {
+                refusal = EuWatermarkStepRefusal.PageNotStrictlyAscending;
+                return null;
+            }
+        }
+
+        if (page.Length > 0 &&
+            string.CompareOrdinal(page[0].WatermarkLexical, startPosition.WatermarkLexical) < 0)
+        {
+            refusal = EuWatermarkStepRefusal.PageBelowBoundaryWatermark;
+            return null;
+        }
+
+        // BEYOND IS STILL COUNTED AGAINST THE START POSITION. Only the RECONCILIATION is dropped,
+        // not the arithmetic: a page carrying nothing above the start watermark is terminal here
+        // exactly as it is in a continuing step, so opening a batch costs no extra request.
+        var atStart = page.Count(row => string.Equals(
+            row.WatermarkLexical, startPosition.WatermarkLexical, StringComparison.Ordinal));
+        var beyond = page.Length - atStart;
+
+        if (beyond == 0 && page.Length == plan.PageLimit)
+        {
+            refusal = EuWatermarkStepRefusal.TraversalCannotAdvance;
+            return null;
+        }
+
+        // NEWLY DELIVERED IS EVERYTHING EXCEPT THE START POSITION ITSELF. That one row, when the
+        // batch holds it at all, is the previous cut's own boundary being re-read rather than
+        // something this cut learned. Every other row is new to this batch, including the rest of
+        // the boundary group, because this batch has delivered no earlier page to have retained it.
+        var newlyDelivered = page
+            .Where(row => row.CompareTo(startPosition) != 0)
+            .ToArray();
+
+        refusal = EuWatermarkStepRefusal.None;
+        return new EuWatermarkTraversalStep(
+            plan,
+            null,
+            Array.AsReadOnly(page),
+            Array.AsReadOnly(newlyDelivered),
+            beyond > 0 ? page[^1] : null,
+            beyond);
+    }
 
     /// <summary>
     /// The only path that mints a step.

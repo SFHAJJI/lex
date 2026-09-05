@@ -720,8 +720,8 @@ public sealed class EuObjectFactsDiscoveryPlan
               BIND(STR(?predicate) AS ?key_2)
               BIND(?value_kind AS ?key_3)
               BIND(COALESCE(STR(?value), "") AS ?key_4)
-              BIND(?datatype_iri AS ?key_5)
-              BIND(?language_tag AS ?key_6)
+              BIND(COALESCE(?datatype_iri, "") AS ?key_5)
+              BIND(COALESCE(?language_tag, "") AS ?key_6)
               VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3 ?last_key_4 ?last_key_5 ?last_key_6) {
                 ({has_cursor:uint} {last_key_1:sparql_string} {last_key_2:sparql_string} {last_key_3:sparql_string} {last_key_4:sparql_string} {last_key_5:sparql_string} {last_key_6:sparql_string})
               }
@@ -776,8 +776,8 @@ public sealed class EuObjectFactsDiscoveryPlan
               BIND(STR(?predicate) AS ?key_2)
               BIND(?value_kind AS ?key_3)
               BIND(COALESCE(STR(?value), "") AS ?key_4)
-              BIND(?datatype_iri AS ?key_5)
-              BIND(?language_tag AS ?key_6)
+              BIND(COALESCE(?datatype_iri, "") AS ?key_5)
+              BIND(COALESCE(?language_tag, "") AS ?key_6)
               BIND(STR(?parent) AS ?key_7)
               VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3 ?last_key_4 ?last_key_5 ?last_key_6 ?last_key_7) {
                 ({has_cursor:uint} {last_key_1:sparql_string} {last_key_2:sparql_string} {last_key_3:sparql_string} {last_key_4:sparql_string} {last_key_5:sparql_string} {last_key_6:sparql_string} {last_key_7:sparql_string})
@@ -827,8 +827,8 @@ public sealed class EuObjectFactsDiscoveryPlan
               BIND(STR(?object) AS ?key_1)
               BIND(?value_kind AS ?key_2)
               BIND(COALESCE(STR(?value), "") AS ?key_3)
-              BIND(?datatype_iri AS ?key_4)
-              BIND(?language_tag AS ?key_5)
+              BIND(COALESCE(?datatype_iri, "") AS ?key_4)
+              BIND(COALESCE(?language_tag, "") AS ?key_5)
               VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3 ?last_key_4 ?last_key_5) {
                 ({has_cursor:uint} {last_key_1:sparql_string} {last_key_2:sparql_string} {last_key_3:sparql_string} {last_key_4:sparql_string} {last_key_5:sparql_string})
               }
@@ -886,8 +886,8 @@ public sealed class EuObjectFactsDiscoveryPlan
               BIND(STR(?parent) AS ?key_1)
               BIND(?value_kind AS ?key_2)
               BIND(COALESCE(STR(?value), "") AS ?key_3)
-              BIND(?datatype_iri AS ?key_4)
-              BIND(?language_tag AS ?key_5)
+              BIND(COALESCE(?datatype_iri, "") AS ?key_4)
+              BIND(COALESCE(?language_tag, "") AS ?key_5)
               VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3 ?last_key_4 ?last_key_5) {
                 ({has_cursor:uint} {last_key_1:sparql_string} {last_key_2:sparql_string} {last_key_3:sparql_string} {last_key_4:sparql_string} {last_key_5:sparql_string})
               }
@@ -932,7 +932,25 @@ public sealed class EuObjectFactsDiscoveryPlan
     /// same local name today; collapsing the two would make a future wire-token rename silently
     /// change the SPARQL this plan sends.
     /// </summary>
-    internal static string CdmIri(EuCdmPredicate predicate) => Cdm + predicate switch
+    /// <remarks>
+    /// <para>
+    /// PUBLIC UNDER DECISION 80, AND THE WIDENING IS PINNED. It was internal, so
+    /// <c>EuQueryExecutionAdapter</c> could not reach it and hand-copied one predicate IRI as a
+    /// string literal instead. That literal named <c>resource_legal_type</c> while the switch it
+    /// fed spoke <c>work_has_resource-type</c>'s vocabulary, and nothing could notice, because a
+    /// string literal is not checked against anything. Every other value_kind guard in the
+    /// reduction reaches its predicate through this accessor and every one of them is correct.
+    /// The accessibility boundary was the defect's carrier, so the boundary moves.
+    /// </para>
+    /// <para>
+    /// THE PIN IS NOT CEREMONY. Two independent reasons required it. Decision 80 requires a public
+    /// door to be pinned. And the mapping was UNPINNED behind a self-referential fixture: all six
+    /// test uses CALL this method to build their own expected values, so both sides of every one of
+    /// those assertions move together and a wrong IRI would have been invisible.
+    /// <c>EuCdmPredicateIriTests</c> pins all thirteen as literals.
+    /// </para>
+    /// </remarks>
+    public static string CdmIri(EuCdmPredicate predicate) => Cdm + predicate switch
     {
         EuCdmPredicate.ResourceLegalIdCelex => "resource_legal_id_celex",
         EuCdmPredicate.ExpressionBelongsToWork => "expression_belongs_to_work",

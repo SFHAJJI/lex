@@ -133,8 +133,8 @@ public sealed class VocabularyRegistryCensusTests
                     + "const CaseLawInterpretesResourceLegalPredicateUri, "
                     + "const WorkCitesWorkPredicateUri",
                 "Lex.V3.Contracts.Source.Europe.EuCellarObjectDecode: const "
-                    + "ConsolidatedActResourceTypeIri, const EnglishLanguageAuthorityIri, "
-                    + "const FrenchLanguageAuthorityIri",
+                    + "ConsolidatedActResourceTypeIri, const ConsolidatedTextResourceTypeIri, "
+                    + "const EnglishLanguageAuthorityIri, const FrenchLanguageAuthorityIri",
                 "Lex.V3.Contracts.Source.Europe.EuConsolidationTerm: const RdfLangStringDatatypeIri, "
                     + "const XsdDateDatatypeIri",
                 "Lex.V3.Contracts.Source.Europe.EuDateQualifierVocabulary: PinnedQualifiers=3, "

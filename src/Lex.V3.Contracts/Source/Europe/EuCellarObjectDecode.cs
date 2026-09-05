@@ -188,6 +188,36 @@ public enum EuCellarObjectDecodeRefusal
 /// </remarks>
 public static class EuCellarObjectDecode
 {
+    /// <summary>
+    /// The resource-type IRIs that mark an object as a CONSOLIDATED ACT rather than an original.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// CONS_TEXT IS THE ONE THE OFFICE ACTUALLY SENDS, and it was missing until D1-05g measured
+    /// it. This marker was only ever exercised against seed ROOTS, which are DIR and REG, so the
+    /// consolidated branch had never been reached with real bytes. The moment the run began asking
+    /// family P about the states its own census discovered, every one of them came back
+    /// <c>.../resource-type/CONS_TEXT</c>: six states across both canary seeds, four on
+    /// 32016R0679 and two on 32003L0088, with the two roots carrying DIR and REG as expected. That
+    /// is what <c>ContentClassClosurePositionMismatch</c> was reporting, correctly: a state whose
+    /// closure position is Consolidation was deriving a content class of OriginalLegalText,
+    /// because the marker it was matched against is not the token the publisher uses.
+    /// </para>
+    /// <para>
+    /// CONSOLID_ACT IS KEPT AND ITS STATUS IS STATED. It has NOT been observed on this route, and
+    /// it is retained rather than replaced because it was not disproven either: this pack contains
+    /// six consolidated states and nothing licenses a claim about object kinds outside it. What is
+    /// NOT done is inventing a third token or silently dropping one; both members are named, and
+    /// only one of them has bytes behind it today.
+    /// </para>
+    /// </remarks>
+    /// <summary>Observed on all six consolidated states of both canary seeds, D1-05g run.</summary>
+    private const string ConsolidatedTextResourceTypeIri =
+        "http://publications.europa.eu/resource/authority/resource-type/CONS_TEXT";
+
+    /// <summary>
+    /// Not observed on this route. Retained because it was not disproven, not because it was seen.
+    /// </summary>
     private const string ConsolidatedActResourceTypeIri =
         "http://publications.europa.eu/resource/authority/resource-type/CONSOLID_ACT";
     private const string EnglishLanguageAuthorityIri =
@@ -449,7 +479,8 @@ public static class EuCellarObjectDecode
             if (parentTerm.Kind != RepeatedEnumerationRdfTermKind.Iri || parentTerm.Value is null ||
                 objectTerm.Kind != RepeatedEnumerationRdfTermKind.Iri || objectTerm.Value is null ||
                 predicateTerm.Kind != RepeatedEnumerationRdfTermKind.Iri || predicateTerm.Value is null ||
-                !IsPlainLiteral(valueKindTerm) || !IsPlainLiteral(datatypeTerm) || !IsPlainLiteral(languageTerm) ||
+                !IsPlainLiteral(valueKindTerm) || !IsPlainLiteral(languageTerm) ||
+                !IsDatatypeTermThePublisherCanProduce(datatypeTerm, languageTerm) ||
                 (valueTerm.Kind == RepeatedEnumerationRdfTermKind.Unbound) != (valueKindTerm.Value == "unbound"))
             {
                 refusal = EuCellarObjectDecodeRefusal.ExpressionFactRowTermKindMismatch;
@@ -608,14 +639,20 @@ public static class EuCellarObjectDecode
         var hasConsolidatedMarker = pRows.Any(row =>
             row.PredicateIri == EuObjectFactsDiscoveryPlan.CdmIri(EuCdmPredicate.WorkHasResourceType) &&
             row.ValueKind == "iri" &&
-            row.Value.Value == ConsolidatedActResourceTypeIri);
+            (row.Value.Value == ConsolidatedTextResourceTypeIri ||
+             row.Value.Value == ConsolidatedActResourceTypeIri));
         var derivedContentClass = hasConsolidatedMarker
             ? EuContentClass.Consolidation
             : EuContentClass.OriginalLegalText;
         var expectedContentClass = isRoot ? EuContentClass.OriginalLegalText : EuContentClass.Consolidation;
         if (derivedContentClass != expectedContentClass)
         {
+            // NAME THE OBJECT, like every sibling refusal in this method. Without it the run stops
+            // honestly and tells nobody WHICH object disagreed, and at eighty two seeds that is the
+            // difference between a diagnosis and a re-run: the adapter's detail carries the seed
+            // and the enum only, so a refusal here used to point at a whole closure.
             refusal = EuCellarObjectDecodeRefusal.ContentClassClosurePositionMismatch;
+            offendingIri = objectIri;
             return null;
         }
 
@@ -880,6 +917,40 @@ public static class EuCellarObjectDecode
 
     private sealed record ObjectFactRow(
         string Object, string PredicateIri, RepeatedEnumerationRdfTerm Value, string ValueKind);
+
+    /// <summary>
+    /// Whether a family X row's <c>datatype_iri</c> is a shape this publisher actually produces.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A PLAIN LITERAL ALWAYS, AND ABSENT ONLY FOR A LANGUAGE TAGGED VALUE. The template binds
+    /// this from <c>STR(DATATYPE(?value))</c>, and the endpoint does not answer <c>DATATYPE()</c>
+    /// on a language tagged literal, so the BIND errors and the variable is simply omitted. That
+    /// was measured on the D1-05g acceptance run: 32 of 373 rows on one page, every one of them a
+    /// language tagged <c>expression_title</c> on a consolidated state, retained under body sha256
+    /// 4edfd1bcd061a44cab0daf13bc3bf3eaf0f83414cec125e74b6e7fd5e8860c1e.
+    /// </para>
+    /// <para>
+    /// SO THE ABSENCE IS ADMITTED, AND NOT FILLED IN. SPARQL 1.1 says the datatype of a language
+    /// tagged literal is <c>rdf:langString</c>, and substituting that here would be reporting a
+    /// value the publisher did not send. This decode's own rule everywhere else is that an
+    /// unobserved thing stays unobserved, so the row is accepted and the datatype is not invented.
+    /// Nothing downstream reads it: <c>ExpressionFactRow</c> carries parent, object, predicate,
+    /// value and value kind, and the datatype term is a shape check that ends here.
+    /// </para>
+    /// <para>
+    /// THE PAIRING IS WHAT KEEPS IT NARROW. An absent datatype is admitted ONLY when the language
+    /// tag is present and non-empty. An absent datatype on an untagged value is still the shape
+    /// violation it always was, because that one has no publisher behaviour behind it.
+    /// </para>
+    /// </remarks>
+    private static bool IsDatatypeTermThePublisherCanProduce(
+        RepeatedEnumerationRdfTerm datatypeTerm,
+        RepeatedEnumerationRdfTerm languageTerm) =>
+        IsPlainLiteral(datatypeTerm)
+        || (datatypeTerm.Kind == RepeatedEnumerationRdfTermKind.Unbound
+            && IsPlainLiteral(languageTerm)
+            && !string.IsNullOrEmpty(languageTerm.Value));
 
     private sealed record ExpressionFactRow(
         string Parent, string Object, string PredicateIri, RepeatedEnumerationRdfTerm Value, string ValueKind);

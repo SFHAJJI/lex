@@ -364,12 +364,22 @@ public sealed class EuWitnessTraversalResult
     }
 
     public static EuWitnessTraversalResult Delivered(
-        EuFeedWatermarkEntrySet entries, string deliveryEvidenceSha256, int productRequestCount)
+        EuFeedWatermarkEntrySet entries,
+        string deliveryEvidenceSha256,
+        int productRequestCount,
+        TimeSpan elapsed)
     {
         ArgumentNullException.ThrowIfNull(entries);
         ArgumentException.ThrowIfNullOrEmpty(deliveryEvidenceSha256);
-        return new(entries, deliveryEvidenceSha256, productRequestCount, null);
+        return new(entries, deliveryEvidenceSha256, productRequestCount, null) { Elapsed = elapsed };
     }
+
+    /// <summary>
+    /// Wall time the whole witness spent, across every batch. Reported under the spec's explicit
+    /// bounds beside <see cref="ProductRequestCount"/>, so a run that stayed inside its budget by
+    /// taking a very long time cannot look identical to one that was quick.
+    /// </summary>
+    public TimeSpan Elapsed { get; private init; }
 
     public static EuWitnessTraversalResult Refused(EuWitnessTraversalRefusalDetail refusal, int productRequestCount)
     {
@@ -613,15 +623,34 @@ public sealed class EuRepeatedEnumerationExecutor
     /// with its bytes exactly as every other Europe bind already requires.
     /// </param>
     /// <param name="sourceWitness">The bound robots-negotiation witness this session starts from.</param>
+    /// <remarks>
+    /// DESIGN A: the witness is restricted to the pack's own objects in batches, so this takes the
+    /// batch plans rather than one plan. <see cref="MaximumWitnessPageRequests"/> bounds EACH
+    /// BATCH's own traversal rather than the run, because a budget written for one batch would
+    /// silently truncate a pack that needs several. The run's total product requests and elapsed
+    /// time are carried out on the result so the receipt and the index can state them.
+    /// <para>
+    /// Every batch plan shares one <c>QueryPlanIdentityDigest</c>, because the digest covers the
+    /// query's SHAPE and the batch's contents travel as bound parameters. That is what lets one
+    /// <see cref="EuFeedWatermarkEntrySet.TryClose"/> close over every batch's steps together: its
+    /// one-plan invariant is satisfied by construction rather than by an exemption.
+    /// </para>
+    /// </remarks>
     public async Task<EuWitnessTraversalResult> RunWitnessTraversalAsync(
-        EuWatermarkWitnessPlan plan,
+        IReadOnlyList<EuWatermarkWitnessPlan> batchPlans,
         MachineQueryRendererSource rendererSource,
         BoundMachineRequest sourceWitness,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(batchPlans);
         ArgumentNullException.ThrowIfNull(rendererSource);
         ArgumentNullException.ThrowIfNull(sourceWitness);
+        if (batchPlans.Count == 0)
+        {
+            return EuWitnessTraversalResult.Refused(
+                new EuWitnessTraversalRefusalDetail(EuWitnessTraversalRefusal.EntrySetRefused, "no witness batch"),
+                productRequestCount: 0);
+        }
 
         var session = await StartSessionAsync(sourceWitness, cancellationToken).ConfigureAwait(false);
         if (session is null)
@@ -632,19 +661,38 @@ public sealed class EuRepeatedEnumerationExecutor
         }
 
         var productRequestCount = 0;
+        var witnessStarted = _timeProvider.GetTimestamp();
         try
         {
             var executorWrittenMembership = new Dictionary<string, CustodyMembership>(StringComparer.Ordinal);
             var evidenceBytesInOrder = new List<byte[]>();
-
-            var position = plan.StartPosition;
-            IReadOnlyList<string> retainedTieSet = new[] { position.CanonicalEntryKey };
             var steps = new List<EuWatermarkTraversalStep>();
+
+            foreach (var plan in batchPlans)
+            {
+            var batchRequestCount = 0;
+            var position = plan.StartPosition;
+            // A BATCH'S FIRST PAGE OPENS THE BATCH; IT DOES NOT CROSS ANYTHING.
+            //
+            // The previous shape seeded every batch's retained tie set with the ONE pack-wide
+            // boundary entry key, which only the batch whose VALUES block holds that root can ever
+            // re-deliver, so at eighty two seeds every batch but one refused BoundaryEntrySkipped.
+            // Seeding those batches EMPTY instead only moved the refusal:
+            // EuWatermarkTraversalStep refuses CrossingCursorNotInRetainedTieSet for a crossing
+            // whose cursor is not in its own retained set, and it exists precisely so an empty tie
+            // set cannot reconcile against an empty reread and read as a clean terminal.
+            //
+            // So the first page of every batch goes through TryOpenBatch, which performs every page
+            // validation and asserts no crossing, and the tie set is established from what that
+            // page actually delivered. Both guards stay intact and neither situation is forced into
+            // the other's shape.
+            IReadOnlyList<string> retainedTieSet = Array.Empty<string>();
+            var batchOpened = false;
             var consecutiveTerminalObservations = 0;
 
             while (true)
             {
-                if (productRequestCount >= MaximumWitnessPageRequests)
+                if (batchRequestCount >= MaximumWitnessPageRequests)
                 {
                     return EuWitnessTraversalResult.Refused(
                         new EuWitnessTraversalRefusalDetail(EuWitnessTraversalRefusal.PageBudgetExhausted, null),
@@ -661,7 +709,13 @@ public sealed class EuRepeatedEnumerationExecutor
 
                 var outcome = await _reopenGlue.ObserveAsync(
                         session, bound.Request, EuWatermarkWitnessPlan.ResponseMediaType, executorWrittenMembership,
-                        () => productRequestCount, count => productRequestCount = count, cancellationToken)
+                        () => productRequestCount,
+                        count =>
+                        {
+                            batchRequestCount += count - productRequestCount;
+                            productRequestCount = count;
+                        },
+                        cancellationToken)
                     .ConfigureAwait(false);
                 if (outcome.Failure is { } failure)
                 {
@@ -708,21 +762,44 @@ public sealed class EuRepeatedEnumerationExecutor
                 var firstBeyond = deliveredPage.FirstOrDefault(
                     row => !string.Equals(row.WatermarkLexical, boundaryWatermark, StringComparison.Ordinal));
 
-                var crossing = EuBoundaryCrossing.TryCross(
-                    position, retainedTieSet, rereadAtBoundary, firstBeyond, out var crossingRefusal);
-                if (crossing is null)
+                EuWatermarkTraversalStep? step;
+                EuBoundaryCrossing? crossing = null;
+                if (!batchOpened)
                 {
-                    return EuWitnessTraversalResult.Refused(
-                        new EuWitnessTraversalRefusalDetail(EuWitnessTraversalRefusal.CrossingRefused, crossingRefusal.ToString()),
-                        productRequestCount);
-                }
+                    step = EuWatermarkTraversalStep.TryOpenBatch(
+                        plan, position, deliveredPage, out var openRefusal);
+                    if (step is null)
+                    {
+                        return EuWitnessTraversalResult.Refused(
+                            new EuWitnessTraversalRefusalDetail(
+                                EuWitnessTraversalRefusal.StepRefused, openRefusal.ToString()),
+                            productRequestCount);
+                    }
 
-                var step = EuWatermarkTraversalStep.TryAdvance(plan, crossing, deliveredPage, out var stepRefusal);
-                if (step is null)
+                    // A batch whose opening page delivered NOTHING has still opened nothing to
+                    // cross, so its confirming repeat opens too. Marking it opened would send that
+                    // repeat through TryCross with an empty retained set, which is the very
+                    // refusal this split exists to remove.
+                    batchOpened = step.DeliveredPage.Count > 0;
+                }
+                else
                 {
-                    return EuWitnessTraversalResult.Refused(
-                        new EuWitnessTraversalRefusalDetail(EuWitnessTraversalRefusal.StepRefused, stepRefusal.ToString()),
-                        productRequestCount);
+                    crossing = EuBoundaryCrossing.TryCross(
+                        position, retainedTieSet, rereadAtBoundary, firstBeyond, out var crossingRefusal);
+                    if (crossing is null)
+                    {
+                        return EuWitnessTraversalResult.Refused(
+                            new EuWitnessTraversalRefusalDetail(EuWitnessTraversalRefusal.CrossingRefused, crossingRefusal.ToString()),
+                            productRequestCount);
+                    }
+
+                    step = EuWatermarkTraversalStep.TryAdvance(plan, crossing, deliveredPage, out var stepRefusal);
+                    if (step is null)
+                    {
+                        return EuWitnessTraversalResult.Refused(
+                            new EuWitnessTraversalRefusalDetail(EuWitnessTraversalRefusal.StepRefused, stepRefusal.ToString()),
+                            productRequestCount);
+                    }
                 }
 
                 steps.Add(step);
@@ -740,7 +817,17 @@ public sealed class EuRepeatedEnumerationExecutor
                     // the full boundary group this step just proved (crossing.RetainedTieSet plus
                     // whatever it carried forward), so a repeat of the identical publisher response
                     // reconciles cleanly and yields nothing newly delivered.
-                    retainedTieSet = crossing.RetainedTieSet.Concat(crossing.CarriedForward).ToArray();
+                    // An opening page has no crossing, so the group it must carry into the
+                    // confirming repeat is simply what it delivered at its own last watermark.
+                    retainedTieSet = crossing is not null
+                        ? crossing.RetainedTieSet.Concat(crossing.CarriedForward).ToArray()
+                        : deliveredPage
+                            .Where(row => step.DeliveredPage.Count > 0 && string.Equals(
+                                row.WatermarkLexical,
+                                step.DeliveredPage[^1].WatermarkLexical,
+                                StringComparison.Ordinal))
+                            .Select(static row => row.CanonicalEntryKey)
+                            .ToArray();
                     continue;
                 }
 
@@ -752,6 +839,8 @@ public sealed class EuRepeatedEnumerationExecutor
                     .ToArray();
             }
 
+            }
+
             var entrySet = EuFeedWatermarkEntrySet.TryClose(steps, out var entrySetRefusal);
             if (entrySet is null)
             {
@@ -761,7 +850,10 @@ public sealed class EuRepeatedEnumerationExecutor
             }
 
             return EuWitnessTraversalResult.Delivered(
-                entrySet, CombinedSha256(evidenceBytesInOrder), productRequestCount);
+                entrySet,
+                CombinedSha256(evidenceBytesInOrder),
+                productRequestCount,
+                _timeProvider.GetElapsedTime(witnessStarted));
         }
         catch (Exception exception) when (exception is CustodyIntegrityException or CustodyRequiredException)
         {

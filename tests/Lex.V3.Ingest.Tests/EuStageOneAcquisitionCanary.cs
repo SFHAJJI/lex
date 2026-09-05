@@ -70,14 +70,19 @@ namespace Lex.V3.Ingest.Tests;
 /// <para>
 /// WHAT THIS TEST ASSERTS, today, as opposed to what it discusses. That the census table's own per
 /// type counts sum to its row totals. That both census families PROVED and that each carries
-/// <see cref="CustodyMembership.RetainedUnenforced"/>. And, WHEN THE RUN REACHES THE MANIFEST, the
-/// reduced manifest's expression count against the census total. WHEN IT DOES NOT REACH THE
-/// MANIFEST IT CALLS <c>Assert.Fail</c> WITH THE REFUSAL IN WORDS. There is no path through this
-/// method that passes silently, and today it does not pass at all. WHERE IT STOPS HAS MOVED and
-/// this sentence is dated deliberately: at D1-05f's head all six families PROVE against the live
-/// publisher and the run refuses later, at RecordFormNotResolved, because a seed's root carries no
-/// resource_legal_type this adapter maps to a closed EuActForm. That is D1-05g. Re-read the run's
-/// own wholeRunRefusalCode rather than this line, which is a summary and will age again.
+/// <see cref="CustodyMembership.RetainedUnenforced"/>. That the manifest was written AND reopened,
+/// the two digests being distinct. That the record set was written and every record is held with
+/// its custody class and membership, or typed by reason and named. That every MINTED manifest row
+/// carries a row, held or typed. That expressions match the census PER ROOT WORK and that the per
+/// root and per state counts sum to the closure's distinct total. And that the manifestation TYPE
+/// SET per root work equals the census's, taken from family M's own listing. WHEN THE RUN DOES NOT
+/// REACH THE MANIFEST IT CALLS <c>Assert.Fail</c> WITH THE REFUSAL IN WORDS.
+/// </para>
+/// <para>
+/// AND AT D1-05g IT PASSES. It did not for the whole of D1-05f, and the superseded sentence here
+/// named resource_legal_type as the predicate that stopped it, which was itself the defect: the
+/// act form is read from work_has_resource-type. Re-read the run's own wholeRunRefusalCode rather
+/// than this paragraph, which is a summary and will age again.
 /// </para>
 /// <para>
 /// ONE COMPARISON THE CENSUS MAKES POSSIBLE IS NOT YET ASSERTABLE, and it is failed loudly rather
@@ -85,8 +90,10 @@ namespace Lex.V3.Ingest.Tests;
 /// work, not one row per manifestation, so the run observes three tokens for the GDPR where the
 /// census counts 72 manifestations. Asserting 72 against a number this route cannot produce would
 /// be a fabricated check, so the totals are carried as data and the gap is stated by a failing
-/// assertion rather than by a sentence a reader may not reach. D1-05f decides whether the canary
-/// enumerates manifestations or the comparison narrows to the token set.
+/// assertion rather than by a sentence a reader may not reach. D1-05g SETTLED IT: the comparison
+/// is over the TYPE SET, because family M lists manifestation types per Work and emits no per
+/// format row, so there is no row to count. The per type counts stay recorded as the publisher's
+/// inventory, and counting that inventory is residue R8.
 /// </para>
 /// <para>
 /// The fetch half is separately corroborated by RULING
@@ -184,22 +191,15 @@ public sealed class EuStageOneAcquisitionCanary
             })
             .ToArray();
 
-        var objectFactsRequests = new[]
-            {
-                EuObjectFactsQuerySet.ObjectFacts,
-                EuObjectFactsQuerySet.ExpressionFacts,
-                EuObjectFactsQuerySet.RootWatermark,
-                EuObjectFactsQuerySet.ManifestationFacts,
-            }
-            .Select(set =>
-            {
-                var (plan, planId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
-                return (
-                    Request: new EuObjectFactsPartitionRunRequest(
-                        plan, planId, set, roots, EuAcquisitionTestFixture.BuildRendererSource(6200)),
-                    Witness: EuAcquisitionTestFixture.SourceWitness());
-            })
-            .ToArray();
+        // D1-05g: the canary supplies the PLAN and the POLICY and never the object list. It used
+        // to build four requests over `roots`, which is why family P was only ever asked about the
+        // two seed roots while the decoder walked root plus every state the census discovered.
+        var (objectFactsPlan, objectFactsPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var objectFactsPolicy = new EuObjectFactsBatchPolicy(
+            objectFactsPlan,
+            objectFactsPlanId,
+            EuAcquisitionTestFixture.BuildRendererSource(6200),
+            EuAcquisitionTestFixture.SourceWitness());
 
         var completeEnumerationRef = new SourceArtifactRef(
             $"urn:uuid:{Guid.NewGuid():D}",
@@ -209,7 +209,7 @@ public sealed class EuStageOneAcquisitionCanary
 
         var result = await adapter.RunAsync(
             censusRequests,
-            objectFactsRequests,
+            objectFactsPolicy,
             EuAcquisitionTestFixture.BuildRendererSource(6300),
             EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.BuildRendererSource(6400),
@@ -347,21 +347,290 @@ public sealed class EuStageOneAcquisitionCanary
                 + " This is D1-05f.");
         }
 
-        Assert.AreEqual(
-            Census.Sum(static row => row.Expressions),
-            result.ObservedExpressionCount,
-            "the reduced manifest's expression count must equal the independent census total.");
 
-        Assert.Fail(
-            "the run reached the manifest, and the per type totals are still not comparable: family M "
-            + "returns DISTINCT manifestation types per work rather than one row per manifestation, so "
-            + "this route cannot produce the census totals "
-            + string.Join("; ", Census.Select(
-                static row => $"{row.Celex} {row.Manifestations} across "
-                    + string.Join(",", row.Types.Select(static entry => $"{entry.Token}={entry.Count}"))))
-            + ". Asserting them against a number the route cannot produce would be a fabricated check, "
-            + "so this fails rather than passing on the half it can reach. D1-05f decides whether the "
-            + "canary enumerates manifestations or the comparison narrows to the token set.");
+        // ---- D1-05g: THE THREE STEPS THE ACCEPTANCE NEVER CHECKED. ----
+        //
+        // The manifest write and reopen, the record set write, and the body acquisition all worked
+        // against live data before this block existed, and they worked SILENTLY: the canary's
+        // assertions stopped at the type set comparison, so a run could have gone green having
+        // held nothing at all, which is the one thing the product exists to do. These assertions
+        // close that, and they make the acceptance stronger rather than weaker.
+
+        // The manifest went to custody AND came back. The receipt digest and the canonical digest
+        // being DISTINCT is the pair that proves a reopen rather than a write: the receipt names
+        // the stored bytes, the canonical digest names the manifest's own content address.
+        Assert.IsNotNull(result.ScopeManifestReceipt, "the manifest must have been written.");
+        Assert.IsFalse(
+            string.IsNullOrWhiteSpace(result.ScopeManifestCanonicalSha256),
+            "the manifest must carry its own canonical digest.");
+        Assert.AreNotEqual(
+            result.ScopeManifestReceipt!.Reference.ContentSha256,
+            result.ScopeManifestCanonicalSha256,
+            "the receipt digest and the manifest's canonical digest are the same value, so nothing "
+                + "here distinguishes a reopen from a write.");
+
+        // The record set was written and is addressable by its own content.
+        Assert.IsNotNull(result.CorpusRecordSetRef, "the corpus record set must have been written.");
+        Assert.IsFalse(
+            string.IsNullOrWhiteSpace(result.CorpusRecordSetRef!.Sha256),
+            "the record set must be addressable by its own canonical digest.");
+        Assert.IsNotNull(result.CorpusRecordSet);
+
+        // EVERY RECORD IS HELD WITH ITS EVIDENCE OR TYPED BY REASON. The RULE is asserted and the
+        // number falls out of it: pinning "four of eight" would fix a count nobody has explained,
+        // and the run that produced it showed the assignment of bodies to manifest ORDINALS is not
+        // stable across runs, so a count keyed to position would be true of one run and false of
+        // the next. This is keyed to the RECORD, which is stable.
+        var heldKeys = new List<string>();
+        var typedKeys = new List<string>();
+        foreach (var record in result.CorpusRecordSet!.Set.Records)
+        {
+            var key = record.ObjectRef.CanonicalKey;
+            if (record.Body.Kind == CorpusBodyRecordKind.Held)
+            {
+                Assert.IsNotNull(
+                    record.Body.Floor,
+                    $"{key} is held, so it must say which custody class its bytes were retained "
+                        + "under.");
+                Assert.AreEqual(
+                    CustodyMembership.RetainedUnenforced,
+                    record.Body.Floor,
+                    $"{key} ran over a filesystem store and must say so.");
+                heldKeys.Add(key);
+                continue;
+            }
+
+            Assert.IsTrue(
+                record.Body.NotHeldReason is not null || record.Body.PendingAcquisitionReason is not null,
+                $"{key} holds no body and gives NO REASON. A record that is neither held nor typed "
+                    + "is a silent absence, and a reader cannot tell it from a body we simply "
+                    + "failed to fetch.");
+            typedKeys.Add(key);
+        }
+
+        Assert.AreEqual(
+            result.CorpusRecordSet.Set.Records.Count,
+            heldKeys.Count + typedKeys.Count,
+            "every record must be either held or typed; these are the only two dispositions.");
+        Assert.IsTrue(
+            heldKeys.Count > 0,
+            "no record held a body at all. The run reached the record set, so a corpus with "
+                + "nothing held in it is the failure this acceptance exists to catch.");
+
+        // EVERY MINTED ROW CARRIES A ROW, held or typed. An ABSENT row is the one answer a reader
+        // cannot act on, and it is what this replaces: the index used to emit a row only for
+        // ordinals a fetch was attempted for, so a row the body axis excluded simply vanished.
+        // The RULE is asserted and the number falls out; pinning "four of eight" would turn an
+        // unexplained state into a permanent expectation, and the ordinal a body lands on is not
+        // even stable across runs.
+        Assert.IsNotNull(result.MintedRowsByOrdinal);
+        Assert.IsNotNull(result.DocumentAcquisitionOutcomesByOrdinal);
+        Assert.IsTrue(
+            result.MintedRowsByOrdinal!.Count > 0,
+            "a run that reached the record set minted at least one manifest row.");
+
+        foreach (var (ordinal, accounting) in result.MintedRowsByOrdinal)
+        {
+            Assert.IsFalse(
+                string.IsNullOrWhiteSpace(accounting.CanonicalKey),
+                $"minted row {ordinal} must name the object it is about.");
+
+            var hasOutcome = result.DocumentAcquisitionOutcomesByOrdinal!.TryGetValue(
+                ordinal, out var outcome);
+            if (!accounting.SelectedByBodyAxis)
+            {
+                Assert.IsFalse(
+                    hasOutcome,
+                    $"{accounting.CanonicalKey} was not selected by the body axis, so no fetch can "
+                        + "have been attempted for it.");
+                continue;
+            }
+
+            Assert.IsTrue(
+                hasOutcome,
+                $"{accounting.CanonicalKey} was selected by the body axis and carries no outcome "
+                    + "at all, which is the silent absence this rule forbids.");
+            Assert.IsTrue(
+                outcome!.Receipt is not null || outcome.Refusal is not null,
+                $"{accounting.CanonicalKey} carries neither a receipt nor a reason.");
+            if (outcome.Receipt is not null)
+            {
+                Assert.IsFalse(
+                    string.IsNullOrWhiteSpace(outcome.Receipt.Reference.ContentSha256),
+                    $"{accounting.CanonicalKey} is held and must carry its digest.");
+                Assert.IsTrue(
+                    outcome.Receipt.Reference.ByteLength > 0,
+                    $"{accounting.CanonicalKey} is held and must carry its byte length.");
+
+                // AND WHAT THE HOLD MEANS, which the digest and the length do not say. Asserted on
+                // the receipt because that is what the index row is built from, so a row that
+                // stopped carrying either field would have to stop carrying it here first.
+                Assert.AreEqual(
+                    CustodyClass.NightlyFloor90d,
+                    outcome.Receipt.Reference.CustodyClass,
+                    $"{accounting.CanonicalKey} is held and must state the storage class it was "
+                        + "written under, which is the field the Luxembourg index carries per "
+                        + "expression and the one that makes the two indexes comparable.");
+                Assert.AreEqual(
+                    CustodyMembership.RetainedUnenforced,
+                    CustodyMembershipClassifier.Classify(outcome.Receipt),
+                    $"{accounting.CanonicalKey} ran over a filesystem store, so Decision 71's own "
+                        + "distinction must read retained_unenforced rather than floored. A held "
+                        + "row that cannot say which is the silence this field exists to remove.");
+            }
+        }
+
+        // ---- D1-05g: the expression comparison is PER ROOT WORK. ----
+        // ObservedExpressionCount is the whole closure, roots AND the consolidated states this
+        // run's own census discovered, which is the right number for the manifest and the wrong
+        // one to compare against a census of ROOT Works. They agreed only while family X was asked
+        // about roots alone. The states' expressions are REPORTED beside the comparison rather
+        // than dropped: they are real Works this run acquired, and discarding them to make a total
+        // line up would be the fabrication this split exists to avoid.
+        Assert.IsNotNull(
+            result.ObservedExpressionsByCelex,
+            "a run that reached the manifest must carry its expressions split by closure position.");
+
+        foreach (var row in Census)
+        {
+            Assert.IsTrue(
+                result.ObservedExpressionsByCelex!.TryGetValue(row.Celex, out var split),
+                $"{row.Celex} has no expression split at all.");
+            Assert.AreEqual(
+                row.Expressions,
+                split!.OfRootWork,
+                $"{row.Celex}'s own ROOT WORK must carry exactly the census's expression count. "
+                + $"Its consolidated states carried a further {split.OfConsolidatedStates}, which "
+                + "is an observation this run made and not part of this comparison.");
+        }
+
+        // THE ARITHMETIC IDENTITY, ASSERTED RATHER THAN ONLY WRITTEN TO THE INDEX. The split is
+        // only trustworthy if the parts add up to the whole, and this is the ONE check that would
+        // catch an expression counted under BOTH a root and one of its states: double counting
+        // leaves every per-root number looking right while the total silently disagrees.
+        var splitTotal = result.ObservedExpressionsByCelex!.Values
+            .Sum(split => split.OfRootWork + split.OfConsolidatedStates);
+        Assert.AreEqual(
+            result.ObservedExpressionCount,
+            splitTotal,
+            "the per root and per state expression counts must sum to the closure's own DISTINCT "
+                + "total. They disagree, which means at least one expression was counted under "
+                + "both a root and a state, or one was counted under neither.");
+
+
+        // ---- D1-05g: the two witness facts, asserted from THIS RUN'S OWN terminations. ----
+        // Both were measured from retained bytes before being asserted, so neither is a guess
+        // about what the endpoint might do.
+        Assert.IsNotNull(
+            result.WitnessTerminations,
+            "a run that reached the manifest ran the witness and must carry its terminations.");
+        Assert.IsNotNull(result.WatermarkWitnessPlan);
+
+        var terminations = result.WitnessTerminations!;
+        var bound = result.WatermarkWitnessPlan!.StartPosition;
+
+        // ONE: THE BOUNDARY GROUP IS ACCOUNTED EXACTLY ONCE, WHICH MEANS NOT AGAIN.
+        //
+        // THIS ASSERTION WAS WRONG THE FIRST TIME AND THE RUN CORRECTED IT. It required an entry to
+        // SIT ON the bound, reasoning that the boundary rule re-reads that watermark inclusively so
+        // the group must reappear. The run delivered one entry and it was not the boundary one, and
+        // the code is right: the previous cut ENDED at that position and retained the group sharing
+        // its watermark, so re-reading it proves nothing was skipped while the crossing accounts it
+        // through RetainedTieSet and CarriedForward rather than TERMINATING it a second time. An
+        // entry on the bound appearing in THIS cut's terminations would be the double accounting
+        // the crossing exists to prevent, so the correct assertion is the opposite of the first.
+        //
+        // Measured: bound 2024-12-31T20:10:26.804+01:00 at cellar/3e485e15, one entry delivered.
+        Assert.IsFalse(
+            terminations.Any(entry => string.Equals(
+                entry.Entry.CanonicalEntryKey, bound.CanonicalEntryKey, StringComparison.Ordinal)
+                && string.Equals(
+                    entry.Entry.WatermarkLexical, bound.WatermarkLexical, StringComparison.Ordinal)),
+            "the entry ON the bound was terminated again in this cut. The previous cut ended at "
+            + "that position and accounted it; the inclusive re-read is there to prove nothing was "
+            + "skipped, not to account it twice.");
+
+        Assert.AreEqual(
+            terminations.Select(entry => entry.Entry.CanonicalEntryKey)
+                .Distinct(StringComparer.Ordinal).Count(),
+            terminations.Count,
+            "every entry the witness delivered must be accounted exactly once across the whole "
+            + "traversal, which is what the boundary crossing proves and what re-reading a tie "
+            + "group inclusively puts at risk.");
+
+        // TWO: THE POST BOUND CHANGE IS DELIVERED. This state's watermark is later than either
+        // root's, which is the whole reason the witness watches the closure rather than the roots:
+        // a roots-only witness would have been blind to it while reporting a clean cut.
+        const string movedState =
+            "http://publications.europa.eu/resource/cellar/5f2552c2-cc45-11e6-ad7c-01aa75ed71a1";
+        var moved = terminations
+            .Where(entry => string.Equals(
+                entry.Entry.CanonicalEntryKey, movedState, StringComparison.Ordinal))
+            .ToArray();
+        Assert.AreEqual(
+            1,
+            moved.Length,
+            "the post-bound change on GDPR's consolidated state was not delivered. Entries "
+            + $"delivered were: {string.Join(", ", terminations.Select(
+                entry => entry.Entry.CanonicalEntryKey + "@" + entry.Entry.WatermarkLexical))}");
+        Assert.IsTrue(
+            string.CompareOrdinal(moved[0].Entry.WatermarkLexical, bound.WatermarkLexical) > 0,
+            $"the moved state's watermark {moved[0].Entry.WatermarkLexical} must be later than the "
+            + $"bound {bound.WatermarkLexical}, or it is not the post-bound change this asserts.");
+
+        // ---- D1-05g: THE TYPE SET COMPARISON, PER ROOT WORK. ----
+        // This replaces an unconditional Assert.Fail that said the per type totals were not
+        // comparable. They are not, and that has been settled rather than worked around: family M
+        // lists manifestation TYPES per Work and emits NO PER FORMAT ROW, so there is no row to
+        // count and a count comparison would have to invent one. The census per type counts stay
+        // recorded as the publisher's inventory and the comparison is over type SETS. Counting the
+        // inventory needs its own acquisition and is residue R8.
+        //
+        // WHY THIS IS EQUALITY AND NOT CONTAINMENT. A directional form was ruled and then withdrawn
+        // as moot, and the reason is worth keeping: the run once listed pdfa2a where the census
+        // does not, which looked like the publisher having added a format since the census was
+        // taken. It was not. pdfa2a was a RUNG OF OUR OWN FETCH LADDER, and the observed side was
+        // being built from the ladder rather than from what the office listed. Fixing the SOURCE
+        // dissolved the divergence instead of a relaxation absorbing it, and equality survived.
+        //
+        // WHAT EQUALITY COSTS, stated so it is a choice rather than an oversight: a format the
+        // publisher genuinely adds later WILL FAIL THIS RED rather than surface as news. That is
+        // acceptable while census rows exist for two seeds and a red is cheap to read; it is R8's
+        // to revisit when the census covers more.
+        //
+        // THE ROW SOURCE IS STATED AND IT IS NOT THE LADDER. These tokens come from
+        // ObservedManifestationTypesByCelex, which the adapter fills from family M's OWN rows: the
+        // publisher's listing. DocumentLadderResultsByOrdinal is the ladder, what this run
+        // attempted and was served, and comparing that against a census would report OUR coverage
+        // as the OFFICE'S holdings.
+        Assert.IsNotNull(
+            result.ObservedManifestationTypesByCelex,
+            "a run that reached the manifest must carry family M's own listing per Work.");
+
+        foreach (var row in Census)
+        {
+            Assert.IsTrue(
+                result.ObservedManifestationTypesByCelex!.TryGetValue(row.Celex, out var observed),
+                $"{row.Celex} has no observed manifestation listing at all. Listings were for: "
+                + string.Join(", ", result.ObservedManifestationTypesByCelex.Keys));
+
+            var expected = row.Types
+                .Select(static entry => entry.Token)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(static token => token, StringComparer.Ordinal)
+                .ToArray();
+
+            // Joined rather than compared element-wise so a diff names the token that moved.
+            Assert.AreEqual(
+                string.Join(",", expected),
+                string.Join(",", observed!),
+                $"{row.Celex}'s listed manifestation TYPE SET must equal the census's own. The "
+                + $"census also records per type counts ({string.Join(",", row.Types.Select(
+                    static entry => $"{entry.Token}={entry.Count}"))}) as the publisher's "
+                + "inventory; those are NOT compared here, because family M lists types and not "
+                + "rows, and asserting a count this route cannot produce would be a fabricated "
+                + "check.");
+        }
     }
 
     /// <summary>
@@ -448,7 +717,8 @@ public sealed class EuStageOneAcquisitionCanary
                 ["role"] = "familyPassBodiesAndCursors",
                 ["why"] = "EuFamilyEnumerationOutcome carries the proof but not the delivery receipt, "
                     + "so pass A and pass B page bodies and their cursor values are not reachable "
-                    + "from EuQueryExecutionResult. D1-05g must surface the receipt to record them.",
+                    + "from EuQueryExecutionResult. Surfacing the receipt is R3's to carry, since the pass "
+                    + "bodies are what a reader would reopen to check a delivery proof.",
             },
             new System.Text.Json.Nodes.JsonObject
             {
@@ -479,11 +749,12 @@ public sealed class EuStageOneAcquisitionCanary
                     + "manifest's custody-write digest), so the set digest cannot be stable by "
                     + "construction. Stated here FROM THE CODE PATH rather than by analogy with "
                     + "Luxembourg, whose canary mints the same two resource_ids in the canary "
-                    + "itself. THE PER-FIELD AUDIT HAS NOW RUN AND COULD NOT CONFIRM THIS ONE: "
-                    + "both clean-checkout runs refused at RecordFormNotResolved before any "
-                    + "record set existed, so setRefSha256 was null in both and being equal "
-                    + "proves nothing about it. This claim therefore rests on the code path alone "
-                    + "until a run reaches the record set. It sits beside heldContentSha256 "
+                    + "itself. THE PER-FIELD AUDIT COULD NOT CONFIRM THIS ONE AT THE TIME: both "
+                    + "clean-checkout runs then refused before any record set existed, so "
+                    + "setRefSha256 was null in both and being equal proved nothing. D1-05g's "
+                    + "run DOES reach the record set and mints a setRefSha256, so the claim is "
+                    + "now testable by two runs and remains, for the moment, a reading of the "
+                    + "code path rather than a measured pair. It sits beside heldContentSha256 "
                     + "values that ARE content addresses, so without this note a reader diffing "
                     + "two runs sees a moved corpus where nothing moved, and, worse, might take a "
                     + "match as evidence two runs produced the same corpus. WHAT TO DIFF INSTEAD, "
@@ -522,6 +793,13 @@ public sealed class EuStageOneAcquisitionCanary
     /// One enum value as the token a WIRE CONSUMER would see, never as its C# member name.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// APPLIED TO EVERY ENUM VALUED FIELD IN THIS DOCUMENT, which it was not at first. Two fields
+    /// were converted and six were left on <c>ToString()</c>, so the shipped index carried
+    /// PascalCase member names beside snake_case tokens IN ONE SCHEMA DECLARING DOCUMENT, which is
+    /// worse for a machine reading it than either convention would have been alone. A half applied
+    /// rule is a rule a reader cannot use.
+    /// </para>
     /// <para>
     /// THE DEFECT THIS REPLACES, which was live and is not hypothetical. Both call sites used
     /// <c>ToString()</c>, which returns the C# member name and BYPASSES <c>ContractJson</c>
@@ -582,21 +860,21 @@ public sealed class EuStageOneAcquisitionCanary
             {
                 ["role"] = "family",
                 ["familyKey"] = outcome.FamilyKey,
-                ["kind"] = outcome.Kind.ToString(),
-                ["retainedFloor"] = outcome.RetainedFloor?.ToString(),
+                ["kind"] = WireToken<EuFamilyEnumerationOutcomeKind>(outcome.Kind),
+                ["retainedFloor"] = WireToken(outcome.RetainedFloor),
                 ["proofDeliveredRowCount"] = outcome.Proof?.DeliveredRowCount,
                 ["proofCanonicalKeyDigest"] = outcome.Proof?.CanonicalKeyDigest,
                 ["proofAcquisitionRunSha256"] = outcome.Proof?.AcquisitionRunRef.Sha256,
                 ["proofInterpretationProfileSha256"] = outcome.Proof?.InterpretationProfileRef.Sha256,
                 ["proofSourceProfileSha256"] = outcome.Proof?.SourceProfileRef.Sha256,
-                ["refusalKind"] = refusal?.Code.ToString(),
+                ["refusalKind"] = WireToken(refusal?.Code),
                 ["refusedBodySha256"] = refusal?.ResponseBodySha256,
                 ["refusedBodyTerminalStatus"] = refusal?.TerminalStatus,
                 ["refusedBodyObservedMediaType"] = refusal?.ObservedMediaType,
                 ["countAnswerItShouldHaveMatched"] = refusal?.ObservedCount,
                 ["offendingKey"] = refusal?.OffendingKey,
                 ["requestOrdinal"] = refusal?.RequestOrdinal,
-                ["proofRefusal"] = outcome.ProofRefusal?.ToString(),
+                ["proofRefusal"] = WireToken(outcome.ProofRefusal),
             });
         }
 
@@ -616,22 +894,104 @@ public sealed class EuStageOneAcquisitionCanary
             ["setRefSha256"] = result.CorpusRecordSetRef?.Sha256,
         };
 
+        // D1-05g: ONE ROW PER MINTED ROW, never one per attempted fetch. The absent row was the
+        // worst form of the unobserved-versus-zero defect: a reader could not tell NOT SELECTED
+        // from FAILED from NEVER ATTEMPTED, because there was not even a field to be wrong in.
+        // Each row also carries its OBJECT KEY, since the ordinal a body lands on was measured to
+        // differ between two runs of one head while the bodies held were the same. The rows are
+        // therefore comparable across runs BY OBJECT rather than by position, which is what a two
+        // index comparison needs and what the ordinals cannot give it.
         var bodies = new System.Text.Json.Nodes.JsonArray();
         var outcomes = result.DocumentAcquisitionOutcomesByOrdinal
             ?? new Dictionary<int, CorpusAcquisitionOutcome>();
-        foreach (var entry in outcomes.OrderBy(static entry => entry.Key))
+        var minted = result.MintedRowsByOrdinal
+            ?? new Dictionary<int, EuMintedRowAccounting>();
+        foreach (var entry in minted.OrderBy(static entry => entry.Key))
         {
+            outcomes.TryGetValue(entry.Key, out var outcome);
             bodies.Add(new System.Text.Json.Nodes.JsonObject
             {
                 ["role"] = "documentBody",
                 ["manifestRowOrdinal"] = entry.Key,
-                ["heldContentSha256"] = entry.Value.Receipt?.Reference.ContentSha256,
-                ["heldByteLength"] = entry.Value.Receipt?.Reference.ByteLength,
-                ["refusalReason"] = entry.Value.Refusal?.ToString(),
+                ["objectCanonicalKey"] = entry.Value.CanonicalKey,
+                ["selectedByBodyAxis"] = entry.Value.SelectedByBodyAxis,
+                ["heldContentSha256"] = outcome?.Receipt?.Reference.ContentSha256,
+                ["heldByteLength"] = outcome?.Receipt?.Reference.ByteLength,
+
+                // WHAT A HOLD MEANS, on the row that claims the hold. A digest and a length say
+                // the bytes exist and say nothing about the custody they exist under, which is the
+                // same silence this run removed from the witness terminals and from the missing
+                // body rows. Both come from the receipt the run already holds, so neither costs a
+                // call.
+                //
+                // TWO FIELDS BECAUSE THEY ARE TWO FACTS, and one would not have closed the gap.
+                // custodyClass is the STORAGE CLASS the object was written under, which is the
+                // field the Luxembourg index carries per expression, so this is the one that makes
+                // the two publishers' indexes agree. custodyMembership is DECISION 71's OWN
+                // DISTINCTION, floored against retained_unenforced, which the storage class does
+                // not express: an object can be written under a floor class and still be held by a
+                // store that enforces nothing. Carrying only the class would have matched LU while
+                // leaving the question Decision 71 actually asks unanswered.
+                //
+                // A row that holds nothing carries NEITHER, and keeps its typed reason. Inventing a
+                // class for bytes that were never written is the fabrication these fields exist to
+                // prevent.
+                ["custodyClass"] = outcome?.Receipt is null
+                    ? null
+                    : WireToken<CustodyClass>(outcome.Receipt.Reference.CustodyClass),
+                ["custodyMembership"] = outcome?.Receipt is null
+                    ? null
+                    : WireToken<CustodyMembership>(
+                        CustodyMembershipClassifier.Classify(outcome.Receipt)),
+                ["refusalReason"] = WireToken(outcome?.Refusal)?.GetValue<string>()
+                    ?? (entry.Value.SelectedByBodyAxis
+                        ? null
+                        : "not_selected_by_the_body_axis"),
             });
         }
 
         index["documentBodies"] = bodies;
+
+        // D1-05g: EVERY RECORD, WITH ITS REASON, so four of eight is readable.
+        //
+        // documentBodies above carries only the ordinals a fetch was ATTEMPTED for, so a record the
+        // body axis quarantined has no row at all and the index simply goes quiet about it. Four
+        // held out of eight objects is not readable as success or shortfall until every one of the
+        // other four says what it is, and an absent row is the same unobserved-versus-zero defect
+        // this run already fixed once for the witness terminals. Measured on the acceptance run:
+        // the four without bodies are all consolidated states and every one carries
+        // TypedQuarantine, which is a legitimate typed absence and now says so here.
+        var records = new System.Text.Json.Nodes.JsonArray();
+        foreach (var record in result.CorpusRecordSet?.Set.Records
+                     ?? (IReadOnlyList<CorpusRecord>)[])
+        {
+            records.Add(new System.Text.Json.Nodes.JsonObject
+            {
+                ["role"] = "corpusRecord",
+                ["canonicalKey"] = record.ObjectRef.CanonicalKey,
+                ["bodyKind"] = WireToken<CorpusBodyRecordKind>(record.Body.Kind),
+                ["retainedFloor"] = WireToken(record.Body.Floor),
+                ["notHeldReason"] = WireToken(record.Body.NotHeldReason),
+                ["pendingAcquisitionReason"] = record.Body.PendingAcquisitionReason is null
+                    ? null
+                    : WireToken<CorpusBodyPendingAcquisitionReasonKind>(
+                        record.Body.PendingAcquisitionReason.Kind),
+            });
+        }
+
+        index["corpusRecords"] = records;
+
+        index["expressionsByRootWork"] = new System.Text.Json.Nodes.JsonObject(
+            (result.ObservedExpressionsByCelex
+                ?? new Dictionary<string, EuObservedExpressionSplit>(StringComparer.Ordinal))
+            .OrderBy(static pair => pair.Key, StringComparer.Ordinal)
+            .Select(pair => new KeyValuePair<string, System.Text.Json.Nodes.JsonNode?>(
+                pair.Key,
+                new System.Text.Json.Nodes.JsonObject
+                {
+                    ["ofRootWork"] = pair.Value.OfRootWork,
+                    ["ofConsolidatedStates"] = pair.Value.OfConsolidatedStates,
+                })));
 
         index["rolesThisIndexCannotYetCarry"] = RolesThisIndexCannotYetCarry();
 

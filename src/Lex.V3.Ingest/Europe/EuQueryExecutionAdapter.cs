@@ -365,6 +365,40 @@ public sealed record EuDocumentLadderResult(
     IReadOnlyList<EuManifestationMediaType> Attempted,
     EuManifestationMediaType? Served);
 
+/// <summary>
+/// One seed's distinct expression counts, separated by closure position.
+/// </summary>
+/// <param name="OfRootWork">Expressions whose parent is the seed's own root Work.</param>
+/// <param name="OfConsolidatedStates">
+/// Expressions whose parent is one of the states the census discovered. Reported rather than
+/// folded in, because a census of root Works is not a census of the closure.
+/// </param>
+public sealed record EuObservedExpressionSplit(int OfRootWork, int OfConsolidatedStates);
+
+/// <summary>
+/// One minted manifest row's accounting: which object it names, and whether this run's own body
+/// axis selected it for acquisition.
+/// </summary>
+/// <remarks>
+/// <para>
+/// THIS EXISTS SO THE EVIDENCE INDEX CAN CARRY A ROW FOR EVERY MINTED ROW. It used to emit one
+/// only for ordinals a fetch was ATTEMPTED for, so a row the body axis excluded was ABSENT
+/// entirely and a reader could not tell NOT SELECTED from FAILED from NEVER ATTEMPTED. A missing
+/// row is the worst form of the unobserved-versus-zero defect, because there is not even a field
+/// to be wrong in.
+/// </para>
+/// <para>
+/// It is deliberately NOT carried as a <c>CorpusAcquisitionOutcome</c>. That type is the record
+/// builder's input and the builder REFUSES an outcome for a row its own body axis did not accept,
+/// which is a correct invariant: an outcome means a fetch happened. The question the index answers
+/// is wider than the question the builder asks, so it gets its own carrier rather than widening
+/// one whose narrowness is load bearing.
+/// </para>
+/// </remarks>
+/// <param name="CanonicalKey">The object this row names, which is stable across runs.</param>
+/// <param name="SelectedByBodyAxis">Whether this run's manifest selected the row for a body.</param>
+public sealed record EuMintedRowAccounting(string CanonicalKey, bool SelectedByBodyAxis);
+
 /// <summary>Delivered or refused, never both and never neither.</summary>
 public sealed class EuQueryExecutionResult
 {
@@ -382,6 +416,9 @@ public sealed class EuQueryExecutionResult
         string? scopeManifestCanonicalSha256,
         IReadOnlyDictionary<int, CorpusAcquisitionOutcome>? documentAcquisitionOutcomesByOrdinal,
         IReadOnlyDictionary<int, EuDocumentLadderResult>? documentLadderResultsByOrdinal,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? observedManifestationTypesByCelex,
+        IReadOnlyDictionary<string, EuObservedExpressionSplit>? observedExpressionsByCelex,
+        IReadOnlyDictionary<int, EuMintedRowAccounting>? mintedRowsByOrdinal,
         SourceArtifactRef? corpusRecordSetRef,
         VerifiedCorpusRecordSet? corpusRecordSet,
         EuQueryExecutionCompletion? completion,
@@ -403,6 +440,9 @@ public sealed class EuQueryExecutionResult
         ScopeManifestCanonicalSha256 = scopeManifestCanonicalSha256;
         DocumentAcquisitionOutcomesByOrdinal = documentAcquisitionOutcomesByOrdinal;
         DocumentLadderResultsByOrdinal = documentLadderResultsByOrdinal;
+        ObservedManifestationTypesByCelex = observedManifestationTypesByCelex;
+        ObservedExpressionsByCelex = observedExpressionsByCelex;
+        MintedRowsByOrdinal = mintedRowsByOrdinal;
         CorpusRecordSetRef = corpusRecordSetRef;
         CorpusRecordSet = corpusRecordSet;
         Completion = completion;
@@ -426,6 +466,9 @@ public sealed class EuQueryExecutionResult
         string scopeManifestCanonicalSha256,
         IReadOnlyDictionary<int, CorpusAcquisitionOutcome> documentAcquisitionOutcomesByOrdinal,
         IReadOnlyDictionary<int, EuDocumentLadderResult> documentLadderResultsByOrdinal,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> observedManifestationTypesByCelex,
+        IReadOnlyDictionary<string, EuObservedExpressionSplit> observedExpressionsByCelex,
+        IReadOnlyDictionary<int, EuMintedRowAccounting> mintedRowsByOrdinal,
         SourceArtifactRef corpusRecordSetRef,
         VerifiedCorpusRecordSet corpusRecordSet)
     {
@@ -438,6 +481,9 @@ public sealed class EuQueryExecutionResult
         ArgumentException.ThrowIfNullOrWhiteSpace(scopeManifestCanonicalSha256);
         ArgumentNullException.ThrowIfNull(documentAcquisitionOutcomesByOrdinal);
         ArgumentNullException.ThrowIfNull(documentLadderResultsByOrdinal);
+        ArgumentNullException.ThrowIfNull(observedManifestationTypesByCelex);
+        ArgumentNullException.ThrowIfNull(observedExpressionsByCelex);
+        ArgumentNullException.ThrowIfNull(mintedRowsByOrdinal);
         ArgumentNullException.ThrowIfNull(corpusRecordSetRef);
         ArgumentNullException.ThrowIfNull(corpusRecordSet);
         var completion = familyOutcomes.All(static outcome => outcome.Kind == EuFamilyEnumerationOutcomeKind.Proven)
@@ -447,6 +493,7 @@ public sealed class EuQueryExecutionResult
             topology, familyOutcomes, observedObjectCount, observedExpressionCount, reductionExclusions,
             watermarkWitnessPlan, rootBinding, witnessReconciliation, witnessTerminations, scopeManifestReceipt,
             scopeManifestCanonicalSha256, documentAcquisitionOutcomesByOrdinal, documentLadderResultsByOrdinal,
+            observedManifestationTypesByCelex, observedExpressionsByCelex, mintedRowsByOrdinal,
             corpusRecordSetRef, corpusRecordSet, completion, null, null, null, null);
     }
 
@@ -462,7 +509,7 @@ public sealed class EuQueryExecutionResult
         ArgumentNullException.ThrowIfNull(refusal);
         return new(
             topology, familyOutcomes, 0, 0, [], null, null, null, null, null, null, null, null, null, null, null,
-            refusal, decodeRefusal, decodeOffendingIri, decodeSnapshotRefusal);
+            null, null, null, refusal, decodeRefusal, decodeOffendingIri, decodeSnapshotRefusal);
     }
 
     /// <summary>Always present: minting it cannot fail, and it is useful context on a refusal too.</summary>
@@ -558,6 +605,73 @@ public sealed class EuQueryExecutionResult
     /// misreport every fall-through object.
     /// </remarks>
     public IReadOnlyDictionary<int, EuDocumentLadderResult>? DocumentLadderResultsByOrdinal { get; }
+
+    /// <summary>
+    /// Per requested CELEX, the DISTINCT manifestation type tokens FAMILY M ACTUALLY LISTED for
+    /// that seed's OWN ROOT WORK, sorted ordinally.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// FILTERED TO THE ROOT'S OWN PARENT, and D1-05g's acceptance run is why. Family M is asked
+    /// about the whole closure, so its delivered rows cover the root AND every consolidated state
+    /// the census discovered. Unioning them and comparing the result against a census OF ROOT
+    /// WORKS reported the closure's types as the root's: measured on the retained family M page,
+    /// both roots list exactly what the census records and pdfa2a appears ONLY on states, four of
+    /// the six. Reading that as publisher drift and widening the census would have recorded a
+    /// false fact about the office and made a failing run pass.
+    /// </para>
+    /// </remarks>
+    /// <remarks>
+    /// <para>
+    /// THE PUBLISHER'S OWN LISTING, AND NEVER WHAT THE LADDER ADMITTED. The distinction is the
+    /// whole reason this property exists rather than the canary reading
+    /// <see cref="DocumentLadderResultsByOrdinal"/>: that is the LADDER, the formats this run
+    /// attempted and was served, which is a fact about our fetching rather than about the office's
+    /// inventory. Comparing a census of what the office lists against a record of what we managed
+    /// to fetch would report our own coverage as the publisher's holdings.
+    /// </para>
+    /// <para>
+    /// A SET RATHER THAN COUNTS, and that is settled rather than convenient. Family M lists
+    /// manifestation TYPES per Work and emits no per-format row, so there is no row to count: a
+    /// count comparison would have to invent one. The census per-type counts stay recorded as the
+    /// publisher's inventory and are compared as type SETS. Counting the inventory, if it is ever
+    /// wanted, needs its own acquisition and is residue R8.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyDictionary<string, IReadOnlyList<string>>? ObservedManifestationTypesByCelex { get; }
+
+    /// <summary>
+    /// Per requested CELEX, the count of DISTINCT expressions family X delivered FOR THAT SEED'S
+    /// OWN ROOT WORK, and separately for the consolidated states its census discovered.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// SPLIT BECAUSE THE CENSUS IS PER ROOT WORK. <see cref="ObservedExpressionCount"/> is the
+    /// whole closure's distinct expressions, roots and states together, which is the right number
+    /// for the manifest and the WRONG number to compare against a census of root Works. Before
+    /// D1-05g the two happened to agree, because family X was only ever asked about roots; asking
+    /// about the states its own census discovered is what separated them, and the acceptance run
+    /// measured 116 across the closure against a census total of 47.
+    /// </para>
+    /// <para>
+    /// The states' expressions are REPORTED, not discarded: they are a real observation of real
+    /// Works this run acquired, and dropping them to make a comparison line up would be the
+    /// fabrication this split exists to avoid.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyDictionary<string, EuObservedExpressionSplit>? ObservedExpressionsByCelex { get; }
+
+    /// <summary>
+    /// Every MINTED manifest row, whether or not a body was fetched for it.
+    /// </summary>
+    /// <remarks>
+    /// The evidence index emits one row per entry here, so a row the body axis excluded is stated
+    /// rather than absent. It is keyed by ordinal and CARRIES THE OBJECT KEY, because the ordinal a
+    /// body lands on was measured to differ between two runs of the same head while the four bodies
+    /// held were the same four; an explanation keyed to position would be true of one run and false
+    /// of the next.
+    /// </remarks>
+    public IReadOnlyDictionary<int, EuMintedRowAccounting>? MintedRowsByOrdinal { get; }
 
     /// <summary>
     /// D1-06c-EU fix two: this run's own written corpus/6 record set artifact reference. Present iff
@@ -676,7 +790,7 @@ public sealed class EuQueryExecutionAdapter
     /// <param name="evidenceResolver">The evidence resolver the scope reduction requires.</param>
     public async Task<EuQueryExecutionResult> RunAsync(
         IReadOnlyList<(EuCensusPartitionRunRequest Request, BoundMachineRequest SourceWitness)> censusFamilies,
-        IReadOnlyList<(EuObjectFactsPartitionRunRequest Request, BoundMachineRequest SourceWitness)> objectFactsFamilies,
+        EuObjectFactsBatchPolicy objectFactsPolicy,
         MachineQueryRendererSource witnessRendererSource,
         BoundMachineRequest witnessSourceWitness,
         MachineQueryRendererSource documentFetchRendererSource,
@@ -685,7 +799,7 @@ public sealed class EuQueryExecutionAdapter
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(censusFamilies);
-        ArgumentNullException.ThrowIfNull(objectFactsFamilies);
+        ArgumentNullException.ThrowIfNull(objectFactsPolicy);
         ArgumentNullException.ThrowIfNull(witnessRendererSource);
         ArgumentNullException.ThrowIfNull(witnessSourceWitness);
         ArgumentNullException.ThrowIfNull(documentFetchRendererSource);
@@ -693,7 +807,7 @@ public sealed class EuQueryExecutionAdapter
         ArgumentNullException.ThrowIfNull(evidenceResolver);
 
         var topology = MintTopology();
-        var outcomes = new List<EuFamilyEnumerationOutcome>(censusFamilies.Count + objectFactsFamilies.Count);
+        var outcomes = new List<EuFamilyEnumerationOutcome>(censusFamilies.Count * 5);
 
         // ---- Run and prove every census-family seed. ----
         var censusByFamilyKey = new Dictionary<
@@ -714,30 +828,6 @@ public sealed class EuQueryExecutionAdapter
             }
         }
 
-        // ---- Run and prove every object-facts batch (P, X, W, M). ----
-        // Keyed by (Set, familyKey) rather than familyKey alone: EuObjectFactsDiscoveryPlan.PartitionKeyFor
-        // is a pure function of the batch's own object set, never of which query set (P, X, W or M)
-        // asked it, so two families sharing one batch of objects (the common case: P, X, W and M all
-        // cover the same discovered closure) mint the IDENTICAL partition key. A dictionary keyed on
-        // that key alone would silently collapse four proven families into one.
-        var objectFactsByKey = new Dictionary<
-            (EuObjectFactsQuerySet Set, string FamilyKey),
-            (AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationDeliveryReceipt Receipt)>();
-        foreach (var (request, sourceWitness) in objectFactsFamilies)
-        {
-            var runResult = await _executor.RunObjectFactsPartitionAsync(request, sourceWitness, cancellationToken)
-                .ConfigureAwait(false);
-            if (!TryRecordOutcome(runResult, out var familyKey, out var proof, out var receipt, outcomes))
-            {
-                continue;
-            }
-
-            if (proof is not null && receipt is not null)
-            {
-                objectFactsByKey[(request.Set, familyKey)] = (proof, receipt);
-            }
-        }
-
         if (censusByFamilyKey.Count != censusFamilies.Count)
         {
             return EuQueryExecutionResult.Refused(
@@ -745,15 +835,6 @@ public sealed class EuQueryExecutionAdapter
                 new EuQueryExecutionRefusalDetail(
                     EuQueryExecutionRefusal.CensusFamilyNotProven,
                     "one or more requested census-family seeds did not prove this run's enumeration."));
-        }
-
-        if (objectFactsByKey.Count != objectFactsFamilies.Count)
-        {
-            return EuQueryExecutionResult.Refused(
-                topology, outcomes,
-                new EuQueryExecutionRefusalDetail(
-                    EuQueryExecutionRefusal.ObjectFactsFamilyNotProven,
-                    "one or more requested object-facts family batches did not prove this run's enumeration."));
         }
 
         // ---- Reopen and independently re-verify every proven family's own delivered rows. ----
@@ -775,6 +856,65 @@ public sealed class EuQueryExecutionAdapter
             }
 
             censusRowsBySeed[requestedCelex] = (rows, reopenedProfile);
+        }
+
+        // ---- D1-05g: derive O from THIS RUN'S OWN PROVEN CENSUS, then ask P, X, W and M. ----
+        // The order is the fix. Before D1-05g the caller handed in the object lists and every
+        // caller passed the seed ROOTS, so family P was asked about two objects while the decoder
+        // walked root plus every consolidated state the census had just discovered. Lane A proved
+        // it against the retained bytes: 41 rows over exactly two distinct objects, and
+        // TryBuildPredicateObservation treats zero matches for a subject as malformed BY EXPLICIT
+        // DESIGN, so the state arrived undescribed and the decode refused. A tolerance was tried
+        // and cannot work: the content class is derived from these same family P rows, so decoding
+        // an undescribed state as NotObserved produced ContentClassClosurePositionMismatch the
+        // moment it ran. There is no reading of an absent row that yields a content class.
+        var closuresByCelex = new Dictionary<string, (HashSet<string> Closure, string RootIri)>(StringComparer.Ordinal);
+        var allRequestedSeedsClosure = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (requestedCelex, (familyRows, familyProfile)) in censusRowsBySeed)
+        {
+            var seedClosure = ExtractClosure(familyRows, familyProfile, requestedCelex, out var seedRootIri);
+            closuresByCelex[requestedCelex] = (seedClosure, seedRootIri);
+            allRequestedSeedsClosure.UnionWith(seedClosure);
+        }
+
+
+        var objectFactsRequests = EuObjectFactsBatchFactory.Build(
+            objectFactsPolicy,
+            allRequestedSeedsClosure,
+            closuresByCelex.Values.Select(static entry => entry.RootIri).ToArray());
+
+        // ---- Run and prove every object-facts batch (P, X, W, M). ----
+        // Keyed by (Set, familyKey) rather than familyKey alone: EuObjectFactsDiscoveryPlan.PartitionKeyFor
+        // is a pure function of the batch's own object set, never of which query set (P, X, W or M)
+        // asked it, so two families sharing one batch of objects (the common case: P, X, W and M all
+        // cover the same discovered closure) mint the IDENTICAL partition key. A dictionary keyed on
+        // that key alone would silently collapse four proven families into one.
+        var objectFactsByKey = new Dictionary<
+            (EuObjectFactsQuerySet Set, string FamilyKey),
+            (AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationDeliveryReceipt Receipt)>();
+        foreach (var request in objectFactsRequests)
+        {
+            var runResult = await _executor.RunObjectFactsPartitionAsync(
+                    request, objectFactsPolicy.SourceWitness, cancellationToken)
+                .ConfigureAwait(false);
+            if (!TryRecordOutcome(runResult, out var familyKey, out var proof, out var receipt, outcomes))
+            {
+                continue;
+            }
+
+            if (proof is not null && receipt is not null)
+            {
+                objectFactsByKey[(request.Set, familyKey)] = (proof, receipt);
+            }
+        }
+
+        if (objectFactsByKey.Count != objectFactsRequests.Count)
+        {
+            return EuQueryExecutionResult.Refused(
+                topology, outcomes,
+                new EuQueryExecutionRefusalDetail(
+                    EuQueryExecutionRefusal.ObjectFactsFamilyNotProven,
+                    "one or more requested object-facts family batches did not prove this run's enumeration."));
         }
 
         var objectFactsRows = new Dictionary<EuObjectFactsQuerySet, List<(IReadOnlyList<RepeatedEnumerationRow> Rows, RepeatedEnumerationInterpretationProfile Profile, AbsenceFamilyEnumerationProof Proof)>>();
@@ -837,6 +977,10 @@ public sealed class EuQueryExecutionAdapter
 
         // ---- Per seed: derive the closure from the census family's own rows, filter P/X to it, decode. ----
         var allSnapshots = new List<EuCellarObjectSnapshot>();
+        var observedManifestationTypesByCelex =
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        var observedExpressionsByCelex =
+            new Dictionary<string, EuObservedExpressionSplit>(StringComparer.Ordinal);
         var discoveredRoots = new List<string>();
         var expressionIris = new HashSet<string>(StringComparer.Ordinal);
         var rootWatermarkObservations = new List<(string WatermarkLexical, string CanonicalEntryKey)>();
@@ -848,13 +992,42 @@ public sealed class EuQueryExecutionAdapter
         // seed before decode ever sees it) -- but a row belonging to NO requested seed at all must no
         // longer be silently dropped alongside a row that legitimately belongs to a sibling seed's
         // own closure.
-        var closuresByCelex = new Dictionary<string, (HashSet<string> Closure, string RootIri)>(StringComparer.Ordinal);
-        var allRequestedSeedsClosure = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var (requestedCelex, (familyRows, familyProfile)) in censusRowsBySeed)
+        // ---- D1-05g: resolve EVERY seed's act form before decoding ANY of them. ----
+        // The old shape returned on the first seed that failed, inside the decode loop. Both roots
+        // of the canary fail identically when the mapping is wrong, and the message named only the
+        // one reached first, which is how the defect read as a directive-specific problem for as
+        // long as it did. A refusal that names one of two failures actively misdirects.
+        var recordFormByCelex = new Dictionary<string, EuActForm>(StringComparer.Ordinal);
+        var recordFormFailures = new List<string>();
+        foreach (var (requestedCelex, _) in censusRowsBySeed)
         {
-            var seedClosure = ExtractClosure(familyRows, familyProfile, requestedCelex, out var seedRootIri);
-            closuresByCelex[requestedCelex] = (seedClosure, seedRootIri);
-            allRequestedSeedsClosure.UnionWith(seedClosure);
+            var (closure, rootIri) = closuresByCelex[requestedCelex];
+            var seedPRows = FilterByClosureColumn(
+                allPRows, pProfile, "object", closure, allRequestedSeedsClosure);
+            if (TryResolveRecordForm(
+                    seedPRows, pProfile, rootIri, out var resolvedForm, out var conflict))
+            {
+                recordFormByCelex[requestedCelex] = resolvedForm;
+                continue;
+            }
+
+            recordFormFailures.Add(
+                $"seed '{requestedCelex}' (root '{rootIri}') "
+                + (conflict is null
+                    ? "observed "
+                    : $"is CO-TYPED, carrying {conflict}, which cannot be resolved by row order. It observed ")
+                + DescribeRowsForRoot(seedPRows, pProfile, rootIri));
+        }
+
+        if (recordFormFailures.Count != 0)
+        {
+            return EuQueryExecutionResult.Refused(
+                topology, outcomes,
+                new EuQueryExecutionRefusalDetail(
+                    EuQueryExecutionRefusal.RecordFormNotResolved,
+                    $"{recordFormFailures.Count} of {censusRowsBySeed.Count} root(s) carry no "
+                    + "act-form value this adapter can map to a closed EuActForm. "
+                    + string.Join(" ", recordFormFailures)));
         }
 
         foreach (var (requestedCelex, (familyRows, familyProfile)) in censusRowsBySeed)
@@ -868,15 +1041,7 @@ public sealed class EuQueryExecutionAdapter
             // EuCellarObjectDecode.TryDecode refuses any row outside the ONE closure it is handed.
             var seedMRows = FilterByClosureColumn(allMRows, mProfile, "parent", closure, allRequestedSeedsClosure);
 
-            if (!TryResolveRecordForm(seedPRows, pProfile, rootIri, out var recordForm))
-            {
-                return EuQueryExecutionResult.Refused(
-                    topology, outcomes,
-                    new EuQueryExecutionRefusalDetail(
-                        EuQueryExecutionRefusal.RecordFormNotResolved,
-                        $"seed '{requestedCelex}' (root '{rootIri}') carries no admitted " +
-                        "resource_legal_type value this adapter can map to a closed EuActForm."));
-            }
+            var recordForm = recordFormByCelex[requestedCelex];
 
             var snapshots = EuCellarObjectDecode.TryDecode(
                 requestedCelex,
@@ -912,6 +1077,14 @@ public sealed class EuQueryExecutionAdapter
 
             allSnapshots.AddRange(snapshots);
             CollectExpressionIris(seedXRows, xProfile, expressionIris);
+
+            // D1-05g: the type set the canary compares against the census, taken from FAMILY M'S
+            // OWN ROWS. Not from the ladder: the ladder is what this run attempted and was served,
+            // which is a fact about our fetching rather than about the office's inventory.
+            observedManifestationTypesByCelex[requestedCelex] =
+                CollectListedManifestationTypes(seedMRows, mProfile, rootIri);
+            observedExpressionsByCelex[requestedCelex] =
+                SplitExpressionsByParent(seedXRows, xProfile, rootIri);
         }
 
         // ---- D1-05c-2 precision two: bind the discovered roots to Appendix A's own 82-seed pack. ----
@@ -1090,7 +1263,8 @@ public sealed class EuQueryExecutionAdapter
         // ordinal. Extracted into RunDocumentAcquisitionAsync -- see that method's own remarks for
         // exactly what lands here versus what refuses the whole run instead, and for why the gate
         // moved there. ----
-        var (documentAcquisitionOutcomesByOrdinal, documentLadderResultsByOrdinal, acquisitionRefusal) =
+        var (documentAcquisitionOutcomesByOrdinal, documentLadderResultsByOrdinal,
+                mintedRowAccounting, acquisitionRefusal) =
             await RunDocumentAcquisitionAsync(
                 reopenedManifest, mintedAddressesByObjectRef, documentFetchRendererSource,
                 documentFetchSourceWitness, cancellationToken)
@@ -1123,12 +1297,45 @@ public sealed class EuQueryExecutionAdapter
                     EuQueryExecutionRefusal.WatermarkBootstrapRefused, watermarkBootstrapRefusal.ToString()));
         }
 
-        var witnessPlan = EuWatermarkWitnessPlan.TryFreeze(
-            EuWatermarkWitnessPlan.OfficialCellarSparqlEndpoint,
-            EuWatermarkWitnessPlan.WatermarkPredicateIri,
-            EuWatermarkWitnessPlan.SortedResultWindowRows,
-            startPosition,
-            out var watermarkPlanRefusal);
+        // DESIGN A: the witness is restricted to THIS PACK'S OWN OBJECTS, in batches, rather than
+        // scanning the whole lastModificationDate graph. Measured rather than assumed: the
+        // unrestricted query needs 66.9 seconds to first byte against a 60 second RequestTimeout,
+        // because it sorts the whole feed; restricted to the pack it answers in 168 milliseconds
+        // with ORDER BY intact. The alternative of keeping the whole feed and dropping the deep sort
+        // was refuted by counting it: 17,230,321 rows after the bound, four orders of magnitude past
+        // any page a run could hold.
+        //
+        // The capacity is family P's SYMBOL and never a literal, so a change there moves this too.
+        var packObjects = allSnapshots
+            .Select(static snapshot => snapshot.ObjectRef.PublisherUri)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static iri => iri, StringComparer.Ordinal)
+            .ToArray();
+        var witnessBatches = new List<EuWatermarkWitnessPlan>();
+        EuWatermarkPlanRefusal watermarkPlanRefusal = EuWatermarkPlanRefusal.None;
+        for (var offset = 0; offset < packObjects.Length; offset += EuWatermarkWitnessPlan.BatchCapacity)
+        {
+            var batch = packObjects
+                .Skip(offset)
+                .Take(EuWatermarkWitnessPlan.BatchCapacity)
+                .ToArray();
+            var batchPlan = EuWatermarkWitnessPlan.TryFreeze(
+                EuWatermarkWitnessPlan.OfficialCellarSparqlEndpoint,
+                EuWatermarkWitnessPlan.WatermarkPredicateIri,
+                EuWatermarkWitnessPlan.SortedResultWindowRows,
+                startPosition,
+                batch,
+                out watermarkPlanRefusal);
+            if (batchPlan is null)
+            {
+                witnessBatches.Clear();
+                break;
+            }
+
+            witnessBatches.Add(batchPlan);
+        }
+
+        var witnessPlan = witnessBatches.Count == 0 ? null : witnessBatches[0];
         if (witnessPlan is null)
         {
             return EuQueryExecutionResult.Refused(
@@ -1146,7 +1353,7 @@ public sealed class EuQueryExecutionAdapter
         // startPosition from -- still has to run the witness's own traversal from that bound; it is
         // simply likely, not guaranteed, to observe few or zero rows beyond it.
         var traversal = await _executor.RunWitnessTraversalAsync(
-                witnessPlan, witnessRendererSource, witnessSourceWitness, cancellationToken)
+                witnessBatches, witnessRendererSource, witnessSourceWitness, cancellationToken)
             .ConfigureAwait(false);
         if (traversal.Entries is null)
         {
@@ -1171,12 +1378,27 @@ public sealed class EuQueryExecutionAdapter
         var witnessIdentityPredicateBindingRef = new SourceArtifactRef(
             EuWitnessIdentityPredicateBindingResourceId, traversal.DeliveryEvidenceSha256!);
 
+        // D1-05g: THE DISCOVERED FAMILY IS THIS RUN'S OWN CLOSURE, not an empty list. Every state
+        // here was delivered by the census this run proved and reverified, so a projection from a
+        // state to its root is evidence this run acquired rather than an answer invented for the
+        // witness. The family was empty before, which is why DiscoveredFamilyContains could never
+        // be true and every delivered entry fell to the unresolved terminal.
+        var witnessProjections = closuresByCelex
+            .SelectMany(entry => entry.Value.Closure.Select(member => new EuFeedFamilyProjection(
+                entry.Value.RootIri,
+                entry.Key,
+                member)))
+            .DistinctBy(static projection => (projection.SourceWorkRoot, projection.ProjectedKey))
+            .OrderBy(static projection => projection.SourceWorkRoot, StringComparer.Ordinal)
+            .ThenBy(static projection => projection.ProjectedKey, StringComparer.Ordinal)
+            .ToArray();
+
         var feedWitness = EuFeedRootIntersection.TryBind(
             EuConsolidationDiscoveryPlan.Create().ArtifactRef,
             witnessClosureMatrixRef,
             witnessIdentityPredicateBindingRef,
             rootBinding.DiscoveredRoots,
-            Array.Empty<EuFeedFamilyProjection>(),
+            witnessProjections,
             out var feedWitnessRefusal);
         if (feedWitness is null)
         {
@@ -1186,23 +1408,39 @@ public sealed class EuQueryExecutionAdapter
                     EuQueryExecutionRefusal.WitnessBindingRefused, feedWitnessRefusal.ToString()));
         }
 
-        // Every delivered entry, decoded honestly: no identity resolver exists in this codebase yet
-        // (EuFeedEntryObservation's own remarks -- "writing a resolver here would be inventing that
-        // answer"), so every real row this run observed is constructed with
-        // identityResolutionClosed: false and empty resolved roots/projections, which Classify then
-        // correctly and honestly terminates as EuFeedTerminal.UnresolvedOrAmbiguous /
-        // IdentityResolutionDidNotClose. This is a real, already-modeled outcome, not a shortcut.
+        // D1-05g: AN ENTRY THIS RUN DEMONSTRABLY HOLDS IS RESOLVED FROM WHAT IT HOLDS.
+        //
+        // The previous shape observed EVERY entry with identityResolutionClosed: false, on the
+        // reasoning that no identity resolver exists and writing one would be inventing the answer.
+        // That reasoning was right about inventing and wrong about this case. The acceptance run
+        // delivered exactly one entry, cellar/5f2552c2, and this same run had already proved,
+        // reopened and reverified a census saying that IRI is a consolidated state of root
+        // cellar/3e485e15, and written it a record. Terminating something we hold as
+        // UnresolvedOrAmbiguous is not honesty, it is discarding evidence the run acquired.
+        //
+        // So the lookup is THIS RUN'S OWN CLOSURE and nothing else. An entry outside it stays
+        // honestly unresolved, because for that one there really is no resolver.
+        var projectionByEntry = witnessProjections.ToDictionary(
+            static projection => projection.ProjectedKey, StringComparer.Ordinal);
+        var rootByEntry = witnessProjections.ToDictionary(
+            static projection => projection.ProjectedKey,
+            static projection => projection.SourceWorkRoot,
+            StringComparer.Ordinal);
+
         var terminations = new List<EuFeedEntryTermination>(traversal.Entries.Count);
         foreach (var entry in traversal.Entries.CanonicalEntries)
         {
+            var canonicalEntry = EuPackRootCanonicalForm.TryCanonicalize(entry.CanonicalEntryKey, out _)
+                ?? entry.CanonicalEntryKey;
+            var resolved = projectionByEntry.TryGetValue(canonicalEntry, out var projection);
             var observation = EuFeedEntryObservation.TryObserve(
                 entry,
-                identityResolutionClosed: false,
-                Array.Empty<string>(),
-                Array.Empty<EuFeedFamilyProjection>(),
+                identityResolutionClosed: resolved,
+                resolved ? [rootByEntry[canonicalEntry]] : Array.Empty<string>(),
+                resolved ? [projection!] : Array.Empty<EuFeedFamilyProjection>(),
                 out var observationRefusal)
                 ?? throw new InvalidOperationException(
-                    $"unreachable: an honestly-unresolved witness observation cannot itself be refused ({observationRefusal}).");
+                    $"unreachable: a witness observation cannot itself be refused ({observationRefusal}).");
             terminations.Add(feedWitness.Classify(observation, traversal.Entries));
         }
 
@@ -1252,6 +1490,9 @@ public sealed class EuQueryExecutionAdapter
             observedObjectCount: allSnapshots.Count,
             observedExpressionCount: expressionIris.Count,
             reductionExclusions: exclusions,
+            observedManifestationTypesByCelex: observedManifestationTypesByCelex,
+            observedExpressionsByCelex: observedExpressionsByCelex,
+            mintedRowsByOrdinal: mintedRowAccounting ?? new Dictionary<int, EuMintedRowAccounting>(),
             watermarkWitnessPlan: witnessPlan,
             rootBinding: rootBinding,
             witnessReconciliation: witnessReconciliation,
@@ -1311,6 +1552,7 @@ public sealed class EuQueryExecutionAdapter
     internal async Task<(
         IReadOnlyDictionary<int, CorpusAcquisitionOutcome>? Outcomes,
         IReadOnlyDictionary<int, EuDocumentLadderResult>? LadderResults,
+        IReadOnlyDictionary<int, EuMintedRowAccounting>? MintedRows,
         EuQueryExecutionRefusalDetail? Refusal)> RunDocumentAcquisitionAsync(
         ScopeManifest reopenedManifest,
         IReadOnlyDictionary<SourceObjectRef, IReadOnlyList<EuDocumentFetchAddress>> mintedAddressesByObjectRef,
@@ -1341,6 +1583,8 @@ public sealed class EuQueryExecutionAdapter
 
         var documentAcquisitionOutcomesByOrdinal = new Dictionary<int, CorpusAcquisitionOutcome>();
         var ladderResultsByOrdinal = new Dictionary<int, EuDocumentLadderResult>();
+        var mintedRows = new Dictionary<int, string>();
+        var bodyAxisExcluded = new HashSet<int>();
         for (var rowOrdinal = 0; rowOrdinal < reopenedManifest.Rows.Count; rowOrdinal++)
         {
             var row = reopenedManifest.Rows[rowOrdinal];
@@ -1349,10 +1593,19 @@ public sealed class EuQueryExecutionAdapter
                 continue;
             }
 
+            // D1-05g: EVERY MINTED ROW IS RECORDED, selected or not. The evidence index emitted a
+            // row only for ordinals a fetch was attempted for, so a row the body axis excluded was
+            // simply ABSENT and a reader could not tell "not selected" from "failed" from "never
+            // attempted". A missing row is the worst form of the unobserved-versus-zero defect,
+            // because there is not even a field to be wrong in.
+            mintedRows[rowOrdinal] = reopenedManifest.ObservedObjects[rowOrdinal].ObjectRef.CanonicalKey;
+
             // Defect nine's own gate: no fetch attempt at all for a Minted row this manifest's own
-            // body axis already excludes.
+            // body axis already excludes. The row above records that it existed and was not
+            // selected; this skips the FETCH and not the accounting.
             if (!bodyAcceptedOrdinals.Contains(rowOrdinal))
             {
+                bodyAxisExcluded.Add(rowOrdinal);
                 continue;
             }
 
@@ -1363,7 +1616,7 @@ public sealed class EuQueryExecutionAdapter
                 // own per-snapshot loop, the only path that ever mints one. Refusing the whole run
                 // here, rather than throwing, keeps this method's own "never throws past a typed
                 // refusal" discipline even for a defect this loop cannot itself introduce.
-                return (null, null, new EuQueryExecutionRefusalDetail(
+                return (null, null, null, new EuQueryExecutionRefusalDetail(
                     EuQueryExecutionRefusal.AcquisitionOutcomeNotRepresentable,
                     $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}') carries a " +
                     "Minted fetch address this run never itself minted."));
@@ -1401,7 +1654,7 @@ public sealed class EuQueryExecutionAdapter
                     // Every other attempt-level refusal (today, only ObservationNotExecuted) stays a
                     // whole-run refusal: this run's own document-fetch session never started at all,
                     // which is not a fact about any one object's own document.
-                    return (null, null, new EuQueryExecutionRefusalDetail(
+                    return (null, null, null, new EuQueryExecutionRefusalDetail(
                         EuQueryExecutionRefusal.DocumentFetchSessionNotStarted,
                         $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): code=" +
                         $"{attempt.Refusal} detail={attempt.Detail}."));
@@ -1430,7 +1683,7 @@ public sealed class EuQueryExecutionAdapter
                     catch (Exception exception)
                         when (exception is CustodyIntegrityException or CustodyRequiredException)
                     {
-                        return (null, null, new EuQueryExecutionRefusalDetail(
+                        return (null, null, null, new EuQueryExecutionRefusalDetail(
                             EuQueryExecutionRefusal.DocumentBodyNotRetained,
                             $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): the " +
                             $"fetched body could not be reread: {exception.GetType().Name}: " +
@@ -1442,7 +1695,7 @@ public sealed class EuQueryExecutionAdapter
                         .ConfigureAwait(false);
                     if (bodyReceipt is null)
                     {
-                        return (null, null, new EuQueryExecutionRefusalDetail(
+                        return (null, null, null, new EuQueryExecutionRefusalDetail(
                             EuQueryExecutionRefusal.DocumentBodyNotRetained,
                             $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): " +
                             bodyHoldFailure));
@@ -1483,7 +1736,7 @@ public sealed class EuQueryExecutionAdapter
                 var routeOutcomeDetail = evidence.Outcome is IncompleteHttpRouteOutcome incompleteOutcome
                     ? $"{evidence.Outcome.GetType().Name}({incompleteOutcome.Reason})"
                     : evidence.Outcome.GetType().Name;
-                return (null, null, new EuQueryExecutionRefusalDetail(
+                return (null, null, null, new EuQueryExecutionRefusalDetail(
                     EuQueryExecutionRefusal.AcquisitionOutcomeNotRepresentable,
                     $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): classified " +
                     $"refusal={classified.Refusal} observedStatus={classified.ObservedStatus} " +
@@ -1502,7 +1755,11 @@ public sealed class EuQueryExecutionAdapter
                 Array.AsReadOnly(attemptedMediaTypes.ToArray()), servedMediaType);
         }
 
-        return (documentAcquisitionOutcomesByOrdinal, ladderResultsByOrdinal, null);
+        return (documentAcquisitionOutcomesByOrdinal, ladderResultsByOrdinal,
+            mintedRows.ToDictionary(
+                static pair => pair.Key,
+                pair => new EuMintedRowAccounting(pair.Value, !bodyAxisExcluded.Contains(pair.Key))),
+            null);
     }
 
     /// <summary>
@@ -1717,6 +1974,39 @@ public sealed class EuQueryExecutionAdapter
     }
 
     /// <summary>
+    /// The DISTINCT manifestation type tokens family M listed for one Work, sorted ordinally.
+    /// </summary>
+    /// <remarks>
+    /// Rows whose value is unbound are the office's own typed ABSENCE and contribute no token, so a
+    /// Work the office lists nothing for yields an EMPTY set rather than a missing entry. That
+    /// distinction is the point: an empty set is an observation, and a missing key would be a
+    /// question never asked.
+    /// </remarks>
+    private static IReadOnlyList<string> CollectListedManifestationTypes(
+        IReadOnlyList<RepeatedEnumerationRow> mRows,
+        RepeatedEnumerationInterpretationProfile mProfile,
+        string rootIri)
+    {
+        var parentIndex = IndexOf(mProfile, "parent");
+        var valueIndex = IndexOf(mProfile, "value");
+        var valueKindIndex = IndexOf(mProfile, "value_kind");
+        return mRows
+            .Where(row =>
+            {
+                var parent = row.Terms[parentIndex].Value;
+                return parent is not null
+                    && EuPackRootCanonicalForm.TryCanonicalize(parent, out _) == rootIri;
+            })
+            .Where(row => row.Terms[valueKindIndex].Value == "literal")
+            .Select(row => row.Terms[valueIndex].Value)
+            .Where(static value => !string.IsNullOrEmpty(value))
+            .Select(static value => value!)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static value => value, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    /// <summary>
     /// Extracts D1-05c-1's own closure (the root plus every discovered consolidated state) from
     /// D1-05a's family rows, exactly as <see cref="EuCellarObjectDecode.TryDecode"/> does internally --
     /// duplicated here only because this adapter needs the closure BEFORE calling that door, to filter
@@ -1810,35 +2100,110 @@ public sealed class EuQueryExecutionAdapter
     }
 
     /// <summary>
-    /// D1-05c-1's own decode contract requires a caller-resolved <see cref="EuActForm"/> as an input
-    /// it does not itself derive ("Not recoverable from these closures' rows; the caller supplies it
-    /// from wherever it independently resolves resource_legal_type" -- <see cref="EuCellarObjectDecode.TryDecode"/>'s
-    /// own doc comment). This reads it from the SAME family P rows this run already acquired for the
-    /// seed's own root: every <c>resource_legal_type</c> value P observed for the root, read by its
-    /// last IRI path segment against the EU Publications Office resource-type authority table's own
-    /// short-code convention (the same convention <see cref="EuCellarObjectDecode"/>'s own
-    /// <c>CONSOLID_ACT</c> marker and <see cref="EuScopeProfile.RecordFormToken"/>'s wire tokens both
-    /// already use). This is not a new Contracts-layer mapping invented for this slice: it is reading
-    /// a value already present in already-acquired publisher data, never a new query or a guess. A
-    /// root whose every observed <c>resource_legal_type</c> value fails to map refuses this seed's
-    /// decode rather than defaulting to any one closed member.
+    /// Every family P row this run observed for one root, as predicate, value_kind and value
+    /// VERBATIM, for a refusal that has to be actionable without a second run.
     /// </summary>
-    private static bool TryResolveRecordForm(
+    /// <remarks>
+    /// A refusal saying a value could not be mapped WITHOUT saying what the value was names
+    /// nothing: the reader cannot tell an unadmitted form from an absent predicate from a
+    /// projection that never selected it, and those are three different defects with three
+    /// different fixes. Only the bytes distinguish them, so the bytes travel with the refusal.
+    /// The absent case is stated in words rather than as an empty list, because an empty list
+    /// reads as a rendering bug.
+    /// </remarks>
+    private static string DescribeRowsForRoot(
         IReadOnlyList<RepeatedEnumerationRow> pRows,
         RepeatedEnumerationInterpretationProfile pProfile,
-        string rootIri,
-        out EuActForm recordForm)
+        string rootIri)
     {
         var objectIndex = IndexOf(pProfile, "object");
         var predicateIndex = IndexOf(pProfile, "predicate");
         var valueIndex = IndexOf(pProfile, "value");
         var valueKindIndex = IndexOf(pProfile, "value_kind");
-        // EuObjectFactsDiscoveryPlan.CdmIri is internal to Lex.V3.Contracts (this path claim does not
-        // extend there); this is the exact IRI its own switch produces for ResourceLegalType
-        // ("cdm:resource_legal_type", the fixed CDM namespace every EU predicate constant in this
-        // repository already uses), stated here as a plain literal rather than reached reflectively.
-        const string resourceLegalTypeIri = "http://publications.europa.eu/ontology/cdm#resource_legal_type";
 
+        var described = pRows
+            .Where(row =>
+            {
+                var objectValue = row.Terms[objectIndex].Value;
+                return objectValue is not null
+                    && EuPackRootCanonicalForm.TryCanonicalize(objectValue, out _) == rootIri;
+            })
+            .Select(row =>
+            {
+                var predicate = row.Terms[predicateIndex].Value ?? "(unbound)";
+                var valueKind = row.Terms[valueKindIndex].Value ?? "(unbound)";
+                var value = row.Terms[valueIndex].Value ?? "(unbound)";
+                return $"[predicate={predicate} value_kind={valueKind} value={value}]";
+            })
+            .OrderBy(static entry => entry, StringComparer.Ordinal)
+            .ToArray();
+
+        return described.Length == 0
+            ? "NO family P row at all, so the predicate was not delivered for this root."
+            : $"{described.Length} family P row(s): {string.Join(" ", described)}";
+    }
+
+    /// <summary>
+    /// D1-05c-1's own decode contract requires a caller-resolved <see cref="EuActForm"/> as an input
+    /// it does not itself derive ("Not recoverable from these closures' rows; the caller supplies it
+    /// from wherever it independently resolves resource_legal_type" -- <see cref="EuCellarObjectDecode.TryDecode"/>'s
+    /// own doc comment). This reads it from the SAME family P rows this run already acquired for the
+    /// seed's own root, read by its last IRI path segment against the EU Publications Office
+    /// resource-type authority table's own short-code convention (the same convention
+    /// <see cref="EuCellarObjectDecode"/>'s own <c>CONSOLID_ACT</c> marker and
+    /// <see cref="EuScopeProfile.RecordFormToken"/>'s wire tokens both already use). This is not a
+    /// new Contracts-layer mapping invented for this slice: it is reading a value already present in
+    /// already-acquired publisher data, never a new query or a guess. A root whose every observed
+    /// value fails to map refuses this seed's decode rather than defaulting to any closed member.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// D1-05g: THE PREDICATE IS <c>work_has_resource-type</c> AND IT USED TO BE THE WRONG ONE. This
+    /// guard asked for <c>resource_legal_type</c> AND required <c>value_kind</c> of <c>"iri"</c>.
+    /// Those two conditions are mutually exclusive against the publisher's own data:
+    /// <c>resource_legal_type</c> carries a one-letter STRING LITERAL, measured as <c>"L"</c> for
+    /// the directive root and <c>"R"</c> for the regulation root, so the loop skipped every row and
+    /// the switch below was never reached for any root. The switch speaks
+    /// <c>work_has_resource-type</c>'s vocabulary, whose values ARE authority IRIs ending DIR, REG
+    /// and TREATY, and both predicates were already being projected and retained side by side.
+    /// </para>
+    /// <para>
+    /// THE AUTHORITY FOR CHOOSING IT, cited by address rather than summarised:
+    /// <c>coordination/measurements/D1-EU-DIRECT-SEED-RESOURCE-TYPES-2026-09-01.md</c> line 32
+    /// joins through the <c>resource_legal_id_celex</c> and <c>work_has_resource-type</c> graph
+    /// pattern, over the 82-seed inventory at seed SHA-256
+    /// <c>ea1b4f276406a8bede5223459b92d7a94321de5b9a38de63397f2e22688d50c0</c>, and records the
+    /// complete observed direct-seed partition as TREATY 6, DIR 40, REG 36.
+    /// </para>
+    /// <para>
+    /// TWO CLAIMS THAT MUST NOT BE BLURRED. THE MEASUREMENT PROVES THE 82: every seed in the pack
+    /// carries one of three values and the switch below already maps all three, so no seed needs a
+    /// new <see cref="EuActForm"/> member and D1-05g is a wiring fix rather than a vocabulary
+    /// admission. THE RUN PROVES TWO: the canary reaches two roots and demonstrates DIR and REG on
+    /// those. Closure over today's pack is not closure over tomorrow's publisher, so any value
+    /// outside the switch stays a typed refusal naming the value VERBATIM rather than being mapped
+    /// to a nearest member or dropped.
+    /// </para>
+    /// </remarks>
+    private static bool TryResolveRecordForm(
+        IReadOnlyList<RepeatedEnumerationRow> pRows,
+        RepeatedEnumerationInterpretationProfile pProfile,
+        string rootIri,
+        out EuActForm recordForm,
+        out string? observedConflict)
+    {
+        var objectIndex = IndexOf(pProfile, "object");
+        var predicateIndex = IndexOf(pProfile, "predicate");
+        var valueIndex = IndexOf(pProfile, "value");
+        var valueKindIndex = IndexOf(pProfile, "value_kind");
+        // D1-05g. Reached through the typed accessor like every other guard in this reduction,
+        // now that Decision 80 has made it a pinned public door. The literal that used to sit here
+        // named a DIFFERENT predicate from the one the switch below speaks, and a string literal is
+        // checked against nothing, which is how the two drifted apart unnoticed.
+        var actFormPredicateIri = EuObjectFactsDiscoveryPlan.CdmIri(EuCdmPredicate.WorkHasResourceType);
+
+        observedConflict = null;
+        (EuActForm Form, string Value)? observed = null;
         foreach (var row in pRows)
         {
             var objectValue = row.Terms[objectIndex].Value;
@@ -1847,17 +2212,55 @@ public sealed class EuQueryExecutionAdapter
                 continue;
             }
 
-            if (row.Terms[predicateIndex].Value != resourceLegalTypeIri ||
+            if (row.Terms[predicateIndex].Value != actFormPredicateIri ||
                 row.Terms[valueKindIndex].Value != "iri")
             {
                 continue;
             }
 
             var value = row.Terms[valueIndex].Value;
-            if (value is not null && TryMapResourceTypeCode(value, out recordForm))
+            if (value is null)
             {
-                return true;
+                continue;
             }
+
+            // AN UNRECOGNISED VALUE IS A REFUSAL, NOT A ROW TO SKIP. Continuing past it meant a
+            // root carrying one mappable value and one unknown classified on the mappable one and
+            // DROPPED THE UNKNOWN SILENTLY, which is narrower than the measurement this resolver
+            // cites: that cut fails EXTRA and UNKNOWN values as well as co-typed ones, so a root
+            // the office has since given a second, unrecognised type would have been recorded as
+            // though the office still typed it once.
+            if (!TryMapResourceTypeCode(value, out var mapped))
+            {
+                observedConflict = observed is null
+                    ? value + " (unrecognised)"
+                    : observed.Value.Value + " and " + value + " (the second unrecognised)";
+                recordForm = default;
+                return false;
+            }
+
+            // A SECOND MAPPABLE VALUE IS A REFUSAL, NOT A TIE BROKEN BY ROW ORDER. This used to
+            // return on the first value it met, so a co-typed root would have been classified by
+            // whichever row the publisher happened to deliver first, and the answer would change
+            // between runs without anything saying so. The canary cannot see this: both its seeds
+            // are singletons. The accepted 82-seed measurement is what makes it reachable, since it
+            // admits exactly six singleton TREATY, forty singleton DIR and thirty six singleton REG
+            // sets and records the predicate itself as MULTIVALUED, and says missing, extra,
+            // co-typed, unknown, case-altered or unicode-aliased values fail the direct-seed cut.
+            if (observed is not null && mapped != observed.Value.Form)
+            {
+                observedConflict = observed.Value.Value + " and " + value;
+                recordForm = default;
+                return false;
+            }
+
+            observed ??= (mapped, value);
+        }
+
+        if (observed is not null)
+        {
+            recordForm = observed.Value.Form;
+            return true;
         }
 
         recordForm = default;
@@ -1883,6 +2286,42 @@ public sealed class EuQueryExecutionAdapter
             case "DEC_DEL": form = EuActForm.DelegatedDecision; return true;
             default: form = default; return false;
         }
+    }
+
+    /// <summary>
+    /// One seed's distinct expressions, split by whether their parent is the ROOT Work or one of
+    /// the consolidated states this run's census discovered.
+    /// </summary>
+    private static EuObservedExpressionSplit SplitExpressionsByParent(
+        IReadOnlyList<RepeatedEnumerationRow> xRows,
+        RepeatedEnumerationInterpretationProfile xProfile,
+        string rootIri)
+    {
+        var parentIndex = IndexOf(xProfile, "parent");
+        var objectIndex = IndexOf(xProfile, "object");
+        var ofRoot = new HashSet<string>(StringComparer.Ordinal);
+        var ofStates = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var row in xRows)
+        {
+            var parent = row.Terms[parentIndex].Value;
+            var expression = row.Terms[objectIndex].Value;
+            if (parent is null || expression is null)
+            {
+                continue;
+            }
+
+            var canonicalParent = EuPackRootCanonicalForm.TryCanonicalize(parent, out _);
+            if (string.Equals(canonicalParent, rootIri, StringComparison.Ordinal))
+            {
+                ofRoot.Add(expression);
+            }
+            else
+            {
+                ofStates.Add(expression);
+            }
+        }
+
+        return new EuObservedExpressionSplit(ofRoot.Count, ofStates.Count);
     }
 
     private static void CollectExpressionIris(

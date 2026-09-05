@@ -49,7 +49,7 @@ public sealed class HalfDeclaredVocabularyGuardTests
                 + "tell which names are contract: " + string.Join(" | ", census.HalfDeclared));
 
         Assert.AreEqual(
-            151,
+            152,
             census.FullyDeclared,
             "the vocabularies in this scope that declare a token on every member. This is the reach "
                 + "check: if the attribute read broke, this would fall to zero and the emptiness "

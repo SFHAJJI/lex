@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Serialization;
@@ -1133,6 +1134,91 @@ public sealed class EuFeedRootIntersection
 }
 
 /// <summary>
+/// How wide the witness that produced a cut could see. A terminal outside that reach is
+/// UNOBSERVED, never zero.
+/// </summary>
+public enum EuWitnessObservationScope
+{
+    /// <summary>
+    /// The witness bound <c>?entry</c> to the pack's own objects, so it can only ever have seen
+    /// entries inside the pack. Whether anything outside changed is a question this run did not
+    /// ask.
+    /// </summary>
+    [JsonStringEnumMemberName("pack_objects_only")]
+    PackObjectsOnly = 1,
+
+    /// <summary>
+    /// The witness read the endpoint's whole entry stream, so every terminal is reachable and a
+    /// zero is a measured zero.
+    /// </summary>
+    [JsonStringEnumMemberName("every_entry_the_endpoint_holds")]
+    EveryEntryTheEndpointHolds = 2,
+}
+
+/// <summary>
+/// One terminal's outcome: OBSERVED with a count, or UNOBSERVED because the witness could not
+/// reach it. Never a bare integer.
+/// </summary>
+/// <remarks>
+/// <para>
+/// THE DEFECT THIS TYPE EXISTS TO MAKE UNSPELLABLE. The terminal counts were a
+/// <c>Dictionary&lt;EuFeedTerminal, int&gt;</c> initialised to zero for every member. Once the
+/// witness was restricted to the pack's own objects, two of those terminals became STRUCTURALLY
+/// UNREACHABLE, and they went on reporting <c>0</c>. A consumer reading <c>0</c> cannot tell "we
+/// looked and found none" from "we never looked", and no amount of prose beside the field fixes
+/// that, because the prose is not what a consumer reads. A run reporting an unreachable terminal
+/// as zero would be making a false claim about the publisher's holdings while every number in it
+/// looked complete.
+/// </para>
+/// <para>
+/// So the distinction moves into the type. <see cref="Count"/> does not exist for an unobserved
+/// terminal, and <see cref="ObservedCount"/> throws rather than returning a default, because a
+/// caller that forgets to check is a caller that would otherwise silently read a zero it invented.
+/// </para>
+/// </remarks>
+public sealed class EuTerminalObservation
+{
+    private EuTerminalObservation(bool observed, int count, string? unobservedReason)
+    {
+        IsObserved = observed;
+        Count = observed ? count : null;
+        UnobservedReason = unobservedReason;
+    }
+
+    /// <summary>A terminal the witness could reach, with what it found. Zero here IS measured.</summary>
+    public static EuTerminalObservation Observed(int count) =>
+        count < 0
+            ? throw new ArgumentOutOfRangeException(nameof(count), "A terminal count cannot be negative.")
+            : new EuTerminalObservation(true, count, null);
+
+    /// <summary>A terminal outside the witness's reach, with why it is out of reach.</summary>
+    public static EuTerminalObservation UnobservedByDesign(string reason) =>
+        string.IsNullOrWhiteSpace(reason)
+            ? throw new ArgumentException(
+                "An unobserved terminal must say why it was not observed.", nameof(reason))
+            : new EuTerminalObservation(false, 0, reason);
+
+    /// <summary>Whether the witness could reach this terminal at all.</summary>
+    public bool IsObserved { get; }
+
+    /// <summary>The count when observed, and ABSENT when not. Never zero for an unobserved terminal.</summary>
+    public int? Count { get; }
+
+    /// <summary>Why this terminal was not observed, when it was not.</summary>
+    public string? UnobservedReason { get; }
+
+    /// <summary>The count, for a caller that has established the terminal was observed.</summary>
+    /// <exception cref="InvalidOperationException">The terminal was not observed.</exception>
+    public int ObservedCount => Count ?? throw new InvalidOperationException(
+        "This terminal was not observed (" + UnobservedReason + "), so it has no count. Reading "
+        + "one as zero is the claim this type exists to prevent.");
+
+    /// <inheritdoc />
+    public override string ToString() =>
+        IsObserved ? Count!.Value.ToString(CultureInfo.InvariantCulture) : "unobserved";
+}
+
+/// <summary>
 /// R3's terminal equation and its orthogonal conflict counts, over one cut.
 /// </summary>
 /// <remarks>
@@ -1156,17 +1242,37 @@ public sealed class EuFeedRootIntersection
 public sealed class EuFeedTerminalReconciliation
 {
     private EuFeedTerminalReconciliation(
-        IReadOnlyDictionary<EuFeedTerminal, int> terminalCounts,
+        IReadOnlyDictionary<EuFeedTerminal, EuTerminalObservation> terminalObservations,
         IReadOnlyDictionary<EuFeedReconciliationConflict, int> conflictCounts,
-        int canonicalEntryCount)
+        int canonicalEntryCount,
+        EuWitnessObservationScope scope,
+        string scopeStatement)
     {
-        TerminalCounts = terminalCounts;
+        TerminalObservations = terminalObservations;
         ConflictCounts = conflictCounts;
         CanonicalEntryCount = canonicalEntryCount;
+        Scope = scope;
+        ScopeStatement = scopeStatement;
     }
 
-    /// <summary>Every terminal, including the ones no entry reached.</summary>
-    public IReadOnlyDictionary<EuFeedTerminal, int> TerminalCounts { get; }
+    /// <summary>
+    /// Every terminal, each either OBSERVED with a count or UNOBSERVED by design. A terminal the
+    /// witness could not reach has no count at all rather than a zero.
+    /// </summary>
+    public IReadOnlyDictionary<EuFeedTerminal, EuTerminalObservation> TerminalObservations { get; }
+
+    /// <summary>How wide the witness that produced this cut could see.</summary>
+    public EuWitnessObservationScope Scope { get; }
+
+    /// <summary>
+    /// What this cut does and does not claim, as a field a consumer READS rather than a remark a
+    /// reader of the source might reach.
+    /// </summary>
+    /// <remarks>
+    /// A machine consuming this reconciliation has no access to doc comments. The scope limitation
+    /// is a property of the answer, so it travels with the answer.
+    /// </remarks>
+    public string ScopeStatement { get; }
 
     /// <summary>Every conflict subtype, including the ones with no occurrence.</summary>
     public IReadOnlyDictionary<EuFeedReconciliationConflict, int> ConflictCounts { get; }
@@ -1174,11 +1280,37 @@ public sealed class EuFeedTerminalReconciliation
     /// <summary>The canonical entry count, from the watermark traversal.</summary>
     public int CanonicalEntryCount { get; }
 
-    /// <summary>The sum of the four terminal counts.</summary>
-    public int TerminalCountSum => TerminalCounts.Values.Sum();
+    /// <summary>The sum over the OBSERVED terminals only. Unobserved terminals contribute nothing.</summary>
+    public int ObservedTerminalCountSum =>
+        TerminalObservations.Values.Where(static value => value.IsObserved).Sum(static value => value.Count!.Value);
 
-    /// <summary>Whether R3's terminal equation holds for this cut.</summary>
-    public bool TerminalEquationHolds => TerminalCountSum == CanonicalEntryCount;
+    /// <summary>The terminals this cut's witness could not reach, in vocabulary order.</summary>
+    public IReadOnlyList<EuFeedTerminal> UnobservedTerminals =>
+        TerminalObservations
+            .Where(static pair => !pair.Value.IsObserved)
+            .Select(static pair => pair.Key)
+            .OrderBy(static terminal => terminal)
+            .ToArray();
+
+    /// <summary>
+    /// Whether R3's terminal equation holds OVER THE OBSERVED TERMINALS ALONE.
+    /// </summary>
+    /// <remarks>
+    /// The name carries the qualifier because the qualifier is the fact. Under a pack-scoped
+    /// witness this is not R3's four-way equation and reporting it as though it were would be a
+    /// second false claim hiding behind the first: the equation would close trivially while two of
+    /// its four terms were never measured.
+    /// <see cref="ClosesOverEveryTerminal"/> is how a consumer tells the two situations apart.
+    /// </remarks>
+    public bool TerminalEquationOverObservedTerminalsHolds =>
+        ObservedTerminalCountSum == CanonicalEntryCount;
+
+    /// <summary>
+    /// Whether the equation above is R3's FULL four-way one, which it is only when every terminal
+    /// was observed.
+    /// </summary>
+    public bool ClosesOverEveryTerminal =>
+        TerminalObservations.Values.All(static value => value.IsObserved);
 
     /// <summary>The total conflict count, never part of the terminal equation.</summary>
     public int ConflictTotal => ConflictCounts.Values.Sum();
@@ -1187,16 +1319,23 @@ public sealed class EuFeedTerminalReconciliation
     /// Whether this reconciliation makes the EU cut incomplete. Any conflict does, and so does a
     /// broken terminal equation.
     /// </summary>
-    public bool MakesTheCutIncomplete => ConflictTotal > 0 || !TerminalEquationHolds;
+    public bool MakesTheCutIncomplete =>
+        ConflictTotal > 0 || !TerminalEquationOverObservedTerminalsHolds;
 
     /// <summary>The only path that mints a reconciliation.</summary>
     /// <param name="binding">The frozen binding, for its discovered family index.</param>
     /// <param name="entries">The cut's canonical entry set.</param>
     /// <param name="terminations">Every termination the classifier produced for this cut.</param>
+    /// <param name="scope">
+    /// How wide the witness that produced these terminations could see. Required, and deliberately
+    /// not defaulted: a caller that does not know its own witness's reach cannot honestly report a
+    /// terminal equation, and a default would let one be reported by omission.
+    /// </param>
     public static EuFeedTerminalReconciliation Of(
         EuFeedRootIntersection binding,
         EuFeedWatermarkEntrySet entries,
-        IReadOnlyList<EuFeedEntryTermination> terminations)
+        IReadOnlyList<EuFeedEntryTermination> terminations,
+        EuWitnessObservationScope scope)
     {
         ArgumentNullException.ThrowIfNull(binding);
         ArgumentNullException.ThrowIfNull(entries);
@@ -1214,6 +1353,14 @@ public sealed class EuFeedTerminalReconciliation
         {
             terminalCounts[terminal] = 0;
         }
+
+        // A pack-scoped witness binds ?entry to the pack's own objects, so it cannot see an entry
+        // whose projections lie outside the pack, and cannot see that an in-pack entry ALSO has
+        // out-of-pack projections. Those two terminals are therefore not zero here; they were
+        // never asked about.
+        var unreachable = scope == EuWitnessObservationScope.PackObjectsOnly
+            ? new[] { EuFeedTerminal.OutOfPack, EuFeedTerminal.MixedScope }
+            : [];
 
         var conflictCounts = new Dictionary<EuFeedReconciliationConflict, int>();
         foreach (var conflict in Enum.GetValues<EuFeedReconciliationConflict>())
@@ -1268,6 +1415,48 @@ public sealed class EuFeedTerminalReconciliation
             }
         }
 
-        return new EuFeedTerminalReconciliation(terminalCounts, conflictCounts, entries.Count);
+        var observations = new Dictionary<EuFeedTerminal, EuTerminalObservation>();
+        foreach (var terminal in Enum.GetValues<EuFeedTerminal>())
+        {
+            observations[terminal] = Array.IndexOf(unreachable, terminal) >= 0
+                ? EuTerminalObservation.UnobservedByDesign(
+                    "the witness bound ?entry to the pack's own objects, so this terminal was "
+                    + "never asked about")
+                : EuTerminalObservation.Observed(terminalCounts[terminal]);
+        }
+
+        // A pack-scoped witness that nonetheless CLASSIFIED an entry into an unreachable terminal
+        // is a contradiction between the scope and the terminations, and reporting either half
+        // would hide it.
+        foreach (var terminal in unreachable)
+        {
+            if (terminalCounts[terminal] > 0)
+            {
+                throw new ArgumentException(
+                    $"{terminalCounts[terminal]} termination(s) were classified as {terminal}, "
+                    + "which a pack-scoped witness cannot observe. Either the scope or the "
+                    + "terminations are wrong; they cannot both be right.",
+                    nameof(terminations));
+            }
+        }
+
+        return new EuFeedTerminalReconciliation(
+            observations,
+            conflictCounts,
+            entries.Count,
+            scope,
+            ScopeStatementFor(scope));
     }
+
+    /// <summary>
+    /// The sentence a consumer reads about what this cut did and did not look at.
+    /// </summary>
+    private static string ScopeStatementFor(EuWitnessObservationScope scope) =>
+        scope == EuWitnessObservationScope.PackObjectsOnly
+            ? "The witness observed only the pack's own objects, by design. Entries outside the "
+                + "pack were NOT OBSERVED, and this run makes no claim about whether any changed. "
+                + "The out of pack and mixed scope terminals are therefore UNOBSERVED, NOT ZERO, "
+                + "and the terminal equation closes over the in pack portion alone."
+            : "The witness read every entry the endpoint holds, so every terminal was reachable "
+                + "and a zero count is a measured zero.";
 }
