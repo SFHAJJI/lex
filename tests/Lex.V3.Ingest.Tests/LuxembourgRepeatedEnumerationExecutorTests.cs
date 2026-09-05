@@ -1,6 +1,6 @@
-using System.Runtime.CompilerServices;
 using System.Net;
 using System.Net.Http;
+using System.Runtime.CompilerServices;
 using Lex.V3.Artifacts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Absence;
@@ -1653,7 +1653,7 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
         // threshold can fire inside the robots bootstrap, whose own write volume is an
         // implementation detail that would otherwise give RobotsBootstrapRefused, a true refusal
         // about the wrong thing. THE COUNT SELECTS THE WRITE: calibrated to this fixture's clean
-        // run of exactly 50 custody writes, arming after 49 puts the failure in the LAST one,
+        // run of exactly 50 custody writes, arming after 49 puts the failure in THE 50TH WRITE,
         // during delivery-evidence materialisation, inside the outer try this test is about.
         // Arming earlier lands in the send path and is caught as ObservationNotExecuted instead.
         // Both neighbours were measured, not assumed: 48 and 44 give ObservationNotExecuted, 60

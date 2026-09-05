@@ -876,14 +876,16 @@ public sealed class LuxembourgQueryExecutionAdapter
     /// <see cref="LuxembourgQueryExecutionRefusal.ObservationSubjectNotInDeliveredCensus"/> -- an
     /// identity-set membership test over both families' own decoded rows, never a count.
     /// </param>
-    /// <summary>
+    /// <remarks>
+    /// SECOND SUMMARY ELEMENT IN ONE DOC COMMENT, now a remark. Nothing warned, because
+    /// GenerateDocumentationFile is unset, so the duplicate sat here unseen.
     /// D1-04c item 2: the caller-facing door. Never accepts an evidence resolver from outside --
     /// production code cannot hand this run an arbitrary admission answer. This run's own
     /// <see cref="LuxembourgProductionScopeReductionEvidenceResolver"/> is constructed internally,
     /// from this exact run's own custody store, its own independently re-derived observations, and
     /// its own resolved evidence-artifact set (see the six-parameter internal overload below for the
     /// shared implementation).
-    /// </summary>
+    /// </remarks>
     public Task<LuxembourgQueryExecutionResult> RunAsync(
         IReadOnlyList<(
             LuxembourgPartitionRunRequest PartitionRequest,
@@ -1249,9 +1251,32 @@ public sealed class LuxembourgQueryExecutionAdapter
         // here would only be re-deriving what that digest check already establishes (fold-in seven
         // of the D1-04 refreeze -- the executor's own delivery proof removed the same redundant
         // check after a checked read for the same reason).
-        var reopened = await CustodyRestore.ReadByDigestCheckedAsync(
-                _custodyStore, writeReceipt.Reference.ContentSha256, cancellationToken)
-            .ConfigureAwait(false);
+        // THIS REOPEN HAD NO CATCH. ReadByDigestCheckedAsync throws CustodyIntegrityException
+        // when the store cannot reproduce the bytes at their own digest, and that exception
+        // escaped RunAsync untyped, past every typed refusal this method exists to produce and
+        // past the principle its own neighbouring tests assert by name. A store can accept the
+        // write, satisfy the hold's verification read, and still fail a later read; that is a
+        // custody failure on our side, one of the four legitimate reasons a law goes unheld, and
+        // it is reported as one rather than thrown at the caller.
+        ReadOnlyMemory<byte> reopened;
+        try
+        {
+            reopened = await CustodyRestore.ReadByDigestCheckedAsync(
+                    _custodyStore, writeReceipt.Reference.ContentSha256, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (CustodyIntegrityException exception)
+        {
+            return LuxembourgQueryExecutionResult.Refused(
+                topology,
+                outcomes,
+                relationAcquisitions,
+                new LuxembourgQueryExecutionRefusalDetail(
+                    LuxembourgQueryExecutionRefusal.ScopeManifestNotHeld,
+                    null,
+                    "The scope manifest could not be reopened at its own digest: "
+                    + exception.Message));
+        }
 
         // Decision 75's rule, applied to this adapter's own artifact: re-verification re-derives
         // the comparison from custody rather than trusting the in-memory object this run already

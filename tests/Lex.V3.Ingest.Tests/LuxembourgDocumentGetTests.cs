@@ -3,8 +3,8 @@ using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
 using Lex.V3.Contracts.Custody;
-using Lex.V3.Contracts.Source.Corpus;
 using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Corpus;
 using Lex.V3.Contracts.Source.Http;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Contracts.Source.Scope;
@@ -292,19 +292,20 @@ public sealed class LuxembourgDocumentGetTests
     /// PublisherUri and its kind asserted, which is the property actually claimed: one object's
     /// publisher answer does not decide another's.
     /// <para>
-    /// BOTH CANONICAL ORDERS are driven. The reducer sorts observed objects by the OBJECT REF'S
+    /// WHICH OBJECT CARRIES THE 404 is what the two rows vary, and it is all they vary. The
+    /// RECORD ORDER IS THE SAME IN BOTH: the reducer sorts observed objects by the OBJECT REF'S
     /// DIGEST (ScopeReducer, ComputeObjectRefSha256 through ScopeObservedObjectComparer), not by
-    /// act number or publisher URI, and the adapter then walks them by ascending ordinal. For
-    /// these two acts a440 sorts FIRST, measured rather than assumed, so the earlier revision's
-    /// fixed choice of a440 for the 404 drove only the order where the publisher's refusal comes
-    /// BEFORE any successful hold; a 404 arriving after a hold was the case never exercised.
-    /// Both orders now run. The first record's PublisherUri is asserted too, but as a guard on
-    /// THESE TWO CASES rather than on production: record order is fixed by construction in two
-    /// places, ScopeReducer's VerifyObservedObjectTable and the CorpusRecordSet constructor's
-    /// strict ordinal ordering, and both mutations tried against it (reversing the observed
-    /// object comparer, and reversing record emission) were refused there before this
-    /// assertion ran. It exists so a later edit collapsing the two cases into one order could
-    /// not pass as if it had not.
+    /// act number or publisher URI, so for these two acts a440 is records[0] in BOTH cases,
+    /// measured rather than assumed. What varying the 404 does buy is the order the RUN meets
+    /// the two answers in, since the adapter walks rows by ascending ordinal: with the 404 fixed
+    /// on a440 the refusal always arrived BEFORE any successful hold, and a 404 arriving after a
+    /// hold was never exercised. Both now run. The first record's PublisherUri is asserted too,
+    /// but as a guard on THESE TWO CASES rather than on production: record order is fixed by
+    /// construction in two places, ScopeReducer's VerifyObservedObjectTable and the
+    /// CorpusRecordSet constructor's strict ordinal ordering, and both mutations tried against
+    /// it (reversing the observed-object comparer, and reversing record emission) were refused
+    /// there before this assertion ran. It exists so a later edit collapsing the two cases into
+    /// one could not pass as if it had not.
     /// </para>
     /// Both bodies are the publisher's own retained bytes: the real Akoma Ntoso document for the
     /// one that is held, and the office's real 404 JSON for the one that is not.
@@ -370,8 +371,9 @@ public sealed class LuxembourgDocumentGetTests
         Assert.AreEqual(
             notFoundSortsFirst ? missingPublisherUri : heldPublisherUri,
             records[0].ObjectRef.PublisherUri,
-            "this case exists to drive that canonical order; if it stops inverting, it proves "
-            + "nothing the other case did not already prove.");
+            "a440 is records[0] in BOTH cases; the ternary only names which role that first "
+            + "record plays here, so a case that stopped varying which object carries the 404 "
+            + "could not pass unnoticed.");
 
         var heldRecord = records.Single(
             r => string.Equals(r.ObjectRef.PublisherUri, heldPublisherUri, StringComparison.Ordinal));
@@ -1177,40 +1179,6 @@ public sealed class LuxembourgDocumentGetTests
     /// failure is armed only after the payload has been written once, which is exactly the
     /// adapter's own second write.
     /// </remarks>
-    /// <summary>
-    /// Refuses every write once the run has reached its product request, so the failure lands
-    /// inside the document GET's own try rather than in the robots bootstrap before it, where it
-    /// would be a true refusal about a different thing.
-    /// </summary>
-    private sealed class CustodyRequiredAfterProductRequestStore(ICustodyStore inner, string message)
-        : ICustodyStore
-    {
-        internal bool Armed;
-
-        internal int PassThroughArmedWrites;
-
-        internal int ArmedWrites;
-
-        public Task<DurableBlobWriteReceipt> CreateAsync(
-            ReadOnlyMemory<byte> bytes, CustodyClass custodyClass, CancellationToken cancellationToken)
-        {
-            if (Armed && ArmedWrites++ >= PassThroughArmedWrites)
-            {
-                throw new CustodyRequiredException(message);
-            }
-
-            return inner.CreateAsync(bytes, custodyClass, cancellationToken);
-        }
-
-        public Task<ReadOnlyMemory<byte>> ReadAsync(
-            DurableBlobRef reference, CancellationToken cancellationToken) =>
-            inner.ReadAsync(reference, cancellationToken);
-
-        public Task<ReadOnlyMemory<byte>> ReadByDigestAsync(
-            string contentSha256, CancellationToken cancellationToken) =>
-            inner.ReadByDigestAsync(contentSha256, cancellationToken);
-    }
-
     private sealed class HoldFailingCustodyStore(
         ICustodyStore inner, byte[] payload, bool failWrite) : ICustodyStore
     {
@@ -1249,6 +1217,40 @@ public sealed class LuxembourgDocumentGetTests
             string.Equals(contentSha256, _armedDigest, StringComparison.Ordinal)
                 ? Task.FromResult<ReadOnlyMemory<byte>>("not the bytes you stored"u8.ToArray())
                 : inner.ReadByDigestAsync(contentSha256, cancellationToken);
+    }
+
+    /// <summary>
+    /// Refuses every write once the run has reached its product request, so the failure lands
+    /// inside the document GET's own try rather than in the robots bootstrap before it, where it
+    /// would be a true refusal about a different thing.
+    /// </summary>
+    private sealed class CustodyRequiredAfterProductRequestStore(ICustodyStore inner, string message)
+        : ICustodyStore
+    {
+        internal bool Armed;
+
+        internal int PassThroughArmedWrites;
+
+        internal int ArmedWrites;
+
+        public Task<DurableBlobWriteReceipt> CreateAsync(
+            ReadOnlyMemory<byte> bytes, CustodyClass custodyClass, CancellationToken cancellationToken)
+        {
+            if (Armed && ArmedWrites++ >= PassThroughArmedWrites)
+            {
+                throw new CustodyRequiredException(message);
+            }
+
+            return inner.CreateAsync(bytes, custodyClass, cancellationToken);
+        }
+
+        public Task<ReadOnlyMemory<byte>> ReadAsync(
+            DurableBlobRef reference, CancellationToken cancellationToken) =>
+            inner.ReadAsync(reference, cancellationToken);
+
+        public Task<ReadOnlyMemory<byte>> ReadByDigestAsync(
+            string contentSha256, CancellationToken cancellationToken) =>
+            inner.ReadByDigestAsync(contentSha256, cancellationToken);
     }
 
     /// <summary>
