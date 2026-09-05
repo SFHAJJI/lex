@@ -757,8 +757,8 @@ public sealed record LuxembourgProfileResolutionFailure
     /// Reading the attribute makes the member the only source, and a member added without a token
     /// now fails loudly at its first use instead of projecting its CLR spelling.
     /// <see cref="ContractWire"/> is the existing mechanism and its remarks already give this exact
-    /// argument; its name says Absence while its function is general, which is worth correcting
-    /// separately rather than duplicating a second reader here.
+    /// argument. It was AbsenceWire when this was written, named for one slice while its function
+    /// was general; R4 moved it to the contracts root rather than leaving a second reader here.
     /// </remarks>
     public string ReasonCode => ContractWire.NameOf(Code);
 }

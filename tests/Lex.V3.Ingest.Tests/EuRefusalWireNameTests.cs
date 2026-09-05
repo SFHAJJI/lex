@@ -8,7 +8,7 @@ namespace Lex.V3.Ingest.Tests;
 
 /// <summary>
 /// The EU refusal vocabularies' exact WIRE NAMES, pinned member by member. The mirror of
-/// <c>LuxembourgEnumerationRefusalWireNameTests</c>, which existed for LU while EU's equivalent
+/// <c>LuxembourgRefusalWireNameTests</c>, which existed for LU while EU's equivalent
 /// vocabulary had no wire-name pin of any kind.
 /// </summary>
 /// <remarks>

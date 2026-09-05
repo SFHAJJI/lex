@@ -14,15 +14,24 @@ namespace Lex.V3.Ingest.Tests.Census;
 /// of them, and fixing the two would have left the class open.
 /// </para>
 /// <para>
-/// THIS IS A LOCK RATHER THAN A CLEANUP. When it was written the sweep saw 243 enums, 160 fully
-/// declared, 81 declaring nothing at all, and exactly 2 half declared, which were the two R4 fixed.
-/// So it lands green and costs nothing, and its whole value is the next one it refuses.
+/// THE FULLY DECLARED COUNT IS ASSERTED RATHER THAN DESCRIBED, and that is this guard's reach
+/// check as well as its scale. Without it the guard has the empty-baseline shape it exists to
+/// remove: wrong binding flags or an inverted filter would read every member as undeclared, the
+/// half-declared filter would then match nothing, and a guard whose whole job is to see a surface
+/// would report success having seen none of it. A count in a remark cannot fail; a count in an
+/// assertion can.
 /// </para>
 /// <para>
-/// The 81 that declare nothing are correctly outside the rule. Most enums here are internal state
-/// that never reaches a wire; the criterion is that a vocabulary which has BEGUN declaring tokens
-/// has to finish, because that is the point at which a reader starts inferring meaning from their
-/// presence.
+/// This file once carried three counts in prose, and they were measured over src PLUS both test
+/// assemblies while this guard sweeps only the census scope, which holds neither. The numbers were
+/// real and were about a different set. A count is not a number, it is a number ABOUT A SET, and
+/// the set has to be the one the sentence claims.
+/// </para>
+/// <para>
+/// Vocabularies declaring nothing at all are deliberately outside the rule. Most enums here are
+/// internal state that never reaches a wire; the criterion is that a vocabulary which has BEGUN
+/// declaring tokens has to finish, because that is the point at which a reader starts inferring
+/// meaning from their presence.
 /// </para>
 /// </remarks>
 [TestClass]
@@ -31,12 +40,19 @@ public sealed class HalfDeclaredVocabularyGuardTests
     [TestMethod]
     public void NoVocabularyDeclaresWireTokensOnOnlySomeOfItsMembers()
     {
-        var half = ClosedSurfaceCensus.HalfDeclaredVocabularies(CensusScope.SweptHere);
+        var census = ClosedSurfaceCensus.DeclarationCensus(CensusScope.SweptHere);
 
         CollectionAssert.AreEqual(
             Array.Empty<string>(),
-            half.ToArray(),
+            census.HalfDeclared.ToArray(),
             "a vocabulary declares a wire token on some members and not others, so a reader cannot "
-                + "tell which names are contract: " + string.Join(" | ", half));
+                + "tell which names are contract: " + string.Join(" | ", census.HalfDeclared));
+
+        Assert.AreEqual(
+            11,
+            census.FullyDeclared,
+            "the vocabularies in this scope that declare a token on every member. This is the reach "
+                + "check: if the attribute read broke, this would fall to zero and the emptiness "
+                + "above would prove nothing.");
     }
 }

@@ -448,7 +448,7 @@ public enum LuxembourgQueryExecutionRefusal
     /// recording an object as held on bytes this run cannot reproduce.
     /// </summary>
     /// <remarks>
-    /// WAS <c>DocumentBodyNotRetained</c>, and its summary said it fired when the store enforced no
+    /// WAS <c>DocumentBodyNotHeld</c>, and its summary said it fired when the store enforced no
     /// retention floor. It never did after the Decision 71 interpretation removed that gate: a
     /// store that wrote the bytes, can reproduce them at their own digest and honestly declares
     /// NotEnforced did not fail, and the membership class is recorded rather than gated on. So the

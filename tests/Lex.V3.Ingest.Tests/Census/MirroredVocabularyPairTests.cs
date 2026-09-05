@@ -10,7 +10,8 @@ namespace Lex.V3.Ingest.Tests.Census;
 
 /// <summary>
 /// The DECLARED SET of vocabulary pairs that must carry the same wire tokens across publishers,
-/// and the assertion that they still do. One entry today.
+/// and the assertion that they still do. Three rows today: one whole-vocabulary pair and two
+/// single members.
 /// </summary>
 /// <remarks>
 /// <para>

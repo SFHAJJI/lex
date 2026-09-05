@@ -232,9 +232,24 @@ public static class ClosedSurfaceCensus
     }
 
     /// <summary>
-    /// Every enum in <paramref name="assemblies"/> that declares a wire token on SOME of its
-    /// members but not all, as <c>full name: n of m declared, missing A, B</c>, ordered by full
-    /// name. Empty is the healthy answer.
+    /// How the enums in <paramref name="assemblies"/> declare wire tokens: the half-declared ones
+    /// by name, and counts for the rest.
+    /// </summary>
+    /// <param name="HalfDeclared">
+    /// Vocabularies declaring a token on some members but not all, as
+    /// <c>full name: n of m declared, missing A, B</c>, ordered by full name. Empty is healthy.
+    /// </param>
+    /// <param name="FullyDeclared">Vocabularies declaring a token on every member.</param>
+    /// <param name="DeclaringNothing">Vocabularies declaring no token at all.</param>
+    /// <param name="Total">Every enum the scope holds.</param>
+    public readonly record struct VocabularyDeclarationCensus(
+        IReadOnlyList<string> HalfDeclared,
+        int FullyDeclared,
+        int DeclaringNothing,
+        int Total);
+
+    /// <summary>
+    /// Counts the declaration state of every enum in <paramref name="assemblies"/>.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -251,8 +266,9 @@ public static class ClosedSurfaceCensus
     /// meaning from their presence.
     /// </para>
     /// </remarks>
-    public static IReadOnlyList<string> HalfDeclaredVocabularies(params string[] assemblies) =>
-        Load(assemblies)
+    public static VocabularyDeclarationCensus DeclarationCensus(params string[] assemblies)
+    {
+        var found = Load(assemblies)
             .SelectMany(AllTypes)
             .Where(static type => type.IsEnum)
             .Select(static type =>
@@ -264,11 +280,21 @@ public static class ClosedSurfaceCensus
                     .ToArray();
                 return (Type: type, Declared: names.Length - missing.Length, names.Length, Missing: missing);
             })
-            .Where(static found => found.Declared > 0 && found.Missing.Length > 0)
-            .OrderBy(static found => found.Type.FullName, StringComparer.Ordinal)
-            .Select(static found => found.Type.FullName + ": " + found.Declared + " of "
-                + found.Length + " declared, missing " + string.Join(", ", found.Missing))
             .ToArray();
+
+        var half = found
+            .Where(static one => one.Declared > 0 && one.Missing.Length > 0)
+            .OrderBy(static one => one.Type.FullName, StringComparer.Ordinal)
+            .Select(static one => one.Type.FullName + ": " + one.Declared + " of "
+                + one.Length + " declared, missing " + string.Join(", ", one.Missing))
+            .ToArray();
+
+        return new(
+            half,
+            found.Count(static one => one.Missing.Length == 0),
+            found.Count(static one => one.Declared == 0),
+            found.Length);
+    }
 
     private static IEnumerable<Assembly> Load(string[] assemblies)
     {

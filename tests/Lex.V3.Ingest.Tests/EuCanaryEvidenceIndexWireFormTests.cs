@@ -42,10 +42,13 @@ namespace Lex.V3.Ingest.Tests;
 /// exactly the regression that occurred.
 /// </para>
 /// <para>
-/// A NOTE ON WHAT NONE OF THIS COVERS. Members of these vocabularies with no
-/// <c>JsonStringEnumMemberName</c> fall back to the member name, so their wire token IS PascalCase.
-/// That fallback is the separate defect queued as R4. The end-to-end test therefore drives a member
-/// that carries an attribute, which is exactly the set where the index and the wire disagreed.
+/// A NOTE ON WHAT NONE OF THIS COVERS, AND WHAT HAS SINCE CHANGED. A member with no
+/// <c>JsonStringEnumMemberName</c> falls back to its CLR member name, so its wire token is
+/// PascalCase. That was live when this was written and was queued as R4; R4 has since declared a
+/// token on every member of both query-execution refusal vocabularies, so no member THIS FILE
+/// covers still falls back. The end-to-end test drives a member carrying an attribute, which was
+/// then the only safe set and is now simply the whole set. The fallback itself still exists for any
+/// vocabulary that declares nothing, which is what the half-declared guard exists to bound.
 /// </para>
 /// </remarks>
 [TestClass]
