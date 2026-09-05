@@ -449,7 +449,8 @@ public static class EuCellarObjectDecode
             if (parentTerm.Kind != RepeatedEnumerationRdfTermKind.Iri || parentTerm.Value is null ||
                 objectTerm.Kind != RepeatedEnumerationRdfTermKind.Iri || objectTerm.Value is null ||
                 predicateTerm.Kind != RepeatedEnumerationRdfTermKind.Iri || predicateTerm.Value is null ||
-                !IsPlainLiteral(valueKindTerm) || !IsPlainLiteral(datatypeTerm) || !IsPlainLiteral(languageTerm) ||
+                !IsPlainLiteral(valueKindTerm) || !IsPlainLiteral(languageTerm) ||
+                !IsDatatypeTermThePublisherCanProduce(datatypeTerm, languageTerm) ||
                 (valueTerm.Kind == RepeatedEnumerationRdfTermKind.Unbound) != (valueKindTerm.Value == "unbound"))
             {
                 refusal = EuCellarObjectDecodeRefusal.ExpressionFactRowTermKindMismatch;
@@ -880,6 +881,40 @@ public static class EuCellarObjectDecode
 
     private sealed record ObjectFactRow(
         string Object, string PredicateIri, RepeatedEnumerationRdfTerm Value, string ValueKind);
+
+    /// <summary>
+    /// Whether a family X row's <c>datatype_iri</c> is a shape this publisher actually produces.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A PLAIN LITERAL ALWAYS, AND ABSENT ONLY FOR A LANGUAGE TAGGED VALUE. The template binds
+    /// this from <c>STR(DATATYPE(?value))</c>, and the endpoint does not answer <c>DATATYPE()</c>
+    /// on a language tagged literal, so the BIND errors and the variable is simply omitted. That
+    /// was measured on the D1-05g acceptance run: 32 of 373 rows on one page, every one of them a
+    /// language tagged <c>expression_title</c> on a consolidated state, retained under body sha256
+    /// 4edfd1bcd061a44cab0daf13bc3bf3eaf0f83414cec125e74b6e7fd5e8860c1e.
+    /// </para>
+    /// <para>
+    /// SO THE ABSENCE IS ADMITTED, AND NOT FILLED IN. SPARQL 1.1 says the datatype of a language
+    /// tagged literal is <c>rdf:langString</c>, and substituting that here would be reporting a
+    /// value the publisher did not send. This decode's own rule everywhere else is that an
+    /// unobserved thing stays unobserved, so the row is accepted and the datatype is not invented.
+    /// Nothing downstream reads it: <c>ExpressionFactRow</c> carries parent, object, predicate,
+    /// value and value kind, and the datatype term is a shape check that ends here.
+    /// </para>
+    /// <para>
+    /// THE PAIRING IS WHAT KEEPS IT NARROW. An absent datatype is admitted ONLY when the language
+    /// tag is present and non-empty. An absent datatype on an untagged value is still the shape
+    /// violation it always was, because that one has no publisher behaviour behind it.
+    /// </para>
+    /// </remarks>
+    private static bool IsDatatypeTermThePublisherCanProduce(
+        RepeatedEnumerationRdfTerm datatypeTerm,
+        RepeatedEnumerationRdfTerm languageTerm) =>
+        IsPlainLiteral(datatypeTerm)
+        || (datatypeTerm.Kind == RepeatedEnumerationRdfTermKind.Unbound
+            && IsPlainLiteral(languageTerm)
+            && !string.IsNullOrEmpty(languageTerm.Value));
 
     private sealed record ExpressionFactRow(
         string Parent, string Object, string PredicateIri, RepeatedEnumerationRdfTerm Value, string ValueKind);
