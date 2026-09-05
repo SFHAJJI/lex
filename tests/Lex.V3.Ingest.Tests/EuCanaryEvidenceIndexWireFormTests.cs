@@ -159,8 +159,10 @@ public sealed class EuCanaryEvidenceIndexWireFormTests
             {
                 "completion",
                 "corpusRecordSet",
+                "corpusRecords",
                 "custodyClassSegment",
                 "documentBodies",
+                "expressionsByRootWork",
                 "families",
                 "observedExpressionCount",
                 "observedObjectCount",

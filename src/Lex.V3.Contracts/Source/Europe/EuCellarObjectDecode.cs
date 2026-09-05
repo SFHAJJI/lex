@@ -211,14 +211,15 @@ public static class EuCellarObjectDecode
     /// only one of them has bytes behind it today.
     /// </para>
     /// </remarks>
-    private static readonly string[] ConsolidatedActResourceTypeIris =
-    [
-        // Observed on all six consolidated states of both canary seeds, D1-05g acceptance run.
-        "http://publications.europa.eu/resource/authority/resource-type/CONS_TEXT",
+    /// <summary>Observed on all six consolidated states of both canary seeds, D1-05g run.</summary>
+    private const string ConsolidatedTextResourceTypeIri =
+        "http://publications.europa.eu/resource/authority/resource-type/CONS_TEXT";
 
-        // Not observed on this route. Retained because it was not disproven, not because it was seen.
-        "http://publications.europa.eu/resource/authority/resource-type/CONSOLID_ACT",
-    ];
+    /// <summary>
+    /// Not observed on this route. Retained because it was not disproven, not because it was seen.
+    /// </summary>
+    private const string ConsolidatedActResourceTypeIri =
+        "http://publications.europa.eu/resource/authority/resource-type/CONSOLID_ACT";
     private const string EnglishLanguageAuthorityIri =
         "http://publications.europa.eu/resource/authority/language/ENG";
     private const string FrenchLanguageAuthorityIri =
@@ -638,8 +639,8 @@ public static class EuCellarObjectDecode
         var hasConsolidatedMarker = pRows.Any(row =>
             row.PredicateIri == EuObjectFactsDiscoveryPlan.CdmIri(EuCdmPredicate.WorkHasResourceType) &&
             row.ValueKind == "iri" &&
-            row.Value.Value is not null &&
-            Array.IndexOf(ConsolidatedActResourceTypeIris, row.Value.Value) >= 0);
+            (row.Value.Value == ConsolidatedTextResourceTypeIri ||
+             row.Value.Value == ConsolidatedActResourceTypeIri));
         var derivedContentClass = hasConsolidatedMarker
             ? EuContentClass.Consolidation
             : EuContentClass.OriginalLegalText;

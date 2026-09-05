@@ -295,6 +295,107 @@ public sealed class EuCellarObjectDecodeTests
     /// </summary>
     private const string ManifestationEvidenceLabel = "m-ev";
 
+
+    // ---- D1-05g: the datatype the publisher does not send on a language tagged value. ----
+
+    /// <summary>
+    /// A family X row whose <c>datatype_iri</c> is ABSENT beside a present language tag is
+    /// ACCEPTED, and the same absence WITHOUT a language tag is still REFUSED.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THIS TEST EXISTS BECAUSE THE FIX SHIPPED WITHOUT ONE. The guard was relaxed to admit an
+    /// absent datatype, and an independent read found the relaxation UNDRIVEN IN BOTH DIRECTIONS:
+    /// nothing proved it accepts the language tagged case, and nothing proved it still refuses the
+    /// untagged one, which is the half the narrowness depends on. No pre-existing test could have
+    /// been covering it either, because before the change the guard REFUSED that shape, so any test
+    /// driving it would have been red.
+    /// </para>
+    /// <para>
+    /// THE BYTES BEHIND IT. Retained body
+    /// <c>4edfd1bcd061a44cab0daf13bc3bf3eaf0f83414cec125e74b6e7fd5e8860c1e</c> from the D1-05g
+    /// acceptance run, 32 of whose 373 rows are exactly this shape: a language tagged
+    /// <c>expression_title</c> on a consolidated state with <c>datatype_iri</c> omitted, because
+    /// the endpoint does not answer <c>DATATYPE()</c> on a language tagged literal. This test
+    /// drives the DECODE with that shape rather than parsing the page, which is what the fixture
+    /// test beside it does and what left this gap.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void ALanguageTaggedValueMayOmitItsDatatypeAndAnUntaggedOneMayNot()
+    {
+        var pRows = RootObjectRows(GdprRoot, GdprCelex);
+
+        // ACCEPTED: absent datatype, present language tag. The shape the office actually sends.
+        var tagged = new[]
+        {
+            XBoundRow(GdprRoot, ExprA, ExpressionBelongsToWorkIri, new PValue(GdprRoot)),
+            XBoundRow(GdprRoot, ExprA, ExpressionUsesLanguageIri, new PValue(EnglishLanguageAuthorityIri)),
+            XRowWithAbsentDatatype(GdprRoot, ExprA, EuObjectFactsDiscoveryPlan.CdmIri(EuCdmPredicate.ExpressionTitle), "Verordening (EU) 2016/679", "nl"),
+        };
+
+        var accepted = Decode(
+            GdprCelex, [], pRows, tagged, out var acceptedRefusal, out _, out _);
+
+        Assert.IsNotNull(
+            accepted,
+            "a language tagged title with no datatype is what the publisher sends on this route, "
+                + $"and the decode refused it as {acceptedRefusal}.");
+        Assert.AreEqual(EuCellarObjectDecodeRefusal.None, acceptedRefusal);
+
+        // STILL REFUSED: absent datatype, NO language tag. This shape has no publisher behaviour
+        // behind it, and admitting it is the widening the pairing exists to prevent.
+        var untagged = new[]
+        {
+            XBoundRow(GdprRoot, ExprA, ExpressionBelongsToWorkIri, new PValue(GdprRoot)),
+            XBoundRow(GdprRoot, ExprA, ExpressionUsesLanguageIri, new PValue(EnglishLanguageAuthorityIri)),
+            XRowWithAbsentDatatype(GdprRoot, ExprA, EuObjectFactsDiscoveryPlan.CdmIri(EuCdmPredicate.ExpressionTitle), "a title with no tag", ""),
+        };
+
+        var refused = Decode(
+            GdprCelex, [], pRows, untagged, out var refusedRefusal, out _, out _);
+
+        Assert.IsNull(
+            refused,
+            "an absent datatype with no language tag must stay a shape violation; admitting it "
+                + "would widen the pairing past the behaviour that was measured.");
+        Assert.AreEqual(
+            EuCellarObjectDecodeRefusal.ExpressionFactRowTermKindMismatch, refusedRefusal);
+    }
+
+    /// <summary>
+    /// A family X row whose <c>datatype_iri</c> term is UNBOUND, which is how the endpoint encodes
+    /// a datatype it would not answer for.
+    /// </summary>
+    private static RepeatedEnumerationRow XRowWithAbsentDatatype(
+        string parentIri, string exprIri, string predicateIri, string value, string lang)
+    {
+        var terms = new[]
+        {
+            RepeatedEnumerationRdfTerm.Iri(parentIri),
+            RepeatedEnumerationRdfTerm.Iri(exprIri),
+            RepeatedEnumerationRdfTerm.Iri(predicateIri),
+            RepeatedEnumerationRdfTerm.Literal(value, null, string.IsNullOrEmpty(lang) ? null : lang),
+            RepeatedEnumerationRdfTerm.Literal("literal", null, null),
+
+            // THE DEFECT'S OWN SHAPE: the datatype term is UNBOUND, which is how the endpoint
+            // encodes a datatype it would not answer for.
+            RepeatedEnumerationRdfTerm.Unbound(),
+            RepeatedEnumerationRdfTerm.Literal(lang, null, null),
+            RepeatedEnumerationRdfTerm.Literal("1", XsdInteger, null),
+            RepeatedEnumerationRdfTerm.Literal(exprIri, null, null),
+            RepeatedEnumerationRdfTerm.Literal(predicateIri, null, null),
+            RepeatedEnumerationRdfTerm.Literal("literal", null, null),
+            RepeatedEnumerationRdfTerm.Literal(value, null, null),
+            RepeatedEnumerationRdfTerm.Literal(string.Empty, null, null),
+            RepeatedEnumerationRdfTerm.Literal(lang, null, null),
+        };
+        return new RepeatedEnumerationRow(
+            Array.AsReadOnly(terms),
+            Array.AsReadOnly(new[] { terms[0], terms[1], terms[2], terms[3] }),
+            Array.AsReadOnly(terms[8..14]));
+    }
+
     // ---- Happy path: root only, no discovered states. ----
 
     [TestMethod]

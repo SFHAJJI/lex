@@ -246,7 +246,7 @@ public sealed class EuQueryExecutionAdapterTests
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
         var adapter = new EuQueryExecutionAdapter(store, executor);
 
-        var (outcomes, ladderResults, refusal) = await adapter.RunDocumentAcquisitionAsync(
+        var (outcomes, ladderResults, _, refusal) = await adapter.RunDocumentAcquisitionAsync(
             manifest,
             mintedAddressesByObjectRef,
             EuAcquisitionTestFixture.BuildRendererSource(801),
@@ -281,7 +281,7 @@ public sealed class EuQueryExecutionAdapterTests
     [TestMethod]
     public async Task ADocumentBodyTheStoreCannotRetainAtAllStillRefusesRatherThanHolding()
     {
-        var (outcomes, _, refusal) = await RunOneAcceptedBodyFetchAsync(
+        var (outcomes, _, _, refusal) = await RunOneAcceptedBodyFetchAsync(
             store: new EuAcquisitionTestFixture.EuInMemoryCustodyStore(
                 failWriteDigest: (digest, occurrence) =>
                     occurrence == 2 && string.Equals(digest, CanaryBodyDigest, StringComparison.Ordinal)));
@@ -309,7 +309,7 @@ public sealed class EuQueryExecutionAdapterTests
     [TestMethod]
     public async Task ADocumentBodyNoConsumerCouldFindByDigestRefusesRatherThanHolding()
     {
-        var (outcomes, _, refusal) = await RunOneAcceptedBodyFetchAsync(
+        var (outcomes, _, _, refusal) = await RunOneAcceptedBodyFetchAsync(
             store: new EuAcquisitionTestFixture.EuInMemoryCustodyStore(
                 loseBytesAfterWriteDigest: (digest, occurrence) =>
                     occurrence == 2 && string.Equals(digest, CanaryBodyDigest, StringComparison.Ordinal)));
@@ -330,7 +330,7 @@ public sealed class EuQueryExecutionAdapterTests
     [TestMethod]
     public async Task ADocumentBodyTheStoreCannotReproduceStillRefusesRatherThanHolding()
     {
-        var (outcomes, _, refusal) = await RunOneAcceptedBodyFetchAsync(
+        var (outcomes, _, _, refusal) = await RunOneAcceptedBodyFetchAsync(
             store: new EuAcquisitionTestFixture.EuInMemoryCustodyStore(
                 raiseIntegrityOnWriteDigest: (digest, occurrence) =>
                     occurrence == 2 && string.Equals(digest, CanaryBodyDigest, StringComparison.Ordinal)));
@@ -359,6 +359,7 @@ public sealed class EuQueryExecutionAdapterTests
     private static async Task<(
         IReadOnlyDictionary<int, CorpusAcquisitionOutcome>? Outcomes,
         IReadOnlyDictionary<int, EuDocumentLadderResult>? LadderResults,
+        IReadOnlyDictionary<int, EuMintedRowAccounting>? MintedRows,
         EuQueryExecutionRefusalDetail? Refusal)>
         RunOneAcceptedBodyFetchAsync(EuAcquisitionTestFixture.EuInMemoryCustodyStore store)
     {
@@ -444,7 +445,7 @@ public sealed class EuQueryExecutionAdapterTests
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
         var adapter = new EuQueryExecutionAdapter(store, executor);
 
-        var (outcomes, ladderResults, refusal) = await adapter.RunDocumentAcquisitionAsync(
+        var (outcomes, ladderResults, _, refusal) = await adapter.RunDocumentAcquisitionAsync(
             manifest,
             mintedAddressesByObjectRef,
             EuAcquisitionTestFixture.BuildRendererSource(901),
@@ -509,7 +510,7 @@ public sealed class EuQueryExecutionAdapterTests
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
         var adapter = new EuQueryExecutionAdapter(store, executor);
 
-        var (outcomes, ladderResults, refusal) = await adapter.RunDocumentAcquisitionAsync(
+        var (outcomes, ladderResults, _, refusal) = await adapter.RunDocumentAcquisitionAsync(
             manifest,
             mintedAddressesByObjectRef,
             EuAcquisitionTestFixture.BuildRendererSource(911),
@@ -616,7 +617,7 @@ public sealed class EuQueryExecutionAdapterTests
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
         var adapter = new EuQueryExecutionAdapter(store, executor);
 
-        var (outcomes, ladderResults, acquisitionRefusal) = await adapter.RunDocumentAcquisitionAsync(
+        var (outcomes, ladderResults, _, acquisitionRefusal) = await adapter.RunDocumentAcquisitionAsync(
             manifest,
             mintedAddressesByObjectRef,
             EuAcquisitionTestFixture.BuildRendererSource(9001),
@@ -807,7 +808,7 @@ public sealed class EuQueryExecutionAdapterTests
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
         var adapter = new EuQueryExecutionAdapter(store, executor);
 
-        var (outcomes, ladderResults, refusal) = await adapter.RunDocumentAcquisitionAsync(
+        var (outcomes, ladderResults, _, refusal) = await adapter.RunDocumentAcquisitionAsync(
             manifest,
             mintedAddressesByObjectRef,
             EuAcquisitionTestFixture.BuildRendererSource(9101),
@@ -1078,7 +1079,7 @@ public sealed class EuQueryExecutionAdapterTests
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
         var adapter = new EuQueryExecutionAdapter(store, executor);
 
-        var (outcomes, ladderResults, refusal) = await adapter.RunDocumentAcquisitionAsync(
+        var (outcomes, ladderResults, _, refusal) = await adapter.RunDocumentAcquisitionAsync(
             manifest,
             mintedAddressesByObjectRef,
             EuAcquisitionTestFixture.BuildRendererSource(9201),
@@ -1140,7 +1141,7 @@ public sealed class EuQueryExecutionAdapterTests
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
         var adapter = new EuQueryExecutionAdapter(store, executor);
 
-        var (outcomes, ladderResults, refusal) = await adapter.RunDocumentAcquisitionAsync(
+        var (outcomes, ladderResults, _, refusal) = await adapter.RunDocumentAcquisitionAsync(
             manifest,
             mintedAddressesByObjectRef,
             EuAcquisitionTestFixture.BuildRendererSource(9301),
@@ -1189,7 +1190,7 @@ public sealed class EuQueryExecutionAdapterTests
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
         var adapter = new EuQueryExecutionAdapter(store, executor);
 
-        var (outcomes, ladderResults, refusal) = await adapter.RunDocumentAcquisitionAsync(
+        var (outcomes, ladderResults, _, refusal) = await adapter.RunDocumentAcquisitionAsync(
             manifest,
             mintedAddressesByObjectRef,
             EuAcquisitionTestFixture.BuildRendererSource(9301),
