@@ -912,18 +912,22 @@ public sealed class LuxembourgDocumentGetTests
             CustodyMembershipClassifier.Classify(receipt!),
             "and the class is what the store honestly declared, through the one classifier.");
 
-        // The record-set half is NOT this lane's to change. CorpusRecordSetWriter's own floor gate
-        // is shared with the EU lane and the gate ownership ruling
+        // THE RECORD-SET HALF, FLIPPED AT THE REBASE EXACTLY AS PLANNED. This assertion was kept
+        // deliberately in its old form, asserting that the SET still refused an unenforced store,
+        // because CorpusRecordSetWriter's floor gate was shared and the gate ownership ruling
         // (lex-event-20260904T214500631Z-2988b4fbae224252b08849326325a2a6) put it in the lane that
-        // merges first, so it still refuses an unenforced store. Asserted as it is, so this test
-        // states the real boundary rather than implying the whole path works.
+        // merges first. That lane has merged: the writer now routes through CustodyHold and
+        // records the observed class on RetainedFloor instead of refusing, so the whole path this
+        // test names does work, and the pair finally reads as one statement end to end.
         var written = await new CorpusRecordSetWriter(store).WriteAsync(
             manifest, manifestRef, RunIdentityRef(), outcomes, CancellationToken.None);
-        Assert.IsNotNull(
+        Assert.IsNull(
             written.Refusal,
-            "until the shared writer's gate lands in the EU lane, the SET still refuses on an "
-            + "unenforced store even though the BODY above is held.");
-        Assert.AreEqual(CorpusRecordSetWriteRefusalKind.RecordSetNotHeld, written.Refusal!.Kind);
+            "an unenforced store no longer costs the run its corpus records: " + written.Refusal?.Detail);
+        Assert.AreEqual(
+            CustodyMembership.RetainedUnenforced,
+            written.RetainedFloor,
+            "and the SET says under which guarantee it is retained, rather than being discarded.");
     }
 
     // ---------------------------------------------------------------------------------------

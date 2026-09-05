@@ -11,6 +11,11 @@
 # therefore a property of each file's bytes rather than of any rule. Declaring it makes the next
 # NUL-free XHTML or XML body safe by construction. Adding this changes no stored blob: all twelve
 # already round trip identically, so it is prevention, not repair.
+# The incident that proved this: staging the retained Akoma Ntoso body without a binary
+# declaration rewrote its CRLF and changed its digest from 9e43a99e.. to fc3303d4.., which
+# would have committed a fixture that is not the publisher bytes it names. That was first
+# fixed with a lane-scoped path rule; this general *.bin rule supersedes it, so the scoped
+# line is gone and one rule covers every publisher body.
 *.bin binary
 *.png binary
 *.jpg binary
@@ -19,9 +24,3 @@
 *.ico binary
 *.woff binary
 *.woff2 binary
-
-# D1-06c-LU-2: retained publisher response bodies are EXACT BYTES, never text. Without this,
-# text=auto above detects the Akoma Ntoso XML as text and rewrites its CRLF on staging, which
-# changed its digest from 9e43a99e.. to fc3303d4.. and would have committed a fixture that is not
-# the publisher bytes it names. Scoped to this lane; see the packet for the general *.bin case.
-tests/Lex.V3.Ingest.Tests/Fixtures/LuDocumentFetch/** binary

@@ -734,21 +734,16 @@ public sealed class LuxembourgQueryExecutionAdapterTests
             var result = await adapter.RunAsync(
                 [], null, null, null, new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
 
-            // THE MANIFEST GATE IS PASSED, which is what this lane changed: the run no longer stops
-            // at ScopeManifestNotHeld. It now reaches the record set, whose writer's own floor gate
-            // is SHARED WITH THE EU LANE and, per the gate ownership ruling
-            // lex-event-20260904T214500631Z-2988b4fbae224252b08849326325a2a6, belongs to the lane
-            // that merges first. So the run still refuses, one gate later, and this says so by name
-            // rather than asserting a completeness this lane cannot yet deliver.
-            Assert.IsNotNull(result.Refusal);
-            Assert.AreNotEqual(
-                LuxembourgQueryExecutionRefusal.ScopeManifestNotHeld,
-                result.Refusal!.Code,
-                "the manifest is held on an unenforced store now; that gate records and continues.");
-            Assert.AreEqual(
-                LuxembourgQueryExecutionRefusal.RecordSetNotHeld,
-                result.Refusal.Code,
-                "the remaining refusal is the shared CorpusRecordSetWriter gate, not this lane's.");
+            // BOTH GATES ARE PASSED NOW, and the test finally delivers what its name promises.
+            // It asserted a residual RecordSetNotHeld because the shared CorpusRecordSetWriter
+            // gate belonged to the lane that merges first
+            // (lex-event-20260904T214500631Z-2988b4fbae224252b08849326325a2a6). That lane has
+            // merged and routed the writer through CustodyHold, so an unenforced store no longer
+            // refuses at either gate: a Luxembourg run completes outside Azure, which is the
+            // whole point of the Decision 71 interpretation this test was written against.
+            Assert.IsNull(
+                result.Refusal,
+                "an unenforced store refuses at no gate now: " + result.Refusal?.Detail);
         }
         finally
         {
