@@ -119,7 +119,7 @@ public sealed class AbsenceSubject
     public string CanonicalProjection() =>
         string.Join('\n',
         [
-            "publisher=" + AbsenceWire.NameOf(Publisher),
+            "publisher=" + ContractWire.NameOf(Publisher),
             "entity_kind=" + Describe(EntityKind),
             "canonical_publisher_uri=" + CanonicalPublisherUri,
             "parent_identity_or_null=" + (ParentIdentity is null
@@ -284,7 +284,7 @@ public sealed class AbsenceComparisonPolicy
         }
 
         var projection = string.Join('\n', Enum.GetValues<AbsenceComparisonPolicyMember>()
-            .Select(member => AbsenceWire.NameOf(member) + "=" + byMember[member]));
+            .Select(member => ContractWire.NameOf(member) + "=" + byMember[member]));
 
         refusal = AbsenceComparisonPolicyRefusal.None;
         return new AbsenceComparisonPolicy(byMember, projection);

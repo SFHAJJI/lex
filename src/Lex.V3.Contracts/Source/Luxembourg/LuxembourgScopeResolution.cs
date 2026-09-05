@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Text;
 using System.Text.Json.Serialization;
-using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Scope;
 
@@ -757,11 +756,11 @@ public sealed record LuxembourgProfileResolutionFailure
     /// of the five, and renaming one of the two unpinned tokens left the whole suite green.
     /// Reading the attribute makes the member the only source, and a member added without a token
     /// now fails loudly at its first use instead of projecting its CLR spelling.
-    /// <see cref="AbsenceWire"/> is the existing mechanism and its remarks already give this exact
+    /// <see cref="ContractWire"/> is the existing mechanism and its remarks already give this exact
     /// argument; its name says Absence while its function is general, which is worth correcting
     /// separately rather than duplicating a second reader here.
     /// </remarks>
-    public string ReasonCode => AbsenceWire.NameOf(Code);
+    public string ReasonCode => ContractWire.NameOf(Code);
 }
 
 public abstract record LuxembourgProfileResolution
