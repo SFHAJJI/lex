@@ -14,6 +14,7 @@
              Link="TestSupport/AbsenceEnumerationProofFixture.cs" />
     <Compile Include="../Lex.V3.Tests/Contracts/Source/Absence/AbsenceFixtures.cs"
              Link="TestSupport/AbsenceFixtures.cs" />
+    <Compile Include="../Lex.V3.TestSupport/CustodyStoreConformance.cs" Link="TestSupport/CustodyStoreConformance.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/Lex.V3.Artifacts/Lex.V3.Artifacts.csproj" />
