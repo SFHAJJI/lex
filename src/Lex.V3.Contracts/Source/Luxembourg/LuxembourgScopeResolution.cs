@@ -77,12 +77,64 @@ public enum LuxembourgAssertionDisposition
     TypedQuarantine = 2,
 }
 
+/// <summary>
+/// Why a whole Luxembourg run refused. Every member names the condition that produces it, so a
+/// reader can check the claim against the code rather than infer it from the name.
+/// </summary>
+/// <remarks>
+/// Residue R1, RULING lex-event-20260905T044206627Z-43bd39db4edb474c834cb2acd1e1e1ff. Two of these
+/// members were constructed by no production path while the conditions they name escaped as an
+/// untyped <see cref="ArgumentException"/>, so this vocabulary advertised coverage it did not have.
+/// Naming each producer in its own summary is what makes that failure visible next time: a code
+/// whose summary names its real producer can be checked by a reader, and a code whose summary does
+/// not cannot.
+/// </remarks>
 public enum LuxembourgProfileResolutionFailureCode
 {
+    /// <summary>
+    /// An observation whose object is not a Luxembourg resource IRI under the Jolux authority.
+    /// Produced by <c>LuxembourgScopeResolver.ValidateObservation</c>.
+    /// </summary>
     InvalidPublisherIri = 1,
+
+    /// <summary>
+    /// The snapshot omits a settled exact rule value the profile requires, so the vocabulary is not
+    /// complete enough to resolve anything. Produced by
+    /// <c>VerifiedLuxembourgSourceProfile.TryOpen</c>.
+    /// </summary>
     IncompleteVocabulary = 2,
+
+    /// <summary>
+    /// An observed predicate or object IRI that is not the settled value, which is drift in the
+    /// publisher vocabulary rather than a duplicate of a settled one. Produced by
+    /// <c>LuxembourgScopeResolver.ValidateObservation</c>.
+    /// </summary>
     UnknownVocabularyDrift = 3,
+
+    /// <summary>
+    /// Two vocabulary rows compete for one selector position: the snapshot presents the same kind
+    /// and IRI twice, or the same literal row twice, so one selector has two answers. Produced by
+    /// <c>VerifiedLuxembourgSourceProfile.TryOpen</c>.
+    /// </summary>
+    /// <remarks>
+    /// That mapping is a READING of the code, recorded as one so the next reader can check it.
+    /// Duplicate rows were the only input-driven condition left without a home once the neighbours
+    /// were excluded: the static selector table cannot collide, since its keys and projection rules
+    /// are compile-time arrays; a per-object selector conflict already resolves as
+    /// <c>typed_quarantine_selector_conflict</c> at object level rather than refusing a run; and the
+    /// identity mismatch in <c>ReduceScope</c> is a different condition. The reviewer confirmed it
+    /// from the other side, by elimination over this enum rather than from the throw sites:
+    /// <see cref="UnknownVocabularyDrift"/> means a value that is not the settled one, not a
+    /// duplicate of it, so the duplicate condition has no other home here. Two independent readings
+    /// agreeing is strong evidence and not proof.
+    /// </remarks>
     SelectorConflict = 4,
+
+    /// <summary>
+    /// Evidence that does not bind: an observation naming a different run, a duplicate publisher
+    /// URI, duplicate assertions or relations, or a term that is not an exact IRI. Produced by
+    /// <c>LuxembourgScopeResolver.Resolve</c> and its <c>ValidateObservation</c>.
+    /// </summary>
     EvidenceBindingRejected = 5,
 }
 

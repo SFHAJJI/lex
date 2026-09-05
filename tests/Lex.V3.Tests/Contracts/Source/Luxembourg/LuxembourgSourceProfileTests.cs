@@ -5,6 +5,7 @@ using Lex.V3.Contracts;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Lex.V3.TestSupport;
 
 namespace Lex.V3.Tests.Contracts.Source.Luxembourg;
 
@@ -17,7 +18,7 @@ public sealed class LuxembourgSourceProfileTests
     [TestMethod]
     public void PublisherOriginEndpointAndObjectIdentityRemainDistinct()
     {
-        var profile = VerifiedLuxembourgSourceProfile.Open(CompleteSnapshot());
+        var profile = LuxembourgProfiles.Opened(CompleteSnapshot());
         var objectRef = ObjectRef(
             "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a1");
         var observation = Observation(objectRef);
@@ -44,8 +45,8 @@ public sealed class LuxembourgSourceProfileTests
             forward.IriValues.Reverse().ToArray(),
             forward.LiteralValues.Reverse().ToArray());
 
-        var first = VerifiedLuxembourgSourceProfile.Open(forward);
-        var second = VerifiedLuxembourgSourceProfile.Open(reverse);
+        var first = LuxembourgProfiles.Opened(forward);
+        var second = LuxembourgProfiles.Opened(reverse);
 
         Assert.AreEqual(first.ScopeBinding.SourceProfileRef, second.ScopeBinding.SourceProfileRef);
         Assert.AreEqual(first.ScopeBinding.SelectorTableRef, second.ScopeBinding.SelectorTableRef);
@@ -53,12 +54,17 @@ public sealed class LuxembourgSourceProfileTests
             first.ObservedIriVocabulary.ToArray(),
             second.ObservedIriVocabulary.ToArray());
 
-        Assert.ThrowsExactly<ArgumentException>(() =>
-            VerifiedLuxembourgSourceProfile.Open(new LuxembourgVocabularySnapshot(
+        var duplicated = VerifiedLuxembourgSourceProfile.TryOpen(
+            new LuxembourgVocabularySnapshot(
                 forward.ObservationRef,
                 forward.CompleteEnumerationRef,
                 [.. forward.IriValues, forward.IriValues[0]],
-                forward.LiteralValues)));
+                forward.LiteralValues),
+            out var duplicateFailure);
+
+        Assert.IsNull(duplicated);
+        Assert.AreEqual(
+            LuxembourgProfileResolutionFailureCode.SelectorConflict, duplicateFailure!.Code);
     }
 
     [TestMethod]
@@ -67,7 +73,7 @@ public sealed class LuxembourgSourceProfileTests
         const string datatype = "https://example.invalid/digest-datatype";
         const string lexical = "https://example.invalid/digest-value";
         var required = VerifiedLuxembourgSourceProfile.RequiredIriVocabulary;
-        var twoIriRows = VerifiedLuxembourgSourceProfile.Open(new LuxembourgVocabularySnapshot(
+        var twoIriRows = LuxembourgProfiles.Opened(new LuxembourgVocabularySnapshot(
             ObservationRef,
             EnumerationRef,
             [
@@ -78,7 +84,7 @@ public sealed class LuxembourgSourceProfileTests
                     lexical),
             ],
             []));
-        var oneLiteralRow = VerifiedLuxembourgSourceProfile.Open(new LuxembourgVocabularySnapshot(
+        var oneLiteralRow = LuxembourgProfiles.Opened(new LuxembourgVocabularySnapshot(
             ObservationRef,
             EnumerationRef,
             required,
@@ -98,7 +104,7 @@ public sealed class LuxembourgSourceProfileTests
     [TestMethod]
     public void LiteralVocabularyPreservesRawTermsAndDerivesSelectorTruth()
     {
-        var profile = VerifiedLuxembourgSourceProfile.Open(new LuxembourgVocabularySnapshot(
+        var profile = LuxembourgProfiles.Opened(new LuxembourgVocabularySnapshot(
             ObservationRef,
             EnumerationRef,
             VerifiedLuxembourgSourceProfile.RequiredIriVocabulary,
@@ -148,7 +154,7 @@ public sealed class LuxembourgSourceProfileTests
     {
         const string privateUse = "https://example.invalid/\uE000";
         const string supplementary = "https://example.invalid/\U00010000";
-        var profile = VerifiedLuxembourgSourceProfile.Open(new LuxembourgVocabularySnapshot(
+        var profile = LuxembourgProfiles.Opened(new LuxembourgVocabularySnapshot(
             ObservationRef,
             EnumerationRef,
             [
@@ -186,7 +192,7 @@ public sealed class LuxembourgSourceProfileTests
             value.Kind == LuxembourgVocabularyKind.RelationPredicate &&
             value.FullIri == Jolux + "cites"));
 
-        var profile = VerifiedLuxembourgSourceProfile.Open(CompleteSnapshot());
+        var profile = LuxembourgProfiles.Opened(CompleteSnapshot());
         var cites = profile.RelationRules.Single(rule => rule.PredicateIri == Jolux + "cites");
         Assert.AreEqual(LuxembourgRelationSemantic.AssertedCitation, cites.Semantic);
     }
@@ -246,7 +252,7 @@ public sealed class LuxembourgSourceProfileTests
     [TestMethod]
     public void CitesPreservesPublisherDirectionWithoutInventingInterpretation()
     {
-        var profile = VerifiedLuxembourgSourceProfile.Open(CompleteSnapshot());
+        var profile = LuxembourgProfiles.Opened(CompleteSnapshot());
         var source = ObjectRef(
             "http://data.legilux.public.lu/eli/etat/leg/acc/2026/01/01/a1");
         var target = "http://data.legilux.public.lu/eli/etat/leg/loi/2025/01/01/a2";
@@ -272,7 +278,7 @@ public sealed class LuxembourgSourceProfileTests
     [TestMethod]
     public void ProfileInvalidPublisherIdentityReturnsTypedFailureAndNoPartialInput()
     {
-        var profile = VerifiedLuxembourgSourceProfile.Open(CompleteSnapshot());
+        var profile = LuxembourgProfiles.Opened(CompleteSnapshot());
         var outsidePublisher = ObjectRef("https://example.invalid/legal-resource");
 
         var failure = Assert.IsInstanceOfType<LuxembourgProfileResolution.Failed>(
@@ -289,7 +295,7 @@ public sealed class LuxembourgSourceProfileTests
     [TestMethod]
     public void AssertionOutsideBoundVocabularyIsTypedScopeDrift()
     {
-        var profile = VerifiedLuxembourgSourceProfile.Open(CompleteSnapshot());
+        var profile = LuxembourgProfiles.Opened(CompleteSnapshot());
         var objectRef = ObjectRef(
             "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a1");
         var assertion = new LuxembourgObservedAssertion(

@@ -145,23 +145,65 @@ public sealed class VerifiedLuxembourgSourceProfile
 
     public IReadOnlyList<LuxembourgRelationRule> RelationRules => SettledRelationRules;
 
-    public static VerifiedLuxembourgSourceProfile Open(LuxembourgVocabularySnapshot snapshot)
+    /// <summary>
+    /// Opens a snapshot as a verified profile, or refuses it with a typed whole-run failure that
+    /// names which condition refused it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Residue R1. RULING lex-event-20260905T044206627Z-43bd39db4edb474c834cb2acd1e1e1ff, finding
+    /// lex-event-20260904T215524557Z-7cb36f1f533c4318b978a4ff97c929d7. Both conditions below used
+    /// to leave here as an untyped <see cref="ArgumentException"/> while
+    /// <see cref="LuxembourgProfileResolutionFailureCode"/> carried a named member for each, so the
+    /// vocabulary advertised coverage the code did not have: a reader saw two named codes for two
+    /// real conditions and reasonably concluded those conditions were reported as refusals, when
+    /// nothing constructed either member and no caller could classify what actually escaped.
+    /// </para>
+    /// <para>
+    /// The untyped throws are gone rather than kept beside this door, because a typed refusal that
+    /// shares a path with an untyped throw is the same defect one level up.
+    /// </para>
+    /// </remarks>
+    /// <returns>The verified profile, or null with <paramref name="failure"/> set.</returns>
+    public static VerifiedLuxembourgSourceProfile? TryOpen(
+        LuxembourgVocabularySnapshot snapshot,
+        out LuxembourgProfileResolutionFailure? failure)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
-        var iriValues = CanonicalizeIriVocabulary(snapshot.IriValues);
-        var literalValues = CanonicalizeLiteralVocabulary(snapshot.LiteralValues);
+        var iriValues = TryCanonicalizeIriVocabulary(snapshot.IriValues, out var iriConflict);
+        if (iriValues is null)
+        {
+            failure = new LuxembourgProfileResolutionFailure(
+                LuxembourgProfileResolutionFailureCode.SelectorConflict, iriConflict!);
+            return null;
+        }
+
+        var literalValues = TryCanonicalizeLiteralVocabulary(
+            snapshot.LiteralValues, out var literalConflict);
+        if (literalValues is null)
+        {
+            failure = new LuxembourgProfileResolutionFailure(
+                LuxembourgProfileResolutionFailureCode.SelectorConflict, literalConflict!);
+            return null;
+        }
+
         var actual = iriValues
             .Select(static value => new VocabularyKey(value.Kind, value.FullIri))
             .ToHashSet();
         var missing = RequiredVocabulary
             .Select(static value => new VocabularyKey(value.Kind, value.FullIri))
             .Where(value => !actual.Contains(value))
+            .OrderBy(static value => value.Kind)
+            .ThenBy(
+                static value => value.FullIri,
+                LuxembourgSourceValidation.UnicodeScalarComparer)
             .ToArray();
         if (missing.Length != 0)
         {
-            throw new ArgumentException(
-                "The complete Luxembourg vocabulary snapshot omits a settled exact rule value.",
-                nameof(snapshot));
+            failure = new LuxembourgProfileResolutionFailure(
+                LuxembourgProfileResolutionFailureCode.IncompleteVocabulary,
+                Subject(missing[0].Kind, missing[0].FullIri));
+            return null;
         }
 
         var sourceProfileRef = new SourceArtifactRef(
@@ -176,6 +218,7 @@ public sealed class VerifiedLuxembourgSourceProfile
             snapshot.CompleteEnumerationRef,
             iriValues,
             literalValues);
+        failure = null;
         return new VerifiedLuxembourgSourceProfile(
             canonicalSnapshot,
             Array.AsReadOnly(iriValues),
@@ -183,6 +226,14 @@ public sealed class VerifiedLuxembourgSourceProfile
             binding,
             ordinals);
     }
+
+    /// <summary>
+    /// The subject a whole-run vocabulary failure names: the kind and the value, so a reader can
+    /// find the offending row rather than being told only that one exists. Never empty, because a
+    /// failure subject must be a non-empty scalar string and a literal lexical value may be empty.
+    /// </summary>
+    private static string Subject(LuxembourgVocabularyKind kind, string value) =>
+        value.Length == 0 ? kind.ToString() : kind + " " + value;
 
     /// <summary>
     /// Resolves scope over observations that can only be constructed from this run's own proven
@@ -263,19 +314,27 @@ public sealed class VerifiedLuxembourgSourceProfile
 
     internal int MemberOrdinal(string memberKey) => _memberOrdinals[memberKey];
 
-    private static LuxembourgIriVocabularyValue[] CanonicalizeIriVocabulary(
-        IReadOnlyList<LuxembourgIriVocabularyValue> values)
+    /// <summary>
+    /// Canonicalises the IRI vocabulary, or reports the first row that competes with an earlier one
+    /// for the same selector position. Two rows sharing a kind and an IRI are two answers to one
+    /// selector, which is the selector conflict.
+    /// </summary>
+    private static LuxembourgIriVocabularyValue[]? TryCanonicalizeIriVocabulary(
+        IReadOnlyList<LuxembourgIriVocabularyValue> values,
+        out string? conflictSubject)
     {
         var copy = LuxembourgSourceValidation.Copy(values, nameof(values)).ToArray();
-        if (copy.Select(static value => new VocabularyKey(value.Kind, value.FullIri))
-            .Distinct()
-            .Count() != copy.Length)
+        var seen = new HashSet<VocabularyKey>();
+        foreach (var value in copy)
         {
-            throw new ArgumentException(
-                "IRI vocabulary rows must be unique before canonical sorting.",
-                nameof(values));
+            if (!seen.Add(new VocabularyKey(value.Kind, value.FullIri)))
+            {
+                conflictSubject = Subject(value.Kind, value.FullIri);
+                return null;
+            }
         }
 
+        conflictSubject = null;
         return copy
             .OrderBy(static value => value.Kind)
             .ThenBy(
@@ -284,8 +343,13 @@ public sealed class VerifiedLuxembourgSourceProfile
             .ToArray();
     }
 
-    private static LuxembourgLiteralVocabularyValue[] CanonicalizeLiteralVocabulary(
-        IReadOnlyList<LuxembourgLiteralVocabularyValue> values)
+    /// <summary>
+    /// Canonicalises the literal vocabulary, or reports the first row that competes with an earlier
+    /// one for the same selector position, exactly as the IRI form does.
+    /// </summary>
+    private static LuxembourgLiteralVocabularyValue[]? TryCanonicalizeLiteralVocabulary(
+        IReadOnlyList<LuxembourgLiteralVocabularyValue> values,
+        out string? conflictSubject)
     {
         var copy = LuxembourgSourceValidation.Copy(values, nameof(values)).ToArray();
         var ordered = copy
@@ -304,12 +368,12 @@ public sealed class VerifiedLuxembourgSourceProfile
         {
             if (ordered[index - 1] == ordered[index])
             {
-                throw new ArgumentException(
-                    "Literal vocabulary rows must be unique before canonical sorting.",
-                    nameof(values));
+                conflictSubject = Subject(ordered[index].Kind, ordered[index].RawLexicalValue);
+                return null;
             }
         }
 
+        conflictSubject = null;
         return ordered;
     }
 

@@ -10,6 +10,7 @@ using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Contracts.Source.Scope;
 using Lex.V3.Ingest.Luxembourg;
+using Lex.V3.TestSupport;
 
 namespace Lex.V3.Ingest.Tests;
 
@@ -1551,7 +1552,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
             "urn:uuid:3f60c78d-6e8a-4208-9146-43b634db9bbc", new string('2', 64));
         var snapshot = new LuxembourgVocabularySnapshot(
             observationRef, enumerationRef, VerifiedLuxembourgSourceProfile.RequiredIriVocabulary, []);
-        return (VerifiedLuxembourgSourceProfile.Open(snapshot), observationRef, enumerationRef);
+        return (LuxembourgProfiles.Opened(snapshot), observationRef, enumerationRef);
     }
 
     private static (LuxembourgPartitionRunRequest Request, BoundMachineRequest Witness) BuildPartitionRequest(

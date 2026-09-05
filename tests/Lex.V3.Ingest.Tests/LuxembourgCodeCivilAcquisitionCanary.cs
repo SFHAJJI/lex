@@ -8,6 +8,7 @@ using Lex.V3.Contracts.Source.Http;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Contracts.Source.Scope;
 using Lex.V3.Ingest.Luxembourg;
+using Lex.V3.TestSupport;
 
 namespace Lex.V3.Ingest.Tests;
 
@@ -719,7 +720,7 @@ public sealed class LuxembourgCodeCivilAcquisitionCanary
         Convert.ToHexStringLower(SHA256.HashData("lu-canary-run"u8.ToArray())));
 
     private static VerifiedLuxembourgSourceProfile BuildProfile() =>
-        VerifiedLuxembourgSourceProfile.Open(new LuxembourgVocabularySnapshot(
+        LuxembourgProfiles.Opened(new LuxembourgVocabularySnapshot(
             new SourceArtifactRef("urn:uuid:10dd0a6e-3fa4-468d-a2aa-570a93ec4bf0", new string('1', 64)),
             CompleteEnumerationRef,
             VerifiedLuxembourgSourceProfile.RequiredIriVocabulary,

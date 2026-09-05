@@ -6,6 +6,7 @@ using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Contracts.Source.Scope;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Lex.V3.TestSupport;
 
 namespace Lex.V3.Tests.Contracts.Source.Luxembourg;
 
@@ -50,7 +51,7 @@ public sealed class LuxembourgSourceProfileAdversarialProofTests
                 .Select(static value => value.FullIri)
                 .ToArray());
 
-        var profile = VerifiedLuxembourgSourceProfile.Open(new LuxembourgVocabularySnapshot(
+        var profile = LuxembourgProfiles.Opened(new LuxembourgVocabularySnapshot(
             ObservationRef,
             CompleteEnumerationRef,
             authorityVocabulary,
@@ -314,14 +315,14 @@ public sealed class LuxembourgSourceProfileAdversarialProofTests
 
     private static VerifiedLuxembourgSourceProfile Profile(
         params LuxembourgIriVocabularyValue[] extraVocabulary) =>
-        VerifiedLuxembourgSourceProfile.Open(new LuxembourgVocabularySnapshot(
+        LuxembourgProfiles.Opened(new LuxembourgVocabularySnapshot(
             ObservationRef,
             CompleteEnumerationRef,
             [.. VerifiedLuxembourgSourceProfile.RequiredIriVocabulary, .. extraVocabulary],
             []));
 
     private static VerifiedLuxembourgSourceProfile ExpectedProfile() =>
-        VerifiedLuxembourgSourceProfile.Open(new LuxembourgVocabularySnapshot(
+        LuxembourgProfiles.Opened(new LuxembourgVocabularySnapshot(
             ObservationRef,
             CompleteEnumerationRef,
             ExpectedVocabulary()
