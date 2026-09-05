@@ -111,24 +111,29 @@ public sealed class EuFamilyEnumerationOutcome
 
 public enum EuQueryExecutionRefusal
 {
+    [JsonStringEnumMemberName("none")]
     None = 0,
 
     /// <summary>A requested census-family (D1-05a's own <c>Family</c> set) partition did not prove.</summary>
+    [JsonStringEnumMemberName("census_family_not_proven")]
     CensusFamilyNotProven = 1,
 
     /// <summary>A requested object-facts family (P, X, W or M) batch did not prove.</summary>
+    [JsonStringEnumMemberName("object_facts_family_not_proven")]
     ObjectFactsFamilyNotProven = 2,
 
     /// <summary>
     /// A proven family's delivered rows did not independently re-verify when reopened from custody
     /// through <see cref="VerifiedRepeatedEnumerationRows.TryOpen"/>.
     /// </summary>
+    [JsonStringEnumMemberName("family_rows_not_verified")]
     FamilyRowsNotVerified = 3,
 
     /// <summary>
     /// D1-05c-2 precision two: the observed root set is bound to Appendix A's own 82-seed pack by
     /// identity through <see cref="EuPrimaryEnumerationRootBinding.TryBind"/>, which refused.
     /// </summary>
+    [JsonStringEnumMemberName("root_binding_refused")]
     RootBindingRefused = 4,
 
     /// <summary>
@@ -138,6 +143,7 @@ public enum EuQueryExecutionRefusal
     /// remarks on <see cref="EuQueryExecutionAdapter.TryResolveRecordForm"/> for exactly how it is read
     /// and why a value this reader cannot map refuses rather than guesses.
     /// </summary>
+    [JsonStringEnumMemberName("record_form_not_resolved")]
     RecordFormNotResolved = 5,
 
     /// <summary>
@@ -145,6 +151,7 @@ public enum EuQueryExecutionRefusal
     /// <see cref="EuQueryExecutionResult.DecodeRefusal"/>, <see cref="EuQueryExecutionResult.DecodeOffendingIri"/>
     /// and <see cref="EuQueryExecutionResult.DecodeSnapshotRefusal"/> for the exact reason.
     /// </summary>
+    [JsonStringEnumMemberName("object_decode_refused")]
     ObjectDecodeRefused = 6,
 
     /// <summary>
@@ -167,12 +174,15 @@ public enum EuQueryExecutionRefusal
     /// The written and reopened manifest did not admit as the Union's own through
     /// <see cref="EuScopeManifestBindingProof.TryOpenAsEuManifest"/>.
     /// </summary>
+    [JsonStringEnumMemberName("manifest_binding_refused")]
     ManifestBindingRefused = 8,
 
     /// <summary>D1-05c-2 precision three: no valid first-cut watermark start position could be computed.</summary>
+    [JsonStringEnumMemberName("watermark_bootstrap_refused")]
     WatermarkBootstrapRefused = 9,
 
     /// <summary>The frozen watermark witness plan itself refused.</summary>
+    [JsonStringEnumMemberName("watermark_plan_refused")]
     WatermarkPlanRefused = 10,
 
     /// <summary>
@@ -182,6 +192,7 @@ public enum EuQueryExecutionRefusal
     /// cannot be tied to a root this run actually discovered is refused naming the offending value,
     /// never silently excluded from the first-cut bootstrap.
     /// </summary>
+    [JsonStringEnumMemberName("root_watermark_binding_refused")]
     RootWatermarkBindingRefused = 11,
 
     /// <summary>
@@ -189,6 +200,7 @@ public enum EuQueryExecutionRefusal
     /// this run could ever reconcile the frozen watermark witness against its own primary
     /// enumeration.
     /// </summary>
+    [JsonStringEnumMemberName("witness_binding_refused")]
     WitnessBindingRefused = 12,
 
     /// <summary>
@@ -199,6 +211,7 @@ public enum EuQueryExecutionRefusal
     /// own remarks -- but a termination naming an in-pack root this run's primary enumeration never
     /// discovered still refuses here, exactly as it would for any other cut.
     /// </summary>
+    [JsonStringEnumMemberName("witness_reconciliation_refused")]
     WitnessReconciliationRefused = 13,
 
     /// <summary>
@@ -207,6 +220,7 @@ public enum EuQueryExecutionRefusal
     /// together, so a failure here cannot be attributed to one offending object and is reported as a
     /// whole-run refusal instead.
     /// </summary>
+    [JsonStringEnumMemberName("scope_reduction_refused")]
     ScopeReductionRefused = 14,
 
     /// <summary>
@@ -215,6 +229,7 @@ public enum EuQueryExecutionRefusal
     /// termination. Replaces the assumed-empty-result shortcut this refusal code did not previously
     /// need to exist for.
     /// </summary>
+    [JsonStringEnumMemberName("witness_traversal_refused")]
     WitnessTraversalRefused = 15,
 
     /// <summary>

@@ -334,9 +334,11 @@ public sealed class LuxembourgFamilyEnumerationOutcome
 
 public enum LuxembourgQueryExecutionRefusal
 {
+    [JsonStringEnumMemberName("none")]
     None = 0,
 
     /// <summary>The merged R5.1 pipeline's <c>Resolve</c> step refused (see <see cref="LuxembourgQueryExecutionRefusalDetail.ResolutionFailure"/>).</summary>
+    [JsonStringEnumMemberName("scope_resolution_failed")]
     ScopeResolutionFailed = 1,
 
     /// <summary>
@@ -366,6 +368,7 @@ public enum LuxembourgQueryExecutionRefusal
     /// rows behind a proof that exists, so an unproven or unmatched designation refuses here rather
     /// than silently deriving zero observations from a family this run never actually censused.
     /// </summary>
+    [JsonStringEnumMemberName("resource_observation_family_not_proven")]
     ResourceObservationFamilyNotProven = 3,
 
     /// <summary>
@@ -375,6 +378,7 @@ public enum LuxembourgQueryExecutionRefusal
     /// from custody: see <see cref="LuxembourgQueryExecutionRefusalDetail.Detail"/> for the exact
     /// <see cref="Lex.V3.Contracts.Source.Core.RepeatedEnumerationRowsOpenRefusal"/> reason.
     /// </summary>
+    [JsonStringEnumMemberName("resource_observation_rows_not_verified")]
     ResourceObservationRowsNotVerified = 4,
 
     /// <summary>
@@ -385,6 +389,7 @@ public enum LuxembourgQueryExecutionRefusal
     /// exist is a genuine data-integrity problem this adapter reports rather than silently drops.
     /// See <see cref="LuxembourgQueryExecutionRefusalDetail.Detail"/> for the exact subject.
     /// </summary>
+    [JsonStringEnumMemberName("observation_subject_not_in_delivered_census")]
     ObservationSubjectNotInDeliveredCensus = 5,
 
     /// <summary>
@@ -395,6 +400,7 @@ public enum LuxembourgQueryExecutionRefusal
     /// it refuses here rather than throwing. See <see cref="LuxembourgQueryExecutionRefusalDetail.Detail"/>
     /// for the exact subject and value.
     /// </summary>
+    [JsonStringEnumMemberName("assertion_row_object_kind_not_recognised")]
     AssertionRowObjectKindNotRecognised = 6,
 
     /// <summary>
@@ -419,6 +425,7 @@ public enum LuxembourgQueryExecutionRefusal
     /// canonical-key coverage ever narrows to something less than the full projection.
     /// </para>
     /// </summary>
+    [JsonStringEnumMemberName("assertion_row_term_unbound")]
     AssertionRowTermUnbound = 7,
 
     /// <summary>
@@ -430,6 +437,7 @@ public enum LuxembourgQueryExecutionRefusal
     /// <see cref="Lex.V3.Contracts.Source.Corpus.CorpusAcquisitionRefusalReason.RobotsDisallowed"/>
     /// record, because it is the publisher speaking about that document.
     /// </summary>
+    [JsonStringEnumMemberName("document_fetch_session_not_started")]
     DocumentFetchSessionNotStarted = 8,
 
     /// <summary>
@@ -437,6 +445,7 @@ public enum LuxembourgQueryExecutionRefusal
     /// this run cannot claim it as held (never bypass the Decision 71 floor). Refuses the whole run
     /// rather than recording an object as held on bytes nothing protects.
     /// </summary>
+    [JsonStringEnumMemberName("document_body_not_held")]
     DocumentBodyNotHeld = 9,
 
     /// <summary>
@@ -445,6 +454,7 @@ public enum LuxembourgQueryExecutionRefusal
     /// vocabulary cannot name faithfully. The whole run refuses, naming the real classified cause,
     /// rather than mapping it onto an unrelated existing member or accepting it as held.
     /// </summary>
+    [JsonStringEnumMemberName("document_get_outcome_not_representable")]
     DocumentGetOutcomeNotRepresentable = 10,
 
     /// <summary>
