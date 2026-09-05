@@ -1004,14 +1004,18 @@ public sealed class EuQueryExecutionAdapter
             var (closure, rootIri) = closuresByCelex[requestedCelex];
             var seedPRows = FilterByClosureColumn(
                 allPRows, pProfile, "object", closure, allRequestedSeedsClosure);
-            if (TryResolveRecordForm(seedPRows, pProfile, rootIri, out var resolvedForm))
+            if (TryResolveRecordForm(
+                    seedPRows, pProfile, rootIri, out var resolvedForm, out var conflict))
             {
                 recordFormByCelex[requestedCelex] = resolvedForm;
                 continue;
             }
 
             recordFormFailures.Add(
-                $"seed '{requestedCelex}' (root '{rootIri}') observed "
+                $"seed '{requestedCelex}' (root '{rootIri}') "
+                + (conflict is null
+                    ? "observed "
+                    : $"is CO-TYPED, carrying {conflict}, which cannot be resolved by row order. It observed ")
                 + DescribeRowsForRoot(seedPRows, pProfile, rootIri));
         }
 
@@ -2185,7 +2189,8 @@ public sealed class EuQueryExecutionAdapter
         IReadOnlyList<RepeatedEnumerationRow> pRows,
         RepeatedEnumerationInterpretationProfile pProfile,
         string rootIri,
-        out EuActForm recordForm)
+        out EuActForm recordForm,
+        out string? observedConflict)
     {
         var objectIndex = IndexOf(pProfile, "object");
         var predicateIndex = IndexOf(pProfile, "predicate");
@@ -2197,6 +2202,8 @@ public sealed class EuQueryExecutionAdapter
         // checked against nothing, which is how the two drifted apart unnoticed.
         var actFormPredicateIri = EuObjectFactsDiscoveryPlan.CdmIri(EuCdmPredicate.WorkHasResourceType);
 
+        observedConflict = null;
+        (EuActForm Form, string Value)? observed = null;
         foreach (var row in pRows)
         {
             var objectValue = row.Terms[objectIndex].Value;
@@ -2212,10 +2219,33 @@ public sealed class EuQueryExecutionAdapter
             }
 
             var value = row.Terms[valueIndex].Value;
-            if (value is not null && TryMapResourceTypeCode(value, out recordForm))
+            if (value is null || !TryMapResourceTypeCode(value, out var mapped))
             {
-                return true;
+                continue;
             }
+
+            // A SECOND MAPPABLE VALUE IS A REFUSAL, NOT A TIE BROKEN BY ROW ORDER. This used to
+            // return on the first value it met, so a co-typed root would have been classified by
+            // whichever row the publisher happened to deliver first, and the answer would change
+            // between runs without anything saying so. The canary cannot see this: both its seeds
+            // are singletons. The accepted 82-seed measurement is what makes it reachable, since it
+            // admits exactly six singleton TREATY, forty singleton DIR and thirty six singleton REG
+            // sets and records the predicate itself as MULTIVALUED, and says missing, extra,
+            // co-typed, unknown, case-altered or unicode-aliased values fail the direct-seed cut.
+            if (observed is not null && mapped != observed.Value.Form)
+            {
+                observedConflict = observed.Value.Value + " and " + value;
+                recordForm = default;
+                return false;
+            }
+
+            observed ??= (mapped, value);
+        }
+
+        if (observed is not null)
+        {
+            recordForm = observed.Value.Form;
+            return true;
         }
 
         recordForm = default;

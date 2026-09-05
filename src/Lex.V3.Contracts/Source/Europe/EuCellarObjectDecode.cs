@@ -647,7 +647,12 @@ public static class EuCellarObjectDecode
         var expectedContentClass = isRoot ? EuContentClass.OriginalLegalText : EuContentClass.Consolidation;
         if (derivedContentClass != expectedContentClass)
         {
+            // NAME THE OBJECT, like every sibling refusal in this method. Without it the run stops
+            // honestly and tells nobody WHICH object disagreed, and at eighty two seeds that is the
+            // difference between a diagnosis and a re-run: the adapter's detail carries the seed
+            // and the enum only, so a refusal here used to point at a whole closure.
             refusal = EuCellarObjectDecodeRefusal.ContentClassClosurePositionMismatch;
+            offendingIri = objectIri;
             return null;
         }
 

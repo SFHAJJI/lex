@@ -672,7 +672,22 @@ public sealed class EuRepeatedEnumerationExecutor
             {
             var batchRequestCount = 0;
             var position = plan.StartPosition;
-            IReadOnlyList<string> retainedTieSet = new[] { position.CanonicalEntryKey };
+            // EACH BATCH IS SEEDED FROM ITS OWN BOUNDARY, not from the pack-wide one.
+            //
+            // The retained tie set is what the next page must re-deliver, and a member of it that
+            // does not come back is BoundaryEntrySkipped. Seeding EVERY batch with the one pack-wide
+            // boundary entry key made that key unreachable for every batch except the single one
+            // whose VALUES block contains that root, so at eighty two seeds every batch but one
+            // would refuse. It is invisible at canary scale by construction: eight objects fit in
+            // one batch at capacity fifty, so no canary run can have more than one batch.
+            //
+            // A batch that does not contain the boundary entry starts with nothing retained, which
+            // is correct rather than lenient: it never delivered that entry, so it cannot have
+            // skipped it, and its own first page still establishes what it must carry forward.
+            IReadOnlyList<string> retainedTieSet =
+                plan.PaddedEntries.Contains(position.CanonicalEntryKey, StringComparer.Ordinal)
+                    ? new[] { position.CanonicalEntryKey }
+                    : Array.Empty<string>();
             var consecutiveTerminalObservations = 0;
 
             while (true)

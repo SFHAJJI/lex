@@ -3204,6 +3204,136 @@ public sealed class EuQueryExecutionAdapterTests
     /// <c>ScopeManifestContractTests</c> already covers; they are proving this adapter wires the
     /// already-merged EU scope-reduction pipeline correctly.
     /// </summary>
+    /// <summary>
+    /// A root carrying TWO mappable act-form values REFUSES, naming both, rather than being
+    /// classified by whichever row arrived first.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// WHY THE CANARY CANNOT SEE THIS. Both its seeds are singletons: 32003L0088 carries DIR alone
+    /// and 32016R0679 carries REG alone. The accepted measurement
+    /// <c>D1-EU-DIRECT-SEED-RESOURCE-TYPES-2026-09-01.md</c> admits exactly six singleton TREATY,
+    /// forty singleton DIR and thirty six singleton REG sets, AND RECORDS THE PREDICATE AS
+    /// MULTIVALUED, and states that co-typed values fail the direct-seed cut. So a co-typed root is
+    /// a shape the publisher's own data model permits and the pack happens not to contain today.
+    /// </para>
+    /// <para>
+    /// TAKING THE FIRST MAPPABLE VALUE WOULD HAVE BEEN THE ONLY FIX IN THIS HEAD THAT YIELDS A
+    /// WRONG RECORD RATHER THAN AN HONEST STOP: the answer would depend on row order, so two runs
+    /// could classify one Work differently with nothing saying so. A refusal naming both values is
+    /// the honest stop.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task ARootCarryingTwoActFormsRefusesNamingBothRatherThanTakingTheFirst()
+    {
+        var seed = EuAppendixASeedMap.SeedsInCelexOrder[0];
+        var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)!;
+
+        // The same root, typed BOTH ways. Row order is the only thing separating them.
+        var pOutcomes = EuAcquisitionTestFixture.ObjectAuthorityPredicates
+            .Select(predicate => (
+                PredicateIri: predicate,
+                ValueIri: predicate == EuAcquisitionTestFixture.WorkHasResourceType
+                    ? EuAcquisitionTestFixture.RegulationResourceType
+                    : (string?)null))
+            .Concat(EuAcquisitionTestFixture.RelationPredicates.Select(
+                predicate => (PredicateIri: predicate, ValueIri: (string?)null)))
+            .ToArray();
+        // BOTH VALUES IN ASCENDING ORDER UNDER THEIR SHARED PREDICATE. The page's cursor is
+        // (object, predicate, value_kind, value, ...), so two rows sharing a predicate must be
+        // ordered by VALUE or the delivery proof refuses on a cursor that did not advance, and the
+        // test would then pass for a reason unrelated to co-typing. DIR sorts before REG.
+        var pRows = pOutcomes
+            .Where(outcome => outcome.PredicateIri != EuAcquisitionTestFixture.WorkHasResourceType)
+            .Concat(
+            [
+                (PredicateIri: EuAcquisitionTestFixture.WorkHasResourceType,
+                 ValueIri: (string?)EuAcquisitionTestFixture.DirectiveResourceType),
+                (PredicateIri: EuAcquisitionTestFixture.WorkHasResourceType,
+                 ValueIri: (string?)EuAcquisitionTestFixture.RegulationResourceType),
+            ])
+            .OrderBy(static outcome => outcome.PredicateIri, StringComparer.Ordinal)
+            .ThenBy(static outcome => outcome.ValueIri ?? string.Empty, StringComparer.Ordinal)
+            .Select(outcome => EuAcquisitionTestFixture.ObjectFactRow(
+                rootIri, outcome.PredicateIri, outcome.ValueIri))
+            .ToArray();
+
+        var result = await RunWithObjectRowsAsync(seed.Celex, rootIri, pRows);
+
+        Assert.IsNotNull(result.Refusal);
+        Assert.AreEqual(
+            EuQueryExecutionRefusal.RecordFormNotResolved,
+            result.Refusal!.Code,
+            "a root the office types twice cannot be classified by row order.");
+        StringAssert.Contains(
+            result.Refusal.Detail,
+            "CO-TYPED",
+            "the refusal must say that co-typing is the cause rather than reporting a plain "
+                + "unmappable value.");
+        StringAssert.Contains(
+            result.Refusal.Detail,
+            EuAcquisitionTestFixture.RegulationResourceType,
+            "the refusal must name the first value VERBATIM.");
+        StringAssert.Contains(
+            result.Refusal.Detail,
+            EuAcquisitionTestFixture.DirectiveResourceType,
+            "the refusal must name the second value VERBATIM, or a reader cannot tell which two "
+                + "types collided.");
+    }
+
+    private static async System.Threading.Tasks.Task<EuQueryExecutionResult> RunWithObjectRowsAsync(
+        string celex, string rootIri, IReadOnlyList<string> pRows)
+    {
+        var xRows = new[]
+        {
+            EuAcquisitionTestFixture.ExpressionFactRow(
+                rootIri,
+                "http://publications.europa.eu/resource/cellar/00000000-0000-0000-0000-000000000004.0001.01/DOC_1"),
+        };
+        var wRows = new[]
+        {
+            EuAcquisitionTestFixture.RootWatermarkRow(rootIri, "2026-01-01T00:00:00.0000000+01:00"),
+        };
+
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["Census"] = EuAcquisitionTestFixture.ScriptFor(
+                "Census", 0, [], EuAcquisitionTestFixture.CensusFamilyProjection),
+            ["P"] = EuAcquisitionTestFixture.ScriptFor(
+                "P", pRows.Count, pRows, EuAcquisitionTestFixture.ObjectFactsProjection),
+            ["X"] = EuAcquisitionTestFixture.ScriptFor(
+                "X", xRows.Length, xRows, EuAcquisitionTestFixture.ExpressionFactsProjection),
+            ["W"] = EuAcquisitionTestFixture.ScriptFor(
+                "W", wRows.Length, wRows, EuAcquisitionTestFixture.RootWatermarkProjection),
+            ["M"] = EuAcquisitionTestFixture.ManifestationScriptFor(rootIri),
+        };
+
+        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(scripts);
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var executor = new EuRepeatedEnumerationExecutor(
+            store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
+        var adapter = new EuQueryExecutionAdapter(store, executor);
+
+        var (censusPlan, censusPlanId) = EuAcquisitionTestFixture.BuildCensusPlan();
+        var (objectFactsPlan, objectFactsPlanId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+
+        return await adapter.RunAsync(
+            [(new EuCensusPartitionRunRequest(
+                censusPlan, censusPlanId, celex, EuAcquisitionTestFixture.BuildRendererSource(8101)),
+              EuAcquisitionTestFixture.SourceWitness())],
+            new EuObjectFactsBatchPolicy(
+                objectFactsPlan, objectFactsPlanId,
+                EuAcquisitionTestFixture.BuildRendererSource(8102),
+                EuAcquisitionTestFixture.SourceWitness()),
+            EuAcquisitionTestFixture.BuildRendererSource(8103),
+            EuAcquisitionTestFixture.SourceWitness(),
+            EuAcquisitionTestFixture.BuildRendererSource(8104),
+            EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
+            new PermissiveEvidenceResolver(CompleteEnumerationRef),
+            System.Threading.CancellationToken.None);
+    }
+
     private sealed class PermissiveEvidenceResolver(SourceArtifactRef completeEnumerationRef)
         : IScopeReductionEvidenceResolver
     {
