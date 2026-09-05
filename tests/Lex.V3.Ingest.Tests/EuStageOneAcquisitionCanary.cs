@@ -372,6 +372,72 @@ public sealed class EuStageOneAcquisitionCanary
     /// index can carry them, and the file says so where a reader will see it.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// The roles this index CANNOT yet carry, declared as data so a test can hold them.
+    /// </summary>
+    /// <remarks>
+    /// Extracted from the writer for one reason: until it was, NOTHING IN EITHER LANE ASSERTED
+    /// THESE ROLES. They are built inside a canary that is skipped unless LEX_EU_CANARY=1, so a
+    /// gap could have been deleted, renamed, or silently never added and the whole suite would
+    /// have stayed green. A declaration nothing holds is a comment with JSON syntax. The pin over
+    /// this lives in <c>EuCanaryEvidenceIndexGapTests</c> and covers the ROLE NAMES rather than
+    /// the prose, because the prose is expected to be edited as each gap is understood better and
+    /// the role set is the part that is a contract with a reader diffing two runs.
+    /// </remarks>
+    internal static System.Text.Json.Nodes.JsonArray RolesThisIndexCannotYetCarry() =>
+        new System.Text.Json.Nodes.JsonArray
+        {
+            new System.Text.Json.Nodes.JsonObject
+            {
+                ["role"] = "familyPassBodiesAndCursors",
+                ["why"] = "EuFamilyEnumerationOutcome carries the proof but not the delivery receipt, "
+                    + "so pass A and pass B page bodies and their cursor values are not reachable "
+                    + "from EuQueryExecutionResult. D1-05f must surface the receipt to record them.",
+            },
+            new System.Text.Json.Nodes.JsonObject
+            {
+                ["role"] = "countAnswerBesideARefusedPage",
+                ["why"] = "countAnswerItShouldHaveMatched comes from EuEnumerationRefusalDetail"
+                    + ".ObservedCount, which this refusal path leaves null, so the count a refused "
+                    + "page should have matched is not stated beside it. Measured out of band by "
+                    + "direct probes of the four families: ObjectFacts 41, ExpressionFacts 166, "
+                    + "RootWatermark 2, ManifestationFacts 9. D1-05f should populate it on the "
+                    + "refusal so the index carries it rather than a reader importing it.",
+            },
+            new System.Text.Json.Nodes.JsonObject
+            {
+                ["role"] = "robotsBootstrapArtifact",
+                ["why"] = "The routed session writes robots inside the executor and the adapter's "
+                    + "result does not name it, so its digest cannot be stated by role from here.",
+            },
+            new System.Text.Json.Nodes.JsonObject
+            {
+                ["role"] = "crossRunCorpusRecordSetIdentity",
+                ["why"] = "setRefSha256 above identifies THIS RUN'S record set and IS NOT "
+                    + "COMPARABLE ACROSS RUNS. CorpusRecordCanonicalWriter digests manifest_ref "
+                    + "and run_identity through ScopeManifestCanonicalWriter.WriteArtifact, which "
+                    + "emits each ref's resource_id, and EuQueryExecutionAdapter mints both of "
+                    + "those resource_ids as a fresh urn:uuid per run (the manifest ref paired "
+                    + "with the manifest's canonical digest, the run identity paired with the "
+                    + "manifest's custody-write digest), so the set digest cannot be stable by "
+                    + "construction. Stated here FROM THE CODE PATH rather than by analogy with "
+                    + "Luxembourg, whose canary mints the same two resource_ids in the canary "
+                    + "itself; the EU-side observation of two runs is the per-field cross-run "
+                    + "audit's job and is NOT claimed here. It sits beside heldContentSha256 "
+                    + "values that ARE content addresses, so without this note a reader diffing "
+                    + "two runs sees a moved corpus where nothing moved, and, worse, might take a "
+                    + "match as evidence two runs produced the same corpus. WHAT TO DIFF INSTEAD, "
+                    + "stable across runs by the same reading of the code: every documentBodies[] "
+                    + "heldContentSha256 and heldByteLength, scopeManifest.canonicalSha256 (the "
+                    + "manifest's own content address, which no resource_id enters), and "
+                    + "observedObjectCount and observedExpressionCount. The custody root is a "
+                    + "fresh temp directory per run and is not comparable either; it is printed "
+                    + "on the CANARY|custodyRoot line rather than carried in this index. Every "
+                    + "one of those is a claim the per-field audit must MEASURE, not inherit from "
+                    + "this note.",
+            },
+        };
+
     private static async Task WriteEvidenceIndexAsync(
         FileSystemCustodyStore store,
         string root,
@@ -452,32 +518,7 @@ public sealed class EuStageOneAcquisitionCanary
 
         index["documentBodies"] = bodies;
 
-        index["rolesThisIndexCannotYetCarry"] = new System.Text.Json.Nodes.JsonArray
-        {
-            new System.Text.Json.Nodes.JsonObject
-            {
-                ["role"] = "familyPassBodiesAndCursors",
-                ["why"] = "EuFamilyEnumerationOutcome carries the proof but not the delivery receipt, "
-                    + "so pass A and pass B page bodies and their cursor values are not reachable "
-                    + "from EuQueryExecutionResult. D1-05f must surface the receipt to record them.",
-            },
-            new System.Text.Json.Nodes.JsonObject
-            {
-                ["role"] = "countAnswerBesideARefusedPage",
-                ["why"] = "countAnswerItShouldHaveMatched comes from EuEnumerationRefusalDetail"
-                    + ".ObservedCount, which this refusal path leaves null, so the count a refused "
-                    + "page should have matched is not stated beside it. Measured out of band by "
-                    + "direct probes of the four families: ObjectFacts 41, ExpressionFacts 166, "
-                    + "RootWatermark 2, ManifestationFacts 9. D1-05f should populate it on the "
-                    + "refusal so the index carries it rather than a reader importing it.",
-            },
-            new System.Text.Json.Nodes.JsonObject
-            {
-                ["role"] = "robotsBootstrapArtifact",
-                ["why"] = "The routed session writes robots inside the executor and the adapter's "
-                    + "result does not name it, so its digest cannot be stated by role from here.",
-            },
-        };
+        index["rolesThisIndexCannotYetCarry"] = RolesThisIndexCannotYetCarry();
 
         var bytes = System.Text.Encoding.UTF8.GetBytes(
             index.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
