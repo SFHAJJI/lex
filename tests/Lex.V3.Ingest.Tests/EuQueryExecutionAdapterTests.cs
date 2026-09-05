@@ -824,12 +824,8 @@ public sealed class EuQueryExecutionAdapterTests
     }
 
     /// <summary>
-    /// D1-06c-EU defect nine's own fold-in five: no existing test forced
-    /// <see cref="CorpusRecordSetWriter.WriteAsync"/>'s own floor check to fail through the adapter, so
-    /// <see cref="EuQueryExecutionRefusal.RecordSetNotRetained"/> was never actually driven end to end
-    /// (<see cref="CorpusRecordSetWriterTests.WriteAsyncRefusesWhenTheStoreEnforcesNoFloor"/> already
-    /// drives the writer's own <see cref="CorpusRecordSetWriteRefusalKind.RecordSetNotRetained"/> in
-    /// isolation; this drives the adapter's own translation of that into its own refusal code).
+    /// A record set written under NO enforced floor is still written, and the class it observed is
+    /// recorded rather than costing the run its records.
     /// </summary>
     /// <remarks>
     /// A real single-seed run, identical to
@@ -961,7 +957,8 @@ public sealed class EuQueryExecutionAdapterTests
         // stable across runs: it embeds a fresh urn:uuid, so its bytes differ every time while its
         // position in the write order does not. Discovering the ordinal by matching pass one's own
         // manifest receipt against pass one's own write order keeps this a measurement rather than a
-        // guess, and the digest equality asserted below is what proves the right write was hit.
+        // guess. What proves the right write was hit is the class assertion below: the manifest's own
+        // receipt comes back RetainedUnenforced, which only the targeted write can produce.
         var manifestOrdinal = discoveryStore.WrittenDigestsInOrder
             .Select(static (digest, index) => (Digest: digest, Ordinal: index + 1))
             .Single(entry => string.Equals(
@@ -2564,6 +2561,93 @@ public sealed class EuQueryExecutionAdapterTests
     }
 
     /// <summary>
+    /// GATE TWO's genuine failure: a scope manifest the store accepts and then cannot reproduce at
+    /// its own digest is NOT retained, and the run refuses saying so.
+    /// </summary>
+    /// <remarks>
+    /// The inverse mutation the design ruling requires for a re-conditioned gate, and it was missing:
+    /// <see cref="EuQueryExecutionRefusal.ScopeManifestNotRetained"/> had ZERO test references, so an
+    /// edit turning this genuine hold failure into a continue would have passed green. The store
+    /// accepts the write and drops the bytes, which is what CustodyHold's own reopen exists to catch:
+    /// "we stored it under a weaker guarantee" and "we failed to store it" must stay different facts,
+    /// and only the second refuses. Targeted BY ORDINAL because the manifest embeds a fresh urn:uuid
+    /// and its digest is not stable across runs.
+    /// </remarks>
+    [TestMethod]
+    public async Task AScopeManifestTheStoreCannotReproduceRefusesAsNotRetained()
+    {
+        var (result, manifestOrdinal) = await RunSingleSeedLosingWriteAsync(
+            static (store, firstResult) => OrdinalOf(store, firstResult.ScopeManifestReceipt!.Reference.ContentSha256));
+
+        Assert.IsNotNull(result.Refusal, $"ordinal {manifestOrdinal} must refuse, not deliver.");
+        Assert.AreEqual(EuQueryExecutionRefusal.ScopeManifestNotRetained, result.Refusal!.Code);
+        StringAssert.Contains(
+            result.Refusal.Detail,
+            "could not reproduce those exact",
+            "the refusal must carry the hold's own failure detail, not a restatement.");
+        Assert.IsNull(
+            result.ScopeManifestReceipt,
+            "and no receipt is reported for a manifest this run could not retain.");
+    }
+
+    /// <summary>
+    /// GATE THREE's genuine failure: a corpus record set the store accepts and then cannot reproduce
+    /// is NOT retained, and the adapter refuses with its own code carrying the writer's detail.
+    /// </summary>
+    /// <remarks>
+    /// The second missing inverse mutation.
+    /// <see cref="EuQueryExecutionRefusal.RecordSetNotRetained"/> also had zero test references, and
+    /// the doc on <see cref="ARecordSetWriteWhoseFloorIsUnenforcedStillDeliversAndRecordsTheWeakerClass"/>
+    /// claimed a named test drove it, which was false. The record set is this run's LITERAL LAST
+    /// custody write, which is what makes the ordinal discoverable without guessing.
+    /// </remarks>
+    [TestMethod]
+    public async Task ARecordSetTheStoreCannotReproduceRefusesAsNotRetained()
+    {
+        var (result, _) = await RunSingleSeedLosingWriteAsync(
+            static (store, _) => store.CreateCallCount);
+
+        Assert.IsNotNull(result.Refusal, "a record set that cannot be retained must refuse the run.");
+        Assert.AreEqual(EuQueryExecutionRefusal.RecordSetNotRetained, result.Refusal!.Code);
+        StringAssert.Contains(result.Refusal.Detail, "could not reproduce those exact");
+        Assert.IsNull(result.CorpusRecordSet, "and no set is reported for one this run could not retain.");
+        Assert.IsNull(result.CorpusRecordSetRef);
+    }
+
+    /// <summary>
+    /// The write ordinal of a digest, from a fully enforcing discovery pass's own write order.
+    /// </summary>
+    private static int OrdinalOf(EuAcquisitionTestFixture.EuInMemoryCustodyStore store, string digest) =>
+        store.WrittenDigestsInOrder
+            .Select(static (written, index) => (Digest: written, Ordinal: index + 1))
+            .Single(entry => string.Equals(entry.Digest, digest, StringComparison.Ordinal))
+            .Ordinal;
+
+    /// <summary>
+    /// One single-seed run twice: once fully enforcing to discover which write ordinal the caller
+    /// wants, then again with that one write's bytes dropped after a successful create. Extracted so
+    /// the manifest and record-set hold failures are the same scenario differing only in the ordinal.
+    /// </summary>
+    private static async Task<(EuQueryExecutionResult Result, int Ordinal)> RunSingleSeedLosingWriteAsync(
+        Func<EuAcquisitionTestFixture.EuInMemoryCustodyStore, EuQueryExecutionResult, int> chooseOrdinal)
+    {
+        var discoveryStore = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var (first, _, _) = await RunWorkingTimeDirectiveAsync(
+            EuAcquisitionTestFixture.RealBandListedTypes, WorkingTimeLadderResponse, discoveryStore);
+        Assert.IsNull(first.Refusal, $"code={first.Refusal?.Code} detail={first.Refusal?.Detail}");
+
+        var ordinal = chooseOrdinal(discoveryStore, first);
+        Assert.IsTrue(ordinal > 0);
+
+        var (result, _, _) = await RunWorkingTimeDirectiveAsync(
+            EuAcquisitionTestFixture.RealBandListedTypes,
+            WorkingTimeLadderResponse,
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(
+                loseBytesAfterWriteCallOrdinal: ordinal));
+        return (result, ordinal);
+    }
+
+    /// <summary>
     /// The narrowed floor at the adapter level: a listing of print plus an unknown type still fetches
     /// nothing, and still does not reach never-ingest.
     /// </summary>
@@ -2635,7 +2719,8 @@ public sealed class EuQueryExecutionAdapterTests
         EuAcquisitionTestFixture.EuInMemoryCustodyStore Store)>
         RunWorkingTimeDirectiveAsync(
             IReadOnlyList<string>? listedTypes,
-            Func<HttpRequestMessage, HttpResponseMessage> documentFetchResponse)
+            Func<HttpRequestMessage, HttpResponseMessage> documentFetchResponse,
+            EuAcquisitionTestFixture.EuInMemoryCustodyStore? custodyStore = null)
     {
         var seed = EuAppendixASeedMap.SeedsInCelexOrder.Single(entry => entry.Celex == WorkingTimeCelex);
         var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)
@@ -2674,7 +2759,7 @@ public sealed class EuQueryExecutionAdapterTests
         };
 
         var handler = new EuAcquisitionTestFixture.ClassifyingHandler(scripts, documentFetchResponse);
-        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var store = custodyStore ?? new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
         var executor = new EuRepeatedEnumerationExecutor(
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
         var adapter = new EuQueryExecutionAdapter(store, executor);

@@ -750,6 +750,12 @@ internal static class EuAcquisitionTestFixture
     /// and which looks the object up across every CustodyClass by digest. When supplied, a matching
     /// (digest, occurrence) writes the receipt and drops the bytes.
     /// </param>
+    /// <param name="loseBytesAfterWriteCallOrdinal">
+    /// The same failure as <paramref name="loseBytesAfterWriteDigest"/>, targeted by the Nth call to
+    /// CreateAsync in real call order rather than by digest. Needed because the scope manifest and
+    /// the corpus record set embed a fresh urn:uuid per run, so their digests are not stable across
+    /// runs while their position in the write order is.
+    /// </param>
     /// <param name="raiseIntegrityOnWriteDigest">
     /// The other genuine failure, modelled the way ICustodyStore.CreateAsync requires: a receipt
     /// exists only after the store has read the bytes back and observed their protection, and a
@@ -762,7 +768,8 @@ internal static class EuAcquisitionTestFixture
         int? unenforceCallOrdinal = null,
         Func<string, int, bool>? failWriteDigest = null,
         Func<string, int, bool>? raiseIntegrityOnWriteDigest = null,
-        Func<string, int, bool>? loseBytesAfterWriteDigest = null)
+        Func<string, int, bool>? loseBytesAfterWriteDigest = null,
+        int? loseBytesAfterWriteCallOrdinal = null)
         : Lex.V3.Contracts.Custody.ICustodyStore
     {
         private readonly Dictionary<string, byte[]> _byDigest = new(StringComparer.Ordinal);
@@ -820,7 +827,8 @@ internal static class EuAcquisitionTestFixture
             // ALONE. This is not the write obligation failing; the write succeeded and the receipt
             // is real. It is the second property CustodyHold's own reopen proves, and the one every
             // downstream consumer depends on.
-            if (loseBytesAfterWriteDigest?.Invoke(digest, occurrence) == true)
+            if (loseBytesAfterWriteDigest?.Invoke(digest, occurrence) == true ||
+                loseBytesAfterWriteCallOrdinal == callOrdinal)
             {
                 _byDigest.Remove(digest);
             }

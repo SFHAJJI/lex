@@ -59,22 +59,31 @@ namespace Lex.V3.Ingest.Tests;
 /// different and weaker claim than a proven admission policy.
 /// </para>
 /// <para>
-/// CONDITION TWO, the output check. The reduced manifest's expression count and its family M token
-/// set are compared per seed against the census in RULING
+/// CONDITION TWO, AND WHAT IS ACTUALLY ASSERTED TODAY. The census of RULING
 /// lex-event-20260904T232128757Z-e21b4aedbfc4412dba8e6533ab2499d0, measured at the endpoint outside
-/// this lane. The GDPR is regular: 24 expressions, 72 manifestations, tokens fmx4 24, xhtml 24,
-/// pdfa1a 24. 32003L0088 is NOT: 23 expressions, 71 manifestations, tokens fmx4 1, html 20, pdf 22,
-/// pdfa1a 1, print 23, xhtml 4, so most languages lack most formats and at least one lacks html
-/// entirely. Nothing here assumes one manifestation of each type per expression; that would pass on
-/// the GDPR and be wrong on the second seed.
+/// this lane, is carried as DATA on <see cref="Census"/>, per type, rather than as prose: the GDPR
+/// at 24 expressions and 72 manifestations with fmx4 24, pdfa1a 24 and xhtml 24; 32003L0088 at 23
+/// expressions and 71 manifestations with fmx4 1, html 20, pdf 22, pdfa1a 1, print 23 and xhtml 4.
+/// The second seed is IRREGULAR, so nothing here assumes one manifestation of each type per
+/// expression; that assumption would pass on the GDPR and be wrong on the other seed.
 /// </para>
 /// <para>
-/// WHAT THE COUNT COMPARISON CAN AND CANNOT REACH. Family M as this route queries it returns the
-/// DISTINCT manifestation types per work, not one row per manifestation, so this run observes three
-/// tokens for the GDPR where the census counts 72 manifestations. The token SET is compared and the
-/// manifestation TOTAL is not, because this route never enumerates individual manifestations and
-/// asserting 72 against a number it cannot produce would be a fabricated check. The expression
-/// count is compared directly, because family X does enumerate those.
+/// WHAT THIS TEST ASSERTS, today, as opposed to what it discusses. That the census table's own per
+/// type counts sum to its row totals. That both census families PROVED and that each carries
+/// <see cref="CustodyMembership.RetainedUnenforced"/>. And, WHEN THE RUN REACHES THE MANIFEST, the
+/// reduced manifest's expression count against the census total. WHEN IT DOES NOT REACH THE
+/// MANIFEST IT CALLS <c>Assert.Fail</c> WITH THE REFUSAL IN WORDS. There is no path through this
+/// method that passes silently, and today it does not pass at all: the run stops at the
+/// object-facts families, which is D1-05f.
+/// </para>
+/// <para>
+/// ONE COMPARISON THE CENSUS MAKES POSSIBLE IS NOT YET ASSERTABLE, and it is failed loudly rather
+/// than discussed. Family M as this route queries it returns the DISTINCT manifestation types per
+/// work, not one row per manifestation, so the run observes three tokens for the GDPR where the
+/// census counts 72 manifestations. Asserting 72 against a number this route cannot produce would
+/// be a fabricated check, so the totals are carried as data and the gap is stated by a failing
+/// assertion rather than by a sentence a reader may not reach. D1-05f decides whether the canary
+/// enumerates manifestations or the comparison narrows to the token set.
 /// </para>
 /// <para>
 /// The fetch half is separately corroborated by RULING
@@ -96,14 +105,17 @@ public sealed class EuStageOneAcquisitionCanary
     private const string WorkingTime = "32003L0088";
 
     /// <summary>
-    /// The independent census, RULING lex-event-20260904T232128757Z-e21b4aedbfc4412dba8e6533ab2499d0.
-    /// Expression count and the distinct manifestation token set per seed. The per-token counts are
-    /// in the class remarks; only the SET is comparable against what this route observes.
+    /// The independent census, RULING lex-event-20260904T232128757Z-e21b4aedbfc4412dba8e6533ab2499d0,
+    /// measured at the endpoint outside this lane. Carried as DATA, per type, so the comparison is a
+    /// check rather than a sentence. Manifestations is the row total and must equal the sum of the
+    /// per type counts, which the test asserts of the table itself before using it.
     /// </summary>
-    private static readonly (string Celex, int Expressions, string[] Tokens)[] Census =
+    private static readonly (string Celex, int Expressions, int Manifestations,
+        (string Token, int Count)[] Types)[] Census =
     [
-        (Gdpr, 24, ["fmx4", "pdfa1a", "xhtml"]),
-        (WorkingTime, 23, ["fmx4", "html", "pdf", "pdfa1a", "print", "xhtml"]),
+        (Gdpr, 24, 72, [("fmx4", 24), ("pdfa1a", 24), ("xhtml", 24)]),
+        (WorkingTime, 23, 71,
+            [("fmx4", 1), ("html", 20), ("pdf", 22), ("pdfa1a", 1), ("print", 23), ("xhtml", 4)]),
     ];
 
     [TestMethod]
@@ -117,10 +129,18 @@ public sealed class EuStageOneAcquisitionCanary
             return;
         }
 
-        foreach (var (celex, expressions, tokens) in Census)
+        foreach (var (celex, expressions, manifestations, types) in Census)
         {
+            // The table checks itself before anything is compared against it: a census whose per
+            // type counts do not sum to its own row total is a transcription error, and finding that
+            // out here is better than finding it out as a mismatch against the run.
+            Assert.AreEqual(
+                manifestations,
+                types.Sum(static entry => entry.Count),
+                $"{celex}'s census per type counts must sum to its own manifestation total.");
             Console.WriteLine(
-                $"CANARY|census|{celex}|expressions={expressions}|tokens={string.Join(",", tokens)}");
+                $"CANARY|census|{celex}|expressions={expressions}|manifestations={manifestations}|"
+                + string.Join(",", types.Select(static entry => $"{entry.Token}={entry.Count}")));
         }
 
         // Retained where a later slice can read it. LEX_EU_CANARY_ROOT lets a run keep its
@@ -270,9 +290,53 @@ public sealed class EuStageOneAcquisitionCanary
 
         await WriteEvidenceIndexAsync(store, root, result, CancellationToken.None);
 
-        Assert.IsNull(
-            result.Refusal,
-            $"the run must not refuse as a whole: code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
+        // CONDITION TWO, first half, reachable today and asserted unconditionally: both census
+        // families proved, and each says which of the three custody classes its run was.
+        var censusProofs = result.FamilyOutcomes
+            .Where(static outcome => outcome.Kind == EuFamilyEnumerationOutcomeKind.Proven)
+            .ToArray();
+        Assert.HasCount(
+            Census.Length,
+            censusProofs,
+            "one proved census family per seed is the least this run must establish; got "
+            + string.Join(", ", result.FamilyOutcomes.Select(
+                static outcome => $"{outcome.Kind}/{outcome.ExecutorRefusal?.Code}")));
+        foreach (var proven in censusProofs)
+        {
+            Assert.AreEqual(
+                CustodyMembership.RetainedUnenforced,
+                proven.RetainedFloor,
+                $"family {proven.FamilyKey} ran over a filesystem store and must say so.");
+        }
+
+        // Either the run reached the manifest and the census comparison happens, or it did not and
+        // this FAILS IN WORDS. There is no third path and none of them is a silent pass.
+        if (result.Refusal is { } wholeRunRefusal)
+        {
+            Assert.Fail(
+                "the run did not reach the manifest, so the census comparison never ran. It refused as "
+                + $"{wholeRunRefusal.Code}: {wholeRunRefusal.Detail} Per family: "
+                + string.Join("; ", result.FamilyOutcomes.Select(
+                    static outcome => $"{outcome.FamilyKey} {outcome.Kind} "
+                        + $"{outcome.ExecutorRefusal?.Code} body={outcome.ExecutorRefusal?.ResponseBodySha256}"))
+                + " This is D1-05f.");
+        }
+
+        Assert.AreEqual(
+            Census.Sum(static row => row.Expressions),
+            result.ObservedExpressionCount,
+            "the reduced manifest's expression count must equal the independent census total.");
+
+        Assert.Fail(
+            "the run reached the manifest, and the per type totals are still not comparable: family M "
+            + "returns DISTINCT manifestation types per work rather than one row per manifestation, so "
+            + "this route cannot produce the census totals "
+            + string.Join("; ", Census.Select(
+                static row => $"{row.Celex} {row.Manifestations} across "
+                    + string.Join(",", row.Types.Select(static entry => $"{entry.Token}={entry.Count}"))))
+            + ". Asserting them against a number the route cannot produce would be a fabricated check, "
+            + "so this fails rather than passing on the half it can reach. D1-05f decides whether the "
+            + "canary enumerates manifestations or the comparison narrows to the token set.");
     }
 
     /// <summary>

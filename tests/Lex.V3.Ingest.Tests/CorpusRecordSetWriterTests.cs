@@ -281,7 +281,7 @@ public sealed class CorpusRecordSetWriterTests
     }
 
     [TestMethod]
-    public async Task WriteAsyncRefusesWhenTheStoreEnforcesNoFloor()
+    public async Task WriteAsyncWritesTheSetAndRecordsTheWeakerClassWhenTheStoreEnforcesNoFloor()
     {
         // A bare FileSystemCustodyStore publishes NotEnforced for every write (Decision 71). It
         // used to refuse here, which is why no record set could be written anywhere outside Azure.
@@ -563,6 +563,59 @@ public sealed class CorpusRecordSetWriterTests
     /// exactly: a real store this writer's own retention floor check passes against, never a bare
     /// unenforced double.
     /// </summary>
+    /// <summary>
+    /// GATE FIVE's genuine failure, at the writer itself: a record set the store accepts and then
+    /// cannot reproduce at its own digest is NOT retained, and the writer refuses saying so.
+    /// </summary>
+    /// <remarks>
+    /// The third missing inverse mutation.
+    /// <see cref="CorpusRecordSetWriteRefusalKind.RecordSetNotRetained"/> had ZERO test references
+    /// after it was re-conditioned, so an edit turning this genuine hold failure into a continue
+    /// would have passed green. The neighbouring test proves the OTHER half, that an unenforced
+    /// floor is written and recorded rather than refused; this proves the half that must still
+    /// refuse, and the two together are what keep "stored under a weaker guarantee" and "failed to
+    /// store" different facts.
+    /// </remarks>
+    [TestMethod]
+    public async Task WriteAsyncRefusesWhenTheStoreCannotReproduceTheSetItJustWrote()
+    {
+        var writer = new CorpusRecordSetWriter(
+            new HoldFailingCustodyStore(new EnforcingInMemoryCustodyStore()));
+
+        var result = await writer.WriteAsync(
+            ManifestFixture(), ManifestRef(), RunIdentity(), null, CancellationToken.None);
+
+        Assert.IsNotNull(result.Refusal, "a set that cannot be retained must refuse, not be written.");
+        Assert.AreEqual(CorpusRecordSetWriteRefusalKind.RecordSetNotRetained, result.Refusal!.Kind);
+        StringAssert.Contains(
+            result.Refusal.Detail,
+            "could not reproduce those exact",
+            "the refusal must carry CustodyHold's own failure detail rather than a restatement.");
+        Assert.IsNull(result.SetRef, "and no set is reported for one that was not retained.");
+        Assert.IsNull(result.VerifiedSet);
+        Assert.IsNull(result.RetainedFloor, "nor any class, since nothing was held to have one.");
+    }
+
+    /// <summary>
+    /// Accepts every write and then cannot answer for the object by its content address. This is not
+    /// the write obligation failing: the write succeeded and the receipt is real. It is the property
+    /// CustodyHold's own reopen proves, and the one every downstream consumer depends on.
+    /// </summary>
+    private sealed class HoldFailingCustodyStore(ICustodyStore inner) : ICustodyStore
+    {
+        public Task<DurableBlobWriteReceipt> CreateAsync(
+            ReadOnlyMemory<byte> bytes, CustodyClass custodyClass, CancellationToken cancellationToken) =>
+            inner.CreateAsync(bytes, custodyClass, cancellationToken);
+
+        public Task<ReadOnlyMemory<byte>> ReadAsync(
+            DurableBlobRef reference, CancellationToken cancellationToken) =>
+            inner.ReadAsync(reference, cancellationToken);
+
+        public Task<ReadOnlyMemory<byte>> ReadByDigestAsync(
+            string contentSha256, CancellationToken cancellationToken) =>
+            Task.FromResult<ReadOnlyMemory<byte>>("not the bytes you stored"u8.ToArray());
+    }
+
     private sealed class EnforcingInMemoryCustodyStore : ICustodyStore
     {
         private readonly Dictionary<string, byte[]> _byDigest = new(StringComparer.Ordinal);

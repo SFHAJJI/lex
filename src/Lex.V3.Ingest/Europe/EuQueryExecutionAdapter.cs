@@ -589,9 +589,11 @@ public sealed class EuQueryExecutionResult
 /// called it, so no corpus/6 record set was ever durably written by a real run. This run mints its
 /// own <c>RunIdentity</c> paired with real evidence (the manifest's own custody-write digest) and
 /// reuses the identical custody floor (<see cref="CustodyClass.NightlyFloor90d"/>) its own manifest
-/// and document-body writes already require; a floor failure on the record set itself refuses the
-/// whole run (<see cref="EuQueryExecutionRefusal.RecordSetNotHeld"/>), exactly as a floor failure on
-/// the manifest or a document body already does.
+/// and document-body writes already require. A record set the store cannot RETAIN at all refuses the
+/// whole run (<see cref="EuQueryExecutionRefusal.RecordSetNotRetained"/>), exactly as an unretainable
+/// manifest or document body does. An unenforced FLOOR is not that failure and no longer refuses
+/// anything here: the class is recorded and the run continues, per RULING
+/// lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c.
 /// </para>
 /// </remarks>
 public sealed class EuQueryExecutionAdapter
