@@ -567,7 +567,9 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Contracts.Source.Europe.EuWatermarkTraversalStep: constructor private "
                     + "instance Lex.V3.Contracts.Source.Europe.EuWatermarkTraversalStep::.ctor, "
                     + "method public static "
-                    + "Lex.V3.Contracts.Source.Europe.EuWatermarkTraversalStep::TryAdvance",
+                    + "Lex.V3.Contracts.Source.Europe.EuWatermarkTraversalStep::TryAdvance, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Europe.EuWatermarkTraversalStep::TryOpenBatch",
                 "Lex.V3.Contracts.Source.Europe.EuWatermarkWitnessPlan: constructor private "
                     + "instance Lex.V3.Contracts.Source.Europe.EuWatermarkWitnessPlan::.ctor, "
                     + "constructor private static "

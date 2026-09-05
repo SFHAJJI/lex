@@ -2219,9 +2219,24 @@ public sealed class EuQueryExecutionAdapter
             }
 
             var value = row.Terms[valueIndex].Value;
-            if (value is null || !TryMapResourceTypeCode(value, out var mapped))
+            if (value is null)
             {
                 continue;
+            }
+
+            // AN UNRECOGNISED VALUE IS A REFUSAL, NOT A ROW TO SKIP. Continuing past it meant a
+            // root carrying one mappable value and one unknown classified on the mappable one and
+            // DROPPED THE UNKNOWN SILENTLY, which is narrower than the measurement this resolver
+            // cites: that cut fails EXTRA and UNKNOWN values as well as co-typed ones, so a root
+            // the office has since given a second, unrecognised type would have been recorded as
+            // though the office still typed it once.
+            if (!TryMapResourceTypeCode(value, out var mapped))
+            {
+                observedConflict = observed is null
+                    ? value + " (unrecognised)"
+                    : observed.Value.Value + " and " + value + " (the second unrecognised)";
+                recordForm = default;
+                return false;
             }
 
             // A SECOND MAPPABLE VALUE IS A REFUSAL, NOT A TIE BROKEN BY ROW ORDER. This used to

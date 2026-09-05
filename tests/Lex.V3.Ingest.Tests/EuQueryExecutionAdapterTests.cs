@@ -3244,6 +3244,13 @@ public sealed class EuQueryExecutionAdapterTests
         // (object, predicate, value_kind, value, ...), so two rows sharing a predicate must be
         // ordered by VALUE or the delivery proof refuses on a cursor that did not advance, and the
         // test would then pass for a reason unrelated to co-typing. DIR sorts before REG.
+        //
+        // WHICH MEANS ORDER INDEPENDENCE IS NOT DEMONSTRABLE THROUGH THIS PATH, and this test does
+        // not claim it. The resolver keeps the first mappable value and compares every later one
+        // against it, so it is order independent BY READING; but the only ordering the delivery
+        // proof admits is ascending, so a reversed fixture never reaches the resolver at all. The
+        // honest statement is that the guard refuses co-typing in the one order the publisher can
+        // deliver, and that the wider claim rests on reading the loop rather than on this test.
         var pRows = pOutcomes
             .Where(outcome => outcome.PredicateIri != EuAcquisitionTestFixture.WorkHasResourceType)
             .Concat(
@@ -3261,7 +3268,15 @@ public sealed class EuQueryExecutionAdapterTests
 
         var result = await RunWithObjectRowsAsync(seed.Celex, rootIri, pRows);
 
-        Assert.IsNotNull(result.Refusal);
+        // THE FIRST ASSERTION IS THE ONE THE MUTATION MEETS, so it carries the diagnosis. Remove
+        // the co-typing comparison and this run does not refuse at all: it keeps whichever value
+        // arrived first and classifies a doubly typed root as a single form. A bare "expected not
+        // null" would send the reader looking for a broken fixture, which is the failure this
+        // message exists to prevent.
+        Assert.IsNotNull(
+            result.Refusal,
+            "a root carrying two act forms was classified rather than refused, which means the "
+                + "resolver took one of the two values and discarded the other.");
         Assert.AreEqual(
             EuQueryExecutionRefusal.RecordFormNotResolved,
             result.Refusal!.Code,
@@ -3307,6 +3322,16 @@ public sealed class EuQueryExecutionAdapterTests
             ["W"] = EuAcquisitionTestFixture.ScriptFor(
                 "W", wRows.Length, wRows, EuAcquisitionTestFixture.RootWatermarkProjection),
             ["M"] = EuAcquisitionTestFixture.ManifestationScriptFor(rootIri),
+
+            // SCRIPTED PAST THE GUARD ON PURPOSE. With the co-typing guard removed, this run
+            // continues into the witness traversal, and an unscripted witness dies with a fixture
+            // KeyNotFoundException. A reader meeting that red would diagnose a broken fixture
+            // rather than co-typing, so the mutation that proves this guard has to fail on the
+            // ASSERTION and not on the scaffolding around it.
+            ["Witness"] = new EuAcquisitionTestFixture.FamilyScript(
+                "Witness",
+                EuAcquisitionTestFixture.WitnessEmptyTraversalScript(
+                    rootIri, "2026-01-01T00:00:00.0000000+01:00")),
         };
 
         var handler = new EuAcquisitionTestFixture.ClassifyingHandler(scripts);

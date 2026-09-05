@@ -573,7 +573,7 @@ public sealed class EuWatermarkWitnessPlanTests
             EuWatermarkWitnessPlan.ClassifyShape(second.DeliveredPage[2].WatermarkLexical));
 
         // The third page carried the entry its reread found and then reported no successor.
-        CollectionAssert.AreEqual(new[] { KeyZ }, third.Crossing.CarriedForward.ToArray());
+        CollectionAssert.AreEqual(new[] { KeyZ }, third.Crossing!.CarriedForward.ToArray());
         Assert.IsNull(third.NextPosition);
     }
 
@@ -805,15 +805,31 @@ public sealed class EuWatermarkWitnessPlanTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "constructor private instance " + N + "EuWatermarkTraversalStep::.ctor(" + N
-                + "EuWatermarkWitnessPlan, " + N + "EuBoundaryCrossing, System.Collections.Generic"
-                + ".IReadOnlyList<" + N + "EuWatermarkCursor>, System.Collections.Generic"
-                + ".IReadOnlyList<" + N + "EuWatermarkCursor>, " + N + "EuWatermarkCursor?, "
-                + "System.Int32) -> " + N + "EuWatermarkTraversalStep",
-                "method public static " + N + "EuWatermarkTraversalStep::TryAdvance(" + N
-                + "EuWatermarkWitnessPlan, " + N + "EuBoundaryCrossing, System.Collections.Generic"
-                + ".IReadOnlyList<" + N + "EuWatermarkCursor>, out " + N + "EuWatermarkStepRefusal&)"
-                + " -> " + N + "EuWatermarkTraversalStep?",
+                "constructor private instance "
+                    + "Lex.V3.Contracts.Source.Europe.EuWatermarkTraversalStep::.ctor(Lex.V3.Contra"
+                    + "cts.Source.Europe.EuWatermarkWitnessPlan, "
+                    + "Lex.V3.Contracts.Source.Europe.EuBoundaryCrossing?, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Europe.EuWa"
+                    + "termarkCursor>, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Europe.EuWa"
+                    + "termarkCursor>, Lex.V3.Contracts.Source.Europe.EuWatermarkCursor?, "
+                    + "System.Int32) -> Lex.V3.Contracts.Source.Europe.EuWatermarkTraversalStep",
+                "method public static "
+                    + "Lex.V3.Contracts.Source.Europe.EuWatermarkTraversalStep::TryAdvance(Lex.V3.C"
+                    + "ontracts.Source.Europe.EuWatermarkWitnessPlan, "
+                    + "Lex.V3.Contracts.Source.Europe.EuBoundaryCrossing, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Europe.EuWa"
+                    + "termarkCursor>, "
+                    + "out Lex.V3.Contracts.Source.Europe.EuWatermarkStepRefusal&) -> "
+                    + "Lex.V3.Contracts.Source.Europe.EuWatermarkTraversalStep?",
+                "method public static "
+                    + "Lex.V3.Contracts.Source.Europe.EuWatermarkTraversalStep::TryOpenBatch(Lex.V3"
+                    + ".Contracts.Source.Europe.EuWatermarkWitnessPlan, "
+                    + "Lex.V3.Contracts.Source.Europe.EuWatermarkCursor, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Europe.EuWa"
+                    + "termarkCursor>, "
+                    + "out Lex.V3.Contracts.Source.Europe.EuWatermarkStepRefusal&) -> "
+                    + "Lex.V3.Contracts.Source.Europe.EuWatermarkTraversalStep?",
             },
             ConstructionSurface.Of(typeof(EuWatermarkTraversalStep)).ToArray());
     }

@@ -40,6 +40,12 @@ public sealed class EuCellarObjectDecodeTests
     private const string XsdInteger = "http://www.w3.org/2001/XMLSchema#integer";
     private const string ConsolidatedActResourceTypeIri =
         "http://publications.europa.eu/resource/authority/resource-type/CONSOLID_ACT";
+
+    /// <summary>
+    /// The consolidated marker the office ACTUALLY SENDS, measured on the D1-05g acceptance run.
+    /// </summary>
+    private const string ConsolidatedTextResourceTypeIri =
+        "http://publications.europa.eu/resource/authority/resource-type/CONS_TEXT";
     private const string OrdinaryActResourceTypeIri =
         "http://publications.europa.eu/resource/authority/resource-type/REG";
     private const string EnglishLanguageAuthorityIri =
@@ -394,6 +400,54 @@ public sealed class EuCellarObjectDecodeTests
             Array.AsReadOnly(terms),
             Array.AsReadOnly(new[] { terms[0], terms[1], terms[2], terms[3] }),
             Array.AsReadOnly(terms[8..14]));
+    }
+
+
+    /// <summary>
+    /// A consolidated state marked <c>CONS_TEXT</c> decodes, which is the marker the publisher
+    /// actually sends.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// WITHOUT THIS TEST, DELETING <c>CONS_TEXT</c> FROM THE DECODE LEFT BOTH SUITES GREEN and only
+    /// the live canary failed. Every state fixture in this file used <c>CONSOLID_ACT</c>, the
+    /// marker the code matched on BEFORE the live run showed the office does not send it, so the
+    /// whole suite agreed with the assumption rather than with the publisher.
+    /// </para>
+    /// <para>
+    /// The sibling assertion matters as much: <c>CONSOLID_ACT</c> is retained in the decode as
+    /// UNOBSERVED rather than disproven, so it must keep working. A test that only drove the new
+    /// marker would have let the old one be deleted silently, which is the same class of gap in
+    /// the opposite direction.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void AStateMarkedConsTextDecodesAndSoDoesOneMarkedConsolidAct()
+    {
+        foreach (var marker in new[] { ConsolidatedTextResourceTypeIri, ConsolidatedActResourceTypeIri })
+        {
+            var pRows = RootObjectRows(GdprRoot, GdprCelex)
+                .Concat(StateObjectRows(
+                    StateA,
+                    GdprRoot,
+                    new Dictionary<string, PValue[]>
+                    {
+                        [WorkHasResourceTypeIri] = [new PValue(marker)],
+                    }))
+                .ToArray();
+
+            // The state must be in the closure, which comes from the census family's own rows.
+            var familyRows = new[] { FamilyRow(GdprCelex, GdprRoot, StateA) };
+            var snapshots = Decode(
+                GdprCelex, familyRows, pRows, [], out var refusal, out var offendingIri, out _);
+
+            Assert.IsNotNull(
+                snapshots,
+                $"a state marked {marker.Split('/')[^1]} must decode; it refused as {refusal} "
+                    + $"on {offendingIri}.");
+            Assert.AreEqual(EuCellarObjectDecodeRefusal.None, refusal);
+            Assert.HasCount(2, snapshots!, "the root and its one state.");
+        }
     }
 
     // ---- Happy path: root only, no discovered states. ----

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Europe;
@@ -66,6 +67,75 @@ public sealed class EuScaleReachableDefectTests
             doesNot.BatchDigest,
             "two batches at one boundary must be distinguishable, or the traversal cannot tell "
                 + "which of them a page belongs to.");
+    }
+
+
+    /// <summary>
+    /// A witness traversal over TWO batches, only ONE of which holds the run boundary, completes.
+    /// The other batch OPENS rather than crossing.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THIS DRIVES THE EXECUTOR, which the previous version of this test did not. That one asserted
+    /// batch membership on values it had constructed itself and never ran a traversal, so it could
+    /// not have failed for the reason it existed: it was the SELF REFERENTIAL FIXTURE this head
+    /// diagnosed and closed for CdmIri, reappearing in the test written to prove the scale fix.
+    /// </para>
+    /// <para>
+    /// UNDER THE SEEDING IT REPLACES THIS REDDENS. Seeding every batch with the pack-wide boundary
+    /// key made the second batch refuse BoundaryEntrySkipped; seeding it EMPTY moved the refusal to
+    /// CrossingCursorNotInRetainedTieSet, which the crossing guard raises BY DESIGN so an empty tie
+    /// set cannot reconcile against an empty reread. Only giving the first page its own entry point
+    /// lets both batches finish with both guards intact.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async System.Threading.Tasks.Task ASecondBatchWithoutTheBoundaryEntryStillCompletesItsTraversal()
+    {
+        var boundaryRoot = Root(0);
+        var otherRoot = Root(1);
+        const string boundaryWatermark = "2024-12-31T20:10:26.804+01:00";
+        var boundary = EuWatermarkCursor.TryOpen(boundaryWatermark, boundaryRoot, out var cursorRefusal)
+            ?? throw new InvalidOperationException($"fixture cursor refused as {cursorRefusal}");
+
+        // Batch one HOLDS the boundary root and re-reads it, then confirms terminal.
+        // Batch two holds a different root and has NOTHING at or beyond the boundary, which is the
+        // ordinary case for eighty of the eighty two seeds.
+        var boundaryPage = EuAcquisitionTestFixture.WitnessRowsJson(
+            [EuAcquisitionTestFixture.WitnessRow(boundaryRoot, boundaryWatermark)]);
+        var emptyPage = EuAcquisitionTestFixture.WitnessRowsJson([]);
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["Witness"] = new EuAcquisitionTestFixture.FamilyScript(
+                "Witness",
+                [
+                    // Batch one: opens on the boundary row, which carries nothing beyond it, then
+                    // confirms terminal. Opening costs no extra request.
+                    boundaryPage, boundaryPage,
+
+                    // Batch two: nothing at or beyond the boundary, twice, which is the confirmed
+                    // terminal shape for a batch with no news.
+                    emptyPage, emptyPage,
+                ]),
+        };
+
+        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(scripts);
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var executor = new EuRepeatedEnumerationExecutor(
+            store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
+
+        var result = await executor.RunWitnessTraversalAsync(
+            [Freeze([boundaryRoot], boundary), Freeze([otherRoot], boundary)],
+            EuAcquisitionTestFixture.BuildRendererSource(8201),
+            EuAcquisitionTestFixture.SourceWitness(),
+            System.Threading.CancellationToken.None);
+
+        Assert.IsNull(
+            result.Refusal,
+            "a batch that never held the boundary entry has nothing to cross and must OPEN "
+                + $"instead, but the traversal refused as {result.Refusal?.Code} "
+                + $"({result.Refusal?.Detail}). At eighty two seeds this is every batch but one.");
+        Assert.IsNotNull(result.Entries, "a completed traversal carries its canonical entry set.");
     }
 
     private static string Root(int index) =>

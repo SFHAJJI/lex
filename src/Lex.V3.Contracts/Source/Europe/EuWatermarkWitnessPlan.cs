@@ -1050,7 +1050,7 @@ public sealed class EuWatermarkTraversalStep
 {
     private EuWatermarkTraversalStep(
         EuWatermarkWitnessPlan plan,
-        EuBoundaryCrossing crossing,
+        EuBoundaryCrossing? crossing,
         IReadOnlyList<EuWatermarkCursor> deliveredPage,
         IReadOnlyList<EuWatermarkCursor> newlyDelivered,
         EuWatermarkCursor? nextPosition,
@@ -1067,8 +1067,32 @@ public sealed class EuWatermarkTraversalStep
     /// <summary>The plan this page was rendered from.</summary>
     public EuWatermarkWitnessPlan Plan { get; }
 
-    /// <summary>The reconciled boundary crossing this page carried.</summary>
-    public EuBoundaryCrossing Crossing { get; }
+    /// <summary>
+    /// The reconciled boundary crossing this page carried, and ABSENT for a batch's opening page.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// TWO SITUATIONS WERE BEING SQUEEZED THROUGH ONE TYPE. A page that continues a traversal
+    /// crosses a boundary the previous page established, and the crossing is what proves nothing
+    /// was skipped across it. A batch's FIRST page crosses nothing: the batch has delivered no
+    /// earlier page, so there is no boundary of its own to cross and no tie group it could have
+    /// skipped.
+    /// </para>
+    /// <para>
+    /// Forcing the first case's shape onto the second is what produced the defect this replaces.
+    /// The witness runs in batches, and only ONE batch holds the run-wide boundary entry; every
+    /// other batch was handed an EMPTY retained tie set, which
+    /// <see cref="EuWatermarkStepRefusal.CrossingCursorNotInRetainedTieSet"/> refuses BY DESIGN, so
+    /// at eighty two seeds every batch but one refused the whole run. Relaxing that guard was the
+    /// obvious move and the wrong one: it exists so an empty tie set cannot reconcile against an
+    /// empty reread and read as a clean terminal, which is a real defect it really does catch.
+    /// Separating the two situations lets both survive intact.
+    /// </para>
+    /// </remarks>
+    public EuBoundaryCrossing? Crossing { get; }
+
+    /// <summary>Whether this step opened a batch rather than continuing one.</summary>
+    public bool IsBatchOpening => Crossing is null;
 
     /// <summary>The page as delivered, in publisher order.</summary>
     public IReadOnlyList<EuWatermarkCursor> DeliveredPage { get; }
@@ -1091,6 +1115,105 @@ public sealed class EuWatermarkTraversalStep
 
     /// <summary>How many rows this page carried above the boundary watermark.</summary>
     public int RowsBeyondBoundary { get; }
+
+
+    /// <summary>
+    /// A batch's FIRST page: establishes where that batch's own traversal starts and what it
+    /// carries forward, WITHOUT asserting a crossing it has nothing to cross.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every page validation <see cref="TryAdvance"/> performs is performed here too: the page
+    /// limit, the admitted watermark shapes, strict ascent, and the floor at the plan's own start
+    /// position. What is NOT performed is the boundary reconciliation, because there is no earlier
+    /// page of this batch to reconcile against.
+    /// </para>
+    /// <para>
+    /// AND THE WHOLE PAGE IS NEWLY DELIVERED, which is the substantive difference. A continuing
+    /// page discounts the rows its incoming crossing already retained; an opening page has
+    /// retained nothing, so discounting anything here would silently drop the batch's own first
+    /// rows from the cut.
+    /// </para>
+    /// </remarks>
+    /// <param name="plan">The plan this page was rendered from.</param>
+    /// <param name="startPosition">The plan's own start position, which the page must not precede.</param>
+    /// <param name="deliveredPage">The page as delivered, in publisher order.</param>
+    /// <param name="refusal">Why no step exists, when none does.</param>
+    public static EuWatermarkTraversalStep? TryOpenBatch(
+        EuWatermarkWitnessPlan plan,
+        EuWatermarkCursor startPosition,
+        IReadOnlyList<EuWatermarkCursor> deliveredPage,
+        out EuWatermarkStepRefusal refusal)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(startPosition);
+        ArgumentNullException.ThrowIfNull(deliveredPage);
+
+        var page = deliveredPage.ToArray();
+        if (Array.Exists(page, static row => row is null))
+        {
+            throw new ArgumentException("A delivered row cannot be null.", nameof(deliveredPage));
+        }
+
+        if (page.Length > plan.PageLimit)
+        {
+            refusal = EuWatermarkStepRefusal.PageExceedsPlanLimit;
+            return null;
+        }
+
+        if (Outside(startPosition.WatermarkLexical) ||
+            Array.Exists(page, row => Outside(row.WatermarkLexical)))
+        {
+            refusal = EuWatermarkStepRefusal.WatermarkShapeWithoutFrozenOrderSemantics;
+            return null;
+        }
+
+        for (var index = 1; index < page.Length; index++)
+        {
+            if (page[index].CompareTo(page[index - 1]) <= 0)
+            {
+                refusal = EuWatermarkStepRefusal.PageNotStrictlyAscending;
+                return null;
+            }
+        }
+
+        if (page.Length > 0 &&
+            string.CompareOrdinal(page[0].WatermarkLexical, startPosition.WatermarkLexical) < 0)
+        {
+            refusal = EuWatermarkStepRefusal.PageBelowBoundaryWatermark;
+            return null;
+        }
+
+        // BEYOND IS STILL COUNTED AGAINST THE START POSITION. Only the RECONCILIATION is dropped,
+        // not the arithmetic: a page carrying nothing above the start watermark is terminal here
+        // exactly as it is in a continuing step, so opening a batch costs no extra request.
+        var atStart = page.Count(row => string.Equals(
+            row.WatermarkLexical, startPosition.WatermarkLexical, StringComparison.Ordinal));
+        var beyond = page.Length - atStart;
+
+        if (beyond == 0 && page.Length == plan.PageLimit)
+        {
+            refusal = EuWatermarkStepRefusal.TraversalCannotAdvance;
+            return null;
+        }
+
+        // NEWLY DELIVERED IS EVERYTHING EXCEPT THE START POSITION ITSELF. That one row, when the
+        // batch holds it at all, is the previous cut's own boundary being re-read rather than
+        // something this cut learned. Every other row is new to this batch, including the rest of
+        // the boundary group, because this batch has delivered no earlier page to have retained it.
+        var newlyDelivered = page
+            .Where(row => row.CompareTo(startPosition) != 0)
+            .ToArray();
+
+        refusal = EuWatermarkStepRefusal.None;
+        return new EuWatermarkTraversalStep(
+            plan,
+            null,
+            Array.AsReadOnly(page),
+            Array.AsReadOnly(newlyDelivered),
+            beyond > 0 ? page[^1] : null,
+            beyond);
+    }
 
     /// <summary>
     /// The only path that mints a step.

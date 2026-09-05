@@ -70,14 +70,19 @@ namespace Lex.V3.Ingest.Tests;
 /// <para>
 /// WHAT THIS TEST ASSERTS, today, as opposed to what it discusses. That the census table's own per
 /// type counts sum to its row totals. That both census families PROVED and that each carries
-/// <see cref="CustodyMembership.RetainedUnenforced"/>. And, WHEN THE RUN REACHES THE MANIFEST, the
-/// reduced manifest's expression count against the census total. WHEN IT DOES NOT REACH THE
-/// MANIFEST IT CALLS <c>Assert.Fail</c> WITH THE REFUSAL IN WORDS. There is no path through this
-/// method that passes silently, and today it does not pass at all. WHERE IT STOPS HAS MOVED and
-/// this sentence is dated deliberately: at D1-05f's head all six families PROVE against the live
-/// publisher and the run refuses later, at RecordFormNotResolved, because a seed's root carries no
-/// resource_legal_type this adapter maps to a closed EuActForm. That is D1-05g. Re-read the run's
-/// own wholeRunRefusalCode rather than this line, which is a summary and will age again.
+/// <see cref="CustodyMembership.RetainedUnenforced"/>. That the manifest was written AND reopened,
+/// the two digests being distinct. That the record set was written and every record is held with
+/// its custody class and membership, or typed by reason and named. That every MINTED manifest row
+/// carries a row, held or typed. That expressions match the census PER ROOT WORK and that the per
+/// root and per state counts sum to the closure's distinct total. And that the manifestation TYPE
+/// SET per root work equals the census's, taken from family M's own listing. WHEN THE RUN DOES NOT
+/// REACH THE MANIFEST IT CALLS <c>Assert.Fail</c> WITH THE REFUSAL IN WORDS.
+/// </para>
+/// <para>
+/// AND AT D1-05g IT PASSES. It did not for the whole of D1-05f, and the superseded sentence here
+/// named resource_legal_type as the predicate that stopped it, which was itself the defect: the
+/// act form is read from work_has_resource-type. Re-read the run's own wholeRunRefusalCode rather
+/// than this paragraph, which is a summary and will age again.
 /// </para>
 /// <para>
 /// ONE COMPARISON THE CENSUS MAKES POSSIBLE IS NOT YET ASSERTABLE, and it is failed loudly rather
@@ -499,6 +504,19 @@ public sealed class EuStageOneAcquisitionCanary
                 + "is an observation this run made and not part of this comparison.");
         }
 
+        // THE ARITHMETIC IDENTITY, ASSERTED RATHER THAN ONLY WRITTEN TO THE INDEX. The split is
+        // only trustworthy if the parts add up to the whole, and this is the ONE check that would
+        // catch an expression counted under BOTH a root and one of its states: double counting
+        // leaves every per-root number looking right while the total silently disagrees.
+        var splitTotal = result.ObservedExpressionsByCelex!.Values
+            .Sum(split => split.OfRootWork + split.OfConsolidatedStates);
+        Assert.AreEqual(
+            result.ObservedExpressionCount,
+            splitTotal,
+            "the per root and per state expression counts must sum to the closure's own DISTINCT "
+                + "total. They disagree, which means at least one expression was counted under "
+                + "both a root and a state, or one was counted under neither.");
+
 
         // ---- D1-05g: the two witness facts, asserted from THIS RUN'S OWN terminations. ----
         // Both were measured from retained bytes before being asserted, so neither is a guess
@@ -567,6 +585,18 @@ public sealed class EuStageOneAcquisitionCanary
         // count and a count comparison would have to invent one. The census per type counts stay
         // recorded as the publisher's inventory and the comparison is over type SETS. Counting the
         // inventory needs its own acquisition and is residue R8.
+        //
+        // WHY THIS IS EQUALITY AND NOT CONTAINMENT. A directional form was ruled and then withdrawn
+        // as moot, and the reason is worth keeping: the run once listed pdfa2a where the census
+        // does not, which looked like the publisher having added a format since the census was
+        // taken. It was not. pdfa2a was a RUNG OF OUR OWN FETCH LADDER, and the observed side was
+        // being built from the ladder rather than from what the office listed. Fixing the SOURCE
+        // dissolved the divergence instead of a relaxation absorbing it, and equality survived.
+        //
+        // WHAT EQUALITY COSTS, stated so it is a choice rather than an oversight: a format the
+        // publisher genuinely adds later WILL FAIL THIS RED rather than surface as news. That is
+        // acceptable while census rows exist for two seeds and a red is cheap to read; it is R8's
+        // to revisit when the census covers more.
         //
         // THE ROW SOURCE IS STATED AND IT IS NOT THE LADDER. These tokens come from
         // ObservedManifestationTypesByCelex, which the adapter fills from family M's OWN rows: the
@@ -687,7 +717,8 @@ public sealed class EuStageOneAcquisitionCanary
                 ["role"] = "familyPassBodiesAndCursors",
                 ["why"] = "EuFamilyEnumerationOutcome carries the proof but not the delivery receipt, "
                     + "so pass A and pass B page bodies and their cursor values are not reachable "
-                    + "from EuQueryExecutionResult. D1-05g must surface the receipt to record them.",
+                    + "from EuQueryExecutionResult. Surfacing the receipt is R3's to carry, since the pass "
+                    + "bodies are what a reader would reopen to check a delivery proof.",
             },
             new System.Text.Json.Nodes.JsonObject
             {
@@ -718,11 +749,12 @@ public sealed class EuStageOneAcquisitionCanary
                     + "manifest's custody-write digest), so the set digest cannot be stable by "
                     + "construction. Stated here FROM THE CODE PATH rather than by analogy with "
                     + "Luxembourg, whose canary mints the same two resource_ids in the canary "
-                    + "itself. THE PER-FIELD AUDIT HAS NOW RUN AND COULD NOT CONFIRM THIS ONE: "
-                    + "both clean-checkout runs refused at RecordFormNotResolved before any "
-                    + "record set existed, so setRefSha256 was null in both and being equal "
-                    + "proves nothing about it. This claim therefore rests on the code path alone "
-                    + "until a run reaches the record set. It sits beside heldContentSha256 "
+                    + "itself. THE PER-FIELD AUDIT COULD NOT CONFIRM THIS ONE AT THE TIME: both "
+                    + "clean-checkout runs then refused before any record set existed, so "
+                    + "setRefSha256 was null in both and being equal proved nothing. D1-05g's "
+                    + "run DOES reach the record set and mints a setRefSha256, so the claim is "
+                    + "now testable by two runs and remains, for the moment, a reading of the "
+                    + "code path rather than a measured pair. It sits beside heldContentSha256 "
                     + "values that ARE content addresses, so without this note a reader diffing "
                     + "two runs sees a moved corpus where nothing moved, and, worse, might take a "
                     + "match as evidence two runs produced the same corpus. WHAT TO DIFF INSTEAD, "
@@ -761,6 +793,13 @@ public sealed class EuStageOneAcquisitionCanary
     /// One enum value as the token a WIRE CONSUMER would see, never as its C# member name.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// APPLIED TO EVERY ENUM VALUED FIELD IN THIS DOCUMENT, which it was not at first. Two fields
+    /// were converted and six were left on <c>ToString()</c>, so the shipped index carried
+    /// PascalCase member names beside snake_case tokens IN ONE SCHEMA DECLARING DOCUMENT, which is
+    /// worse for a machine reading it than either convention would have been alone. A half applied
+    /// rule is a rule a reader cannot use.
+    /// </para>
     /// <para>
     /// THE DEFECT THIS REPLACES, which was live and is not hypothetical. Both call sites used
     /// <c>ToString()</c>, which returns the C# member name and BYPASSES <c>ContractJson</c>
@@ -821,21 +860,21 @@ public sealed class EuStageOneAcquisitionCanary
             {
                 ["role"] = "family",
                 ["familyKey"] = outcome.FamilyKey,
-                ["kind"] = outcome.Kind.ToString(),
-                ["retainedFloor"] = outcome.RetainedFloor?.ToString(),
+                ["kind"] = WireToken<EuFamilyEnumerationOutcomeKind>(outcome.Kind),
+                ["retainedFloor"] = WireToken(outcome.RetainedFloor),
                 ["proofDeliveredRowCount"] = outcome.Proof?.DeliveredRowCount,
                 ["proofCanonicalKeyDigest"] = outcome.Proof?.CanonicalKeyDigest,
                 ["proofAcquisitionRunSha256"] = outcome.Proof?.AcquisitionRunRef.Sha256,
                 ["proofInterpretationProfileSha256"] = outcome.Proof?.InterpretationProfileRef.Sha256,
                 ["proofSourceProfileSha256"] = outcome.Proof?.SourceProfileRef.Sha256,
-                ["refusalKind"] = refusal?.Code.ToString(),
+                ["refusalKind"] = WireToken(refusal?.Code),
                 ["refusedBodySha256"] = refusal?.ResponseBodySha256,
                 ["refusedBodyTerminalStatus"] = refusal?.TerminalStatus,
                 ["refusedBodyObservedMediaType"] = refusal?.ObservedMediaType,
                 ["countAnswerItShouldHaveMatched"] = refusal?.ObservedCount,
                 ["offendingKey"] = refusal?.OffendingKey,
                 ["requestOrdinal"] = refusal?.RequestOrdinal,
-                ["proofRefusal"] = outcome.ProofRefusal?.ToString(),
+                ["proofRefusal"] = WireToken(outcome.ProofRefusal),
             });
         }
 
@@ -859,7 +898,9 @@ public sealed class EuStageOneAcquisitionCanary
         // worst form of the unobserved-versus-zero defect: a reader could not tell NOT SELECTED
         // from FAILED from NEVER ATTEMPTED, because there was not even a field to be wrong in.
         // Each row also carries its OBJECT KEY, since the ordinal a body lands on was measured to
-        // differ between two runs of one head while the bodies held were the same.
+        // differ between two runs of one head while the bodies held were the same. The rows are
+        // therefore comparable across runs BY OBJECT rather than by position, which is what a two
+        // index comparison needs and what the ordinals cannot give it.
         var bodies = new System.Text.Json.Nodes.JsonArray();
         var outcomes = result.DocumentAcquisitionOutcomesByOrdinal
             ?? new Dictionary<int, CorpusAcquisitionOutcome>();
@@ -902,7 +943,7 @@ public sealed class EuStageOneAcquisitionCanary
                     ? null
                     : WireToken<CustodyMembership>(
                         CustodyMembershipClassifier.Classify(outcome.Receipt)),
-                ["refusalReason"] = outcome?.Refusal?.ToString()
+                ["refusalReason"] = WireToken(outcome?.Refusal)?.GetValue<string>()
                     ?? (entry.Value.SelectedByBodyAxis
                         ? null
                         : "not_selected_by_the_body_axis"),
@@ -929,9 +970,12 @@ public sealed class EuStageOneAcquisitionCanary
                 ["role"] = "corpusRecord",
                 ["canonicalKey"] = record.ObjectRef.CanonicalKey,
                 ["bodyKind"] = WireToken<CorpusBodyRecordKind>(record.Body.Kind),
-                ["retainedFloor"] = record.Body.Floor?.ToString(),
-                ["notHeldReason"] = record.Body.NotHeldReason?.ToString(),
-                ["pendingAcquisitionReason"] = record.Body.PendingAcquisitionReason?.ToString(),
+                ["retainedFloor"] = WireToken(record.Body.Floor),
+                ["notHeldReason"] = WireToken(record.Body.NotHeldReason),
+                ["pendingAcquisitionReason"] = record.Body.PendingAcquisitionReason is null
+                    ? null
+                    : WireToken<CorpusBodyPendingAcquisitionReasonKind>(
+                        record.Body.PendingAcquisitionReason.Kind),
             });
         }
 
