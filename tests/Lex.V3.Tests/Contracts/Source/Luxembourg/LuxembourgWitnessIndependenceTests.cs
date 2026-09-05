@@ -170,7 +170,7 @@ public sealed class LuxembourgWitnessIndependenceTests
         Assert.AreEqual(profile.ScopeBinding.SourceProfileRef, topology.IdentityProfileRef);
 
         // Two profiles built from the same complete vocabulary share a source-profile identity
-        // (VerifiedLuxembourgSourceProfile.Open is a pure function of its snapshot), so minting
+        // (VerifiedLuxembourgSourceProfile.TryOpen is a pure function of its snapshot), so minting
         // twice must be stable, not merely equal by accident of a shared instance.
         var second = LuxembourgSourceProfileTopology.Mint(LuxembourgProfiles.Opened(snapshot));
         Assert.AreEqual(topology.IdentityProfileRef, second.IdentityProfileRef);

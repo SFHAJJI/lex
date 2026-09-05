@@ -163,6 +163,18 @@ public sealed class VerifiedLuxembourgSourceProfile
     /// The untyped throws are gone rather than kept beside this door, because a typed refusal that
     /// shares a path with an untyped throw is the same defect one level up.
     /// </para>
+    /// <para>
+    /// PRECEDENCE, since a snapshot can meet more than one condition at once and only one refusal
+    /// is returned: IRI conflict, then literal conflict, then completeness. So a snapshot that is
+    /// both incomplete and conflicting refuses as
+    /// <see cref="LuxembourgProfileResolutionFailureCode.SelectorConflict"/>, which is asserted
+    /// rather than left to be inferred from the order of the code.
+    /// </para>
+    /// <para>
+    /// A NULL RETURN IS A WHOLE-RUN REFUSAL FOR THE CALLER TO CARRY, never to dereference and never
+    /// to assert away. The failure names the condition and its subject so a caller can report it;
+    /// treating null as impossible is how a typed refusal becomes a crash one frame later.
+    /// </para>
     /// </remarks>
     /// <returns>The verified profile, or null with <paramref name="failure"/> set.</returns>
     public static VerifiedLuxembourgSourceProfile? TryOpen(

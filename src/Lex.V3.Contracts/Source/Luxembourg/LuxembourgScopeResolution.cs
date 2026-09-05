@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Text;
 using System.Text.Json.Serialization;
+using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Scope;
 
@@ -95,6 +96,7 @@ public enum LuxembourgProfileResolutionFailureCode
     /// An observation whose object is not a Luxembourg resource IRI under the Jolux authority.
     /// Produced by <c>LuxembourgScopeResolver.ValidateObservation</c>.
     /// </summary>
+    [JsonStringEnumMemberName("profile_resolution_failed_invalid_publisher_iri")]
     InvalidPublisherIri = 1,
 
     /// <summary>
@@ -102,6 +104,7 @@ public enum LuxembourgProfileResolutionFailureCode
     /// complete enough to resolve anything. Produced by
     /// <c>VerifiedLuxembourgSourceProfile.TryOpen</c>.
     /// </summary>
+    [JsonStringEnumMemberName("profile_resolution_failed_incomplete_vocabulary")]
     IncompleteVocabulary = 2,
 
     /// <summary>
@@ -109,14 +112,25 @@ public enum LuxembourgProfileResolutionFailureCode
     /// publisher vocabulary rather than a duplicate of a settled one. Produced by
     /// <c>LuxembourgScopeResolver.ValidateObservation</c>.
     /// </summary>
+    [JsonStringEnumMemberName("profile_resolution_failed_unknown_vocabulary_drift")]
     UnknownVocabularyDrift = 3,
 
     /// <summary>
-    /// Two vocabulary rows compete for one selector position: the snapshot presents the same kind
-    /// and IRI twice, or the same literal row twice, so one selector has two answers. Produced by
+    /// The snapshot presents an EXACT DUPLICATE ROW: the same kind and IRI twice in the IRI
+    /// vocabulary, or a byte-identical row twice in the literal vocabulary. Produced by
     /// <c>VerifiedLuxembourgSourceProfile.TryOpen</c>.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// This summary said "one selector has two answers", which claimed more than the check makes
+    /// true, so it is narrowed to what is detected. Literal equality is WHOLE RECORD, so two
+    /// literal rows sharing a kind and a canonical selector value but differing in their raw
+    /// lexical bytes are NOT detected. That is correct rather than a gap, and the evidence is that
+    /// <c>CanonicalSelectorLexicalValue</c> is consumed by nothing but the profile digest: no
+    /// selector reads it, so two such rows are two distinct publisher observations that both reach
+    /// the digest, not two answers competing for one position. If a selector ever reads the
+    /// canonical value they become two answers and this check has to widen with it.
+    /// </para>
     /// That mapping is a READING of the code, recorded as one so the next reader can check it.
     /// Duplicate rows were the only input-driven condition left without a home once the neighbours
     /// were excluded: the static selector table cannot collide, since its keys and projection rules
@@ -128,6 +142,7 @@ public enum LuxembourgProfileResolutionFailureCode
     /// duplicate of it, so the duplicate condition has no other home here. Two independent readings
     /// agreeing is strong evidence and not proof.
     /// </remarks>
+    [JsonStringEnumMemberName("profile_resolution_failed_selector_conflict")]
     SelectorConflict = 4,
 
     /// <summary>
@@ -135,6 +150,7 @@ public enum LuxembourgProfileResolutionFailureCode
     /// URI, duplicate assertions or relations, or a term that is not an exact IRI. Produced by
     /// <c>LuxembourgScopeResolver.Resolve</c> and its <c>ValidateObservation</c>.
     /// </summary>
+    [JsonStringEnumMemberName("profile_resolution_failed_evidence_binding_rejected")]
     EvidenceBindingRejected = 5,
 }
 
@@ -734,20 +750,18 @@ public sealed record LuxembourgProfileResolutionFailure
 
     public string Subject { get; }
 
-    public string ReasonCode => Code switch
-    {
-        LuxembourgProfileResolutionFailureCode.InvalidPublisherIri =>
-            "profile_resolution_failed_invalid_publisher_iri",
-        LuxembourgProfileResolutionFailureCode.IncompleteVocabulary =>
-            "profile_resolution_failed_incomplete_vocabulary",
-        LuxembourgProfileResolutionFailureCode.UnknownVocabularyDrift =>
-            "profile_resolution_failed_unknown_vocabulary_drift",
-        LuxembourgProfileResolutionFailureCode.SelectorConflict =>
-            "profile_resolution_failed_selector_conflict",
-        LuxembourgProfileResolutionFailureCode.EvidenceBindingRejected =>
-            "profile_resolution_failed_evidence_binding_rejected",
-        _ => throw new InvalidOperationException("Unknown Luxembourg profile failure code."),
-    };
+    /// <summary>The exact wire token this code carries, read from the member itself.</summary>
+    /// <remarks>
+    /// This was a hand-written switch over five members while the vocabulary carried no wire
+    /// attribute at all: two sources of truth that can drift, and they had. The pin covered three
+    /// of the five, and renaming one of the two unpinned tokens left the whole suite green.
+    /// Reading the attribute makes the member the only source, and a member added without a token
+    /// now fails loudly at its first use instead of projecting its CLR spelling.
+    /// <see cref="AbsenceWire"/> is the existing mechanism and its remarks already give this exact
+    /// argument; its name says Absence while its function is general, which is worth correcting
+    /// separately rather than duplicating a second reader here.
+    /// </remarks>
+    public string ReasonCode => AbsenceWire.NameOf(Code);
 }
 
 public abstract record LuxembourgProfileResolution

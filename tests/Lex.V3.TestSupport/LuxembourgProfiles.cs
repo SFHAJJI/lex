@@ -16,9 +16,12 @@ namespace Lex.V3.TestSupport;
 /// and subject rather than with a null reference somewhere later.
 /// </para>
 /// <para>
-/// The throw here is a test-fixture assertion and not a second production path: production callers
-/// use <c>TryOpen</c> and read the typed failure. A test that means to observe a refusal calls
-/// <c>TryOpen</c> directly, because a helper that hides the failure could not observe it.
+/// The throw here is a test-fixture assertion and not a second production path. THIS DOOR IS THE
+/// ONLY CALLER TODAY: no src caller exists, because the LU composition root is Stage 6. The R6-01
+/// root will be the first production caller, and it maps a failure to
+/// <c>LuxembourgQueryExecutionRefusal.ScopeResolutionFailed</c> with its detail, a member that
+/// already exists. A test that means to observe a refusal calls <c>TryOpen</c> directly, because a
+/// helper that hides the failure could not observe it.
 /// </para>
 /// </remarks>
 public static class LuxembourgProfiles
