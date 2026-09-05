@@ -76,7 +76,7 @@ public sealed class ClosedVocabularyCensusTests
                     + "RootWatermarkBindingRefused, WitnessBindingRefused, "
                     + "WitnessReconciliationRefused, ScopeReductionRefused, WitnessTraversalRefused, "
                     + "DocumentFetchSessionNotStarted, DocumentBodyNotRetained, "
-                    + "DocumentFetchOutcomeNotRepresentable, RecordSetNotRetained",
+                    + "AcquisitionOutcomeNotRepresentable, RecordSetNotRetained",
                 "Lex.V3.Ingest.Europe.EuWitnessTraversalRefusal: None, RobotsBootstrapRefused, "
                     + "BindRefused, ObservationNotExecuted, StatusNotAdmitted, MediaTypeNotAdmitted, "
                     + "PageBodyMalformed, CrossingRefused, StepRefused, EntrySetRefused, "
@@ -101,8 +101,9 @@ public sealed class ClosedVocabularyCensusTests
                     + "ScopeResolutionFailed, ScopeManifestNotRetained, "
                     + "ResourceObservationFamilyNotProven, ResourceObservationRowsNotVerified, "
                     + "ObservationSubjectNotInDeliveredCensus, AssertionRowObjectKindNotRecognised, "
-                    + "AssertionRowTermUnbound, DocumentFetchSessionNotStarted, DocumentBodyNotHeld, "
-                    + "DocumentGetOutcomeNotRepresentable, RecordSetNotRetained",
+                    + "AssertionRowTermUnbound, DocumentFetchSessionNotStarted, "
+                    + "DocumentBodyNotRetained, AcquisitionOutcomeNotRepresentable, "
+                    + "RecordSetNotRetained",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgRelationFamilyAcquisitionState: "
                     + "AcquiredComplete, Unacquired, Incomplete, Uncertain",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgResourceObservationExclusionCause: "
