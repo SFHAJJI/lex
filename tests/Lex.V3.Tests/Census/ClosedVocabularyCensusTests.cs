@@ -383,6 +383,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "PageBelowBoundaryWatermark, CrossingDoesNotDescribeThisPage, "
                     + "TraversalCannotAdvance",
                 "Lex.V3.Contracts.Source.Europe.EuWemiRole: Work, Expression, Manifestation, Item",
+                "Lex.V3.Contracts.Source.Europe.EuWitnessObservationScope: PackObjectsOnly, "
+                    + "EveryEntryTheEndpointHolds",
                 "Lex.V3.Contracts.Source.Europe.EuWorkKind: Directive, Regulation",
                 "Lex.V3.Contracts.Source.Http.HeldAcquisitionPublisher: LuLegilux, EuEurLex",
                 "Lex.V3.Contracts.Source.Http.HttpCompletionUnprovenReason: MissingCompletionProof, "

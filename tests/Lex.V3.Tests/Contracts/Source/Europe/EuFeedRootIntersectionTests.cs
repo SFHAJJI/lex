@@ -145,16 +145,23 @@ public sealed class EuFeedRootIntersectionTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "constructor private instance " + N + "EuFeedTerminalReconciliation::.ctor("
-                + "System.Collections.Generic.IReadOnlyDictionary<" + N
-                + "EuFeedTerminal, System.Int32>, "
-                + "System.Collections.Generic.IReadOnlyDictionary<" + N
-                + "EuFeedReconciliationConflict, System.Int32>, System.Int32) -> " + N
-                + "EuFeedTerminalReconciliation",
-                "method public static " + N + "EuFeedTerminalReconciliation::Of(" + N
-                + "EuFeedRootIntersection, " + N + "EuFeedWatermarkEntrySet, "
-                + "System.Collections.Generic.IReadOnlyList<" + N + "EuFeedEntryTermination>) -> "
-                + N + "EuFeedTerminalReconciliation",
+                "constructor private instance "
+                    + "Lex.V3.Contracts.Source.Europe.EuFeedTerminalReconciliation::.ctor(System.Co"
+                    + "llections.Generic.IReadOnlyDictionary<Lex.V3.Contracts.Source.Europe.EuFeedT"
+                    + "erminal, Lex.V3.Contracts.Source.Europe.EuTerminalObservation>, "
+                    + "System.Collections.Generic.IReadOnlyDictionary<Lex.V3.Contracts.Source.Europ"
+                    + "e.EuFeedReconciliationConflict, System.Int32>, System.Int32, "
+                    + "Lex.V3.Contracts.Source.Europe.EuWitnessObservationScope, "
+                    + "System.String) -> "
+                    + "Lex.V3.Contracts.Source.Europe.EuFeedTerminalReconciliation",
+                "method public static "
+                    + "Lex.V3.Contracts.Source.Europe.EuFeedTerminalReconciliation::Of(Lex.V3.Contr"
+                    + "acts.Source.Europe.EuFeedRootIntersection, "
+                    + "Lex.V3.Contracts.Source.Europe.EuFeedWatermarkEntrySet, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Europe.EuFe"
+                    + "edEntryTermination>, "
+                    + "Lex.V3.Contracts.Source.Europe.EuWitnessObservationScope) -> "
+                    + "Lex.V3.Contracts.Source.Europe.EuFeedTerminalReconciliation",
             },
             ConstructionSurface.Of(typeof(EuFeedTerminalReconciliation)).ToArray());
     }
@@ -821,17 +828,120 @@ public sealed class EuFeedRootIntersectionTests
             binding.Classify(Observed(At(3), [RootIn, RootOut]), entries),
         };
 
-        var reconciliation = EuFeedTerminalReconciliation.Of(binding, entries, terminations);
+        var reconciliation = EuFeedTerminalReconciliation.Of(
+            binding, entries, terminations,
+            EuWitnessObservationScope.EveryEntryTheEndpointHolds);
 
         Assert.AreEqual(3, reconciliation.CanonicalEntryCount);
-        Assert.AreEqual(3, reconciliation.TerminalCountSum);
-        Assert.IsTrue(reconciliation.TerminalEquationHolds);
-        Assert.AreEqual(1, reconciliation.TerminalCounts[EuFeedTerminal.InPack]);
-        Assert.AreEqual(1, reconciliation.TerminalCounts[EuFeedTerminal.OutOfPack]);
-        Assert.AreEqual(1, reconciliation.TerminalCounts[EuFeedTerminal.MixedScope]);
-        Assert.AreEqual(0, reconciliation.TerminalCounts[EuFeedTerminal.UnresolvedOrAmbiguous]);
+        Assert.AreEqual(3, reconciliation.ObservedTerminalCountSum);
+        Assert.IsTrue(reconciliation.TerminalEquationOverObservedTerminalsHolds);
+        Assert.AreEqual(1, reconciliation.TerminalObservations[EuFeedTerminal.InPack].ObservedCount);
+        Assert.AreEqual(1, reconciliation.TerminalObservations[EuFeedTerminal.OutOfPack].ObservedCount);
+        Assert.AreEqual(1, reconciliation.TerminalObservations[EuFeedTerminal.MixedScope].ObservedCount);
+        Assert.AreEqual(0, reconciliation.TerminalObservations[EuFeedTerminal.UnresolvedOrAmbiguous].ObservedCount);
         Assert.AreEqual(0, reconciliation.ConflictTotal);
         Assert.IsFalse(reconciliation.MakesTheCutIncomplete);
+    }
+
+    /// <summary>
+    /// A pack-scoped run reports the terminals its witness could not reach as UNOBSERVED, and
+    /// REFUSES to report them as zero.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE LIVE DEFECT THIS DRIVES. Once the witness was restricted to the pack's own objects,
+    /// <c>OutOfPack</c> and <c>MixedScope</c> became structurally unreachable and the old
+    /// dictionary went on reporting <c>0</c> for both. A consumer reading zero cannot tell "we
+    /// looked and found none" from "we never looked", so the run was making a claim about the
+    /// publisher's holdings that it had no evidence for, with every number in it looking complete.
+    /// </para>
+    /// <para>
+    /// AND THE EQUATION WOULD HAVE HIDDEN BEHIND IT. <c>TerminalEquationHolds</c> compared the sum
+    /// of four terminals against the canonical entry count; with two of the four structurally zero
+    /// it closed trivially, so reporting it as R3's four-way equation would have been a SECOND
+    /// false claim resting on the first. The equation now names what it closes over, and
+    /// <c>ClosesOverEveryTerminal</c> is how a consumer tells the two situations apart.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void APackScopedCutReportsTheTerminalsItCouldNotReachAsUnobservedRatherThanZero()
+    {
+        var plan = Plan(2);
+        var entries = EuFeedWatermarkEntrySet.TryClose(
+            [SingleEntryStep(plan, 1)], out var entriesRefusal);
+        Assert.IsNotNull(entries, $"refused as {entriesRefusal}");
+
+        var binding = Binding([RootIn], []);
+        var terminations = new[] { binding.Classify(Observed(At(1), [RootIn]), entries) };
+
+        var reconciliation = EuFeedTerminalReconciliation.Of(
+            binding, entries, terminations, EuWitnessObservationScope.PackObjectsOnly);
+
+        foreach (var unreachable in new[] { EuFeedTerminal.OutOfPack, EuFeedTerminal.MixedScope })
+        {
+            var observation = reconciliation.TerminalObservations[unreachable];
+            Assert.IsFalse(
+                observation.IsObserved,
+                unreachable + " is not reachable by a witness bound to the pack's own objects, so "
+                    + "it must report as unobserved.");
+            Assert.IsNull(
+                observation.Count,
+                unreachable + " reported a count of " + observation.Count + ". A terminal nobody "
+                    + "asked about has no count, and a zero here is a claim about the publisher "
+                    + "this run cannot support.");
+            Assert.ThrowsExactly<InvalidOperationException>(
+                () => _ = observation.ObservedCount,
+                "reading an unobserved terminal's count must fail loudly rather than yield zero.");
+            Assert.IsFalse(
+                string.IsNullOrWhiteSpace(observation.UnobservedReason),
+                unreachable + " must say WHY it was not observed.");
+        }
+
+        // The reachable half is still measured, and a zero THERE is a real zero.
+        Assert.AreEqual(1, reconciliation.TerminalObservations[EuFeedTerminal.InPack].ObservedCount);
+        Assert.AreEqual(
+            0,
+            reconciliation.TerminalObservations[EuFeedTerminal.UnresolvedOrAmbiguous].ObservedCount,
+            "this terminal IS reachable, so its zero is measured and must stay a number.");
+
+        // The equation closes over the observed terminals and says so in the type.
+        Assert.IsTrue(reconciliation.TerminalEquationOverObservedTerminalsHolds);
+        Assert.IsFalse(
+            reconciliation.ClosesOverEveryTerminal,
+            "this is not R3's four way equation, and a consumer must be able to tell.");
+        CollectionAssert.AreEqual(
+            new[] { EuFeedTerminal.OutOfPack, EuFeedTerminal.MixedScope },
+            reconciliation.UnobservedTerminals.ToArray());
+
+        // The honesty sentence is a FIELD, because a machine cannot read a doc comment.
+        StringAssert.Contains(reconciliation.ScopeStatement, "NOT OBSERVED");
+        StringAssert.Contains(reconciliation.ScopeStatement, "UNOBSERVED, NOT ZERO");
+        StringAssert.Contains(
+            reconciliation.ScopeStatement, "closes over the in pack portion alone");
+    }
+
+    /// <summary>
+    /// A pack-scoped cut whose terminations nonetheless CLAIM an unreachable terminal is a
+    /// contradiction, and refuses rather than reporting either half.
+    /// </summary>
+    [TestMethod]
+    public void APackScopedCutRefusesTerminationsItsOwnScopeCouldNotHaveProduced()
+    {
+        var plan = Plan(2);
+        var entries = EuFeedWatermarkEntrySet.TryClose(
+            [SingleEntryStep(plan, 1), SingleEntryStep(plan, 2)], out var entriesRefusal);
+        Assert.IsNotNull(entries, $"refused as {entriesRefusal}");
+
+        var binding = Binding([RootIn], []);
+        var terminations = new[]
+        {
+            binding.Classify(Observed(At(1), [RootIn]), entries),
+            binding.Classify(Observed(At(2), [RootOut]), entries),
+        };
+
+        var thrown = Assert.ThrowsExactly<ArgumentException>(() => EuFeedTerminalReconciliation.Of(
+            binding, entries, terminations, EuWitnessObservationScope.PackObjectsOnly));
+        StringAssert.Contains(thrown.Message, "OutOfPack");
     }
 
     [TestMethod]
@@ -841,9 +951,11 @@ public sealed class EuFeedRootIntersectionTests
         var binding = Binding([RootIn], []);
         var terminations = new[] { binding.Classify(Observed(At(1), []), entries) };
 
-        var reconciliation = EuFeedTerminalReconciliation.Of(binding, entries, terminations);
+        var reconciliation = EuFeedTerminalReconciliation.Of(
+            binding, entries, terminations,
+            EuWitnessObservationScope.EveryEntryTheEndpointHolds);
 
-        Assert.IsTrue(reconciliation.TerminalEquationHolds);
+        Assert.IsTrue(reconciliation.TerminalEquationOverObservedTerminalsHolds);
         Assert.AreEqual(
             1, reconciliation.ConflictCounts[EuFeedReconciliationConflict.UnresolvedOrAmbiguousTerminal]);
         Assert.IsTrue(reconciliation.MakesTheCutIncomplete);
@@ -860,7 +972,9 @@ public sealed class EuFeedRootIntersectionTests
             At(1), [RootIn], new EuFeedFamilyProjection(RootIn, "family-a", "projected-key-1"));
         var terminations = new[] { binding.Classify(observation, entries) };
 
-        var reconciliation = EuFeedTerminalReconciliation.Of(binding, entries, terminations);
+        var reconciliation = EuFeedTerminalReconciliation.Of(
+            binding, entries, terminations,
+            EuWitnessObservationScope.EveryEntryTheEndpointHolds);
 
         Assert.AreEqual(EuFeedTerminal.InPack, terminations[0].Terminal);
         Assert.AreEqual(
@@ -878,7 +992,9 @@ public sealed class EuFeedRootIntersectionTests
         var binding = Binding([RootIn], [projection]);
         var terminations = new[] { binding.Classify(Observed(At(1), [RootIn], projection), entries) };
 
-        var reconciliation = EuFeedTerminalReconciliation.Of(binding, entries, terminations);
+        var reconciliation = EuFeedTerminalReconciliation.Of(
+            binding, entries, terminations,
+            EuWitnessObservationScope.EveryEntryTheEndpointHolds);
 
         Assert.AreEqual(0, reconciliation.ConflictTotal);
         Assert.IsFalse(reconciliation.MakesTheCutIncomplete);
@@ -896,7 +1012,9 @@ public sealed class EuFeedRootIntersectionTests
             At(1), [RootIn, RootOut], new EuFeedFamilyProjection(RootOut, "family-b", "projected-key-2"));
         var terminations = new[] { binding.Classify(observation, entries) };
 
-        var reconciliation = EuFeedTerminalReconciliation.Of(binding, entries, terminations);
+        var reconciliation = EuFeedTerminalReconciliation.Of(
+            binding, entries, terminations,
+            EuWitnessObservationScope.EveryEntryTheEndpointHolds);
 
         Assert.AreEqual(EuFeedTerminal.MixedScope, terminations[0].Terminal);
         Assert.AreEqual(0, reconciliation.ConflictTotal);
@@ -916,15 +1034,16 @@ public sealed class EuFeedRootIntersectionTests
         var termination = binding.Classify(observation, entries);
 
         var reconciliation = EuFeedTerminalReconciliation.Of(
-            binding, entries, [termination, termination, termination]);
+            binding, entries, [termination, termination, termination],
+            EuWitnessObservationScope.EveryEntryTheEndpointHolds);
 
         Assert.AreEqual(
             2, reconciliation.ConflictCounts[EuFeedReconciliationConflict.DuplicateTerminalAccounting]);
         Assert.IsTrue(reconciliation.MakesTheCutIncomplete);
         // All three copies still count toward the sum: the equation is arithmetic over what was
         // reported, not a de-duplicated view of it.
-        Assert.AreEqual(3, reconciliation.TerminalCountSum);
-        Assert.IsFalse(reconciliation.TerminalEquationHolds);
+        Assert.AreEqual(3, reconciliation.ObservedTerminalCountSum);
+        Assert.IsFalse(reconciliation.TerminalEquationOverObservedTerminalsHolds);
     }
 
     [TestMethod]
@@ -949,14 +1068,16 @@ public sealed class EuFeedRootIntersectionTests
             binding.Classify(Observed(At(2), [RootIn]), entries),
         };
 
-        var reconciliation = EuFeedTerminalReconciliation.Of(binding, entries, terminations);
+        var reconciliation = EuFeedTerminalReconciliation.Of(
+            binding, entries, terminations,
+            EuWitnessObservationScope.EveryEntryTheEndpointHolds);
 
         Assert.AreEqual(
             1, reconciliation.ConflictCounts[EuFeedReconciliationConflict.EntryWithoutATerminal]);
         Assert.IsTrue(reconciliation.MakesTheCutIncomplete);
         Assert.AreEqual(3, reconciliation.CanonicalEntryCount);
-        Assert.AreEqual(2, reconciliation.TerminalCountSum);
-        Assert.IsFalse(reconciliation.TerminalEquationHolds);
+        Assert.AreEqual(2, reconciliation.ObservedTerminalCountSum);
+        Assert.IsFalse(reconciliation.TerminalEquationOverObservedTerminalsHolds);
     }
 
     [TestMethod]
@@ -978,7 +1099,8 @@ public sealed class EuFeedRootIntersectionTests
         Assert.IsNotNull(unrelatedEntries, $"refused as {refusal}");
 
         var reconciliation = EuFeedTerminalReconciliation.Of(
-            binding, unrelatedEntries, [termination]);
+            binding, unrelatedEntries, [termination],
+            EuWitnessObservationScope.EveryEntryTheEndpointHolds);
 
         Assert.AreEqual(
             1,

@@ -542,6 +542,12 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Europe.EuStructuralLocation::.ctor, "
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Europe.EuStructuralLocation::Parse",
+                "Lex.V3.Contracts.Source.Europe.EuTerminalObservation: constructor private "
+                    + "instance Lex.V3.Contracts.Source.Europe.EuTerminalObservation::.ctor, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Europe.EuTerminalObservation::Observed, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Europe.EuTerminalObservation::UnobservedByDesign",
                 "Lex.V3.Contracts.Source.Europe.EuTranspositionDeadlineClassification: constructor "
                     + "private instance "
                     + "Lex.V3.Contracts.Source.Europe.EuTranspositionDeadlineClassification::.ctor, "

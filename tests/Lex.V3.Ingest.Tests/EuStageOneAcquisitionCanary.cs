@@ -347,6 +347,70 @@ public sealed class EuStageOneAcquisitionCanary
             result.ObservedExpressionCount,
             "the reduced manifest's expression count must equal the independent census total.");
 
+
+        // ---- D1-05g: the two witness facts, asserted from THIS RUN'S OWN terminations. ----
+        // Both were measured from retained bytes before being asserted, so neither is a guess
+        // about what the endpoint might do.
+        Assert.IsNotNull(
+            result.WitnessTerminations,
+            "a run that reached the manifest ran the witness and must carry its terminations.");
+        Assert.IsNotNull(result.WatermarkWitnessPlan);
+
+        var terminations = result.WitnessTerminations!;
+        var bound = result.WatermarkWitnessPlan!.StartPosition;
+
+        // ONE: THE TIE ON THE BOUND, RE READ AND ACCOUNTED ONCE. Each page begins by re-delivering
+        // the boundary watermark inclusively, so the whole group sharing that exact lexical value
+        // is seen again. The point of this assertion is that the CROSSING PROOF executed: the row
+        // reappearing is not evidence on its own, and an entry accounted twice is exactly what
+        // inclusive re-read risks and what the crossing exists to rule out.
+        var onTheBound = terminations
+            .Where(entry => string.Equals(
+                entry.Entry.WatermarkLexical, bound.WatermarkLexical, StringComparison.Ordinal))
+            .ToArray();
+        Assert.IsTrue(
+            onTheBound.Length > 0,
+            $"no entry sits on the bound {bound.WatermarkLexical}, so the inclusive re-read never "
+            + "happened and the crossing proof had nothing to prove.");
+
+        foreach (var group in onTheBound.GroupBy(
+                     entry => entry.Entry.CanonicalEntryKey, StringComparer.Ordinal))
+        {
+            Assert.AreEqual(
+                1,
+                group.Count(),
+                $"{group.Key} sits on the bound and was accounted {group.Count()} times. The "
+                + "boundary rule re-reads the whole tie group, so accounting one of its members "
+                + "twice is the defect that rule creates and the crossing proof exists to catch.");
+        }
+
+        Assert.AreEqual(
+            terminations.Select(entry => entry.Entry.CanonicalEntryKey)
+                .Distinct(StringComparer.Ordinal).Count(),
+            terminations.Count,
+            "every entry the witness delivered must be accounted exactly once across the whole "
+            + "traversal, not only on the bound.");
+
+        // TWO: THE POST BOUND CHANGE IS DELIVERED. This state's watermark is later than either
+        // root's, which is the whole reason the witness watches the closure rather than the roots:
+        // a roots-only witness would have been blind to it while reporting a clean cut.
+        const string movedState =
+            "http://publications.europa.eu/resource/cellar/5f2552c2-cc45-11e6-ad7c-01aa75ed71a1";
+        var moved = terminations
+            .Where(entry => string.Equals(
+                entry.Entry.CanonicalEntryKey, movedState, StringComparison.Ordinal))
+            .ToArray();
+        Assert.AreEqual(
+            1,
+            moved.Length,
+            "the post-bound change on GDPR's consolidated state was not delivered. Entries "
+            + $"delivered were: {string.Join(", ", terminations.Select(
+                entry => entry.Entry.CanonicalEntryKey + "@" + entry.Entry.WatermarkLexical))}");
+        Assert.IsTrue(
+            string.CompareOrdinal(moved[0].Entry.WatermarkLexical, bound.WatermarkLexical) > 0,
+            $"the moved state's watermark {moved[0].Entry.WatermarkLexical} must be later than the "
+            + $"bound {bound.WatermarkLexical}, or it is not the post-bound change this asserts.");
+
         // ---- D1-05g: THE TYPE SET COMPARISON, PER ROOT WORK. ----
         // This replaces an unconditional Assert.Fail that said the per type totals were not
         // comparable. They are not, and that has been settled rather than worked around: family M
