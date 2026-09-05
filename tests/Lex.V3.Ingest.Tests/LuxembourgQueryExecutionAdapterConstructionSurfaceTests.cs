@@ -144,7 +144,7 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
     [TestMethod]
     public void QueryExecutionRefusalIsATwelveMemberEnumIncludingNone()
     {
-        // D1-06c-LU-2 added four: DocumentFetchSessionNotStarted, DocumentBodyNotHeld,
+        // D1-06c-LU-2 added four: DocumentFetchSessionNotStarted, DocumentBodyNotRetained,
         // AcquisitionOutcomeNotRepresentable and RecordSetNotHeld, one per whole-run failure the
         // document-acquisition phase and the corpus record-set write can produce. Every other
         // document-GET failure is a PER OBJECT refusal and appears nowhere here, which is the
@@ -164,7 +164,7 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 + "LuxembourgQueryExecutionRefusal::AssertionRowTermUnbound -> " + N
                 + "LuxembourgQueryExecutionRefusal",
                 "field public static " + N
-                + "LuxembourgQueryExecutionRefusal::DocumentBodyNotHeld -> " + N
+                + "LuxembourgQueryExecutionRefusal::DocumentBodyNotRetained -> " + N
                 + "LuxembourgQueryExecutionRefusal",
                 "field public static " + N
                 + "LuxembourgQueryExecutionRefusal::DocumentFetchSessionNotStarted -> " + N

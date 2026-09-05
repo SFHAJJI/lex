@@ -441,12 +441,23 @@ public enum LuxembourgQueryExecutionRefusal
     DocumentFetchSessionNotStarted = 8,
 
     /// <summary>
-    /// A document body was fetched for real, but the store enforced no retention floor on it, so
-    /// this run cannot claim it as held (never bypass the Decision 71 floor). Refuses the whole run
-    /// rather than recording an object as held on bytes nothing protects.
+    /// A document body was fetched for real and this run could not retain it at all. TWO PRODUCERS,
+    /// both in RunDocumentGetAsync: the digest-checked reopen raised
+    /// <see cref="Lex.V3.Contracts.Custody.CustodyIntegrityException"/> because the bytes did not
+    /// come back at their own digest, or the hold itself failed. Refuses the whole run rather than
+    /// recording an object as held on bytes this run cannot reproduce.
     /// </summary>
-    [JsonStringEnumMemberName("document_body_not_held")]
-    DocumentBodyNotHeld = 9,
+    /// <remarks>
+    /// WAS <c>DocumentBodyNotRetained</c>, and its summary said it fired when the store enforced no
+    /// retention floor. It never did after the Decision 71 interpretation removed that gate: a
+    /// store that wrote the bytes, can reproduce them at their own digest and honestly declares
+    /// NotEnforced did not fail, and the membership class is recorded rather than gated on. So the
+    /// name and the summary both described a condition that could not produce this member, which is
+    /// the misattribution class ruled at b0edd672. EU renamed its equivalent under that ruling and
+    /// this one was left behind; ONE CONDITION CARRIES ONE NAME ACROSS BOTH PUBLISHERS.
+    /// </remarks>
+    [JsonStringEnumMemberName("document_body_not_retained")]
+    DocumentBodyNotRetained = 9,
 
     /// <summary>
     /// A document GET completed or failed in a shape this route has no reviewed reading for and
@@ -1671,7 +1682,7 @@ public sealed class LuxembourgQueryExecutionAdapter
                     catch (CustodyIntegrityException exception)
                     {
                         return (null, new LuxembourgQueryExecutionRefusalDetail(
-                            LuxembourgQueryExecutionRefusal.DocumentBodyNotHeld,
+                            LuxembourgQueryExecutionRefusal.DocumentBodyNotRetained,
                             null,
                             $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): the "
                             + $"body could not be reopened at its own digest: {exception.Message}"));
@@ -1695,7 +1706,7 @@ public sealed class LuxembourgQueryExecutionAdapter
                     if (bodyReceipt is null)
                     {
                         return (null, new LuxembourgQueryExecutionRefusalDetail(
-                            LuxembourgQueryExecutionRefusal.DocumentBodyNotHeld,
+                            LuxembourgQueryExecutionRefusal.DocumentBodyNotRetained,
                             null,
                             $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): {holdFailure}"));
                     }

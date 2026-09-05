@@ -486,7 +486,7 @@ public sealed class LuxembourgDocumentGetTests
         // EXACT TO ONE WRITE IN BOTH DIRECTIONS, each measured rather than assumed: 0 and 1 give
         // "code=ObservationNotExecuted detail=CustodyUnavailable/.", the session classifying its
         // own write, which would have passed a test that only checked the refusal's name; 3 walks
-        // past the executor entirely onto the adapter's body hold and gives DocumentBodyNotHeld.
+        // past the executor entirely onto the adapter's body hold and gives DocumentBodyNotRetained.
         var body = LuxembourgDocumentFetchFixtures.XmlBody();
         var store = new CustodyRequiredAfterProductRequestStore(new FlooringCustodyStore(), StoreMessage)
         {
@@ -549,7 +549,7 @@ public sealed class LuxembourgDocumentGetTests
         }
 
         Assert.IsNotNull(refusal, "a body that will not reopen is a typed refusal, never an escape.");
-        Assert.AreEqual(LuxembourgQueryExecutionRefusal.DocumentBodyNotHeld, refusal!.Code);
+        Assert.AreEqual(LuxembourgQueryExecutionRefusal.DocumentBodyNotRetained, refusal!.Code);
         StringAssert.Contains(
             refusal.Detail,
             "could not be reopened at its own digest",
@@ -859,7 +859,7 @@ public sealed class LuxembourgDocumentGetTests
             store);
 
         Assert.IsNotNull(refusal, "a body whose stored bytes do not reopen at their own digest is not held.");
-        Assert.AreEqual(LuxembourgQueryExecutionRefusal.DocumentBodyNotHeld, refusal!.Code);
+        Assert.AreEqual(LuxembourgQueryExecutionRefusal.DocumentBodyNotRetained, refusal!.Code);
         StringAssert.Contains(refusal.Detail, "digest");
         Assert.IsEmpty(outcomes, "and no held outcome is recorded for it under any custody class.");
     }
@@ -882,7 +882,7 @@ public sealed class LuxembourgDocumentGetTests
             store);
 
         Assert.IsNotNull(refusal, "a body the store refused to write is not held.");
-        Assert.AreEqual(LuxembourgQueryExecutionRefusal.DocumentBodyNotHeld, refusal!.Code);
+        Assert.AreEqual(LuxembourgQueryExecutionRefusal.DocumentBodyNotRetained, refusal!.Code);
         StringAssert.Contains(refusal.Detail, "custody write failed");
         Assert.IsEmpty(outcomes);
     }
@@ -1349,7 +1349,7 @@ public sealed class LuxembourgDocumentGetTests
     /// MEASURED, AND NOT WHAT A FIRST ATTEMPT ASSUMED. The ordinals of this digest through
     /// ReadByDigestAsync are: ONE, the adapter's checked reopen, which is the escape this
     /// drives; TWO, CustodyHold's own write-then-readback verification, which reports a digest
-    /// mismatch as a hold failure carrying ITS message under the SAME DocumentBodyNotHeld code.
+    /// mismatch as a hold failure carrying ITS message under the SAME DocumentBodyNotRetained code.
     /// The session's retention readback never appears here at all, so the reopen is read one
     /// and not read two. Because both ordinals answer with the same refusal code, the DETAIL is
     /// what discriminates them, which is why the test asserts the message and not just the code.
