@@ -153,10 +153,12 @@ public sealed class ClosedVocabularyCensusTests
                     + "ApplicableSetUndefined, ObservationsEmpty, DuplicateObservationId, "
                     + "DuplicateFamilyKey, ObservedKeyInvalid, DuplicateObservedKey, "
                     + "DuplicateEnumerationProofFamily, EnumerationProofFamilyNotObserved, "
-                    + "FamilyEnumerationProofMissing, EnumerationProofsSpanMoreThanOneRun",
+                    + "FamilyEnumerationProofMissing, EnumerationProofsSpanMoreThanOneRun, "
+                    + "EnumerationProofNotFloored",
                 "Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProofRefusal: None, "
                     + "FamilyKeyInvalid, PartitionIsNotThisFamily, "
-                    + "PassesDeliveredDifferentSelections, SelectionReachedTheRowCap",
+                    + "PassesDeliveredDifferentSelections, SelectionReachedTheRowCap, "
+                    + "RetainedFloorIsNotReceiptDerived",
                 "Lex.V3.Contracts.Source.Absence.AbsenceFamilyObservationRefusal: None, "
                     + "ObservationIdInvalid, FamilyKeyInvalid, TimestampNotUtc, PrecisionUndefined, "
                     + "TimestampFinerThanDeclaredPrecision, ClockSourceInvalid, ProvenanceUndefined, "
@@ -260,7 +262,7 @@ public sealed class ClosedVocabularyCensusTests
                     + "ObjectFactRowNotInClosure, ExpressionFactRowTermKindMismatch, "
                     + "ExpressionParentNotInClosure, ExpressionSubjectNotSelfClosed, "
                     + "ConsolidatedBasedOnEdgeDisagreesWithFamily, "
-                    + "ContentClassClosurePositionMismatch",
+                    + "ContentClassClosurePositionMismatch, ManifestationListingRefused",
                 "Lex.V3.Contracts.Source.Europe.EuCellarObjectSnapshotRefusal: None, "
                     + "WorkRootNotCanonical, WorkRootOutsideAppendixAPack, "
                     + "PredicateObservationMissing, PredicateObservationRepeated, "
@@ -289,7 +291,7 @@ public sealed class ClosedVocabularyCensusTests
                     + "EuJudgmentText, CellarDoNotIndex, SyntheticConsolidation, Akn4EuLegalBody, "
                     + "EurLexPortalFallback, InboundTreatyBasedOnExpansion",
                 "Lex.V3.Contracts.Source.Europe.EuExpressionObservationState: NotObserved, "
-                    + "ExpressionObservedBodyHeld, ExpressionObservedBodyNotHeld",
+                    + "ExpressionObservedBodyCandidate, ExpressionObservedBodyNotHeld",
                 "Lex.V3.Contracts.Source.Europe.EuFeedEntrySetRefusal: None, CanonicalEntryRepeated, "
                     + "TraversalStepsDoNotShareOnePlan",
                 "Lex.V3.Contracts.Source.Europe.EuFeedIntersectionRefusal: None, PackRootSetEmpty, "
@@ -324,13 +326,16 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Contracts.Source.Europe.EuJudgmentBodyDisposition: "
                     + "LinkOnlyNeverHeldOrFetched",
                 "Lex.V3.Contracts.Source.Europe.EuManifestationFormat: Formex4, Xhtml, Xhtml5, Html, "
-                    + "Pdf, PdfA1a, PdfA1b, PdfA2a, Print",
+                    + "Pdf, PdfA1a, PdfA1b, PdfA2a, Print, NoneAdmitted",
+                "Lex.V3.Contracts.Source.Europe.EuManifestationListingRefusal: None, "
+                    + "ListingRowTermKindMismatch, ListingParentNotInClosure, "
+                    + "ListingContradictsItsOwnAbsenceRow",
                 "Lex.V3.Contracts.Source.Europe.EuManifestationMediaType: XhtmlXml, ZipMtypeFmx4, "
                     + "PdfTypePdfa2a, RdfXml, RdfXmlNoticeTree, XmlNoticeBranch, XmlNoticeObject, "
-                    + "XmlNoticeIdentifier",
+                    + "XmlNoticeIdentifier, TextHtml, ApplicationPdf",
                 "Lex.V3.Contracts.Source.Europe.EuObjectFactsQueryPass: Pass1, Pass2",
                 "Lex.V3.Contracts.Source.Europe.EuObjectFactsQuerySet: ObjectFacts, ExpressionFacts, "
-                    + "RootWatermark",
+                    + "RootWatermark, ManifestationFacts",
                 "Lex.V3.Contracts.Source.Europe.EuPacingBasis: ChosenAbsentPublishedGuidance, "
                     + "PublishedCrawlDelay",
                 "Lex.V3.Contracts.Source.Europe.EuPackRootCanonicalFormRefusal: None, "

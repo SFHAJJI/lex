@@ -144,6 +144,8 @@ public sealed class VocabularyRegistryCensusTests
                 "Lex.V3.Contracts.Source.Europe.EuDoNotIndexTerm: const DatatypeIri, const Lexical",
                 "Lex.V3.Contracts.Source.Europe.EuLegislationSummaryPredicateVocabulary: Pinned=1, "
                     + "const SummarizesResourceLegalPredicateUri",
+                "Lex.V3.Contracts.Source.Europe.EuManifestationListingDecode: FormatLadder=4, "
+                    + "ListedTypeTokens=9, const UnadmittedTypeReasonCode",
                 "Lex.V3.Contracts.Source.Europe.EuPackRootCanonicalForm: const HttpScheme, "
                     + "const HttpsScheme",
                 "Lex.V3.Contracts.Source.Europe.EuScopeProfile: ProjectionRules=4, SelectorKeys=7, "

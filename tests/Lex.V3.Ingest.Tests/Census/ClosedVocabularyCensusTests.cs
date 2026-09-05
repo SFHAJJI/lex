@@ -56,12 +56,12 @@ public sealed class ClosedVocabularyCensusTests
             {
                 "Lex.V3.Ingest.CorpusRecordOutcomeKind: Held, NotHeld, PendingAcquisition",
                 "Lex.V3.Ingest.CorpusRecordSetCompletionState: Complete, Partial",
-                "Lex.V3.Ingest.CorpusRecordSetWriteRefusalKind: RecordSetNotHeld",
+                "Lex.V3.Ingest.CorpusRecordSetWriteRefusalKind: RecordSetNotRetained",
                 "Lex.V3.Ingest.Europe.EuDocumentFetchAttemptRefusal: None, RobotsBootstrapRefused, "
                     + "ObservationNotExecuted",
                 "Lex.V3.Ingest.Europe.EuEnumerationRefusal: None, RobotsBootstrapRefused, "
-                    + "CustodyFloorNotObserved, ObservationNotExecuted, StatusNotAdmitted, "
-                    + "MediaTypeNotAdmitted, CountNotOneNonNegativeInteger, PartitionRequired, "
+                    + "ObservationNotExecuted, StatusNotAdmitted, MediaTypeNotAdmitted, "
+                    + "CountNotOneNonNegativeInteger, PartitionRequired, "
                     + "DeliveredKeyNotRepresentable, DeliveredRowOutsidePartition, "
                     + "CursorDidNotAdvance, PageBudgetExhausted, CustodyMemberMissing, "
                     + "DeliveryProofRefused, PageBodyMalformed",
@@ -71,12 +71,12 @@ public sealed class ClosedVocabularyCensusTests
                     + "PartialFamilyRefused",
                 "Lex.V3.Ingest.Europe.EuQueryExecutionRefusal: None, CensusFamilyNotProven, "
                     + "ObjectFactsFamilyNotProven, FamilyRowsNotVerified, RootBindingRefused, "
-                    + "RecordFormNotResolved, ObjectDecodeRefused, ScopeManifestNotHeld, "
+                    + "RecordFormNotResolved, ObjectDecodeRefused, ScopeManifestNotRetained, "
                     + "ManifestBindingRefused, WatermarkBootstrapRefused, WatermarkPlanRefused, "
                     + "RootWatermarkBindingRefused, WitnessBindingRefused, "
                     + "WitnessReconciliationRefused, ScopeReductionRefused, WitnessTraversalRefused, "
-                    + "DocumentFetchSessionNotStarted, DocumentBodyNotHeld, "
-                    + "DocumentFetchOutcomeNotRepresentable, RecordSetNotHeld",
+                    + "DocumentFetchSessionNotStarted, DocumentBodyNotRetained, "
+                    + "DocumentFetchOutcomeNotRepresentable, RecordSetNotRetained",
                 "Lex.V3.Ingest.Europe.EuWitnessTraversalRefusal: None, RobotsBootstrapRefused, "
                     + "BindRefused, ObservationNotExecuted, StatusNotAdmitted, MediaTypeNotAdmitted, "
                     + "PageBodyMalformed, CrossingRefused, StepRefused, EntrySetRefused, "

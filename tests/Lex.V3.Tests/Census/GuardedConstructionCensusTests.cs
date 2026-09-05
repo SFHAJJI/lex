@@ -236,9 +236,6 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Core.CutReleaseGate::TryEvaluate",
                 "Lex.V3.Contracts.Source.Core.EnumerationDeliveryComparison: constructor private "
                     + "instance Lex.V3.Contracts.Source.Core.EnumerationDeliveryComparison::.ctor, "
-                    + "method public instance "
-                    + "Lex.V3.Contracts.Source.Core.RepeatedEnumerationDeliveryReceipt::RequireFloo"
-                    + "redRun, "
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Core.EnumerationDeliveryComparison::Create",
                 "Lex.V3.Contracts.Source.Core.GlobalBlockerCountVector: constructor private "
@@ -337,6 +334,8 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Core.EnumerationDeliveryComparison::Term, "
                     + "method private static "
                     + "Lex.V3.Contracts.Source.Europe.EuCellarObjectDecode::Term, "
+                    + "method private static "
+                    + "Lex.V3.Contracts.Source.Europe.EuManifestationListingDecode::Term, "
                     + "method public instance "
                     + "Lex.V3.Contracts.Source.Core.RepeatedEnumerationRdfTerm::<Clone>$, "
                     + "method public static "
