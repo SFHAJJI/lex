@@ -1733,10 +1733,8 @@ public sealed class EuQueryExecutionAdapterTests
         {
             EuAcquisitionTestFixture.EuCountJson(1),
             EuAcquisitionTestFixture.CensusFamilyRowsJson(new[] { rowA }),
-            EuAcquisitionTestFixture.EmptyRowsJson(EuAcquisitionTestFixture.CensusFamilyProjection),
             EuAcquisitionTestFixture.EuCountJson(1),
             EuAcquisitionTestFixture.CensusFamilyRowsJson(new[] { rowB }),
-            EuAcquisitionTestFixture.EmptyRowsJson(EuAcquisitionTestFixture.CensusFamilyProjection),
         });
 
         var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
@@ -2675,6 +2673,58 @@ public sealed class EuQueryExecutionAdapterTests
         Assert.AreEqual(CorpusBodyRecordKind.NotHeld, record.Body.Kind);
     }
 
+    /// <summary>
+    /// The witness traversal's own narrowing: a body DEMONSTRABLY not the promised shape keeps
+    /// PageBodyMalformed and names the root it found.
+    /// </summary>
+    /// <remarks>
+    /// SYNTHETIC BODY, stated as such: no publisher has sent this, and a plausible-looking fake
+    /// retained body would be worse than a plainly synthetic one. The condition it defends is real,
+    /// and was found one traversal over from the page path's own version of it.
+    /// </remarks>
+    [TestMethod]
+    public async Task AWitnessPageWhoseRootIsNotTheResultsShapeIsMalformedAndNamesTheRoot()
+    {
+        var (result, _, _) = await RunWorkingTimeDirectiveAsync(
+            EuAcquisitionTestFixture.RealBandListedTypes,
+            WorkingTimeLadderResponse,
+            witnessBodies: ["[]"]);
+
+        Assert.IsNotNull(result.Refusal);
+        Assert.AreEqual(EuQueryExecutionRefusal.WitnessTraversalRefused, result.Refusal!.Code);
+        StringAssert.Contains(result.Refusal.Detail, "code=PageBodyMalformed");
+        StringAssert.Contains(result.Refusal.Detail, "root is Array");
+    }
+
+    /// <summary>
+    /// And the half that was being MISATTRIBUTED: a witness row missing a projected term is OUR
+    /// decode's limit, not the office's bytes, so it names us and carries the body digest.
+    /// </summary>
+    /// <remarks>
+    /// SYNTHETIC BODY, stated as such. This is the identical condition D1-05f part two fixed on the
+    /// page path: SPARQL 1.1 omits an unbound variable from a binding entirely, and this reader
+    /// required every projected term present. Before this change the witness traversal reported it
+    /// as PageBodyMalformed with no position and no digest.
+    /// </remarks>
+    [TestMethod]
+    public async Task AWitnessRowMissingAProjectedTermNamesOurDecodeAndCarriesTheBodyDigest()
+    {
+        var (result, _, _) = await RunWorkingTimeDirectiveAsync(
+            EuAcquisitionTestFixture.RealBandListedTypes,
+            WorkingTimeLadderResponse,
+            witnessBodies: ["{\"head\":{\"vars\":[\"entry\"]},\"results\":{\"bindings\":[{}]}}"]);
+
+        Assert.IsNotNull(result.Refusal);
+        Assert.AreEqual(EuQueryExecutionRefusal.WitnessTraversalRefused, result.Refusal!.Code);
+        StringAssert.Contains(
+            result.Refusal.Detail,
+            "code=PageDecodeFailedOnOurSide",
+            "a projected term the publisher legitimately omitted must never be reported as the "
+            + "publisher sending a malformed body.");
+        StringAssert.Contains(result.Refusal.Detail, "FormatException");
+        StringAssert.Contains(result.Refusal.Detail, "witness page body sha256");
+    }
+
     private const string WorkingTimeCelex = "32003L0088";
     private const string CellarResourceOrigin = "http://publications.europa.eu/resource/cellar/";
 
@@ -2717,7 +2767,8 @@ public sealed class EuQueryExecutionAdapterTests
         RunWorkingTimeDirectiveAsync(
             IReadOnlyList<string>? listedTypes,
             Func<HttpRequestMessage, HttpResponseMessage> documentFetchResponse,
-            EuAcquisitionTestFixture.EuInMemoryCustodyStore? custodyStore = null)
+            EuAcquisitionTestFixture.EuInMemoryCustodyStore? custodyStore = null,
+            IReadOnlyList<string>? witnessBodies = null)
     {
         var seed = EuAppendixASeedMap.SeedsInCelexOrder.Single(entry => entry.Celex == WorkingTimeCelex);
         var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)
@@ -2752,7 +2803,8 @@ public sealed class EuQueryExecutionAdapterTests
                 : EuAcquisitionTestFixture.ManifestationScriptFor(rootIri, listedTypes),
             ["Witness"] = new EuAcquisitionTestFixture.FamilyScript(
                 "Witness",
-                EuAcquisitionTestFixture.WitnessEmptyTraversalScript(rootIri, watermarkLexical)),
+                witnessBodies
+                    ?? EuAcquisitionTestFixture.WitnessEmptyTraversalScript(rootIri, watermarkLexical)),
         };
 
         var handler = new EuAcquisitionTestFixture.ClassifyingHandler(scripts, documentFetchResponse);

@@ -53,11 +53,21 @@ public interface ICustodyStore
     /// durability.
     /// </para>
     /// <para>
-    /// Residue R2, queued and deliberately not built here: a conformance test over every
-    /// <see cref="ICustodyStore"/> implementation. Thirteen exist, two in <c>src</c> and eleven
-    /// private test doubles, several written specifically to VIOLATE this contract, so a literal
-    /// sweep would fail by design and an exclusion list would be a sweep narrowed by its own
-    /// expected answer.
+    /// WHAT HOLDS IMPLEMENTATIONS TO THE TWO OBLIGATIONS ABOVE is the conformance suite, residue R2,
+    /// which lives in the test assemblies rather than here: a contract cannot test its own
+    /// implementers, and this project's rule is that a promise stated only in prose is a convention
+    /// standing in for a contract. Not every implementer is in scope for a literal sweep, because
+    /// several test doubles exist specifically to VIOLATE this contract so that a guard can be shown
+    /// to bite; a sweep including them would fail by design, and one excluding them by name would be
+    /// narrowed by its own expected answer.
+    /// </para>
+    /// <para>
+    /// THIS PARAGRAPH DELIBERATELY CARRIES NO COUNT OF IMPLEMENTATIONS. The version before it said
+    /// thirteen and said the suite was unbuilt; both were false within a day, because every merge
+    /// that adds a store or a double moves the number and the suite landed meanwhile. A doc fact
+    /// that only stays true until the next merge is worse than no fact, since a reader has no way to
+    /// tell a stale number from a measured one. Where the suite lives is durable; how many
+    /// implementers exist is a hostage.
     /// </para>
     /// </remarks>
     Task<DurableBlobWriteReceipt> CreateAsync(

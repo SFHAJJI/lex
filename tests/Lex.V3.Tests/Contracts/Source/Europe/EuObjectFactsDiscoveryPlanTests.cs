@@ -123,10 +123,51 @@ public sealed class EuObjectFactsDiscoveryPlanTests
             var profile = plan.CreateDeliveryProfile(set);
             Assert.AreEqual(RepeatedEnumerationSparqlJsonDialect.EuropeanUnionVirtuoso, profile.Dialect);
             Assert.AreEqual(
-                RepeatedEnumerationTerminalPagePolicy.EmptySuccessorAfterShortPage, profile.TerminalPagePolicy);
+                RepeatedEnumerationTerminalPagePolicy.ShortPageTerminal,
+                profile.TerminalPagePolicy,
+                "a short page is the terminal page: ORDER BY plus LIMIT already prove the result "
+                + "set is exhausted, so the successor these families used to fetch established "
+                + "nothing and the publisher answered it with rows already delivered.");
             Assert.AreEqual("pass_id", profile.PassParameterName);
             Assert.AreEqual("has_cursor", profile.HasCursorParameterName);
         }
+    }
+
+    /// <summary>
+    /// This plan's own identity, pinned as a literal so a change to any of its EIGHT templates
+    /// reddens a named test instead of silently moving a digest nothing compares.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The gap this closes was found while listing what D1-05f moved: this ArtifactRef DID move with
+    /// the COALESCE and terminal-policy changes, and nothing pinned it. The only other assertion
+    /// over a plan ArtifactRef is
+    /// <c>MachineQueryPlanContractTests</c>'s self-consistency check, which recomputes the digest
+    /// from the same canonical bytes, so it catches a CORRUPTED ref and cannot catch DRIFT: change a
+    /// template and both sides of that equality move together. Same shape as
+    /// <c>EuConsolidationDiscoveryTests.ClosedPlanSeparatesFamilyAndFactDeliveryWithoutErasingMultiplicity</c>,
+    /// which already pinned the sibling plan. Re-derive by reading the value this test prints on
+    /// failure rather than by computing one by hand.
+    /// </para>
+    /// <para>
+    /// WHAT THIS CATCHES THAT NOTHING ELSE DOES, measured rather than argued. Three of the four
+    /// families have a template pinned by exact text, so drift there reddens two tests. The
+    /// MANIFESTATION family has no text assertion anywhere in either suite: the count-template loop
+    /// in this file deliberately omits it, and every other reference names the enum member, not the
+    /// query. Two mutations confined to that one page template were each watched red:
+    /// dropping <c>?key_5</c> from its keyset ORDER BY, which is a REAL pagination defect because a
+    /// partial sort makes the cursor predicate skip rows, and a whitespace-only edit to its
+    /// projection. Under both, this test was the ONLY failure in 2,179 contract tests and 295 ingest
+    /// tests. That is the whole argument for a digest pin over more text assertions: it covers the
+    /// template nobody remembered to cover.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void TheObjectFactsPlanIdentityIsPinnedSoTemplateDriftCannotPassSilently()
+    {
+        Assert.AreEqual(
+            "45d7304e5c06e89b5c7a3efee488786d236ce6078b45aede5d88f08b005b6efe",
+            EuObjectFactsDiscoveryPlan.Create().ArtifactRef.Sha256);
     }
 
     // ---- The three SELECT templates, pinned by their exact literal SPARQL text. ----
@@ -167,7 +208,18 @@ public sealed class EuObjectFactsDiscoveryPlanTests
             "GROUP BY ?object ?predicate ?value ?value_kind ?datatype_iri ?language_tag");
         StringAssert.Contains(page, "BIND(STR(?object) AS ?key_1)");
         StringAssert.Contains(page, "BIND(STR(?predicate) AS ?key_2)");
-        StringAssert.Contains(page, "BIND(IF(BOUND(?value), STR(?value), \"\") AS ?key_4)");
+        // COALESCE, not IF. The publisher's engine selects IF's branch correctly and evaluates its
+        // arguments EAGERLY, so STR on the unbound term raised, the erroring BIND left key_4
+        // unbound, and SPARQL JSON then omitted it from 8 of 41 bindings. Measured by a bounded
+        // three-query probe over the exact batch that produced that page, PROBE
+        // lex-event-20260905T015937388Z-8bc0d2893047464c91a6a1c54982b5e1, ruled at
+        // lex-event-20260905T020043766Z-cd0db29d887b4d86b5c44da66d82e2f7. COALESCE is specified to
+        // swallow an erroring argument, and the same probe confirmed the key became total while the
+        // row count stayed 41.
+        StringAssert.Contains(page, "BIND(COALESCE(STR(?value), \"\") AS ?key_4)");
+        Assert.IsFalse(
+            page.Contains("IF(BOUND(?value)", StringComparison.Ordinal),
+            "the eager-IF form must not come back: it refuses conformant pages under our own name.");
         StringAssert.Contains(page,
             "ORDER BY ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 ?key_6\nLIMIT {page_limit:uint}");
         Assert.IsFalse(page.Contains("SELECT DISTINCT", StringComparison.OrdinalIgnoreCase));
@@ -702,15 +754,13 @@ public sealed class EuObjectFactsDiscoveryPlanTests
                 _set, _batch, pass, null, _rows.Count, countRefs.HttpEvidenceRef,
                 Artifact(++_seed).ResourceId, Artifact(++_seed).ResourceId, _rendererSource);
             var firstRefs = Add(firstBound, RowsDocument(_rows), isPage: true);
-            var successorBound = _plan.BindPage(
-                _set, _batch, pass, _lastRowCursor, _rows.Count, countRefs.HttpEvidenceRef,
-                Artifact(++_seed).ResourceId, Artifact(++_seed).ResourceId, _rendererSource);
-            var successorRefs = Add(successorBound, RowsDocument([]), isPage: true);
-            return (countRefs, new[]
-            {
-                new RepeatedEnumerationPageRef(0, firstRefs),
-                new RepeatedEnumerationPageRef(1, successorRefs),
-            });
+
+            // ONE PAGE, and no successor. These families declare ShortPageTerminal since D1-05f, so
+            // a page carrying fewer rows than the limit IS the terminal page and no further request
+            // is made. The fixture used to bind a second page with _lastRowCursor and answer it
+            // empty, which is the protocol that produced the CursorDidNotAdvance fault against the
+            // live endpoint: the publisher answered that request with rows already delivered.
+            return (countRefs, new[] { new RepeatedEnumerationPageRef(0, firstRefs) });
         }
 
         private RepeatedEnumerationEvidenceRefs Add(

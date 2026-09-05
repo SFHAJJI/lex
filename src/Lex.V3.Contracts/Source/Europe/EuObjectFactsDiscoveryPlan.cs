@@ -95,6 +95,49 @@ public sealed record EuObjectFactsBoundQuery(
 /// object set.
 /// </para>
 /// <para>
+/// THE VALUE-DERIVED CURSOR COMPONENT IS TOTALISED WITH COALESCE, and the reason is measured rather
+/// than assumed. Each family binds exactly one key position from <c>?value</c>, which the absence
+/// branch leaves unbound: <c>key_4</c> for <see cref="EuObjectFactsQuerySet.ObjectFacts"/> and
+/// <see cref="EuObjectFactsQuerySet.ExpressionFacts"/>, <c>key_3</c> for
+/// <see cref="EuObjectFactsQuerySet.RootWatermark"/> and
+/// <see cref="EuObjectFactsQuerySet.ManifestationFacts"/>. Every other position binds from a VALUES
+/// term or from a literal this template BINDs in both UNION branches, so none of them can be unbound.
+/// </para>
+/// <para>
+/// That one position used to read <c>IF(BOUND(?value), STR(?value), "")</c>, which is correct under
+/// SPARQL's own lazy IF and wrong against the publisher's engine. A bounded three-query probe over
+/// the exact batch that produced a 41-binding page settled it by naming the behaviour from the
+/// response rather than inferring it (PROBE
+/// lex-event-20260905T015937388Z-8bc0d2893047464c91a6a1c54982b5e1, RULING
+/// lex-event-20260905T020043766Z-cd0db29d887b4d86b5c44da66d82e2f7). On an unbound row the engine
+/// answered <c>BOUND(?value)</c> false, took IF's false branch when neither arm called STR, and
+/// still errored when the untaken arm did: it selects the branch correctly and evaluates the
+/// arguments EAGERLY, so <c>STR</c> on the unbound term raised and the erroring BIND left the key
+/// unbound. SPARQL's JSON results format then omits an unbound variable from the binding entirely,
+/// so the key vanished from 8 of 41 rows and this route refused a conformant answer. COALESCE is
+/// specified to swallow an erroring argument and take the next, and the same probe confirmed it: the
+/// key became total while the row count stayed 41.
+/// </para>
+/// <para>
+/// THE OTHER EIGHT BINDS ARE LEFT ALONE, AND THAT IS MEASURED RATHER THAN ASSUMED. Each family also
+/// feeds <c>datatype_iri</c> and <c>language_tag</c> through
+/// <c>IF(isLiteral(?value), STR(DATATYPE(?value)), "")</c> and
+/// <c>IF(isLiteral(?value), LANG(?value), "")</c>, which under the same eager argument evaluation
+/// could raise on an IRI-valued row and leave both unbound. The retained post-fix page answers it:
+/// of its 41 bindings, 23 ARE IRI-VALUED, and <c>key_5</c>, <c>key_6</c>, <c>datatype_iri</c> and
+/// <c>language_tag</c> are present in every one of them. So this engine does not raise inside
+/// DATATYPE or LANG on a bound IRI, and those eight sites need no change. The difference from the
+/// four that did: those dereference a possibly UNBOUND variable, where eager evaluation raises an
+/// unbound-variable error; these dereference a BOUND term of the wrong type, where it does not.
+/// </para>
+/// <para>
+/// WHAT IS DELIBERATELY NOT TOTALISED IS <c>?value</c> ITSELF. It stays absent on exactly those
+/// rows, because that absence IS the unbound fact, recorded alongside <c>value_kind</c> of
+/// <c>"unbound"</c>. Only the CURSOR becomes total. A change that had totalised both would have
+/// destroyed the fact while appearing to succeed, and would have passed any test that merely counted
+/// absences.
+/// </para>
+/// <para>
 /// The batch is this design's partition (per the synthesis ruling): a bounded, fixed-capacity set of
 /// canonical object IRIs, VALUES-bound in one request. <see cref="BatchCapacity"/> is fixed at 50, not
 /// a tuning constant: every batch member is carried as its own <c>publisher_literal</c>
@@ -367,7 +410,24 @@ public sealed class EuObjectFactsDiscoveryPlan
             "pass_id",
             definition.CursorVariables.Select(static value => "last_" + value).ToArray(),
             "has_cursor",
-            RepeatedEnumerationTerminalPagePolicy.EmptySuccessorAfterShortPage);
+            // A WHOLE SET ON ONE PAGE COMPLETES RATHER THAN REFUSES. RULING
+            // lex-event-20260905T021827470Z-61309ecca6e8414db4150b451b181ebb. This declared
+            // EmptySuccessorAfterShortPage, which obliges a run to fetch one more page after a short
+            // one and requires that page to come back EMPTY. Every family here fits in a single page
+            // (the observed counts are 41, 166, 2 and 9 against limits of 997 and 613), so every run
+            // spent a request asking for nothing, and the publisher answered those requests with a
+            // TAIL SUBSET of rows already delivered rather than with nothing. The executor then
+            // correctly refused CursorDidNotAdvance, which is a true observation of a useless
+            // request. ORDER BY plus LIMIT already prove a short page has exhausted the result set,
+            // so the successor established nothing that the short page had not.
+            //
+            // THIS DOES NOT RETIRE THE COUNT CROSS CHECK, which remains the closure test for the
+            // enumeration. What the terminal policy settles is WHEN TO STOP ASKING; what the count
+            // settles is WHETHER WE GOT EVERYTHING. A page can be short because the set is exhausted
+            // or because the publisher truncated it, and only the independent count answered by the
+            // count query tells those apart. Dropping the successor removed a request that proved
+            // nothing; it did not remove the proof.
+            RepeatedEnumerationTerminalPagePolicy.ShortPageTerminal);
     }
 
     public EuObjectFactsBoundQuery BindCount(
@@ -659,7 +719,7 @@ public sealed class EuObjectFactsDiscoveryPlan
               BIND(STR(?object) AS ?key_1)
               BIND(STR(?predicate) AS ?key_2)
               BIND(?value_kind AS ?key_3)
-              BIND(IF(BOUND(?value), STR(?value), "") AS ?key_4)
+              BIND(COALESCE(STR(?value), "") AS ?key_4)
               BIND(?datatype_iri AS ?key_5)
               BIND(?language_tag AS ?key_6)
               VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3 ?last_key_4 ?last_key_5 ?last_key_6) {
@@ -715,7 +775,7 @@ public sealed class EuObjectFactsDiscoveryPlan
               BIND(STR(?object) AS ?key_1)
               BIND(STR(?predicate) AS ?key_2)
               BIND(?value_kind AS ?key_3)
-              BIND(IF(BOUND(?value), STR(?value), "") AS ?key_4)
+              BIND(COALESCE(STR(?value), "") AS ?key_4)
               BIND(?datatype_iri AS ?key_5)
               BIND(?language_tag AS ?key_6)
               BIND(STR(?parent) AS ?key_7)
@@ -766,7 +826,7 @@ public sealed class EuObjectFactsDiscoveryPlan
               }
               BIND(STR(?object) AS ?key_1)
               BIND(?value_kind AS ?key_2)
-              BIND(IF(BOUND(?value), STR(?value), "") AS ?key_3)
+              BIND(COALESCE(STR(?value), "") AS ?key_3)
               BIND(?datatype_iri AS ?key_4)
               BIND(?language_tag AS ?key_5)
               VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3 ?last_key_4 ?last_key_5) {
@@ -825,7 +885,7 @@ public sealed class EuObjectFactsDiscoveryPlan
               }
               BIND(STR(?parent) AS ?key_1)
               BIND(?value_kind AS ?key_2)
-              BIND(IF(BOUND(?value), STR(?value), "") AS ?key_3)
+              BIND(COALESCE(STR(?value), "") AS ?key_3)
               BIND(?datatype_iri AS ?key_4)
               BIND(?language_tag AS ?key_5)
               VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3 ?last_key_4 ?last_key_5) {

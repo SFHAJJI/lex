@@ -49,6 +49,18 @@ public sealed class EuFamilyEnumerationOutcome
 
     public AbsenceFamilyEnumerationProof? Proof { get; }
 
+    /// <summary>
+    /// The executor's own refusal for a family that never delivered.
+    /// </summary>
+    /// <remarks>
+    /// WRITTEN HERE AND READ NOWHERE IN <c>src</c>, stated rather than left for a reader to discover.
+    /// Its only consumers are in tests: the Stage 1 canary prints it per family and its evidence
+    /// index records the code, the offending key, the refused body's digest, the terminal status and
+    /// the request ordinal. That is deliberate for now, because no production caller of
+    /// <see cref="EuQueryExecutionAdapter.RunAsync"/> exists at all (the composition root is a
+    /// Stage 6 boundary, RULING lex-event-20260904T231236855Z-8c7a540fc4d2420f859f9d92fdfc733a), so
+    /// there is no src consumer for it to have. When that root arrives this is the field it reads.
+    /// </remarks>
     public EuEnumerationRefusalDetail? ExecutorRefusal { get; }
 
     public AbsenceFamilyEnumerationProofRefusal? ProofRefusal { get; }
@@ -1273,6 +1285,7 @@ public sealed class EuQueryExecutionAdapter
     /// fact. When every candidate answers that 404, the object records PendingAcquisition with
     /// <see cref="CorpusAcquisitionRefusalReason.RequestedRepresentationNotServed"/>, and the tried
     /// types are named through this method's own returned ladder results.
+    /// </para>
     /// </remarks>
     /// <returns>
     /// The real per-ordinal outcomes this run's fetches produced together with each accepted row's

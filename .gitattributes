@@ -4,18 +4,26 @@
 # its own filename, so a single rewritten line ending makes a fixture that is not the bytes it
 # names, and every digest assertion against it silently wrong. The "* text=auto eol=lf" default
 # above is wrong for them: git resolves .bin as "text: auto", so it applies its own content
-# heuristic per file rather than any declaration here. Of the twelve tracked .bin files, eight are
-# NUL-free and so are seen as TEXT with the eol filter running over them, surviving only because
-# they happen to contain no CRLF at all; the other four are seen as binary only because they
-# contain NUL, and one of those carries 288 CRLF that would be rewritten without it. Safety was
-# therefore a property of each file's bytes rather than of any rule. Declaring it makes the next
-# NUL-free XHTML or XML body safe by construction. Adding this changes no stored blob: all twelve
-# already round trip identically, so it is prevention, not repair.
-# The incident that proved this: staging the retained Akoma Ntoso body without a binary
-# declaration rewrote its CRLF and changed its digest from 9e43a99e.. to fc3303d4.., which
-# would have committed a fixture that is not the publisher bytes it names. That was first
-# fixed with a lane-scoped path rule; this general *.bin rule supersedes it, so the scoped
-# line is gone and one rule covers every publisher body.
+# heuristic per file rather than any declaration here. THE RULE IS CR PLUS NO NUL IN THE FIRST 8000
+# BYTES, which is the whole of what git inspects: a body with NUL inside that window is seen as
+# binary and is then safe by accident, and a body without one is seen as TEXT, the eol filter runs
+# over it, and its CR are rewritten. A NUL that only appears LATER does not save a file, so a large
+# text-shaped body with binary far into it is exactly the shape that would surprise a reader who
+# had learned this as "contains NUL". That is not hypothetical. The tracked Akoma Ntoso body
+# lu-xml-200-body.bin has no NUL at all and carries 69 CRLF, so the "*.bin binary" rule below is
+# what keeps it equal to the publisher bytes its digest names. For that file the rule is repair,
+# not prevention.
+# The incident that proved this: staging that body without a binary declaration rewrote its CRLF
+# and changed its digest from 9e43a99e.. to fc3303d4.., which would have committed a fixture that
+# is not the publisher bytes it names. That was first fixed with a lane-scoped path rule; this
+# general *.bin rule supersedes it, so the scoped line is gone and one rule covers every publisher
+# body.
+# THIS PARAGRAPH DELIBERATELY CARRIES NO FILE CENSUS. Both earlier versions carried one, and both
+# concluded that the NUL-free bodies were safe because none of them contained CRLF. That was
+# already untrue of lu-xml-200-body.bin, whose digest the incident above records, so the census
+# was not merely stale, it contradicted the incident recorded beside it. A count is also wrong
+# again at the next fixture. The rule holds for every .bin whatever a census says, which is
+# exactly why it is declared rather than reasoned about per file.
 *.bin binary
 *.png binary
 *.jpg binary

@@ -77,11 +77,68 @@ public enum EuEnumerationRefusal
     DeliveryProofRefused = 12,
 
     /// <summary>
-    /// A page body admitted by status and media type is not a SPARQL results document this executor
-    /// can read at all: not JSON, or JSON without the results/bindings array.
+    /// A page body admitted by status and media type is DEMONSTRABLY NOT what the interpretation
+    /// profile promised: not JSON at all, JSON without the results/bindings array, or a binding that
+    /// is not an object. The detail names the offending term or position.
     /// </summary>
+    /// <remarks>
+    /// Narrowed. This used to be the DEFAULT arm of the executor's page-parse classifier, so any
+    /// parse failure it had no specific member for was reported as the publisher having sent bad
+    /// bytes. That is the strongest possible wrong answer: it blames the office for our own decode
+    /// and, worse, it hides the real cause behind a name a reader will not question. The EU canary
+    /// refused a body of 39,498 bytes carrying 41 bindings against a count query that answered 41,
+    /// valid and complete SPARQL JSON, under this member. Every remaining producer is an explicit
+    /// throw that can point at the exact byte or term it rejected;
+    /// <see cref="PageDecodeFailedOnOurSide"/> now carries everything else.
+    /// </remarks>
     [JsonStringEnumMemberName("page_body_malformed")]
     PageBodyMalformed = 13,
+
+    /// <summary>
+    /// THIS EXECUTOR could not decode a page the interpretation profile admits. Ours, not the
+    /// publisher's. The detail carries the exception type, its message and the page body's own
+    /// digest, so the exact retained bytes can be reopened and read.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The default arm of the page-parse classifier, and the reason it exists is that a default arm
+    /// must never name someone else. The first condition it names was found by the canary: SPARQL
+    /// 1.1's JSON results format OMITS AN UNBOUND VARIABLE FROM A BINDING ENTIRELY, and this
+    /// executor's cursor-key extraction required every projected variable to be present in every
+    /// binding, so a spec-correct answer with an unbound term was rejected. That is a defect in the
+    /// reader, and this member says so.
+    /// </para>
+    /// <para>
+    /// AND THE TEMPLATE HAD ALREADY TRIED TO PREVENT IT, which is the part a reader must not be
+    /// pointed away from. <see cref="EuObjectFactsDiscoveryPlan"/>'s page template bound that key as
+    /// <c>IF(BOUND(?value), STR(?value), "")</c> specifically to make it total, and the publisher's
+    /// engine DID NOT HONOUR that guard: it selects IF's branch correctly and evaluates the
+    /// arguments eagerly, so STR on the unbound term raised and the erroring BIND left the key
+    /// unbound anyway. D1-05f part two replaced the guard with COALESCE, which the same engine does
+    /// honour. So this member's first condition was never a missing guard; it was a guard the engine
+    /// ignored.
+    /// </para>
+    /// </remarks>
+    [JsonStringEnumMemberName("page_decode_failed_on_our_side")]
+    PageDecodeFailedOnOurSide = 14,
+
+    // WHEN A REFUSAL LOOKS WRONG, GO TO THE RETAINED BYTES, NOT THE CODE THAT PRODUCED THE MESSAGE.
+    //
+    // Every refusal in this vocabulary is honest about what it OBSERVED, and that is exactly what
+    // makes a misattributing one hard to see: the text is accurate and still points away from the
+    // cause, because the cause is a rule WE declared. Three in this slice wore that costume.
+    // PageBodyMalformed named the publisher for a page of 41 correct bindings, when our reader
+    // required a variable SPARQL legitimately omits. CursorDidNotAdvance named the publisher for
+    // answering a successor request our own terminal-page policy obliged us to send and which could
+    // establish nothing. And the witness traversal carried the same misattribution one path over,
+    // unnoticed while the page path was being narrowed.
+    //
+    // The rule pays rather than exhorts: it has now caught those three, and a fourth thing that was
+    // not a refusal at all. A mutation sweep reported five guards killed; the reds were an artifact
+    // of a mutation left in the tree by a run killed mid-write, and the tell was that one test died
+    // under mutations touching unrelated paths. A guard dies to the mutation aimed at it; a guard
+    // that dies to everything is broken, not sensitive. In all four cases the answer was in the
+    // retained bytes and in none of them was it in the message.
 }
 
 public sealed class EuEnumerationRefusalDetail
@@ -224,9 +281,33 @@ public enum EuWitnessTraversalRefusal
     [JsonStringEnumMemberName("media_type_not_admitted")]
     MediaTypeNotAdmitted = 5,
 
-    /// <summary>The delivered page body was not one readable SPARQL JSON results document.</summary>
+    /// <summary>
+    /// The delivered witness page body is DEMONSTRABLY NOT what the profile promised: not JSON at
+    /// all, JSON without the results/bindings array, or a binding that is not an object. The detail
+    /// names the offending position.
+    /// </summary>
+    /// <remarks>
+    /// Narrowed for the same reason and by the same rule as
+    /// <see cref="EuEnumerationRefusal.PageBodyMalformed"/>. This was the catch-all for EVERY parse
+    /// failure in the witness traversal, including the two that are OURS: a projected variable
+    /// absent from a binding, which is SPARQL 1.1's own encoding of unbound, and a row this reader
+    /// could not turn into a tie-safe cursor. Both were reported under the publisher's name with no
+    /// position and no digest. <see cref="PageDecodeFailedOnOurSide"/> carries them now.
+    /// </remarks>
     [JsonStringEnumMemberName("page_body_malformed")]
     PageBodyMalformed = 6,
+
+    /// <summary>
+    /// THIS EXECUTOR could not decode a witness page the profile admits. Ours, not the publisher's.
+    /// The detail carries the exception type, its message and the page body's own digest.
+    /// </summary>
+    /// <remarks>
+    /// The witness counterpart of <see cref="EuEnumerationRefusal.PageDecodeFailedOnOurSide"/>, added when
+    /// the same misattribution was found one traversal over: the page path had been narrowed while
+    /// this one still blamed the office for an unbound term or a cursor this reader would not mint.
+    /// </remarks>
+    [JsonStringEnumMemberName("page_decode_failed_on_our_side")]
+    PageDecodeFailedOnOurSide = 11,
 
     /// <summary><see cref="EuBoundaryCrossing.TryCross"/> itself refused.</summary>
     [JsonStringEnumMemberName("crossing_refused")]
@@ -608,8 +689,14 @@ public sealed class EuRepeatedEnumerationExecutor
                 }
                 catch (Exception exception) when (exception is FormatException or System.Text.Json.JsonException)
                 {
+                    // Same rule as the page path: only a tagged, positioned throw may name the
+                    // publisher, and the default names us and carries enough to reopen the bytes.
+                    var witnessBodySha256 = transport.HttpEvidence.Hops[0].Sha256;
                     return EuWitnessTraversalResult.Refused(
-                        new EuWitnessTraversalRefusalDetail(EuWitnessTraversalRefusal.PageBodyMalformed, exception.Message),
+                        new EuWitnessTraversalRefusalDetail(
+                            ClassifyWitnessParseFailure(exception),
+                            $"{exception.GetType().Name}: {exception.Message} "
+                            + $"(witness page body sha256 {witnessBodySha256})"),
                         productRequestCount);
                 }
 
@@ -788,7 +875,22 @@ public sealed class EuRepeatedEnumerationExecutor
     /// </summary>
     private static IReadOnlyList<EuWatermarkCursor> ParseWitnessRows(ReadOnlySpan<byte> bytes)
     {
-        using var document = System.Text.Json.JsonDocument.Parse(bytes.ToArray());
+        System.Text.Json.JsonDocument document;
+        try
+        {
+            document = System.Text.Json.JsonDocument.Parse(bytes.ToArray());
+        }
+        catch (System.Text.Json.JsonException exception)
+        {
+            throw WitnessPageFailure(
+                "The witness page body is not JSON at all, at line " +
+                $"{exception.LineNumber?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "unknown"} byte " +
+                $"{exception.BytePositionInLine?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "unknown"}.",
+                EuWitnessTraversalRefusal.PageBodyMalformed,
+                exception);
+        }
+
+        using var _document = document;
         var root = document.RootElement;
         if (root.ValueKind != System.Text.Json.JsonValueKind.Object ||
             !root.TryGetProperty("results", out var results) ||
@@ -796,15 +898,21 @@ public sealed class EuRepeatedEnumerationExecutor
             !results.TryGetProperty("bindings", out var bindings) ||
             bindings.ValueKind != System.Text.Json.JsonValueKind.Array)
         {
-            throw new FormatException("The witness page response has no binding array.");
+            throw WitnessPageFailure(
+                $"The witness page body's root is {root.ValueKind} and carries no results/bindings array.",
+                EuWitnessTraversalRefusal.PageBodyMalformed);
         }
 
         var rows = new List<EuWatermarkCursor>();
+        var witnessOrdinal = 0;
         foreach (var binding in bindings.EnumerateArray())
         {
             if (binding.ValueKind != System.Text.Json.JsonValueKind.Object)
             {
-                throw new FormatException("The witness page response row is not an object.");
+                throw WitnessPageFailure(
+                    $"The witness page body's binding at position {witnessOrdinal} is "
+                    + $"{binding.ValueKind}, not an object.",
+                    EuWitnessTraversalRefusal.PageBodyMalformed);
             }
 
             _ = RequireWitnessTermValue(binding, "entry");
@@ -818,9 +926,36 @@ public sealed class EuRepeatedEnumerationExecutor
             }
 
             rows.Add(cursor);
+            witnessOrdinal++;
         }
 
         return rows;
+    }
+
+    private const string WitnessParseFailureKey = "eu.witnessPageParseFailure";
+
+    /// <summary>
+    /// The refusal a witness page-parse failure carries. THE DEFAULT ARM NAMES US, exactly as the
+    /// page path's own classifier does, and for the same reason: the two throws it covers are a
+    /// projected variable absent from a binding, which is the publisher's correct encoding of an
+    /// unbound term, and a row this reader would not mint a tie-safe cursor from. Neither is the
+    /// office sending bad bytes.
+    /// </summary>
+    private static EuWitnessTraversalRefusal ClassifyWitnessParseFailure(Exception exception) =>
+        exception.Data[WitnessParseFailureKey] switch
+        {
+            nameof(EuWitnessTraversalRefusal.PageBodyMalformed) =>
+                EuWitnessTraversalRefusal.PageBodyMalformed,
+            _ => EuWitnessTraversalRefusal.PageDecodeFailedOnOurSide,
+        };
+
+    /// <summary>Tags a witness page failure with the refusal its classifier should read back out.</summary>
+    private static FormatException WitnessPageFailure(
+        string message, EuWitnessTraversalRefusal refusal, Exception? inner = null)
+    {
+        var exception = new FormatException(message, inner);
+        exception.Data[WitnessParseFailureKey] = refusal.ToString();
+        return exception;
     }
 
     private static string RequireWitnessTermValue(System.Text.Json.JsonElement binding, string name)
@@ -1064,13 +1199,19 @@ public sealed class EuRepeatedEnumerationExecutor
             }
             catch (Exception exception) when (exception is FormatException or System.Text.Json.JsonException)
             {
+                // The detail is self-contained on purpose: exception type, its message, and the
+                // page body's own digest, so a reader can reopen the exact retained bytes from the
+                // refusal alone rather than correlating it against a store by hand. The digest is
+                // also in its own field; repeating it here costs 64 characters and saves a lookup.
+                var bodySha256 = transport.HttpEvidence.Hops[0].Sha256;
                 return new PassOutcome(
                     null,
                     partitionKey,
                     new EuEnumerationRefusalDetail(
                         ClassifyPageParseFailure(exception),
                         pageOutcome.RequestOrdinal, null, transport.HttpEvidence.Hops[0].Status,
-                        transport.HttpEvidence.Hops[0].Sha256, null, null, null, null));
+                        bodySha256, null, null, null,
+                        $"{exception.GetType().Name}: {exception.Message} (page body sha256 {bodySha256})"));
             }
 
             if (rows.Count > 0)
@@ -1129,7 +1270,12 @@ public sealed class EuRepeatedEnumerationExecutor
                 RepeatedEnumerationObservationIdentity.NewObservation(), transport, profile);
             deliveryPass = deliveryPass.WithPage(pageObservation);
 
-            if (rows.Count == 0)
+            // ShortPageTerminal: a page carrying fewer rows than the limit IS the terminal page,
+            // because ORDER BY plus LIMIT mean a short page has exhausted the result set. No
+            // successor is requested, so the "did not advance" condition can no longer arise from a
+            // request that had nothing to fetch. A page that fills the limit exactly still
+            // continues, since a full page proves nothing about what follows it.
+            if (rows.Count < pageLimit)
             {
                 break;
             }
@@ -1306,12 +1452,24 @@ public sealed class EuRepeatedEnumerationExecutor
 
     private const string PageParseFailureKey = "eu.pageParseFailure";
 
+    /// <summary>
+    /// The refusal a page-parse failure carries. Every arm but the last is an explicit tag put on
+    /// the exception by the throw site that knows what it rejected.
+    /// </summary>
+    /// <remarks>
+    /// THE DEFAULT ARM NAMES US, and that is the whole point of it. It used to answer
+    /// <see cref="EuEnumerationRefusal.PageBodyMalformed"/>, so any failure without a specific
+    /// member was reported as the publisher's bytes being bad, which both blamed the office for our
+    /// decode and hid the real cause behind a name nobody would question.
+    /// </remarks>
     private static EuEnumerationRefusal ClassifyPageParseFailure(Exception exception) =>
         exception.Data[PageParseFailureKey] switch
         {
             nameof(EuEnumerationRefusal.DeliveredKeyNotRepresentable) =>
                 EuEnumerationRefusal.DeliveredKeyNotRepresentable,
-            _ => EuEnumerationRefusal.PageBodyMalformed,
+            nameof(EuEnumerationRefusal.PageBodyMalformed) =>
+                EuEnumerationRefusal.PageBodyMalformed,
+            _ => EuEnumerationRefusal.PageDecodeFailedOnOurSide,
         };
 
     /// <summary>
@@ -1419,44 +1577,76 @@ public sealed class EuRepeatedEnumerationExecutor
     private static IReadOnlyList<string[]> ParseStrictRows(
         ReadOnlySpan<byte> bytes, IReadOnlyList<string> cursorVariables)
     {
-        using var document = System.Text.Json.JsonDocument.Parse(bytes.ToArray());
-        var root = document.RootElement;
-        if (root.ValueKind != System.Text.Json.JsonValueKind.Object ||
-            !root.TryGetProperty("results", out var results) ||
-            results.ValueKind != System.Text.Json.JsonValueKind.Object ||
-            !results.TryGetProperty("bindings", out var bindings) ||
-            bindings.ValueKind != System.Text.Json.JsonValueKind.Array)
+        // Every throw below that can POINT AT the offending byte or term tags itself
+        // PageBodyMalformed, which is the only thing that member may now mean. Anything else falls
+        // through untagged to PageDecodeFailedOnOurSide, which names this executor rather than the office.
+        System.Text.Json.JsonDocument document;
+        try
         {
-            throw new FormatException("The page response has no binding array.");
+            document = System.Text.Json.JsonDocument.Parse(bytes.ToArray());
+        }
+        catch (System.Text.Json.JsonException exception)
+        {
+            throw PageFailure(
+                "The page body is not JSON at all, at line " +
+                $"{exception.LineNumber?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "unknown"} byte " +
+                $"{exception.BytePositionInLine?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "unknown"}.",
+                EuEnumerationRefusal.PageBodyMalformed,
+                exception);
         }
 
-        var rows = new List<string[]>();
-        foreach (var binding in bindings.EnumerateArray())
+        using (document)
         {
-            if (binding.ValueKind != System.Text.Json.JsonValueKind.Object)
+            var root = document.RootElement;
+            if (root.ValueKind != System.Text.Json.JsonValueKind.Object ||
+                !root.TryGetProperty("results", out var results) ||
+                results.ValueKind != System.Text.Json.JsonValueKind.Object ||
+                !results.TryGetProperty("bindings", out var bindings) ||
+                bindings.ValueKind != System.Text.Json.JsonValueKind.Array)
             {
-                throw new FormatException("The page response row is not an object.");
+                throw PageFailure(
+                    $"The page body's root is {root.ValueKind} and carries no results/bindings array.",
+                    EuEnumerationRefusal.PageBodyMalformed);
             }
 
-            var parts = new string[cursorVariables.Count];
-            for (var index = 0; index < cursorVariables.Count; index++)
+            var rows = new List<string[]>();
+            var ordinal = 0;
+            foreach (var binding in bindings.EnumerateArray())
             {
-                var name = cursorVariables[index];
-                if (!binding.TryGetProperty(name, out var term) ||
-                    term.ValueKind != System.Text.Json.JsonValueKind.Object ||
-                    !term.TryGetProperty("value", out var value) ||
-                    value.ValueKind != System.Text.Json.JsonValueKind.String)
+                if (binding.ValueKind != System.Text.Json.JsonValueKind.Object)
                 {
-                    throw new FormatException($"The page response row is missing {name}.");
+                    throw PageFailure(
+                        $"The page body's binding at position {ordinal} is {binding.ValueKind}, not an object.",
+                        EuEnumerationRefusal.PageBodyMalformed);
                 }
 
-                parts[index] = RequireRepresentableKeyPart(value.GetString()!, name);
+                var parts = new string[cursorVariables.Count];
+                for (var index = 0; index < cursorVariables.Count; index++)
+                {
+                    var name = cursorVariables[index];
+
+                    // Deliberately NOT tagged. A projected variable absent from a binding is
+                    // SPARQL 1.1 JSON's own way of saying unbound, so refusing it is this reader's
+                    // limitation and not a shape the publisher broke. It falls through to
+                    // PageDecodeFailedOnOurSide until the cursor extraction learns to read an unbound term.
+                    if (!binding.TryGetProperty(name, out var term) ||
+                        term.ValueKind != System.Text.Json.JsonValueKind.Object ||
+                        !term.TryGetProperty("value", out var value) ||
+                        value.ValueKind != System.Text.Json.JsonValueKind.String)
+                    {
+                        throw new FormatException(
+                            $"The page response row at position {ordinal} is missing {name}.");
+                    }
+
+                    parts[index] = RequireRepresentableKeyPart(value.GetString()!, name);
+                }
+
+                rows.Add(parts);
+                ordinal++;
             }
 
-            rows.Add(parts);
+            return rows;
         }
-
-        return rows;
     }
 
     /// <summary>

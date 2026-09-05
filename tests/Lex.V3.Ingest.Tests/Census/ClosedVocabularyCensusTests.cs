@@ -64,7 +64,7 @@ public sealed class ClosedVocabularyCensusTests
                     + "CountNotOneNonNegativeInteger, PartitionRequired, "
                     + "DeliveredKeyNotRepresentable, DeliveredRowOutsidePartition, "
                     + "CursorDidNotAdvance, PageBudgetExhausted, CustodyMemberMissing, "
-                    + "DeliveryProofRefused, PageBodyMalformed",
+                    + "DeliveryProofRefused, PageBodyMalformed, PageDecodeFailedOnOurSide",
                 "Lex.V3.Ingest.Europe.EuFamilyEnumerationOutcomeKind: Proven, ExecutorRefused, "
                     + "ProofRefused",
                 "Lex.V3.Ingest.Europe.EuQueryExecutionCompletion: AllFamiliesProven, "
@@ -80,7 +80,7 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Europe.EuWitnessTraversalRefusal: None, RobotsBootstrapRefused, "
                     + "BindRefused, ObservationNotExecuted, StatusNotAdmitted, MediaTypeNotAdmitted, "
                     + "PageBodyMalformed, CrossingRefused, StepRefused, EntrySetRefused, "
-                    + "PageBudgetExhausted",
+                    + "PageBudgetExhausted, PageDecodeFailedOnOurSide",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgDocumentGetAttemptRefusal: None, "
                     + "RobotsDisallowed, RobotsBootstrapNotCompleted, ObservationNotExecuted",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRefusal: None, "

@@ -73,8 +73,11 @@ namespace Lex.V3.Ingest.Tests;
 /// <see cref="CustodyMembership.RetainedUnenforced"/>. And, WHEN THE RUN REACHES THE MANIFEST, the
 /// reduced manifest's expression count against the census total. WHEN IT DOES NOT REACH THE
 /// MANIFEST IT CALLS <c>Assert.Fail</c> WITH THE REFUSAL IN WORDS. There is no path through this
-/// method that passes silently, and today it does not pass at all: the run stops at the
-/// object-facts families, which is D1-05f.
+/// method that passes silently, and today it does not pass at all. WHERE IT STOPS HAS MOVED and
+/// this sentence is dated deliberately: at D1-05f's head all six families PROVE against the live
+/// publisher and the run refuses later, at RecordFormNotResolved, because a seed's root carries no
+/// resource_legal_type this adapter maps to a closed EuActForm. That is D1-05g. Re-read the run's
+/// own wholeRunRefusalCode rather than this line, which is a summary and will age again.
 /// </para>
 /// <para>
 /// ONE COMPARISON THE CENSUS MAKES POSSIBLE IS NOT YET ASSERTABLE, and it is failed loudly rather
@@ -296,22 +299,38 @@ public sealed class EuStageOneAcquisitionCanary
         // By key rather than by count. An arity check passes when the right number of families prove
         // whether or not they are these two, and it FAILS the moment a third family proves, which is
         // precisely what D1-05f is meant to achieve. This assertion grows correct instead.
+        // A LOOKUP RATHER THAN A DICTIONARY, and the reason is a real crash this canary hit the
+        // moment D1-05f started working. FamilyKey is a BATCH PARTITION key, not a query-set key,
+        // so all four object-facts sets report the SAME key with different row counts and different
+        // canonical key digests. While those sets were refusing, only the two census families
+        // proved and the keys happened to be unique; once they proved, ToDictionary threw
+        // ArgumentException on the duplicate. That broke this file's own promise, which is that
+        // every path through it either proves something or FAILS IN WORDS: it failed in a LINQ
+        // stack trace instead, above every assertion below and telling a reader nothing about the
+        // run. The lookup keeps the by-key assertion the comment above argues for.
         var proven = result.FamilyOutcomes
             .Where(static outcome => outcome.Kind == EuFamilyEnumerationOutcomeKind.Proven)
-            .ToDictionary(static outcome => outcome.FamilyKey, StringComparer.Ordinal);
+            .ToLookup(static outcome => outcome.FamilyKey, StringComparer.Ordinal);
         var everyOutcome = string.Join("; ", result.FamilyOutcomes.Select(
             static outcome => $"{outcome.FamilyKey} {outcome.Kind} {outcome.ExecutorRefusal?.Code}"));
 
         foreach (var row in Census)
         {
             var familyKey = CensusFamilyKey(row.Celex);
-            Assert.IsTrue(
-                proven.TryGetValue(familyKey, out var outcome),
-                $"{row.Celex}'s own census family {familyKey} must be among the proved families. "
-                + $"Outcomes were: {everyOutcome}");
+            var matches = proven[familyKey].ToArray();
+
+            // Exactly one, asserted rather than assumed. A census key is minted per CELEX, so a
+            // second outcome under one census key would mean two runs of one seed's own family
+            // collapsed into one answer, which is worth a named failure rather than a Single()
+            // throwing out of LINQ the way the dictionary did.
+            Assert.HasCount(
+                1,
+                matches,
+                $"{row.Celex}'s own census family {familyKey} must be among the proved families "
+                + $"exactly once. Outcomes were: {everyOutcome}");
             Assert.AreEqual(
                 CustodyMembership.RetainedUnenforced,
-                outcome!.RetainedFloor,
+                matches[0].RetainedFloor,
                 $"{row.Celex}'s family ran over a filesystem store and must say so.");
         }
 
@@ -364,19 +383,181 @@ public sealed class EuStageOneAcquisitionCanary
     /// retaining their provenance.
     /// </para>
     /// <para>
+    /// THE PER-FIELD CROSS-RUN AUDIT, MEASURED. Two clean checkouts at one sha, built and run
+    /// separately and sequentially so neither doubled the publisher traffic of the other, each
+    /// with its own custody root. Both indexes reported runTreeClean true and the same runGitSha,
+    /// which is the check that they really were the same source. 126 leaf fields compared.
+    /// </para>
+    /// <para>
+    /// SIX FIELDS DIFFERED and they were the SAME field in each of the six families,
+    /// proofAcquisitionRunSha256. Nothing else moved. That settles it as a property of the run
+    /// identity rather than a suspicion about the corpus, and the cause is in
+    /// <c>RoutedHttpAcquisitionSession.CreateRunIdentity</c>, which hashes a fresh urn:uuid AND
+    /// the start instant to 100 nanoseconds; either term alone would be enough.
+    /// </para>
+    /// <para>
+    /// WHAT THE OTHER 120 ACTUALLY PROVE, stated in the shape that stops a reader over-reading
+    /// them. 46 were stable AND non-trivial: every family's familyKey, kind,
+    /// proofDeliveredRowCount, proofCanonicalKeyDigest, proofInterpretationProfileSha256,
+    /// proofSourceProfileSha256 and retainedFloor, plus runGitSha, runTreeClean and the whole-run
+    /// refusal code and detail. 18 were static text this file writes on every run. 3 were zero or
+    /// empty in both. And 53 WERE NULL IN BOTH AND PROVE NOTHING: both runs refused at
+    /// RecordFormNotResolved, before a manifest or a record set existed, so scopeManifest's three
+    /// fields, corpusRecordSet.setRefSha256 and every documentBodies entry were absent rather than
+    /// stable. A null equal to a null is not a measurement, and counting it as one is how an audit
+    /// reports coverage it does not have.
+    /// </para>
+    /// <para>
+    /// AND THE RUN ITSELF MOVED. All six families PROVED, with delivered row counts 2, 4, 41, 166,
+    /// 2 and 9. The four object-facts counts are exactly the out-of-band probe totals recorded in
+    /// the countAnswerBesideARefusedPage gap below (ObjectFacts 41, ExpressionFacts 166,
+    /// RootWatermark 2, ManifestationFacts 9), measured independently and months apart from this
+    /// run, so D1-05f's COALESCE and short-page-terminal fixes are confirmed against the live
+    /// publisher rather than against fixtures. The whole run now refuses LATER, at
+    /// RecordFormNotResolved: seed 32003L0088's root carries no admitted resource_legal_type this
+    /// adapter maps to a closed EuActForm. Identical detail in both runs.
+    /// </para>
+    /// <para>
     /// WHAT IT CANNOT YET REACH, recorded IN the index rather than quietly omitted. Two roles are
     /// not on <see cref="EuQueryExecutionResult"/> at all: each family's pass A and pass B page
     /// bodies with their cursor values, which live on the delivery receipt that
     /// <see cref="EuFamilyEnumerationOutcome"/> does not carry, and the robots bootstrap artifact,
-    /// which the routed session writes inside the executor. D1-05f has to surface both before the
-    /// index can carry them, and the file says so where a reader will see it.
+    /// which the routed session writes inside the executor. D1-05g has to surface the receipt
+    /// before the index can carry the first, and the file says so where a reader will see it. The
+    /// same sentence named D1-05f until D1-05f was about to merge, which is how a gap starts
+    /// reading as done: the item it points at closes and nothing repoints it.
     /// </para>
     /// </remarks>
-    private static async Task WriteEvidenceIndexAsync(
-        FileSystemCustodyStore store,
-        string root,
-        EuQueryExecutionResult result,
-        CancellationToken cancellationToken)
+    /// <summary>
+    /// The roles this index CANNOT yet carry, declared as data so a test can hold them.
+    /// </summary>
+    /// <remarks>
+    /// Extracted from the writer for one reason: until it was, NOTHING IN EITHER LANE ASSERTED
+    /// THESE ROLES. They are built inside a canary that is skipped unless LEX_EU_CANARY=1, so a
+    /// gap could have been deleted, renamed, or silently never added and the whole suite would
+    /// have stayed green. A declaration nothing holds is a comment with JSON syntax. The pin over
+    /// this lives in <c>EuCanaryEvidenceIndexGapTests</c> and covers the ROLE NAMES rather than
+    /// the prose, because the prose is expected to be edited as each gap is understood better and
+    /// the role set is the part that is a contract with a reader diffing two runs.
+    /// </remarks>
+    internal static System.Text.Json.Nodes.JsonArray RolesThisIndexCannotYetCarry() =>
+        new System.Text.Json.Nodes.JsonArray
+        {
+            new System.Text.Json.Nodes.JsonObject
+            {
+                ["role"] = "familyPassBodiesAndCursors",
+                ["why"] = "EuFamilyEnumerationOutcome carries the proof but not the delivery receipt, "
+                    + "so pass A and pass B page bodies and their cursor values are not reachable "
+                    + "from EuQueryExecutionResult. D1-05g must surface the receipt to record them.",
+            },
+            new System.Text.Json.Nodes.JsonObject
+            {
+                ["role"] = "countAnswerBesideARefusedPage",
+                ["why"] = "countAnswerItShouldHaveMatched comes from EuEnumerationRefusalDetail"
+                    + ".ObservedCount, which this refusal path leaves null, so the count a refused "
+                    + "page should have matched is not stated beside it. Measured out of band by "
+                    + "direct probes of the four families: ObjectFacts 41, ExpressionFacts 166, "
+                    + "RootWatermark 2, ManifestationFacts 9. Populating it on the refusal is a "
+                    + "prerequisite of R3, so the index carries the count rather than a "
+                    + "reader importing it from this note.",
+            },
+            new System.Text.Json.Nodes.JsonObject
+            {
+                ["role"] = "robotsBootstrapArtifact",
+                ["why"] = "The routed session writes robots inside the executor and the adapter's "
+                    + "result does not name it, so its digest cannot be stated by role from here.",
+            },
+            new System.Text.Json.Nodes.JsonObject
+            {
+                ["role"] = "crossRunCorpusRecordSetIdentity",
+                ["why"] = "setRefSha256 above identifies THIS RUN'S record set and IS NOT "
+                    + "COMPARABLE ACROSS RUNS. CorpusRecordCanonicalWriter digests manifest_ref "
+                    + "and run_identity through ScopeManifestCanonicalWriter.WriteArtifact, which "
+                    + "emits each ref's resource_id, and EuQueryExecutionAdapter mints both of "
+                    + "those resource_ids as a fresh urn:uuid per run (the manifest ref paired "
+                    + "with the manifest's canonical digest, the run identity paired with the "
+                    + "manifest's custody-write digest), so the set digest cannot be stable by "
+                    + "construction. Stated here FROM THE CODE PATH rather than by analogy with "
+                    + "Luxembourg, whose canary mints the same two resource_ids in the canary "
+                    + "itself. THE PER-FIELD AUDIT HAS NOW RUN AND COULD NOT CONFIRM THIS ONE: "
+                    + "both clean-checkout runs refused at RecordFormNotResolved before any "
+                    + "record set existed, so setRefSha256 was null in both and being equal "
+                    + "proves nothing about it. This claim therefore rests on the code path alone "
+                    + "until a run reaches the record set. It sits beside heldContentSha256 "
+                    + "values that ARE content addresses, so without this note a reader diffing "
+                    + "two runs sees a moved corpus where nothing moved, and, worse, might take a "
+                    + "match as evidence two runs produced the same corpus. WHAT TO DIFF INSTEAD, "
+                    + "stable across runs by the same reading of the code: every documentBodies[] "
+                    + "heldContentSha256 and heldByteLength, scopeManifest.canonicalSha256 (the "
+                    + "manifest's own content address, which no resource_id enters), and "
+                    + "observedObjectCount and observedExpressionCount. The custody root is a "
+                    + "fresh temp directory per run and is not comparable either; it is printed "
+                    + "on the CANARY|custodyRoot line rather than carried in this index. Every "
+                    + "one of those is a claim the per-field audit must MEASURE, not inherit from "
+                    + "this note.",
+            },
+            new System.Text.Json.Nodes.JsonObject
+            {
+                ["role"] = "crossRunAcquisitionRunIdentity",
+                ["why"] = "proofAcquisitionRunSha256 above identifies THIS RUN and IS NOT "
+                    + "COMPARABLE ACROSS RUNS, and unlike the other gaps here this one is "
+                    + "MEASURED rather than reasoned. "
+                    + "RoutedHttpAcquisitionSession.CreateRunIdentity hashes a canonical block "
+                    + "carrying a fresh urn:uuid resource id AND the run's start instant to 100 "
+                    + "nanoseconds, so TWO independent terms make it unrepeatable; a run identity "
+                    + "that DID repeat across two runs would be the defect. Observed: two "
+                    + "clean-checkout runs at one sha, both reporting runTreeClean true, gave six "
+                    + "different values, one per family, while every other family field held: "
+                    + "familyKey, kind, proofDeliveredRowCount, proofCanonicalKeyDigest, "
+                    + "proofInterpretationProfileSha256, proofSourceProfileSha256 and "
+                    + "retainedFloor were identical in all six. It sits beside those stable "
+                    + "digests, so a reader diffing two runs sees six moved values and can read a "
+                    + "stable corpus as a changed one. WHAT TO DIFF INSTEAD for a family: "
+                    + "proofCanonicalKeyDigest, which is the content address of the delivered "
+                    + "keys, and proofDeliveredRowCount beside it.",
+            },
+        };
+
+    /// <summary>
+    /// One enum value as the token a WIRE CONSUMER would see, never as its C# member name.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE DEFECT THIS REPLACES, which was live and is not hypothetical. Both call sites used
+    /// <c>ToString()</c>, which returns the C# member name and BYPASSES <c>ContractJson</c>
+    /// entirely. This index declares a schema, <c>lex-eu-canary-evidence-index/1</c>, so it is a
+    /// MACHINE READ document, and a machine reading it has to see the same token a wire consumer
+    /// sees. It did not: the acceptance run at the head that found this recorded
+    /// <c>RecordFormNotResolved</c> where the wire says <c>record_form_not_resolved</c>.
+    /// </para>
+    /// <para>
+    /// HOW WIDE IT WAS, exactly. <c>ExactStringEnumConverter</c> resolves a member's wire name as
+    /// its <c>JsonStringEnumMemberName</c> attribute FALLING BACK to the member name, so today the
+    /// index disagreed with the wire only for the members that carry an attribute, and agreed for
+    /// the rest by both being PascalCase. That agreement is not a comfort: the members without an
+    /// attribute are the separate defect queued as R4, and giving them attributes would widen this
+    /// disagreement from a few members to every one of them. Fixing the conversion first means R4
+    /// can proceed without dragging this along.
+    /// </para>
+    /// </remarks>
+    private static System.Text.Json.Nodes.JsonNode? WireToken<T>(T? value)
+        where T : struct, Enum =>
+        value is { } present
+            ? System.Text.Json.Nodes.JsonNode.Parse(Lex.V3.Contracts.ContractJson.Serialize(present))
+            : null;
+
+    /// <summary>
+    /// The evidence index this run would write, built as data so a synthetic result can be
+    /// asserted against it without a store, a custody root or a byte of publisher traffic.
+    /// </summary>
+    /// <remarks>
+    /// Split from the write for the same reason the gap array was: the fields it produces were
+    /// only ever exercised behind LEX_EU_CANARY=1, so a field could disagree with the wire, as
+    /// two of them did, and every test would still pass. The write stays in
+    /// <see cref="WriteEvidenceIndexAsync"/>; only the document construction moved.
+    /// </remarks>
+    internal static System.Text.Json.Nodes.JsonObject BuildEvidenceIndex(
+        EuQueryExecutionResult result)
     {
         var dirty = TryGit("status --porcelain");
         var index = new System.Text.Json.Nodes.JsonObject
@@ -386,9 +567,9 @@ public sealed class EuStageOneAcquisitionCanary
             ["runTreeClean"] = dirty is null ? null : dirty.Length == 0,
             ["runTreeDirtyPaths"] = dirty,
             ["custodyClassSegment"] = "nightly-floor-90d",
-            ["wholeRunRefusalCode"] = result.Refusal?.Code.ToString(),
+            ["wholeRunRefusalCode"] = WireToken(result.Refusal?.Code),
             ["wholeRunRefusalDetail"] = result.Refusal?.Detail,
-            ["completion"] = result.Completion?.ToString(),
+            ["completion"] = WireToken(result.Completion),
             ["observedObjectCount"] = result.ObservedObjectCount,
             ["observedExpressionCount"] = result.ObservedExpressionCount,
         };
@@ -452,33 +633,18 @@ public sealed class EuStageOneAcquisitionCanary
 
         index["documentBodies"] = bodies;
 
-        index["rolesThisIndexCannotYetCarry"] = new System.Text.Json.Nodes.JsonArray
-        {
-            new System.Text.Json.Nodes.JsonObject
-            {
-                ["role"] = "familyPassBodiesAndCursors",
-                ["why"] = "EuFamilyEnumerationOutcome carries the proof but not the delivery receipt, "
-                    + "so pass A and pass B page bodies and their cursor values are not reachable "
-                    + "from EuQueryExecutionResult. D1-05f must surface the receipt to record them.",
-            },
-            new System.Text.Json.Nodes.JsonObject
-            {
-                ["role"] = "countAnswerBesideARefusedPage",
-                ["why"] = "countAnswerItShouldHaveMatched comes from EuEnumerationRefusalDetail"
-                    + ".ObservedCount, which this refusal path leaves null, so the count a refused "
-                    + "page should have matched is not stated beside it. Measured out of band by "
-                    + "direct probes of the four families: ObjectFacts 41, ExpressionFacts 166, "
-                    + "RootWatermark 2, ManifestationFacts 9. D1-05f should populate it on the "
-                    + "refusal so the index carries it rather than a reader importing it.",
-            },
-            new System.Text.Json.Nodes.JsonObject
-            {
-                ["role"] = "robotsBootstrapArtifact",
-                ["why"] = "The routed session writes robots inside the executor and the adapter's "
-                    + "result does not name it, so its digest cannot be stated by role from here.",
-            },
-        };
+        index["rolesThisIndexCannotYetCarry"] = RolesThisIndexCannotYetCarry();
 
+        return index;
+    }
+
+    private static async Task WriteEvidenceIndexAsync(
+        FileSystemCustodyStore store,
+        string root,
+        EuQueryExecutionResult result,
+        CancellationToken cancellationToken)
+    {
+        var index = BuildEvidenceIndex(result);
         var bytes = System.Text.Encoding.UTF8.GetBytes(
             index.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
 
