@@ -34,7 +34,10 @@ namespace Lex.V3.Ingest.Tests;
 /// see divergence immediately. The divergence this pin was written after was real: the same defect
 /// was fixed in both lanes on the same day and named <c>PageDecodeFailed</c> here and
 /// <c>PageDecodeFailedOnOurSide</c> there, with tokens to match. EU adopted LU's name because LU's
-/// had already merged.
+/// had already merged. The assertion that the two lanes AGREE is deliberately NOT here: it is a
+/// row in <see cref="Census.MirroredVocabularyPairTests"/>, so that an LU-side change reddens a
+/// file about mirroring rather than this one, which is named for EU. This file pins the EU side
+/// against a literal and nothing else, which is the half that belongs under an EU name.
 /// </para>
 /// <para>
 /// When this fails, re-derive rather than hand edit: print the attribute names in
@@ -112,18 +115,5 @@ public sealed class EuRefusalWireNameTests
             }),
             string.Join("\n", WireNames<EuWitnessTraversalRefusal>()),
             "a wire name changing is a contract change; a number changing is not.");
-    }
-
-    [TestMethod]
-    public void TheTwoLanesRefuseUnderTheSameWireNamesInTheSameOrder()
-    {
-        // Not a tautology over one source: it reads BOTH lanes' attributes and asserts they agree.
-        // If either lane adds, renames or reorders a refusal without the other, this names it. The
-        // pin above is what stops this test passing because both sides drifted together.
-        Assert.AreEqual(
-            string.Join("\n", WireNames<Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRefusal>()),
-            string.Join("\n", WireNames<EuEnumerationRefusal>()),
-            "the two repeated-enumeration executors are mirrors; a refusal in one without the "
-                + "other is a divergence to justify, not to discover later from a census diff.");
     }
 }
