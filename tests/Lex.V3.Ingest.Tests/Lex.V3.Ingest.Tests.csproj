@@ -6,6 +6,7 @@
   <ItemGroup>
     <Compile Include="../Lex.V3.TestSupport/ConstructionSurface.cs" Link="TestSupport/ConstructionSurface.cs" />
     <Compile Include="../Lex.V3.TestSupport/ClosedSurfaceCensus.cs" Link="TestSupport/ClosedSurfaceCensus.cs" />
+    <Compile Include="../Lex.V3.TestSupport/CustodyStoreConformance.cs" Link="TestSupport/CustodyStoreConformance.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/Lex.V3.Artifacts/Lex.V3.Artifacts.csproj" />
