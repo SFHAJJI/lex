@@ -95,6 +95,37 @@ public sealed record EuObjectFactsBoundQuery(
 /// object set.
 /// </para>
 /// <para>
+/// THE VALUE-DERIVED CURSOR COMPONENT IS TOTALISED WITH COALESCE, and the reason is measured rather
+/// than assumed. Each family binds exactly one key position from <c>?value</c>, which the absence
+/// branch leaves unbound: <c>key_4</c> for <see cref="EuObjectFactsQuerySet.ObjectFacts"/> and
+/// <see cref="EuObjectFactsQuerySet.ExpressionFacts"/>, <c>key_3</c> for
+/// <see cref="EuObjectFactsQuerySet.RootWatermark"/> and
+/// <see cref="EuObjectFactsQuerySet.ManifestationFacts"/>. Every other position binds from a VALUES
+/// term or from a literal this template BINDs in both UNION branches, so none of them can be unbound.
+/// </para>
+/// <para>
+/// That one position used to read <c>IF(BOUND(?value), STR(?value), "")</c>, which is correct under
+/// SPARQL's own lazy IF and wrong against the publisher's engine. A bounded three-query probe over
+/// the exact batch that produced a 41-binding page settled it by naming the behaviour from the
+/// response rather than inferring it (PROBE
+/// lex-event-20260905T015937388Z-8bc0d2893047464c91a6a1c54982b5e1, RULING
+/// lex-event-20260905T020043766Z-cd0db29d887b4d86b5c44da66d82e2f7). On an unbound row the engine
+/// answered <c>BOUND(?value)</c> false, took IF's false branch when neither arm called STR, and
+/// still errored when the untaken arm did: it selects the branch correctly and evaluates the
+/// arguments EAGERLY, so <c>STR</c> on the unbound term raised and the erroring BIND left the key
+/// unbound. SPARQL's JSON results format then omits an unbound variable from the binding entirely,
+/// so the key vanished from 8 of 41 rows and this route refused a conformant answer. COALESCE is
+/// specified to swallow an erroring argument and take the next, and the same probe confirmed it: the
+/// key became total while the row count stayed 41.
+/// </para>
+/// <para>
+/// WHAT IS DELIBERATELY NOT TOTALISED IS <c>?value</c> ITSELF. It stays absent on exactly those
+/// rows, because that absence IS the unbound fact, recorded alongside <c>value_kind</c> of
+/// <c>"unbound"</c>. Only the CURSOR becomes total. A change that had totalised both would have
+/// destroyed the fact while appearing to succeed, and would have passed any test that merely counted
+/// absences.
+/// </para>
+/// <para>
 /// The batch is this design's partition (per the synthesis ruling): a bounded, fixed-capacity set of
 /// canonical object IRIs, VALUES-bound in one request. <see cref="BatchCapacity"/> is fixed at 50, not
 /// a tuning constant: every batch member is carried as its own <c>publisher_literal</c>
@@ -659,7 +690,7 @@ public sealed class EuObjectFactsDiscoveryPlan
               BIND(STR(?object) AS ?key_1)
               BIND(STR(?predicate) AS ?key_2)
               BIND(?value_kind AS ?key_3)
-              BIND(IF(BOUND(?value), STR(?value), "") AS ?key_4)
+              BIND(COALESCE(STR(?value), "") AS ?key_4)
               BIND(?datatype_iri AS ?key_5)
               BIND(?language_tag AS ?key_6)
               VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3 ?last_key_4 ?last_key_5 ?last_key_6) {
@@ -715,7 +746,7 @@ public sealed class EuObjectFactsDiscoveryPlan
               BIND(STR(?object) AS ?key_1)
               BIND(STR(?predicate) AS ?key_2)
               BIND(?value_kind AS ?key_3)
-              BIND(IF(BOUND(?value), STR(?value), "") AS ?key_4)
+              BIND(COALESCE(STR(?value), "") AS ?key_4)
               BIND(?datatype_iri AS ?key_5)
               BIND(?language_tag AS ?key_6)
               BIND(STR(?parent) AS ?key_7)
@@ -766,7 +797,7 @@ public sealed class EuObjectFactsDiscoveryPlan
               }
               BIND(STR(?object) AS ?key_1)
               BIND(?value_kind AS ?key_2)
-              BIND(IF(BOUND(?value), STR(?value), "") AS ?key_3)
+              BIND(COALESCE(STR(?value), "") AS ?key_3)
               BIND(?datatype_iri AS ?key_4)
               BIND(?language_tag AS ?key_5)
               VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3 ?last_key_4 ?last_key_5) {
@@ -825,7 +856,7 @@ public sealed class EuObjectFactsDiscoveryPlan
               }
               BIND(STR(?parent) AS ?key_1)
               BIND(?value_kind AS ?key_2)
-              BIND(IF(BOUND(?value), STR(?value), "") AS ?key_3)
+              BIND(COALESCE(STR(?value), "") AS ?key_3)
               BIND(?datatype_iri AS ?key_4)
               BIND(?language_tag AS ?key_5)
               VALUES (?has_cursor ?last_key_1 ?last_key_2 ?last_key_3 ?last_key_4 ?last_key_5) {
