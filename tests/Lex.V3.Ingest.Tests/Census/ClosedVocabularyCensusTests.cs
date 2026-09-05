@@ -98,11 +98,11 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionCompletion: AllFamiliesProven, "
                     + "PartialFamilyRefused",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionRefusal: None, "
-                    + "ScopeResolutionFailed, ScopeManifestNotHeld, "
+                    + "ScopeResolutionFailed, ScopeManifestNotRetained, "
                     + "ResourceObservationFamilyNotProven, ResourceObservationRowsNotVerified, "
                     + "ObservationSubjectNotInDeliveredCensus, AssertionRowObjectKindNotRecognised, "
                     + "AssertionRowTermUnbound, DocumentFetchSessionNotStarted, DocumentBodyNotHeld, "
-                    + "DocumentGetOutcomeNotRepresentable, RecordSetNotHeld",
+                    + "DocumentGetOutcomeNotRepresentable, RecordSetNotRetained",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgRelationFamilyAcquisitionState: "
                     + "AcquiredComplete, Unacquired, Incomplete, Uncertain",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgResourceObservationExclusionCause: "

@@ -154,30 +154,41 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
             {
                 "base-constructor protected instance System.Enum::.ctor() -> System.Enum",
                 "base-constructor protected instance System.ValueType::.ctor() -> System.ValueType",
-                "field public static " + N + "LuxembourgQueryExecutionRefusal::AssertionRowObjectKindNotRecognised -> "
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::AssertionRowObjectKindNotRecognised -> "
                 + N + "LuxembourgQueryExecutionRefusal",
-                "field public static " + N + "LuxembourgQueryExecutionRefusal::AssertionRowTermUnbound -> "
-                + N + "LuxembourgQueryExecutionRefusal",
-                "field public static " + N + "LuxembourgQueryExecutionRefusal::DocumentBodyNotHeld -> "
-                + N + "LuxembourgQueryExecutionRefusal",
-                "field public static " + N + "LuxembourgQueryExecutionRefusal::DocumentFetchSessionNotStarted -> "
-                + N + "LuxembourgQueryExecutionRefusal",
-                "field public static " + N + "LuxembourgQueryExecutionRefusal::DocumentGetOutcomeNotRepresentable -> "
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::AssertionRowTermUnbound -> " + N
+                + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::DocumentBodyNotHeld -> " + N
+                + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::DocumentFetchSessionNotStarted -> " + N
+                + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::DocumentGetOutcomeNotRepresentable -> "
                 + N + "LuxembourgQueryExecutionRefusal",
                 "field public static " + N + "LuxembourgQueryExecutionRefusal::None -> "
                 + N + "LuxembourgQueryExecutionRefusal",
-                "field public static " + N + "LuxembourgQueryExecutionRefusal::ObservationSubjectNotInDeliveredCensus -> "
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::ObservationSubjectNotInDeliveredCensus -> "
                 + N + "LuxembourgQueryExecutionRefusal",
-                "field public static " + N + "LuxembourgQueryExecutionRefusal::RecordSetNotHeld -> "
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::RecordSetNotRetained -> " + N
+                + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::ResourceObservationFamilyNotProven -> "
                 + N + "LuxembourgQueryExecutionRefusal",
-                "field public static " + N + "LuxembourgQueryExecutionRefusal::ResourceObservationFamilyNotProven -> "
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::ResourceObservationRowsNotVerified -> "
                 + N + "LuxembourgQueryExecutionRefusal",
-                "field public static " + N + "LuxembourgQueryExecutionRefusal::ResourceObservationRowsNotVerified -> "
-                + N + "LuxembourgQueryExecutionRefusal",
-                "field public static " + N + "LuxembourgQueryExecutionRefusal::ScopeManifestNotHeld -> "
-                + N + "LuxembourgQueryExecutionRefusal",
-                "field public static " + N + "LuxembourgQueryExecutionRefusal::ScopeResolutionFailed -> "
-                + N + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::ScopeManifestNotRetained -> " + N
+                + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::ScopeResolutionFailed -> " + N
+                + "LuxembourgQueryExecutionRefusal",
             },
             ConstructionSurface.Of(typeof(LuxembourgQueryExecutionRefusal)).ToArray());
     }

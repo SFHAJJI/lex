@@ -122,7 +122,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
             LuxembourgProfileResolutionFailureCode.EvidenceBindingRejected, "urn:example:subject");
         Assert.ThrowsExactly<ArgumentException>(() =>
             new LuxembourgQueryExecutionRefusalDetail(
-                LuxembourgQueryExecutionRefusal.ScopeManifestNotHeld, failure, null));
+                LuxembourgQueryExecutionRefusal.ScopeManifestNotRetained, failure, null));
         Assert.ThrowsExactly<ArgumentException>(static () =>
             new LuxembourgQueryExecutionRefusalDetail(
                 LuxembourgQueryExecutionRefusal.ScopeResolutionFailed, null, null));
@@ -553,7 +553,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
 
     /// <summary>
     /// The manifest gate's REFUSAL direction: a genuine custody failure on the manifest bytes still
-    /// refuses with <see cref="LuxembourgQueryExecutionRefusal.ScopeManifestNotHeld"/>, and never
+    /// refuses with <see cref="LuxembourgQueryExecutionRefusal.ScopeManifestNotRetained"/>, and never
     /// resolves into a weaker custody class.
     /// </summary>
     /// <remarks>
@@ -581,7 +581,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
 
             Assert.IsNotNull(result.Refusal);
             Assert.AreEqual(
-                LuxembourgQueryExecutionRefusal.ScopeManifestNotHeld,
+                LuxembourgQueryExecutionRefusal.ScopeManifestNotRetained,
                 result.Refusal!.Code,
                 "a manifest whose stored bytes do not reopen at their own digest is NOT held.");
             StringAssert.Contains(result.Refusal.Detail, "digest");
@@ -636,7 +636,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
 
             Assert.IsNotNull(result.Refusal);
             Assert.AreEqual(
-                LuxembourgQueryExecutionRefusal.ScopeManifestNotHeld,
+                LuxembourgQueryExecutionRefusal.ScopeManifestNotRetained,
                 result.Refusal!.Code,
                 "a manifest that does not reopen at its own digest is NOT held.");
             StringAssert.Contains(
@@ -735,7 +735,7 @@ public sealed class LuxembourgQueryExecutionAdapterTests
                 [], null, null, null, new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), CancellationToken.None);
 
             // BOTH GATES ARE PASSED NOW, and the test finally delivers what its name promises.
-            // It asserted a residual RecordSetNotHeld because the shared CorpusRecordSetWriter
+            // It asserted a residual RecordSetNotRetained because the shared CorpusRecordSetWriter
             // gate belonged to the lane that merges first
             // (lex-event-20260904T214500631Z-2988b4fbae224252b08849326325a2a6). That lane has
             // merged and routed the writer through CustodyHold, so an unenforced store no longer
@@ -744,6 +744,13 @@ public sealed class LuxembourgQueryExecutionAdapterTests
             Assert.IsNull(
                 result.Refusal,
                 "an unenforced store refuses at no gate now: " + result.Refusal?.Detail);
+            Assert.IsNotNull(result.ScopeManifestReceipt, "the manifest is retained, not discarded.");
+            Assert.AreEqual(
+                CustodyMembership.RetainedUnenforced,
+                CustodyMembershipClassifier.Classify(result.ScopeManifestReceipt!),
+                "AND THE CLASS IS CARRIED, as this test's own sibling asserts for the record set. "
+                + "IsNull on the refusal alone would pass if the manifest came back Floored, which "
+                + "would mean the store lied about enforcing nothing.");
         }
         finally
         {

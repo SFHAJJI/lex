@@ -147,6 +147,12 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
                 result.Refusal,
                 "a filesystem deployment refuses at no gate now: " + result.Refusal?.Code);
             Assert.IsNotNull(result.Receipt, "and the run produces its delivery receipt.");
+            Assert.AreEqual(
+                CustodyMembership.RetainedUnenforced,
+                result.Receipt!.RetainedFloor,
+                "AND THE RECEIPT CARRIES THE CLASS THIS TEST IS NAMED FOR. Asserting only that a "
+                + "receipt exists would pass if the run reported Floored, which is the strongest "
+                + "possible wrong answer on a store that enforces nothing.");
         }
         finally
         {

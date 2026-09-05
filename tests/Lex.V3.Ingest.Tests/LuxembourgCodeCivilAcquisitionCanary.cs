@@ -192,6 +192,38 @@ public sealed class LuxembourgCodeCivilAcquisitionCanary
                 $"CANARY row {ordinal}: {(outcome.Receipt is null ? $"REFUSED {outcome.Refusal}" : $"HELD {outcome.Receipt.Reference.ContentSha256} {outcome.Receipt.Reference.ByteLength}b")}");
         }
 
+        // THE REOPENED RECORD SET, not the in-memory one, and its EVIDENCE INDEX, BOTH BEFORE THE
+        // SUBSTANTIVE ASSERTIONS. The index used to be written last, so the run whose evidence is
+        // worth most, a failing one, produced none at all. Nothing between here and the index is
+        // asserted; the record set's own refusal is DATA the index carries rather than a reason to
+        // stop before recording anything.
+        var written = await new CorpusRecordSetWriter(store).WriteAsync(
+            manifest, manifestRef, RunIdentityRef(), outcomes, CancellationToken.None);
+
+        var indexHoldFailure = await WriteEvidenceIndexAsync(
+            store,
+            new LuxembourgCanaryEvidence(
+                TryGit("rev-parse HEAD"),
+                TryGit("status --porcelain"),
+                root,
+                manifest.Rows.Count,
+                manifestRef.Sha256,
+                outcomes.OrderBy(static pair => pair.Key).Select(pair => new LuxembourgCanaryExpressionRow(
+                    pair.Key,
+                    manifest.ObservedObjects[pair.Key].ObjectRef.PublisherUri,
+                    pair.Value.Receipt?.Reference.ContentSha256,
+                    pair.Value.Receipt?.Reference.ByteLength,
+                    pair.Value.Receipt is null
+                        ? null
+                        : CustodyMembershipClassifier.Classify(pair.Value.Receipt).ToString(),
+                    pair.Value.Receipt?.Reference.CustodyClass.ToString(),
+                    pair.Value.Refusal?.ToString())).ToArray(),
+                written.SetRef?.Sha256,
+                written.RetainedFloor?.ToString(),
+                written.VerifiedSet?.Set.Records.Count,
+                written.Refusal?.Kind.ToString()),
+            CancellationToken.None);
+
         // Every row is Held with a real receipt, or typed. Nothing here is untyped.
         foreach (var outcome in outcomes.Values)
         {
@@ -207,9 +239,6 @@ public sealed class LuxembourgCodeCivilAcquisitionCanary
             + "correct if it names one of the four legitimate reasons, which this assertion's "
             + "failure message must then be read against.");
 
-        // THE REOPENED RECORD SET, not the in-memory one.
-        var written = await new CorpusRecordSetWriter(store).WriteAsync(
-            manifest, manifestRef, RunIdentityRef(), outcomes, CancellationToken.None);
         Assert.IsNull(written.Refusal, written.Refusal?.Detail);
         Assert.IsNotNull(written.VerifiedSet);
 
@@ -223,86 +252,230 @@ public sealed class LuxembourgCodeCivilAcquisitionCanary
                 $"'{record.ObjectRef.PublisherUri}' must be Held in the REOPENED record set.");
         }
 
-        // THE EVIDENCE THE ACCEPTANCE RULING NEEDS IS RETAINED, NOT PRINTED. Everything reported
-        // above went through Console.WriteLine, which this runner never surfaces on a pass even at
-        // --output Detailed, so the accepted fraction this canary computes existed only for a
-        // reader who already had the numbers. The index is required now, and it follows the shape
-        // EuStageOneAcquisitionCanary already proved rather than inventing one.
-        await WriteEvidenceIndexAsync(
-            store, root, manifest, manifestRef, outcomes, written, CancellationToken.None);
+        // The index is held like every other artifact, so a failure to hold IT is a custody failure
+        // too. Asserted last, because it must not pre-empt the assertions above: the evidence is
+        // already on disk by the time this runs.
+        Assert.IsNull(
+            indexHoldFailure,
+            $"the evidence index itself was not retained: {indexHoldFailure}");
     }
 
     /// <summary>
-    /// The run's own evidence index, retained under the same custody class as everything else this
-    /// canary holds and written beside the store as a file, in the shape
-    /// <see cref="EuStageOneAcquisitionCanary"/> already proved.
+    /// THE INDEX SHAPE, DRIVEN WITHOUT THE NETWORK. Every field is pinned by its dotted path, so a
+    /// removed or renamed field reddens here instead of first appearing in a live run.
     /// </summary>
     /// <remarks>
-    /// THE DENOMINATOR IS NOT DERIVED HERE. It is the independent census measured outside this
-    /// lane, CORRECTION lex-event-20260904T223038388Z-6d7cc6d87c8e446e829c3f7db93dc0b4, copied in
-    /// as data rather than recomputed from the run, because a fraction whose denominator comes out
-    /// of the same run it measures proves nothing about that run.
+    /// The defect this answers, measured rather than supposed: removing runTreeClean outright left
+    /// the whole suite green, because WriteEvidenceIndexAsync ran only under the canary gate and
+    /// nothing else executed a line of it. An artifact used as ACCEPTANCE that no test exercises is
+    /// evidence about the publisher resting on code nobody checks.
+    /// <para>
+    /// It runs unconditionally and touches no publisher, no store and no git: the evidence is
+    /// literals. Values are asserted only where the document DERIVES something rather than copying
+    /// it, since a pin that restates every input would fail for any change and so say nothing.
+    /// </para>
     /// </remarks>
-    private static async Task WriteEvidenceIndexAsync(
-        FileSystemCustodyStore store,
-        string root,
-        ScopeManifest manifest,
-        SourceArtifactRef manifestRef,
-        IReadOnlyDictionary<int, CorpusAcquisitionOutcome> outcomes,
-        CorpusRecordSetWriteResult written,
-        CancellationToken cancellationToken)
+    [TestMethod]
+    public void TheEvidenceIndexCarriesExactlyTheseFieldsFromASyntheticResult()
     {
-        var dirty = TryGit("status --porcelain");
-        var held = outcomes.Count(pair => pair.Value.Receipt is not null);
+        var index = BuildEvidenceIndex(new LuxembourgCanaryEvidence(
+            "0000000000000000000000000000000000000000",
+            string.Empty,
+            "synthetic-root",
+            2,
+            "1111111111111111111111111111111111111111111111111111111111111111",
+            [
+                new LuxembourgCanaryExpressionRow(
+                    0, "http://example.invalid/a", "aa", 1, "RetainedUnenforced", "NightlyFloor90d", null),
+                new LuxembourgCanaryExpressionRow(
+                    1, "http://example.invalid/b", null, null, null, null, "NotFound"),
+            ],
+            "cc",
+            "RetainedUnenforced",
+            2,
+            null));
+
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "acceptedFraction.censusDenominator.consolidations",
+                "acceptedFraction.censusDenominator.expressionsAllFrench",
+                "acceptedFraction.censusDenominator.licencesCcBy40",
+                "acceptedFraction.censusDenominator.manifestations",
+                "acceptedFraction.censusDenominator.manifestationsPerConsolidation",
+                "acceptedFraction.censusDenominator.manifestationsWithoutLegalValue",
+                "acceptedFraction.censusDenominator.note",
+                "acceptedFraction.censusDenominator.obtainedOutsideThisLane",
+                "acceptedFraction.censusDenominator.source",
+                "acceptedFraction.fraction",
+                "acceptedFraction.heldExpressions",
+                "acceptedFraction.manifestRowCount",
+                "corpusRecordSet.recordCount",
+                "corpusRecordSet.refusalKind",
+                "corpusRecordSet.retainedFloor",
+                "corpusRecordSet.role",
+                "corpusRecordSet.setRefSha256",
+                "custodyClassSegment",
+                "custodyRoot",
+                "expressions[].custodyClass",
+                "expressions[].custodyClassSegment",
+                "expressions[].heldByteLength",
+                "expressions[].heldContentSha256",
+                "expressions[].manifestRowOrdinal",
+                "expressions[].publisherUri",
+                "expressions[].refusalReason",
+                "expressions[].role",
+                "rolesThisIndexCannotYetCarry[].role",
+                "rolesThisIndexCannotYetCarry[].why",
+                "runGitSha",
+                "runTreeClean",
+                "runTreeDirtyPaths",
+                "schema",
+                "scopeManifest.canonicalSha256",
+                "scopeManifest.role",
+            },
+            FieldPaths(index).ToArray(),
+            "a field was added, removed or renamed in the evidence index");
+
+        // The derived values, which are the only ones worth asserting: one of the two rows carries
+        // no receipt, so the fraction is a half and not a one.
+        Assert.AreEqual(1, index["acceptedFraction"]!["heldExpressions"]!.GetValue<int>());
+        Assert.AreEqual(0.5, index["acceptedFraction"]!["fraction"]!.GetValue<double>());
+        Assert.IsTrue(
+            index["runTreeClean"]!.GetValue<bool>(),
+            "an empty dirty-path string is a CLEAN tree, not an unknown one.");
+
+        // The four declared gaps, by role, in order. This is the half of the index that says what
+        // it cannot support, and it is the half a reader is most likely to be misled without.
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "robotsBootstrapArtifact",
+                "scopeManifestCustodyReceipt",
+                "crossRunCorpusRecordSetIdentity",
+                "enumerationDeliveryProof",
+            },
+            index["rolesThisIndexCannotYetCarry"]!.AsArray()
+                .Select(entry => entry!["role"]!.GetValue<string>()).ToArray(),
+            "the declared gaps are part of the contract, not commentary");
+    }
+
+    /// <summary>
+    /// Every field path in the document, sorted, with array members collapsed to one "[]" entry so
+    /// the pin describes a SHAPE rather than this run's row count.
+    /// </summary>
+    private static IEnumerable<string> FieldPaths(System.Text.Json.Nodes.JsonNode node)
+    {
+        var paths = new SortedSet<string>(StringComparer.Ordinal);
+
+        void Walk(System.Text.Json.Nodes.JsonNode? current, string prefix)
+        {
+            switch (current)
+            {
+                case System.Text.Json.Nodes.JsonObject o:
+                    foreach (var (name, value) in o)
+                    {
+                        var path = prefix.Length == 0 ? name : prefix + "." + name;
+                        if (value is System.Text.Json.Nodes.JsonObject
+                            or System.Text.Json.Nodes.JsonArray)
+                        {
+                            Walk(value, path);
+                        }
+                        else
+                        {
+                            paths.Add(path);
+                        }
+                    }
+
+                    break;
+                case System.Text.Json.Nodes.JsonArray a:
+                    foreach (var item in a)
+                    {
+                        Walk(item, prefix + "[]");
+                    }
+
+                    break;
+            }
+        }
+
+        Walk(node, string.Empty);
+        return paths;
+    }
+
+    /// <summary>
+    /// THE INDEX AS A PURE FUNCTION OF A RESULT. It takes the run's evidence and returns the
+    /// document; it writes nothing, reads no environment and touches no store, so the shape below
+    /// can be driven from a test with no network and no custody at all.
+    /// </summary>
+    /// <remarks>
+    /// It used to be a side effect of a passing test: built inline, written at the end, and reached
+    /// only under the canary gate. Two consequences, both real. Removing a field left the suite
+    /// green, because nothing but a live run ever executed this code. And the index was written
+    /// AFTER the assertions, so a FAILING run produced no index at all, which is precisely the run
+    /// whose evidence is worth most. Separating construction from writing fixes the first;
+    /// <see cref="TheEvidenceIndexCarriesExactlyTheseFieldsFromASyntheticResult"/> pins the field
+    /// set so a removed or renamed field reddens; and the caller now writes it BEFORE it asserts.
+    /// <para>
+    /// WHAT THIS STILL DOES NOT COVER, said plainly: the mapping from CorpusAcquisitionOutcome to
+    /// <see cref="LuxembourgCanaryExpressionRow"/> happens in the live path, so the synthetic test
+    /// pins the DOCUMENT's shape and not that mapping. Closing that needs a constructible outcome,
+    /// which needs a receipt, which needs custody.
+    /// </para>
+    /// </remarks>
+    internal static System.Text.Json.Nodes.JsonObject BuildEvidenceIndex(
+        LuxembourgCanaryEvidence evidence)
+    {
+        ArgumentNullException.ThrowIfNull(evidence);
         var index = new System.Text.Json.Nodes.JsonObject
         {
             ["schema"] = "lex-lu-canary-evidence-index/1",
-            ["runGitSha"] = TryGit("rev-parse HEAD"),
-            ["runTreeClean"] = dirty is null ? null : dirty.Length == 0,
-            ["runTreeDirtyPaths"] = dirty,
+            ["runGitSha"] = evidence.RunGitSha,
+            ["runTreeClean"] = evidence.DirtyPaths is null ? null : evidence.DirtyPaths.Length == 0,
+            ["runTreeDirtyPaths"] = evidence.DirtyPaths,
             ["custodyClassSegment"] = "nightly-floor-90d",
-            ["custodyRoot"] = root,
+            ["custodyRoot"] = evidence.CustodyRoot,
         };
 
         // THE ACCEPTED FRACTION, AS A NUMBER, beside the census it is a fraction OF.
+        var held = evidence.Expressions.Count(row => row.HeldContentSha256 is not null);
         index["acceptedFraction"] = new System.Text.Json.Nodes.JsonObject
         {
             ["heldExpressions"] = held,
-            ["manifestRowCount"] = manifest.Rows.Count,
-            ["fraction"] = manifest.Rows.Count == 0 ? null : (double)held / manifest.Rows.Count,
+            ["manifestRowCount"] = evidence.ManifestRowCount,
+            ["fraction"] = evidence.ManifestRowCount == 0
+                ? null
+                : (double)held / evidence.ManifestRowCount,
             ["censusDenominator"] = new System.Text.Json.Nodes.JsonObject
             {
                 ["source"] = "lex-event-20260904T223038388Z-6d7cc6d87c8e446e829c3f7db93dc0b4",
                 ["obtainedOutsideThisLane"] = true,
                 ["consolidations"] = 19,
-                ["expressions"] = 19,
+                ["expressionsAllFrench"] = 19,
                 ["manifestations"] = 76,
-                ["licences"] = 76,
                 ["manifestationsPerConsolidation"] = 4,
+                ["licencesCcBy40"] = 76,
                 ["manifestationsWithoutLegalValue"] = 57,
-                ["note"] = "This run acquires the two canary consolidations of the 19, so "
-                    + "heldExpressions is a fraction of manifestRowCount and NOT of the 19. The "
-                    + "census is carried so a reader can see which denominator is which rather "
-                    + "than assuming.",
+                ["note"] = "The counts are labelled because a bare 19 and 76 do not say what they "
+                    + "count: the 19 expressions are ALL FRENCH with zero absent language, and the "
+                    + "76 licences are ALL CC BY 4.0, one distinct IRI, zero absent. This run "
+                    + "acquires the two canary consolidations of the 19, so heldExpressions is a "
+                    + "fraction of manifestRowCount and NOT of the 19.",
             },
         };
 
         var expressions = new System.Text.Json.Nodes.JsonArray();
-        foreach (var entry in outcomes.OrderBy(static entry => entry.Key))
+        foreach (var row in evidence.Expressions.OrderBy(static row => row.ManifestRowOrdinal))
         {
-            var receipt = entry.Value.Receipt;
             expressions.Add(new System.Text.Json.Nodes.JsonObject
             {
                 ["role"] = "expressionBody",
-                ["manifestRowOrdinal"] = entry.Key,
-                ["publisherUri"] = manifest.ObservedObjects[entry.Key].ObjectRef.PublisherUri,
-                ["heldContentSha256"] = receipt?.Reference.ContentSha256,
-                ["heldByteLength"] = receipt?.Reference.ByteLength,
-                ["custodyClass"] = receipt is null
-                    ? null
-                    : CustodyMembershipClassifier.Classify(receipt).ToString(),
-                ["custodyClassSegment"] = receipt?.Reference.CustodyClass.ToString(),
-                ["refusalReason"] = entry.Value.Refusal?.ToString(),
+                ["manifestRowOrdinal"] = row.ManifestRowOrdinal,
+                ["publisherUri"] = row.PublisherUri,
+                ["heldContentSha256"] = row.HeldContentSha256,
+                ["heldByteLength"] = row.HeldByteLength,
+                ["custodyClass"] = row.CustodyClass,
+                ["custodyClassSegment"] = row.CustodyClassSegment,
+                ["refusalReason"] = row.RefusalReason,
             });
         }
 
@@ -311,16 +484,16 @@ public sealed class LuxembourgCodeCivilAcquisitionCanary
         index["scopeManifest"] = new System.Text.Json.Nodes.JsonObject
         {
             ["role"] = "scopeManifest",
-            ["canonicalSha256"] = manifestRef.Sha256,
+            ["canonicalSha256"] = evidence.ScopeManifestCanonicalSha256,
         };
 
         index["corpusRecordSet"] = new System.Text.Json.Nodes.JsonObject
         {
             ["role"] = "corpusRecordSet",
-            ["setRefSha256"] = written.SetRef?.Sha256,
-            ["retainedFloor"] = written.RetainedFloor?.ToString(),
-            ["recordCount"] = written.VerifiedSet?.Set.Records.Count,
-            ["refusalKind"] = written.Refusal?.Kind.ToString(),
+            ["setRefSha256"] = evidence.RecordSetRefSha256,
+            ["retainedFloor"] = evidence.RecordSetRetainedFloor,
+            ["recordCount"] = evidence.RecordSetRecordCount,
+            ["refusalKind"] = evidence.RecordSetRefusalKind,
         };
 
         index["rolesThisIndexCannotYetCarry"] = new System.Text.Json.Nodes.JsonArray
@@ -373,18 +546,62 @@ public sealed class LuxembourgCodeCivilAcquisitionCanary
             },
         };
 
-        var bytes = System.Text.Encoding.UTF8.GetBytes(
-            index.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        return index;
+    }
 
-        var indexReceipt = await store.CreateAsync(bytes, CustodyClass.NightlyFloor90d, cancellationToken)
-            .ConfigureAwait(false);
-        var beside = Path.Combine(root, "evidence-index.json");
+    /// <summary>
+    /// Writes the document and HOLDS IT THROUGH <see cref="CustodyHold.TryHoldAsync"/>, like every
+    /// other artifact this run retains rather than being the one artifact written without holding.
+    /// The file lands beside the store BEFORE the hold, so evidence survives even a custody failure,
+    /// and the hold outcome is returned for the caller to assert AFTER its substantive assertions.
+    /// </summary>
+    private static async Task<string?> WriteEvidenceIndexAsync(
+        ICustodyStore store,
+        LuxembourgCanaryEvidence evidence,
+        CancellationToken cancellationToken)
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes(
+            BuildEvidenceIndex(evidence).ToJsonString(
+                new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+        var beside = Path.Combine(evidence.CustodyRoot, "evidence-index.json");
         await File.WriteAllBytesAsync(beside, bytes, cancellationToken).ConfigureAwait(false);
 
+        var (indexReceipt, holdFailure) = await CustodyHold
+            .TryHoldAsync(store, bytes, cancellationToken)
+            .ConfigureAwait(false);
+
         Console.WriteLine(
-            $"CANARY|evidenceIndex|sha256={indexReceipt.Reference.ContentSha256}|bytes={bytes.Length}"
-            + $"|beside={beside}");
+            $"CANARY|evidenceIndex|sha256={indexReceipt?.Reference.ContentSha256}"
+            + $"|bytes={bytes.Length}|beside={beside}|holdFailure={holdFailure}");
+        return holdFailure;
     }
+
+    /// <summary>One expression's row in the index, as plain data a test can build without custody.</summary>
+    internal sealed record LuxembourgCanaryExpressionRow(
+        int ManifestRowOrdinal,
+        string PublisherUri,
+        string? HeldContentSha256,
+        long? HeldByteLength,
+        string? CustodyClass,
+        string? CustodyClassSegment,
+        string? RefusalReason);
+
+    /// <summary>
+    /// Everything the index states, as plain data. The live path fills it from the run; the pin test
+    /// fills it with literals.
+    /// </summary>
+    internal sealed record LuxembourgCanaryEvidence(
+        string? RunGitSha,
+        string? DirtyPaths,
+        string CustodyRoot,
+        int ManifestRowCount,
+        string ScopeManifestCanonicalSha256,
+        IReadOnlyList<LuxembourgCanaryExpressionRow> Expressions,
+        string? RecordSetRefSha256,
+        string? RecordSetRetainedFloor,
+        int? RecordSetRecordCount,
+        string? RecordSetRefusalKind);
 
     /// <summary>
     /// Declared here rather than shared with <see cref="EuStageOneAcquisitionCanary"/>, whose copy

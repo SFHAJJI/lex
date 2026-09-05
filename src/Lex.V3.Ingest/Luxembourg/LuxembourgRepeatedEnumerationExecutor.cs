@@ -94,7 +94,6 @@ public enum LuxembourgEnumerationRefusal
     /// </summary>
     [JsonStringEnumMemberName("page_decode_failed_on_our_side")]
     PageDecodeFailedOnOurSide = 14,
-
 }
 
 public sealed class LuxembourgEnumerationRefusalDetail

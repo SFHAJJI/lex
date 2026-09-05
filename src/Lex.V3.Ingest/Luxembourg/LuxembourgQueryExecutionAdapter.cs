@@ -340,10 +340,22 @@ public enum LuxembourgQueryExecutionRefusal
     ScopeResolutionFailed = 1,
 
     /// <summary>
-    /// The scope manifest was written, but the store enforced no retention floor on it, so this run
-    /// cannot claim it as held evidence (never bypass the Core floor).
+    /// A GENUINE CUSTODY FAILURE on the scope manifest: either the write itself errored, or the
+    /// bytes could not be reproduced at their own digest when this run reopened them. Those are the
+    /// only two producers, CustodyHold.TryHoldAsync returning no receipt and the checked reopen
+    /// raising CustodyIntegrityException, and both mean the manifest is NOT RETAINED.
     /// </summary>
-    ScopeManifestNotHeld = 2,
+    /// <remarks>
+    /// WAS <c>ScopeManifestNotHeld</c>, and its summary said it fired when the store enforced no
+    /// retention floor. It never did: the floor gate was removed by the Decision 71 interpretation,
+    /// which records the observed class and continues, so the name and the summary both described a
+    /// condition that could not produce this member. Renamed to match
+    /// <see cref="Lex.V3.Ingest.Europe.EuQueryExecutionRefusal.ScopeManifestNotRetained"/> under the misattribution class
+    /// ruled at b0edd672: ONE CONDITION CARRIES ONE NAME ACROSS BOTH PUBLISHERS, so a reader who
+    /// learns what this refusal means from the EU adapter is not misled by the LU one.
+    /// </remarks>
+    [JsonStringEnumMemberName("scope_manifest_not_retained")]
+    ScopeManifestNotRetained = 2,
 
     /// <summary>
     /// <see cref="LuxembourgQueryExecutionAdapter.RunAsync"/> was given a non-null
@@ -436,10 +448,18 @@ public enum LuxembourgQueryExecutionRefusal
     DocumentGetOutcomeNotRepresentable = 10,
 
     /// <summary>
-    /// This run's own corpus/6 record set was written but the store enforced no retention floor on
-    /// it. Mirrors <see cref="ScopeManifestNotHeld"/> for the run's last step.
+    /// A GENUINE CUSTODY FAILURE on this run's own corpus/6 record set, forwarded verbatim from
+    /// <see cref="Lex.V3.Ingest.CorpusRecordSetWriteRefusalKind.RecordSetNotRetained"/>: the writer
+    /// routes through CustodyHold like every other artifact, so this fires when that hold errored or
+    /// the set could not be reproduced at its own digest. Mirrors
+    /// <see cref="ScopeManifestNotRetained"/> for the run's last step.
     /// </summary>
-    RecordSetNotHeld = 11,
+    /// <remarks>
+    /// WAS <c>RecordSetNotHeld</c>, with the same untrue summary about an enforced floor, and its
+    /// only producer already forwarded a refusal the shared writer had renamed. Renamed with it.
+    /// </remarks>
+    [JsonStringEnumMemberName("record_set_not_retained")]
+    RecordSetNotRetained = 11,
 }
 
 /// <summary>
@@ -1236,7 +1256,7 @@ public sealed class LuxembourgQueryExecutionAdapter
                 outcomes,
                 relationAcquisitions,
                 new LuxembourgQueryExecutionRefusalDetail(
-                    LuxembourgQueryExecutionRefusal.ScopeManifestNotHeld,
+                    LuxembourgQueryExecutionRefusal.ScopeManifestNotRetained,
                     null,
                     $"The scope manifest could not be held: {manifestHoldFailure}"));
         }
@@ -1272,7 +1292,7 @@ public sealed class LuxembourgQueryExecutionAdapter
                 outcomes,
                 relationAcquisitions,
                 new LuxembourgQueryExecutionRefusalDetail(
-                    LuxembourgQueryExecutionRefusal.ScopeManifestNotHeld,
+                    LuxembourgQueryExecutionRefusal.ScopeManifestNotRetained,
                     null,
                     "The scope manifest could not be reopened at its own digest: "
                     + exception.Message));
@@ -1331,7 +1351,7 @@ public sealed class LuxembourgQueryExecutionAdapter
             return LuxembourgQueryExecutionResult.Refused(
                 topology, outcomes, relationAcquisitions,
                 new LuxembourgQueryExecutionRefusalDetail(
-                    LuxembourgQueryExecutionRefusal.RecordSetNotHeld,
+                    LuxembourgQueryExecutionRefusal.RecordSetNotRetained,
                     null,
                     recordSetResult.Refusal.Detail));
         }
