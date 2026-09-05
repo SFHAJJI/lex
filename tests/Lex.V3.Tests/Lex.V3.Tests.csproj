@@ -5,6 +5,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../Lex.V3.TestSupport/ConstructionSurface.cs" Link="TestSupport/ConstructionSurface.cs" />
+    <Compile Include="../Lex.V3.TestSupport/ClosedSurfaceCensus.cs" Link="TestSupport/ClosedSurfaceCensus.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Fixtures/EuManifestationListing/*.json" CopyToOutputDirectory="PreserveNewest" />

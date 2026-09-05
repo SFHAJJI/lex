@@ -179,6 +179,80 @@ public static class ConstructionSurface
     }
 
     /// <summary>
+    /// Every hand-out of <paramref name="guarded"/> anywhere in <paramref name="assembly"/>: the
+    /// members that yield an instance, as opposed to the fields and properties that only carry one
+    /// somebody else already made. The ones declared on compiler-generated types are counted rather
+    /// than named.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This exists for a census over many guarded types at once, where <see cref="Of"/> and
+    /// <see cref="ProducersIn"/> are still the right tool for a single reviewed type. Two things
+    /// differ, and both are narrowings that a caller has to know about.
+    /// </para>
+    /// <para>
+    /// Holders are dropped. A field or a property whose type carries the guarded type is a place a
+    /// value is kept, not a place one is made, and across a whole assembly those move whenever an
+    /// unrelated record grows a member. Naming them in a census would make it fire on edits that
+    /// opened no door, and a guard nobody believes is a guard nobody reads. Whether a member hands
+    /// out is read from its reflection kind, not from the text of its entry.
+    /// </para>
+    /// <para>
+    /// Hand-outs on compiler-generated types are counted, not named, and the reason is the one
+    /// <see cref="CompilerGeneratedHolders"/> already records for hoisted fields, one step further.
+    /// A lambda's method name carries the ordinal of the method it sits in and of its position
+    /// within it, so <c>&lt;RunCover&gt;b__8_0</c> becomes <c>&lt;RunCover&gt;b__9_0</c> when
+    /// somebody adds an unrelated method above it. An exact name would make a census churn on edits
+    /// that opened no door; the count still moves when a lambda that yields the guarded type is
+    /// added or removed, which is the door itself opening or closing. Whether the declaring type is
+    /// compiler generated is read from its attribute, never from the shape of its name.
+    /// </para>
+    /// </remarks>
+    public static HandOutSurface HandOuts(Assembly assembly, Type guarded)
+    {
+        ArgumentNullException.ThrowIfNull(assembly);
+        ArgumentNullException.ThrowIfNull(guarded);
+        var own = SelfNestedAndBases(guarded).ToHashSet();
+
+        // Keyed by the full entry, valued by the head. Deduplicating on the head instead would
+        // collapse two overloads of the same factory into one line, and this type's own summary
+        // promises the opposite. A second Create is a second door.
+        var named = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        var compilerGenerated = 0;
+        foreach (var type in own.Concat(AllTypes(assembly).Where(candidate => !own.Contains(candidate))))
+        {
+            var generated = IsCompilerGenerated(type);
+            foreach (var producer in ProducersDeclaredOn(
+                type, guarded, includeBaseConstructors: own.Contains(type)))
+            {
+                if (!producer.HandsOut)
+                {
+                    continue;
+                }
+
+                if (generated)
+                {
+                    compilerGenerated++;
+                    continue;
+                }
+
+                named[producer.Entry] = producer.Head;
+            }
+        }
+
+        return new(named.Values.ToArray(), compilerGenerated);
+    }
+
+    /// <summary>
+    /// The result of <see cref="HandOuts"/>: the hand-outs a person declared, in ordinal order and
+    /// without their parameter lists, and how many the compiler declared for lambdas and state
+    /// machines.
+    /// </summary>
+    public readonly record struct HandOutSurface(
+        IReadOnlyList<string> Declared,
+        int CompilerGenerated);
+
+    /// <summary>
     /// Every member declared on the type and its nested types, transitively, with the full
     /// binding flags. For guards about parameters or names rather than production.
     /// </summary>
@@ -236,13 +310,21 @@ public static class ConstructionSurface
         {
             if (isGuardedOrSubtype)
             {
-                yield return new(Describe("constructor", constructor, type), constructor.IsPublic);
+                yield return new(
+                    Describe("constructor", constructor, type),
+                    constructor.IsPublic,
+                    HandsOut: true,
+                    Head: DescribeHead("constructor", constructor));
             }
             else if (isBase && includeBaseConstructors && !constructor.IsPrivate)
             {
                 // A base constructor that is not private can be reached by a subtype written
                 // tomorrow in any assembly the scope admits, so it is a construction path.
-                yield return new(Describe("base-constructor", constructor, type), constructor.IsPublic);
+                yield return new(
+                    Describe("base-constructor", constructor, type),
+                    constructor.IsPublic,
+                    HandsOut: true,
+                    Head: DescribeHead("base-constructor", constructor));
             }
         }
 
@@ -266,7 +348,11 @@ public static class ConstructionSurface
                 var kind = method.IsSpecialName && method.Name.StartsWith("op_", StringComparison.Ordinal)
                     ? "operator"
                     : producesByRef && !producesByReturn ? "by-ref-method" : "method";
-                yield return new(Describe(kind, method, method.ReturnType), method.IsPublic);
+                yield return new(
+                    Describe(kind, method, method.ReturnType),
+                    method.IsPublic,
+                    HandsOut: true,
+                    Head: DescribeHead(kind, method));
             }
         }
 
@@ -277,7 +363,9 @@ public static class ConstructionSurface
                 var fieldNullability = new NullabilityInfoContext().Create(field);
                 yield return new(
                     $"field {Scope(field)} {(field.IsStatic ? "static" : "instance")} {Name(type)}::{field.Name} -> {Name(field.FieldType, fieldNullability)}",
-                    field.IsPublic);
+                    field.IsPublic,
+                    HandsOut: false,
+                    Head: string.Empty);
             }
         }
 
@@ -292,7 +380,9 @@ public static class ConstructionSurface
                 var propertyNullability = new NullabilityInfoContext().Create(property);
                 yield return new(
                     $"property {scope} {(isStatic ? "static" : "instance")} {Name(type)}::{property.Name}({parameters}) -> {Name(property.PropertyType, propertyNullability)}",
-                    accessor?.IsPublic == true);
+                    accessor?.IsPublic == true,
+                    HandsOut: false,
+                    Head: string.Empty);
             }
         }
 
@@ -302,12 +392,41 @@ public static class ConstructionSurface
             {
                 yield return new(
                     $"event {Name(type)}::{evt.Name} -> {Name(evt.EventHandlerType)}",
-                    evt.AddMethod?.IsPublic == true);
+                    evt.AddMethod?.IsPublic == true,
+                    HandsOut: false,
+                    Head: string.Empty);
             }
         }
     }
 
-    private readonly record struct Producer(string Entry, bool PublicMember);
+    /// <summary>
+    /// One way the guarded type can reach a caller. <paramref name="HandsOut"/> separates a member
+    /// that yields an instance (a constructor, a method, a conversion operator) from one that only
+    /// stores a value someone else already made (a field, a property, an event). The distinction is
+    /// taken from the member's own reflection kind at the point the entry is built, never from the
+    /// text of the entry afterwards, because a guard that reads its own rendering is a guard that
+    /// can be fooled by a rename.
+    /// </summary>
+    private readonly record struct Producer(
+        string Entry,
+        bool PublicMember,
+        bool HandsOut,
+        string Head);
+
+    /// <summary>
+    /// The same entry <see cref="Describe"/> renders, stopping before the parameter list and the
+    /// produced type: kind, scope, static or instance, declaring type and member name.
+    /// </summary>
+    /// <remarks>
+    /// Built from the member, never by cutting <see cref="Describe"/>'s output at a bracket. This
+    /// type's own documentation forbids a guard reading its own rendering, and a census that cut
+    /// the string would be doing exactly that one layer up.
+    /// </remarks>
+    private static string DescribeHead(string kind, MethodBase member)
+    {
+        var declaring = member.DeclaringType is null ? "?" : Name(member.DeclaringType);
+        return $"{kind} {Scope(member)} {(member.IsStatic ? "static" : "instance")} {declaring}::{member.Name}";
+    }
 
     private static string Describe(string kind, MethodBase member, Type produced)
     {
