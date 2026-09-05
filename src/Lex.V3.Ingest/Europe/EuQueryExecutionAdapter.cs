@@ -280,8 +280,8 @@ public enum EuQueryExecutionRefusal
     /// the whole run, naming the real classified cause, rather than mapping it to an unrelated
     /// existing member or silently treating it as held.
     /// </remarks>
-    [JsonStringEnumMemberName("document_fetch_outcome_not_representable")]
-    DocumentFetchOutcomeNotRepresentable = 18,
+    [JsonStringEnumMemberName("acquisition_outcome_not_representable")]
+    AcquisitionOutcomeNotRepresentable = 18,
 
     /// <summary>
     /// D1-06c-EU fix two (SCOPE_RULING lex-event-20260904T141600712Z-0b823f7143154a608f01ec8f757f9e93
@@ -535,7 +535,7 @@ public sealed class EuQueryExecutionResult
     /// the reopened manifest but absent from this dictionary was never Minted at all -- every Minted
     /// row's own outcome either lands here or refuses the whole run (see
     /// <see cref="EuQueryExecutionRefusal.DocumentBodyNotRetained"/> and
-    /// <see cref="EuQueryExecutionRefusal.DocumentFetchOutcomeNotRepresentable"/>'s own remarks for
+    /// <see cref="EuQueryExecutionRefusal.AcquisitionOutcomeNotRepresentable"/>'s own remarks for
     /// exactly which outcomes cannot be represented and so refuse the run instead of appearing here).
     /// D1-06c-EU fix two: this is exactly the <c>acquisitionOutcomesByOrdinal</c> this run itself
     /// hands to <c>CorpusRecordSetWriter.WriteAsync</c> as its own last step (see this file's own
@@ -1364,7 +1364,7 @@ public sealed class EuQueryExecutionAdapter
                 // here, rather than throwing, keeps this method's own "never throws past a typed
                 // refusal" discipline even for a defect this loop cannot itself introduce.
                 return (null, null, new EuQueryExecutionRefusalDetail(
-                    EuQueryExecutionRefusal.DocumentFetchOutcomeNotRepresentable,
+                    EuQueryExecutionRefusal.AcquisitionOutcomeNotRepresentable,
                     $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}') carries a " +
                     "Minted fetch address this run never itself minted."));
             }
@@ -1475,7 +1475,7 @@ public sealed class EuQueryExecutionAdapter
                 // Neither a real 200, nor this route's own named shapes (fix one), nor a robots-
                 // bootstrap refusal (fold-in three), nor a terminal status this door can name (fold-in
                 // one), nor a transport-incomplete shape D1-06b's own CorpusAcquisitionRefusalReason
-                // vocabulary can name (see EuQueryExecutionRefusal.DocumentFetchOutcomeNotRepresentable's
+                // vocabulary can name (see EuQueryExecutionRefusal.AcquisitionOutcomeNotRepresentable's
                 // own remarks): a route-level refusal (robots-policy-unavailable, redirect refused, looped
                 // or limit-exceeded, or a stale profile) that vocabulary was never scoped to cover. The
                 // whole run refuses, naming the real classified cause, rather than mapping it to an
@@ -1484,7 +1484,7 @@ public sealed class EuQueryExecutionAdapter
                     ? $"{evidence.Outcome.GetType().Name}({incompleteOutcome.Reason})"
                     : evidence.Outcome.GetType().Name;
                 return (null, null, new EuQueryExecutionRefusalDetail(
-                    EuQueryExecutionRefusal.DocumentFetchOutcomeNotRepresentable,
+                    EuQueryExecutionRefusal.AcquisitionOutcomeNotRepresentable,
                     $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): classified " +
                     $"refusal={classified.Refusal} observedStatus={classified.ObservedStatus} " +
                     $"routeOutcome={routeOutcomeDetail}."));

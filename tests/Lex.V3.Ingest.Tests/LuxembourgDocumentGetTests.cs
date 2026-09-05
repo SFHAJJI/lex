@@ -567,7 +567,7 @@ public sealed class LuxembourgDocumentGetTests
     /// real classified cause, rather than being mapped onto an unrelated corpus member. The
     /// Luxembourg profile admits no redirect at all, so a 303 leaves the route incomplete for a
     /// reason the hop-level registry mirror cannot name. Drives
-    /// <see cref="LuxembourgQueryExecutionRefusal.DocumentGetOutcomeNotRepresentable"/>.
+    /// <see cref="LuxembourgQueryExecutionRefusal.AcquisitionOutcomeNotRepresentable"/>.
     /// </summary>
     [TestMethod]
     public async Task AnUnreadableRouteOutcomeRefusesTheWholeRunAndNamesTheCause()
@@ -582,7 +582,7 @@ public sealed class LuxembourgDocumentGetTests
 
         Assert.IsNotNull(refusal);
         Assert.AreEqual(
-            LuxembourgQueryExecutionRefusal.DocumentGetOutcomeNotRepresentable, refusal!.Code);
+            LuxembourgQueryExecutionRefusal.AcquisitionOutcomeNotRepresentable, refusal!.Code);
         StringAssert.Contains(refusal.Detail, "routeOutcome=");
         Assert.IsEmpty(outcomes);
     }

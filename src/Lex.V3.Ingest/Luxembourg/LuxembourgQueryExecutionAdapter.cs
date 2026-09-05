@@ -454,8 +454,8 @@ public enum LuxembourgQueryExecutionRefusal
     /// vocabulary cannot name faithfully. The whole run refuses, naming the real classified cause,
     /// rather than mapping it onto an unrelated existing member or accepting it as held.
     /// </summary>
-    [JsonStringEnumMemberName("document_get_outcome_not_representable")]
-    DocumentGetOutcomeNotRepresentable = 10,
+    [JsonStringEnumMemberName("acquisition_outcome_not_representable")]
+    AcquisitionOutcomeNotRepresentable = 10,
 
     /// <summary>
     /// A GENUINE CUSTODY FAILURE on this run's own corpus/6 record set, forwarded verbatim from
@@ -1616,7 +1616,7 @@ public sealed class LuxembourgQueryExecutionAdapter
                 // here rather than throwing keeps this method's "never throws past a typed refusal"
                 // discipline even for a defect this loop cannot itself introduce.
                 return (null, new LuxembourgQueryExecutionRefusalDetail(
-                    LuxembourgQueryExecutionRefusal.DocumentGetOutcomeNotRepresentable,
+                    LuxembourgQueryExecutionRefusal.AcquisitionOutcomeNotRepresentable,
                     null,
                     $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}') carries a Minted " +
                     "fetch address this run never itself minted."));
@@ -1719,7 +1719,7 @@ public sealed class LuxembourgQueryExecutionAdapter
                 ? $"{evidence.Outcome.GetType().Name}({incompleteOutcome.Reason})"
                 : evidence.Outcome.GetType().Name;
             return (null, new LuxembourgQueryExecutionRefusalDetail(
-                LuxembourgQueryExecutionRefusal.DocumentGetOutcomeNotRepresentable,
+                LuxembourgQueryExecutionRefusal.AcquisitionOutcomeNotRepresentable,
                 null,
                 $"manifest row {rowOrdinal} ('{mintedObjectRef.CanonicalKey}'): " +
                 $"routeOutcome={routeOutcomeDetail}."));
