@@ -75,7 +75,20 @@ public sealed class MirroredVocabularyPairTests
     /// Why the two are CONSTRAINED to agree. Not a description of the pair, and not an observation
     /// that they currently match.
     /// </param>
-    private sealed record MirroredVocabularyPair(Type Luxembourg, Type Europe, string Reason);
+    /// <summary>
+    /// A declared mirror. <paramref name="Member"/> null means the WHOLE vocabularies mirror each
+    /// other; a member name means only that one condition is mirrored, which is the common case
+    /// when two vocabularies overlap on a shared dependency without being the same list.
+    /// </summary>
+    /// <remarks>
+    /// The member form was added by R4. Two ruled pairs could not be expressed as whole-vocabulary
+    /// rows: EuQueryExecutionRefusal has twenty members and LuxembourgQueryExecutionRefusal twelve,
+    /// so asserting their whole token sequences equal would be false, while the two conditions
+    /// ruled one-condition-one-name really are constrained to agree. Widening the row rather than
+    /// building a second table keeps one declared set of mirrors, which was the point of the table.
+    /// </remarks>
+    private sealed record MirroredVocabularyPair(
+        Type Luxembourg, Type Europe, string Reason, string? Member = null);
 
     private static readonly MirroredVocabularyPair[] Table =
     [
@@ -95,7 +108,41 @@ public sealed class MirroredVocabularyPairTests
                 + "gap in that executor rather than a difference between the publishers. The two "
                 + "lists were found describing ONE condition under TWO names during the D1-05f "
                 + "rebase, which is what this row exists to stop recurring."),
+        new(
+            typeof(LuxembourgQueryExecutionRefusal),
+            typeof(EuQueryExecutionRefusal),
+            "AcquisitionOutcomeNotRepresentable refuses on both sides when the CLOSED "
+                + "CorpusAcquisitionRefusalReason vocabulary cannot name an acquisition outcome "
+                + "faithfully. That is a code dependency on ONE THIRD VOCABULARY, so a reason added "
+                + "or renamed there changes what both members mean at once, and the two cannot "
+                + "drift apart without one of them becoming wrong. The route each adapter takes "
+                + "differs and is carried by the enum type, not by the member name, which is why "
+                + "the two were renamed off document_fetch and document_get onto one name.",
+            "AcquisitionOutcomeNotRepresentable"),
+        new(
+            typeof(LuxembourgQueryExecutionRefusal),
+            typeof(EuQueryExecutionRefusal),
+            "DocumentBodyNotRetained is produced on both sides by THE SAME TWO CUSTODY CALLS: a "
+                + "digest-checked reopen raising CustodyIntegrityException, and CustodyHold."
+                + "TryHoldAsync returning no receipt. Both adapters depend on those shared helpers "
+                + "rather than on anything of their own publisher, so the condition is one "
+                + "condition. Stated asymmetry, because it is real and does not break the "
+                + "constraint: EU also admits CustodyRequiredException at that catch, so slightly "
+                + "more reaches the member on that side. That is a difference in what arrives, not "
+                + "in what the member means.",
+            "DocumentBodyNotRetained"),
     ];
+
+    private static string TokenOf(Type vocabulary, string member)
+    {
+        var field = vocabulary.GetField(member)
+            ?? throw new InvalidOperationException(vocabulary.Name + " has no member " + member);
+        var token = field.GetCustomAttribute<JsonStringEnumMemberNameAttribute>();
+        Assert.IsNotNull(
+            token,
+            vocabulary.Name + "." + member + " is a declared mirror and carries no wire token.");
+        return token.Name;
+    }
 
     private static string[] WireTokens(Type vocabulary)
     {
@@ -132,6 +179,29 @@ public sealed class MirroredVocabularyPairTests
                 pair.Luxembourg.Name + " and " + pair.Europe.Name
                     + " are declared a mirrored pair with no reason. A row without a reason cannot "
                     + "be told apart later from two vocabularies that happened to match.");
+
+            if (pair.Member is { } member)
+            {
+                // A member row asserts BOTH halves: that each vocabulary really declares a member
+                // of that name, and that the two carry the same wire token. Name equality is not
+                // implied by the token check, and token equality is not implied by the name.
+                foreach (var vocabulary in new[] { pair.Luxembourg, pair.Europe })
+                {
+                    CollectionAssert.Contains(
+                        Enum.GetNames(vocabulary),
+                        member,
+                        vocabulary.Name + " is declared to mirror " + member
+                            + " and does not declare a member of that name. Declared reason: "
+                            + pair.Reason);
+                }
+
+                Assert.AreEqual(
+                    TokenOf(pair.Luxembourg, member),
+                    TokenOf(pair.Europe, member),
+                    member + " is declared a mirrored condition, so its wire token must be the "
+                        + "same on both sides. Declared reason: " + pair.Reason);
+                continue;
+            }
 
             // Joined rather than compared element-wise: CollectionAssert reports a count difference
             // for two equal-length sequences that differ only in a token, which is the failure this
